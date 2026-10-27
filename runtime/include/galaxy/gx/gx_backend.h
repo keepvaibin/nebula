@@ -41,6 +41,8 @@
 #include "galaxy/gx/resident_vertex_arena.h"
 #include "galaxy/gx/shader_keys.h"
 #include "galaxy/gx/texture_cache.h"
+#include "galaxy/gx/frame_interpolation.h"
+#include "galaxy/gx/interp_gpu.h"
 #include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
@@ -225,6 +227,8 @@ public:
     // tail at the scene boundary). The render thread owns the capture until it publishes.
     void attach_pointer_depth_capture(
         const std::shared_ptr<PointerDepthCapture>& capture, std::size_t fifo_offset);
+    // Scene boundaries one render chunk carries (3D and 2D, two frames).
+    static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // Simulation thread: the next render_frame submission handles `marker`
     // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
     void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
@@ -240,10 +244,38 @@ public:
         }
         producer_scene_view_valid_ = false;
     }
+    [[nodiscard]] bool draw_identity_wanted() const noexcept {
+        return draw_identity_wanted_.load(std::memory_order_relaxed);
+    }
+    // Render thread: where GameScene image effects begin in the open (or
+    // last) 3D scene (SceneFunction::executeDrawImageEffect marker): the
+    // transform-record index and the byte offset in the chunk's FIFO; -1
+    // before the marker. The split point for an upscaler or HUD-less colour.
+    [[nodiscard]] std::int64_t scene_image_effect_record() const noexcept { return scene_image_effect_record_; }
+    [[nodiscard]] std::int64_t scene_image_effect_offset() const noexcept { return scene_image_effect_offset_; }
+    // Render thread: the 2D layer (GameScene::draw2D, FifoMarker::Scene2DBegin
+    // and Scene2DEnd) in the chunk's FIFO: byte offsets of its entry and of its
+    // epilogue (-1 until the marker), and whether the parser is inside it.
+    // Layout identity markers (kinds 9-11, galaxy/motion_signals.h) follow.
+    [[nodiscard]] std::int64_t scene_2d_begin_offset() const noexcept { return scene_2d_begin_offset_; }
+    [[nodiscard]] std::int64_t scene_2d_end_offset() const noexcept { return scene_2d_end_offset_; }
+    [[nodiscard]] bool scene_2d_open() const noexcept { return scene_2d_open_; }
     // Simulation thread: the game camera for the next SceneBegin marker.
     void attach_scene_view(const float view[12]) noexcept {
         for (unsigned i = 0; i < 12u; ++i) producer_scene_view_[i] = view[i];
         producer_scene_view_valid_ = true;
+    }
+    // One particle of a JPA stripe at `stream_offset` of the live GX stream
+    // (its two strip vertices follow); carried by the next submission.
+    struct StripeParticleMark {
+        std::size_t offset = 0;
+        std::uint32_t particle = 0;
+        std::uint32_t age_lifetime = 0;   // mAge << 16 | mLifeTime
+        std::uint8_t strip = 0;           // 0 JPADrawStripe, 1-2 JPADrawStripeX
+    };
+    // Simulation thread.
+    void attach_stripe_particle(const StripeParticleMark& mark) {
+        if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
     }
     void set_prerecorded_movie_content(bool movie) noexcept { producer_movie_content_=movie; }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
@@ -386,6 +418,13 @@ private:
     void on_invalidate_textures() override;
     void on_invalidate_vertex_cache() override;
     void on_tlut_load() override;
+    void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                        std::uint32_t b, std::size_t offset) override;
+    // GALAXY_MOTION_TRACE_SIGNALS: motion-signal and identity-epoch traces.
+    [[nodiscard]] static bool motion_trace_signals() noexcept;
+    // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
+    void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b,
+                          std::size_t offset);
 
     // --- Per-draw state flush ------------------------------------------------
 
@@ -535,13 +574,16 @@ private:
         // offset of the chunk's FIFO (the scene boundary).
         std::size_t pointer_depth_capture_fifo_offset = 0;
         bool pointer_depth_in_frame = false;
-        // Scene boundaries in this chunk's FIFO, in stream order.
-        std::array<std::pair<std::size_t, FifoMarker>, 4> fifo_markers{};
+        // Scene boundaries in this chunk's FIFO, in stream order (3D and 2D
+        // scenes of up to two frames).
+        std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> fifo_markers{};
         std::uint8_t fifo_marker_count = 0;
         // Game camera (world to eye) per SceneBegin marker; bit i of the
         // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, 4> fifo_marker_views{};
+        std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
         std::uint8_t fifo_marker_view_mask = 0;
+        // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
+        std::vector<StripeParticleMark> stripe_particles;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -607,14 +649,107 @@ private:
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;
-    std::array<std::pair<std::size_t, FifoMarker>, 4> producer_fifo_markers_{};
+    std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> producer_fifo_markers_{};
     std::uint8_t producer_fifo_marker_count_ = 0;
-    std::array<std::array<float, 12>, 4> producer_fifo_marker_views_{};
+    std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
     std::uint8_t producer_fifo_marker_view_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
+    std::vector<StripeParticleMark> producer_stripe_particles_;
+    // Render thread: the chunk's stripe marks while its FIFO is parsed (log
+    // recording), and the stripe vertices of the pending draw batch.
+    std::span<const StripeParticleMark> parse_stripes_{};
+    std::size_t parse_stripe_next_ = 0;
+    std::vector<RendererD3D12::StripeVertex> pending_stripe_vertices_;
+    std::vector<RendererD3D12::StripeVertex> draw_stripe_vertices_;
+    void take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size);
+    // Render thread, after a chunk's parse: trace of the stripe-particle marks.
+    void note_stripe_particles(const FrameChunk& chunk);
     // Render thread: inside GameScene::draw3D (between the scene markers).
     bool scene_phase_ = false;
+    // Render thread -> simulation thread: emit draw-identity markers.
+    std::atomic<bool> draw_identity_wanted_{false};
+    // Draw identity (on_host_marker): the key of the marker in force in the
+    // open scene and the matrix-write count at it. A transform record's
+    // identity is that key with the matrix writes since. Repeated markers of
+    // one scene get distinct keys through their occurrence counts. A scene
+    // uses identities when the scene before it had markers (a module without
+    // them keeps signature matching).
+    std::uint64_t identity_marker_ = 0;
+    std::uint32_t identity_matrix_base_ = 0;
+    // Records with the same marker and matrix writes (texgen or color changes
+    // between them) are told apart by their order.
+    std::uint64_t identity_last_base_ = 0;
+    std::uint32_t identity_sub_index_ = 0;
+    // A render chunk began (FIFO streaming cuts frames mid-scene): its first
+    // VS upload re-states the bindings and may continue the open record.
+    bool scene_chunk_restart_ = false;
+    std::uint64_t interp_chunk_continues_ = 0;   // records continued across a chunk start
+    std::uint64_t identity_scene_index_ = 0;
+    std::uint64_t identity_scene_markers_ = 0;
+    bool identity_scene_ = false;
+    struct IdentityOccurrence {
+        std::uint64_t key = 0;
+        std::uint64_t scene = 0;
+        std::uint32_t count = 0;
+    };
+    std::vector<IdentityOccurrence> identity_occurrences_;
+    std::uint32_t identity_occurrences_used_ = 0;
+    [[nodiscard]] std::uint32_t note_identity_occurrence(std::uint64_t key);
+    [[nodiscard]] std::uint64_t record_identity() noexcept;
+    void begin_identity_scene();
+    std::array<std::uint64_t, 12> identity_markers_by_kind_{};  // motion::kMarkerKinds
+    std::uint64_t identity_records_ = 0;
+    std::uint64_t identity_matched_ = 0;
+    std::uint64_t identity_rejected_ = 0;
+    std::uint64_t identity_scene_records_ = 0;
+    // Motion signals (galaxy/motion_signals.h). The marker in force names a
+    // particle: its age is the record's continuity (checked on match, not
+    // part of the key).
+    std::uint32_t identity_continuity_ = 0;
+    bool identity_continuity_particle_ = false;
+    // Category in force (draw phase and the latest CategoryList call).
+    std::uint32_t identity_category_ = 0x00FF0000u;
+    // Scene signals of the open scene (kind-6 marker): the game's camera
+    // epoch, known once a scene marker arrived.
+    std::uint32_t scene_camera_epoch_ = 0;
+    bool scene_camera_epoch_known_ = false;
+    // GameScene image effects (SceneFunction::executeDrawImageEffect) begin
+    // at this record index and FIFO offset of the scene's chunk (the future
+    // upscaler / HUD-less split); -1 none yet.
+    std::int64_t scene_image_effect_record_ = -1;
+    std::int64_t scene_image_effect_offset_ = -1;
+    // FIFO offset of the span the parser is running (run_stream), so marker
+    // offsets map to the chunk's FIFO.
+    std::size_t parse_span_base_ = 0;
+    std::size_t parse_span_prefix_ = 0;
+    std::uint64_t motion_category_markers_ = 0;
+    std::uint64_t motion_image_effect_markers_ = 0;
+    std::uint64_t motion_scene_markers_ = 0;
+    std::uint64_t motion_light_markers_ = 0;
+    std::uint64_t motion_mirror_markers_ = 0;
+    std::uint64_t motion_stripe_marks_ = 0;
+    // The 2D layer (FifoMarker::Scene2DBegin/End) and the layout markers
+    // (kinds 9-11: pane, layout actor, star pointer) parsed inside and
+    // outside it; counts since the start (per scene for the open one).
+    void on_scene_2d_marker(bool begin, std::size_t chunk_offset);
+    bool scene_2d_open_ = false;
+    std::int64_t scene_2d_begin_offset_ = -1;
+    std::int64_t scene_2d_end_offset_ = -1;
+    std::uint64_t scene_2d_serial_ = 0;
+    std::array<std::uint32_t, 3> scene_2d_layout_markers_{};
+    std::uint32_t scene_2d_categories_ = 0;
+    std::array<std::uint64_t, 3> layout_markers_in_2d_{};
+    std::array<std::uint64_t, 3> layout_markers_outside_2d_{};
+    std::uint64_t window_2d_scenes_ = 0;
+    std::uint64_t identity_signature_rejected_ = 0;
+    std::uint64_t identity_continuity_rejected_ = 0;
+    // Matched particle keys by age step: <0, 0, 1, 2, >2.
+    std::array<std::uint64_t, 5> particle_age_steps_{};
+    std::uint64_t interp_game_cuts_ = 0;        // cuts from the game's camera epoch
+    std::uint64_t interp_threshold_cuts_ = 0;   // cuts from the turn/move thresholds only
+    // GALAXY_MOTION_TRACE_SIGNALS: identity epoch changes per object.
+    std::unordered_map<std::uint32_t, std::uint16_t> trace_object_epochs_;
     // Temporal upscaling for the current scene: perspective projections carry
     // this sub-pixel jitter (render pixels).
     bool temporal_scene_ = false;
@@ -631,30 +766,85 @@ private:
     TransformHistory transform_history_;
     // The scene records transforms (temporal upscaling or interpolation).
     bool history_scene_ = false;
+    // An interpolated frame's records come in layers (InterpScene::layers): its
+    // 3D scene (transform_history_), the screen layer after it (everything up
+    // to the display copy: HUD, layouts, star pointer, wipes) and the mirror
+    // pass before it (GameScene::drawMirror, its own camera). The side layers
+    // match against the previous frame's same layer by their own identities
+    // and move without the scene camera's world split.
+    static constexpr unsigned kSceneLayer = 0u;
+    static constexpr unsigned kScreenLayer = 1u;
+    static constexpr unsigned kMirrorLayer = 2u;
+    TransformHistory screen_history_;
+    TransformHistory mirror_history_;
+    unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
+    bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
+    bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
+    std::array<std::uint64_t, 3> layer_serials_{};
+    std::array<std::uint64_t, 3> layer_identity_markers_{};
+    std::array<bool, 3> layer_identity_{};     // the layer's previous occurrence carried markers
+    // Per layer: records recorded and matches dropped because the scene before
+    // did not hold the previous occurrence of the layer.
+    std::array<std::uint64_t, 3> layer_records_{};
+    std::array<std::uint64_t, 3> layer_unmapped_{};
+    void open_interp_scene();
+    void begin_side_layer(unsigned layer);
+    void end_side_layer();
+    void end_record_layer(unsigned layer);
+    void set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag);
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
     bool interp_recording_ = false;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
+    // The scene's current pixel-constant record (InterpScene::ps_constants), -1 for none.
+    std::int32_t current_ps_record_ = -1;
+    // The first draw of a recorded scene re-uploads its pixel constants so it has a record.
+    bool ps_record_restart_ = false;
     std::int32_t current_palette_shadow_ = -1;
     // One history scene's interpolation inputs, kept for three scenes: the
     // one recording, the one being interpolated (its log completed), and its
     // predecessor (previous palettes and texture matrices).
     struct InterpScene {
         std::vector<GxVsConstants> constants;   // per record, as uploaded
-        std::vector<Affine34> from;             // previous transform (inline)
-        std::vector<Affine34> current;          // current inline transform
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
         std::size_t palette_count = 0;
+        // Pixel-stage constants per upload in the scene (draws carry the index).
+        std::vector<GxPsConstants> ps_constants;
         Affine34 camera{};
+        // The game camera (world to eye) of the scene.
+        Affine34 view{};
+        bool view_known = false;
         bool valid = false;
+        std::uint64_t serial = 0;               // replay serial of its log (0: none)
+        // Per record: draw phase and category (galaxy/motion_signals.h).
+        std::vector<std::uint32_t> category;
+        // The game's camera epoch (scene marker); a different epoch in the
+        // next scene is a hard cut.
+        std::uint32_t camera_epoch = 0;
+        bool camera_epoch_known = false;
+        // Record ranges of the frame's layers (GxBackend::kSceneLayer,
+        // kScreenLayer, kMirrorLayer). Every prev_index is in the scene
+        // before's index space (GxBackend::end_record_layer).
+        struct LayerRange {
+            std::size_t first = 0;
+            std::size_t count = 0;
+            std::uint64_t serial = 0;   // 0: not recorded
+        };
+        std::array<LayerRange, 3> layers{};
+        [[nodiscard]] bool in_layer(unsigned layer, std::size_t r) const noexcept {
+            return r - layers[layer].first < layers[layer].count;
+        }
         void clear() noexcept {
-            constants.clear(); from.clear(); current.clear(); prev_index.clear();
-            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false;
+            constants.clear(); prev_index.clear();
+            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
+            ps_constants.clear();
+            category.clear(); camera_epoch_known = false;
+            layers = {};
         }
     };
     // Recording, ready (log completed), playing, and the playing scene's
@@ -670,13 +860,71 @@ private:
         std::uint32_t xfb_addr = 0;
         unsigned subframes = 0;
         unsigned next = 0;
-        std::int64_t due_qpc = 0;
-        std::int64_t step_qpc = 0;
+        std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
+        double lead = 0.0;                // t of a slot at the arrival (see start)
         // Set inside a render chunk (no frame may be recorded there): the
         // render loop presents the real frame before anything else.
         bool flush_requested = false;
         unsigned scene = 0;               // interp_scenes_ index being interpolated
+        bool classified = false;          // interp_moving_ holds this scene's records
+        bool ready = false;               // the replay and its program are recorded
+        // The scene interpolated from: the one before, or the one shown last
+        // when the one before was never shown (its log replaced unplayed);
+        // `chained`: records then match through the skipped scene
+        // (interp_chain_prev_).
+        unsigned before = 0;
+        bool chained = false;
     };
+    // The interp_scenes_ index of the last frame on screen (a sub-frame or the
+    // real frame of a sequence), -1 when unknown (a frame presented alone).
+    std::int32_t interp_shown_scene_ = -1;
+    // Its sequence and t (1: the real frame): the frame before of the next
+    // replay's motion vectors.
+    std::uint64_t interp_shown_serial_ = 0;
+    float interp_shown_t_ = 0.0f;
+    std::vector<std::int32_t> interp_chain_prev_;
+    std::uint64_t interp_chained_sequences_ = 0;  // started from the scene shown last
+    std::uint64_t interp_unchained_skips_ = 0;    // a never-shown scene before, not chained
+    // The playing scene, classified once per sequence (render_interp_subframe):
+    // the game camera between the scene before and it, every record whose
+    // constants change in a sub-frame, and every palette snapshot pair.
+    CameraMotion interp_camera_{};
+    float interp_camera_move_ = 0.0f;     // eye movement into the scene before (cut test)
+    struct InterpRecordMotion {
+        std::uint32_t record = 0;
+        std::int32_t prev = -1;           // matched record of the scene before
+        std::int32_t palette = -1;        // interp_palette_motions_ index
+        EyeMotion position{};             // inline position matrix
+        bool position_moves = false;
+        bool tex_moves = false;           // inline texture or post matrices
+        bool colour_moves = false;        // channel ambient or material colours
+        bool projection_moves = false;
+    };
+    std::vector<InterpRecordMotion> interp_moving_;
+    std::vector<InterpRecordMotion> interp_pending_;  // classification scratch
+    struct InterpPaletteMotion {
+        std::int32_t shadow = -1;         // palette shadow of the playing scene
+        std::int32_t before = -1;         // of the scene before, or -1
+        std::int32_t next = -1;           // next entry of the same shadow
+        std::uint16_t position_mask = 0;  // PNMTX slots its records read
+        std::uint16_t normal_mask = 0;    // normal matrices its records read
+        std::uint8_t light_mask = 0;      // GX lights its records evaluate
+        bool orthographic = false;
+        std::uint8_t layer = 0;           // of the records that read it
+        PaletteMotion motion{};
+    };
+    // The camera of screen-layer records: none (no split, no cut). Mirror-pass
+    // records have no split either, and cut with the scene camera.
+    static constexpr CameraMotion kScreenCamera{};
+    CameraMotion interp_mirror_camera_{};
+    [[nodiscard]] const CameraMotion& layer_camera(unsigned layer) const noexcept {
+        return layer == kScreenLayer ? kScreenCamera : layer == kMirrorLayer ? interp_mirror_camera_ : interp_camera_;
+    }
+    std::vector<InterpPaletteMotion> interp_palette_motions_;
+    std::vector<std::int32_t> interp_palette_first_;  // per shadow: first entry
+    std::uint64_t interp_moving_records_ = 0;        // summed per sub-frame
+    std::uint64_t interp_palette_decompositions_ = 0;
+    std::uint64_t interp_camera_cuts_ = 0;
     // A ready frame's present arrived inside a render chunk: the render loop
     // finishes the playing sequence, then starts this one.
     bool interp_start_pending_ = false;
@@ -690,19 +938,93 @@ private:
     // A recorded frame whose present arrives as a separate VI present.
     bool interp_log_waiting_ = false;
     std::uint32_t interp_log_xfb_ = 0;
+    bool interp_stopping_ = false;        // render thread draining for a stop
+    // RendererD3D12::replay_hold_segment() seen at the last render chunk.
+    unsigned resident_hold_segment_ = ~0u;
+    std::uint64_t interp_held_vertex_blocks_ = 0;   // released while interpolating
+    // Present slot clock (VSync off): next slot and slot length.
+    std::int64_t interp_slot_due_qpc_ = 0;
+    std::int64_t interp_slot_period_qpc_ = 0;
+    // Smoothed game-frame arrival clock (start_interp_sequence).
+    std::int64_t interp_arrival_qpc_ = 0;
+    std::int64_t interp_frame_period_qpc_ = 0;
+    std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
+    std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
+    void supersede_interp_sequence();
     void start_interp_sequence(std::uint32_t xfb_addr);
-    std::vector<D3D12_GPU_VIRTUAL_ADDRESS> interp_record_vas_;
+    void select_interp_before();
+    // B22: sub-frames per game frame within the GPU budget (interp_gpu_governor).
+    unsigned interp_gpu_governor(double& rate);
+    unsigned interp_gpu_cap_ = 7u;
+    std::uint64_t interp_gpu_cap_serial_ = 0;
+    std::uint64_t interp_gpu_checked_ = 0;
+    std::uint64_t interp_gpu_capped_ = 0;   // sequences with fewer sub-frames
+    // Game-frame cadence governor (note_game_frame_cadence).
+    void note_game_frame_cadence(std::int64_t now_qpc);
+    unsigned interp_cadence_cap_ = 7u;
+    unsigned interp_cadence_interval_s_ = 8u;
+    std::int64_t interp_cadence_window_qpc_ = 0;
+    std::int64_t interp_cadence_last_qpc_ = 0;
+    std::uint32_t interp_cadence_misses_ = 0;
+    std::int64_t interp_cadence_change_qpc_ = 0;
+    std::int64_t interp_cadence_try_qpc_ = 0;
+    std::uint32_t interp_cadence_frames_ = 0;
+    std::uint64_t interp_cadence_drops_ = 0;
+    double interp_cadence_fps_ = 0.0;
+    double interp_cadence_own_misses_ = 0.0;   // per second, without sub-frames
+    // The playing sequence's evaluation program and output slots (prepare_interp_sequence).
+    interp_gpu::Program interp_program_;
+    interp_gpu::Layout interp_layout_{};
+    std::vector<std::int32_t> interp_vs_slot_;             // per record
+    std::vector<std::int32_t> interp_record_palette_slot_;  // per record
+    std::vector<std::int32_t> interp_ps_slot_;             // per pixel-constant record
+    std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
+    std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
+    std::vector<std::uint32_t> interp_palette_source_;     // per palette slot: mtx_palette_base
+    std::vector<std::uint32_t> interp_eval_expected_;      // GALAXY_INTERP_EVAL_CHECK reference
+    std::uint64_t interp_eval_expected_seq_ = 0;
+    std::vector<interp_gpu::Op> interp_eval_ops_;
+    bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
+    void build_interp_reference(const InterpScene& scene, const interp_gpu::FrameTimes& times,
+                                std::vector<std::uint32_t>& out) const;
+    void verify_interp_program(const InterpScene& scene, const InterpScene& before_scene, const Affine34& camera_t);
+    void check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t, const Affine34& camera_prev,
+                           float t_prev);
+    // Pixel-constant records of the playing scene whose colours change
+    // (record, matched record of the scene before), and their sub-frame uploads.
+    std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;
+    std::uint64_t interp_ps_moving_total_ = 0;   // summed per sub-frame
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded
-    double interp_cpu_ms_ = 0.0;
+    double interp_cpu_ms_ = 0.0;          // wall time per sub-frame, waits included
+    double interp_prepare_ms_ = 0.0;      // classification, program and replay per sequence
+    std::array<double, 6> interp_prepare_phase_ms_{};
+    std::uint64_t interp_prepared_ = 0;   // sequences prepared
+    std::uint64_t interp_program_ops_ = 0;
+    std::uint64_t interp_program_words_ = 0;
+    std::uint64_t interp_sequences_ = 0;
+    std::uint64_t interp_snapped_ = 0;    // records shown at their own transform
+    std::uint64_t interp_started_ = 0;
+    std::uint64_t interp_last_played_serial_ = 0;
+    std::uint64_t interp_logs_skipped_ = 0;     // completed logs replaced before playing
+    std::uint64_t interp_present_skipped_ = 0;  // VI presents while a sequence played
+    // Game frames presented without sub-frames, by reason: overlay, no 3D
+    // scene, several scenes, (unused), log already gone, unmatched.
+    std::array<std::uint64_t, 6> interp_real_only_{};
+    bool interp_presenting_real_ = false;
+    void note_interp_real_present();
+    void interp_event(const char* what, std::uint64_t a, std::uint64_t b) const;
+    void report_interp_stats();
     std::int64_t interp_stats_qpc_ = 0;
     // Render thread: steps the interpolation sequence of the latest frame
     // (one sub-frame or the real frame when due; `flush` presents the real
     // frame now and drops the remaining sub-frames).
     void advance_interp_sequence(bool flush);
     bool render_interp_subframe(float t);
-    [[nodiscard]] std::int64_t interp_wait_ms() const;
+    [[nodiscard]] std::int64_t interp_remaining_us() const;  // to the next slot
+    [[nodiscard]] double interp_slot_t() const;
+    static void interp_sleep_us(std::int64_t us);
     std::uint64_t motion_trace_scenes_ = 0;
     bool scene_camera_captured_ = false;
     float scene_jitter_px_[2]{};

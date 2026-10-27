@@ -1306,14 +1306,50 @@ void TextureCache::begin_frame(
     // Reserve before publishing any slots, so allocation failure cannot leave
     // a partially reclaimed list that would publish duplicate slots on retry.
     free_srv_indices_.reserve(free_srv_indices_.size() + retired.size());
+    std::vector<Entry>* held = hold_segment_ < kMaxHoldSegments
+        ? &held_entries_[hold_segment_] : nullptr;
+    if (held != nullptr) [[unlikely]] {
+        held->reserve(held->size() + retired.size());
+    }
     for (Entry& entry : retired) {
         free_srv_indices_.push_back(entry.handle.srv_index);
-        pool_retired_texture(entry);
+        if (held != nullptr) [[unlikely]] {
+            held->push_back(std::move(entry));
+            ++held_texture_count_;
+        } else {
+            pool_retired_texture(entry);
+        }
     }
     retired.clear();
     upload_arenas_[frame_slot].active_chunk = 0;
     upload_arenas_[frame_slot].cursor = 0;
     current_frame_slot_ = frame_slot;
+}
+
+void TextureCache::release_held_entries(std::vector<Entry>& held) {
+    for (Entry& entry : held) {
+        pool_retired_texture(entry);
+    }
+    held.clear();
+}
+
+void TextureCache::set_retirement_hold_segment(unsigned segment) {
+    if (segment == hold_segment_) {
+        return;
+    }
+    if (segment >= kMaxHoldSegments) {
+        // Interpolation ended: the renderer drained the GPU when its rings
+        // left the per-game-frame mode.
+        for (auto& held : held_entries_) {
+            release_held_entries(held);
+        }
+        hold_segment_ = kNoHoldSegment;
+        return;
+    }
+    // The renderer waited for this segment's fence before reusing it: every
+    // replay that could name these textures has completed.
+    release_held_entries(held_entries_[segment]);
+    hold_segment_ = segment;
 }
 
 bool TextureCache::preallocate_upload_arenas(unsigned frames_in_flight) {
@@ -1603,6 +1639,10 @@ void TextureCache::shutdown() {
     efb_aliases_.clear();
     alias_guest_envelope_.clear();
     retired_entries_.clear();
+    for (auto& held : held_entries_) {
+        held.clear();
+    }
+    hold_segment_ = kNoHoldSegment;
     texture_pool_.clear();
     texture_pool_bytes_ = 0;
     release_upload_arenas();

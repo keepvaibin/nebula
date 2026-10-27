@@ -41,10 +41,13 @@ public:
 
     // LOAD_INDX A-D (opcodes 0x20-0x38): indexed XF write resolved by the
     // parser from the guest-side array (SMG matrix skinning path).
+    // `source` = array slot << 16 | element index (the load signature's
+    // name for the matrix; the array base alternates between buffers).
     void load_xf_indexed(
         std::uint16_t xf_addr,
         const std::uint32_t* values,
-        std::uint16_t count);
+        std::uint16_t count,
+        std::uint32_t source = 0u);
 
     // LOAD_BP_REG (opcode 0x61): payload = register(31:24) | value(23:0).
     // Honors the one-shot BP 0xFE write mask for the immediately following
@@ -241,7 +244,29 @@ public:
     }
     void mark_all_dirty() { dirty_ = ~0u; }
 
+    // LOAD_XF_REG / LOAD_INDX commands that wrote matrix or light memory
+    // (below 0x1000), changed or not. The same object loads the same sequence
+    // every frame, so a count since its draw-identity marker names each of its
+    // transform states.
+    [[nodiscard]] std::uint32_t matrix_write_count() const noexcept { return matrix_writes_; }
+    // Load signature: a hash of the destinations (and, for LOAD_INDX, the
+    // array slot and element) of those writes since the last reset. Two
+    // records with the same count but a different sequence of loads differ
+    // here. Updated only while tracking is on (draw-identity scenes).
+    void set_matrix_load_tracking(bool on) noexcept { track_matrix_loads_ = on; }
+    void reset_matrix_load_signature() noexcept { matrix_load_signature_ = kMatrixLoadSignatureSeed; }
+    [[nodiscard]] std::uint64_t matrix_load_signature() const noexcept { return matrix_load_signature_; }
+    static constexpr std::uint64_t kMatrixLoadSignatureSeed = 0x6D6C6F6164736967ull;
+
 private:
+    void note_matrix_load(std::uint16_t base, std::uint16_t count, std::uint32_t source) noexcept {
+        std::uint64_t h = matrix_load_signature_ ^
+            ((static_cast<std::uint64_t>(source) << 32u) | (static_cast<std::uint64_t>(count) << 16u) | base);
+        h *= 0x9E3779B97F4A7C15ull;
+        matrix_load_signature_ = h ^ (h >> 29u);
+    }
+    bool track_matrix_loads_ = false;
+    std::uint64_t matrix_load_signature_ = kMatrixLoadSignatureSeed;
     friend class GxBackendMemorySnapshotTestAccess;
     void invalidate_dependency_shape() noexcept {
         dependency_shape_hash_valid_ = false;
@@ -269,6 +294,7 @@ private:
     // guest has written since the last consumer snapshot. See
     // xf_palette_dirty() for what the consumer does with them.
     std::uint64_t xf_palette_dirty_ = 0u;
+    std::uint32_t matrix_writes_ = 0u;
     mutable std::uint64_t dependency_shape_hash_ = 0u;
     mutable DependencyShapeWords dependency_shape_words_{};
     mutable bool dependency_shape_hash_valid_ = false;

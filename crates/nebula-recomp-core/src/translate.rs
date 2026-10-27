@@ -4286,6 +4286,12 @@ fn lower_words_with_config(
         {
             output.push_str(&site_hook_call(pc, "HomeVertical", 0));
         }
+        if let Some((kind, argument)) = draw_identity_site(address, function_end, pc, word) {
+            output.push_str(&site_hook_call(pc, kind, argument));
+        }
+        if let Some((kind, argument)) = motion_signal_site(address, function_end, pc, word) {
+            output.push_str(&site_hook_call(pc, kind, argument));
+        }
         let typed_pure_access = if typed_region_gpr_mask != 0
             && !has_reentry_label
             && function_async_marker.is_none()
@@ -7670,6 +7676,14 @@ fn emit_direct_guest_call_with_exact_fpu(
         if target == 0x804D_0830 {
             output.push_str(&site_hook_call(pc, "Language", 0));
         }
+        // TalkTextFormer::updateTalking reveals one step of a talk balloon's
+        // (TalkBalloon, former at r31 + 0x24) or Rosalina's storybook text
+        // (RosettaMonologue, former at r30 + 0x24) per frame; the runtime
+        // repeats it for the text speed setting. Movie subtitles keep the
+        // movie's pace.
+        if target == 0x802A_367C && (pc == 0x8029_D1A8 || pc == 0x8028_2B38) {
+            output.push_str(&site_hook_call(pc, "TextStep", u32::from(pc == 0x8028_2B38)));
+        }
         Ok(())
     }
 
@@ -7948,6 +7962,101 @@ fn site_hook_call(pc: u32, kind: &str, argument: u32) -> String {
     format!(
         "    galaxy::site_hook(services, context, memory, 0x{pc:08X}u, galaxy::SiteHookKind::{kind}, {argument}u);\n"
     )
+}
+
+/// The object that is about to draw, for frame interpolation and motion vectors: each J3D shape
+/// packet (J3DShapePacket::prepareDraw, r3), each NameObj draw of a category list (the const
+/// NameObjRealDelegator call, r4), each JPA emitter pass (JPAResource::drawP / drawC, work in r4)
+/// and each particle of those passes (the `work->mpCurNode = node` store; the argument names the
+/// node register, plus 0x100 in drawC).
+fn draw_identity_site(address: u32, function_end: u32, pc: u32, word: u32) -> Option<(&'static str, u32)> {
+    match (address, function_end, pc, word) {
+        (0x8042_32D4, 0x8042_33F0, 0x8042_32D4, 0x9421_FFF0) => Some(("DrawShapePacket", 0)),
+        (0x8026_1B40, 0x8026_1B70, 0x8026_1B40, 0x9421_FFF0) => Some(("DrawNameObj", 0)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_2E74, 0x9421_FFD0) => Some(("DrawEmitter", 0)),
+        (0x8044_319C, 0x8044_3484, 0x8044_319C, 0x9421_FFE0) => Some(("DrawEmitter", 1)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_30A0, 0x939F_01E8) => Some(("DrawParticle", 28)),
+        (0x8044_2E74, 0x8044_319C, 0x8044_3104, 0x937F_01E8) => Some(("DrawParticle", 27)),
+        (0x8044_319C, 0x8044_3484, 0x8044_3388, 0x939F_01E8) => Some(("DrawParticle", 0x100 | 28)),
+        (0x8044_319C, 0x8044_3484, 0x8044_33EC, 0x937F_01E8) => Some(("DrawParticle", 0x100 | 27)),
+        _ => None,
+    }
+}
+
+/// Game-side motion signals (generation 20): where the game's own state says a
+/// transform does not continue from the frame before, and which part of the
+/// scene draws next.
+/// - MotionCamera: CameraViewInterpolator::reduceOscillation entry (r3; it
+///   consumes the force-camera-change flag, so a set flag there means the view
+///   jumps this frame), and for attribution CameraDirector::resetCameraMan,
+///   MR::resetCameraMan, MR::startCameraInterpolation (r3 frames) and
+///   CameraViewInterpolator::setInterpolation (r3, r4 frames).
+/// - MotionObject (r3 the object): MR::resetPosition (three overloads),
+///   LiveActor::makeActorAppeared / makeActorDead, MarioAccess::setTrans and
+///   setBaseMtx after their MarioActor fetch (every MR::setPlayerPos* path
+///   ends in one of them), JPABaseEmitter::init (a pooled emitter's new life).
+/// - DrawCategory (argument source << 8 | phase): CategoryList::execute
+///   (r3 MR::DrawType), CategoryList::drawOpa / drawXlu (r3 MR::DrawBufferType;
+///   every DrawBufferHolder draw is reached through these), and the draw3D
+///   phases of SceneFunction (phase 9 = executeDrawImageEffect).
+/// - DrawStripeParticle: the `work->mpCurNode = node` stores of JPADrawStripe
+///   and JPADrawStripeX (inside one GXBegin; argument = node register | loop
+///   << 8).
+/// - MirrorPass: GameScene::drawMirror after its isDrawMirror test (argument
+///   0) and before its MR::clearZBuffer (argument 1).
+/// - LightLoad: LightFunction::loadActorLightInfo (r3 ActorLightInfo),
+///   loadLightInfoCoin, loadPointLightInfo, loadAllLightWhite, MR::loadLightPlayer.
+/// - Layout2D (the 2D layer): GameScene::draw2D entry (0) and epilogue after
+///   its WipeLayout category (1); nw4r::lyt::Pane::Draw after its visibility
+///   test (2, r3 pane); LayoutActor::draw after MR::isExecuteDrawLayout (3,
+///   r31); StarPointerLayout::draw on its drawn path (4, r31);
+///   StarPointerDirector::draw entry (5, r3). None is inside a GXBegin.
+fn motion_signal_site(address: u32, function_end: u32, pc: u32, word: u32) -> Option<(&'static str, u32)> {
+    match (address, function_end, pc, word) {
+        (0x800B_4024, 0x800B_4178, 0x800B_4024, 0x9421_FF80) => Some(("MotionCamera", 0)),
+        (0x8009_AD28, 0x8009_AEA8, 0x8009_AD28, 0x9421_FFB0) => Some(("MotionCamera", 1)),
+        (0x803C_7860, 0x803C_7884, 0x803C_7860, 0x9421_FFF0) => Some(("MotionCamera", 2)),
+        (0x803C_7884, 0x803C_78B8, 0x803C_7884, 0x9421_FFF0) => Some(("MotionCamera", 3)),
+        (0x800B_3A2C, 0x800B_3A7C, 0x800B_3A2C, 0x8803_000A) => Some(("MotionCamera", 4)),
+        (0x803B_ECD4, 0x803B_ED4C, 0x803B_ECD4, 0x9421_FFF0) => Some(("MotionObject", 0)),
+        (0x803B_ED4C, 0x803B_ED84, 0x803B_ED4C, 0x9421_FFF0) => Some(("MotionObject", 1)),
+        (0x803B_ED84, 0x803B_EE10, 0x803B_ED84, 0x9421_FFD0) => Some(("MotionObject", 2)),
+        (0x8016_5300, 0x8016_53C4, 0x8016_5300, 0x9421_FFF0) => Some(("MotionObject", 3)),
+        (0x8016_53D4, 0x8016_5478, 0x8016_53D4, 0x9421_FFF0) => Some(("MotionObject", 4)),
+        (0x8030_3078, 0x8030_312C, 0x8030_3094, 0x7FE4_FB78) => Some(("MotionObject", 5)),
+        (0x8030_3E44, 0x8030_3E7C, 0x8030_3E60, 0x7FE4_FB78) => Some(("MotionObject", 6)),
+        (0x803A_38EC, 0x803A_3B6C, 0x803A_38EC, 0x9421_FFF0) => Some(("MotionObject", 7)),
+        (0x8034_4894, 0x8034_48D0, 0x8034_4894, 0x9421_FFF0) => Some(("DrawCategory", 1 << 8)),
+        (0x8034_4954, 0x8034_4990, 0x8034_4954, 0x9421_FFF0) => Some(("DrawCategory", 2 << 8)),
+        (0x8034_4990, 0x8034_49CC, 0x8034_4990, 0x9421_FFF0) => Some(("DrawCategory", 3 << 8)),
+        (0x8034_3E44, 0x8034_3F24, 0x8034_3E44, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8)),
+        (0x8034_3F24, 0x8034_3F50, 0x8034_3F24, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 1)),
+        (0x8034_3F50, 0x8034_3FE8, 0x8034_3F50, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 2)),
+        (0x8034_3FE8, 0x8034_4094, 0x8034_3FE8, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 3)),
+        (0x8034_4094, 0x8034_419C, 0x8034_4094, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 4)),
+        (0x8034_419C, 0x8034_41FC, 0x8034_419C, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 5)),
+        (0x8034_41FC, 0x8034_4224, 0x8034_41FC, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 6)),
+        (0x8034_4224, 0x8034_424C, 0x8034_4224, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 7)),
+        (0x8034_424C, 0x8034_4350, 0x8034_424C, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 8)),
+        (0x8034_4350, 0x8034_43CC, 0x8034_4350, 0x9421_FFF0) => Some(("DrawCategory", 4 << 8 | 9)),
+        (0x803A_41FC, 0x803A_45E8, 0x803A_4360, 0x933F_01E8) => Some(("DrawStripeParticle", 25)),
+        (0x803A_45E8, 0x803A_4CE0, 0x803A_478C, 0x92FC_01E8) => Some(("DrawStripeParticle", 1 << 8 | 23)),
+        (0x803A_45E8, 0x803A_4CE0, 0x803A_4A10, 0x93BC_01E8) => Some(("DrawStripeParticle", 2 << 8 | 29)),
+        (0x8033_F040, 0x8033_F0F8, 0x8033_F040, 0x9421_FFF0) => Some(("Layout2D", 0)),
+        (0x8033_F040, 0x8033_F0F8, 0x8033_F0E0, 0x8001_0014) => Some(("Layout2D", 1)),
+        (0x8000_C53C, 0x8000_C5C0, 0x8000_C568, 0x8183_0000) => Some(("Layout2D", 2)),
+        (0x8036_61A4, 0x8036_61E0, 0x8036_61C4, 0x807F_000C) => Some(("Layout2D", 3)),
+        (0x8038_82F8, 0x8038_839C, 0x8038_8364, 0x7FE3_FB78) => Some(("Layout2D", 4)),
+        (0x8038_5758, 0x8038_57E4, 0x8038_5758, 0x9421_FFE0) => Some(("Layout2D", 5)),
+        (0x8033_EDF8, 0x8033_EE8C, 0x8033_EE10, 0x4808_89E5) => Some(("MirrorPass", 0)),
+        (0x8033_EDF8, 0x8033_EE8C, 0x8033_EE50, 0x4808_B91D) => Some(("MirrorPass", 1)),
+        (0x8018_881C, 0x8018_88D0, 0x8018_881C, 0x9421_FFD0) => Some(("LightLoad", 0)),
+        (0x8018_88D0, 0x8018_8998, 0x8018_88D0, 0x9421_FF90) => Some(("LightLoad", 1)),
+        (0x8018_8998, 0x8018_8A4C, 0x8018_8998, 0x9421_FFA0) => Some(("LightLoad", 2)),
+        (0x8018_8A4C, 0x8018_8B0C, 0x8018_8A4C, 0x9421_FF80) => Some(("LightLoad", 3)),
+        (0x803D_8A44, 0x803D_8A70, 0x803D_8A44, 0x9421_FFF0) => Some(("LightLoad", 4)),
+        _ => None,
+    }
 }
 
 fn rmge01_native_screen_width_call(address: u32, function_end: u32, pc: u32, word: u32) -> bool {

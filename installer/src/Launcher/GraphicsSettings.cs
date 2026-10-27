@@ -22,12 +22,50 @@ namespace Nebula.Launcher
         public static readonly string[] AntiAliasingQualities = { "Low", "Medium", "High", "Ultra" };
         // Release runtimes are built without FSR 3 (upscaler 2); a saved 2 reads as FSR 1.
         public static readonly string[] Upscalers = { "Bilinear", "AMD FidelityFX FSR 1" };
+        // NVIDIA DLSS (upscaler 3) runs from files the player downloads from NVIDIA
+        // (DlssPackage); Nebula ships none of them.
+        public static string StreamlineDir { get { return DlssPackage.Folder; } }
+        public static bool DlssInstalled() { return DlssPackage.Installed(); }
+        // The upscaler setting values offered, in list order. On NVIDIA RTX machines DLSS is
+        // listed before it is downloaded; choosing it offers the download.
+        public static List<int> UpscalerChoices()
+        {
+            var choices = new List<int> { 0, 1 };
+            if (DlssInstalled() || DlssPackage.RtxAdapterPresent()) choices.Add(3);
+            return choices;
+        }
+        public static string UpscalerName(int value)
+        {
+            if (value == 3) return DlssInstalled() ? "NVIDIA DLSS" : "NVIDIA DLSS (download)";
+            return Upscalers[Math.Max(0, Math.Min(value, Upscalers.Length - 1))];
+        }
+        public static readonly string[] DlssQualities = { "DLAA", "Quality", "Balanced", "Performance", "Ultra Performance" };
         private const int TemporalQualityCount = 5;
         public static readonly string[] TextureFilters = { "Trilinear", "2x anisotropic", "4x anisotropic", "8x anisotropic", "16x anisotropic" };
         public static readonly string[] LightingModes = { "Per pixel (enhanced)", "Per vertex (original)" };
         private static readonly int[] Anisotropy = { 1, 2, 4, 8, 16 };
-        // The runtime's frame_rate_options.
-        public static readonly int[] FrameRates = { 30, 60 };
+        private static readonly int[] StandardFrameRates = { 30, 60, 120, 144, 165, 240, 360 };
+
+        // The runtime's frame_rate_options: standard rates the display can
+        // show, its own rate when that is not one of them, then 0 (unlimited).
+        public static List<int> FrameRates(int refreshHz)
+        {
+            var rates = new List<int>();
+            bool listed = false;
+            foreach (int rate in StandardFrameRates)
+            {
+                if (refreshHz != 0 && rate > refreshHz + 1) break;
+                rates.Add(rate);
+                listed = listed || (refreshHz + 1 >= rate && refreshHz <= rate + 1);
+            }
+            if (refreshHz > 30 && !listed)
+            {
+                int at = rates.FindIndex(r => r > refreshHz);
+                rates.Insert(at < 0 ? rates.Count : at, refreshHz);
+            }
+            rates.Add(0);
+            return rates;
+        }
         // Width:height of each aspect choice; Auto has none.
         private static readonly int[,] AspectRatios = { { 0, 0 }, { 4, 3 }, { 16, 10 }, { 16, 9 }, { 21, 9 }, { 32, 9 } };
         // Window heights offered for a fixed aspect when the width comes out whole.
@@ -98,10 +136,11 @@ namespace Nebula.Launcher
             double rate;
             if (values.TryGetValue("max_fps", out fps) &&
                 double.TryParse(fps.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out rate) &&
-                rate >= 1 && rate <= 60) settings.FrameRate = (int)Math.Round(rate);
+                (rate == 0 || (rate >= 1 && rate <= 1000))) settings.FrameRate = (int)Math.Round(rate);
             settings.AntiAliasing = Choice(values, "aa", AntiAliasingModes.Length, settings.AntiAliasing);
             settings.Quality = Choice(values, "smaa_quality", AntiAliasingQualities.Length, settings.Quality);
-            settings.Upscaler = Math.Min(Choice(values, "upscaler", Upscalers.Length + 1, settings.Upscaler), Upscalers.Length - 1);
+            int upscaler = Choice(values, "upscaler", 4, settings.Upscaler);
+            settings.Upscaler = upscaler == 2 ? 1 : upscaler;
             settings.TemporalQuality = Choice(values, "temporal_quality", TemporalQualityCount, settings.TemporalQuality);
             settings.Sharpness = Math.Min(Choice(values, "sharpness", 101, settings.Sharpness), 100);
             int anisotropy = Choice(values, "anisotropic_filtering", 17, -1);

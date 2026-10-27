@@ -88,6 +88,14 @@ Belen Masia, Fernando Navarro and Diego Gutierrez. License: `third_party/smaa/LI
 <https://github.com/GPUOpen-Effects/FidelityFX-FSR>. Copyright (c) 2021 Advanced Micro Devices, Inc.
 License: `third_party/fidelityfx-fsr1/LICENSE.txt`.
 
+## NVIDIA Streamline 2.14.1 headers (MIT)
+
+`third_party/streamline/include/` holds unmodified headers from
+<https://github.com/NVIDIA-RTX/Streamline> (tag v2.14.1). Copyright (c) 2022-2023 NVIDIA CORPORATION.
+License: `third_party/streamline/LICENSE.txt`. The Streamline and DLSS binaries are not part of
+Nebula: Setup or the settings download them from NVIDIA's release when the player asks for DLSS and
+accepts the NVIDIA RTX SDKs license.
+
 ## nod and other Rust crates
 
 `nebula-recomp.exe` reads disc images with the `nod` crate 1.4.4 by Luke Street

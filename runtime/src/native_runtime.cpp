@@ -35,6 +35,7 @@
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/fifo_submission.h"
+#include "galaxy/motion_signals.h"
 #include "galaxy/runtime_timeline.h"
 #include "galaxy/relative_vi_window.h"
 #include "galaxy/opening_route_marker_guard.h"
@@ -2270,6 +2271,47 @@ struct RuntimeState {
     std::uint32_t first_tick{};
     std::uint32_t last_tick{};
     galaxy::host::GuestAddressSpace* address_space{};
+    // Draw-identity markers are emitted inside this 3D scene (set at its
+    // SceneBegin when the renderer wants them).
+    bool draw_identity_scene{};
+    std::uint64_t draw_identity_markers{};
+    std::uint64_t draw_identity_dropped{};
+    // Motion signals (generation-20 site hooks; galaxy/motion_signals.h).
+    galaxy::motion::EpochTable motion_epochs;
+    std::uint32_t motion_camera_epoch{};
+    std::uint32_t motion_camera_sites{};      // CameraSite bits seen since the last cut
+    bool motion_camera_cut_pending{};         // a cut since the previous scene marker
+    std::uint32_t motion_object_events{};     // epoch bumps since the previous scene marker
+    std::uint64_t motion_scene_serial{};      // SceneBegin markers seen
+    std::array<std::uint64_t, 8> motion_object_counts{};
+    std::uint64_t motion_camera_cuts{};
+    std::uint64_t motion_category_markers{};
+    std::uint64_t motion_light_markers{};
+    std::uint64_t motion_stripe_entries{};
+    std::uint64_t motion_mirror_passes{};
+    std::uint64_t motion_dead_repeats{};      // makeActorDead on a dead actor (no bump)
+    std::uint64_t motion_player_moves{};      // player placed without a jump (no bump)
+    // The 2D layer (SiteHookKind::Layout2D): GameScene::draw2D bounds and
+    // layout identity markers. Index 0 pane, 1 layout actor, 2 star pointer.
+    bool layout_2d_open{};                    // inside GameScene::draw2D
+    bool layout_2d_markers{};                 // ... and the renderer reads identity markers
+    bool layout_2d_since_scene{};             // draw2D ran since the last 3D SceneBegin
+    bool layout_after_2d{};                   // draw2D ended, no 3D SceneBegin since
+    std::array<std::uint64_t, 3> layout_drawn_after_2d{};  // outside draw2D, after it in the frame
+    std::uint64_t layout_2d_scenes{};         // draw2D entries
+    std::uint64_t layout_3d_without_2d{};     // 3D scenes with no draw2D before the next one
+    std::array<std::uint32_t, 3> layout_frame_drawn{};    // this draw2D
+    std::array<std::uint32_t, 3> layout_frame_markers{};  // this draw2D, appended
+    std::uint32_t layout_frame_categories{};
+    std::array<std::uint64_t, 3> layout_markers_in_2d{};  // appended inside draw2D
+    std::array<std::uint64_t, 3> layout_drawn_outside_2d{};
+    std::array<std::uint64_t, 3> layout_drawn_in_3d{};
+    std::uint64_t layout_markers_outside_2d{};            // appended outside draw2D
+    std::uint64_t layout_markers_dropped{};
+    std::uint32_t layout_panes_min{0xFFFFFFFFu};
+    std::uint32_t layout_panes_max{};
+    std::uint64_t layout_panes_sum{};
+    std::uint64_t layout_summary_frames{};
     galaxy::input::NativeInputCausalityTracker native_input_causality;
     galaxy::scheduler::FunctionAsyncFlightTracker function_async_flights;
     std::unordered_map<std::uint32_t, std::uint64_t>
@@ -9855,6 +9897,14 @@ bool try_read_guest_u32(
     return true;
 }
 
+// SiteHookKind::DrawShapePacket..DrawParticle: one op::kHostMarker in the GX
+// stream naming the object whose commands follow. Marker kinds: 1 J3D shape
+// packet (packet, its J3DShape), 2 NameObj draw (object, vtable), 3 JPA
+// emitter pass (emitter, JPAResource; aux 1 = child pass), 4 JPA particle
+// (particle, age << 16 | lifetime; aux 1 = child pass).
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context);
+
 std::uint32_t read_guest_u32_or_zero(
     const galaxy::host::GuestAddressSpace& address_space,
     std::uint32_t address) {
@@ -9863,12 +9913,503 @@ std::uint32_t read_guest_u32_or_zero(
     return value;
 }
 
+bool append_host_marker(RuntimeState& state, std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                        std::uint32_t b) {
+    const std::array<std::byte, 12> marker{
+        std::byte{0xF0}, std::byte{kind},
+        std::byte(aux >> 8u), std::byte(aux & 0xFFu),
+        std::byte(a >> 24u), std::byte((a >> 16u) & 0xFFu),
+        std::byte((a >> 8u) & 0xFFu), std::byte(a & 0xFFu),
+        std::byte(b >> 24u), std::byte((b >> 16u) & 0xFFu),
+        std::byte((b >> 8u) & 0xFFu), std::byte(b & 0xFFu)};
+    if (state.address_space->append_gx_host_marker(marker)) {
+        ++state.draw_identity_markers;
+        return true;
+    }
+    ++state.draw_identity_dropped;
+    return false;
+}
+
+// Shape-packet, NameObj and emitter markers carry their object's epoch above
+// the pass bit (galaxy/motion_signals.h): a reset or new life is a new identity.
+void emit_draw_identity_marker(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                               const galaxy::PpcContext& context) {
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    std::uint8_t marker_kind = 0u;
+    std::uint16_t aux = 0u;
+    std::uint32_t a = 0u;
+    std::uint32_t b = 0u;
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::DrawShapePacket:
+        marker_kind = galaxy::motion::kMarkerShapePacket;
+        a = context.gpr[3];
+        b = read_guest_u32_or_zero(space, a + 0x28u);  // J3DShapePacket::mpShape
+        if (state.motion_epochs.size() != 0u) {
+            const std::uint32_t model = read_guest_u32_or_zero(space, a + galaxy::motion::kShapePacketModel);
+            aux = static_cast<std::uint16_t>(state.motion_epochs.get(model) << 1u);
+        }
+        break;
+    case galaxy::SiteHookKind::DrawNameObj:
+        marker_kind = galaxy::motion::kMarkerNameObj;
+        a = context.gpr[4];
+        b = read_guest_u32_or_zero(space, a);          // vtable
+        aux = static_cast<std::uint16_t>(state.motion_epochs.get(a) << 1u);
+        break;
+    case galaxy::SiteHookKind::DrawEmitter:
+        marker_kind = galaxy::motion::kMarkerEmitter;
+        a = read_guest_u32_or_zero(space, context.gpr[4]);  // JPAEmitterWorkData::mpEmtr
+        b = context.gpr[3];
+        aux = static_cast<std::uint16_t>((state.motion_epochs.get(a) << 1u) | (argument & 1u));
+        break;
+    case galaxy::SiteHookKind::DrawParticle:
+        marker_kind = galaxy::motion::kMarkerParticle;
+        a = context.gpr[argument & 0x1Fu] + 8u;         // JPANode -> JPABaseParticle
+        b = read_guest_u32_or_zero(space, a + 0x80u);  // mAge << 16 | mLifeTime
+        aux = static_cast<std::uint16_t>((argument >> 8u) & 1u);
+        break;
+    default:
+        return;
+    }
+    static_cast<void>(append_host_marker(state, marker_kind, aux, a, b));
+}
+
 std::uint8_t read_guest_u8_or_zero(
     const galaxy::host::GuestAddressSpace& address_space,
     std::uint32_t address) {
     return mapped_guest_range(address_space, address, 1u)
                ? read_guest_u8(address_space, address)
                : 0u;
+}
+
+// Generation-20 motion signals (galaxy/motion_signals.h), simulation thread.
+// GALAXY_MOTION_TRACE_SIGNALS=1 logs every camera cut, the first 4000 camera
+// sites and object epoch bumps, and a summary every 600 scenes.
+bool motion_trace_enabled() {
+    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
+    return enabled;
+}
+
+void note_motion_camera(RuntimeState& state, std::uint32_t site, const galaxy::PpcContext& context) {
+    using galaxy::motion::CameraSite;
+    if (state.address_space == nullptr) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    if (site == static_cast<std::uint32_t>(CameraSite::ReduceOscillation)) {
+        const std::uint32_t self = context.gpr[3];
+        if (read_guest_u8_or_zero(space, self + galaxy::motion::kInterpolatorForceChange) == 0u) {
+            return;
+        }
+        ++state.motion_camera_epoch;
+        ++state.motion_camera_cuts;
+        state.motion_camera_cut_pending = true;
+        if (motion_trace_enabled()) {
+            std::fprintf(stderr,
+                         "[motion-signal] camera-cut vi=%llu scene=%llu epoch=%u sites=0x%X anti-oscillation=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), state.motion_camera_epoch,
+                         state.motion_camera_sites,
+                         static_cast<unsigned>(read_guest_u8_or_zero(
+                             space, self + galaxy::motion::kInterpolatorAntiOscillation)));
+        }
+        state.motion_camera_sites = 0u;
+        return;
+    }
+    if (site < 32u) {
+        state.motion_camera_sites |= 1u << site;
+    }
+    if (motion_trace_enabled()) {
+        static std::uint64_t lines = 0u;
+        if (lines++ < 4000u) {
+            const std::uint32_t frames = site == static_cast<std::uint32_t>(CameraSite::StartInterpolation)
+                ? context.gpr[3]
+                : site == static_cast<std::uint32_t>(CameraSite::SetInterpolation) ? context.gpr[4] : 0u;
+            const unsigned off = site == static_cast<std::uint32_t>(CameraSite::SetInterpolation)
+                ? read_guest_u8_or_zero(space, context.gpr[3] + galaxy::motion::kInterpolatorOff)
+                : 0u;
+            std::fprintf(stderr, "[motion-signal] camera-site vi=%llu scene=%llu site=%u frames=%u interpolation-off=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), site, frames, off);
+        }
+    }
+}
+
+// A reset position or a new life: the object's epoch, and its model's.
+// `source` is r31 at the player sites: the target position (setTrans) or
+// base matrix (setBaseMtx).
+void note_motion_object(RuntimeState& state, std::uint32_t site, std::uint32_t object, std::uint32_t source) {
+    using galaxy::motion::ObjectSite;
+    if (object == 0u || state.address_space == nullptr || site >= static_cast<std::uint32_t>(ObjectSite::Count)) {
+        return;
+    }
+    const auto& space = *state.address_space;
+    // makeActorDead on an actor that is already dead ends no life (some
+    // objects kill their dead children every frame).
+    if (site == static_cast<std::uint32_t>(ObjectSite::Dead) &&
+        read_guest_u8_or_zero(space, object + galaxy::motion::kActorDeadFlag) != 0u) {
+        ++state.motion_dead_repeats;
+        return;
+    }
+    if (site == static_cast<std::uint32_t>(ObjectSite::PlayerTrans) ||
+        site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx)) {
+        const bool matrix = site == static_cast<std::uint32_t>(ObjectSite::PlayerBaseMtx);
+        float now[3]{};
+        float target[3]{};
+        for (std::uint32_t i = 0; i < 3u; ++i) {
+            now[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, object + galaxy::motion::kActorPosition + 4u * i));
+            target[i] = std::bit_cast<float>(
+                read_guest_u32_or_zero(space, source + (matrix ? 0x0Cu + 0x10u * i : 4u * i)));
+        }
+        if (!galaxy::motion::player_jump_is_new_life(now, target)) {
+            ++state.motion_player_moves;
+            return;
+        }
+        if (motion_trace_enabled()) {
+            const float dx = target[0] - now[0], dy = target[1] - now[1], dz = target[2] - now[2];
+            std::fprintf(stderr, "[motion-signal] player-jump vi=%llu scene=%llu site=%s distance=%.1f\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial),
+                         matrix ? "player-base-mtx" : "player-trans", std::sqrt(dx * dx + dy * dy + dz * dz));
+        }
+    }
+    const std::uint16_t epoch = state.motion_epochs.bump(object);
+    std::uint32_t model = 0u;
+    if (site != static_cast<std::uint32_t>(ObjectSite::EmitterInit)) {
+        const std::uint32_t manager = read_guest_u32_or_zero(space, object + galaxy::motion::kActorModelManager);
+        model = manager != 0u ? read_guest_u32_or_zero(space, manager + galaxy::motion::kModelManagerModel) : 0u;
+        if (model != 0u) {
+            static_cast<void>(state.motion_epochs.bump(model));
+        }
+    }
+    ++state.motion_object_events;
+    ++state.motion_object_counts[site];
+    if (motion_trace_enabled()) {
+        static constexpr const char* kNames[] = {"reset-position", "reset-position-to", "reset-position-named",
+                                                 "appeared", "dead", "player-trans", "player-base-mtx",
+                                                 "emitter-init"};
+        static std::array<std::uint64_t, 8> lines{};
+        if (lines[site]++ < 4000u) {
+            std::fprintf(stderr, "[motion-signal] object vi=%llu scene=%llu site=%s object=%08X model=%08X epoch=%u\n",
+                         static_cast<unsigned long long>(state.vi_retrace_count),
+                         static_cast<unsigned long long>(state.motion_scene_serial), kNames[site], object, model,
+                         static_cast<unsigned>(epoch));
+        }
+    }
+}
+
+// Draw category or scene phase marker (inside the 3D scene only).
+void emit_motion_category(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if ((!state.draw_identity_scene && !state.layout_2d_markers) || state.address_space == nullptr) {
+        return;
+    }
+    const auto source = static_cast<std::uint16_t>((argument >> 8u) & 0xFFu);
+    const std::uint32_t type = source == galaxy::motion::kCategoryPhase ? (argument & 0xFFu) : context.gpr[3];
+    if (append_host_marker(state, galaxy::motion::kMarkerCategory, source, type, 0u)) {
+        ++state.motion_category_markers;
+        if (state.layout_2d_open) {
+            ++state.layout_frame_categories;
+        }
+    }
+}
+
+// The first marker of a 3D scene: the camera epoch and the object epoch bumps
+// since the previous scene.
+void emit_scene_signal_marker(RuntimeState& state) {
+    const std::uint16_t flags = state.motion_camera_cut_pending ? galaxy::motion::kSceneCameraCut : 0u;
+    static_cast<void>(append_host_marker(state, galaxy::motion::kMarkerScene, flags, state.motion_camera_epoch,
+                                         state.motion_object_events));
+    state.motion_camera_cut_pending = false;
+    state.motion_object_events = 0u;
+    if (motion_trace_enabled() && state.motion_scene_serial % 600u == 0u) {
+        const auto& counts = state.motion_object_counts;
+        std::fprintf(stderr,
+                     "[motion-signal] summary scene=%llu camera-cuts=%llu epoch=%u objects reset=%llu/%llu/%llu "
+                     "appeared=%llu dead=%llu dead-repeats=%llu player=%llu/%llu player-moves=%llu emitters=%llu "
+                     "table=%zu resets=%u categories=%llu lights=%llu stripes=%llu mirrors=%llu\n",
+                     static_cast<unsigned long long>(state.motion_scene_serial),
+                     static_cast<unsigned long long>(state.motion_camera_cuts), state.motion_camera_epoch,
+                     static_cast<unsigned long long>(counts[0]), static_cast<unsigned long long>(counts[1]),
+                     static_cast<unsigned long long>(counts[2]), static_cast<unsigned long long>(counts[3]),
+                     static_cast<unsigned long long>(counts[4]),
+                     static_cast<unsigned long long>(state.motion_dead_repeats),
+                     static_cast<unsigned long long>(counts[5]),
+                     static_cast<unsigned long long>(counts[6]),
+                     static_cast<unsigned long long>(state.motion_player_moves),
+                     static_cast<unsigned long long>(counts[7]),
+                     state.motion_epochs.size(), state.motion_epochs.resets(),
+                     static_cast<unsigned long long>(state.motion_category_markers),
+                     static_cast<unsigned long long>(state.motion_light_markers),
+                     static_cast<unsigned long long>(state.motion_stripe_entries),
+                     static_cast<unsigned long long>(state.motion_mirror_passes));
+    }
+}
+
+// One particle of a JPA stripe: its two strip vertices follow inside the same
+// GXBegin, so it travels as a side mark at its FIFO offset, never as a marker.
+void note_stripe_particle(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    if (!state.draw_identity_scene || state.address_space == nullptr) {
+        return;
+    }
+    const std::size_t position = state.address_space->gx_stream_position();
+    if (position == SIZE_MAX) {
+        return;
+    }
+    const std::uint32_t particle = context.gpr[argument & 0x1Fu] + 8u;  // JPANode -> JPABaseParticle
+    const std::uint32_t age_lifetime = read_guest_u32_or_zero(*state.address_space, particle + 0x80u);
+    galaxy::gx::attach_stripe_particle(position, particle, age_lifetime,
+                                       static_cast<std::uint8_t>((argument >> 8u) & 0xFFu));
+    ++state.motion_stripe_entries;
+}
+
+// The 2D layer (SiteHookKind::Layout2D, galaxy/motion_signals.h).
+// GameScene::draw2D's entry and epilogue become FIFO markers at the flushed
+// gather position, like the 3D scene's bounds. A pane's, layout actor's or
+// star pointer's draw starts with a host marker (kinds 9-11) at a function
+// entry or after its visibility test, so never inside a GXBegin.
+// GALAXY_MOTION_TRACE_SIGNALS=1 traces the markers of the first two and
+// every 600th 2D scene, pane counts per frame (the first 30, then every 60th),
+// markers outside draw2D (the first 100, each layout actor or star pointer
+// object the first time, the first 100 panes once a 3D scene ran) and a
+// summary every 600 frames.
+void trace_layout_marker(const RuntimeState& state, const char* where, std::uint8_t kind, std::uint16_t aux,
+                         std::uint32_t a, std::uint32_t b) {
+    char name[17]{};
+    if (kind == galaxy::motion::kMarkerLayoutPane) {
+        for (std::uint32_t i = 0; i < 16u; ++i) {
+            const auto c = static_cast<char>(
+                read_guest_u8_or_zero(*state.address_space, a + galaxy::motion::kPaneName + i));
+            if (c == '\0') {
+                break;
+            }
+            name[i] = c >= 0x20 && c < 0x7F ? c : '?';
+        }
+    }
+    static constexpr const char* kKinds[] = {"pane", "layout-actor", "star-pointer"};
+    std::fprintf(stderr,
+                 "[layout-signal] %s frame=%llu scene3d=%llu vi=%llu n=%u after-2d=%d kind=%s aux=%u a=%08X b=%08X "
+                 "name=%s\n",
+                 where, static_cast<unsigned long long>(state.layout_2d_scenes),
+                 static_cast<unsigned long long>(state.motion_scene_serial),
+                 static_cast<unsigned long long>(state.vi_retrace_count),
+                 state.layout_frame_markers[0] + state.layout_frame_markers[1] + state.layout_frame_markers[2],
+                 state.layout_after_2d ? 1 : 0, kKinds[kind - galaxy::motion::kMarkerLayoutPane],
+                 static_cast<unsigned>(aux), a, b, name);
+}
+
+void note_layout_frame_end(RuntimeState& state, std::size_t position) {
+    const std::uint32_t panes = state.layout_frame_drawn[0];
+    state.layout_panes_min = std::min(state.layout_panes_min, panes);
+    state.layout_panes_max = std::max(state.layout_panes_max, panes);
+    state.layout_panes_sum += panes;
+    ++state.layout_summary_frames;
+    if (!motion_trace_enabled()) {
+        return;
+    }
+    const std::uint64_t frame = state.layout_2d_scenes;
+    if (frame <= 30u || frame % 60u == 0u) {
+        std::fprintf(stderr,
+                     "[layout-signal] draw2d-end frame=%llu scene3d=%llu fifo=%zu panes=%u layout-actors=%u "
+                     "star-pointer=%u markers(pane/actor/star)=%u/%u/%u categories=%u\n",
+                     static_cast<unsigned long long>(frame),
+                     static_cast<unsigned long long>(state.motion_scene_serial), position,
+                     state.layout_frame_drawn[0], state.layout_frame_drawn[1], state.layout_frame_drawn[2],
+                     state.layout_frame_markers[0], state.layout_frame_markers[1], state.layout_frame_markers[2],
+                     state.layout_frame_categories);
+    }
+    if (frame % 600u == 0u) {
+        std::fprintf(stderr,
+                     "[layout-signal] summary frames=%llu scenes3d=%llu 3d-without-2d=%llu "
+                     "panes-per-frame(min/avg/max)=%u/%.1f/%u in-2d-appended(pane/actor/star)=%llu/%llu/%llu "
+                     "drawn-outside-2d=%llu/%llu/%llu drawn-after-2d=%llu/%llu/%llu drawn-in-3d=%llu/%llu/%llu "
+                     "outside-appended=%llu dropped=%llu\n",
+                     static_cast<unsigned long long>(frame),
+                     static_cast<unsigned long long>(state.motion_scene_serial),
+                     static_cast<unsigned long long>(state.layout_3d_without_2d),
+                     state.layout_panes_min == 0xFFFFFFFFu ? 0u : state.layout_panes_min,
+                     state.layout_summary_frames != 0u
+                         ? static_cast<double>(state.layout_panes_sum) /
+                               static_cast<double>(state.layout_summary_frames)
+                         : 0.0,
+                     state.layout_panes_max,
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[0]),
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[1]),
+                     static_cast<unsigned long long>(state.layout_markers_in_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_outside_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_after_2d[2]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[0]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[1]),
+                     static_cast<unsigned long long>(state.layout_drawn_in_3d[2]),
+                     static_cast<unsigned long long>(state.layout_markers_outside_2d),
+                     static_cast<unsigned long long>(state.layout_markers_dropped));
+        state.layout_panes_min = 0xFFFFFFFFu;
+        state.layout_panes_max = 0u;
+        state.layout_panes_sum = 0u;
+        state.layout_summary_frames = 0u;
+    }
+}
+
+void handle_layout_signal(RuntimeState& state, std::uint32_t argument, const galaxy::PpcContext& context) {
+    using galaxy::motion::Layout2DSite;
+    if (state.address_space == nullptr) {
+        return;
+    }
+    auto& space = *state.address_space;
+    const auto site = static_cast<Layout2DSite>(argument);
+    if (site == Layout2DSite::SceneBegin || site == Layout2DSite::SceneEnd) {
+        const bool begin = site == Layout2DSite::SceneBegin;
+        space.flush_wgpipe_gather_tail_for_frame();
+        const std::size_t position = space.gx_fifo_data().size();
+        galaxy::gx::attach_fifo_marker(
+            begin ? galaxy::gx::FifoMarker::Scene2DBegin : galaxy::gx::FifoMarker::Scene2DEnd, position);
+        if (begin) {
+            state.layout_2d_open = true;
+            state.layout_2d_markers = galaxy::gx::draw_identity_wanted();
+            state.layout_2d_since_scene = true;
+            ++state.layout_2d_scenes;
+            state.layout_frame_drawn = {};
+            state.layout_frame_markers = {};
+            state.layout_frame_categories = 0u;
+            if (motion_trace_enabled() && (state.layout_2d_scenes <= 30u || state.layout_2d_scenes % 60u == 0u)) {
+                std::fprintf(stderr, "[layout-signal] draw2d-begin frame=%llu scene3d=%llu vi=%llu fifo=%zu markers=%d\n",
+                             static_cast<unsigned long long>(state.layout_2d_scenes),
+                             static_cast<unsigned long long>(state.motion_scene_serial),
+                             static_cast<unsigned long long>(state.vi_retrace_count), position,
+                             state.layout_2d_markers ? 1 : 0);
+            }
+        } else {
+            state.layout_2d_open = false;
+            state.layout_2d_markers = false;
+            state.layout_after_2d = true;
+            note_layout_frame_end(state, position);
+        }
+        return;
+    }
+    std::uint8_t kind = 0u;
+    std::uint16_t aux = state.layout_2d_open ? galaxy::motion::kLayoutIn2D : 0u;
+    std::uint32_t a = 0u;
+    std::uint32_t b = 0u;
+    switch (site) {
+    case Layout2DSite::Pane:
+        kind = galaxy::motion::kMarkerLayoutPane;
+        a = context.gpr[3];
+        b = read_guest_u32_or_zero(space, a + galaxy::motion::kPaneParent);
+        break;
+    case Layout2DSite::LayoutActor:
+        kind = galaxy::motion::kMarkerLayoutActor;
+        a = context.gpr[31];
+        b = read_guest_u32_or_zero(space, a);  // vtable
+        break;
+    case Layout2DSite::StarPointerLayout:
+        kind = galaxy::motion::kMarkerStarPointer;
+        a = context.gpr[31];
+        b = read_guest_u32_or_zero(space, a);  // vtable
+        break;
+    case Layout2DSite::StarPointerDirector:
+        kind = galaxy::motion::kMarkerStarPointer;
+        aux |= galaxy::motion::kStarPointerDirector;
+        a = context.gpr[3];
+        break;
+    default:
+        return;
+    }
+    const std::size_t index = kind - galaxy::motion::kMarkerLayoutPane;
+    if (state.layout_2d_open) {
+        ++state.layout_frame_drawn[index];
+    } else {
+        ++state.layout_drawn_outside_2d[index];
+        if (state.layout_after_2d) {
+            ++state.layout_drawn_after_2d[index];
+        }
+    }
+    if (state.draw_identity_scene) {
+        ++state.layout_drawn_in_3d[index];
+    }
+    const bool wanted = state.layout_2d_open ? state.layout_2d_markers : galaxy::gx::draw_identity_wanted();
+    if (!wanted) {
+        return;
+    }
+    if (!append_host_marker(state, kind, aux, a, b)) {
+        ++state.layout_markers_dropped;
+        return;
+    }
+    if (state.layout_2d_open) {
+        ++state.layout_frame_markers[index];
+        ++state.layout_markers_in_2d[index];
+        if (motion_trace_enabled() && (state.layout_2d_scenes <= 2u || state.layout_2d_scenes % 600u == 0u) &&
+            state.layout_frame_markers[0] + state.layout_frame_markers[1] + state.layout_frame_markers[2] <= 40u) {
+            trace_layout_marker(state, "marker", kind, aux, a, b);
+        }
+    } else {
+        ++state.layout_markers_outside_2d;
+        if (motion_trace_enabled()) {
+            static std::vector<std::uint32_t> objects_seen;
+            static std::uint32_t panes_after_scene = 0u;
+            bool fresh = false;
+            if (kind != galaxy::motion::kMarkerLayoutPane) {
+                fresh = objects_seen.size() < 400u &&
+                        std::find(objects_seen.begin(), objects_seen.end(), a) == objects_seen.end();
+                if (fresh) {
+                    objects_seen.push_back(a);
+                }
+            } else if (state.motion_scene_serial != 0u) {
+                fresh = panes_after_scene++ < 100u;
+            }
+            if (state.layout_markers_outside_2d <= 100u || fresh) {
+                trace_layout_marker(state, "outside-2d", kind, aux, a, b);
+            }
+        }
+    }
+}
+
+void handle_motion_signal(RuntimeState& state, std::uint32_t kind, std::uint32_t argument,
+                          const galaxy::PpcContext& context) {
+    switch (static_cast<galaxy::SiteHookKind>(kind)) {
+    case galaxy::SiteHookKind::Layout2D:
+        handle_layout_signal(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MotionCamera:
+        note_motion_camera(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MotionObject:
+        note_motion_object(state, argument, context.gpr[3], context.gpr[31]);
+        return;
+    case galaxy::SiteHookKind::DrawCategory:
+        emit_motion_category(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::DrawStripeParticle:
+        note_stripe_particle(state, argument, context);
+        return;
+    case galaxy::SiteHookKind::MirrorPass:
+        if (state.address_space != nullptr && galaxy::gx::draw_identity_wanted() &&
+            append_host_marker(state, galaxy::motion::kMarkerPass,
+                               static_cast<std::uint16_t>(argument == 0u ? galaxy::motion::PassMarker::MirrorBegin
+                                                                         : galaxy::motion::PassMarker::MirrorEnd),
+                               0u, 0u) &&
+            argument == 0u) {
+            ++state.motion_mirror_passes;
+        }
+        return;
+    case galaxy::SiteHookKind::LightLoad:
+        if (state.draw_identity_scene && state.address_space != nullptr &&
+            append_host_marker(state, galaxy::motion::kMarkerLight, static_cast<std::uint16_t>(argument),
+                               argument <= static_cast<std::uint32_t>(galaxy::motion::LightSite::PointLight)
+                                   ? context.gpr[3]
+                                   : 0u,
+                               0u)) {
+            ++state.motion_light_markers;
+        }
+        return;
+    default:
+        return;
+    }
 }
 
 RuntimeState::FunctionAsyncCausalityObservation
@@ -24079,6 +24620,23 @@ void call_guest_impl_body(
             guest_address == 0x8033EE8Cu ? galaxy::gx::FifoMarker::SceneBegin
                                          : galaxy::gx::FifoMarker::SceneEnd,
             state.address_space->gx_fifo_data().size());
+        state.draw_identity_scene =
+            guest_address == 0x8033EE8Cu && galaxy::gx::draw_identity_wanted();
+        if (guest_address == 0x8033EE8Cu) {
+            // The scene's first marker: the game's camera epoch and object
+            // epoch bumps since the previous scene (galaxy/motion_signals.h).
+            ++state.motion_scene_serial;
+            if (state.draw_identity_scene) {
+                emit_scene_signal_marker(state);
+            }
+            // GameScene::draw runs draw2D after draw3D: a 3D scene with no
+            // draw2D before the next one is a frame without the 2D layer.
+            if (state.motion_scene_serial > 1u && !state.layout_2d_since_scene) {
+                ++state.layout_3d_without_2d;
+            }
+            state.layout_2d_since_scene = false;
+            state.layout_after_2d = false;
+        }
     }
     const auto mouse_boundary_object=context->gpr[3];
     guest_address = normalize_executable_address(state, guest_address);
@@ -33025,6 +33583,29 @@ int wmain(int argc, wchar_t** argv) {
                     }
                 }
                 state.pending_draw_done_submissions.audit_drained();
+                // A VI boundary stopped while its frame token was pending
+                // (the render thread was still on that frame): its token is
+                // newer than every draw-done receipt, so consume it last.
+                if (state.pending_vi_boundary.snapshot().phase ==
+                    galaxy::vi::BoundaryPhase::TokenPending) {
+                    const auto token = state.pending_vi_boundary.snapshot().token;
+                    const auto start = std::chrono::steady_clock::now();
+                    while (!galaxy::gx::wait_for_frame_pe_completion_for(token, 0u)) {
+                        if (std::chrono::steady_clock::now() - start >=
+                            std::chrono::milliseconds(
+                                galaxy::gx::kFramePeCooperativeWaitTimeoutMs)) {
+                            throw RuntimeFailure(
+                                "shutdown VI PE token exceeded its absolute budget");
+                        }
+                        if (!wait_realtime_vi_duration_high_res(
+                                std::chrono::milliseconds(1))) {
+                            SwitchToThread();
+                        }
+                    }
+                    if (!state.pending_vi_boundary.mark_token_consumed(token)) {
+                        throw RuntimeFailure("shutdown VI token lost exact ownership");
+                    }
+                }
             } catch (const std::exception& error) {
                 if (cleanup_failure == nullptr) {
                     cleanup_failure = std::current_exception();
@@ -33039,6 +33620,8 @@ int wmain(int argc, wchar_t** argv) {
                           << " bytes=" << state.gx_stream_bytes
                           << " deferred=" << state.gx_stream_deferred
                           << " queue-full=" << state.gx_stream_queue_full << '\n';
+                std::cerr << "[draw-identity-audit] markers=" << state.draw_identity_markers
+                          << " dropped=" << state.draw_identity_dropped << '\n';
                 std::cerr << "[draw-done-submit-audit] enabled="
                           << (submit_gx_at_draw_done_wait_enabled() ? 1 : 0)
                           << " attempts=" << state.draw_done_submit_attempts
@@ -33540,8 +34123,20 @@ int wmain(int argc, wchar_t** argv) {
     services.site_hook = +[](void* user, std::uint32_t guest_pc, std::uint32_t kind,
                              std::uint32_t argument, galaxy::PpcContext* context,
                              galaxy::GuestMemoryV1* memory) {
-        galaxy::dispatch_site_hook(static_cast<RuntimeState*>(user)->services, guest_pc, kind,
-                                   argument, context, memory);
+        auto& runtime = *static_cast<RuntimeState*>(user);
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawShapePacket) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::DrawParticle)) {
+            if (runtime.draw_identity_scene) {
+                emit_draw_identity_marker(runtime, kind, argument, *context);
+            }
+            return;
+        }
+        if (kind >= static_cast<std::uint32_t>(galaxy::SiteHookKind::MotionCamera) &&
+            kind <= static_cast<std::uint32_t>(galaxy::SiteHookKind::Layout2D)) {
+            handle_motion_signal(runtime, kind, argument, *context);
+            return;
+        }
+        galaxy::dispatch_site_hook(runtime.services, guest_pc, kind, argument, context, memory);
     };
     build_direct_dispatch_table(state, function_records_fn);
     if (!state.direct_dispatch_table.empty()) {

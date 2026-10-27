@@ -507,6 +507,20 @@ enum class SiteHookKind : std::uint32_t {
     HomeGeometry = 14,          // argument: kind | lane << 8
     LodDistance = 15,           // 1.0.0 modules only; a no-op (see site_hooks.cpp)
     MultiSceneModel = 16,       // r31 MultiSceneActor, r3 its J3DModel
+    // Draw identity (generation 20): the object whose GX commands follow.
+    DrawShapePacket = 17,       // r3 J3DShapePacket (prepareDraw entry)
+    DrawNameObj = 18,           // r4 NameObj (const category-list delegator)
+    DrawEmitter = 19,           // r3 JPAResource, r4 JPAEmitterWorkData; argument 1 = child pass
+    DrawParticle = 20,          // argument: node register | 0x100 for the child pass; r31 work
+    // Motion signals (generation 20); see galaxy/motion_signals.h.
+    MotionCamera = 21,          // argument: MotionCameraSite
+    MotionObject = 22,          // argument: MotionObjectSite; r3 the object
+    DrawCategory = 23,          // argument: source << 8 | scene phase
+    DrawStripeParticle = 24,    // argument: node register | strip << 8; r31 or r28 work
+    MirrorPass = 25,            // argument: 0 begins, 1 its geometry ends
+    LightLoad = 26,             // argument: MotionLightSite; r3 the light info
+    // 2D layer (generation 20): GameScene::draw2D bounds and layout identity.
+    Layout2D = 27,              // argument: galaxy::motion::Layout2DSite
     // One step of dialogue text was revealed (TalkTextFormer::updateTalking); the value matches the
     // development line's.
     TextStep = 28,              // argument 0: TalkBalloon in r31; 1: RosettaMonologue in r30

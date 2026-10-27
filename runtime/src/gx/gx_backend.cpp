@@ -28,6 +28,7 @@
 #include "galaxy/frame_timeline.h"
 #include "galaxy/gx/sorted_dirty_ranges.h"
 #include "galaxy/gx/snapshot_region_lookup.h"
+#include "galaxy/motion_signals.h"
 
 #include <algorithm>
 #include <array>
@@ -5258,6 +5259,7 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     resident_vertex_mapped_ = static_cast<std::byte*>(mapped);
     resident_vertex_gpu_ = resident_vertex_buffer_->GetGPUVirtualAddress();
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
+    renderer_.set_resident_vertices(resident_vertex_gpu_, resident_vertex_buffer_->GetDesc().Width);
     return true;
 }
 
@@ -5268,6 +5270,7 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
     resident_vertex_buffer_.Reset();
     resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
+    renderer_.set_resident_vertices(0u, 0u);
     resident_vertex_device_ = nullptr;
     resident_vertex_buffer_failed_ = false;
     resident_vertices_.reset(0u, kFramesInFlight);
@@ -5278,6 +5281,9 @@ void GxBackend::release_decoded_entry_residency(
     if (entry.resident_epoch != 0u &&
         entry.resident_epoch == resident_vertices_.epoch()) {
         resident_vertices_.release(entry.resident_offset, entry.resident_units);
+        if (resident_hold_segment_ != ~0u) [[unlikely]] {
+            ++interp_held_vertex_blocks_;
+        }
     }
     entry.resident_epoch = 0u;
     entry.resident_offset = 0u;
@@ -5503,6 +5509,7 @@ FramePeCompletionToken GxBackend::render_frame(
         chunk.pointer_response=producer_pointer_response_;
         take_attached_pointer_depth_capture(chunk, fifo_size);
         take_attached_fifo_markers(chunk, fifo_size);
+        take_attached_stripe_particles(chunk, fifo_size);
         chunk.prerecorded_movie=producer_movie_content_;
         chunk.safety_surround=producer_safety_surround_;
         chunk.services = services;
@@ -5602,6 +5609,7 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.pointer_response=producer_pointer_response_;
     take_attached_pointer_depth_capture(chunk, fifo_size);
     take_attached_fifo_markers(chunk, fifo_size);
+    take_attached_stripe_particles(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.services = services;
@@ -6287,12 +6295,56 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     const auto xf_float = [this](unsigned offset) {
         return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
     };
+    if (std::exchange(scene_chunk_restart_, false) && interp_recording_ && !motion_scene_ &&
+        current_replay_record_ >= 0) [[unlikely]] {
+        // The chunk start re-uploaded the bindings of the open record: when
+        // nothing changed (no marker, no matrix write, the same constants and
+        // palette), its draws stay in that record instead of an unmatched one.
+        InterpScene& scene = interp_scenes_[interp_scene_];
+        const auto r = static_cast<std::size_t>(current_replay_record_);
+        const std::uint64_t base = combine64(
+            identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+        if (identity_scene_ && base == identity_last_base_ && r < scene.constants.size()) {
+            GxVsConstants probe = cpu;
+            probe.mtx_palette_base = scene.constants[r].mtx_palette_base;
+            apply_uber_vs_key(vs_key_, probe);
+            // Derived from the fields compared (write_scene_vs_constants).
+            std::memcpy(probe.motion_prev_proj, scene.constants[r].motion_prev_proj,
+                        offsetof(GxVsConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
+                            offsetof(GxVsConstants, motion_prev_proj));
+            const std::int32_t shadow = scene.palette[r];
+            const bool palette_continues =
+                shadow < 0
+                    ? !current_palette_required_
+                    : current_palette_shadow_ >= 0 &&
+                          (current_palette_shadow_ == shadow ||
+                           std::memcmp(scene.palettes.data() + static_cast<std::size_t>(shadow) * kMatrixPaletteWords,
+                                       scene.palettes.data() +
+                                           static_cast<std::size_t>(current_palette_shadow_) * kMatrixPaletteWords,
+                                       kMatrixPaletteWords * sizeof(std::uint32_t)) == 0);
+            if (palette_continues && std::memcmp(&probe, &scene.constants[r], sizeof(probe)) == 0) {
+                if (shadow >= 0 && current_palette_shadow_ != shadow &&
+                    static_cast<std::size_t>(current_palette_shadow_) + 1u == scene.palette_count) {
+                    --scene.palette_count;  // the duplicate snapshot
+                }
+                current_palette_shadow_ = shadow;
+                ++interp_chunk_continues_;
+                return;
+            }
+        }
+    }
     TransformRecord record{};
     record.signature = combine64(
         combine64(mix64(current_vs_hash_ & ~0ull), current_ps_hash_),
         (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
             (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
             state_.cp(cp::kVcdHi));
+    record.identity = record_identity();
+    record.layout = current_vs_hash_;
+    record.load_signature = state_.matrix_load_signature();
+    record.category = identity_category_;
+    record.continuity = identity_continuity_;
+    record.particle = identity_continuity_particle_;
     record.palette = (vs_key_.flags & 0x01u) != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
@@ -6309,33 +6361,48 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     }
     record.projection[6] =
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ? 1.0f : 0.0f;
-    const TransformRecord* previous = transform_history_.add(record);
+    TransformHistory& history = side_layer_ == kScreenLayer ? screen_history_
+        : side_layer_ == kMirrorLayer                         ? mirror_history_
+                                                              : transform_history_;
+    const TransformRecord* previous = history.add(record);
     if (interp_recording_) [[unlikely]] {
         // The replay rebuilds this record's constants per sub-frame.
-        current_replay_record_ =
-            static_cast<std::int32_t>(transform_history_.current().size()) - 1;
         InterpScene& scene = interp_scenes_[interp_scene_];
+        current_replay_record_ = static_cast<std::int32_t>(scene.constants.size());
         scene.constants.push_back(cpu);
-        scene.constants.back().mtx_palette_base = upload.mtx_palette_base;
-        const std::int32_t m = transform_history_.current_matches().back();
-        scene.from.push_back(previous != nullptr
-            ? previous->position
-            : affine_multiply(transform_history_.camera_delta(), record.position));
-        scene.current.push_back(record.position);
+        // Not read back from `upload`: the ring is write-combined memory.
+        scene.constants.back().mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
+        // Uber pipelines read the key from the constants: a sub-frame's copy
+        // needs it as the frame's upload has it.
+        apply_uber_vs_key(vs_key_, scene.constants.back());
+        const std::int32_t m = history.current_matches().back();
         scene.prev_index.push_back(m);
-        scene.palette.push_back(record.palette ? current_palette_shadow_ : -1);
+        // Inline draws read normals, lights and indexed texture matrices from
+        // the palette too: their snapshot is interpolated like a skinned one.
+        scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        scene.category.push_back(record.category);
     }
     if (!motion_scene_) {
         return;
     }
 
-    // Previous transform: the matched record, else the camera delta.
+    // Previous transform: the matched record, else the camera delta. With
+    // temporal upscaling of the replays, every presented frame is a replay
+    // whose program moves what moves: a block keeps its own transform.
+    const bool replays_upscaled = renderer_.temporal_interpolation();
     const Affine34& camera = transform_history_.camera_delta();
     std::uint32_t mode = 1u;
     std::uint32_t previous_palette = 0u;
-    Affine34 prev_pos = camera;
-    if (record.palette) {
+    Affine34 prev_pos = replays_upscaled ? affine_identity() : camera;
+    if (replays_upscaled) {
+        if (!record.palette) {
+            prev_pos = record.position;
+        } else if (palette_offset != kNoPaletteOffset) {
+            mode = 0u;
+            previous_palette = palette_offset;
+        }
+    } else if (record.palette) {
         if (previous != nullptr && previous->palette_offset != kNoPaletteOffset &&
             transform_history_.current_frame() - transform_history_.previous_frame() <=
                 renderer_.matrix_history_frames()) {
@@ -6347,7 +6414,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
                                        : affine_multiply(camera, record.position);
     }
     const std::array<float, 7>& proj =
-        previous != nullptr ? previous->projection : record.projection;
+        previous != nullptr && !replays_upscaled ? previous->projection : record.projection;
     upload.motion_prev_proj[0][0] = proj[0];
     upload.motion_prev_proj[0][1] = proj[1];
     upload.motion_prev_proj[0][2] = proj[2];
@@ -6365,6 +6432,320 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     upload.motion_ctrl[1] = previous_palette;
     upload.motion_ctrl[2] = 0u;
     upload.motion_ctrl[3] = 0u;
+    if (interp_recording_ && replays_upscaled) [[unlikely]] {
+        // The sequence's base copies carry them: the CPU image too (evaluation check).
+        // Written from the values above: `upload` is write-combined memory.
+        GxVsConstants& image = interp_scenes_[interp_scene_].constants.back();
+        for (unsigned i = 0; i < 4u; ++i) {
+            image.motion_prev_proj[0][i] = proj[i];
+        }
+        image.motion_prev_proj[1][0] = proj[4];
+        image.motion_prev_proj[1][1] = proj[5];
+        image.motion_prev_proj[1][2] = proj[6];
+        image.motion_prev_proj[1][3] = 0.0f;
+        std::memcpy(image.motion_prev_pos, prev_pos.data(), sizeof(image.motion_prev_pos));
+        image.motion_params[0] = jitter_ndc[0];
+        image.motion_params[1] = jitter_ndc[1];
+        image.motion_params[2] = 0.5f * cpu.line_point_raster[0];
+        image.motion_params[3] = -0.5f * cpu.line_point_raster[1];
+        image.motion_ctrl[0] = mode;
+        image.motion_ctrl[1] = previous_palette;
+        image.motion_ctrl[2] = 0u;
+        image.motion_ctrl[3] = 0u;
+    }
+}
+
+std::uint32_t GxBackend::note_identity_occurrence(std::uint64_t key) {
+    if (identity_occurrences_.size() < 2u * (identity_occurrences_used_ + 1u)) {
+        // Grow and rehash this scene's entries; older scenes' entries drop out.
+        std::vector<IdentityOccurrence> old;
+        old.swap(identity_occurrences_);
+        identity_occurrences_.assign(std::max<std::size_t>(old.size() * 2u, 8192u),
+                                     IdentityOccurrence{});
+        identity_occurrences_used_ = 0u;
+        const std::size_t mask = identity_occurrences_.size() - 1u;
+        for (const IdentityOccurrence& entry : old) {
+            if (entry.scene != identity_scene_index_ || entry.count == 0u) continue;
+            std::size_t slot = static_cast<std::size_t>(entry.key ^ (entry.key >> 29u)) & mask;
+            while (identity_occurrences_[slot].scene == identity_scene_index_ &&
+                   identity_occurrences_[slot].count != 0u) {
+                slot = (slot + 1u) & mask;
+            }
+            identity_occurrences_[slot] = entry;
+            ++identity_occurrences_used_;
+        }
+    }
+    const std::size_t mask = identity_occurrences_.size() - 1u;
+    std::size_t slot = static_cast<std::size_t>(key ^ (key >> 29u)) & mask;
+    for (;;) {
+        IdentityOccurrence& entry = identity_occurrences_[slot];
+        if (entry.scene != identity_scene_index_ || entry.count == 0u) {
+            entry = {key, identity_scene_index_, 1u};
+            ++identity_occurrences_used_;
+            return 0u;
+        }
+        if (entry.key == key) {
+            return entry.count++;
+        }
+        slot = (slot + 1u) & mask;
+    }
+}
+
+void GxBackend::begin_identity_scene() {
+    identity_scene_ = identity_scene_markers_ != 0u;
+    identity_scene_markers_ = 0u;
+    ++identity_scene_index_;
+    identity_occurrences_used_ = 0u;
+    identity_marker_ = mix64(0x5343454E45ull);
+    identity_matrix_base_ = state_.matrix_write_count();
+    identity_last_base_ = 0u;
+    identity_sub_index_ = 0u;
+    identity_continuity_ = 0u;
+    identity_continuity_particle_ = false;
+    identity_category_ = motion::kNoCategory;
+    scene_camera_epoch_known_ = false;
+    scene_image_effect_record_ = -1;
+    scene_image_effect_offset_ = -1;
+    state_.reset_matrix_load_signature();
+}
+
+std::uint64_t GxBackend::record_identity() noexcept {
+    if (!identity_scene_) {
+        return 0u;
+    }
+    const std::uint64_t base = combine64(
+        identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+    identity_sub_index_ = base == identity_last_base_ ? identity_sub_index_ + 1u : 0u;
+    identity_last_base_ = base;
+    const std::uint64_t key = combine64(base, identity_sub_index_);
+    return key != 0u ? key : 1u;
+}
+
+void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+                               std::uint32_t b, std::size_t offset) {
+    if (kind < identity_markers_by_kind_.size()) {
+        ++identity_markers_by_kind_[kind];
+    }
+    if (kind >= motion::kMarkerCategory) {
+        on_motion_marker(kind, aux, a, b, offset);
+        return;
+    }
+    if (!history_scene_) {
+        return;
+    }
+    ++(side_layer_ != 0u ? layer_identity_markers_[side_layer_] : identity_scene_markers_);
+    std::uint64_t tag = b;
+    identity_continuity_particle_ = kind == motion::kMarkerParticle;
+    identity_continuity_ = 0u;
+    if (identity_continuity_particle_) {
+        // Particles come from a pool: node, pass and lifetime name the slot's
+        // particle; its age (the record's continuity) must continue on a
+        // match, else the slot holds a new particle (TransformHistory::add).
+        identity_continuity_ = b >> 16u;
+        tag = b & 0xFFFFu;
+    } else if (motion_trace_signals()) [[unlikely]] {
+        // Shape packets, NameObjs and emitters carry their object's epoch
+        // above the pass bit (generation 20): a change is a new identity.
+        const auto epoch = static_cast<std::uint16_t>(aux >> 1u);
+        const auto [it, inserted] = trace_object_epochs_.try_emplace(a, epoch);
+        if (!inserted && it->second != epoch) {
+            std::fprintf(stderr, "[motion-identity] new-life kind=%u object=%08X epoch=%u->%u scene=%llu\n",
+                         static_cast<unsigned>(kind), a, static_cast<unsigned>(it->second),
+                         static_cast<unsigned>(epoch), static_cast<unsigned long long>(identity_scene_index_));
+            it->second = epoch;
+        }
+    }
+    set_identity_marker(kind, aux, a, static_cast<std::uint32_t>(tag));
+}
+
+void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag) {
+    std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
+    key = combine64(key, note_identity_occurrence(key));
+    identity_marker_ = key;
+    identity_matrix_base_ = state_.matrix_write_count();
+    state_.reset_matrix_load_signature();
+}
+
+void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b,
+                                 std::size_t offset) {
+    switch (kind) {
+    case motion::kMarkerCategory: {
+        ++motion_category_markers_;
+        if (scene_2d_open_) {
+            ++scene_2d_categories_;
+        }
+        if (!history_scene_) {
+            return;
+        }
+        std::uint8_t phase = motion::category_phase(identity_category_);
+        if (aux == motion::kCategoryPhase) {
+            phase = static_cast<std::uint8_t>(a);
+            if (phase == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect)) {
+                ++motion_image_effect_markers_;
+                scene_image_effect_record_ = static_cast<std::int64_t>(transform_history_.current().size());
+                scene_image_effect_offset_ =
+                    static_cast<std::int64_t>(parse_span_base_ + offset) - static_cast<std::int64_t>(parse_span_prefix_);
+                if (motion_trace_signals()) [[unlikely]] {
+                    std::fprintf(stderr, "[gx-phase] image-effect scene=%llu record=%lld chunk-offset=%lld\n",
+                                 static_cast<unsigned long long>(identity_scene_index_),
+                                 static_cast<long long>(scene_image_effect_record_),
+                                 static_cast<long long>(scene_image_effect_offset_));
+                }
+            }
+        }
+        identity_category_ = motion::encode_category(phase, aux, a);
+        return;
+    }
+    case motion::kMarkerScene:
+        ++motion_scene_markers_;
+        if (!history_scene_) {
+            return;
+        }
+        scene_camera_epoch_ = a;
+        scene_camera_epoch_known_ = true;
+        // The game cut the view: the temporal upscaler's history is invalid.
+        if (temporal_scene_ && (aux & motion::kSceneCameraCut) != 0u) {
+            renderer_.reset_temporal_history();
+        }
+        if (interp_recording_) {
+            InterpScene& scene = interp_scenes_[interp_scene_];
+            scene.camera_epoch = a;
+            scene.camera_epoch_known = true;
+        }
+        if (motion_trace_signals() && (aux & motion::kSceneCameraCut) != 0u) [[unlikely]] {
+            std::fprintf(stderr, "[gx-scene] camera-cut scene=%llu epoch=%u object-events=%u\n",
+                         static_cast<unsigned long long>(identity_scene_index_), a, b);
+        }
+        return;
+    case motion::kMarkerPass:
+        ++motion_mirror_markers_;
+        if (aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin)) {
+            end_side_layer();
+            begin_side_layer(kMirrorLayer);
+        } else if (side_layer_ == kMirrorLayer) {
+            end_side_layer();
+        }
+        if (motion_trace_signals()) [[unlikely]] {
+            static std::uint64_t lines = 0u;
+            if (lines++ < 200u) {
+                std::fprintf(stderr, "[gx-pass] %s scene=%llu history-scene=%d\n",
+                             aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin) ? "mirror-begin"
+                                                                                                 : "mirror-end",
+                             static_cast<unsigned long long>(identity_scene_index_), history_scene_ ? 1 : 0);
+            }
+        }
+        return;
+    case motion::kMarkerLight:
+        ++motion_light_markers_;
+        return;
+    case motion::kMarkerLayoutPane:
+    case motion::kMarkerLayoutActor:
+    case motion::kMarkerStarPointer: {
+        const std::size_t index = static_cast<std::size_t>(kind - motion::kMarkerLayoutPane);
+        if (scene_2d_open_) {
+            ++scene_2d_layout_markers_[index];
+            ++layout_markers_in_2d_[index];
+        } else {
+            ++layout_markers_outside_2d_[index];
+        }
+        if (side_layer_ == kScreenLayer) {
+            // The pane, layout actor or pointer layout names the draws after it.
+            ++layer_identity_markers_[kScreenLayer];
+            identity_continuity_particle_ = false;
+            identity_continuity_ = 0u;
+            set_identity_marker(kind, aux, a, b);
+        }
+        return;
+    }
+    default:
+        return;
+    }
+}
+
+// GameScene::draw2D's entry and epilogue (FifoMarker::Scene2DBegin/End): the
+// 2D layer's FIFO span in the chunk. Recording only.
+void GxBackend::on_scene_2d_marker(bool begin, std::size_t chunk_offset) {
+    if (begin && scene_phase_) {
+        // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
+        // the scene ends here.
+        on_fifo_marker(FifoMarker::SceneEnd, nullptr);
+    }
+    if (begin) {
+        scene_2d_open_ = true;
+        ++scene_2d_serial_;
+        ++window_2d_scenes_;
+        scene_2d_begin_offset_ = static_cast<std::int64_t>(chunk_offset);
+        scene_2d_end_offset_ = -1;
+        scene_2d_layout_markers_ = {};
+        scene_2d_categories_ = 0u;
+        return;
+    }
+    scene_2d_open_ = false;
+    scene_2d_end_offset_ = static_cast<std::int64_t>(chunk_offset);
+    if (motion_trace_signals() && (scene_2d_serial_ <= 30u || scene_2d_serial_ % 600u == 0u)) [[unlikely]] {
+        std::fprintf(stderr,
+                     "[gx-2d] scene=%llu begin=%lld end=%lld panes=%u layout-actors=%u star-pointer=%u "
+                     "categories=%u total-in-2d(pane/actor/star)=%llu/%llu/%llu outside-2d=%llu/%llu/%llu\n",
+                     static_cast<unsigned long long>(scene_2d_serial_),
+                     static_cast<long long>(scene_2d_begin_offset_), static_cast<long long>(scene_2d_end_offset_),
+                     scene_2d_layout_markers_[0], scene_2d_layout_markers_[1], scene_2d_layout_markers_[2],
+                     scene_2d_categories_, static_cast<unsigned long long>(layout_markers_in_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_in_2d_[2]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[0]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[1]),
+                     static_cast<unsigned long long>(layout_markers_outside_2d_[2]));
+    }
+}
+
+bool GxBackend::motion_trace_signals() noexcept {
+    static const bool enabled = read_env_u64("GALAXY_MOTION_TRACE_SIGNALS", 0u) != 0u;
+    return enabled;
+}
+
+void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size) {
+    if (producer_stripe_particles_.empty()) {
+        return;
+    }
+    // Marks past this submission (staged gather bytes) move to the next one.
+    std::size_t kept = 0u;
+    for (const StripeParticleMark& mark : producer_stripe_particles_) {
+        if (mark.offset < fifo_size) {
+            chunk.stripe_particles.push_back(mark);
+        } else {
+            StripeParticleMark rest = mark;
+            rest.offset -= fifo_size;
+            producer_stripe_particles_[kept++] = rest;
+        }
+    }
+    producer_stripe_particles_.resize(kept);
+}
+
+void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
+    motion_stripe_marks_ += chunk.stripe_particles.size();
+    if (!motion_trace_signals()) {
+        return;
+    }
+    static std::uint64_t lines = 0u;
+    if (lines >= 400u) {
+        return;
+    }
+    // One strip = consecutive marks of one strip id with rising offsets.
+    std::size_t strips = 0u;
+    std::uint32_t min_age = 0xFFFFu, max_age = 0u;
+    for (std::size_t i = 0; i < chunk.stripe_particles.size(); ++i) {
+        const StripeParticleMark& mark = chunk.stripe_particles[i];
+        if (i == 0u || mark.strip != chunk.stripe_particles[i - 1u].strip ||
+            mark.offset <= chunk.stripe_particles[i - 1u].offset) {
+            ++strips;
+        }
+        min_age = std::min(min_age, mark.age_lifetime >> 16u);
+        max_age = std::max(max_age, mark.age_lifetime >> 16u);
+    }
+    ++lines;
+    std::fprintf(stderr, "[gx-stripe] scene=%llu marks=%zu strips=%zu first-offset=%zu age=%u..%u\n",
+                 static_cast<unsigned long long>(identity_scene_index_), chunk.stripe_particles.size(), strips,
+                 chunk.stripe_particles.front().offset, min_age, max_age);
 }
 
 void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
@@ -6385,9 +6766,120 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_s
     producer_fifo_marker_view_mask_ = 0;
 }
 
+// A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
+// scene, whichever comes first).
+void GxBackend::open_interp_scene() {
+    note_interp_log_completion();
+    interp_scene_ = (interp_scene_ + 1u) % 4u;
+    if (interp_shown_scene_ == static_cast<std::int32_t>(interp_scene_)) {
+        interp_shown_scene_ = -1;  // its inputs are about to be reused
+    }
+    if (interp_sequence_.active &&
+        (interp_scene_ == interp_sequence_.scene ||
+         interp_scene_ == interp_sequence_.before)) {
+        // The playing scene's inputs are about to be reused.
+        interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
+        interp_sequence_.subframes = interp_sequence_.next;
+        interp_sequence_.flush_requested = true;
+    }
+    if (interp_scene_ == interp_log_scene_) {
+        interp_log_waiting_ = false;
+        interp_start_pending_ = false;
+    }
+    interp_scenes_[interp_scene_].clear();
+    interp_scenes_[interp_scene_].valid = true;
+}
+
+// The matches of a layer that ended index the previous frame's same layer:
+// they become indices of the scene before, whose layer that is when the two
+// are consecutive.
+void GxBackend::end_record_layer(unsigned layer) {
+    InterpScene& scene = interp_scenes_[interp_scene_];
+    InterpScene::LayerRange& range = scene.layers[layer];
+    range.count = scene.constants.size() - range.first;
+    range.serial = ++layer_serials_[layer];
+    const InterpScene& before = interp_scenes_[(interp_scene_ + 3u) % 4u];
+    const InterpScene::LayerRange& was = before.layers[layer];
+    const bool consecutive = before.valid && was.serial != 0u && was.serial + 1u == range.serial;
+    layer_records_[layer] += range.count;
+    for (std::size_t r = range.first; r < scene.constants.size(); ++r) {
+        std::int32_t& m = scene.prev_index[r];
+        layer_unmapped_[layer] += !consecutive && m >= 0 ? 1u : 0u;
+        m = consecutive && m >= 0 && static_cast<std::size_t>(m) < was.count
+            ? static_cast<std::int32_t>(was.first + static_cast<std::size_t>(m)) : -1;
+    }
+}
+
+// A side layer of an interpolated frame: the screen layer after its 3D scene
+// (to the display copy) or the mirror pass before it.
+void GxBackend::begin_side_layer(unsigned layer) {
+    if (!interp_recording_ || history_scene_) {
+        return;
+    }
+    if (layer == kScreenLayer) {
+        if (!scene_3d_recorded_ || !interp_scenes_[interp_scene_].valid) {
+            return;
+        }
+        scene_3d_recorded_ = false;
+    } else {
+        flush_pending_draw_batch();
+        open_interp_scene();
+        mirror_opened_scene_ = true;
+    }
+    flush_pending_draw_batch();
+    InterpScene& scene = interp_scenes_[interp_scene_];
+    side_layer_ = layer;
+    history_scene_ = true;
+    frame_bindings_dirty_ = true;
+    scene.layers[layer].first = scene.constants.size();
+    TransformHistory& history = layer == kScreenLayer ? screen_history_ : mirror_history_;
+    if (history.current().capacity() == 0u) {
+        history.reserve(2048u);
+    }
+    history.begin_scene(renderer_.matrix_segment_serial(), nullptr);
+    ++identity_scene_index_;
+    identity_scene_ = layer_identity_[layer];
+    layer_identity_markers_[layer] = 0u;
+    identity_occurrences_used_ = 0u;
+    identity_marker_ = mix64(0x5343524545ull);
+    identity_matrix_base_ = state_.matrix_write_count();
+    identity_last_base_ = 0u;
+    identity_sub_index_ = 0u;
+    identity_continuity_ = 0u;
+    identity_continuity_particle_ = false;
+    identity_category_ = motion::kNoCategory;
+    state_.reset_matrix_load_signature();
+    state_.set_matrix_load_tracking(true);
+    matrix_palette_stale_ = true;
+    current_palette_shadow_ = -1;
+    current_replay_record_ = -1;
+    current_ps_record_ = -1;
+    ps_record_restart_ = true;
+}
+
+void GxBackend::end_side_layer() {
+    if (side_layer_ == 0u) {
+        return;
+    }
+    flush_pending_draw_batch();
+    const unsigned layer = side_layer_;
+    (layer == kScreenLayer ? screen_history_ : mirror_history_).end_scene();
+    end_record_layer(layer);
+    layer_identity_[layer] = layer_identity_markers_[layer] != 0u;
+    side_layer_ = 0u;
+    history_scene_ = false;
+    frame_bindings_dirty_ = true;
+    current_replay_record_ = -1;
+    current_ps_record_ = -1;
+    state_.set_matrix_load_tracking(false);
+}
+
 void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view) {
     flush_pending_draw_batch();
     ++scene_markers_seen_;
+    if (marker == FifoMarker::SceneBegin) {
+        end_side_layer();
+    }
     scene_phase_ = marker == FifoMarker::SceneBegin;
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
@@ -6398,28 +6890,19 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         scene_camera_captured_ = false;
         history_scene_ = temporal_scene_ || interp_recording_;
         if (interp_recording_) {
-            note_interp_log_completion();
             renderer_.note_replay_scene();
-            interp_scene_ = (interp_scene_ + 1u) % 4u;
-            if (interp_sequence_.active &&
-                (interp_scene_ == interp_sequence_.scene ||
-                 interp_scene_ == (interp_sequence_.scene + 3u) % 4u)) {
-                // The playing scene's inputs are about to be reused.
-                interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
-                interp_sequence_.subframes = interp_sequence_.next;
-                interp_sequence_.flush_requested = true;
+            if (!std::exchange(mirror_opened_scene_, false)) {
+                open_interp_scene();
             }
-            if (interp_scene_ == interp_log_scene_) {
-                interp_log_waiting_ = false;
-                interp_start_pending_ = false;
-            }
-            interp_scenes_[interp_scene_].clear();
-            interp_scenes_[interp_scene_].valid = true;
+            interp_scenes_[interp_scene_].layers[kSceneLayer].first = interp_scenes_[interp_scene_].constants.size();
+            scene_3d_recorded_ = true;
             ++interp_scenes_in_chunk_;
             // A fresh palette shadow for the scene's first palette draw.
             matrix_palette_stale_ = true;
             current_palette_shadow_ = -1;
             current_replay_record_ = -1;
+            current_ps_record_ = -1;
+            ps_record_restart_ = true;
         }
         if (history_scene_) {
             if (transform_history_.current().capacity() == 0u) {
@@ -6431,11 +6914,17 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
             transform_history_.begin_scene(renderer_.matrix_segment_serial(),
                                            view != nullptr ? &camera : nullptr);
+            begin_identity_scene();
+            state_.set_matrix_load_tracking(true);
             if (interp_recording_) {
-                interp_scenes_[interp_scene_].camera = transform_history_.camera_delta();
+                InterpScene& scene = interp_scenes_[interp_scene_];
+                scene.camera = transform_history_.camera_delta();
+                scene.view = camera;
+                scene.view_known = view != nullptr;
             }
         } else {
             transform_history_.reset();
+            state_.set_matrix_load_tracking(false);
         }
     } else {
         if (history_scene_) {
@@ -6444,7 +6933,19 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
                 renderer_.record_motion_debug_view();
             }
             transform_history_.end_scene();
+            if (interp_recording_ && interp_scenes_[interp_scene_].valid) {
+                end_record_layer(kSceneLayer);
+            }
             const TransformHistoryStats stats = transform_history_.stats();
+            identity_records_ += stats.identified;
+            identity_matched_ += stats.identity_matched;
+            identity_rejected_ += stats.identity_rejected;
+            identity_scene_records_ += stats.records;
+            identity_signature_rejected_ += stats.signature_rejected;
+            identity_continuity_rejected_ += stats.continuity_rejected;
+            for (std::size_t i = 0; i < particle_age_steps_.size(); ++i) {
+                particle_age_steps_[i] += stats.particle_age_steps[i];
+            }
             // A cut: most transforms have no previous counterpart.
             if (temporal_scene_ && stats.records >= 16u && stats.matched * 2u < stats.records) {
                 renderer_.reset_temporal_history();
@@ -6466,6 +6967,8 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         motion_scene_ = false;
         history_scene_ = false;
         current_replay_record_ = -1;
+        current_ps_record_ = -1;
+        state_.set_matrix_load_tracking(false);
     }
     // Projections take (or drop) the scene jitter, and scene draws switch
     // palette addressing, from the next draw on.
@@ -6488,6 +6991,9 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     if (switched) {
         efb_copies_.set_efb_scale(renderer_.efb_scale());
         frame_bindings_dirty_ = true;
+    }
+    if (marker == FifoMarker::SceneEnd) {
+        begin_side_layer(kScreenLayer);
     }
 }
 
@@ -6656,16 +7162,43 @@ bool GxBackend::peek_efb(
 
 // A display copy completed a game frame's log: its scene (the one recording
 // when the copy landed) is the one to interpolate when its present arrives.
+// GALAXY_INTERP_EVENTS=first,last: one line per interpolation event while the
+// latest log serial is in [first, last].
+void GxBackend::interp_event(const char* what, std::uint64_t a, std::uint64_t b) const {
+    static const std::pair<std::uint64_t, std::uint64_t> range = [] {
+        char value[64]{};
+        std::size_t length = 0u;
+        std::pair<std::uint64_t, std::uint64_t> r{1u, 0u};
+        if (getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_EVENTS") == 0 && length > 1u) {
+            unsigned long long first = 0, last = 0;
+            if (sscanf_s(value, "%llu,%llu", &first, &last) == 2) r = {first, last};
+        }
+        return r;
+    }();
+    const std::uint64_t serial = renderer_.replay_serial();
+    if (serial < range.first || serial > range.second) {
+        return;
+    }
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    std::ostringstream message;
+    message << "[interp-event] qpc=" << now.QuadPart << " log=" << serial << ' ' << what
+            << ' ' << a << ' ' << b << '\n';
+    std::cerr << message.str();
+}
+
 void GxBackend::note_interp_log_completion() {
     const std::uint64_t serial = renderer_.replay_serial();
     if (serial == interp_seen_serial_) {
         return;
     }
     interp_seen_serial_ = serial;
+    interp_event("log-closed", renderer_.replay_available() ? 1u : 0u, renderer_.replay_xfb_addr());
     if (!renderer_.replay_available()) {
         return;
     }
     interp_log_scene_ = interp_scene_;
+    interp_scenes_[interp_log_scene_].serial = serial;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
         !native_settings_overlay_visible();
     interp_log_xfb_ = renderer_.replay_xfb_addr();
@@ -6677,7 +7210,7 @@ void GxBackend::run_pending_interp_start() {
     }
     interp_start_pending_ = false;
     if (interp_sequence_.active) {
-        advance_interp_sequence(true);
+        supersede_interp_sequence();
     }
     if (interp_log_waiting_ && renderer_.replay_available()) {
         interp_log_waiting_ = false;
@@ -6697,18 +7230,289 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     if (!renderer_.start_replay_playback()) {
         return;
     }
+    const RenderConfig cfg = get_render_config();
+    double rate = std::max(61.0, present_frame_rate(
+        cfg.max_fps, cfg.vsync_interval, renderer_.display_refresh_hz()));
     ++interp_sequence_serial_;
+    ++interp_started_;
+    // Logs completed but never played (a newer one replaced them first).
+    const std::uint64_t played = renderer_.playing_serial();
+    if (interp_last_played_serial_ != 0u && played > interp_last_played_serial_ + 1u &&
+        played - interp_last_played_serial_ < 8u) {
+        interp_logs_skipped_ += played - interp_last_played_serial_ - 1u;
+    }
+    interp_last_played_serial_ = played;
+    note_game_frame_cadence(now.QuadPart);
+    interp_event("start", played, xfb_addr);
+    static const std::uint64_t trace_level = read_env_u64("GALAXY_INTERP_TRACE", 0u);
+    if (trace_level >= 2u) {
+        std::cerr << "[interp-start] seq=" << interp_sequence_serial_ << " log=" << played << '\n';
+    }
     interp_sequence_.active = true;
     interp_sequence_.flush_requested = false;
+    interp_sequence_.classified = false;
     interp_sequence_.scene = interp_log_scene_;
+    select_interp_before();
     interp_sequence_.xfb_addr = xfb_addr;
-    interp_sequence_.subframes = interp_frames_;
+    interp_sequence_.subframes = interp_gpu_governor(rate);
     interp_sequence_.next = 0u;
-    // Sub-frame i at t = i / (k + 1), one present slot apart; the real frame
-    // closes the game frame.
-    interp_sequence_.step_qpc =
-        frequency / (60 * static_cast<std::int64_t>(interp_frames_ + 1u));
-    interp_sequence_.due_qpc = now.QuadPart;
+    // Present slots run on one clock at the present rate. A slot shows the
+    // game at t = (slot - arrival) * 60 + lead between the previous frame (0)
+    // and this one (1); the first slot with t >= 1 presents this frame
+    // itself. Integer multiples of 60 lock the clock to each arrival with
+    // lead 60 / rate: k sub-frames at i / (k + 1), then the frame, on time.
+    // Other rates keep a free-running clock with lead 0: content time is
+    // then linear in present time (the next arrival ends the sequence at
+    // t -> 1), where a lead would show the frame up to one slot early and
+    // step the content unevenly around it. A clock left behind by a pause
+    // restarts.
+    interp_slot_period_qpc_ = static_cast<std::int64_t>(static_cast<double>(frequency) / rate);
+    const bool locked = std::abs(rate / 60.0 - std::round(rate / 60.0)) < 0.02;
+    // The arrival clock: the render thread sees a frame's present when it
+    // reaches the queue (a chunk in progress delays it by milliseconds), so
+    // arrivals are the game's frame cadence, smoothed: the prediction one or
+    // more frame periods on, pulled 1/8 toward the measured arrival, with the
+    // period tracking the game's rate. A miss by a third of a period or more
+    // (pause, hitch) restarts it at the measured time.
+    if (interp_frame_period_qpc_ == 0) {
+        interp_frame_period_qpc_ = frequency / 60;
+    }
+    std::int64_t arrival = now.QuadPart;
+    if (interp_arrival_qpc_ != 0 && now.QuadPart > interp_arrival_qpc_) {
+        const std::int64_t periods = std::max<std::int64_t>(1,
+            (now.QuadPart - interp_arrival_qpc_ + interp_frame_period_qpc_ / 2) /
+                interp_frame_period_qpc_);
+        const std::int64_t predicted = interp_arrival_qpc_ + periods * interp_frame_period_qpc_;
+        const std::int64_t error = now.QuadPart - predicted;
+        if (periods <= 4 && std::abs(error) < interp_frame_period_qpc_ / 3) {
+            arrival = predicted + error / 8;
+            interp_frame_period_qpc_ = std::clamp<std::int64_t>(
+                interp_frame_period_qpc_ + error / (64 * periods), frequency / 62, frequency / 58);
+        }
+    }
+    interp_arrival_qpc_ = arrival;
+    interp_sequence_.frame_qpc = arrival;
+    interp_sequence_.lead = locked ? 60.0 / rate : 0.0;
+    if (locked || interp_slot_due_qpc_ == 0 ||
+        now.QuadPart - interp_slot_due_qpc_ > interp_slot_period_qpc_ ||
+        interp_slot_due_qpc_ - now.QuadPart > interp_slot_period_qpc_) {
+        // Locked rates start the slots at the (smoothed) arrival.
+        interp_slot_due_qpc_ = locked && arrival <= now.QuadPart + interp_slot_period_qpc_
+            ? arrival : now.QuadPart;
+    }
+}
+
+// B18: the scene before the starting one was never on screen (its log was
+// replaced before a present started it, or its sequence ended before showing
+// anything). The sub-frames then start from the scene shown last, records
+// matched through the skipped scenes, instead of from a frame never shown.
+// Vertex blending needs consecutive logs (prepare_vertex_blend) and stays off
+// for such a sequence.
+void GxBackend::select_interp_before() {
+    const unsigned scene = interp_sequence_.scene;
+    interp_sequence_.before = (scene + 3u) % 4u;
+    interp_sequence_.chained = false;
+    if (interp_shown_scene_ < 0 ||
+        static_cast<unsigned>(interp_shown_scene_) == interp_sequence_.before ||
+        static_cast<unsigned>(interp_shown_scene_) == scene) {
+        return;
+    }
+    // GALAXY_INTERP_CHAIN=0: start from the scene before regardless (A/B).
+    static const bool chain = read_env_u64("GALAXY_INTERP_CHAIN", 1u) != 0u;
+    const unsigned shown = static_cast<unsigned>(interp_shown_scene_);
+    const unsigned depth = (scene + 4u - shown) % 4u;  // 2 or 3 scenes back
+    const InterpScene& target = interp_scenes_[scene];
+    bool consecutive = chain && target.valid && target.serial != 0u;
+    for (unsigned step = 1u; consecutive && step <= depth; ++step) {
+        const InterpScene& older = interp_scenes_[(scene + 4u - step) % 4u];
+        consecutive = older.valid && older.serial + step == target.serial;
+    }
+    static const bool trace = read_env_u64("GALAXY_INTERP_TRACE", 0u) != 0u;
+    if (trace) {
+        std::cerr << "[interp-chain] seq=" << interp_sequence_serial_ << " depth=" << depth
+                  << " chained=" << (consecutive ? 1 : 0) << '\n';
+    }
+    if (!consecutive) {
+        ++interp_unchained_skips_;
+        return;
+    }
+    interp_chain_prev_ = target.prev_index;
+    for (unsigned step = 1u; step < depth; ++step) {
+        const std::vector<std::int32_t>& through = interp_scenes_[(scene + 4u - step) % 4u].prev_index;
+        for (std::int32_t& m : interp_chain_prev_) {
+            m = m >= 0 && static_cast<std::size_t>(m) < through.size()
+                ? through[static_cast<std::size_t>(m)] : -1;
+        }
+    }
+    interp_sequence_.before = shown;
+    interp_sequence_.chained = true;
+    ++interp_chained_sequences_;
+}
+
+// B22: as many sub-frames per game frame as the GPU fits. A sub-frame
+// replays the whole frame, so a game frame costs about (k + 1) sub-frame
+// times (measured with GPU timestamps). k drops at once when over budget and
+// rises one step after 10 s under it; with none left, one is tried again
+// every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
+// GALAXY_INTERP_GPU_BUDGET_MS: GPU time per game frame (default 15 of 16.7);
+// GALAXY_INTERP_GPU_GOVERNOR=0 turns it off.
+unsigned GxBackend::interp_gpu_governor(double& rate) {
+    const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
+    static const bool enabled = read_env_u64("GALAXY_INTERP_GPU_GOVERNOR", 1u) != 0u;
+    static const double budget_ms = [] {
+        char value[32]{};
+        std::size_t length = 0u;
+        const double ms = getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_GPU_BUDGET_MS") == 0 &&
+                                  length > 1u
+            ? std::strtod(value, nullptr) : 0.0;
+        return ms > 0.0 ? ms : 15.0;
+    }();
+    if (configured == 0u) {
+        return configured;
+    }
+    const unsigned allowed = std::min(configured, interp_cadence_cap_);
+    if (!enabled) {
+        if (allowed < configured) {
+            ++interp_gpu_capped_;
+            rate = 60.0 * static_cast<double>(allowed + 1u);
+        }
+        return allowed;
+    }
+    const std::uint64_t serial = interp_sequence_serial_;
+    if (serial - interp_gpu_checked_ >= 30u) {
+        interp_gpu_checked_ = serial;
+        const double sub_ms = renderer_.subframe_gpu_ema_ms();
+        if (sub_ms > 0.0) {
+            // With the temporal upscaler on the replays the frame at t = 1 is
+            // one too; when no sub-frame fits beside it, the game frames take
+            // the upscaler instead (the same frames for less GPU time).
+            const bool upscaled = renderer_.temporal_interpolation();
+            const double fit = std::floor(budget_ms / sub_ms) - (upscaled ? 2.0 : 1.0);
+            if (upscaled && fit < 1.0) {
+                renderer_.suspend_temporal_interpolation(sub_ms);
+            }
+            const unsigned fits = fit < 1.0 ? 0u : static_cast<unsigned>(std::min(fit, 7.0));
+            if (fits < interp_gpu_cap_) {
+                interp_gpu_cap_ = fits;
+                interp_gpu_cap_serial_ = serial;
+            } else if (fits > interp_gpu_cap_ && serial - interp_gpu_cap_serial_ >= 600u) {
+                ++interp_gpu_cap_;
+                interp_gpu_cap_serial_ = serial;
+            }
+        }
+        if (interp_gpu_cap_ == 0u && serial - interp_gpu_cap_serial_ >= 1200u) {
+            interp_gpu_cap_ = 1u;  // measure one sub-frame again
+            interp_gpu_cap_serial_ = serial;
+            renderer_.reset_subframe_gpu_ema();
+        }
+    }
+    const unsigned subframes = std::min(allowed, interp_gpu_cap_);
+    if (subframes >= configured) {
+        return configured;
+    }
+    ++interp_gpu_capped_;
+    rate = 60.0 * static_cast<double>(subframes + 1u);
+    return subframes;
+}
+
+// Sub-frames must never cost the game its own frames. Each game frame shown is
+// timed against the VI period: an interval above 1.5 periods missed VIs. The
+// game's own misses are measured while no sub-frames run. Two or more misses
+// per second beyond those take a sub-frame away (half of them at eight); a try
+// of one more sub-frame is undone at its first miss when the game misses none
+// on its own. Tries follow a clean interval that doubles after each failed
+// one (8 s to 64 s) and halves after one that held.
+// GALAXY_INTERP_CADENCE_GOVERNOR=0 turns it off.
+void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
+    static const bool enabled = read_env_u64("GALAXY_INTERP_CADENCE_GOVERNOR", 1u) != 0u;
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    if (!enabled) {
+        return;
+    }
+    const std::int64_t period = frequency * 1001 / 60000;
+    if (interp_cadence_last_qpc_ == 0 || now_qpc - interp_cadence_last_qpc_ > 4 * frequency) {
+        // First frame, or a pause (menu, load): a new window.
+        interp_cadence_last_qpc_ = now_qpc;
+        interp_cadence_window_qpc_ = now_qpc;
+        interp_cadence_frames_ = 0u;
+        interp_cadence_misses_ = 0u;
+        return;
+    }
+    const std::int64_t interval = now_qpc - interp_cadence_last_qpc_;
+    interp_cadence_last_qpc_ = now_qpc;
+    ++interp_cadence_frames_;
+    const std::uint32_t missed =
+        interval > period * 3 / 2 ? static_cast<std::uint32_t>((interval + period / 2) / period) - 1u : 0u;
+    interp_cadence_misses_ += missed;
+    const unsigned running = std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_});
+    const bool trying = interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ < 4 * frequency;
+    const auto drop = [&](unsigned cap) {
+        if (trying) {
+            interp_cadence_interval_s_ = std::min(interp_cadence_interval_s_ * 2u, 64u);
+        }
+        // The replay at t = 1 alone costs the game its frames (measured to
+        // take a quarter of a frame or more, not a load hitch).
+        const double replay_ms = renderer_.subframe_gpu_ema_ms();
+        if (cap == 0u && renderer_.temporal_interpolation() && replay_ms * 4.0 >= 1000.0 / 60.0) {
+            renderer_.suspend_temporal_interpolation(replay_ms);
+        }
+        interp_cadence_cap_ = cap;
+        interp_cadence_change_qpc_ = now_qpc;
+        interp_cadence_try_qpc_ = 0;
+        ++interp_cadence_drops_;
+    };
+    if (trying && missed != 0u && running > 0u && interp_cadence_own_misses_ < 0.5) {
+        drop(running - 1u);
+        return;
+    }
+    const std::int64_t elapsed = now_qpc - interp_cadence_window_qpc_;
+    if (elapsed < frequency) {
+        return;
+    }
+    const double seconds = static_cast<double>(elapsed) / static_cast<double>(frequency);
+    interp_cadence_fps_ = static_cast<double>(interp_cadence_frames_) / seconds;
+    const double misses = static_cast<double>(interp_cadence_misses_) / seconds;
+    interp_cadence_window_qpc_ = now_qpc;
+    interp_cadence_frames_ = 0u;
+    interp_cadence_misses_ = 0u;
+    if (running == 0u) {
+        interp_cadence_own_misses_ = 0.5 * (interp_cadence_own_misses_ + misses);
+    } else {
+        interp_cadence_own_misses_ = std::min(interp_cadence_own_misses_, misses);
+    }
+    const double excess = misses - interp_cadence_own_misses_;
+    if (running > 0u && excess >= 2.0) {
+        drop(excess >= 8.0 ? running / 2u : running - 1u);
+        return;
+    }
+    if (interp_cadence_cap_ >= interp_frames_) {
+        return;
+    }
+    if (now_qpc - interp_cadence_change_qpc_ >=
+        static_cast<std::int64_t>(interp_cadence_interval_s_) * frequency) {
+        ++interp_cadence_cap_;
+        interp_cadence_change_qpc_ = now_qpc;
+        interp_cadence_try_qpc_ = now_qpc;
+    } else if (interp_cadence_try_qpc_ != 0 && now_qpc - interp_cadence_try_qpc_ >= 4 * frequency) {
+        interp_cadence_interval_s_ = std::max(interp_cadence_interval_s_ / 2u, 8u);
+        interp_cadence_try_qpc_ = 0;
+    }
+}
+
+// The next frame's sequence replaces this one before its real frame (at
+// rates that are not multiples of 60 that is the normal end: the next
+// frame's sub-frames continue from t = 0, its predecessor's image).
+void GxBackend::supersede_interp_sequence() {
+    if (!interp_sequence_.active) {
+        return;
+    }
+    interp_sequence_.active = false;
+    ++interp_superseded_;
+    interp_event("superseded", interp_last_played_serial_, interp_sequence_.next);
 }
 
 std::string GxBackend::interp_snapshot_path(const char* suffix) const {
@@ -6721,13 +7525,26 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
     }();
     static const std::uint64_t first = read_env_u64("GALAXY_INTERP_SNAPSHOT_FIRST", 0u);
     static const std::uint64_t last = read_env_u64("GALAXY_INTERP_SNAPSHOT_LAST", 0u);
-    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last) {
+    static const std::uint64_t every = std::max<std::uint64_t>(read_env_u64("GALAXY_INTERP_SNAPSHOT_EVERY", 1u), 1u);
+    if (directory.empty() || interp_sequence_serial_ < first || interp_sequence_serial_ > last ||
+        (interp_sequence_serial_ - first) % every != 0u) {
         return {};
     }
     return directory + "\\seq_" + std::to_string(interp_sequence_serial_) + "_" + suffix + ".ppm";
 }
 
-std::int64_t GxBackend::interp_wait_ms() const {
+// t of the next slot in the playing sequence (see advance_interp_sequence).
+double GxBackend::interp_slot_t() const {
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * 60.0 /
+               static_cast<double>(frequency) + interp_sequence_.lead;
+}
+
+std::int64_t GxBackend::interp_remaining_us() const {
     LARGE_INTEGER now{};
     QueryPerformanceCounter(&now);
     static const std::int64_t frequency = [] {
@@ -6735,194 +7552,926 @@ std::int64_t GxBackend::interp_wait_ms() const {
         QueryPerformanceFrequency(&value);
         return static_cast<std::int64_t>(value.QuadPart);
     }();
-    const std::int64_t remaining = interp_sequence_.due_qpc - now.QuadPart;
-    return remaining <= 0 ? 0 : std::max<std::int64_t>(1, remaining * 1000 / frequency);
+    return (interp_slot_due_qpc_ - now.QuadPart) * 1'000'000 / frequency;
+}
+
+#ifndef CREATE_WAITABLE_TIMER_HIGH_RESOLUTION
+#define CREATE_WAITABLE_TIMER_HIGH_RESOLUTION 0x00000002
+#endif
+
+// Render thread: a short wait to a present slot, finer than the scheduler tick.
+void GxBackend::interp_sleep_us(std::int64_t us) {
+    struct Timer {
+        HANDLE handle = CreateWaitableTimerExW(
+            nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+        ~Timer() {
+            if (handle != nullptr) CloseHandle(handle);
+        }
+    };
+    static thread_local Timer timer;
+    LARGE_INTEGER due{};
+    due.QuadPart = -us * 10;  // relative, 100 ns units
+    if (timer.handle != nullptr && SetWaitableTimer(timer.handle, &due, 0, nullptr, nullptr, FALSE)) {
+        (void)WaitForSingleObject(timer.handle, 4u);
+        return;
+    }
+    std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
 void GxBackend::advance_interp_sequence(bool flush) {
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
     flush = flush || interp_sequence_.flush_requested;
     while (interp_sequence_.active) {
         LARGE_INTEGER now{};
         QueryPerformanceCounter(&now);
-        if (!flush && now.QuadPart < interp_sequence_.due_qpc) {
+        InterpSequence& sequence = interp_sequence_;
+        // Slots run on the QPC clock with VSync too: a Present that waits
+        // for the display would hold back the frame chunks behind it.
+        if (!flush && now.QuadPart < interp_slot_due_qpc_) {
             return;
         }
-        InterpSequence& sequence = interp_sequence_;
-        if (!flush && sequence.next < sequence.subframes && renderer_.replay_playing()) {
-            const float t = static_cast<float>(sequence.next + 1u) /
-                            static_cast<float>(sequence.subframes + 1u);
+        const std::int64_t slot = interp_slot_due_qpc_;
+        // A free-running slot due just before the arrival shows t = 0.
+        const double t = std::max(0.0, static_cast<double>(slot - sequence.frame_qpc) * 60.0 /
+                                           static_cast<double>(frequency) + sequence.lead);
+        if (!flush) {
+            interp_slot_due_qpc_ = slot + interp_slot_period_qpc_;
+            // A stall skips the slots it missed instead of bunching them.
+            if (now.QuadPart >= interp_slot_due_qpc_) {
+                interp_late_slots_ += static_cast<std::uint64_t>(
+                    (now.QuadPart - interp_slot_due_qpc_) / interp_slot_period_qpc_ + 1);
+                interp_slot_due_qpc_ = now.QuadPart + interp_slot_period_qpc_;
+            }
+        }
+        if (!flush && t < 1.0 - 1e-3 && sequence.next < 7u && sequence.subframes != 0u &&
+            renderer_.replay_playing()) {
             const auto start = std::chrono::steady_clock::now();
-            const std::string snapshot =
+            std::string snapshot =
                 interp_snapshot_path(("sub" + std::to_string(sequence.next + 1u)).c_str());
+            if (snapshot.empty()) {
+                snapshot = present_snapshot_path();  // sub-frames count as presents
+            }
             if (!snapshot.empty()) {
                 renderer_.set_debug_capture_paths({}, snapshot);
                 renderer_.set_subframe_capture(true);
+                renderer_.set_capture_waits(true);
             }
-            const bool presented = render_interp_subframe(t);
+            // GALAXY_INTERP_FORCE_T=<0..1>: every sub-frame at that t (replay checks: 1 must
+            // reproduce the frame, 0 the frame before).
+            static const double force_t = [] {
+                char value[32]{};
+                std::size_t length = 0u;
+                return getenv_s(&length, value, sizeof(value), "GALAXY_INTERP_FORCE_T") == 0 && length > 1u
+                    ? std::clamp(std::strtod(value, nullptr), 0.0, 1.0) : -1.0;
+            }();
+            // GALAXY_INTERP_COPY_AB=1: sequences alternate redirected and guarded copies; =3 adds
+            // a third with neither (A/B in one run, diagnostics).
+            static const std::uint64_t copy_ab = read_env_u64("GALAXY_INTERP_COPY_AB", 0u);
+            if (copy_ab != 0u) {
+                const std::uint64_t phase = interp_sequence_serial_ % (copy_ab == 3u ? 3u : 2u);
+                renderer_.set_subframe_copy_redirect(phase == 0u ? 1 : phase == 1u ? 0 : 2);
+            }
+            const bool presented = render_interp_subframe(static_cast<float>(force_t >= 0.0 ? force_t : t));
+            interp_event("sub", interp_last_played_serial_, static_cast<std::uint64_t>(t * 1000.0));
             if (!snapshot.empty()) {
                 renderer_.set_subframe_capture(false);
+                renderer_.set_capture_waits(false);
                 renderer_.set_debug_capture_paths({}, {});
             }
             interp_cpu_ms_ += std::chrono::duration<double, std::milli>(
                 std::chrono::steady_clock::now() - start).count();
             if (presented) {
                 ++interp_presented_;
+                interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
             } else {
                 ++interp_failed_;
             }
             ++sequence.next;
-            sequence.due_qpc += sequence.step_qpc;
-            // A late sub-frame never delays the next one past its own slot.
-            if (now.QuadPart > sequence.due_qpc) sequence.due_qpc = now.QuadPart;
+            // Rates that are not multiples of 60 rarely present real frames.
+            report_interp_stats();
             return;
         }
-        if (sequence.next < sequence.subframes) {
-            interp_dropped_ += sequence.subframes - sequence.next;
-        }
         sequence.active = false;
+        interp_event("real", interp_last_played_serial_, static_cast<std::uint64_t>(std::max(0.0, t) * 1000.0));
         interp_snapshot_path_ = interp_snapshot_path("real");
+        renderer_.set_capture_waits(!interp_snapshot_path_.empty());
+        interp_presenting_real_ = true;
         present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
+        interp_presenting_real_ = false;
+        interp_shown_scene_ = static_cast<std::int32_t>(sequence.scene);
+        renderer_.set_capture_waits(false);
         interp_snapshot_path_.clear();
-        static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
-        if (trace) {
-            static const std::int64_t frequency = [] {
-                LARGE_INTEGER value{};
-                QueryPerformanceFrequency(&value);
-                return static_cast<std::int64_t>(value.QuadPart);
-            }();
-            if (interp_stats_qpc_ == 0) interp_stats_qpc_ = now.QuadPart;
-            if (now.QuadPart - interp_stats_qpc_ >= 2 * frequency) {
-                double gpu_ms = 0.0;
-                std::uint64_t gpu_samples = 0u;
-                renderer_.take_subframe_gpu_ms(gpu_ms, gpu_samples);
-                const double seconds = static_cast<double>(now.QuadPart - interp_stats_qpc_) /
-                                       static_cast<double>(frequency);
-                std::cerr << "[interp-stats] subframes-per-frame=" << sequence.subframes
-                          << " presented-hz=" << static_cast<double>(interp_presented_) / seconds
-                          << " dropped=" << interp_dropped_
-                          << " failed=" << interp_failed_
-                          << " replay-fail=" << renderer_.replay_failure()
-                          << " cpu-ms-per-subframe="
-                          << (interp_presented_ != 0u ? interp_cpu_ms_ / static_cast<double>(interp_presented_) : 0.0)
-                          << " gpu-ms-per-subframe="
-                          << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
-                          << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
-                interp_presented_ = 0u;
-                interp_dropped_ = 0u;
-                interp_failed_ = 0u;
-                interp_cpu_ms_ = 0.0;
-                interp_stats_qpc_ = now.QuadPart;
-            }
-        }
+        ++interp_sequences_;
+        report_interp_stats();
         return;
     }
 }
 
+// A game frame presented while interpolating, without sub-frames: why.
+void GxBackend::note_interp_real_present() {
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    note_game_frame_cadence(now.QuadPart);
+    interp_shown_scene_ = -1;                  // a frame no sequence knows
+    unsigned reason = 5u;                      // log ready, present not matched
+    if (native_settings_overlay_visible()) {
+        reason = 0u;
+    } else if (!renderer_.replay_available() && !interp_log_waiting_) {
+        reason = renderer_.replay_reject() != 0u ? renderer_.replay_reject() : 4u;
+    }
+    ++interp_real_only_[reason];
+    report_interp_stats();
+}
+
+void GxBackend::report_interp_stats() {
+    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    if (!trace) {
+        return;
+    }
+    static const std::int64_t frequency = [] {
+        LARGE_INTEGER value{};
+        QueryPerformanceFrequency(&value);
+        return static_cast<std::int64_t>(value.QuadPart);
+    }();
+    LARGE_INTEGER now{};
+    QueryPerformanceCounter(&now);
+    if (interp_stats_qpc_ == 0) interp_stats_qpc_ = now.QuadPart;
+    if (now.QuadPart - interp_stats_qpc_ < 2 * frequency) {
+        return;
+    }
+    double gpu_ms = 0.0;
+    std::uint64_t gpu_samples = 0u;
+    renderer_.take_subframe_gpu_ms(gpu_ms, gpu_samples);
+    const std::array<double, 3> gpu_phase = renderer_.take_subframe_phase_ms();
+    const double gpu_divisor = gpu_samples != 0u ? static_cast<double>(gpu_samples) : 1.0;
+    double record_ms = 0.0;
+    std::uint64_t record_samples = 0u;
+    renderer_.take_subframe_record_ms(record_ms, record_samples);
+    double replay_ms = 0.0;
+    std::uint64_t replay_samples = 0u;
+    std::uint64_t replays = 0u;
+    renderer_.take_sequence_record_ms(replay_ms, replay_samples, replays);
+    const double prepared = static_cast<double>(interp_prepared_);
+    std::ostringstream phases;
+    for (std::size_t i = 0; i < interp_prepare_phase_ms_.size(); ++i) {
+        phases << (i != 0u ? "/" : "") << (interp_prepared_ != 0u ? interp_prepare_phase_ms_[i] / prepared : 0.0);
+    }
+    const double seconds = static_cast<double>(now.QuadPart - interp_stats_qpc_) /
+                           static_cast<double>(frequency);
+    const double presented = static_cast<double>(interp_presented_);
+    std::uint64_t real_only = 0u;
+    for (const std::uint64_t count : interp_real_only_) real_only += count;
+    const RendererD3D12::CopyRedirectStats redirect = renderer_.take_copy_redirect_stats();
+    std::array<double, 3> path_ms{};
+    std::array<std::uint64_t, 3> path_samples{};
+    renderer_.take_subframe_path_gpu_ms(path_ms, path_samples);
+    const auto per_sample = [](double ms, std::uint64_t samples) {
+        return samples != 0u ? ms / static_cast<double>(samples) : 0.0;
+    };
+    std::ostringstream message;
+    message << "[interp-stats] subframes-per-frame=" << interp_frames_
+            << " sequences=" << interp_sequences_
+            << " presented-hz=" << presented / seconds
+            << " dropped=" << interp_dropped_
+            << " late-slots=" << interp_late_slots_
+            << " superseded=" << interp_superseded_
+            << " started=" << interp_started_
+            << " logs-skipped=" << interp_logs_skipped_
+            << " chained-sequences=" << interp_chained_sequences_
+            << " unchained-skips=" << interp_unchained_skips_
+            << " presents-during-sequence=" << interp_present_skipped_
+            << " snapped-records=" << interp_snapped_
+            << " failed=" << interp_failed_
+            << " replay-fail=" << renderer_.replay_failure()
+            << " log-gap-ops=" << renderer_.take_log_gap_ops()
+            << " real-only=" << real_only
+            << " (overlay=" << interp_real_only_[0]
+            << " no-scene=" << interp_real_only_[1]
+            << " multi-scene=" << interp_real_only_[2]
+            << " log-gone=" << interp_real_only_[4]
+            << " unmatched=" << interp_real_only_[5] << ")"
+            << " moving-per-subframe="
+            << (interp_presented_ != 0u ? static_cast<double>(interp_moving_records_) / presented : 0.0)
+            << " palette-decompositions=" << interp_palette_decompositions_
+            << " layer-records(scene/screen/mirror)=" << layer_records_[0] << '/' << layer_records_[1] << '/'
+            << layer_records_[2] << " layer-unmapped=" << layer_unmapped_[0] << '/' << layer_unmapped_[1] << '/'
+            << layer_unmapped_[2]
+            << " camera-cuts=" << interp_camera_cuts_
+            << " identity(records/matched/rejected/scene-records)=" << identity_records_ << '/'
+            << identity_matched_ << '/' << identity_rejected_ << '/' << identity_scene_records_
+            << " markers(shape/obj/emitter/particle)=" << identity_markers_by_kind_[1] << '/'
+            << identity_markers_by_kind_[2] << '/' << identity_markers_by_kind_[3] << '/'
+            << identity_markers_by_kind_[4]
+            << " motion(game-cuts/threshold-cuts/signature-rejects/continuity-rejects)=" << interp_game_cuts_
+            << '/' << interp_threshold_cuts_ << '/' << identity_signature_rejected_ << '/'
+            << identity_continuity_rejected_
+            << " particle-age-steps(<0/0/1/2/>2)=" << particle_age_steps_[0] << '/' << particle_age_steps_[1]
+            << '/' << particle_age_steps_[2] << '/' << particle_age_steps_[3] << '/' << particle_age_steps_[4]
+            << " signal-markers(category/image-effect/scene/pass/light/stripe-marks)=" << motion_category_markers_
+            << '/' << motion_image_effect_markers_ << '/' << motion_scene_markers_ << '/' << motion_mirror_markers_
+            << '/' << motion_light_markers_ << '/' << motion_stripe_marks_
+            << " layout-markers(2d-scenes/pane/actor/star-pointer)=" << window_2d_scenes_ << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutPane] << '/'
+            << identity_markers_by_kind_[motion::kMarkerLayoutActor] << '/'
+            << identity_markers_by_kind_[motion::kMarkerStarPointer]
+            << " prepare-ms-per-sequence="
+            << (interp_prepared_ != 0u ? interp_prepare_ms_ / prepared : 0.0)
+            << " prepare-phase-ms(camera/records/palettes/blend/colours/program+replay)=" << phases.str()
+            << " replay-record-ms-per-sequence="
+            << (replay_samples != 0u ? replay_ms / static_cast<double>(replay_samples) : 0.0)
+            << " replays-per-sequence="
+            << (replay_samples != 0u ? static_cast<double>(replays) / static_cast<double>(replay_samples) : 0.0)
+            << " eval-ops-per-sequence="
+            << (interp_prepared_ != 0u ? static_cast<double>(interp_program_ops_) / prepared : 0.0)
+            << " eval-kb-per-sequence="
+            << (interp_prepared_ != 0u ? static_cast<double>(interp_program_words_) * 4.0 / 1024.0 / prepared : 0.0)
+            << " submit-ms-per-subframe="
+            << (record_samples != 0u ? record_ms / static_cast<double>(record_samples) : 0.0)
+            << " wall-ms-per-subframe="
+            << (interp_presented_ != 0u ? interp_cpu_ms_ / presented : 0.0)
+            << " gpu-ms-per-subframe="
+            << (gpu_samples != 0u ? gpu_ms / static_cast<double>(gpu_samples) : 0.0)
+            << " gpu-phase-ms(eval/replay/present)=" << gpu_phase[0] / gpu_divisor << '/'
+            << gpu_phase[1] / gpu_divisor << '/' << gpu_phase[2] / gpu_divisor
+            << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
+            << " colour-records-per-subframe="
+            << (interp_presented_ != 0u
+                    ? static_cast<double>(std::exchange(interp_ps_moving_total_, 0u)) / presented : 0.0)
+            << " vertex-blend-draws-per-subframe="
+            << (interp_presented_ != 0u
+                    ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
+            << " guarded-copies=" << renderer_.take_subframe_guarded()
+            << " redirected-copies=" << redirect.redirected
+            << " patched-tables=" << redirect.patched_tables
+            << " copy-snapshots=" << redirect.snapshots
+            << " redirect-fallbacks=" << redirect.fallback_logs
+            << " gpu-subframe-cap=" << interp_gpu_cap_
+            << " cadence-subframe-cap=" << interp_cadence_cap_
+            << " cadence-drops=" << std::exchange(interp_cadence_drops_, 0u)
+            << " game-fps=" << interp_cadence_fps_
+            << " capped-sequences=" << std::exchange(interp_gpu_capped_, 0u)
+            << " subframe-gpu-ema-ms=" << renderer_.subframe_gpu_ema_ms()
+            << " gpu-ms-guard-path=" << per_sample(path_ms[0], path_samples[0])
+            << " gpu-ms-redirect-path=" << per_sample(path_ms[1], path_samples[1])
+            << " gpu-ms-unguarded-path=" << per_sample(path_ms[2], path_samples[2])
+            << " path-samples(guard/redirect/unguarded)=" << path_samples[0] << '/' << path_samples[1]
+            << '/' << path_samples[2]
+            << " held-textures=" << texture_cache_.take_held_texture_count()
+            << " held-vertex-blocks=" << interp_held_vertex_blocks_
+            << " ring-peak-kb(v/i/c/m)="
+            << renderer_.vertex_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.index_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.constant_ring().take_peak_bytes_per_frame() / 1024u << '/'
+            << renderer_.matrix_ring().take_peak_bytes_per_frame() / 1024u
+            << " measured-presents-hz=" << renderer_.measured_present_hz() << '\n';
+    std::cerr << message.str();
+    interp_presented_ = 0u;
+    interp_dropped_ = 0u;
+    interp_late_slots_ = 0u;
+    interp_superseded_ = 0u;
+    interp_started_ = 0u;
+    interp_logs_skipped_ = 0u;
+    interp_chained_sequences_ = 0u;
+    interp_unchained_skips_ = 0u;
+    interp_present_skipped_ = 0u;
+    interp_snapped_ = 0u;
+    interp_failed_ = 0u;
+    interp_sequences_ = 0u;
+    interp_real_only_ = {};
+    interp_cpu_ms_ = 0.0;
+    interp_prepare_ms_ = 0.0;
+    interp_prepare_phase_ms_ = {};
+    interp_prepared_ = 0u;
+    interp_program_ops_ = 0u;
+    interp_program_words_ = 0u;
+    interp_held_vertex_blocks_ = 0u;
+    interp_moving_records_ = 0u;
+    interp_palette_decompositions_ = 0u;
+    interp_camera_cuts_ = 0u;
+    layer_records_ = {};
+    layer_unmapped_ = {};
+    identity_records_ = 0u;
+    identity_matched_ = 0u;
+    identity_rejected_ = 0u;
+    identity_scene_records_ = 0u;
+    identity_markers_by_kind_ = {};
+    interp_game_cuts_ = 0u;
+    interp_threshold_cuts_ = 0u;
+    identity_signature_rejected_ = 0u;
+    identity_continuity_rejected_ = 0u;
+    particle_age_steps_ = {};
+    motion_category_markers_ = 0u;
+    motion_image_effect_markers_ = 0u;
+    motion_scene_markers_ = 0u;
+    motion_mirror_markers_ = 0u;
+    motion_light_markers_ = 0u;
+    window_2d_scenes_ = 0u;
+    motion_stripe_marks_ = 0u;
+    interp_stats_qpc_ = now.QuadPart;
+}
+
 // One interpolated frame at t (0 = previous game frame, 1 = the latest):
-// every scene record's VS constants (and per-vertex palette) rebuilt with
-// its transform between the matched previous record (or the camera delta)
-// and the latest, then the latest frame's operations replayed with them.
+// the camera at t, and every scene record whose constants change rebuilt
+// from its matched previous record (frame_interpolation.h): position and
+// normal matrices in world space under the camera at t, texture matrices,
+// lights and projection; then the latest frame's operations replayed.
 bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
-    const InterpScene& before_scene = interp_scenes_[(interp_sequence_.scene + 3u) % 4u];
+    const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
+    // Matched records of the scene before (through skipped scenes: B18).
+    const std::vector<std::int32_t>& prev_index =
+        interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
     }
+    const auto build_start = std::chrono::steady_clock::now();
     const std::size_t count = scene.constants.size();
-    const Affine34& camera = scene.camera;
-    const D3D12_GPU_VIRTUAL_ADDRESS ring_base = renderer_.matrix_ring().gpu_base();
     constexpr std::size_t kWords = kMatrixPaletteWords;
-    interp_record_vas_.assign(count, 0u);
-    alignas(16) static thread_local std::uint32_t palette[kMatrixPaletteWords];
-    const bool camera_still = camera == affine_identity();
-    for (std::size_t r = 0; r < count; ++r) {
-        const std::int32_t m = scene.prev_index[r];
-        const bool prev_data = before_scene.valid && m >= 0 &&
-            static_cast<std::size_t>(m) < before_scene.constants.size();
-        // Records that did not move keep the constants the frame recorded
-        // (a zero address leaves the draw's own).
-        if (scene.per_vertex[r] == 0u) {
-            const bool same_tex = !prev_data ||
-                std::memcmp(before_scene.constants[static_cast<std::size_t>(m)].inline_tex_matrices,
-                            scene.constants[r].inline_tex_matrices,
-                            sizeof(scene.constants[r].inline_tex_matrices)) == 0;
-            if (same_tex && scene.from[r] == scene.current[r]) {
-                continue;
-            }
-        } else if (const std::int32_t shadow = scene.palette[r];
-                   shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
-            const std::uint32_t* now_words =
-                scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-            const std::int32_t before = prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
-            if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
-                if (std::memcmp(before_scene.palettes.data() + static_cast<std::size_t>(before) * kWords,
-                                now_words, 256u * sizeof(std::uint32_t)) == 0) {
-                    continue;
-                }
-            } else if (camera_still) {
-                continue;
-            }
-        } else {
-            continue;
+    static_assert(kMatrixPaletteWords == kXfPaletteWords);
+    const bool before_valid = before_scene.valid;
+    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+        return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
+            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
+            : nullptr;
+    };
+    if (!interp_sequence_.classified) {
+        // Once per sequence: the camera between the two scenes, then every
+        // record whose constants differ at some t, with its decomposed motion.
+        interp_sequence_.classified = true;
+        interp_moving_.clear();
+        interp_pending_.clear();
+        interp_palette_motions_.clear();
+        interp_palette_first_.assign(scene.palette_count, -1);
+        static const CameraCutLimits cut_limits{};
+        camera_motion(before_valid && before_scene.view_known ? &before_scene.view : nullptr,
+                      scene.view_known ? &scene.view : nullptr, interp_camera_move_, cut_limits,
+                      interp_camera_);
+        // The game's camera epoch (generation 20) changes when the view was set
+        // without blending: a hard cut whatever the thresholds say. The
+        // thresholds remain for cuts the game does not flag.
+        const bool game_cut = before_valid && scene.camera_epoch_known && before_scene.camera_epoch_known &&
+                              scene.camera_epoch != before_scene.camera_epoch;
+        const bool threshold_cut = interp_camera_.cut;
+        if (game_cut && interp_camera_.known) {
+            interp_camera_.cut = true;
         }
-        GxVsConstants constants = scene.constants[r];
-        if (scene.per_vertex[r] == 0u) {
-            const Affine34 at = affine_interpolate(scene.from[r], scene.current[r], t);
-            std::memcpy(constants.inline_pos_matrix, at.data(), sizeof(constants.inline_pos_matrix));
-            if (prev_data) {
-                const GxVsConstants& before = before_scene.constants[static_cast<std::size_t>(m)];
-                float* tex = &constants.inline_tex_matrices[0][0][0];
-                const float* old = &before.inline_tex_matrices[0][0][0];
-                for (std::size_t i = 0; i < kMaxTexGens * 12u; ++i) {
-                    tex[i] = old[i] + (tex[i] - old[i]) * t;
-                }
-            }
-        } else if (const std::int32_t shadow = scene.palette[r];
-                   shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
-            const std::uint32_t* now_words =
-                scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords;
-            const std::uint32_t* before_words = nullptr;
-            if (prev_data) {
-                const std::int32_t before = before_scene.palette[static_cast<std::size_t>(m)];
-                if (before >= 0 && static_cast<std::size_t>(before) < before_scene.palette_count) {
-                    before_words = before_scene.palettes.data() +
-                                   static_cast<std::size_t>(before) * kWords;
-                }
-            }
-            std::memcpy(palette, now_words, sizeof(palette));
-            // PNMTX0-9 (XF rows 0-29): rigid interpolation.
-            for (unsigned matrix = 0; matrix < 10u; ++matrix) {
-                Affine34 now_m{};
-                std::memcpy(now_m.data(), now_words + matrix * 12u, sizeof(now_m));
-                Affine34 from{};
-                if (before_words != nullptr) {
-                    std::memcpy(from.data(), before_words + matrix * 12u, sizeof(from));
-                } else {
-                    from = affine_multiply(camera, now_m);
-                }
-                const Affine34 at = affine_interpolate(from, now_m, t);
-                std::memcpy(palette + matrix * 12u, at.data(), sizeof(at));
-            }
-            // Texture matrices (rows 30-63): element-wise.
-            if (before_words != nullptr) {
-                for (std::size_t w = 120u; w < 256u; ++w) {
-                    const float a = std::bit_cast<float>(before_words[w]);
-                    const float b = std::bit_cast<float>(now_words[w]);
-                    palette[w] = std::bit_cast<std::uint32_t>(a + (b - a) * t);
-                }
-            }
-            const UploadRing::Allocation alloc =
-                renderer_.matrix_ring().allocate(sizeof(palette), 256u);
-            std::memcpy(alloc.cpu, palette, sizeof(palette));
-            constants.mtx_palette_base = static_cast<std::uint32_t>((alloc.gpu - ring_base) / 16u);
+        interp_camera_move_ = interp_camera_.known && !game_cut ? interp_camera_.moved : 0.0f;
+        if (interp_camera_.cut) {
+            ++interp_camera_cuts_;
+            ++(game_cut ? interp_game_cuts_ : interp_threshold_cuts_);
         }
-        const UploadRing::Allocation upload =
-            renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
-        std::memcpy(upload.cpu, &constants, sizeof(constants));
-        interp_record_vas_[r] = upload.gpu;
+        static const std::uint64_t dump_records = read_env_u64("GALAXY_INTERP_DUMP_RECORDS", 0u);
+        if (dump_records != 0u && interp_sequence_serial_ == dump_records) {
+            const auto& current = transform_history_.previous();  // the playing scene's records
+            std::ostringstream out;
+            out << "[interp-records] seq=" << interp_sequence_serial_ << " count=" << count
+                << " history-previous=" << current.size() << '\n';
+            for (std::size_t r = 0; r < count; ++r) {
+                const std::int32_t m = prev_index[r];
+                const GxVsConstants& now = scene.constants[r];
+                out << "  r=" << r << " m=" << m << " pv=" << int(scene.per_vertex[r])
+                    << " pal=" << scene.palette[r]
+                    << " id=" << std::hex << (r < current.size() ? current[r].identity : 0u) << std::dec
+                    << " t=(" << now.inline_pos_matrix[0][3] << ',' << now.inline_pos_matrix[1][3] << ','
+                    << now.inline_pos_matrix[2][3] << ')';
+                if (before_valid && m >= 0 && static_cast<std::size_t>(m) < before_scene.constants.size()) {
+                    const GxVsConstants& b = before_scene.constants[static_cast<std::size_t>(m)];
+                    out << " prev=(" << b.inline_pos_matrix[0][3] << ',' << b.inline_pos_matrix[1][3] << ','
+                        << b.inline_pos_matrix[2][3] << ')';
+                }
+                out << '\n';
+            }
+            std::cerr << out.str();
+        }
+        static const bool trace_camera = read_env_u64("GALAXY_INTERP_TRACE_CAMERA", 0u) != 0u;
+        if (trace_camera) {
+            std::ostringstream line;
+            line << "[interp-camera] seq=" << interp_sequence_serial_ << " scene=" << interp_sequence_.scene
+                 << " known=" << interp_camera_.known << " rigid=" << interp_camera_.rigid
+                 << " cut=" << interp_camera_.cut << " game-cut=" << game_cut << " threshold-cut=" << threshold_cut
+                 << " epochs=" << (before_scene.camera_epoch_known ? static_cast<std::int64_t>(before_scene.camera_epoch) : -1)
+                 << '/' << (scene.camera_epoch_known ? static_cast<std::int64_t>(scene.camera_epoch) : -1)
+                 << " moved=" << interp_camera_.moved
+                 << " turn=" << interp_camera_.turn_degrees << " before-valid=" << before_valid
+                 << " records=" << count << " before-records=" << before_scene.constants.size() << " Va=";
+            for (float v : before_scene.view) line << v << ',';
+            line << " Vb=";
+            for (float v : scene.view) line << v << ',';
+            line << '\n';
+            std::cerr << line.str();
+        }
+        // Mirror-pass records move with their own camera: no world split; a cut
+        // of the scene camera cuts them too.
+        interp_mirror_camera_ = CameraMotion{};
+        interp_mirror_camera_.known = interp_camera_.known && interp_camera_.cut;
+        interp_mirror_camera_.cut = interp_mirror_camera_.known;
+        const bool camera_moves = interp_camera_.known && !interp_camera_.cut &&
+            std::memcmp(interp_camera_.a.data(), interp_camera_.b.data(), sizeof(Affine34)) != 0;
+        const auto records_start = std::chrono::steady_clock::now();
+        for (std::size_t r = 0; r < count; ++r) {
+            const std::int32_t m = prev_index[r];
+            const bool prev_data = before_valid && m >= 0 &&
+                static_cast<std::size_t>(m) < before_scene.constants.size();
+            const GxVsConstants& now = scene.constants[r];
+            const GxVsConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
+            // The screen layer moves in screen space, whatever its projection,
+            // and the scene camera's cuts do not apply to it.
+            const unsigned layer = scene.in_layer(kScreenLayer, r) ? kScreenLayer
+                : scene.in_layer(kMirrorLayer, r)                  ? kMirrorLayer
+                                                                   : kSceneLayer;
+            const bool orthographic = layer == kScreenLayer || now.projection[3][3] != 0.0f;
+            const CameraMotion& camera = layer_camera(layer);
+            InterpRecordMotion motion{};
+            motion.record = static_cast<std::uint32_t>(r);
+            motion.prev = prev_data ? m : -1;
+            if (scene.per_vertex[r] == 0u) {
+                Affine34 b{};
+                std::memcpy(b.data(), now.inline_pos_matrix, sizeof(Affine34));
+                Affine34 a{};
+                if (before != nullptr) {
+                    std::memcpy(a.data(), before->inline_pos_matrix, sizeof(Affine34));
+                }
+                eye_motion(before != nullptr ? &a : nullptr, b, camera, orthographic, motion.position);
+                motion.position_moves =
+                    !motion.position.still || (motion.position.split && camera_moves);
+                interp_snapped_ += motion.position.snapped ? 1u : 0u;
+            }
+            if (before != nullptr && !(camera.known && camera.cut)) {
+                motion.colour_moves = channel_colours_move(*before, now);
+                motion.tex_moves =
+                    std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
+                                sizeof(now.inline_tex_matrices)) != 0 ||
+                    std::memcmp(before->inline_post_matrices, now.inline_post_matrices,
+                                sizeof(now.inline_post_matrices)) != 0;
+                motion.projection_moves =
+                    before->projection[3][3] == now.projection[3][3] &&
+                    std::memcmp(before->projection, now.projection, sizeof(now.projection)) != 0;
+            }
+            const std::int32_t shadow = scene.palette[r];
+            if (shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
+                const std::int32_t before_shadow =
+                    prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
+                const std::uint32_t* before_words = before_palette(before_shadow);
+                const std::int32_t pair_before = before_words != nullptr ? before_shadow : -1;
+                std::int32_t index = interp_palette_first_[static_cast<std::size_t>(shadow)];
+                while (index >= 0 &&
+                       interp_palette_motions_[static_cast<std::size_t>(index)].before != pair_before) {
+                    index = interp_palette_motions_[static_cast<std::size_t>(index)].next;
+                }
+                if (index < 0) {
+                    index = static_cast<std::int32_t>(interp_palette_motions_.size());
+                    InterpPaletteMotion& entry = interp_palette_motions_.emplace_back();
+                    entry.shadow = shadow;
+                    entry.before = pair_before;
+                    entry.next = interp_palette_first_[static_cast<std::size_t>(shadow)];
+                    entry.orthographic = orthographic;
+                    entry.layer = static_cast<std::uint8_t>(layer);
+                    interp_palette_first_[static_cast<std::size_t>(shadow)] = index;
+                }
+                // The slots this record reads: every one for per-vertex
+                // matrices; for an inline draw, the normal matrix of its
+                // matrix index when it is lit; the lights its channels and
+                // emboss texgens evaluate (texture rows are taken whole).
+                InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
+                entry.light_mask |= used_lights(now);
+                if (scene.per_vertex[r] != 0u) {
+                    entry.position_mask = kAllPaletteSlots;
+                    entry.normal_mask = kAllPaletteSlots;
+                } else if ((now.flags & 0x02u) != 0u) {
+                    const std::uint32_t slot = (now.matrix_index_a & 0x3Fu) / 3u;
+                    if (slot < 10u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
+                }
+                motion.palette = index;
+            }
+            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
+                motion.colour_moves || motion.palette >= 0) {
+                interp_pending_.push_back(motion);
+            }
+        }
+        const auto palettes_start = std::chrono::steady_clock::now();
+        // Each palette pair once, with the slots its records read.
+        for (InterpPaletteMotion& entry : interp_palette_motions_) {
+            const std::uint32_t* now_words =
+                scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+            palette_motion(before_palette(entry.before), now_words, layer_camera(entry.layer),
+                           entry.orthographic,
+                           entry.motion, entry.position_mask, entry.normal_mask, entry.light_mask);
+            interp_snapped_ += entry.motion.snapped;
+            ++interp_palette_decompositions_;
+        }
+        for (InterpRecordMotion& motion : interp_pending_) {
+            if (motion.palette >= 0 &&
+                !interp_palette_motions_[static_cast<std::size_t>(motion.palette)].motion.any_changed) {
+                motion.palette = -1;
+            }
+            if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
+                motion.colour_moves || motion.palette >= 0) {
+                interp_moving_.push_back(motion);
+            }
+        }
+        if (trace_camera) {
+            std::size_t matched = 0u, inline_records = 0u, inline_unmatched = 0u, snapped = 0u;
+            for (std::size_t r = 0; r < count; ++r) {
+                matched += prev_index[r] >= 0 ? 1u : 0u;
+                if (scene.per_vertex[r] == 0u) {
+                    ++inline_records;
+                    inline_unmatched += prev_index[r] < 0 ? 1u : 0u;
+                }
+            }
+            for (const InterpRecordMotion& moving : interp_moving_) {
+                snapped += moving.position.snapped ? 1u : 0u;
+            }
+            std::size_t pairs_without_before = 0u, palette_snapped_slots = 0u;
+            for (const InterpPaletteMotion& entry : interp_palette_motions_) {
+                pairs_without_before += entry.before < 0 ? 1u : 0u;
+                palette_snapped_slots += entry.motion.snapped;
+            }
+            std::ostringstream line;
+            line << "[interp-seq] seq=" << interp_sequence_serial_ << " records=" << count
+                 << " matched=" << matched << " inline=" << inline_records
+                 << " inline-unmatched=" << inline_unmatched << " inline-snapped=" << snapped
+                 << " moving=" << interp_moving_.size() << " palette-pairs=" << interp_palette_motions_.size()
+                 << " pairs-without-before=" << pairs_without_before
+                 << " palette-snapped-slots=" << palette_snapped_slots
+                 << " palettes=" << scene.palette_count << '/' << before_scene.palette_count;
+            // Records per draw phase (galaxy/motion_signals.h; the last is none).
+            std::array<std::uint32_t, 11> phase_records{};
+            for (const std::uint32_t category : scene.category) {
+                const std::uint8_t phase = motion::category_phase(category);
+                ++phase_records[phase < 10u ? phase : 10u];
+            }
+            line << " phase-records=";
+            for (std::size_t i = 0; i < phase_records.size(); ++i) line << (i != 0u ? "," : "") << phase_records[i];
+            line << '\n';
+            std::cerr << line.str();
+        }
+        const auto blend_start = std::chrono::steady_clock::now();
+        // Vertex blending pairs draws with the log run before: not for a
+        // sequence chained past a skipped scene (B18).
+        renderer_.prepare_vertex_blend(before_valid && !interp_sequence_.chained
+                                           ? std::span<const std::int32_t>(prev_index)
+                                           : std::span<const std::int32_t>{});
+        const auto colours_start = std::chrono::steady_clock::now();
+        // Pixel-constant records pair through the paired draws.
+        interp_ps_moving_.clear();
+        if (before_valid && !(interp_camera_.known && interp_camera_.cut)) {
+            const std::span<const std::int32_t> pairs = renderer_.ps_record_pairs();
+            const std::size_t records = std::min(pairs.size(), scene.ps_constants.size());
+            for (std::size_t p = 0; p < records; ++p) {
+                const std::int32_t q = pairs[p];
+                if (q >= 0 && static_cast<std::size_t>(q) < before_scene.ps_constants.size() &&
+                    ps_colours_move(before_scene.ps_constants[static_cast<std::size_t>(q)],
+                                    scene.ps_constants[p])) {
+                    interp_ps_moving_.push_back({static_cast<std::uint32_t>(p), static_cast<std::uint32_t>(q)});
+                }
+            }
+        }
+        const auto program_start = std::chrono::steady_clock::now();
+        interp_sequence_.ready = prepare_interp_sequence(scene, before_scene, before_valid);
+        const auto prepare_end = std::chrono::steady_clock::now();
+        const auto ms = [](auto from, auto to) { return std::chrono::duration<double, std::milli>(to - from).count(); };
+        interp_prepare_phase_ms_[0] += ms(build_start, records_start);
+        interp_prepare_phase_ms_[1] += ms(records_start, palettes_start);
+        interp_prepare_phase_ms_[2] += ms(palettes_start, blend_start);
+        interp_prepare_phase_ms_[3] += ms(blend_start, colours_start);
+        interp_prepare_phase_ms_[4] += ms(colours_start, program_start);
+        interp_prepare_phase_ms_[5] += ms(program_start, prepare_end);
+        interp_prepare_ms_ += ms(build_start, prepare_end);
+        ++interp_prepared_;
     }
-    return renderer_.present_replay_subframe(interp_record_vas_);
+    if (!interp_sequence_.ready) {
+        return false;
+    }
+    const Affine34 camera_t = camera_at(interp_camera_, t);
+    interp_moving_records_ += interp_moving_.size();
+    interp_ps_moving_total_ += interp_ps_moving_.size();
+    // GALAXY_INTERP_VERIFY=1 with GALAXY_INTERP_FORCE_T=0: every matched block at
+    // t = 0 must equal the previous frame's (diagnostics).
+    static const bool verify = read_env_u64("GALAXY_INTERP_VERIFY", 0u) != 0u;
+    if (verify && t == 0.0f && interp_sequence_.next == 0u) {
+        verify_interp_program(scene, before_scene, camera_t);
+    }
+    // The frame presented before: earlier in this sequence, or this sequence's
+    // t = 0 when it was the scene before at t = 1. Anything else (a frame
+    // presented alone, a cut, a gap) starts the upscaler's history again.
+    RendererD3D12::SubframeTime time{};
+    time.t = t;
+    time.t_prev = t;
+    if (interp_shown_serial_ == interp_sequence_serial_ && interp_shown_t_ < t) {
+        time.t_prev = interp_shown_t_;
+    } else if (interp_shown_t_ >= 1.0f && interp_shown_scene_ == static_cast<std::int32_t>(interp_sequence_.before) &&
+               !(interp_camera_.known && interp_camera_.cut)) {
+        time.t_prev = 0.0f;
+    } else {
+        time.reset = true;
+    }
+    const Affine34 camera_prev = time.t_prev == t ? camera_t : camera_at(interp_camera_, time.t_prev);
+    check_interp_eval(scene, camera_t, t, camera_prev, time.t_prev);
+    if (!renderer_.present_replay_subframe(time, camera_t, camera_prev)) {
+        return false;
+    }
+    interp_shown_serial_ = interp_sequence_serial_;
+    interp_shown_t_ = t;
+    return true;
+}
+
+// The playing sequence's evaluation program (interp_gpu.h): an output block
+// per moving record, palette pair and pixel record, the ops that move them,
+// and the replay recorded once over them.
+bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
+                                        bool before_valid) {
+    // GALAXY_INTERP_PARTS: bit 0 inline position, 1 texture matrices, 2 projection, 3 palette,
+    // 4 vertex blending, 5 colours (diagnostics).
+    static const std::uint64_t parts = read_env_u64("GALAXY_INTERP_PARTS", 0x3Fu);
+    constexpr std::size_t kWords = kMatrixPaletteWords;
+    const std::size_t count = scene.constants.size();
+    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+        return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
+            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
+            : nullptr;
+    };
+    interp_program_.clear();
+    interp_vs_slot_.assign(count, -1);
+    interp_record_palette_slot_.assign(count, -1);
+    interp_ps_slot_.assign(scene.ps_constants.size(), -1);
+    interp_palette_slot_.assign(interp_palette_motions_.size(), -1);
+    interp_palette_source_.clear();
+    interp_palette_entry_.clear();
+    if ((parts & 8u) != 0u) {
+        for (const InterpRecordMotion& moving : interp_moving_) {
+            if (moving.palette < 0) continue;
+            std::int32_t& slot = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
+            if (slot < 0) {
+                slot = static_cast<std::int32_t>(interp_palette_source_.size());
+                interp_palette_source_.push_back(scene.constants[moving.record].mtx_palette_base);
+                interp_palette_entry_.push_back(moving.palette);
+            }
+        }
+    }
+    const bool colours = (parts & 0x20u) != 0u;
+    // Temporal upscaling of the replays: the motion vector fields of each
+    // moving block at the frame presented before (blocks the program leaves
+    // alone carry their own transform there: no motion).
+    const bool motion = renderer_.temporal_interpolation();
+    interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
+                      static_cast<std::uint32_t>(interp_palette_source_.size()),
+                      colours ? static_cast<std::uint32_t>(interp_ps_moving_.size()) : 0u,
+                      motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
+    const interp_gpu::Layout& layout = interp_layout_;
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        const InterpRecordMotion& moving = interp_moving_[s];
+        interp_vs_slot_[moving.record] = static_cast<std::int32_t>(s);
+        const std::uint32_t base = layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u;
+        const GxVsConstants& recorded = scene.constants[moving.record];
+        const GxVsConstants* before = moving.prev >= 0
+            ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
+        if (moving.position_moves && (parts & 1u) != 0u) {
+            interp_program_.eye(base + interp_gpu::kVsPosition, moving.position);
+        }
+        if (moving.tex_moves && before != nullptr && (parts & 2u) != 0u) {
+            // Per texgen: projection and environment maps lerp whole; texture
+            // coordinate matrices scroll (wrap-aware) or step.
+            for (unsigned i = 0; i < kMaxTexGens; ++i) {
+                const bool spatial = texgen_spatial(recorded.texgen_config[i][0]);
+                interp_program_.tex_matrix(base + interp_gpu::kVsTex + 12u * i, &before->inline_tex_matrices[i][0][0],
+                                           &recorded.inline_tex_matrices[i][0][0], spatial);
+                interp_program_.tex_matrix(base + interp_gpu::kVsPost + 12u * i,
+                                           &before->inline_post_matrices[i][0][0],
+                                           &recorded.inline_post_matrices[i][0][0], spatial);
+            }
+        }
+        if (moving.colour_moves && before != nullptr && colours) {
+            interp_program_.channel_colours(base, *before, recorded);
+        }
+        if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
+            interp_program_.projection(base, *before, recorded);
+        }
+        std::int32_t palette_slot = -1;
+        if (moving.palette >= 0) {
+            const std::int32_t q = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
+            if (q >= 0) {
+                palette_slot = q;
+                interp_record_palette_slot_[moving.record] = q;
+                const std::uint32_t word =
+                    (layout.palette_offset(static_cast<std::uint32_t>(q)) - layout.palette_base()) / 16u;
+                interp_program_.store(base + interp_gpu::kVsPaletteBase, &word, 1u);
+            }
+        }
+        if (motion) {
+            interp_program_.at_previous(true);
+            if (moving.position_moves && (parts & 1u) != 0u) {
+                interp_program_.eye(base + interp_gpu::kVsMotionPrevPos, moving.position);
+            }
+            if (moving.projection_moves && before != nullptr && (parts & 4u) != 0u) {
+                interp_program_.projection_params(base, *before, recorded);
+            }
+            if (palette_slot >= 0) {
+                // Mode 0: the palette's rows at the frame before.
+                const std::uint32_t ctrl[2]{
+                    0u, (layout.prev_palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) /
+                            16u};
+                interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
+            }
+            interp_program_.at_previous(false);
+        }
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+        interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, entry.motion,
+                                before_palette(entry.before), now_words,
+                                layer_camera(entry.layer));
+        if (q < layout.prev_palette_count) {
+            interp_program_.at_previous(true);
+            interp_program_.palette_positions(layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u,
+                                              entry.motion);
+            interp_program_.at_previous(false);
+        }
+    }
+    if (colours) {
+        for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
+            const auto [p, q] = interp_ps_moving_[k];
+            interp_ps_slot_[p] = static_cast<std::int32_t>(k);
+            interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
+                                       before_scene.ps_constants[q], scene.ps_constants[p]);
+        }
+    }
+    interp_program_ops_ += interp_program_.ops.size();
+    interp_program_words_ += interp_program_.payload.size();
+    RendererD3D12::ReplaySequence sequence{};
+    sequence.layout = layout;
+    sequence.record_vs_slot = interp_vs_slot_;
+    sequence.record_palette_slot = interp_record_palette_slot_;
+    sequence.ps_slot = interp_ps_slot_;
+    sequence.palette_source = interp_palette_source_;
+    sequence.program = &interp_program_;
+    sequence.vertex_blend = (parts & 0x10u) != 0u;
+    return renderer_.begin_replay_sequence(sequence);
+}
+
+// The output the replay reads, built on the CPU: each block as recorded, then
+// the program at t (interp_gpu::evaluate).
+void GxBackend::build_interp_reference(const InterpScene& scene, const interp_gpu::FrameTimes& times,
+                                       std::vector<std::uint32_t>& out) const {
+    const interp_gpu::Layout& layout = interp_layout_;
+    out.assign(layout.bytes() / 4u, 0u);
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        std::memcpy(out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u,
+                    &scene.constants[interp_moving_[s].record], sizeof(GxVsConstants));
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        const std::uint32_t* words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kMatrixPaletteWords;
+        std::memcpy(out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
+                    interp_gpu::kPaletteBytes);
+        if (q < layout.prev_palette_count) {
+            std::memcpy(out.data() + layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u, words,
+                        interp_gpu::kPrevPaletteBytes);
+        }
+    }
+    for (std::size_t k = 0; k < layout.ps_count; ++k) {
+        std::memcpy(out.data() + layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
+                    &scene.ps_constants[interp_ps_moving_[k][0]], sizeof(GxPsConstants));
+    }
+    interp_gpu::evaluate(interp_program_, times, out.data());
+}
+
+// GALAXY_INTERP_VERIFY: at t = 0 every matched record's moving block must equal
+// the previous frame's (positions, projection, texture matrices) and every
+// palette with a previous snapshot its words.
+void GxBackend::verify_interp_program(const InterpScene& scene, const InterpScene& before_scene,
+                                      const Affine34& camera_t) {
+    std::vector<std::uint32_t> out;
+    interp_gpu::FrameTimes times{};
+    times.camera = camera_t;
+    times.camera_prev = camera_t;
+    build_interp_reference(scene, times, out);
+    const interp_gpu::Layout& layout = interp_layout_;
+    std::size_t checked = 0u, bad = 0u, palette_words = 0u;
+    float worst = 0.0f;
+    const auto compare = [&worst](const float* x, const float* y, std::size_t n) {
+        float local = 0.0f;
+        for (std::size_t i = 0; i < n; ++i) {
+            local = std::max(local, std::fabs(x[i] - y[i]) / (1.0f + std::fabs(y[i])));
+        }
+        worst = std::max(worst, local);
+        return local;
+    };
+    for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
+        const InterpRecordMotion& moving = interp_moving_[s];
+        if (moving.prev < 0) continue;
+        const GxVsConstants& was = before_scene.constants[static_cast<std::size_t>(moving.prev)];
+        GxVsConstants built{};
+        std::memcpy(&built, out.data() + layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u, sizeof(built));
+        ++checked;
+        float local = compare(&built.projection[0][0], &was.projection[0][0], 16u);
+        local = std::max(local, compare(&built.inline_tex_matrices[0][0][0], &was.inline_tex_matrices[0][0][0],
+                                        kMaxTexGens * 12u));
+        if (scene.per_vertex[moving.record] == 0u) {
+            local = std::max(local, compare(&built.inline_pos_matrix[0][0], &was.inline_pos_matrix[0][0], 12u));
+        }
+        bad += local > 1e-3f ? 1u : 0u;
+    }
+    for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
+        const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
+        if (entry.before < 0) continue;
+        const std::uint32_t* was =
+            before_scene.palettes.data() + static_cast<std::size_t>(entry.before) * kMatrixPaletteWords;
+        const std::uint32_t* got = out.data() + layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u;
+        for (std::size_t w = 0; w < kMatrixPaletteWords; ++w) {
+            const float x = std::bit_cast<float>(got[w]);
+            const float y = std::bit_cast<float>(was[w]);
+            palette_words += got[w] != was[w] && !(std::fabs(x - y) <= 1e-3f * (1.0f + std::fabs(y))) ? 1u : 0u;
+        }
+    }
+    std::cerr << "[interp-verify] seq=" << interp_sequence_serial_ << " checked=" << checked << " bad=" << bad
+              << " palette-words-off=" << palette_words << " worst=" << worst << '\n';
+}
+
+// GALAXY_INTERP_EVAL_CHECK=<n>: every n-th sequence the GPU evaluation of its
+// first sub-frame is read back and compared with the CPU reference: copied
+// words exactly, each op's output to float precision of its magnitude
+// (rounded colours and integers within one step).
+void GxBackend::check_interp_eval(const InterpScene& scene, const Affine34& camera_t, float t,
+                                  const Affine34& camera_prev, float t_prev) {
+    static const std::uint64_t every = read_env_u64("GALAXY_INTERP_EVAL_CHECK", 0u);
+    if (every == 0u) {
+        return;
+    }
+    std::vector<std::uint32_t> got;
+    float got_t = 0.0f;
+    if (renderer_.take_eval_readback(got, got_t) && !interp_eval_expected_.empty()) {
+        const std::vector<std::uint32_t>& want = interp_eval_expected_;
+        const std::size_t words = std::min(got.size(), want.size());
+        std::vector<std::uint8_t> covered(words, 0u);
+        std::size_t ops_off = 0u, copies_off = 0u;
+        float worst = 0.0f;
+        std::ostringstream detail;
+        unsigned listed = 0u;
+        for (const interp_gpu::Op& op : interp_eval_ops_) {
+            const std::uint32_t kind = interp_gpu::op_kind(op.control);
+            const std::uint32_t n = kind == 0u ? 12u : kind == 1u ? 9u : kind == 5u ? 6u : kind == 4u ? 1u
+                                                                                    : interp_gpu::op_count(op.control);
+            if (op.dst + n > words) continue;
+            float magnitude = 0.0f, error = 0.0f;
+            bool step = false;
+            for (std::uint32_t i = 0; i < n; ++i) {
+                const std::uint32_t x = got[op.dst + i], y = want[op.dst + i];
+                covered[op.dst + i] = 1u;
+                if (kind == 4u) {
+                    for (unsigned shift = 0; shift < 32u; shift += 8u) {
+                        const int dx = static_cast<int>((x >> shift) & 0xFFu) - static_cast<int>((y >> shift) & 0xFFu);
+                        step = step || dx > 1 || dx < -1;
+                    }
+                } else if (kind == 3u) {
+                    const std::int64_t d = static_cast<std::int64_t>(static_cast<std::int32_t>(x)) -
+                                           static_cast<std::int32_t>(y);
+                    step = step || d > 1 || d < -1;
+                } else if (kind != 6u) {
+                    magnitude = std::max(magnitude, std::fabs(std::bit_cast<float>(y)));
+                    error = std::max(error, std::fabs(std::bit_cast<float>(x) - std::bit_cast<float>(y)));
+                } else {
+                    step = step || x != y;
+                }
+            }
+            const float relative = error / (1.0f + magnitude);
+            if (step || !(relative <= 2e-5f)) {
+                ++ops_off;
+                worst = std::max(worst, step ? 1.0f : relative);
+                if (listed++ < 6u) {
+                    detail << " op(kind=" << kind << " dst=" << op.dst << " rel=" << relative << ')';
+                }
+            }
+        }
+        for (std::size_t w = 0; w < words; ++w) {
+            if (covered[w] == 0u && got[w] != want[w]) {
+                if (copies_off++ < 4u) {
+                    detail << " copy(word=" << w << ' ' << got[w] << "!=" << want[w] << ')';
+                }
+            }
+        }
+        std::cerr << "[interp-eval-check] seq=" << interp_eval_expected_seq_ << " t=" << got_t << " words=" << words
+                  << " ops=" << interp_eval_ops_.size() << " ops-off=" << ops_off << " copies-off=" << copies_off
+                  << " worst=" << worst << detail.str() << '\n';
+        interp_eval_expected_.clear();
+    }
+    if (interp_sequence_.next == 0u && interp_eval_expected_.empty() && interp_sequence_serial_ % every == 0u) {
+        interp_gpu::FrameTimes times{};
+        times.camera = camera_t;
+        times.t = t;
+        times.camera_prev = camera_prev;
+        times.t_prev = t_prev;
+        times.previous_only = t >= 1.0f;
+        build_interp_reference(scene, times, interp_eval_expected_);
+        interp_eval_expected_seq_ = interp_sequence_serial_;
+        interp_eval_ops_ = interp_program_.ops;
+        renderer_.request_eval_readback();
+    }
 }
 
 bool GxBackend::skip_for_present_rate() {
@@ -7098,12 +8647,21 @@ void GxBackend::render_thread_main() {
             const bool poll_pointer_depth =
                 static_cast<bool>(pending_pointer_depth_capture_.capture) ||
                 renderer_.any_async_peek_field_pending();
+            // Draining for a stop: queued frames present without sub-frames.
+            interp_stopping_ = stop_render_thread_;
             if (interp_sequence_.active && frame_queue_.empty() && !stop_render_thread_) {
-                const std::int64_t wait_ms = interp_wait_ms();
-                if (wait_ms > 0) {
-                    queue_cv_.wait_for(lock, std::chrono::milliseconds(wait_ms), [this] {
+                // Coarse and interruptible to about 1.5 ms before the slot
+                // (the condition variable wakes on the 1 ms scheduler tick),
+                // then a high-resolution timer for the rest.
+                const std::int64_t remaining_us = interp_remaining_us();
+                if (remaining_us > 2000) {
+                    queue_cv_.wait_for(lock, std::chrono::microseconds(remaining_us - 1500), [this] {
                         return stop_render_thread_ || !frame_queue_.empty();
                     });
+                } else if (remaining_us > 0) {
+                    lock.unlock();
+                    interp_sleep_us(remaining_us);
+                    lock.lock();
                 }
             } else if (idle_present || poll_frame_effects || poll_pointer_depth) {
                 // Completion polling occurs outside queue_mutex_ at the top of
@@ -7119,7 +8677,20 @@ void GxBackend::render_thread_main() {
                     return stop_render_thread_ || !frame_queue_.empty();
                 });
             }
-            if (frame_queue_.empty() && interp_sequence_.active && !stop_render_thread_) {
+            // A due slot goes before queued chunks, so presents keep their
+            // cadence while a game frame's chunks stream in; except a slot
+            // that would show the frame itself (t >= 1) while the next
+            // frame's present is queued: that present starts its sequence.
+            const auto due_slot_first = [this] {
+                if (interp_remaining_us() > 0) return false;
+                if (interp_slot_t() < 1.0 - 1e-3) return true;
+                for (const FrameChunk& queued : frame_queue_) {
+                    if (queued.present_only || queued.present_swap_chain) return false;
+                }
+                return true;
+            };
+            if (interp_sequence_.active && !stop_render_thread_ &&
+                (frame_queue_.empty() || due_slot_first())) {
                 lock.unlock();
                 try {
                     advance_interp_sequence(false);
@@ -7194,10 +8765,12 @@ void GxBackend::render_thread_main() {
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
+                    if (interp_recording_) [[unlikely]] {
+                        interp_event("vi-present", chunk.displayed_xfb_addr,
+                                     interp_log_waiting_ ? 1u : 0u);
+                    }
                     if (interp_log_waiting_ && renderer_.replay_available()) {
-                        if (interp_sequence_.active) {
-                            advance_interp_sequence(true);
-                        }
+                        supersede_interp_sequence();
                         interp_log_waiting_ = false;
                         start_interp_sequence(interp_log_xfb_);
                         advance_interp_sequence(false);
@@ -7205,6 +8778,8 @@ void GxBackend::render_thread_main() {
                         present_cached_xfb_on_thread(
                             chunk.displayed_xfb_addr,
                             false);
+                    } else {
+                        ++interp_present_skipped_;
                     }
                 } else {
                     if (interp_sequence_.active && interp_sequence_.flush_requested) {
@@ -7987,17 +9562,44 @@ void GxBackend::present_cached_xfb_on_thread(
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
     }
-    renderer_.begin_frame(true);
-    // Present-only frames do not acquire or resize XFB textures. Keep
-    // EfbCopyManager retirement/recycling tied to render frames that can
-    // actually produce GXCopyDisp resources; otherwise the split
-    // render-then-present cadence advances XFB lifetime twice per VI.
-    const bool capture_recorded = renderer_.present(
-        selected, capture_present || !snapshot_path.empty());
+    if (interp_recording_ && count_game_xfb_present && !interp_presenting_real_ &&
+        !duplicate_stamp) {
+        note_interp_real_present();
+    }
+    bool capture_recorded = false;
+    bool replayed = false;
+    if (interp_presenting_real_ && renderer_.temporal_interpolation()) {
+        // The temporal upscaler takes every presented frame from the replays:
+        // the sequence's frame at t = 1 too (one history).
+        const bool capture = capture_present || !snapshot_path.empty();
+        renderer_.set_subframe_capture(capture);
+        replayed = renderer_.replay_playing() && render_interp_subframe(1.0f);
+        renderer_.set_subframe_capture(false);
+        capture_recorded = replayed && capture;
+        if (!replayed) {
+            // Shown without the upscaler: the next sequence starts its history again.
+            interp_shown_serial_ = 0u;
+            interp_shown_t_ = 0.0f;
+        }
+    } else if (interp_presenting_real_) {
+        interp_shown_serial_ = interp_sequence_serial_;
+        interp_shown_t_ = 1.0f;
+    }
+    if (!replayed) {
+        renderer_.begin_frame(true);
+        // Present-only frames do not acquire or resize XFB textures. Keep
+        // EfbCopyManager retirement/recycling tied to render frames that can
+        // actually produce GXCopyDisp resources; otherwise the split
+        // render-then-present cadence advances XFB lifetime twice per VI.
+        capture_recorded = renderer_.present(
+            selected, capture_present || !snapshot_path.empty());
+    }
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, {});
     }
-    renderer_.end_frame();
+    if (!replayed) {
+        renderer_.end_frame();
+    }
     if (capture_present) {
         renderer_.set_debug_capture_paths({}, {});
         std::cerr << "[gx-present-capture] request=" << present_requests
@@ -8183,6 +9785,18 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // The renderer keeps the log per game frame (interpolation_mode).
             interp_recording_ = renderer_.interpolation_mode();
             interp_frames_ = interp_recording_ ? interpolated_frames_per_game_frame(rate) : 0u;
+            if (!interp_recording_) {
+                interp_shown_scene_ = -1;
+            }
+            // GALAXY_DRAW_IDENTITY=0 never asks the game for draw identities,
+            // =1 always does (tests at 60).
+            static const std::uint64_t identity_env = read_env_u64("GALAXY_DRAW_IDENTITY", 2u);
+            const bool wanted = identity_env == 2u
+                ? (interp_recording_ || renderer_.temporal_mode())
+                : identity_env != 0u;
+            if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
+                draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
+            }
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies must use the scale the
@@ -8193,7 +9807,27 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // begin_frame() waited for this slot's previous frame: resident vertex
         // blocks released kFramesInFlight render frames ago are now unused.
-        resident_vertices_.advance_frame();
+        // Interpolation replays a game frame's draws until its ring segment
+        // comes round again (after its fence): resident blocks and texture
+        // resources then retire per game frame, over the segment count.
+        {
+            static_assert(kInterpSegments <= TextureCache::kMaxHoldSegments &&
+                          kInterpSegments >= kFramesInFlight);
+            const unsigned hold = renderer_.replay_hold_segment();
+            if (hold != resident_hold_segment_) [[unlikely]] {
+                // Interpolation started or stopped, or a game frame began.
+                resident_hold_segment_ = hold;
+                resident_vertices_.set_frames_in_flight(
+                    hold == ~0u ? kFramesInFlight : kInterpSegments);
+                if (hold != ~0u) {
+                    resident_vertices_.advance_frame();
+                }
+                texture_cache_.set_retirement_hold_segment(hold);
+            }
+            if (hold == ~0u) [[likely]] {
+                resident_vertices_.advance_frame();
+            }
+        }
         efb_copies_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         texture_cache_.begin_frame(renderer_.frame_slot(), kFramesInFlight);
         const auto retirement_revision = texture_cache_.retirement_revision();
@@ -8313,6 +9947,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // palette chunk uploaded then is not at a known offset. Re-arm every chunk; the first palette
     // upload of the frame writes the full bank again.
     xf_palette_valid_ = 0u;
+    scene_chunk_restart_ = true;
 
     // Bind EFB with default (null) viewport. The XF viewport registers
     // will provide the actual values once processed from the FIFO.
@@ -8439,7 +10074,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     int marker;  // -1: pointer depth field
                     int view;    // marker index (its camera), -1 none
                 };
-                std::array<Split, 5> splits{};
+                std::array<Split, 1u + kFifoMarkersPerChunk> splits{};
                 std::size_t split_count = 0;
                 if (capture_in_frame) {
                     splits[split_count++] = {
@@ -8460,6 +10095,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                         continue;
                     }
                     if (split.offset > consumed) {
+                        parse_span_base_ = consumed;
+                        parse_span_prefix_ = prefix;
                         consumed += parser_.run_available(
                             stream.subspan(consumed, split.offset - consumed),
                             memory, *this, state_,
@@ -8467,6 +10104,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                     if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
+                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin) ||
+                               split.marker == static_cast<int>(FifoMarker::Scene2DEnd)) {
+                        on_scene_2d_marker(split.marker == static_cast<int>(FifoMarker::Scene2DBegin),
+                                           split.offset - prefix);
                     } else {
                         const auto index = static_cast<std::size_t>(split.view);
                         on_fifo_marker(static_cast<FifoMarker>(split.marker),
@@ -8477,12 +10118,17 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                     }
                 }
                 if (consumed < stream.size()) {
+                    parse_span_base_ = consumed;
+                    parse_span_prefix_ = prefix;
                     consumed += parser_.run_available(
                         stream.subspan(consumed), memory, *this, state_,
                         frame_memory_regions_disjoint_sorted_);
                 }
                 return consumed;
             };
+            parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
+                                               : std::span<const StripeParticleMark>{};
+            parse_stripe_next_ = 0u;
             if (pending_fifo_.empty()) {
                 const std::span<const std::byte> fifo(fifo_data, fifo_size);
                 const std::size_t consumed = run_stream(fifo, 0u);
@@ -8507,6 +10153,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                         pending_fifo_.begin() +
                             static_cast<std::ptrdiff_t>(consumed));
                 }
+            }
+            parse_stripes_ = {};
+            if (!chunk.stripe_particles.empty()) [[unlikely]] {
+                note_stripe_particles(chunk);
             }
         } catch (const GxFatalError& e) {
             texture_cache_.set_async_decode_allowed(false);
@@ -8837,15 +10487,23 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         }
         // The ready frame's own present: its sub-frames come first, the real
         // frame after them (started by the render loop after this chunk).
+        if (present_swap_chain) {
+            interp_event("chunk-present", selected_xfb != nullptr ? selected_xfb->guest_addr : 0u,
+                         chunk.displayed_xfb_addr);
+        }
+        // As on the VI-present path, a present while a completed log waits
+        // starts that log's sequence: the VI may still name the previous
+        // XFB (the guest flips at the next retrace).
         if (interp_log_waiting_ && present_swap_chain && !capture_backbuffer &&
-            selected_xfb != nullptr && selected_xfb->guest_addr == interp_log_xfb_ &&
             renderer_.replay_available()) {
             interp_start_pending_ = true;
             present_swap_chain = false;
         } else if (interp_sequence_.active && present_swap_chain) {
             // Another frame presents now: the playing one is superseded.
-            interp_dropped_ += interp_sequence_.subframes - interp_sequence_.next;
-            interp_sequence_.active = false;
+            supersede_interp_sequence();
+        }
+        if (present_swap_chain && !capture_backbuffer && !duplicate_xfb_present) {
+            note_interp_real_present();
         }
     }
     const auto pre_present_end = frame_timing_enabled
@@ -10309,7 +11967,7 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
 
     // Upload PS constants when TEV stage config / fog / alpha / tex dims change.
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ ||
-        dirty == ~0u) {
+        dirty == ~0u || (ps_record_restart_ && history_scene_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -10322,6 +11980,12 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
             renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
         std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
         current_ps_constants_ = ps_alloc.gpu;
+        if (interp_recording_ && history_scene_) [[unlikely]] {
+            ps_record_restart_ = false;
+            InterpScene& scene = interp_scenes_[interp_scene_];
+            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
+            scene.ps_constants.push_back(ps_c);
+        }
         if (time_detail) {
             frame_flush_constants_us_ +=
                 elapsed_us(constants_start, std::chrono::steady_clock::now());
@@ -10485,6 +12149,23 @@ ID3D12PipelineState* GxBackend::flush_draw_state(
                     dev->CopyDescriptors(1, &tbl.cpu, &destination_size,
                         num_maps, sources, nullptr,
                         D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+                    // Interpolation logs keep tables that name EFB-copy
+                    // textures: sub-frames repoint those slots.
+                    if (renderer_.replay_recording()) [[unlikely]] {
+                        static_assert(kMaxTextureMaps == RendererD3D12::kReplayTableSlots);
+                        ID3D12Resource* copies[kMaxTextureMaps]{};
+                        bool names_copy = false;
+                        for (unsigned m = 0; m < num_maps; ++m) {
+                            if (texture_handles[m].resource != nullptr &&
+                                texture_handles[m].from_efb_copy) {
+                                copies[m] = texture_handles[m].resource;
+                                names_copy = true;
+                            }
+                        }
+                        if (names_copy) {
+                            renderer_.note_replay_texture_table(tbl.gpu, sources, copies);
+                        }
+                    }
                     current_texture_table_ = tbl.gpu;
                     frame_texture_tables_.emplace(table_key, tbl.gpu);
                 }
@@ -10596,6 +12277,10 @@ void GxBackend::flush_pending_draw_batch() {
     const auto draw_record_start = time_detail
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
+    if (!pending_stripe_vertices_.empty()) [[unlikely]] {
+        renderer_.note_stripe_vertices(pending_stripe_vertices_);
+        pending_stripe_vertices_.clear();
+    }
     renderer_.draw(pending_draw_batch_.call);
     if (time_detail) {
         frame_draw_record_us_ +=
@@ -10718,6 +12403,7 @@ bool GxBackend::begin_cached_draw_run(
     cached_draw_run_state_call_.matrix_palette = draw_matrix_palette_;
     cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.replay_record  = current_replay_record_;
+    cached_draw_run_state_call_.ps_record      = current_ps_record_;
     cached_draw_run_state_call_.topology       = topology;
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
@@ -11644,6 +13330,10 @@ void GxBackend::on_draw(
         static_cast<std::uint16_t>(
             (static_cast<std::uint16_t>(cursor.data[cursor.offset]) << 8) |
             static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
+    // The FIFO position of the vertex data (top-level stream draws only:
+    // display-list cursors address list memory).
+    const bool stream_draw = cursor.recover_truncation && cursor.base_offset == 0u;
+    const std::size_t vertex_stream_offset = parse_span_base_ + cursor.offset + 2u;
 
     ID3D12PipelineState* pso = nullptr;
     {
@@ -11692,6 +13382,7 @@ void GxBackend::on_draw(
     state_call.matrix_palette = draw_matrix_palette_;
     state_call.aux_target     = current_pipeline_aux_;
     state_call.replay_record  = current_replay_record_;
+    state_call.ps_record      = current_ps_record_;
     state_call.topology       = topology;
     state_call.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
@@ -11754,6 +13445,27 @@ void GxBackend::on_draw(
     }
     ++stat_draws_issued_;
     ++frame_draws_issued_;
+    // Stripe particles drawn by this primitive: each mark is the FIFO position
+    // of a particle's two vertices.
+    draw_stripe_vertices_.clear();
+    if (stream_draw && parse_stripe_next_ < parse_stripes_.size() && vertex_stream_offset >= parse_span_prefix_)
+        [[unlikely]] {
+        const std::size_t start = vertex_stream_offset - parse_span_prefix_;
+        const std::size_t end = start + layout.source_size * static_cast<std::size_t>(source_vertex_count);
+        const std::uint32_t base = append_to_pending ? pending_draw_batch_.vertex_count : 0u;
+        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < start) {
+            ++parse_stripe_next_;
+        }
+        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < end &&
+               layout.source_size != 0u) {
+            const StripeParticleMark& mark = parse_stripes_[parse_stripe_next_++];
+            const auto local = static_cast<std::uint32_t>((mark.offset - start) / layout.source_size);
+            for (std::uint8_t side = 0; side < 2u && local + side < prim.vertex_count; ++side) {
+                draw_stripe_vertices_.push_back({base + local + side, mark.particle, mark.age_lifetime, mark.strip,
+                                                 side});
+            }
+        }
+    }
 
     const std::uint64_t current_trace_frame = frame_index_ + 1u;
     if (trace_thp_draw_frame_enabled(current_trace_frame)) {
@@ -12348,6 +14060,10 @@ void GxBackend::on_draw(
         pending_draw_batch_.index_count = prim.index_count;
         pending_draw_batch_.draw_count = 1;
     }
+    if (!draw_stripe_vertices_.empty()) [[unlikely]] {
+        pending_stripe_vertices_.insert(pending_stripe_vertices_.end(), draw_stripe_vertices_.begin(),
+                                        draw_stripe_vertices_.end());
+    }
     if (capture_draws_ && draw_index == capture_readback_draw_) {
         flush_pending_draw_batch();
         capture_readback_recorded_ = renderer_.debug_copy_efb_to_readback();
@@ -12443,6 +14159,8 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
                     capture_output_path("GALAXY_GX_CAPTURE_BACKBUFFER_PPM", frame_index_ + 1u));
                 owned_efb_recorded = renderer_.debug_copy_efb_to_readback();
             }
+            end_side_layer();
+            mirror_opened_scene_ = false;
             renderer_.copy_efb_to_xfb(params, *xfb);
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution EFB again.

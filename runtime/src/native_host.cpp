@@ -12177,7 +12177,9 @@ void GuestAddressSpace::drain_wgpipe_gather_bursts() {
             (cpu_fifo_wrap_ ? kPiCpWrapMask : 0u);
         write_storage_be32(broadway_registers_, kPiCpWrite, pi_write);
     }
-    if (live_fifo) {
+    if (!pending_gx_markers_.empty()) [[unlikely]] {
+        append_staged_bytes_with_markers(complete, live_fifo);
+    } else if (live_fifo) {
         const std::size_t append_start = gx_fifo_.size();
         gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin(),
                         wgpipe_gather_.begin() + static_cast<std::ptrdiff_t>(complete));
@@ -12251,9 +12253,48 @@ void GuestAddressSpace::flush_wgpipe_gather_burst(
     }
 }
 
+void GuestAddressSpace::append_staged_bytes_with_markers(std::uint32_t count, bool live_fifo) {
+    std::uint32_t copied = 0u;
+    std::size_t done = 0u;
+    for (; done < pending_gx_markers_.size() && pending_gx_markers_[done].at <= count; ++done) {
+        const PendingGxMarker& marker = pending_gx_markers_[done];
+        if (live_fifo && marker.at > copied) {
+            gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin() + copied,
+                            wgpipe_gather_.begin() + marker.at);
+        }
+        copied = marker.at;
+        gx_fifo_.insert(gx_fifo_.end(), marker.bytes.begin(), marker.bytes.end());
+    }
+    if (live_fifo && count > copied) {
+        gx_fifo_.insert(gx_fifo_.end(), wgpipe_gather_.begin() + copied,
+                        wgpipe_gather_.begin() + count);
+    }
+    pending_gx_markers_.erase(pending_gx_markers_.begin(),
+                              pending_gx_markers_.begin() + static_cast<std::ptrdiff_t>(done));
+    for (PendingGxMarker& marker : pending_gx_markers_) {
+        marker.at -= count;
+    }
+}
+
+bool GuestAddressSpace::append_gx_host_marker(const std::array<std::byte, 12>& marker) {
+    drain_wgpipe_gather_bursts();
+    if (!wgpipe_feeds_live_fifo()) {
+        return false;
+    }
+    if (wgpipe_gather_count_ == 0u && pending_gx_markers_.empty()) {
+        gx_fifo_.insert(gx_fifo_.end(), marker.begin(), marker.end());
+        return true;
+    }
+    pending_gx_markers_.push_back({wgpipe_gather_count_, marker});
+    return true;
+}
+
 void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
     drain_wgpipe_gather_bursts();
     if (wgpipe_gather_count_ == 0) {
+        if (!pending_gx_markers_.empty() && wgpipe_feeds_live_fifo()) {
+            append_staged_bytes_with_markers(0u, true);
+        }
         return;
     }
 
@@ -12266,11 +12307,15 @@ void GuestAddressSpace::flush_wgpipe_gather_tail_for_frame() {
         return;
     }
     const std::size_t append_start = gx_fifo_.size();
-    gx_fifo_.insert(
-        gx_fifo_.end(),
-        wgpipe_gather_.begin(),
-        wgpipe_gather_.begin() +
-            static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
+    if (!pending_gx_markers_.empty()) [[unlikely]] {
+        append_staged_bytes_with_markers(wgpipe_gather_count_, true);
+    } else {
+        gx_fifo_.insert(
+            gx_fifo_.end(),
+            wgpipe_gather_.begin(),
+            wgpipe_gather_.begin() +
+                static_cast<std::ptrdiff_t>(wgpipe_gather_count_));
+    }
     if (trace_gx_fifo_append_enabled_) {
         trace_gx_fifo_append(
             "wgpipe-tail",

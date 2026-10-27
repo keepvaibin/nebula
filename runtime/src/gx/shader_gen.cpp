@@ -365,6 +365,87 @@ static constexpr const char* kMotionInterpolants =
     "    float4   mv_cur    : TEXCOORD12;\n"
     "    float4   mv_prev   : TEXCOORD13;\n";
 
+// Interpolated redraw: a sub-frame blends a CPU-written vertex buffer with the
+// matching draw's vertices of the frame before (GxVertexOut, 144-byte stride;
+// the renderer binds them at t1, space1 and the blend at b2). The uber vertex
+// shader carries the same code.
+static constexpr const char* kVertexBlendDef = R"HLSL(
+cbuffer GxVertexBlend : register(b2) {
+    uint  vb_mode;   // 0: the draw's own vertices only
+    uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
+    uint  vb_slot;   // the pair's verdict
+    uint  vb_last;   // the last vertex of the earlier draw
+};
+ByteAddressBuffer vb_prev : register(t1, space1);
+// Per pair: vertices, positions unchanged, largest move, extent (the GPU
+// check of the pairing, renderer_d3d12.cpp kBlendValidateCs). Element 8192:
+// the presented frame's t, the t of the frame presented before it and its
+// jitter (render pixels); element 8193 stays zero.
+StructuredBuffer<uint4> vb_verdict : register(t2, space1);
+static float vb_t;
+static float vb_t_prev;
+static float2 vb_jitter;
+// The vertex's object-space position in the frame presented before (motion vectors).
+static float3 vb_pos_prev;
+uint vb_color(uint a, uint b) {
+    uint c = 0u;
+    [unroll] for (uint s = 0u; s < 32u; s += 8u) {
+        const float x = float((a >> s) & 0xFFu);
+        const float y = float((b >> s) & 0xFFu);
+        c |= uint(round(lerp(x, y, vb_t))) << s;
+    }
+    return c;
+}
+// A whole-texture jump is a wrap; a step of more than an eighth (an atlas
+// frame) shows the new coordinate.
+float vb_coord(float a, float b) {
+    const float d = b - a;
+    const float w = abs(d) > 0.5 ? a + round(d) : a;
+    return abs(b - w) > 0.125 ? b : lerp(w, b, vb_t);
+}
+void vertex_blend(inout VSIn v, uint id) {
+    // Root views have no bounds: every read stays inside its buffer even if
+    // a compiler moves it above the checks.
+    const uint4 frame = vb_verdict[min(vb_frame, 8193u)];
+    vb_t = asfloat(frame.x);
+    vb_t_prev = asfloat(frame.y);
+    vb_jitter = asfloat(frame.zw);
+    vb_pos_prev = v.pos;
+    if (vb_mode == 0u) {
+        return;
+    }
+    // The same geometry one frame earlier: positions unchanged, all moved by
+    // at most a quarter of its extent, or any by at most 2% (a reordered or
+    // different vertex set shows this frame's vertices).
+    const uint4 verdict = vb_verdict[min(vb_slot, 8191u)];
+    const float worst = asfloat(verdict.z);
+    const float extent = asfloat(verdict.w);
+    if (verdict.y != verdict.x && !(verdict.y == 0u && worst <= 0.25 * extent) &&
+        !(worst <= 0.02 * extent)) {
+        return;
+    }
+    const uint at = min(id, vb_last) * 144u;
+    const float3 earlier = asfloat(vb_prev.Load3(at));
+    vb_pos_prev = lerp(earlier, v.pos, vb_t_prev);
+    if (vb_t >= 1.0) {
+        return;  // the game frame's own vertices
+    }
+    v.pos = lerp(earlier, v.pos, vb_t);
+    const float3 n = lerp(asfloat(vb_prev.Load3(at + 12u)), v.nrm, vb_t);
+    const float nn = dot(n, n);
+    if (nn > 0.0) {
+        v.nrm = n * sqrt(dot(v.nrm, v.nrm) / nn);
+    }
+    const uint2 c = vb_prev.Load2(at + 48u);
+    v.color0 = vb_color(c.x, v.color0);
+    v.color1 = vb_color(c.y, v.color1);
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        const float2 uv = asfloat(vb_prev.Load2(at + 56u + 8u * i));
+        v.uv[i] = float2(vb_coord(uv.x, v.uv[i].x), vb_coord(uv.y, v.uv[i].y));
+    }
+}
+)HLSL";
+
 static std::string insert_before_close(const char* text, const char* members, bool last) {
     std::string out(text);
     const std::size_t at = last ? out.rfind("};") : out.find("};");
@@ -821,6 +902,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << kVsConstantsDef;
         s << (ppl ? kVsStructsPpl : kVsStructs);
     }
+    s << kVertexBlendDef;
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 
@@ -853,7 +935,8 @@ float xfw(uint w) {
     }
 
     // ---- main() ----
-    s << "VSOut main(VSIn v) {\n";
+    s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
+    s << "    vertex_blend(v, vertex_id);\n";
 
     // Unpack the position/normal matrix index from the BLENDINDICES semantic. The GX PNMATIDX value is the
     // XF row index (PNMTX0=0, PNMTX1=3, ...); a matrix occupies rows n..n+2. The loader resolves the
@@ -880,29 +963,34 @@ float xfw(uint w) {
     s << "    VSOut o = (VSOut)0;\n";
     s << "    o.pos = mul(projection, wpos);\n\n";
     if (motion) {
+        // Sub-frames take the presented frame's jitter here (perspective
+        // draws); game frames carry theirs in the projection (motion_params.xy).
+        s << "    const float2 jitter_ndc = projection[3][3] == 0.0 && motion_params.z != 0.0 &&\n"
+             "        motion_params.w != 0.0 ? vb_jitter / motion_params.zw : float2(0.0, 0.0);\n"
+             "    o.pos.xy += jitter_ndc * o.pos.w;\n";
         s << "    float3 prev_eye;\n";
         if ((key.flags & 0x01u) != 0u) {
             s << "    if (motion_ctrl.x == 0u) {\n"
                  "        uint prow = pn_row + motion_ctrl.y;\n"
-                 "        prev_eye = float3(dot(mtx_palette[prow+0u], float4(pos_in, 1.0)),\n"
-                 "                          dot(mtx_palette[prow+1u], float4(pos_in, 1.0)),\n"
-                 "                          dot(mtx_palette[prow+2u], float4(pos_in, 1.0)));\n"
+                 "        prev_eye = float3(dot(mtx_palette[prow+0u], float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mtx_palette[prow+1u], float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mtx_palette[prow+2u], float4(vb_pos_prev, 1.0)));\n"
                  "    } else {\n"
                  "        prev_eye = float3(dot(motion_prev_pos[0], wpos),\n"
                  "                          dot(motion_prev_pos[1], wpos),\n"
                  "                          dot(motion_prev_pos[2], wpos));\n"
                  "    }\n";
         } else {
-            s << "    prev_eye = float3(dot(motion_prev_pos[0], float4(pos_in, 1.0)),\n"
-                 "                      dot(motion_prev_pos[1], float4(pos_in, 1.0)),\n"
-                 "                      dot(motion_prev_pos[2], float4(pos_in, 1.0)));\n";
+            s << "    prev_eye = float3(dot(motion_prev_pos[0], float4(vb_pos_prev, 1.0)),\n"
+                 "                      dot(motion_prev_pos[1], float4(vb_pos_prev, 1.0)),\n"
+                 "                      dot(motion_prev_pos[2], float4(vb_pos_prev, 1.0)));\n";
         }
         s << "    float4 pp0 = motion_prev_proj[0];\n"
              "    float3 prev_clip = (motion_prev_proj[1].z == 0.0)\n"
              "        ? float3(pp0.x * prev_eye.x + pp0.y * prev_eye.z,\n"
              "                 pp0.z * prev_eye.y + pp0.w * prev_eye.z, -prev_eye.z)\n"
              "        : float3(pp0.x * prev_eye.x + pp0.y, pp0.z * prev_eye.y + pp0.w, 1.0);\n"
-             "    o.mv_cur = float4(o.pos.xy - motion_params.xy * o.pos.w,"
+             "    o.mv_cur = float4(o.pos.xy - (motion_params.xy + jitter_ndc) * o.pos.w,"
              " motion_params.z, o.pos.w);\n"
              "    o.mv_prev = float4(prev_clip.xy, motion_params.w, prev_clip.z);\n\n";
     }

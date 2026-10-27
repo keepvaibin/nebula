@@ -84,8 +84,13 @@ int main() {
         const auto same = [](const std::vector<unsigned>& got, std::initializer_list<unsigned> want) {
             return std::equal(got.begin(), got.end(), want.begin(), want.end());
         };
-        if (!same(frame_rate_options(), {30u, 60u})) {
-            std::cerr << "frame-rate choices must be 30 and 60\n";
+        if (!same(frame_rate_options(240u), {30u, 60u, 120u, 144u, 165u, 240u, 0u}) ||
+            !same(frame_rate_options(60u), {30u, 60u, 0u}) ||
+            !same(frame_rate_options(59u), {30u, 60u, 0u}) ||
+            !same(frame_rate_options(220u), {30u, 60u, 120u, 144u, 165u, 220u, 0u}) ||
+            !same(frame_rate_options(50u), {30u, 50u, 0u}) ||
+            !same(frame_rate_options(0u), {30u, 60u, 120u, 144u, 165u, 240u, 360u, 0u})) {
+            std::cerr << "frame-rate choices: standard rates up to the display's, its own, unlimited\n";
             passed = false;
         }
         using galaxy::gx::aspect_window_sizes;
