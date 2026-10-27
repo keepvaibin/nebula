@@ -7920,8 +7920,22 @@ bool GxBackend::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
     const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
     // Matched records of the scene before (through skipped scenes: B18).
-    const std::vector<std::int32_t>& prev_index =
+    const std::vector<std::int32_t>& matched_index =
         interp_sequence_.chained ? interp_chain_prev_ : scene.prev_index;
+    // The screen layer (HUD, titles, fades, cinema bars) is drawn as the game frame has it. Its panels are
+    // all 4-vertex quads paired by draw order, so a panel that appears or goes (a fade, a banner) pairs the
+    // ones after it with other panels and the sub-frame blends their colours: a see-through black fade
+    // showing the next scene, dark HUD icons, a title gone for a sub-frame (it64 presents 5676, 9604).
+    const InterpScene::LayerRange& screen_range = scene.layers[kScreenLayer];
+    const bool snap_screen = screen_range.count != 0u;
+    if (snap_screen && !interp_sequence_.classified) {
+        interp_screen_prev_.assign(matched_index.begin(), matched_index.end());
+        const std::size_t end = std::min(screen_range.first + screen_range.count, interp_screen_prev_.size());
+        for (std::size_t r = screen_range.first; r < end; ++r) {
+            interp_screen_prev_[r] = -1;
+        }
+    }
+    const std::vector<std::int32_t>& prev_index = snap_screen ? interp_screen_prev_ : matched_index;
     if (!scene.valid) {
         renderer_.note_replay_failure(9u);
         return false;
