@@ -13,9 +13,25 @@ namespace Nebula
     {
         public static string Sha256File(string path)
         {
-            using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20))
-            using (var sha = SHA256.Create())
-                return Hex(sha.ComputeHash(stream));
+            try
+            {
+                using (var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 20))
+                using (var sha = SHA256.Create())
+                    return Hex(sha.ComputeHash(stream));
+            }
+            catch (IOException error)
+            {
+                if (!BlockedByAntivirus(error)) throw;
+                throw new IOException("Windows Security blocked " + path + ", one of Nebula's own files, so it could not be read. " +
+                                      "Nebula is built from its public source code at https://github.com/" + BuildInfo.Repository +
+                                      "; please report the file to Microsoft as a false detection.", error);
+            }
+        }
+
+        /// <summary>Whether an antivirus refused the file (ERROR_VIRUS_INFECTED, ERROR_VIRUS_DELETED).</summary>
+        public static bool BlockedByAntivirus(Exception error)
+        {
+            return error.HResult == unchecked((int)0x800700E1) || error.HResult == unchecked((int)0x800700E2);
         }
 
         public static string Sha256Bytes(byte[] bytes)
@@ -58,8 +74,7 @@ namespace Nebula
         /// <summary>
         /// Moves a directory. A file in it that another process holds open for a moment (a virus scanner or indexer
         /// reading freshly written programs) refuses the move: it is retried for about ten seconds, then the tree is
-        /// copied instead (a reader's handle still allows that). A failure names the processes the Restart Manager
-        /// reports holding its files.
+        /// copied instead (a reader's handle still allows that).
         /// </summary>
         public static void MoveDirectory(string source, string destination, Action<string> log)
         {
@@ -74,23 +89,24 @@ namespace Nebula
             {
                 if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
                 try { DeleteTree(destination); } catch (Exception) { }
-                string holders = Holders(Directory.GetFiles(source, "*", SearchOption.AllDirectories));
-                throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), error);
+                throw new IOException(refused.Message + HeldAdvice, error);
             }
             try { DeleteTree(source); } catch (Exception) { }
         }
 
         /// <summary>
         /// MoveDirectory without the copy, for trees whose folders carry streams of their own (saves: a copy would
-        /// drop them). After about ten seconds of refusals it fails, naming the holders; nothing has moved.
+        /// drop them). After about ten seconds of refusals it fails; nothing has moved.
         /// </summary>
         public static void MoveDirectoryInPlace(string source, string destination)
         {
             Exception refused = RetryMove(source, destination);
             if (refused == null) return;
-            string holders = Holders(Directory.GetFiles(source, "*", SearchOption.AllDirectories));
-            throw new IOException(refused.Message + (holders.Length != 0 ? " In use by: " + holders + "." : ""), refused);
+            throw new IOException(refused.Message + HeldAdvice, refused);
         }
+
+        /// <summary>What to do when a program holds files open (a game still running, a folder window, a scan).</summary>
+        public const string HeldAdvice = " Close Nebula and any window or program using these files, then try again.";
 
         /// <summary>Directory.Move, retried for about ten seconds while it is refused; the last refusal, or null.</summary>
         private static Exception RetryMove(string source, string destination)
@@ -118,36 +134,6 @@ namespace Nebula
                 Directory.CreateDirectory(Path.Combine(to, dir.Substring(from.Length + 1)));
             foreach (var file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
                 File.Copy(file, Path.Combine(to, file.Substring(from.Length + 1)), true);
-        }
-
-        /// <summary>The processes holding any of the files open, as "name (pid)"; "" when none or unknown.</summary>
-        public static string Holders(string[] files)
-        {
-            uint session;
-            if (files.Length == 0 || NativeMethods.RmStartSession(out session, 0, new StringBuilder(64)) != 0) return "";
-            try
-            {
-                if (NativeMethods.RmRegisterResources(session, (uint)files.Length, files, 0, null, 0, null) != 0) return "";
-                uint needed, count = 0, reasons = 0;
-                const int ErrorMoreData = 234;
-                if (NativeMethods.RmGetList(session, out needed, ref count, null, ref reasons) != ErrorMoreData || needed == 0)
-                    return "";
-                var info = new NativeMethods.RmProcessInfo[needed];
-                count = needed;
-                if (NativeMethods.RmGetList(session, out needed, ref count, info, ref reasons) != 0) return "";
-                var names = new List<string>();
-                for (int i = 0; i < count; i++) names.Add(ProcessName(info[i]) + " (" + info[i].Process.ProcessId + ")");
-                return string.Join(", ", names);
-            }
-            finally { NativeMethods.RmEndSession(session); }
-        }
-
-        // The Restart Manager names only processes with a window or a service; a scanner is usually neither.
-        private static string ProcessName(NativeMethods.RmProcessInfo info)
-        {
-            if (!string.IsNullOrWhiteSpace(info.AppName)) return info.AppName.Trim();
-            try { return System.Diagnostics.Process.GetProcessById(info.Process.ProcessId).ProcessName + ".exe"; }
-            catch (Exception) { return "process"; }
         }
 
         public static bool IsReparsePoint(string path)
@@ -333,26 +319,6 @@ namespace Nebula
             }
         }
 
-        public static long FreeBytes(string path)
-        {
-            ulong available, total, free;
-            string probe = Path.GetFullPath(path);
-            while (!Directory.Exists(probe)) probe = Path.GetDirectoryName(probe);
-            if (!NativeMethods.GetDiskFreeSpaceExW(probe, out available, out total, out free))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), probe);
-            return (long)available;
-        }
-
-        public static string FileSystemName(string path)
-        {
-            string root = Path.GetPathRoot(Path.GetFullPath(path));
-            var name = new StringBuilder(64);
-            uint serial, maxLength, flags;
-            if (!NativeMethods.GetVolumeInformationW(root, null, 0, out serial, out maxLength, out flags, name, (uint)name.Capacity))
-                return "unknown";
-            return name.ToString();
-        }
-
         public static string FormatBytes(long bytes)
         {
             if (bytes >= 1L << 30) return string.Format("{0:0.0} GB", bytes / (double)(1L << 30));
@@ -363,40 +329,6 @@ namespace Nebula
 
     internal static class NativeMethods
     {
-        // Restart Manager (FileUtil.Holders).
-        [StructLayout(LayoutKind.Sequential)]
-        internal struct RmUniqueProcess
-        {
-            public int ProcessId;
-            public System.Runtime.InteropServices.ComTypes.FILETIME StartTime;
-        }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        internal struct RmProcessInfo
-        {
-            public RmUniqueProcess Process;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string AppName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string ServiceShortName;
-            public int ApplicationType;
-            public uint AppStatus;
-            public uint TSSessionId;
-            [MarshalAs(UnmanagedType.Bool)] public bool Restartable;
-        }
-
-        [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
-        internal static extern int RmStartSession(out uint session, int flags, StringBuilder key);
-
-        [DllImport("rstrtmgr.dll")]
-        internal static extern int RmEndSession(uint session);
-
-        [DllImport("rstrtmgr.dll", CharSet = CharSet.Unicode)]
-        internal static extern int RmRegisterResources(uint session, uint fileCount, string[] files, uint processCount,
-            RmUniqueProcess[] processes, uint serviceCount, string[] services);
-
-        [DllImport("rstrtmgr.dll")]
-        internal static extern int RmGetList(uint session, out uint needed, ref uint count, [In, Out] RmProcessInfo[] info,
-            ref uint rebootReasons);
-
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
 
@@ -425,46 +357,6 @@ namespace Nebula
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool FindClose(IntPtr find);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GetDiskFreeSpaceExW(string directory, out ulong available, out ulong total, out ulong free);
-
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GetVolumeInformationW(string root, StringBuilder volumeName, uint volumeNameSize, out uint serial, out uint maxComponentLength, out uint flags, StringBuilder fileSystemName, uint fileSystemNameSize);
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct MEMORYSTATUSEX
-        {
-            public uint dwLength;
-            public uint dwMemoryLoad;
-            public ulong ullTotalPhys;
-            public ulong ullAvailPhys;
-            public ulong ullTotalPageFile;
-            public ulong ullAvailPageFile;
-            public ulong ullTotalVirtual;
-            public ulong ullAvailVirtual;
-            public ulong ullAvailExtendedVirtual;
-        }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool GlobalMemoryStatusEx(ref MEMORYSTATUSEX buffer);
-
-        public static ulong TotalPhysicalMemory()
-        {
-            var status = new MEMORYSTATUSEX();
-            status.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-            return GlobalMemoryStatusEx(ref status) ? status.ullTotalPhys : 0;
-        }
-
-        public static ulong AvailablePhysicalMemory()
-        {
-            var status = new MEMORYSTATUSEX();
-            status.dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
-            return GlobalMemoryStatusEx(ref status) ? status.ullAvailPhys : 0;
-        }
 
         [DllImport("user32.dll")]
         public static extern bool SetProcessDpiAwarenessContext(IntPtr context);

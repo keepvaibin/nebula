@@ -93,7 +93,7 @@ namespace Nebula.Setup
                         response.Add(Path.Combine(libraries, lib));
                     response.AddRange(SystemLibraries);
                     string rsp = Path.Combine(app, target + "-relink.rsp");
-                    File.WriteAllLines(rsp, response.Select(ProcessRunner.Quote));
+                    File.WriteAllLines(rsp, response.Select(CommandLine.Quote));
                     var args = new List<string> {"/nologo", "@" + rsp, "/dll", "/machine:x64", "/INCREMENTAL:NO", "/version:0.0",
                         "/out:" + Path.Combine(app, "RMGE01_" + target + ".dll"), "/implib:" + Path.Combine(app, target + "-relink.lib")};
                     if (target == "dsp")

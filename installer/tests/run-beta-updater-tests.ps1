@@ -7,6 +7,7 @@ $key=(Get-Content -LiteralPath (Join-Path $repo 'installer\release-public-key.xm
 @"
 namespace Nebula { internal static class BuildInfo {
  public const string Version="0.1.1-beta.1";
+ public const string FileVersion="0.1.1.0";
  public const string Commit="source-probe";
  public const string Repository="keepvaibin/nebula";
  public const string ReleasePublicKeyXml="$key";

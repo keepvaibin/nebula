@@ -18,7 +18,7 @@ namespace Nebula.Launcher
         public static ProcessStartInfo Create(string app, string content, string saves, RecordingMode recording)
         {
             var start = new ProcessStartInfo(Path.Combine(app, "NebulaRuntime.exe"),
-                ProcessRunner.Quote(content) + " " + ProcessRunner.Quote(Path.Combine(app, "RMGE01_game.dll")));
+                CommandLine.Quote(content) + " " + CommandLine.Quote(Path.Combine(app, "RMGE01_game.dll")));
             start.UseShellExecute = false;
             start.CreateNoWindow = true;
             start.WorkingDirectory = app;

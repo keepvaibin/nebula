@@ -46,7 +46,7 @@ namespace Nebula
         public int Run(string fileName, IList<string> arguments, string workingDirectory,
             IDictionary<string, string> environment, Action<string> onLine, CancellationToken cancel)
         {
-            return RunCommandLine(fileName, JoinArguments(arguments), workingDirectory, environment, onLine, cancel);
+            return RunCommandLine(fileName, CommandLine.JoinArguments(arguments), workingDirectory, environment, onLine, cancel);
         }
 
         /// <summary>Run with a preformatted command line, for programs such as
@@ -92,35 +92,6 @@ namespace Nebula
                 process.WaitForExit();
                 return process.ExitCode;
             }
-        }
-
-        public static string JoinArguments(IList<string> arguments)
-        {
-            var builder = new StringBuilder();
-            foreach (var argument in arguments)
-            {
-                if (builder.Length > 0) builder.Append(' ');
-                builder.Append(Quote(argument));
-            }
-            return builder.ToString();
-        }
-
-        /// <summary>Quote one argument for CommandLineToArgvW-compatible parsing.</summary>
-        public static string Quote(string argument)
-        {
-            if (argument.Length > 0 && argument.IndexOfAny(new[] { ' ', '\t', '"' }) < 0) return argument;
-            var builder = new StringBuilder("\"");
-            int backslashes = 0;
-            foreach (char c in argument)
-            {
-                if (c == '\\') { backslashes++; continue; }
-                if (c == '"') builder.Append('\\', backslashes * 2 + 1);
-                else builder.Append('\\', backslashes);
-                backslashes = 0;
-                builder.Append(c);
-            }
-            builder.Append('\\', backslashes * 2).Append('"');
-            return builder.ToString();
         }
 
         public void Dispose() { CloseHandle(job); }

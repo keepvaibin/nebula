@@ -378,7 +378,7 @@ namespace Nebula.Setup
                 Cursor = Cursors.WaitCursor;
                 string exe = Updater.Download(release, layout.Staging, null, CancellationToken.None);
                 Cursor = Cursors.Default;
-                Process.Start(new ProcessStartInfo(exe, "--apply-update --root " + ProcessRunner.Quote(layout.Root)) { UseShellExecute = false });
+                Process.Start(new ProcessStartInfo(exe, "--apply-update --root " + CommandLine.Quote(layout.Root)) { UseShellExecute = false });
                 Close();
             }
             catch (Exception error)

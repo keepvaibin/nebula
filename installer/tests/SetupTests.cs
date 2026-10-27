@@ -155,8 +155,8 @@ namespace Nebula.Setup
             string installed = MakeTree(Path.Combine(root, "installed"), "old");
             using (new FileStream(Path.Combine(installed, "sub", "b.txt"), FileMode.Open, FileAccess.Read, FileShare.Read))
                 Expect<IOException>(() => FileUtil.MoveDirectoryInPlace(installed, Path.Combine(root, "aside")),
-                    e => e.Message.Contains("In use by") && Holds(installed, "old") && !Directory.Exists(Path.Combine(root, "aside")),
-                    "an installed tree with a held file is left whole, and the failure names the program holding it");
+                    e => e.Message.EndsWith(FileUtil.HeldAdvice) && Holds(installed, "old") && !Directory.Exists(Path.Combine(root, "aside")),
+                    "an installed tree with a held file is left whole, and the failure says what to close");
             Expect<IOException>(() => FileUtil.MoveDirectory(MakeTree(Path.Combine(root, "other"), "x"), installed, log.Add),
                 e => e.Message.Contains("already exists") && Holds(installed, "old"), "a tree is never moved into an existing folder");
 

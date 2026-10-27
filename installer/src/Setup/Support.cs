@@ -213,10 +213,7 @@ namespace Nebula.Setup
                 catch (Exception error)
                 {
                     if (!(error is IOException) && !(error is UnauthorizedAccessException)) throw;
-                    string holders = Directory.Exists(entry) ? FileUtil.Holders(Directory.GetFiles(entry, "*", SearchOption.AllDirectories))
-                        : FileUtil.Holders(new[] { entry });
-                    throw new IOException("Could not remove " + entry + ": " + error.Message +
-                        (holders.Length != 0 ? " In use by: " + holders + "." : "") + " Close it and uninstall again.", error);
+                    throw new IOException("Could not remove " + entry + ": " + error.Message + FileUtil.HeldAdvice, error);
                 }
             }
             if (Directory.Exists(StartMenuFolder)) FileUtil.DeleteTree(StartMenuFolder);
@@ -225,17 +222,60 @@ namespace Nebula.Setup
             Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false);
             Registry.CurrentUser.DeleteSubKeyTree(@"Software\Nebula", false);
             if (removeUserData && Directory.Exists(NebulaPaths.DataRoot)) FileUtil.DeleteTree(NebulaPaths.DataRoot);
-            // The running setup copy deletes itself and the folder after exit.
+            // A running program cannot delete its own file. When this is the Setup copy in the install folder, a copy of
+            // it in the temporary folder removes it and the emptied folder once this process has ended, as NSIS and Inno
+            // Setup uninstallers do.
             if (self.StartsWith(Path.GetFullPath(layout.Root), StringComparison.OrdinalIgnoreCase))
             {
-                string command = "/c ping 127.0.0.1 -n 3 > nul & del /f /q \"" + self + "\" & rmdir \"" + layout.Root + "\"";
-                var start = new ProcessStartInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "cmd.exe"), command);
-                start.CreateNoWindow = true;
+                string folder = Path.Combine(Path.GetTempPath(), RemoverPrefix + Guid.NewGuid().ToString("N"));
+                Directory.CreateDirectory(folder);
+                string remover = Path.Combine(folder, Path.GetFileName(self));
+                File.Copy(self, remover);
+                var start = new ProcessStartInfo(remover, "--finish-uninstall " + Process.GetCurrentProcess().Id + " --root " +
+                                                 CommandLine.Quote(layout.Root));
                 start.UseShellExecute = false;
-                Process.Start(start);
+                start.WorkingDirectory = folder;
+                Process.Start(start).Dispose();
             }
             else if (Directory.Exists(layout.Root) && Directory.GetFileSystemEntries(layout.Root).Length == 0)
                 Directory.Delete(layout.Root);
+        }
+
+        private const string RemoverPrefix = "Nebula-Uninstall-";
+
+        /// <summary>
+        /// The temporary copy's part of an uninstall (--finish-uninstall PID --root ROOT): once Setup PID has ended, its
+        /// copy in ROOT and the emptied ROOT are removed. The temporary copies of earlier uninstalls are removed too; this
+        /// one stays in the temporary folder, which Windows clears.
+        /// </summary>
+        public static void FinishUninstall(int setupProcess, string root)
+        {
+            try
+            {
+                using (var setup = Process.GetProcessById(setupProcess)) setup.WaitForExit(60000);
+            }
+            catch (ArgumentException) { } // already ended
+            var layout = new InstallLayout(root);
+            for (int attempt = 0; attempt < 20 && File.Exists(layout.SetupCopy); attempt++)
+            {
+                try { File.Delete(layout.SetupCopy); }
+                catch (IOException) { System.Threading.Thread.Sleep(500); }
+                catch (UnauthorizedAccessException) { System.Threading.Thread.Sleep(500); }
+            }
+            try
+            {
+                if (Directory.Exists(layout.Root) && Directory.GetFileSystemEntries(layout.Root).Length == 0) Directory.Delete(layout.Root);
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+            string own = Path.GetDirectoryName(Path.GetFullPath(Assembly.GetExecutingAssembly().Location));
+            foreach (var folder in Directory.GetDirectories(Path.GetTempPath(), RemoverPrefix + "*"))
+            {
+                if (string.Equals(Path.GetFullPath(folder), own, StringComparison.OrdinalIgnoreCase)) continue;
+                try { FileUtil.DeleteTree(folder); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
         }
     }
 
