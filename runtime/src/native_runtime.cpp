@@ -2754,7 +2754,11 @@ struct RuntimeState {
     // Test hooks: GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI=<vi> treats this scene's field as unmatched at
     // every store from that VI on (0: never). GALAXY_POINTER_DEPTH_FALLBACK=0 leaves such a store
     // unanswered.
+#if GALAXY_TEST_HOOKS
     std::uint64_t test_pointer_depth_miss_from_vi = read_env_u64("GALAXY_TEST_POINTER_DEPTH_MISS_FROM_VI", 0u);
+#else
+    std::uint64_t test_pointer_depth_miss_from_vi = 0u;
+#endif
     bool pointer_depth_fallback = read_env_flag("GALAXY_POINTER_DEPTH_FALLBACK", true);
     std::uint64_t native_mouse_capture_ns{}, native_mouse_capture_max_ns{};
     std::uint64_t native_mouse_worker_ns{}, native_mouse_worker_max_ns{}, native_mouse_capture_busy{};
@@ -5410,6 +5414,7 @@ std::uint64_t throttled_thread_cpu_time_100ns() noexcept {
 // every VI delivery, to emulate a slower processor when looking for
 // serialization (frames lost while total work is still under a frame).
 void diag_sim_burn() {
+#if GALAXY_TEST_HOOKS
     static const std::uint64_t burn_us = read_env_u64("GALAXY_DIAG_SIM_BURN_US", 0u);
     if (burn_us == 0u) {
         return;
@@ -5418,6 +5423,7 @@ void diag_sim_burn() {
     while (std::chrono::steady_clock::now() < until) {
         _mm_pause();
     }
+#endif
 }
 
 std::uint64_t runtime_time_base_ticks(RuntimeState& state) {

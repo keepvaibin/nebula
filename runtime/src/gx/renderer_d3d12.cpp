@@ -1,5 +1,6 @@
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/crash_notes.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/gx/display_modes.h"
 
 #include "galaxy/content_viewport.h"
@@ -425,10 +426,14 @@ const MonitorInfo* settings_monitor(const RenderConfig& render);
 // (hidden test runs; a remote desktop session reports its virtual display's).
 unsigned refresh_override_hz() {
     static const unsigned hz = [] {
+#if GALAXY_TEST_HOOKS
         char value[16]{};
         std::size_t length = 0u;
         return getenv_s(&length, value, sizeof(value), "GALAXY_DISPLAY_REFRESH_HZ") == 0 && length > 1u
             ? static_cast<unsigned>(std::strtoul(value, nullptr, 10)) : 0u;
+#else
+        return 0u;
+#endif
     }();
     return hz;
 }
@@ -1681,6 +1686,7 @@ bool flip_discard_enabled() {
 
 bool hidden_window_mode_enabled() {
     static const bool enabled = [] {
+#if GALAXY_TEST_HOOKS
         char value[16]{};
         std::size_t length = 0;
         return getenv_s(
@@ -1688,6 +1694,9 @@ bool hidden_window_mode_enabled() {
                    "GALAXY_HIDE_WINDOW") == 0 &&
                length > 1 && value[0] != '0' && value[0] != 'n' &&
                value[0] != 'N';
+#else
+        return false;
+#endif
     }();
     return enabled;
 }
