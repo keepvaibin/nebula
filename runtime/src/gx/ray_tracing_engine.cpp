@@ -612,11 +612,19 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     const UINT hy = ((engine_gi_full_ ? engine_height_ : (engine_height_ + 1u) / 2u) + 7u) / 8u;
     const D3D12_RESOURCE_BARRIER barrier = all_uavs();
     to_state(list, engine_slots_[slot].Get(), engine_slot_state_[slot], D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    // GALAXY_RT_PASS_TIMING=2: each dispatch's GPU time too ([rt-engine-kernels]).
+    unsigned kernel = 0u;
     const auto run = [&](ID3D12PipelineState* pso, UINT x, UINT y, const wchar_t* name) {
         dred_marker(list, name);
+        const int timed_kernel = kernel_timing_ && kernel < kEngineKernels ? begin_pass(list) : -1;
         list->SetPipelineState(pso);
         list->Dispatch(x, y, 1u);
         list->ResourceBarrier(1u, &barrier);
+        if (timed_kernel >= 0) {
+            end_pass(list, timed_kernel, static_cast<Pass>(kPassEngineKernel + kernel));
+            kernel_names_[kernel] = name;
+        }
+        ++kernel;
     };
     // GALAXY_RT_PASS_TIMING: each stage's GPU time ([rt-engine-pass]).
     int timed = begin_pass(list);

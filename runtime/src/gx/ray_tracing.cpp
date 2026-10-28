@@ -687,6 +687,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     }
     pass_entries_ = {};
     next_pass_entry_ = 0u;
+    kernel_timing_ = env_float("GALAXY_RT_PASS_TIMING", 0.0f) >= 2.0f;
     if (timestamp_frequency != 0u && env_float("GALAXY_RT_PASS_TIMING", 0.0f) != 0.0f) {
         query.Count = kPassEntries * 2u;
         if (FAILED(device_->CreateQueryHeap(&query, IID_PPV_ARGS(&pass_timestamps_))) ||
@@ -1926,7 +1927,7 @@ void SceneRayTracer::report() {
         // inside the lighting's.
         for (unsigned p = 0; p < kPassCount; ++p) {
             if (p != kPassLights && p != kPassBloomBlur && p != kPassEmit && p != kPassMerge &&
-                (p < kPassEngineGBuffer || p >= kPassEngineClear)) {
+                (p < kPassEngineGBuffer || p >= kPassEngineClear) && p < kPassEngineKernel) {
                 passes_ms += ms[p];
             }
         }
@@ -1962,6 +1963,20 @@ void SceneRayTracer::report() {
                           call_ms(kPassEngineFinal), engine_ms, call_ms(kPassEngineClear), calls(kPassEngineClear),
                           call_ms(kPassEngineMist), call_ms(kPassMistComposite), calls(kPassMistComposite));
             std::cerr << line;
+        }
+        if (kernel_timing_ && n[kPassEngineKernel] != 0u) {
+            std::string kernels = "[rt-engine-kernels]";
+            for (unsigned k = 0; k < kEngineKernels && kernel_names_[k] != nullptr; ++k) {
+                const auto pass = static_cast<Pass>(kPassEngineKernel + k);
+                kernels += ' ';
+                for (const wchar_t* c = kernel_names_[k]; *c != L'\0'; ++c) {
+                    kernels += static_cast<char>(*c);
+                }
+                char value[24];
+                std::snprintf(value, sizeof(value), "=%.3f", call_ms(pass));
+                kernels += value;
+            }
+            std::cerr << kernels << '\n';
         }
     }
     window_ = {};

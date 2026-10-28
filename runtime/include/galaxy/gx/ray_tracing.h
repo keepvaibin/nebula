@@ -410,8 +410,10 @@ private:
         kPassEngineClear,       // the glass pass at the water's trace (outside the lighting)
         kPassEngineMist,        // the mist's light at the water's trace (outside the lighting)
         kPassMistComposite,     // the mist over the picture
-        kPassCount
+        kPassEngineKernel,      // GALAXY_RT_PASS_TIMING=2: the engine's dispatches in their order (kEngineKernels)
+        kPassCount = kPassEngineKernel + 24
     };
+    static constexpr unsigned kEngineKernels = kPassCount - kPassEngineKernel;
     struct PassEntry {
         std::uint64_t frame = 0;
         std::uint32_t pass = 0;
@@ -542,6 +544,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> pass_readback_;
     std::array<PassEntry, kPassEntries> pass_entries_{};
     unsigned next_pass_entry_ = 0;
+    bool kernel_timing_ = false;
+    std::array<const wchar_t*, kEngineKernels> kernel_names_{};
     std::vector<Retired> retired_;
     // GALAXY_RT_DUMP=<scene serial>: that scene's per-pixel validation is written as PPM
     // images to GALAXY_RT_DUMP_DIR (class, raster depth, traced depth).
