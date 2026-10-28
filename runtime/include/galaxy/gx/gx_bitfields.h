@@ -275,6 +275,40 @@ struct BlendMode {
     };
 }
 
+// GX logic op 3: the source unchanged.
+inline constexpr std::uint8_t kLogicCopy = 3u;
+
+// The blend the pixel engine performs, as the draw's result shows it: a blend that writes the fragment's colour unchanged
+// is no blend. The pixel engine blends (or subtracts) where blending is on, else applies the logic op where that is on
+// (Dolphin's BlendingState). A blend of ONE and ZERO, and the logic op COPY, write the source exactly as an unblended draw
+// does; so does DSTALPHA and INVDSTALPHA where the EFB has no alpha (`efb_has_alpha` false: its alpha reads as one). The
+// game draws opaque surfaces with such states (the far side of Bonefin's ocean sphere: BLEND ONE ZERO, depth written),
+// and whatever tells translucent draws from opaque ones (the pipeline's blend key, the motion target, the ray tracer's
+// geometry and its translucent lighting) must take them for the opaque draws they are.
+[[nodiscard]] constexpr BlendMode effective_blend(BlendMode b, bool efb_has_alpha) {
+    const auto factor = [efb_has_alpha](BlendFactor f) {
+        if (!efb_has_alpha && f == BlendFactor::DstAlpha) {
+            return BlendFactor::One;
+        }
+        if (!efb_has_alpha && f == BlendFactor::InvDstAlpha) {
+            return BlendFactor::Zero;
+        }
+        return f;
+    };
+    const bool replaces = b.blend_enable ? !b.subtract && factor(b.src_factor) == BlendFactor::One &&
+                                               factor(b.dst_factor) == BlendFactor::Zero
+                                         : b.logic_op_enable && b.logic_mode == kLogicCopy;
+    if (replaces) {
+        b.blend_enable = false;
+        b.logic_op_enable = false;
+        b.subtract = false;
+        b.src_factor = BlendFactor::One;
+        b.dst_factor = BlendFactor::Zero;
+        b.logic_mode = kLogicCopy;
+    }
+    return b;
+}
+
 struct PeControl {
     std::uint8_t pixel_format;      // 0=RGB8_Z24, 1=RGBA6_Z24, 2=RGB565_Z16, ...
     std::uint8_t z_format;

@@ -43,6 +43,24 @@ static_assert(kBlend.src_factor == BlendFactor::SrcAlpha);
 static_assert(kBlend.dst_factor == BlendFactor::InvSrcAlpha);
 static_assert(!kBlend.subtract);
 
+// effective_blend: an alpha blend stays a blend; BLEND ONE ZERO and logic COPY write the source (no blend, no logic op);
+// DSTALPHA / INVDSTALPHA write the source only where the EFB has no alpha; a subtract of ONE ZERO still subtracts.
+static_assert(effective_blend(kBlend, true).blend_enable);
+static_assert(effective_blend(kBlend, false).blend_enable);
+constexpr auto kBlendOneZero = decode_blend(1u | (1u << 3) | (0u << 5) | (1u << 8), 0u);
+static_assert(kBlendOneZero.blend_enable && !effective_blend(kBlendOneZero, true).blend_enable);
+static_assert(!effective_blend(kBlendOneZero, false).logic_op_enable);
+static_assert(effective_blend(kBlendOneZero, true).color_update);
+constexpr auto kBlendDstAlpha = decode_blend(1u | (1u << 3) | (7u << 5) | (6u << 8), 0u);
+static_assert(!effective_blend(kBlendDstAlpha, false).blend_enable);
+static_assert(effective_blend(kBlendDstAlpha, true).blend_enable);
+constexpr auto kSubtractOneZero = decode_blend(1u | (1u << 3) | (0u << 5) | (1u << 8) | (1u << 11), 0u);
+static_assert(effective_blend(kSubtractOneZero, true).blend_enable && effective_blend(kSubtractOneZero, true).subtract);
+constexpr auto kLogicCopyMode = decode_blend((1u << 1) | (1u << 3) | (3u << 12), 0u);
+static_assert(!effective_blend(kLogicCopyMode, true).logic_op_enable);
+constexpr auto kLogicXor = decode_blend((1u << 1) | (1u << 3) | (6u << 12), 0u);
+static_assert(effective_blend(kLogicXor, true).logic_op_enable);
+
 // TEX_SETIMAGE0/3: 640x480 RGB565 at physical 0x01000000.
 constexpr auto kTexImage = decode_tex_image(
     (640u - 1u) | ((480u - 1u) << 10) | (4u << 20), 0x01000000u >> 5);

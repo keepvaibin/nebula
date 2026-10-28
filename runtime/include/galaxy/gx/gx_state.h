@@ -122,8 +122,10 @@ public:
     [[nodiscard]] ZMode z_mode() const {
         return decode_z_mode(bp_[bp::kZMode]);
     }
+    // The blend as the pixel engine performs it (effective_blend: a blend that writes the source unchanged is none).
     [[nodiscard]] BlendMode blend_mode() const {
-        return decode_blend(bp_[bp::kBlendMode], bp_[bp::kConstAlpha]);
+        return effective_blend(decode_blend(bp_[bp::kBlendMode], bp_[bp::kConstAlpha]),
+                               decode_pe_control(bp_[bp::kPeControl]).pixel_format == 1u);
     }
     [[nodiscard]] PeControl pe_control() const {
         return decode_pe_control(bp_[bp::kPeControl]);

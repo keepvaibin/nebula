@@ -275,8 +275,9 @@ void check_independent_pair_compilation() {
 int main() {
     using namespace galaxy::gx;
 
-    {   // RGB8/RGB565 have no EFB alpha, so destination-alpha factors share a PSO key with
-        // ONE/ZERO (as in Aurora's GX pipeline normalization); RGBA6 keeps its factors.
+    {   // RGB8/RGB565 have no EFB alpha, so destination-alpha factors read ONE/ZERO (as in Aurora's GX pipeline
+        // normalization), which writes the source unchanged: no blend at all (effective_blend), the key of an
+        // unblended draw; RGBA6 keeps its factors and its blend.
         GxState state;
         const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
             state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
@@ -294,9 +295,9 @@ int main() {
         const RenderStateKey rgb565 = build_render_state_key(state);
         write_bp(bp::kPeControl, 1u);  // RGBA6_Z24 has EFB alpha.
         const RenderStateKey rgba6 = build_render_state_key(state);
-        if (!(rgb8 == rgb8_normalized) ||
-            ((rgb565.blend_bits >> 2u) & 7u) != 1u ||
-            ((rgb565.blend_bits >> 5u) & 7u) != 0u ||
+        if (!(rgb8 == rgb8_normalized) || (rgb8.blend_bits & 1u) != 0u ||
+            (rgb565.blend_bits & 0x1FFFu) != 0u ||
+            (rgba6.blend_bits & 1u) == 0u ||
             ((rgba6.blend_bits >> 2u) & 7u) != 6u ||
             ((rgba6.blend_bits >> 5u) & 7u) != 7u) {
             ++g_failures;
