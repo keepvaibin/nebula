@@ -177,6 +177,9 @@ namespace MR {
         GXSetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
         GXSetCullMode(GX_CULL_BACK);
 
+#ifdef TARGET_PC
+        __NebulaGXClearQuadMarker(0xFFFFFF);
+#endif
         GXBegin(GX_QUADS, GX_VTXFMT0, 4);
         {
             GXPosition2u16(0, 0);

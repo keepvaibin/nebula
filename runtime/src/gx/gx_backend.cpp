@@ -4289,6 +4289,11 @@ std::uint32_t GxBackend::rt_light_key() noexcept {
 
 void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                                std::uint32_t b) {
+    if (kind == motion::kMarkerClearQuad) {
+        clear_quad_pending_ = true;
+        clear_quad_z24_ = a & 0xFFFFFFu;
+        return;
+    }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
@@ -9465,6 +9470,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_curved_flat_triangles_ = 0;
     frame_curved_patch_triangles_ = 0;
     frame_curved_split_draws_ = 0;
+    frame_clear_quads_ = 0;
     frame_decoded_vertex_cache_evictions_ = 0;
     frame_decoded_vertex_cache_stale_rejects_ = 0;
     pending_draw_batch_ = {};
@@ -9501,6 +9507,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
             static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
             curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
+            // GALAXY_TEST_CLEAR_QUAD_AB=1: the game's clear quads draw as written in those frames.
+            static const bool clear_ab = read_env_u64("GALAXY_TEST_CLEAR_QUAD_AB", 0u) != 0u;
+            clear_quads_ = !(clear_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
@@ -10338,6 +10347,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " curved-split-draws=" << frame_curved_split_draws_
                   << " curved-flat-tris=" << frame_curved_flat_triangles_
                   << " curved-patch-tris=" << frame_curved_patch_triangles_
+                  << " clear-quads=" << frame_clear_quads_
                   << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
                   << " resident-vtx-used-bytes="
                   << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
@@ -10760,6 +10770,60 @@ void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs,
 }
 
 }  // namespace
+
+bool GxBackend::draw_clear_quad(std::uint8_t vtxfmt, FifoCursor& cursor) {
+    // The quad as the game draws it: the compare always, written, no blending or logic op, depth from a Z24X8
+    // texture (replace); a 16-bit depth EFB stores another depth.
+    const ZMode zm = state_.z_mode();
+    const BlendMode bm = state_.blend_mode();
+    const std::uint32_t zenv1 = state_.bp(bp::kTevZEnv1);
+    const auto pixel_format = static_cast<std::uint8_t>(state_.pe_control().pixel_format);
+    if (!zm.test_enable || zm.func != CompareFunc::Always || !zm.update_enable || bm.blend_enable ||
+        bm.logic_op_enable || ((zenv1 >> 2u) & 0x3u) != 2u || (zenv1 & 0x3u) != 2u || pixel_format > 1u) {
+        return false;
+    }
+    cursor.require(2);
+    if (((static_cast<std::uint32_t>(cursor.data[cursor.offset]) << 8u) |
+         static_cast<std::uint32_t>(cursor.data[cursor.offset + 1u])) != 4u) {
+        return false;
+    }
+    // It fills its viewport: the scissor's rectangle, where the viewport covers it.
+    const EfbScissor efb_sc = state_.efb_scissor();
+    const ScissorRect sc = efb_sc.rect;
+    const auto viewport = [&](std::uint16_t i) {
+        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
+    };
+    const float left = viewport(3u) - 342.0f - static_cast<float>(efb_sc.offset.x) - viewport(0u);
+    const float top = viewport(4u) - 342.0f - static_cast<float>(efb_sc.offset.y) + viewport(1u);
+    const float right = left + 2.0f * viewport(0u);
+    const float bottom = top - 2.0f * viewport(1u);
+    if (sc.x1 < sc.x0 || sc.y1 < sc.y0 || sc.x0 < 0 || sc.y0 < 0 || left > static_cast<float>(sc.x0) ||
+        top > static_cast<float>(sc.y0) || right < static_cast<float>(sc.x1 + 1) ||
+        bottom < static_cast<float>(sc.y1 + 1)) {
+        return false;
+    }
+    flush_pending_draw_batch();
+    // The depth the pixel shader writes (zout.depth, from the texture plus the Z texture's bias), as a clear.
+    const std::uint32_t z24 = (clear_quad_z24_ + (state_.bp(bp::kTevZEnv0) & 0xFFFFFFu)) & 0xFFFFFFu;
+    renderer_.clear_efb(0u, 0u, z24, false, false, true, static_cast<unsigned>(sc.x0), static_cast<unsigned>(sc.y0),
+                        static_cast<unsigned>(sc.x1 - sc.x0 + 1), static_cast<unsigned>(sc.y1 - sc.y0 + 1),
+                        pixel_format);
+    ++frame_clear_quads_;
+    if (bm.color_update || (bm.alpha_update && pixel_format == 1u)) {
+        // Its colour: the same quad without the Z texture or the depth compare and write.
+        const std::uint32_t zmode = state_.bp(bp::kZMode);
+        state_.load_bp((static_cast<std::uint32_t>(bp::kTevZEnv1) << 24u) | (zenv1 & ~0xCu & 0xFFFFFFu));
+        state_.load_bp(static_cast<std::uint32_t>(bp::kZMode) << 24u);
+        on_draw(PrimitiveClass::Quads, vtxfmt, cursor);
+        state_.load_bp((static_cast<std::uint32_t>(bp::kTevZEnv1) << 24u) | (zenv1 & 0xFFFFFFu));
+        state_.load_bp((static_cast<std::uint32_t>(bp::kZMode) << 24u) | (zmode & 0xFFFFFFu));
+    } else {
+        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
+        const std::uint16_t count = cursor.read_u16();
+        cursor.take(layout.source_size * static_cast<std::size_t>(count));
+    }
+    return true;
+}
 
 bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
                                  std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
@@ -12915,6 +12979,10 @@ void GxBackend::on_draw(
     display_copy_on_output_ = false;
     if (cached_draw_run_active_) {
         on_cached_draw_run_draw(primitive, vtxfmt, cursor);
+        return;
+    }
+    if (std::exchange(clear_quad_pending_, false) && clear_quads_ && primitive == PrimitiveClass::Quads &&
+        draw_clear_quad(vtxfmt, cursor)) {
         return;
     }
 

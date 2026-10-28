@@ -368,6 +368,9 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     GXSetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
     GXSetCullMode(GX_CULL_BACK);
 
+#ifdef TARGET_PC
+    __NebulaGXClearQuadMarker(0xFFFFFF);
+#endif
     GXBegin(GX_QUADS, GX_VTXFMT0, 4);
     {
         GXPosition2u16(param1, param2);
