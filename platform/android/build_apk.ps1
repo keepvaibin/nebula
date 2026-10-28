@@ -67,6 +67,13 @@ foreach ($abi in $Abis -split ",") {
     Set-Item "env:CXX_$lower" "$llvm\${triple}31-clang++.cmd"
     Set-Item "env:AR_$lower" "$llvm\llvm-ar.exe"
     $env:CARGO_TARGET_DIR = "$Work\cargo"
+    # Source paths the library keeps (panic messages, the C its crates build) name no build machine's folders.
+    $cargoHome = if ($env:CARGO_HOME) { $env:CARGO_HOME } else { Join-Path $env:USERPROFILE ".cargo" }
+    $rustupHome = if ($env:RUSTUP_HOME) { $env:RUSTUP_HOME } else { Join-Path $env:USERPROFILE ".rustup" }
+    $remaps = @(@($cargoHome, "cargo"), @($rustupHome, "rustup"), @($root, "nebula"))
+    $env:CARGO_ENCODED_RUSTFLAGS = ($remaps | ForEach-Object { "--remap-path-prefix=$($_[0])=$($_[1])" }) -join [char]0x1f
+    Set-Item "env:CFLAGS_$lower" (($remaps | ForEach-Object {
+        "-ffile-prefix-map=$($_[0])=$($_[1]) -ffile-prefix-map=$($_[0] -replace '\\', '/')=$($_[1])" }) -join " ")
     Invoke-Logged "$Work\import-$abi.log" {
         Push-Location $root
         try { cargo build --release --locked -p nebula-import --lib --target $triple } finally { Pop-Location }
