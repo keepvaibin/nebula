@@ -237,7 +237,14 @@ D3D12_RESOURCE_BARRIER uav_barrier() {
 
 }  // namespace
 
-bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_frequency, DXGI_FORMAT color_format) {
+bool RtReflections::prepare_pipelines(ID3D12Device5* device, DXGI_FORMAT color_format, unsigned quality) {
+    RtReflections other;
+    other.device_ = device;
+    return device != nullptr && other.create_pipelines(color_format, quality);
+}
+
+bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_frequency, DXGI_FORMAT color_format,
+                               unsigned quality) {
     shutdown();
     if (device == nullptr || env_float("GALAXY_RT_REFLECT", 1.0f) == 0.0f) {
         return false;
@@ -360,7 +367,7 @@ bool RtReflections::initialize(ID3D12Device5* device, std::uint64_t timestamp_fr
     // remember instead of falling back to its average.
     const bool new_memory = memory_.resource == nullptr;
     const bool new_sky = sky_.resource == nullptr;
-    if (!create_pipelines(color_format) ||
+    if (!create_pipelines(color_format, quality) ||
         (new_memory &&
          !create_buffer(kMemoryTexels * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                         D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, memory_.resource, L"rt reflect memory")) ||
@@ -501,12 +508,9 @@ void RtReflections::to_state(ID3D12GraphicsCommandList* list, Buffer& buffer, D3
     buffer.state = wanted;
 }
 
-bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
+bool RtReflections::create_pipelines(DXGI_FORMAT color_format, unsigned quality) {
     const auto serialize = [&](const D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>& out) {
-        ComPtr<ID3DBlob> blob, error;
-        return SUCCEEDED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) &&
-               SUCCEEDED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                                      IID_PPV_ARGS(&out)));
+        return rt_prepare::root_signature(device_.Get(), desc, out);
     };
     // Compiled in parallel (pso_jobs.h), joined where their results decide.
     PsoJobs jobs;
@@ -576,7 +580,7 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     {
         D3D12_FEATURE_DATA_SHADER_MODEL model{D3D_SHADER_MODEL_6_6};
         D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-        textured_ = get_render_config().rt_quality == 1u &&
+        textured_ = quality == 1u &&
                     SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &model, sizeof(model))) &&
                     model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
                     SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
@@ -687,15 +691,15 @@ bool RtReflections::create_pipelines(DXGI_FORMAT color_format) {
     graphics.NumRenderTargets = 1u;
     graphics.RTVFormats[0] = color_format;
     graphics.SampleDesc.Count = 1u;
-    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)))) {
+    if (!rt_prepare::graphics(device_.Get(), graphics, composite_pso_)) {
         return false;
     }
     graphics.PS = {g_rt_water_composite_ps, sizeof(g_rt_water_composite_ps)};
-    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&water_composite_pso_)))) {
+    if (!rt_prepare::graphics(device_.Get(), graphics, water_composite_pso_)) {
         return false;
     }
     graphics.PS = {g_rt_underwater_ps, sizeof(g_rt_underwater_ps)};
-    return SUCCEEDED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&underwater_pso_)));
+    return rt_prepare::graphics(device_.Get(), graphics, underwater_pso_);
 }
 
 bool RtReflections::allocate_pass(Pass& pass, std::uint64_t samples, std::uint32_t tiles, const wchar_t* name) {

@@ -130,8 +130,13 @@ public:
     RtReflections& operator=(const RtReflections&) = delete;
     ~RtReflections() { shutdown(); }
 
-    // GALAXY_RT_REFLECT=0 leaves it off. False when a pipeline cannot be created.
-    bool initialize(ID3D12Device5* device, std::uint64_t timestamp_frequency, DXGI_FORMAT color_format);
+    // At `quality` (RenderConfig::rt_quality). GALAXY_RT_REFLECT=0 leaves it off. False when a pipeline cannot be
+    // created.
+    bool initialize(ID3D12Device5* device, std::uint64_t timestamp_frequency, DXGI_FORMAT color_format,
+                    unsigned quality);
+    // The pipelines of `quality` made into the ray tracing pipeline library and dropped: a start that prepares the
+    // library makes every quality's (rt_prepare.h).
+    static bool prepare_pipelines(ID3D12Device5* device, DXGI_FORMAT color_format, unsigned quality);
     // Keeps the environment memory and the captured sky (the stage's; reset_memory clears them): started again on
     // the same device, the reflections continue from what the stage has shown.
     void shutdown() noexcept;
@@ -255,7 +260,7 @@ private:
         float cover = 0.0f;
     };
 
-    bool create_pipelines(DXGI_FORMAT color_format);
+    bool create_pipelines(DXGI_FORMAT color_format, unsigned quality);
     // `opaque`: the opaque pass's buffers too (the engine skips that pass; the water pass needs the rest).
     bool ensure_buffers(std::uint32_t samples, std::uint32_t tiles, bool opaque);
     bool ensure_water_buffers();

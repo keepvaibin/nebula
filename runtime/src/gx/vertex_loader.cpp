@@ -893,6 +893,8 @@ void decode_vertex_stream(
             out.curve[1] = model.crease[position_index];
             out.curve[2] = model.places[position_index];
             out.mtx_indices[2] |= static_cast<std::uint32_t>(model.second[position_index]) << 16u;
+            // Bit 15: a flat solid's corner shaded soft (Model::flat_of; ray_tracing.hlsl GeometryCS shades its face).
+            out.mtx_indices[2] |= model.flat_of(position_index, normal_index) ? kVertexFlatCorner : 0u;
         } else if (inputs.curved != nullptr) {
             // Outside the registered arrays: no place, no neighbours.
             out.curve[0] = 0u;

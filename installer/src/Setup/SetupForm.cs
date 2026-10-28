@@ -16,7 +16,8 @@ namespace Nebula.Setup
         private InstalledInfo installed;
         private readonly Panel choose = new Panel(), work = new Panel();
         private readonly TextBox input = new TextBox(), root = new TextBox(), log = new TextBox();
-        private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox();
+        private readonly CheckBox desktop = new CheckBox(), dlss = new CheckBox(), dlssLicense = new CheckBox(),
+            prepareRayTracing = new CheckBox();
         private readonly RadioButton modeRepair = new RadioButton(), modeRestore = new RadioButton(), modeUninstall = new RadioButton(), modeInstall = new RadioButton();
         private readonly Label summary = new Label(), step = new Label(), elapsed = new Label();
         private readonly ProgressBar overall = new ProgressBar(), stepBar = new ProgressBar();
@@ -163,6 +164,15 @@ namespace Nebula.Setup
             desktop.Size = new Size(700, 24);
             choose.Controls.Add(desktop);
             y += 28;
+
+            if (RayTracingPreparation.Offered())
+            {
+                prepareRayTracing.Text = "Prepare ray tracing shaders";
+                prepareRayTracing.Location = new Point(20, y);
+                prepareRayTracing.Size = new Size(700, 24);
+                choose.Controls.Add(prepareRayTracing);
+                y += 28;
+            }
 
             if (DlssPackage.RtxAdapterPresent() && !DlssPackage.Installed())
             {
@@ -332,6 +342,7 @@ namespace Nebula.Setup
             if (failure == null)
             {
                 step.Text = "Nebula " + BuildInfo.Version + " is installed.";
+                if (prepareRayTracing.Checked) RayTracingPreparation.Request();
                 if (engine.DlssFailure != null)
                     MessageBox.Show(this, "NVIDIA DLSS was not installed: " + engine.DlssFailure + "\r\n\r\nYou can install it later from the game's graphics settings.",
                         "Nebula Setup", MessageBoxButtons.OK, MessageBoxIcon.Warning);

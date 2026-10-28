@@ -34,6 +34,7 @@
 #include <revolution.h>
 #ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
+#include "Game/Screen/NebulaRtPrepare.hpp"
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
@@ -185,6 +186,7 @@ void GameSystem::initAfterStationedResourceLoaded() {
     NebulaIcons::init();
     NebulaCutsceneSkip::init();
     NebulaSettingsMenu::init();
+    NebulaRtPrepare::init();
 #endif
     mSceneController->initAfterStationedResourceLoaded();
     mSequenceDirector->initAfterResourceLoaded();
@@ -246,6 +248,7 @@ void GameSystem::draw() {
     mErrorWatcher->draw();
 #ifdef TARGET_PC
     mSceneController->drawSceneOverlay();
+    NebulaRtPrepare::draw();
     if (isSettingsShown) {
         NebulaSettingsMenu::draw();
         mObjHolder->drawStarPointer();
@@ -261,6 +264,7 @@ void GameSystem::update() {
     mObjHolder->update();
 #ifdef TARGET_PC
     NebulaMenuFocus::update();
+    NebulaRtPrepare::update();
     NebulaSettingsMenu::update();
     NebulaIcons::update();
     // The skip's question waits under the settings menu.

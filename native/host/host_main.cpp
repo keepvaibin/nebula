@@ -45,6 +45,9 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/texture_pack.h"
+#if defined(NEBULA_HOST_D3D12)
+#include "galaxy/gx/rt_prepare.h"
+#endif
 
 #if defined(_WIN32)
 #include <crtdbg.h>
@@ -1706,6 +1709,10 @@ static_assert(static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::Leave) == 
               static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::ModsRestartAsk) == NEBULA_SETTINGS_STATUS_MODS_RESTART_ASK &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::KeepDisplay) == NEBULA_SETTINGS_STATUS_KEEP_DISPLAY &&
               static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::JoyCon) == NEBULA_SETTINGS_STATUS_JOYCON &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::RtRestartAsk) ==
+                  NEBULA_SETTINGS_STATUS_RT_RESTART_ASK &&
+              static_cast<uint32_t>(galaxy::gx::NativeSettingsStatus::DiagnosticsAsk) ==
+                  NEBULA_SETTINGS_STATUS_DIAGNOSTICS_ASK &&
               galaxy::gx::kJoyConLeftBit == NEBULA_JOYCON_LEFT && galaxy::gx::kJoyConRightBit == NEBULA_JOYCON_RIGHT &&
               galaxy::gx::kJoyConLeftHeldBit == NEBULA_JOYCON_LEFT_HELD &&
               galaxy::gx::kJoyConRightHeldBit == NEBULA_JOYCON_RIGHT_HELD &&
@@ -2297,6 +2304,22 @@ uint32_t svc_option(void*, uint32_t what) {
     case NEBULA_OPTION_BLOOM:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::gx::bloom_route();
+#else
+        return 0;
+#endif
+    case NEBULA_OPTION_RT_PREPARATION:
+#if defined(NEBULA_HOST_D3D12)
+        switch (galaxy::gx::rt_prepare::first_start()) {
+        case galaxy::gx::rt_prepare::FirstStart::Opening: return 1u;
+        case galaxy::gx::rt_prepare::FirstStart::Compiling: return 2u;
+        default: return 0u;
+        }
+#else
+        return 0;
+#endif
+    case NEBULA_OPTION_RT_PREPARE_PROGRESS:
+#if defined(NEBULA_HOST_D3D12)
+        return static_cast<uint32_t>(galaxy::gx::rt_prepare::progress() * 10000.0f + 0.5f);
 #else
         return 0;
 #endif

@@ -98,7 +98,7 @@ bool dlss_installed_now();
 bool frame_generation_offered();
 bool dlss_hold_back(RenderConfig& applied, const RenderConfig& live);
 bool dlss_prompt_key(WPARAM key, bool was_down);
-bool mods_restart_key(WPARAM key, bool was_down);
+bool restart_ask_key(WPARAM key, bool was_down);
 bool mods_page_key(WPARAM key, bool accept, bool was_down);
 unsigned mods_draft_changes();
 void commit_mods_draft();
@@ -332,6 +332,16 @@ std::atomic<bool> s_settings_drawn_by_game{false};
 bool s_settings_leave_asking = false;
 // Apply saved mod changes this session did not start with: the menu asks whether to restart now.
 std::atomic<bool> s_mods_restart_ask{false};
+// RAY TRACING turned on (applied) before its shaders are prepared: the menu asks to restart, which prepares them.
+std::atomic<bool> s_rt_restart_ask{false};
+// SYSTEM > DIAGNOSTICS > RECORD: the menu asks to restart into a recorded session (the launcher's recording).
+std::atomic<bool> s_diagnostics_ask{false};
+
+// A restart question is up (the mods', ray tracing's, the diagnostics run's).
+bool restart_asking() {
+    return s_mods_restart_ask.load(std::memory_order_acquire) || s_rt_restart_ask.load(std::memory_order_acquire) ||
+           s_diagnostics_ask.load(std::memory_order_acquire);
+}
 // The pages, in order.
 constexpr const char* kNativeSettingsTabNames[] = {"DISPLAY", "GRAPHICS", "CONTROLS", "AUDIO", "GENERAL", "MODS", "SYSTEM",
                                                    "ADVANCED"};
@@ -1185,6 +1195,12 @@ void apply_native_settings_draft() {
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     commit_mods_draft();
+    // RAY TRACING turned on before its shaders are prepared starts at the next start, which prepares them first.
+    if (applied.ray_tracing_enabled && !live.ray_tracing_enabled &&
+        host_window::ray_tracing_offered.load(std::memory_order_relaxed) &&
+        !host_window::ray_tracing_prepared.load(std::memory_order_relaxed)) {
+        s_rt_restart_ask.store(true, std::memory_order_release);
+    }
     // The game's settings the menu changed, over the live ones (the controls applied the input mode).
     RuntimeSettings runtime = get_runtime_settings();
     if (runtime_draft_changes(&runtime) != 0u) {
@@ -1751,7 +1767,7 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
             // anything else closes.
             const NativeSettingsStatus dlss = dlss_status(GetTickCount64());
             if (!settings_display_confirming() && dlss != NativeSettingsStatus::DlssAsk &&
-                dlss != NativeSettingsStatus::DlssRestart && !s_mods_restart_ask.load(std::memory_order_acquire)) {
+                dlss != NativeSettingsStatus::DlssRestart && !restart_asking()) {
                 set_native_settings_visible(false);
             }
         } else if (key == VK_BACK) {
@@ -1764,7 +1780,7 @@ bool handle_native_settings_key(WPARAM key, bool was_down, bool from_pad = false
         return true;
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
-        (dlss_prompt_key(key, was_down) || mods_restart_key(key, was_down))) {
+        (dlss_prompt_key(key, was_down) || restart_ask_key(key, was_down))) {
         return true;
     }
     if (key != VK_F1 && s_native_settings_visible.load(std::memory_order_relaxed) &&
@@ -2542,7 +2558,8 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
 
     if (rt_offered) {
         rows.push_back({"RAY TRACING", {}, nullptr, {}, true});
-        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
+        const bool prepared = host_window::ray_tracing_prepared.load(std::memory_order_relaxed);
+        rows.push_back({"RAY TRACING", !render.ray_tracing_enabled ? "OFF" : prepared ? "ON" : "ON (AFTER RESTART)",
                         [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
     }
@@ -3629,6 +3646,9 @@ std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
     std::string post = post_process_caps_text(get_post_process_status());
     if (const std::size_t colon = post.find(": "); colon != std::string::npos) post.erase(0, colon + 2u);
     rows.push_back({"POST-PROCESS", post, nullptr, "ANTI-ALIASING, FSR 1 AND SHARPENING"});
+    rows.push_back(button_row("DIAGNOSTICS", {"RECORD"},
+                              [](RenderConfig&, unsigned) { s_diagnostics_ask.store(true, std::memory_order_release); },
+                              {}));
     return rows;
 }
 
@@ -3791,7 +3811,7 @@ bool start_launcher(const std::wstring& arguments, HANDLE* process_out) {
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(launcher.c_str(), command.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr,
                         &startup, &process)) {
-        std::cerr << "[dlss] could not start Nebula.exe: win32=" << GetLastError() << '\n';
+        std::cerr << "[launcher] could not start Nebula.exe: win32=" << GetLastError() << '\n';
         return false;
     }
     // Its window comes to the front over the game.
@@ -3867,9 +3887,10 @@ void dlss_fail(const char* why) {
     std::cerr << "[dlss] not installed: " << why << '\n';
 }
 
-// The launcher starts the game again once this process has exited; this one closes.
-bool restart_through_launcher() {
-    if (!start_launcher(L"--restart-after " + std::to_wstring(GetCurrentProcessId()), nullptr)) {
+// The launcher starts the game again once this process has exited (`record`: a diagnostics run); this one closes.
+bool restart_through_launcher(bool record = false) {
+    if (!start_launcher(L"--restart-after " + std::to_wstring(GetCurrentProcessId()) + (record ? L" --record" : L""),
+                        nullptr)) {
         return false;
     }
     PostMessageW(reinterpret_cast<HWND>(host_window::settings_window.load(std::memory_order_acquire)), WM_CLOSE, 0, 0);
@@ -3909,20 +3930,25 @@ bool dlss_prompt_key(WPARAM key, bool was_down) {
     return true;
 }
 
-// After mod changes were applied: Enter, Space or Y restarts the game now; Escape, Backspace or B keeps them for the
-// next start. Every other key waits for the answer.
-bool mods_restart_key(WPARAM key, bool was_down) {
-    if (!s_mods_restart_ask.load(std::memory_order_acquire)) return false;
+// After changes that take a restart were applied (mods; ray tracing turned on before its shaders are prepared): Enter,
+// Space or Y restarts the game now; Escape, Backspace or B keeps them for the next start. Every other key waits for
+// the answer.
+bool restart_ask_key(WPARAM key, bool was_down) {
+    if (!restart_asking()) return false;
     if (was_down) return true;
     if (key == VK_RETURN || key == VK_SPACE) {
         s_mods_restart_ask.store(false, std::memory_order_release);
-        if (restart_through_launcher()) {
-            std::cerr << "[mods] restarting\n";
+        s_rt_restart_ask.store(false, std::memory_order_release);
+        const bool record = s_diagnostics_ask.exchange(false, std::memory_order_acq_rel);
+        if (restart_through_launcher(record)) {
+            std::cerr << (record ? "[settings] restarting into a diagnostics run\n" : "[settings] restarting\n");
         } else {
             show_controls_message("COULD NOT RESTART");
         }
     } else if (key == VK_ESCAPE || key == VK_BACK || key == VK_F1) {
         s_mods_restart_ask.store(false, std::memory_order_release);
+        s_rt_restart_ask.store(false, std::memory_order_release);
+        s_diagnostics_ask.store(false, std::memory_order_release);
     }
     return true;
 }
@@ -4032,8 +4058,9 @@ unsigned display_efb_scale_cap() {
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
 
-// DXR 1.1 with shader model 6.5 on an adapter with dedicated memory (the RAY TRACING row).
+// DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
 std::atomic<bool> ray_tracing_offered{false};
+std::atomic<bool> ray_tracing_prepared{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
     if (!s_native_settings_dirty.load(std::memory_order_acquire)) {
@@ -4973,6 +5000,11 @@ void draw_native_settings_overlay(UiCanvas& renderer) {
     case NativeSettingsStatus::GpuRestart:
         status = "THE NEW GRAPHICS CARD APPLIES WHEN NEBULA RESTARTS";
         break;
+    case NativeSettingsStatus::ModsRestartAsk:
+    case NativeSettingsStatus::RtRestartAsk:
+    case NativeSettingsStatus::DiagnosticsAsk:
+        status = pad_hints("RESTART NOW?  ENTER/Y RESTART  ESC/B LATER");
+        break;
     case NativeSettingsStatus::Help:
         status = view.help;
         status_color = muted;
@@ -5128,6 +5160,10 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending_settings_changes());
     } else if (s_mods_restart_ask.load(std::memory_order_acquire)) {
         view.status = NativeSettingsStatus::ModsRestartAsk;
+    } else if (s_rt_restart_ask.load(std::memory_order_acquire)) {
+        view.status = NativeSettingsStatus::RtRestartAsk;
+    } else if (s_diagnostics_ask.load(std::memory_order_acquire)) {
+        view.status = NativeSettingsStatus::DiagnosticsAsk;
     } else if (controls_capturing()) {
         view.status = s_controls_scheme == galaxy::input::ControlScheme::Keyboard ? NativeSettingsStatus::CaptureKey
                                                                                    : NativeSettingsStatus::CapturePad;
@@ -5212,40 +5248,6 @@ void draw_home_menu(UiCanvas& renderer) {
         }
         ui_text(renderer, x + 14 * scale, ry + 4 * scale, scale, rows[row], row == selected ? text : muted);
     }
-}
-
-// For the first seconds of a session, until the overlay is first opened, a one-line hint names the keys that open it.
-void draw_native_settings_hint(UiCanvas& renderer) {
-    static std::uint64_t s_hint_until_ms = 0u;
-    static bool s_hint_done = false;
-    if (s_hint_done) {
-        return;
-    }
-    const std::uint64_t now = GetTickCount64();
-    if (s_hint_until_ms == 0u) {
-        s_hint_until_ms = now + 8000u;
-    }
-    if (now >= s_hint_until_ms ||
-        s_native_settings_visible.load(std::memory_order_relaxed)) {
-        s_hint_done = true;
-        return;
-    }
-    if (host_window::backbuffer_width < 427u || host_window::backbuffer_height < 240u) {
-        return;
-    }
-    static constexpr const char* kHint = "F1, VIEW+MENU OR MINUS+PLUS: SETTINGS";
-    const int scale = host_window::backbuffer_height >= 1440u ? 3 : (host_window::backbuffer_height >= 720u ? 2 : 1);
-    int text_w = -scale;
-    for (const char* ch = kHint; *ch != '\0'; ++ch) {
-        text_w += (*ch == ' ' ? 4 : 6) * scale;
-    }
-    const int pad = 4 * scale;
-    const int x = 8 * scale;
-    const int y = static_cast<int>(host_window::backbuffer_height) - 8 * scale - 7 * scale - pad * 2;
-    ui_rect(renderer, x, y, text_w + pad * 2, 7 * scale + pad * 2,
-            {0.02f, 0.025f, 0.035f, 1.0f});
-    ui_text(renderer, x + pad, y + pad, scale, kHint,
-            {0.88f, 0.94f, 0.96f, 1.0f});
 }
 
 }  // namespace host_window
@@ -5744,8 +5746,7 @@ void native_settings_input(NativeSettingsInput input, int arg) {
         break;
     }
     // The page and its rows wait while a question is up (keep the display? leave without applying?).
-    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() ||
-        s_mods_restart_ask.load(std::memory_order_acquire)) {
+    if (!visible || s_settings_leave_asking || s_joycon_pairing || settings_display_confirming() || restart_asking()) {
         return;
     }
     switch (input) {

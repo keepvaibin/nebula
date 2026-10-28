@@ -2,6 +2,7 @@
 // The curved-surface analysis and the model registry (curved_surfaces.h) on hand-built meshes.
 #include "galaxy/gx/curved_surfaces.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -169,6 +170,7 @@ int main() {
         passed &= expect(bottom_round, "an open edge of a smooth side keeps its normal");
         passed &= expect(cap_flat, "the flat cap's edges stay in its plane");
         passed &= expect(crack_free(s, p.positions, p.corners), "a pipe's shared edges bend alike on both sides");
+        passed &= expect(!s.flat_anything(), "a pipe's round side and rim are no flat solid");
         // A 16-gon's edge of 39.0 rounds onto its circle: the sagitta 100 (1 - cos(11.25 deg)) = 1.92.
         const float rim = midpoint_move(s, p.positions, c(0, 0), c(1, 1));
         passed &= expect(std::fabs(rim - 1.92f) < 0.1f, "a 16-gon's edge rounds onto its circle");
@@ -181,6 +183,7 @@ int main() {
         });
         const Surface s = analyse(m.positions, m.normals, m.corners);
         passed &= expect(largest_move(s, m.positions, m.corners) == 0.0f, "a cube's edges do not move");
+        passed &= expect(!s.flat_anything(), "a cube shaded by its faces needs nothing shaded flat");
     }
     {
         // The same box shaded soft: one normal per corner, averaged over its three faces. Still flat.
@@ -198,6 +201,9 @@ int main() {
         const Surface s = analyse(soft.positions, soft.normals, soft.corners);
         passed &= expect(largest_move(s, soft.positions, soft.corners) == 0.0f,
                          "a box with averaged corner normals does not puff into a pillow");
+        passed &= expect(!s.bends_anything() &&
+                             std::all_of(s.bends.begin(), s.bends.end(), [](const PlaceBend& b) { return b.flat; }),
+                         "a box shaded soft is shaded flat by the ray tracer, every corner");
     }
     {
         // A flat plank face drawn alone, its corner normals splayed 31 degrees for the look (the airship bridge's
@@ -208,6 +214,7 @@ int main() {
         const std::vector<Corner> corners = {c(0, 0), c(1, 1), c(2, 2), c(1, 1), c(3, 3), c(2, 2)};
         const Surface s = analyse(positions, normals, corners);
         passed &= expect(largest_move(s, positions, corners) == 0.0f, "a flat face's splayed normals do not dome it");
+        passed &= expect(s.flat_anything(), "a flat face's splayed normals are shaded flat");
     }
     {
         // The bridge's plank whole: a 50 x 115 x 490 box with 7-unit 45-degree bevels on its long edges, shaded soft
@@ -240,6 +247,7 @@ int main() {
         const Surface s = analyse(positions, normals, corners);
         passed &= expect(largest_move(s, positions, corners) < 0.5f, "a bevelled plank keeps its broad faces flat");
         passed &= expect(crack_free(s, positions, corners), "a bevelled plank's shared edges bend alike");
+        passed &= expect(s.flat_anything(), "a bevelled plank shaded soft across its bevels is shaded flat");
     }
     {
         // An octagonal prism shaded round (the art's coarse rings and barrels): its side faces at 45 degrees round.
@@ -270,6 +278,7 @@ int main() {
             round = std::fabs(dot(n, normals[static_cast<std::size_t>(i)]) - 1.0f) < 1e-4f;
         }
         passed &= expect(round, "an octagonal prism shaded round rounds");
+        passed &= expect(!s.flat_anything(), "an octagonal prism shaded round is no flat solid");
         // Onto its circle within 11 %: the sagitta 100 (1 - cos(22.5 deg)) = 7.61.
         const float move = midpoint_move(s, positions, c(0, 0), c(1, 1));
         passed &= expect(move > 0.85f * 7.61f && move < 7.61f, "an octagon's edge rounds onto its circle");
@@ -325,6 +334,31 @@ int main() {
         passed &= expect(std::fabs(edge_normal(s, 0u, 0u, 1u)[2]) > 0.9999f &&
                              std::fabs(edge_normal(s, 0u, 1u, 1u)[2]) > 0.9999f,
                          "a fold's sides bend alike");
+        passed &= expect(!s.flat_anything(), "a fold is no flat solid");
+    }
+    {
+        // A spike's tip (a nose, a horn): five faces meet at the apex under one averaged normal. More planes than a
+        // solid's corner holds: its shading stays smooth.
+        std::vector<Vec3> positions = {{0, 100, 0}};
+        for (int i = 0; i < 5; ++i) {
+            const float a = 6.2831853f * static_cast<float>(i) / 5.0f;
+            positions.push_back({30.0f * std::cos(a), 0.0f, 30.0f * std::sin(a)});
+        }
+        std::vector<Vec3> normals = {{0, 1, 0}};
+        for (int i = 0; i < 5; ++i) {
+            const float a = 6.2831853f * (static_cast<float>(i) + 0.5f) / 5.0f;
+            normals.push_back(unit({std::cos(a), 0.3f, std::sin(a)}));
+        }
+        std::vector<Corner> corners;
+        for (int i = 0; i < 5; ++i) {
+            const int j = i % 5 + 1;
+            const int k = (i + 1) % 5 + 1;
+            corners.insert(corners.end(), {c(0, 0), c(k, k), c(j, j)});
+        }
+        const Surface s = analyse(positions, normals, corners);
+        bool apex_flat = false;
+        for (std::uint32_t b = s.first[s.place[0]]; b < s.first[s.place[0] + 1u]; ++b) apex_flat |= s.bends[b].flat;
+        passed &= expect(!apex_flat, "a spike's tip, five faces under one normal, stays smooth");
     }
     {
         // The same pipe with its rim repeated under new indices for the cap: welded by value, the same bends.

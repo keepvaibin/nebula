@@ -619,10 +619,7 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = kRootCount;
     rsd.pParameters = params;
-    ComPtr<ID3DBlob> blob, error;
-    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) ||
-        FAILED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            IID_PPV_ARGS(&root_)))) {
+    if (!rt_prepare::root_signature(device_.Get(), rsd, root_)) {
         std::cerr << "[rt] root signature failed\n";
         shutdown();
         return false;
@@ -630,13 +627,13 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
     D3D12_COMPUTE_PIPELINE_STATE_DESC pso{};
     pso.pRootSignature = root_.Get();
     pso.CS = {g_rt_geometry_cs, sizeof(g_rt_geometry_cs)};
-    if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&geometry_pso_)))) {
+    if (!rt_prepare::compute(device_.Get(), pso, geometry_pso_)) {
         std::cerr << "[rt] geometry pipeline failed\n";
         shutdown();
         return false;
     }
     pso.CS = {g_rt_validate_cs, sizeof(g_rt_validate_cs)};
-    if (FAILED(device_->CreateComputePipelineState(&pso, IID_PPV_ARGS(&validate_pso_)))) {
+    if (!rt_prepare::compute(device_.Get(), pso, validate_pso_)) {
         std::cerr << "[rt] validation pipeline failed\n";
         shutdown();
         return false;
@@ -821,7 +818,12 @@ bool SceneRayTracer::initialize(ID3D12Device* device, std::uint64_t timestamp_fr
         lighting_enabled_ = false;
     }
     if (lighting_enabled_) {
-        static_cast<void>(reflections_.initialize(device_.Get(), timestamp_frequency, scene_format));
+        static_cast<void>(reflections_.initialize(device_.Get(), timestamp_frequency, scene_format, quality_));
+        // A start that prepares the pipeline library makes the reflections' pipelines of the other qualities too (High
+        // samples the hits' textures, the others do not), so every quality loads from it after (rt_prepare.h).
+        if (!rt_prepare::prepared()) {
+            static_cast<void>(RtReflections::prepare_pipelines(device_.Get(), scene_format, high_quality_ ? 0u : 1u));
+        }
     }
     // The renderer draws the scene into the HDR scene EFB only with a camera to bring it back.
     if (!create_camera_pipelines(scene_format, display_format)) {
@@ -3136,10 +3138,7 @@ std::uint32_t SceneRayTracer::sample_factor(std::uint32_t width, std::uint32_t h
 
 bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     const auto serialize = [&](const D3D12_ROOT_SIGNATURE_DESC& desc, ComPtr<ID3D12RootSignature>& out) {
-        ComPtr<ID3DBlob> blob, error;
-        return SUCCEEDED(D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) &&
-               SUCCEEDED(device_->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                                      IID_PPV_ARGS(&out)));
+        return rt_prepare::root_signature(device_.Get(), desc, out);
     };
     // Compiled in parallel (pso_jobs.h), each group's failure handled once they are joined (after the emit root's):
     // 1 the star sphere, 2 de-lighting, 3 the emitting triangles, 4 the traced sky, 5 the capture, 6 the emitters.
@@ -3411,7 +3410,7 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
         light_tex.NumRenderTargets = 1u;
         light_tex.RTVFormats[0] = DXGI_FORMAT_R16G16B16A16_FLOAT;
         light_tex.SampleDesc.Count = 1u;
-        if (FAILED(device_->CreateGraphicsPipelineState(&light_tex, IID_PPV_ARGS(&light_tex_pso_)))) {
+        if (!rt_prepare::graphics(device_.Get(), light_tex, light_tex_pso_)) {
             return false;
         }
         D3D12_DESCRIPTOR_HEAP_DESC rtv_heap{};
@@ -3484,17 +3483,17 @@ bool SceneRayTracer::create_lighting_pipelines(DXGI_FORMAT scene_format) {
     graphics.NumRenderTargets = 1u;
     graphics.RTVFormats[0] = scene_format;
     graphics.SampleDesc.Count = 1u;
-    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&composite_pso_)))) {
+    if (!rt_prepare::graphics(device_.Get(), graphics, composite_pso_)) {
         return false;
     }
     // The engine's clear surfaces over the picture (rt_lighting.hlsl ClearCompositePS): none without it.
     graphics.PS = {g_rt_clear_composite_ps, sizeof(g_rt_clear_composite_ps)};
-    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&clear_composite_pso_)))) {
+    if (!rt_prepare::graphics(device_.Get(), graphics, clear_composite_pso_)) {
         clear_composite_pso_.Reset();
     }
     // The waterfall mist over the picture (rt_lighting.hlsl MistCompositePS): none without it.
     graphics.PS = {g_rt_mist_composite_ps, sizeof(g_rt_mist_composite_ps)};
-    if (FAILED(device_->CreateGraphicsPipelineState(&graphics, IID_PPV_ARGS(&mist_composite_pso_)))) {
+    if (!rt_prepare::graphics(device_.Get(), graphics, mist_composite_pso_)) {
         mist_composite_pso_.Reset();
     }
     if (!create_buffer(kReprojectEntryBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,

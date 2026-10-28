@@ -836,6 +836,15 @@ std::filesystem::path movie_directory() {
     return folder;
 }
 
+std::filesystem::path render_config_path() {
+    return config_path();
+}
+
+std::filesystem::path shader_cache_directory() {
+    const std::filesystem::path data = galaxy::nebula_data_directory();
+    return data.empty() ? std::filesystem::path("generated") / "shadercache" : data / "shadercache" / "RMGE01";
+}
+
 void set_movie_mod_folders(std::vector<std::filesystem::path> folders) {
     const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
     s_movie_folders = std::move(folders);

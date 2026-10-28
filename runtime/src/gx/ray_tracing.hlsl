@@ -52,6 +52,9 @@ static const uint kVertexMatrixIndex = 120u;
 static const uint kVertexNormal = 12u;
 static const uint kVertexColor = 48u;
 static const uint kVertexUv = 56u;
+// mtx_indices[2] (byte 128), bit 15: a flat solid's corner shaded soft (vertex_loader.h kVertexFlatCorner).
+static const uint kVertexMatrixIndex2 = 128u;
+static const uint kVertexFlatCorner = 0x8000u;
 static const uint kVsFlags = 200u;
 static const uint kVsPaletteBase = 204u;
 static const uint kVsInlinePosMatrix = 224u;
@@ -259,6 +262,8 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     const bool indexed = (draw.y & 2u) != 0u;
     const bool wide = (draw.y & 4u) != 0u;
     float3 corners[3];
+    float3 corner_normals[3];
+    bool flat_corner[3];
     uint normals[3];
     float2 uvs[3];
     uint colours[3];
@@ -267,9 +272,13 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         const uint i = local * 3u + k;
         const uint vertex = indexed ? load_index(draw.w, i, wide) : i;
-        float3 normal;
-        corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, palette_base, normal);
-        normals[k] = pack_vertex_normal(normal);
+        corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, palette_base, corner_normals[k]);
+        {
+            const uint at = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride + kVertexMatrixIndex2;
+            const uint word = (draw.y & 1u) != 0u ? g_resident.Load(min(at, g_resident_limit))
+                                                  : g_vertex_ring.Load(min(at, g_vertex_ring_limit));
+            flat_corner[k] = (word & kVertexFlatCorner) != 0u;
+        }
         vertex_uv(draw, vertex, uvs[k], colours[k]);
         // The texture slots' own coordinates (RtDraw.vertex_count bits 24-27 and 28-31: their generators + 1).
         uvs2[k] = uvs[k];
@@ -293,6 +302,18 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
                 }
             }
         }
+    }
+    // A flat solid's corner shaded soft (a box's or a bevel's averaged normal) shades with its face's own normal, on
+    // the side its normal faces: the geometry is flat there, and the soft normal turned each face of a block from lit
+    // to shaded in the same band under the traced sun (curved_surfaces.h PlaceBend::flat).
+    const float3 face = cross(corners[1] - corners[0], corners[2] - corners[0]);
+    const float face_length = length(face);
+    [unroll] for (uint c = 0u; c < 3u; ++c) {
+        float3 n = corner_normals[c];
+        if (flat_corner[c] && face_length > 0.0f && dot(n, n) > 0.0f) {
+            n = face / face_length * (dot(face, n) < 0.0f ? -1.0f : 1.0f);
+        }
+        normals[c] = pack_vertex_normal(n);
     }
     if ((g_frame_flags & 2u) != 0u) {
         const uint uv_address = tri * 72u;

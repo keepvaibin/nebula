@@ -29,7 +29,8 @@ namespace Nebula.Launcher
             Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                // The in-game menu runs these: the DLSS download, and a restart once the game has exited.
+                // The in-game menu runs these: the DLSS download, and a restart once the game has exited (--record: a
+                // diagnostics run).
                 if (args.Length > 0 && string.Equals(args[0], "--install-dlss", StringComparison.OrdinalIgnoreCase))
                 {
                     if (GraphicsSettings.DlssInstalled()) return 0;
@@ -41,7 +42,10 @@ namespace Nebula.Launcher
                     int.TryParse(args[1], out restartAfter))
                 {
                     WaitForExit(restartAfter);
-                    string restartError = new LaunchSession().TryLaunch();
+                    var restart = new LaunchSession();
+                    if (args.Length > 2 && string.Equals(args[2], "--record", StringComparison.OrdinalIgnoreCase))
+                        restart.Recording = RecordingMode.Lightweight;
+                    string restartError = restart.TryLaunch();
                     if (restartError == null) return 0;
                     MessageBox.Show(restartError, "Nebula", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     return 1;

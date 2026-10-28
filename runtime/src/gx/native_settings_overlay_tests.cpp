@@ -561,10 +561,20 @@ int main() {
     passed &= expect(snapshot.tab == 5u && snapshot.row_count >= 3u, "mods page has its two lists and its buttons");
     passed &= expect(key(VK_TAB), "Tab enters the system page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
-    passed &= expect(snapshot.tab == 6u && snapshot.row_count == 7u, "system page has the graphics card and six status rows");
+    passed &= expect(snapshot.tab == 6u && snapshot.row_count == 8u,
+                     "system page has the graphics card, six status rows and diagnostics");
     passed &= expect(snapshot.row == 0u && key(VK_RIGHT) && key(VK_LEFT) &&
                          galaxy::gx::native_settings_overlay_snapshot().pending_changes == 0u,
                      "the graphics card row cannot be changed in game");
+    for (int i = 0; i < 7; ++i) key(VK_DOWN);
+    using galaxy::gx::NativeSettingsStatus;
+    passed &= expect(galaxy::gx::native_settings_overlay_snapshot().row == 7u && key(VK_SPACE) &&
+                         galaxy::gx::native_settings_view().status == NativeSettingsStatus::DiagnosticsAsk,
+                     "diagnostics' Record asks to restart");
+    passed &= expect(key(VK_ESCAPE) && galaxy::gx::native_settings_view().status != NativeSettingsStatus::DiagnosticsAsk &&
+                         galaxy::gx::native_settings_overlay_snapshot().visible,
+                     "Escape answers not now and keeps the menu");
+    for (int i = 0; i < 7; ++i) key(VK_UP);
     passed &= expect(key(VK_TAB), "Tab enters the advanced page");
     snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(snapshot.tab == 7u && snapshot.row_count == 5u,

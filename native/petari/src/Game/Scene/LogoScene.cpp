@@ -12,6 +12,7 @@
 #include "Game/Util/LayoutUtil.hpp"
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
+#include "Game/Screen/NebulaRtPrepare.hpp"
 #include <cstring>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
@@ -81,6 +82,9 @@ namespace {
     NEW_NERVE(LogoSceneStrapDisplay, LogoScene, StrapDisplay);
     NEW_NERVE(LogoSceneStrapFadeout, LogoScene, StrapFadeout);
     NEW_NERVE(LogoSceneMountGameData, LogoScene, MountGameData);
+#ifdef TARGET_PC
+    NEW_NERVE(LogoSceneWaitRayTracing, LogoScene, WaitRayTracing);
+#endif
     NEW_NERVE(LogoSceneWaitReadDoneSystemArchive, LogoScene, WaitReadDoneSystemArchive);
     NEW_NERVE(LogoSceneDeactive, LogoScene, Deactive);
 };  // namespace
@@ -260,8 +264,21 @@ void LogoScene::exeMountGameData() {
         return;
     }
 
+#ifdef TARGET_PC
+    setNerve(GET_NERVE_ANON(LogoSceneWaitRayTracing));
+#else
     setNerve(GET_NERVE_ANON(LogoSceneDeactive));
+#endif
 }
+
+#ifdef TARGET_PC
+// Ray tracing's shaders compile before the title (NebulaRtPrepare): the title waits for them and their screen.
+void LogoScene::exeWaitRayTracing() {
+    if (!NebulaRtPrepare::isHolding()) {
+        setNerve(GET_NERVE_ANON(LogoSceneDeactive));
+    }
+}
+#endif
 
 void LogoScene::exeWaitReadDoneSystemArchive() {
     if (GameSystemFunction::isDoneLoadSystemArchive()) {

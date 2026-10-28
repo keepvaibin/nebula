@@ -13,6 +13,7 @@
 #include "galaxy/gx/game_asset_extract.h"
 #include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/rt_prepare.h"
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/uber_constants.h"
@@ -554,6 +555,23 @@ bool g_selected_adapter_valid = false;
     constexpr std::uint64_t kNegligibleDedicatedBytes = 256ull * 1024ull * 1024ull;
     return dedicated <= kNegligibleDedicatedBytes &&
         shared >= dedicated * 8ull;
+}
+
+// The adapter and its user-mode driver's version, as the ray tracing pipeline library records them (rt_prepare.h).
+rt_prepare::Identity rt_identity(IDXGIAdapter1* adapter, const DXGI_ADAPTER_DESC1& desc) {
+    char text[48]{};
+    std::snprintf(text, sizeof(text), "%04x:%04x:%08x:%02x", static_cast<unsigned>(desc.VendorId & 0xFFFFu),
+                  static_cast<unsigned>(desc.DeviceId & 0xFFFFu), static_cast<unsigned>(desc.SubSysId),
+                  static_cast<unsigned>(desc.Revision & 0xFFu));
+    rt_prepare::Identity identity{text, {}};
+    LARGE_INTEGER umd{};
+    if (adapter != nullptr && SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umd))) {
+        std::snprintf(text, sizeof(text), "%u.%u.%u.%u", static_cast<unsigned>(HIWORD(umd.HighPart)),
+                      static_cast<unsigned>(LOWORD(umd.HighPart)), static_cast<unsigned>(HIWORD(umd.LowPart)),
+                      static_cast<unsigned>(LOWORD(umd.LowPart)));
+        identity.driver = text;
+    }
+    return identity;
 }
 
 }  // namespace
@@ -1977,16 +1995,26 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                 sizeof(options5))) &&
             options5.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
         {
-            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_5};
+            // What the ray tracer starts with (SceneRayTracer::create_lighting_pipelines): DXR 1.1, and its textures,
+            // TEV records and buffers read straight from the descriptor heap (shader model 6.6, resource binding
+            // tier 3), on dedicated video memory.
+            D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_6};
+            D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
             const bool offered =
                 dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
                 SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
                                                        sizeof(shader_model))) &&
-                shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_5 && !adapter_is_unified_memory();
+                shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
+                SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options))) &&
+                options.ResourceBindingTier >= D3D12_RESOURCE_BINDING_TIER_3 && !adapter_is_unified_memory();
             host_window::ray_tracing_offered.store(offered, std::memory_order_relaxed);
             record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
                                   adapter_desc.SubSysId, adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER,
                                   offered);
+            if (offered) {
+                rt_prepare::identify(rt_identity(adapter.Get(), adapter_desc));
+                host_window::ray_tracing_prepared.store(rt_prepare::prepared(), std::memory_order_relaxed);
+            }
         }
         RenderFeatureCaps caps{};
         caps.d3d12_device_created = true;
@@ -2028,7 +2056,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             host_window::ray_tracing_offered.load(std::memory_order_relaxed),
             host_window::ray_tracing_offered.load(std::memory_order_relaxed)
                 ? "ray-traced ambient occlusion (GRAPHICS: RAY TRACING)"
-            : dxr_runtime_supported ? "needs DXR 1.1, shader model 6.5 and dedicated video memory"
+            : dxr_runtime_supported ? "needs DXR 1.1, shader model 6.6, binding tier 3 and dedicated memory"
                                     : "D3D12 raytracing tier is unsupported");
         caps.streamline = make_render_feature_status(
             caps.streamline_bridge_built,
@@ -4543,12 +4571,24 @@ void RendererD3D12::take_started_ray_tracer() {
 }
 
 void RendererD3D12::reconcile_ray_tracing() {
-    const bool wanted =
-        get_render_config().ray_tracing_enabled && host_window::ray_tracing_offered.load(std::memory_order_relaxed);
+    const bool offered = host_window::ray_tracing_offered.load(std::memory_order_relaxed);
+    const bool wanted = get_render_config().ray_tracing_enabled && offered;
     // REFLECTIONS switches live, at a frame's start.
     ray_tracer_->set_surface_reflections(rt_effect_on(get_render_config(), RtEffect::Reflections));
     if (rt_starting_.valid()) {
         return;
+    }
+    // The first call (initialize): Setup's request prepares the pipeline library with RAY TRACING off too (that tracer
+    // is dropped once it is done); a request the GPU or the library leaves nothing to do for is withdrawn.
+    const bool first = !rt_first_reconciled_;
+    rt_first_reconciled_ = true;
+    if (first && rt_prepare::preparation_requested()) {
+        if (!offered || rt_prepare::prepared()) {
+            rt_prepare::withdraw_request();
+        } else if (!wanted && device_) {
+            start_ray_tracer(true);
+            return;
+        }
     }
     // A quality change restarts the tracer (its rays, sample grid and pipelines are chosen when it starts): off this
     // frame, on again the next, as the setting's off and on.
@@ -4571,14 +4611,24 @@ void RendererD3D12::reconcile_ray_tracing() {
         std::cerr << (requality ? "[rt] quality changed: restarting\n" : "[rt] off\n");
         return;
     }
-    start_ray_tracer();
+    // A start in the game compiles nothing: while the library is not prepared, ray tracing waits for the next start,
+    // which prepares it before the title (the settings ask to restart).
+    if (!first && !rt_prepare::prepared()) {
+        if (!rt_waiting_restart_) {
+            rt_waiting_restart_ = true;
+            std::cerr << "[rt] waits for the next start: its pipelines are not prepared\n";
+        }
+        return;
+    }
+    start_ray_tracer(first);
 }
 
-// Starting a tracer builds its pipelines and buffers (half a second on a warm driver cache, about two on a cold one):
-// on a worker, so turning RAY TRACING on (or starting the game with it) never holds the window; the frames draw
-// without ray tracing until reconcile_ray_tracing takes it over. The device is free-threaded, and the worker touches
-// only its own tracer.
-void RendererD3D12::start_ray_tracer() {
+// Starting a tracer builds its pipelines (from the ray tracing pipeline library, rt_prepare.h) and buffers: on a
+// worker, so turning RAY TRACING on never holds the window; the frames draw without ray tracing until
+// reconcile_ray_tracing takes it over. The device is free-threaded, and the worker touches only its own tracer. A start
+// whose library is not prepared compiles every pipeline of every quality into it; the `first` (the renderer's, before
+// the game starts) tells the host, which holds the game in the preparation window meanwhile.
+void RendererD3D12::start_ray_tracer(bool first) {
     char value[8]{};
     std::size_t length = 0u;
     const bool validate =
@@ -4588,24 +4638,45 @@ void RendererD3D12::start_ray_tracer() {
     const D3D12_RESOURCE_DESC efb = efb_depth_ ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
     const auto efb_width = static_cast<std::uint32_t>(efb.Width);
     const auto efb_height = static_cast<std::uint32_t>(efb.Height);
+    if (first) {
+        rt_prepare::set_first_start(rt_prepare::FirstStart::Opening);
+    }
     rt_starting_ = std::async(
         std::launch::async,
         [device = device_, frequency = timestamp_frequency_, validate, views = rt_texture_views_,
-         delight = rt_delight_views_, efb_width, efb_height]() -> std::unique_ptr<SceneRayTracer> {
+         delight = rt_delight_views_, efb_width, efb_height, first]() -> std::unique_ptr<SceneRayTracer> {
             galaxy::host::name_current_thread(L"Nebula RT Start");
+            // However the start ends, the host's wait for it does.
+            const galaxy::ScopeExit first_done([first]() noexcept {
+                if (first) rt_prepare::set_first_start(rt_prepare::FirstStart::None);
+            });
+            rt_prepare::open(device.Get());
+            const bool preparing = !rt_prepare::prepared();
+            rt_prepare::reset();
+            if (first) {
+                rt_prepare::set_first_start(preparing ? rt_prepare::FirstStart::Compiling : rt_prepare::FirstStart::None);
+            }
+            std::unique_ptr<SceneRayTracer> started;
             try {
                 auto tracer = std::make_unique<SceneRayTracer>();
                 tracer->set_texture_views(views.cpu, views.first, views.increment);
                 tracer->set_delight_views(delight.cpu, delight.first, delight.increment);
-                if (!tracer->initialize(device.Get(), frequency, validate, kEfbHdrColorFormat, kEfbColorFormat)) {
-                    return nullptr;
+                if (tracer->initialize(device.Get(), frequency, validate, kEfbHdrColorFormat, kEfbColorFormat)) {
+                    tracer->prepare_buffers(efb_width, efb_height);
+                    started = std::move(tracer);
                 }
-                tracer->prepare_buffers(efb_width, efb_height);
-                return tracer;
             } catch (const std::exception& e) {
                 std::cerr << "[rt] start failed: " << e.what() << '\n';
-                return nullptr;
             }
+            const bool complete = started != nullptr && started->complete();
+            rt_prepare::finish_start(preparing && complete);
+            host_window::ray_tracing_prepared.store(rt_prepare::prepared(), std::memory_order_relaxed);
+            if (complete) {
+                rt_prepare::withdraw_request();
+            }
+            std::cerr << "[rt-prepare] start " << (complete ? "complete" : "incomplete") << ", "
+                      << rt_prepare::compiled() << " pipelines compiled\n";
+            return started;
         });
 }
 
@@ -9650,7 +9721,6 @@ bool RendererD3D12::present(
     command_list_->RSSetScissorRects(1, &overlay_sci);
 
     host_window::draw_native_settings_overlay(*this);
-    host_window::draw_native_settings_hint(*this);
     host_window::draw_home_menu(*this);
 
     if (capture_backbuffer) {

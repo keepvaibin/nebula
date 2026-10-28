@@ -44,6 +44,11 @@ struct GxVertexOut {
     std::uint32_t curve[3];
 };
 static_assert(sizeof(GxVertexOut) == 144, "fixed 144-byte vertex stride");
+// mtx_indices[2] bit 15: the corner is a flat solid's normal shaded soft (curved_surfaces.h PlaceBend::flat); ray
+// tracing shades its face flat (ray_tracing.hlsl kVertexFlatCorner). Bits 0-7 hold texture matrix 7's index, bits
+// 16-31 the second crease neighbour.
+inline constexpr std::uint32_t kVertexFlatCorner = 0x8000u;
+static_assert(offsetof(GxVertexOut, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
 static_assert(sizeof(GxVertexOut) % 16u == 0u,
               "vertex upload batching requires 16-byte stride alignment");
 

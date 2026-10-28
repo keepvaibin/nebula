@@ -737,7 +737,6 @@ bool present_grid(std::int64_t& retrace_ns, std::int64_t& period_ns, std::int64_
 // The overlay, the HOME Menu and the hint are the platform's own screens on SDL platforms (Android: the activity's).
 void draw_native_settings_overlay(UiCanvas&) {}
 void draw_home_menu(UiCanvas&) {}
-void draw_native_settings_hint(UiCanvas&) {}
 
 std::vector<const char*> vulkan_instance_extensions() {
     Uint32 count = 0;

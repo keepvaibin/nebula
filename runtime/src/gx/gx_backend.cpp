@@ -2107,27 +2107,7 @@ bool GxBackend::initialize(int w, int h) {
     renderer_.create_first_use_resources();
     boot_step("first-use resources");
 
-    std::filesystem::path cache_dir;
-#if defined(_WIN32)
-    {
-        wchar_t* local_app = nullptr;
-        std::size_t local_app_len = 0;
-        if (_wdupenv_s(&local_app, &local_app_len, L"LOCALAPPDATA") == 0 && local_app != nullptr) {
-            cache_dir = std::filesystem::path(local_app)
-                / L"Nebula" / L"shadercache" / L"RMGE01";
-            std::free(local_app);
-        } else {
-            if (local_app) std::free(local_app);
-            cache_dir = std::filesystem::path("generated") / "shadercache";
-        }
-    }
-#else
-    if (const std::filesystem::path data = galaxy::nebula_data_directory(); !data.empty()) {
-        cache_dir = data / "shadercache" / "RMGE01";
-    } else {
-        cache_dir = std::filesystem::path("generated") / "shadercache";
-    }
-#endif
+    const std::filesystem::path cache_dir = shader_cache_directory();
 
     // Few compile workers on small CPUs; more on large ones, to warm cached PSOs early.
     const unsigned logical_cores = std::thread::hardware_concurrency();
@@ -10746,7 +10726,9 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
         (desc.normal.vcd != VcdType::Index8 && desc.normal.vcd != VcdType::Index16) || desc.normal.count != 0u) {
         return false;
     }
-    return curved::find_model(state_.array_base(0u)) != nullptr;
+    // A model kept only for its flat corners (curved_surfaces.h Model::bends) draws plainly.
+    const std::shared_ptr<const curved::Model> model = curved::find_model(state_.array_base(0u));
+    return model != nullptr && model->bends;
 }
 
 gpu::Pipeline* GxBackend::flush_draw_state(

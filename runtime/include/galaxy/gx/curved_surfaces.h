@@ -50,10 +50,15 @@ struct Corner {
 // No place (a crease neighbour where there is none).
 inline constexpr std::uint16_t kNoPlace = 0xFFFFu;
 
-// A normal index's displacement normal at a place.
+// A normal index's displacement normal at a place, and whether it is a flat solid's normal shaded soft for the look:
+// its group is no sampled surface, its faces lie in at most three planes each 40 degrees or more from the others (a
+// box's corner, a bevel, a plank's splayed end: one plane) and the normal stands off one of them. Ray tracing shades
+// such a corner with its face's own normal (ray_tracing.hlsl GeometryCS): under a traced sun the soft normal turned
+// each face of a block from lit to shaded in the same band (Bowser's Star Reactor). The raster keeps it.
 struct PlaceBend {
     std::uint16_t normal = 0;
     Vec3 bend{};
+    bool flat = false;
 };
 
 // A model's curved surfaces. Positions equal by value are one place (they bend alike); places are numbered below
@@ -65,6 +70,7 @@ struct Surface {
     std::vector<std::uint32_t> first;              // per place, and one past the last: its range in `bends`
     std::vector<PlaceBend> bends;                  // by place, then by normal index; a normal index not listed is zero
     [[nodiscard]] bool bends_anything() const noexcept;
+    [[nodiscard]] bool flat_anything() const noexcept;
 };
 
 // The analysis of a model's triangles (three corners each). Triangles with an out-of-range index or a repeated
@@ -94,8 +100,13 @@ struct Model {
     std::vector<std::uint32_t> first;          // per position, and one past the last: its range in the two below
     std::vector<std::uint16_t> bend_normal;    // normal index, ascending within a position's range
     std::vector<std::uint32_t> bend;           // its displacement normal, packed
+    std::vector<std::uint8_t> bend_flat;       // PlaceBend::flat
+    // Whether anything bends (the curved stages draw it); a model kept only for its flat corners draws plainly.
+    bool bends = false;
     // The packed displacement normal of a vertex's corner (zero where it has none).
     [[nodiscard]] std::uint32_t bend_of(std::uint32_t position, std::uint32_t normal) const noexcept;
+    // Whether a vertex's corner is a flat solid's normal shaded soft (PlaceBend::flat).
+    [[nodiscard]] bool flat_of(std::uint32_t position, std::uint32_t normal) const noexcept;
 };
 
 // FNV-1a over at most kFingerprintWords 8-byte words spread evenly across the bytes (the first and the last among
@@ -106,8 +117,8 @@ inline constexpr std::size_t kFingerprintWords = 64u;
 [[nodiscard]] std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept;
 
 // The models by their position array's GX address (thread-safe: the game registers while the renderer decodes). A
-// model in which nothing bends is not kept: its draws stay plain triangles; the address's earlier model, if any, is
-// forgotten all the same.
+// model in which nothing bends and no corner is flat is not kept: its draws stay plain triangles; the address's
+// earlier model, if any, is forgotten all the same.
 void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface);
 [[nodiscard]] std::shared_ptr<const Model> find_model(std::uint32_t array_address);
 // A model whose array no longer holds its bytes (its memory reused): forgotten.

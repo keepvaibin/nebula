@@ -133,7 +133,7 @@ namespace NebulaUi {
     void setInfluencedAlphaRecursive(Pane* pPane, s32 depth);
     // Nebula's screens with small text ask the host for the 2D layer at the window's resolution while they show (the
     // HUD otherwise follows the internal scale, and small letters lose strokes): one bit each.
-    enum { SharpBoard = 1, SharpSettings = 2 };
+    enum { SharpBoard = 1, SharpSettings = 2, SharpPrepare = 4 };
     void setSharp(u32 screen, bool shown);
     // The screen in screen units (LayoutAspect's canvas, its width made square) and the root's horizontal scale.
     void readScreen(f32* pScaleX, f32* pWidth, f32* pHeight);

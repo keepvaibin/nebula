@@ -1151,7 +1151,10 @@ private:
     };
     RtViewTable rt_texture_views_{};
     RtViewTable rt_delight_views_{};
-    void start_ray_tracer();
+    void start_ray_tracer(bool first);
+    // reconcile_ray_tracing's first call (initialize's) is past; RAY TRACING waits for the next start (logged once).
+    bool rt_first_reconciled_ = false;
+    bool rt_waiting_restart_ = false;
     void take_started_ray_tracer();
     // Waits for a tracer still starting and drops it (the device goes away, or the renderer shuts down).
     void abandon_ray_tracer_start() noexcept;

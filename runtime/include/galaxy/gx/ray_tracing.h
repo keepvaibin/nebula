@@ -95,6 +95,10 @@ public:
         return prepared_width_ == width && prepared_height_ == height;
     }
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // Every pipeline it has was made: the lighting's, the engine's and the reflections' (rt_prepare.h's complete start).
+    [[nodiscard]] bool complete() const noexcept {
+        return ready_ && lighting_enabled_ && engine_ready_ && reflections_.ready();
+    }
     // The quality it started with (config rt_quality: 0 medium, 1 high, 2 low).
     [[nodiscard]] unsigned quality() const noexcept { return quality_; }
 

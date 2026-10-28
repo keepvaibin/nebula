@@ -3,6 +3,7 @@
 // and the tone curve. RendererD3D12::begin_hdr_scene / end_hdr_scene swap the EFBs.
 #include "galaxy/gx/ray_tracing.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/rt_prepare.h"
 
 #include "rt_camera_down_cs.h"
 #include "rt_camera_ps.h"
@@ -114,11 +115,7 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = 6u;
     rsd.pParameters = params;
-    ComPtr<ID3DBlob> blob;
-    ComPtr<ID3DBlob> error;
-    if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &error)) ||
-        FAILED(device_->CreateRootSignature(0u, blob->GetBufferPointer(), blob->GetBufferSize(),
-                                            IID_PPV_ARGS(&camera_root_)))) {
+    if (!rt_prepare::root_signature(device_.Get(), rsd, camera_root_)) {
         std::cerr << "[rt] camera root signature failed\n";
         return false;
     }
@@ -126,7 +123,7 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
         desc.pRootSignature = camera_root_.Get();
         desc.CS = {code, size};
-        return SUCCEEDED(device_->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+        return rt_prepare::compute(device_.Get(), desc, out);
     };
     const auto graphics = [&](const void* code, std::size_t size, DXGI_FORMAT format, ComPtr<ID3D12PipelineState>& out) {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
@@ -142,7 +139,7 @@ bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORM
         desc.NumRenderTargets = 1u;
         desc.RTVFormats[0] = format;
         desc.SampleDesc.Count = 1u;
-        return SUCCEEDED(device_->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&out)));
+        return rt_prepare::graphics(device_.Get(), desc, out);
     };
     if (!compute(g_rt_camera_down_cs, sizeof(g_rt_camera_down_cs), camera_down_pso_) ||
         !compute(g_rt_camera_up_cs, sizeof(g_rt_camera_up_cs), camera_up_pso_) ||

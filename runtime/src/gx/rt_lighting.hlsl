@@ -183,11 +183,12 @@ static const float3 kWaterAttenuation = float3(0.00175f, 0.000325f, 0.000095f);
 static const float3 kWaterBeam = float3(0.0018f, 0.0004f, 0.00015f);
 // The water's own light (its path radiance seen sideways) per unit of the light falling on it (a white surface under
 // that light: 1): near the surface the upwelling radiance is one to two orders of magnitude below the downwelling and
-// the horizontal lies between (Mobley, Ocean Optics Web Book, Visualizing Radiances): a seventh of the downwelling,
-// in coastal water's colour, its single-scattering albedo b / c (particles scattering about 0.15, 0.17, 0.19 per metre
-// against an absorption of 0.35, 0.07, 0.08: pure water's, Pope and Fry 1997, with the dissolved organic matter that
-// absorbs blue, Jerlov's coastal types): 0.30, 0.71, 0.70, here as a share of green's.
-static const float3 kWaterLight = float3(0.30f, 0.71f, 0.70f) * (0.15f / 0.71f);
+// the horizontal lies between (Mobley, Ocean Optics Web Book, Visualizing Radiances): a fifth of the downwelling, the
+// lighter side of that range (the owner, 27 October: Deep Dark's blue a little lighter; a seventh before), in coastal
+// water's colour, its single-scattering albedo b / c (particles scattering about 0.15, 0.17, 0.19 per metre against
+// an absorption of 0.35, 0.07, 0.08: pure water's, Pope and Fry 1997, with the dissolved organic matter that absorbs
+// blue, Jerlov's coastal types): 0.30, 0.71, 0.70, here as a share of green's.
+static const float3 kWaterLight = float3(0.30f, 0.71f, 0.70f) * (0.20f / 0.71f);
 
 // The light water scatters towards a ray in it, `depth` eye units under its surface: its share of the stage's full
 // light `full` falling on the water, dimmed by the water above. The stage's light, not what the traced scene sees

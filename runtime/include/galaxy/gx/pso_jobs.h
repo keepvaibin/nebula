@@ -8,9 +8,9 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
-#include <chrono>
+#include "galaxy/gx/rt_prepare.h"
+
 #include <cstdint>
-#include <cstdio>
 #include <future>
 #include <vector>
 
@@ -23,7 +23,8 @@ public:
     PsoJobs& operator=(const PsoJobs&) = delete;
     ~PsoJobs() { wait(); }
 
-    // Starts `out`'s compile (`root` and `code` must outlive wait()); `group` (0-63) names it in wait()'s result.
+    // Starts `out`'s compile (`root` and `code` must outlive wait()); `group` (0-63) names it in wait()'s result. It
+    // loads from the ray tracing pipeline library when the library has it (rt_prepare.h).
     void compute(ID3D12Device* device, ID3D12RootSignature* root, const void* code, std::size_t bytes,
                  Microsoft::WRL::ComPtr<ID3D12PipelineState>& out, unsigned group = 0u) {
         jobs_.push_back({std::async(std::launch::async,
@@ -31,19 +32,7 @@ public:
                                         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
                                         desc.pRootSignature = root;
                                         desc.CS = {code, bytes};
-                                        const auto start = std::chrono::steady_clock::now();
-                                        const bool made =
-                                            SUCCEEDED(device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
-                                        // A compile of seconds is the driver's cache missing it: named by its
-                                        // shader's size (the generated rt_*_cs.h arrays).
-                                        const double ms = std::chrono::duration<double, std::milli>(
-                                                              std::chrono::steady_clock::now() - start)
-                                                              .count();
-                                        if (ms >= 2000.0) {
-                                            std::fprintf(stderr, "[pso-jobs] compute shader of %zu bytes: %.0f ms\n",
-                                                         bytes, ms);
-                                        }
-                                        return made;
+                                        return rt_prepare::compute(device, desc, out);
                                     }),
                          group});
     }

@@ -72,6 +72,10 @@ const double kTurn = std::cos(radians(62.0));
 // crease's normal.
 const double kAgree = std::cos(radians(10.0));
 constexpr double kInPlane = 0.5;
+// A flat solid shaded soft (PlaceBend::flat): its faces' planes 40 degrees or more apart, its normal 10 degrees or more
+// off one of them.
+const double kSolidCrease = std::cos(radians(40.0));
+const double kSplayed = std::cos(radians(10.0));
 // A T-junction's line bends under a normal more than this far off its perpendicular.
 constexpr double kBow = 1e-5;
 
@@ -340,6 +344,30 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
     return true;
 }
 
+// Whether a group of corners with normal n0 is a flat solid's corner shaded soft (PlaceBend::flat): its faces in at
+// most three planes, each 40 degrees or more from the others (a box's corner or edge, a bevel; a cylinder's sides,
+// 22.5 degrees apart, and a sphere's or a character's many facets are not), and the normal 10 degrees or more off one
+// of them (a normal on its faces shades them flat already).
+bool flat_solid(const D3& n0, std::span<const At* const> group) {
+    std::array<D3, 3> planes{};
+    std::size_t count = 0u;
+    for (const At* c : group) {
+        bool known = false;
+        for (std::size_t i = 0; i < count && !known; ++i) known = dot(planes[i], c->face) >= kParallel;
+        if (known) continue;
+        if (count == planes.size()) return false;
+        planes[count++] = c->face;
+    }
+    bool splayed = false;
+    for (std::size_t i = 0; i < count; ++i) {
+        for (std::size_t j = i + 1u; j < count; ++j) {
+            if (dot(planes[i], planes[j]) > kSolidCrease) return false;
+        }
+        splayed = splayed || std::fabs(dot(planes[i], n0)) < kSplayed;
+    }
+    return count != 0u && splayed;
+}
+
 // T-junctions: (inner place, edge end, edge end) where a place lies inside another edge. Places are entered in a
 // grid of the median edge's size; each edge looks in the cells along it (samples half a cell apart and the cells
 // around each, which hold every point of the edge).
@@ -418,6 +446,10 @@ bool Surface::bends_anything() const noexcept {
     const auto bends_at = [](const Vec3& v) { return v[0] != 0.0f || v[1] != 0.0f || v[2] != 0.0f; };
     return std::any_of(crease.begin(), crease.end(), bends_at) ||
            std::any_of(bends.begin(), bends.end(), [&](const PlaceBend& b) { return bends_at(b.bend); });
+}
+
+bool Surface::flat_anything() const noexcept {
+    return std::any_of(bends.begin(), bends.end(), [](const PlaceBend& b) { return b.flat; });
 }
 
 Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, std::span<const Corner> corners) {
@@ -512,6 +544,7 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
 
     // Each place's groups, their bends and the crease's.
     std::vector<std::vector<std::pair<std::uint16_t, D3>>> bends(places.size());
+    std::vector<std::vector<std::uint16_t>> flats(places.size());   // the normal indices of flat solids' corners
     std::vector<D3> crease_normal(places.size(), D3{0.0, 0.0, 0.0});
     for (std::uint32_t q = 0; q < place_count; ++q) {
         const std::vector<At>& cs = at[q];
@@ -530,9 +563,16 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         for (std::uint32_t i = 0; i < cs.size(); ++i) members[groups.root(i)].push_back(&cs[i]);
         const bool multi = members.size() > 1u;
         std::vector<std::pair<std::uint16_t, D3>>& here = bends[q];
+        // A group that is no sampled surface but a flat solid's corner shaded soft: its normal indices.
+        const auto note_flat = [&](const std::vector<const At*>& group) {
+            if (flat_solid(group[0]->normal, group)) {
+                for (const At* c : group) flats[q].push_back(c->normal_index);
+            }
+        };
         if (multi && creases[q].size() != 2u) {
             // A corner: nothing bends.
             for (const At& c : cs) here.push_back({c.normal_index, D3{0.0, 0.0, 0.0}});
+            for (const auto& [root, group] : members) note_flat(group);
             continue;
         }
         D3 crease_plane{0.0, 0.0, 0.0};
@@ -570,6 +610,7 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         for (const auto& [root, group] : members) {
             const D3& n0 = group[0]->normal;
             const bool curved = sampled(q, n0, group, places);
+            if (!curved) note_flat(group);
             set_bends[index_sets.root(index_slot[group[0]->normal_index])].push_back(curved ? n0 : D3{0.0, 0.0, 0.0});
             if (curved && !is_zero(crease_normal[q])) {
                 const D3 in_plane = sub(n0, mul(crease_plane, dot(n0, crease_plane)));
@@ -623,7 +664,8 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         std::vector<std::pair<std::uint16_t, D3>>& here = bends[q];
         std::sort(here.begin(), here.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
         for (const auto& [index, bend] : here) {
-            out.bends.push_back({index, fixed[q] ? Vec3{0.0f, 0.0f, 0.0f} : narrow(bend)});
+            const bool flat = std::find(flats[q].begin(), flats[q].end(), index) != flats[q].end();
+            out.bends.push_back({index, fixed[q] ? Vec3{0.0f, 0.0f, 0.0f} : narrow(bend), flat});
         }
         out.crease[q] = fixed[q] ? Vec3{0.0f, 0.0f, 0.0f} : narrow(crease_normal[q]);
     }
@@ -682,6 +724,14 @@ std::uint32_t Model::bend_of(std::uint32_t position, std::uint32_t normal) const
     return 0u;
 }
 
+bool Model::flat_of(std::uint32_t position, std::uint32_t normal) const noexcept {
+    if (position + 1u >= first.size()) return false;
+    for (std::uint32_t i = first[position]; i < first[position + 1u]; ++i) {
+        if (bend_normal[i] == normal) return bend_flat[i] != 0u;
+    }
+    return false;
+}
+
 std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept {
     std::uint64_t h = 0xCBF29CE484222325ull;
     const auto word = [&h, &bytes](std::size_t index) {
@@ -706,7 +756,8 @@ std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept {
 }
 
 void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface) {
-    if (!surface.bends_anything()) {
+    const bool bends = surface.bends_anything();
+    if (!bends && !surface.flat_anything()) {
         Registry& r = registry();
         std::unique_lock guard(r.lock);
         r.models.erase(array_address);
@@ -715,6 +766,7 @@ void register_model(std::uint32_t array_address, std::span<const std::byte> arra
     auto model = std::make_shared<Model>();
     model->fingerprint = fingerprint(array_bytes);
     model->bytes = static_cast<std::uint32_t>(array_bytes.size());
+    model->bends = bends;
     const std::size_t positions = surface.place.size();
     model->places.resize(positions);
     model->second.resize(positions);
@@ -735,6 +787,7 @@ void register_model(std::uint32_t array_address, std::span<const std::byte> arra
         for (std::uint32_t b = surface.first[q]; b < surface.first[q + 1u]; ++b) {
             model->bend_normal.push_back(surface.bends[b].normal);
             model->bend.push_back(pack_normal(surface.bends[b].bend));
+            model->bend_flat.push_back(surface.bends[b].flat ? 1u : 0u);
         }
     }
     model->first[positions] = static_cast<std::uint32_t>(model->bend.size());

@@ -50,6 +50,9 @@ extern std::atomic<std::uintptr_t> pointer_hwnd;
 // The settings the D3D12 renderer reads (temporal upscaling and interpolation, ray tracing).
 extern std::atomic<bool> temporal_interp_suspended;  // RendererD3D12::suspend_temporal_interpolation
 extern std::atomic<bool> ray_tracing_offered;        // the RAY TRACING row is offered
+// Every ray tracing pipeline loads from the pipeline library (rt_prepare.h): RAY TRACING starts at once. Otherwise it
+// starts at the next start, which prepares the library before the title.
+extern std::atomic<bool> ray_tracing_prepared;
 extern std::atomic<bool> rtx_adapter;                // the session's GPU is an NVIDIA RTX (DLSS)
 [[nodiscard]] unsigned upscaler_render_scale(const RenderConfig& render, unsigned internal);
 void save_native_settings_now();

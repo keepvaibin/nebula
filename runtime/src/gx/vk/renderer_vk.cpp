@@ -1706,7 +1706,6 @@ bool RendererVk::present(const XfbTexture* source, bool capture_backbuffer, bool
     // The overlays are drawn unturned (Windows); turned images belong to platforms whose overlays are their own screens.
     if (swapchain_.transform == VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR) {
         host_window::draw_native_settings_overlay(*this);
-        host_window::draw_native_settings_hint(*this);
         host_window::draw_home_menu(*this);
     }
     vkCmdEndRenderPass(commands);

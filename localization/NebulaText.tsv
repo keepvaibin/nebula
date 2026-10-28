@@ -121,6 +121,8 @@ S.AUDIO	Audio		Audio	Audio	Audio	Audio	Audio	Audio	Audio	Áudio	サウンド	사
 S.GENERAL	General		Général	Général	General	General	Allgemein	Generale	Algemeen	Geral	一般	일반	常规	一般
 S.MODS	Mods		Mods	Mods	Mods	Mods	Mods	Mod	Mods	Mods	MOD	모드	模组	模組
 S.SYSTEM	System		Système	Système	Sistema	Sistema	System	Sistema	Systeem	Sistema	システム	시스템	系统	系統
+S.DIAGNOSTICS	Diagnostics		Diagnostic	Diagnostic	Diagnóstico	Diagnóstico	Diagnose	Diagnostica	Diagnose	Diagnóstico	診断	진단	诊断	診斷
+S.RECORD	Record		Enregistrer	Enregistrer	Grabar	Grabar	Aufzeichnen	Registra	Opnemen	Gravar	記録	기록	记录	記錄
 S.ADVANCED	Advanced		Avancé	Avancé	Avanzado	Avanzado	Erweitert	Avanzate	Geavanceerd	Avançado	詳細設定	고급	高级	進階
 S.ON	On		Activé	Activé	Sí	Sí	An	Sì	Aan	Ligado	オン	켜기	开	開
 S.OFF	Off		Désactivé	Désactivé	No	No	Aus	No	Uit	Desligado	オフ	끄기	关	關
@@ -557,6 +559,8 @@ S.GO	Go		Y aller	Y aller	Ir	Ir	Los	Vai	Gaan	Ir	行く	이동	前往	前往
 S.GET	Get		Obtenir	Obtenir	Obtener	Obtener	Holen	Ottieni	Krijgen	Obter	もらう	받기	获取	取得
 S.RESET	Reset		Réinitialiser	Réinitialiser	Restablecer	Restablecer	Zurücksetzen	Ripristina	Herstellen	Redefinir	リセット	초기화	重置	重設
 SettingsModsRestartAsk	Restart to apply the mod changes?		Redémarrer pour appliquer les changements de mods?	Redémarrer pour appliquer les changements de mods ?	¿Reiniciar para aplicar los cambios de mods?	¿Reiniciar para aplicar los cambios de mods?	Neu starten, um die Mod-Änderungen anzuwenden?	Riavviare per applicare le modifiche alle mod?	Opnieuw starten om de modwijzigingen toe te passen?	Reiniciar para aplicar as mudanças de mods?	再起動して MOD の変更を反映しますか？	다시 시작해서 모드 변경을 적용할까요?	重新启动以应用模组更改吗？	重新啟動以套用模組變更嗎？
+SettingsRtRestartAsk	Restart to turn on ray tracing?		Redémarrer pour activer le ray tracing?	Redémarrer pour activer le ray tracing ?	¿Reiniciar para activar el trazado de rayos?	¿Reiniciar para activar el trazado de rayos?	Neu starten, um Raytracing einzuschalten?	Riavviare per attivare il ray tracing?	Opnieuw starten om raytracing in te schakelen?	Reiniciar para ativar o ray tracing?	再起動してレイトレーシングをオンにしますか？	다시 시작해서 레이 트레이싱을 켤까요?	重新启动以开启光线追踪吗？	重新啟動以開啟光線追蹤嗎？
+SettingsDiagnosticsAsk	Restart and record a diagnostics run?		Redémarrer et enregistrer une session de diagnostic?	Redémarrer et enregistrer une session de diagnostic ?	¿Reiniciar y grabar una sesión de diagnóstico?	¿Reiniciar y grabar una sesión de diagnóstico?	Neu starten und eine Diagnosesitzung aufzeichnen?	Riavviare e registrare una sessione di diagnostica?	Opnieuw starten en een diagnosesessie opnemen?	Reiniciar e gravar uma sessão de diagnóstico?	再起動して診断セッションを記録しますか？	다시 시작해서 진단 세션을 기록할까요?	重新启动并记录一次诊断会话吗？	重新啟動並記錄一次診斷工作階段嗎？
 SettingsModsNone	No mods yet		Aucun mod pour le moment	Aucun mod pour le moment	Aún no hay mods	Aún no hay mods	Noch keine Mods	Ancora nessuna mod	Nog geen mods	Nenhum mod ainda	MOD はまだありません	아직 모드가 없습니다	还没有模组	還沒有模組
 SettingsHintPickUp	Move		Déplacer	Déplacer	Mover	Mover	Verschieben	Sposta	Verplaatsen	Mover	移動	옮기기	移动	移動
 SettingsHintPutDown	Put down		Déposer	Déposer	Soltar	Soltar	Ablegen	Rilascia	Neerzetten	Soltar	置く	놓기	放下	放下
@@ -571,3 +575,5 @@ S.XBOX	Xbox
 S.NINTENDO_SWITCH	Nintendo Switch													
 S.PLAYSTATION	PlayStation													
 S.THE_BUTTONS_THE_GAME'S_ICONS_SHOW._AUTO:_THE_CONTROLLER_IN_USE	The buttons the game's icons show. Auto: the controller in use.		Les boutons que montrent les icônes du jeu. Auto : la manette utilisée.	Les boutons que montrent les icônes du jeu. Auto : la manette utilisée.	Los botones que muestran los íconos del juego. Automático: el control en uso.	Los botones que muestran los iconos del juego. Automático: el mando en uso.	Die Tasten, die die Symbole des Spiels zeigen. Automatisch: der verwendete Controller.	I pulsanti mostrati dalle icone del gioco. Automatico: il controller in uso.	De knoppen die de pictogrammen van het spel tonen. Automatisch: de gebruikte controller.	Os botões que os ícones do jogo mostram. Automático: o controle em uso.	ゲームのアイコンが示すボタン。自動：使用中のコントローラー	게임 아이콘이 보여 주는 버튼. 자동: 사용 중인 컨트롤러	游戏图标显示的按键。自动：正在使用的控制器	遊戲圖示顯示的按鍵。自動：正在使用的控制器
+RtPrepareTitle	Preparing ray tracing		Préparation du ray tracing	Préparation du ray tracing	Preparando el trazado de rayos	Preparando el trazado de rayos	Raytracing wird vorbereitet	Preparazione del ray tracing	Raytracing voorbereiden	Preparando o ray tracing	レイトレーシングを準備しています	레이 트레이싱 준비 중	正在准备光线追踪	正在準備光線追蹤
+RtPreparePercent	{n}%		{n} %	{n} %	{n} %	{n} %	{n} %	{n}%	{n}%	{n}%	{n}%	{n}%	{n}%	{n}%

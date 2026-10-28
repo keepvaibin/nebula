@@ -92,7 +92,6 @@ void show_window(NativeWindow window) noexcept;
 
 void draw_native_settings_overlay(UiCanvas& renderer);
 void draw_home_menu(UiCanvas& renderer);
-void draw_native_settings_hint(UiCanvas& renderer);
 
 #if defined(NEBULA_GPU_VULKAN)
 // The instance extensions the window's surface needs, and the surface (VK_NULL_HANDLE when it cannot be made).
