@@ -859,6 +859,12 @@ void FifoParser::call_shape_list(
     GxState& state,
     std::size_t opcode_offset,
     DisplayListRecording* recording) {
+    if (sink.on_native_shape(handle, guest_addr, byte_size)) {
+        if (memory_read_recorder_ != nullptr) {
+            memory_read_recorder_->record_guest_dependency_shape_read(guest_addr & ~std::uint32_t{31u}, byte_size);
+        }
+        return;
+    }
     guest_addr &= ~std::uint32_t{31u};
     const std::uint32_t canonical = normalize_display_list_guest_addr(guest_addr);
     if (handle < shape_bindings_.size()) {

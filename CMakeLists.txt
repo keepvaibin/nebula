@@ -478,6 +478,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/placed_texture_allocator.cpp
     runtime/src/gx/vertex_loader.cpp
     runtime/src/gx/curved_surfaces.cpp
+    runtime/src/gx/native_shapes.cpp
     runtime/src/gx/shader_keys.cpp
     runtime/src/gx/efb_copy.cpp
     runtime/src/gx/line_point_raster.cpp
@@ -638,7 +639,7 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name shader_gen fifo_parser vertex_loader curved_surfaces simd_kernel vs_constants rt_tev_eval render_config
+foreach(name shader_gen fifo_parser vertex_loader curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         frame_completion memory_snapshot sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         xfb_present_selection line_point_raster xf_lighting sorted_dirty_ranges native_settings_overlay post_process
         efb_conversion)
@@ -707,6 +708,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/movie_replacement.cpp
         runtime/src/gx/vertex_loader.cpp
         runtime/src/gx/curved_surfaces.cpp
+        runtime/src/gx/native_shapes.cpp
         runtime/src/gx/shader_keys.cpp
         runtime/src/gx/efb_copy.cpp
         runtime/src/gx/line_point_raster.cpp

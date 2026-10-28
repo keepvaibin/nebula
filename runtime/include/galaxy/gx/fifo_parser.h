@@ -281,6 +281,17 @@ struct FifoSink {
         return false;
     }
 
+    // A model shape list by its handle (motion::kMarkerShapeList): the sink draws the shape built for `handle`
+    // (native_shapes.h) when it is still the list at `list_address` (as the marker carries it) under the vertex state it
+    // was built for, and returns true; else the list is called as GX would call it.
+    [[nodiscard]] virtual bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
+                                               std::uint32_t list_bytes) {
+        (void)handle;
+        (void)list_address;
+        (void)list_bytes;
+        return false;
+    }
+
     // BP 0x52 PE_COPY_EXECUTE write; `exec_command` is the 24-bit value.
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
     virtual void on_efb_copy(std::uint32_t exec_command) = 0;

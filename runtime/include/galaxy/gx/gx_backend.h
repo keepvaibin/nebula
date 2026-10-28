@@ -32,6 +32,7 @@
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/movie_replacement.h"
+#include "galaxy/gx/native_shapes.h"
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/gx/vk/pipeline_cache_vk.h"
 #include "galaxy/gx/vk/renderer_vk.h"
@@ -335,6 +336,8 @@ private:
         std::uint32_t total_vertices,
         std::uint32_t total_indices,
         std::span<const std::uint16_t> precomputed_indices) override;
+    [[nodiscard]] bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
+                                       std::uint32_t list_bytes) override;
     void on_efb_copy(std::uint32_t exec_command) override;
     void on_pe_finish() override;
     void on_pe_token(std::uint16_t token, bool interrupt) override;
@@ -384,6 +387,8 @@ private:
         bool traced = false;
         RtDrawInfo rt_info{};
         std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
+        // Its indices are a native shape's own, apart from the frame's index ring: nothing extends it.
+        bool sealed = false;
     };
 
     [[nodiscard]] static bool draw_calls_batch_compatible(
@@ -1592,6 +1597,41 @@ private:
     bool split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
                           std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
                           std::span<const std::uint16_t> precomputed_indices);
+    // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
+    // are. Empty `split` when an index is out of range.
+    static std::uint32_t split_curved_triangles(std::span<const GxVertexOut> vertices,
+                                                std::span<const std::uint16_t> triangles,
+                                                std::vector<std::uint16_t>& split);
+
+    // Native shapes (native_shapes.h) by handle: the built shape, its resident vertices, its curved split and the
+    // array bytes it was built from, compared with guest memory once per write generation. A shape whose list, vertex
+    // state or arrays no longer match draws as GX would; one whose arrays changed is retired.
+    struct NativeShape {
+        std::shared_ptr<const shapes::Shape> shape;
+        ImmutableUploadToken index_upload_token;
+        std::uint64_t resident_epoch = 0;
+        std::uint32_t resident_offset = 0;
+        std::vector<std::uint16_t> split_indices;
+        std::uint32_t split_flat_indices = 0;
+        bool split_built = false;
+        ImmutableUploadToken split_upload_token;
+        DecodedPacketRunCacheEntry::GuestDependencySnapshots snapshots;
+        std::uint64_t validated_generation = 0;
+        bool requested = false;
+        bool rebuilt = false;
+        bool retired = false;
+    };
+    std::vector<NativeShape> native_shapes_;
+    // The game's live memory (render_frame's), which the shape builder reads; frame memory may be a snapshot.
+    std::atomic<GuestMemory*> live_memory_{nullptr};
+    // Queues the build of the list at `list_address` under the current vertex state; false when the list is not in
+    // this frame's memory.
+    bool request_native_shape(NativeShape& native, std::uint32_t handle, std::uint32_t list_address,
+                              std::uint32_t list_bytes);
+    // The shape's snapshots from frame memory, when its arrays still hold the bytes it was built from.
+    [[nodiscard]] bool adopt_native_shape(NativeShape& native, std::shared_ptr<const shapes::Shape> shape);
+    // Gives back the shape's resident block and drops it.
+    void drop_native_shape(NativeShape& native) noexcept;
     // Render thread: decode scratch for runs outside the decoded cache (capacity bounded by
     // kDecodedPacketRunCacheMaxEntryBytes).
     std::vector<GxVertexOut> decoded_packet_vertex_scratch_;
@@ -1962,6 +2002,8 @@ private:
     // replay.
     std::uint64_t frame_replay_prepared_batches_ = 0;
     std::uint64_t frame_replay_packet_batches_ = 0;
+    std::uint64_t frame_native_shape_draws_ = 0;
+    std::uint64_t frame_native_shape_misses_ = 0;
     std::uint64_t frame_replay_simple_batches_ = 0;
     std::uint64_t frame_replay_generic_draws_ = 0;
     std::uint64_t frame_flush_matrix_us_ = 0;

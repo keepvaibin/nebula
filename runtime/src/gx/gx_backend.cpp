@@ -3453,6 +3453,7 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
     chunk.memory   = memory;
+    live_memory_.store(memory, std::memory_order_relaxed);
     chunk.present_swap_chain = present_swap_chain;
     chunk.displayed_xfb_addr = displayed_xfb_addr;
     const GxTimingConfig& timing = get_gx_timing_config();
@@ -9258,6 +9259,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_compile_stats_baseline_ = pipeline_cache_.compile_stats();
     frame_replay_prepared_batches_ = 0;
     frame_replay_packet_batches_ = 0;
+    frame_native_shape_draws_ = 0;
+    frame_native_shape_misses_ = 0;
     frame_replay_simple_batches_ = 0;
     frame_replay_generic_draws_ = 0;
     for (PipelineMemoEntry& entry : pipeline_memo_) {
@@ -10095,6 +10098,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " replay-prepared-batches="
                   << frame_replay_prepared_batches_
                   << " replay-packet-offers=" << frame_replay_packet_batches_
+                  << " native-shape-draws=" << frame_native_shape_draws_
+                  << " native-shape-misses=" << frame_native_shape_misses_
                   << " replay-simple-offers=" << frame_replay_simple_batches_
                   << " replay-generic-draws=" << frame_replay_generic_draws_
                   << " flush-matrix-us=" << frame_flush_matrix_us_
@@ -10637,42 +10642,49 @@ bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t 
         std::vector<std::uint16_t>& run = curved_split_scratch_;
         VertexLoader::cached_packet_run_triangles(static_cast<std::uint32_t>(entry.vertices.size()), base_offset,
                                                   packets, primitive, entry.total_indices, precomputed_indices, run);
-        // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment
-        // and moves nothing, in this triangle and in its neighbours.
-        const auto flat = [&](std::size_t t) {
-            for (std::size_t k = 0; k < 3u; ++k) {
-                const GxVertexOut& v = entry.vertices[run[t + k]];
-                if ((v.curve[0] | v.curve[1]) != 0u) {
-                    return false;
-                }
-            }
-            return true;
-        };
-        const std::size_t count = run.size() / 3u * 3u;
-        const bool in_range = std::all_of(run.begin(), run.begin() + static_cast<std::ptrdiff_t>(count),
-                                          [&](std::uint16_t i) { return i < entry.vertices.size(); });
-        std::size_t flat_indices = 0;
-        for (std::size_t t = 0; in_range && t < count; t += 3u) {
-            flat_indices += flat(t) ? 3u : 0u;
-        }
-        if (in_range && count != 0u) {
-            entry.split_indices.resize(count);
-            std::size_t f = 0;
-            std::size_t c = flat_indices;
-            for (std::size_t t = 0; t < count; t += 3u) {
-                std::size_t& out = flat(t) ? f : c;
-                entry.split_indices[out] = run[t];
-                entry.split_indices[out + 1u] = run[t + 1u];
-                entry.split_indices[out + 2u] = run[t + 2u];
-                out += 3u;
-            }
-            entry.split_flat_indices = static_cast<std::uint32_t>(flat_indices);
-            const std::size_t bytes = count * sizeof(std::uint16_t);
-            entry.byte_size += bytes;
-            decoded_packet_run_cache_bytes_ += bytes;
-        }
+        entry.split_flat_indices = split_curved_triangles(entry.vertices, run, entry.split_indices);
+        const std::size_t bytes = entry.split_indices.size() * sizeof(std::uint16_t);
+        entry.byte_size += bytes;
+        decoded_packet_run_cache_bytes_ += bytes;
     }
     return !entry.split_indices.empty();
+}
+
+std::uint32_t GxBackend::split_curved_triangles(std::span<const GxVertexOut> vertices,
+                                                std::span<const std::uint16_t> triangles,
+                                                std::vector<std::uint16_t>& split) {
+    // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment and
+    // moves nothing, in this triangle and in its neighbours.
+    const auto flat = [&](std::size_t t) {
+        for (std::size_t k = 0; k < 3u; ++k) {
+            const GxVertexOut& v = vertices[triangles[t + k]];
+            if ((v.curve[0] | v.curve[1]) != 0u) {
+                return false;
+            }
+        }
+        return true;
+    };
+    split.clear();
+    const std::size_t count = triangles.size() / 3u * 3u;
+    if (count == 0u || !std::all_of(triangles.begin(), triangles.begin() + static_cast<std::ptrdiff_t>(count),
+                                    [&](std::uint16_t i) { return i < vertices.size(); })) {
+        return 0u;
+    }
+    std::size_t flat_indices = 0;
+    for (std::size_t t = 0; t < count; t += 3u) {
+        flat_indices += flat(t) ? 3u : 0u;
+    }
+    split.resize(count);
+    std::size_t f = 0;
+    std::size_t c = flat_indices;
+    for (std::size_t t = 0; t < count; t += 3u) {
+        std::size_t& out = flat(t) ? f : c;
+        split[out] = triangles[t];
+        split[out + 1u] = triangles[t + 1u];
+        split[out + 2u] = triangles[t + 2u];
+        out += 3u;
+    }
+    return static_cast<std::uint32_t>(flat_indices);
 }
 
 gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
@@ -11345,7 +11357,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             mtx_alloc =
                 renderer_.matrix_ring().allocate(palette_bytes, /*alignment=*/256u);
-            std::memcpy(mtx_alloc.cpu, state_.xf_raw(), palette_bytes);
+            // XF memory has nothing at 0x100-0x3FF, which no reader addresses: the position and texture matrices,
+            // then the normal, post-transform and light words.
+            constexpr std::size_t kMatrixWords = 0x100u;
+            constexpr std::size_t kNormalBase = 0x400u;
+            std::memcpy(mtx_alloc.cpu, state_.xf_raw(), kMatrixWords * sizeof(std::uint32_t));
+            std::memcpy(mtx_alloc.cpu + kNormalBase * sizeof(std::uint32_t),
+                        state_.xf_raw() + kNormalBase, (kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t));
             if (snapshot_start != 0u) [[unlikely]] {
                 rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
                 ++rt_snapshot_count_;
@@ -11373,7 +11391,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             // complete image valid without computing a redundant dirty span.
             xf_palette_valid_ = xf_palette_chunk_mask;
             state_.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
-            frame_matrix_upload_bytes_ += palette_bytes;
+            frame_matrix_upload_bytes_ += (kMatrixWords + kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t);
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
         // frame's segment.
@@ -12262,6 +12280,10 @@ bool GxBackend::on_cached_packet_draw_run(
         append_to_pending = false;
         cached_draw_run_batch_compatible_known_ = false;
     }
+    if (append_to_pending && pending_draw_batch_.sealed) {
+        append_to_pending = false;
+        cached_draw_run_batch_compatible_known_ = false;
+    }
     if (pending_draw_batch_.active && !append_to_pending) {
         flush_pending_draw_batch();
         cached_draw_run_batch_compatible_known_ = false;
@@ -12619,6 +12641,212 @@ bool GxBackend::on_cached_packet_draw_run(
     pending_draw_batch_.draw_count =
         static_cast<std::uint32_t>(packets.size());
     pending_draw_batch_.resident = batch_resident;
+    return true;
+}
+
+bool GxBackend::adopt_native_shape(NativeShape& native, std::shared_ptr<const shapes::Shape> shape) {
+    // The arrays as the builder read them: changed since (a model the game rewrote between its load and its first
+    // draw), the shape is retired.
+    std::size_t at = 0;
+    for (const VertexDecodeGuestRange& read : shape->reads) {
+        const std::byte* live =
+            resolve_guest_const_bytes(frame_memory_, read.guest_base, read.size, frame_memory_regions_disjoint_sorted_);
+        if (live == nullptr || at + read.size > shape->read_bytes.size() ||
+            std::memcmp(live, shape->read_bytes.data() + at, read.size) != 0) {
+            native.retired = true;
+            return false;
+        }
+        at += read.size;
+    }
+    std::size_t captured = 0;
+    if (!capture_decoded_packet_run_dependencies(frame_memory_, shape->reads, kDecodedPacketRunCacheMaxEntryBytes,
+                                                 native.snapshots, captured, frame_memory_regions_disjoint_sorted_)) {
+        native.retired = true;
+        return false;
+    }
+    native.validated_generation = decoded_packet_run_generation_;
+    native.shape = std::move(shape);
+    return true;
+}
+
+void GxBackend::drop_native_shape(NativeShape& native) noexcept {
+    if (native.shape != nullptr && native.resident_epoch != 0u && native.resident_epoch == resident_vertices_.epoch()) {
+        resident_vertices_.release(native.resident_offset, static_cast<std::uint32_t>(native.shape->vertices.size()));
+    }
+    const bool requested = native.requested;
+    const bool rebuilt = native.rebuilt;
+    native = NativeShape{};
+    native.requested = requested;
+    native.rebuilt = rebuilt;
+}
+
+bool GxBackend::request_native_shape(NativeShape& native, std::uint32_t handle, std::uint32_t list_address,
+                                     std::uint32_t list_bytes) {
+    GuestMemory* const live = live_memory_.load(std::memory_order_relaxed);
+    const std::byte* list = resolve_guest_const_bytes(frame_memory_, list_address & ~std::uint32_t{31u}, list_bytes,
+                                                      frame_memory_regions_disjoint_sorted_);
+    if (live == nullptr || list == nullptr) {
+        return false;
+    }
+    shapes::register_later(shapes::make_request(handle, list_address, std::span(list, list_bytes), state_), live);
+    native.requested = true;
+    return true;
+}
+
+bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address, std::uint32_t list_bytes) {
+    static const bool enabled = read_env_u64("GALAXY_NATIVE_SHAPES", 1u) != 0u;
+    // GALAXY_TEST_NATIVE_SHAPES_AB=1: native shapes in every other presented frame, the lists called in the others (a
+    // same-run picture comparison; a frame can take several render chunks).
+    static const bool test_ab = read_env_u64("GALAXY_TEST_NATIVE_SHAPES_AB", 0u) != 0u;
+    if (!enabled || cached_draw_run_active_ || (test_ab && ((g_snapshot_presents + 1u) & 1u) != 0u)) {
+        return false;
+    }
+    if (handle >= native_shapes_.size()) {
+        native_shapes_.resize(std::max<std::size_t>(handle + 1u, native_shapes_.size() * 2u));
+    }
+    NativeShape& native = native_shapes_[handle];
+    if (native.retired) {
+        return false;
+    }
+    if (native.shape == nullptr) {
+        // Built from its first draw (this one is drawn as GX would), then looked up until the builder is done.
+        if (!native.requested) {
+            request_native_shape(native, handle, list_address, list_bytes);
+            return false;
+        }
+        bool pending = false;
+        std::shared_ptr<const shapes::Shape> built = shapes::find(handle, pending);
+        if (built == nullptr) {
+            native.retired = !pending;
+            return false;
+        }
+        if (!adopt_native_shape(native, std::move(built))) {
+            return false;
+        }
+    }
+    const shapes::Shape& shape = *native.shape;
+    if (shape.list_address != list_address || shape.list_bytes != list_bytes ||
+        shapes::vertex_state(state_, shape.vtxfmt) != shape.state) {
+        ++frame_native_shape_misses_;
+        // Another list or vertex state than it was built from: built once more from this one.
+        if (!native.rebuilt) {
+            drop_native_shape(native);
+            native.rebuilt = true;
+            native.requested = false;
+            request_native_shape(native, handle, list_address, list_bytes);
+        }
+        return false;
+    }
+    // The array bytes, once per batch of guest writes.
+    if (native.validated_generation != decoded_packet_run_generation_) {
+        std::uint64_t validated = 0u;
+        if (!decoded_packet_run_dependencies_match(frame_memory_, native.validated_generation,
+                                                   decoded_packet_run_generation_, native.snapshots, validated,
+                                                   frame_memory_regions_disjoint_sorted_)) {
+            // Arrays the game writes (a deformed or recoloured model): drawn as GX would from now on.
+            drop_native_shape(native);
+            native.retired = true;
+            return false;
+        }
+        native.validated_generation = validated != 0u ? validated : decoded_packet_run_generation_;
+    }
+    if (!ensure_resident_vertex_buffer()) {
+        return false;
+    }
+    const auto units = static_cast<std::uint32_t>(shape.vertices.size());
+    if (native.resident_epoch != resident_vertices_.epoch()) {
+        native.resident_epoch = 0u;
+        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(units);
+        if (!offset.has_value()) {
+            return false;
+        }
+        // Written once while the block belongs to this shape, so no in-flight frame sees a partial write.
+        std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
+                    shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(GxVertexOut));
+        renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(GxVertexOut),
+                                         static_cast<std::uint64_t>(units) * sizeof(GxVertexOut));
+        native.resident_epoch = resident_vertices_.epoch();
+        native.resident_offset = *offset;
+    }
+
+    struct CachedRunScope {
+        GxBackend* backend = nullptr;
+        ~CachedRunScope() {
+            backend->end_cached_draw_run();
+        }
+    };
+    if (!begin_cached_draw_run(PrimitiveClass::Triangles, shape.vtxfmt, shape.draws)) {
+        return false;
+    }
+    const CachedRunScope scope{this};
+    ++frame_native_shape_draws_;
+    if (cached_draw_run_scissor_reject_) {
+        frame_scissor_skips_ += shape.draws;
+        return true;
+    }
+    if (cached_draw_run_no_pso_) {
+        stat_draws_no_pso_ += shape.draws;
+        frame_draws_no_pso_ += shape.draws;
+        return true;
+    }
+    flush_pending_draw_batch();
+    cached_draw_run_batch_compatible_known_ = false;
+
+    const bool curved = current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr;
+    if (curved && !native.split_built) {
+        native.split_built = true;
+        native.split_flat_indices = split_curved_triangles(shape.vertices, shape.indices, native.split_indices);
+    }
+    const bool split = curved && !native.split_indices.empty();
+    const std::vector<std::uint16_t>& indices = split ? native.split_indices : shape.indices;
+    const UploadRing::Allocation ib = renderer_.index_ring().upload_immutable(
+        indices.data(), indices.size() * sizeof(std::uint16_t), sizeof(std::uint16_t),
+        split ? native.split_upload_token : native.index_upload_token);
+    const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+    const auto index_count = static_cast<std::uint32_t>(indices.size());
+    const std::size_t vertex_byte_offset = static_cast<std::size_t>(native.resident_offset) * sizeof(GxVertexOut);
+    stat_draws_issued_ += shape.draws;
+    frame_draws_issued_ += shape.draws;
+    ++frame_resident_vertex_hits_;
+    frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(GxVertexOut);
+
+    const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset,
+                                                 units * static_cast<std::uint32_t>(sizeof(GxVertexOut)),
+                                                 static_cast<std::uint32_t>(sizeof(GxVertexOut)));
+    const gpu::IndexView ibv = gpu::index_view(
+        renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
+        index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
+    DrawCall call = cached_draw_run_state_call_;
+    call.vertex_view = vbv;
+    call.index_view = ibv;
+    call.index_count = index_count;
+    if (split) {
+        call.flat_pipeline = current_flat_pipeline_;
+        call.flat_index_count = native.split_flat_indices;
+        // The sort's view of this frame: of the triangles after the flat ones, those the hull shader would leave
+        // whole draw after the flat ones.
+        call.curve_sort = renderer_.sort_curved(
+            vbv.BufferLocation, ibv.BufferLocation + native.split_flat_indices * sizeof(std::uint16_t),
+            (index_count - native.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
+            (vs_key_.flags & 0x01u) != 0u);
+        call.curve_sort_list = renderer_.curve_sort_list();
+    }
+    pending_draw_batch_.active = true;
+    pending_draw_batch_.call = call;
+    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
+    pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
+    pending_draw_batch_.debake_model = debake_sample_key_;
+    pending_draw_batch_.indexed = true;
+    pending_draw_batch_.base_vertex = native.resident_offset;
+    pending_draw_batch_.vertex_count = units;
+    pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(GxVertexOut);
+    pending_draw_batch_.first_index = first_index;
+    pending_draw_batch_.index_count = index_count;
+    pending_draw_batch_.draw_count = shape.draws;
+    pending_draw_batch_.resident = true;
+    pending_draw_batch_.sealed = true;
     return true;
 }
 
