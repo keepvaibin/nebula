@@ -391,9 +391,47 @@ void find_junctions(const std::vector<D3>& places, const std::vector<std::uint64
         return (static_cast<std::uint64_t>(c[0] & 0x1FFFFF) << 42u) | (static_cast<std::uint64_t>(c[1] & 0x1FFFFF) << 21u) |
                static_cast<std::uint64_t>(c[2] & 0x1FFFFF);
     };
-    std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> grid;
-    for (std::uint32_t i = 0; i < places.size(); ++i) grid[key_of(cell_of(places[i]))].push_back(i);
-    std::unordered_set<std::uint64_t> cells;
+    // The grid as (cell, place) pairs sorted by cell, and each occupied cell's run in it by open addressing (keys use
+    // 63 bits, so all ones marks an empty slot).
+    std::vector<std::pair<std::uint64_t, std::uint32_t>> grid(places.size());
+    for (std::uint32_t i = 0; i < places.size(); ++i) grid[i] = {key_of(cell_of(places[i])), i};
+    std::sort(grid.begin(), grid.end());
+    struct Run {
+        std::uint64_t key = ~std::uint64_t{0};
+        std::uint32_t begin = 0;
+        std::uint32_t end = 0;
+    };
+    unsigned table_bits = 4u;
+    while ((std::size_t{1} << table_bits) < 2u * places.size()) ++table_bits;
+    std::vector<Run> runs(std::size_t{1} << table_bits);
+    const std::size_t table_mask = runs.size() - 1u;
+    const auto slot_of = [table_bits](std::uint64_t key) {
+        return static_cast<std::size_t>((key * 0x9E3779B97F4A7C15ull) >> (64u - table_bits));
+    };
+    for (std::uint32_t begin = 0; begin < grid.size();) {
+        std::uint32_t end = begin + 1u;
+        while (end < grid.size() && grid[end].first == grid[begin].first) ++end;
+        std::size_t slot = slot_of(grid[begin].first);
+        while (runs[slot].key != ~std::uint64_t{0}) slot = (slot + 1u) & table_mask;
+        runs[slot] = {grid[begin].first, begin, end};
+        begin = end;
+    }
+    const auto visit = [&](std::uint64_t key, std::uint32_t a, std::uint32_t b, const D3& pa, const D3& d, double dd) {
+        std::size_t slot = slot_of(key);
+        while (runs[slot].key != key) {
+            if (runs[slot].key == ~std::uint64_t{0}) return;
+            slot = (slot + 1u) & table_mask;
+        }
+        for (std::uint32_t i = runs[slot].begin; i < runs[slot].end; ++i) {
+            const std::uint32_t p = grid[i].second;
+            if (p == a || p == b) continue;
+            const D3 w = sub(places[p], pa);
+            const double t = dot(w, d) / dd;
+            if (t <= 1e-4 || t >= 1.0 - 1e-4) continue;
+            const D3 off = sub(w, mul(d, t));
+            if (dot(off, off) <= 1e-8 * dd) out.push_back({p, a, b});
+        }
+    };
     for (const std::uint64_t e : edges) {
         const auto a = static_cast<std::uint32_t>(e >> 32u);
         const auto b = static_cast<std::uint32_t>(e & 0xFFFFFFFFu);
@@ -402,26 +440,27 @@ void find_junctions(const std::vector<D3>& places, const std::vector<std::uint64
         const double dd = dot(d, d);
         if (!(dd > 0.0)) continue;
         const auto steps = static_cast<std::size_t>(std::sqrt(dd) / (0.5 * cell)) + 1u;
-        cells.clear();
+        // The samples' cells move monotonically along each axis, so a cell of a sample's 3x3x3 block that lies outside
+        // the previous sample's block lies outside every earlier one: each cell of the edge's blocks is visited once.
+        std::array<std::int64_t, 3> previous{};
+        bool have_previous = false;
         for (std::size_t s = 0; s <= steps; ++s) {
             const auto c = cell_of(add(pa, mul(d, static_cast<double>(s) / static_cast<double>(steps))));
+            if (have_previous && c == previous) continue;
             for (std::int64_t dx = -1; dx <= 1; ++dx) {
                 for (std::int64_t dy = -1; dy <= 1; ++dy) {
-                    for (std::int64_t dz = -1; dz <= 1; ++dz) cells.insert(key_of({c[0] + dx, c[1] + dy, c[2] + dz}));
+                    for (std::int64_t dz = -1; dz <= 1; ++dz) {
+                        const std::array<std::int64_t, 3> x{c[0] + dx, c[1] + dy, c[2] + dz};
+                        if (have_previous && std::llabs(x[0] - previous[0]) <= 1 && std::llabs(x[1] - previous[1]) <= 1 &&
+                            std::llabs(x[2] - previous[2]) <= 1) {
+                            continue;
+                        }
+                        visit(key_of(x), a, b, pa, d, dd);
+                    }
                 }
             }
-        }
-        for (const std::uint64_t key : cells) {
-            const auto it = grid.find(key);
-            if (it == grid.end()) continue;
-            for (const std::uint32_t p : it->second) {
-                if (p == a || p == b) continue;
-                const D3 w = sub(places[p], pa);
-                const double t = dot(w, d) / dd;
-                if (t <= 1e-4 || t >= 1.0 - 1e-4) continue;
-                const D3 off = sub(w, mul(d, t));
-                if (dot(off, off) <= 1e-8 * dd) out.push_back({p, a, b});
-            }
+            previous = c;
+            have_previous = true;
         }
     }
 }
