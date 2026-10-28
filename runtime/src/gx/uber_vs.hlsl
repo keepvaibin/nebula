@@ -245,7 +245,8 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     const uint key_texmtx_mask = uber_vs_header.w;
     const bool finite_attn = (key_flags & 0x20u) != 0u;
 
-    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);
+    // The vertex's PNMATIDX where the stream carries one, else the draw's CP MatrixIndexA.
+    uint pn_row = min(((key_flags & 0x01u) != 0u ? v.mtx_idx.x : matrix_index_a) & 0x3Fu, 61u);
     float3 pos_in = v.pos;
     float4 wpos;
     if ((key_flags & 0x01u) != 0u) {

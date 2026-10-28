@@ -1635,12 +1635,13 @@ float3 nebula_debake_gain(float3 nrm) {
     s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
     s << "    vertex_blend(v, vertex_id);\n";
 
-    // Unpack the position/normal matrix index from the BLENDINDICES semantic. The GX PNMATIDX value is the
-    // XF row index (PNMTX0=0, PNMTX1=3, ...); a matrix occupies rows n..n+2. The loader resolves the
-    // non-per-vertex default from CP MatrixIndexA, so v.mtx_idx is always authoritative. Clamp to the 64-row
-    // position-matrix region so a bad index cannot read past the palette snapshot. The matrix palette is a
-    // root SRV, and hardware does not clamp out-of-bounds reads, which can page-fault the GPU.
-    s << "    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);\n";
+    // The position/normal matrix's XF row (PNMTX0=0, PNMTX1=3, ...; a matrix occupies rows n..n+2): the vertex's
+    // PNMATIDX (BLENDINDICES) where the stream carries one, else the draw's CP MatrixIndexA, the value the loader
+    // would put in each vertex (so a vertex's bytes do not depend on the draw). Clamped to the 64-row
+    // position-matrix region so a bad index cannot read past the palette snapshot: the matrix palette is a root SRV,
+    // and hardware does not clamp out-of-bounds reads, which can page-fault the GPU.
+    s << ((key.flags & 0x01u) != 0u ? "    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);\n"
+                                    : "    uint pn_row = min(matrix_index_a & 0x3Fu, 61u);\n");
     s << "    float3 pos_in = v.pos;\n";
     if ((key.flags & 0x01u) != 0u) {
         s << "    uint pnmtx_row = pn_row + mtx_palette_base;\n";
