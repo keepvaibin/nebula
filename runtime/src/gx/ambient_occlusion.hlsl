@@ -24,6 +24,7 @@ cbuffer AoConstants : register(b0) {
 
 Texture2D<float> t_depth : register(t0);       // the EFB's depth
 Texture2D<float2> t_occlusion : register(t1);  // occlusion, eye distance
+SamplerState s_block : register(s0);           // point, clamped: the apply's 2x2 gathers
 Texture2D<float> t_distance : register(t2);    // DepthCS's eye distance
 RWTexture2D<float2> u_occlusion : register(u0);
 RWTexture2D<float> u_distance : register(u0);
@@ -257,10 +258,29 @@ float multi_bounce(float visibility) {
     return max(visibility, ((visibility * a + b) * visibility + c) * visibility);
 }
 
+// The colour multiplier of a visibility, display-encoded (the EFB's colour): it rises with the visibility.
+float ao_scale(float visibility) {
+    return pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
+}
+
 float4 ApplyPS(ApplyOut i) : SV_Target {
     const int2 q = int2(i.position.xy);
-    const float depth = t_depth.Load(int3(q, 0));
     const bool view = g_size.w == 1u;
+    // The four nearest occlusion pixels (one per g_size.z x g_size.z EFB pixels), as gathers of their 2x2 block:
+    // components (0,1), (1,1), (1,0), (0,0) from its top-left `base`.
+    const float2 f = (i.position.xy - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
+    const int2 base = int2(floor(f));
+    const float2 corner = (float2(base) + 1.0f) / float2(g_size.xy);
+    float4 block = 1.0f;
+    if (g_size.z > 1u) {
+        block = t_occlusion.GatherRed(s_block, corner);
+        // The visibility is a weighted mean of these four (or one): where even the least of them changes the colour
+        // by less than a half level the pixel keeps it, whatever its depth.
+        if (!view && ao_scale(min(min(block.x, block.y), min(block.z, block.w))) > 1.0f - 0.5f / 255.0f) {
+            discard;
+        }
+    }
+    const float depth = t_depth.Load(int3(q, 0));
     if (far_plane(depth) || !inside(i.position.xy)) {
         if (view) {
             return float4(1.0f, 1.0f, 1.0f, 1.0f);
@@ -273,17 +293,17 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
         visibility = t_occlusion.Load(int3(q, 0)).x;
     } else {
         // The four nearest occlusion pixels, bilinear and weighted by their distance's agreement with this pixel's.
-        const float2 f = (i.position.xy - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
-        const int2 base = int2(floor(f));
         const float2 w = f - float2(base);
         const float tolerance = 1.0f / (0.03f * z + 1.0f);
+        const float4 distances = t_occlusion.GatherGreen(s_block, corner);
+        const float4 occlusion_k = float4(block.w, block.z, block.x, block.y);
+        const float4 distance_k = float4(distances.w, distances.z, distances.x, distances.y);
         float sum = 0.0f;
         float weight = 0.0f;
         [unroll]
         for (int k = 0; k < 4; ++k) {
             const int2 o = int2(k & 1, k >> 1);
-            const int2 at = clamp(base + o, int2(0, 0), int2(g_size.xy) - 1);
-            const float2 s = t_occlusion.Load(int3(at, 0));
+            const float2 s = float2(occlusion_k[k], distance_k[k]);
             const float bilinear = (o.x != 0 ? w.x : 1.0f - w.x) * (o.y != 0 ? w.y : 1.0f - w.y);
             const float agree = s.y > 0.0f ? saturate(1.0f - abs(s.y - z) * tolerance) : 0.0f;
             sum += s.x * bilinear * agree;
@@ -293,7 +313,7 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
     }
     // The occlusion scales light, linear; the EFB holds display-encoded colour. A pixel it would change by less than a
     // half level (8-bit) keeps its colour without a write.
-    const float scale = pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
+    const float scale = ao_scale(visibility);
     if (view) {
         return float4(scale, scale, scale, 1.0f);
     }

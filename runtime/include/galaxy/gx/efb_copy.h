@@ -150,6 +150,12 @@ struct EfbCopyRect {
     std::uint32_t right = 0;
     std::uint32_t bottom = 0;
 };
+// A colour copy whose texture is one channel (I4, or I8 from R, G, B or A): the conversion writes (i, i, i, i), so
+// its destination holds the one byte (R8, viewed as R in every channel, as decoded I8 textures are).
+[[nodiscard]] constexpr bool efb_copy_single_channel(std::uint8_t target_format, bool is_depth_copy) noexcept {
+    return !is_depth_copy && (target_format <= 1u || (target_format >= 7u && target_format <= 10u));
+}
+
 [[nodiscard]] std::optional<EfbCopyRect> efb_identity_copy_rect(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept;

@@ -508,7 +508,8 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
     }
     const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
     // The whole EFB, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
-    if (!efb_pass_open_ && color_enable && (alpha_enable || pixel_format != 1u) && depth_enable && rect.offset.x == 0 &&
+    const bool has_alpha = (pixel_format & ~kEfbClearExact) == 1u;
+    if (!efb_pass_open_ && color_enable && (alpha_enable || !has_alpha) && depth_enable && rect.offset.x == 0 &&
         rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(efb_w) &&
         rect.extent.height == static_cast<std::uint32_t>(efb_h)) {
         begin_efb_pass(&clear);
@@ -518,7 +519,7 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
     const VkCommandBuffer commands = commands_;
     const VkClearRect clear_rect{rect, 0, 1};
     if (color_enable || alpha_enable) {
-        if (pixel_format != 1u) {
+        if (!has_alpha) {
             alpha_enable = true;
         }
         const VkPipeline rgba = efb_utility_pipeline(EfbUtility::ClearRgba);
@@ -1407,7 +1408,7 @@ void RendererVk::draw(const DrawCall& call) {
 VkFramebuffer RendererVk::framebuffer_for(vk::Texture& texture) {
     if (texture.framebuffer == VK_NULL_HANDLE) {
         VkFramebufferCreateInfo info{VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO};
-        info.renderPass = color_pass_;
+        info.renderPass = texture.format == VK_FORMAT_R8_UNORM ? grey_pass_ : color_pass_;
         info.attachmentCount = 1;
         info.pAttachments = &texture.target_view;
         info.width = texture.width;
@@ -1457,8 +1458,9 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     end_efb_pass();
     const VkCommandBuffer commands = commands_;
     transition_efb_for_sampling(commands, is_depth_copy);
+    const bool grey = dest.format == VK_FORMAT_R8_UNORM;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = color_pass_;
+    begin.renderPass = grey ? grey_pass_ : color_pass_;
     begin.framebuffer = framebuffer_for(dest);
     begin.renderArea = {{0, 0}, {dest_w, dest_h}};
     vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
@@ -1467,7 +1469,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     const VkRect2D scissor{{0, 0}, {dest_w, dest_h}};
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_pipeline_);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, grey ? grey_conversion_pipeline_ : conversion_pipeline_);
     const VkDescriptorSet source = is_depth_copy ? efb_.depth_source : efb_.color_source;
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const EfbConversionShaderConstants constants =
@@ -1549,11 +1551,15 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
             retire(std::move(dest.texture));
             efb_copy_dests_bytes_ -= std::min(efb_copy_dests_bytes_, dest.bytes);
         }
+        const bool grey = efb_copy_single_channel(params.target_format, is_depth_copy);
         dest.texture = vk::Context::get().create_texture(
-            w, h, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+            w, h, 1u, grey ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
             true, nullptr);
+        if (dest.texture && grey && !vk::Context::get().grey_view(*dest.texture)) {
+            dest.texture.reset();
+        }
         if (!dest.texture) {
             efb_copy_dests_.erase(dest_key);
             static std::atomic<unsigned> reported{0u};

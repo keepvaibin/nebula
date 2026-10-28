@@ -1661,6 +1661,9 @@ private:
     bool clear_quad_pending_ = false;
     bool clear_quads_ = true;
     std::uint32_t clear_quad_z24_ = 0;
+    // The clear quad's constant colour (RGBA), where its marker gave one.
+    std::uint32_t clear_quad_colour_ = 0;
+    bool clear_quad_has_colour_ = false;
     // The game's EFB clear quad as a depth clear and its colour (motion::kMarkerClearQuad); false: the quad is not
     // the expected one and draws as written.
     bool draw_clear_quad(std::uint8_t vtxfmt, FifoCursor& cursor);

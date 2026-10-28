@@ -67,6 +67,7 @@ public:
     struct PresentStep {
         VkPipeline pipeline = VK_NULL_HANDLE;
         VkImageView input = VK_NULL_HANDLE;
+        VkImageView second = VK_NULL_HANDLE;  // the deband's smoothed picture
         PostConstants constants{};
     };
     PresentStep prepare_present(VkCommandBuffer commands, const Texture& source, unsigned source_width,
@@ -79,7 +80,8 @@ private:
     // The pipelines' SPIR-V, compiled by the worker: vertex and pixel shader per pass.
     enum Program : unsigned {
         kFullscreenVs, kResamplePs, kFxaaPs, kEasuPs, kRcasPs, kRcasScaledPs, kSmaaEdgesVs, kSmaaEdgesPs,
-        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kDebandPs, kProgramCount
+        kSmaaWeightsVs, kSmaaWeightsPs, kSmaaBlendVs, kSmaaBlendPs, kSmaaBlendKeepPs, kDebandPs, kDebandReducePs, kDebandSmoothPs,
+        kDebandApplyPs, kProgramCount
     };
     struct Target {
         std::shared_ptr<Texture> texture;  // its framebuffer is the pass's (with the stencil for edges and weights)
@@ -93,6 +95,7 @@ private:
         VkPipeline rcas_scaled = VK_NULL_HANDLE;
         VkPipeline resample = VK_NULL_HANDLE;
         VkPipeline deband = VK_NULL_HANDLE;
+        VkPipeline deband_apply = VK_NULL_HANDLE;
     };
 
     // Every program, or only the three that depend on the SMAA quality.
@@ -114,6 +117,10 @@ private:
               const VkRect2D& viewport, const PostConstants& constants, const SetAllocator& allocate,
               const VkRect2D* scissor = nullptr) const;
     void self_test();
+    // From 1080 lines `source` (width x height) reduced and smoothed (PASS_DEBAND_REDUCE, PASS_DEBAND_SMOOTH) for the
+    // deband's last pass, PASS_DEBAND_APPLY: the smoothed picture, or none (`reduction` 1: the one-pass deband).
+    VkImageView deband_smoothed(VkCommandBuffer commands, VkImageView source, unsigned width, unsigned height,
+                                unsigned& reduction, const SetAllocator& allocate);
 
     PostProcessSettings settings_{};
     PostProcessStatus status_{};
@@ -156,9 +163,14 @@ private:
     Target stencil_;  // shared by edges and weights
     Target antialiased_;
     Target scaled_;
-    // The debanded picture, source-sized, and its pass (optional).
+    // The debanded picture, source-sized, and its passes (optional); from 1080 lines the reduced picture and its
+    // smoothing.
     Target debanded_;
+    Target deband_reduced_;
+    Target deband_smoothed_;
     VkPipeline deband_ = VK_NULL_HANDLE;
+    VkPipeline deband_reduce_ = VK_NULL_HANDLE;
+    VkPipeline deband_smooth_ = VK_NULL_HANDLE;
 };
 
 }  // namespace galaxy::gx::vk

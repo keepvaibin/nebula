@@ -63,9 +63,17 @@ bool AmbientOcclusion::initialize(ID3D12Device* device) {
         params[i].DescriptorTable.pDescriptorRanges = &ranges[i - 1u];
         params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
     }
+    // The apply's gathers of the occlusion's 2x2 blocks (edges clamped).
+    D3D12_STATIC_SAMPLER_DESC sampler{};
+    sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+    sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
+    sampler.MaxLOD = D3D12_FLOAT32_MAX;
+    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
     D3D12_ROOT_SIGNATURE_DESC rsd{};
     rsd.NumParameters = 3;
     rsd.pParameters = params;
+    rsd.NumStaticSamplers = 1;
+    rsd.pStaticSamplers = &sampler;
     Microsoft::WRL::ComPtr<ID3DBlob> blob;
     Microsoft::WRL::ComPtr<ID3DBlob> errors;
     if (FAILED(D3D12SerializeRootSignature(&rsd, D3D_ROOT_SIGNATURE_VERSION_1, &blob, &errors)) ||

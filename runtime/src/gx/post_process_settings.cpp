@@ -27,9 +27,19 @@ void set_post_input_size(PostConstants& constants, unsigned width, unsigned heig
     constants.rt_metrics[3] = static_cast<float>(height);
 }
 
-void set_deband_constants(PostConstants& constants, unsigned height) noexcept {
-    constants.params[0] = std::max(8.0f, 48.0f * static_cast<float>(height) / 1080.0f);
+void set_deband_constants(PostConstants& constants, unsigned width, unsigned height, unsigned reduction) noexcept {
+    constants.params[0] = std::max(8.0f, 48.0f * static_cast<float>(height) / 1080.0f) / static_cast<float>(reduction);
     constants.params[1] = 1.5f / 255.0f;
+    constants.params[2] = 1.0f / static_cast<float>(deband_reduced_size(width, reduction) * reduction);
+    constants.params[3] = 1.0f / static_cast<float>(deband_reduced_size(height, reduction) * reduction);
+}
+
+unsigned deband_reduction(unsigned height) noexcept {
+    return height < 1080u ? 1u : height < 2160u ? 2u : height < 4320u ? 4u : 8u;
+}
+
+unsigned deband_reduced_size(unsigned size, unsigned reduction) noexcept {
+    return (size + reduction - 1u) / reduction;
 }
 
 bool deband_wanted() noexcept {

@@ -120,7 +120,8 @@ bool TextureBackend::poolable(vk::Texture* texture, std::uint32_t& width, std::u
 }
 
 bool TextureBackend::alias_compatible(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height) {
-    if (texture->format != VK_FORMAT_R8G8B8A8_UNORM || texture->width == 0u || texture->width > UINT16_MAX ||
+    if ((texture->format != VK_FORMAT_R8G8B8A8_UNORM && texture->format != VK_FORMAT_R8_UNORM) ||
+        texture->width == 0u || texture->width > UINT16_MAX ||
         texture->height == 0u || texture->height > UINT16_MAX) {
         return false;
     }

@@ -4292,6 +4292,8 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     if (kind == motion::kMarkerClearQuad) {
         clear_quad_pending_ = true;
         clear_quad_z24_ = a & 0xFFFFFFu;
+        clear_quad_has_colour_ = aux == 1u;
+        clear_quad_colour_ = b;
         return;
     }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
@@ -10809,7 +10811,35 @@ bool GxBackend::draw_clear_quad(std::uint8_t vtxfmt, FifoCursor& cursor) {
                         static_cast<unsigned>(sc.x1 - sc.x0 + 1), static_cast<unsigned>(sc.y1 - sc.y0 + 1),
                         pixel_format);
     ++frame_clear_quads_;
-    if (bm.color_update || (bm.alpha_update && pixel_format == 1u)) {
+    const bool colour = bm.color_update || (bm.alpha_update && pixel_format == 1u);
+    if (colour && clear_quad_has_colour_ && !motion_scene_ && !lit_translucent_ && !lit_late_) {
+        // A constant colour without fog or dither: the 8-bit value the quad's pixel shader stores, as a clear. Its
+        // alpha (an EFB with alpha) is 6-bit: the TEV's (one writes zero) or the destination alpha constant.
+        const PixelShaderKey key = build_pixel_shader_key(state_, renderer_.efb_scale());
+        if (key.num_tev_stages == 1u && key.fog_type == 0u && (key.output_flags & 0x08u) == 0u) {
+            const std::uint32_t c = clear_quad_colour_;
+            std::uint32_t alpha = c & 0xFFu;
+            if (pixel_format == 1u) {
+                alpha = (key.flags & 0x04u) != 0u ? bm.const_alpha : (alpha == 1u ? 0u : alpha);
+                alpha = ((alpha >> 2u) * 255u + 31u) / 63u;
+            }
+            const std::uint32_t ar = (alpha << 8u) | (c >> 24u);
+            const std::uint32_t gb = c >> 8u & 0xFFFFu;
+            // The whole EFB as a whole-target clear (a fast clear where the GPU has one).
+            const bool whole = sc.x0 == 0 && sc.y0 == 0 && static_cast<unsigned>(sc.x1) + 1u >= kEfbWidth &&
+                               static_cast<unsigned>(sc.y1) + 1u >= kEfbHeight;
+            renderer_.clear_efb(ar, gb, 0u, bm.color_update, bm.alpha_update && pixel_format == 1u, false,
+                                whole ? 0u : static_cast<unsigned>(sc.x0), whole ? 0u : static_cast<unsigned>(sc.y0),
+                                whole ? 0u : static_cast<unsigned>(sc.x1 - sc.x0 + 1),
+                                whole ? 0u : static_cast<unsigned>(sc.y1 - sc.y0 + 1),
+                                static_cast<std::uint8_t>(pixel_format | kEfbClearExact));
+            const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
+            const std::uint16_t count = cursor.read_u16();
+            cursor.take(layout.source_size * static_cast<std::size_t>(count));
+            return true;
+        }
+    }
+    if (colour) {
         // Its colour: the same quad without the Z texture or the depth compare and write.
         const std::uint32_t zmode = state_.bp(bp::kZMode);
         state_.load_bp((static_cast<std::uint32_t>(bp::kTevZEnv1) << 24u) | (zenv1 & ~0xCu & 0xFFFFFFu));

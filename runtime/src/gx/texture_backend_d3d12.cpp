@@ -148,7 +148,7 @@ bool TextureBackend::poolable(ID3D12Resource* texture, std::uint32_t& width, std
 bool TextureBackend::alias_compatible(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height) {
     const D3D12_RESOURCE_DESC resource_desc = texture->GetDesc();
     if (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        resource_desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM ||
+        (resource_desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM && resource_desc.Format != DXGI_FORMAT_R8_UNORM) ||
         resource_desc.DepthOrArraySize != 1u || resource_desc.SampleDesc.Count != 1u ||
         resource_desc.Width == 0u || resource_desc.Width > UINT16_MAX ||
         resource_desc.Height == 0u || resource_desc.Height > UINT16_MAX) {

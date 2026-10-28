@@ -511,6 +511,8 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &color_pass_), "copy render pass");
+        attachment.format = VK_FORMAT_R8_UNORM;
+        vk::check(vkCreateRenderPass(device, &info, nullptr, &grey_pass_), "one-channel copy render pass");
     }
     gx_layout_.depth_format = depth_format_;
     gx_layout_.geometry_shaders = context.geometry_shader();
@@ -864,6 +866,8 @@ bool RendererVk::create_utility_pipelines() {
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
                                                    efb_conversion_shader_source(), kAll, false, false, false);
+    grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, blit_vertex_shader_source(),
+                                                        efb_conversion_shader_source(), kAll, false, false, false);
     for (unsigned kind = 0u; kind < static_cast<unsigned>(EfbUtility::Count); ++kind) {
         (void)efb_utility_pipeline(static_cast<EfbUtility>(kind));
     }
@@ -955,8 +959,9 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         utility_commands_ = VK_NULL_HANDLE;
-        for (VkPipeline pipeline : {conversion_pipeline_, blit_pipeline_, ui_solid_pipeline_, ui_textured_pipeline_,
-                                    depth_carry_pipeline_, color_carry_pipeline_, depth_resolve_pipeline_}) {
+        for (VkPipeline pipeline : {conversion_pipeline_, grey_conversion_pipeline_, blit_pipeline_,
+                                    ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
+                                    color_carry_pipeline_, depth_resolve_pipeline_}) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         }
         for (auto& by_samples : efb_utility_pipelines_) {
@@ -965,7 +970,7 @@ void RendererVk::shutdown() {
                 pipeline = VK_NULL_HANDLE;
             }
         }
-        conversion_pipeline_ = blit_pipeline_ = depth_resolve_pipeline_ = VK_NULL_HANDLE;
+        conversion_pipeline_ = grey_conversion_pipeline_ = blit_pipeline_ = depth_resolve_pipeline_ = VK_NULL_HANDLE;
         ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();
@@ -1010,7 +1015,8 @@ void RendererVk::shutdown() {
         if (draw_queries_ != VK_NULL_HANDLE) vkDestroyQueryPool(device, draw_queries_, nullptr);
         draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
-        for (VkRenderPass pass : {present_pass_, color_pass_, gx_layout_.efb_pass, gx_layout_.efb_pass_clear}) {
+        for (VkRenderPass pass :
+             {present_pass_, color_pass_, grey_pass_, gx_layout_.efb_pass, gx_layout_.efb_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
         for (auto* passes : {&gx_layout_.ms_passes, &gx_layout_.ms_passes_clear}) {
@@ -1019,7 +1025,7 @@ void RendererVk::shutdown() {
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = gx_layout_.efb_pass = gx_layout_.efb_pass_clear = VK_NULL_HANDLE;
+        present_pass_ = color_pass_ = grey_pass_ = gx_layout_.efb_pass = gx_layout_.efb_pass_clear = VK_NULL_HANDLE;
         for (VkPipelineLayout layout : {gx_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }

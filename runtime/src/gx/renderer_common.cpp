@@ -450,7 +450,11 @@ EfbClearValues make_efb_clear_values(std::uint32_t ar, std::uint32_t gb,
     std::uint32_t b = gb & 255u, a = (ar >> 8u) & 255u;
     const auto expand6 = [](std::uint32_t v) { return (v & 0xfcu) | (v >> 6u); };
     const auto expand5 = [](std::uint32_t v) { return (v & 0xf8u) | (v >> 5u); };
-    if (pixel_format == 1u) {
+    const bool exact = (pixel_format & kEfbClearExact) != 0u;
+    pixel_format &= static_cast<std::uint8_t>(~kEfbClearExact);
+    if (exact) {
+        if (pixel_format != 1u) a = 255u;
+    } else if (pixel_format == 1u) {
         r = expand6(r); g = expand6(g); b = expand6(b); a = expand6(a);
     } else {
         if (pixel_format == 2u) { r = expand5(r); g = expand6(g); b = expand5(b); }

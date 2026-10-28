@@ -646,6 +646,25 @@ std::shared_ptr<Texture> Context::create_texture(std::uint32_t width, std::uint3
     return texture;
 }
 
+bool Context::grey_view(Texture& texture) const {
+    VkImageViewCreateInfo view_info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+    view_info.image = texture.image;
+    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    view_info.format = VK_FORMAT_R8_UNORM;
+    view_info.components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_R,
+                            VK_COMPONENT_SWIZZLE_R};
+    view_info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, texture.levels, 0, 1};
+    VkImageView view = VK_NULL_HANDLE;
+    if (vkCreateImageView(device_, &view_info, nullptr, &view) != VK_SUCCESS) {
+        return false;
+    }
+    if (texture.view != VK_NULL_HANDLE) {
+        vkDestroyImageView(device_, texture.view, nullptr);
+    }
+    texture.view = view;
+    return true;
+}
+
 bool Context::device_memory_budget(std::uint64_t& usage, std::uint64_t& budget) const noexcept {
     usage = budget = 0u;
     if (allocator_ == nullptr) {

@@ -31,11 +31,15 @@
 #include "post_smaa_weights_ps_ultra.h"
 #include "post_smaa_blend_vs.h"
 #include "post_smaa_blend_ps.h"
+#include "post_smaa_blend_keep_ps.h"
 #include "post_fsr_easu_ps.h"
 #include "post_fsr_rcas_ps.h"
 #include "post_fsr_rcas_scaled_ps.h"
 #include "post_resample_ps.h"
 #include "post_deband_ps.h"
+#include "post_deband_reduce_ps.h"
+#include "post_deband_smooth_ps.h"
+#include "post_deband_apply_ps.h"
 #include "post_fxaa_ps.h"
 
 namespace galaxy::gx {
@@ -56,7 +60,7 @@ constexpr ShaderBytes bytes(const BYTE (&code)[N]) noexcept {
 constexpr DXGI_FORMAT kColorFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 constexpr DXGI_FORMAT kEdgesFormat = DXGI_FORMAT_R8G8_UNORM;
 constexpr DXGI_FORMAT kStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-constexpr unsigned kRtvSlots = 5u;
+constexpr unsigned kRtvSlots = 7u;
 
 D3D12_SHADER_BYTECODE code(ShaderBytes shader) noexcept {
     return {shader.data, shader.size};
@@ -229,8 +233,15 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                         rcas_scaled_) &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_resample_ps)), kColorFormat, 0, resample_);
     // Optional: without it the picture goes on as the game drew it.
-    if (!create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_ps)), kColorFormat, 0, deband_)) {
+    if (!create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_ps)), kColorFormat, 0, deband_) ||
+        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_reduce_ps)), kColorFormat, 0,
+                         deband_reduce_) ||
+        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_smooth_ps)), kColorFormat, 0,
+                         deband_smooth_) ||
+        !create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_deband_apply_ps)), kColorFormat, 0,
+                         deband_apply_)) {
         std::cerr << "[post-process] deband pipeline unavailable\n";
+        deband_.Reset();
     }
     if (!scaling) {
         std::cerr << "[post-process] pipeline creation failed\n";
@@ -244,7 +255,7 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
     const bool smaa_pipelines = !test_fault("smaa") &&
         create_smaa_pipelines(settings_.smaa_quality, smaa_edges_, smaa_weights_) &&
         create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0, smaa_blend_) &&
-        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_ps)), kColorFormat, 0,
+        create_pipeline(code(bytes(g_post_smaa_blend_vs)), code(bytes(g_post_smaa_blend_keep_ps)), kColorFormat, 0,
                         smaa_blend_rgb_, kRgb);
     const bool fxaa_pipeline = !test_fault("fxaa") &&
         create_pipeline(code(bytes(g_post_fullscreen_vs)), code(bytes(g_post_fxaa_ps)), kColorFormat, 0, fxaa_) &&
@@ -302,7 +313,12 @@ bool PostProcessor::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
 
 void PostProcessor::shutdown() noexcept {
     deband_.Reset();
+    deband_reduce_.Reset();
+    deband_smooth_.Reset();
+    deband_apply_.Reset();
     debanded_ = {};
+    deband_reduced_ = {};
+    deband_smoothed_ = {};
     ready_ = false;
     status_.initialized = false;
     status_.smaa_ok = false;
@@ -813,6 +829,48 @@ void PostProcessor::self_test(ID3D12CommandQueue* queue) {
     edges_ = weights_ = antialiased_ = stencil_ = {};
 }
 
+void PostProcessor::record_deband(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring, ID3D12Resource* image,
+                                  unsigned width, unsigned height,
+                                  const std::function<void(D3D12_VIEWPORT&, Constants&)>& bind,
+                                  std::uint64_t frame_index, unsigned frames_in_flight) {
+    const unsigned reduction = deband_reduction(height);
+    const unsigned reduced_width = deband_reduced_size(width, reduction);
+    const unsigned reduced_height = deband_reduced_size(height, reduction);
+    Constants d{};
+    set_post_input_size(d, width, height);
+    D3D12_VIEWPORT viewport{};
+    if (reduction == 1u ||
+        !ensure_target(deband_reduced_, reduced_width, reduced_height, kColorFormat, 5u, frame_index,
+                       frames_in_flight) ||
+        !ensure_target(deband_smoothed_, reduced_width, reduced_height, kColorFormat, 6u, frame_index,
+                       frames_in_flight)) {
+        set_deband_constants(d, width, height, 1u);
+        bind(viewport, d);
+        draw(list, srv_ring, deband_.Get(), {image}, {kColorFormat}, viewport, d);
+        return;
+    }
+    const D3D12_VIEWPORT reduced_viewport{
+        0.0f, 0.0f, static_cast<float>(reduced_width), static_cast<float>(reduced_height), 0.0f, 1.0f};
+    Constants r{};
+    set_post_input_size(r, width, height);
+    r.params[0] = static_cast<float>(reduction);
+    transition(list, deband_reduced_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->OMSetRenderTargets(1, &deband_reduced_.rtv, FALSE, nullptr);
+    draw(list, srv_ring, deband_reduce_.Get(), {image}, {kColorFormat}, reduced_viewport, r);
+    transition(list, deband_reduced_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    Constants s{};
+    set_post_input_size(s, reduced_width, reduced_height);
+    set_deband_constants(s, width, height, reduction);
+    transition(list, deband_smoothed_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+    list->OMSetRenderTargets(1, &deband_smoothed_.rtv, FALSE, nullptr);
+    draw(list, srv_ring, deband_smooth_.Get(), {deband_reduced_.resource.Get()}, {kColorFormat}, reduced_viewport, s);
+    transition(list, deband_smoothed_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    set_deband_constants(d, width, height, reduction);
+    bind(viewport, d);
+    draw(list, srv_ring, deband_apply_.Get(), {image, deband_smoothed_.resource.Get()}, {kColorFormat, kColorFormat},
+         viewport, d);
+}
+
 void PostProcessor::record(ID3D12GraphicsCommandList* list,
                            DescriptorRing& srv_ring,
                            ID3D12Resource* source,
@@ -857,13 +915,14 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         ensure_target(scaled_, target_width, target_height, kColorFormat, 3u, frame_index, frames_in_flight);
     if (deband && !deband_in_window &&
         ensure_target(debanded_, source_width, source_height, kColorFormat, 4u, frame_index, frames_in_flight)) {
-        Constants d = c;
-        set_deband_constants(d, source_height);
-        transition(list, debanded_, D3D12_RESOURCE_STATE_RENDER_TARGET);
-        list->OMSetRenderTargets(1, &debanded_.rtv, FALSE, nullptr);
-        const D3D12_VIEWPORT source_sized{
-            0.0f, 0.0f, static_cast<float>(source_width), static_cast<float>(source_height), 0.0f, 1.0f};
-        draw(list, srv_ring, deband_.Get(), {image}, {kColorFormat}, source_sized, d);
+        record_deband(list, srv_ring, image, source_width, source_height,
+                      [&](D3D12_VIEWPORT& out_viewport, Constants&) {
+                          transition(list, debanded_, D3D12_RESOURCE_STATE_RENDER_TARGET);
+                          list->OMSetRenderTargets(1, &debanded_.rtv, FALSE, nullptr);
+                          out_viewport = {0.0f, 0.0f, static_cast<float>(source_width),
+                                          static_cast<float>(source_height), 0.0f, 1.0f};
+                      },
+                      frame_index, frames_in_flight);
         transition(list, debanded_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         image = debanded_.resource.Get();
     }
@@ -933,12 +992,9 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         draw(list, srv_ring, resample_.Get(), {image}, {kColorFormat}, vp, r);
         if (deband_in_window) {
             transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-            Constants d{};
-            set_post_input_size(d, target_width, target_height);
-            set_deband_constants(d, target_height);
-            D3D12_VIEWPORT window{};
-            into(true, window, d);
-            draw(list, srv_ring, deband_.Get(), {scaled_.resource.Get()}, {kColorFormat}, window, d);
+            record_deband(list, srv_ring, scaled_.resource.Get(), target_width, target_height,
+                          [&](D3D12_VIEWPORT& window, Constants& d) { into(true, window, d); }, frame_index,
+                          frames_in_flight);
             return;
         }
         if (!plan.resample_to_target) {

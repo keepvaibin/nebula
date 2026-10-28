@@ -147,19 +147,28 @@ static inline void __NebulaGXBloomMarker(uint16_t phase, uint32_t a, uint32_t b)
 /* The next draw is an EFB clear quad (MainLoopFramework::clearEfb, MR::clearZBuffer): one quad filling its viewport
    in a constant colour, writing its Z texture's depth (`z`, 24 bits) with the compare always. The renderer clears that
    depth and draws the colour without the Z texture where the draw is the one it expects; else the quad draws as
-   written. In the main ring only. */
+   written. With its colour (__NebulaGXClearQuadColourMarker: the TEV's only stage outputs C0 and A0, `rgba`) the
+   renderer clears the colour too. In the main ring only. */
 enum { NEBULA_GX_MARKER_CLEAR_QUAD = 16 };
 
-static inline void __NebulaGXClearQuadMarker(uint32_t z) {
+static inline void __NebulaGXClearQuadMarkerWith(uint32_t z, uint16_t has_colour, uint32_t rgba) {
     if (__NebulaGXLinked == 0) {
         return;
     }
     uint8_t* const p = __NebulaGXReserve(12);
     p[0] = 0xF0;
     p[1] = NEBULA_GX_MARKER_CLEAR_QUAD;
-    __NebulaGXStore16(p + 2, 0);
+    __NebulaGXStore16(p + 2, has_colour);
     __NebulaGXStore32(p + 4, z);
-    __NebulaGXStore32(p + 8, 0);
+    __NebulaGXStore32(p + 8, rgba);
+}
+
+static inline void __NebulaGXClearQuadMarker(uint32_t z) {
+    __NebulaGXClearQuadMarkerWith(z, 0, 0);
+}
+
+static inline void __NebulaGXClearQuadColourMarker(uint32_t z, uint32_t rgba) {
+    __NebulaGXClearQuadMarkerWith(z, 1, rgba);
 }
 
 /* Indexed load (0x20/0x28/0x30/0x38): the opcode, the index, the address and size word. */

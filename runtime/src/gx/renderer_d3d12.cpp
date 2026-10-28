@@ -1397,6 +1397,9 @@ bool RendererD3D12::create_conversion_pipeline() {
         pd.SampleDesc.Count      = 1;
         d3d_check(device_->CreateGraphicsPipelineState(
             &pd, IID_PPV_ARGS(&conv_pipeline_)), "CreateConvPSO");
+        pd.RTVFormats[0] = DXGI_FORMAT_R8_UNORM;
+        d3d_check(device_->CreateGraphicsPipelineState(
+            &pd, IID_PPV_ARGS(&conv_pipeline_r8_)), "CreateConvPSO R8");
     }
 
     // CPU-only RTV slot reused after each conversion bind is recorded.
@@ -2512,6 +2515,7 @@ void RendererD3D12::shutdown() {
     blit_pipeline_.Reset();
     s_conv_root_sig.Reset();
     conv_pipeline_.Reset();
+    conv_pipeline_r8_.Reset();
     conv_scratch_rtv_slot_.reset();
     conv_rtv_heap_.Reset();
     conv_scratch_rtv_ = {};
@@ -8470,7 +8474,7 @@ void RendererD3D12::clear_efb(
 
     const auto clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
     if (color_enable || alpha_enable) {
-        if (pixel_format != 1u) alpha_enable = true;
+        if ((pixel_format & ~kEfbClearExact) != 1u) alpha_enable = true;
         const float* col = clear.color.data();
         if (color_enable && alpha_enable) {
             command_list_->ClearRenderTargetView(rtv, col, num_rects, rects);
@@ -8841,7 +8845,8 @@ void RendererD3D12::record_conversion_blit(
     command_list_->RSSetViewports(1, &vp);
     command_list_->RSSetScissorRects(1, &sci);
     command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
-    command_list_->SetPipelineState(conv_pipeline_.Get());
+    command_list_->SetPipelineState(dest->GetDesc().Format == DXGI_FORMAT_R8_UNORM ? conv_pipeline_r8_.Get()
+                                                                                     : conv_pipeline_.Get());
 
     const EfbConversionShaderConstants constants =
         make_efb_conversion_constants(
@@ -9036,7 +9041,8 @@ bool RendererD3D12::copy_efb_to_texture(
         rd.Height           = h;
         rd.DepthOrArraySize = 1;
         rd.MipLevels        = 1;
-        rd.Format           = kEfbColorFormat;
+        rd.Format           = efb_copy_single_channel(params.target_format, is_depth_copy) ? DXGI_FORMAT_R8_UNORM
+                                                                                            : kEfbColorFormat;
         rd.SampleDesc.Count = 1;
         rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
         rd.Flags            = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;

@@ -16,6 +16,7 @@
 
 #include <array>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -135,6 +136,10 @@ private:
               const D3D12_VIEWPORT& viewport,
               const Constants& constants);
     void note_aa_run(const PostProcessPlan& plan, AaRun ran);
+    // The deband pass of `image` (width x height) into the render target bound after `bind`, at `viewport`.
+    void record_deband(ID3D12GraphicsCommandList* list, DescriptorRing& srv_ring, ID3D12Resource* image,
+                       unsigned width, unsigned height, const std::function<void(D3D12_VIEWPORT&, Constants&)>& bind,
+                       std::uint64_t frame_index, unsigned frames_in_flight);
     void release_retired(std::uint64_t frame_index) noexcept;
 
     ID3D12Device* device_ = nullptr;
@@ -159,6 +164,9 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_reduce_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_smooth_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_apply_;
     Microsoft::WRL::ComPtr<ID3D12Resource> area_texture_;
     Microsoft::WRL::ComPtr<ID3D12Resource> search_texture_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap_;
@@ -168,8 +176,10 @@ private:
     Target weights_;
     Target antialiased_;
     Target scaled_;
-    // The debanded picture, source-sized.
+    // The debanded picture, source-sized, and from 1080 lines the reduced picture and its smoothing.
     Target debanded_;
+    Target deband_reduced_;
+    Target deband_smoothed_;
     // SMAA's edge mask: the weight pass runs only where edge detection kept a
     // pixel. `rtv` holds its DSV.
     Target stencil_;

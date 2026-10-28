@@ -488,6 +488,7 @@ private:
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants
     VkPipelineLayout conversion_layout_ = VK_NULL_HANDLE;   // conversion set + 64 bytes of push constants
     VkRenderPass color_pass_ = VK_NULL_HANDLE;    // one RGBA8 target, ends shader-readable
+    VkRenderPass grey_pass_ = VK_NULL_HANDLE;     // one R8 target (one-channel copies), ends shader-readable
     VkRenderPass present_pass_ = VK_NULL_HANDLE;  // the swapchain image, cleared, ends presentable
     VkSampler linear_clamp_ = VK_NULL_HANDLE;
     VkSampler point_clamp_ = VK_NULL_HANDLE;
@@ -532,6 +533,7 @@ private:
 
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
+    VkPipeline grey_conversion_pipeline_ = VK_NULL_HANDLE;  // into one-channel copies (grey_pass_)
     // The renderer's own draws into the EFB pass, per EFB sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class EfbUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };

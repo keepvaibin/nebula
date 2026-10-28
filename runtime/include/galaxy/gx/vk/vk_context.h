@@ -140,6 +140,8 @@ public:
 
     // RGBA8 (or `format`) image with a sampled view of `levels` levels; `render_target` adds a level-0 target view.
     // `samples` per pixel above one: a multisampled target (one level).
+    // Replaces an R8 texture's sampled view with one reading R in every channel (GX's I8). False if it fails.
+    bool grey_view(Texture& texture) const;
     [[nodiscard]] std::shared_ptr<Texture> create_texture(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
                                                           VkFormat format, VkImageUsageFlags usage,
                                                           bool render_target, const char* name,
