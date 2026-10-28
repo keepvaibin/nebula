@@ -253,7 +253,8 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
         return;
     }
     const VkDevice device = Context::get().device();
-    for (VkPipeline pipeline : {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample}) {
+    for (VkPipeline pipeline :
+         {to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample, to_present_.deband}) {
         if (pipeline != VK_NULL_HANDLE) {
             Context::get().defer([device, pipeline] { vkDestroyPipeline(device, pipeline, nullptr); });
         }
@@ -267,6 +268,7 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
         to_present_.rcas = create_pipeline(kFullscreenVs, kRcasPs, present_pass_, kRgba, 0);
         to_present_.rcas_scaled = create_pipeline(kFullscreenVs, kRcasScaledPs, present_pass_, kRgba, 0);
         to_present_.resample = create_pipeline(kFullscreenVs, kResamplePs, present_pass_, kRgba, 0);
+        to_present_.deband = create_pipeline(kFullscreenVs, kDebandPs, present_pass_, kRgba, 0);
     }
 }
 
@@ -443,7 +445,8 @@ void PostProcessorVk::destroy_pipelines() noexcept {
     const VkDevice device = context.device();
     for (VkPipeline pipeline : {smaa_edges_, smaa_weights_, smaa_blend_, smaa_blend_rgb_, fxaa_, fxaa_rgb_, deband_,
                                 to_color_.easu, to_color_.rcas, to_color_.rcas_scaled, to_color_.resample,
-                                to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample}) {
+                                to_present_.easu, to_present_.rcas, to_present_.rcas_scaled, to_present_.resample,
+                                to_present_.deband}) {
         if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
     }
     smaa_edges_ = smaa_weights_ = smaa_blend_ = smaa_blend_rgb_ = fxaa_ = fxaa_rgb_ = deband_ = VK_NULL_HANDLE;
@@ -746,9 +749,15 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
                                              status_.smaa_ok, status_.fxaa_ok);
     PresentStep step{};
     set_post_input_size(step.constants, source_width, source_height);
-    // The picture's 8-bit steps smoothed at its own size, before any scaling (PASS_DEBAND).
+    // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one in the
+    // window after the box filter (PostProcessor::record).
     VkImageView input = source.view;
-    if (deband_ != VK_NULL_HANDLE && deband_wanted() &&
+    const bool deband = deband_ != VK_NULL_HANDLE && deband_wanted();
+    const VkPipeline deband_last = present ? to_present_.deband : deband_;
+    const bool deband_in_window = deband && deband_last != VK_NULL_HANDLE && target_width < source_width &&
+        target_height < source_height && plan.resample && !plan.rcas &&
+        ensure_target(scaled_, target_width, target_height, kColorFormat, color_pass_, false);
+    if (deband && !deband_in_window &&
         ensure_target(debanded_, source_width, source_height, kColorFormat, color_pass_, false)) {
         PostConstants d = step.constants;
         set_deband_constants(d, source_height);
@@ -792,13 +801,21 @@ PostProcessorVk::PresentStep PostProcessorVk::prepare_present(VkCommandBuffer co
         step.constants.params[1] = static_cast<float>(source_height);
         step.constants.params[2] = static_cast<float>(target_width);
         step.constants.params[3] = static_cast<float>(target_height);
-        if (plan.resample_to_target) {
+        if (plan.resample_to_target && !deband_in_window) {
             step.pipeline = last.resample;
             return step;
         }
         begin_pass(commands, color_pass_, scaled_, false);
         draw(commands, to_color_.resample, {input}, window, step.constants, allocate);
         vkCmdEndRenderPass(commands);
+        if (deband_in_window) {
+            step.input = scaled_.texture->view;
+            step.constants = {};
+            set_post_input_size(step.constants, target_width, target_height);
+            set_deband_constants(step.constants, target_height);
+            step.pipeline = deband_last;
+            return step;
+        }
     }
     // RCAS of the scaled picture (or of the source at its own size).
     if (plan.easu || plan.resample) {

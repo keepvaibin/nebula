@@ -841,8 +841,21 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
     Constants c{};
     set_post_input_size(c, source_width, source_height);
 
-    // The picture's 8-bit steps smoothed at its own size, before any scaling (PASS_DEBAND).
-    if (deband_ && deband_wanted() &&
+    // The picture's 8-bit steps smoothed (PASS_DEBAND): at its own size before any enlarging; a reduced one (a
+    // supersampled scene) in the window after the box filter, where it has a third or less of the pixels, its taps
+    // stay in the texture cache and its dither is at the size it is seen.
+    const bool deband = deband_ && deband_wanted();
+    // GALAXY_TEST_DEBAND_AB=1: a reduced picture debanded at its own size in every other frame (same-run pictures).
+    static const bool deband_ab = [] {
+        char value[8]{};
+        std::size_t length = 0u;
+        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_DEBAND_AB") == 0 && length > 1u && value[0] == '1';
+    }();
+    const bool deband_in_window = deband && !(deband_ab && (frame_index & 1u) != 0u) &&
+        target_width < source_width && target_height < source_height &&
+        plan.resample && !plan.rcas &&
+        ensure_target(scaled_, target_width, target_height, kColorFormat, 3u, frame_index, frames_in_flight);
+    if (deband && !deband_in_window &&
         ensure_target(debanded_, source_width, source_height, kColorFormat, 4u, frame_index, frames_in_flight)) {
         Constants d = c;
         set_deband_constants(d, source_height);
@@ -916,8 +929,18 @@ void PostProcessor::record(ID3D12GraphicsCommandList* list,
         r.params[2] = static_cast<float>(target_width);
         r.params[3] = static_cast<float>(target_height);
         D3D12_VIEWPORT vp{};
-        into(plan.resample_to_target, vp, r);
+        into(plan.resample_to_target && !deband_in_window, vp, r);
         draw(list, srv_ring, resample_.Get(), {image}, {kColorFormat}, vp, r);
+        if (deband_in_window) {
+            transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            Constants d{};
+            set_post_input_size(d, target_width, target_height);
+            set_deband_constants(d, target_height);
+            D3D12_VIEWPORT window{};
+            into(true, window, d);
+            draw(list, srv_ring, deband_.Get(), {scaled_.resource.Get()}, {kColorFormat}, window, d);
+            return;
+        }
         if (!plan.resample_to_target) {
             transition(list, scaled_, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             image = scaled_.resource.Get();

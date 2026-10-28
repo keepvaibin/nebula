@@ -92,6 +92,7 @@ private:
         VkPipeline rcas = VK_NULL_HANDLE;
         VkPipeline rcas_scaled = VK_NULL_HANDLE;
         VkPipeline resample = VK_NULL_HANDLE;
+        VkPipeline deband = VK_NULL_HANDLE;
     };
 
     // Every program, or only the three that depend on the SMAA quality.
