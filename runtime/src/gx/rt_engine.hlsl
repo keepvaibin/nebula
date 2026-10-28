@@ -198,6 +198,34 @@ uint4 gb_word0(GSurface s)
                  uint(round(saturate(s.metallic) * 255.0f)) | (s.flags << 8u) | (min(s.draw, 0xFFFFu) << 16u));
 }
 
+// What the neighbour taps read of a pixel (gb_guide; the a-trous reads 25 a pixel an iteration): the G-buffer record's
+// eye depth, shading normal (pack_normal), roughness and flags, copied bit for bit into 12 bytes after the records.
+struct GGuide {
+    bool valid;
+    float z;
+    float3 n;
+    float roughness;
+    uint flags;
+};
+
+uint gb_guide_at(uint pixel)
+{
+    return g_target_size.x * g_target_size.y * 32u + pixel * 12u;
+}
+
+GGuide gb_guide(uint view, uint pixel)
+{
+    RWByteAddressBuffer b = ResourceDescriptorHeap[view];
+    const uint3 w = b.Load3(gb_guide_at(pixel));
+    GGuide g;
+    g.valid = w.x != 0u;
+    g.z = asfloat(w.x);
+    g.n = unpack_normal(w.y);
+    g.roughness = float(w.z & 0xFFu) / 255.0f;
+    g.flags = (w.z >> 8u) & 0xFFu;
+    return g;
+}
+
 GSurface gb_load(uint view, uint pixel, float4 projection, int2 q)
 {
     RWByteAddressBuffer b = ResourceDescriptorHeap[view];
@@ -586,6 +614,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
     RWByteAddressBuffer gb = engine_buffer(kEvGBuffer);
     gb.Store4(pixel * 32u, w0);
     gb.Store4(pixel * 32u + 16u, w1);
+    gb.Store3(gb_guide_at(pixel), uint3(w1.x, w0.x, (w0.z >> 24u) | (w0.w & 0xFF00u)));
 }
 
 float3 fresnel_schlick(float3 f0, float cos_theta)
@@ -1883,10 +1912,11 @@ float surface_curvature(GSurface s, int2 q, float2 along)
         const float3 ray = pixel_direction(g_projection, g_viewport, float2(o) + 0.5f);
         const float3 on_plane = ray * (dot(s.ng, s.p) / min(dot(s.ng, ray), -1e-4f));
         const uint op = uint(o.y) * g_target_size.x + uint(o.x);
-        const float z = asfloat(gb.Load(op * 32u + 16u));
+        const uint2 guide = gb.Load2(gb_guide_at(op));
+        const float z = asfloat(guide.x);
         const bool same = z != 0.0f && abs(z - on_plane.z) < 0.02f * abs(s.p.z) + 1.0f && any(o != q);
         x += (same ? on_plane : s.p) * share[k];
-        n += (same ? unpack_normal(gb.Load(op * 32u)) : s.n) * share[k];
+        n += (same ? unpack_normal(guide.y) : s.n) * share[k];
     }
     const float3 edge = x - s.p;
     const float length2 = dot(edge, edge);
@@ -2227,15 +2257,15 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
             continue;
         }
         const uint neighbour = uint(o.y) * g_target_size.x + uint(o.x);
-        const GSurface ns = gb_load(engine_view(kEvGBuffer), neighbour, g_projection, o);
+        const GGuide ns = gb_guide(engine_view(kEvGBuffer), neighbour);
         if (!ns.valid || (ns.flags & kGbEmitter) != 0u || dot(ns.n, s.n) < 0.9f ||
-            abs(ns.p.z - s.p.z) > 0.1f * abs(s.p.z)) {
+            abs(ns.z - s.p.z) > 0.1f * abs(s.p.z)) {
             continue;
         }
         Reservoir other = reservoir_load(engine_view(kEvDiTemp), neighbour);
         samples[taken] = other.s;
         const bool lit = other.W > 0.0f && engine_light_at(other.s.ref, other.s.uv, samples[taken]);
-        at_p[taken] = ns.p;
+        at_p[taken] = eye_position(g_projection, g_viewport, float2(o) + 0.5f, ns.z);
         at_n[taken] = ns.n;
         weight_w[taken] = lit ? other.W : 0.0f;
         count[taken] = other.m;
@@ -2405,7 +2435,7 @@ void shadow_blur(uint2 id, uint stage)
             const float v = shadow_load(stage, op, p);
             float w = 1.0f;
             if (i != 0 || j != 0) {
-                const float z = asfloat(gb.Load(op * 32u + 16u));
+                const float z = asfloat(gb.Load(gb_guide_at(op)));
                 if (z != 0.0f && p != 0.0f) {
                     const float3 x = eye_position(g_projection, g_viewport, float2(o) + 0.5f, z);
                     // Within the centre's own penumbra, a pixel at least (none lit: its whole 5 x 5).
@@ -2460,7 +2490,7 @@ void shadow_blur(uint2 id, uint stage)
         const uint op = uint(o.y) * g_target_size.x + uint(o.x);
         float p;
         const float v = shadow_load(stage, op, p);
-        const float z = asfloat(gb.Load(op * 32u + 16u));
+        const float z = asfloat(gb.Load(gb_guide_at(op)));
         if (z == 0.0f || p == 0.0f) {
             continue;
         }
@@ -2541,9 +2571,9 @@ void EngineShadowStabilizeCS(uint3 id : SV_DispatchThreadID)
                     continue;
                 }
                 const uint op = uint(o.y) * g_target_size.x + uint(o.x);
-                const uint4 w0 = gb.Load4(op * 32u);
-                const uint w1 = gb.Load(op * 32u + 16u);
-                if (w1 == 0u || abs(asfloat(w1) - hp.z) > hp.tolerance || dot(unpack_normal(w0.x), hp.n) < hp.facing) {
+                const uint2 guide = gb.Load2(gb_guide_at(op));
+                if (guide.x == 0u || abs(asfloat(guide.x) - hp.z) > hp.tolerance ||
+                    dot(unpack_normal(guide.y), hp.n) < hp.facing) {
                     continue;
                 }
                 const float w = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
@@ -2773,9 +2803,9 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         }
         const int2 o = gi_pixel(uint2(ho));
         const uint neighbour = uint(o.y) * g_target_size.x + uint(o.x);
-        const GSurface ns = gb_load(engine_view(kEvGBuffer), neighbour, g_projection, o);
+        const GGuide ns = gb_guide(engine_view(kEvGBuffer), neighbour);
         if (!ns.valid || (ns.flags & kGbEmitter) != 0u || dot(ns.n, s.n) < 0.9f ||
-            abs(ns.p.z - s.p.z) > 0.1f * abs(s.p.z)) {
+            abs(ns.z - s.p.z) > 0.1f * abs(s.p.z)) {
             continue;
         }
         const GiReservoir other = gi_load(engine_view(kEvGiTemp), uint(ho.y) * half_size.x + uint(ho.x));
@@ -2786,7 +2816,7 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         // |cos at the sample towards here| / |cos towards there| x (distance there / distance here)^2; a neighbour
         // whose sample's solid angle differs past tenfold is not reused (its weight would be mostly wrong).
         const float3 to_here = s.p - other.x;
-        const float3 to_there = ns.p - other.x;
+        const float3 to_there = eye_position(g_projection, g_viewport, float2(o) + 0.5f, ns.z) - other.x;
         const float d_here = length(to_here);
         const float d_there = length(to_there);
         const float jacobian = d_here > 1e-3f && d_there > 1e-3f
@@ -2887,10 +2917,10 @@ float3 gi_upsampled(GSurface s, int2 q)
             continue;
         }
         const int2 at = gi_pixel(uint2(o));
-        const GSurface ns = gb_load(engine_view(kEvGBuffer), uint(at.y) * g_target_size.x + uint(at.x), g_projection, at);
+        const GGuide ns = gb_guide(engine_view(kEvGBuffer), uint(at.y) * g_target_size.x + uint(at.x));
         const float bilinear = ((k & 1u) != 0u ? f.x : 1.0f - f.x) * ((k & 2u) != 0u ? f.y : 1.0f - f.y);
         const float w = (bilinear + 1e-3f) * pow(saturate(dot(ns.n, s.n)), 32.0f) *
-                        exp(-abs(ns.p.z - s.p.z) / (0.02f * abs(s.p.z) + 1.0f));
+                        exp(-abs(ns.z - s.p.z) / (0.02f * abs(s.p.z) + 1.0f));
         sum += float3(f16tof32(v.x), f16tof32(v.x >> 16u), f16tof32(v.y & 0xFFFFu)) * w;
         weight += w;
     }
@@ -3207,8 +3237,8 @@ float depth_gradient(int2 q, float z)
     RWByteAddressBuffer gb = engine_buffer(kEvGBuffer);
     const int2 qx = min(q + int2(1, 0), int2(g_target_size) - 1);
     const int2 qy = min(q + int2(0, 1), int2(g_target_size) - 1);
-    const float zx = asfloat(gb.Load((uint(qx.y) * g_target_size.x + uint(qx.x)) * 32u + 16u));
-    const float zy = asfloat(gb.Load((uint(qy.y) * g_target_size.x + uint(qy.x)) * 32u + 16u));
+    const float zx = asfloat(gb.Load(gb_guide_at(uint(qx.y) * g_target_size.x + uint(qx.x))));
+    const float zy = asfloat(gb.Load(gb_guide_at(uint(qy.y) * g_target_size.x + uint(qy.x))));
     const float limit = abs(z) * 0.05f + 1.0f;
     const float gx = zx != 0.0f && abs(zx - z) < limit ? abs(zx - z) : 0.0f;
     const float gy = zy != 0.0f && abs(zy - z) < limit ? abs(zy - z) : 0.0f;
@@ -3271,7 +3301,7 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
                 continue;
             }
             const uint op = uint(o.y) * g_target_size.x + uint(o.x);
-            const GSurface ns = gb_load(engine_view(kEvGBuffer), op, g_projection, o);
+            const GGuide ns = gb_guide(engine_view(kEvGBuffer), op);
             if (!ns.valid || (ns.flags & kGbEmitter) != 0u) {
                 continue;
             }
@@ -3279,7 +3309,7 @@ void EngineAtrousCS(uint3 id : SV_DispatchThreadID)
             const float3 nd = float3(f16tof32(nc.x), f16tof32(nc.x >> 16u), f16tof32(nc.y));
             const float3 nsp = float3(f16tof32(nc.z), f16tof32(nc.z >> 16u), f16tof32(nc.w));
             const float h = kernel[abs(i)] * kernel[abs(j)];
-            const float wz = exp(-abs(ns.p.z - s.p.z) / (z_grad * length(float2(i, j)) * float(step) + 1.0f));
+            const float wz = exp(-abs(ns.z - s.p.z) / (z_grad * length(float2(i, j)) * float(step) + 1.0f));
             const float nn = saturate(dot(ns.n, s.n));
             const float wn = pow(nn, normal_power);
             const float wd = h * wz * wn * exp(-abs(luminance(nd) - ld) / sigma_d);

@@ -112,7 +112,7 @@ D3D12_RESOURCE_BARRIER all_uavs() {
 
 // The engine's buffers: bytes per pixel (full resolution) or per half-resolution sample.
 const SceneRayTracer::EngineBufferSpec SceneRayTracer::kEngineBufferSpecs[kEngineBuffers] = {
-    {32u, false, L"rt engine gbuffer 0"},   {32u, false, L"rt engine gbuffer 1"},
+    {44u, false, L"rt engine gbuffer 0"},   {44u, false, L"rt engine gbuffer 1"},
     {16u, false, L"rt engine di temp"},     {16u, false, L"rt engine di 0"},
     {16u, false, L"rt engine di 1"},        {16u, false, L"rt engine direct"},
     {32u, true, L"rt engine gi temp"},      {32u, true, L"rt engine gi 0"},
@@ -327,7 +327,7 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     engine_height_ = height;
     engine_fresh_ = true;
     std::cerr << "[rt] engine buffers " << width << 'x' << height << " mb="
-              << ((full * (32u * 2u + 16u * 3u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >>
+              << ((full * (44u * 2u + 16u * 3u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >>
                   20u)
               << " in " << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - made_from).count()
               << " ms\n";
