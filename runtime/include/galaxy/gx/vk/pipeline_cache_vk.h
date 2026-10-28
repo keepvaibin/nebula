@@ -102,6 +102,7 @@ private:
         PsoKey key{};
         VertexShaderKey vs_key{};
         PixelShaderKey ps_key{};
+        std::uint32_t unused = 0;  // the record's size a multiple of PsoKey's alignment, with no padding
     };
     // Written and read as raw records (vk_keys.bin).
     static_assert(std::has_unique_object_representations_v<Entry>);

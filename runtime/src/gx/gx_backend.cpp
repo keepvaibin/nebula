@@ -10677,13 +10677,20 @@ bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t 
 
 gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
     // A triangle a factor-one patch outputs unchanged draws the same pixels in a triangle list, but in another place
-    // in the draw's order: only where that order cannot show (no blending or logic op; a depth test that passes by
-    // nearness, written).
+    // in the draw's order: only where that order cannot show. Opaque: no blending or logic op, a depth test that
+    // passes by nearness, written. Or a sum: both factors one, added or subtracted (the shadow volumes' alpha), into a
+    // fixed-point EFB (its clamped sums do not depend on their order; float sums round by it), with depth not written
+    // and no other target.
     const RenderStateKey& rs = curved_key.render_state;
     const unsigned depth_func = (rs.zmode_bits >> 1u) & 0x7u;
     const bool ordered_by_depth = (rs.zmode_bits & 0x11u) == 0x11u &&
         (depth_func == 1u || depth_func == 3u || depth_func == 4u || depth_func == 6u);
-    if ((rs.blend_bits & 0x101u) != 0u || !ordered_by_depth) {
+    const bool opaque = (rs.blend_bits & 0x101u) == 0u && ordered_by_depth;
+    constexpr std::uint32_t kOtherTargets =
+        kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget;
+    const bool sum = (rs.blend_bits & 0x1FDu) == 0x25u && (rs.blend_bits & kOtherTargets) == 0u &&
+                     (rs.samples_log2 & kEfbVariantHdr) == 0u && (rs.zmode_bits & 0x10u) == 0u;
+    if (!opaque && !sum) {
         return nullptr;
     }
     VertexShaderKey vs_key = vs_key_;
@@ -10917,6 +10924,15 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             sky_up_dirty_ = true;   // the scene constants' upload
         }
     }
+    // The vertex shaders carry interpolation's vertex blend only in frames recorded for interpolated redraws, and the
+    // de-baking only under physical ray tracing (kVsFeature*).
+    const std::uint32_t vs_features = (interp_recording_ ? kVsFeatureVertexBlend : 0u) |
+                                      ((enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u ? kVsFeatureDebake : 0u);
+    const bool vs_features_changed = vs_key_.features != vs_features;
+    if (vs_features_changed) {
+        vs_key_.features = vs_features;
+        current_vs_hash_ = vs_key_.hash();
+    }
     bool enhanced = false;
     bool enhanced_changed = false;
     {
@@ -11138,7 +11154,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     }
     if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
         tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
-        motion_key_changed || curved_changed) {
+        motion_key_changed || curved_changed || vs_features_changed) {
         const PsoKey pso_key{
             current_vs_hash_,
             current_ps_hash_,

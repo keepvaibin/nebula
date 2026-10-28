@@ -120,6 +120,12 @@ inline constexpr std::uint8_t kPsKeyRtPaths = 0x40u;
 // is kTopologyPatch with the vertex output's variant in its high bits, which picks the hull and domain shaders
 // (ShaderGenerator::curved_stage_source).
 inline constexpr std::uint8_t kVsKeyCurved = 0x80u;
+// VertexShaderKey::features: code a vertex shader carries only for the frames that run it. Interpolated redraws blend
+// each vertex with the matching draw's of the frame before (kVertexBlendDef): the vertex shaders of a frame recorded for
+// them. Physical ray tracing de-bakes vertex colours (GxVsConstants::flags bits 2, 3 and 6): the vertex shaders of its
+// frames.
+inline constexpr std::uint32_t kVsFeatureVertexBlend = 0x1u;
+inline constexpr std::uint32_t kVsFeatureDebake = 0x2u;
 inline constexpr std::uint8_t kTopologyTypeMask = 0x0Fu;
 inline constexpr std::uint8_t kTopologyPatch = 4u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH
 inline constexpr std::uint8_t kCurvedPerPixel = 0x10u;  // the per-pixel lighting interpolants
@@ -212,6 +218,7 @@ struct VertexShaderKey {
     std::uint32_t post_texgen[8];   // raw XF 0x1050+n (dual-tex transforms)
     std::uint32_t channel[4];       // raw XF 0x100E+n: color0, color1,
                                     // alpha0, alpha1 (zeroed past num_chans)
+    std::uint32_t features;         // kVsFeature*
 
     [[nodiscard]] bool operator==(const VertexShaderKey& other) const noexcept {
         return key_bytes_equal(this, &other, sizeof(*this));
@@ -220,7 +227,7 @@ struct VertexShaderKey {
         return fnv1a64(this, sizeof(*this));
     }
 };
-static_assert(sizeof(VertexShaderKey) == 4 + 8 * 4 + 8 * 4 + 4 * 4);
+static_assert(sizeof(VertexShaderKey) == 4 + 8 * 4 + 8 * 4 + 4 * 4 + 4);
 static_assert(std::has_unique_object_representations_v<VertexShaderKey>);
 
 // RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene EFB

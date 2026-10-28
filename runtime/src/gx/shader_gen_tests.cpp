@@ -583,10 +583,23 @@ int main() {
         run_vs(k, "vs_texgen_x8");
     }
 
+    // Physical ray tracing's de-baking only in its frames' vertex shaders.
+    {
+        const ShaderGenerator gen;
+        VertexShaderKey k{};
+        std::memset(&k, 0, sizeof(k));
+        k.num_chans = 1;
+        k.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);
+        check_not_contains(gen.generate_vs(k), "nebula_debake", "vs_without_debake");
+        k.features = kVsFeatureDebake;
+        check_contains(gen.generate_vs(k), "nebula_debake_gain(v.nrm)", "vs_debake");
+        run_vs(k, "vs_debake");
+    }
+
     // Motion-vector variants.
     {
         const ShaderGenerator gen;
-        for (unsigned variant = 0; variant < 4u; ++variant) {
+        for (unsigned variant = 0; variant < 8u; ++variant) {
             VertexShaderKey k{};
             std::memset(&k, 0, sizeof(k));
             k.num_chans = 1;
@@ -597,6 +610,8 @@ int main() {
                 k.flags |= 0x02u | kVsKeyPerPixelLighting;
                 k.channel[0] = chan_ctrl(false, true, 0x01, false, 1, 1);
             }
+            const bool blend = (variant & 4u) != 0u;
+            k.features = blend ? kVsFeatureVertexBlend : 0u;
             const std::string src = gen.generate_vs(k);
             char label[64];
             std::snprintf(label, sizeof(label), "vs_motion_variant%u", variant);
@@ -604,9 +619,15 @@ int main() {
             check_contains(src, (variant & 1u) != 0u ? "motion_ctrl.x == 0u"
                                                      : "dot(motion_prev_pos[0], float4(vb_pos_prev",
                            label);
-            // Replays take the presented frame's jitter and the blended position before it.
+            // Replays take the presented frame's jitter and the blended position before it; without them, the game
+            // frame's (no jitter, the vertex's own position).
             check_contains(src, "o.pos.xy += jitter_ndc * o.pos.w", label);
-            check_contains(src, "vb_pos_prev = lerp(earlier, v.pos, vb_t_prev)", label);
+            if (blend) {
+                check_contains(src, "vb_pos_prev = lerp(earlier, v.pos, vb_t_prev)", label);
+            } else {
+                check_not_contains(src, "vertex_blend(", label);
+                check_contains(src, "const float3 vb_pos_prev = v.pos;", label);
+            }
             Microsoft::WRL::ComPtr<ID3DBlob> code, errors;
             const HRESULT hr = D3DCompile(src.data(), src.size(), label, nullptr, nullptr,
                 "main", "vs_5_1", D3DCOMPILE_ENABLE_STRICTNESS |

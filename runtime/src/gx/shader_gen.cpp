@@ -495,6 +495,39 @@ void vertex_blend(inout VSIn v, uint id) {
 }
 )HLSL";
 
+// Physical ray tracing's de-baked vertex colours (kVsFeatureDebake).
+static constexpr const char* kVsDebakeDef = R"HLSL(
+// Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
+// lit facing (debake_peak: its light at the player's up, GxBackend::flush_draw_state) over the light at this vertex's
+// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; GxBackend::fit_debake_light), 1/4 to 4.
+// No normal: 1.
+float3 nebula_debake_gain(float3 nrm) {
+    const float len2 = dot(nrm, nrm);
+    if (!(len2 > 0.25)) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    const float3 n = nrm * rsqrt(len2);
+    const float y[9] = {0.282095, 0.488603 * n.y, 0.488603 * n.z, 0.488603 * n.x, 1.092548 * n.x * n.y,
+                        1.092548 * n.y * n.z, 0.315392 * (3.0 * n.z * n.z - 1.0), 1.092548 * n.x * n.z,
+                        0.546274 * (n.x * n.x - n.y * n.y)};
+    float3 light = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint i = 0u; i < 9u; ++i) {
+        light.r += debake_sh[i >> 2u][i & 3u] * y[i];
+        light.g += debake_sh[(9u + i) >> 2u][(9u + i) & 3u] * y[i];
+        light.b += debake_sh[(18u + i) >> 2u][(18u + i) & 3u] * y[i];
+    }
+    const float3 peak = max(debake_peak.rgb, 1e-3);
+    return clamp(peak / max(light, peak * 0.25), 0.25, 4.0);
+}
+
+// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
+float3 nebula_debake(float3 c) {
+    const float m = max(c.r, max(c.g, c.b));
+    return m > (1.0 / 255.0) ? c / m : c;
+}
+
+)HLSL";
+
 static std::string insert_before_close(const char* text, const char* members, bool last) {
     std::string out(text);
     const std::size_t at = last ? out.rfind("};") : out.find("};");
@@ -1569,7 +1602,11 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     if (curved) {
         s << kCurveCodec;
     }
-    s << kVertexBlendDef;
+    const bool blend = (key.features & kVsFeatureVertexBlend) != 0u;
+    const bool debake = (key.features & kVsFeatureDebake) != 0u;
+    if (blend) {
+        s << kVertexBlendDef;
+    }
 
     const bool dual_tex = (key.flags & 0x04u) != 0u;
 
@@ -1602,38 +1639,22 @@ float xfw(uint w) {
     }
     const bool finite_attn = (key.flags & kVsKeyFiniteLightAttn) != 0u;
 
-    s << R"HLSL(// Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
-// lit facing (debake_peak: its light at the player's up, GxBackend::flush_draw_state) over the light at this vertex's
-// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; GxBackend::fit_debake_light), 1/4 to 4.
-// No normal: 1.
-float3 nebula_debake_gain(float3 nrm) {
-    const float len2 = dot(nrm, nrm);
-    if (!(len2 > 0.25)) {
-        return float3(1.0, 1.0, 1.0);
+    if (debake) {
+        s << kVsDebakeDef;
     }
-    const float3 n = nrm * rsqrt(len2);
-    const float y[9] = {0.282095, 0.488603 * n.y, 0.488603 * n.z, 0.488603 * n.x, 1.092548 * n.x * n.y,
-                        1.092548 * n.y * n.z, 0.315392 * (3.0 * n.z * n.z - 1.0), 1.092548 * n.x * n.z,
-                        0.546274 * (n.x * n.x - n.y * n.y)};
-    float3 light = float3(0.0, 0.0, 0.0);
-    [unroll] for (uint i = 0u; i < 9u; ++i) {
-        light.r += debake_sh[i >> 2u][i & 3u] * y[i];
-        light.g += debake_sh[(9u + i) >> 2u][(9u + i) & 3u] * y[i];
-        light.b += debake_sh[(18u + i) >> 2u][(18u + i) & 3u] * y[i];
+
+    if (blend) {
+        s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
+        s << "    vertex_blend(v, vertex_id);\n";
+    } else {
+        // A game frame's values (kVertexBlendDef's with the frame's zero element): no jitter of a presented frame, the
+        // position before the vertex's own.
+        s << "VSOut main(VSIn v) {\n";
+        if (motion) {
+            s << "    const float2 vb_jitter = float2(0.0, 0.0);\n"
+                 "    const float3 vb_pos_prev = v.pos;\n";
+        }
     }
-    const float3 peak = max(debake_peak.rgb, 1e-3);
-    return clamp(peak / max(light, peak * 0.25), 0.25, 4.0);
-}
-
-)HLSL";
-    // A vertex colour with its baked light removed: its hue at full brightness (black stays black).
-    s << "float3 nebula_debake(float3 c) {\n"
-         "    const float m = max(c.r, max(c.g, c.b));\n"
-         "    return m > (1.0 / 255.0) ? c / m : c;\n"
-         "}\n\n";
-
-    s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
-    s << "    vertex_blend(v, vertex_id);\n";
 
     // The position/normal matrix's XF row (PNMTX0=0, PNMTX1=3, ...; a matrix occupies rows n..n+2): the vertex's
     // PNMATIDX (BLENDINDICES) where the stream carries one, else the draw's CP MatrixIndexA, the value the loader
@@ -1704,16 +1725,18 @@ float3 nebula_debake_gain(float3 nrm) {
     s << "        float((v.color1 >> 16u) & 0xFFu) / 255.0,\n";
     s << "        float((v.color1 >>  8u) & 0xFFu) / 255.0,\n";
     s << "        float((v.color1       ) & 0xFFu) / 255.0);\n";
-    // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
-    // Bit 6: by the model's facing fit (nebula_debake_gain); else each colour over its brightest channel.
-    s << "    if ((flags & 64u) != 0u) {\n"
-         "        const float3 debake_gain = nebula_debake_gain(v.nrm);\n"
-         "        if ((flags & 4u) != 0u) vtx_col0.rgb = saturate(vtx_col0.rgb * debake_gain);\n"
-         "        if ((flags & 8u) != 0u) vtx_col1.rgb = saturate(vtx_col1.rgb * debake_gain);\n"
-         "    } else {\n";
-    s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);\n";
-    s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n";
-    s << "    }\n";
+    if (debake) {
+        // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
+        // Bit 6: by the model's facing fit (nebula_debake_gain); else each colour over its brightest channel.
+        s << "    if ((flags & 64u) != 0u) {\n"
+             "        const float3 debake_gain = nebula_debake_gain(v.nrm);\n"
+             "        if ((flags & 4u) != 0u) vtx_col0.rgb = saturate(vtx_col0.rgb * debake_gain);\n"
+             "        if ((flags & 8u) != 0u) vtx_col1.rgb = saturate(vtx_col1.rgb * debake_gain);\n"
+             "    } else {\n";
+        s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);\n";
+        s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n";
+        s << "    }\n";
+    }
     s << "\n";
 
     if (lighting_used) {
@@ -3227,11 +3250,12 @@ std::string ShaderGenerator::describe(const PixelShaderKey& key) {
 std::string ShaderGenerator::describe(const VertexShaderKey& key) {
     char buf[128];
     std::snprintf(buf, sizeof(buf),
-        "VS:tg=%u chans=%u flags=0x%02x tmidx=0x%02x",
+        "VS:tg=%u chans=%u flags=0x%02x tmidx=0x%02x features=0x%x",
         static_cast<unsigned>(key.num_texgens),
         static_cast<unsigned>(key.num_chans),
         static_cast<unsigned>(key.flags),
-        static_cast<unsigned>(key.texmtx_idx_mask));
+        static_cast<unsigned>(key.texmtx_idx_mask),
+        static_cast<unsigned>(key.features));
     return buf;
 }
 
