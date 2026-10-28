@@ -24,4 +24,8 @@ public:
 private:
     /* 0x04 */ u32 mDisplayListSize;
     /* 0x08 */ void* mDisplayList;
+#ifdef TARGET_PC
+    // The renderer's handle for this list (__NebulaGXCallShapeDisplayList): one per shape draw, never reused.
+    u32 mNebulaHandle;
+#endif
 };

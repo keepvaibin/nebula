@@ -556,6 +556,24 @@ private:
         GxState& state,
         std::size_t opcode_offset) const;
 
+    // A shape list marker (motion::kMarkerShapeList): its handle's recording replayed when it is still the list at
+    // that address and size (a model's list does not change while its handle lives), else the list called as CALL_DL
+    // and the handle bound to what that recorded.
+    void call_shape_list(
+        std::uint32_t handle,
+        std::uint32_t guest_addr,
+        std::uint32_t byte_size,
+        GuestMemory* memory,
+        FifoSink& sink,
+        GxState& state,
+        std::size_t opcode_offset,
+        DisplayListRecording* recording);
+    struct ShapeBinding {
+        std::uint32_t slot = ~std::uint32_t{0};
+        std::uint64_t cache_token = 0;
+    };
+    std::vector<ShapeBinding> shape_bindings_;
+
     void record_display_list_cp_dependency(
         DisplayListRecording* recording,
         const GxState& state,

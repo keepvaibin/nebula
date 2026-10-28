@@ -67,13 +67,26 @@ void J3DShapeDraw::addTexMtxIndexInDL(u32 stride, u32 attrOffs, u32 valueBase) {
     DCStoreRange(newDLStart, mDisplayListSize);
 }
 
+#ifdef TARGET_PC
+namespace {
+    u32 sNebulaHandles = 0;
+}
+#endif
+
 J3DShapeDraw::J3DShapeDraw(const u8* displayList, u32 displayListSize) {
     mDisplayList = const_cast< u8* >(displayList);
     mDisplayListSize = displayListSize;
+#ifdef TARGET_PC
+    mNebulaHandle = ++sNebulaHandles;
+#endif
 }
 
 void J3DShapeDraw::draw() const {
+#ifdef TARGET_PC
+    __NebulaGXCallShapeDisplayList(mDisplayList, mDisplayListSize, mNebulaHandle);
+#else
     GXCallDisplayList(mDisplayList, mDisplayListSize);
+#endif
 }
 
 J3DShapeDraw::~J3DShapeDraw() {
