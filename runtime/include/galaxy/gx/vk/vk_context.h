@@ -63,7 +63,13 @@ struct Buffer {
     ~Buffer();
 };
 
-// A host-visible, persistently mapped buffer without a GX address (create_buffer wraps one in a Buffer).
+// Where a buffer's memory lies. Host: host memory the GPU reads across the bus (D3D12's upload heap), for data
+// written each frame. DeviceMapped: device memory the CPU writes where the device maps it (unified memory, resizable
+// BAR), else host memory, for data the GPU reads every frame. Device: device memory only, for what the GPU writes.
+enum class BufferPlace : std::uint8_t { Host, DeviceMapped, Device };
+
+// A persistently mapped buffer (unmapped in BufferPlace::Device) without a GX address (create_buffer wraps one in a
+// Buffer).
 struct MappedBuffer {
     VkBuffer buffer = VK_NULL_HANDLE;
     VmaAllocation_T* allocation = nullptr;
@@ -103,6 +109,8 @@ public:
     [[nodiscard]] bool sampler_anisotropy() const noexcept { return sampler_anisotropy_; }
     // shaderImageGatherExtended: a gather of one chosen channel (FSR 1 EASU's GatherRed/Green/Blue).
     [[nodiscard]] bool gather_extended() const noexcept { return gather_extended_; }
+    // pipelineStatisticsQuery: GALAXY_GPU_PASSES' shader invocation counts.
+    [[nodiscard]] bool pipeline_statistics() const noexcept { return pipeline_statistics_; }
     [[nodiscard]] bool depth_clamp() const noexcept { return depth_clamp_; }
     // VK_EXT_depth_clip_enable: clamping without giving up clipping (D3D's rasterizer).
     [[nodiscard]] bool depth_clip_enable() const noexcept { return depth_clip_enable_; }
@@ -140,9 +148,11 @@ public:
     // and from linear images.
     [[nodiscard]] std::shared_ptr<Texture> create_linear_image(std::uint32_t width, std::uint32_t height,
                                                                VkFormat format, const char* name);
-    [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
-    // A mapped buffer with a GX address.
-    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name);
+    [[nodiscard]] MappedBuffer create_mapped_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
+                                                    BufferPlace place = BufferPlace::Host);
+    // A buffer with a GX address.
+    [[nodiscard]] std::shared_ptr<Buffer> create_buffer(std::uint64_t size, VkBufferUsageFlags usage, const char* name,
+                                                        BufferPlace place = BufferPlace::Host);
     // A mapped transfer-destination buffer the CPU reads (readbacks), in cached host memory (coherent where the driver
     // reads that back faster: DeviceQuirks::coherent_readback); no GX address.
     [[nodiscard]] std::shared_ptr<Buffer> create_readback_buffer(std::uint64_t size, const char* name);
@@ -193,6 +203,7 @@ private:
     bool tessellation_shader_ = false;
     bool sampler_anisotropy_ = false;
     bool gather_extended_ = false;
+    bool pipeline_statistics_ = false;
     bool bc_textures_ = false;
     bool memory_budget_ = false;
     bool display_timing_ = false;  // VK_GOOGLE_display_timing

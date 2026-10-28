@@ -238,10 +238,9 @@ public:
                                            bool palette_rows);
     // The frame being recorded (DrawCall::curve_sort_list).
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
-    // The resident decoded vertices (RendererD3D12::create_resident_vertices); host-visible memory on Vulkan.
-    [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name) {
-        return create_upload_buffer(bytes, name);
-    }
+    // The resident decoded vertices (RendererD3D12::create_resident_vertices): written once, read every frame, so in
+    // device memory where the device maps it (vk::BufferPlace::DeviceMapped).
+    [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
     void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
     [[nodiscard]] bool copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy);
@@ -989,6 +988,54 @@ private:
     VkQueryPool timestamps_ = VK_NULL_HANDLE;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
     double timestamp_period_ns_ = 0.0;
+    // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms (RendererD3D12's). A mark starts a pass in
+    // the frame's commands; the time to the next mark (or the frame's end) is that pass's. The curved surfaces' sort,
+    // in the upload commands, takes the two queries after the frame's marks.
+    enum class GpuPass : std::uint8_t {
+        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
+    };
+    static constexpr unsigned kGpuPassSlots = 512;
+    void gpu_pass(GpuPass pass);
+    void read_gpu_passes();
+    class GpuPassScope {
+    public:
+        GpuPassScope(RendererVk& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
+            renderer_.gpu_pass(pass);
+        }
+        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        GpuPassScope(const GpuPassScope&) = delete;
+        GpuPassScope& operator=(const GpuPassScope&) = delete;
+    private:
+        RendererVk& renderer_;
+        GpuPass outer_;
+    };
+    VkQueryPool pass_queries_ = VK_NULL_HANDLE;
+    // The frame's shader invocations (gpu-stats): vertex, tessellation control patches and evaluation, clipped
+    // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
+    VkQueryPool stats_queries_ = VK_NULL_HANDLE;
+    // GALAXY_GPU_DRAWS=1: each GX draw between two timestamps, its time summed by pipeline for present-stats'
+    // [gpu-draws] lines (RendererD3D12's; the timestamps serialize the draws: the total grows, the shares hold).
+    static constexpr unsigned kGpuDrawSlots = 16384;
+    struct GpuDrawMark {
+        gpu::Pipeline* pipeline = nullptr;
+        std::uint32_t triangles = 0;
+    };
+    struct GpuDrawCost {
+        double ms = 0.0;
+        std::uint64_t draws = 0;
+        std::uint64_t triangles = 0;
+    };
+    VkQueryPool draw_queries_ = VK_NULL_HANDLE;
+    std::array<std::vector<GpuDrawMark>, kFramesInFlight> draw_marks_{};
+    std::unordered_map<gpu::Pipeline*, GpuDrawCost> draw_cost_;
+    std::array<bool, kFramesInFlight> stats_pending_{};
+    std::array<double, 6> stats_sum_{};
+    std::array<std::array<GpuPass, kGpuPassSlots>, kFramesInFlight> pass_marks_{};
+    std::array<unsigned, kFramesInFlight> pass_mark_count_{};
+    std::array<bool, kFramesInFlight> pass_sort_timed_{};
+    GpuPass current_pass_ = GpuPass::Scene;
+    bool pass_recording_ = false;  // between begin_frame and end_frame
+    std::array<double, static_cast<std::size_t>(GpuPass::Count)> pass_ms_{};
 };
 
 using Renderer = RendererVk;

@@ -222,6 +222,7 @@ void RendererVk::resolve_efb_depth(VkCommandBuffer commands) {
     if (set.samples <= 1u || !set.depth_dirty || depth_resolve_pipeline_ == VK_NULL_HANDLE) {
         return;
     }
+    const GpuPassScope pass{*this, GpuPass::Resolve};
     image_barrier(commands, set.ms_depth->image, depth_aspects(depth_format_),
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
@@ -732,6 +733,7 @@ void RendererVk::record_scene_aa() {
     if (!post_.ready() || !efb_.color || post_.settings().aa == PostProcessSettings::Aa::kOff || efb_.samples > 1u) {
         return;
     }
+    const GpuPassScope pass{*this, GpuPass::SceneAa};
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SceneAa, 0u});
     }
@@ -773,6 +775,7 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
     if (!efb_.color) {
         return;
     }
+    const GpuPassScope pass{*this, GpuPass::Bloom};
     vk::GameBloomVk::Inputs in{};
     in.color = efb_.color.get();
     in.scale = efb_scale_;
@@ -1086,7 +1089,7 @@ bool RendererVk::ensure_curve_sort() {
         frame.sorted = context.create_buffer(kCurveSortBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                                                   VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                                                                   VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
-                                             "curve sort output");
+                                             "curve sort output", vk::BufferPlace::Device);
         VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
         info.descriptorPool = curve_pool_;
         info.descriptorSetCount = 1;
@@ -1348,6 +1351,13 @@ void RendererVk::draw(const DrawCall& call) {
     if (call.index_count == 0u) {
         return;
     }
+    const bool time_draw = draw_queries_ != VK_NULL_HANDLE && pass_recording_ &&
+                           commands == frames_[frame_slot_].commands &&
+                           draw_marks_[frame_slot_].size() < kGpuDrawSlots / 2u;
+    if (time_draw) {
+        vkCmdWriteTimestamp(commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, draw_queries_,
+                            frame_slot_ * kGpuDrawSlots + 2u * static_cast<std::uint32_t>(draw_marks_[frame_slot_].size()));
+    }
     if (call.index_view.BufferLocation != 0u) {
         if (call.index_view.BufferLocation != bound_.index_address) {
             const vk::Context::BufferOffset indices = context.resolve(call.index_view.BufferLocation);
@@ -1382,6 +1392,12 @@ void RendererVk::draw(const DrawCall& call) {
         }
     } else {
         vkCmdDraw(commands, call.index_count, 1, 0, 0);
+    }
+    if (time_draw) {
+        std::vector<GpuDrawMark>& marks = draw_marks_[frame_slot_];
+        vkCmdWriteTimestamp(commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, draw_queries_,
+                            frame_slot_ * kGpuDrawSlots + 2u * static_cast<std::uint32_t>(marks.size()) + 1u);
+        marks.push_back({call.pipeline, call.index_count / 3u});
     }
 }
 
@@ -1465,6 +1481,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
 }
 
 void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
+    const GpuPassScope pass{*this, GpuPass::XfbCopy};
     if (!dest.texture) {
         throw std::runtime_error("XFB copy has no destination texture");
     }
@@ -1505,6 +1522,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
 }
 
 bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+    const GpuPassScope pass{*this, GpuPass::EfbCopy};
     ++gpu_window_.copies;
     // The game composites its picture from EFB->texture copies; half_scale halves both dimensions (a 2x2 box).
     const unsigned dw_unscaled = params.half_scale ? std::max(1u, params.src_width / 2u) : params.src_width;
