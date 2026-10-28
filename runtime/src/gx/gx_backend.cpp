@@ -10957,6 +10957,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ps_key_.ind_reserved = material;
             current_ps_hash_ = ps_key_.hash();
         }
+        // The scene draws of a ray-traced scene keep the branches only ray tracing takes (kPsKeyRtPaths).
+        constexpr std::uint32_t kRtBits = kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical;
+        const bool rt_scene = scene_phase_ && (enhanced_ps_flags_ & kRtBits) != 0u;
+        if (((ps_key_.reserved & kPsKeyRtPaths) != 0u) != rt_scene) {
+            ps_key_.reserved ^= kPsKeyRtPaths;
+            current_ps_hash_ = ps_key_.hash();
+        }
     }
     {
         const bool ppl = per_pixel_lighting_ && !enhanced && (vs_key_.flags & 0x02u) != 0u && triangles;

@@ -140,15 +140,18 @@ public:
     // records kept) and the pipeline library. Also called from shutdown().
     void flush_disk();
 
-    // RENDER THREAD ONLY. Writes a snapshot of the shader and key records on a
-    // background thread, one batch at a time; the pipeline library is not written.
+    // RENDER THREAD ONLY. Writes a snapshot of the shader and key records and the
+    // pipeline library on a background thread, one batch at a time. The host ends
+    // the process without shutdown(), so this is how the driver's compiled
+    // pipelines reach the next start.
     void flush_disk_async();
     void poll_disk_flush();
 
-    // RENDER THREAD ONLY. True when shader pairs or PSO keys learned this run
-    // are not yet on disk (an abnormal exit would lose them).
+    // RENDER THREAD ONLY. True when shader pairs, PSO keys or pipelines learned
+    // this run are not yet on disk.
     [[nodiscard]] bool has_unsaved_records() const {
-        return !unsaved_blobs_.empty() || !unsaved_pso_keys_.empty();
+        return !unsaved_blobs_.empty() || !unsaved_pso_keys_.empty() ||
+            pipeline_library_dirty_.load(std::memory_order_relaxed);
     }
 
     [[nodiscard]] std::uint64_t specialized_hits() const;
@@ -423,7 +426,8 @@ private:
     void worker_main();
 
     std::mutex pipeline_library_mutex_;
-    bool pipeline_library_dirty_ = false;
+    // Written under pipeline_library_mutex_; read without it by has_unsaved_records().
+    std::atomic<bool> pipeline_library_dirty_{false};
 };
 
 }  // namespace galaxy::gx

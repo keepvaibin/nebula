@@ -702,8 +702,8 @@ int main() {
             check_compiles(src, "vs_5_1", label);
         }
         // Pixel stage: lit dielectric, lit environment-mapped, unlit environment-mapped (the ray
-        // tracer's class), each also with motion vectors.
-        for (unsigned variant = 0; variant < 6u; ++variant) {
+        // tracer's class), each also with motion vectors, in a scene without and with ray tracing.
+        for (unsigned variant = 0; variant < 12u; ++variant) {
             PixelShaderKey k{};
             std::memset(&k, 0, sizeof(k));
             k.num_tev_stages = 2;
@@ -714,7 +714,8 @@ int main() {
             k.stages[0] = basic_stage();
             k.stages[1] = basic_stage();
             k.stages[1].order = (1u << 3) | 1u | (1u << 6);
-            k.reserved = kPsKeyEnhancedLighting;
+            const bool rt = variant >= 6u;
+            k.reserved = static_cast<std::uint8_t>(kPsKeyEnhancedLighting | (rt ? kPsKeyRtPaths : 0u));
             const unsigned material = variant % 3u;
             // The actors' colour channel 0x70F: lights 0 and 1, clamped diffuse, spot attenuation,
             // material from the vertex colour.
@@ -723,7 +724,7 @@ int main() {
             k.ind_reserved = material == 0u ? actor
                            : material == 1u ? actor | 0x02u | kEnhancedReflective
                                             : 0x02u | kEnhancedReflective;
-            if (variant >= 3u) k.reserved |= kPsKeyMotion;
+            if (variant % 6u >= 3u) k.reserved |= kPsKeyMotion;
             const std::string src = gen.generate_ps(k);
             char label[64];
             std::snprintf(label, sizeof(label), "ps_enhanced_variant%u", variant);
@@ -734,7 +735,19 @@ int main() {
                 check_contains(src, "enh_light(1u, true, pin.ppl_pos", label);
                 check_contains(src, "pin.col0.rgb = enh_mat *", label);
                 // Under traced lighting the channel is the game's light averaged over direction.
-                check_contains(src, "pin.col0.rgb = enh_mat * saturate(enh_avg);", label);
+                if (rt) {
+                    check_contains(src, "pin.col0.rgb = enh_mat * saturate(enh_avg);", label);
+                } else {
+                    check_not_contains(src, "enh_avg", label);
+                }
+            }
+            // Without ray tracing none of its branches (header bits 16, 17, 31) are compiled in.
+            if (rt) {
+                check_contains(src, "0x20000u", label);
+            } else {
+                check_not_contains(src, "0x20000u", label);
+                check_not_contains(src, "0x30000u", label);
+                check_not_contains(src, "0x80000000u", label);
             }
             if (material == 0u) {
                 check_not_contains(src, "enh.env_gain))", label);
@@ -758,6 +771,13 @@ int main() {
         const std::string ppl = gen.generate_ps(k);
         check_not_contains(ppl, "enh_", "ps_ppl_has_no_enhanced_lighting");
         check_not_contains(ppl, "uber_ps_header", "ps_ppl_keeps_its_constants");
+        // A clear ice draw's tint is taken only under ray tracing: only a ray-traced scene's keys compile it.
+        k.reserved = 0u;
+        check_not_contains(gen.generate_ps(k), "gx_tint_cleared", "ps_no_tint_without_ray_tracing");
+        k.reserved = kPsKeyRtPaths;
+        const std::string traced = gen.generate_ps(k);
+        check_contains(traced, "pin.col0.rgb = gx_tint_cleared(", "ps_tint_under_ray_tracing");
+        check_compiles(traced, "ps_5_1", "ps_tint_under_ray_tracing");
 
         // The material word from the draw's keys (enhanced_lighting.h).
         {

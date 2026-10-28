@@ -109,6 +109,10 @@ inline constexpr std::uint8_t kPsKeyPplFiniteLightAttn = 0x08u;
 // pixel key's ind_reserved word carries the material (kEnhanced* below).
 inline constexpr std::uint8_t kVsKeyEnhancedLighting = 0x40u;
 inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
+// A scene draw while the scene is ray traced (kEnhancedRtReflections, kEnhancedRtLighting or kEnhancedRtPhysical): the
+// shader keeps the branches only ray tracing takes (an enhanced key's header bits, a clear ice draw's tint). Without it
+// they are left out.
+inline constexpr std::uint8_t kPsKeyRtPaths = 0x40u;
 // Curved surfaces (RenderConfig::curved_surfaces, curved_surfaces.h): a perspective scene triangle draw of a model the
 // game registered. The vertex stage also passes the eye-space position, displacement and crease normals and the
 // places that pick one per edge (GxVertexOut::curve);

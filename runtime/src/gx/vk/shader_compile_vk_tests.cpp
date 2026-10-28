@@ -415,11 +415,36 @@ int main(int argc, char** argv) {
         }
         unsigned vs_count = 0, ps_count = 0;
         const int failures_before = failures;
+        // argv[2]: a folder to write each captured key's HLSL (vs_N.hlsl, ps_N.hlsl, its description first) and SPIR-V
+        // (vs_N.spv, ps_N.spv) to, for instruction counts (fxc, RGA).
+        const auto dump = [&](const char* stage, unsigned index, const std::string& description,
+                              const std::string& source) {
+            if (argc <= 2) {
+                return;
+            }
+            const std::string base = std::string(argv[2]) + "/" + stage + "_" + std::to_string(index);
+            const bool pixel = stage[0] == 'p';
+            std::string error;
+            const std::vector<std::uint32_t> spirv =
+                compile_hlsl(annotate(source, gx), pixel ? ShaderStage::Fragment : ShaderStage::Vertex, "main", {},
+                             error, {false, pixel && (ps.flags & 0x80u) != 0u});
+            if (std::FILE* out = std::fopen((base + ".spv").c_str(), "wb")) {
+                std::fwrite(spirv.data(), sizeof(std::uint32_t), spirv.size(), out);
+                std::fclose(out);
+            }
+            const std::string path = base + ".hlsl";
+            if (std::FILE* out = std::fopen(path.c_str(), "wb")) {
+                std::fprintf(out, "// %s\n%s", description.c_str(), source.c_str());
+                std::fclose(out);
+            }
+        };
         for (int tag; (tag = std::fgetc(file)) != EOF;) {
             if (tag == 'V' && std::fread(&vs, sizeof(vs), 1, file) == 1) {
+                dump("vs", vs_count, ShaderGenerator::describe(vs), generator.generate_vs(vs));
                 const std::string label = "captured vs " + std::to_string(vs_count++);
                 expect(label.c_str(), generator.generate_vs(vs), ShaderStage::Vertex, gx);
             } else if (tag == 'P' && std::fread(&ps, sizeof(ps), 1, file) == 1) {
+                dump("ps", ps_count, ShaderGenerator::describe(ps), generator.generate_ps(ps));
                 const std::string label = "captured ps " + std::to_string(ps_count++);
                 const bool dual = (ps.flags & 0x80u) != 0u;
                 expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx, {}, dual);

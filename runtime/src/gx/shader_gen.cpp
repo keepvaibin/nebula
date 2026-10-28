@@ -885,12 +885,6 @@ void enh_key_highlight(inout EnhShade e, float3 P) {
     }
 }
 
-// TEV inputs: GX wraps them to 8 bits (an unclamped stage above 255 wraps, as the hardware does); under
-// ray-traced lighting (header bit 17) they clamp instead, as the de-lit colour channel and the sphere
-// map's mean can lift a stage the game kept at 255 just past it.
-int3 tev_in3(int3 x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }
-int tev_in1(int x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }
-
 // The highlights added to the TEV result in linear light. A metal's F0 is its own colour raised to
 // a peak of at least kEnhMetalF0, so metals baked dull still reflect their light in their own hue.
 // `view`: the highlights alone (diagnostics).
@@ -2017,6 +2011,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
     const bool enhanced = (key.reserved & kPsKeyEnhancedLighting) != 0u;
+    // Ray tracing's branches only in the keys of a ray-traced scene: the tint, and an enhanced key's header bits 16, 17
+    // and 31.
+    const bool rt_scene = (key.reserved & kPsKeyRtPaths) != 0u;
+    const bool rt_paths = enhanced && rt_scene;
     const bool ppl_inputs = ppl || enhanced;
     const bool motion = (key.reserved & kPsKeyMotion) != 0u;
     const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
@@ -2037,12 +2035,14 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // loses; rt_materials.h kRtIceTintKept): a colour of its art (8-bit sRGB over 255) with that share of its chroma
     // taken, its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that
     // are textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); GxBackend clears its registers.
-    s << "float3 gx_tint_cleared(float3 c, float share) {\n"
-         "    float3 l = saturate(c);\n"
-         "    l = l <= 0.04045 ? l / 12.92 : pow((l + 0.055) / 1.055, 2.4);\n"
-         "    l = lerp(l, dot(l, float3(0.2126, 0.7152, 0.0722)).xxx, share);\n"
-         "    return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;\n"
-         "}\n";
+    if (rt_scene) {
+        s << "float3 gx_tint_cleared(float3 c, float share) {\n"
+             "    float3 l = saturate(c);\n"
+             "    l = l <= 0.04045 ? l / 12.92 : pow((l + 0.055) / 1.055, 2.4);\n"
+             "    l = lerp(l, dot(l, float3(0.2126, 0.7152, 0.0722)).xxx, share);\n"
+             "    return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;\n"
+             "}\n";
+    }
     if (scalar_masks) {
         s << "int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }\n"
              "int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }\n"
@@ -2084,6 +2084,16 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              t.ramp, t.hemi, t.sky, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
              t.env_graze);
         s << kEnhancedLighting;
+        // TEV inputs: GX wraps them to 8 bits (an unclamped stage above 255 wraps, as the hardware does); under
+        // ray-traced lighting (header bit 17) they clamp instead, as the de-lit colour channel and the sphere
+        // map's mean can lift a stage the game kept at 255 just past it.
+        if (rt_paths) {
+            s << "int3 tev_in3(int3 x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n"
+                 "int tev_in1(int x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n";
+        } else {
+            s << "int3 tev_in3(int3 x) { return x & 255; }\n"
+                 "int tev_in1(int x) { return x & 255; }\n";
+        }
     }
 
     // Z-texturing (flags bit 1): the fragment depth is replaced by (or offset
@@ -2170,54 +2180,60 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
             // direction: its ambient plus each light at the mean facing of a lit surface (0.55; lights
             // without a facing term whole), clamped as GX's channel. The art's level and tint stay; the
             // direction of its camera-following lights leaves, and the tracer's sun gives the direction.
-            s << "        if ((uber_ps_header.w & 0x20000u) != 0u) {\n"
-                 "            float3 enh_avg = enh_amb;\n";
-            for (unsigned n = 0; n < 8u; ++n) {
-                if ((lights & (1u << n)) == 0u) continue;
-                emit(s,
-                     "            {\n"
-                     "                float3 ldir;\n"
-                     "                float attn;\n"
-                     "                float3 lcol;\n"
-                     "                enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
-                     "                enh_avg += lcol * (attn * %s);\n"
-                     "            }\n",
-                     n, spot ? "true" : "false", dfn != 0u ? "0.55" : "1.0");
+            if (rt_paths) {
+                s << "        if ((uber_ps_header.w & 0x20000u) != 0u) {\n"
+                     "            float3 enh_avg = enh_amb;\n";
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((lights & (1u << n)) == 0u) continue;
+                    emit(s,
+                         "            {\n"
+                         "                float3 ldir;\n"
+                         "                float attn;\n"
+                         "                float3 lcol;\n"
+                         "                enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                         "                enh_avg += lcol * (attn * %s);\n"
+                         "            }\n",
+                         n, spot ? "true" : "false", dfn != 0u ? "0.55" : "1.0");
+                }
+                // In the game's own light units (header bit 31) the channel is its full light, the ambient and every
+                // light at N.L 1, clamped as GX's channel: the traced light (sky, sun, bounces) multiplies it.
+                s << "            if ((uber_ps_header.w & 0x80000000u) != 0u) {\n"
+                     "                enh_avg = enh_amb;\n";
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((lights & (1u << n)) == 0u) continue;
+                    emit(s,
+                         "                {\n"
+                         "                    float3 ldir;\n"
+                         "                    float attn;\n"
+                         "                    float3 lcol;\n"
+                         "                    enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                         "                    enh_avg += lcol * attn;\n"
+                         "                }\n",
+                         n, spot ? "true" : "false");
+                }
+                // Lit by the game's player light rig (flags bit 7, GxBackend::rt_player_rig_draw): its level, not its
+                // hue (a rig such as the prologue's cyan night rig would tint the player); the traced light gives the
+                // colour.
+                s << "                if ((ppl_flags & 128u) != 0u) {\n"
+                     "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
+                     "                }\n";
+                // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's
+                // full light, in the full light's hue, since the ambient register or the vertices often hold the
+                // object's own colour.
+                s << "                if ((ppl_flags & 16u) != 0u) {\n"
+                     "                    const float enh_peak = max(enh_avg.r, max(enh_avg.g, enh_avg.b));\n"
+                     "                    enh_avg = (enh_peak > 1e-4 ? enh_avg / enh_peak : float3(1.0, 1.0, 1.0)) *\n"
+                     "                              (float((ppl_flags >> 8u) & 0xFFu) / 255.0);\n"
+                     "                }\n"
+                     "            }\n"
+                     "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
+                     "        } else {\n";
+            } else {
+                s << "        {\n";
             }
-            // In the game's own light units (header bit 31) the channel is its full light, the ambient and every light
-            // at N.L 1, clamped as GX's channel: the traced light (sky, sun, bounces) multiplies it.
-            s << "            if ((uber_ps_header.w & 0x80000000u) != 0u) {\n"
-                 "                enh_avg = enh_amb;\n";
-            for (unsigned n = 0; n < 8u; ++n) {
-                if ((lights & (1u << n)) == 0u) continue;
-                emit(s,
-                     "                {\n"
-                     "                    float3 ldir;\n"
-                     "                    float attn;\n"
-                     "                    float3 lcol;\n"
-                     "                    enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
-                     "                    enh_avg += lcol * attn;\n"
-                     "                }\n",
-                     n, spot ? "true" : "false");
-            }
-            // Lit by the game's player light rig (flags bit 7, GxBackend::rt_player_rig_draw): its level, not its hue
-            // (a rig such as the prologue's cyan night rig would tint the player); the traced light gives the colour.
-            s << "                if ((ppl_flags & 128u) != 0u) {\n"
-                 "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
-                 "                }\n";
-            // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's full
-            // light, in the full light's hue, since the ambient register or the vertices often hold the object's own
-            // colour.
-            s << "                if ((ppl_flags & 16u) != 0u) {\n"
-                 "                    const float enh_peak = max(enh_avg.r, max(enh_avg.g, enh_avg.b));\n"
-                 "                    enh_avg = (enh_peak > 1e-4 ? enh_avg / enh_peak : float3(1.0, 1.0, 1.0)) *\n"
-                 "                              (float((ppl_flags >> 8u) & 0xFFu) / 255.0);\n"
-                 "                }\n"
-                 "            }\n"
-                 "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
-                 "        } else {\n";
             s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"
-                 "        float3 enh_acc = enh_amb_lin * enh_sky(enh, (uber_ps_header.w & 0x20000u) == 0u);\n";
+                 "        float3 enh_acc = enh_amb_lin * enh_sky(enh, "
+              << (rt_paths ? "(uber_ps_header.w & 0x20000u) == 0u" : "true") << ");\n";
             bool first = true;
             for (unsigned n = 0; n < 8u; ++n) {
                 if ((lights & (1u << n)) == 0u) continue;
@@ -2245,16 +2261,19 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                  "        }\n"
                  "    }\n";
         } else {
-            s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) enh_key_highlight(enh, pin.ppl_pos);\n";
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)" : "    if (enh_on)")
+              << " enh_key_highlight(enh, pin.ppl_pos);\n";
         }
     }
     // A clear ice or crystal draw's tint (gx_tint_cleared): its rasterized colours here, its textures' texels per stage.
-    s << "    const bool tinted = ztex_params.w < 0.0 && ztex_params.w > -1.0;\n"
-         "    const uint tinted_maps = tinted ? (asuint(alpha_refs.z) >> 8u) & 0xFFu : 0u;\n"
-         "    if (tinted) {\n"
-         "        pin.col0.rgb = gx_tint_cleared(pin.col0.rgb, -ztex_params.w);\n"
-         "        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);\n"
-         "    }\n";
+    if (rt_scene) {
+        s << "    const bool tinted = ztex_params.w < 0.0 && ztex_params.w > -1.0;\n"
+             "    const uint tinted_maps = tinted ? (asuint(alpha_refs.z) >> 8u) & 0xFFu : 0u;\n"
+             "    if (tinted) {\n"
+             "        pin.col0.rgb = gx_tint_cleared(pin.col0.rgb, -ztex_params.w);\n"
+             "        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);\n"
+             "    }\n";
+    }
     s << "    int4 tex_color_i = int4(0,0,0,0);\n";
     s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
     s << "    int4 ras_color_i = int4(0,0,0,0);\n";
@@ -2510,17 +2529,20 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                     texmap,
                     tex_swz.c_str());
             }
-            emit(s,
-                 "    if (((tinted_maps >> %uu) & 1u) != 0u) {\n"
-                 "        tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, -ztex_params.w) * 255.0));\n"
-                 "    }\n",
-                 texmap);
+            if (rt_scene) {
+                emit(s,
+                     "    if (((tinted_maps >> %uu) & 1u) != 0u) {\n"
+                     "        tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, "
+                     "-ztex_params.w) * 255.0));\n"
+                     "    }\n",
+                     texmap);
+            }
             if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
                 // Under ray tracing the game's painted reflection (metals, crystals, sheen) stays as drawn
                 // and the traced reflection screens over it; replacing the map by its mean would flatten
                 // chrome. Enhanced lighting alone scales it.
-                s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n"
-                     "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
+                s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n" : "    if (enh_on) {\n")
+                  << "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
                      "    }\n";
             }
         } else if (key.num_texgens != 0u) {
@@ -2851,9 +2873,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
     // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs, so a
     // channel lifted just past 255 does not wrap.
-    if (enhanced) {
+    if (rt_paths) {
         s << "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
              " : (tev_prev_i & int4(255,255,255,255));\n";
+    } else if (enhanced) {
+        s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
     } else {
         s << (scalar_masks ? "\n    int4 frag_i = gx_u8(tev_prev_i);\n"
                            : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
@@ -2862,11 +2886,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
             // The ray tracer's reflections own this class's highlights while they run.
-            s << "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0u)\n"
-                 "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0u)\n" : "    if (enh_on)\n")
+              << "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         } else {
-            s << "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)\n"
-                 "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)\n" : "    if (enh_on)\n")
+              << "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
         }
         if (enh_lit) {
             // Diagnostics: colour channel 0 itself, the game's left of the split.

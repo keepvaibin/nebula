@@ -1179,7 +1179,7 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 61u;
+constexpr std::uint32_t kShaderCacheVersion = 62u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.
@@ -1193,9 +1193,13 @@ constexpr std::uint32_t kMaxCacheRecords = 65536u;
 // there are more than this many, not on every flush.
 constexpr std::size_t kCacheCoverageAppendBatch = 64u;
 
+// Topology types 1-3, or a curved surface's patches with their variant in bits 4-5.
 bool valid_pso_key(const PsoKey& key) {
     const auto& state = key.render_state;
-    return state.primitive_topology >= 1u && state.primitive_topology <= 3u &&
+    const std::uint8_t type = state.primitive_topology & kTopologyTypeMask;
+    const std::uint8_t variant = state.primitive_topology & ~kTopologyTypeMask;
+    return type >= 1u && type <= kTopologyPatch &&
+        (variant == 0u || (type == kTopologyPatch && (variant & ~(kCurvedPerPixel | kCurvedMotion)) == 0u)) &&
         state.cull <= 3u && state.pixfmt <= 7u && state.samples_log2 <= 7u &&
         (state.blend_bits & 0x80000000u) == 0u && (state.zmode_bits & ~0x1fu) == 0u &&
         std::all_of(std::begin(state.reserved), std::end(state.reserved),
@@ -2171,7 +2175,8 @@ void PipelineCache::flush_disk_async() {
     const bool psos_pending = !pso_cache_at_capacity_ &&
         (!unsaved_pso_keys_.empty() || pso_cache_repair_pending_ ||
          persisted_pso_keys_.size() > cached_pso_records_ + kCacheCoverageAppendBatch);
-    if (!shaders_pending && !psos_pending) return;
+    const bool library_pending = pipeline_library_dirty_.load(std::memory_order_relaxed);
+    if (!shaders_pending && !psos_pending && !library_pending) return;
     try {
         auto snapshot = std::make_unique<DiskFlushSnapshot>();
         snapshot->cache_dir_ = cache_dir_;
@@ -2188,13 +2193,20 @@ void PipelineCache::flush_disk_async() {
         snapshot->pending_shaders = unsaved_blobs_.size();
         snapshot->pending_psos = unsaved_pso_keys_.size();
         auto* batch = snapshot.get();
-        disk_writer_ = std::thread([batch] {
+        disk_writer_ = std::thread([this, batch, library_pending] {
             galaxy::host::name_current_thread(L"Nebula PSO Disk Writer");
             (void)SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
             try { batch->result = flush_disk_records(*batch); }
             catch (...) {
                 // Optional persistence must not terminate the process. Pending
                 // live records were never removed, so the next flush can retry.
+            }
+            // The library is serialized under pipeline_library_mutex_ (a pipeline
+            // created meanwhile waits for the copy, not the disk); a failed save
+            // stays dirty for the next flush.
+            if (library_pending) {
+                try { flush_pipeline_library(); }
+                catch (...) {}
             }
             batch->done.store(true, std::memory_order_release);
         });
@@ -2494,9 +2506,9 @@ void PipelineCache::enqueue_uber_prewarm(std::uint8_t samples_log2) {
     };
     for (unsigned pass = 0u; pass < 3u; ++pass) {
         for (const PsoKey& known : warm_pso_keys_) {
-            add(pass, known.render_state.blend_bits, known.render_state.zmode_bits,
-                known.render_state.cull, known.render_state.pixfmt,
-                known.render_state.primitive_topology);
+            // A curved surface's stand-in draws its patches as plain triangles (flat_render_state).
+            const RenderStateKey rs = flat_render_state(known.render_state);
+            add(pass, rs.blend_bits, rs.zmode_bits, rs.cull, rs.pixfmt, rs.primitive_topology);
         }
         for (const KnownRenderState& known : kKnownRenderStates) {
             add(pass, known.blend_bits, known.zmode_bits, known.cull, known.pixfmt,

@@ -458,6 +458,11 @@ struct PipelineCachePersistenceTestAccess {
     static bool remembered(const PipelineCache& cache, unsigned id) {
         return cache.persisted_pso_keys_.contains(key(id));
     }
+    static void remember(PipelineCache& cache, const PsoKey& record) { cache.remember_pso_key(record); }
+    static bool warm(const PipelineCache& cache, const PsoKey& record) {
+        return std::find(cache.warm_pso_keys_.begin(), cache.warm_pso_keys_.end(), record) !=
+            cache.warm_pso_keys_.end();
+    }
     static bool contains(const PipelineCache& cache, bool shader, unsigned id) {
         const PsoKey record = key(id);
         if (!shader) {
@@ -1026,6 +1031,36 @@ bool damaged_shader_recovery(const std::filesystem::path& root, bool wrong_stage
     return passed;
 }
 
+// Every topology the renderer keys survives a restart: point, line and triangle lists, and a curved surface's
+// patches in each variant, on an HDR multisampled EFB.
+bool every_topology_reload(const std::filesystem::path& root) {
+    using galaxy::gx::kCurvedMotion;
+    using galaxy::gx::kCurvedPerPixel;
+    using galaxy::gx::kTopologyPatch;
+    using galaxy::gx::PsoKey;
+    const std::uint8_t topologies[] = {
+        1u, 2u, 3u, kTopologyPatch, kTopologyPatch | kCurvedPerPixel, kTopologyPatch | kCurvedMotion,
+        kTopologyPatch | kCurvedPerPixel | kCurvedMotion};
+    std::vector<PsoKey> records;
+    PipelineCache writer;
+    Access::set_directory(writer, root);
+    for (const std::uint8_t topology : topologies) {
+        PsoKey record = Access::key(static_cast<unsigned>(records.size()) + 1u);
+        record.render_state.primitive_topology = topology;
+        record.render_state.samples_log2 = static_cast<std::uint8_t>(galaxy::gx::kEfbVariantHdr | 2u);
+        Access::remember(writer, record);
+        records.push_back(record);
+    }
+    writer.flush_disk();
+    PipelineCache reload;
+    Access::set_directory(reload, root);
+    Access::load(reload, false);
+    return expect(Access::loaded(reload, false) == records.size() && !Access::repair_pending(reload, false) &&
+                      std::all_of(records.begin(), records.end(),
+                                  [&](const PsoKey& record) { return Access::warm(reload, record); }),
+        "every topology, curved patches included, reloads from psos.bin");
+}
+
 bool shared_stage_reload(const std::filesystem::path& root) {
     PipelineCache writer;
     Access::set_directory(writer, root);
@@ -1164,6 +1199,7 @@ int main() {
         passed &= damaged_shader_recovery(files.root / std::to_string(case_index++), false);
         passed &= damaged_shader_recovery(files.root / std::to_string(case_index++), true);
         passed &= shared_stage_reload(files.root / std::to_string(case_index++));
+        passed &= every_topology_reload(files.root / std::to_string(case_index++));
         passed &= busy_writer_retry(files.root / std::to_string(case_index++));
         for (bool busy_writer : {true, false}) {
             passed &= expect(Access::pipeline_library_retry(
