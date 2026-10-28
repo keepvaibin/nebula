@@ -1785,175 +1785,10 @@ static_assert(
 
 }  // anonymous namespace
 
-FramePeEventClassifier::FramePeEventClassifier() {
-    parser_.set_event_classification_only(true);
-}
-
-void FramePeEventClassifier::reset() {
-    if (active_events_ != nullptr) {
-        throw std::logic_error(
-            "GX PE event classifier reset during an active parse");
-    }
-    state_ = GxState{};
-    parser_ = FifoParser{};
-    parser_.set_event_classification_only(true);
-    parser_.set_dump_dir("generated");
-    pending_fifo_.clear();
-}
-
-void FramePeEventClassifier::classify(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
-    GuestMemory* memory,
-    std::vector<FramePeEventSignature>& events,
-    bool frozen_regions) {
-    events.clear();
-    if (fifo_data == nullptr || fifo_size == 0u) {
-        return;
-    }
-    if (active_events_ != nullptr) {
-        throw std::logic_error("GX PE event classifier is reentrant");
-    }
-
-    active_events_ = &events;
-    try {
-        if (pending_fifo_.empty()) {
-            const std::span<const std::byte> fifo(fifo_data, fifo_size);
-            const std::size_t consumed =
-                parser_.run_available(fifo, memory, *this, state_, frozen_regions);
-            if (consumed < fifo.size()) {
-                pending_fifo_.assign(
-                    fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
-                    fifo.end());
-            }
-        } else {
-            pending_fifo_.insert(
-                pending_fifo_.end(), fifo_data, fifo_data + fifo_size);
-            const std::size_t consumed = parser_.run_available(
-                pending_fifo_, memory, *this, state_, frozen_regions);
-            if (consumed == pending_fifo_.size()) {
-                pending_fifo_.clear();
-            } else if (consumed > 0u) {
-                pending_fifo_.erase(
-                    pending_fifo_.begin(),
-                    pending_fifo_.begin() +
-                        static_cast<std::ptrdiff_t>(consumed));
-            }
-        }
-    } catch (...) {
-        active_events_ = nullptr;
-        throw;
-    }
-    active_events_ = nullptr;
-}
-
-std::size_t FramePeEventClassifier::draw_payload_size(
-    std::uint8_t vtxfmt,
-    std::uint16_t vertex_count) const {
-    // The stride depends only on CP VCD_LO/HI and VAT_A/B/C[vtxfmt], so it is recomputed only when
-    // one of them changes.
-    if (vtxfmt >= vtx_payload_stride_memo_.size()) {
-        return VertexLoader::source_vertex_size(state_.vertex_desc(vtxfmt)) *
-            static_cast<std::size_t>(vertex_count);
-    }
-    VtxPayloadStrideMemo& slot = vtx_payload_stride_memo_[vtxfmt];
-    const std::uint32_t vcd_lo = state_.cp(cp::kVcdLo);
-    const std::uint32_t vcd_hi = state_.cp(cp::kVcdHi);
-    const std::uint32_t vat_a =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatABase + vtxfmt));
-    const std::uint32_t vat_b =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatBBase + vtxfmt));
-    const std::uint32_t vat_c =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatCBase + vtxfmt));
-    if (!slot.valid || slot.vcd_lo != vcd_lo || slot.vcd_hi != vcd_hi ||
-        slot.vat_a != vat_a || slot.vat_b != vat_b || slot.vat_c != vat_c) {
-        slot.valid = true;
-        slot.vcd_lo = vcd_lo;
-        slot.vcd_hi = vcd_hi;
-        slot.vat_a = vat_a;
-        slot.vat_b = vat_b;
-        slot.vat_c = vat_c;
-        slot.stride =
-            VertexLoader::source_vertex_size(state_.vertex_desc(vtxfmt));
-    }
-    return slot.stride * static_cast<std::size_t>(vertex_count);
-}
-
-void FramePeEventClassifier::on_draw(
-    PrimitiveClass,
-    std::uint8_t vtxfmt,
-    FifoCursor& cursor) {
-    const std::uint16_t vertex_count = cursor.read_u16();
-    (void)cursor.take(draw_payload_size(vtxfmt, vertex_count));
-}
-
-bool FramePeEventClassifier::on_cached_simple_draw_run(
-    PrimitiveClass,
-    std::uint8_t,
-    std::span<const std::byte>,
-    std::size_t,
-    std::span<const CachedDrawPacket>) {
-    return true;
-}
-
-bool FramePeEventClassifier::on_cached_prepared_draw_run(
-    PrimitiveClass,
-    std::uint8_t,
-    std::span<const std::byte>,
-    std::size_t,
-    std::size_t,
-    std::uint8_t,
-    std::size_t) {
-    return true;
-}
-
-bool FramePeEventClassifier::on_cached_packet_draw_run(
-    std::uint64_t,
-    std::size_t,
-    PrimitiveClass,
-    std::uint8_t,
-    std::span<const std::byte>,
-    std::size_t,
-    std::span<const CachedDrawPacket>,
-    std::uint32_t,
-    std::uint32_t,
-    std::span<const std::uint16_t>) {
-    return true;
-}
-
-void FramePeEventClassifier::on_efb_copy(std::uint32_t) {}
-
-void FramePeEventClassifier::on_pe_finish() {
-    if (active_events_ == nullptr) {
-        throw std::logic_error(
-            "GX PE classifier emitted FINISH outside an active parse");
-    }
-    active_events_->push_back(
-        FramePeEventSignature{FramePeEventSignature::Kind::Finish, 0u, false});
-}
-
-void FramePeEventClassifier::on_pe_token(
-    std::uint16_t token,
-    bool interrupt) {
-    if (active_events_ == nullptr) {
-        throw std::logic_error(
-            "GX PE classifier emitted TOKEN outside an active parse");
-    }
-    active_events_->push_back(
-        FramePeEventSignature{
-            FramePeEventSignature::Kind::Token,
-            token,
-            interrupt});
-}
-
-void FramePeEventClassifier::on_invalidate_textures() {}
-void FramePeEventClassifier::on_tlut_load() {}
-void FramePeEventClassifier::on_invalidate_vertex_cache() {}
-
 void GxBackend::reset_fifo_session_state() {
-    // The render parser, event parser, dependency scanner and PE preclassifier read the same command
-    // stream on different schedules, so all of them reset together, while no producer or render
-    // thread runs: stale state or a partial command in one of them would shift command boundaries.
+    // The render parser, event parser and dependency scanner read the same command stream on
+    // different schedules, so all of them reset together, while no producer or render thread
+    // runs: stale state or a partial command in one of them would shift command boundaries.
     state_ = GxState{};
     state_.mark_all_dirty();
     // A new parser also drops the previous session's display-list cache and its capacity.
@@ -1979,7 +1814,6 @@ void GxBackend::reset_fifo_session_state() {
     dependency_draw_run_range_cache_tick_ = 0u;
     dependency_draw_run_range_cache_bytes_ = 0u;
 
-    pe_event_classifier_.reset();
     pending_async_dirty_ranges_.clear();
     decoded_packet_run_cache_.clear();
     decoded_packet_run_cache_tick_ = 0u;
@@ -3784,28 +3618,6 @@ FramePeCompletionToken GxBackend::render_frame(
         chunk.memory = &chunk.memory_snapshot.memory;
         chunk.memory_snapshot_active = true;
     }
-    if (timing.pe_events_gpu_fence) {
-        // Classify the chunk's own FIFO copy against the memory view the render parser reads: live
-        // memory could change under a concurrent DMA and move CALL_DL/LOAD_INDX command boundaries.
-        const auto classification_start = producer_time_detail
-                ? std::chrono::steady_clock::now()
-                : std::chrono::steady_clock::time_point{};
-        pe_event_classifier_.classify(
-            chunk.fifo.data(),
-            chunk.fifo.size(),
-            chunk.memory_snapshot_active ? chunk.memory : memory,
-            chunk.preclassified_pe_events,
-            chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
-                chunk.memory == &chunk.memory_snapshot.memory &&
-                chunk.memory_snapshot.regions_disjoint_sorted);
-        if (producer_time_detail) {
-            chunk.pe_classification_ns = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now() - classification_start)
-                    .count());
-        }
-        chunk.pe_events_preclassified = true;
-    }
 
     if (trace_gx_stalls) {
         const std::uint64_t dependency_scan_us =
@@ -3852,15 +3664,11 @@ FramePeCompletionToken GxBackend::render_frame(
             }
             return {};
         }
-        const bool event_free_receipt =
-            chunk.pe_events_preclassified &&
-            chunk.preclassified_pe_events.empty();
-        chunk.pe_event_free_receipt = event_free_receipt;
-        submitted_token = event_free_receipt
-            ? frame_pe_completions_.issue_event_free()
-            : frame_pe_completions_.issue();
+        // The render thread resolves the token when it has consumed the chunk (its PE events, if
+        // any, delivered then): the stream is parsed once, there, not again here to find events.
+        submitted_token = frame_pe_completions_.issue();
         chunk.pe_completion_token = submitted_token;
-        chunk.pe_completion_requires_resolution = !event_free_receipt;
+        chunk.pe_completion_requires_resolution = true;
         frame_queue_.push_back(std::move(chunk));
         queue_depth_after_push = frame_queue_.size();
     }
@@ -9899,34 +9707,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         frame_pe_events_ = saved_pe_events;
         frame_pe_callbacks_enabled_ = saved_pe_callbacks_enabled;
     }
-    if (chunk.pe_events_preclassified) {
-        if (!defer_pe_events_to_gpu_fence) {
-            throw std::logic_error(
-                "GX PE preclassification used without GPU-fence delivery");
-        }
-        if (chunk.pe_events.size() !=
-            chunk.preclassified_pe_events.size()) {
-            throw std::runtime_error(
-                "GX PE preclassifier/render parser event-count mismatch: "
-                "classified=" +
-                std::to_string(chunk.preclassified_pe_events.size()) +
-                " rendered=" + std::to_string(chunk.pe_events.size()));
-        }
-        for (std::size_t index = 0; index < chunk.pe_events.size(); ++index) {
-            const PeEvent& rendered = chunk.pe_events[index];
-            const FramePeEventSignature actual{
-                rendered.kind == PeEvent::Kind::Finish
-                    ? FramePeEventSignature::Kind::Finish
-                    : FramePeEventSignature::Kind::Token,
-                rendered.token,
-                rendered.interrupt};
-            if (actual != chunk.preclassified_pe_events[index]) {
-                throw std::runtime_error(
-                    "GX PE preclassifier/render parser event mismatch at "
-                    "index=" + std::to_string(index));
-            }
-        }
-    }
     parser_.set_profile(nullptr);
     parser_lock.unlock();
     if (cadence_diagnostics_ != nullptr) {
@@ -10250,12 +10030,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " begin-reset-us="
                   << renderer_.last_begin_reset_us()
                   << " producer-wait-us=" << producer_wait_us
-                  << " pe-classify-us="
-                  << (chunk.pe_classification_ns / 1000u)
-                  << " pe-classified-events="
-                  << chunk.preclassified_pe_events.size()
-                  << " pe-event-free-receipt="
-                  << (chunk.pe_event_free_receipt ? 1 : 0)
                   << " dependency-scan-us="
                   << (chunk.dependency_scan_ns / 1000u)
                   << " dependency-cache-hit="

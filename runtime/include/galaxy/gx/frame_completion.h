@@ -54,8 +54,8 @@ struct FramePeCompletionStats {
 class FramePeCompletionContract {
 public:
     [[nodiscard]] FramePeCompletionToken issue();
-    // A token for a FIFO capture the preclassifier found free of PE FINISH and TOKEN events. It is ready at
-    // once unless an older token is still pending.
+    // A token for a FIFO capture known to hold no PE FINISH or TOKEN event. It is ready at once unless an older
+    // token is still pending.
     [[nodiscard]] FramePeCompletionToken issue_event_free();
     void resolve_on_submission(FramePeCompletionToken token);
     void resolve_to_fence(

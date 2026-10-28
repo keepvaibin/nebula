@@ -1,6 +1,5 @@
-// Tests of FramePeCompletionContract and the FIFO PE-event preclassifier (FramePeEventClassifier).
+// Tests of FramePeCompletionContract.
 #include "galaxy/gx/frame_completion.h"
-#include "galaxy/gx/gx_backend.h"
 
 #include <array>
 #include <cstddef>
@@ -16,8 +15,6 @@ namespace {
 using galaxy::gx::FramePeCompletionContract;
 using galaxy::gx::FramePeCompletionStats;
 using galaxy::gx::FramePeCompletionToken;
-using galaxy::gx::FramePeEventClassifier;
-using galaxy::gx::FramePeEventSignature;
 using galaxy::gx::FramePeWaitState;
 
 bool expect(bool condition, std::string_view message) {
@@ -236,169 +233,6 @@ bool event_free_receipt_cannot_pass_older_pe_fence() {
                   "mixed preclassified/fenced sequence conserves tokens");
 }
 
-bool fifo_preclassifier_is_boundary_and_identity_exact() {
-    FramePeEventClassifier classifier;
-    classifier.reset();
-    std::vector<FramePeEventSignature> events;
-
-    const std::array<std::byte, 5> event_free_bp{
-        std::byte{0x61}, std::byte{0x40}, std::byte{0x00},
-        std::byte{0x00}, std::byte{0x17}};
-    classifier.classify(
-        event_free_bp.data(), event_free_bp.size(), nullptr, events);
-    if (!expect(events.empty(),
-                "ordinary BP write is classified event-free")) {
-        return false;
-    }
-
-    const std::array<std::byte, 15> draw_with_pe_shaped_payload{
-        std::byte{0x08}, std::byte{galaxy::gx::cp::kVcdLo},
-        std::byte{0x00}, std::byte{0x00}, std::byte{0x02}, std::byte{0x00},
-        std::byte{0x90}, std::byte{0x00}, std::byte{0x03},
-        std::byte{0x61}, std::byte{0x45}, std::byte{0x00},
-        std::byte{0x00}, std::byte{0x02}, std::byte{0x7F}};
-    classifier.classify(
-        draw_with_pe_shaped_payload.data(),
-        draw_with_pe_shaped_payload.size(),
-        nullptr,
-        events);
-    if (!expect(
-            events.empty(),
-            "PE-shaped draw payload bytes cannot forge a completion barrier")) {
-        return false;
-    }
-
-    const std::array<std::byte, 3> split_token_head{
-        std::byte{0x61}, std::byte{0x48}, std::byte{0x00}};
-    classifier.classify(
-        split_token_head.data(), split_token_head.size(), nullptr, events);
-    if (!expect(events.empty(),
-                "partial PE command cannot forge a completion barrier")) {
-        return false;
-    }
-    const std::array<std::byte, 2> split_token_tail{
-        std::byte{0x12}, std::byte{0x34}};
-    classifier.classify(
-        split_token_tail.data(), split_token_tail.size(), nullptr, events);
-    if (!expect(
-            events == std::vector<FramePeEventSignature>{
-                FramePeEventSignature{
-                    FramePeEventSignature::Kind::Token,
-                    0x1234u,
-                    true}},
-            "split PE token retains exact value and interrupt identity")) {
-        return false;
-    }
-
-    const std::array<std::byte, 15> pe_sequence{
-        std::byte{0x61}, std::byte{0x45}, std::byte{0x00},
-        std::byte{0x00}, std::byte{0x02},
-        std::byte{0x61}, std::byte{0x47}, std::byte{0x00},
-        std::byte{0xAB}, std::byte{0xCD},
-        std::byte{0x61}, std::byte{0x48}, std::byte{0x00},
-        std::byte{0x56}, std::byte{0x78}};
-    classifier.classify(
-        pe_sequence.data(), pe_sequence.size(), nullptr, events);
-    return expect(
-        events == std::vector<FramePeEventSignature>{
-            FramePeEventSignature{
-                FramePeEventSignature::Kind::Finish,
-                0u,
-                false},
-            FramePeEventSignature{
-                FramePeEventSignature::Kind::Token,
-                0xABCDu,
-                false},
-            FramePeEventSignature{
-                FramePeEventSignature::Kind::Token,
-                0x5678u,
-                true}},
-        "classifier preserves ordered FINISH/TOKEN identities");
-}
-
-bool frozen_preclassifier_preserves_order_and_partial_calls() {
-    std::array<std::array<std::byte, 32>, 64> bytes{};
-    std::array<galaxy::GuestMemoryRegion, 64> regions{};
-    std::vector<std::byte> fifo;
-    std::vector<FramePeEventSignature> expected;
-    for (std::uint32_t i = 0; i < regions.size(); ++i) {
-        regions[i] = {0x1000u + i * 64u, 32u, bytes[i].data()};
-        bytes[i][0] = std::byte{0x61}; bytes[i][1] = std::byte{0x48};
-        bytes[i][4] = static_cast<std::byte>(i);
-        const auto address = regions[i].guest_base;
-        fifo.push_back(std::byte{0x40});
-        for (unsigned shift = 0; shift < 4; ++shift)
-            fifo.push_back(static_cast<std::byte>(address >> (24u - 8u * shift)));
-        fifo.insert(fifo.end(), {std::byte{0},std::byte{0},std::byte{0},std::byte{32}});
-        expected.push_back({FramePeEventSignature::Kind::Token, static_cast<std::uint16_t>(i), true});
-    }
-    galaxy::GuestMemory memory{}; memory.regions = regions.data();
-    memory.region_count = static_cast<std::uint32_t>(regions.size());
-    for (std::size_t split = 0; split <= 9u; ++split) {
-        FramePeEventClassifier generic, frozen;
-        for (unsigned pass = 0; pass < 2u; ++pass) {
-            std::vector<FramePeEventSignature> a,b,all_a,all_b;
-            generic.classify(fifo.data(), split, &memory, a);
-            frozen.classify(fifo.data(), split, &memory, b, true);
-            all_a = a; all_b = b;
-            generic.classify(fifo.data()+split, fifo.size()-split, &memory, a);
-            frozen.classify(fifo.data()+split, fifo.size()-split, &memory, b, true);
-            all_a.insert(all_a.end(),a.begin(),a.end()); all_b.insert(all_b.end(),b.begin(),b.end());
-            if (!expect(all_a == expected && all_b == expected,
-                        "frozen classifier preserves cold/replay/split token order")) return false;
-        }
-    }
-    return true;
-}
-
-bool fifo_preclassifier_follows_display_lists() {
-    FramePeEventClassifier classifier;
-    classifier.reset();
-    std::array<std::byte, 512> guest{};
-    constexpr std::size_t kDisplayListOffset = 0x100u;
-    guest[kDisplayListOffset + 0u] = std::byte{0x90};
-    guest[kDisplayListOffset + 1u] = std::byte{0x00};
-    guest[kDisplayListOffset + 2u] = std::byte{0x00};
-    guest[kDisplayListOffset + 3u] = std::byte{0x61};
-    guest[kDisplayListOffset + 4u] = std::byte{0x48};
-    guest[kDisplayListOffset + 5u] = std::byte{0x00};
-    guest[kDisplayListOffset + 6u] = std::byte{0xCA};
-    guest[kDisplayListOffset + 7u] = std::byte{0xFE};
-
-    galaxy::GuestMemory memory{};
-    memory.fast_regions[8].host_base = guest.data();
-    memory.fast_regions[8].size =
-        static_cast<std::uint32_t>(guest.size());
-    const std::array<std::byte, 9> call_dl{
-        std::byte{0x40},
-        std::byte{0x80}, std::byte{0x00},
-        std::byte{0x01}, std::byte{0x00},
-        std::byte{0x00}, std::byte{0x00},
-        std::byte{0x00}, std::byte{0x20}};
-    std::vector<FramePeEventSignature> events;
-    classifier.classify(
-        call_dl.data(), call_dl.size(), &memory, events);
-    if (!expect(
-            events == std::vector<FramePeEventSignature>{
-                FramePeEventSignature{
-                    FramePeEventSignature::Kind::Token,
-                    0xCAFEu,
-                    true}},
-            "classifier follows CALL_DL instead of scanning only top-level bytes")) {
-        return false;
-    }
-
-    classifier.classify(
-        call_dl.data(), call_dl.size(), &memory, events);
-    return expect(
-        events == std::vector<FramePeEventSignature>{
-            FramePeEventSignature{
-                FramePeEventSignature::Kind::Token,
-                0xCAFEu,
-                true}},
-        "cached CALL_DL draw fast path preserves following PE identity");
-}
-
 bool duplicate_stale_and_out_of_order_fail() {
     FramePeCompletionContract contract;
     contract.reset();
@@ -531,15 +365,12 @@ bool reset_and_drain_audit_reject_pending_or_unconsumed() {
 }  // namespace
 
 int main() {
-    if (!frozen_preclassifier_preserves_order_and_partial_calls()) return 1;
     bool ok = true;
     ok = ordered_fake_fence_completion() && ok;
     ok = deterministic_timeout_does_not_forge_completion() && ok;
     ok = submission_completion_stays_behind_older_fence() && ok;
     ok = preclassified_event_free_receipts_do_not_serialize() && ok;
     ok = event_free_receipt_cannot_pass_older_pe_fence() && ok;
-    ok = fifo_preclassifier_is_boundary_and_identity_exact() && ok;
-    ok = fifo_preclassifier_follows_display_lists() && ok;
     ok = duplicate_stale_and_out_of_order_fail() && ok;
     ok = queue_depths_one_through_three_are_independent() && ok;
     ok = reset_changes_identity_and_rejects_stale_epoch() && ok;

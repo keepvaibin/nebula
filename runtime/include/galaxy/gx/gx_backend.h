@@ -79,90 +79,6 @@ struct GuestMemoryRange {
     std::uint32_t size = 0;
 };
 
-// A game-visible PE event found by the FIFO preclassifier. The classifier runs FifoParser, so
-// partial commands, draw payloads, BP masks and CALL_DL recursion split exactly as for the renderer.
-struct FramePeEventSignature {
-    enum class Kind : std::uint8_t {
-        Finish,
-        Token,
-    };
-
-    Kind kind = Kind::Finish;
-    std::uint16_t token = 0;
-    bool interrupt = false;
-
-    [[nodiscard]] bool operator==(
-        const FramePeEventSignature&) const = default;
-};
-
-class FramePeEventClassifier final : private FifoSink {
-public:
-    FramePeEventClassifier();
-    void reset();
-    void classify(
-        const std::byte* fifo_data,
-        std::size_t fifo_size,
-        GuestMemory* memory,
-        std::vector<FramePeEventSignature>& events,
-        bool frozen_regions = false);
-
-private:
-    [[nodiscard]] std::size_t draw_payload_size(
-        std::uint8_t vtxfmt,
-        std::uint16_t vertex_count) const override;
-    void on_draw(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor) override;
-    [[nodiscard]] bool on_cached_simple_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets) override;
-    [[nodiscard]] bool on_cached_prepared_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> prepared_payload,
-        std::size_t base_offset,
-        std::size_t local_opcode_offset,
-        std::uint8_t opcode,
-        std::size_t source_draw_count) override;
-    [[nodiscard]] bool on_cached_packet_draw_run(
-        std::uint64_t cache_token,
-        std::size_t packet_run_index,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets,
-        std::uint32_t total_vertices,
-        std::uint32_t total_indices,
-        std::span<const std::uint16_t> precomputed_indices) override;
-    void on_efb_copy(std::uint32_t exec_command) override;
-    void on_pe_finish() override;
-    void on_pe_token(std::uint16_t token, bool interrupt) override;
-    void on_invalidate_textures() override;
-    void on_tlut_load() override;
-    void on_invalidate_vertex_cache() override;
-
-    GxState state_{};
-    FifoParser parser_{};
-    std::vector<std::byte> pending_fifo_;
-    std::vector<FramePeEventSignature>* active_events_ = nullptr;
-    // draw_payload_size() per vertex format, valid while CP VCD_LO/HI and VAT_A/B/C are unchanged.
-    struct VtxPayloadStrideMemo {
-        bool valid = false;
-        std::uint32_t vcd_lo = 0u;
-        std::uint32_t vcd_hi = 0u;
-        std::uint32_t vat_a = 0u;
-        std::uint32_t vat_b = 0u;
-        std::uint32_t vat_c = 0u;
-        std::size_t stride = 0u;
-    };
-    mutable std::array<VtxPayloadStrideMemo, 8> vtx_payload_stride_memo_{};
-};
-
 // lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the guest size. The guest's LOD
 // range moves by the shift (its base level is the replacement's level `shift`), except that a guest
 // range starting at its base level starts at the replacement's (close up, the guest magnifies its
@@ -549,12 +465,10 @@ private:
         std::vector<GuestWriteRange> dirty_ranges;
         std::vector<GuestMemoryRange> memory_ranges;
         std::vector<PeEvent> pe_events;
-        std::vector<FramePeEventSignature> preclassified_pe_events;
         GuestMemory* memory = nullptr;
         const GxServices* services = nullptr;
         FramePeCompletionToken pe_completion_token{};
         std::uint64_t producer_wait_ns = 0;
-        std::uint64_t pe_classification_ns = 0;
         std::uint32_t displayed_xfb_addr = 0;
         bool present_swap_chain = true;
         bool present_only = false;
@@ -562,8 +476,6 @@ private:
         bool memory_snapshot_strict = false;
         bool cpu_reads_pending = false;
         bool fifo_effects_pending = false;
-        bool pe_events_preclassified = false;
-        bool pe_event_free_receipt = false;
         bool pe_completion_requires_resolution = false;
         bool pe_events_scanned_on_sim_thread = false;
         bool efb_peek_only = false;
@@ -1373,7 +1285,6 @@ private:
     // Renderer compilation/recording must not lock dependency discovery.
     FifoParser dependency_parser_;
     FifoParser event_parser_;
-    FramePeEventClassifier pe_event_classifier_;
     VertexLoader vertex_loader_;
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
