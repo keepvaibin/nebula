@@ -78,7 +78,7 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   in progress into a file; the next launch never builds that pipeline again.
 - **Reports.** The first refusal logs the VkResult, the pipeline's state, this process's driver log (Android's
   logcat) and the shaders' HLSL. `GALAXY_VK_SHADER_DUMP=<dir>` writes every module.
-- **Checks** (D:/NebulaWork/port/tools): `vk_compat_runs.sh` runs a simulated driver
+- **Checks** (development scripts, outside the repository): `vk_compat_runs.sh` runs a simulated driver
   (`GALAXY_VK_SIMULATE_DRIVER=qualcomm:512.700.0`), forced refusals (`GALAXY_VK_TEST_REFUSE=dual-source,...`) and a
   forced crash (`GALAXY_VK_TEST_CRASH_AT=<n>`); `vk_profile_matrix.sh` runs the game under the validation layer with
   each Android GPU's gpuinfo.org profile (`fetch_device_profiles.py`: Adreno 610-840, Turnip, Mali-G52-G715,
