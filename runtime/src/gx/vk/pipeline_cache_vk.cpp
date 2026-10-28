@@ -1037,8 +1037,11 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
             curved = curved_hs_[variant] != VK_NULL_HANDLE && curved_ds_[variant] != VK_NULL_HANDLE;
         }
         set_curved_surfaces_offered(curved);
-        const bool complete = uber_vs_ != VK_NULL_HANDLE &&
-            std::all_of(uber_ps_.begin(), uber_ps_.end(), [](VkShaderModule m) { return m != VK_NULL_HANDLE; });
+        // Every variant Vulkan builds (the effects layer's are not).
+        bool complete = uber_vs_ != VK_NULL_HANDLE;
+        for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
+            complete = complete && (uber_ps_variant_layer(variant) || uber_ps_[variant] != VK_NULL_HANDLE);
+        }
         std::fprintf(stderr, "[uber-pipeline-vk] %s in %llu ms\n", complete ? "shaders ready" : "shader compile failed",
                      static_cast<unsigned long long>(elapsed_us(start) / 1000u));
         // A new driver build's self-test before any stand-in is used: a variant the driver refuses is then never tried
@@ -1247,7 +1250,9 @@ void PipelineCacheVk::self_test() {
     opaque.primitive_topology = gpu::kTopologyTypeTriangleValue;
     std::vector<std::pair<RenderStateKey, unsigned>> tests;
     for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
-        tests.emplace_back(opaque, variant);
+        if (!uber_ps_variant_layer(variant)) {
+            tests.emplace_back(opaque, variant);
+        }
     }
     RenderStateKey blended = opaque;  // alpha blend against the second output
     blended.blend_bits |= 1u | (4u << 2u) | (5u << 5u) | (1u << 27u);
