@@ -213,6 +213,10 @@ struct Device {
     bool joycon_shoulder = false;
     std::uint32_t joycon_buttons = 0;  // held at its last report
     std::uint8_t joycon_presses = 0;
+    // The touch surface's finger at its last report.
+    bool touch_down = false;
+    float touch_x = 0.0f;
+    float touch_y = 0.0f;
     // Generic HID controller: the parser's description, the layout taken from
     // it and the last values (a device may spread them over several reports).
     UniquePreparsed preparsed;
@@ -1768,6 +1772,16 @@ private:
         if (moved.imu_count != 0u) {
             ++device.imu_reports;
         }
+        float touch_dx = 0.0f, touch_dy = 0.0f;
+        if (decoded.touch_surface) {
+            if (decoded.touch_down && device.touch_down) {
+                touch_dx = decoded.touch_x - device.touch_x;
+                touch_dy = decoded.touch_y - device.touch_y;
+            }
+            device.touch_down = decoded.touch_down;
+            device.touch_x = decoded.touch_x;
+            device.touch_y = decoded.touch_y;
+        }
         log_motion(device, now, motion);
         AcquireSRWLockExclusive(&hub().lock);
         Published& published = hub().pads[target->slot];
@@ -1787,6 +1801,10 @@ private:
             state.gravity = device.motion.gravity();
             state.gravity_valid = device.motion.gravity_ready();
         }
+        state.touch_live = decoded.touch_surface;
+        state.touch_down = decoded.touch_surface && decoded.touch_down;
+        state.touch_dx = std::clamp(state.touch_dx + touch_dx, -2.0f, 2.0f);
+        state.touch_dy = std::clamp(state.touch_dy + touch_dy, -2.0f, 2.0f);
         state.slot = static_cast<std::uint8_t>(target->slot);
         ReleaseSRWLockExclusive(&hub().lock);
     }
@@ -2139,6 +2157,8 @@ std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcep
         if (consume_gyro) {
             published.state.gyro_x = 0.0f;
             published.state.gyro_y = 0.0f;
+            published.state.touch_dx = 0.0f;
+            published.state.touch_dy = 0.0f;
         }
     }
     if (consume_gyro) ReleaseSRWLockExclusive(&h.lock); else ReleaseSRWLockShared(&h.lock);

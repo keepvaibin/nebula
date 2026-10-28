@@ -148,7 +148,7 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
     } else if (std::strcmp(key, "discord_status") == 0) {
         settings.discord_status = value[0] != '0';
     } else if (std::strcmp(key, "button_icons") == 0) {
-        for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::PlayStation); ++i) {
+        for (unsigned i = 0; i <= static_cast<unsigned>(ButtonIcons::Keyboard); ++i) {
             if (_stricmp(value, button_icons_key(static_cast<ButtonIcons>(i))) == 0) {
                 settings.button_icons = static_cast<ButtonIcons>(i);
             }
@@ -370,7 +370,7 @@ bool running_game_language(GameLanguage& language) noexcept {
 }
 
 const char* button_icons_key(ButtonIcons icons) noexcept {
-    static constexpr const char* kKeys[] = {"auto", "wii", "xbox", "nintendo", "playstation"};
+    static constexpr const char* kKeys[] = {"auto", "wii", "xbox", "nintendo", "playstation", "keyboard"};
     return kKeys[std::min<std::size_t>(static_cast<std::size_t>(icons), std::size(kKeys) - 1u)];
 }
 

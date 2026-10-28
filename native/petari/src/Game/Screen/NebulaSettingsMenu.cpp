@@ -16,6 +16,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
@@ -240,6 +241,7 @@ namespace {
         f32 mInkY[2];
         nw4r::math::VEC2 mLabelScales[2];
         bool mGlyph;  // mWord is the D-pad
+        bool mKeyIcon;  // mWord is the keyboard's keys (NebulaIcons::keyCode)
         f32 mSize;    // the size of the text it stands with
         f32 mWidth;
     };
@@ -537,15 +539,42 @@ namespace {
         return true;
     }
 
-    // `key` (KeyApply...; -1 none) as `input` (NEBULA_SETTINGS_INPUT_*) shows it.
+    // The keyboard's key for `key` (NEBULA_KEY_*); `controls`: the bindings page's own (Space applies). Changing: the
+    // left arrow (the right one beside it).
+    s32 keyboardKey(s32 key, bool controls) {
+        static const s32 cKeys[KeyNum] = {NEBULA_KEY_ENTER, NEBULA_KEY_BACKSPACE, NEBULA_KEY_ESCAPE, NEBULA_KEY_TAB,
+                                          NEBULA_KEY_LEFT,  NEBULA_KEY_ENTER,     NEBULA_KEY_SPACE};
+        return key == KeyApply && controls ? NEBULA_KEY_SPACE : cKeys[key];
+    }
+
+    // `key` (KeyApply...; -1 none) as `input` (NEBULA_SETTINGS_INPUT_*) shows it: the keyboard's as its keys' icons
+    // (as the game's icons draw them; its name in words while the icons cannot be drawn), a controller's as its buttons.
     void fillKeyCap(KeyCap& rCap, s32 key, u32 input, bool controls) {
         f32 height = 0.0f;
         const bool pad = input >= NEBULA_SETTINGS_INPUT_XBOX && input <= NEBULA_SETTINGS_INPUT_PLAYSTATION;
         rCap.mBadgeCount = 0;
         rCap.mWidth = 0.0f;
         rCap.mGlyph = false;
+        rCap.mKeyIcon = false;
         rCap.mWord->SetVisible(key >= 0 && (!pad || key == KeyChange));
-        if (key >= 0 && !pad) {
+        const u16 keyIcon = key >= 0 && !pad ? NebulaIcons::keyCode(keyboardKey(key, controls)) : 0;
+        if (keyIcon != 0) {
+            const f32 glyphSize = rCap.mSize * 1.3f;
+            setGlyph(rCap.mWord, keyIcon, glyphSize);
+            s32 glyphs = 1;
+            if (key == KeyChange) {
+                // Left and right, side by side.
+                wchar_t text[16] = {0};
+                MR::addPictureFontTag(MR::addPictureFontTag(text, keyIcon), NebulaIcons::keyCode(NEBULA_KEY_RIGHT));
+                setText(rCap.mWord, text);
+                glyphs = 2;
+            }
+            setTextColor(rCap.mWord, 0xFFFFFFFF, 0xFFFFFFFF);
+            rCap.mGlyph = true;
+            rCap.mKeyIcon = true;
+            rCap.mWidth = glyphFontSize(rCap.mWord, glyphSize).width * glyphs;
+            rCap.mWord->mSize = nw4r::lyt::Size(rCap.mWidth + glyphSize, glyphSize * 2.0f);
+        } else if (key >= 0 && !pad) {
             wchar_t text[64] = {0};
             getKeyName(text, 64, key, controls);
             setTextStyle(rCap.mWord, rCap.mSize, cAccent, cAccent, 4);
@@ -596,7 +625,10 @@ namespace {
     void placeKeyCap(KeyCap& rCap, f32 left, f32 y) {
         if (rCap.mBadgeCount == 0) {
             rCap.mWord->mTranslate = nw4r::math::VEC3(left + rCap.mWidth * 0.5f,
-                                                      rCap.mGlyph ? glyphCentre(y, rCap.mSize * 1.3f) : textCentre(y, rCap.mSize), 0.0f);
+                                                      rCap.mKeyIcon ? y - cKeyGlyphDrop * rCap.mSize * 1.3f
+                                                      : rCap.mGlyph ? glyphCentre(y, rCap.mSize * 1.3f)
+                                                                    : textCentre(y, rCap.mSize),
+                                                      0.0f);
             return;
         }
         const f32 diameter = rCap.mSize * cBadgeScale;
@@ -1248,7 +1280,10 @@ void NebulaSettingsScreen::fillTexts(const NebulaSettingsView& rView, const Nebu
         if (heading) {
             continue;
         }
-        const u32 valueColor = (rData.flags & NEBULA_SETTINGS_ROW_CHANGES) != 0 ? cText : cDisabled;
+        // A binding whose input another control shares is red: both act together.
+        const u32 valueColor = (rData.flags & NEBULA_SETTINGS_ROW_SHARED) != 0    ? cWarning
+                               : (rData.flags & NEBULA_SETTINGS_ROW_CHANGES) != 0 ? cText
+                                                                                  : cDisabled;
         translateLine(text, 192, rData.value, (rData.flags & NEBULA_SETTINGS_ROW_NAME) != 0);
         if ((rData.flags & NEBULA_SETTINGS_ROW_ACTIVE) != 0) {
             wchar_t inUse[48] = L"  ";

@@ -1763,7 +1763,8 @@ void svc_settings_view(void*, NebulaSettingsView* view) {
                               (row.mod_list == 1u ? NEBULA_SETTINGS_ROW_MOD_OFF : 0u) |
                               (row.mod_list == 2u ? NEBULA_SETTINGS_ROW_MOD_ON : 0u) | (row.held ? NEBULA_SETTINGS_ROW_HELD : 0u) |
                               (row.slider_steps != 0u ? NEBULA_SETTINGS_ROW_SLIDER : 0u) |
-                              (row.inputs ? NEBULA_SETTINGS_ROW_BINDING : 0u);
+                              (row.inputs ? NEBULA_SETTINGS_ROW_BINDING : 0u) |
+                              (row.shared ? NEBULA_SETTINGS_ROW_SHARED : 0u);
         view->rows[i].slider_steps = static_cast<uint16_t>(row.slider_steps);
         view->rows[i].slider_at = static_cast<uint16_t>(row.slider_at);
     }
@@ -1895,8 +1896,13 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
     *icons = NebulaButtonIcons{};
 #if defined(NEBULA_HOST_RENDERER)
     static_assert(galaxy::input::kButtonIconCount == NEBULA_BUTTON_ICONS &&
-                  static_cast<int>(galaxy::input::ButtonIconStyle::PlayStation) == NEBULA_ICON_STYLE_PLAYSTATION &&
-                  static_cast<int>(galaxy::input::ButtonGlyph::Dpad) == NEBULA_ICON_DPAD);
+                  static_cast<int>(galaxy::input::ButtonIconStyle::Keyboard) == NEBULA_ICON_STYLE_KEYBOARD &&
+                  static_cast<int>(galaxy::input::ButtonGlyph::Key) == NEBULA_ICON_KEY &&
+                  galaxy::input::kKeyIconLayoutFirst == NEBULA_KEY_LAYOUT_FIRST &&
+                  galaxy::input::kKeyIconLayoutCount == NEBULA_KEY_LAYOUT_KEYS &&
+                  galaxy::input::kKeyIconMouseLeft == NEBULA_KEY_MOUSE_LEFT &&
+                  galaxy::input::kKeyIconOther == NEBULA_KEY_OTHER && galaxy::input::kKeyIconCount == NEBULA_KEYS &&
+                  NEBULA_KEY_SPACE == 75 && NEBULA_KEY_RIGHT_WIN == 106 && NEBULA_KEYS < galaxy::input::kKeyIconNone);
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
     const bool menu = mode >= 0 && static_cast<uint32_t>(mode) < galaxy::input::kStarPointerModeCount &&
                       galaxy::input::play_context_from_star_pointer_mode(static_cast<uint32_t>(mode)) !=
@@ -1906,6 +1912,12 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
     for (size_t i = 0; i < NEBULA_BUTTON_ICONS; ++i) {
         icons->glyphs[i] = static_cast<uint8_t>(spec.glyphs[i]);
         icons->places[i] = spec.places[i];
+    }
+    for (size_t i = 0; i < 4u; ++i) icons->pad_keys[i] = spec.pad_keys[i];
+    for (size_t i = 0; i < NEBULA_KEY_LAYOUT_KEYS; ++i) icons->layout[i] = spec.layout[i];
+    for (size_t i = 0; i < NEBULA_BUTTON_ICONS; ++i) {
+        std::memcpy(icons->other[i], spec.other[i].data(), NEBULA_KEY_NAME_CHARS);
+        icons->other[i][NEBULA_KEY_NAME_CHARS - 1] = '\0';
     }
 #endif
 #if defined(NEBULA_REAL_WIIMOTE)

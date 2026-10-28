@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -1642,6 +1643,151 @@ void test_button_icons() {
            "a rebound A shows the button it is bound to");
 }
 
+// The keyboard's icons: every key and mouse button has one; each Wii button shows its input as it is reached for there.
+void test_keyboard_icons() {
+    const auto key = [](std::uint8_t vk) { return key_icon(InputSource{SourceKind::Key, vk}); };
+    bool all = true;
+    for (unsigned vk = 1u; vk < 256u; ++vk) {
+        const std::optional<std::uint8_t> icon = key(static_cast<std::uint8_t>(vk));
+        all = all && icon.has_value() && *icon < kKeyIconCount;
+    }
+    expect(all, "every virtual key has an icon");
+    expect(key('A') == 0u && key('Z') == 25u && key('0') == 26u && key('9') == 35u, "letters and digits");
+    expect(key(VK_F1) == 36u && key(VK_F24) == 59u && key(VK_NUMPAD0) == 60u && key(VK_DECIMAL) == 74u,
+           "F1 to F24 and the number pad");
+    expect(key(VK_SPACE) == 75u && key(VK_RWIN) == 106u, "the named keys from Space to the right Windows key");
+    expect(key(VK_OEM_1) == kKeyIconLayoutFirst && key(VK_OEM_102) == kKeyIconLayoutFirst + 12u &&
+               key_icon_layout_key(0) == VK_OEM_1 && key_icon_layout_key(12) == VK_OEM_102,
+           "the layout keys, in order");
+    expect(key(VK_BROWSER_BACK) == kKeyIconOther && key(0xFF) == kKeyIconOther, "a key without its own: the unnamed key");
+    expect(key_icon(InputSource{SourceKind::Mouse, 0u}) == kKeyIconMouseLeft &&
+               key_icon(InputSource{SourceKind::Mouse, 4u}) == kKeyIconMouseLeft + 4u &&
+               !key_icon(InputSource{SourceKind::Mouse, 5u}).has_value() &&
+               !key_icon(InputSource{SourceKind::Button, 0u}).has_value(),
+           "mouse buttons; nothing else");
+
+    const BindingTable keyboard = default_binding_table(ControlScheme::Keyboard);
+    using Glyph = std::pair<ButtonGlyph, unsigned>;
+    const auto icon = [](const ButtonIconSpec& spec, ButtonIcon which) {
+        return Glyph(spec.glyphs[static_cast<std::size_t>(which)], spec.places[static_cast<std::size_t>(which)]);
+    };
+    const ButtonIconSpec play = button_icon_spec(ButtonIconStyle::Keyboard, keyboard, false);
+    expect(play.style == ButtonIconStyle::Keyboard, "the keyboard's style");
+    expect(icon(play, ButtonIcon::A) == Glyph{ButtonGlyph::Key, 75u}, "in play A is Space");
+    expect(icon(play, ButtonIcon::B) == Glyph{ButtonGlyph::Key, kKeyIconMouseLeft + 1u},
+           "B is the right click (Star Bits fly where the pointer aims)");
+    expect(icon(play, ButtonIcon::C) == Glyph{ButtonGlyph::Key, 2u} && icon(play, ButtonIcon::Z) == Glyph{ButtonGlyph::Key, 25u},
+           "C and Z are their keys");
+    expect(icon(play, ButtonIcon::One) == Glyph{ButtonGlyph::Key, 27u} && icon(play, ButtonIcon::Two) == Glyph{ButtonGlyph::Key, 28u},
+           "1 and 2");
+    expect(icon(play, ButtonIcon::Plus) == Glyph{ButtonGlyph::Key, kKeyIconLayoutFirst + 1u} &&
+               icon(play, ButtonIcon::Minus) == Glyph{ButtonGlyph::Key, kKeyIconLayoutFirst + 3u},
+           "Plus and Minus are the = and - keys");
+    expect(icon(play, ButtonIcon::Home) == Glyph{ButtonGlyph::Key, 7u}, "HOME is H");
+    expect(play.glyphs[static_cast<std::size_t>(ButtonIcon::Pad)] == ButtonGlyph::Dpad && play.pad_keys[0] == 89u &&
+               play.pad_keys[1] == 90u && play.pad_keys[2] == 91u && play.pad_keys[3] == 92u,
+           "the Control Pad is the arrows");
+    const ButtonIconSpec menu = button_icon_spec(ButtonIconStyle::Keyboard, keyboard, true);
+    expect(icon(menu, ButtonIcon::A) == Glyph{ButtonGlyph::Key, kKeyIconMouseLeft}, "in menus A is the left click");
+    expect(icon(menu, ButtonIcon::B) == Glyph{ButtonGlyph::Key, kKeyIconMouseLeft + 1u}, "and B the right click");
+
+    BindingTable keys_only = keyboard;
+    keys_only[WiiTarget::A] = {};
+    keys_only[WiiTarget::A][0] = InputSource{SourceKind::Key, VK_RETURN};
+    keys_only[WiiTarget::C] = {};
+    keys_only[WiiTarget::DpadLeft] = {};
+    const ButtonIconSpec rebound = button_icon_spec(ButtonIconStyle::Keyboard, keys_only, true);
+    expect(icon(rebound, ButtonIcon::A) == Glyph{ButtonGlyph::Key, 76u}, "A without a mouse button shows its key in menus too");
+    expect(icon(rebound, ButtonIcon::C) == Glyph{ButtonGlyph::Keep, 0u}, "an unbound button keeps the Wii's icon");
+    expect(rebound.pad_keys[2] == kKeyIconNone && rebound.pad_keys[0] == 89u, "an unbound direction shows no key");
+    expect(std::string(key_icon_name(VK_VOLUME_UP).data()) == "VOL +" &&
+               std::string(key_icon_name(VK_CONVERT).data()) == "CONV" &&
+               std::string(key_icon_name(0x88).data()) == "VK88",
+           "a key without its own icon carries the name keyboards print, else its code");
+    keys_only[WiiTarget::Z] = {};
+    keys_only[WiiTarget::Z][0] = InputSource{SourceKind::Key, VK_MEDIA_PLAY_PAUSE};
+    keys_only[WiiTarget::C][0] = InputSource{SourceKind::Key, VK_VOLUME_MUTE};
+    const ButtonIconSpec named = button_icon_spec(ButtonIconStyle::Keyboard, keys_only, false);
+    expect(icon(named, ButtonIcon::Z) == Glyph{ButtonGlyph::Key, kKeyIconOther} &&
+               std::string(named.other[static_cast<std::size_t>(ButtonIcon::Z)].data()) == "PLAY" &&
+               std::string(named.other[static_cast<std::size_t>(ButtonIcon::C)].data()) == "MUTE" &&
+               named.other[static_cast<std::size_t>(ButtonIcon::A)][0] == 0,
+           "each such icon names its own key");
+    keys_only[WiiTarget::JumpBack][0] = InputSource{SourceKind::Key, VK_BACK};
+    expect(icon(button_icon_spec(ButtonIconStyle::Keyboard, keys_only, true), ButtonIcon::B) == Glyph{ButtonGlyph::Key, 78u},
+           "in menus B is the back key's first (JumpBack)");
+}
+
+void test_shared_bindings() {
+    for (std::size_t i = 0; i < kControlSchemeCount; ++i) {
+        const auto scheme = static_cast<ControlScheme>(i);
+        const std::uint32_t shared = shared_binding_targets(default_binding_table(scheme));
+        if (shared != 0u) {
+            std::cerr << control_scheme_id(scheme) << " defaults share an input: targets 0x" << std::hex << shared
+                      << std::dec << '\n';
+        }
+        expect(shared == 0u, "no default binding list shares an input with another");
+    }
+    BindingTable table = default_binding_table(ControlScheme::Keyboard);
+    const InputSource space{SourceKind::Key, 0x20};
+    table[WiiTarget::A] = {space};
+    table[WiiTarget::Two] = {InputSource{SourceKind::Key, 'X'}, space};
+    const std::uint32_t both = wii_target_bit(WiiTarget::A) | wii_target_bit(WiiTarget::Two);
+    expect((shared_binding_targets(table) & both) == both, "a key bound to two targets marks both");
+    BindingTable pad = default_binding_table(ControlScheme::Xbox);
+    const InputSource right_up{SourceKind::AxisPositive, static_cast<std::uint8_t>(PadAxis::RightY)};
+    pad[WiiTarget::PointerUp] = {right_up};
+    pad[WiiTarget::DpadUp] = {right_up};
+    expect((shared_binding_targets(pad) & wii_target_bit(WiiTarget::PointerUp)) == 0u,
+           "a stick direction shared by the pointer and another target drives one at a time");
+    pad[WiiTarget::PointerDown] = {right_up};
+    expect((shared_binding_targets(pad) & wii_target_bit(WiiTarget::PointerDown)) != 0u,
+           "two pointer directions on one stick direction act together");
+}
+
+void test_touch_tuning() {
+    const ControlsConfig defaults = default_controls_config();
+    expect(defaults.tune(ControlScheme::PlayStation).touch_pointer && defaults.tune(ControlScheme::Steam).touch_pointer,
+           "the touchpad points by default where there is one");
+    expect(!defaults.tune(ControlScheme::Xbox).touch_pointer && !defaults.tune(ControlScheme::SwitchPro).touch_pointer,
+           "no touch pointer without a touchpad");
+    ControlsConfig config = defaults;
+    expect(apply_controls_setting(config, "tune.playstation.touch_pointer", "0") &&
+               !config.tune(ControlScheme::PlayStation).touch_pointer,
+           "touch_pointer reads");
+    expect(apply_controls_setting(config, "tune.steam.touch_sensitivity", "2.5") &&
+               config.tune(ControlScheme::Steam).touch_sensitivity == 2.5f,
+           "touch_sensitivity reads");
+    expect(apply_controls_setting(config, "tune.xbox.touch_pointer", "1") && !config.tune(ControlScheme::Xbox).touch_pointer,
+           "a controller without a touchpad never takes the touch pointer");
+    const std::string text = format_controls_settings(config);
+    expect(text.find("tune.playstation.touch_pointer=0\n") != std::string::npos &&
+               text.find("tune.steam.touch_sensitivity=2.5\n") != std::string::npos &&
+               text.find("tune.xbox.touch_pointer") == std::string::npos,
+           "touch settings are written for touchpad controllers only");
+    ControlsConfig read = defaults;
+    std::istringstream lines(text);
+    std::string line;
+    while (std::getline(lines, line)) {
+        const std::size_t eq = line.find('=');
+        if (eq != std::string::npos) (void)apply_controls_setting(read, line.substr(0, eq), line.substr(eq + 1u));
+    }
+    expect(read.tune(ControlScheme::PlayStation) == config.tune(ControlScheme::PlayStation) &&
+               read.tune(ControlScheme::Steam) == config.tune(ControlScheme::Steam),
+           "touch settings round-trip");
+
+    PointerOwner owner{};
+    PointerActivity gyro{};
+    gyro.gyro = true;
+    expect(owner.update(gyro, 1000u) == PointerSource::Gyro, "the gyro points");
+    PointerActivity both{};
+    both.gyro = true;
+    both.touch = true;
+    expect(owner.update(both, 2000u) == PointerSource::Touch, "a finger on the touchpad takes the pointer at once");
+    expect(owner.update(gyro, 3000u) == PointerSource::Touch, "the gyro waits for the touchpad's handoff");
+    expect(std::string(pointer_source_name(PointerSource::Touch)) == "touch", "the touch source's name");
+}
+
 int main(int argc, char** argv) {
     // The launcher's ControlsSettings mirrors these defaults; this prints them
     // for a cross-check.
@@ -1672,6 +1818,9 @@ int main(int argc, char** argv) {
     test_playstation_and_steam_schemes();
     test_kpad_dots_stable();
     test_button_icons();
+    test_keyboard_icons();
+    test_shared_bindings();
+    test_touch_tuning();
     if (g_failures != 0) {
         std::cerr << g_failures << " controls test(s) failed\n";
         return 1;

@@ -110,6 +110,7 @@ inline constexpr std::uint32_t kSteam = 0x00010000;
 inline constexpr std::uint32_t kLeftGrip1 = 0x00020000;   // L4
 inline constexpr std::uint32_t kLeftGrip2 = 0x00040000;   // L5
 inline constexpr std::uint32_t kLeftBumper = 0x00080000;
+inline constexpr std::uint32_t kRightPadTouch = 0x00200000;  // a finger on the right trackpad
 inline constexpr std::uint32_t kRightPadClick = 0x00400000;
 inline constexpr std::uint32_t kLeftPadClick = 0x04000000;
 }  // namespace button

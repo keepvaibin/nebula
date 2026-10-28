@@ -398,6 +398,8 @@ std::uint64_t s_controls_devices_ms = 0u;
 // Tests stand in for the attached controllers.
 std::optional<std::vector<galaxy::input::ControllerInfo>> s_test_controllers;
 std::optional<galaxy::input::DeviceKey> s_test_active_device;
+std::optional<galaxy::host::JoyConStatus> s_test_joycons;
+std::optional<bool> s_test_wii_remote;
 std::size_t s_capture_target = galaxy::input::kWiiTargetCount;
 std::uint64_t s_capture_deadline_ms = 0u;
 constexpr std::uint64_t kCaptureTimeoutMs = 6000u;
@@ -827,8 +829,9 @@ enum class ControlsRow {
     VibrationStrength,
     MotionShake,
     ShakeSensitivity,
-    GyroPointer,
+    Pointer,
     GyroSensitivity,
+    TouchSensitivity,
     PairJoyCon,
     Reset,
 };
@@ -836,9 +839,8 @@ enum class ControlsRow {
 struct ControlsRowInfo {
     ControlsRow kind = ControlsRow::Reset;
     galaxy::input::WiiTarget target = galaxy::input::WiiTarget::A;
+    friend bool operator==(const ControlsRowInfo&, const ControlsRowInfo&) = default;
 };
-
-constexpr unsigned kControlsBindingRow0 = 2u;
 
 // The Pair Joy-Con screen (CONTROLS > PAIR JOY-CON): open while the controller worker pairs the halves whose L and R
 // are held; it closes a moment after a pair is made, or with Escape or B.
@@ -872,6 +874,9 @@ galaxy::host::JoyConStatus joycon_status_now() {
         }
         return steps;
     }();
+    if (s_test_joycons) {
+        return *s_test_joycons;
+    }
     if (test.empty()) {
         return galaxy::host::joycon_status();
     }
@@ -914,50 +919,101 @@ std::vector<ControlsRow> controls_tail_rows() {
         rows.push_back(ControlsRow::StickDeadzone);
         rows.push_back(ControlsRow::PointerDeadzone);
         rows.push_back(ControlsRow::PointerHide);
-        rows.push_back(ControlsRow::Vibration);
-        rows.push_back(ControlsRow::VibrationStrength);
+        // A generic controller has no standard motor report: no vibration.
+        if (s_controls_scheme != galaxy::input::ControlScheme::Generic) {
+            rows.push_back(ControlsRow::Vibration);
+            rows.push_back(ControlsRow::VibrationStrength);
+        }
+    }
+    // The pointer's source where the controller has more than its stick, each source's sensitivity while it points.
+    const galaxy::input::SchemeTuning& tuning = s_controls_draft.tune(s_controls_scheme);
+    if (scheme_has_motion(s_controls_scheme) || galaxy::input::scheme_has_touch(s_controls_scheme)) {
+        rows.push_back(ControlsRow::Pointer);
+        if (tuning.gyro_pointer) rows.push_back(ControlsRow::GyroSensitivity);
+        if (tuning.touch_pointer) rows.push_back(ControlsRow::TouchSensitivity);
     }
     if (scheme_has_motion(s_controls_scheme)) {
         rows.push_back(ControlsRow::MotionShake);
         rows.push_back(ControlsRow::ShakeSensitivity);
-        rows.push_back(ControlsRow::GyroPointer);
-        rows.push_back(ControlsRow::GyroSensitivity);
     }
-    // Pairing Joy-Con is on every page (its place never moves as halves come and go).
-    rows.push_back(ControlsRow::PairJoyCon);
     rows.push_back(ControlsRow::Reset);
     return rows;
 }
 
 void refresh_controls_devices(bool force);
 
+// A real Wii Remote is paired and on (its HID interface is present), looked for at most once a second: the WII REMOTE
+// input mode is offered while one is.
+bool wii_remote_present() {
+    if (s_test_wii_remote) {
+        return *s_test_wii_remote;
+    }
+    static std::uint64_t s_checked_ms = 0u;
+    static bool s_present = false;
+    const std::uint64_t now = GetTickCount64();
+    if (s_checked_ms == 0u || now - s_checked_ms >= 1000u) {
+        s_checked_ms = now;
+        static constexpr std::uint16_t kRemotes[] = {0x0306u, 0x0330u};
+        s_present = !galaxy::host::hid_interface_paths(0x057Eu, kRemotes).empty();
+    }
+    return s_present;
+}
+
+// The CONTROLS page's rows top to bottom: the input mode; PAIR JOY-CON while a Joy-Con half is connected (Auto,
+// Controller only); then, but in the Wii Remote mode (its buttons are its own), the device being set up and, while
+// there is one, its bindings (the jump/back row after A and B) and its settings.
+std::vector<ControlsRowInfo> controls_rows() {
+    using galaxy::input::WiiTarget;
+    std::vector<ControlsRowInfo> rows{{ControlsRow::InputMode}};
+    const galaxy::host::JoyConStatus joycons = joycon_status_now();
+    if ((s_input_mode_draft == RuntimeInputMode::Auto || s_input_mode_draft == RuntimeInputMode::Controller) &&
+        joycons.lefts + joycons.rights != 0u) {
+        rows.push_back({ControlsRow::PairJoyCon});
+    }
+    if (s_input_mode_draft == RuntimeInputMode::RealWiimote) {
+        return rows;
+    }
+    rows.push_back({ControlsRow::Device});
+    if (s_controls_devices.count == 0u) {
+        return rows;
+    }
+    for (unsigned index = 0; index < galaxy::input::kWiiTargetCount; ++index) {
+        const WiiTarget target = index == 2u ? WiiTarget::JumpBack
+                                 : index > 2u ? static_cast<WiiTarget>(index - 1u)
+                                              : static_cast<WiiTarget>(index);
+        rows.push_back({ControlsRow::Binding, target});
+    }
+    for (const ControlsRow kind : controls_tail_rows()) {
+        rows.push_back({kind});
+    }
+    return rows;
+}
+
 unsigned controls_row_count() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
     refresh_controls_devices(false);
-    return kControlsBindingRow0 + static_cast<unsigned>(galaxy::input::kWiiTargetCount) +
-           static_cast<unsigned>(controls_tail_rows().size());
+    return static_cast<unsigned>(controls_rows().size());
 }
 
 ControlsRowInfo controls_row(unsigned row) {
-    ControlsRowInfo info{};
-    if (row == 0u) {
-        info.kind = ControlsRow::InputMode;
-    } else if (row == 1u) {
-        info.kind = ControlsRow::Device;
-    } else if (row - kControlsBindingRow0 < galaxy::input::kWiiTargetCount) {
-        // The jump/back row follows A and B.
-        using galaxy::input::WiiTarget;
-        const unsigned index = row - kControlsBindingRow0;
-        info.kind = ControlsRow::Binding;
-        info.target = index == 2u ? WiiTarget::JumpBack
-            : index > 2u ? static_cast<WiiTarget>(index - 1u)
-            : static_cast<WiiTarget>(index);
-    } else {
-        const auto tail = controls_tail_rows();
-        const std::size_t index = row - kControlsBindingRow0 - galaxy::input::kWiiTargetCount;
-        info.kind = index < tail.size() ? tail[index] : ControlsRow::Reset;
+    const std::vector<ControlsRowInfo> rows = controls_rows();
+    return row < rows.size() ? rows[row] : ControlsRowInfo{};
+}
+
+// The rows changed under the selection (a Joy-Con half came or went, a sensitivity row with its source): the selection
+// stays on the row it was on.
+void keep_controls_selection() {
+    static std::vector<ControlsRowInfo> s_last;
+    const std::vector<ControlsRowInfo> rows = controls_rows();
+    if (rows == s_last) return;
+    const unsigned selected = s_native_settings_row.load(std::memory_order_relaxed);
+    if (selected < s_last.size()) {
+        const auto it = std::find(rows.begin(), rows.end(), s_last[selected]);
+        const unsigned row = it != rows.end() ? static_cast<unsigned>(it - rows.begin())
+                                              : std::min(selected, static_cast<unsigned>(rows.size()) - 1u);
+        s_native_settings_row.store(row, std::memory_order_relaxed);
     }
-    return info;
+    s_last = rows;
 }
 
 unsigned controls_changes() {
@@ -1028,7 +1084,7 @@ constexpr std::uint64_t kControlsDevicesRefreshMs = 500u;
 // keyboard and mouse).
 void refresh_controls_devices(bool force) {
     const std::uint64_t now = GetTickCount64();
-    if (!force && s_controls_devices.count != 0u && now - s_controls_devices_ms < kControlsDevicesRefreshMs) {
+    if (!force && s_controls_devices_ms != 0u && now - s_controls_devices_ms < kControlsDevicesRefreshMs) {
         return;
     }
     s_controls_devices_ms = now;
@@ -1045,6 +1101,20 @@ void refresh_controls_devices(bool force) {
     }
     galaxy::input::build_device_list(std::span<const galaxy::input::ControllerInfo>(connected.data(), count),
                                      active, s_controls_devices);
+    // Only what the input mode reads: the keyboard and mouse alone, or the controllers alone.
+    if (s_input_mode_draft == RuntimeInputMode::KeyboardMouse || s_input_mode_draft == RuntimeInputMode::Controller) {
+        const bool keyboard = s_input_mode_draft == RuntimeInputMode::KeyboardMouse;
+        std::size_t kept = 0;
+        for (std::size_t i = 0; i < s_controls_devices.count; ++i) {
+            const bool is_keyboard = s_controls_devices.entries[i].key.scheme == galaxy::input::ControlScheme::Keyboard;
+            if (is_keyboard == keyboard) s_controls_devices.entries[kept++] = s_controls_devices.entries[i];
+        }
+        s_controls_devices.count = kept;
+    }
+    if (s_controls_devices.count == 0u) {
+        end_controls_capture();
+        return;
+    }
     const galaxy::input::DeviceKey edited =
         s_controls_devices.entries[galaxy::input::resolve_device(s_controls_devices, s_controls_device)].key;
     if (!(edited == s_controls_device)) {
@@ -1123,6 +1193,11 @@ void expire_display_confirmation() {
     }
 }
 
+// A controller is attached (the tests' stand-ins where they set them).
+bool controller_attached() {
+    return s_test_controllers ? !s_test_controllers->empty() : galaxy::host::controller_present_now();
+}
+
 // Applies the CONTROLS draft. Controller input is selected only while a
 // controller is attached.
 void apply_controls_draft() {
@@ -1133,8 +1208,11 @@ void apply_controls_draft() {
     }
     RuntimeSettings runtime = get_runtime_settings();
     if (s_input_mode_draft != runtime.input_mode) {
-        if (s_input_mode_draft == RuntimeInputMode::Controller && !galaxy::host::controller_present_now()) {
+        if (s_input_mode_draft == RuntimeInputMode::Controller && !controller_attached()) {
             show_controls_message("NO CONTROLLER CONNECTED");
+            s_input_mode_draft = runtime.input_mode;
+        } else if (s_input_mode_draft == RuntimeInputMode::RealWiimote && !wii_remote_present()) {
+            show_controls_message("NO WII REMOTE CONNECTED");
             s_input_mode_draft = runtime.input_mode;
         } else {
             runtime.input_mode = s_input_mode_draft;
@@ -1344,19 +1422,21 @@ void adjust_native_setting_unlogged(int delta) {
             return std::clamp(snapped + static_cast<float>(delta) * increment, lo, hi);
         };
         switch (info.kind) {
-        case ControlsRow::InputMode:
-            // A physical Wii Remote is chosen in the launcher only.
-            if (s_input_mode_draft == RuntimeInputMode::RealWiimote) return;
-            {
-                static constexpr RuntimeInputMode kModes[] = {
-                    RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse, RuntimeInputMode::Controller};
-                unsigned index = 0u;
-                for (unsigned i = 0; i < 3u; ++i) {
-                    if (kModes[i] == s_input_mode_draft) index = i;
-                }
-                s_input_mode_draft = kModes[step(index, 3u)];
+        case ControlsRow::InputMode: {
+            // The Wii Remote's own mode while one is paired and on (or chosen already).
+            std::vector<RuntimeInputMode> modes{RuntimeInputMode::Auto, RuntimeInputMode::KeyboardMouse,
+                                                RuntimeInputMode::Controller};
+            if (wii_remote_present() || s_input_mode_draft == RuntimeInputMode::RealWiimote) {
+                modes.push_back(RuntimeInputMode::RealWiimote);
             }
+            unsigned index = 0u;
+            for (unsigned i = 0; i < modes.size(); ++i) {
+                if (modes[i] == s_input_mode_draft) index = i;
+            }
+            s_input_mode_draft = modes[step(index, static_cast<unsigned>(modes.size()))];
+            refresh_controls_devices(true);
             return;
+        }
         case ControlsRow::Device: {
             refresh_controls_devices(true);
             if (s_controls_devices.count == 0u) return;
@@ -1402,11 +1482,27 @@ void adjust_native_setting_unlogged(int delta) {
             tuning.shake_sensitivity = static_cast<std::uint8_t>(
                 step(tuning.shake_sensitivity - 1u, galaxy::input::kShakeSensitivitySteps) + 1u);
             return;
-        case ControlsRow::GyroPointer:
-            tuning.gyro_pointer = !tuning.gyro_pointer;
+        case ControlsRow::Pointer: {
+            // Its sources by the controller's sensors: bit 0 motion, bit 1 the touchpad.
+            std::vector<unsigned> choices{0u};
+            if (galaxy::input::scheme_has_motion(s_controls_scheme)) choices.push_back(1u);
+            if (galaxy::input::scheme_has_touch(s_controls_scheme)) choices.push_back(2u);
+            if (choices.size() == 3u) choices.push_back(3u);
+            const unsigned current = (tuning.gyro_pointer ? 1u : 0u) | (tuning.touch_pointer ? 2u : 0u);
+            unsigned index = 0u;
+            for (unsigned i = 0; i < choices.size(); ++i) {
+                if (choices[i] == current) index = i;
+            }
+            const unsigned next = choices[step(index, static_cast<unsigned>(choices.size()))];
+            tuning.gyro_pointer = (next & 1u) != 0u;
+            tuning.touch_pointer = (next & 2u) != 0u;
             return;
+        }
         case ControlsRow::GyroSensitivity:
             tuning.gyro_sensitivity = step_float(tuning.gyro_sensitivity, 0.1f, 0.2f, 5.0f);
+            return;
+        case ControlsRow::TouchSensitivity:
+            tuning.touch_sensitivity = step_float(tuning.touch_sensitivity, 0.1f, 0.2f, 5.0f);
             return;
         case ControlsRow::PairJoyCon:
             if (delta > 0) open_joycon_pairing();
@@ -1675,6 +1771,7 @@ SliderPlace settings_slider(unsigned tab, unsigned row, const std::vector<Settin
         along(static_cast<float>(tuning.shake_sensitivity), 1.0f, 1.0f, static_cast<float>(galaxy::input::kShakeSensitivitySteps));
         break;
     case ControlsRow::GyroSensitivity: along(tuning.gyro_sensitivity, 0.2f, 0.1f, 5.0f); break;
+    case ControlsRow::TouchSensitivity: along(tuning.touch_sensitivity, 0.2f, 0.1f, 5.0f); break;
     default: break;
     }
     return place;
@@ -3510,12 +3607,24 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                     },
                     "HOW FAST DIALOGUE TEXT APPEARS. INSTANT: EACH PAGE AT ONCE"});
     {
-        static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION"};
-        rows.push_back({"BUTTON ICONS", kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 4u)],
+        static constexpr const char* kIcons[] = {"AUTO", "WII", "XBOX", "NINTENDO SWITCH", "PLAYSTATION",
+                                                 "KEYBOARD AND MOUSE"};
+        // Auto names the icons it shows now.
+        std::string icons = kIcons[std::min<std::size_t>(static_cast<std::size_t>(runtime.button_icons), 5u)];
+        if (runtime.button_icons == ButtonIcons::Auto) {
+            using galaxy::input::ButtonIconStyle;
+            const ButtonIconStyle shown = galaxy::host::button_icons_auto_style();
+            icons += shown == ButtonIconStyle::Xbox          ? " (XBOX)"
+                     : shown == ButtonIconStyle::Nintendo    ? " (NINTENDO SWITCH)"
+                     : shown == ButtonIconStyle::PlayStation ? " (PLAYSTATION)"
+                     : shown == ButtonIconStyle::Keyboard    ? " (KEYBOARD AND MOUSE)"
+                                                             : " (WII)";
+        }
+        rows.push_back({"BUTTON ICONS", icons,
                         [](RenderConfig&, int delta) {
                             RuntimeSettings& settings = s_runtime_draft;
                             settings.button_icons = static_cast<ButtonIcons>(
-                                settings_step(static_cast<unsigned>(settings.button_icons), 5u, delta));
+                                settings_step(static_cast<unsigned>(settings.button_icons), 6u, delta));
                         },
                         "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
     }
@@ -3693,6 +3802,7 @@ std::string native_settings_row_text(
             default: return "INPUT: AUTO";
             }
         case ControlsRow::Device: {
+            if (s_controls_devices.count == 0u) return "EDIT: NONE";
             const galaxy::input::DeviceEntry& entry = s_controls_devices.entries[
                 galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
             // Bluetooth is abbreviated: the row has no room for the longest names.
@@ -3742,9 +3852,15 @@ std::string native_settings_row_text(
         case ControlsRow::ShakeSensitivity:
             std::snprintf(text, sizeof(text), "SHAKE SENSITIVITY: %u", static_cast<unsigned>(tuning.shake_sensitivity));
             return text;
-        case ControlsRow::GyroPointer:
-            return std::string("GYRO POINTER: ") + on_off(tuning.gyro_pointer) +
-                   (tuning.gyro_pointer ? "  (R STICK: CAMERA)" : "  (R STICK: POINTER)");
+        case ControlsRow::Pointer: {
+            static constexpr const char* kSources[] = {"STICK", "MOTION", "TOUCHPAD", "MOTION + TOUCHPAD"};
+            return std::string("POINTER: ") +
+                   kSources[(tuning.gyro_pointer ? 1u : 0u) | (tuning.touch_pointer ? 2u : 0u)];
+        }
+        case ControlsRow::TouchSensitivity:
+            std::snprintf(text, sizeof(text), "TOUCHPAD SENSITIVITY: %.1f",
+                          static_cast<double>(tuning.touch_sensitivity));
+            return text;
         case ControlsRow::GyroSensitivity:
             std::snprintf(text, sizeof(text), "GYRO SENSITIVITY: %.1f",
                           static_cast<double>(tuning.gyro_sensitivity));
@@ -5047,11 +5163,12 @@ NativeSettingsView build_native_settings_view() {
     NativeSettingsView view;
     view.pages.assign(std::begin(kNativeSettingsTabNames), std::end(kNativeSettingsTabNames));
     view.controls_page = kControlsTab;
-    // The hints show the buttons the icons do: a chosen style whatever is in hand, else what the player last used.
+    // The hints show the buttons the icons do: a chosen style whatever is in hand (the keyboard's: its keys), else what
+    // the player last used.
     const ButtonIcons icons = get_runtime_settings().button_icons;
     if (icons == ButtonIcons::Xbox || icons == ButtonIcons::Nintendo || icons == ButtonIcons::PlayStation) {
         view.input = icons == ButtonIcons::Xbox ? 1u : icons == ButtonIcons::Nintendo ? 2u : 3u;
-    } else if (const auto device = galaxy::host::last_input_device()) {
+    } else if (const auto device = galaxy::host::last_input_device(); device && icons != ButtonIcons::Keyboard) {
         switch (device->scheme) {
         case galaxy::input::ControlScheme::Keyboard: break;
         case galaxy::input::ControlScheme::SwitchPro:
@@ -5071,6 +5188,7 @@ NativeSettingsView build_native_settings_view() {
     expire_controls_capture();
     if (tab == kControlsTab) {
         refresh_controls_devices(false);
+        keep_controls_selection();
     }
     const RenderConfig row_render = s_settings_draft;
     const RuntimeSettings row_runtime = s_runtime_draft;
@@ -5081,6 +5199,8 @@ NativeSettingsView build_native_settings_view() {
     const std::vector<SettingsRow> page =
         page_tab ? settings_page(tab, row_render, row_runtime, row_caps) : std::vector<SettingsRow>{};
     view.rows.reserve(row_count);
+    const std::uint32_t shared_targets =
+        tab == kControlsTab ? galaxy::input::shared_binding_targets(s_controls_draft.table(s_controls_scheme)) : 0u;
     for (unsigned row = 0; row < row_count; ++row) {
         NativeSettingsViewRow shown;
         shown.changes = true;
@@ -5108,7 +5228,9 @@ NativeSettingsView build_native_settings_view() {
             // The controller being set up by its own name (the overlay's row has it in capitals), and the bindings as
             // lists of inputs.
             const ControlsRowInfo info = controls_row(row);
-            if (info.kind == ControlsRow::Device) {
+            // Nothing to set up (controller only, none attached): the device row shows none, fixed.
+            shown.changes = info.kind != ControlsRow::Device || s_controls_devices.count != 0u;
+            if (info.kind == ControlsRow::Device && s_controls_devices.count != 0u) {
                 const galaxy::input::DeviceEntry& entry =
                     s_controls_devices.entries[galaxy::input::resolve_device(s_controls_devices, s_controls_device)];
                 shown.value = entry.label.data();
@@ -5121,6 +5243,7 @@ NativeSettingsView build_native_settings_view() {
                                                                     s_controls_draft.table(s_controls_scheme)[info.target]);
             }
             shown.inputs = info.kind == ControlsRow::Binding;
+            shown.shared = shown.inputs && (shared_targets & galaxy::input::wii_target_bit(info.target)) != 0u;
             if (info.kind == ControlsRow::Reset) {
                 shown.buttons = true;
                 shown.value = "RESET";
@@ -5879,6 +6002,9 @@ void native_settings_reset_overlay_state_for_tests() noexcept {
     s_controls_devices = {};
     s_test_controllers.reset();
     s_test_active_device.reset();
+    // No Joy-Con half and no Wii Remote, whatever this machine has, until a test sets them.
+    s_test_joycons = galaxy::host::JoyConStatus{};
+    s_test_wii_remote = false;
     s_settings_first_row = 0u;
     s_controls_message_until_ms = 0u;
     s_native_settings_visible.store(false, std::memory_order_relaxed);
@@ -5899,6 +6025,18 @@ void native_settings_set_controllers_for_tests(std::span<const galaxy::input::Co
     s_test_controllers = std::vector<galaxy::input::ControllerInfo>(controllers.begin(), controllers.end());
     s_test_active_device = active;
     refresh_controls_devices(true);
+}
+
+void native_settings_set_joycons_for_tests(unsigned lefts, unsigned rights) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    galaxy::host::JoyConStatus status{};
+    status.lefts = static_cast<std::uint8_t>(lefts);
+    status.rights = static_cast<std::uint8_t>(rights);
+    s_test_joycons = status;
+}
+void native_settings_set_wii_remote_for_tests(bool present) {
+    const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);
+    s_test_wii_remote = present;
 }
 RenderConfig native_settings_draft_for_tests() {
     const std::lock_guard<std::recursive_mutex> lock(s_native_settings_mutex);

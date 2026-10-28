@@ -168,15 +168,17 @@ namespace {
     }
 
     // The buttons' names in letters of Nebula's own, sharp at any size: strokes of one width (cStrokeHalf of a capital
-    // each side) with round ends, in a box one capital tall from the capitals' top (0) to their foot (1). A segment is
-    // (x0, y0, x1, y1); an arc (centre, radius, its start and end directions) turns clockwise on screen, half a turn at
-    // most.
+    // each side) with round ends, in a box one capital tall from the capitals' top (0) to their foot (1); a mark above a
+    // capital or a cedilla under it outside the box. A segment is (x0, y0, x1, y1); an arc (centre, radius, its start
+    // and end directions) turns clockwise on screen, half a turn at most. Codes are Unicode's (the capitals, digits and
+    // marks keyboards print), and 1 to 5 the arrows up, down, left and right and Backspace's long arrow. The first twelve
+    // are the controllers' (their pictures, and so a texture pack's names for them, stay as they are).
     struct Stroke {
         u8 mArc;
         f32 mA, mB, mC, mD, mE, mF, mG;
     };
     struct Letter {
-        char mCode;
+        u16 mCode;
         f32 mAdvance;  // its ink's width
         s32 mFirst;
         s32 mCount;
@@ -225,14 +227,361 @@ namespace {
         {1, 0.3f, 0.29f, 0.195f, 0.8192f, -0.5736f, 0.0f, 1.0f},
         {1, 0.3f, 0.695f, 0.21f, 0.0f, -1.0f, 0.8192f, 0.5736f},
         {1, 0.3f, 0.695f, 0.21f, 0.8192f, 0.5736f, -0.9397f, 0.342f},
+{1, 0.36f, 0.36f, 0.265f, -1.0f, 0.0f, 0.8192f, -0.5736f},
+        {1, 0.36f, 0.64f, 0.265f, 0.8192f, 0.5736f, -1.0f, 0.0f},
+        {0, 0.095f, 0.36f, 0.095f, 0.64f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.385f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.385f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {1, 0.385f, 0.355f, 0.26f, 0.0f, -1.0f, 1.0f, 0.0f},
+        {1, 0.385f, 0.645f, 0.26f, 1.0f, 0.0f, 0.0f, 1.0f},
+        {0, 0.645f, 0.355f, 0.645f, 0.645f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.525f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.48f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.525f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.505f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.46f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {1, 0.38f, 0.38f, 0.285f, -1.0f, 0.0f, 0.866f, -0.5f},
+        {1, 0.38f, 0.62f, 0.285f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.38f, 0.095f, 0.62f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.62f, 0.665f, 0.53f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.53f, 0.43f, 0.53f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.645f, 0.095f, 0.645f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.645f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.505f, 0.095f, 0.505f, 0.65f, 0.0f, 0.0f, 0.0f},
+        {1, 0.3f, 0.65f, 0.205f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.625f, 0.095f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.3f, 0.43f, 0.625f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.095f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.46f, 0.68f, 0.0f, 0.0f, 0.0f},
+        {0, 0.46f, 0.68f, 0.825f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.825f, 0.095f, 0.825f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.095f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.665f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.905f, 0.665f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {1, 0.4f, 0.4f, 0.305f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.4f, 0.6f, 0.305f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.4f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.705f, 0.4f, 0.705f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.36f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.545f, 0.36f, 0.545f, 0.0f, 0.0f, 0.0f},
+        {1, 0.36f, 0.32f, 0.225f, 0.0f, -1.0f, 0.0f, 1.0f},
+        {1, 0.4f, 0.4f, 0.305f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.4f, 0.6f, 0.305f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.4f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.705f, 0.4f, 0.705f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.48f, 0.66f, 0.705f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {0, 0.645f, 0.095f, 0.645f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {1, 0.37f, 0.63f, 0.275f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.4f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.4f, 0.905f, 0.705f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.3f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.3f, 0.905f, 0.52f, 0.32f, 0.0f, 0.0f, 0.0f},
+        {0, 0.52f, 0.32f, 0.74f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.74f, 0.905f, 0.945f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {1, 0.34f, 0.34f, 0.245f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.34f, 0.66f, 0.245f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.34f, 0.095f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.585f, 0.34f, 0.585f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.47f, 0.095f, 0.095f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.66f, 0.585f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.47f, 0.095f, 0.47f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.53f, 0.095f, 0.14f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.14f, 0.095f, 0.12f, 0.45f, 0.0f, 0.0f, 0.0f},
+        {0, 0.12f, 0.45f, 0.29f, 0.42f, 0.0f, 0.0f, 0.0f},
+        {1, 0.29f, 0.66f, 0.245f, 0.0f, -1.0f, 0.0f, 1.0f},
+        {1, 0.29f, 0.66f, 0.245f, 0.0f, 1.0f, -0.866f, 0.5f},
+        {1, 0.32f, 0.66f, 0.225f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.32f, 0.66f, 0.225f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.6f, 0.66f, 0.505f, -1.0f, 0.0f, -0.3746f, -0.9272f},
+        {0, 0.095f, 0.095f, 0.545f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.545f, 0.095f, 0.24f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {1, 0.32f, 0.29f, 0.195f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.32f, 0.29f, 0.195f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.32f, 0.68f, 0.225f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.32f, 0.68f, 0.225f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.32f, 0.34f, 0.225f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.32f, 0.34f, 0.225f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.04f, 0.34f, 0.505f, 1.0f, 0.0f, 0.3746f, 0.9272f},
+        {0, 0.091f, 0.905f, 0.099f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.121f, 0.865f, 0.129f, 0.865f, 0.0f, 0.0f, 0.0f},
+        {0, 0.125f, 0.865f, 0.06f, 1.08f, 0.0f, 0.0f, 0.0f},
+        {0, 0.121f, 0.42f, 0.129f, 0.42f, 0.0f, 0.0f, 0.0f},
+        {0, 0.121f, 0.865f, 0.129f, 0.865f, 0.0f, 0.0f, 0.0f},
+        {0, 0.125f, 0.865f, 0.06f, 1.08f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, 0.42f, 0.099f, 0.42f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, 0.905f, 0.099f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.34f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.34f, 0.0f, 0.0f, 0.0f},
+        {0, 0.345f, 0.095f, 0.345f, 0.34f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.225f, 0.24f, 0.0f, 0.0f, 0.0f},
+        {0, 0.225f, 0.095f, 0.095f, 0.24f, 0.0f, 0.0f, 0.0f},
+        {0, 0.425f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.425f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.285f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.285f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.285f, 0.095f, 0.285f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.285f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.285f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {1, 0.62f, 0.5f, 0.525f, -0.766f, 0.6428f, -0.766f, -0.6428f},
+        {1, -0.28f, 0.5f, 0.525f, 0.766f, -0.6428f, 0.766f, 0.6428f},
+        {0, 0.095f, 0.56f, 0.405f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.505f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.42f, 0.505f, 0.42f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.7f, 0.505f, 0.7f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.56f, 0.525f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.345f, 0.31f, 0.775f, 0.0f, 0.0f, 0.0f},
+        {0, 0.28f, 0.28f, 0.28f, 0.72f, 0.0f, 0.0f, 0.0f},
+        {0, 0.09f, 0.39f, 0.47f, 0.61f, 0.0f, 0.0f, 0.0f},
+        {0, 0.09f, 0.61f, 0.47f, 0.39f, 0.0f, 0.0f, 0.0f},
+        {0, 0.465f, 0.3f, 0.095f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.56f, 0.465f, 0.82f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.3f, 0.465f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {0, 0.465f, 0.56f, 0.095f, 0.82f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.42f, 0.28f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.28f, 0.095f, 0.465f, 0.42f, 0.0f, 0.0f, 0.0f},
+        {1, 0.24f, 0.56f, 0.145f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.53f, 0.56f, 0.145f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.3f, 0.095f, 0.22f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.54f, 0.095f, 0.46f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.36f, 0.645f, 0.36f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.64f, 0.645f, 0.64f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.62f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, 0.905f, 0.099f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, 0.095f, 0.099f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.38f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {1, 0.31f, 0.285f, 0.19f, 0.0f, 1.0f, -0.809f, -0.5878f},
+        {1, 0.31f, 0.285f, 0.19f, -0.809f, -0.5878f, 0.9511f, -0.309f},
+        {1, 0.31f, 0.69f, 0.215f, 0.0f, -1.0f, 0.809f, 0.5878f},
+        {1, 0.31f, 0.69f, 0.215f, 0.809f, 0.5878f, -0.9511f, 0.309f},
+        {0, 0.31f, -0.02f, 0.31f, 1.02f, 0.0f, 0.0f, 0.0f},
+        {1, 0.5f, 0.5f, 0.405f, 0.866f, 0.5f, -0.866f, -0.5f},
+        {1, 0.5f, 0.5f, 0.405f, -0.866f, -0.5f, 0.866f, -0.5f},
+        {1, 0.47f, 0.5f, 0.15f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.47f, 0.5f, 0.15f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {0, 0.62f, 0.35f, 0.62f, 0.62f, 0.0f, 0.0f, 0.0f},
+        {1, 0.735f, 0.62f, 0.115f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.25f, 0.25f, 0.155f, -1.0f, 0.0f, 0.9397f, -0.342f},
+        {1, 0.25f, 0.25f, 0.155f, 0.0f, 1.0f, -1.0f, 0.0f},
+        {1, 0.25f, 0.5f, 0.155f, 0.0f, -1.0f, 0.0f, 1.0f},
+        {1, 0.25f, 0.5f, 0.155f, 0.0f, 1.0f, 0.0f, -1.0f},
+        {1, 0.25f, 0.75f, 0.155f, 1.0f, 0.0f, 0.0f, 1.0f},
+        {1, 0.25f, 0.75f, 0.155f, -0.9397f, 0.342f, 0.9397f, -0.342f},
+        {1, 0.25f, 0.75f, 0.155f, 0.9397f, -0.342f, 1.0f, 0.0f},
+        {1, 0.2f, 0.25f, 0.105f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.2f, 0.25f, 0.105f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.2f, 0.27f, 0.105f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.2f, 0.27f, 0.105f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {0, 0.095f, 0.56f, 0.305f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {1, 0.2f, 0.27f, 0.105f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.2f, 0.27f, 0.105f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {0, 0.305f, 0.17f, 0.305f, 0.375f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.56f, 0.305f, 0.56f, 0.0f, 0.0f, 0.0f},
+        {1, 0.1843f, 0.1705f, 0.1183f, -0.9659f, -0.2588f, 0.4226f, -0.9063f},
+        {1, 0.1843f, 0.1705f, 0.1183f, 0.4226f, -0.9063f, 0.8192f, 0.5736f},
+        {0, 0.2811f, 0.2383f, 0.05225f, 0.4978f, 0.0f, 0.0f, 0.0f},
+        {0, 0.05225f, 0.4978f, 0.3025f, 0.4978f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, 0.2f, 0.099f, 0.2f, 0.0f, 0.0f, 0.0f},
+        {0, 0.341f, 0.2f, 0.349f, 0.2f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.095f, 0.3f, 0.0f, 0.0f, 0.0f},
+        {1, 0.3f, 0.3f, 0.205f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.3f, 0.3f, 0.205f, 1.0f, 0.0f, 0.0f, 1.0f},
+        {0, 0.3f, 0.505f, 0.28f, 0.505f, 0.0f, 0.0f, 0.0f},
+        {1, 0.3f, 0.7f, 0.205f, 0.0f, -1.0f, 0.0f, 1.0f},
+        {0, 0.3f, 0.905f, 0.2f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.905f, 0.31f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.095f, 0.095f, 0.31f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.095f, 0.525f, 0.31f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.095f, 0.31f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.905f, 0.095f, 0.69f, 0.0f, 0.0f, 0.0f},
+        {0, 0.31f, 0.905f, 0.525f, 0.69f, 0.0f, 0.0f, 0.0f},
+        {0, 0.765f, 0.5f, 0.095f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.31f, 0.285f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.31f, 0.715f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.765f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.765f, 0.5f, 0.55f, 0.285f, 0.0f, 0.0f, 0.0f},
+        {0, 0.765f, 0.5f, 0.55f, 0.715f, 0.0f, 0.0f, 0.0f},
+        {0, 1.105f, 0.5f, 0.095f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.31f, 0.285f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.31f, 0.715f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.745f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.1933f, 0.66f, 0.6467f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.246f, -0.18f, 0.254f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.586f, -0.18f, 0.594f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {1, 0.4f, 0.4f, 0.305f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.4f, 0.6f, 0.305f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.4f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.705f, 0.4f, 0.705f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.226f, -0.18f, 0.234f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.566f, -0.18f, 0.574f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {0, 0.645f, 0.095f, 0.645f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {1, 0.37f, 0.63f, 0.275f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.196f, -0.18f, 0.204f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.536f, -0.18f, 0.544f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.745f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.1933f, 0.66f, 0.6467f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {1, 0.42f, -0.3f, 0.09f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.42f, -0.3f, 0.09f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.525f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.48f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.525f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.23f, -0.1f, 0.41f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.525f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.5f, 0.48f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.525f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.39f, -0.1f, 0.21f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 0.095f, 0.745f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.1933f, 0.66f, 0.6467f, 0.66f, 0.0f, 0.0f, 0.0f},
+        {0, 0.5f, -0.1f, 0.32f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.175f, -0.1f, -0.005f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {1, 0.4f, 0.4f, 0.305f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.4f, 0.6f, 0.305f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.4f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.705f, 0.4f, 0.705f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.48f, -0.1f, 0.3f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {0, 0.645f, 0.095f, 0.645f, 0.63f, 0.0f, 0.0f, 0.0f},
+        {1, 0.37f, 0.63f, 0.275f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.45f, -0.1f, 0.27f, -0.3f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.095f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.665f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.905f, 0.665f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {1, 0.27f, -0.16f, 0.1f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.47f, -0.16f, 0.1f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {1, 0.36f, 0.36f, 0.265f, -1.0f, 0.0f, 0.8192f, -0.5736f},
+        {1, 0.36f, 0.64f, 0.265f, 0.8192f, 0.5736f, -1.0f, 0.0f},
+        {0, 0.095f, 0.36f, 0.095f, 0.64f, 0.0f, 0.0f, 0.0f},
+        {0, 0.36f, 1.0f, 0.42f, 1.13f, 0.0f, 0.0f, 0.0f},
+        {0, 0.42f, 1.13f, 0.29f, 1.24f, 0.0f, 0.0f, 0.0f},
+        {1, 0.38f, 0.38f, 0.285f, -1.0f, 0.0f, 0.866f, -0.5f},
+        {1, 0.38f, 0.62f, 0.285f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.38f, 0.095f, 0.62f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.62f, 0.665f, 0.53f, 0.0f, 0.0f, 0.0f},
+        {0, 0.665f, 0.53f, 0.43f, 0.53f, 0.0f, 0.0f, 0.0f},
+        {1, 0.38f, -0.36f, 0.17f, 0.866f, 0.5f, -0.866f, 0.5f},
+        {1, 0.31f, 0.285f, 0.19f, 0.0f, 1.0f, -0.809f, -0.5878f},
+        {1, 0.31f, 0.285f, 0.19f, -0.809f, -0.5878f, 0.9511f, -0.309f},
+        {1, 0.31f, 0.69f, 0.215f, 0.0f, -1.0f, 0.809f, 0.5878f},
+        {1, 0.31f, 0.69f, 0.215f, 0.809f, 0.5878f, -0.9511f, 0.309f},
+        {0, 0.31f, 1.0f, 0.37f, 1.13f, 0.0f, 0.0f, 0.0f},
+        {0, 0.37f, 1.13f, 0.24f, 1.24f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.095f, 0.095f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.091f, -0.18f, 0.099f, -0.18f, 0.0f, 0.0f, 0.0f},
+        {0, 0.095f, 0.905f, 0.5f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.24f, 0.62f, 0.52f, 0.62f, 0.0f, 0.0f, 0.0f},
+        {0, 0.5f, 0.095f, 0.5f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {0, 0.5f, 0.095f, 0.985f, 0.095f, 0.0f, 0.0f, 0.0f},
+        {0, 0.5f, 0.5f, 0.94f, 0.5f, 0.0f, 0.0f, 0.0f},
+        {0, 0.5f, 0.905f, 0.985f, 0.905f, 0.0f, 0.0f, 0.0f},
+        {1, 0.4f, 0.4f, 0.305f, -1.0f, 0.0f, 1.0f, 0.0f},
+        {1, 0.4f, 0.6f, 0.305f, 1.0f, 0.0f, -1.0f, 0.0f},
+        {0, 0.095f, 0.4f, 0.095f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.705f, 0.4f, 0.705f, 0.6f, 0.0f, 0.0f, 0.0f},
+        {0, 0.72f, 0.02f, 0.08f, 0.98f, 0.0f, 0.0f, 0.0f},
     };
     const Letter cLetters[] = {
         {'A', 0.84f, 0, 3},   {'B', 0.6675f, 3, 7}, {'L', 0.64f, 10, 2}, {'R', 0.74f, 12, 5},
         {'S', 0.62f, 17, 4},  {'T', 0.72f, 21, 2},  {'X', 0.8f, 23, 2},  {'Y', 0.82f, 25, 3},
         {'Z', 0.72f, 28, 3},  {'1', 0.48f, 31, 2},  {'2', 0.645f, 33, 4}, {'3', 0.605f, 37, 4},
+        {'C', 0.72f, 41, 3},
+        {'D', 0.74f, 44, 6},
+        {'E', 0.62f, 50, 4},
+        {'F', 0.6f, 54, 3},
+        {'G', 0.76f, 57, 5},
+        {'H', 0.74f, 62, 3},
+        {'I', 0.19f, 65, 1},
+        {'J', 0.6f, 66, 2},
+        {'K', 0.72f, 68, 3},
+        {'M', 0.92f, 71, 4},
+        {'N', 0.76f, 75, 3},
+        {'O', 0.8f, 78, 4},
+        {'P', 0.68f, 82, 4},
+        {'Q', 0.8f, 86, 5},
+        {'U', 0.74f, 91, 3},
+        {'V', 0.8f, 94, 2},
+        {'W', 1.04f, 96, 4},
+        {'0', 0.68f, 100, 4},
+        {'4', 0.68f, 104, 3},
+        {'5', 0.63f, 107, 5},
+        {'6', 0.64f, 112, 3},
+        {'7', 0.64f, 115, 2},
+        {'8', 0.64f, 117, 4},
+        {'9', 0.64f, 121, 3},
+        {'.', 0.19f, 124, 1},
+        {',', 0.22f, 125, 2},
+        {';', 0.22f, 127, 3},
+        {':', 0.19f, 130, 2},
+        {'\'', 0.19f, 132, 1},
+        {'"', 0.44f, 133, 2},
+        {'`', 0.32f, 135, 1},
+        {0xB4, 0.32f, 136, 1},
+        {'/', 0.52f, 137, 1},
+        {'\\', 0.52f, 138, 1},
+        {'[', 0.38f, 139, 3},
+        {']', 0.38f, 142, 3},
+        {'(', 0.34f, 145, 1},
+        {')', 0.34f, 146, 1},
+        {'-', 0.5f, 147, 1},
+        {'_', 0.6f, 148, 1},
+        {'=', 0.6f, 149, 2},
+        {'+', 0.62f, 151, 2},
+        {'*', 0.56f, 153, 3},
+        {'<', 0.56f, 156, 2},
+        {'>', 0.56f, 158, 2},
+        {'^', 0.56f, 160, 2},
+        {'~', 0.78f, 162, 2},
+        {'#', 0.74f, 164, 4},
+        {'!', 0.19f, 168, 2},
+        {0xA1, 0.19f, 170, 2},
+        {'$', 0.62f, 172, 5},
+        {'@', 1.0f, 177, 6},
+        {0xA7, 0.5f, 183, 7},
+        {0xB0, 0.4f, 190, 2},
+        {0xBA, 0.4f, 192, 3},
+        {0xAA, 0.4f, 195, 4},
+        {0xB2, 0.42f, 199, 4},
+        {0xA8, 0.44f, 203, 2},
+        {0xDF, 0.66f, 205, 6},
+        {0x01, 0.62f, 211, 3},
+        {0x02, 0.62f, 214, 3},
+        {0x03, 0.86f, 217, 3},
+        {0x04, 0.86f, 220, 3},
+        {0x05, 1.2f, 223, 3},
+        {0xC4, 0.84f, 226, 5},
+        {0xD6, 0.8f, 231, 6},
+        {0xDC, 0.74f, 237, 5},
+        {0xC5, 0.84f, 242, 5},
+        {0xC9, 0.62f, 247, 5},
+        {0xC8, 0.62f, 252, 5},
+        {0xC0, 0.84f, 257, 4},
+        {0xCC, 0.19f, 261, 2},
+        {0xD2, 0.8f, 263, 5},
+        {0xD9, 0.74f, 268, 4},
+        {0xD1, 0.76f, 272, 5},
+        {0xC7, 0.72f, 277, 5},
+        {0x11E, 0.76f, 282, 6},
+        {0x15E, 0.62f, 288, 6},
+        {0x130, 0.19f, 294, 2},
+        {0xC6, 1.08f, 296, 6},
+        {0xD8, 0.8f, 302, 5},
     };
 
-    const Letter* findLetter(char code) {
+    const Letter* findLetter(u16 code) {
         for (u32 i = 0; i < sizeof(cLetters) / sizeof(cLetters[0]); i++) {
             if (cLetters[i].mCode == code) {
                 return &cLetters[i];
@@ -275,7 +624,7 @@ namespace {
         s32 count = 0;
         f32 width = 0.0f;
         for (const char* p = pText; *p != 0 && count < 4; p++) {
-            letters[count] = findLetter(*p);
+            letters[count] = findLetter(static_cast< u8 >(*p));
             if (letters[count] != nullptr) {
                 width += (count > 0 ? cLetterGap : 0.0f) + letters[count]->mAdvance;
                 count++;
@@ -437,6 +786,399 @@ namespace {
         }
     }
 
+    // The keyboard's icons: a keycap for each key (NEBULA_KEY_*) in the icons' look (the window's ink round it, a face
+    // lit from above), its side showing beneath its face as a key's does; its legend in the icons' letters (words on a
+    // wide key, two lines where a keyboard prints two, the side of a key that has one of each as a small L or R); a mouse
+    // for each mouse button, the button in the menu's blue (its side buttons drawn on theirs alone). The Control Pad:
+    // its four keys as a keyboard's arrows sit.
+    enum { KeySquare, KeyWide, KeyMouse };
+    const s32 cKeyPad = NEBULA_KEYS;  // the Control Pad's
+    // A key without its own icon (NEBULA_KEY_OTHER) on a cell of each icon's own, its name (NebulaButtonIcons::other)
+    // on it: two such keys at once each show theirs.
+    const s32 cKeyNamed = NEBULA_KEYS + 1;
+    const s32 cKeyCells = cKeyNamed + NEBULA_BUTTON_ICONS;
+    const u32 cKeySideTop = 0xBDC6D6FF;
+    const u32 cKeySideBottom = 0x8F9AB0FF;
+    const u32 cKeyEdge = 0xB4BDCDFF;
+    const u32 cKeyAccentTop = 0x5D9CF2FF;
+    const u32 cKeyAccentBottom = 0x2F6FD0FF;  // the menu's blue (NebulaSettingsMenu cAccent)
+    const f32 cSpaceAdvance = 0.32f;
+
+    // A line of a legend: codes of cLetters (' ' a space), its capitals' size against the legend's.
+    struct KeyLine {
+        u16 mCodes[8];
+        s32 mCount;
+        f32 mScale;
+    };
+    struct KeyLegend {
+        s32 mShape;
+        KeyLine mLine[2];
+        s32 mLineCount;
+        u16 mTag;  // L or R: the key of a pair (Shift, Ctrl, Alt, Windows) on that side
+    };
+
+    void setLine(KeyLine& rLine, const char* pText, f32 scale) {
+        rLine.mCount = 0;
+        rLine.mScale = scale;
+        for (const char* p = pText; *p != 0 && rLine.mCount < 8; p++) {
+            rLine.mCodes[rLine.mCount++] = static_cast< u8 >(*p);
+        }
+    }
+
+    // The named keys' legends, Space to the right Windows key (NEBULA_KEY_SPACE on): codes 1 to 4 are the arrows up,
+    // down, left and right, 5 Backspace's long arrow.
+    struct NamedKey {
+        u8 mShape;
+        const char* mTop;
+        const char* mBottom;  // a second line, as large
+        char mTag;
+    };
+    const NamedKey cNamedKeys[NEBULA_KEY_LAYOUT_FIRST - NEBULA_KEY_SPACE] = {
+        {KeyWide, "SPACE", nullptr, 0}, {KeyWide, "ENTER", nullptr, 0}, {KeyWide, "TAB", nullptr, 0},
+        {KeyWide, "\x05", nullptr, 0},  {KeyWide, "ESC", nullptr, 0},   {KeyWide, "SHIFT", nullptr, 0},
+        {KeyWide, "SHIFT", nullptr, 'L'}, {KeyWide, "SHIFT", nullptr, 'R'}, {KeyWide, "CTRL", nullptr, 0},
+        {KeyWide, "CTRL", nullptr, 'L'}, {KeyWide, "CTRL", nullptr, 'R'}, {KeyWide, "ALT", nullptr, 0},
+        {KeyWide, "ALT", nullptr, 'L'}, {KeyWide, "ALT", nullptr, 'R'}, {KeySquare, "\x01", nullptr, 0},
+        {KeySquare, "\x02", nullptr, 0}, {KeySquare, "\x03", nullptr, 0}, {KeySquare, "\x04", nullptr, 0},
+        {KeyWide, "INS", nullptr, 0},   {KeyWide, "DEL", nullptr, 0},   {KeyWide, "HOME", nullptr, 0},
+        {KeyWide, "END", nullptr, 0},   {KeyWide, "PG UP", nullptr, 0}, {KeyWide, "PG DN", nullptr, 0},
+        {KeyWide, "CAPS", nullptr, 0},  {KeyWide, "NUM", "LOCK", 0},    {KeyWide, "SCR", "LOCK", 0},
+        {KeyWide, "PAUSE", nullptr, 0}, {KeyWide, "PRT SC", nullptr, 0}, {KeyWide, "MENU", nullptr, 0},
+        {KeyWide, "WIN", nullptr, 'L'}, {KeyWide, "WIN", nullptr, 'R'},
+    };
+    // What the layout keys print on a US keyboard (; = , - . / ` [ \ ] ', the ISO key's \), and OEM 8, which a US
+    // keyboard lacks, as a UK one prints it.
+    const u8 cUsLayout[NEBULA_KEY_LAYOUT_KEYS] = {';', '=', ',', '-', '.', '/', '`', '[', '\\', ']', '\'', '`', '\\'};
+
+    // Key `slot`'s legend; `layout`: what the layout keys print (NebulaButtonIcons::layout; 0 or a character the icons'
+    // letters lack: the US legend); `name`: a named cell's key's name.
+    KeyLegend keyLegend(s32 slot, const u16* pLayout, const char* pName) {
+        KeyLegend k;
+        memset(&k, 0, sizeof(k));
+        k.mShape = KeySquare;
+        k.mLineCount = 1;
+        k.mLine[0].mScale = 1.0f;
+        char text[8] = {0};
+        if (slot >= cKeyNamed) {
+            const char* pText = pName != nullptr ? pName : "";
+            k.mShape = strlen(pText) > 2 ? KeyWide : KeySquare;
+            setLine(k.mLine[0], pText, 1.0f);
+        } else if (slot < NEBULA_KEY_0) {
+            text[0] = static_cast< char >('A' + slot);
+            setLine(k.mLine[0], text, 1.0f);
+        } else if (slot < NEBULA_KEY_F1) {
+            text[0] = static_cast< char >('0' + slot - NEBULA_KEY_0);
+            setLine(k.mLine[0], text, 1.0f);
+        } else if (slot < NEBULA_KEY_NUM0) {
+            snprintf(text, sizeof(text), "F%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
+            setLine(k.mLine[0], text, 1.0f);
+        } else if (slot <= NEBULA_KEY_NUM_DECIMAL) {
+            // The number pad's: NUM over its own legend.
+            text[0] = slot < NEBULA_KEY_NUM_ADD ? static_cast< char >('0' + slot - NEBULA_KEY_NUM0) : "+-*/."[slot - NEBULA_KEY_NUM_ADD];
+            setLine(k.mLine[0], "NUM", 0.46f);
+            setLine(k.mLine[1], text, 1.0f);
+            k.mLineCount = 2;
+        } else if (slot < NEBULA_KEY_LAYOUT_FIRST) {
+            const NamedKey& rNamed = cNamedKeys[slot - NEBULA_KEY_SPACE];
+            k.mShape = rNamed.mShape;
+            setLine(k.mLine[0], rNamed.mTop, 1.0f);
+            if (rNamed.mBottom != nullptr) {
+                setLine(k.mLine[1], rNamed.mBottom, 1.0f);
+                k.mLineCount = 2;
+            }
+            k.mTag = static_cast< u8 >(rNamed.mTag);
+        } else if (slot < NEBULA_KEY_MOUSE_LEFT) {
+            const s32 index = slot - NEBULA_KEY_LAYOUT_FIRST;
+            const u16 printed = pLayout != nullptr ? pLayout[index] : 0;
+            const u16 code = printed != 0 && findLetter(printed) != nullptr ? printed : cUsLayout[index];
+            k.mLine[0].mCount = code != 0 ? 1 : 0;
+            k.mLine[0].mCodes[0] = code;
+        } else if (slot < NEBULA_KEY_OTHER) {
+            k.mShape = KeyMouse;
+            k.mLineCount = 0;
+        } else {
+            k.mLineCount = 0;  // any other key: a key, unnamed
+        }
+        return k;
+    }
+
+    // A line's width and its ink's top and foot, in capitals (an accented capital's mark above, a cedilla below).
+    void lineExtent(const KeyLine& rLine, f32* pWidth, f32* pTop, f32* pFoot) {
+        f32 width = 0.0f;
+        f32 top = 0.0f;
+        f32 foot = 1.0f;
+        for (s32 i = 0; i < rLine.mCount; i++) {
+            const Letter* pLetter = rLine.mCodes[i] == ' ' ? nullptr : findLetter(rLine.mCodes[i]);
+            width += (i > 0 ? cLetterGap : 0.0f) + (pLetter != nullptr ? pLetter->mAdvance : cSpaceAdvance);
+            for (s32 s = 0; pLetter != nullptr && s < pLetter->mCount; s++) {
+                const Stroke& rStroke = cStrokes[pLetter->mFirst + s];
+                f32 low;
+                f32 high;
+                if (rStroke.mArc == 0) {
+                    low = rStroke.mB < rStroke.mD ? rStroke.mB : rStroke.mD;
+                    high = rStroke.mB < rStroke.mD ? rStroke.mD : rStroke.mB;
+                } else {
+                    // Its ends, and its top and foot where it turns through them (clockwise from (mD, mE) to (mF, mG)).
+                    const f32 a = rStroke.mB + rStroke.mC * rStroke.mE;
+                    const f32 b = rStroke.mB + rStroke.mC * rStroke.mG;
+                    low = rStroke.mD <= 0.0f && rStroke.mF >= 0.0f ? rStroke.mB - rStroke.mC : (a < b ? a : b);
+                    high = rStroke.mD >= 0.0f && rStroke.mF <= 0.0f ? rStroke.mB + rStroke.mC : (a < b ? b : a);
+                }
+                top = low - cStrokeHalf < top ? low - cStrokeHalf : top;
+                foot = high + cStrokeHalf > foot ? high + cStrokeHalf : foot;
+            }
+        }
+        *pWidth = width;
+        *pTop = top;
+        *pFoot = foot;
+    }
+
+    // A line's letters in `rInk`, its ink's middle at `x`, its capitals' top at `top`, `capital` pixels tall.
+    void drawLine(Canvas& rCanvas, const KeyLine& rLine, f32 x, f32 top, f32 capital, const Rgba& rInk) {
+        f32 width, inkTop, inkFoot;
+        lineExtent(rLine, &width, &inkTop, &inkFoot);
+        f32 left = x - width * capital * 0.5f;
+        for (s32 i = 0; i < rLine.mCount; i++) {
+            const Letter* pLetter = rLine.mCodes[i] == ' ' ? nullptr : findLetter(rLine.mCodes[i]);
+            if (pLetter == nullptr) {
+                left += (cSpaceAdvance + cLetterGap) * capital;
+                continue;
+            }
+            const f32 margin = capital * cStrokeHalf + 1.0f;
+            const s32 x0 = static_cast< s32 >(NebulaUi::clamp(left - margin, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
+            const s32 x1 = static_cast< s32 >(NebulaUi::clamp(left + pLetter->mAdvance * capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mWidth)));
+            const s32 y0 = static_cast< s32 >(NebulaUi::clamp(top + inkTop * capital - margin, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
+            const s32 y1 = static_cast< s32 >(NebulaUi::clamp(top + inkFoot * capital + margin + 1.0f, 0.0f, static_cast< f32 >(rCanvas.mHeight)));
+            for (s32 py = y0; py < y1; py++) {
+                for (s32 px = x0; px < x1; px++) {
+                    const f32 d = letterDistance(*pLetter, (px + 0.5f - left) / capital, (py + 0.5f - top) / capital) * capital;
+                    rCanvas.blend(px, py, rInk, coverOf(d - cStrokeHalf * capital));
+                }
+            }
+            left += (pLetter->mAdvance + cLetterGap) * capital;
+        }
+    }
+
+    // A legend in the face (its middle (x, y), `halfWidth` x `halfHeight`): as large as its lines fit, a single letter
+    // no larger than a key's own, a tag to the left of the rest.
+    void drawLegend(Canvas& rCanvas, const KeyLegend& rLegend, f32 x, f32 y, f32 halfWidth, f32 halfHeight, const Rgba& rInk) {
+        if (rLegend.mLineCount == 0) {
+            return;
+        }
+        f32 widths[2] = {0.0f, 0.0f};
+        f32 tops[2] = {0.0f, 0.0f};
+        f32 feet[2] = {1.0f, 1.0f};
+        f32 height = 0.0f;
+        f32 widest = 0.0f;
+        const f32 lineGap = 0.3f;
+        for (s32 i = 0; i < rLegend.mLineCount; i++) {
+            lineExtent(rLegend.mLine[i], &widths[i], &tops[i], &feet[i]);
+            const f32 scale = rLegend.mLine[i].mScale;
+            height += (feet[i] - tops[i]) * scale + (i > 0 ? lineGap : 0.0f);
+            widest = widths[i] * scale > widest ? widths[i] * scale : widest;
+        }
+        // The tag's room on the left: its letter at half the legend's size.
+        const KeyLine tag = {{rLegend.mTag}, rLegend.mTag != 0 ? 1 : 0, 0.5f};
+        f32 tagWidth = 0.0f, tagTop = 0.0f, tagFoot = 1.0f;
+        if (tag.mCount != 0) {
+            lineExtent(tag, &tagWidth, &tagTop, &tagFoot);
+        }
+        const f32 room = tag.mCount != 0 ? (tagWidth * tag.mScale + 0.55f) : 0.0f;
+        const f32 single = rLegend.mLineCount == 1 && rLegend.mLine[0].mCount == 1 ? 0.62f : 0.72f;
+        f32 capital = halfHeight * 2.0f * single / height;
+        const f32 byWidth = halfWidth * 2.0f * 0.84f / (widest + room);
+        capital = byWidth < capital ? byWidth : capital;
+        const f32 shift = room * capital * 0.5f;
+        f32 top = y - height * capital * 0.5f;
+        for (s32 i = 0; i < rLegend.mLineCount; i++) {
+            const f32 lineCapital = capital * rLegend.mLine[i].mScale;
+            drawLine(rCanvas, rLegend.mLine[i], x + shift, top - tops[i] * lineCapital, lineCapital, rInk);
+            top += (feet[i] - tops[i]) * lineCapital + lineGap * capital;
+        }
+        if (tag.mCount != 0) {
+            const f32 tagCapital = capital * tag.mScale;
+            const f32 centre = x + shift - widest * capital * 0.5f - 0.55f * capital * 0.5f - tagWidth * tagCapital * 0.5f;
+            drawLine(rCanvas, tag, centre, y - tagCapital * 0.5f, tagCapital, rInk);
+        }
+    }
+
+    Rgba lerpRgba(const Rgba& rA, const Rgba& rB, f32 t) {
+        const Rgba c = {rA.r + (rB.r - rA.r) * t, rA.g + (rB.g - rA.g) * t, rA.b + (rB.b - rA.b) * t, rA.a + (rB.a - rA.a) * t};
+        return c;
+    }
+
+    // A keycap `halfWidth` x `halfHeight` from its middle (x, y), `unit` the size its ring and edges are drawn for: its
+    // body ringed in the window's ink, the side below its face; pressed, the face sits down in it. Returns the face.
+    Shape drawKeyCap(Canvas& rCanvas, f32 x, f32 y, f32 halfWidth, f32 halfHeight, f32 unit, bool pressed) {
+        const f32 ring = unit * 0.06f;
+        const f32 smaller = halfWidth < halfHeight ? halfWidth : halfHeight;
+        const Shape body = {x, y, halfWidth, halfHeight, smaller * 0.45f};
+        drawShape(rCanvas, body, rgba(cRing), ring, rgba(cKeySideTop), rgba(cKeySideBottom));
+        const f32 inset = unit * 0.04f;
+        const f32 front = pressed ? inset : unit * 0.11f;  // the side showing beneath the face
+        const Shape face = {x, y - (front - inset) * 0.5f, halfWidth - ring - inset, halfHeight - ring - (inset + front) * 0.5f,
+                            smaller * 0.36f};
+        const Rgba top = rgba(cWhiteTop);
+        const Rgba bottom = rgba(cWhiteBottom);
+        drawShape(rCanvas, face, rgba(cKeyEdge), unit * 0.014f, pressed ? darkened(bottom) : top, pressed ? darkened(top) : bottom);
+        return face;
+    }
+
+    // A mouse, `unit` its cell's size, with `button` (NEBULA_KEY_MOUSE_*) in the menu's blue.
+    void drawMouse(Canvas& rCanvas, f32 x, f32 y, f32 unit, s32 button, bool pressed) {
+        const f32 ring = unit * 0.06f;
+        const f32 halfWidth = unit * 0.27f;
+        const f32 halfHeight = unit * 0.42f;
+        const Rgba ink = rgba(cRing);
+        const Rgba faceTop = pressed ? darkened(rgba(cWhiteBottom)) : rgba(cWhiteTop);
+        const Rgba faceBottom = pressed ? darkened(rgba(cWhiteTop)) : rgba(cWhiteBottom);
+        const Rgba accentTop = rgba(cKeyAccentTop);
+        const Rgba accentBottom = rgba(cKeyAccentBottom);
+        // Its side buttons (forward over back, standing out from its left side) on their own icons only.
+        for (s32 i = 0; i < 2 && (button == NEBULA_KEY_MOUSE_BACK || button == NEBULA_KEY_MOUSE_FORWARD); i++) {
+            const bool lit = button == (i == 0 ? NEBULA_KEY_MOUSE_FORWARD : NEBULA_KEY_MOUSE_BACK);
+            const Shape side = {x - halfWidth - unit * 0.035f, y + unit * (i == 0 ? -0.04f : 0.16f), unit * 0.095f, unit * 0.075f,
+                                unit * 0.06f};
+            drawShape(rCanvas, side, ink, ring * 0.6f, lit ? accentTop : faceTop, lit ? accentBottom : faceBottom);
+        }
+        const Shape body = {x, y, halfWidth, halfHeight, halfWidth};
+        drawShape(rCanvas, body, ink, ring, faceTop, faceBottom);
+        // Its buttons: the top above `split`, halved; the lit one filled in the blue.
+        const f32 split = y - unit * 0.05f;
+        const bool left = button == NEBULA_KEY_MOUSE_LEFT;
+        const bool right = button == NEBULA_KEY_MOUSE_RIGHT;
+        for (s32 py = 0; py < rCanvas.mHeight; py++) {
+            const f32 fy = py + 0.5f;
+            const f32 t = NebulaUi::clamp((fy - (y - halfHeight)) / (split - (y - halfHeight)), 0.0f, 1.0f);
+            const Rgba accent = lerpRgba(accentTop, accentBottom, t);
+            for (s32 px = 0; px < rCanvas.mWidth; px++) {
+                const f32 fx = px + 0.5f;
+                const f32 inside = coverOf(body.distance(fx, fy) + ring);
+                if (inside <= 0.0f) {
+                    continue;
+                }
+                if (left || right) {
+                    const f32 cover = inside * coverOf(fy - split) * coverOf(left ? fx - x : x - fx);
+                    rCanvas.blend(px, py, accent, cover);
+                }
+                // The lines between the buttons and under them.
+                const f32 vertical = fy < split ? __builtin_fabsf(fx - x) : 1e9f;
+                const f32 across = __builtin_fabsf(fy - split);
+                const f32 line = vertical < across ? vertical : across;
+                rCanvas.blend(px, py, ink, inside * coverOf(line - unit * 0.017f));
+            }
+        }
+        // The wheel.
+        const bool wheel = button == NEBULA_KEY_MOUSE_MIDDLE;
+        const Shape roll = {x, y - unit * 0.22f, unit * 0.068f, unit * 0.11f, unit * 0.068f};
+        drawShape(rCanvas, roll, ink, ring * 0.5f, wheel ? accentTop : rgba(0x9AA3B5FF), wheel ? accentBottom : rgba(0x7A8396FF));
+    }
+
+    // The Control Pad's four keys (`pPadKeys`: up, down, left, right; NEBULA_KEYS or more: none), small keycaps as a
+    // keyboard's arrows sit, each with its legend where it is one letter or picture.
+    void drawPadKeys(Canvas& rCanvas, f32 x, f32 y, f32 unit, const u8* pPadKeys, const u16* pLayout) {
+        const f32 half = unit * 0.155f;
+        const f32 step = half * 2.0f + unit * 0.025f;
+        const f32 places[4][2] = {{x, y - step * 0.5f}, {x, y + step * 0.5f}, {x - step, y + step * 0.5f}, {x + step, y + step * 0.5f}};
+        for (s32 i = 0; i < 4; i++) {
+            const Shape face = drawKeyCap(rCanvas, places[i][0], places[i][1], half, half, unit * 0.5f, false);
+            if (pPadKeys[i] >= NEBULA_KEYS) {
+                continue;
+            }
+            KeyLegend legend = keyLegend(pPadKeys[i], pLayout, nullptr);
+            if (legend.mShape != KeySquare || legend.mLineCount != 1 || legend.mLine[0].mCount != 1) {
+                continue;  // a word does not fit: the key shows alone
+            }
+            drawLegend(rCanvas, legend, face.mX, face.mY, face.mHalfWidth, face.mHalfHeight, rgba(cInk));
+        }
+    }
+
+    // Key `slot`'s icon (or the Control Pad's, cKeyPad; a named cell's with its key's `name`) in `look` on the canvas,
+    // cleared first; a named cell without a name stays clear.
+    void paintKey(Canvas& rCanvas, s32 slot, s32 look, const u16* pLayout, const u8* pPadKeys, const char* pName = nullptr) {
+        rCanvas.clear();
+        const s32 width = rCanvas.mWidth;
+        const s32 height = rCanvas.mHeight;
+        const f32 side = static_cast< f32 >(width < height ? width : height);
+        // As the other icons: in text the cell less a pixel each side; the A bubble's up (39 of 48 at (4, 4), its shadow
+        // down and right) and pressed (36 of 40).
+        const f32 unit = look == LookUp ? side * (39.0f / 48.0f) : look == LookPressed ? side * (36.0f / 40.0f) : side - 2.0f * rCanvas.mScale;
+        const f32 x = look == LookUp ? side * (4.0f / 48.0f) + unit * 0.5f : width * 0.5f;
+        const f32 y = look == LookUp ? side * (4.0f / 48.0f) + unit * 0.5f : height * 0.5f;
+        const bool pressed = look == LookPressed;
+        if (slot == cKeyPad) {
+            drawPadKeys(rCanvas, x, y, unit, pPadKeys, pLayout);
+            return;
+        }
+        if (slot >= cKeyNamed && (pName == nullptr || pName[0] == 0)) {
+            return;
+        }
+        const KeyLegend legend = keyLegend(slot, pLayout, pName);
+        const f32 halfWidth = unit * (legend.mShape == KeyWide ? 0.5f : 0.46f);
+        const f32 halfHeight = unit * (legend.mShape == KeyWide ? 0.34f : 0.46f);
+        if (look == LookUp) {
+            const Shape shadow = legend.mShape == KeyMouse
+                                     ? Shape{x + unit * 0.07f, y + unit * 0.07f, unit * 0.27f, unit * 0.42f, unit * 0.27f}
+                                     : Shape{x + unit * 0.07f, y + unit * 0.07f, halfWidth, halfHeight, unit * 0.16f};
+            const Rgba dark = {0.0f, 0.0f, 0.0f, 0.4f};
+            const f32 soft = 2.0f * rCanvas.mScale;
+            for (s32 py = 0; py < height; py++) {
+                for (s32 px = 0; px < width; px++) {
+                    rCanvas.blend(px, py, dark, NebulaUi::clamp((rCanvas.mScale - shadow.distance(px + 0.5f, py + 0.5f)) / soft, 0.0f, 1.0f));
+                }
+            }
+        }
+        if (legend.mShape == KeyMouse) {
+            drawMouse(rCanvas, x, y, unit, slot, pressed);
+            return;
+        }
+        const Shape face = drawKeyCap(rCanvas, x, y, halfWidth, halfHeight, unit, pressed);
+        drawLegend(rCanvas, legend, face.mX, face.mY, face.mHalfWidth, face.mHalfHeight, rgba(cInk));
+    }
+
+    // Each key's name in the art's exports.
+    void keyName(s32 slot, char* pName, s32 capacity) {
+        static const char* const cNames[NEBULA_KEY_LAYOUT_FIRST - NEBULA_KEY_SPACE] = {
+            "space", "enter", "tab", "backspace", "escape", "shift", "shift-left", "shift-right", "ctrl", "ctrl-left",
+            "ctrl-right", "alt", "alt-left", "alt-right", "up", "down", "left", "right", "insert", "delete", "home", "end",
+            "page-up", "page-down", "caps-lock", "num-lock", "scroll-lock", "pause", "print-screen", "menu", "win-left",
+            "win-right"};
+        static const char* const cMice[5] = {"mouse-left", "mouse-right", "mouse-middle", "mouse-back", "mouse-forward"};
+        if (slot < NEBULA_KEY_0) {
+            snprintf(pName, capacity, "key-%c", static_cast< char >('a' + slot));
+        } else if (slot < NEBULA_KEY_F1) {
+            snprintf(pName, capacity, "key-%d", static_cast< int >(slot - NEBULA_KEY_0));
+        } else if (slot < NEBULA_KEY_NUM0) {
+            snprintf(pName, capacity, "key-f%d", static_cast< int >(slot - NEBULA_KEY_F1 + 1));
+        } else if (slot < NEBULA_KEY_NUM_ADD) {
+            snprintf(pName, capacity, "key-num%d", static_cast< int >(slot - NEBULA_KEY_NUM0));
+        } else if (slot < NEBULA_KEY_SPACE) {
+            static const char* const cNumbers[5] = {"add", "subtract", "multiply", "divide", "decimal"};
+            snprintf(pName, capacity, "key-num-%s", cNumbers[slot - NEBULA_KEY_NUM_ADD]);
+        } else if (slot < NEBULA_KEY_LAYOUT_FIRST) {
+            snprintf(pName, capacity, "key-%s", cNames[slot - NEBULA_KEY_SPACE]);
+        } else if (slot < NEBULA_KEY_MOUSE_LEFT) {
+            snprintf(pName, capacity, "key-layout-%d", static_cast< int >(slot - NEBULA_KEY_LAYOUT_FIRST + 1));
+        } else if (slot < NEBULA_KEY_OTHER) {
+            snprintf(pName, capacity, "%s", cMice[slot - NEBULA_KEY_MOUSE_LEFT]);
+        } else if (slot == cKeyPad) {
+            snprintf(pName, capacity, "control-pad");
+        } else {
+            snprintf(pName, capacity, "key-named-%d", static_cast< int >(slot - cKeyNamed + 1));
+        }
+    }
+
+    // A key whose picture follows the player's layout or bindings (the layout keys, the Control Pad): on sheets of their
+    // own after the others, which are the same every run.
+    bool keyFollows(s32 slot) {
+        return slot >= cKeyPad || (slot >= NEBULA_KEY_LAYOUT_FIRST && slot < NEBULA_KEY_LAYOUT_FIRST + NEBULA_KEY_LAYOUT_KEYS);
+    }
+
+    // NEBULA_KEY_OTHER has no cell: an icon shows its own named one.
+    bool keyHasCell(s32 slot) {
+        return slot != NEBULA_KEY_OTHER;
+    }
+
     u16 encode(const Rgba& rColor) {
         const f32 a = NebulaUi::clamp(rColor.a, 0.0f, 1.0f);
         const f32 r = NebulaUi::clamp(rColor.r, 0.0f, 1.0f);
@@ -557,6 +1299,15 @@ namespace {
         s32 mCells;       // cells in a sheet
         s32 mFamilySheets;
         s32 mFirstSheet;  // the first family's first sheet
+        s32 mKeyFirstSheet;  // the keyboard's: its fixed keys' sheets, then those of the keys that follow (keyFollows)
+        s32 mKeySheets;
+        s16 mKeyCell[cKeyCells];  // each key's cell from the keyboard's first sheet
+        nw4r::ut::FontCodeMap* mKeyMap;  // cKeyCodeFirst on: each key's glyph (the menu's keys)
+        bool mKeysDrawn;
+        bool mKeysFollowing;  // the following keys drawn for mKeyLayout and mKeyPad
+        u16 mKeyLayout[NEBULA_KEY_LAYOUT_KEYS];
+        u8 mKeyPad[4];
+        char mKeyNames[NEBULA_BUTTON_ICONS][NEBULA_KEY_NAME_CHARS];
         s32 mGlyphWidth;  // every icon of ours, as A's cell has it
         s32 mGlyphHeight;
         u16 mOriginal[cMapLast - cMapFirst + 1];  // each code's own glyph
@@ -622,8 +1373,25 @@ namespace {
         f.mCells = pGlyph->sheetRow * pGlyph->sheetLine;
         f.mFamilySheets = (cAtlasIcons + f.mCells - 1) / f.mCells;
         f.mFirstSheet = pGlyph->sheetNum;
-        const s32 sheets = f.mFirstSheet + cFamilies * f.mFamilySheets;
-        const s32 added = cFamilies * f.mFamilySheets * f.mCells;
+        // The keyboard's cells: the fixed keys' in order, then from a sheet of their own those that follow.
+        s32 fixedCells = 0;
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            f.mKeyCell[slot] = 0;
+            if (keyHasCell(slot) && !keyFollows(slot)) {
+                f.mKeyCell[slot] = static_cast< s16 >(fixedCells++);
+            }
+        }
+        const s32 fixedSheets = (fixedCells + f.mCells - 1) / f.mCells;
+        s32 followingCells = 0;
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            if (keyFollows(slot)) {
+                f.mKeyCell[slot] = static_cast< s16 >(fixedSheets * f.mCells + followingCells++);
+            }
+        }
+        f.mKeyFirstSheet = f.mFirstSheet + cFamilies * f.mFamilySheets;
+        f.mKeySheets = fixedSheets + (followingCells + f.mCells - 1) / f.mCells;
+        const s32 sheets = f.mKeyFirstSheet + f.mKeySheets;
+        const s32 added = (cFamilies * f.mFamilySheets + f.mKeySheets) * f.mCells;
         if (sheets * f.mCells > 0xFFFF) {
             return FontUnusable;
         }
@@ -638,7 +1406,8 @@ namespace {
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
         const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 3u) & ~3u;
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
-        const u32 bytes = sheetsBytes + widthBytes + mapBytes;
+        const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 3u) & ~3u;
+        const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
         JKRHeap* pHeap = MR::getStationedHeapGDDR3();
         u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
                          ? static_cast< u8* >(JKRHeap::alloc(bytes, 32, pHeap))
@@ -660,12 +1429,23 @@ namespace {
         for (s32 i = 0; i < added; i++) {
             pWidth->widthTable[i] = widths;
         }
-        nw4r::ut::FontCodeMap* pMap = reinterpret_cast< nw4r::ut::FontCodeMap* >(pBlock + sheetsBytes + widthBytes);
+        // The keys' codes (for the menu's own keys), after ours and before the font's.
+        nw4r::ut::FontCodeMap* pKeyMap = reinterpret_cast< nw4r::ut::FontCodeMap* >(pBlock + sheetsBytes + widthBytes);
+        pKeyMap->ccodeBegin = NebulaIcons::cKeyCodeFirst;
+        pKeyMap->ccodeEnd = static_cast< u16 >(NebulaIcons::cKeyCodeFirst + cKeyCells - 1);
+        pKeyMap->mappingMethod = 1;
+        pKeyMap->reserved = 0;
+        pKeyMap->pNext = pInfo->pMap.get();
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            pKeyMap->mapInfo[slot] = static_cast< u16 >(f.mKeyFirstSheet * f.mCells + f.mKeyCell[keyHasCell(slot) ? slot : cKeyNamed]);
+        }
+        f.mKeyMap = pKeyMap;
+        nw4r::ut::FontCodeMap* pMap = reinterpret_cast< nw4r::ut::FontCodeMap* >(pBlock + sheetsBytes + widthBytes + keyMapBytes);
         pMap->ccodeBegin = cMapFirst;
         pMap->ccodeEnd = cMapLast;
         pMap->mappingMethod = 1;
         pMap->reserved = 0;
-        pMap->pNext = pInfo->pMap.get();
+        pMap->pNext = pKeyMap;
         for (u16 code = cMapFirst; code <= cMapLast; code++) {
             pMap->mapInfo[code - cMapFirst] = f.mOriginal[code - cMapFirst];
         }
@@ -696,6 +1476,68 @@ namespace {
         DCStoreRange(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets) * sFont.mSheetBytes,
                      static_cast< u32 >(sFont.mFamilySheets * sFont.mSheetBytes));
         sFont.mFamilyDrawn[family] = true;
+    }
+
+    u16 keyGlyph(s32 slot) {
+        return static_cast< u16 >(sFont.mKeyFirstSheet * sFont.mCells + sFont.mKeyCell[slot]);
+    }
+
+    // The keyboard's cells: its fixed keys the first time they show; the keys that follow the layout, the Control Pad
+    // and the named keys whenever these change (a US layout, the arrows and no named key until the host says otherwise).
+    void drawKeys(const u16* pLayout, const u8* pPadKeys, const char (*pNames)[NEBULA_KEY_NAME_CHARS]) {
+        Canvas canvas = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+        if (!sFont.mKeysDrawn) {
+            for (s32 slot = 0; slot < cKeyCells; slot++) {
+                if (keyFollows(slot) || !keyHasCell(slot)) {
+                    continue;
+                }
+                paintKey(canvas, slot, LookText, nullptr, nullptr);
+                u8* pSheet;
+                s32 x, y;
+                cellOf(keyGlyph(slot), &pSheet, &x, &y);
+                encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
+            }
+            sFont.mKeysDrawn = true;
+            DCStoreRange(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, static_cast< u32 >(sFont.mKeySheets * sFont.mSheetBytes));
+        }
+        static const u8 cArrows[4] = {NEBULA_KEY_UP, NEBULA_KEY_DOWN, NEBULA_KEY_LEFT, NEBULA_KEY_RIGHT};
+        static const u16 cNoLayout[NEBULA_KEY_LAYOUT_KEYS] = {0};
+        static const char cNoNames[NEBULA_BUTTON_ICONS][NEBULA_KEY_NAME_CHARS] = {{0}};
+        const u16* pShownLayout = pLayout != nullptr ? pLayout : cNoLayout;
+        const u8* pShownPad = pPadKeys != nullptr ? pPadKeys : cArrows;
+        const char (*pShownNames)[NEBULA_KEY_NAME_CHARS] = pNames != nullptr ? pNames : cNoNames;
+        if (sFont.mKeysFollowing && memcmp(sFont.mKeyLayout, pShownLayout, sizeof(sFont.mKeyLayout)) == 0 &&
+            memcmp(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad)) == 0 &&
+            memcmp(sFont.mKeyNames, pShownNames, sizeof(sFont.mKeyNames)) == 0) {
+            return;
+        }
+        for (s32 slot = 0; slot < cKeyCells; slot++) {
+            if (!keyFollows(slot) || !keyHasCell(slot)) {
+                continue;
+            }
+            paintKey(canvas, slot, LookText, pShownLayout, pShownPad, slot >= cKeyNamed ? pShownNames[slot - cKeyNamed] : nullptr);
+            u8* pSheet;
+            s32 x, y;
+            cellOf(keyGlyph(slot), &pSheet, &x, &y);
+            encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
+        }
+        memcpy(sFont.mKeyLayout, pShownLayout, sizeof(sFont.mKeyLayout));
+        memcpy(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad));
+        memcpy(sFont.mKeyNames, pShownNames, sizeof(sFont.mKeyNames));
+        sFont.mKeysFollowing = true;
+        DCStoreRange(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, static_cast< u32 >(sFont.mKeySheets * sFont.mSheetBytes));
+    }
+
+    // The glyph icon `icon` shows on the keyboard: its key's (a key without its own icon: the icon's named cell), the
+    // Control Pad's four keys, or its own.
+    u16 keyboardGlyph(s32 icon, s32 glyph, s32 place) {
+        if (glyph == NEBULA_ICON_KEY && place < NEBULA_KEYS) {
+            return keyGlyph(keyHasCell(place) ? place : cKeyNamed + icon);
+        }
+        if (glyph == NEBULA_ICON_DPAD) {
+            return keyGlyph(cKeyPad);
+        }
+        return originalGlyph(icon);
     }
 
     // The glyph icon `icon` shows: ours, a Wii icon in its place (Plus, Minus, HOME or the Control Pad, which a Nintendo
@@ -743,10 +1585,14 @@ namespace {
         }
     }
 
-    // The A bubble's picture `k` of the icon at A's code.
+    // The A bubble's picture `k` of the icon at A's code (a keyboard's key: family cFamilies).
     void drawPicture(s32 k, s32 family, s32 glyph, s32 place) {
         Canvas canvas = {sCanvasPixels, cPictureSizes[k], cPictureSizes[k], 1.0f};
-        if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k])) {
+        if (family == cFamilies) {
+            const bool named = !keyHasCell(place);
+            paintKey(canvas, named ? cKeyNamed : place, cPictureLooks[k], sFont.mKeyLayout, sFont.mKeyPad,
+                     named ? sFont.mKeyNames[0] : nullptr);
+        } else if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k])) {
             paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place));
         }
         encodeInto(canvas, sPictures[k].mTexels, cPictureSizes[k], 0, 0);
@@ -827,6 +1673,60 @@ namespace {
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     __NebulaArtExport(&art);
                 }
+            }
+        }
+        // The keyboard: its sheets (a US layout, the Control Pad on the arrows: the keyboard's own bindings), each key alone
+        // and as the A bubble.
+        drawKeys(nullptr, nullptr, nullptr);
+        static const u8 cArrowKeys[4] = {NEBULA_KEY_UP, NEBULA_KEY_DOWN, NEBULA_KEY_LEFT, NEBULA_KEY_RIGHT};
+        static const u16 cUs[NEBULA_KEY_LAYOUT_KEYS] = {0};
+        char keyText[32];
+        for (s32 sheet = 0; sheet < sFont.mKeySheets; sheet++) {
+            memset(pHdSheet, 0, static_cast< size_t >(hdSheetWidth) * hdSheetHeight * 4);
+            for (s32 slot = 0; slot < cKeyCells; slot++) {
+                // The named cells are empty until a key needs one.
+                if (!keyHasCell(slot) || slot >= cKeyNamed || sFont.mKeyCell[slot] / sFont.mCells != sheet) {
+                    continue;
+                }
+                u8* pSheet;
+                s32 x, y;
+                cellOf(keyGlyph(slot), &pSheet, &x, &y);
+                Canvas hd = {pHdPixels, sFont.mGlyphWidth * scale, sFont.mGlyphHeight * scale, static_cast< f32 >(scale)};
+                paintKey(hd, slot, LookText, cUs, cArrowKeys);
+                canvasToRgba8(hd, pHdSheet, hdSheetWidth, x * scale, y * scale);
+                Canvas native = {sCanvasPixels, sFont.mGlyphWidth, sFont.mGlyphHeight, 1.0f};
+                paintKey(native, slot, LookText, cUs, cArrowKeys);
+                canvasToRgba8(native, pImage, native.mWidth, 0, 0);
+                canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
+                keyName(slot, keyText, sizeof(keyText));
+                snprintf(name, sizeof(name), "Keyboard/%s", keyText);
+                NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), GX_TF_RGB5A3,
+                                       pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
+                __NebulaArtExport(&art);
+            }
+            const u8* pTexels = sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes;
+            pictureToRgba8(pTexels, sFont.mSheetWidth, sFont.mSheetHeight, pImage);
+            snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
+            NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), GX_TF_RGB5A3,
+                                   pImage, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
+            __NebulaArtExport(&art);
+        }
+        for (s32 slot = 0; slot < NEBULA_KEYS; slot++) {
+            for (s32 look = 0; look < 2 && keyHasCell(slot); look++) {
+                const s32 size = cPictureSizes[look];
+                Canvas native = {sCanvasPixels, size, size, 1.0f};
+                paintKey(native, slot, cPictureLooks[look], cUs, cArrowKeys);
+                Picture picture;
+                encodeInto(native, picture.mTexels, size, 0, 0);
+                pictureToRgba8(picture.mTexels, size, size, pImage);
+                Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
+                paintKey(hd, slot, cPictureLooks[look], cUs, cArrowKeys);
+                canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
+                keyName(slot, keyText, sizeof(keyText));
+                snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
+                NebulaArtExport art = {name, picture.mTexels, static_cast< u32 >(size), static_cast< u32 >(size), GX_TF_RGB5A3,
+                                       pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
+                __NebulaArtExport(&art);
             }
         }
         free(pHdPixels);
@@ -1186,15 +2086,20 @@ namespace NebulaIcons {
         if (sFontState != FontReady || memcmp(&now, &sShown, sizeof(now)) == 0) {
             return;
         }
-        const s32 family = now.style >= NEBULA_ICON_STYLE_XBOX && now.style <= NEBULA_ICON_STYLE_PLAYSTATION ? now.style - 1 : -1;
-        if (family >= 0) {
+        const bool keyboard = now.style == NEBULA_ICON_STYLE_KEYBOARD;
+        const s32 family = keyboard ? cFamilies
+                                    : now.style >= NEBULA_ICON_STYLE_XBOX && now.style <= NEBULA_ICON_STYLE_PLAYSTATION ? now.style - 1 : -1;
+        if (keyboard) {
+            drawKeys(now.layout, now.pad_keys, now.other);
+        } else if (family >= 0) {
             drawFamily(family);
         }
         for (s32 i = 0; i < NEBULA_BUTTON_ICONS; i++) {
-            sFont.mMap->mapInfo[cCodes[i] - cMapFirst] = shownGlyph(family, i, now.glyphs[i], now.places[i]);
+            sFont.mMap->mapInfo[cCodes[i] - cMapFirst] =
+                keyboard ? keyboardGlyph(i, now.glyphs[i], now.places[i]) : shownGlyph(family, i, now.glyphs[i], now.places[i]);
         }
         // The A bubble's two frames, as the font's A.
-        sPicturesShown = family >= 0 && now.glyphs[0] != NEBULA_ICON_KEEP;
+        sPicturesShown = family >= 0 && (keyboard ? now.glyphs[0] == NEBULA_ICON_KEY : now.glyphs[0] != NEBULA_ICON_KEEP);
         for (s32 k = 0; k < 2 && sPicturesShown; k++) {
             drawPicture(k, family, now.glyphs[0], now.places[0]);
         }
@@ -1203,6 +2108,15 @@ namespace NebulaIcons {
 
     bool wiiRemoteInUse() {
         return sShown.wii_remote != 0;
+    }
+
+    u16 keyCode(s32 key) {
+        if (sFontState != FontReady || key < 0 || key >= NEBULA_KEYS) {
+            return 0;
+        }
+        const bool keyboard = sShown.style == NEBULA_ICON_STYLE_KEYBOARD;
+        drawKeys(keyboard ? sShown.layout : nullptr, keyboard ? sShown.pad_keys : nullptr, keyboard ? sShown.other : nullptr);
+        return static_cast< u16 >(cKeyCodeFirst + key);
     }
 
     void setJoyConDensity(f32 pixelsX, f32 pixelsY) {

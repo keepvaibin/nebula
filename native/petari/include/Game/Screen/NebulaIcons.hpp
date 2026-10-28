@@ -28,6 +28,10 @@ namespace NebulaIcons {
     // A real Wii Remote is in the player's hand (the host's NebulaButtonIcons::wii_remote): the game's pictures of one
     // (how to shake it to spin, tilt it to roll the Star Ball or steer the Ray) show only then.
     bool wiiRemoteInUse();
+    // The keyboard's keys in the picture font (the menu's keys): key NEBULA_KEY_* at cKeyCodeFirst + key, drawn when
+    // asked for. keyCode: its code, 0 while the icons cannot be drawn (the menu names the key in words).
+    const u16 cKeyCodeFirst = 0xE000;
+    u16 keyCode(s32 key);
     // The Pair Joy-Con picture: each half (0 left, 1 right) in each look, textures of Nebula's own covering cJoyConBox
     // units of the owner's drawing (a half's body, cJoyConBody, in its middle). setJoyConDensity asks for them at
     // the screen's pixels per unit on each axis; paintJoyConAhead paints toward that for about `budgetMicros` (true

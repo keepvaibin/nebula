@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 31u
+#define NEBULA_GAME_API_VERSION 32u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -220,6 +220,7 @@ enum {
     NEBULA_SETTINGS_ROW_HELD = 256,      /* the mod picked up to move: the arrows move it */
     NEBULA_SETTINGS_ROW_SLIDER = 512,    /* a setting along a range: `slider_steps` from its first value, at `slider_at` */
     NEBULA_SETTINGS_ROW_BINDING = 1024,  /* a control's binding: changing it waits for an input */
+    NEBULA_SETTINGS_ROW_SHARED = 2048,   /* a binding with an input another control is bound to as well: shown red */
 };
 
 /* The game's button icons (its picture font's A, B, C, Z, 1, 2, Plus, Minus, HOME and Control Pad, in this order):
@@ -230,6 +231,7 @@ enum {
     NEBULA_ICON_STYLE_XBOX,
     NEBULA_ICON_STYLE_NINTENDO,
     NEBULA_ICON_STYLE_PLAYSTATION,
+    NEBULA_ICON_STYLE_KEYBOARD, /* the keyboard and mouse: each icon a key (NEBULA_ICON_KEY) */
 };
 enum {
     NEBULA_ICON_KEEP = 0, /* the Wii's own icon */
@@ -240,13 +242,74 @@ enum {
     NEBULA_ICON_START,    /* Xbox Menu, Plus, Options */
     NEBULA_ICON_BACK,     /* Xbox View, Minus, Share or Create */
     NEBULA_ICON_HOME,
-    NEBULA_ICON_DPAD,
+    NEBULA_ICON_DPAD,     /* KEYBOARD: the four keys of `pad_keys` */
+    NEBULA_ICON_KEY,      /* place: NEBULA_KEY_* */
 };
+/* The keys and mouse buttons a keyboard icon shows (NEBULA_ICON_KEY's place). Those from NEBULA_KEY_LAYOUT_FIRST print
+   what the keyboard's layout puts on them (NebulaButtonIcons::layout); NEBULA_KEY_OTHER is any other key, unnamed. */
+enum {
+    NEBULA_KEY_A = 0,                        /* A to Z */
+    NEBULA_KEY_0 = NEBULA_KEY_A + 26,        /* 0 to 9 */
+    NEBULA_KEY_F1 = NEBULA_KEY_0 + 10,       /* F1 to F24 */
+    NEBULA_KEY_NUM0 = NEBULA_KEY_F1 + 24,    /* the number pad's 0 to 9 */
+    NEBULA_KEY_NUM_ADD = NEBULA_KEY_NUM0 + 10,
+    NEBULA_KEY_NUM_SUBTRACT,
+    NEBULA_KEY_NUM_MULTIPLY,
+    NEBULA_KEY_NUM_DIVIDE,
+    NEBULA_KEY_NUM_DECIMAL,
+    NEBULA_KEY_SPACE,
+    NEBULA_KEY_ENTER,
+    NEBULA_KEY_TAB,
+    NEBULA_KEY_BACKSPACE,
+    NEBULA_KEY_ESCAPE,
+    NEBULA_KEY_SHIFT,
+    NEBULA_KEY_LEFT_SHIFT,
+    NEBULA_KEY_RIGHT_SHIFT,
+    NEBULA_KEY_CTRL,
+    NEBULA_KEY_LEFT_CTRL,
+    NEBULA_KEY_RIGHT_CTRL,
+    NEBULA_KEY_ALT,
+    NEBULA_KEY_LEFT_ALT,
+    NEBULA_KEY_RIGHT_ALT,
+    NEBULA_KEY_UP,
+    NEBULA_KEY_DOWN,
+    NEBULA_KEY_LEFT,
+    NEBULA_KEY_RIGHT,
+    NEBULA_KEY_INSERT,
+    NEBULA_KEY_DELETE,
+    NEBULA_KEY_HOME,
+    NEBULA_KEY_END,
+    NEBULA_KEY_PAGE_UP,
+    NEBULA_KEY_PAGE_DOWN,
+    NEBULA_KEY_CAPS_LOCK,
+    NEBULA_KEY_NUM_LOCK,
+    NEBULA_KEY_SCROLL_LOCK,
+    NEBULA_KEY_PAUSE,
+    NEBULA_KEY_PRINT_SCREEN,
+    NEBULA_KEY_MENU,
+    NEBULA_KEY_LEFT_WIN,
+    NEBULA_KEY_RIGHT_WIN,
+    NEBULA_KEY_LAYOUT_FIRST, /* US: ; = , - . / ` [ \ ] ' (none) and the ISO key's \ */
+    NEBULA_KEY_MOUSE_LEFT = NEBULA_KEY_LAYOUT_FIRST + 13,
+    NEBULA_KEY_MOUSE_RIGHT,
+    NEBULA_KEY_MOUSE_MIDDLE,
+    NEBULA_KEY_MOUSE_BACK,    /* the side buttons (Mouse4, Mouse5) */
+    NEBULA_KEY_MOUSE_FORWARD,
+    NEBULA_KEY_OTHER, /* a key without its own icon: its name (NebulaButtonIcons::other) on a key of its own */
+    NEBULA_KEYS,
+};
+#define NEBULA_KEY_NAME_CHARS 8
+#define NEBULA_KEY_LAYOUT_KEYS 13
 typedef struct NebulaButtonIcons {
     uint8_t style; /* NEBULA_ICON_STYLE_* */
     uint8_t glyphs[NEBULA_BUTTON_ICONS]; /* NEBULA_ICON_KEEP... */
     uint8_t places[NEBULA_BUTTON_ICONS];
     uint8_t wii_remote; /* a real Wii Remote is in use: the game's pictures of one show */
+    uint8_t pad_keys[4]; /* KEYBOARD: the Control Pad's up, down, left and right keys (NEBULA_KEY_*) */
+    /* KEYBOARD: the capital each layout key prints (from NEBULA_KEY_LAYOUT_FIRST; UCS-2), 0 where the US label shows */
+    uint16_t layout[NEBULA_KEY_LAYOUT_KEYS];
+    /* KEYBOARD: each icon on NEBULA_KEY_OTHER, its key's name in capitals (ASCII, at most 6), else empty */
+    char other[NEBULA_BUTTON_ICONS][NEBULA_KEY_NAME_CHARS];
 } NebulaButtonIcons;
 
 /* A picture of Nebula's own (its button icons) for GALAXY_EXPORT_ART: `texels` the texture the game draws, which names

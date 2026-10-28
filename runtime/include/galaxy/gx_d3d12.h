@@ -328,6 +328,10 @@ void native_settings_wait_saved_for_tests();
 // the device marked active.
 void native_settings_set_controllers_for_tests(std::span<const input::ControllerInfo> controllers,
                                                std::optional<input::DeviceKey> active);
+// The Joy-Con halves connected, for tests.
+void native_settings_set_joycons_for_tests(unsigned lefts, unsigned rights);
+// Whether a Wii Remote is connected, for tests.
+void native_settings_set_wii_remote_for_tests(bool present);
 // The text of a row of the open page as drawn.
 [[nodiscard]] std::string native_settings_row_text_for_tests(unsigned row);
 // The settings the menu would apply (its draft), for tests.
@@ -349,6 +353,7 @@ struct NativeSettingsViewRow {
     bool buttons = false;     // its value is its buttons' words, '|' between them
     unsigned mod_list = 0u;   // the MODS page's lists: 1 off, 2 on (a mod, or the list's title)
     bool held = false;        // a mod picked up to move
+    bool shared = false;      // a binding with an input another control is bound to as well (both act together)
     unsigned slider_steps = 0u;  // a setting along a range: its steps, and the one it is at
     unsigned slider_at = 0u;
 };

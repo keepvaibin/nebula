@@ -486,6 +486,9 @@ SchemeTuning default_scheme_tuning(ControlScheme scheme) {
     if (scheme_has_motion(scheme)) {
         tuning.gyro_pointer = true;
     }
+    if (scheme_has_touch(scheme)) {
+        tuning.touch_pointer = true;
+    }
     if (scheme_is_gamepad(scheme)) {
         // Still-pointer hiding (pointer_control.h kDefaultPointerHide*).
         tuning.pointer_hide_seconds = 4.0f;
@@ -738,6 +741,10 @@ bool apply_controls_setting(ControlsConfig& config, std::string_view key_text, s
         tuning.gyro_pointer = flag;
     } else if (name == "gyro_sensitivity" && parse_float_c(value, number)) {
         tuning.gyro_sensitivity = number;
+    } else if (name == "touch_pointer" && parse_bool(value, flag)) {
+        tuning.touch_pointer = flag;
+    } else if (name == "touch_sensitivity" && parse_float_c(value, number)) {
+        tuning.touch_sensitivity = number;
     } else if (name == "pointer_hide_seconds" && parse_float_c(value, number)) {
         tuning.pointer_hide_seconds = number;
     } else if (name == "pointer_hide_radius" && parse_float_c(value, number)) {
@@ -775,6 +782,7 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
         tuning.pointer_deadzone = clamp_or(tuning.pointer_deadzone, 0.0f, 0.9f, defaults.pointer_deadzone);
         tuning.pointer_speed = clamp_or(tuning.pointer_speed, 0.1f, 10.0f, defaults.pointer_speed);
         tuning.gyro_sensitivity = clamp_or(tuning.gyro_sensitivity, 0.2f, 5.0f, defaults.gyro_sensitivity);
+        tuning.touch_sensitivity = clamp_or(tuning.touch_sensitivity, 0.2f, 5.0f, defaults.touch_sensitivity);
         tuning.pointer_hide_seconds = clamp_or(tuning.pointer_hide_seconds, 0.0f, 60.0f, defaults.pointer_hide_seconds);
         tuning.pointer_hide_radius = clamp_or(tuning.pointer_hide_radius, 0.0f, 0.5f, defaults.pointer_hide_radius);
         tuning.shake_sensitivity = static_cast<std::uint8_t>(
@@ -785,6 +793,10 @@ ControlsConfig sanitize_controls_config(ControlsConfig config) noexcept {
             tuning.motion_shake = MotionShake::Off;
             tuning.gyro_pointer = false;
             tuning.gyro_sensitivity = defaults.gyro_sensitivity;
+        }
+        if (!scheme_has_touch(static_cast<ControlScheme>(s))) {
+            tuning.touch_pointer = false;
+            tuning.touch_sensitivity = defaults.touch_sensitivity;
         }
     }
     return config;
@@ -817,6 +829,10 @@ std::string format_controls_settings(const ControlsConfig& config) {
                     std::to_string(tuning.shake_sensitivity) + "\n";
             text += "tune." + prefix + "gyro_pointer=" + (tuning.gyro_pointer ? "1" : "0") + "\n";
             text += "tune." + prefix + "gyro_sensitivity=" + format_float_c(tuning.gyro_sensitivity) + "\n";
+        }
+        if (scheme_has_touch(scheme)) {
+            text += "tune." + prefix + "touch_pointer=" + (tuning.touch_pointer ? "1" : "0") + "\n";
+            text += "tune." + prefix + "touch_sensitivity=" + format_float_c(tuning.touch_sensitivity) + "\n";
         }
     }
     return text;
@@ -931,7 +947,7 @@ LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& s
 }
 LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& sample,
                                    float trigger_threshold, std::uint32_t previous_pressed,
-                                   bool gyro_pointer) noexcept {
+                                   bool sensor_pointing) noexcept {
     if (!sample.connected) return {};
     const StickRoles roles = stick_roles(table);
     return evaluate(
@@ -944,12 +960,30 @@ LogicalInput evaluate_pad_bindings(const BindingTable& table, const PadSample& s
             return value >= kStickDirectionPress ||
                    (was_pressed && is_stick_source(s) && value >= kStickDirectionRelease);
         },
-        [&roles, gyro_pointer](WiiTarget target, InputSource s) {
+        [&roles, sensor_pointing](WiiTarget target, InputSource s) {
             if (!is_stick_source(s)) return true;
             const auto bit = static_cast<std::uint8_t>(1u << s.code);
             if ((roles.pointer & roles.other & bit) == 0u) return true;
-            return is_pointer_target(target) ? !gyro_pointer : gyro_pointer;
+            return is_pointer_target(target) ? !sensor_pointing : sensor_pointing;
         });
+}
+
+std::uint32_t shared_binding_targets(const BindingTable& table) noexcept {
+    std::uint32_t shared = 0u;
+    for (std::size_t t = 0; t < kWiiTargetCount; ++t) {
+        for (std::size_t u = t + 1u; u < kWiiTargetCount; ++u) {
+            const auto first = static_cast<WiiTarget>(t);
+            const auto second = static_cast<WiiTarget>(u);
+            for (const InputSource& a : table.targets[t]) {
+                if (a.empty()) continue;
+                const bool together = !is_stick_source(a) || is_pointer_target(first) == is_pointer_target(second);
+                for (const InputSource& b : table.targets[u]) {
+                    if (together && a == b) shared |= wii_target_bit(first) | wii_target_bit(second);
+                }
+            }
+        }
+    }
+    return shared;
 }
 
 LogicalInput merge_logical_input(const LogicalInput& a, const LogicalInput& b) noexcept {
@@ -1074,9 +1108,131 @@ GlyphPlace glyph_of(InputSource source) noexcept {
     }
 }
 
+// The layout keys in key icon order: US ; = , - . / ` [ \ ] ', OEM 8 and the ISO key.
+constexpr std::array<std::uint8_t, kKeyIconLayoutCount> kLayoutKeys{
+    VK_OEM_1, VK_OEM_PLUS, VK_OEM_COMMA, VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_2, VK_OEM_3,
+    VK_OEM_4, VK_OEM_5, VK_OEM_6, VK_OEM_7, VK_OEM_8, VK_OEM_102};
+
+// Named keys' icons in order from Space (the game API's NEBULA_KEY_SPACE .. NEBULA_KEY_RIGHT_WIN).
+constexpr std::uint8_t kKeyIconSpace = 75;
+constexpr std::array<std::uint8_t, 32> kNamedKeyIcons{
+    VK_SPACE, VK_RETURN, VK_TAB, VK_BACK, VK_ESCAPE, VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL,
+    VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_INSERT, VK_DELETE, VK_HOME,
+    VK_END, VK_PRIOR, VK_NEXT, VK_CAPITAL, VK_NUMLOCK, VK_SCROLL, VK_PAUSE, VK_SNAPSHOT, VK_APPS, VK_LWIN, VK_RWIN};
+static_assert(kKeyIconSpace + kNamedKeyIcons.size() == kKeyIconLayoutFirst);
+
+}  // namespace
+
+std::optional<std::uint8_t> key_icon(InputSource source) noexcept {
+    using Icon = std::uint8_t;
+    if (source.kind == SourceKind::Mouse) {
+        if (source.code >= kMouseButtonCount) return std::nullopt;
+        return static_cast<Icon>(kKeyIconMouseLeft + source.code);
+    }
+    if (source.kind != SourceKind::Key) return std::nullopt;
+    const std::uint8_t vk = source.code;
+    if (vk >= 'A' && vk <= 'Z') return static_cast<Icon>(vk - 'A');
+    if (vk >= '0' && vk <= '9') return static_cast<Icon>(26 + vk - '0');
+    if (vk >= VK_F1 && vk <= VK_F24) return static_cast<Icon>(36 + vk - VK_F1);
+    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return static_cast<Icon>(60 + vk - VK_NUMPAD0);
+    switch (vk) {
+    case VK_ADD: return Icon{70};
+    case VK_SUBTRACT: return Icon{71};
+    case VK_MULTIPLY: return Icon{72};
+    case VK_DIVIDE: return Icon{73};
+    case VK_DECIMAL: return Icon{74};
+    default: break;
+    }
+    for (std::size_t i = 0; i < kNamedKeyIcons.size(); ++i) {
+        if (kNamedKeyIcons[i] == vk) return static_cast<std::uint8_t>(kKeyIconSpace + i);
+    }
+    for (std::size_t i = 0; i < kLayoutKeys.size(); ++i) {
+        if (kLayoutKeys[i] == vk) return static_cast<std::uint8_t>(kKeyIconLayoutFirst + i);
+    }
+    return kKeyIconOther;
+}
+
+std::array<char, 8> key_icon_name(std::uint8_t vk) noexcept {
+    struct Name {
+        std::uint8_t vk;
+        const char* name;
+    };
+    static constexpr Name kNames[] = {
+        {VK_VOLUME_MUTE, "MUTE"}, {VK_VOLUME_DOWN, "VOL -"}, {VK_VOLUME_UP, "VOL +"}, {VK_MEDIA_NEXT_TRACK, "NEXT"},
+        {VK_MEDIA_PREV_TRACK, "PREV"}, {VK_MEDIA_STOP, "STOP"}, {VK_MEDIA_PLAY_PAUSE, "PLAY"}, {VK_BROWSER_BACK, "BACK"},
+        {VK_BROWSER_FORWARD, "FWD"}, {VK_BROWSER_REFRESH, "RELOAD"}, {VK_BROWSER_STOP, "STOP"},
+        {VK_BROWSER_SEARCH, "SEARCH"}, {VK_BROWSER_FAVORITES, "FAV"}, {VK_BROWSER_HOME, "WEB"}, {VK_LAUNCH_MAIL, "MAIL"},
+        {VK_LAUNCH_MEDIA_SELECT, "MEDIA"}, {VK_LAUNCH_APP1, "APP 1"}, {VK_LAUNCH_APP2, "APP 2"}, {VK_SLEEP, "SLEEP"},
+        {VK_HELP, "HELP"}, {VK_SELECT, "SELECT"}, {VK_PRINT, "PRINT"}, {VK_EXECUTE, "EXEC"}, {VK_CLEAR, "CLEAR"},
+        {VK_SEPARATOR, "SEP"}, {VK_CANCEL, "BREAK"}, {VK_KANA, "KANA"}, {VK_JUNJA, "JUNJA"}, {VK_FINAL, "FINAL"},
+        {VK_KANJI, "KANJI"}, {VK_CONVERT, "CONV"}, {VK_NONCONVERT, "NCONV"}, {VK_ACCEPT, "ACCEPT"},
+        {VK_MODECHANGE, "MODE"}, {VK_OEM_ATTN, "EISU"}, {VK_OEM_FINISH, "KATA"}, {VK_OEM_COPY, "HIRA"},
+        {VK_OEM_AUTO, "HANKAK"}, {VK_OEM_ENLW, "ZENKAK"}, {VK_OEM_BACKTAB, "ROMAJI"}, {VK_ATTN, "ATTN"},
+        {VK_PLAY, "PLAY"}, {VK_ZOOM, "ZOOM"}, {VK_OEM_CLEAR, "CLEAR"},
+    };
+    std::array<char, 8> out{};
+    for (const Name& name : kNames) {
+        if (name.vk == vk) {
+            std::snprintf(out.data(), out.size(), "%s", name.name);
+            return out;
+        }
+    }
+    std::snprintf(out.data(), out.size(), "VK%02X", static_cast<unsigned>(vk));
+    return out;
+}
+
+std::uint8_t key_icon_layout_key(std::size_t index) noexcept {
+    return index < kLayoutKeys.size() ? kLayoutKeys[index] : 0u;
+}
+
+namespace {
+
+// The keyboard's icons: each Wii button's input as the player reaches for it there (B's in menus JumpBack's first),
+// HOME's, and the Control Pad's four keys. A in menus and B everywhere show their first mouse button where they have one
+// (the pointer chooses in menus; B shoots Star Bits where the pointer aims: Space and the left click are both A, Shift
+// and the right click both B); every other icon, and A in play, its first key, else its first mouse button.
+ButtonIconSpec keyboard_icon_spec(const BindingTable& table, bool menu) noexcept {
+    ButtonIconSpec spec;
+    spec.style = ButtonIconStyle::Keyboard;
+    const auto first = [&table](WiiTarget target, bool mouse_first = false) -> std::optional<InputSource> {
+        for (const SourceKind kind : {mouse_first ? SourceKind::Mouse : SourceKind::Key,
+                                      mouse_first ? SourceKind::Key : SourceKind::Mouse}) {
+            for (const InputSource source : table[target]) {
+                if (source.kind == kind && key_icon(source).has_value()) return source;
+            }
+        }
+        return std::nullopt;
+    };
+    static constexpr WiiTarget kTargets[static_cast<std::size_t>(ButtonIcon::Pad)] = {
+        WiiTarget::A, WiiTarget::B, WiiTarget::C, WiiTarget::Z, WiiTarget::One, WiiTarget::Two, WiiTarget::Plus,
+        WiiTarget::Minus, WiiTarget::Home};
+    for (std::size_t i = 0; i < std::size(kTargets); ++i) {
+        const bool b = i == static_cast<std::size_t>(ButtonIcon::B);
+        const bool mouse_first = b || (i == static_cast<std::size_t>(ButtonIcon::A) && menu);
+        std::optional<InputSource> input = b && menu ? first(WiiTarget::JumpBack, mouse_first) : std::nullopt;
+        if (!input) input = first(kTargets[i], mouse_first);
+        const std::optional<std::uint8_t> icon = input ? key_icon(*input) : std::nullopt;
+        spec.glyphs[i] = icon ? ButtonGlyph::Key : ButtonGlyph::Keep;
+        spec.places[i] = icon.value_or(0u);
+        if (icon == kKeyIconOther) spec.other[i] = key_icon_name(input->code);
+    }
+    static constexpr WiiTarget kPad[4] = {WiiTarget::DpadUp, WiiTarget::DpadDown, WiiTarget::DpadLeft,
+                                          WiiTarget::DpadRight};
+    bool any = false;
+    for (std::size_t i = 0; i < 4u; ++i) {
+        const std::optional<InputSource> input = first(kPad[i]);
+        const std::optional<std::uint8_t> icon = input ? key_icon(*input) : std::nullopt;
+        spec.pad_keys[i] = icon.value_or(kKeyIconNone);
+        any = any || icon.has_value();
+    }
+    spec.glyphs[static_cast<std::size_t>(ButtonIcon::Pad)] = any ? ButtonGlyph::Dpad : ButtonGlyph::Keep;
+    return spec;
+}
+
 }  // namespace
 
 ButtonIconSpec button_icon_spec(ButtonIconStyle style, const BindingTable& table, bool menu) noexcept {
+    if (style == ButtonIconStyle::Keyboard) return keyboard_icon_spec(table, menu);
     ButtonIconSpec spec;
     spec.style = style;
     if (style == ButtonIconStyle::Wii) return spec;

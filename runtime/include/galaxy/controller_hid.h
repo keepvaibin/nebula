@@ -40,6 +40,13 @@ struct HidPadState {
     float gyro_y = 0.0f;
     // The last report carried IMU samples.
     bool imu_live = false;
+    // The touch surface (DecodedState::touch_*): the finger's travel since the previous consuming read (the
+    // surface's width and height are 1 each; a finger put down moves nothing), whether one is down, and whether the
+    // controller reports a surface.
+    float touch_dx = 0.0f;
+    float touch_dy = 0.0f;
+    bool touch_down = false;
+    bool touch_live = false;
     unsigned gyro_rest_windows = 0;
     // Controller orientation: the gravity reaction (up) in the SDL frame,
     // low-passed (SwitchMotion), valid once the IMU has streamed.
@@ -78,8 +85,8 @@ void stop_all_rumble() noexcept;
 
 // Starts the worker on first use; later calls are free.
 void ensure_controller_hid_started() noexcept;
-// Copies every connected pad into `out`; `consume_gyro` clears the gyro
-// accumulators. Returns the number written. Never blocks on device I/O.
+// Copies every connected pad into `out`; `consume_gyro` clears the gyro and
+// touch accumulators. Returns the number written. Never blocks on device I/O.
 std::size_t read_hid_pads(std::span<HidPadState> out, bool consume_gyro) noexcept;
 // Steady-clock microseconds, the time base of shake_until_us.
 [[nodiscard]] std::uint64_t controller_hid_now_us() noexcept;

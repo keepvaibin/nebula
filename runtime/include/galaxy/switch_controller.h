@@ -100,6 +100,12 @@ struct DecodedState {
     // Seconds from the previous IMU sample to imu[0] by the controller's own
     // clock (0: unknown, the host clock applies). One sample per report.
     float imu_dt = 0.0f;
+    // A touch surface's finger (the PlayStation touchpad's first, the Steam controllers' right pad): whether one is
+    // down, and where, 0..1 across the surface left to right and top to bottom. `touch_surface`: the report has one.
+    bool touch_surface = false;
+    bool touch_down = false;
+    float touch_x = 0.0f;
+    float touch_y = 0.0f;
 };
 
 // Switch Pro Controller input report (byte 0 = report id). Full state (0x30)

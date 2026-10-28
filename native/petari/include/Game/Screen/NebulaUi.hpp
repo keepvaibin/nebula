@@ -34,6 +34,9 @@ namespace NebulaUi {
     const f32 cCapTop = 0.19f;
     const f32 cBaseline = 0.71f;
     const f32 cGlyphDrop = 0.04f;
+    // The keyboard's icons are drawn centred in their cells: one centred 0.07 of its size below the line's middle sits
+    // as the game's own icons do in its text, between the capitals' middle and the small letters' (measured at 1080p).
+    const f32 cKeyGlyphDrop = 0.07f;
 
     // The game's window with a ring (SysInfoWindowMini's): its corner texture is 24 across, so a window drawn at
     // scale k has corners of radius 24k.

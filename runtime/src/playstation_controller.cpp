@@ -220,6 +220,20 @@ bool decode_report(Model model, Transport transport, std::span<const std::uint8_
     }
     if (!layout.full) return true;
 
+    // The touchpad's first finger: its counter's bit 7 is set while it is lifted; 12-bit x and y over 1920 x 920 (a
+    // DualShock 4, SDL's span) or 1920 x 1070 (a DualSense).
+    if (r.size() >= layout.base + 36u) {
+        const std::uint8_t* touch = p + 32;
+        out.touch_surface = true;
+        out.touch_down = (touch[0] & 0x80u) == 0u;
+        if (out.touch_down) {
+            const int x = touch[1] | ((touch[2] & 0x0f) << 8);
+            const int y = (touch[2] >> 4) | (touch[3] << 4);
+            out.touch_x = std::clamp(static_cast<float>(x) / 1920.0f, 0.0f, 1.0f);
+            out.touch_y = std::clamp(static_cast<float>(y) / (dualsense ? 1070.0f : 920.0f), 0.0f, 1.0f);
+        }
+    }
+
     const std::uint8_t* gyro = p + (dualsense ? 15 : 12);
     const std::uint8_t* accel = p + (dualsense ? 21 : 18);
     std::array<std::int16_t, 6> raw{};

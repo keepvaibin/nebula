@@ -1822,11 +1822,58 @@ void note_keyboard_input() noexcept {
     g_last_input.store(kLastInputKeyboard, std::memory_order_relaxed);
 }
 
+// The style Auto shows now (button_icons sets it, the settings menu reads it).
+std::atomic<input::ButtonIconStyle> g_auto_icon_style{input::ButtonIconStyle::Wii};
+
+input::ButtonIconStyle button_icons_auto_style() noexcept {
+    return g_auto_icon_style.load(std::memory_order_relaxed);
+}
+
+namespace {
+bool current_process_runtime_window(HWND& window);
+}  // namespace
+
+// What the layout keys (input::key_icon_layout_key) print on the keyboard the game's window reads: each one's
+// character alone (a dead key's too: a German keyboard's ^ and its acute accent), as a capital; 0 where it prints none.
+// Looked up at most once a second. GALAXY_TEST_KEY_LAYOUT=<hex>,... (13 UCS-2 codes) stands in for them: hidden runs
+// show another country's keyboard.
+std::array<std::uint16_t, input::kKeyIconLayoutCount> keyboard_layout_labels() noexcept {
+    static std::array<std::uint16_t, input::kKeyIconLayoutCount> s_labels{};
+    static std::uint64_t s_checked_ms = 0u;
+    static const std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>> s_test = [] {
+        const std::optional<std::string> value = read_env_string_uncached("GALAXY_TEST_KEY_LAYOUT");
+        if (!value.has_value()) return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>{};
+        std::array<std::uint16_t, input::kKeyIconLayoutCount> labels{};
+        const char* p = value->c_str();
+        for (std::size_t i = 0; i < labels.size() && *p != '\0'; ++i) {
+            char* end = nullptr;
+            labels[i] = static_cast<std::uint16_t>(std::strtoul(p, &end, 16));
+            p = *end == ',' ? end + 1 : end;
+        }
+        return std::optional<std::array<std::uint16_t, input::kKeyIconLayoutCount>>(labels);
+    }();
+    if (s_test.has_value()) return *s_test;
+    const std::uint64_t now_ms = GetTickCount64();
+    if (s_checked_ms != 0u && now_ms - s_checked_ms < 1000u) return s_labels;
+    s_checked_ms = now_ms;
+    HWND window = nullptr;
+    const HKL layout =
+        GetKeyboardLayout(current_process_runtime_window(window) ? GetWindowThreadProcessId(window, nullptr) : 0u);
+    for (std::size_t i = 0; i < s_labels.size(); ++i) {
+        // The top bit marks a dead key; the character is in the low word.
+        wchar_t character[2] = {static_cast<wchar_t>(
+                                    MapVirtualKeyExW(input::key_icon_layout_key(i), MAPVK_VK_TO_CHAR, layout) & 0xFFFFu),
+                                L'\0'};
+        if (character[0] != L'\0') CharUpperBuffW(character, 1u);
+        s_labels[i] = static_cast<std::uint16_t>(character[0]);
+    }
+    return s_labels;
+}
+
 input::ButtonIconSpec button_icons(bool menu) noexcept {
     using input::ButtonIconStyle;
     using input::ControlScheme;
-    // The game's thread asks each frame. The controller last used stays while the mouse and keys are (a pad's player
-    // may aim with the mouse) as long as a controller is attached; the keyboard alone shows a Wii Remote's.
+    // The game's thread asks each frame.
     // The pads attached: read once a second and when the last input's device changes (the roster asks XInput's empty
     // slots, which is slow).
     static std::array<ControlScheme, input::kMaxControllers> s_attached{};
@@ -1856,29 +1903,43 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
         s_pad = s_attached_count != 0u ? std::optional<ControlScheme>(s_attached[0]) : std::nullopt;
     }
     const std::optional<ControlScheme> pad = s_pad;
-    ButtonIconStyle style = ButtonIconStyle::Wii;
-    switch (get_runtime_settings().button_icons) {
-    case ButtonIcons::Wii: break;
-    case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
-    case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
-    case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
-    case ButtonIcons::Auto:
-        // A real Wii Remote's own while one is in use; a controller of no known family shows them too.
-        if (real_wiimote_in_use()) break;
+    // Auto's: a real Wii Remote's own while one is in use; the keyboard's while it is (a key or a mouse button pressed
+    // since a controller's last input; with no controller attached and none used, from the start), and always in the
+    // keyboard and mouse input mode, never in the controller one; else the controller's family (one of no known
+    // family shows the Wii's). Moving the mouse alone leaves them (a controller's player may aim with it).
+    const RuntimeInputMode mode = get_runtime_settings().input_mode;
+    const bool keyboard_last = device.has_value() ? device->scheme == ControlScheme::Keyboard : !pad.has_value();
+    const bool keyboard = mode == RuntimeInputMode::KeyboardMouse ||
+                          (mode != RuntimeInputMode::Controller && keyboard_last);
+    ButtonIconStyle auto_style = ButtonIconStyle::Wii;
+    if (real_wiimote_in_use()) {
+    } else if (keyboard) {
+        auto_style = ButtonIconStyle::Keyboard;
+    } else {
         switch (pad.value_or(ControlScheme::Keyboard)) {
         case ControlScheme::Xbox:
-        case ControlScheme::Steam: style = ButtonIconStyle::Xbox; break;
+        case ControlScheme::Steam: auto_style = ButtonIconStyle::Xbox; break;
         case ControlScheme::SwitchPro:
-        case ControlScheme::SwitchPro2: style = ButtonIconStyle::Nintendo; break;
-        case ControlScheme::PlayStation: style = ButtonIconStyle::PlayStation; break;
+        case ControlScheme::SwitchPro2: auto_style = ButtonIconStyle::Nintendo; break;
+        case ControlScheme::PlayStation: auto_style = ButtonIconStyle::PlayStation; break;
         case ControlScheme::Keyboard:
         case ControlScheme::Generic: break;
         }
-        break;
+    }
+    g_auto_icon_style.store(auto_style, std::memory_order_relaxed);
+    ButtonIconStyle style = auto_style;
+    switch (get_runtime_settings().button_icons) {
+    case ButtonIcons::Auto: break;
+    case ButtonIcons::Wii: style = ButtonIconStyle::Wii; break;
+    case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
+    case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
+    case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
+    case ButtonIcons::Keyboard: style = ButtonIconStyle::Keyboard; break;
     }
     // The bindings of the controller in use; a style chosen without one takes its own family's. A chosen style shows
-    // the bound buttons by place (an 8BitDo pad seen as an Xbox one, with Nintendo's labels).
-    const ControlScheme scheme = pad.has_value() ? *pad
+    // the bound buttons by place (an 8BitDo pad seen as an Xbox one, with Nintendo's labels). The keyboard's are its own.
+    const ControlScheme scheme = style == ButtonIconStyle::Keyboard  ? ControlScheme::Keyboard
+                                 : pad.has_value()                   ? *pad
                                  : style == ButtonIconStyle::Nintendo    ? ControlScheme::SwitchPro
                                  : style == ButtonIconStyle::PlayStation ? ControlScheme::PlayStation
                                                                          : ControlScheme::Xbox;
@@ -1896,6 +1957,7 @@ input::ButtonIconSpec button_icons(bool menu) noexcept {
         s_menu = menu;
         s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
     }
+    if (style == ButtonIconStyle::Keyboard) s_spec.layout = keyboard_layout_labels();
     return s_spec;
 }
 
@@ -2191,6 +2253,10 @@ struct LivePad {
     bool imu_live = false;
     float gyro_x = 0.0f;
     float gyro_y = 0.0f;
+    // The touch surface's finger travel this report (its width and height 1 each) and whether the controller has one.
+    bool touch_live = false;
+    float touch_dx = 0.0f;
+    float touch_dy = 0.0f;
     // Controller up (gravity reaction, SDL frame) when the IMU knows it.
     bool gravity_valid = false;
     galaxy::input::tilt::Vec3 gravity{0.0f, 1.0f, 0.0f};
@@ -2250,6 +2316,9 @@ std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config,
         live.shake_nunchuk = shaking && tuning.motion_shake == galaxy::input::MotionShake::Nunchuk;
         live.gyro_x = pads[i].gyro_x;
         live.gyro_y = pads[i].gyro_y;
+        live.touch_live = pads[i].touch_live;
+        live.touch_dx = pads[i].touch_dx;
+        live.touch_dy = pads[i].touch_dy;
         live.gravity_valid = pads[i].gravity_valid && pads[i].imu_live;
         live.gravity = pads[i].gravity;
         live.device_slot = pads[i].slot;
@@ -2321,6 +2390,7 @@ bool route_native_settings_pads(std::span<LivePad> pads, bool capture_finished) 
             pad.sample.axes = {};
             pad.shake_remote = pad.shake_nunchuk = false;
             pad.gyro_x = pad.gyro_y = 0.0f;
+            pad.touch_dx = pad.touch_dy = 0.0f;
         }
     }
     return neutral;
@@ -3878,7 +3948,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     for (const LivePad& pad : live_pads) {
         if (!pad.sample.connected) continue;
         if (pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
-            std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f) {
+            std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
+            std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f) {
             g_last_input.store((static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot,
                                std::memory_order_relaxed);
         }
@@ -3926,6 +3997,10 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     float gyro_y = 0.0f;
     float pad_pointer_speed = 0.0f;
     bool pad_gyro_pointing = false;
+    // The touch pointer's travel this report (pointer units, 2 = the picture's width and height; y down).
+    float touch_x = 0.0f;
+    float touch_y = 0.0f;
+    bool pad_touch_pointing = false;
     // Rest-hide tuning of the pad that points (gyro first, then the stick).
     float pointer_hide_seconds = 0.0f;
     float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
@@ -3949,7 +4024,8 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             if (!pad.sample.connected) continue;
             if (first_connected == nullptr) first_connected = &pad;
             const bool moved = pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
-                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f;
+                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
+                               std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f;
             if (moved) s_driving_pad = pad_key(pad);
             if (pad_key(pad) == s_driving_pad) driving = &pad;
         }
@@ -3966,9 +4042,10 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
             }
             const galaxy::input::SchemeTuning& tuning = controls.config.tune(pad.sample.scheme);
             const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live;
+            const bool touch_pointing = tuning.touch_pointer && pad.touch_live;
             galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
                 controls.config.table(pad.sample.scheme), pad.sample, trigger_threshold,
-                s_pad_previous_pressed[index], gyro_pointing);
+                s_pad_previous_pressed[index], gyro_pointing || touch_pointing);
             s_pad_previous_pressed[index] = pad_logic.pressed;
             if (tuning.invert_pointer_y) pad_logic.pointer_y = -pad_logic.pointer_y;
             if (std::fabs(pad_logic.pointer_x) + std::fabs(pad_logic.pointer_y) >
@@ -3988,6 +4065,15 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
                 pointer_hide_radius = tuning.pointer_hide_radius;
                 gyro_x += pad.gyro_x;
                 gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
+            }
+            if (touch_pointing) {
+                pad_touch_pointing = true;
+                touch_x += pad.touch_dx * 2.0f * tuning.touch_sensitivity;
+                touch_y += (tuning.invert_pointer_y ? -pad.touch_dy : pad.touch_dy) * 2.0f * tuning.touch_sensitivity;
+                if (!pad_gyro_pointing) {
+                    pointer_hide_seconds = tuning.pointer_hide_seconds;
+                    pointer_hide_radius = tuning.pointer_hide_radius;
+                }
             }
         }
     } else {
@@ -4297,6 +4383,7 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
     activity.gyro = pad_gyro_pointing && dt > 0.0f &&
                     gyro_motion > kGyroActiveUnitsPerSecond * dt;
+    activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
     // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
     // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
     const bool recenter_held = held(WiiTarget::PointerRecenter);
@@ -4305,8 +4392,9 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     if (recenter.pressed) {
         const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
         s_pointer_owner.owner = pad_recenter
-            ? (pad_gyro_pointing ? galaxy::input::PointerSource::Gyro
-                                 : galaxy::input::PointerSource::Stick)
+            ? (pad_gyro_pointing    ? galaxy::input::PointerSource::Gyro
+               : pad_touch_pointing ? galaxy::input::PointerSource::Touch
+                                    : galaxy::input::PointerSource::Stick)
             : galaxy::input::PointerSource::Keys;
     }
     if (recenter.pinned) {
@@ -4347,6 +4435,14 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
         pointer_active = std::fabs(s_pointer_x) <= galaxy::input::kPointerVisibleLimit &&
                          std::fabs(s_pointer_y) <= galaxy::input::kPointerVisibleLimit;
         break;
+    case galaxy::input::PointerSource::Touch:
+        // The finger moves it as a touchpad moves a cursor; it stays on the picture.
+        s_pointer_x = std::clamp(s_pointer_x + touch_x, -galaxy::input::kStickPointerLimit,
+                                 galaxy::input::kStickPointerLimit);
+        s_pointer_y = std::clamp(s_pointer_y + touch_y, -galaxy::input::kStickPointerLimit,
+                                 galaxy::input::kStickPointerLimit);
+        pointer_active = true;
+        break;
     case galaxy::input::PointerSource::None:
         break;
     }
@@ -4368,11 +4464,13 @@ galaxy::input::WiimoteInputSnapshot build_native_hid_input_snapshot(
     static galaxy::input::PointerRestHide s_rest_hide{};
     const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
                                   owner == galaxy::input::PointerSource::Gyro ||
+                                  owner == galaxy::input::PointerSource::Touch ||
                                   (owner == galaxy::input::PointerSource::None && use_pads);
     const bool rest_hidden = s_rest_hide.update(
         s_pointer_x, s_pointer_y, now_us, controller_owned,
         recenter.pinned || recenter.released ||
-            (owner == galaxy::input::PointerSource::Stick && activity.stick),
+            (owner == galaxy::input::PointerSource::Stick && activity.stick) ||
+            (owner == galaxy::input::PointerSource::Touch && activity.touch),
         owner == galaxy::input::PointerSource::Gyro,
         pointer_hide_seconds, pointer_hide_radius);
     if (rest_hidden) {

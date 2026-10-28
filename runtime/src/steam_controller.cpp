@@ -120,6 +120,16 @@ void put_sensors(const std::uint8_t* accel, const std::uint8_t* gyro, float gyro
     out.imu_count = 1;
 }
 
+// A trackpad's finger at `x`, `y` (Valve's signed coordinates, the centre 0, y up), as the decoded touch.
+void put_touch(bool down, int x, int y, switch_hid::DecodedState& out) noexcept {
+    out.touch_surface = true;
+    out.touch_down = down;
+    if (down) {
+        out.touch_x = std::clamp(static_cast<float>(x) / 65536.0f + 0.5f, 0.0f, 1.0f);
+        out.touch_y = std::clamp(-static_cast<float>(y) / 65536.0f + 0.5f, 0.0f, 1.0f);
+    }
+}
+
 struct ValveSetting {
     std::uint8_t number;
     std::uint16_t value;
@@ -154,6 +164,9 @@ bool decode_report(std::span<const std::uint8_t> r, SensorClock& clock, switch_h
     out.axes[3] = unit(s16(&r[16]));
     out.axes[4] = std::max(unit(s16(&r[6])), 0.0f);
     out.axes[5] = std::max(unit(s16(&r[8])), 0.0f);
+    // The right trackpad: two bytes later where the short clock's layout has a trackpad timestamp first.
+    const std::size_t pad = id == kReportStateShortClock ? 26u : 24u;
+    put_touch((u32(&r[2]) & button::kRightPadTouch) != 0u, s16(&r[pad]), s16(&r[pad + 2u]), out);
 
     // The sensors share offsets in all three layouts; only the clock differs.
     std::uint32_t ticks;
@@ -276,6 +289,8 @@ bool decode_deck_report(std::span<const std::uint8_t> r, switch_hid::DecodedStat
     out.axes[3] = unit(s16(p + 50));
     out.axes[4] = std::clamp(static_cast<float>(u16(p + 40)) / 32767.0f, 0.0f, 1.0f);
     out.axes[5] = std::clamp(static_cast<float>(u16(p + 42)) / 32767.0f, 0.0f, 1.0f);
+    constexpr std::uint32_t kRightPadFinger = 0x00100000;
+    put_touch((u32(p + 4) & kRightPadFinger) != 0u, s16(p + 16), s16(p + 18), out);
     put_sensors(p + 20, p + 26, -1.0f, out);
     return true;
 }
@@ -332,6 +347,7 @@ bool decode_classic_report(std::span<const std::uint8_t> r, ClassicState& state,
     };
     out.axes[4] = trigger(p[7]);
     out.axes[5] = trigger(p[8]);
+    put_touch((word & kRightPadFinger) != 0u, s16(p + 16), s16(p + 18), out);
     put_sensors(p + 24, p + 30, 1.0f, out);
     return true;
 }

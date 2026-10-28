@@ -966,6 +966,82 @@ void test_generic() {
            "generic pads: HID, no motion");
 }
 
+// The trackpads: where a finger is (0 to 1 across, 0 to 1 down), and when it is lifted.
+void test_touch() {
+    // DualSense USB: the first finger at packet byte 32 (report byte 33): x 960 of 1920, y 535 of 1070.
+    Bytes r = ds5_usb();
+    r[33] = 0x05;
+    r[34] = 0xc0;
+    r[35] = 0x73;
+    r[36] = 0x21;
+    Decoded d = decode(ps::Model::DualSense, ps::Transport::Usb, r);
+    expect(d.ok && d.state.touch_surface && d.state.touch_down && close_to(d.state.touch_x, 0.5f) &&
+               close_to(d.state.touch_y, 0.5f),
+           "DualSense touchpad: a finger in the middle");
+    r[33] = 0x85;
+    d = decode(ps::Model::DualSense, ps::Transport::Usb, r);
+    expect(d.ok && d.state.touch_surface && !d.state.touch_down, "DualSense touchpad: the finger lifted (bit 7)");
+    // DualShock 4 over Bluetooth: two bytes later; y over 920.
+    Bytes bt = ds4_bluetooth();
+    bt[35] = 0x01;
+    bt[36] = 0x80;
+    bt[37] = 0xc7;
+    bt[38] = 0x1c;  // x 1920, y 460
+    seal_input(bt);
+    d = decode(ps::Model::DualShock4, ps::Transport::Bluetooth, bt);
+    expect(d.ok && d.state.touch_down && close_to(d.state.touch_x, 1.0f) && close_to(d.state.touch_y, 0.5f),
+           "DualShock 4 touchpad over Bluetooth: the right edge, half way down");
+    // The DualShock 4's short Bluetooth report (no touchpad in it).
+    Bytes simple(10, 0);
+    simple[0] = 0x01;
+    d = decode(ps::Model::DualShock4, ps::Transport::Bluetooth, simple);
+    expect(d.ok && !d.state.touch_surface, "the short report has no touchpad");
+
+    // The 2026 Steam Controller: the right pad's finger bit, its signed coordinates (centre 0, y up).
+    switch_hid::DecodedState state;
+    sv::SensorClock clock;
+    Bytes steam = steam_report(0x45);
+    put32(steam, 2, sv::button::kRightPadTouch);
+    put16(steam, 24, 16384);   // a quarter right of the centre
+    put16(steam, 26, -16384);  // a quarter below
+    expect(sv::decode_report(steam, clock, state) && state.touch_surface && state.touch_down &&
+               close_to(state.touch_x, 0.75f) && close_to(state.touch_y, 0.75f),
+           "Steam Controller right pad: x right, y down");
+    put32(steam, 2, 0);
+    expect(sv::decode_report(steam, clock, state) && state.touch_surface && !state.touch_down,
+           "Steam Controller right pad: no finger");
+    Bytes shortclock = steam_report(0x47);
+    put32(shortclock, 2, sv::button::kRightPadTouch);
+    put16(shortclock, 26, -32768);  // the left edge
+    put16(shortclock, 28, 32767);   // the top
+    sv::SensorClock short_clock;
+    expect(sv::decode_report(shortclock, short_clock, state) && state.touch_down && close_to(state.touch_x, 0.0f) &&
+               close_to(state.touch_y, 0.0f, 1e-4f),
+           "0x47: the pad two bytes later");
+
+    // The Steam Deck: bit 0x00100000 of the low button word, the right pad at state bytes 16 and 18 (report 21, 23).
+    Bytes deck = valve_report(9, 64);
+    put32(deck, 9, 0x00100000u);
+    put16(deck, 21, 0);
+    put16(deck, 23, 0);
+    expect(sv::decode_deck_report(deck, state) && state.touch_down && close_to(state.touch_x, 0.5f) &&
+               close_to(state.touch_y, 0.5f),
+           "Steam Deck right pad: the centre");
+    put32(deck, 9, 0);
+    expect(sv::decode_deck_report(deck, state) && state.touch_surface && !state.touch_down, "Steam Deck: no finger");
+
+    // The 2015 Steam Controller: the same bit and place.
+    Bytes classic_report = valve_report(1, 60);
+    put32(classic_report, 5, 1);
+    put32(classic_report, 9, 0x00100000u);
+    put16(classic_report, 21, 32767);
+    put16(classic_report, 23, 0);
+    sv::ClassicState classic;
+    expect(sv::decode_classic_report(classic_report, classic, state) && state.touch_down &&
+               close_to(state.touch_x, 1.0f, 1e-4f) && close_to(state.touch_y, 0.5f),
+           "2015 Steam Controller right pad: the right edge");
+}
+
 int main() {
     test_crc();
     test_dualshock4_usb();
@@ -982,6 +1058,7 @@ int main() {
     test_pad_sample();
     test_device_list();
     test_generic();
+    test_touch();
     if (g_failures != 0) {
         std::cerr << g_failures << " check(s) failed\n";
         return 1;
