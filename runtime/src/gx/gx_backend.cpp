@@ -12744,7 +12744,7 @@ bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address
     }
     const shapes::Shape& shape = *native.shape;
     if (shape.list_address != list_address || shape.list_bytes != list_bytes ||
-        shapes::vertex_state(state_, shape.vtxfmt) != shape.state) {
+        !shapes::vertex_state_matches(shape, state_)) {
         ++frame_native_shape_misses_;
         // Another list or vertex state than it was built from: built once more from this one.
         if (!native.rebuilt) {

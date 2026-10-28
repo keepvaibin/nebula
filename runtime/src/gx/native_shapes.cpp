@@ -154,6 +154,22 @@ VertexState vertex_state(const GxState& state, std::uint8_t vtxfmt) {
     return v;
 }
 
+bool vertex_state_matches(const Shape& shape, const GxState& state) {
+    const VertexState& v = shape.state;
+    if (v[0] != state.cp(cp::kVcdLo) || v[1] != state.cp(cp::kVcdHi) ||
+        v[2] != state.cp(static_cast<std::uint8_t>(cp::kVatABase + shape.vtxfmt)) ||
+        v[3] != state.cp(static_cast<std::uint8_t>(cp::kVatBBase + shape.vtxfmt)) ||
+        v[4] != state.cp(static_cast<std::uint8_t>(cp::kVatCBase + shape.vtxfmt))) {
+        return false;
+    }
+    for (unsigned a = 0; a < 12u; ++a) {
+        if (v[5u + a] != state.array_base(a) || v[17u + a] != state.array_stride(a)) {
+            return false;
+        }
+    }
+    return shape.vertex_matrix || v[29] == (state.cp(cp::kMatrixIndexA) & 0x3Fu);
+}
+
 std::shared_ptr<const Shape> build(const Request& request, GuestMemory* memory) {
     GxState state;
     for (std::size_t i = 0; i < std::size(kRequestRegisters); ++i) {
@@ -202,6 +218,7 @@ std::shared_ptr<const Shape> build(const Request& request, GuestMemory* memory) 
     shape->list_address = request.list_address;
     shape->list_bytes = static_cast<std::uint32_t>(request.list.size());
     shape->vtxfmt = vtxfmt;
+    shape->vertex_matrix = desc.has_pn_matrix_index;
     shape->draws = draws;
     shape->state = vertex_state(state, vtxfmt);
     VertexLoader loader;

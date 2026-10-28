@@ -33,7 +33,8 @@ struct Shape {
     std::uint32_t list_address = 0;  // physical, as the marker carries it
     std::uint32_t list_bytes = 0;
     std::uint8_t vtxfmt = 0;
-    std::uint32_t draws = 0;  // the list's GX draws
+    bool vertex_matrix = false;  // its vertices carry their position-matrix index
+    std::uint32_t draws = 0;     // the list's GX draws
     VertexState state{};
     std::vector<GxVertexOut> vertices;
     std::vector<std::uint16_t> indices;  // a triangle list
@@ -58,6 +59,9 @@ struct Request {
 };
 [[nodiscard]] Request make_request(std::uint32_t handle, std::uint32_t list_address, std::span<const std::byte> list,
                                    const GxState& state);
+
+// Whether `state` is the vertex state `shape` was built under (vertex_state's words, without decoding the VCD).
+[[nodiscard]] bool vertex_state_matches(const Shape& shape, const GxState& state);
 
 // The shape `request` describes, its vertices decoded from `memory` as the renderer decodes a list's draws; null when
 // the lists hold anything but triangle draws (lists, strips, fans, quads) of one vertex format, or more than 65,536

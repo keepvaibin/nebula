@@ -80,6 +80,14 @@ bool test_corners_match_decoder() {
     bool ok = expect(shape->vertices.size() == 4u, "each corner stored once");
     ok = expect(shape->draws == 2u, "the list's two draws counted") && ok;
     ok = expect(shape->state == shapes::vertex_state(scene.state, 0u), "built under the draw's vertex state") && ok;
+    ok = expect(shapes::vertex_state_matches(*shape, scene.state), "the draw's state matches it") && ok;
+    GxState moved = scene.state;
+    moved.load_cp(cp::kArrayBaseBase, kPositions + 6u);
+    ok = expect(!shapes::vertex_state_matches(*shape, moved), "another array does not") && ok;
+    GxState other_matrix = scene.state;
+    other_matrix.load_cp(cp::kMatrixIndexA, 6u);
+    ok = expect(!shapes::vertex_state_matches(*shape, other_matrix),
+                "another default matrix does not, for vertices without their own") && ok;
     ok = expect(shape->list_address == kList && shape->list_bytes == list.size(), "the list it was built from") && ok;
 
     // The renderer's own decode of each run, its triangles corner by corner.
