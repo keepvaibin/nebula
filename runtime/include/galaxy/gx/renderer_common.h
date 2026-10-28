@@ -227,10 +227,16 @@ struct DrawCall {
     std::uint32_t blend_slot = 0;
     // Interpolated redraw: the scene's pixel-constant record, -1 for none.
     std::int32_t ps_record = -1;
-    // A curved surface's first `flat_index_count` indices are triangles no corner bends: drawn as a triangle list
-    // with `flat_pipeline` (the same shaders without the patch stages), the rest as patches with `pipeline`.
+    // A split curved surface (flat_pipeline set): its first `flat_index_count` indices are triangles no corner bends,
+    // drawn as a triangle list with `flat_pipeline` (the same shaders without the patch stages), the rest as patches
+    // with `pipeline`.
     gpu::Pipeline* flat_pipeline = nullptr;
     std::uint32_t flat_index_count = 0;
+    // The split draw's place in its command list's curve sort (the renderer's sort_curved), -1 for none: its
+    // triangles the hull shader would leave whole are drawn as a triangle list too. Interpolated redraws draw the
+    // split as above.
+    std::int32_t curve_sort = -1;
+    std::uint32_t curve_sort_list = 0;
 };
 
 }  // namespace galaxy::gx

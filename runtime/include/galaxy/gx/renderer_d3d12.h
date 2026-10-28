@@ -474,7 +474,18 @@ public:
     void set_resident_vertices(D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) noexcept {
         resident_vertex_base_ = base;
         resident_vertex_bytes_ = bytes;
+        if (base == 0u) {
+            resident_staging_.Reset();
+            resident_local_ = nullptr;
+            resident_copies_.clear();
+        }
     }
+    // The resident decoded vertices (GxBackend): written through the returned mapping, an upload copy; the GPU reads
+    // them from local memory at the returned address (GPU reads of upload memory measured 2.7x slower on an AMD
+    // APU), each range once copy_resident_vertices has queued it: the copies run before the command list being
+    // recorded. Where local memory cannot be had the GPU reads the upload copy.
+    [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
+    void copy_resident_vertices(std::uint64_t offset, std::uint64_t bytes);
     // Swap-chain presents per second over the last second (any source).
     [[nodiscard]] double measured_present_hz() const noexcept {
         return measured_present_hz_.load(std::memory_order_relaxed);
@@ -568,6 +579,17 @@ public:
         std::uint8_t pixel_format = 0);
 
     void draw(const DrawCall& call);
+
+    // Curved surfaces sorted on the GPU before the command list runs (ShaderGenerator::curve_sort_source): a split
+    // draw's triangles the hull shader would leave whole this frame join its flat ones as a triangle list. The
+    // vertices are resident, the indices the split's in the index ring, the constants and palette the draw's.
+    // Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted (no sort pipeline, no room).
+    [[nodiscard]] std::int32_t sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D12_GPU_VIRTUAL_ADDRESS indices,
+                                           std::uint32_t triangles, std::uint32_t flat_triangles,
+                                           D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS palette,
+                                           bool palette_rows);
+    // The command list being recorded (DrawCall::curve_sort_list).
+    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
     // EFB copy paths (record into the current command list). Both run the
     // conversion blit (intensity / gamma / 3-tap vertical copy filter /
@@ -881,7 +903,7 @@ private:
     // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
     // list; the time to the next mark (or the list's end) is that pass's.
     enum class GpuPass : std::uint8_t {
-        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Count
+        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, CurveSort, Count
     };
     static constexpr unsigned kGpuPassSlots = 512;
     void gpu_pass(GpuPass pass);
@@ -920,6 +942,54 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> draw_readback_;
     std::array<std::vector<GpuDrawMark>, kFramesInFlight> draw_marks_{};
     std::unordered_map<ID3D12PipelineState*, GpuDrawCost> telemetry_draw_cost_;
+    // GALAXY_GPU_PASSES=1 also counts each command list's pipeline statistics (shader invocations, primitives) for
+    // present-stats' gpu-stats.
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> stats_query_heap_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> stats_readback_;
+    std::array<bool, kFramesInFlight> stats_pending_{};
+    D3D12_QUERY_DATA_PIPELINE_STATISTICS telemetry_stats_{};
+
+    // Curved surfaces' sort (sort_curved): three dispatches in the pre-list of the command list whose draws it sorts.
+    // Each frame slot's output: per draw two DrawIndexedArguments and its two index lists.
+    struct CurveSortDraw {
+        std::uint32_t vertices;
+        std::uint32_t indices;
+        std::uint32_t triangles;
+        std::uint32_t flat;
+        std::uint32_t constants;
+        std::uint32_t palette;
+        std::uint32_t flags;
+        std::uint32_t output;
+        std::uint32_t scratch;
+    };
+    static constexpr std::uint64_t kCurveSortBytes = 8u << 20u;
+    bool ensure_curve_sort();
+    // The command list run before each main one when it has work: resident vertex copies, then the curve sort.
+    bool ensure_pre_list();
+    void record_pre_list();
+    Microsoft::WRL::ComPtr<ID3D12Resource> resident_staging_;
+    ID3D12Resource* resident_local_ = nullptr;
+    std::vector<std::array<std::uint64_t, 2>> resident_copies_;
+    bool pre_list_failed_ = false;
+    Microsoft::WRL::ComPtr<ID3D12RootSignature> curve_sort_root_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_sort_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_offsets_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> curve_scatter_pso_;
+    std::vector<std::array<std::uint32_t, 2>> curve_sort_blocks_;
+    Microsoft::WRL::ComPtr<ID3D12CommandSignature> curve_draw_signature_;
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> pre_list_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12CommandAllocator>, kFramesInFlight> pre_allocators_;
+    std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kFramesInFlight> curve_sorted_;
+    std::array<std::vector<CurveSortDraw>, kFramesInFlight> curve_sort_draws_;
+    std::array<std::uint64_t, kFramesInFlight> curve_sorted_bytes_{};
+    std::array<D3D12_GPU_VIRTUAL_ADDRESS, kFramesInFlight> curve_sort_vertices_{};
+    std::array<bool, kFramesInFlight> pre_list_used_{};
+    // The sort's GPU time (two timestamps a slot), counted in the frame's.
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> curve_sort_queries_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> curve_sort_readback_;
+    std::uint32_t curve_sort_list_ = 0;
+    bool curve_sort_failed_ = false;
+    bool pre_list_recorded_ = false;
 
     // EFB.
     Microsoft::WRL::ComPtr<ID3D12Resource> efb_color_;

@@ -1032,7 +1032,7 @@ void RendererVk::draw(const DrawCall& call) {
     begin_efb_pass();
     const VkCommandBuffer commands = commands_;
     const vk::Context& context = vk::Context::get();
-    const bool split = call.flat_index_count != 0u;
+    const bool split = call.flat_pipeline != nullptr;
     gpu::Pipeline* const first_pipeline = split ? call.flat_pipeline : call.pipeline;
     if (first_pipeline != bound_.pipeline) {
         vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, first_pipeline);
@@ -1165,7 +1165,9 @@ void RendererVk::draw(const DrawCall& call) {
             bound_.index_address = call.index_view.BufferLocation;
         }
         if (split) {
-            vkCmdDrawIndexed(commands, call.flat_index_count, 1, 0, 0, 0);
+            if (call.flat_index_count != 0u) {
+                vkCmdDrawIndexed(commands, call.flat_index_count, 1, 0, 0, 0);
+            }
             if (call.index_count > call.flat_index_count) {
                 vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, call.pipeline);
                 bound_.pipeline = call.pipeline;

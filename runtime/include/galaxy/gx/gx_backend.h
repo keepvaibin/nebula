@@ -1568,8 +1568,8 @@ private:
 
         DecodedPacketRunCacheKey key{};
         std::uint32_t total_indices = 0;
-        // Curved surfaces: the run's triangles with those no corner bends first (DrawCall::flat_index_count), from
-        // its first vertex; built at its first curved draw.
+        // Curved surfaces: the run's triangles with those no corner bends first (DrawCall::flat_index_count, maybe
+        // none), from its first vertex; built at its first curved draw.
         std::vector<std::uint16_t> split_indices;
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;
@@ -1665,7 +1665,7 @@ private:
     // buffer could not be created (the ring path is used).
     [[nodiscard]] bool make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry);
     // Builds a resident run's split (DecodedPacketRunCacheEntry::split_indices) at its first curved draw; whether it
-    // has flat triangles.
+    // has one (its indices in range).
     bool split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
                           std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
                           std::span<const std::uint16_t> precomputed_indices);

@@ -16,6 +16,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/uber_constants.h"
+#include "galaxy/gx/vertex_loader.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -1156,22 +1157,31 @@ struct CurvePatch {
 };
 )HLSL";
 
-static constexpr const char* kCurvedHull = R"HLSL(
-float curve_segments(VSOut a, VSOut b) {
-    const float2 half_viewport = 0.5 * line_point_raster.xy;
-    const float3 edge = b.curve_pos.xyz - a.curve_pos.xyz;
+// An edge's segments squared, before the clamp to 1-16: its chord on screen (pixels) times its turn, halved. `a` and
+// `b` are its ends' clip positions, `qa` and `qb` their eye positions, `na` and `nb` the normals each end bends it by.
+// Zero for an edge that stays straight. The hull shader and the sort (curve_sort_source) both use it.
+static constexpr const char* kCurveValue = R"HLSL(
+float curve_value(float4 a, float4 b, float3 qa, float3 qb, float3 na, float3 nb, float2 half_viewport) {
+    const float3 edge = qb - qa;
     const float edge_length = length(edge);
-    if (a.pos.w <= 0.0 || b.pos.w <= 0.0 || !(edge_length > 0.0)) {
-        return 1.0;
+    if (a.w <= 0.0 || b.w <= 0.0 || !(edge_length > 0.0)) {
+        return 0.0;
     }
     const float3 along = edge / edge_length;
-    const float tilt = max(abs(dot(along, curve_edge_normal(a, b))), abs(dot(along, curve_edge_normal(b, a))));
+    const float tilt = max(abs(dot(along, na)), abs(dot(along, nb)));
     if (!(tilt > 0.0)) {
-        return 1.0;
+        return 0.0;
     }
     const float angle = 2.0 * asin(min(tilt, 1.0));
-    const float chord = length((a.pos.xy / a.pos.w - b.pos.xy / b.pos.w) * half_viewport);
-    return clamp(sqrt(chord * angle * 0.5), 1.0, 16.0);
+    const float chord = length((a.xy / a.w - b.xy / b.w) * half_viewport);
+    return chord * angle * 0.5;
+}
+)HLSL";
+
+static constexpr const char* kCurvedHull = R"HLSL(
+float curve_segments(VSOut a, VSOut b) {
+    return clamp(sqrt(curve_value(a.pos, b.pos, a.curve_pos.xyz, b.curve_pos.xyz, curve_edge_normal(a, b),
+                                  curve_edge_normal(b, a), 0.5 * line_point_raster.xy)), 1.0, 16.0);
 }
 
 // Whether the patch lies wholly past one of the view's side planes or behind the eye, however far its curve bulges:
@@ -1253,6 +1263,217 @@ CURVE_EXTRA_MOVE
 }
 )HLSL";
 
+// Each draw's (CurveDraw) triangles kept whole where every edge's curve_value is under kCurveFlat (the hull shader
+// gives such an edge one segment and the domain shader moves nothing), with margin for the two stages' rounding; an
+// edge with an end near the eye plane stays a patch. Three passes (classify, offsets, scatter) keep each list in the
+// draw's order. A draw's output: two DrawIndexedArguments (whole, patches), then the whole triangles' 32-bit
+// indices, then the patches'. The positions, displacement and crease normals and their pick per edge are the curved
+// vertex shader's and curve_edge_normal's.
+static constexpr const char* kCurveSort = R"HLSL(
+struct CurveDraw {
+    uint vertices;   // byte offset of the draw's first vertex
+    uint indices;    // byte offset of its 16-bit indices
+    uint triangles;
+    uint flat;       // its first triangles that bend nothing
+    uint constants;  // byte offset of its vertex constants
+    uint palette;    // byte offset of its matrix palette
+    uint flags;      // bit 0: position matrices from the palette
+    uint output;     // byte offset of its output
+    uint scratch;    // byte offset of its blocks' masks of whole triangles, then their offsets
+};
+StructuredBuffer<CurveDraw> draws : register(t0);
+StructuredBuffer<uint2> blocks : register(t5);  // a group's draw and first triangle
+ByteAddressBuffer vertex_data : register(t1);
+ByteAddressBuffer index_data : register(t2);
+ByteAddressBuffer constant_data : register(t3);
+ByteAddressBuffer palette_data : register(t4);
+RWByteAddressBuffer sorted : register(u0);
+
+static const float kCurveFlat = 0.8;
+static const float kNearEye = 0.01;
+
+struct Corner {
+    float4 clip;
+    float3 eye;
+    float3 bend;
+    float3 crease;
+    uint place;
+    uint first_neighbour;
+    uint second_neighbour;
+};
+
+float3 turned(float3x3 cofactor, uint packed) {
+    const float3 n = mul(cofactor, curve_unpack(packed));
+    return dot(n, n) > 0.0 ? normalize(n) : n;
+}
+
+// A group's draw: its projection (rows 0-3), the inline position matrix (4-6), the half viewport (7.xy) and, for
+// palette draws, the 64 position-matrix rows from its palette base (8-71), loaded once per group.
+groupshared float4 draw_rows[72];
+
+void load_draw_rows(CurveDraw d, uint tid) {
+    if (tid < 4u) {
+        draw_rows[tid] = asfloat(constant_data.Load4(d.constants + 16u * tid));
+    } else if (tid < 7u) {
+        draw_rows[tid] = asfloat(constant_data.Load4(d.constants + CB_INLINE_POS + 16u * (tid - 4u)));
+    } else if (tid == 7u) {
+        draw_rows[7] = float4(0.5 * asfloat(constant_data.Load2(d.constants + CB_RASTER)), 0.0, 0.0);
+    }
+    if ((d.flags & 1u) != 0u) {
+        const uint base = constant_data.Load(d.constants + CB_PALETTE_BASE);
+        draw_rows[8u + tid] = asfloat(palette_data.Load4(d.palette + 16u * (base + tid)));
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+Corner corner(CurveDraw d, uint vertex) {
+    const uint at = d.vertices + vertex * VERTEX_STRIDE;
+    const float3 pos = asfloat(vertex_data.Load3(at));
+    const uint pn_row = min(vertex_data.Load(at + VERTEX_MTX) & 0x3Fu, 61u);
+    const uint third = vertex_data.Load(at + VERTEX_MTX + 8u);
+    const uint3 curve = vertex_data.Load3(at + VERTEX_CURVE);
+    const uint first_row = (d.flags & 1u) != 0u ? 8u + pn_row : 4u;
+    float4 rows[3];
+    rows[0] = draw_rows[first_row];
+    rows[1] = draw_rows[first_row + 1u];
+    rows[2] = draw_rows[first_row + 2u];
+    const float4 p = float4(pos, 1.0);
+    const float4 wpos = float4(dot(rows[0], p), dot(rows[1], p), dot(rows[2], p), 1.0);
+    const float3x3 cofactor = float3x3(cross(rows[1].xyz, rows[2].xyz), cross(rows[2].xyz, rows[0].xyz),
+                                       cross(rows[0].xyz, rows[1].xyz));
+    const float4x4 projection = float4x4(draw_rows[0], draw_rows[1], draw_rows[2], draw_rows[3]);
+    Corner c;
+    c.clip = mul(projection, wpos);
+    c.eye = wpos.xyz;
+    c.bend = turned(cofactor, curve.x);
+    c.crease = turned(cofactor, curve.y);
+    c.place = curve.z & 0xFFFFu;
+    c.first_neighbour = curve.z >> 16u;
+    c.second_neighbour = third >> 16u;
+    return c;
+}
+
+float3 edge_normal(Corner a, Corner b) {
+    if (b.place != 0xFFFFu && (b.place == a.first_neighbour || b.place == a.second_neighbour)) {
+        return a.crease;
+    }
+    return a.bend;
+}
+
+bool edge_whole(Corner a, Corner b, float2 half_viewport) {
+    if (abs(a.clip.w) < kNearEye || abs(b.clip.w) < kNearEye) {
+        return false;
+    }
+    return curve_value(a.clip, b.clip, a.eye, b.eye, edge_normal(a, b), edge_normal(b, a), half_viewport) < kCurveFlat;
+}
+
+uint index_at(uint at) {
+    const uint word = index_data.Load(at & ~3u);
+    return (at & 2u) != 0u ? word >> 16u : word & 0xFFFFu;
+}
+
+groupshared uint block_mask[2];
+groupshared uint scan[64];
+
+// Pass one, a thread a triangle (a group a block of 64 of one draw): its bit in the block's mask of whole triangles.
+[numthreads(64, 1, 1)]
+void classify(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const uint2 job = blocks[group.x];
+    const CurveDraw d = draws[job.x];
+    const uint t = job.y + tid;
+    if (tid < 2u) {
+        block_mask[tid] = 0u;
+    }
+    load_draw_rows(d, tid);
+    if (t < d.triangles) {
+        bool whole = t < d.flat;
+        if (!whole) {
+            const float2 half_viewport = draw_rows[7].xy;
+            const uint at = d.indices + t * 6u;
+            const Corner c0 = corner(d, index_at(at));
+            const Corner c1 = corner(d, index_at(at + 2u));
+            const Corner c2 = corner(d, index_at(at + 4u));
+            whole = edge_whole(c1, c2, half_viewport) && edge_whole(c2, c0, half_viewport) &&
+                    edge_whole(c0, c1, half_viewport);
+        }
+        if (whole) {
+            InterlockedOr(block_mask[tid >> 5u], 1u << (tid & 31u));
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (tid < 2u) {
+        sorted.Store(d.scratch + 8u * (job.y / 64u) + 4u * tid, block_mask[tid]);
+    }
+}
+
+// Pass two, a group a draw: the whole triangles before each block; the lists' draw arguments.
+[numthreads(64, 1, 1)]
+void offsets(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const CurveDraw d = draws[group.x];
+    const uint block_count = (d.triangles + 63u) / 64u;
+    const uint before = d.scratch + 8u * block_count;
+    uint total = 0u;
+    for (uint first = 0u; first < block_count; first += 64u) {
+        const uint b = first + tid;
+        const uint2 mask = b < block_count ? sorted.Load2(d.scratch + 8u * b) : uint2(0u, 0u);
+        const uint count = countbits(mask.x) + countbits(mask.y);
+        scan[tid] = count;
+        GroupMemoryBarrierWithGroupSync();
+        [unroll] for (uint offset = 1u; offset < 64u; offset <<= 1u) {
+            const uint earlier = tid >= offset ? scan[tid - offset] : 0u;
+            GroupMemoryBarrierWithGroupSync();
+            scan[tid] += earlier;
+            GroupMemoryBarrierWithGroupSync();
+        }
+        if (b < block_count) {
+            sorted.Store(before + 4u * b, total + scan[tid] - count);
+        }
+        total += scan[63];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0u) {
+        sorted.Store4(d.output, uint4(total * 3u, 1u, 0u, 0u));
+        sorted.Store4(d.output + 16u, uint4(0u, (d.triangles - total) * 3u, 1u, 0u));
+        sorted.Store2(d.output + 32u, uint2(0u, 0u));
+    }
+}
+
+// Pass three, a thread a triangle: to its list, at the whole triangles (or patches) before it in the draw.
+[numthreads(64, 1, 1)]
+void scatter(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const uint2 job = blocks[group.x];
+    const CurveDraw d = draws[job.x];
+    const uint t = job.y + tid;
+    if (t >= d.triangles) {
+        return;
+    }
+    const uint block = job.y / 64u;
+    const uint2 mask = sorted.Load2(d.scratch + 8u * block);
+    const uint below = tid < 32u ? countbits(mask.x & ((1u << tid) - 1u))
+                                 : countbits(mask.x) + countbits(mask.y & ((1u << (tid - 32u)) - 1u));
+    const bool whole = ((tid < 32u ? mask.x >> tid : mask.y >> (tid - 32u)) & 1u) != 0u;
+    const uint block_count = (d.triangles + 63u) / 64u;
+    const uint wholes_before = sorted.Load(d.scratch + 8u * block_count + 4u * block) + below;
+    const uint at = d.indices + t * 6u;
+    const uint3 v = uint3(index_at(at), index_at(at + 2u), index_at(at + 4u));
+    const uint whole_out = d.output + 40u;
+    const uint slot = whole ? whole_out + 12u * wholes_before : whole_out + 12u * (d.triangles + t - wholes_before);
+    sorted.Store3(slot, v);
+}
+)HLSL";
+
+std::string ShaderGenerator::curve_sort_source() {
+    char defines[256];
+    std::snprintf(defines, sizeof(defines),
+                  "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
+                  "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n",
+                  sizeof(GxVertexOut), offsetof(GxVertexOut, mtx_indices), offsetof(GxVertexOut, curve),
+                  offsetof(GxVsConstants, mtx_palette_base), offsetof(GxVsConstants, inline_pos_matrix),
+                  offsetof(GxVsConstants, line_point_raster));
+    return std::string("// Curved surfaces' triangles sorted (ShaderGenerator::curve_sort_source).\n") + defines +
+           kCurveCodec + kCurveValue + kCurveSort;
+}
+
 std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) {
     const bool ppl = (variant & 1u) != 0u;
     const bool motion = (variant & 2u) != 0u;
@@ -1278,7 +1499,7 @@ std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) 
     vs_out = insert_before_close(vs_out.c_str(), kCurvedInterpolants, true);
     s += vs_out + ds_out + kCurvePatch + kCurveCodec + kCurveEdgeNormal;
     if (!domain) {
-        return s + kCurvedHull;
+        return s + kCurveValue + kCurvedHull;
     }
     std::string stages = kCurvedDomain;
     std::string blend;

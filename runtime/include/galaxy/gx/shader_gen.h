@@ -44,6 +44,9 @@ public:
     // Curved surfaces' hull shader, or with `domain` their domain shader (entry main), Phong tessellation (Boubekeur
     // and Alexa 2008), for a vertex output variant (curved_variant: kCurvedPerPixel, kCurvedMotion in shader_keys.h).
     [[nodiscard]] static std::string curved_stage_source(unsigned variant, bool domain);
+    // Curved surfaces' triangles sorted before their draws (compute, entries classify, offsets, scatter): those the
+    // hull shader would leave whole to a triangle list, the rest to patches (RendererD3D12::sort_curved).
+    [[nodiscard]] static std::string curve_sort_source();
 
     // Stable human-readable key description, embedded as a comment in generated
     // source and used in pipeline-cache log lines.

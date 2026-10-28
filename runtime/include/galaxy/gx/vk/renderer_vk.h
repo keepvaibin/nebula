@@ -231,6 +231,17 @@ public:
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     void draw(const DrawCall& call);
+    // Curved surfaces' GPU sort (RendererD3D12::sort_curved); not on Vulkan yet: split draws draw as built.
+    [[nodiscard]] std::int32_t sort_curved(gpu::Address, gpu::Address, std::uint32_t, std::uint32_t, gpu::Address,
+                                           gpu::Address, bool) noexcept {
+        return -1;
+    }
+    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return 0u; }
+    // The resident decoded vertices (RendererD3D12::create_resident_vertices); host-visible memory on Vulkan.
+    [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name) {
+        return create_upload_buffer(bytes, name);
+    }
+    void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
     [[nodiscard]] bool copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy);
     // `black`: the frame is presented black (the pass clears; the XFB is not drawn).

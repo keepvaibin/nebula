@@ -3354,7 +3354,7 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     // A different device means the old one was shut down (drained) first.
     release_resident_vertex_buffer();
     resident_vertex_device_ = device;
-    UploadBuffer buffer = renderer_.create_upload_buffer(
+    UploadBuffer buffer = renderer_.create_resident_vertices(
         static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut),
         "GX resident decoded vertices");
     if (!buffer) {
@@ -3425,6 +3425,8 @@ bool GxBackend::make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry) {
             static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
         entry.vertices.data(),
         static_cast<std::size_t>(units) * sizeof(GxVertexOut));
+    renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(GxVertexOut),
+                                     static_cast<std::uint64_t>(units) * sizeof(GxVertexOut));
     entry.resident_epoch = resident_vertices_.epoch();
     entry.resident_offset = *offset;
     entry.resident_units = units;
@@ -10785,7 +10787,7 @@ bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t 
         for (std::size_t t = 0; in_range && t < count; t += 3u) {
             flat_indices += flat(t) ? 3u : 0u;
         }
-        if (flat_indices != 0u) {
+        if (in_range && count != 0u) {
             entry.split_indices.resize(count);
             std::size_t f = 0;
             std::size_t c = flat_indices;
@@ -10802,7 +10804,7 @@ bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t 
             decoded_packet_run_cache_bytes_ += bytes;
         }
     }
-    return entry.split_flat_indices != 0u;
+    return !entry.split_indices.empty();
 }
 
 gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
@@ -11866,7 +11868,7 @@ bool GxBackend::draw_calls_batch_compatible(
         lhs.matrix_palette != rhs.matrix_palette ||
         lhs.topology != rhs.topology ||
         lhs.has_viewport != rhs.has_viewport ||
-        lhs.flat_index_count != 0u || rhs.flat_index_count != 0u) {
+        lhs.flat_pipeline != nullptr || rhs.flat_pipeline != nullptr) {
         return false;
     }
     if (lhs.scissor.left != rhs.scissor.left ||
@@ -11907,7 +11909,7 @@ void GxBackend::flush_pending_draw_batch() {
         if (call.topology == gpu::kTopologyTrianglePatches) {
             frame_curved_flat_triangles_ += call.flat_index_count / 3u;
             frame_curved_patch_triangles_ += (call.index_count - call.flat_index_count) / 3u;
-            frame_curved_split_draws_ += call.flat_index_count != 0u ? 1u : 0u;
+            frame_curved_split_draws_ += call.flat_pipeline != nullptr ? 1u : 0u;
         }
         renderer_.draw(call);
     }
@@ -12396,6 +12398,7 @@ bool GxBackend::on_cached_packet_draw_run(
     bool decoded_cache_hit = false;
     bool batch_resident = false;
     std::uint32_t split_flat_indices = 0u;
+    bool split_run = false;
     if (decoded_cache_enabled) {
         if (auto it = decoded_packet_run_cache_.find(decoded_cache_key);
             it != decoded_packet_run_cache_.end()) {
@@ -12474,6 +12477,7 @@ bool GxBackend::on_cached_packet_draw_run(
                         prim.indexed = true;
                         prim.source_class = primitive;
                         split_flat_indices = entry.split_flat_indices;
+                        split_run = true;
                     } else {
                         prim = vertex_loader_.upload_cached_packet_run_indices(
                             resident_byte_offset,
@@ -12692,9 +12696,14 @@ bool GxBackend::on_cached_packet_draw_run(
     call.vertex_view = vbv;
     call.index_view = ibv;
     call.index_count = prim.index_count;
-    if (split_flat_indices != 0u) {
+    if (split_run) {
         call.flat_pipeline = current_flat_pipeline_;
         call.flat_index_count = split_flat_indices;
+        // The sort's view of this frame: the triangles the hull shader would leave whole join the flat ones.
+        call.curve_sort = renderer_.sort_curved(vbv.BufferLocation, ibv.BufferLocation, prim.index_count / 3u,
+                                                split_flat_indices / 3u, call.vs_constants, call.matrix_palette,
+                                                (vs_key_.flags & 0x01u) != 0u);
+        call.curve_sort_list = renderer_.curve_sort_list();
     }
 
     const std::size_t vertex_byte_end =
