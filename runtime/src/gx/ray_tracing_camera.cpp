@@ -46,6 +46,7 @@ static_assert(sizeof(RtCameraConstants) == 144u);
 constexpr std::uint32_t kCameraPhysical = 1u;
 constexpr std::uint32_t kCameraAces = 2u;
 constexpr std::uint32_t kCameraClip = 4u;
+constexpr std::uint32_t kCameraNeutral = 8u;
 constexpr std::uint32_t kNoLevel = 0xFFFFFFFFu;
 // Bloom pyramid levels: the coarsest is a 64th of the picture's side (20 texels at 1280 pixels, a blur about a fifth of
 // the picture wide).
@@ -86,7 +87,7 @@ std::uint32_t camera_levels(std::uint32_t width, std::uint32_t height, Level (&l
 
 bool SceneRayTracer::create_camera_pipelines(DXGI_FORMAT scene_format, DXGI_FORMAT display_format) {
     camera_bloom_ = std::clamp(env_value("GALAXY_RT_CAMERA_BLOOM", 0.04f), 0.0f, 1.0f);
-    camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 2.0f));
+    camera_tone_ = static_cast<std::uint32_t>(std::clamp(env_value("GALAXY_RT_TONEMAP", 0.0f), 0.0f, 3.0f));
     camera_shafts_ = std::clamp(env_value("GALAXY_RT_CAMERA_SHAFTS", 1.0f), 0.0f, 8.0f);
     // The picture's colour and depth views (t0, t1: the renderer's EFB conversion table); the pyramid's down and up
     // levels (u0, u1) and the up levels again for the final draw (t2).
@@ -241,7 +242,10 @@ bool SceneRayTracer::camera_finish(ID3D12GraphicsCommandList* list, D3D12_GPU_DE
                                       ? &light_slots_[static_cast<unsigned>(slot_index)]
                                       : nullptr;
     const bool physical = lighting_active() && slot != nullptr && slot->physical;
-    c.flags = physical ? kCameraPhysical | (camera_tone_ == 1u ? kCameraAces : camera_tone_ == 2u ? kCameraClip : 0u)
+    c.flags = physical ? kCameraPhysical | (camera_tone_ == 1u   ? kCameraAces
+                                            : camera_tone_ == 2u ? kCameraClip
+                                            : camera_tone_ == 3u ? kCameraNeutral
+                                                                 : 0u)
                        : 0u;
     Level levels[kCameraLevels];
     const std::uint32_t count = camera_levels(width, height, levels);

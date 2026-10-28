@@ -12,11 +12,15 @@
 //   taps; Jimenez 2014, "Next Generation Post Processing in Call of Duty: Advanced Warfare"): the sum of the levels is
 //   the picture blurred at every scale, normalised. A share of every pixel's light (c_bloom) leaves for it: energy is
 //   kept, nothing is thresholded (a bright lamp glows because it is bright, not because a sprite was drawn).
-// - Tone curve: the light to the display's range. Khronos PBR Neutral (Khronos 2024; three.js, Blender): below 0.76
-//   the light passes unchanged (the game's colours as drawn), above it a shoulder that reaches white only at infinity,
-//   and the brightest light loses its saturation towards white (a lamp's core burns white, not a saturated blob).
-//   The standard's toe (darkening the darkest tones by up to 0.04) is left out: the game's darks stay as drawn.
-//   c_flags kCameraAces: ACES 1.0 (RRT and sRGB ODT, Hill's fit, as Unreal's filmic curve), for comparison.
+// - Tone curve: the light to the display's range, channel by channel. Below 0.76 the light passes unchanged (the
+//   game's colours as drawn); above it Khronos PBR Neutral's shoulder (Khronos 2024), which reaches 1 only at infinity,
+//   on each channel alone: the RGBA8 EFB's clip at 1, made smooth. The game's colours were drawn against that clip,
+//   which fills a colour's channels one by one: its stacked glows run from orange through yellow to white (a flame's
+//   core), and a light whose channels all pass the shoulder burns white. The standard's own form keeps the light's hue
+//   (one scale for the three channels) and blends it towards white: a flame's sum, red far past its green, went to
+//   salmon pink (the Dreadnought's beams; hue-kept paths to white are known for it). The standard's toe (darkening the
+//   darkest tones by up to 0.04) is left out: the game's darks stay as drawn. For comparison: c_flags kCameraAces,
+//   ACES 1.0 (RRT and sRGB ODT, Hill's fit, as Unreal's filmic curve); kCameraNeutral, the standard's hue-kept form.
 // - Sun shafts: the light the air scatters towards the camera around a sun the sky shows (crepuscular rays), from
 //   where the sky shows it: along each pixel's line to the sun on the picture, the sky's light near the sun where the
 //   depth shows sky (the world in front of it blocks it), decaying with the distance (Mitchell 2007, "Volumetric Light
@@ -29,6 +33,7 @@
 static const uint kCameraPhysical = 1u;
 static const uint kCameraAces = 2u;
 static const uint kCameraClip = 4u;    // GALAXY_RT_TONEMAP=2: the light clipped at 1 (no curve), for comparison
+static const uint kCameraNeutral = 8u; // GALAXY_RT_TONEMAP=3: Khronos PBR Neutral's hue-kept form, for comparison
 
 cbuffer RtCamera : register(b0)
 {
@@ -253,7 +258,16 @@ float3 shafts_at(int2 p)
     return sum;
 }
 
-// Khronos PBR Neutral's shoulder and desaturation (no toe: see the header).
+// Khronos PBR Neutral's shoulder on each channel alone (no toe: see the header): unchanged below the start, then
+// 1 - d^2 / (x + d - start), which meets the line there with its slope.
+float3 shoulder_curve(float3 c)
+{
+    const float start = 0.8f - 0.04f;
+    const float d = 1.0f - start;
+    return min(c, start) + (1.0f - d * d / (max(c, start) + d - start)) - start;
+}
+
+// Khronos PBR Neutral's shoulder and desaturation, the hue kept (no toe: see the header).
 float3 neutral_curve(float3 c)
 {
     const float start = 0.8f - 0.04f;
@@ -316,7 +330,10 @@ float4 CameraPS(float4 position : SV_Position) : SV_Target0
         }
         c = lerp(c, bloom / float(c_levels), c_bloom);
     }
-    c = (c_flags & kCameraClip) != 0u ? saturate(c) : (c_flags & kCameraAces) != 0u ? aces_curve(c) : neutral_curve(c);
+    c = (c_flags & kCameraClip) != 0u      ? saturate(c)
+        : (c_flags & kCameraAces) != 0u    ? aces_curve(c)
+        : (c_flags & kCameraNeutral) != 0u ? neutral_curve(c)
+                                           : shoulder_curve(c);
     // Into 8 bits with a dither (interleaved gradient noise, Jimenez 2014; stochastic rounding): bloom, shafts and
     // the shoulder's gradients come out smooth instead of in bands.
     const float u = frac(52.9829189f * frac(dot(float2(p), float2(0.06711056f, 0.00583715f))));
