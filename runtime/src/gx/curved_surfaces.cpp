@@ -8,8 +8,9 @@
 #include <mutex>
 #include <numeric>
 #include <shared_mutex>
+#include <span>
+#include <tuple>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace galaxy::gx::curved {
 namespace {
@@ -79,31 +80,6 @@ const double kSplayed = std::cos(radians(10.0));
 // A T-junction's line bends under a normal more than this far off its perpendicular.
 constexpr double kBow = 1e-5;
 
-// A position's key, -0 taken as 0 (they compare equal).
-std::uint64_t bits_of(const Vec3& p) noexcept {
-    const float c[3] = {p[0] + 0.0f, p[1] + 0.0f, p[2] + 0.0f};
-    std::uint32_t x;
-    std::uint32_t y;
-    std::uint32_t z;
-    std::memcpy(&x, &c[0], 4u);
-    std::memcpy(&y, &c[1], 4u);
-    std::memcpy(&z, &c[2], 4u);
-    std::uint64_t h = 0x9E3779B97F4A7C15ull;
-    for (const std::uint32_t w : {x, y, z}) {
-        h ^= w + 0x9E3779B97F4A7C15ull + (h << 6u) + (h >> 2u);
-    }
-    return h;
-}
-
-struct VecHash {
-    std::size_t operator()(const Vec3& p) const noexcept { return static_cast<std::size_t>(bits_of(p)); }
-};
-struct VecEqual {
-    bool operator()(const Vec3& a, const Vec3& b) const noexcept {
-        return a[0] + 0.0f == b[0] + 0.0f && a[1] + 0.0f == b[1] + 0.0f && a[2] + 0.0f == b[2] + 0.0f;
-    }
-};
-
 std::uint64_t pair_key(std::uint32_t a, std::uint32_t b) { return (static_cast<std::uint64_t>(a) << 32u) | b; }
 
 // A triangle's corner at a place.
@@ -113,20 +89,6 @@ struct At {
     D3 face;                       // the triangle's own normal, unit
     double angle;                  // the triangle's angle there
     std::uint32_t other[2];        // the triangle's other two places
-};
-
-// Union-find over small index ranges.
-struct Sets {
-    std::vector<std::uint32_t> parent;
-    explicit Sets(std::size_t n) : parent(n) { std::iota(parent.begin(), parent.end(), 0u); }
-    std::uint32_t root(std::uint32_t x) {
-        while (parent[x] != x) {
-            parent[x] = parent[parent[x]];
-            x = parent[x];
-        }
-        return x;
-    }
-    void join(std::uint32_t a, std::uint32_t b) { parent[root(a)] = root(b); }
 };
 
 // Solves the 3x3 symmetric positive semi-definite system m x = r (Gauss-Jordan with partial pivoting); an unknown
@@ -193,6 +155,26 @@ double cone_angle(const D3& n, std::span<const D3> generators) {
     return best;
 }
 
+// sampled()'s working arrays, kept between calls (the analysis calls it once per group of corners).
+struct SampledScratch {
+    struct Side {
+        D3 tangent;
+        double curvature;
+        double edge;
+        bool flat;
+    };
+    struct Row {
+        double eu, ev, tu, tv;
+    };
+    std::vector<D3> oriented;
+    std::vector<std::uint32_t> neighbours;
+    std::vector<Side> sides;
+    std::vector<std::array<double, 3>> forms;
+    std::vector<Row> rows;
+    std::vector<std::uint32_t> lengthwise;
+    std::vector<std::uint32_t> across;
+};
+
 // Whether a group of corners at place q, with normal n0, is a sampled surface (curved_surfaces.h's tests, in order).
 bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, const std::vector<D3>& places) {
     // Its faces within 35 degrees of the normal and 62 of each other.
@@ -204,8 +186,9 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
     }
     // The normal within the convex cone of its faces' normals: any averaged vertex normal is a positive sum of them
     // (a box's corner normal on one face of the box, a plank's end splayed along it, are not).
-    std::vector<D3> oriented;
-    oriented.reserve(group.size());
+    thread_local SampledScratch scratch;
+    std::vector<D3>& oriented = scratch.oriented;
+    oriented.clear();
     for (const At* at : group) oriented.push_back(dot(at->face, n0) >= 0.0 ? at->face : mul(at->face, -1.0));
     if (oriented.empty() || cone_angle(n0, oriented) > kCone) return false;
 
@@ -213,17 +196,13 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
     const D3& pq = places[q];
     const D3 u = normalized(cross(n0, std::fabs(n0[0]) < 0.9 ? D3{1.0, 0.0, 0.0} : D3{0.0, 1.0, 0.0}));
     const D3 v = cross(n0, u);
-    std::vector<std::uint32_t> neighbours;
+    std::vector<std::uint32_t>& neighbours = scratch.neighbours;
+    neighbours.clear();
     for (const At* at : group) neighbours.insert(neighbours.end(), {at->other[0], at->other[1]});
     std::sort(neighbours.begin(), neighbours.end());
     neighbours.erase(std::unique(neighbours.begin(), neighbours.end()), neighbours.end());
-    struct Side {
-        D3 tangent;
-        double curvature;
-        double edge;
-        bool flat;
-    };
-    std::vector<Side> sides;
+    std::vector<SampledScratch::Side>& sides = scratch.sides;
+    sides.clear();
     for (const std::uint32_t j : neighbours) {
         const D3 d = sub(places[j], pq);
         const double dd = dot(d, d);
@@ -243,8 +222,8 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
             }
         }
         if (best == sides.size()) continue;
-        const Side& a = sides[i];
-        const Side& b = sides[best];
+        const SampledScratch::Side& a = sides[i];
+        const SampledScratch::Side& b = sides[best];
         if (a.flat && b.flat) continue;
         if (a.flat || b.flat || a.curvature * b.curvature <= 0.0) return false;
         if (std::max(std::fabs(a.curvature), std::fabs(b.curvature)) >
@@ -259,9 +238,9 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
     if (sides.size() > 3u) {
         std::array<std::array<double, 3>, 3> m{};
         std::array<double, 3> rhs{};
-        std::vector<std::array<double, 3>> forms;
-        forms.reserve(sides.size());
-        for (const Side& side : sides) {
+        std::vector<std::array<double, 3>>& forms = scratch.forms;
+        forms.clear();
+        for (const SampledScratch::Side& side : sides) {
             const double x = dot(side.tangent, u);
             const double y = dot(side.tangent, v);
             const std::array<double, 3> f{x * x, 2.0 * x * y, y * y};
@@ -280,22 +259,20 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
 
     // One shape operator S explains every face: a face's normal is the surface's at its circumcentre, so its tilt
     // from n0 (tangent part) is S applied to the circumcentre's offset (tangent part).
-    struct Row {
-        double eu, ev, tu, tv;
-    };
-    std::vector<Row> rows;
+    std::vector<SampledScratch::Row>& rows = scratch.rows;
+    rows.clear();
     for (std::size_t i = 0; i < group.size(); ++i) {
         const D3 centre = circumcentre(sub(places[group[i]->other[0]], pq), sub(places[group[i]->other[1]], pq));
         if (is_zero(centre)) continue;
         rows.push_back({dot(centre, u), dot(centre, v), dot(oriented[i], u), dot(oriented[i], v)});
     }
     double tilt2 = 0.0;
-    for (const Row& r : rows) tilt2 += r.tu * r.tu + r.tv * r.tv;
+    for (const SampledScratch::Row& r : rows) tilt2 += r.tu * r.tu + r.tv * r.tv;
     if (tilt2 > kFlat * kFlat * static_cast<double>(rows.size())) {
         // S = [[a, b], [b, c]]: t_u = a e_u + b e_v, t_v = b e_u + c e_v, least squares.
         std::array<std::array<double, 3>, 3> m{};
         std::array<double, 3> rhs{};
-        for (const Row& r : rows) {
+        for (const SampledScratch::Row& r : rows) {
             const std::array<std::array<double, 3>, 2> coeffs{{{r.eu, r.ev, 0.0}, {0.0, r.eu, r.ev}}};
             const double t[2] = {r.tu, r.tv};
             for (int e = 0; e < 2; ++e) {
@@ -307,7 +284,7 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
         }
         const std::array<double, 3> s = solve3(m, rhs);
         double residual = 0.0;
-        for (const Row& r : rows) {
+        for (const SampledScratch::Row& r : rows) {
             const double du = r.tu - s[0] * r.eu - s[1] * r.ev;
             const double dv = r.tv - s[1] * r.eu - s[2] * r.ev;
             residual += du * du + dv * dv;
@@ -317,15 +294,21 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
 
     // A sliver shows curvature only across itself: along its length the normal may bend no more than the
     // position's short edges show it bending.
-    std::unordered_set<std::uint32_t> lengthwise;
-    std::unordered_set<std::uint32_t> across;
+    std::vector<std::uint32_t>& lengthwise = scratch.lengthwise;
+    std::vector<std::uint32_t>& across = scratch.across;
+    lengthwise.clear();
+    across.clear();
+    const auto holds = [](const std::vector<std::uint32_t>& set, std::uint32_t j) {
+        return std::find(set.begin(), set.end(), j) != set.end();
+    };
     for (const At* at : group) {
         const D3& pa = places[at->other[0]];
         const D3& pb = places[at->other[1]];
         const double e[3] = {length(sub(pa, pq)), length(sub(pb, pq)), length(sub(pa, pb))};
         const double height = length(cross(sub(pa, pq), sub(pb, pq))) / std::max({e[0], e[1], e[2]});
         for (int k = 0; k < 2; ++k) {
-            (e[k] > kSliver * height ? lengthwise : across).insert(at->other[k]);
+            std::vector<std::uint32_t>& set = e[k] > kSliver * height ? lengthwise : across;
+            if (!holds(set, at->other[k])) set.push_back(at->other[k]);
         }
     }
     const auto curvature = [&](std::uint32_t j) {
@@ -336,7 +319,7 @@ bool sampled(std::uint32_t q, const D3& n0, std::span<const At* const> group, co
     };
     double bound = 0.0;
     for (const std::uint32_t j : across) {
-        if (!lengthwise.contains(j)) bound = std::max(bound, curvature(j));
+        if (!holds(lengthwise, j)) bound = std::max(bound, curvature(j));
     }
     for (const std::uint32_t j : lengthwise) {
         if (curvature(j) > bound) return false;
@@ -493,14 +476,47 @@ bool Surface::flat_anything() const noexcept {
 
 Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, std::span<const Corner> corners) {
     Surface out;
-    // Places: positions by value.
-    std::unordered_map<Vec3, std::uint32_t, VecHash, VecEqual> place_of;
+    // Places: positions equal by value (-0 as 0; a NaN equals nothing), numbered in the order they first appear.
     std::vector<std::uint32_t> place(positions.size());
     std::vector<D3> places;
-    for (std::size_t i = 0; i < positions.size(); ++i) {
-        const auto [it, added] = place_of.try_emplace(positions[i], static_cast<std::uint32_t>(places.size()));
-        if (added) places.push_back(widen(positions[i]));
-        place[i] = it->second;
+    {
+        struct Key {
+            std::uint32_t x, y, z, index;
+        };
+        const auto bits = [](float f) {
+            f += 0.0f;
+            std::uint32_t b;
+            std::memcpy(&b, &f, 4u);
+            return b;
+        };
+        std::vector<Key> keys(positions.size());
+        for (std::uint32_t i = 0; i < positions.size(); ++i) {
+            keys[i] = {bits(positions[i][0]), bits(positions[i][1]), bits(positions[i][2]), i};
+        }
+        std::sort(keys.begin(), keys.end(), [](const Key& a, const Key& b) {
+            return std::tie(a.x, a.y, a.z, a.index) < std::tie(b.x, b.y, b.z, b.index);
+        });
+        std::vector<std::uint32_t> first_of(positions.size());
+        for (std::size_t b = 0; b < keys.size();) {
+            const Vec3& p = positions[keys[b].index];
+            const bool unequal = std::isnan(p[0]) || std::isnan(p[1]) || std::isnan(p[2]);
+            std::size_t e = b + 1u;
+            while (!unequal && e < keys.size() && keys[e].x == keys[b].x && keys[e].y == keys[b].y &&
+                   keys[e].z == keys[b].z) {
+                ++e;
+            }
+            for (std::size_t k = b; k < e; ++k) first_of[keys[k].index] = keys[b].index;
+            b = e;
+        }
+        places.reserve(positions.size());
+        for (std::uint32_t i = 0; i < positions.size(); ++i) {
+            if (first_of[i] == i) {
+                place[i] = static_cast<std::uint32_t>(places.size());
+                places.push_back(widen(positions[i]));
+            } else {
+                place[i] = place[first_of[i]];
+            }
+        }
     }
     const auto place_count = static_cast<std::uint32_t>(places.size());
     out.place.resize(positions.size());
@@ -513,14 +529,28 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         return out;
     }
     for (std::size_t i = 0; i < positions.size(); ++i) out.place[i] = static_cast<std::uint16_t>(place[i]);
+    std::vector<D3> unit_normals(normals.size());
+    for (std::size_t i = 0; i < normals.size(); ++i) unit_normals[i] = normalized(widen(normals[i]));
 
     // Corners at each place; edges; each directed edge's corner normals (crease detection, non-degenerate triangles)
     // and normal indices (every triangle); zero-area triangles' collinear corners as junctions.
-    std::vector<std::vector<At>> at(places.size());
-    std::unordered_map<std::uint64_t, std::vector<D3>> edge_ends;
-    std::unordered_map<std::uint64_t, std::vector<std::uint16_t>> edge_index;
-    std::unordered_set<std::uint64_t> edge_set;
+    struct PlaceCorner {
+        std::uint32_t place;
+        At at;
+    };
+    struct EdgeEnd {
+        std::uint64_t key;
+        D3 normal;
+    };
+    std::vector<PlaceCorner> place_corners;
+    std::vector<std::uint64_t> edges;
+    std::vector<std::pair<std::uint64_t, std::uint16_t>> edge_index;
+    std::vector<EdgeEnd> edge_ends;
     std::vector<std::array<std::uint32_t, 3>> junctions;
+    place_corners.reserve(corners.size());
+    edges.reserve(corners.size());
+    edge_index.reserve(2u * corners.size());
+    edge_ends.reserve(2u * corners.size());
     for (std::size_t t = 0; t + 2u < corners.size(); t += 3u) {
         std::uint32_t p[3];
         D3 n[3];
@@ -532,18 +562,15 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
                 break;
             }
             p[k] = place[c.position];
-            n[k] = normalized(widen(normals[c.normal]));
+            n[k] = unit_normals[c.normal];
         }
         if (!valid || p[0] == p[1] || p[1] == p[2] || p[0] == p[2]) continue;
         for (unsigned k = 0; k < 3u; ++k) {
             const std::uint32_t a = p[k];
             const std::uint32_t b = p[(k + 1u) % 3u];
-            edge_set.insert(pair_key(std::min(a, b), std::max(a, b)));
+            edges.push_back(pair_key(std::min(a, b), std::max(a, b)));
             for (const unsigned j : {(k + 1u) % 3u, (k + 2u) % 3u}) {
-                std::vector<std::uint16_t>& list = edge_index[pair_key(p[k], p[j])];
-                if (std::find(list.begin(), list.end(), corners[t + k].normal) == list.end()) {
-                    list.push_back(corners[t + k].normal);
-                }
+                edge_index.push_back({pair_key(p[k], p[j]), corners[t + k].normal});
             }
         }
         const D3 face = normalized(cross(sub(places[p[1]], places[p[0]]), sub(places[p[2]], places[p[0]])));
@@ -563,62 +590,154 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
             const std::uint32_t o1 = p[(k + 2u) % 3u];
             const double angle = angle_between(normalized(sub(places[o0], places[p[k]])),
                                                normalized(sub(places[o1], places[p[k]])));
-            at[p[k]].push_back({n[k], corners[t + k].normal, face, angle, {o0, o1}});
-            edge_ends[pair_key(p[k], o0)].push_back(n[k]);
-            edge_ends[pair_key(p[k], o1)].push_back(n[k]);
+            place_corners.push_back({p[k], {n[k], corners[t + k].normal, face, angle, {o0, o1}}});
+            edge_ends.push_back({pair_key(p[k], o0), n[k]});
+            edge_ends.push_back({pair_key(p[k], o1), n[k]});
         }
     }
-    // Crease edges: their triangles disagree on the normal at the near end, or one triangle holds them.
-    std::unordered_set<std::uint64_t> crease_edges;
-    std::vector<std::vector<std::uint32_t>> creases(places.size());
-    for (const auto& [key, ends] : edge_ends) {
-        const bool crease =
-            ends.size() == 1u || !std::all_of(ends.begin(), ends.end(), [&](const D3& v) { return parallel(ends[0], v); });
-        if (crease) {
-            crease_edges.insert(key);
-            creases[key >> 32u].push_back(static_cast<std::uint32_t>(key & 0xFFFFFFFFu));
-        }
+    std::sort(edges.begin(), edges.end());
+    edges.erase(std::unique(edges.begin(), edges.end()), edges.end());
+    std::sort(edge_index.begin(), edge_index.end());
+    edge_index.erase(std::unique(edge_index.begin(), edge_index.end()), edge_index.end());
+
+    // Each place's corners in triangle order.
+    std::vector<std::uint32_t> corner_first(place_count + 1u, 0u);
+    for (const PlaceCorner& pc : place_corners) ++corner_first[pc.place + 1u];
+    for (std::uint32_t q = 0; q < place_count; ++q) corner_first[q + 1u] += corner_first[q];
+    std::vector<At> at(place_corners.size());
+    {
+        std::vector<std::uint32_t> next(corner_first.begin(), corner_first.end() - 1);
+        for (const PlaceCorner& pc : place_corners) at[next[pc.place]++] = pc.at;
     }
-    for (std::vector<std::uint32_t>& c : creases) std::sort(c.begin(), c.end());
+
+    // Crease edges: their triangles disagree on the normal at the near end (against the first, in triangle order), or
+    // one triangle holds them. Sorted by key, so each place's run lists its crease neighbours in order.
+    std::stable_sort(edge_ends.begin(), edge_ends.end(),
+                     [](const EdgeEnd& a, const EdgeEnd& b) { return a.key < b.key; });
+    std::vector<std::uint64_t> crease_keys;
+    for (std::size_t b = 0; b < edge_ends.size();) {
+        std::size_t e = b + 1u;
+        bool agree = parallel(edge_ends[b].normal, edge_ends[b].normal);
+        while (e < edge_ends.size() && edge_ends[e].key == edge_ends[b].key) {
+            agree = agree && parallel(edge_ends[b].normal, edge_ends[e].normal);
+            ++e;
+        }
+        if (e - b == 1u || !agree) crease_keys.push_back(edge_ends[b].key);
+        b = e;
+    }
+    std::vector<std::uint32_t> crease_first(place_count + 1u, 0u);
+    for (const std::uint64_t key : crease_keys) ++crease_first[(key >> 32u) + 1u];
+    for (std::uint32_t q = 0; q < place_count; ++q) crease_first[q + 1u] += crease_first[q];
+    const auto is_crease = [&](std::uint32_t q, std::uint32_t j) {
+        return std::binary_search(crease_keys.begin() + crease_first[q], crease_keys.begin() + crease_first[q + 1u],
+                                  pair_key(q, j));
+    };
 
     // Each place's groups, their bends and the crease's.
-    std::vector<std::vector<std::pair<std::uint16_t, D3>>> bends(places.size());
-    std::vector<std::vector<std::uint16_t>> flats(places.size());   // the normal indices of flat solids' corners
+    std::vector<std::pair<std::uint16_t, D3>> bends;  // by place, then by normal index
+    std::vector<std::uint32_t> bend_first(place_count + 1u, 0u);
+    std::vector<std::uint16_t> flats;                 // the normal indices of flat solids' corners, by place
+    std::vector<std::uint32_t> flat_first(place_count + 1u, 0u);
     std::vector<D3> crease_normal(places.size(), D3{0.0, 0.0, 0.0});
+    struct SetBend {
+        bool any = false;
+        bool agree = true;
+        D3 value{};
+    };
+    std::vector<std::uint32_t> corner_sets;
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> through;
+    std::vector<std::uint32_t> roots;
+    std::vector<std::uint32_t> group_of;
+    std::vector<std::uint32_t> group_first;
+    std::vector<std::uint32_t> group_next;
+    std::vector<std::uint32_t> grouped_index;
+    std::vector<const At*> grouped;
+    std::vector<std::uint16_t> slot_index;
+    std::vector<std::uint32_t> slot_of;
+    std::vector<std::uint32_t> slot_sets;
+    std::vector<SetBend> set_bends;
+    const auto root = [](std::vector<std::uint32_t>& sets, std::uint32_t x) {
+        while (sets[x] != x) {
+            sets[x] = sets[sets[x]];
+            x = sets[x];
+        }
+        return x;
+    };
+    const auto join = [&root](std::vector<std::uint32_t>& sets, std::uint32_t a, std::uint32_t b) {
+        sets[root(sets, a)] = root(sets, b);
+    };
     for (std::uint32_t q = 0; q < place_count; ++q) {
-        const std::vector<At>& cs = at[q];
-        if (cs.empty()) continue;
-        // Groups: corners joined through their triangles' shared non-crease edges at q.
-        Sets groups(cs.size());
-        std::unordered_map<std::uint32_t, std::uint32_t> through;
-        for (std::uint32_t i = 0; i < cs.size(); ++i) {
+        bend_first[q] = static_cast<std::uint32_t>(bends.size());
+        flat_first[q] = static_cast<std::uint32_t>(flats.size());
+        const At* const cs = at.data() + corner_first[q];
+        const std::uint32_t count = corner_first[q + 1u] - corner_first[q];
+        if (count == 0u) continue;
+        // Groups: corners joined through their triangles' shared non-crease edges at q; each group's corners in
+        // triangle order.
+        corner_sets.resize(count);
+        std::iota(corner_sets.begin(), corner_sets.end(), 0u);
+        through.clear();
+        for (std::uint32_t i = 0; i < count; ++i) {
             for (const std::uint32_t j : cs[i].other) {
-                if (crease_edges.contains(pair_key(q, j))) continue;
-                const auto [it, added] = through.try_emplace(j, i);
-                if (!added) groups.join(i, it->second);
+                if (is_crease(q, j)) continue;
+                const auto it = std::find_if(through.begin(), through.end(),
+                                             [j](const std::pair<std::uint32_t, std::uint32_t>& e) { return e.first == j; });
+                if (it == through.end()) {
+                    through.push_back({j, i});
+                } else {
+                    join(corner_sets, i, it->second);
+                }
             }
         }
-        std::unordered_map<std::uint32_t, std::vector<const At*>> members;
-        for (std::uint32_t i = 0; i < cs.size(); ++i) members[groups.root(i)].push_back(&cs[i]);
-        const bool multi = members.size() > 1u;
-        std::vector<std::pair<std::uint16_t, D3>>& here = bends[q];
+        roots.clear();
+        group_of.resize(count);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const std::uint32_t r = root(corner_sets, i);
+            const auto it = std::find(roots.begin(), roots.end(), r);
+            group_of[i] = static_cast<std::uint32_t>(it - roots.begin());
+            if (it == roots.end()) roots.push_back(r);
+        }
+        const auto groups = static_cast<std::uint32_t>(roots.size());
+        group_first.assign(groups + 1u, 0u);
+        for (std::uint32_t i = 0; i < count; ++i) ++group_first[group_of[i] + 1u];
+        for (std::uint32_t g = 0; g < groups; ++g) group_first[g + 1u] += group_first[g];
+        grouped_index.resize(count);
+        grouped.resize(count);
+        group_next.assign(group_first.begin(), group_first.end() - 1);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const std::uint32_t slot = group_next[group_of[i]]++;
+            grouped_index[slot] = i;
+            grouped[slot] = &cs[i];
+        }
+        const auto group = [&](std::uint32_t g) {
+            return std::span<const At* const>(grouped.data() + group_first[g], group_first[g + 1u] - group_first[g]);
+        };
+        const bool multi = groups > 1u;
         // A group that is no sampled surface but a flat solid's corner shaded soft: its normal indices.
-        const auto note_flat = [&](const std::vector<const At*>& group) {
-            if (flat_solid(group[0]->normal, group)) {
-                for (const At* c : group) flats[q].push_back(c->normal_index);
+        const auto note_flat = [&](std::span<const At* const> members) {
+            if (flat_solid(members[0]->normal, members)) {
+                for (const At* c : members) flats.push_back(c->normal_index);
             }
         };
-        if (multi && creases[q].size() != 2u) {
+        const std::uint32_t crease_count = crease_first[q + 1u] - crease_first[q];
+        const auto sort_here = [&] {
+            std::sort(bends.begin() + bend_first[q], bends.end(),
+                      [](const auto& a, const auto& b) { return a.first < b.first; });
+        };
+        if (multi && crease_count != 2u) {
             // A corner: nothing bends.
-            for (const At& c : cs) here.push_back({c.normal_index, D3{0.0, 0.0, 0.0}});
-            for (const auto& [root, group] : members) note_flat(group);
+            for (std::uint32_t i = 0; i < count; ++i) bends.push_back({cs[i].normal_index, D3{0.0, 0.0, 0.0}});
+            for (std::uint32_t g = 0; g < groups; ++g) note_flat(group(g));
+            sort_here();
             continue;
         }
         D3 crease_plane{0.0, 0.0, 0.0};
         if (multi) {
-            out.crease_places[q] = {static_cast<std::uint16_t>(creases[q][0]), static_cast<std::uint16_t>(creases[q][1])};
-            const D3& a = places[creases[q][0]];
-            const D3& b = places[creases[q][1]];
+            const auto c0 = static_cast<std::uint32_t>(crease_keys[crease_first[q]] & 0xFFFFFFFFu);
+            const auto c1 = static_cast<std::uint32_t>(crease_keys[crease_first[q] + 1u] & 0xFFFFFFFFu);
+            out.crease_places[q] = {static_cast<std::uint16_t>(c0), static_cast<std::uint16_t>(c1)};
+            const D3& a = places[c0];
+            const D3& b = places[c1];
             const D3 u = sub(places[q], a);
             const D3 v = sub(b, places[q]);
             const double lu = length(u);
@@ -633,24 +752,33 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         }
         // Normal indices one set per group, sets joined where groups share an index: one bend a set, the groups'
         // own where they agree, else none.
-        std::unordered_map<std::uint16_t, std::uint32_t> index_slot;
-        std::vector<std::uint16_t> slot_index;
-        for (const At& c : cs) {
-            if (index_slot.try_emplace(c.normal_index, static_cast<std::uint32_t>(slot_index.size())).second) {
-                slot_index.push_back(c.normal_index);
-            }
+        slot_index.clear();
+        slot_of.resize(count);
+        for (std::uint32_t i = 0; i < count; ++i) {
+            const auto it = std::find(slot_index.begin(), slot_index.end(), cs[i].normal_index);
+            slot_of[i] = static_cast<std::uint32_t>(it - slot_index.begin());
+            if (it == slot_index.end()) slot_index.push_back(cs[i].normal_index);
         }
-        Sets index_sets(slot_index.size());
-        for (const auto& [root, group] : members) {
-            for (const At* c : group) index_sets.join(index_slot[c->normal_index], index_slot[group[0]->normal_index]);
+        slot_sets.resize(slot_index.size());
+        std::iota(slot_sets.begin(), slot_sets.end(), 0u);
+        for (std::uint32_t g = 0; g < groups; ++g) {
+            const std::uint32_t lead = slot_of[grouped_index[group_first[g]]];
+            for (std::uint32_t k = group_first[g]; k < group_first[g + 1u]; ++k) join(slot_sets, slot_of[grouped_index[k]], lead);
         }
-        std::vector<std::vector<D3>> set_bends(slot_index.size());
+        set_bends.assign(slot_index.size(), SetBend{});
         bool backed = false;
-        for (const auto& [root, group] : members) {
-            const D3& n0 = group[0]->normal;
-            const bool curved = sampled(q, n0, group, places);
-            if (!curved) note_flat(group);
-            set_bends[index_sets.root(index_slot[group[0]->normal_index])].push_back(curved ? n0 : D3{0.0, 0.0, 0.0});
+        for (std::uint32_t g = 0; g < groups; ++g) {
+            const std::span<const At* const> members = group(g);
+            const D3& n0 = members[0]->normal;
+            const bool curved = sampled(q, n0, members, places);
+            if (!curved) note_flat(members);
+            const D3 value = curved ? n0 : D3{0.0, 0.0, 0.0};
+            SetBend& set = set_bends[root(slot_sets, slot_of[grouped_index[group_first[g]]])];
+            if (!set.any) {
+                set.any = true;
+                set.value = value;
+            }
+            set.agree = set.agree && value[0] == set.value[0] && value[1] == set.value[1] && value[2] == set.value[2];
             if (curved && !is_zero(crease_normal[q])) {
                 const D3 in_plane = sub(n0, mul(crease_plane, dot(n0, crease_plane)));
                 const double l = length(in_plane);
@@ -658,26 +786,23 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
             }
         }
         if (!backed) crease_normal[q] = {0.0, 0.0, 0.0};
-        for (std::uint32_t s = 0; s < slot_index.size(); ++s) {
-            const std::vector<D3>& values = set_bends[index_sets.root(s)];
-            const bool agree = !values.empty() && std::all_of(values.begin(), values.end(), [&](const D3& v) {
-                return v[0] == values[0][0] && v[1] == values[0][1] && v[2] == values[0][2];
-            });
-            here.push_back({slot_index[s], agree ? values[0] : D3{0.0, 0.0, 0.0}});
+        for (std::uint32_t slot = 0; slot < slot_index.size(); ++slot) {
+            const SetBend& set = set_bends[root(slot_sets, slot)];
+            bends.push_back({slot_index[slot], set.any && set.agree ? set.value : D3{0.0, 0.0, 0.0}});
         }
+        sort_here();
     }
+    bend_first[place_count] = static_cast<std::uint32_t>(bends.size());
+    flat_first[place_count] = static_cast<std::uint32_t>(flats.size());
 
     // T-junctions (and zero-area triangles' corners): where any edge along the line would bend, the three places
     // stay put.
-    {
-        std::vector<std::uint64_t> edges(edge_set.begin(), edge_set.end());
-        find_junctions(places, edges, junctions);
-    }
+    find_junctions(places, edges, junctions);
     const auto bend_at = [&](std::uint32_t x, std::uint16_t normal_index, std::uint32_t y) -> D3 {
         const std::array<std::uint16_t, 2>& c = out.crease_places[x];
         if (c[0] == y || c[1] == y) return crease_normal[x];
-        for (const auto& [index, bend] : bends[x]) {
-            if (index == normal_index) return bend;
+        for (std::uint32_t k = bend_first[x]; k < bend_first[x + 1u]; ++k) {
+            if (bends[k].first == normal_index) return bends[k].second;
         }
         return {0.0, 0.0, 0.0};
     };
@@ -688,9 +813,11 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         for (const std::uint32_t x : j) {
             for (const std::uint32_t y : j) {
                 if (x == y) continue;
-                const auto it = edge_index.find(pair_key(x, y));
-                if (it == edge_index.end()) continue;
-                for (const std::uint16_t ni : it->second) bows = bows || std::fabs(dot(bend_at(x, ni, y), line)) > kBow;
+                const std::uint64_t key = pair_key(x, y);
+                auto it = std::lower_bound(edge_index.begin(), edge_index.end(), std::pair<std::uint64_t, std::uint16_t>{key, 0u});
+                for (; it != edge_index.end() && it->first == key; ++it) {
+                    bows = bows || std::fabs(dot(bend_at(x, it->second, y), line)) > kBow;
+                }
             }
         }
         if (bows) {
@@ -698,12 +825,14 @@ Surface analyse(std::span<const Vec3> positions, std::span<const Vec3> normals, 
         }
     }
 
+    out.bends.reserve(bends.size());
     for (std::uint32_t q = 0; q < place_count; ++q) {
         out.first[q] = static_cast<std::uint32_t>(out.bends.size());
-        std::vector<std::pair<std::uint16_t, D3>>& here = bends[q];
-        std::sort(here.begin(), here.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-        for (const auto& [index, bend] : here) {
-            const bool flat = std::find(flats[q].begin(), flats[q].end(), index) != flats[q].end();
+        const auto flat_begin = flats.begin() + flat_first[q];
+        const auto flat_end = flats.begin() + flat_first[q + 1u];
+        for (std::uint32_t k = bend_first[q]; k < bend_first[q + 1u]; ++k) {
+            const auto& [index, bend] = bends[k];
+            const bool flat = std::find(flat_begin, flat_end, index) != flat_end;
             out.bends.push_back({index, fixed[q] ? Vec3{0.0f, 0.0f, 0.0f} : narrow(bend), flat});
         }
         out.crease[q] = fixed[q] ? Vec3{0.0f, 0.0f, 0.0f} : narrow(crease_normal[q]);
