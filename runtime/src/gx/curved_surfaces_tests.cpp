@@ -431,6 +431,27 @@ int main() {
         register_model(0x1000u, b, analyse(cube.positions, cube.normals, cube.corners));
         passed &= expect(find_model(0x1000u) == nullptr,
                          "a model in which nothing bends is not kept, and replaces the address's earlier one");
+
+        // Analysed on the background thread: found once it is done, the same model.
+        register_model_later(0x2000u, a, p.positions, p.normals, p.corners);
+        const auto later = find_model(0x2000u);
+        passed &= expect(later != nullptr && model != nullptr && later->fingerprint == model->fingerprint &&
+                             later->places == model->places && later->second == model->second &&
+                             later->crease == model->crease && later->first == model->first &&
+                             later->bend_normal == model->bend_normal && later->bend == model->bend &&
+                             later->bend_flat == model->bend_flat,
+                         "a model analysed in the background is the one analysed at once");
+        // A later registration of the address wins over one still being analysed.
+        for (int round_trip = 0; round_trip < 20; ++round_trip) {
+            register_model_later(0x3000u, a, p.positions, p.normals, p.corners);
+            register_model_later(0x3000u, b, cube.positions, cube.normals, cube.corners);
+            passed &= expect(find_model(0x3000u) == nullptr, "the address's latest registration decides");
+            register_model_later(0x3000u, b, cube.positions, cube.normals, cube.corners);
+            register_model_later(0x3000u, a, p.positions, p.normals, p.corners);
+            const auto found = find_model(0x3000u);
+            passed &= expect(found != nullptr && found->fingerprint == fingerprint(a),
+                             "the address's latest registration decides, whichever finishes first");
+        }
     }
     {
         // A large array: its first and last words and its tail are always among the fingerprint's.

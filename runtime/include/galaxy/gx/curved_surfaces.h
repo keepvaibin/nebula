@@ -120,6 +120,10 @@ inline constexpr std::size_t kFingerprintWords = 64u;
 // model in which nothing bends and no corner is flat is not kept: its draws stay plain triangles; the address's
 // earlier model, if any, is forgotten all the same.
 void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface);
+// The same, with the analysis on a background thread: the array's fingerprint is taken now, and find_model for the
+// address waits for the analysis (a model's first draw is already rounded).
+void register_model_later(std::uint32_t array_address, std::span<const std::byte> array_bytes,
+                          std::vector<Vec3> positions, std::vector<Vec3> normals, std::vector<Corner> corners);
 [[nodiscard]] std::shared_ptr<const Model> find_model(std::uint32_t array_address);
 // A model whose array no longer holds its bytes (its memory reused): forgotten.
 void forget_model(std::uint32_t array_address, const Model* model);

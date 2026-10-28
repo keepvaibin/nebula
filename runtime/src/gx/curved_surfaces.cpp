@@ -2,12 +2,16 @@
 // Curved surfaces: the shape analysis behind Phong tessellation and the registry of models (curved_surfaces.h).
 #include "galaxy/gx/curved_surfaces.h"
 
+#include "galaxy/windows_power.h"
+
 #include <algorithm>
 #include <cmath>
+#include <condition_variable>
 #include <cstring>
+#include <deque>
 #include <mutex>
 #include <numeric>
-#include <shared_mutex>
+#include <thread>
 #include <span>
 #include <tuple>
 #include <unordered_map>
@@ -452,14 +456,110 @@ Vec3 narrow(const D3& v) {
     return {static_cast<float>(v[0]), static_cast<float>(v[1]), static_cast<float>(v[2])};
 }
 
-struct Registry {
-    std::shared_mutex lock;
-    std::unordered_map<std::uint32_t, std::shared_ptr<const Model>> models;
+// An address's model, or the analysis it waits for (`pending`); `generation` tells a finished analysis whether it is
+// still the address's latest registration.
+struct Entry {
+    std::shared_ptr<const Model> model;
+    std::uint64_t generation = 0;
+    bool pending = false;
 };
 
+struct Job {
+    std::uint32_t address = 0;
+    std::uint64_t generation = 0;
+    std::uint64_t fingerprint = 0;
+    std::uint32_t bytes = 0;
+    std::vector<Vec3> positions;
+    std::vector<Vec3> normals;
+    std::vector<Corner> corners;
+};
+
+struct Registry {
+    std::mutex lock;
+    std::condition_variable done;
+    std::unordered_map<std::uint32_t, Entry> models;
+    std::uint64_t generation = 0;
+    std::condition_variable work;
+    std::deque<Job> jobs;
+    bool worker = false;
+};
+
+// Never destroyed: the analysis worker may still wait on it while the process exits.
 Registry& registry() {
-    static Registry r;
-    return r;
+    static Registry* r = new Registry;
+    return *r;
+}
+
+// The model a registration keeps, or null when nothing in it bends and no corner is flat (its draws stay plain).
+std::shared_ptr<const Model> make_model(std::uint64_t fingerprint, std::uint32_t bytes, const Surface& surface) {
+    const bool bends = surface.bends_anything();
+    if (!bends && !surface.flat_anything()) return nullptr;
+    auto model = std::make_shared<Model>();
+    model->fingerprint = fingerprint;
+    model->bytes = bytes;
+    model->bends = bends;
+    const std::size_t positions = surface.place.size();
+    model->places.resize(positions);
+    model->second.resize(positions);
+    model->crease.resize(positions);
+    model->first.resize(positions + 1u);
+    for (std::size_t i = 0; i < positions; ++i) {
+        const std::uint16_t q = surface.place[i];
+        model->first[i] = static_cast<std::uint32_t>(model->bend.size());
+        if (q == kNoPlace) {
+            model->places[i] = 0xFFFFFFFFu;
+            model->second[i] = kNoPlace;
+            model->crease[i] = 0u;
+            continue;
+        }
+        model->places[i] = q | static_cast<std::uint32_t>(surface.crease_places[q][0]) << 16u;
+        model->second[i] = surface.crease_places[q][1];
+        model->crease[i] = pack_normal(surface.crease[q]);
+        for (std::uint32_t b = surface.first[q]; b < surface.first[q + 1u]; ++b) {
+            model->bend_normal.push_back(surface.bends[b].normal);
+            model->bend.push_back(pack_normal(surface.bends[b].bend));
+            model->bend_flat.push_back(surface.bends[b].flat ? 1u : 0u);
+        }
+    }
+    model->first[positions] = static_cast<std::uint32_t>(model->bend.size());
+    return model;
+}
+
+// Publishes a finished registration unless a later one for the address replaced it.
+void publish(Registry& r, std::uint32_t address, std::uint64_t generation, std::shared_ptr<const Model> model) {
+    {
+        std::lock_guard guard(r.lock);
+        const auto it = r.models.find(address);
+        if (it == r.models.end() || it->second.generation != generation) return;
+        if (model) {
+            it->second.model = std::move(model);
+            it->second.pending = false;
+        } else {
+            r.models.erase(it);
+        }
+    }
+    r.done.notify_all();
+}
+
+void analysis_worker() {
+    galaxy::host::name_current_thread(L"Nebula Curved Analysis");
+    Registry& r = registry();
+    for (;;) {
+        Job job;
+        {
+            std::unique_lock guard(r.lock);
+            r.work.wait(guard, [&r] { return !r.jobs.empty(); });
+            job = std::move(r.jobs.front());
+            r.jobs.pop_front();
+        }
+        std::shared_ptr<const Model> model;
+        try {
+            model = make_model(job.fingerprint, job.bytes, analyse(job.positions, job.normals, job.corners));
+        } catch (...) {
+            // Without its analysis the model draws plain, as one that bends nothing.
+        }
+        publish(r, job.address, job.generation, std::move(model));
+    }
 }
 
 }  // namespace
@@ -924,64 +1024,65 @@ std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept {
 }
 
 void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface) {
-    const bool bends = surface.bends_anything();
-    if (!bends && !surface.flat_anything()) {
-        Registry& r = registry();
-        std::unique_lock guard(r.lock);
-        r.models.erase(array_address);
-        return;
-    }
-    auto model = std::make_shared<Model>();
-    model->fingerprint = fingerprint(array_bytes);
-    model->bytes = static_cast<std::uint32_t>(array_bytes.size());
-    model->bends = bends;
-    const std::size_t positions = surface.place.size();
-    model->places.resize(positions);
-    model->second.resize(positions);
-    model->crease.resize(positions);
-    model->first.resize(positions + 1u);
-    for (std::size_t i = 0; i < positions; ++i) {
-        const std::uint16_t q = surface.place[i];
-        model->first[i] = static_cast<std::uint32_t>(model->bend.size());
-        if (q == kNoPlace) {
-            model->places[i] = 0xFFFFFFFFu;
-            model->second[i] = kNoPlace;
-            model->crease[i] = 0u;
-            continue;
-        }
-        model->places[i] = q | static_cast<std::uint32_t>(surface.crease_places[q][0]) << 16u;
-        model->second[i] = surface.crease_places[q][1];
-        model->crease[i] = pack_normal(surface.crease[q]);
-        for (std::uint32_t b = surface.first[q]; b < surface.first[q + 1u]; ++b) {
-            model->bend_normal.push_back(surface.bends[b].normal);
-            model->bend.push_back(pack_normal(surface.bends[b].bend));
-            model->bend_flat.push_back(surface.bends[b].flat ? 1u : 0u);
-        }
-    }
-    model->first[positions] = static_cast<std::uint32_t>(model->bend.size());
     Registry& r = registry();
-    std::unique_lock guard(r.lock);
-    r.models[array_address] = std::move(model);
+    std::uint64_t generation;
+    {
+        std::lock_guard guard(r.lock);
+        Entry& entry = r.models[array_address];
+        entry = Entry{nullptr, ++r.generation, true};
+        generation = entry.generation;
+    }
+    publish(r, array_address, generation,
+            make_model(fingerprint(array_bytes), static_cast<std::uint32_t>(array_bytes.size()), surface));
+}
+
+void register_model_later(std::uint32_t array_address, std::span<const std::byte> array_bytes,
+                          std::vector<Vec3> positions, std::vector<Vec3> normals, std::vector<Corner> corners) {
+    Registry& r = registry();
+    Job job{array_address, 0u, fingerprint(array_bytes), static_cast<std::uint32_t>(array_bytes.size()),
+            std::move(positions), std::move(normals), std::move(corners)};
+    {
+        std::lock_guard guard(r.lock);
+        Entry& entry = r.models[array_address];
+        entry = Entry{nullptr, ++r.generation, true};
+        job.generation = entry.generation;
+        r.jobs.push_back(std::move(job));
+        if (!r.worker) {
+            r.worker = true;
+            std::thread(analysis_worker).detach();
+        }
+    }
+    r.work.notify_one();
 }
 
 std::shared_ptr<const Model> find_model(std::uint32_t array_address) {
     Registry& r = registry();
-    std::shared_lock guard(r.lock);
-    const auto it = r.models.find(array_address);
-    return it != r.models.end() ? it->second : nullptr;
+    std::unique_lock guard(r.lock);
+    auto it = r.models.find(array_address);
+    if (it == r.models.end()) return nullptr;
+    // The model's first draw waits for its analysis rather than drawing plain and then rounding.
+    const std::uint64_t generation = it->second.generation;
+    while (it != r.models.end() && it->second.pending && it->second.generation == generation) {
+        r.done.wait(guard);
+        it = r.models.find(array_address);
+    }
+    return it != r.models.end() && !it->second.pending ? it->second.model : nullptr;
 }
 
 void forget_model(std::uint32_t array_address, const Model* model) {
     Registry& r = registry();
-    std::unique_lock guard(r.lock);
+    std::lock_guard guard(r.lock);
     const auto it = r.models.find(array_address);
-    if (it != r.models.end() && it->second.get() == model) r.models.erase(it);
+    if (it != r.models.end() && !it->second.pending && it->second.model.get() == model) r.models.erase(it);
 }
 
 void clear_models() {
     Registry& r = registry();
-    std::unique_lock guard(r.lock);
-    r.models.clear();
+    {
+        std::lock_guard guard(r.lock);
+        r.models.clear();
+    }
+    r.done.notify_all();
 }
 
 }  // namespace galaxy::gx::curved

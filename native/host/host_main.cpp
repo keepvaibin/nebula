@@ -1986,8 +1986,8 @@ void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32
     for (std::size_t i = 0; i < c.size(); ++i) {
         c[i] = curved::Corner{corners[2u * i], corners[2u * i + 1u]};
     }
-    curved::register_model(array_address, std::span(static_cast<const std::byte*>(array), array_bytes),
-                           curved::analyse(p, n, c));
+    curved::register_model_later(array_address, std::span(static_cast<const std::byte*>(array), array_bytes),
+                                 std::move(p), std::move(n), std::move(c));
 #else
     (void)array_address, (void)array, (void)array_bytes, (void)positions, (void)position_count, (void)normals,
         (void)normal_count, (void)corners, (void)triangle_count;
