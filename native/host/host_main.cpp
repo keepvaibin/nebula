@@ -2563,6 +2563,8 @@ void wpad_thread() {
         next = Clock::now() + period;
         log_line("[wiimote]", on ? "in use" : "keyboard, mouse and controllers in use");
     };
+#else
+    constexpr bool real = false;
 #endif
     for (;;) {
 #if defined(NEBULA_REAL_WIIMOTE)

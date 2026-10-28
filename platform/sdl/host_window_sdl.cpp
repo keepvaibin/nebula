@@ -10,7 +10,9 @@
 #include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx_d3d12.h"
+#include "galaxy/input_bindings.h"
 #include "galaxy/native_host.h"
+#include "galaxy/runtime_settings.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/virtual_keys.h"
@@ -38,6 +40,15 @@
 #include <thread>
 
 namespace galaxy::sdl {
+
+// The device that gave input last (button_icons' Auto): none (touch controls), the keyboard and mouse, or a
+// controller: kLastPad plus its scheme.
+constexpr std::uint32_t kLastNone = 0u;
+constexpr std::uint32_t kLastKeyboard = 1u;
+constexpr std::uint32_t kLastPad = 2u;
+std::atomic<std::uint32_t> g_last_input{kLastNone};
+std::atomic<SDL_JoystickID> g_last_pad{0};
+
 namespace {
 
 std::mutex g_input_mutex;
@@ -208,18 +219,26 @@ void set_key(int vk, bool down) {
         return;
     }
     g_input.keys.set_key(static_cast<std::uint8_t>(vk), down);
+    if (down) {
+        g_last_input.store(kLastKeyboard, std::memory_order_relaxed);
+    }
     // The runtime's bindings name the generic modifier keys too.
     if (vk == VK_LSHIFT || vk == VK_RSHIFT) g_input.keys.set_key(VK_SHIFT, down);
     if (vk == VK_LCONTROL || vk == VK_RCONTROL) g_input.keys.set_key(VK_CONTROL, down);
     if (vk == VK_LMENU || vk == VK_RMENU) g_input.keys.set_key(VK_MENU, down);
 }
 
-// The unified layout's scheme for an SDL gamepad: Nintendo's positional layout for Switch controllers.
+// The unified layout's scheme for an SDL gamepad: Nintendo's positional layout for Switch controllers, PlayStation's
+// for Sony's (as the Windows host's HID controllers).
 galaxy::input::ControlScheme scheme_of(SDL_Gamepad* pad) noexcept {
     switch (SDL_GetGamepadType(pad)) {
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO:
     case SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_PAIR:
         return galaxy::input::ControlScheme::SwitchPro;
+    case SDL_GAMEPAD_TYPE_PS3:
+    case SDL_GAMEPAD_TYPE_PS4:
+    case SDL_GAMEPAD_TYPE_PS5:
+        return galaxy::input::ControlScheme::PlayStation;
     default:
         return galaxy::input::ControlScheme::Xbox;
     }
@@ -268,6 +287,10 @@ void sample_gamepads() {
         sample.axes[3] = -axis(gamepad, SDL_GAMEPAD_AXIS_RIGHTY);
         sample.axes[4] = std::max(0.0f, axis(gamepad, SDL_GAMEPAD_AXIS_LEFT_TRIGGER));
         sample.axes[5] = std::max(0.0f, axis(gamepad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER));
+        if (bits != 0u || std::any_of(std::begin(sample.axes), std::end(sample.axes), [](float a) { return std::abs(a) > 0.5f; })) {
+            g_last_input.store(kLastPad + static_cast<std::uint32_t>(sample.scheme), std::memory_order_relaxed);
+            g_last_pad.store(g_input.pad_ids[i], std::memory_order_relaxed);
+        }
     }
 }
 
@@ -289,6 +312,9 @@ void close_gamepad(SDL_JoystickID id) {
             SDL_CloseGamepad(slot);
             slot = nullptr;
         }
+    }
+    if (g_last_pad.load(std::memory_order_relaxed) == id && g_last_input.load(std::memory_order_relaxed) >= kLastPad) {
+        g_last_input.store(kLastNone, std::memory_order_relaxed);
     }
 }
 
@@ -445,6 +471,7 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_FINGER_UP:
         case SDL_EVENT_FINGER_CANCELED:
             // Platforms whose touches reach SDL (Android's go to the activity's controls, nativePointer).
+            g_last_input.store(kLastNone, std::memory_order_relaxed);
             finger_event(event.tfinger.fingerID, event.tfinger.x * static_cast<float>(g_input.window_width),
                          event.tfinger.y * static_cast<float>(g_input.window_height),
                          event.type == SDL_EVENT_FINGER_DOWN,
@@ -471,6 +498,9 @@ void pump_events(int timeout_ms) noexcept {
                 : event.button.button == SDL_BUTTON_X1 ? 3u : 4u;
             g_input.keys.mouse = static_cast<std::uint8_t>(
                 down ? (g_input.keys.mouse | (1u << bit)) : (g_input.keys.mouse & ~(1u << bit)));
+            if (down) {
+                g_last_input.store(kLastKeyboard, std::memory_order_relaxed);
+            }
             g_input.finger_x = event.button.x;
             g_input.finger_y = event.button.y;
             g_input.finger_ms = galaxy::steady_ms();
@@ -823,9 +853,19 @@ host::HostPointerTransitionPoll poll_host_pointer_transition(std::uint64_t) noex
     return {};
 }
 
+// The settings menu is the Windows host's (host_window_win32.cpp: its pages, draft and keys); the SDL hosts do not
+// have it yet, so it stays closed.
 bool native_settings_overlay_visible() noexcept {
     return false;
 }
+
+NativeSettingsView native_settings_view() {
+    return {};
+}
+
+void native_settings_input(NativeSettingsInput, int) {}
+
+void request_sharp_2d(bool) noexcept {}
 
 bool native_window_input_captured() noexcept {
     return home_menu_visible();
@@ -863,3 +903,66 @@ std::int32_t take_pointer_wheel() noexcept {
 }
 
 }  // namespace galaxy::gx
+
+namespace galaxy::host {
+
+// The game's button icons (the Windows host's rules, native_host.cpp): the ButtonIcons setting; Auto's the keyboard's
+// after a key or mouse button (always in the keyboard and mouse input mode, never in the controller one), a
+// controller's family after its input while it stays attached, else the Wii's (touch controls).
+input::ButtonIconSpec button_icons(bool menu) noexcept {
+    using input::ButtonIconStyle;
+    using input::ControlScheme;
+    const std::uint32_t last = galaxy::sdl::g_last_input.load(std::memory_order_relaxed);
+    const std::optional<ControlScheme> pad =
+        last >= galaxy::sdl::kLastPad ? std::optional<ControlScheme>(static_cast<ControlScheme>(last - galaxy::sdl::kLastPad))
+                                      : std::nullopt;
+    const RuntimeInputMode mode = get_runtime_settings().input_mode;
+    const bool keyboard = mode == RuntimeInputMode::KeyboardMouse ||
+                          (mode != RuntimeInputMode::Controller && last == galaxy::sdl::kLastKeyboard);
+    ButtonIconStyle style = ButtonIconStyle::Wii;
+    if (keyboard) {
+        style = ButtonIconStyle::Keyboard;
+    } else if (pad.has_value()) {
+        switch (*pad) {
+        case ControlScheme::Xbox:
+        case ControlScheme::Steam: style = ButtonIconStyle::Xbox; break;
+        case ControlScheme::SwitchPro:
+        case ControlScheme::SwitchPro2: style = ButtonIconStyle::Nintendo; break;
+        case ControlScheme::PlayStation: style = ButtonIconStyle::PlayStation; break;
+        case ControlScheme::Keyboard:
+        case ControlScheme::Generic: break;
+        }
+    }
+    switch (get_runtime_settings().button_icons) {
+    case ButtonIcons::Auto: break;
+    case ButtonIcons::Wii: style = ButtonIconStyle::Wii; break;
+    case ButtonIcons::Xbox: style = ButtonIconStyle::Xbox; break;
+    case ButtonIcons::Nintendo: style = ButtonIconStyle::Nintendo; break;
+    case ButtonIcons::PlayStation: style = ButtonIconStyle::PlayStation; break;
+    case ButtonIcons::Keyboard: style = ButtonIconStyle::Keyboard; break;
+    }
+    // The bindings of the controller in use; a style chosen without one takes its own family's.
+    const ControlScheme scheme = style == ButtonIconStyle::Keyboard      ? ControlScheme::Keyboard
+                                 : pad.has_value()                       ? *pad
+                                 : style == ButtonIconStyle::Nintendo    ? ControlScheme::SwitchPro
+                                 : style == ButtonIconStyle::PlayStation ? ControlScheme::PlayStation
+                                                                         : ControlScheme::Xbox;
+    // The game's thread asks each frame: worked out again only when the bindings, the style, the controller or the
+    // context change.
+    static std::uint64_t s_generation = ~std::uint64_t{0};
+    static ButtonIconStyle s_style = ButtonIconStyle::Wii;
+    static ControlScheme s_scheme = ControlScheme::Keyboard;
+    static bool s_menu = false;
+    static input::ButtonIconSpec s_spec;
+    const std::uint64_t generation = input::controls_config_generation();
+    if (generation != s_generation || style != s_style || scheme != s_scheme || menu != s_menu) {
+        s_generation = generation;
+        s_style = style;
+        s_scheme = scheme;
+        s_menu = menu;
+        s_spec = input::button_icon_spec(style, input::get_controls_config().table(scheme), menu);
+    }
+    return s_spec;
+}
+
+}  // namespace galaxy::host

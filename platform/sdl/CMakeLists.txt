@@ -112,6 +112,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
     ${rt}/achievements.cpp
+    ${rt}/stats.cpp
     ${rt}/input_bindings.cpp
     ${rt}/host_pointer_events.cpp
     ${rt}/native_input.cpp
