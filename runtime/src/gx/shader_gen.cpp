@@ -1719,14 +1719,20 @@ float3 nebula_debake_gain(float3 nrm) {
         // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words
         // 0x400 + 3*(posidx & 31) (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
         // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
+        // Its nine words lie in three float4s of the palette, from word (nrm_base & 3) of the first.
         s << "    uint nrm_base = 0x400u + 3u * (pn_row & 31u);\n";
-        s << "    float3 nrm_t = float3(\n";
-        s << "        dot(float3(xfw(nrm_base+0u), xfw(nrm_base+1u),"
-             " xfw(nrm_base+2u)), v.nrm),\n";
-        s << "        dot(float3(xfw(nrm_base+3u), xfw(nrm_base+4u),"
-             " xfw(nrm_base+5u)), v.nrm),\n";
-        s << "        dot(float3(xfw(nrm_base+6u), xfw(nrm_base+7u),"
-             " xfw(nrm_base+8u)), v.nrm));\n";
+        s << "    const uint nrm_q = mtx_palette_base + (nrm_base >> 2u);\n"
+             "    const float4 nq0 = mtx_palette[nrm_q];\n"
+             "    const float4 nq1 = mtx_palette[nrm_q + 1u];\n"
+             "    const float4 nq2 = mtx_palette[nrm_q + 2u];\n"
+             "    const uint nrm_o = nrm_base & 3u;\n"
+             "    const float3 nrm_r0 = nrm_o == 0u ? nq0.xyz : nrm_o == 1u ? nq0.yzw\n"
+             "                        : nrm_o == 2u ? float3(nq0.zw, nq1.x) : float3(nq0.w, nq1.xy);\n"
+             "    const float3 nrm_r1 = nrm_o == 0u ? float3(nq0.w, nq1.xy) : nrm_o == 1u ? nq1.xyz\n"
+             "                        : nrm_o == 2u ? nq1.yzw : float3(nq1.zw, nq2.x);\n"
+             "    const float3 nrm_r2 = nrm_o == 0u ? float3(nq1.zw, nq2.x) : nrm_o == 1u ? float3(nq1.w, nq2.xy)\n"
+             "                        : nrm_o == 2u ? nq2.xyz : nq2.yzw;\n";
+        s << "    float3 nrm_t = float3(dot(nrm_r0, v.nrm), dot(nrm_r1, v.nrm), dot(nrm_r2, v.nrm));\n";
         s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
              " ? normalize(nrm_t) : nrm_t;\n\n";
     } else if (enhanced) {
