@@ -48,6 +48,9 @@ Uninstalling asks whether to keep this data (`hasFragileUserData`).
   first finger on the left of the picture is a floating stick; any other finger is the pointer
   (`GameActivity.nativePointer`). With a controller in use they hide (Automatic), and come back at a touch.
 - Back opens the HOME Menu, as the HOME button does.
+- Not yet on the SDL hosts (Android, Linux): the settings menu over the game (the Windows host's pages, draft and
+  keys, `host_window_win32.cpp`); its view stays closed. The button icons follow the controller in use, as on
+  Windows (`button_icons` in `host_window_sdl.cpp`).
 - Out of sight, the host stops the display and audio clocks, so the game waits at its next retrace
   (`SDL_HINT_ANDROID_BLOCK_ON_PAUSE` is off: SDL's thread keeps pumping events).
 - When Android takes the window's surface away (the app leaving the screen, a fold moving it to the other display),

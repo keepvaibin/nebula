@@ -234,8 +234,7 @@ public:
     // Curved surfaces sorted on the GPU (RendererD3D12::sort_curved): the dispatches at the end of the frame's uploads,
     // which run before its draws. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted.
     [[nodiscard]] std::int32_t sort_curved(gpu::Address vertices, gpu::Address indices, std::uint32_t triangles,
-                                           std::uint32_t flat_triangles, gpu::Address constants, gpu::Address palette,
-                                           bool palette_rows);
+                                           gpu::Address constants, gpu::Address palette, bool palette_rows);
     // The frame being recorded (DrawCall::curve_sort_list).
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
     // The resident decoded vertices (RendererD3D12::create_resident_vertices): written once, read every frame, so in
@@ -788,7 +787,6 @@ private:
         std::uint32_t vertices;
         std::uint32_t indices;
         std::uint32_t triangles;
-        std::uint32_t flat;
         std::uint32_t constants;
         std::uint32_t palette;
         std::uint32_t flags;

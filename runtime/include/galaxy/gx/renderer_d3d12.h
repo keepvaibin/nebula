@@ -580,14 +580,14 @@ public:
 
     void draw(const DrawCall& call);
 
-    // Curved surfaces sorted on the GPU before the command list runs (ShaderGenerator::curve_sort_source): a split
-    // draw's triangles the hull shader would leave whole this frame join its flat ones as a triangle list. The
-    // vertices are resident, the indices the split's in the index ring, the constants and palette the draw's.
-    // Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted (no sort pipeline, no room).
+    // Curved surfaces sorted on the GPU before the command list runs (ShaderGenerator::curve_sort_source): of a split
+    // draw's triangles after its flat ones, those the hull shader would leave whole this frame draw after the flat
+    // ones as a triangle list. The vertices are resident, the indices (those triangles') in the index ring, the
+    // constants and palette the draw's. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted (no
+    // sort pipeline, no room).
     [[nodiscard]] std::int32_t sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D12_GPU_VIRTUAL_ADDRESS indices,
-                                           std::uint32_t triangles, std::uint32_t flat_triangles,
-                                           D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS palette,
-                                           bool palette_rows);
+                                           std::uint32_t triangles, D3D12_GPU_VIRTUAL_ADDRESS constants,
+                                           D3D12_GPU_VIRTUAL_ADDRESS palette, bool palette_rows);
     // The command list being recorded (DrawCall::curve_sort_list).
     [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
 
@@ -955,7 +955,6 @@ private:
         std::uint32_t vertices;
         std::uint32_t indices;
         std::uint32_t triangles;
-        std::uint32_t flat;
         std::uint32_t constants;
         std::uint32_t palette;
         std::uint32_t flags;

@@ -1103,8 +1103,7 @@ bool RendererVk::ensure_curve_sort() {
 }
 
 std::int32_t RendererVk::sort_curved(gpu::Address vertices, gpu::Address indices, std::uint32_t triangles,
-                                     std::uint32_t flat_triangles, gpu::Address constants, gpu::Address palette,
-                                     bool palette_rows) {
+                                     gpu::Address constants, gpu::Address palette, bool palette_rows) {
     CurveSortFrame& frame = curve_sort_[frame_slot_];
     // Its output (arguments, two lists), then its blocks' masks and offsets.
     const std::uint64_t blocks = (triangles + 63u) / 64u;
@@ -1156,7 +1155,7 @@ std::int32_t RendererVk::sort_curved(gpu::Address vertices, gpu::Address indices
         }
     }
     frame.draws.push_back({static_cast<std::uint32_t>(at[0].offset), static_cast<std::uint32_t>(at[1].offset), triangles,
-                           flat_triangles, static_cast<std::uint32_t>(at[2].offset),
+                           static_cast<std::uint32_t>(at[2].offset),
                            palette_rows ? static_cast<std::uint32_t>(at[3].offset) : 0u, palette_rows ? 1u : 0u,
                            static_cast<std::uint32_t>(frame.bytes), static_cast<std::uint32_t>(frame.bytes + output)});
     frame.bytes += bytes;
@@ -1367,7 +1366,11 @@ void RendererVk::draw(const DrawCall& call) {
         CurveSortFrame& sort = curve_sort_[frame_slot_];
         if (split && call.curve_sort >= 0 && call.curve_sort_list == curve_sort_list_ && !replaying_ &&
             static_cast<std::size_t>(call.curve_sort) < sort.draws.size() && sort.sorted) {
-            // The sort's lists: the whole triangles, then the patches, each drawn by its arguments.
+            // The flat triangles, then the sort's lists: the whole triangles, then the patches, each drawn by its
+            // arguments.
+            if (call.flat_index_count != 0u) {
+                vkCmdDrawIndexed(commands, call.flat_index_count, 1, 0, 0, 0);
+            }
             const CurveSortDraw& sorted = sort.draws[static_cast<std::size_t>(call.curve_sort)];
             const VkBuffer buffer = sort.sorted->buffer;
             vkCmdBindIndexBuffer(commands, buffer, sorted.output + 40u, VK_INDEX_TYPE_UINT32);

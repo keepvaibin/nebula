@@ -12763,10 +12763,12 @@ bool GxBackend::on_cached_packet_draw_run(
     if (split_run) {
         call.flat_pipeline = current_flat_pipeline_;
         call.flat_index_count = split_flat_indices;
-        // The sort's view of this frame: the triangles the hull shader would leave whole join the flat ones.
-        call.curve_sort = renderer_.sort_curved(vbv.BufferLocation, ibv.BufferLocation, prim.index_count / 3u,
-                                                split_flat_indices / 3u, call.vs_constants, call.matrix_palette,
-                                                (vs_key_.flags & 0x01u) != 0u);
+        // The sort's view of this frame: of the triangles after the flat ones, those the hull shader would leave
+        // whole draw after the flat ones.
+        call.curve_sort = renderer_.sort_curved(
+            vbv.BufferLocation, ibv.BufferLocation + split_flat_indices * sizeof(std::uint16_t),
+            (prim.index_count - split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
+            (vs_key_.flags & 0x01u) != 0u);
         call.curve_sort_list = renderer_.curve_sort_list();
     }
 

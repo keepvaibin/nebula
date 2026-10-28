@@ -3406,9 +3406,8 @@ bool RendererD3D12::ensure_curve_sort() {
 }
 
 std::int32_t RendererD3D12::sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D12_GPU_VIRTUAL_ADDRESS indices,
-                                        std::uint32_t triangles, std::uint32_t flat_triangles,
-                                        D3D12_GPU_VIRTUAL_ADDRESS constants, D3D12_GPU_VIRTUAL_ADDRESS palette,
-                                        bool palette_rows) {
+                                        std::uint32_t triangles, D3D12_GPU_VIRTUAL_ADDRESS constants,
+                                        D3D12_GPU_VIRTUAL_ADDRESS palette, bool palette_rows) {
     const auto inside = [](D3D12_GPU_VIRTUAL_ADDRESS address, D3D12_GPU_VIRTUAL_ADDRESS base, std::uint64_t bytes) {
         return address >= base && address - base < bytes && address - base <= 0xFFFFFFFFu;
     };
@@ -3432,7 +3431,7 @@ std::int32_t RendererD3D12::sort_curved(D3D12_GPU_VIRTUAL_ADDRESS vertices, D3D1
     }
     curve_sort_vertices_[frame_slot_] = resident_vertex_base_;
     draws.push_back({static_cast<std::uint32_t>(vertices - resident_vertex_base_),
-                     static_cast<std::uint32_t>(indices - index_ring_.gpu_base()), triangles, flat_triangles,
+                     static_cast<std::uint32_t>(indices - index_ring_.gpu_base()), triangles,
                      static_cast<std::uint32_t>(constants - constant_ring_.gpu_base()),
                      palette_rows ? static_cast<std::uint32_t>(palette - matrix_ring_.gpu_base()) : 0u,
                      palette_rows ? 1u : 0u, static_cast<std::uint32_t>(curve_sorted_bytes_[frame_slot_]),
@@ -8687,7 +8686,11 @@ void RendererD3D12::draw(const DrawCall& call) {
             }
             if (split && call.curve_sort >= 0 && call.curve_sort_list == curve_sort_list_ && !replay_playing_ &&
                 static_cast<std::size_t>(call.curve_sort) < curve_sort_draws_[frame_slot_].size()) {
-                // The sort's lists: the whole triangles, then the patches, each drawn by its arguments.
+                // The flat triangles, then the sort's lists: the whole triangles, then the patches, each drawn by
+                // its arguments.
+                if (call.flat_index_count != 0u) {
+                    command_list_->DrawIndexedInstanced(call.flat_index_count, 1, 0, 0, 0);
+                }
                 const CurveSortDraw& sorted = curve_sort_draws_[frame_slot_][static_cast<std::size_t>(call.curve_sort)];
                 ID3D12Resource* const buffer = curve_sorted_[frame_slot_].Get();
                 const D3D12_GPU_VIRTUAL_ADDRESS lists = buffer->GetGPUVirtualAddress() + sorted.output + 40u;

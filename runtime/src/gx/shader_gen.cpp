@@ -1263,15 +1263,15 @@ CURVE_EXTRA_MOVE
 // Each draw's (CurveDraw) triangles kept whole where every edge's curve_value is under kCurveFlat (the hull shader
 // gives such an edge one segment and the domain shader moves nothing), with margin for the two stages' rounding; an
 // edge with an end near the eye plane stays a patch. Three passes (classify, offsets, scatter) keep each list in the
-// draw's order. A draw's output: two DrawIndexedArguments (whole, patches), then the whole triangles' 32-bit
-// indices, then the patches'. The positions, displacement and crease normals and their pick per edge are the curved
-// vertex shader's and curve_edge_normal's.
+// draw's order. A split draw's flat triangles come first and draw from its own indices: the sort takes the rest. A
+// draw's output: two DrawIndexedArguments (whole, patches), then the whole triangles' 32-bit indices, then the
+// patches'. The positions, displacement and crease normals and their pick per edge are the curved vertex shader's and
+// curve_edge_normal's.
 static constexpr const char* kCurveSort = R"HLSL(
 struct CurveDraw {
     uint vertices;   // byte offset of the draw's first vertex
     uint indices;    // byte offset of its 16-bit indices
     uint triangles;
-    uint flat;       // its first triangles that bend nothing
     uint constants;  // byte offset of its vertex constants
     uint palette;    // byte offset of its matrix palette
     uint flags;      // bit 0: position matrices from the palette
@@ -1388,17 +1388,13 @@ void classify(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
     }
     load_draw_rows(d, tid);
     if (t < d.triangles) {
-        bool whole = t < d.flat;
-        if (!whole) {
-            const float2 half_viewport = draw_rows[7].xy;
-            const uint at = d.indices + t * 6u;
-            const Corner c0 = corner(d, index_at(at));
-            const Corner c1 = corner(d, index_at(at + 2u));
-            const Corner c2 = corner(d, index_at(at + 4u));
-            whole = edge_whole(c1, c2, half_viewport) && edge_whole(c2, c0, half_viewport) &&
-                    edge_whole(c0, c1, half_viewport);
-        }
-        if (whole) {
+        const float2 half_viewport = draw_rows[7].xy;
+        const uint at = d.indices + t * 6u;
+        const Corner c0 = corner(d, index_at(at));
+        const Corner c1 = corner(d, index_at(at + 2u));
+        const Corner c2 = corner(d, index_at(at + 4u));
+        if (edge_whole(c1, c2, half_viewport) && edge_whole(c2, c0, half_viewport) &&
+            edge_whole(c0, c1, half_viewport)) {
             InterlockedOr(block_mask[tid >> 5u], 1u << (tid & 31u));
         }
     }
