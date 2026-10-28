@@ -41,6 +41,8 @@
 #endif
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/curved_surfaces.h"
+#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/native_shapes.h"
 #include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/rt_materials.h"
@@ -1994,6 +1996,39 @@ void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32
 #endif
 }
 
+// A model's shape list once its model is final: built on the shape thread under the vertex state its draws will have
+// (galaxy/gx/native_shapes.h): the description list's VCD, VAT and arrays, then the arrays J3DShape::loadVtxArray
+// sets and the shape's current matrix.
+void svc_native_shape(void*, uint32_t handle, const void* list, uint32_t list_address, uint32_t list_bytes,
+                      const void* description, uint32_t description_bytes, const uint32_t* arrays,
+                      uint32_t matrix_index_a, uint32_t matrix_index_b) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace gx = galaxy::gx;
+    if (list == nullptr || list_bytes == 0u || description == nullptr || arrays == nullptr) {
+        return;
+    }
+    gx::GxState state;
+    if (!gx::shapes::load_description(
+            std::span(static_cast<const std::byte*>(description), description_bytes), state)) {
+        return;
+    }
+    state.load_cp(gx::cp::kArrayBaseBase + 0u, arrays[0]);
+    if (arrays[1] != 0u) {
+        state.load_cp(gx::cp::kArrayBaseBase + 1u, arrays[1]);
+    }
+    state.load_cp(gx::cp::kArrayBaseBase + 2u, arrays[2]);
+    state.load_cp(gx::cp::kMatrixIndexA, matrix_index_a);
+    state.load_cp(gx::cp::kMatrixIndexB, matrix_index_b);
+    gx::shapes::register_later(
+        gx::shapes::make_request(handle, list_address, std::span(static_cast<const std::byte*>(list), list_bytes),
+                                 state),
+        &gMemory);
+#else
+    (void)handle, (void)list, (void)list_address, (void)list_bytes, (void)description, (void)description_bytes,
+        (void)arrays, (void)matrix_index_a, (void)matrix_index_b;
+#endif
+}
+
 // The wheel's turn the window gathered since the game last asked.
 int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -3544,6 +3579,7 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.curved_surface = svc_curved_surface;
+    services.native_shape = svc_native_shape;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

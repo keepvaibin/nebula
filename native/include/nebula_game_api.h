@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 33u
+#define NEBULA_GAME_API_VERSION 34u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -588,6 +588,14 @@ typedef struct NebulaHostServices {
     void (*curved_surface)(void* user, uint32_t array_address, const void* array, uint32_t array_bytes,
                            const float* positions, uint32_t position_count, const float* normals, uint32_t normal_count,
                            const uint16_t* corners, uint32_t triangle_count);
+    /* A model's shape list (J3DShapeDraw `handle`: the shape-list marker's) once its model is final, for the renderer
+       to build ahead of its first draw (galaxy/gx/native_shapes.h): the list (`list`, `list_bytes`, at physical
+       `list_address`), its shape's vertex description list (`description`, `description_bytes`: VCD, VAT and array
+       commands), the arrays the shape sets before each draw (`arrays`: position, normal and colour 0 physical
+       addresses; normal 0 for a bump-mapped shape) and its current matrix (`matrix_index_a`, `matrix_index_b`). */
+    void (*native_shape)(void* user, uint32_t handle, const void* list, uint32_t list_address, uint32_t list_bytes,
+                         const void* description, uint32_t description_bytes, const uint32_t* arrays,
+                         uint32_t matrix_index_a, uint32_t matrix_index_b);
 } NebulaHostServices;
 
 enum {

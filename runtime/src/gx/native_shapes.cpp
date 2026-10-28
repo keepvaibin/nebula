@@ -5,6 +5,7 @@
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/windows_power.h"
 
+#include <chrono>
 #include <condition_variable>
 #include <cstring>
 #include <deque>
@@ -34,14 +35,31 @@ const std::byte* resolve(GuestMemory* memory, std::uint32_t address, std::uint32
     return nullptr;
 }
 
+// A registration until the renderer takes its shape: a model loaded but never drawn (or the game freed it with its
+// heap, which runs no destructors) is forgotten after kUnclaimedLife.
+struct Entry {
+    std::shared_ptr<const Shape> shape;
+    std::uint64_t generation = 0;
+    std::chrono::steady_clock::time_point registered;
+    bool pending = true;
+};
+constexpr auto kUnclaimedLife = std::chrono::seconds(120);
+
+struct Job {
+    Request request;
+    GuestMemory* memory = nullptr;
+    std::uint64_t generation = 0;
+};
+
 struct Registry {
     std::mutex lock;
     std::condition_variable work;
     std::condition_variable idle;
-    std::deque<std::pair<Request, GuestMemory*>> jobs;
-    std::vector<std::shared_ptr<const Shape>> shapes;
-    std::vector<std::uint8_t> pending;
+    std::deque<Job> jobs;
+    std::unordered_map<std::uint32_t, Entry> entries;
+    std::uint64_t generation = 0;
     std::size_t building = 0;
+    std::chrono::steady_clock::time_point last_sweep;
     bool worker = false;
 };
 
@@ -53,9 +71,10 @@ Registry& registry() {
 
 void worker() {
     galaxy::host::name_current_thread(L"Nebula Shape Builder");
+    galaxy::host::lower_current_thread_priority();
     Registry& r = registry();
     for (;;) {
-        std::pair<Request, GuestMemory*> job;
+        Job job;
         {
             std::unique_lock guard(r.lock);
             r.work.wait(guard, [&r] { return !r.jobs.empty(); });
@@ -64,18 +83,18 @@ void worker() {
         }
         std::shared_ptr<const Shape> shape;
         try {
-            shape = build(job.first, job.second);
+            shape = build(job.request, job.memory);
         } catch (...) {
             // A list the builder cannot read draws as GX would call it.
         }
         {
             std::lock_guard guard(r.lock);
-            if (job.first.handle >= r.shapes.size()) {
-                r.shapes.resize(job.first.handle + 1u);
-                r.pending.resize(job.first.handle + 1u);
+            // Published unless the handle was registered again (or taken) meanwhile.
+            const auto it = r.entries.find(job.request.handle);
+            if (it != r.entries.end() && it->second.generation == job.generation) {
+                it->second.shape = std::move(shape);
+                it->second.pending = false;
             }
-            r.shapes[job.first.handle] = std::move(shape);
-            r.pending[job.first.handle] = 0u;
             --r.building;
         }
         r.idle.notify_all();
@@ -83,6 +102,30 @@ void worker() {
 }
 
 }  // namespace
+
+bool load_description(std::span<const std::byte> list, GxState& state) {
+    std::size_t at = 0;
+    while (at < list.size()) {
+        const auto opcode = std::to_integer<std::uint8_t>(list[at]);
+        if (opcode == 0x00u) {
+            ++at;
+        } else if (opcode == 0x08u) {
+            if (list.size() - at < 6u) return false;
+            const std::byte* p = list.data() + at + 2u;
+            state.load_cp(std::to_integer<std::uint8_t>(list[at + 1u]),
+                          (static_cast<std::uint32_t>(read_u16(p)) << 16u) | read_u16(p + 2));
+            at += 6u;
+        } else if (opcode == 0x10u) {
+            if (list.size() - at < 5u) return false;
+            const std::size_t words = static_cast<std::size_t>(read_u16(list.data() + at + 1u)) + 1u;
+            if ((list.size() - at - 5u) / 4u < words) return false;
+            at += 5u + 4u * words;
+        } else {
+            return false;
+        }
+    }
+    return true;
+}
 
 Request make_request(std::uint32_t handle, std::uint32_t list_address, std::span<const std::byte> list,
                      const GxState& state) {
@@ -209,13 +252,16 @@ void register_later(Request request, GuestMemory* memory) {
     Registry& r = registry();
     {
         std::lock_guard guard(r.lock);
-        if (request.handle >= r.shapes.size()) {
-            r.shapes.resize(request.handle + 1u);
-            r.pending.resize(request.handle + 1u);
+        const auto now = std::chrono::steady_clock::now();
+        if (now - r.last_sweep > kUnclaimedLife / 4) {
+            r.last_sweep = now;
+            std::erase_if(r.entries, [now](const auto& item) {
+                return !item.second.pending && now - item.second.registered > kUnclaimedLife;
+            });
         }
-        r.shapes[request.handle] = nullptr;
-        r.pending[request.handle] = 1u;
-        r.jobs.emplace_back(std::move(request), memory);
+        Entry& entry = r.entries[request.handle];
+        entry = Entry{nullptr, ++r.generation, now, true};
+        r.jobs.push_back(Job{std::move(request), memory, entry.generation});
         ++r.building;
         if (!r.worker) {
             r.worker = true;
@@ -225,11 +271,17 @@ void register_later(Request request, GuestMemory* memory) {
     r.work.notify_one();
 }
 
-std::shared_ptr<const Shape> find(std::uint32_t handle, bool& pending) {
+std::shared_ptr<const Shape> take(std::uint32_t handle, bool& pending) {
     Registry& r = registry();
     std::lock_guard guard(r.lock);
-    pending = handle < r.pending.size() && r.pending[handle] != 0u;
-    return handle < r.shapes.size() ? r.shapes[handle] : nullptr;
+    const auto it = r.entries.find(handle);
+    pending = it != r.entries.end() && it->second.pending;
+    if (it == r.entries.end() || it->second.pending) {
+        return nullptr;
+    }
+    std::shared_ptr<const Shape> shape = std::move(it->second.shape);
+    r.entries.erase(it);
+    return shape;
 }
 
 void wait_idle() {

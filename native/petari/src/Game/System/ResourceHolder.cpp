@@ -12,6 +12,7 @@
 #include <revolution.h>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
+#include "Game/System/NebulaNativeShapes.hpp"
 #endif
 
 namespace {
@@ -230,6 +231,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         }
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
+        NebulaNativeShapes::registerModel(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }
@@ -240,6 +242,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         modelData->newSharedDisplayList(0);
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
+        NebulaNativeShapes::registerModel(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }

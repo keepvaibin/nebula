@@ -190,6 +190,11 @@ public:
     void setCurrentMtx(J3DCurrentMtx& mtx) {
         mCurrentMtx = mtx;
     }
+#ifdef TARGET_PC
+    const J3DCurrentMtx& getCurrentMtx() const {
+        return mCurrentMtx;
+    }
+#endif
 
     void setScaleFlagArray(u8* pScaleFlagArray) {
         mScaleFlagArray = pScaleFlagArray;

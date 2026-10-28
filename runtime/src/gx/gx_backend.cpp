@@ -9261,6 +9261,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_replay_packet_batches_ = 0;
     frame_native_shape_draws_ = 0;
     frame_native_shape_misses_ = 0;
+    frame_native_shape_waits_ = 0;
+    if ((frame_index_ & 0xFFu) == 0u) {
+        sweep_native_shapes();
+    }
     frame_replay_simple_batches_ = 0;
     frame_replay_generic_draws_ = 0;
     for (PipelineMemoEntry& entry : pipeline_memo_) {
@@ -10100,6 +10104,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " replay-packet-offers=" << frame_replay_packet_batches_
                   << " native-shape-draws=" << frame_native_shape_draws_
                   << " native-shape-misses=" << frame_native_shape_misses_
+                  << " native-shape-waits=" << frame_native_shape_waits_
                   << " replay-simple-offers=" << frame_replay_simple_batches_
                   << " replay-generic-draws=" << frame_replay_generic_draws_
                   << " flush-matrix-us=" << frame_flush_matrix_us_
@@ -12669,6 +12674,17 @@ bool GxBackend::adopt_native_shape(NativeShape& native, std::shared_ptr<const sh
     return true;
 }
 
+void GxBackend::sweep_native_shapes() noexcept {
+    for (auto it = native_shapes_.begin(); it != native_shapes_.end();) {
+        if (frame_index_ - it->second.last_used > kNativeShapeIdleChunks) {
+            drop_native_shape(it->second);
+            it = native_shapes_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
 void GxBackend::drop_native_shape(NativeShape& native) noexcept {
     if (native.shape != nullptr && native.resident_epoch != 0u && native.resident_epoch == resident_vertices_.epoch()) {
         resident_vertices_.release(native.resident_offset, static_cast<std::uint32_t>(native.shape->vertices.size()));
@@ -12701,23 +12717,25 @@ bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address
     if (!enabled || cached_draw_run_active_ || (test_ab && ((g_snapshot_presents + 1u) & 1u) != 0u)) {
         return false;
     }
-    if (handle >= native_shapes_.size()) {
-        native_shapes_.resize(std::max<std::size_t>(handle + 1u, native_shapes_.size() * 2u));
-    }
     NativeShape& native = native_shapes_[handle];
+    native.last_used = frame_index_;
     if (native.retired) {
         return false;
     }
     if (native.shape == nullptr) {
-        // Built from its first draw (this one is drawn as GX would), then looked up until the builder is done.
-        if (!native.requested) {
-            request_native_shape(native, handle, list_address, list_bytes);
-            return false;
-        }
+        // Registered when its model loaded, or else built from this first draw (drawn as GX would meanwhile).
         bool pending = false;
-        std::shared_ptr<const shapes::Shape> built = shapes::find(handle, pending);
+        std::shared_ptr<const shapes::Shape> built = shapes::take(handle, pending);
         if (built == nullptr) {
-            native.retired = !pending;
+            if (pending) {
+                native.requested = true;
+                ++frame_native_shape_waits_;
+            } else if (!native.requested) {
+                request_native_shape(native, handle, list_address, list_bytes);
+                ++frame_native_shape_waits_;
+            } else {
+                native.retired = true;
+            }
             return false;
         }
         if (!adopt_native_shape(native, std::move(built))) {

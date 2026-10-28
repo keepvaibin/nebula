@@ -20,6 +20,11 @@ public:
     void setDisplayListSize(u32 size) {
         mDisplayListSize = size;
     }
+#ifdef TARGET_PC
+    u32 getNebulaHandle() const {
+        return mNebulaHandle;
+    }
+#endif
 
 private:
     /* 0x04 */ u32 mDisplayListSize;

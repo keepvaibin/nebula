@@ -1617,11 +1617,16 @@ private:
         ImmutableUploadToken split_upload_token;
         DecodedPacketRunCacheEntry::GuestDependencySnapshots snapshots;
         std::uint64_t validated_generation = 0;
+        std::uint64_t last_used = 0;  // frame_index_ of its last draw
         bool requested = false;
         bool rebuilt = false;
         bool retired = false;
     };
-    std::vector<NativeShape> native_shapes_;
+    // By handle. A new galaxy's models come with new handles, and the game frees the old ones with their heap (no
+    // destructors run): a shape not drawn for kNativeShapeIdleChunks render chunks is dropped.
+    std::unordered_map<std::uint32_t, NativeShape> native_shapes_;
+    static constexpr std::uint64_t kNativeShapeIdleChunks = 3600u;
+    void sweep_native_shapes() noexcept;
     // The game's live memory (render_frame's), which the shape builder reads; frame memory may be a snapshot.
     std::atomic<GuestMemory*> live_memory_{nullptr};
     // Queues the build of the list at `list_address` under the current vertex state; false when the list is not in
@@ -2004,6 +2009,7 @@ private:
     std::uint64_t frame_replay_packet_batches_ = 0;
     std::uint64_t frame_native_shape_draws_ = 0;
     std::uint64_t frame_native_shape_misses_ = 0;
+    std::uint64_t frame_native_shape_waits_ = 0;  // drawn as GX while their shape is built
     std::uint64_t frame_replay_simple_batches_ = 0;
     std::uint64_t frame_replay_generic_draws_ = 0;
     std::uint64_t frame_flush_matrix_us_ = 0;

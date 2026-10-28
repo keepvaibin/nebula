@@ -64,11 +64,15 @@ struct Request {
 // distinct vertices.
 [[nodiscard]] std::shared_ptr<const Shape> build(const Request& request, GuestMemory* memory);
 
-// Builds `request` on the shape thread, from `memory`.
+// A shape description list's CP loads (J3DShape::makeVcdVatCmd: VCD, VAT and arrays) into `state`; its XF load (the
+// input specification) changes no decode. False for anything else in it.
+bool load_description(std::span<const std::byte> list, GxState& state);
+
+// Builds `request` on the shape thread, from `memory` (a handle registered again replaces its registration).
 void register_later(Request request, GuestMemory* memory);
-// The shape built for `handle`; null with `pending` set while it is being built, null without when it could not be
-// (or was never registered).
-[[nodiscard]] std::shared_ptr<const Shape> find(std::uint32_t handle, bool& pending);
+// The shape built for `handle`, which the registry then forgets; null with `pending` set while it is being built,
+// null without when it could not be built or was never registered (or was registered long ago and never taken).
+[[nodiscard]] std::shared_ptr<const Shape> take(std::uint32_t handle, bool& pending);
 // Waits until every shape registered so far is built (tests).
 void wait_idle();
 

@@ -129,11 +129,22 @@ bool test_registry() {
     shapes::register_later(shapes::make_request(8u, kList, square_list(0xA8u), scene.state), &scene.memory);
     shapes::wait_idle();
     bool pending = true;
-    bool ok = expect(shapes::find(7u, pending) != nullptr && !pending, "a registered shape is found once built");
+    bool ok = expect(shapes::take(7u, pending) != nullptr && !pending, "a registered shape is taken once built");
     pending = true;
-    ok = expect(shapes::find(8u, pending) == nullptr && !pending, "one that cannot be built is not pending") && ok;
+    ok = expect(shapes::take(7u, pending) == nullptr && !pending, "a taken shape leaves the registry") && ok;
     pending = true;
-    ok = expect(shapes::find(9u, pending) == nullptr && !pending, "an unknown handle is not pending") && ok;
+    ok = expect(shapes::take(8u, pending) == nullptr && !pending, "one that cannot be built is not pending") && ok;
+    pending = true;
+    ok = expect(shapes::take(9u, pending) == nullptr && !pending, "an unknown handle is not pending") && ok;
+    // The description list a J3D shape makes (J3DShape::makeVcdVatCmd): its CP loads, its XF load skipped.
+    std::vector<std::byte> description{std::byte{0x08}, std::byte{0x50}, std::byte{0}, std::byte{0},
+                                       std::byte{0x06}, std::byte{0}, std::byte{0x10}, std::byte{0},
+                                       std::byte{0},    std::byte{0x10}, std::byte{0x08}, std::byte{0},
+                                       std::byte{0},    std::byte{0},    std::byte{0x01}};
+    description.resize(32u);
+    GxState described;
+    ok = expect(shapes::load_description(description, described) && described.cp(cp::kVcdLo) == 0x600u,
+                "a description list's CP loads") && ok;
     return ok;
 }
 
