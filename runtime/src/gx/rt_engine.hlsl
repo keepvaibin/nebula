@@ -22,7 +22,8 @@ static const uint kEvGBufferPrev = 1u;    // the last traced frame's
 static const uint kEvDiTemp = 2u;         // per pixel uint4: the direct reservoir after temporal reuse (reservoir_store)
 static const uint kEvDi = 3u;             // per pixel uint4: this frame's final direct reservoir
 static const uint kEvDiPrev = 4u;         // the last frame's
-static const uint kEvDirect = 5u;         // per pixel uint4: the lights' direct diffuse (m) rgb (halves); z: the light
+static const uint kEvDirect = 5u;         // per pixel uint4: the lights' direct diffuse (m) rgb (halves) and the sun's
+                                          // visibility (y's high half: the share its ray lets through); z: the light
                                           // change (light_change: its kept sample's, whether its light is new; halves);
                                           // w: the sun's penumbra (kShadow*) and the water its light crosses (halves)
 static const uint kEvGiTemp = 6u;         // per half-pixel two uint4: the indirect reservoir after temporal reuse
@@ -734,9 +735,9 @@ float3 ggx_vndf(float3 n, float3 v, float alpha, float2 u)
     return f[0] * hl.x + f[1] * hl.y + f[2] * hl.z;
 }
 
-// A shadow ray from `origin` to `target` (stopping `margin` short of it): true when nothing the scene's lights are
-// blocked by lies between.
-bool engine_visible(float3 origin, float3 target, float margin, uint salt)
+// A shadow ray from `origin` to `target` (stopping `margin` short of it): the share of the light that reaches it (0
+// behind a blocker; through clear solids and undecided cards what each lets through, as sun_visibility_by).
+float engine_visibility(float3 origin, float3 target, float margin)
 {
     const float3 to = target - origin;
     const float span = length(to);
@@ -749,6 +750,7 @@ bool engine_visible(float3 origin, float3 target, float margin, uint salt)
         query;
     query.TraceRayInline(g_scene, RAY_FLAG_NONE, 0xFFu, ray);
     uint visits = 0u;
+    float through = 1.0f;
     while (query.Proceed()) {
         if (++visits > kMaxCandidates) {
             query.CommitNonOpaqueTriangleHit();
@@ -758,16 +760,21 @@ bool engine_visible(float3 origin, float3 target, float margin, uint salt)
         const bool late_hit = query.CandidateInstanceID() != 0u;
         const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
         // A clear solid stops kClearShadow of the light (the lighting without the engine gives its draws no shadow).
-        const bool clear = !late_hit && ((hit >> 8u) & 15u) == kClearClass;
-        if (late_hit ||
-            (clear ? card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow
-                   : (hit & kDrawNoShadow) == 0u &&
-                         card_blocks(query.CandidatePrimitiveIndex(), hit,
-                                     origin + ray.Direction * query.CandidateTriangleRayT(), salt))) {
+        float cover = 1.0f;
+        if (!late_hit) {
+            cover = ((hit >> 8u) & 15u) == kClearClass ? kClearShadow
+                    : (hit & kDrawNoShadow) != 0u
+                        ? 0.0f
+                        : card_cover(query.CandidatePrimitiveIndex(), hit,
+                                     origin + ray.Direction * query.CandidateTriangleRayT());
+        }
+        if (cover >= 1.0f) {
             query.CommitNonOpaqueTriangleHit();
+        } else {
+            through *= 1.0f - cover;
         }
     }
-    return query.CommittedStatus() != COMMITTED_TRIANGLE_HIT;
+    return query.CommittedStatus() == COMMITTED_TRIANGLE_HIT ? 0.0f : through;
 }
 
 // A direction within a disc about the sun's direction of tangent radius `spread` (g_sun.w: the sun's own).
@@ -872,7 +879,7 @@ Hit engine_trace(float3 origin, float3 direction, uint salt)
         }
         const bool late_hit = query.CandidateInstanceID() != 0u;
         const uint hit = late_hit ? 0u : g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-        // A clear solid the engine traces stops kClearShadow of these rays, as of the light (engine_visible): its
+        // A clear solid the engine traces stops kClearShadow of these rays, as of the light (engine_visibility): its
         // facets turn most of them off the straight path; the rest see what lies behind it.
         if (!late_hit && solid_draw(hit)) {
             if (card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow) {
@@ -880,7 +887,7 @@ Hit engine_trace(float3 origin, float3 direction, uint salt)
             }
         } else if (!late_hit && (hit & kDrawNoShadow) != 0u) {
             // What the table says lets light through (its shadow 0: water, translucent wings, decals lying on a
-            // surface) passes these rays as it passes the sun's (engine_visible): the far side of Bonefin's ocean
+            // surface) passes these rays as it passes the sun's (engine_visibility): the far side of Bonefin's ocean
             // sphere, the whole sphere's triangles in one draw, closed the water's inside off from the sky and left
             // it black.
         } else if (late_hit || card_blocks(query.CandidatePrimitiveIndex(), hit,
@@ -1310,7 +1317,7 @@ float engine_light_target(float3 p, float3 n, LightSample l, out float3 light)
 
 // The lights at `p` (normal `n`; shadow ray from `origin`): `candidates` drawn by engine_light_pick_near, one kept in
 // proportion to its target (resampled importance sampling), its light behind one shadow ray, weighted to stay unbiased.
-float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, inout uint seed, uint salt)
+float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, inout uint seed)
 {
     const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
     const float spheres = spheres_total();
@@ -1337,11 +1344,11 @@ float3 engine_light_sample(float3 p, float3 n, float3 origin, uint candidates, i
             kept_point = l.y;
         }
     }
-    if (!(kept_target > 0.0f) ||
-        !engine_visible(origin, kept_point, 0.5f + 0.001f * length(kept_point - origin), salt)) {
+    if (!(kept_target > 0.0f)) {
         return float3(0.0f, 0.0f, 0.0f);
     }
-    return kept_light * (weight_sum / (float(candidates) * kept_target));
+    const float seen = engine_visibility(origin, kept_point, 0.5f + 0.001f * length(kept_point - origin));
+    return kept_light * (seen * weight_sum / (float(candidates) * kept_target));
 }
 
 // The world's radiance cache (our implementation of path-space filtering, Binder, Fricke and Keller 2019, as NVIDIA's
@@ -1589,12 +1596,13 @@ float3 engine_hit_radiance(Hit h, float3 origin, float3 direction, bool emission
             const float3 l = sun_direction_sample(float2(emit_random(seed), emit_random(seed)));
             const float nl = dot(n, l);
             float blocker;
-            if (nl > 0.0f && sun_visible(start, l, false, salt, blocker)) {
-                m += g_sun_light.rgb * nl * water_through(start, g_sun.xyz);
+            if (nl > 0.0f) {
+                m += g_sun_light.rgb * (nl * sun_visibility(start, l, false, blocker)) *
+                     water_through(start, g_sun.xyz);
             }
         }
         if ((g_engine_info.x & kEngineHitNoLights) == 0u) {
-            m += engine_light_sample(lifted, n, start, 4u, seed, salt + 13u);
+            m += engine_light_sample(lifted, n, start, 4u, seed);
         }
         const float3 d = cosine_direction(n, ng, float2(emit_random(seed), emit_random(seed)));
         if ((g_engine_info.x & kEngineHitNoSky) != 0u) {
@@ -1699,12 +1707,13 @@ float light_target(GSurface s, LightSample l, out float3 light)
     return engine_light_target(s.p, s.n, l, light);
 }
 
-// The sun's shadow (after NVIDIA's SIGMA; our own code). EngineDirectCS traces one ray per pixel to a point of the
-// sun's disc and keeps the penumbra its blocker's distance d makes: 0.5 d tan(radius) in eye units (kShadowLit:
-// nothing in the way; 0: the surface faces away). EngineShadowBlurCS and EngineShadowPostCS filter the visibility over
-// that penumbra as the screen shows it, so a shadow cast from close by stays as sharp as daylight makes it and one cast
-// from far is as soft; EngineShadowStabilizeCS keeps a short history (kShadowHistoryMost frames) clamped to the
-// frame's own neighbourhood, so a moving caster leaves no trail. EngineFinalCS lights the surface by the result. In
+// The sun's shadow (after NVIDIA's SIGMA; our own code). EngineDirectCS traces one ray per pixel to the sun's centre
+// and keeps the penumbra its blocker's distance d makes: 0.5 d tan(radius) in eye units (kShadowLit: nothing in the
+// way; 0: the surface faces away). EngineShadowBlurCS and EngineShadowPostCS spread the visibility over that penumbra
+// as the screen shows it (as percentage-closer soft shadows do), so a shadow cast from close by stays as sharp as
+// daylight makes it and one cast from far is as soft; EngineShadowStabilizeCS keeps a short history
+// (kShadowHistoryMost frames) clamped to the frame's own neighbourhood, so a moving caster leaves no trail and the
+// temporal upscaler's jitter steps no edge. EngineFinalCS lights the surface by the result. In
 // the diffuse light's history (32 frames, unclamped) the sun's shadows took half a second to form and to leave, and
 // its a-trous blurred them to blobs.
 static const float kShadowLit = 65504.0f;        // half's largest
@@ -1715,22 +1724,6 @@ static const float kShadowHistoryMost = 7.0f;    // frames
 static const float kShadowHistoryWeight = 5.0f / 6.0f;  // the history's weight at most (5 frames' accumulation)
 // The fast history of the diffuse light (EngineTemporalCS's anti-lag): frames.
 static const float kFastHistory = 4.0f;
-
-// A pixel's point in the unit square for frame `frame`: interleaved gradient noise (Jimenez 2014) places neighbouring
-// pixels well apart, so the sun's rays in a penumbra average out over a few pixels; each pixel then steps along the R2
-// sequence (Roberts 2018; Wolfe 2019, animating noise with low-discrepancy sequences), so over a few frames its own
-// points cover the square evenly and the short stabilisation (kShadowHistoryMost) settles a still shadow's edge on its
-// mean. A pattern moved at random per frame left the edges flickering at a quarter of their contrast.
-float interleaved_gradient_noise(float2 q)
-{
-    return frac(52.9829189f * frac(dot(q, float2(0.06711056f, 0.00583715f))));
-}
-
-float2 pixel_sample(int2 q, uint frame)
-{
-    const float2 start = float2(interleaved_gradient_noise(float2(q)), interleaved_gradient_noise(float2(q.yx) + 31.0f));
-    return frac(start + float(frame & 1023u) * float2(0.7548776662f, 0.5698402910f));
-}
 
 // Where a ray from surface `s` towards `l` starts (Hanika 2021, "Hacking the Shadow Terminator", gated as Blender
 // Cycles' shadow_ray_offset with its default cutoff): a curved surface drawn in flat triangles, its shading normals
@@ -1754,6 +1747,35 @@ float3 surface_start(GSurface s, float3 l)
 float pixel_world_size(float z)
 {
     return abs(z) * 2.0f / max(abs(g_viewport.z * g_projection.x), 1e-6f);
+}
+
+// Where a shadow ray from pixel `q`'s surface `s` towards `l` starts: the highest start (surface_start) of the surface
+// about the pixel, its 3 x 3 and the four pixels two out, those on its plane and facing as it does, measured along its
+// face normal. A pixel's own start rests on the face its camera ray met and that face's lift, and those differ from
+// pixel to pixel where a curved model is drawn in two layers (Star Reactor's stone floor: three start heights a unit
+// or more apart, scattered pixel by pixel). Under a low sun the rays from neighbouring pixels then passed a blocker's
+// thin parts (Mario's hands and feet, 200 units off) at those heights, so which of them hit was a scatter of single
+// pixels, and every movement of the blocker reshuffled it: a hatch in the shadow that glittered. Rays from one height
+// for the surface about the pixel see what blocks that surface.
+static const int2 kStartNeighbours[12] = {int2(-1, -1), int2(0, -1), int2(1, -1), int2(-1, 0), int2(1, 0), int2(-1, 1),
+                                          int2(0, 1),   int2(1, 1),  int2(-2, 0), int2(2, 0), int2(0, -2), int2(0, 2)};
+
+float3 surface_start_steady(GSurface s, int2 q, float3 l)
+{
+    float height = dot(surface_start(s, l) - s.p, s.ng);
+    const float plane = 4.0f + abs(s.p.z) * 2e-3f;  // a neighbour this far off the pixel's plane is another surface
+    [unroll] for (uint k = 0u; k < 12u; ++k) {
+        const int2 o = q + kStartNeighbours[k];
+        if (any(o < 0) || any(o >= int2(g_target_size))) {
+            continue;
+        }
+        const GSurface n = gb_load(engine_view(kEvGBuffer), uint(o.y) * g_target_size.x + uint(o.x), g_projection, o);
+        if (!n.valid || (n.flags & kGbEmitter) != 0u || dot(n.ng, s.ng) < 0.9f || abs(dot(n.p - s.p, s.ng)) > plane) {
+            continue;
+        }
+        height = max(height, dot(surface_start(n, l) - s.p, s.ng));
+    }
+    return s.p + s.ng * height;
 }
 
 // Where a pixel's surface was in the last frame, for every history (the denoiser's, the sun shadow's, the reservoirs'
@@ -2035,34 +2057,35 @@ Reservoir direct_reservoir(uint2 id, uint pixel, out float change, out bool surf
         return r;
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x9E3779B9u));
-    const uint salt = pixel * 32u + g_frame * 0x632BE5ABu;
-    // The sun: one direction in its disc behind a shadow ray, kept as the penumbra its blocker makes (the light itself
-    // is EngineFinalCS's, by the filtered visibility).
+    // The sun: one ray to its centre, kept as the share of its light the way lets through and the penumbra the nearest
+    // blocker makes (the light itself is EngineFinalCS's, by the filtered visibility; the filter spreads it over the
+    // penumbra). Rays to points of the disc, one to four a frame, drew a penumbra as their mean, and under a low sun a
+    // penumbra reaches tens of pixels along the ground (Star Reactor's opening: Mario's hand's, some 25, at 0.47 units
+    // across): over those few rays' mean stayed a glittering hatch no filter or short history evens out. One ray to the
+    // centre draws the same shadow every frame the scene holds still.
     float penumbra = 0.0f;
+    float visibility = 0.0f;
     float depth = 0.0f;
     if (any(g_sun_light.rgb > 0.0f) && dot(s.n, g_sun.xyz) > 0.0f && dot(s.ng, g_sun.xyz) > -0.05f) {
         // Under water the sunlight crosses `depth` of it: attenuated, its disc widened by forward scattering.
-        const float3 start = surface_start(s, g_sun.xyz);
+        const float3 start = surface_start_steady(s, q, g_sun.xyz);
         depth = water_depth_along(start, g_sun.xyz);
         const float spread = depth > 0.0f ? min(g_sun.w + depth * kWaterSpread, kWaterSpreadMost) : g_sun.w;
-        const float2 u = pixel_sample(q, g_frame);
-        const float3 l = sun_direction_spread(u, spread);
         float blocker;
-        penumbra = sun_visible(surface_start(s, l), l, (s.flags & kGbCard) != 0u, salt, blocker)
-                       ? kShadowLit
-                       : clamp(0.5f * blocker * spread, kShadowLeast, 0.5f * kShadowLit);
+        visibility = sun_visibility(start, g_sun.xyz, (s.flags & kGbCard) != 0u, blocker);
+        penumbra = blocker > 0.0f ? clamp(0.5f * blocker * spread, kShadowLeast, 0.5f * kShadowLit) : kShadowLit;
         // GALAXY_RT_PROBE (diagnostics): what stops the sun's centre ray at the probed pixel, in g_final after the
         // light meter's records (SceneRayTracer prints [rt-probe-sun]).
         if (g_probe.z != 0u && all(id == g_probe.xy * g_factor)) {
             float t;
             uint2 who;
-            sun_visible_by(start, g_sun.xyz, (s.flags & kGbCard) != 0u, salt, t, who);
+            sun_visibility_by(start, g_sun.xyz, (s.flags & kGbCard) != 0u, t, who);
             const uint draw = who.x != 0u && who.y == 0u ? g_surfaces.Load((who.x - 1u) * 16u + 12u) >> 16u : 0xFFFFu;
             g_final[g_sample_size.x * g_sample_size.y + kStarSlots + 7u] =
                 uint4(who.x, draw | (who.y << 16u), asuint(t), asuint(depth));
         }
     }
-    direct.Store4(pixel * 16u, uint4(0u, 0u, 0u, pack_half2(penumbra, depth)));
+    direct.Store4(pixel * 16u, uint4(0u, pack_half2(0.0f, visibility), 0u, pack_half2(penumbra, depth)));
     // The lights (emitting triangles, the game's point lights, the star core): candidates from the pixel's light grid
     // cell (engine_light_pick_near).
     const float tris = g_tev_info.z != 0u ? max(emit_element(0u).y, 0.0f) : 0.0f;
@@ -2175,7 +2198,6 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     uint seed = emit_hash(pixel ^ (g_frame * 0x2545F491u) ^ 0xA511E9B3u);
-    const uint salt = pixel * 32u + g_frame * 0x632BE5ABu + 11u;
     // This pixel's reservoir and up to four neighbours' within 30 pixels (at kFootprintLines) on the same surface
     // (normal, depth), combined by the generalized balance heuristic (as the temporal reuse): each sample weighed by its
     // own pixel's count-weighted share of all of their targets for it.
@@ -2243,10 +2265,8 @@ void EngineDirectSpatialCS(uint3 id : SV_DispatchThreadID)
     if (r.W > 0.0f) {
         float3 light;
         light_target(s, r.s, light);
-        const float3 start = surface_start(s, normalize(r.s.y - s.p));
-        if (engine_visible(start, r.s.y, 0.5f + 0.001f * length(r.s.y - start), salt)) {
-            diffuse = light * r.W;
-        }
+        const float3 start = surface_start_steady(s, q, normalize(r.s.y - s.p));
+        diffuse = light * (r.W * engine_visibility(start, r.s.y, 0.5f + 0.001f * length(r.s.y - start)));
     }
     r.shade = luminance(safe_light(diffuse));
     // A light the last frame did not have (a flash, a new fire): its share of the light here is the share of the
@@ -2286,13 +2306,14 @@ float2 light_change(int2 q)
 }
 
 // A pixel's sun shadow as a stage of its filter reads it: its visibility and penumbra (eye units; kShadowLit, 0: see
-// kShadowLit). Stage 0: the ray's (EngineDirectCS: 1 lit, else 0); 1: the first blur's (kEvAtrousA); 2: the second's
+// kShadowLit). Stage 0: the rays' (EngineDirectCS: their lit share); 1: the first blur's (kEvAtrousA); 2: the second's
 // (kEvAtrousB).
 float shadow_load(uint stage, uint pixel, out float penumbra)
 {
     if (stage == 0u) {
+        const uint2 w = engine_buffer(kEvDirect).Load2(pixel * 16u + 4u).xy;
         penumbra = f16tof32(engine_buffer(kEvDirect).Load(pixel * 16u + 12u));
-        return penumbra >= kShadowLit ? 1.0f : 0.0f;
+        return f16tof32(w.x >> 16u);
     }
     const uint w = engine_buffer(stage == 1u ? kEvAtrousA : kEvAtrousB).Load(pixel * 16u);
     penumbra = f16tof32(w >> 16u);
@@ -2305,13 +2326,53 @@ float shadow_plane_weight(GSurface s, float3 x)
     return saturate(1.0f - abs(dot(s.ng, x - s.p)) / (abs(s.p.z) * 0.02f + 1.0f));
 }
 
-// One blur of the sun's visibility (stage 0: the rays' into kEvAtrousA; 1: the first blur's into kEvAtrousB). A dense
-// 5 x 5 estimates the penumbra about the pixel (its occluded neighbours', the smaller preferred) and filters within the
-// pixel's own; kShadowTaps taps on a disc of the estimate's radius on screen (at most kShadowRadiusMost pixels, narrowed
-// where the surface is seen at a slant, turned per frame) complete it. A tap counts on the pixel's plane and facing the
-// sun, and the less the smaller its penumbra against the estimate (an umbra's rays do not darken a wide penumbra next
-// to it). Where no ray about the pixel is blocked it stays lit; where every one is and the penumbra is within the 5 x 5,
-// in shadow.
+// The sun's penumbra lies on a surface stretched along the sun's track over it: EngineDirectCS keeps its width across
+// the rays (half the blocker's distance times the disc's radius, as SIGMA's), and a beam meeting a surface at incidence
+// i covers 1 / cos i of it along the track (Lambert's projection). Under a low sun a penumbra under a pixel across
+// reaches many pixels along the ground (Star Reactor's opening: 0.47 units across a 0.69-unit pixel, some twenty-five
+// along). SIGMA's world-space kernel stretches along the light's track the same way (its screen-space one does not:
+// "doesn't elongate shadow"). At most kShadowStretchMost.
+//
+// And no penumbra is spread narrower than kShadowLeastWidth pixels' footprint: the screen samples the shadow once a
+// pixel, so a width under one (the real sun's disc 0.27 degrees, a blocker 250 units off: 0.47 units across, on
+// 0.77-unit pixels) is below what it resolves. Two pixels: a hard edge's steps softened by a pixel each side.
+static const float kShadowStretchMost = 16.0f;
+static const float kShadowLeastWidth = 2.0f;
+
+struct ShadowFrame {
+    float3 track;   // the sun's direction over the surface
+    float3 across;  // the surface's other direction
+    float stretch;  // the penumbra's reach along the track over its width
+};
+
+ShadowFrame shadow_frame(GSurface s)
+{
+    ShadowFrame f;
+    const float c = dot(s.ng, g_sun.xyz);
+    f.stretch = 1.0f / max(abs(c), 1.0f / kShadowStretchMost);
+    const float3 along = g_sun.xyz - s.ng * c;
+    const float length_along = length(along);
+    f.track = length_along > 1e-4f ? along / length_along : tangent_frame(s.ng)[0];
+    f.across = cross(s.ng, f.track);
+    return f;
+}
+
+// An offset over the surface (eye units) in penumbras `penumbra` wide: along the track shortened by the stretch.
+float shadow_reach(ShadowFrame f, float3 offset, float penumbra)
+{
+    const float along = dot(offset, f.track) / f.stretch;
+    const float across = dot(offset, f.across);
+    return sqrt(along * along + across * across) / penumbra;
+}
+
+// One blur of the sun's visibility (stage 0: the rays' into kEvAtrousA; 1: the first blur's into kEvAtrousB), over the
+// surface as its penumbra lies on it (shadow_frame). A dense 5 x 5 estimates the penumbra about the pixel (its occluded
+// neighbours', the smaller preferred) and filters within the pixel's own; kShadowTaps taps on the surface, on an
+// ellipse of the estimate along the track and across it (on screen at most kShadowRadiusMost pixels; the second blur's
+// turned from the first's, the same every frame), complete it. A tap counts on the pixel's plane and facing the sun,
+// and the less the smaller its penumbra against the estimate (an umbra's rays do not darken a wide penumbra next to
+// it). Where no ray about the pixel is blocked it stays
+// lit; where every one is and the penumbra is within the 5 x 5, in shadow.
 void shadow_blur(uint2 id, uint stage)
 {
     if (any(id >= g_target_size)) {
@@ -2329,8 +2390,7 @@ void shadow_blur(uint2 id, uint stage)
     }
     RWByteAddressBuffer gb = engine_buffer(kEvGBuffer);
     const float size = pixel_world_size(s.p.z);
-    // Pixels to the centre's penumbra radii (none lit: its whole 5 x 5).
-    const float to_centre = centre_penumbra >= kShadowLit ? 0.0f : size / centre_penumbra;
+    const ShadowFrame frame = shadow_frame(s);
     float result = 0.0f;
     float weight = 0.0f;
     float penumbra = 0.0f;
@@ -2346,10 +2406,17 @@ void shadow_blur(uint2 id, uint stage)
             float w = 1.0f;
             if (i != 0 || j != 0) {
                 const float z = asfloat(gb.Load(op * 32u + 16u));
-                const float r = length(float2(i, j)) * to_centre;
-                w = z != 0.0f && p != 0.0f
-                        ? exp(-r * r) * shadow_plane_weight(s, eye_position(g_projection, g_viewport, float2(o) + 0.5f, z))
-                        : 0.0f;
+                if (z != 0.0f && p != 0.0f) {
+                    const float3 x = eye_position(g_projection, g_viewport, float2(o) + 0.5f, z);
+                    // Within the centre's own penumbra, a pixel at least (none lit: its whole 5 x 5).
+                    const float r =
+                        centre_penumbra >= kShadowLit
+                            ? 0.0f
+                            : shadow_reach(frame, x - s.p, max(centre_penumbra, kShadowLeastWidth * size));
+                    w = exp(-r * r) * shadow_plane_weight(s, x);
+                } else {
+                    w = 0.0f;
+                }
             }
             result += v * w;
             weight += w;
@@ -2368,24 +2435,26 @@ void shadow_blur(uint2 id, uint stage)
         return;
     }
     penumbra /= penumbra_weight;
-    const float radius = min(penumbra / size, kShadowRadiusMost * footprint_scale());
-    if (!lit && radius <= 2.0f) {
+    // The taps' ellipse on the surface: the estimate across the track, its stretch along it, each at most the widest
+    // the screen allows.
+    const float widest = kShadowRadiusMost * footprint_scale() * size;
+    const float across = clamp(penumbra, kShadowLeastWidth * size, widest);
+    const float along = clamp(penumbra * frame.stretch, across, widest);
+    if (!lit && along <= 2.0f * size) {
         dst.Store(pixel * 16u, pack_half2(result, penumbra));
         return;
     }
     // The dense estimate counts as one tap at full weight, as its penumbra.
     weight = 1.0f;
     penumbra_weight = 1.0f;
-    const float slant = abs(dot(s.ng, normalize(-s.p)));
-    float2 skew = lerp(1.0f - abs(s.ng.xy), float2(1.0f, 1.0f), slant);
-    skew *= radius / max(max(skew.x, skew.y), 1e-3f);
-    const float turn = float(g_frame & 255u) * 2.3999632f + float(stage) * 1.3f;
+    const float turn = float(stage) * 1.3f;
     const float estimate = penumbra;
     [unroll] for (uint n = 0u; n < kShadowTaps; ++n) {
         const float r = sqrt((float(n) + 0.5f) / float(kShadowTaps));
         const float a = float(n) * 2.3999632f + turn;
-        const int2 o = q + int2(round(float2(cos(a), sin(a)) * r * skew));
-        if (any(o < 0) || any(o >= int2(g_target_size))) {
+        const float3 at = s.p + (frame.track * (cos(a) * along) + frame.across * (sin(a) * across)) * r;
+        const int2 o = int2(floor(eye_to_pixel(g_projection, g_viewport, at)));
+        if (any(o < 0) || any(o >= int2(g_target_size)) || all(o == q)) {
             continue;
         }
         const uint op = uint(o.y) * g_target_size.x + uint(o.x);
@@ -2686,7 +2755,6 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         return;
     }
     uint seed = emit_hash(index ^ (g_frame * 0x1B873593u) ^ 0x6A09E667u);
-    const uint salt = index * 32u + g_frame * 0x632BE5ABu + 23u;
     {
         const GiReservoir own = gi_load(engine_view(kEvGiTemp), index);
         const float t = own.W > 0.0f ? gi_target(s, own.x, own.radiance) : 0.0f;
@@ -2735,9 +2803,8 @@ void EngineIndirectSpatialCS(uint3 id : SV_DispatchThreadID)
         }
     }
     r.W = r.target > 0.0f && r.m > 0.0f ? r.w_sum / (r.m * r.target) : 0.0f;
-    if (reused && r.W > 0.0f && length(r.x) < 9.0e4f &&
-        !engine_visible(surface_start(s, normalize(r.x - s.p)), r.x, 0.5f, salt)) {
-        r.W = 0.0f;
+    if (reused && r.W > 0.0f && length(r.x) < 9.0e4f) {
+        r.W *= engine_visibility(surface_start(s, normalize(r.x - s.p)), r.x, 0.5f);
     }
     // m = (1/pi) L cos W (this frame's light only: the history keeps the temporal reservoir).
     float3 m = float3(0.0f, 0.0f, 0.0f);
@@ -3406,13 +3473,12 @@ float3 clear_wall(ClearHit h, float3 dir, uint pixel, uint layer, out float tran
         const float3 ls = g_sun.xyz;
         const float nls = dot(n, ls);
         float blocker;
-        if (nls > 0.0f && dot(ng, ls) > 0.0f && sun_visible(start, sun_direction_sample(float2(emit_random(seed),
-                                                                                          emit_random(seed))),
-                                                             false, salt + 9u, blocker)) {
+        if (nls > 0.0f && dot(ng, ls) > 0.0f) {
             const float3 hs = normalize(v + ls);
             const float a = sun_alpha(alpha);
             reflected += g_sun_light.rgb * ((ice ? fresnel_dielectric(dot(v, hs), ice_ior) : glass_wall(dot(v, hs)).x) *
-                                            ggx_d(a, dot(n, hs)) * smith_visibility(a, nls, nv) * nls * kPi);
+                                            ggx_d(a, dot(n, hs)) * smith_visibility(a, nls, nv) * nls * kPi *
+                                            sun_visibility(start, ls, false, blocker));
         }
     }
     return safe_light(reflected);
@@ -3719,13 +3785,12 @@ ClearLight clear_solid(ClearHit h, float3 dir, uint pixel)
         const float3 ls = g_sun.xyz;
         const float nls = dot(n, ls);
         float blocker;
-        if (nls > 0.0f && dot(ng, ls) > 0.0f &&
-            sun_visible(start, sun_direction_sample(float2(emit_random(seed), emit_random(seed))), false, salt + 9u,
-                        blocker)) {
+        if (nls > 0.0f && dot(ng, ls) > 0.0f) {
             const float3 hs = normalize(v + ls);
             const float a = sun_alpha(alpha);
             o.r += g_sun_light.rgb * (fresnel_dielectric(dot(v, hs), ior) * ggx_d(a, dot(n, hs)) *
-                                      smith_visibility(a, nls, nv) * nls * kPi);
+                                      smith_visibility(a, nls, nv) * nls * kPi *
+                                      sun_visibility(start, ls, false, blocker));
         }
     }
     // Inside: refracted at the front face, followed along its internally reflected path; each far face passes its
@@ -3841,16 +3906,15 @@ static const float kFallAeration = 0.36f;
 // The light white water at eye-space `x` (face normal `ng`, shading normal `n`, both towards the camera) gives off as a
 // white surface would show it (m): the sun on the side it reaches, behind that side's own shadow ray, and the open sky
 // on both sides, its front's whole, its back's `back` (foam_back).
-float3 foam_light(float3 x, float3 ng, float3 n, float back, uint salt)
+float3 foam_light(float3 x, float3 ng, float3 n, float back)
 {
     float3 m = sky_light_colour(physical_sky_irradiance(n) + back * physical_sky_irradiance(-n));
     const float nl = dot(n, g_sun.xyz);
     if (any(g_sun_light.rgb > 0.0f) && abs(nl) > 0.0f) {
         const float side = nl > 0.0f ? 1.0f : -1.0f;
         float blocker;
-        if (sun_visible(x + ng * (side * (0.2f + abs(x.z) * 4e-4f)), g_sun.xyz, false, salt, blocker)) {
-            m += g_sun_light.rgb * (abs(nl) * (nl > 0.0f ? 1.0f : back));
-        }
+        m += g_sun_light.rgb * (abs(nl) * (nl > 0.0f ? 1.0f : back) *
+                                sun_visibility(x + ng * (side * (0.2f + abs(x.z) * 4e-4f)), g_sun.xyz, false, blocker));
     }
     return m;
 }
@@ -4003,7 +4067,7 @@ ClearLight fall_water(float3 x, float3 ng, float3 n, float3 albedo, float3 hue, 
     // The white water's colour: white at the painted brightness (bubbles scatter every colour alike).
     const float bright = max(albedo.r, max(albedo.g, albedo.b));
     // The white water's light (the sheet casts no shadow: none on itself), and its bubbles' in the clear water.
-    const float3 m = foam_light(x, ng, n, foam_back(white, depth), salt + 5u);
+    const float3 m = foam_light(x, ng, n, foam_back(white, depth));
     o.r = (white * bright + (1.0f - white) * aeration) * m;
     // The clear water's reflection off its corrugated surface (fall_ripple): a visible normal, its mirror direction,
     // the light along it; weight R(v.m) G2 / G1.
@@ -4030,13 +4094,11 @@ ClearLight fall_water(float3 x, float3 ng, float3 n, float3 albedo, float3 hue, 
     if (any(g_sun_light.rgb > 0.0f) && (g_engine_info.x & kEngineClearNoSun) == 0u && nl_sun > 0.0f &&
         dot(ng, g_sun.xyz) > 0.0f) {
         float blocker;
-        if (sun_visible(start, sun_direction_sample(float2(emit_random(seed), emit_random(seed))), false, salt + 9u,
-                        blocker)) {
-            const float3 hs = normalize(v + g_sun.xyz);
-            const float a = sun_alpha(alpha);
-            reflected += g_sun_light.rgb * (water_wall(dot(v, hs)).x * ggx_d(a, dot(nr, hs)) *
-                                            smith_visibility(a, nl_sun, nv_r) * nl_sun * kPi);
-        }
+        const float3 hs = normalize(v + g_sun.xyz);
+        const float a = sun_alpha(alpha);
+        reflected += g_sun_light.rgb * (water_wall(dot(v, hs)).x * ggx_d(a, dot(nr, hs)) *
+                                        smith_visibility(a, nl_sun, nv_r) * nl_sun * kPi *
+                                        sun_visibility(start, g_sun.xyz, false, blocker));
     }
     o.r += reflected * (kFallReflectionGain * (1.0f - white));
     // What lies behind, through the sheet.
@@ -4241,9 +4303,10 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
 static const uint kMistSunRays = 32u;
 static const uint kMistAroundRays = 32u;
 
-// The sun at a point of the mist: the scene's sun shadow (sun_visible's reach, cards and late geometry), the clear
-// surfaces passed (the traced falls are water, glass lets light through). A shadow ray over the whole scene (rt54's
-// solid_trace) took far planets in the sun's direction for blockers and left the mist the light around it alone: grey.
+// The sun at a point of the mist: the scene's sun shadow (sun_visibility_by's reach, cards and late geometry), the
+// clear surfaces passed (the traced falls are water, glass lets light through). A shadow ray over the whole scene
+// (rt54's solid_trace) took far planets in the sun's direction for blockers and left the mist the light around it
+// alone: grey.
 bool mist_sun_visible(float3 origin, uint salt)
 {
     RayDesc ray;
@@ -4395,11 +4458,12 @@ float3 reference_path(float3 p, float3 n, float3 ng, bool card, inout uint seed,
             const float3 l = sun_direction_sample(float2(emit_random(seed), emit_random(seed)));
             const float nl = dot(n, l);
             float blocker;
-            if (nl > 0.0f && dot(ng, l) > -0.05f && sun_visible(start, l, card && bounce == 0u, at, blocker)) {
-                m += g_sun_light.rgb * nl * water_through(start, g_sun.xyz);
+            if (nl > 0.0f && dot(ng, l) > -0.05f) {
+                m += g_sun_light.rgb * (nl * sun_visibility(start, l, card && bounce == 0u, blocker)) *
+                     water_through(start, g_sun.xyz);
             }
         }
-        m += engine_light_sample(p, n, start, 8u, seed, at + 13u);
+        m += engine_light_sample(p, n, start, 8u, seed);
         total += throughput * safe_light(m);
         const float3 d = cosine_direction(n, ng, float2(emit_random(seed), emit_random(seed)));
         const Hit h = engine_trace(start, d, at + 7u);
@@ -4540,16 +4604,16 @@ void water_light(int2 q, float limit, bool has_behind, float3 behind_n, float3 b
         float3 open = sky_light_colour(physical_sky_irradiance(up));
         const float nl = dot(up, g_sun.xyz);
         float blocker;
-        if (any(g_sun_light.rgb > 0.0f) && nl > 0.0f &&
-            sun_visible(hit + up * (0.5f + abs(hit.z) * 4e-4f), g_sun.xyz, false, salt + 11u, blocker)) {
-            open += g_sun_light.rgb * nl;
+        if (any(g_sun_light.rgb > 0.0f) && nl > 0.0f) {
+            open += g_sun_light.rgb * (nl * sun_visibility(hit + up * (0.5f + abs(hit.z) * 4e-4f), g_sun.xyz, false,
+                                                           blocker));
         }
         open_word = max(pack_r11g11b10(min(safe_light(open * physical_exposure()), kMaxPhysicalLight)), 1u);
     }
     if (!fall) {
         return;
     }
-    float3 light = foam_light(hit, n, n, kFoamBack, salt);
+    float3 light = foam_light(hit, n, n, kFoamBack);
     const bool near_behind = has_behind && limit - t <= kFallBehind && dot(behind_n, n) > 0.5f;
     if (near_behind) {
         light += behind - sky_light_colour(physical_sky_irradiance(n));
@@ -4717,7 +4781,7 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 const float3 past = behind_fall(s.p + dir * (1.0f + abs(s.p.z) * 1e-3f), dir, salt);
                 diffuse = float3(0.0f, 0.0f, 0.0f);
                 specular = light.r + past * light.t;
-                whole = foam_light(s.p, s.ng, s.n, kFoamBack, salt + 3u) * exposure;
+                whole = foam_light(s.p, s.ng, s.n, kFoamBack) * exposure;
             }
             if (view == 1u || view == 2u || view == 4u) {
                 const uint4 dv = engine_buffer(kEvDirect).Load4(pixel * 16u);
@@ -4747,12 +4811,12 @@ void EngineFinalCS(uint3 id : SV_DispatchThreadID)
                 diffuse = float3(0.0f, 0.0f, 0.0f);
                 specular = srgb_to_linear(shown) / max(exposure, 1e-6f);
             }
-            // Views 11 to 13: the sun's shadow, unlit (the filtered visibility, its ray's, the penumbra's radius on
-            // screen over kShadowRadiusMost; facing away black).
+            // Views 11 to 13: the sun's shadow, unlit (the filtered visibility, its ray's, the penumbra's reach along
+            // the sun's track on screen over kShadowRadiusMost; facing away black).
             if (view >= 11u && view <= 13u) {
-                const float radius = penumbra > 0.0f && penumbra < kShadowLit
-                                         ? min(penumbra / pixel_world_size(s.p.z), kShadowRadiusMost) / kShadowRadiusMost
-                                         : 0.0f;
+                const float reach = penumbra * shadow_frame(s).stretch / pixel_world_size(s.p.z);
+                const float radius =
+                    penumbra > 0.0f && penumbra < kShadowLit ? min(reach, kShadowRadiusMost) / kShadowRadiusMost : 0.0f;
                 diffuse = float3(0.0f, 0.0f, 0.0f);
                 specular = (view == 11u ? visible : view == 12u ? ray : radius).xxx * (0.5f / max(exposure, 1e-6f));
             }

@@ -263,14 +263,15 @@ static const float kAdaptationLeast = 0.5f;
 // drawn after the trace, Rosalina) has no records in g_positions or g_surfaces: shadow, sky and reflection
 // rays meet it as an occluder.
 static const uint kSceneMask = 1u;
-// g_draws word 6: an alpha-tested card (grass, flowers), traced whole (card_blocks decides its hits).
+// g_draws word 6: an alpha-tested card (grass, flowers), traced whole (card_cover decides its hits).
 static const uint kDrawTableCard = 16u;
 // RtDraw.flags bits 8-11 (rt_surfaces.h RtSurfaceClass::Crystal): clear crystal, glass and gems.
 static const uint kClearClass = 7u;
 // The share of the light a clear solid stops on its way through: its facets refract and totally reflect most rays
 // away from the straight path, so the light behind a cut crystal is a partial, mottled shadow (about 0.4 of the light
-// arrives), not the 0.91 a flat pane passes ((1 - F)^2) nor a solid's full shadow. Decided per shadow ray by a hash
-// (the denoiser averages it), for the sun's and the lights' rays alike.
+// arrives), not the 0.91 a flat pane passes ((1 - F)^2) nor a solid's full shadow. A shadow ray (the sun's, the
+// lights') passes the rest of the light on (sun_visibility_by, engine_visibility); a bounce ray stops at one in
+// kClearShadow, a hash deciding (its history averages it).
 static const float kClearShadow = 0.6f;
 // The lighting multiplies the game's colour by at most this; the composite rolls it off on a film
 // shoulder from kLitKnee (apply_light).
@@ -2052,7 +2053,7 @@ float3 rgb8(uint c)
 // Foliage cards: the scene holds the alpha-tested ones whole, their cut-outs filled. A hit on a card
 // counts where the raster drew it (the depth at the hit's pixel lies on the card's plane), not where it
 // saw through it (a farther depth, the sky); hidden or out of view, at the cards' mean coverage (about half
-// their texels), a number from the primitive and `salt` (the sample, the frame, the ray) deciding.
+// their texels).
 static const float kCardCoverage = 0.5f;
 
 bool traced_card(uint flags)
@@ -2118,23 +2119,24 @@ int alpha_test(uint primitive, uint flags, float3 h)
 #endif
 }
 
-// Whether a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops a ray. An
-// alpha-tested draw or card stops it where its texture's alpha passes its test (exact leaf, fence and lattice
-// shadows); an untested card follows the raster's depth where it is in view, else the cards' mean coverage.
-bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
+// How much of a ray a candidate hit at eye-space `h` on `primitive` (its g_surfaces flags word `flags`) stops: 1 or
+// 0 where it is decided, else kCardCoverage. An alpha-tested draw or card stops it where its texture's alpha passes its
+// test (exact leaf, fence and lattice shadows); an untested card follows the raster's depth where it is in view, else
+// the cards' mean coverage.
+float card_cover(uint primitive, uint flags, float3 h)
 {
     const int tested = alpha_test(primitive, flags, h);
     if (tested >= 0) {
-        return tested != 0;
+        return tested != 0 ? 1.0f : 0.0f;
     }
     if (!traced_card(flags)) {
-        return true;
+        return 1.0f;
     }
     const float2 q = eye_to_pixel(g_projection, g_viewport, h);
     if (h.z < -g_near && inside(g_viewport, q) && all(q < float2(g_target_size))) {
         const float depth = g_efb_depth.Load(int3(int2(q), 0));
         if (far_plane(g_depth, depth)) {
-            return false;
+            return 0.0f;
         }
         // The card's plane along the pixel's own ray (edge-on: undecided).
         const float3 v0 = asfloat(g_positions.Load3(primitive * 36u));
@@ -2147,14 +2149,22 @@ bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
             const float z = depth_to_eye_z(g_depth, depth);
             const float tolerance = 0.004f * abs(plane) + 1.0f;
             if (z < plane - tolerance) {
-                return false;
+                return 0.0f;
             }
             if (z <= plane + tolerance) {
-                return true;
+                return 1.0f;
             }
         }
     }
-    return card_hash(primitive, salt) < kCardCoverage;
+    return kCardCoverage;
+}
+
+// card_cover as one ray's yes or no, for the rays whose histories average their noise (bounces): an undecided card
+// stops one in kCardCoverage, a number from the primitive and `salt` (the sample, the frame, the ray) deciding.
+bool card_blocks(uint primitive, uint flags, float3 h, uint salt)
+{
+    const float cover = card_cover(primitive, flags, h);
+    return cover >= 1.0f || (cover > 0.0f && card_hash(primitive, salt) < cover);
 }
 
 // The surface a sample shows (EngineGBufferCS): the triangle the camera ray meets at the raster depth gives the
@@ -2307,13 +2317,18 @@ Surface primary_surface(int2 q, float3 p)
 // cards along one ray are as good as a wall.
 static const uint kMaxCandidates = 64u;
 
-// Whether the sun is seen from `origin` along `direction` (a point inside its disc); the blocker's distance in
-// `blocker` (0: open), its triangle + 1 in this instance's (0: open) and its instance in `who`. `card`: the sample lies
-// on a foliage card, which the cards close beside it do not shade.
-bool sun_visible_by(float3 origin, float3 direction, bool card, uint salt, out float blocker, out uint2 who)
+// The share of the sun's light reaching `origin` along `direction` (a point of its disc): 0 behind a blocker; through
+// clear solids and undecided cards what each lets through (1 - kClearShadow, 1 - card_cover), the same for every ray
+// and frame, so the shadows they cast are as still as a solid's (a ray stopped at random by them, one in so many,
+// left their shadows a frame's grain). The nearest blocker's distance in `blocker` (0: none), the triangle + 1 of the
+// one that stopped the ray in this instance's (0: open, or only passed through) and its instance in `who`. `card`: the
+// sample lies on a foliage card, which the cards close beside it do not shade.
+float sun_visibility_by(float3 origin, float3 direction, bool card, out float blocker, out uint2 who)
 {
     blocker = 0.0f;
     who = uint2(0u, 0u);
+    float through = 1.0f;
+    float partial = 6.0e4f;
     RayDesc ray;
     ray.Origin = origin;
     ray.Direction = direction;
@@ -2333,37 +2348,41 @@ bool sun_visible_by(float3 origin, float3 direction, bool card, uint salt, out f
             continue;
         }
         const uint hit = g_surfaces.Load(query.CandidatePrimitiveIndex() * 16u + 12u);
-        if (((hit >> 8u) & 15u) == kClearClass) {
-            if (card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow) {
-                query.CommitNonOpaqueTriangleHit();
+        const float t = query.CandidateTriangleRayT();
+        float cover = kClearShadow;
+        if (((hit >> 8u) & 15u) != kClearClass) {
+            if ((hit & kDrawNoShadow) != 0u) {
+                continue;
             }
-            continue;
+            if (card && t < 60.0f &&
+                (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) !=
+                    0u) {
+                continue;
+            }
+            cover = card_cover(query.CandidatePrimitiveIndex(), hit, origin + direction * t);
         }
-        if ((hit & kDrawNoShadow) != 0u) {
-            continue;
+        if (cover >= 1.0f) {
+            query.CommitNonOpaqueTriangleHit();
+        } else if (cover > 0.0f) {
+            through *= 1.0f - cover;
+            partial = min(partial, t);
         }
-        if (card && query.CandidateTriangleRayT() < 60.0f &&
-            (g_draws.Load(min(hit >> 16u, max(g_draw_count, 1u) - 1u) * kDrawStride + 24u) & kDrawTableFoliage) != 0u) {
-            continue;
-        }
-        if (!card_blocks(query.CandidatePrimitiveIndex(), hit, origin + direction * query.CandidateTriangleRayT(),
-                         salt)) {
-            continue;
-        }
-        query.CommitNonOpaqueTriangleHit();
     }
     if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT) {
         blocker = clamp(query.CommittedRayT(), 1e-2f, 6.0e4f);
         who = uint2(query.CommittedPrimitiveIndex() + 1u, query.CommittedInstanceID());
-        return false;
+        return 0.0f;
     }
-    return true;
+    if (through < 1.0f) {
+        blocker = clamp(partial, 1e-2f, 6.0e4f);
+    }
+    return through;
 }
 
-bool sun_visible(float3 origin, float3 direction, bool card, uint salt, out float blocker)
+float sun_visibility(float3 origin, float3 direction, bool card, out float blocker)
 {
     uint2 who;
-    return sun_visible_by(origin, direction, card, salt, blocker, who);
+    return sun_visibility_by(origin, direction, card, blocker, who);
 }
 
 // Physical emitters (kPhysicalFlag): every triangle of the scene's emitting draws (the material table's light sources:
