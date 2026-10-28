@@ -16,6 +16,8 @@
 #include "rt_engine_indirect_spatial_cs.h"
 #include "rt_engine_light_grid_cs.h"
 #include "rt_engine_mist_cs.h"
+#include "rt_engine_paint_clear_cs.h"
+#include "rt_engine_paint_cs.h"
 #include "rt_engine_cache_cs.h"
 #include "rt_engine_reference_cs.h"
 #include "rt_engine_shadow_blur_cs.h"
@@ -86,6 +88,11 @@ constexpr std::uint32_t kEngineGiFull = 2147483648u;
 constexpr std::uint64_t kEngineCacheEntries = 1048576ull;
 constexpr std::uint64_t kEngineCacheBytes = kEngineCacheEntries * 32ull;
 
+// The table metals' painted colour (rt_engine.hlsl EnginePaintCS): per draw a record of four sums (red, green and blue
+// in 1/1023 units, the triangles counted); draws past this many decide pixel by pixel.
+constexpr std::uint32_t kEnginePaintDraws = 16384u;
+constexpr std::uint64_t kEnginePaintBytes = kEnginePaintDraws * 16ull;
+
 float env_value(const char* name, float fallback) {
     char value[32]{};
     std::size_t length = 0u;
@@ -150,6 +157,8 @@ bool SceneRayTracer::create_engine_pipelines() {
         return true;
     };
     const bool ok =
+        compute(g_rt_engine_paint_clear_cs, sizeof(g_rt_engine_paint_clear_cs), engine_paint_clear_pso_) &&
+        compute(g_rt_engine_paint_cs, sizeof(g_rt_engine_paint_cs), engine_paint_pso_) &&
         compute(g_rt_engine_gbuffer_cs, sizeof(g_rt_engine_gbuffer_cs), engine_gbuffer_pso_) &&
         compute(g_rt_engine_direct_cs, sizeof(g_rt_engine_direct_cs), engine_direct_pso_) &&
         compute(g_rt_engine_direct_spatial_cs, sizeof(g_rt_engine_direct_spatial_cs), engine_direct_spatial_pso_) &&
@@ -214,12 +223,66 @@ std::uint32_t SceneRayTracer::texture_srv(ID3D12Resource* resource) {
     return texture_view_first_ + slot;
 }
 
+void SceneRayTracer::prepare_buffers(std::uint32_t width, std::uint32_t height) {
+    if (!ready_ || width == 0u || height == 0u) {
+        return;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    const std::uint32_t factor = sample_factor(width, height);
+    ensure_lighting_buffers(((width + factor - 1u) / factor) * ((height + factor - 1u) / factor));
+    const std::uint64_t full = static_cast<std::uint64_t>(width) * height;
+    for (unsigned slot = 0; slot < kLightSlots; ++slot) {
+        // trace_lighting's per-pixel normals, de-lighting and fog (one per slot).
+        if (!light_pixels_[slot] || light_pixels_bytes_[slot] < full * 16u) {
+            light_pixels_[slot].Reset();
+            light_pixels_bytes_[slot] = 0u;
+            if (create_buffer(full * 16u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, light_pixels_[slot], L"rt pixel normals")) {
+                light_pixels_bytes_[slot] = full * 16u;
+                light_pixels_state_[slot] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            }
+        }
+    }
+    // The engine's buffers whatever the stage at the start (the title has no physical light; every stage the game
+    // lights has, and the first would make them on the render thread: about 2 GB at 4x, 40 ms).
+    if (engine_ready_ && ensure_engine_buffers(width, height) && engine_clear_wanted_) {
+        // trace_engine_clear's two records a pixel (one per slot).
+        for (unsigned slot = 0; slot < kLightSlots; ++slot) {
+            if (!engine_clear_[slot] &&
+                create_buffer(full * 32u, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                              D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_clear_[slot], L"rt engine clear")) {
+                engine_clear_state_[slot] = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            }
+        }
+    }
+    // The water pass's (reflections and refraction over water, glass and crystals), which it makes on the first stage
+    // with any: the same sample grid as the lighting's.
+    if (reflections_.ready()) {
+        const std::uint32_t samples_x = (width + factor - 1u) / factor;
+        const std::uint32_t samples_y = (height + factor - 1u) / factor;
+        static_cast<void>(reflections_.prepare_water(samples_x * samples_y, ((samples_x + 7u) / 8u) * ((samples_y + 7u) / 8u)));
+    }
+    // A size made before this one (the EFB changed while the tracer started) never reached the GPU: no frame of this
+    // tracer has run, so its buffers go now instead of holding two sizes until the retire delay passes.
+    retired_.clear();
+    prepared_width_ = width;
+    prepared_height_ = height;
+    std::cerr << "[rt] buffers for " << width << 'x' << height << " made on the starting worker in "
+              << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() << " ms\n";
+}
+
 bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t height) {
     if (!engine_light_grid_ &&
         !create_buffer(kEngineGridBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
                        D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_light_grid_, L"rt engine light grid")) {
         engine_light_grid_.Reset();
         return false;
+    }
+    // The table metals' painted colour per draw; without it each pixel decides metal or paint by its own colour.
+    if (!engine_paint_ &&
+        !create_buffer(kEnginePaintBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+                       D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, engine_paint_, L"rt engine painted metal")) {
+        engine_paint_.Reset();
     }
     // The radiance cache (created zeroed: every entry free); without it the hits keep their own samples.
     if (!engine_radiance_cache_ &&
@@ -230,6 +293,7 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     if (width == engine_width_ && height == engine_height_ && engine_buffers_[0]) {
         return true;
     }
+    const auto made_from = std::chrono::steady_clock::now();
     for (auto& buffer : engine_buffers_) retire(buffer);
     for (auto& buffer : engine_slots_) retire(buffer);
     for (auto& buffer : engine_clear_) retire(buffer);
@@ -265,7 +329,8 @@ bool SceneRayTracer::ensure_engine_buffers(std::uint32_t width, std::uint32_t he
     std::cerr << "[rt] engine buffers " << width << 'x' << height << " mb="
               << ((full * (32u * 2u + 16u * 3u + 16u + 8u + 16u * 6u + 4u * 2u + 16u * kLightSlots) + half * (32u * 3u + 8u)) >>
                   20u)
-              << '\n';
+              << " in " << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - made_from).count()
+              << " ms\n";
     return true;
 }
 
@@ -444,6 +509,10 @@ bool SceneRayTracer::engine_prepare(std::uint32_t width, std::uint32_t height, u
         }
     }
     std::copy(std::begin(views), std::end(views), c.views);
+    // The table metals' painted colour per draw (EnginePaintCS fills it before the G-buffer reads it).
+    c.paint[0] = engine_paint_ ? buffer_uav(engine_paint_.Get(), kEnginePaintBytes) : 0xFFFFFFFFu;
+    c.paint[2] = kEnginePaintDraws;
+    engine_paint_triangles_ = c.paint[0] != 0xFFFFFFFFu ? c.paint[1] : 0u;
     // The raster's motion, where the scene wrote it (RendererD3D12 scene_motion_): the histories follow what moved by
     // itself (rt_engine.hlsl engine_history).
     // The world's radiance cache for the hits' light (rt_engine.hlsl engine_cache_light).
@@ -551,6 +620,11 @@ void SceneRayTracer::trace_engine(ID3D12GraphicsCommandList* list, Allocate allo
     };
     // GALAXY_RT_PASS_TIMING: each stage's GPU time ([rt-engine-pass]).
     int timed = begin_pass(list);
+    // Each table metal's colour as the game paints it, over all its triangles, for the G-buffer's metal or paint.
+    if (engine_paint_triangles_ != 0u) {
+        run(engine_paint_clear_pso_.Get(), (kEnginePaintDraws * 4u + 63u) / 64u, 1u, L"engine_paint_clear");
+        run(engine_paint_pso_.Get(), (engine_paint_triangles_ + 255u) / 256u, 1u, L"engine_paint");
+    }
     run(engine_gbuffer_pso_.Get(), gx, gy, L"engine_gbuffer");
     end_pass(list, timed, kPassEngineGBuffer);
     // The light grid (the lights near each cell about the camera), for the surfaces' and the hits' light candidates.

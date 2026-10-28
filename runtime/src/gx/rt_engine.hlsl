@@ -263,6 +263,94 @@ float gx_fog_share(uint4 fog, float depth)
     return round(f * 256.0f) / 256.0f;
 }
 
+// Whether linear colour `c` is a metal's (1) or paint's (2); 0 too dark to tell (luminance 0.01). Measured metal
+// reflectances are greyish (silver, aluminium, iron, chrome) or warm (copper, gold, brass: hue about 8 to 60 degrees); a
+// strongly teal, blue, green, olive, violet or pure red colour is paint (or a dye coat) over metal: a dielectric.
+uint metal_or_paint(float3 c)
+{
+    if (!(luminance(c) > 0.01f)) {
+        return 0u;
+    }
+    const float peak = max(c.r, max(c.g, c.b));
+    const float saturation = peak > 1e-4f ? 1.0f - min(c.r, min(c.g, c.b)) / peak : 0.0f;
+    const float hue = degrees(atan2(sqrt(3.0f) * (c.g - c.b), 2.0f * c.r - c.g - c.b));
+    const float hue360 = hue < 0.0f ? hue + 360.0f : hue;
+    return saturation > 0.5f && (hue360 < 8.0f || hue360 > 60.0f) ? 2u : 1u;
+}
+
+// The table metals' painted colour per draw (g_engine_paint; ray_tracing_engine.cpp kEnginePaintDraws): each record the
+// area of the draw's triangles whose colour as the game paints it is paint's, then a metal's (EnginePaintCS). A material
+// is metal or paint as a whole. Decided pixel by pixel, a metal whose colour varies over its texture or its vertices'
+// paint (the Dreadnought's tiles: red, blue and yellow vertex paint, pale swirls in their maps) was paint in one texel
+// and a mirror in the next: hard blotches along the texture's own shapes, white where the mirror caught the light,
+// dark where it caught the sky.
+static const uint kPaintRecord = 16u;
+
+// Whether draw `draw` is a table metal (the material table's metalness above zero) the records hold.
+bool paint_draw(uint draw)
+{
+    if (draw >= g_engine_paint.z || draw >= g_draw_count) {
+        return false;
+    }
+    const uint metal = g_draws.Load(draw * kDrawStride + 16u) >> 16u;
+    return metal != 0xFFFFu && metal != 0u;
+}
+
+// Draw `draw`'s verdict over its triangles (x paint's area, y a metal's), false where the frame has none for it.
+bool paint_votes(uint draw, out uint2 votes)
+{
+    votes = uint2(0u, 0u);
+    if (g_engine_paint.x == 0xFFFFFFFFu || g_engine_paint.y == 0u || !paint_draw(draw)) {
+        return false;
+    }
+    const RWByteAddressBuffer records = ResourceDescriptorHeap[g_engine_paint.x];
+    votes = records.Load2(draw * kPaintRecord);
+    return votes.x != 0u || votes.y != 0u;
+}
+
+[numthreads(64, 1, 1)]
+void EnginePaintClearCS(uint3 id : SV_DispatchThreadID)
+{
+    if (g_engine_paint.x == 0xFFFFFFFFu || id.x >= g_engine_paint.z * (kPaintRecord / 4u)) {
+        return;
+    }
+    RWByteAddressBuffer records = ResourceDescriptorHeap[g_engine_paint.x];
+    records.Store(id.x * 4u, 0u);
+}
+
+// Each traced triangle of a table metal votes with its area (eye units squared, in 64ths, at least 1 and at most 32768,
+// so 65536 triangles of a draw fit a word): its draw's TEV output at its centre, its textures filtered over the
+// triangle's own footprint (cone 0) and its environment stage in, in linear light: the colour the game paints there.
+// Triangles the alpha test cuts there and those too dark to tell do not vote.
+[numthreads(256, 1, 1)]
+void EnginePaintCS(uint3 id : SV_DispatchThreadID)
+{
+    if (g_engine_paint.x == 0xFFFFFFFFu || id.x >= g_engine_paint.y) {
+        return;
+    }
+    const uint tri = id.x;
+    const uint flags = g_surfaces.Load(tri * 16u + 12u);
+    const uint draw = flags >> 16u;
+    if (!paint_draw(draw) || draw >= g_tev_info.x || ((flags >> 8u) & 15u) == kClearClass) {
+        return;
+    }
+    bool pass;
+    const float3 c = srgb_to_linear(
+        saturate(tev_evaluate_cone(draw, g_tev_info.x, tri, float2(1.0f / 3.0f, 1.0f / 3.0f), 0u, 0.0f, pass).rgb));
+    const uint verdict = pass ? metal_or_paint(c) : 0u;
+    if (verdict == 0u) {
+        return;
+    }
+    const float3 v0 = asfloat(g_positions.Load3(tri * 36u));
+    const float3 v1 = asfloat(g_positions.Load3(tri * 36u + 12u));
+    const float3 v2 = asfloat(g_positions.Load3(tri * 36u + 24u));
+    const float area = 0.5f * length(cross(v1 - v0, v2 - v0));
+    const uint weight = uint(clamp(area / 64.0f, 1.0f, 32768.0f));
+    RWByteAddressBuffer records = ResourceDescriptorHeap[g_engine_paint.x];
+    uint previous;
+    records.InterlockedAdd(draw * kPaintRecord + (verdict == 2u ? 0u : 4u), weight, previous);
+}
+
 // The full-resolution G-buffer, and the composite's per-pixel normal, de-lighting and fog (g_pixels).
 [numthreads(8, 8, 1)]
 void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
@@ -303,7 +391,13 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         // The share of its environment the material passes (environment-mapped draws): a metal's reflectance.
         float3 reflectance = float3(-1.0f, -1.0f, -1.0f);
         float3 emitted = float3(-1.0f, -1.0f, -1.0f);   // an emitter's colour: its TEV output (below)
-        float3 metal_colour = float3(-1.0f, -1.0f, -1.0f);   // its colour under the environment stage (below)
+        float3 metal_colour = float3(-1.0f, -1.0f, -1.0f);   // its colour as the game paints it, environment and all
+        // GALAXY_RT_PROBE: the metal test's colour and what was decided (bit 0 a metal tested, 1 taken for paint, 2 its
+        // environment stage evaluated, 3 decided by its material's votes).
+        float3 probe_test = float3(-1.0f, -1.0f, -1.0f);
+        uint probe_bits = 0u;
+        // A table metal the material test takes for paint: the reflections give it a clear coat (g_primary's top bit).
+        bool painted_metal = false;
         uint2 probe_table = uint2(0xFFFFFFFFu, 0u);    // GALAXY_RT_PROBE: the draw's emission word, its glowing region
         if (surface.primary.x != 0u) {
             const uint tri = surface.primary.x - 1u;
@@ -355,7 +449,7 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
                 reflectance = luminance(bare) > 0.1f
                                   ? hue * max(max(passed.r, max(passed.g, passed.b)), bare_peak)
                                   : passed;
-                metal_colour = bare;
+                metal_colour = full;
             }
             const uint record = min(draw, max(g_draw_count, 1u) - 1u) * kDrawStride;
             const uint2 table = g_draws.Load2(record + 8u);
@@ -412,21 +506,36 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         if (emitted.x >= 0.0f) {
             s.albedo = emitted;
         }
-        // A metal of a colour no metal has is paint (or a dye coat) over metal: a dielectric. Measured metal
-        // reflectances are greyish (silver, aluminium, iron, chrome) or warm (copper, gold, brass: hue about 8 to 60
-        // degrees); a strongly teal, blue, green, olive, violet or pure red one reflects as paint does (its colour its
-        // albedo, a clear coat at F0 0.04 over it); as a metal its whole colour would be its environment's. The coat is
-        // a lacquer's (kPaintRoughness): at the metal's own roughness painted blocks show no shine.
+        // A metal of a colour no metal has is paint (or a dye coat) over metal: a dielectric (metal_or_paint). It
+        // reflects as paint does (its colour its albedo, a clear coat at F0 0.04 over it); as a metal its whole colour
+        // would be its environment's. The coat is a lacquer's (kPaintRoughness): at the metal's own roughness painted
+        // blocks show no shine.
         if (s.metallic > 0.0f) {
+            // Its colour as the game paints it, its environment stage included: a coat's hue can live in that stage
+            // and its map (the Sling Pod frames' and the Dreadnought panels' deep blue, near black without the stage,
+            // pale cyan under a white environment) as much as in the material, and the painted whole is what the game
+            // shows. Gold stays gold and chrome grey there: both stay metal. The material decides as a whole, by the
+            // painted area of its triangles (paint_votes); this pixel's own colour only where the frame has no votes.
             const float3 c = metal_colour.x >= 0.0f ? metal_colour : s.albedo;
-            const float peak = max(c.r, max(c.g, c.b));
-            const float saturation = peak > 1e-4f ? 1.0f - min(c.r, min(c.g, c.b)) / peak : 0.0f;
-            const float hue = degrees(atan2(sqrt(3.0f) * (c.g - c.b), 2.0f * c.r - c.g - c.b));
-            const float hue360 = hue < 0.0f ? hue + 360.0f : hue;
-            if (luminance(c) > 0.01f && saturation > 0.5f && (hue360 < 8.0f || hue360 > 60.0f)) {
+            uint2 votes;
+            const bool voted = paint_votes(s.draw, votes);
+            const bool paint = voted ? votes.x > votes.y : metal_or_paint(c) == 2u;
+            probe_test = c;
+            probe_bits |= 1u | (metal_colour.x >= 0.0f ? 4u : 0u) | (voted ? 8u : 0u);
+            if (paint) {
+                probe_bits |= 2u;
+                painted_metal = true;
                 s.metallic = 0.0f;
                 s.roughness = min(s.roughness, kPaintRoughness);
                 reflectance = float3(-1.0f, -1.0f, -1.0f);
+                // Paint's colour is the game's whole colour for it: its environment stage paints the coat's hue (Sling
+                // Pod's blue fences, the Dreadnought's coloured wall tiles), not a reflection the traced one replaces.
+                // Taken out as a metal's, such a panel kept only its dark base under the stage: grey.
+                if (emitted.x < 0.0f) {
+                    own = 1.0f;
+                    const float3 paint = max(color * (delit ? exp(-shading) : 1.0f), 0.0f);
+                    s.albedo = paint / max(max(paint.r, max(paint.g, paint.b)), 1.0f);
+                }
             }
         }
         // A metal's specular colour (its albedo's role for a metal, specular_f0) is what it reflects of its environment
@@ -441,6 +550,10 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
             const uint base = g_sample_size.x * g_sample_size.y + kStarSlots;
             g_final[base] = uint4(surface.primary.x, s.draw, probe_table.x, s.flags | (probe_table.y << 16u));
             g_final[base + 1u] = uint4(asuint(s.emission), asuint(luminance(color)), asuint(p.z), asuint(own));
+            g_final[base + 11u] = uint4(asuint(s.albedo), asuint(s.metallic));
+            g_final[base + 12u] = uint4(asuint(probe_test), probe_bits);
+            g_final[base + 13u] = uint4(asuint(reflectance), asuint(s.roughness));
+            g_final[base + 14u] = uint4(asuint(color), asuint(metal_colour.x >= 0.0f ? luminance(metal_colour) : -1.0f));
             if ((g_engine_info.x & kEngineReference) == 0u && s.draw != 0xFFFFu) {
                 const float2 region_uv = tev_region_uv(s.draw, g_tev_info.x, surface.primary.x - 1u,
                                                        float2(f16tof32(surface.primary.y), f16tof32(surface.primary.y >> 16u)));
@@ -452,7 +565,9 @@ void EngineGBufferCS(uint3 id : SV_DispatchThreadID)
         w1 = uint4(asuint(p.z), pack_half2(s.emission, s.lift), surface.primary.x, surface.primary.y);
         if ((id.x % g_factor) == 0u && (id.y % g_factor) == 0u && all(id.xy / g_factor < g_sample_size)) {
             const uint sample = (id.y / g_factor) * g_sample_size.x + id.x / g_factor;
-            g_primary[sample] = surface.primary;
+            // The camera ray's triangle + 1, its top bit set for a table metal taken for paint (rt_reflections.hlsl
+            // reads it so its reflection is the paint's clear coat, not the bare metal's mirror; triangles stay below 2^31).
+            g_primary[sample] = uint2(surface.primary.x | (painted_metal ? 0x80000000u : 0u), surface.primary.y);
             g_normal[sample] = pack_normal(surface.n);
         }
     } else if ((id.x % g_factor) == 0u && (id.y % g_factor) == 0u && all(id.xy / g_factor < g_sample_size)) {
@@ -763,6 +878,11 @@ Hit engine_trace(float3 origin, float3 direction, uint salt)
             if (card_hash(query.CandidatePrimitiveIndex(), salt ^ 0x5BD1E995u) < kClearShadow) {
                 query.CommitNonOpaqueTriangleHit();
             }
+        } else if (!late_hit && (hit & kDrawNoShadow) != 0u) {
+            // What the table says lets light through (its shadow 0: water, translucent wings, decals lying on a
+            // surface) passes these rays as it passes the sun's (engine_visible): the far side of Bonefin's ocean
+            // sphere, the whole sphere's triangles in one draw, closed the water's inside off from the sky and left
+            // it black.
         } else if (late_hit || card_blocks(query.CandidatePrimitiveIndex(), hit,
                                            origin + direction * query.CandidateTriangleRayT(), salt)) {
             query.CommitNonOpaqueTriangleHit();

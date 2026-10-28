@@ -134,7 +134,7 @@ struct RtLightConstants {
     float light_fit[4];                   // physical: the camera's exposure, the light fitted to the baked light (1)
     RtEngineConstants engine;             // the ray tracing engine (ray_tracing_engine.cpp)
 };
-static_assert(sizeof(RtLightConstants) == 1408u);
+static_assert(sizeof(RtLightConstants) == 1424u);
 
 // Mirrors cbuffer RtEmit in rt_lighting.hlsl (root constants).
 struct RtEmitConstants {
@@ -949,6 +949,9 @@ void SceneRayTracer::shutdown() noexcept {
     engine_direct_spatial_pso_.Reset();
     engine_light_grid_pso_.Reset();
     engine_light_grid_.Reset();
+    engine_paint_clear_pso_.Reset();
+    engine_paint_pso_.Reset();
+    engine_paint_.Reset();
     engine_shadow_blur_pso_.Reset();
     engine_shadow_post_pso_.Reset();
     engine_shadow_stabilize_pso_.Reset();
@@ -1357,6 +1360,17 @@ void SceneRayTracer::begin_frame(std::uint64_t frame_index) {
                              static_cast<unsigned long long>(taken), probe_pixel_[0], probe_pixel_[1], probe[0],
                              static_cast<int>(probe[1]), material(probe[1]), probe[2], probe[3] & 0xFFFFu,
                              probe[3] >> 16u, t, picture, z, facing);
+            // [rt-probe-material]: its albedo and metallic, the metal test's colour and decision (bit 0 a metal tested,
+            // 1 taken for paint, 2 its environment stage evaluated, 3 decided by its material's votes over its
+            // triangles), its reflectance and roughness, the picture's
+            // colour and the painted colour's luminance (-1: no environment stage).
+            float f[16];
+            std::memcpy(f, &probe[44], sizeof(f));
+            std::fprintf(stderr,
+                         "[rt-probe-material] frame=%llu albedo=%.3f,%.3f,%.3f metallic=%.2f test=%.3f,%.3f,%.3f bits=%u "
+                         "reflectance=%.3f,%.3f,%.3f roughness=%.2f picture=%.3f,%.3f,%.3f painted=%.4f\n",
+                         static_cast<unsigned long long>(taken), f[0], f[1], f[2], f[3], f[4], f[5], f[6], probe[51],
+                         f[8], f[9], f[10], f[11], f[12], f[13], f[14], f[15]);
             float region_u = 0.0f;
             float region_v = 0.0f;
             std::memcpy(&region_u, &probe[12], 4u);
@@ -4255,6 +4269,8 @@ void SceneRayTracer::trace_lighting(ID3D12GraphicsCommandList* list, Allocate al
         const float water_depth = camera_water_depth();
         c.engine.water[0] = water_depth >= 0.0f ? 1.0f : 0.0f;
         c.engine.water[1] = std::max(water_depth, 0.0f);
+        // The traced scene's triangles, for the table metals' painted colour (rt_engine.hlsl EnginePaintCS).
+        c.engine.paint[1] = triangles_;
         const bool ran = light_pixels_[next] && engine_prepare(width, height, next, c.engine, c.flags);
         light_remap_commit(ran);
         if (!ran) {

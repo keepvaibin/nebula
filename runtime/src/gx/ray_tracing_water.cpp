@@ -196,6 +196,12 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
     }
     // The water window's surfaces, else the scene's clear solids alone (the clear pass traces them; no water to trace).
     const bool water = water_triangles_ != 0u;
+    // A stage of clear solids without water or glass (Bowser Jr.'s Airship Armada's crystal cages): no water draw made the
+    // window's buffers, and without them the clear pass never ran and the cages, their game draws hidden, vanished.
+    // The window is made here and stays empty (below).
+    if (!water && solid_draws_ != 0u && !water_tlas_) {
+        ensure_water_buffers();
+    }
     if (list == nullptr || allocate == nullptr || water_incomplete_ || (!water && solid_draws_ == 0u) ||
         !reflections_active() || light_slot_ < 0 || !water_tlas_ || !tlas_ || !positions_ || !surfaces_ ||
         !light_primary_ || color_depth_table.ptr == 0u) {
@@ -270,6 +276,20 @@ int SceneRayTracer::trace_water(ID3D12GraphicsCommandList* list, const RtSources
         top.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress() + water_scratch_tlas_;
         list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
         barrier = uav(water_tlas_.Get());
+        list->ResourceBarrier(1u, &barrier);
+    } else {
+        // No water this scene: the window is an empty acceleration structure, so the clear pass's and the lights' rays
+        // through it meet nothing (not the last scene's water).
+        D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC top{};
+        top.Inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
+        top.Inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
+        top.Inputs.NumDescs = 0u;
+        top.Inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+        top.Inputs.InstanceDescs = 0u;
+        top.DestAccelerationStructureData = water_tlas_->GetGPUVirtualAddress();
+        top.ScratchAccelerationStructureData = water_scratch_->GetGPUVirtualAddress() + water_scratch_tlas_;
+        list4->BuildRaytracingAccelerationStructure(&top, 0u, nullptr);
+        const D3D12_RESOURCE_BARRIER barrier = uav(water_tlas_.Get());
         list->ResourceBarrier(1u, &barrier);
     }
     trace_mist(list, allocate, allocate_context, mist_depth, water);

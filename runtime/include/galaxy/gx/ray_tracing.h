@@ -59,8 +59,11 @@ struct RtEngineConstants {
     std::uint32_t info[4];     // flags, a-trous step, slot, a-trous parity
     float params[4];
     float water[4];            // the camera in water (x: 1), its depth (y, eye units): rt_lighting.hlsl water_medium
+    // The table metals' colour as the game paints them, per draw (rt_engine.hlsl EnginePaintCS): the buffer's view
+    // (~0: none), the traced scene's triangles, the draws the buffer holds.
+    std::uint32_t paint[4];
 };
-static_assert(sizeof(RtEngineConstants) == 192u);
+static_assert(sizeof(RtEngineConstants) == 208u);
 
 class SceneRayTracer {
 public:
@@ -82,6 +85,15 @@ public:
     // renderer and the game set whether or not a tracer runs (its views, the stage's sun, the scene's up, camera and
     // lights), which a restart keeps (shutdown leaves them).
     void adopt_inputs(const SceneRayTracer& from) noexcept;
+    // The buffers the first traced frames at this EFB size would otherwise make on the render thread (the engine's,
+    // about 2 GB at 4x; the lighting's; the slots' pixel records and clear passes; the water pass's): made by the
+    // starting worker, so neither the frame that takes the tracer over nor the first stage allocates them. A later
+    // size is made where it is first traced.
+    void prepare_buffers(std::uint32_t width, std::uint32_t height);
+    // Whether prepare_buffers made them for this size.
+    [[nodiscard]] bool prepared_for(std::uint32_t width, std::uint32_t height) const noexcept {
+        return prepared_width_ == width && prepared_height_ == height;
+    }
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // The quality it started with (config rt_quality: 0 medium, 1 high, 2 low).
     [[nodiscard]] unsigned quality() const noexcept { return quality_; }
@@ -800,6 +812,12 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_gbuffer_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_direct_spatial_pso_;
+    // The table metals' painted colour per draw (rt_engine.hlsl EnginePaintClearCS, EnginePaintCS: kEnginePaintDraws
+    // records of 16 bytes), so each material is metal or paint as a whole.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_paint_clear_pso_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_paint_pso_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> engine_paint_;
+    std::uint32_t engine_paint_triangles_ = 0;   // this trace's triangles for EnginePaintCS (0: not run)
     // The light grid (rt_engine.hlsl EngineLightGridCS: kGridCells^3 cells x kGridSlots slots x 8 bytes).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> engine_light_grid_pso_;
     Microsoft::WRL::ComPtr<ID3D12Resource> engine_light_grid_;
@@ -896,6 +914,8 @@ private:
     std::uint64_t camera_texels_ = 0;
     float camera_bloom_ = 0.04f;
     std::uint32_t camera_tone_ = 0;
+    std::uint32_t prepared_width_ = 0;   // prepare_buffers' EFB size
+    std::uint32_t prepared_height_ = 0;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emit_pso_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> glow_emitter_pso_;
     // Physical: this scene's glow draws that are table light sources (GlowEmitterCS): first glow triangle, count, first
@@ -985,9 +1005,9 @@ private:
     // kStarSlots balls and the stars' colour over time (rt_lighting.hlsl kStarColour), each with the frame it was
     // taken (+1; 0: free) and whether the colour was copied.
     static constexpr unsigned kBallReadbacks = 4u;
-    // After the balls and the colour: the probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8), the engine reference's
-    // comparison (2), the light meter's sums (4 to 6; the specular history's, 9).
-    static constexpr unsigned kProbeRecords = 11u;
+    // After the balls and the colour: the probe's records (GALAXY_RT_PROBE: 0, 1, 3, 7, 8, and its surface's material
+    // 11 to 14), the engine reference's comparison (2), the light meter's sums (4 to 6; the specular history's, 9).
+    static constexpr unsigned kProbeRecords = 15u;
     static constexpr unsigned kBallReadbackBytes = kStarSlots * 16u + 16u + kProbeRecords * 16u;
     // GALAXY_RT_PROBE=x,y (diagnostics): an EFB pixel whose sample reports, once a second, the draw the camera sees and
     // what stops the sun's centre ray from it (draw record, material table entry, distance, instance).

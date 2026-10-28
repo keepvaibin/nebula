@@ -8,7 +8,9 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
+#include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <future>
 #include <vector>
 
@@ -29,7 +31,19 @@ public:
                                         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
                                         desc.pRootSignature = root;
                                         desc.CS = {code, bytes};
-                                        return SUCCEEDED(device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+                                        const auto start = std::chrono::steady_clock::now();
+                                        const bool made =
+                                            SUCCEEDED(device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
+                                        // A compile of seconds is the driver's cache missing it: named by its
+                                        // shader's size (the generated rt_*_cs.h arrays).
+                                        const double ms = std::chrono::duration<double, std::milli>(
+                                                              std::chrono::steady_clock::now() - start)
+                                                              .count();
+                                        if (ms >= 2000.0) {
+                                            std::fprintf(stderr, "[pso-jobs] compute shader of %zu bytes: %.0f ms\n",
+                                                         bytes, ms);
+                                        }
+                                        return made;
                                     }),
                          group});
     }

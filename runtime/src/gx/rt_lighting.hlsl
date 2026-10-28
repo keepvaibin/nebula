@@ -97,6 +97,8 @@ cbuffer RtLight : register(b0)
     uint4 g_engine_info;           // flags (kEngine*), a-trous step, slot, a-trous parity
     float4 g_engine_params;
     float4 g_engine_water;         // the camera in water (x: 1), its depth (y, eye units): water_medium
+    uint4 g_engine_paint;          // the table metals' painted colour per draw (rt_engine.hlsl EnginePaintCS): its
+                                   // buffer's view (~0: none), the traced scene's triangles, the draws it holds
 };
 
 // g_flags bit 14: the game's light units (GALAXY_RT_PHYSICAL), as the stage sets them in linear light (white 1):
@@ -228,7 +230,7 @@ static const float kNearGlowReach = 1.25f;
 static const uint kStarSlots = 8u;
 // The probe's records after them (SceneRayTracer::kProbeRecords), then per sample the light at the water in front of it
 // (EngineFinalCS: the fall's light, the open air's at the water, r11g11b10 each; 0: none; LightTexturePS).
-static const uint kProbeRecords = 11u;
+static const uint kProbeRecords = 15u;
 // The picture sums (CaptureCS c_sums): per star slot the game's own colour of its samples, r g b n (x 1/255,
 // cleared per capture), then the stars' colour over time, rgb (float) and known (SkyStateCS).
 static const uint kStarSums = 64u;

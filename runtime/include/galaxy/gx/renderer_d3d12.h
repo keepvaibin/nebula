@@ -1139,6 +1139,10 @@ private:
     // A tracer starting on a worker (start_ray_tracer), and since when: the frames draw without ray tracing meanwhile.
     std::future<std::unique_ptr<SceneRayTracer>> rt_starting_;
     std::chrono::steady_clock::time_point rt_start_time_{};
+    // The frames after a started tracer took over ([rt] frame N after taking over: their intervals, begin to begin),
+    // and the last frame's start.
+    unsigned rt_takeover_frames_ = 0u;
+    std::chrono::steady_clock::time_point frame_begun_{};
     // The descriptor tables the tracers write their texture and de-light views into (set at initialize).
     struct RtViewTable {
         D3D12_CPU_DESCRIPTOR_HANDLE cpu{};

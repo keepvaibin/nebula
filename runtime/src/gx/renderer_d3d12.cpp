@@ -3167,6 +3167,29 @@ void RendererD3D12::wait_for_frame_latency_before_present() {
 }
 
 void RendererD3D12::begin_frame(bool present_swap_chain) {
+    // How long the frames a started tracer took over lasted (the hitch a tracer's first frames could cause).
+    {
+        const auto now = std::chrono::steady_clock::now();
+        // GALAXY_TEST_HITCHES=1: every frame of 50 ms or more, with whether the ray tracer runs (a stall's place).
+        static const bool hitches = [] {
+            char value[8]{};
+            std::size_t length = 0u;
+            return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_HITCHES") == 0 && length > 1u && value[0] == '1';
+        }();
+        if (hitches && frame_begun_.time_since_epoch().count() != 0) {
+            const double ms = std::chrono::duration<double, std::milli>(now - frame_begun_).count();
+            if (ms >= 50.0) {
+                std::cerr << "[hitch] " << ms << " ms, ray tracing " << (ray_tracer_ && ray_tracer_->ready() ? "on" : "off")
+                          << '\n';
+            }
+        }
+        if (rt_takeover_frames_ != 0u) {
+            std::cerr << "[rt] frame " << (11u - rt_takeover_frames_) << " after taking over: "
+                      << std::chrono::duration<double, std::milli>(now - frame_begun_).count() << " ms\n";
+            --rt_takeover_frames_;
+        }
+        frame_begun_ = now;
+    }
     // Display and size changes apply here, between command-list recordings.
     // They wait for the GPU themselves, so they come before any per-slot state
     // below is touched.
@@ -4486,12 +4509,25 @@ void RendererD3D12::record_stripe_gather() {
 
 // A tracer started on a worker takes over at a frame's start (before the EFB follows it: no MSAA under ray tracing),
 // with the inputs the scene gave the one it replaces; one the setting no longer wants, or wants at another quality,
-// is dropped unused.
+// is dropped unused. One whose buffers were made for an EFB size the window or the INTERNAL RESOLUTION row has since
+// changed (the start's first frames: following the window, 6x became 4x) goes back to the worker to make them for the
+// current size, so the frame that takes it over still allocates nothing.
 void RendererD3D12::take_started_ray_tracer() {
     if (!rt_starting_.valid() || rt_starting_.wait_for(std::chrono::seconds(0)) != std::future_status::ready) {
         return;
     }
     std::unique_ptr<SceneRayTracer> started = rt_starting_.get();
+    const D3D12_RESOURCE_DESC efb = efb_depth_ ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
+    const auto efb_width = static_cast<std::uint32_t>(efb.Width);
+    const auto efb_height = static_cast<std::uint32_t>(efb.Height);
+    if (started != nullptr && efb_width != 0u && !started->prepared_for(efb_width, efb_height)) {
+        rt_starting_ = std::async(std::launch::async, [tracer = std::move(started), efb_width, efb_height]() mutable {
+            galaxy::host::name_current_thread(L"Nebula RT Start");
+            tracer->prepare_buffers(efb_width, efb_height);
+            return std::move(tracer);
+        });
+        return;
+    }
     rt_start_failed_ = started == nullptr;
     std::cerr << "[rt] started in "
               << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - rt_start_time_).count()
@@ -4502,6 +4538,7 @@ void RendererD3D12::take_started_ray_tracer() {
         started->quality() == std::min(config.rt_quality, 2u)) {
         started->adopt_inputs(*ray_tracer_);
         ray_tracer_ = std::move(started);
+        rt_takeover_frames_ = 10u;
     }
 }
 
@@ -4547,10 +4584,14 @@ void RendererD3D12::start_ray_tracer() {
     const bool validate =
         getenv_s(&length, value, sizeof(value), "GALAXY_RT_VALIDATE") == 0 && length > 1u && value[0] == '1';
     rt_start_time_ = std::chrono::steady_clock::now();
+    // The EFB the tracer will trace (trace_scene's size): its buffers are made on the worker too.
+    const D3D12_RESOURCE_DESC efb = efb_depth_ ? efb_depth_->GetDesc() : D3D12_RESOURCE_DESC{};
+    const auto efb_width = static_cast<std::uint32_t>(efb.Width);
+    const auto efb_height = static_cast<std::uint32_t>(efb.Height);
     rt_starting_ = std::async(
         std::launch::async,
         [device = device_, frequency = timestamp_frequency_, validate, views = rt_texture_views_,
-         delight = rt_delight_views_]() -> std::unique_ptr<SceneRayTracer> {
+         delight = rt_delight_views_, efb_width, efb_height]() -> std::unique_ptr<SceneRayTracer> {
             galaxy::host::name_current_thread(L"Nebula RT Start");
             try {
                 auto tracer = std::make_unique<SceneRayTracer>();
@@ -4559,6 +4600,7 @@ void RendererD3D12::start_ray_tracer() {
                 if (!tracer->initialize(device.Get(), frequency, validate, kEfbHdrColorFormat, kEfbColorFormat)) {
                     return nullptr;
                 }
+                tracer->prepare_buffers(efb_width, efb_height);
                 return tracer;
             } catch (const std::exception& e) {
                 std::cerr << "[rt] start failed: " << e.what() << '\n';

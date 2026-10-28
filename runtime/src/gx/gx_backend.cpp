@@ -6332,10 +6332,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             }
             // No traced shadow from a material the table marks shadow 0 (a helper row, an environment map or
             // a mask, speaks for its texture, not for the draw), nor from a clear dielectric (crystal, ice,
-            // glass), which passes about 91 % of the light ((1 - F)^2 at F0 0.047).
+            // glass), which passes about 91 % of the light ((1 - F)^2 at F0 0.047), nor from water (F0 0.02:
+            // 96 % passes): the far side of Bonefin's ocean sphere, drawn opaque with the whole sphere's triangles,
+            // closed its inside off from the sun and the sky and read black.
             if (const RtMaterial* shade = rt_material(current_rt_material_);
                 (shade != nullptr && !shade->shadow && !shade->helper) ||
-                surface.surface_class == RtSurfaceClass::Crystal) {
+                surface.surface_class == RtSurfaceClass::Crystal || surface.surface_class == RtSurfaceClass::Water) {
                 info.surface |= kRtDrawNoShadow;
             }
         }

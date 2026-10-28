@@ -136,6 +136,11 @@ public:
     // the same device, the reflections continue from what the stage has shown.
     void shutdown() noexcept;
     [[nodiscard]] bool ready() const noexcept { return ready_; }
+    // The water pass's buffers for a sample grid of `samples` in `tiles` 8 x 8 tiles (what trace_water makes on its
+    // first water under the engine): made by the tracer's starting worker, not by the first stage with water.
+    bool prepare_water(std::uint32_t samples, std::uint32_t tiles) {
+        return ensure_buffers(samples, tiles, false) && ensure_water_buffers();
+    }
     // GALAXY_RT_LOG_SEQ's frames (the ray tracer's).
     void set_log_seq(bool on) noexcept { log_seq_ = on; }
 

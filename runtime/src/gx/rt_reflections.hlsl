@@ -317,6 +317,9 @@ RWStructuredBuffer<uint4> g_memory : register(u5);
 // Per sample, from the camera ray (rt_engine.hlsl EngineGBufferCS): triangle + 1 (0 none) and its barycentrics
 // (halves). Read only.
 RWStructuredBuffer<uint2> g_primary : register(u6);
+// g_primary.x (rt_engine.hlsl EngineGBufferCS): the triangle + 1, and its top bit for a table metal taken for paint.
+static const uint kPrimaryTriangle = 0x7FFFFFFFu;
+static const uint kPrimaryPainted = 0x80000000u;
 // Per tile of 8x8 samples: 1 where a sample reflects.
 RWStructuredBuffer<uint> g_tiles : register(u7);
 // Per sample, the picture under the translucent phases for the water's refraction: lit colour
@@ -719,7 +722,7 @@ void DrawLightCS(uint3 id : SV_DispatchThreadID)
     if (all(id.xy < g_sample_size)) {
         const uint2 primary = g_primary[id.y * g_sample_size.x + id.x];
         if (primary.x != 0u) {
-            draw = g_surfaces.Load((primary.x - 1u) * 16u + 12u) >> 16u;
+            draw = g_surfaces.Load(((primary.x & kPrimaryTriangle) - 1u) * 16u + 12u) >> 16u;
             const int2 q = sample_pixel(id.xy);
             valid = draw < g_draw_count;
             units = uint3(round(min(g_color.Load(int3(q, 0)).rgb * lighting_at(q), 4.0f) * 64.0f));
@@ -1550,7 +1553,7 @@ float3 metal_reflect(float3 light, float3 base, float vm, float metal)
 }
 
 Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, float4 params, float3 base,
-                        bool lights, bool tiled)
+                        bool lights, bool tiled, bool painted_metal)
 {
     Reflected r;
     r.light = float3(0.0f, 0.0f, 0.0f);
@@ -1692,9 +1695,9 @@ Reflected reflect_light(uint2 s, float3 dir, float3 n, float3 ng, float3 hit, fl
     }
     // A mirror shows the sky as sharp as the frame or the capture holds it; the 64^2 memory, the sky map and
     // the sky's average are blurrier than the game's painted reflection, which keeps part of their place (g_metal_sky:
-    // 1 where the painted reflection is taken out).
+    // 1 where the painted reflection is taken out; half where it stays, as on a metal whose colour is paint).
     if (params.w > 0.0f && sky_source(r.source) && r.source != kSkyShown && r.source != kSkyCaptured) {
-        r.confidence *= g_metal_sky;
+        r.confidence *= painted_metal ? min(g_metal_sky, 0.5f) : g_metal_sky;
     }
     // The lights' highlights, weighted like the reflection (its class strength) so the
     // composite's Fresnel weight is divided out here.
@@ -1844,7 +1847,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
         // The triangle the lighting's camera ray met at the raster depth.
         const uint2 primary = g_primary[index];
         if (primary.x != 0u) {
-            const uint tri = primary.x - 1u;
+            const uint tri = (primary.x & kPrimaryTriangle) - 1u;
             const float2 b = float2(f16tof32(primary.y), f16tof32(primary.y >> 16u));
             const float3 w = float3(1.0f - b.x - b.y, b.x, b.y);
             const uint a = tri * 36u;
@@ -1880,6 +1883,11 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 }
             }
             float roughness;
+            // A table metal whose colour no metal has (g_primary's top bit: the Sling Pod frames' and the Dreadnought
+            // panels' blue, which their environment stage paints) keeps the game's painted look as its colour
+            // (EngineGBufferCS). Its reflection stays the metal's, tinted by that look (metal_reflect); as a
+            // dielectric's untinted coat it washed the blue out to white.
+            const bool painted_metal = (primary.x & kPrimaryPainted) != 0u;
             float4 params = draw_material(surface_class, record.w >> 16u, roughness);
             // A mirror (the table's `mirror`): clear and polished, its reflection untinted (ray_params), Fresnel 0.75
             // face-on in the composite (kMirrorF0Share, its metalness share there).
@@ -1918,7 +1926,7 @@ void ReflectTraceCS(uint3 id : SV_DispatchThreadID, uint gi : SV_GroupIndex)
                 confidence = 1.0f;
             } else if (params.y > 0.0f && emitter < 1.0f) {
                 reflected = true;
-                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, true, true);
+                const Reflected r = reflect_light(id.xy, dir, n, ng, hit, ray_params, base, true, true, painted_metal);
                 light = r.light;
                 highlight = r.highlight;
                 // Painted dielectrics and clear ones (ice, crystal, opaque water) take the sky's reflection
@@ -2527,7 +2535,7 @@ void WaterTraceCS(uint3 id : SV_DispatchThreadID)
                 // net's cords, a fence's bars) averages out instead of reflecting as specks the waves set moving.
                 g_reflect_blur = crystal || coat || ice ? 0.0f : 2.0f * max(g_viewport.z / 640.0f, 1.0f);
                 const Reflected r = reflect_light(id.xy, dir, game_waves ? wave : n, ng, hit, ray_params, base, false,
-                                                  false);
+                                                  false, false);
                 g_reflect_blur = 0.0f;
                 g_spread = 0.0f;
                 light = r.light;
