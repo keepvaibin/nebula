@@ -1032,9 +1032,11 @@ void RendererVk::draw(const DrawCall& call) {
     begin_efb_pass();
     const VkCommandBuffer commands = commands_;
     const vk::Context& context = vk::Context::get();
-    if (call.pipeline != bound_.pipeline) {
-        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, call.pipeline);
-        bound_.pipeline = call.pipeline;
+    const bool split = call.flat_index_count != 0u;
+    gpu::Pipeline* const first_pipeline = split ? call.flat_pipeline : call.pipeline;
+    if (first_pipeline != bound_.pipeline) {
+        vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, first_pipeline);
+        bound_.pipeline = first_pipeline;
     }
 
     // Set 0: b0, b1 and the palette at their draw's offsets. An address of 0 keeps the previous one (as D3D12's
@@ -1162,7 +1164,16 @@ void RendererVk::draw(const DrawCall& call) {
             vkCmdBindIndexBuffer(commands, indices.buffer, indices.offset, VK_INDEX_TYPE_UINT16);
             bound_.index_address = call.index_view.BufferLocation;
         }
-        vkCmdDrawIndexed(commands, call.index_count, 1, 0, 0, 0);
+        if (split) {
+            vkCmdDrawIndexed(commands, call.flat_index_count, 1, 0, 0, 0);
+            if (call.index_count > call.flat_index_count) {
+                vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, call.pipeline);
+                bound_.pipeline = call.pipeline;
+                vkCmdDrawIndexed(commands, call.index_count - call.flat_index_count, 1, call.flat_index_count, 0, 0);
+            }
+        } else {
+            vkCmdDrawIndexed(commands, call.index_count, 1, 0, 0, 0);
+        }
     } else {
         vkCmdDraw(commands, call.index_count, 1, 0, 0);
     }

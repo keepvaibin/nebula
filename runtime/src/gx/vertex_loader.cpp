@@ -1674,4 +1674,43 @@ LoadedPrimitive VertexLoader::upload_cached_packet_run_indices(
     return prim;
 }
 
+void VertexLoader::cached_packet_run_triangles(
+    std::uint32_t vertex_count,
+    std::size_t base_offset,
+    std::span<const CachedDrawPacket> packets,
+    PrimitiveClass primitive,
+    std::uint32_t total_indices,
+    std::span<const std::uint16_t> precomputed_indices,
+    std::vector<std::uint16_t>& indices) {
+    indices.clear();
+    if (total_indices == 0u || vertex_count == 0u) {
+        return;
+    }
+    if (primitive == PrimitiveClass::Triangles &&
+        std::all_of(packets.begin(), packets.end(),
+                    [](const CachedDrawPacket& packet) { return packet.vertex_count % 3u == 0u; })) {
+        indices.resize(vertex_count);
+        for (std::uint32_t i = 0; i < vertex_count; ++i) {
+            indices[i] = static_cast<std::uint16_t>(i);
+        }
+        return;
+    }
+    if (!precomputed_indices.empty()) {
+        indices.assign(precomputed_indices.begin(), precomputed_indices.end());
+        return;
+    }
+    // Each triangle primitive emits at most three indices a vertex.
+    indices.resize(std::max<std::size_t>(total_indices, std::size_t{3} * vertex_count));
+    std::uint32_t count = 0;
+    std::uint32_t packet_vertex_base = 0;
+    for (const CachedDrawPacket& packet : packets) {
+        if (packet.vertex_count != 0u) {
+            emit_primitive_indices(indices.data(), count, primitive, packet_vertex_base, packet.vertex_count, 0u,
+                                   base_offset + packet.local_opcode_offset);
+        }
+        packet_vertex_base += packet.vertex_count;
+    }
+    indices.resize(count);
+}
+
 }  // namespace galaxy::gx

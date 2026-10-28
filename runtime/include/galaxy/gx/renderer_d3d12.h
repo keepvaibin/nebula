@@ -878,6 +878,48 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> timestamp_readback_;
     std::array<bool, kFramesInFlight> timestamp_pending_{};
     std::uint64_t timestamp_frequency_ = 0;
+    // GALAXY_GPU_PASSES=1: GPU time by pass for present-stats' gpu-pass-ms. A mark starts a pass on the open command
+    // list; the time to the next mark (or the list's end) is that pass's.
+    enum class GpuPass : std::uint8_t {
+        Scene, Resolve, EfbCopy, XfbCopy, Bloom, SceneAa, SceneAo, Upscale, RayTracing, Present, Count
+    };
+    static constexpr unsigned kGpuPassSlots = 512;
+    void gpu_pass(GpuPass pass);
+    class GpuPassScope {
+    public:
+        GpuPassScope(RendererD3D12& renderer, GpuPass pass) : renderer_(renderer), outer_(renderer.current_pass_) {
+            renderer_.gpu_pass(pass);
+        }
+        ~GpuPassScope() { renderer_.gpu_pass(outer_); }
+        GpuPassScope(const GpuPassScope&) = delete;
+        GpuPassScope& operator=(const GpuPassScope&) = delete;
+    private:
+        RendererD3D12& renderer_;
+        GpuPass outer_;
+    };
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> pass_query_heap_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> pass_readback_;
+    std::array<std::array<GpuPass, kGpuPassSlots>, kFramesInFlight> pass_marks_{};
+    std::array<unsigned, kFramesInFlight> pass_mark_count_{};
+    GpuPass current_pass_ = GpuPass::Scene;
+    bool pass_list_open_ = false;
+    std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
+    // GALAXY_GPU_DRAWS=1: each GX draw between two timestamps, its time summed by pipeline for present-stats'
+    // [gpu-draws] lines (the timestamps serialize the draws: the total grows, the shares hold).
+    static constexpr unsigned kGpuDrawSlots = 16384;
+    struct GpuDrawMark {
+        ID3D12PipelineState* pipeline = nullptr;
+        std::uint32_t triangles = 0;
+    };
+    struct GpuDrawCost {
+        double ms = 0.0;
+        std::uint64_t draws = 0;
+        std::uint64_t triangles = 0;
+    };
+    Microsoft::WRL::ComPtr<ID3D12QueryHeap> draw_query_heap_;
+    Microsoft::WRL::ComPtr<ID3D12Resource> draw_readback_;
+    std::array<std::vector<GpuDrawMark>, kFramesInFlight> draw_marks_{};
+    std::unordered_map<ID3D12PipelineState*, GpuDrawCost> telemetry_draw_cost_;
 
     // EFB.
     Microsoft::WRL::ComPtr<ID3D12Resource> efb_color_;

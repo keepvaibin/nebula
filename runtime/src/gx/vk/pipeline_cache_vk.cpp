@@ -1410,6 +1410,35 @@ void PipelineCacheVk::worker_main() {
     }
 }
 
+VkPipeline PipelineCacheVk::get_if_ready(const PsoKey& key, const PixelShaderKey& ps_key,
+                                         const VertexShaderKey& vs_key) {
+    if (const auto it = published_.find(key); it != published_.end()) {
+        return it->second;
+    }
+    if (in_flight_.contains(key)) {
+        return VK_NULL_HANDLE;
+    }
+    const Entry entry{key, vs_key, ps_key};
+    {
+        std::lock_guard<std::mutex> lock(entries_mutex_);
+        if (entry_keys_.insert(key).second) {
+            entries_.push_back(entry);
+            unsaved_.store(true, std::memory_order_release);
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(compat_mutex_);
+        const std::uint64_t hash = key.hash();
+        if (refused_keys_.contains(hash) || crashed_keys_.contains(hash)) {
+            published_[key] = VK_NULL_HANDLE;
+            return VK_NULL_HANDLE;
+        }
+    }
+    in_flight_.insert(key);
+    enqueue(entry);
+    return VK_NULL_HANDLE;
+}
+
 VkPipeline PipelineCacheVk::get(const PsoKey& key, const PixelShaderKey& ps_key, const VertexShaderKey& vs_key) {
     last_get_used_uber_ = false;
     if (memo_pipeline_ != VK_NULL_HANDLE && memo_key_ == key) {

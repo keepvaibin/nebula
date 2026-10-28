@@ -147,6 +147,17 @@ public:
         std::uint32_t total_indices = 0,
         std::span<const std::uint16_t> precomputed_indices = {});
 
+    // The triangle list upload_cached_packet_run_indices draws for a run of `vertex_count` vertices, as indices from
+    // its first vertex (a list of whole triangles: its vertices in order).
+    static void cached_packet_run_triangles(
+        std::uint32_t vertex_count,
+        std::size_t base_offset,
+        std::span<const CachedDrawPacket> packets,
+        PrimitiveClass primitive,
+        std::uint32_t total_indices,
+        std::span<const std::uint16_t> precomputed_indices,
+        std::vector<std::uint16_t>& indices);
+
     // Byte size of one source vertex, so a packet's vertex data is taken as one window.
     [[nodiscard]] static std::size_t source_vertex_size(
         const VertexDescriptor& desc);

@@ -856,6 +856,7 @@ void RendererD3D12::resolve_efb(bool depth, bool color_wanted) {
     if (msaa.samples <= 1u || (!color && !depth)) {
         return;
     }
+    const GpuPassScope pass{*this, GpuPass::Resolve};
     record_efb_resolve(command_list_.Get(), color, depth);
     msaa.color_dirty = msaa.color_dirty && !color;
     if (depth) {
@@ -2121,6 +2122,36 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
                     D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
                     IID_PPV_ARGS(&timestamp_readback_)),
                 "Create timestamp readback");
+            const bool passes = [] {
+                char value[8]{};
+                std::size_t length = 0u;
+                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_PASSES") == 0 && length > 1u &&
+                       value[0] == '1';
+            }();
+            if (passes) {
+                qhd.Count = kFramesInFlight * kGpuPassSlots;
+                d3d_check(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&pass_query_heap_)), "Create pass query heap");
+                rd.Width = kFramesInFlight * kGpuPassSlots * sizeof(std::uint64_t);
+                d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                                                           D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                           IID_PPV_ARGS(&pass_readback_)),
+                          "Create pass readback");
+            }
+            const bool draws = [] {
+                char value[8]{};
+                std::size_t length = 0u;
+                return getenv_s(&length, value, sizeof(value), "GALAXY_GPU_DRAWS") == 0 && length > 1u &&
+                       value[0] == '1';
+            }();
+            if (draws) {
+                qhd.Count = kFramesInFlight * kGpuDrawSlots;
+                d3d_check(device_->CreateQueryHeap(&qhd, IID_PPV_ARGS(&draw_query_heap_)), "Create draw query heap");
+                rd.Width = kFramesInFlight * kGpuDrawSlots * sizeof(std::uint64_t);
+                d3d_check(device_->CreateCommittedResource(&hp, D3D12_HEAP_FLAG_NONE, &rd,
+                                                           D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                           IID_PPV_ARGS(&draw_readback_)),
+                          "Create draw readback");
+            }
         }
 
         DXGI_SWAP_CHAIN_DESC1 scd{};
@@ -3194,6 +3225,19 @@ void RendererD3D12::wait_for_frame_latency_before_present() {
     }
 }
 
+void RendererD3D12::gpu_pass(GpuPass pass) {
+    if (pass == current_pass_) {
+        return;
+    }
+    current_pass_ = pass;
+    unsigned& marks = pass_mark_count_[frame_slot_];
+    if (!pass_query_heap_ || !pass_list_open_ || marks + 1u >= kGpuPassSlots) {
+        return;
+    }
+    command_list_->EndQuery(pass_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP, frame_slot_ * kGpuPassSlots + marks);
+    pass_marks_[frame_slot_][marks++] = pass;
+}
+
 void RendererD3D12::begin_frame(bool present_swap_chain) {
     // How long the frames a started tracer took over lasted (the hitch a tracer's first frames could cause).
     {
@@ -3417,6 +3461,46 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
                 std::chrono::steady_clock::now());
         }
     }
+    if (pass_readback_ && pass_mark_count_[frame_slot_] > 1u) {
+        const unsigned marks = pass_mark_count_[frame_slot_];
+        const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * kGpuPassSlots * sizeof(std::uint64_t);
+        const D3D12_RANGE read_range{offset, offset + marks * sizeof(std::uint64_t)};
+        void* mapped = nullptr;
+        if (SUCCEEDED(pass_readback_->Map(0, &read_range, &mapped))) {
+            const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
+            for (unsigned i = 0; i + 1u < marks; ++i) {
+                if (ticks[i + 1u] >= ticks[i]) {
+                    telemetry_pass_ms_[static_cast<std::size_t>(pass_marks_[frame_slot_][i])] +=
+                        static_cast<double>(ticks[i + 1u] - ticks[i]) * 1000.0 /
+                        static_cast<double>(timestamp_frequency_);
+                }
+            }
+            const D3D12_RANGE no_write{0, 0};
+            pass_readback_->Unmap(0, &no_write);
+        }
+    }
+    pass_mark_count_[frame_slot_] = 0u;
+    if (draw_readback_ && !draw_marks_[frame_slot_].empty()) {
+        const std::vector<GpuDrawMark>& marks = draw_marks_[frame_slot_];
+        const SIZE_T offset = static_cast<SIZE_T>(frame_slot_) * kGpuDrawSlots * sizeof(std::uint64_t);
+        const D3D12_RANGE read_range{offset, offset + 2u * marks.size() * sizeof(std::uint64_t)};
+        void* mapped = nullptr;
+        if (SUCCEEDED(draw_readback_->Map(0, &read_range, &mapped))) {
+            const auto* ticks = reinterpret_cast<const std::uint64_t*>(static_cast<const std::byte*>(mapped) + offset);
+            for (std::size_t i = 0; i < marks.size(); ++i) {
+                GpuDrawCost& cost = telemetry_draw_cost_[marks[i].pipeline];
+                if (ticks[2u * i + 1u] >= ticks[2u * i]) {
+                    cost.ms += static_cast<double>(ticks[2u * i + 1u] - ticks[2u * i]) * 1000.0 /
+                               static_cast<double>(timestamp_frequency_);
+                }
+                ++cost.draws;
+                cost.triangles += marks[i].triangles;
+            }
+            const D3D12_RANGE no_write{0, 0};
+            draw_readback_->Unmap(0, &no_write);
+        }
+    }
+    draw_marks_[frame_slot_].clear();
 
     ray_tracer_->begin_frame(frame_index_);
 
@@ -3438,6 +3522,12 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         command_list_->EndQuery(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
             frame_slot_ * 2u);
+    }
+    pass_list_open_ = true;
+    {
+        const GpuPass pass = current_pass_;
+        current_pass_ = GpuPass::Count;
+        gpu_pass(pass);
     }
 
     if (ring_mode_ == RingMode::Interp) {
@@ -3864,6 +3954,38 @@ void RendererD3D12::present_to_swap_chain() {
                                 ? telemetry_gpu_by_place_[place] / telemetry_gpu_by_place_count_[place]
                                 : 0.0);
             }
+            if (pass_query_heap_) {
+                static constexpr const char* kPassNames[] = {"scene", "resolve", "efb-copy", "xfb-copy", "bloom",
+                                                             "scene-aa", "scene-ao", "upscale", "rt", "present"};
+                static_assert(std::size(kPassNames) == static_cast<std::size_t>(GpuPass::Count));
+                message << " gpu-pass-ms=";
+                const double presents = static_cast<double>(std::max<std::uint64_t>(telemetry_present_count_, 1u));
+                for (std::size_t pass = 0; pass < std::size(kPassNames); ++pass) {
+                    message << (pass == 0 ? "" : ",") << kPassNames[pass] << ':' << telemetry_pass_ms_[pass] / presents;
+                }
+                telemetry_pass_ms_.fill(0.0);
+            }
+            if (draw_query_heap_ && !telemetry_draw_cost_.empty()) {
+                std::vector<std::pair<ID3D12PipelineState*, GpuDrawCost>> costs(telemetry_draw_cost_.begin(),
+                                                                                telemetry_draw_cost_.end());
+                std::sort(costs.begin(), costs.end(),
+                          [](const auto& a, const auto& b) { return a.second.ms > b.second.ms; });
+                const double presents = static_cast<double>(std::max<std::uint64_t>(telemetry_present_count_, 1u));
+                double total = 0.0;
+                for (const auto& cost : costs) {
+                    total += cost.second.ms;
+                }
+                std::ostringstream draws;
+                draws << "[gpu-draws] total-ms=" << total / presents << " pipelines=" << costs.size() << '\n';
+                for (std::size_t i = 0; i < costs.size() && i < 24u; ++i) {
+                    draws << "[gpu-draws] pso=" << static_cast<const void*>(costs[i].first)
+                          << " ms=" << costs[i].second.ms / presents
+                          << " draws=" << static_cast<double>(costs[i].second.draws) / presents
+                          << " tris=" << static_cast<double>(costs[i].second.triangles) / presents << '\n';
+                }
+                std::cerr << draws.str();
+                telemetry_draw_cost_.clear();
+            }
             message
                 << " no-xfb-presents="
                 << telemetry_no_xfb_present_count_
@@ -3944,6 +4066,22 @@ std::uint64_t RendererD3D12::end_frame(
             timestamp_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
             frame_slot_ * 2u, 2u, timestamp_readback_.Get(),
             static_cast<UINT64>(frame_slot_) * 2u * sizeof(std::uint64_t));
+    }
+    if (pass_query_heap_ && pass_mark_count_[frame_slot_] != 0u) {
+        unsigned& marks = pass_mark_count_[frame_slot_];
+        command_list_->EndQuery(pass_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                frame_slot_ * kGpuPassSlots + marks);
+        pass_marks_[frame_slot_][marks++] = GpuPass::Count;
+        command_list_->ResolveQueryData(pass_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                        frame_slot_ * kGpuPassSlots, marks, pass_readback_.Get(),
+                                        static_cast<UINT64>(frame_slot_) * kGpuPassSlots * sizeof(std::uint64_t));
+    }
+    pass_list_open_ = false;
+    if (draw_query_heap_ && !draw_marks_[frame_slot_].empty()) {
+        command_list_->ResolveQueryData(draw_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                        frame_slot_ * kGpuDrawSlots,
+                                        static_cast<UINT>(2u * draw_marks_[frame_slot_].size()), draw_readback_.Get(),
+                                        static_cast<UINT64>(frame_slot_) * kGpuDrawSlots * sizeof(std::uint64_t));
     }
     const HRESULT close_hr = command_list_->Close();
     if (FAILED(close_hr)) {
@@ -4786,6 +4924,7 @@ void RendererD3D12::rt_begin_scene() {
 }
 
 void RendererD3D12::rt_trace_scene() {
+    const GpuPassScope pass{*this, GpuPass::RayTracing};
     if (!ray_tracer_->scene_open()) {
         return;
     }
@@ -5310,6 +5449,7 @@ void RendererD3D12::record_rt_mist(int slot, bool reproject, bool layer) {
 }
 
 void RendererD3D12::record_rt_composite(int slot, bool reproject) {
+    const GpuPassScope pass{*this, GpuPass::RayTracing};
     log_rt_seq("composite");
     if (!efb_depth_ || conv_efb_depth_srv_.ptr == 0u || !efb_hdr_) {
         return;
@@ -7182,6 +7322,7 @@ bool RendererD3D12::temporal_inputs_match(const TemporalUpscaleInputs& in) const
 }
 
 bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
+    const GpuPassScope pass{*this, GpuPass::Upscale};
     if (!scene_temporal_ || !temporal_ || !ensure_motion_target()) {
         return false;
     }
@@ -7632,6 +7773,7 @@ void RendererD3D12::present_fg_hudless(const XfbTexture& source, const D3D12_VIE
 }
 
 void RendererD3D12::record_scene_aa() {
+    const GpuPassScope pass{*this, GpuPass::SceneAa};
     if (!post_process_.ready() || output_efb_active_ || scene_temporal_ || !efb_color_ || efb_msaa_.samples > 1u ||
         post_process_.settings().aa == PostProcessSettings::Aa::kOff) {
         return;
@@ -7658,6 +7800,7 @@ void RendererD3D12::record_scene_aa() {
 // The EFB's depth, single-sample (MSAA resolves it, sample 0), read by the occlusion; the product lands on the
 // EFB's own colour target, every sample of a multisampled one.
 void RendererD3D12::record_scene_ao() {
+    const GpuPassScope pass{*this, GpuPass::SceneAo};
     if (!ambient_occlusion_.ready() || !efb_depth_ || !efb_color_) {
         return;
     }
@@ -7709,6 +7852,7 @@ void RendererD3D12::game_bloom(std::uint16_t phase, std::uint32_t a, std::uint32
 // The game's bloom on the EFB's single-sample colour (MSAA resolves it first); the composite lands on every sample of
 // a multisampled EFB. The game's frame is its 640 x 456 at the internal scale.
 void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
+    const GpuPassScope pass{*this, GpuPass::Bloom};
     if (!efb_color_) {
         return;
     }
@@ -8002,9 +8146,11 @@ void RendererD3D12::draw(const DrawCall& call) {
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
         ++log_gap_ops_;
     }
-    if (call.pipeline != bound_pipeline_) {
-        command_list_->SetPipelineState(call.pipeline);
-        bound_pipeline_ = call.pipeline;
+    const bool split = call.flat_index_count != 0u;
+    gpu::Pipeline* const first_pipeline = split ? call.flat_pipeline : call.pipeline;
+    if (first_pipeline != bound_pipeline_) {
+        command_list_->SetPipelineState(first_pipeline);
+        bound_pipeline_ = first_pipeline;
     }
     if (call.vs_constants &&
         call.vs_constants != bound_vs_constants_) {
@@ -8131,9 +8277,10 @@ void RendererD3D12::draw(const DrawCall& call) {
             }
         }
     }
-    if (call.topology != bound_topology_) {
-        command_list_->IASetPrimitiveTopology(call.topology);
-        bound_topology_ = call.topology;
+    const gpu::Topology first_topology = split ? gpu::kTopologyTriangleList : call.topology;
+    if (first_topology != bound_topology_) {
+        command_list_->IASetPrimitiveTopology(first_topology);
+        bound_topology_ = first_topology;
     }
     // A replayed display list rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
@@ -8148,6 +8295,12 @@ void RendererD3D12::draw(const DrawCall& call) {
         bound_vertex_view_ = call.vertex_view;
         bound_vertex_view_valid_ = true;
     }
+    const bool time_draw = draw_query_heap_ && pass_list_open_ && call.index_count > 0u &&
+                           draw_marks_[frame_slot_].size() < kGpuDrawSlots / 2u;
+    if (time_draw) {
+        command_list_->EndQuery(draw_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                frame_slot_ * kGpuDrawSlots + 2u * static_cast<UINT>(draw_marks_[frame_slot_].size()));
+    }
     if (call.index_count > 0) {
         if (call.index_view.BufferLocation) {
             // Compared before binding, as the vertex view above.
@@ -8160,10 +8313,28 @@ void RendererD3D12::draw(const DrawCall& call) {
                 bound_index_view_ = call.index_view;
                 bound_index_view_valid_ = true;
             }
-            command_list_->DrawIndexedInstanced(call.index_count, 1, 0, 0, 0);
+            if (split) {
+                command_list_->DrawIndexedInstanced(call.flat_index_count, 1, 0, 0, 0);
+                if (call.index_count > call.flat_index_count) {
+                    command_list_->SetPipelineState(call.pipeline);
+                    command_list_->IASetPrimitiveTopology(call.topology);
+                    bound_pipeline_ = call.pipeline;
+                    bound_topology_ = call.topology;
+                    command_list_->DrawIndexedInstanced(call.index_count - call.flat_index_count, 1,
+                                                        call.flat_index_count, 0, 0);
+                }
+            } else {
+                command_list_->DrawIndexedInstanced(call.index_count, 1, 0, 0, 0);
+            }
         } else {
             command_list_->DrawInstanced(call.index_count, 1, 0, 0);
         }
+    }
+    if (time_draw) {
+        std::vector<GpuDrawMark>& marks = draw_marks_[frame_slot_];
+        command_list_->EndQuery(draw_query_heap_.Get(), D3D12_QUERY_TYPE_TIMESTAMP,
+                                frame_slot_ * kGpuDrawSlots + 2u * static_cast<UINT>(marks.size()) + 1u);
+        marks.push_back({call.pipeline, call.index_count / 3u});
     }
 }
 
@@ -8309,6 +8480,7 @@ void RendererD3D12::record_conversion_blit(
 }
 
 void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
+    const GpuPassScope pass{*this, GpuPass::XfbCopy};
     log_rt_seq("xfb");
     // The caller publishes a new XFB serial after this returns, so a missing
     // target throws rather than pass as a new frame.
@@ -8396,6 +8568,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
 
 bool RendererD3D12::copy_efb_to_texture(
     const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+    const GpuPassScope pass{*this, GpuPass::EfbCopy};
     // SMG composites its visible frame from EFB-to-texture captures (the scene
     // is copied out at 640x456 and the final pass samples it). The conversion
     // blit applies intensity, gamma, the copy filter and half-scale, and serves
@@ -9667,6 +9840,7 @@ bool RendererD3D12::present(
     // Both shader-visible heaps stay bound: the blit uses static samplers, but
     // the overlays and GX recording expect the sampler heap.
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
+    const GpuPassScope present_pass{*this, GpuPass::Present};
     command_list_->SetDescriptorHeaps(2, heaps);
     if (black) {
         // The VI shows black (VISetBlack): the XFB is not scanned out.

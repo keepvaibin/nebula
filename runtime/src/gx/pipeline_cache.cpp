@@ -2551,6 +2551,18 @@ Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_uber_pso(
 
 // Render thread: the specialization of a key now drawing with an uber
 // pipeline. Cached DXBC is reused; a new pair is compiled and then cached.
+ID3D12PipelineState* PipelineCache::get_if_ready(
+    const PsoKey& key,
+    const PixelShaderKey& ps_key,
+    const VertexShaderKey& vs_key) {
+    const MemoizedPsoKey memoized{key, key.hash()};
+    if (const auto it = published_.find(memoized); it != published_.end()) {
+        return it->second.Get();
+    }
+    enqueue_async_specialization(memoized, ps_key, vs_key);
+    return nullptr;
+}
+
 void PipelineCache::enqueue_async_specialization(
     const MemoizedPsoKey& memoized,
     const PixelShaderKey& ps_key,

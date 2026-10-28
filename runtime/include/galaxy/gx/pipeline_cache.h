@@ -125,6 +125,12 @@ public:
         const PsoKey& key,
         const PixelShaderKey& ps_key,
         const VertexShaderKey& vs_key);
+    // RENDER THREAD ONLY. The specialized pipeline once published, else null with its compile queued on a worker:
+    // never compiles or waits here (a variant the draw can do without).
+    [[nodiscard]] ID3D12PipelineState* get_if_ready(
+        const PsoKey& key,
+        const PixelShaderKey& ps_key,
+        const VertexShaderKey& vs_key);
 
     // RENDER THREAD ONLY, called from begin_frame(): publishes every
     // completed specialization into the lookup map.

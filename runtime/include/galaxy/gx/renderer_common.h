@@ -227,6 +227,10 @@ struct DrawCall {
     std::uint32_t blend_slot = 0;
     // Interpolated redraw: the scene's pixel-constant record, -1 for none.
     std::int32_t ps_record = -1;
+    // A curved surface's first `flat_index_count` indices are triangles no corner bends: drawn as a triangle list
+    // with `flat_pipeline` (the same shaders without the patch stages), the rest as patches with `pipeline`.
+    gpu::Pipeline* flat_pipeline = nullptr;
+    std::uint32_t flat_index_count = 0;
 };
 
 }  // namespace galaxy::gx

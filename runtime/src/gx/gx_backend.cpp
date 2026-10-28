@@ -36,6 +36,7 @@
 #include "galaxy/gx/rt_surfaces.h"
 #include "galaxy/gx/texture_sampling.h"
 #include "galaxy/gx/curved_surfaces.h"
+#include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/uber_shaders.h"
 #include "galaxy/gx/render_config.h"
@@ -9459,6 +9460,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_decoded_vertex_cache_misses_ = 0;
     frame_resident_vertex_hits_ = 0;
     frame_resident_vertex_bytes_ = 0;
+    frame_curved_flat_triangles_ = 0;
+    frame_curved_patch_triangles_ = 0;
+    frame_curved_split_draws_ = 0;
     frame_decoded_vertex_cache_evictions_ = 0;
     frame_decoded_vertex_cache_stale_rejects_ = 0;
     pending_draw_batch_ = {};
@@ -9492,6 +9496,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
             curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
                                !(curved_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
+            // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
+            static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
+            curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
@@ -10326,6 +10333,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " decoded-vtx-cache-stale-rejects="
                   << frame_decoded_vertex_cache_stale_rejects_
                   << " resident-vtx-hits=" << frame_resident_vertex_hits_
+                  << " curved-split-draws=" << frame_curved_split_draws_
+                  << " curved-flat-tris=" << frame_curved_flat_triangles_
+                  << " curved-patch-tris=" << frame_curved_patch_triangles_
                   << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
                   << " resident-vtx-used-bytes="
                   << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
@@ -10729,6 +10739,100 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
     // A model kept only for its flat corners (curved_surfaces.h Model::bends) draws plainly.
     const std::shared_ptr<const curved::Model> model = curved::find_model(state_.array_base(0u));
     return model != nullptr && model->bends;
+}
+
+namespace {
+
+// GALAXY_GPU_DRAWS=1: each pipeline's keys once, to name the renderer's [gpu-draws] lines.
+void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs, const PixelShaderKey& ps,
+                       const RenderStateKey& rs) {
+    static const bool enabled = read_env_u64("GALAXY_GPU_DRAWS", 0u) != 0u;
+    static std::unordered_set<const gpu::Pipeline*> described;
+    if (!enabled || pipeline == nullptr || !described.insert(pipeline).second) {
+        return;
+    }
+    std::fprintf(stderr, "[pso-desc] pso=%p %s %s blend=0x%08x z=0x%x cull=%u topo=0x%02x\n",
+                 static_cast<const void*>(pipeline), ShaderGenerator::describe(vs).c_str(),
+                 ShaderGenerator::describe(ps).c_str(), rs.blend_bits, static_cast<unsigned>(rs.zmode_bits),
+                 static_cast<unsigned>(rs.cull), static_cast<unsigned>(rs.primitive_topology));
+}
+
+}  // namespace
+
+bool GxBackend::split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
+                                 std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
+                                 std::span<const std::uint16_t> precomputed_indices) {
+    if (!entry.split_built) {
+        entry.split_built = true;
+        std::vector<std::uint16_t>& run = curved_split_scratch_;
+        VertexLoader::cached_packet_run_triangles(static_cast<std::uint32_t>(entry.vertices.size()), base_offset,
+                                                  packets, primitive, entry.total_indices, precomputed_indices, run);
+        // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment
+        // and moves nothing, in this triangle and in its neighbours.
+        const auto flat = [&](std::size_t t) {
+            for (std::size_t k = 0; k < 3u; ++k) {
+                const GxVertexOut& v = entry.vertices[run[t + k]];
+                if ((v.curve[0] | v.curve[1]) != 0u) {
+                    return false;
+                }
+            }
+            return true;
+        };
+        const std::size_t count = run.size() / 3u * 3u;
+        const bool in_range = std::all_of(run.begin(), run.begin() + static_cast<std::ptrdiff_t>(count),
+                                          [&](std::uint16_t i) { return i < entry.vertices.size(); });
+        std::size_t flat_indices = 0;
+        for (std::size_t t = 0; in_range && t < count; t += 3u) {
+            flat_indices += flat(t) ? 3u : 0u;
+        }
+        if (flat_indices != 0u) {
+            entry.split_indices.resize(count);
+            std::size_t f = 0;
+            std::size_t c = flat_indices;
+            for (std::size_t t = 0; t < count; t += 3u) {
+                std::size_t& out = flat(t) ? f : c;
+                entry.split_indices[out] = run[t];
+                entry.split_indices[out + 1u] = run[t + 1u];
+                entry.split_indices[out + 2u] = run[t + 2u];
+                out += 3u;
+            }
+            entry.split_flat_indices = static_cast<std::uint32_t>(flat_indices);
+            const std::size_t bytes = count * sizeof(std::uint16_t);
+            entry.byte_size += bytes;
+            decoded_packet_run_cache_bytes_ += bytes;
+        }
+    }
+    return entry.split_flat_indices != 0u;
+}
+
+gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
+    // A triangle a factor-one patch outputs unchanged draws the same pixels in a triangle list, but in another place
+    // in the draw's order: only where that order cannot show (no blending or logic op; a depth test that passes by
+    // nearness, written).
+    const RenderStateKey& rs = curved_key.render_state;
+    const unsigned depth_func = (rs.zmode_bits >> 1u) & 0x7u;
+    const bool ordered_by_depth = (rs.zmode_bits & 0x11u) == 0x11u &&
+        (depth_func == 1u || depth_func == 3u || depth_func == 4u || depth_func == 6u);
+    if ((rs.blend_bits & 0x101u) != 0u || !ordered_by_depth) {
+        return nullptr;
+    }
+    VertexShaderKey vs_key = vs_key_;
+    vs_key.flags = static_cast<std::uint8_t>(vs_key.flags & ~kVsKeyCurved);
+    const PsoKey key{vs_key.hash(), curved_key.ps_hash, flat_render_state(rs)};
+    const std::uint64_t hash = key.hash();
+    PipelineMemoEntry& memo = pipeline_memo_[hash & kPipelineMemoMask];
+    if (memo.hash == hash && memo.pipeline != nullptr && memo.key == key) {
+        return memo.pipeline;
+    }
+    gpu::Pipeline* const pipeline = pipeline_cache_.get_if_ready(key, ps_key_, vs_key);
+    if (pipeline == nullptr) {
+        return nullptr;
+    }
+    describe_pipeline(pipeline, vs_key, ps_key_, key.render_state);
+    memo.hash = hash;
+    memo.key = key;
+    memo.pipeline = pipeline;
+    return pipeline;
 }
 
 gpu::Pipeline* GxBackend::flush_draw_state(
@@ -11227,6 +11331,11 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             current_pso_key_ = pso_key;
             current_pso_key_hash_ = pso_key_hash;
             current_pso_key_valid_ = current_pipeline_ != nullptr;
+            current_flat_pipeline_ = curved && resolved != nullptr && !resolved_uber
+                ? resolve_flat_pipeline(pso_key) : nullptr;
+            if (!resolved_uber) {
+                describe_pipeline(resolved, vs_key_, ps_key_, render_state_key_);
+            }
         }
         if (time_detail) {
             frame_flush_pso_us_ +=
@@ -11756,7 +11865,8 @@ bool GxBackend::draw_calls_batch_compatible(
         lhs.sampler_table.ptr != rhs.sampler_table.ptr ||
         lhs.matrix_palette != rhs.matrix_palette ||
         lhs.topology != rhs.topology ||
-        lhs.has_viewport != rhs.has_viewport) {
+        lhs.has_viewport != rhs.has_viewport ||
+        lhs.flat_index_count != 0u || rhs.flat_index_count != 0u) {
         return false;
     }
     if (lhs.scissor.left != rhs.scissor.left ||
@@ -11793,7 +11903,13 @@ void GxBackend::flush_pending_draw_batch() {
         renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
     }
     if (!pending_draw_batch_.hidden) {
-        renderer_.draw(pending_draw_batch_.call);
+        const DrawCall& call = pending_draw_batch_.call;
+        if (call.topology == gpu::kTopologyTrianglePatches) {
+            frame_curved_flat_triangles_ += call.flat_index_count / 3u;
+            frame_curved_patch_triangles_ += (call.index_count - call.flat_index_count) / 3u;
+            frame_curved_split_draws_ += call.flat_index_count != 0u ? 1u : 0u;
+        }
+        renderer_.draw(call);
     }
     if (pending_draw_batch_.debake_model != 0u) [[unlikely]] {
         sample_debake_model(pending_draw_batch_.debake_model, pending_draw_batch_.call);
@@ -12279,6 +12395,7 @@ bool GxBackend::on_cached_packet_draw_run(
     LoadedPrimitive prim{};
     bool decoded_cache_hit = false;
     bool batch_resident = false;
+    std::uint32_t split_flat_indices = 0u;
     if (decoded_cache_enabled) {
         if (auto it = decoded_packet_run_cache_.find(decoded_cache_key);
             it != decoded_packet_run_cache_.end()) {
@@ -12329,8 +12446,10 @@ bool GxBackend::on_cached_packet_draw_run(
                 const std::size_t resident_byte_offset =
                     static_cast<std::size_t>(entry.resident_offset) *
                     sizeof(GxVertexOut);
+                const bool split = resident && current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr &&
+                                   split_curved_run(entry, base_offset, packets, primitive, precomputed_indices);
                 if (append_to_pending &&
-                    (pending_draw_batch_.resident != resident ||
+                    (split || pending_draw_batch_.resident != resident ||
                      (resident &&
                       pending_draw_batch_.vertex_byte_end != resident_byte_offset))) {
                     flush_pending_draw_batch();
@@ -12342,17 +12461,32 @@ bool GxBackend::on_cached_packet_draw_run(
                         ? pending_draw_batch_.base_vertex
                         : 0u;
                 if (resident) {
-                    prim = vertex_loader_.upload_cached_packet_run_indices(
-                        resident_byte_offset,
-                        static_cast<std::uint32_t>(entry.vertices.size()),
-                        base_offset,
-                        packets,
-                        primitive,
-                        renderer_.index_ring(),
-                        index_batch_base,
-                        append_to_pending && cached_draw_run_primitive_indexed_,
-                        entry.total_indices,
-                        precomputed_indices);
+                    if (split) {
+                        // The run's triangles, flat ones first, alone in their batch.
+                        const UploadRing::Allocation ib = renderer_.index_ring().upload_immutable(
+                            entry.split_indices.data(), entry.split_indices.size() * sizeof(std::uint16_t),
+                            sizeof(std::uint16_t), entry.split_upload_token);
+                        prim.base_vertex = entry.resident_offset;
+                        prim.vertex_byte_offset = resident_byte_offset;
+                        prim.vertex_count = static_cast<std::uint32_t>(entry.vertices.size());
+                        prim.first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+                        prim.index_count = static_cast<std::uint32_t>(entry.split_indices.size());
+                        prim.indexed = true;
+                        prim.source_class = primitive;
+                        split_flat_indices = entry.split_flat_indices;
+                    } else {
+                        prim = vertex_loader_.upload_cached_packet_run_indices(
+                            resident_byte_offset,
+                            static_cast<std::uint32_t>(entry.vertices.size()),
+                            base_offset,
+                            packets,
+                            primitive,
+                            renderer_.index_ring(),
+                            index_batch_base,
+                            append_to_pending && cached_draw_run_primitive_indexed_,
+                            entry.total_indices,
+                            precomputed_indices);
+                    }
                     batch_resident = true;
                     ++frame_resident_vertex_hits_;
                     frame_resident_vertex_bytes_ +=
@@ -12558,6 +12692,10 @@ bool GxBackend::on_cached_packet_draw_run(
     call.vertex_view = vbv;
     call.index_view = ibv;
     call.index_count = prim.index_count;
+    if (split_flat_indices != 0u) {
+        call.flat_pipeline = current_flat_pipeline_;
+        call.flat_index_count = split_flat_indices;
+    }
 
     const std::size_t vertex_byte_end =
         prim.vertex_byte_offset +

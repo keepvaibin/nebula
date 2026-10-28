@@ -439,6 +439,8 @@ private:
     // Whether a triangle draw with vertex format `vtxfmt` is a curved surface (curved_surfaces.h): a perspective scene
     // draw of a model the game registered, its positions indexed, not bump mapped, while the setting is on.
     [[nodiscard]] bool curved_draw(std::uint8_t vtxfmt) const;
+    // The pipeline of a curved draw's flat triangles (current_flat_pipeline_) for the curved pipeline's key.
+    [[nodiscard]] gpu::Pipeline* resolve_flat_pipeline(const PsoKey& curved_key);
     // The topology a draw records: a curved surface's patches while its specialized pipeline draws it.
     [[nodiscard]] gpu::Topology draw_topology(gpu::Topology topology) const noexcept {
         return current_curved_ && !current_pipeline_is_uber_ ? gpu::kTopologyTrianglePatches : topology;
@@ -1566,6 +1568,12 @@ private:
 
         DecodedPacketRunCacheKey key{};
         std::uint32_t total_indices = 0;
+        // Curved surfaces: the run's triangles with those no corner bends first (DrawCall::flat_index_count), from
+        // its first vertex; built at its first curved draw.
+        std::vector<std::uint16_t> split_indices;
+        std::uint32_t split_flat_indices = 0;
+        bool split_built = false;
+        ImmutableUploadToken split_upload_token;
         std::uint64_t last_used = 0;
         std::size_t byte_size = 0;
         std::vector<GxVertexOut> vertices;
@@ -1643,6 +1651,10 @@ private:
     gpu::Device* resident_vertex_device_ = nullptr;
     bool resident_vertex_buffer_failed_ = false;
     std::uint64_t frame_resident_vertex_hits_ = 0;
+    // Curved surface triangles drawn plain (no corner bends) and as patches, and the draws split between them.
+    std::uint64_t frame_curved_flat_triangles_ = 0;
+    std::uint64_t frame_curved_patch_triangles_ = 0;
+    std::uint64_t frame_curved_split_draws_ = 0;
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
@@ -1652,6 +1664,11 @@ private:
     // Gives `entry` a resident block holding its vertices; false when out of space or the
     // buffer could not be created (the ring path is used).
     [[nodiscard]] bool make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry);
+    // Builds a resident run's split (DecodedPacketRunCacheEntry::split_indices) at its first curved draw; whether it
+    // has flat triangles.
+    bool split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
+                          std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
+                          std::span<const std::uint16_t> precomputed_indices);
     // Render thread: decode scratch for runs outside the decoded cache (capacity bounded by
     // kDecodedPacketRunCacheMaxEntryBytes).
     std::vector<GxVertexOut> decoded_packet_vertex_scratch_;
@@ -1715,6 +1732,12 @@ private:
     // flushed draw is a curved surface (its keys carry kVsKeyCurved and the patch topology).
     bool curved_surfaces_ = false;
     bool current_curved_ = false;
+    // The last curved draw's pipeline without the patch stages, for its flat triangles (DrawCall::flat_pipeline);
+    // null where the order of a draw's triangles could show (blending, a logic op, no depth test or write) or while
+    // it compiles.
+    gpu::Pipeline* current_flat_pipeline_ = nullptr;
+    bool curved_split_ = true;
+    std::vector<std::uint16_t> curved_split_scratch_;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;
