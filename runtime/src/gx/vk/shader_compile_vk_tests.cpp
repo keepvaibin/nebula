@@ -201,6 +201,50 @@ std::set<std::uint32_t> io_locations(const std::vector<std::uint32_t>& spirv, st
     return result;
 }
 
+// The patch stages' per-vertex variables span the patch's three vertices (glslang sized a split array member's
+// elements by the member's own length).
+std::string check_patch_arrays(const std::vector<std::uint32_t>& spirv, ShaderStage stage) {
+    constexpr std::uint32_t kOpTypeArray = 28;
+    constexpr std::uint32_t kOpTypePointer = 32;
+    constexpr std::uint32_t kOpConstant = 43;
+    constexpr std::uint32_t kDecorationPatch = 15;
+    constexpr std::uint32_t kDecorationLocation = 30;
+    std::map<std::uint32_t, std::uint32_t> lengths, constants, pointees;
+    std::set<std::uint32_t> located, per_patch;
+    struct Variable {
+        std::uint32_t id, pointer, storage;
+    };
+    std::vector<Variable> variables;
+    for (std::size_t at = 5; at < spirv.size() && (spirv[at] >> 16u) != 0u; at += spirv[at] >> 16u) {
+        const std::uint32_t count = spirv[at] >> 16u;
+        const std::uint32_t op = spirv[at] & 0xffffu;
+        if (op == kOpTypeArray && count == 4u) {
+            lengths[spirv[at + 1]] = spirv[at + 3];
+        } else if (op == kOpConstant && count == 4u) {
+            constants[spirv[at + 2]] = spirv[at + 3];
+        } else if (op == kOpTypePointer && count == 4u) {
+            pointees[spirv[at + 1]] = spirv[at + 3];
+        } else if (op == kOpDecorate && count >= 3u && spirv[at + 2] == kDecorationLocation) {
+            located.insert(spirv[at + 1]);
+        } else if (op == kOpDecorate && count >= 3u && spirv[at + 2] == kDecorationPatch) {
+            per_patch.insert(spirv[at + 1]);
+        } else if (op == kOpVariable && count >= 4u && (spirv[at + 3] == 1u || spirv[at + 3] == 3u)) {
+            variables.push_back({spirv[at + 2], spirv[at + 1], spirv[at + 3]});
+        }
+    }
+    std::string problems;
+    for (const Variable& v : variables) {
+        if (!located.contains(v.id) || per_patch.contains(v.id) || (stage == ShaderStage::Domain && v.storage == 3u)) {
+            continue;
+        }
+        const auto length = lengths.find(pointees[v.pointer]);
+        if (length == lengths.end() || constants[length->second] != 3u) {
+            problems += "%" + std::to_string(v.id) + " is not an array over the patch's 3 vertices; ";
+        }
+    }
+    return problems;
+}
+
 // Stage variables sit at their semantics' locations even when the shader leaves others unused (glslang alone would
 // number the used ones from 0).
 void expect_semantic_locations() {
@@ -265,6 +309,9 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
     }
     unsigned matched = 0;
     std::string problems = check_bindings(spirv, bindings) + check_constant_offsets(spirv, matched);
+    if (stage == ShaderStage::Hull || stage == ShaderStage::Domain) {
+        problems += check_patch_arrays(spirv, stage);
+    }
     bool uniform_block = false;  // the optimizer drops a block the shader never reads
     for (std::size_t at = 5; at < spirv.size() && (spirv[at] >> 16u) != 0u; at += spirv[at] >> 16u) {
         uniform_block |= (spirv[at] & 0xffffu) == kOpVariable && spirv[at + 3] == kStorageUniform;

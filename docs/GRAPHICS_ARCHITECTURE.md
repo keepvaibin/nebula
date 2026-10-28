@@ -183,14 +183,16 @@ them with Phong tessellation (Boubekeur and Alexa 2008).
   `clamp(sqrt(chord_px * angle / 2), 1, 16)` segments (fractional odd, symmetric per edge, so
   neighbours agree), where `angle` is between its ends' displacement normals: flat edges stay one
   segment.
-- **Domain stage**: every field is blended barycentrically; the point moves three quarters of the
-  way to the blend of its projections onto the corners' tangent planes (alpha 0.75). The move is
+- **Domain stage**: every field is blended barycentrically; the point moves half way to the
+  blend of its projections onto the corners' tangent planes (alpha 0.5). The move is
   applied to the clip position (with the frame's jitter), the per-pixel lighting position and
   both motion positions (the previous one by the same eye-space move), so DLSS, interpolation
   and ray tracing see the rounded surface.
 - Uber stand-ins draw the same patches as plain triangles (`flat_render_state`). Vulkan uses the
-  same HLSL stages through glslang (tessellation control and evaluation, lower-left domain
-  origin), where the device has `tessellationShader`.
+  same HLSL stages through glslang (tessellation control and evaluation; the default upper-left
+  domain origin keeps `triangle_cw` wound as the patch, so patches cull as triangles; texture
+  coordinates as eight members, which glslang sizes by the patch), where the device has
+  `tessellationShader` and the driver builds them (not NVIDIA's: `DeviceQuirks::no_tessellation`).
 - `GALAXY_TEST_CURVED_AB=1` draws flat in frames that end in an odd present, for same-run A/B
   snapshots.
 

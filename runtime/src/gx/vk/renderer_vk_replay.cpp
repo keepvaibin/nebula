@@ -1509,6 +1509,17 @@ void RendererVk::release_replay_resources() noexcept {
     eval_layout_ = VK_NULL_HANDLE;
     eval_set_layout_ = VK_NULL_HANDLE;
     eval_pool_ = VK_NULL_HANDLE;
+    for (VkPipeline pipeline : {curve_classify_, curve_offsets_, curve_scatter_}) {
+        if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
+    }
+    curve_classify_ = curve_offsets_ = curve_scatter_ = VK_NULL_HANDLE;
+    if (curve_layout_ != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, curve_layout_, nullptr);
+    if (curve_set_layout_ != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, curve_set_layout_, nullptr);
+    if (curve_pool_ != VK_NULL_HANDLE) vkDestroyDescriptorPool(device, curve_pool_, nullptr);
+    curve_layout_ = VK_NULL_HANDLE;
+    curve_set_layout_ = VK_NULL_HANDLE;
+    curve_pool_ = VK_NULL_HANDLE;
+    curve_sort_ = {};
     program_buffers_ = {};
     interp_output_.reset();
     interp_retired_.clear();

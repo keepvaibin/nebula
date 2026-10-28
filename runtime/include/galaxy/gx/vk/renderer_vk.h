@@ -231,12 +231,13 @@ public:
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     void draw(const DrawCall& call);
-    // Curved surfaces' GPU sort (RendererD3D12::sort_curved); not on Vulkan yet: split draws draw as built.
-    [[nodiscard]] std::int32_t sort_curved(gpu::Address, gpu::Address, std::uint32_t, std::uint32_t, gpu::Address,
-                                           gpu::Address, bool) noexcept {
-        return -1;
-    }
-    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return 0u; }
+    // Curved surfaces sorted on the GPU (RendererD3D12::sort_curved): the dispatches at the end of the frame's uploads,
+    // which run before its draws. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted.
+    [[nodiscard]] std::int32_t sort_curved(gpu::Address vertices, gpu::Address indices, std::uint32_t triangles,
+                                           std::uint32_t flat_triangles, gpu::Address constants, gpu::Address palette,
+                                           bool palette_rows);
+    // The frame being recorded (DrawCall::curve_sort_list).
+    [[nodiscard]] std::uint32_t curve_sort_list() const noexcept { return curve_sort_list_; }
     // The resident decoded vertices (RendererD3D12::create_resident_vertices); host-visible memory on Vulkan.
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name) {
         return create_upload_buffer(bytes, name);
@@ -781,6 +782,43 @@ private:
     VkPipeline stripe_gather_pipeline_ = VK_NULL_HANDLE;
     VkDescriptorPool blend_pool_ = VK_NULL_HANDLE;
     bool blend_failed_ = false;
+
+    // Curved surfaces' sort (sort_curved, ShaderGenerator::curve_sort_source): per frame slot its draws, the buffers the
+    // shaders read (draws, the vertex, index, constant and matrix buffers, blocks) and write (the sorted lists).
+    struct CurveSortDraw {
+        std::uint32_t vertices;
+        std::uint32_t indices;
+        std::uint32_t triangles;
+        std::uint32_t flat;
+        std::uint32_t constants;
+        std::uint32_t palette;
+        std::uint32_t flags;
+        std::uint32_t output;
+        std::uint32_t scratch;
+    };
+    struct CurveSortFrame {
+        std::vector<CurveSortDraw> draws;
+        std::array<VkBuffer, 4> sources{};  // vertices, indices, constants, palettes
+        std::uint64_t bytes = 0;
+        std::shared_ptr<vk::Buffer> records;
+        std::shared_ptr<vk::Buffer> blocks;
+        std::shared_ptr<vk::Buffer> sorted;
+        VkDescriptorSet set = VK_NULL_HANDLE;
+        std::array<VkBuffer, 7> bound{};
+    };
+    static constexpr std::uint64_t kCurveSortBytes = 8u << 20u;
+    bool ensure_curve_sort();
+    void record_curve_sort(VkCommandBuffer commands);
+    std::array<CurveSortFrame, kFramesInFlight> curve_sort_{};
+    std::vector<std::array<std::uint32_t, 2>> curve_sort_blocks_;
+    VkDescriptorSetLayout curve_set_layout_ = VK_NULL_HANDLE;
+    VkPipelineLayout curve_layout_ = VK_NULL_HANDLE;
+    VkDescriptorPool curve_pool_ = VK_NULL_HANDLE;
+    VkPipeline curve_classify_ = VK_NULL_HANDLE;
+    VkPipeline curve_offsets_ = VK_NULL_HANDLE;
+    VkPipeline curve_scatter_ = VK_NULL_HANDLE;
+    std::uint32_t curve_sort_list_ = 0;
+    bool curve_sort_failed_ = false;
 
     // A sequence: the playing log's sub-frames between two game frames.
     struct SequenceState {

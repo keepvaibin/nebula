@@ -1240,9 +1240,6 @@ DSOut main(CurvePatch c, float3 b : SV_DomainLocation, const OutputPatch<VSOut, 
     o.pos = b.x * p[0].pos + b.y * p[1].pos + b.z * p[2].pos;
     o.col0 = b.x * p[0].col0 + b.y * p[1].col0 + b.z * p[2].col0;
     o.col1 = b.x * p[0].col1 + b.y * p[1].col1 + b.z * p[2].col1;
-    [unroll] for (uint i = 0u; i < 8u; ++i) {
-        o.uv[i] = b.x * p[0].uv[i] + b.y * p[1].uv[i] + b.z * p[2].uv[i];
-    }
 CURVE_EXTRA_BLEND
     // Phong's move, edge by edge: -alpha times the sum over edges (i, k) of b_i b_k ((e.n_ik) n_ik - (e.n_ki) n_ki),
     // e the edge from i to k and n_ik the normal i bends it by.
@@ -1281,13 +1278,18 @@ struct CurveDraw {
     uint output;     // byte offset of its output
     uint scratch;    // byte offset of its blocks' masks of whole triangles, then their offsets
 };
-StructuredBuffer<CurveDraw> draws : register(t0);
-StructuredBuffer<uint2> blocks : register(t5);  // a group's draw and first triangle
-ByteAddressBuffer vertex_data : register(t1);
-ByteAddressBuffer index_data : register(t2);
-ByteAddressBuffer constant_data : register(t3);
-ByteAddressBuffer palette_data : register(t4);
-RWByteAddressBuffer sorted : register(u0);
+#ifndef NEBULA_VULKAN
+#define VK_BINDING(n)
+#else
+#define VK_BINDING(n) [[vk::binding(n, 0)]]
+#endif
+VK_BINDING(0) StructuredBuffer<CurveDraw> draws : register(t0);
+VK_BINDING(5) StructuredBuffer<uint2> blocks : register(t5);  // a group's draw and first triangle
+VK_BINDING(1) ByteAddressBuffer vertex_data : register(t1);
+VK_BINDING(2) ByteAddressBuffer index_data : register(t2);
+VK_BINDING(3) ByteAddressBuffer constant_data : register(t3);
+VK_BINDING(4) ByteAddressBuffer palette_data : register(t4);
+VK_BINDING(6) RWByteAddressBuffer sorted : register(u0);
 
 static const float kCurveFlat = 0.8;
 static const float kNearEye = 0.01;
@@ -1474,6 +1476,20 @@ std::string ShaderGenerator::curve_sort_source() {
            kCurveCodec + kCurveValue + kCurveSort;
 }
 
+// The patch stages' texture coordinates: eight members at the array's semantics (TEXCOORD0-7), not the array. Split
+// in those stages, the array's elements went to SPIR-V over the array's length, not the patch's vertices (glslang:
+// `p.uv[k]` a float3[8], the other members float3[3]).
+static std::string texcoord_members(std::string text) {
+    const std::size_t at = text.find("uv[8]");
+    const std::size_t start = text.rfind('\n', at) + 1u;
+    const std::size_t end = text.find('\n', at) + 1u;
+    std::string members;
+    for (unsigned i = 0; i < 8u; ++i) {
+        members += "    float3   uv" + std::to_string(i) + "      : TEXCOORD" + std::to_string(i) + ";\n";
+    }
+    return text.replace(start, end - start, members);
+}
+
 std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) {
     const bool ppl = (variant & 1u) != 0u;
     const bool motion = (variant & 2u) != 0u;
@@ -1490,7 +1506,7 @@ std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) 
     s += insert_before_close(kVsConstantsDef, members.c_str(), false);
     // VSOut: what the curved vertex shader writes; DSOut: the same less the curve's, as the pixel shader reads it.
     std::string vs_out = ppl ? kVsStructsPpl : kVsStructs;
-    vs_out = vs_out.substr(vs_out.find("struct VSOut"));
+    vs_out = texcoord_members(vs_out.substr(vs_out.find("struct VSOut")));
     if (motion) {
         vs_out = insert_before_close(vs_out.c_str(), kMotionInterpolants, true);
     }
@@ -1504,6 +1520,10 @@ std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) 
     std::string stages = kCurvedDomain;
     std::string blend;
     std::string move;
+    for (unsigned i = 0; i < 8u; ++i) {
+        const std::string uv = "uv" + std::to_string(i);
+        blend += "    o." + uv + " = b.x * p[0]." + uv + " + b.y * p[1]." + uv + " + b.z * p[2]." + uv + ";\n";
+    }
     if (ppl) {
         blend += "    o.ppl_pos = b.x * p[0].ppl_pos + b.y * p[1].ppl_pos + b.z * p[2].ppl_pos;\n"
                  "    o.ppl_nrm = b.x * p[0].ppl_nrm + b.y * p[1].ppl_nrm + b.z * p[2].ppl_nrm;\n"

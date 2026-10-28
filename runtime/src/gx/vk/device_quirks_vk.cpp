@@ -148,6 +148,9 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     quirks.linear_readback = qualcomm;
     // Dolphin DriverDetails BUG_BROKEN_CLEAR_LOADOP_RENDERPASS: PowerVR's render-pass load-op clears do not clear.
     quirks.clear_by_command = id.driver == DriverKind::ImaginationProprietary;
+    // NVIDIA's Vulkan shader compiler (nvgpucomp64.dll, RTX 5090, Windows driver 610) crashes inside
+    // vkCreateGraphicsPipelines building the curved surfaces' pipelines, whose SPIR-V validates.
+    quirks.no_tessellation = id.driver == DriverKind::NvidiaProprietary;
     // Applied on every device, so not quirks: SPIR-V 1.3 (ANGLE supportsSPIRV14 and Dawn UseSpirv14: Qualcomm before
     // 512.829 crashes on SPIR-V 1.4's OpCopyLogical, Adreno 7xx too, ARM before r47 mishandles its OpSelect); no
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
@@ -201,6 +204,7 @@ std::string describe(const DeviceQuirks& quirks) {
     add(quirks.coherent_readback, "coherent-readback");
     add(quirks.linear_readback, "linear-readback");
     add(quirks.clear_by_command, "clear-by-command");
+    add(quirks.no_tessellation, "no-tessellation");
     return text.empty() ? "none" : text;
 }
 

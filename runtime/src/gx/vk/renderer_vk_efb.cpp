@@ -8,6 +8,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/gx/host_window.h"
 #include "galaxy/gx/render_config.h"
+#include "galaxy/gx/shader_gen.h"
 #include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/gx/gx_state.h"
@@ -1023,6 +1024,195 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
     return set;
 }
 
+bool RendererVk::ensure_curve_sort() {
+    if (curve_classify_ != VK_NULL_HANDLE) {
+        return true;
+    }
+    if (curve_sort_failed_) {
+        return false;
+    }
+    curve_sort_failed_ = true;
+    vk::Context& context = vk::Context::get();
+    const VkDevice device = context.device();
+    VkDescriptorSetLayoutBinding bindings[7]{};
+    for (std::uint32_t i = 0; i < 7u; ++i) {
+        bindings[i].binding = i;
+        bindings[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        bindings[i].descriptorCount = 1;
+        bindings[i].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    }
+    VkDescriptorSetLayoutCreateInfo layout_info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
+    layout_info.bindingCount = 7;
+    layout_info.pBindings = bindings;
+    vk::check(vkCreateDescriptorSetLayout(device, &layout_info, nullptr, &curve_set_layout_), "curve sort set layout");
+    VkPipelineLayoutCreateInfo pipeline_layout_info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &curve_set_layout_;
+    vk::check(vkCreatePipelineLayout(device, &pipeline_layout_info, nullptr, &curve_layout_), "curve sort layout");
+    const VkDescriptorPoolSize size{VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 7u * kFramesInFlight};
+    VkDescriptorPoolCreateInfo pool_info{VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+    pool_info.maxSets = kFramesInFlight;
+    pool_info.poolSizeCount = 1;
+    pool_info.pPoolSizes = &size;
+    vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &curve_pool_), "curve sort descriptor pool");
+    const std::string source = ShaderGenerator::curve_sort_source();
+    for (const auto& [entry, pipeline] : {std::pair{"classify", &curve_classify_}, std::pair{"offsets", &curve_offsets_},
+                                          std::pair{"scatter", &curve_scatter_}}) {
+        std::string error;
+        const std::vector<std::uint32_t> spirv = vk::compile_hlsl(source, vk::ShaderStage::Compute, entry, {}, error);
+        if (spirv.empty()) {
+            std::cerr << "[curve-sort] " << error << '\n';
+            return false;
+        }
+        VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+        module_info.codeSize = spirv.size() * sizeof(std::uint32_t);
+        module_info.pCode = spirv.data();
+        VkShaderModule module = VK_NULL_HANDLE;
+        vk::check(vkCreateShaderModule(device, &module_info, nullptr, &module), "curve sort shader module");
+        VkComputePipelineCreateInfo info{VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO};
+        info.stage = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+        info.stage.stage = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = module;
+        info.stage.pName = entry;
+        info.layout = curve_layout_;
+        const VkResult result = vkCreateComputePipelines(device, VK_NULL_HANDLE, 1, &info, nullptr, pipeline);
+        vkDestroyShaderModule(device, module, nullptr);
+        if (result != VK_SUCCESS) {
+            std::cerr << "[curve-sort] pipeline " << entry << ": " << static_cast<int>(result) << '\n';
+            return false;
+        }
+    }
+    for (CurveSortFrame& frame : curve_sort_) {
+        frame.sorted = context.create_buffer(kCurveSortBytes, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                                                                  VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+                                                                  VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
+                                             "curve sort output");
+        VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+        info.descriptorPool = curve_pool_;
+        info.descriptorSetCount = 1;
+        info.pSetLayouts = &curve_set_layout_;
+        if (!frame.sorted || vkAllocateDescriptorSets(device, &info, &frame.set) != VK_SUCCESS) {
+            return false;
+        }
+    }
+    curve_sort_failed_ = false;
+    return true;
+}
+
+std::int32_t RendererVk::sort_curved(gpu::Address vertices, gpu::Address indices, std::uint32_t triangles,
+                                     std::uint32_t flat_triangles, gpu::Address constants, gpu::Address palette,
+                                     bool palette_rows) {
+    CurveSortFrame& frame = curve_sort_[frame_slot_];
+    // Its output (arguments, two lists), then its blocks' masks and offsets.
+    const std::uint64_t blocks = (triangles + 63u) / 64u;
+    const std::uint64_t output = 40u + std::uint64_t{24} * triangles;
+    const std::uint64_t bytes = output + 12u * blocks;
+    if (replaying_ || triangles == 0u || blocks > 1024u || frame.bytes + bytes > kCurveSortBytes ||
+        frame.draws.size() >= 65535u || !ensure_curve_sort()) {
+        return -1;
+    }
+    // The buffers bind whole: each within the device's storage range.
+    const std::uint64_t range = vk::Context::get().properties().limits.maxStorageBufferRange;
+    if (resident_vertex_bytes_ > range || index_ring_.total_bytes() > range || constant_ring_.total_bytes() > range ||
+        matrix_ring_.total_bytes() > range) {
+        return -1;
+    }
+    // One buffer of each kind a frame (the resident vertices and the rings), 32-bit offsets into it.
+    const vk::Context& context = vk::Context::get();
+    const vk::Context::BufferOffset at[4] = {context.resolve(vertices), context.resolve(indices), context.resolve(constants),
+                                             palette_rows ? context.resolve(palette) : vk::Context::BufferOffset{}};
+    for (unsigned i = 0; i < 4u; ++i) {
+        if ((i < 3u || palette_rows) &&
+            (at[i].buffer == VK_NULL_HANDLE || at[i].offset > 0xFFFFFFFFu ||
+             (frame.sources[i] != VK_NULL_HANDLE && frame.sources[i] != at[i].buffer))) {
+            return -1;
+        }
+    }
+    // The tables the dispatches read, grown now: the draws recorded with this sort must find it recorded.
+    const auto room = [&](std::shared_ptr<vk::Buffer>& buffer, std::uint64_t needed, const char* name) {
+        if (!buffer || buffer->size < needed) {
+            std::uint64_t size = 64u << 10u;
+            while (size < needed) {
+                size *= 2u;
+            }
+            buffer = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, name);
+        }
+        return static_cast<bool>(buffer);
+    };
+    std::uint64_t all_blocks = blocks;
+    for (const CurveSortDraw& draw : frame.draws) {
+        all_blocks += (draw.triangles + 63u) / 64u;
+    }
+    if (!room(frame.records, (frame.draws.size() + 1u) * sizeof(CurveSortDraw), "curve sort draws") ||
+        !room(frame.blocks, all_blocks * 8u, "curve sort blocks")) {
+        return -1;
+    }
+    for (unsigned i = 0; i < 4u; ++i) {
+        if (at[i].buffer != VK_NULL_HANDLE) {
+            frame.sources[i] = at[i].buffer;
+        }
+    }
+    frame.draws.push_back({static_cast<std::uint32_t>(at[0].offset), static_cast<std::uint32_t>(at[1].offset), triangles,
+                           flat_triangles, static_cast<std::uint32_t>(at[2].offset),
+                           palette_rows ? static_cast<std::uint32_t>(at[3].offset) : 0u, palette_rows ? 1u : 0u,
+                           static_cast<std::uint32_t>(frame.bytes), static_cast<std::uint32_t>(frame.bytes + output)});
+    frame.bytes += bytes;
+    return static_cast<std::int32_t>(frame.draws.size() - 1u);
+}
+
+void RendererVk::record_curve_sort(VkCommandBuffer commands) {
+    CurveSortFrame& frame = curve_sort_[frame_slot_];
+    const VkDevice device = vk::Context::get().device();
+    std::memcpy(frame.records->mapped, frame.draws.data(), frame.draws.size() * sizeof(CurveSortDraw));
+    curve_sort_blocks_.clear();
+    for (std::uint32_t draw = 0; draw < frame.draws.size(); ++draw) {
+        for (std::uint32_t first = 0; first < frame.draws[draw].triangles; first += 64u) {
+            curve_sort_blocks_.push_back({draw, first});
+        }
+    }
+    std::memcpy(frame.blocks->mapped, curve_sort_blocks_.data(), curve_sort_blocks_.size() * sizeof(curve_sort_blocks_[0]));
+    // A draw without palette rows reads none: the constants stand in.
+    const VkBuffer palette = frame.sources[3] != VK_NULL_HANDLE ? frame.sources[3] : frame.sources[2];
+    const std::array<VkBuffer, 7> buffers{frame.records->buffer, frame.sources[0], frame.sources[1], frame.sources[2],
+                                          palette, frame.blocks->buffer, frame.sorted->buffer};
+    if (frame.bound != buffers) {
+        VkDescriptorBufferInfo infos[7]{};
+        VkWriteDescriptorSet writes[7]{};
+        for (unsigned i = 0; i < 7u; ++i) {
+            infos[i] = {buffers[i], 0, VK_WHOLE_SIZE};
+            writes[i].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[i].dstSet = frame.set;
+            writes[i].dstBinding = i;
+            writes[i].descriptorCount = 1;
+            writes[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            writes[i].pBufferInfo = &infos[i];
+        }
+        vkUpdateDescriptorSets(device, 7, writes, 0, nullptr);
+        frame.bound = buffers;
+    }
+    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_COMPUTE, curve_layout_, 0, 1, &frame.set, 0, nullptr);
+    VkMemoryBarrier between{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    between.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    between.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, curve_classify_);
+    vkCmdDispatch(commands, static_cast<std::uint32_t>(curve_sort_blocks_.size()), 1u, 1u);
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+                         &between, 0, nullptr, 0, nullptr);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, curve_offsets_);
+    vkCmdDispatch(commands, static_cast<std::uint32_t>(frame.draws.size()), 1u, 1u);
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1,
+                         &between, 0, nullptr, 0, nullptr);
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_COMPUTE, curve_scatter_);
+    vkCmdDispatch(commands, static_cast<std::uint32_t>(curve_sort_blocks_.size()), 1u, 1u);
+    // The frame's draws read the lists and their arguments.
+    VkMemoryBarrier to_draws{VK_STRUCTURE_TYPE_MEMORY_BARRIER};
+    to_draws.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    to_draws.dstAccessMask = VK_ACCESS_INDIRECT_COMMAND_READ_BIT | VK_ACCESS_INDEX_READ_BIT;
+    vkCmdPipelineBarrier(commands, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT | VK_PIPELINE_STAGE_VERTEX_INPUT_BIT, 0, 1, &to_draws, 0,
+                         nullptr, 0, nullptr);
+}
+
 void RendererVk::draw(const DrawCall& call) {
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::Draw, static_cast<std::uint32_t>(recording_log_.draws.size())});
@@ -1164,7 +1354,21 @@ void RendererVk::draw(const DrawCall& call) {
             vkCmdBindIndexBuffer(commands, indices.buffer, indices.offset, VK_INDEX_TYPE_UINT16);
             bound_.index_address = call.index_view.BufferLocation;
         }
-        if (split) {
+        CurveSortFrame& sort = curve_sort_[frame_slot_];
+        if (split && call.curve_sort >= 0 && call.curve_sort_list == curve_sort_list_ && !replaying_ &&
+            static_cast<std::size_t>(call.curve_sort) < sort.draws.size() && sort.sorted) {
+            // The sort's lists: the whole triangles, then the patches, each drawn by its arguments.
+            const CurveSortDraw& sorted = sort.draws[static_cast<std::size_t>(call.curve_sort)];
+            const VkBuffer buffer = sort.sorted->buffer;
+            vkCmdBindIndexBuffer(commands, buffer, sorted.output + 40u, VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexedIndirect(commands, buffer, sorted.output, 1u, 20u);
+            vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, call.pipeline);
+            bound_.pipeline = call.pipeline;
+            vkCmdBindIndexBuffer(commands, buffer, sorted.output + 40u + VkDeviceSize{12} * sorted.triangles,
+                                 VK_INDEX_TYPE_UINT32);
+            vkCmdDrawIndexedIndirect(commands, buffer, sorted.output + 20u, 1u, 20u);
+            bound_.index_address = ~gpu::Address{0};
+        } else if (split) {
             if (call.flat_index_count != 0u) {
                 vkCmdDrawIndexed(commands, call.flat_index_count, 1, 0, 0, 0);
             }

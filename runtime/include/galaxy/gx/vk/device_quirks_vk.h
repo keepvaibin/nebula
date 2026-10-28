@@ -67,6 +67,8 @@ struct DeviceQuirks {
     bool linear_readback = false;
     // Render passes clear by command, not by load op (PowerVR's load-op clears are broken).
     bool clear_by_command = false;
+    // No tessellation, so no curved surfaces (NVIDIA's Vulkan compiler crashes building their pipelines).
+    bool no_tessellation = false;
 };
 
 [[nodiscard]] DeviceIdentity identify(VkPhysicalDevice physical, bool has_driver_properties);

@@ -50,7 +50,8 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   Qualcomm before 512.762.12 draws its clears; Mali and Adreno read back from coherent memory; Qualcomm reads back
   through a linear image (its optimal image-to-buffer copies make a temporary image each); PowerVR clears render
   passes by command (its load-op clears do nothing); one PSO thread on Android (parallel precompiles crash Android
-  drivers). On every device:
+  drivers); no curved surfaces on NVIDIA's driver (610.88's compiler crashes in `vkCreateGraphicsPipelines` on their
+  pipelines, which validate). On every device:
   SPIR-V 1.3 (Qualcomm and ARM drivers mishandle 1.4), no maximal-reconvergence mode (Dusklight issue 2563), TEV byte
   masks per component (Mali's vector AND), D24S8 depth where present (Adreno's D32F clears), no reversed depth ranges.
 - **Capabilities.** Only what the device reports is enabled; without it: single-source blending, plain writes for
@@ -75,7 +76,8 @@ Every Vulkan 1.1 GPU and driver (Android's in particular), with no per-device wo
   version built elsewhere makes other SPIR-V: the Adreno 840 refused the PC build's vertex shaders that it accepts from
   the phone's own (test 3), so `vk_shader_seed` SPIR-V is used only on a matching compiler.
 - **Driver crashes** inside a compile (the class Dusklight hit on Adreno 740): `compile_journal.h` maps the compiles
-  in progress into a file; the next launch never builds that pipeline again.
+  in progress into a file; the next launch on the same driver build never builds that pipeline again (another GPU's
+  crash, as on a laptop with two, is not this one's).
 - **Reports.** The first refusal logs the VkResult, the pipeline's state, this process's driver log (Android's
   logcat) and the shaders' HLSL. `GALAXY_VK_SHADER_DUMP=<dir>` writes every module.
 - **Checks** (development scripts, outside the repository): `vk_compat_runs.sh` runs a simulated driver

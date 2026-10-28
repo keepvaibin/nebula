@@ -69,7 +69,8 @@ std::string spirv_string(const std::vector<std::uint32_t>& spirv, std::size_t fi
 
 // A semantic's location, as D3D12 matches stages by semantic: vertex attributes in GxVertexOut's order
 // (POSITION 0, NORMAL 1, TANGENT 2, BINORMAL 3, COLOR0-1 4-5, TEXCOORD0-7 6-13, BLENDINDICES 14, BEND 15);
-// between stages COLOR0-1 at 0-1 and TEXCOORDn at 2+n; pixel outputs SV_TARGETn at n. `element`: the variable's element of an
+// between stages COLOR0-1 at 0-1 and TEXCOORD0-16 at 2-18 (16: the curved stages' curve data); pixel outputs
+// SV_TARGETn at n. `element`: the variable's element of an
 // array declared with this semantic, which takes the following indices.
 std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32_t element, bool vertex_input,
                                                bool pixel_output) {
@@ -98,7 +99,7 @@ std::optional<std::uint32_t> semantic_location(std::string semantic, std::uint32
         return std::nullopt;
     }
     if (name == "COLOR" && index < 2u) return index;
-    if (name == "TEXCOORD" && index < 16u) return 2u + index;
+    if (name == "TEXCOORD" && index < 17u) return 2u + index;
     return std::nullopt;
 }
 

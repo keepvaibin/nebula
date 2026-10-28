@@ -1103,6 +1103,10 @@ void RendererVk::begin_frame(bool) {
     vk::check(vkBeginCommandBuffer(frame.uploads, &begin), "vkBeginCommandBuffer");
     vk::check(vkBeginCommandBuffer(frame.commands, &begin), "vkBeginCommandBuffer");
     commands_ = frame.commands;
+    ++curve_sort_list_;
+    curve_sort_[frame_slot_].draws.clear();
+    curve_sort_[frame_slot_].bytes = 0u;
+    curve_sort_[frame_slot_].sources = {};
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdResetQueryPool(frame.commands, timestamps_, frame_slot_ * 2u, 2u);
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, timestamps_, frame_slot_ * 2u);
@@ -1138,6 +1142,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
     if (timestamps_ != VK_NULL_HANDLE) {
         vkCmdWriteTimestamp(frame.commands, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, timestamps_,
                             frame_slot_ * 2u + 1u);
+    }
+    if (!curve_sort_[frame_slot_].draws.empty()) {
+        record_curve_sort(frame.uploads);
     }
     vk::check(vkEndCommandBuffer(frame.uploads), "vkEndCommandBuffer");
     vk::check(vkEndCommandBuffer(frame.commands), "vkEndCommandBuffer");

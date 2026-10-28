@@ -375,8 +375,13 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, co
         driver_key_ = vk::driver_key(vk::Context::get().identity());
     }
     load_compat();
-    // Pipelines a crashed process was building: never again on this driver build.
+    // Pipelines a crashed process was building: never again on this driver build. The last session ran this one when
+    // its compat state loaded (each session saves it at start); another's crash (a hybrid laptop's other GPU) says
+    // nothing about this one.
     for (const vk::CompileJournal::Left& left : journal_.open(cache_dir_ / "vk_compiling.bin")) {
+        if (!compat_known_) {
+            continue;
+        }
         std::fprintf(stderr, "[vk-compat] %s pipeline %016llx crashed the driver last launch; skipped\n",
                      left.kind == kJournalSpecialised ? "specialised" : "uber",
                      static_cast<unsigned long long>(left.key));
@@ -513,13 +518,10 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
             expanded = true;
         }
     }
-    // A curved surface's patches (kVsKeyCurved): its vertex output variant's hull and domain stages. D3D's tessellation
-    // domain has its origin at the lower left; so set, the HLSL stages' triangles keep their winding.
-    VkPipelineTessellationDomainOriginStateCreateInfo domain_origin{
-        VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_DOMAIN_ORIGIN_STATE_CREATE_INFO};
-    domain_origin.domainOrigin = VK_TESSELLATION_DOMAIN_ORIGIN_LOWER_LEFT;
+    // A curved surface's patches (kVsKeyCurved): its vertex output variant's hull and domain stages. In the default
+    // domain origin (upper left) the hull stage's triangle_cw, VertexOrderCw as glslang writes it, winds each patch's
+    // triangles as the patch is wound, as on D3D12, so they cull as the triangles they replace.
     VkPipelineTessellationStateCreateInfo tessellation{VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO};
-    tessellation.pNext = &domain_origin;
     tessellation.patchControlPoints = 3u;
     const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
     if (curved) {
@@ -585,8 +587,8 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     case CullMode::Back: raster.cullMode = VK_CULL_MODE_FRONT_BIT; break;
     default: raster.cullMode = VK_CULL_MODE_NONE; break;
     }
-    if (topology != VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST || expanded) {
-        raster.cullMode = VK_CULL_MODE_NONE;  // GX culls polygons, not lines or points
+    if ((topology != VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST && topology != VK_PRIMITIVE_TOPOLOGY_PATCH_LIST) || expanded) {
+        raster.cullMode = VK_CULL_MODE_NONE;  // GX culls polygons (a curved surface's patches too), not lines or points
     }
     VkPipelineMultisampleStateCreateInfo multisample{VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO};
     multisample.rasterizationSamples = static_cast<VkSampleCountFlagBits>(1u << rs.samples_log2);
