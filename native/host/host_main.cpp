@@ -483,6 +483,7 @@ struct Pak {
     size_t fst_size = 0;
     const uint8_t* dol = nullptr;
     size_t dol_size = 0;
+    char id[7] = {};  // boot.bin's game id
 };
 Pak gPak;
 // The mods this session (galaxy::mods): the disc's file table with their files, main.dol's patches, a save folder.
@@ -518,6 +519,12 @@ void open_pak(const fs::path& path) {
 #endif
     if (gPak.size < 0x440) {
         die("%s is too short for a game partition", path.string().c_str());
+    }
+    // The releases the module plays (sdk/region.c): North America, Europe and Japan.
+    std::memcpy(gPak.id, gPak.data, 6);
+    if (std::strcmp(gPak.id, "RMGE01") != 0 && std::strcmp(gPak.id, "RMGP01") != 0 &&
+        std::strcmp(gPak.id, "RMGJ01") != 0) {
+        die("%s holds %.6s, not Super Mario Galaxy for North America, Europe or Japan", path.string().c_str(), gPak.id);
     }
     // Wii partition offsets are words: boot.bin holds them divided by 4.
     const uint64_t dol = (uint64_t)load_be32(gPak.data + 0x420) << 2;
@@ -2154,6 +2161,10 @@ const uint8_t* svc_disc_dol(void*, size_t* size) {
     return gPak.dol;
 }
 
+const char* svc_disc_id(void*) {
+    return gPak.id;
+}
+
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
 std::atomic<uint32_t> gXfb{0};
@@ -3358,7 +3369,6 @@ int main(int argc, char** argv) {
     }
     gNandRoot = nand;
     std::error_code error;
-    fs::create_directories(gNandRoot / "title/00010000/524d4745/data", error);
     fs::create_directories(gNandRoot / "tmp", error);  // where saves stage their banner before moving it
 #if defined(NEBULA_HOST_RENDERER)
     // The system's Mii database, which every console has: an empty one when this NAND has none (the game treats a
@@ -3376,6 +3386,7 @@ int main(int argc, char** argv) {
 
     open_pak(pak);
     boot_mark("disc opened");
+    galaxy::gx::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
     load_module(module);
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
@@ -3413,9 +3424,29 @@ int main(int argc, char** argv) {
         char title[9];
         std::snprintf(title, sizeof(title), "%02x%02x%02x%02x", gPak.data[0], gPak.data[1], gPak.data[2], gPak.data[3]);
         gSaveDataPath = std::string("/title/00010000/") + title + "/data";
+        fs::create_directories(gNandRoot / gSaveDataPath.substr(1), error);  // the release's own save folder
+        // The disc's languages, and those its enabled mods add, before the game's language is first settled (the mods
+        // below take their text in it): Auto settles on one the disc has (Japan's disc: Japanese), never on one only a
+        // fuller list would offer.
+        std::vector<std::string> boot_languages =
+            galaxy::mods::language_folders(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size));
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::set_disc_languages(boot_languages);
+#endif
         if (!settings_folder.empty()) {
             fs::create_directories(settings_folder / "mods", error);
             galaxy::mods::set_mods_folder(settings_folder / "mods", settings_folder / "mods.ini", game_id);
+#if defined(NEBULA_HOST_RENDERER)
+            for (const galaxy::mods::ModInfo& mod : galaxy::mods::scan_mods(game_id)) {
+                if (!mod.enabled) continue;
+                for (const std::string& language : mod.languages) {
+                    if (std::find(boot_languages.begin(), boot_languages.end(), language) == boot_languages.end()) {
+                        boot_languages.push_back(language);
+                    }
+                }
+            }
+            galaxy::set_disc_languages(boot_languages);
+#endif
             gMods = galaxy::mods::apply_mods(std::span<const std::uint8_t>(gPak.fst, gPak.fst_size),
                                              std::span<const std::uint8_t>(gPak.dol, gPak.dol_size),
                                              static_cast<uint64_t>(gPak.dol - gPak.data), gPak.data, gPak.size, game_id,
@@ -3515,6 +3546,7 @@ int main(int argc, char** argv) {
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
     services.disc_dol = svc_disc_dol;
+    services.disc_id = svc_disc_id;
     services.vi_frame = svc_vi_frame;
     services.fs_request = svc_fs_request;
     services.sc_get = svc_sc_get;

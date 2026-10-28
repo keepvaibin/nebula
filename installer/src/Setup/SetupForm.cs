@@ -78,7 +78,7 @@ namespace Nebula.Setup
             choose.Dock = DockStyle.Fill;
             var title = AddLabel(choose, "Nebula", 20, 14, 700, 34);
             title.Font = new Font("Segoe UI Semibold", 17f);
-            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (USA, RMGE01).", 20, 50, 720, 40);
+            AddLabel(choose, "Unofficial native PC port of Super Mario Galaxy (North America, Europe and Japan).", 20, 50, 720, 40);
 
             int y = 98;
             if (installed != null)
@@ -370,7 +370,7 @@ namespace Nebula.Setup
                 var release = Updater.FindNewer();
                 Cursor = Cursors.Default;
                 if (release == null) { MessageBox.Show(this, "Nebula " + BuildInfo.Version + " is the newest release.", "Nebula Update"); return; }
-                string notes = release.Notes.Length > 1200 ? release.Notes.Substring(0, 1200) + "…" : release.Notes;
+                string notes = ReleaseNotes.Plain(release.Notes, 1200);
                 if (MessageBox.Show(this, "Nebula " + release.Version + (release.Prerelease ? " (prerelease)" : "") + " is available. You have " +
                     BuildInfo.Version + ".\r\n\r\n" + notes + "\r\n\r\nDownload and install it? Your current version stays available until the new one is ready.",
                     "Nebula Update", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;

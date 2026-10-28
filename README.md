@@ -46,7 +46,8 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
 - 34 achievements, each with a pop-up when it is reached. From the Gateway's Grand Star on, a Luma near Mario's start
   in the Comet Observatory shows them all: tabs, filters and play stats.
 - Text speed: dialogue and Rosalina's storybook at the original pace, 2x, 3x or instant.
-- English, French and Spanish, the languages of the USA release.
+- Every language of the disc played: English, French and Spanish (North America); English, French, German, Spanish
+  and Italian (Europe); Japanese (Japan). Nebula's own menus follow the game's language.
 - Mii import for the file icons from a Wii, DS, 3DS, Wii U, Switch, Mii Studio or Mii Creator. Settings > GENERAL
   > IMPORT MIIS, or put the files in the `miis` folder next to the settings; imported files are kept there and read
   at every start.
@@ -62,7 +63,8 @@ the Petari decompilation by SMGCommunity, compiled for the PC with the changes a
 
 ## Requirements
 
-- Super Mario Galaxy, USA (RMGE01), revision 0, as an ISO, RVZ or extracted folder
+- Super Mario Galaxy for North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01), revision 0, as an ISO, RVZ or
+  extracted folder
 - Windows 10 (version 1803 or newer) or Windows 11, 64-bit
 - A GPU with Direct3D 12 support
 - A CPU with AVX2
@@ -82,16 +84,17 @@ version** goes back to it (and forward again the same way).
 
 ## Languages
 
-Nebula plays the North American disc (RMGE01), in English, French or Spanish: the languages on that disc. Setup
-names each disc's languages before importing it, and the language setting offers the ones on the disc (and those a
-mod adds).
+Nebula plays the North American (RMGE01), European (RMGP01) and Japanese (RMGJ01) discs, each in the languages on
+it. Setup names a disc's languages before importing it. The game starts in your system's language where the disc has
+it (else English; Japan's disc in Japanese), and the language setting offers the disc's languages (and those a mod
+adds). Nebula's own menus follow the game's language.
 
 | Disc | Languages |
 |---|---|
-| USA, RMGE01 | English, French, Spanish (read from the disc) |
+| North America, RMGE01 | English, French, Spanish |
 | Europe, RMGP01 | English, French, German, Spanish, Italian (GameTDB) |
-| Japan, RMGJ01 | Japanese (GameTDB) |
-| Korea, RMGK01 | Korean (GameTDB) |
+| Japan, RMGJ01 | Japanese |
+| Korea, RMGK01 | Korean (GameTDB); not supported yet |
 
 GameTDB lists no Wii disc in Chinese; Simplified Chinese came with the NVIDIA Shield TV release in China (RNVW01).
 The Korean release's code also names a Simplified Chinese folder (Language.cpp); no Korean disc has been read here to
@@ -99,8 +102,9 @@ see whether it holds one.
 
 ## Saves
 
-Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: the game's save is
-`title\00010000\524d4745\data\GameData.bin`, next to its `banner.bin`. Move saves with the launcher's **Advanced**
+Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: each release keeps its own
+save, as on the Wii, in `title\00010000\<title>\data\GameData.bin` next to its `banner.bin` (`524d4745` North
+America, `524d4750` Europe, `524d474a` Japan). Move saves with the launcher's **Advanced**
 tab:
 
 - **Export saves…** writes `Nebula-Saves-<date>.zip` with everything the game reads.
@@ -108,8 +112,8 @@ tab:
   saves are moved to `saves-backup-<date>` beside them first. Close the game before importing or exporting.
 
 To bring a save over from Dolphin, right-click Super Mario Galaxy in Dolphin, choose **Open Wii Save Folder**, then
-in Nebula choose **Advanced**, **Import saves…**, **From a folder…** and select that folder. Saves of the USA version
-(RMGE01) apply; Nebula and Dolphin use the same save format.
+in Nebula choose **Advanced**, **Import saves…**, **From a folder…** and select that folder. A save goes to the
+installed disc's release; Nebula and Dolphin use the same save format.
 
 ## Building from source
 

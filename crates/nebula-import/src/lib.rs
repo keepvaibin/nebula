@@ -1,6 +1,6 @@
-//! The game partition of a Super Mario Galaxy (RMGE01) disc as the native game reads it: `game.pak`, the partition's
-//! decrypted data at its own offsets, with the gaps left sparse. Android's setup calls it through JNI (`jni.rs`);
-//! Windows Setup runs the `nebula-import` program (`main.rs`).
+//! The game partition of a Super Mario Galaxy disc (RMGE01, RMGP01 or RMGJ01) as the native game reads it: `game.pak`,
+//! the partition's decrypted data at its own offsets, with the gaps left sparse. Android's setup calls it through JNI
+//! (`jni.rs`); Windows Setup runs the `nebula-import` program (`main.rs`).
 
 use anyhow::{anyhow, bail, Context, Result};
 use nod::{Disc, OpenOptions, PartitionBase, PartitionKind};
@@ -18,8 +18,26 @@ mod jni;
 pub const RMGE01_GAME_ID: &str = "RMGE01";
 /// SHA-1 of RMGE01's main.dol.
 pub const RMGE01_DOL_SHA1: &str = "9a71008ae1ee9010e267fa67d1f0b0d4f0e895dd";
-/// RMGE01's only disc revision.
-const RMGE01_REVISION: u8 = 0;
+
+/// A release the native game plays: its game id, its main.dol's SHA-1 (the one Petari's build of it matches,
+/// config/<id>/build.sha1) and its region's name. Each has one disc revision, 0.
+pub struct Release {
+    pub game_id: &'static str,
+    pub dol_sha1: &'static str,
+    pub region: &'static str,
+}
+
+pub const RELEASES: [Release; 3] = [
+    Release { game_id: RMGE01_GAME_ID, dol_sha1: RMGE01_DOL_SHA1, region: "USA" },
+    Release { game_id: "RMGP01", dol_sha1: "9bd1daa520bd1f573b6a4b82e03336e9c51b511f", region: "Europe" },
+    Release { game_id: "RMGJ01", dol_sha1: "604d0b47d446caec0aab9ac370014f132e1b4016", region: "Japan" },
+];
+const RELEASE_REVISION: u8 = 0;
+
+/// The release a game id names, if the native game plays it.
+pub fn release(game_id: &str) -> Option<&'static Release> {
+    RELEASES.iter().find(|release| release.game_id == game_id)
+}
 
 const BOOT_BIN_SIZE: usize = 0x440;
 const BI2_BIN_SIZE: usize = 0x2000;
@@ -31,7 +49,10 @@ const TMD_SIGNATURE_TYPE: u32 = 0x0001_0001;
 const TMD_CONTENT_COUNT_OFFSET: usize = 0x1de;
 const TMD_CONTENT_RECORD_OFFSET: usize = 0x1e4;
 const TMD_CONTENT_RECORD_SIZE: usize = 36;
+/// The game partition's size in RMGE01's title metadata (the tests' disc); every release's is whole clusters.
+#[cfg(test)]
 const RMGE01_PARTITION_DATA_BYTES: u64 = 0xff7c_0000;
+const PARTITION_CLUSTER: u64 = 0x8000;
 const COPY_CHUNK: usize = 1 << 20;
 
 /// The content folder's one file besides game.pak: the settings overlay draws its window frame from this archive.
@@ -55,7 +76,7 @@ pub struct InputIdentity {
     pub game_id: String,
     pub title: String,
     pub revision: u8,
-    /// Read for RMGE01 only.
+    /// Read for the releases the native game plays.
     pub main_dol_sha1: Option<String>,
     /// The game partition's language folders (`UsEnglish`, `EuGerman`...); empty when its file table was not read.
     pub languages: Vec<String>,
@@ -72,36 +93,35 @@ impl InputIdentity {
         main_dol_sha1: Option<String>,
         languages: Vec<String>,
     ) -> Self {
-        let message = if game_id != RMGE01_GAME_ID {
-            if game_id.starts_with("RMG") {
-                format!(
-                    "This is Super Mario Galaxy for {} ({game_id}, revision {revision}){}. Nebula supports only the \
-                     North American release, RMGE01.",
-                    region_name(&game_id),
-                    in_languages(&languages)
-                )
-            } else {
-                format!(
-                    "This is {title} ({game_id}), not Super Mario Galaxy (RMGE01). Nebula supports only the North \
-                     American release of Super Mario Galaxy."
-                )
-            }
-        } else if revision != RMGE01_REVISION || main_dol_sha1.as_deref() != Some(RMGE01_DOL_SHA1) {
-            format!(
-                "This RMGE01 copy is revision {revision} with main.dol SHA-1 {}. Nebula supports only revision \
-                 {RMGE01_REVISION} (main.dol SHA-1 {RMGE01_DOL_SHA1}). The image may be modified, patched or a \
-                 different revision.",
-                main_dol_sha1.as_deref().unwrap_or("unknown")
-            )
-        } else {
-            String::new()
+        let known = release(&game_id);
+        let message = match known {
+            None if game_id.starts_with("RMG") => format!(
+                "This is Super Mario Galaxy for {} ({game_id}, revision {revision}){}. Nebula plays the releases for \
+                 North America (RMGE01), Europe (RMGP01) and Japan (RMGJ01).",
+                region_name(&game_id),
+                in_languages(&languages)
+            ),
+            None => format!(
+                "This is {title} ({game_id}), not Super Mario Galaxy. Nebula plays Super Mario Galaxy for North \
+                 America (RMGE01), Europe (RMGP01) and Japan (RMGJ01)."
+            ),
+            Some(known) if revision != RELEASE_REVISION || main_dol_sha1.as_deref() != Some(known.dol_sha1) => format!(
+                "This {game_id} copy is revision {revision} with main.dol SHA-1 {}. Nebula supports only revision \
+                 {RELEASE_REVISION} (main.dol SHA-1 {}). The image may be modified, patched or a different revision.",
+                main_dol_sha1.as_deref().unwrap_or("unknown"),
+                known.dol_sha1
+            ),
+            Some(_) => String::new(),
         };
         InputIdentity {
             supported: message.is_empty(),
-            message: if message.is_empty() {
-                format!("Supported: Super Mario Galaxy (USA, RMGE01, revision 0){}.", in_languages(&languages))
-            } else {
-                message
+            message: match known {
+                Some(known) if message.is_empty() => format!(
+                    "Supported: Super Mario Galaxy ({}, {game_id}, revision {revision}){}.",
+                    known.region,
+                    in_languages(&languages)
+                ),
+                _ => message,
             },
             format,
             game_id,
@@ -280,8 +300,14 @@ pub fn identify(disc: DiscFile) -> Result<Identity> {
     let title = header.game_title_str().to_owned();
     let (supported, message) = if !header.is_wii() {
         (false, format!("{title} is a GameCube game, not Super Mario Galaxy."))
-    } else if game_id != RMGE01_GAME_ID {
-        (false, format!("{title} ({game_id}) is not the North American Super Mario Galaxy (RMGE01)."))
+    } else if release(&game_id).is_none() {
+        (
+            false,
+            format!(
+                "{title} ({game_id}) is not Super Mario Galaxy for North America (RMGE01), Europe (RMGP01) or Japan \
+                 (RMGJ01)."
+            ),
+        )
     } else {
         (true, format!("Super Mario Galaxy ({game_id}), {format}"))
     };
@@ -304,9 +330,9 @@ pub fn identify_input(input: &Path) -> Result<InputIdentity> {
     let mut main_dol_sha1 = None;
     let mut languages = Vec::new();
     if header.is_wii() && game_id.starts_with("RMG") {
-        // Another region's languages are read for its message; a partition that cannot be read leaves them out.
+        // Another release's languages are read for its message; a partition that cannot be read leaves them out.
         let opened = disc.open_partition_kind(PartitionKind::Data);
-        if game_id == RMGE01_GAME_ID {
+        if release(&game_id).is_some() {
             let meta = opened.context("the disc's game partition cannot be opened")?.meta().context("the game partition cannot be read")?;
             main_dol_sha1 = Some(sha1_hex(&meta.raw_dol));
             languages = language_folders(&meta.raw_fst);
@@ -375,10 +401,10 @@ fn read_u64_be(data: &[u8], offset: usize) -> Result<u64> {
     Ok(u64::from_be_bytes(bytes.try_into().unwrap()))
 }
 
-/// The partition's data size from RMGE01's title metadata: one content record, of type 3.
+/// The partition's data size from its title metadata: one content record, of type 3, of whole clusters.
 fn validate_tmd(tmd: &[u8]) -> Result<u64> {
     if tmd.len() != TMD_SIZE || read_u32_be(tmd, 0)? != TMD_SIGNATURE_TYPE {
-        bail!("the game partition's title metadata is not RMGE01's");
+        bail!("the game partition's title metadata is not a Wii game's");
     }
     if read_u16_be(tmd, TMD_CONTENT_COUNT_OFFSET)? != 1
         || TMD_CONTENT_RECORD_OFFSET + TMD_CONTENT_RECORD_SIZE != tmd.len()
@@ -389,8 +415,8 @@ fn validate_tmd(tmd: &[u8]) -> Result<u64> {
     let index = read_u16_be(tmd, TMD_CONTENT_RECORD_OFFSET + 4)?;
     let kind = read_u16_be(tmd, TMD_CONTENT_RECORD_OFFSET + 6)?;
     let size = read_u64_be(tmd, TMD_CONTENT_RECORD_OFFSET + 8)?;
-    if id != 0 || index != 0 || kind != 3 || size != RMGE01_PARTITION_DATA_BYTES {
-        bail!("the game partition's content record is not RMGE01's");
+    if id != 0 || index != 0 || kind != 3 || size == 0 || size % PARTITION_CLUSTER != 0 {
+        bail!("the game partition's content record is not a Wii game's");
     }
     Ok(size)
 }
@@ -553,8 +579,8 @@ impl Source {
     }
 }
 
-/// RMGE01's game partition, checked: its system files at their offsets, the files of its file table, and where to
-/// read them.
+/// A release's game partition (RELEASES), checked: its system files at their offsets, the files of its file table, and
+/// where to read them.
 pub struct Partition {
     system: Vec<(&'static str, u64, Box<[u8]>)>,
     files: Vec<GameFile>,
@@ -580,8 +606,8 @@ impl Partition {
     pub fn from_disc(disc: DiscFile) -> Result<Partition> {
         let disc = open_disc(disc)?;
         let header = disc.header();
-        if !header.is_wii() || header.game_id_str() != RMGE01_GAME_ID {
-            bail!("this disc is not the North American Super Mario Galaxy (RMGE01)");
+        if !header.is_wii() || release(header.game_id_str()).is_none() {
+            bail!("this disc is not Super Mario Galaxy for North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01)");
         }
         let mut partition =
             disc.open_partition_kind(PartitionKind::Data).context("the disc's game partition cannot be opened")?;
@@ -627,9 +653,10 @@ impl Partition {
 
     fn new(system: SystemFiles, source: Source) -> Result<Partition> {
         let SystemFiles { boot, bi2, apploader, dol, fst, tmd } = system;
-        if boot.len() != BOOT_BIN_SIZE || &boot[..RMGE01_GAME_ID.len()] != RMGE01_GAME_ID.as_bytes() {
-            bail!("the game partition's boot header is not RMGE01's");
-        }
+        let known = (boot.len() == BOOT_BIN_SIZE)
+            .then(|| std::str::from_utf8(&boot[..6]).ok().and_then(release))
+            .flatten()
+            .context("the game partition's boot header is not Super Mario Galaxy's (RMGE01, RMGP01 or RMGJ01)")?;
         if bi2.len() != BI2_BIN_SIZE || apploader.len() < APPLOADER_HEADER_SIZE {
             bail!("the game partition's system files have unexpected sizes");
         }
@@ -639,8 +666,11 @@ impl Partition {
             bail!("the game partition's apploader has an unexpected size");
         }
         let dol_sha1 = sha1_hex(&dol);
-        if dol_sha1 != RMGE01_DOL_SHA1 {
-            bail!("main.dol differs from Super Mario Galaxy's (SHA-1 {dol_sha1}): the disc image may be damaged");
+        if dol_sha1 != known.dol_sha1 {
+            bail!(
+                "main.dol differs from Super Mario Galaxy's ({}, SHA-1 {dol_sha1}): the disc image may be damaged",
+                known.game_id
+            );
         }
         // Wii partition offsets and sizes are words: the boot header holds them divided by 4.
         let dol_offset = u64::from(read_u32_be(&boot, 0x420)?) << 2;
@@ -824,7 +854,11 @@ mod tests {
         let mut wrong_size = valid_tmd();
         wrong_size[TMD_CONTENT_RECORD_OFFSET + 8..TMD_CONTENT_RECORD_OFFSET + 16]
             .copy_from_slice(&(RMGE01_PARTITION_DATA_BYTES + 0x8000).to_be_bytes());
-        assert!(validate_tmd(&wrong_size).is_err());
+        assert!(validate_tmd(&wrong_size).is_ok(), "another release's partition size, in whole clusters");
+        let mut torn = valid_tmd();
+        torn[TMD_CONTENT_RECORD_OFFSET + 8..TMD_CONTENT_RECORD_OFFSET + 16]
+            .copy_from_slice(&(RMGE01_PARTITION_DATA_BYTES + 0x10).to_be_bytes());
+        assert!(validate_tmd(&torn).is_err());
         let mut two_contents = valid_tmd();
         two_contents[TMD_CONTENT_COUNT_OFFSET..TMD_CONTENT_COUNT_OFFSET + 2].copy_from_slice(&2u16.to_be_bytes());
         assert!(validate_tmd(&two_contents).is_err());
@@ -1016,8 +1050,8 @@ mod tests {
             other.to_json(),
             "{\"format\":\"ISO\",\"gameId\":\"RMCP01\",\"title\":\"Mario \\\"Kart\\\"\\u000a\",\"revision\":0,\
              \"mainDolSha1\":null,\"languages\":[],\"supported\":false,\"message\":\"This is Mario \\\"Kart\\\"\\u000a \
-             (RMCP01), not Super Mario Galaxy (RMGE01). Nebula supports only the North American release of Super Mario \
-             Galaxy.\"}"
+             (RMCP01), not Super Mario Galaxy. Nebula plays Super Mario Galaxy for North America (RMGE01), Europe (RMGP01) \
+             and Japan (RMGJ01).\"}"
         );
         let us = vec!["UsEnglish".to_owned(), "UsFrench".to_owned(), "UsSpanish".to_owned()];
         let supported = InputIdentity::new(
@@ -1032,15 +1066,33 @@ mod tests {
         assert_eq!(supported.message, "Supported: Super Mario Galaxy (USA, RMGE01, revision 0), in English, French and Spanish.");
         assert!(supported.to_json().contains("\"languages\":[\"UsEnglish\",\"UsFrench\",\"UsSpanish\"]"));
         let europe: Vec<String> = ["EuEnglish", "EuGerman", "EuFrench"].iter().map(|s| s.to_string()).collect();
-        assert_eq!(
-            InputIdentity::new("ISO".into(), "RMGP01".into(), "x".into(), 1, None, europe).message,
-            "This is Super Mario Galaxy for Europe (RMGP01, revision 1), in English, German and French. Nebula supports \
-             only the North American release, RMGE01."
+        let pal = InputIdentity::new(
+            "ISO".into(),
+            "RMGP01".into(),
+            "x".into(),
+            0,
+            Some("9bd1daa520bd1f573b6a4b82e03336e9c51b511f".into()),
+            europe.clone(),
         );
+        assert!(pal.supported);
+        assert_eq!(pal.message, "Supported: Super Mario Galaxy (Europe, RMGP01, revision 0), in English, German and French.");
+        let japan = InputIdentity::new(
+            "ISO".into(),
+            "RMGJ01".into(),
+            "x".into(),
+            0,
+            Some("604d0b47d446caec0aab9ac370014f132e1b4016".into()),
+            vec!["JpJapanese".to_owned()],
+        );
+        assert!(japan.supported);
+        assert_eq!(japan.message, "Supported: Super Mario Galaxy (Japan, RMGJ01, revision 0), in Japanese.");
+        let other_dol =
+            InputIdentity::new("ISO".into(), "RMGP01".into(), "x".into(), 0, Some(RMGE01_DOL_SHA1.into()), europe);
+        assert!(!other_dol.supported && other_dol.message.starts_with("This RMGP01 copy is revision 0 with main.dol"));
         assert_eq!(
             InputIdentity::new("ISO".into(), "RMGK01".into(), "x".into(), 0, None, Vec::new()).message,
-            "This is Super Mario Galaxy for Korea (RMGK01, revision 0). Nebula supports only the North American \
-             release, RMGE01."
+            "This is Super Mario Galaxy for Korea (RMGK01, revision 0). Nebula plays the releases for North America \
+             (RMGE01), Europe (RMGP01) and Japan (RMGJ01)."
         );
         let revision = InputIdentity::new(
             "ISO".into(),

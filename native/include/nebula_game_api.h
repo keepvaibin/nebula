@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 32u
+#define NEBULA_GAME_API_VERSION 33u
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -456,6 +456,9 @@ typedef struct NebulaHostServices {
     /* The game partition's main.dol as on the disc, valid for the process's life: the module reads the data tables
        the game keeps in its executable from it at boot (sdk/dol_data.c). */
     const uint8_t* (*disc_dol)(void* user, size_t* size);
+    /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
+       whose few differences the module follows (sdk/region.c) and whose save folder the NAND holds. */
+    const char* (*disc_id)(void* user);
 
     /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
        whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */

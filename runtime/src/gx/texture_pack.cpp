@@ -5,6 +5,7 @@
 
 #include "galaxy/crash_report.h"
 
+#include "galaxy/gx/render_config.h"
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/windows_power.h"
@@ -452,7 +453,7 @@ std::shared_ptr<TexturePacks::Index> TexturePacks::build_index(std::span<const s
     const auto start = std::chrono::steady_clock::now();
     auto index = std::make_shared<Index>();
     index->generation = generation;
-    const std::string id = ascii_lower(kGameId);
+    const std::string id = ascii_lower(texture_pack_game_id());
     const std::string region_free = id.substr(0, 3);
     struct Found {
         std::filesystem::path path;
@@ -859,7 +860,7 @@ void TexturePacks::dump(const TexturePackName& name, std::uint32_t width, std::u
     if (!dumping() || rgba == nullptr || width == 0u || height == 0u) return;
     std::string stem = texture_pack_name(name);
     if (!dumped_.insert(stem).second) return;
-    const std::filesystem::path folder = settings_.dumps / kGameId;
+    const std::filesystem::path folder = settings_.dumps / texture_pack_game_id();
     std::vector<std::uint8_t> pixels(rgba, rgba + static_cast<std::size_t>(width) * height * 4u);
     submit([this, folder, stem = std::move(stem), width, height, pixels = std::move(pixels)]() mutable {
         std::error_code error;

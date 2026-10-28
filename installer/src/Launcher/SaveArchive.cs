@@ -116,22 +116,41 @@ namespace Nebula.Launcher
     /// </summary>
     internal static class SaveArchive
     {
+        /// <summary>The releases' save titles, as their game ids in hex: North America's (RMGE), Europe's (RMGP), Japan's
+        /// (RMGJ). Each keeps its own save, as on the Wii.</summary>
+        internal static readonly string[] Titles = { "524d4745", "524d4750", "524d474a" };
+
         public const string GameDataPath = "title/00010000/524d4745/data/GameData.bin";
         public const string BannerPath = "title/00010000/524d4745/data/banner.bin";
         public const string MiiDatabasePath = "shared2/menu/FaceLib/RFL_DB.dat";
 
+        internal static string GameDataPathOf(string title) { return "title/00010000/" + title + "/data/GameData.bin"; }
+        internal static string BannerPathOf(string title) { return "title/00010000/" + title + "/data/banner.bin"; }
+
+        /// <summary>The save title of a game id ("RMGP01": 524d4750); North America's for any other.</summary>
+        internal static string TitleOf(string gameId)
+        {
+            if (gameId == null || gameId.Length < 4) return Titles[0];
+            string title = string.Concat(gameId.Substring(0, 4).Select(c => ((int)c).ToString("x2", CultureInfo.InvariantCulture)));
+            return Titles.Contains(title) ? title : Titles[0];
+        }
+
         // Parents first.
-        internal static readonly string[] Folders =
+        internal static readonly string[] Folders = new[]
         {
             "", "shared2", "shared2/menu", "shared2/menu/FaceLib", "shared2/sys", "title", "title/00000001",
-            "title/00000001/00000002", "title/00000001/00000002/data", "title/00010000", "title/00010000/524d4745",
-            "title/00010000/524d4745/data",
-        };
-        internal static readonly string[] Files =
-        {
-            GameDataPath, BannerPath, MiiDatabasePath, "shared2/sys/SYSCONF", "title/00000001/00000002/data/setting.txt",
-            "title/00000001/00000002/data/play_rec.dat",
-        };
+            "title/00000001/00000002", "title/00000001/00000002/data", "title/00010000",
+        }.Concat(Titles.SelectMany(t => new[] { "title/00010000/" + t, "title/00010000/" + t + "/data" })).ToArray();
+        internal static readonly string[] Files = Titles.SelectMany(t => new[] { GameDataPathOf(t), BannerPathOf(t) })
+            .Concat(new[]
+            {
+                MiiDatabasePath, "shared2/sys/SYSCONF", "title/00000001/00000002/data/setting.txt",
+                "title/00000001/00000002/data/play_rec.dat",
+            }).ToArray();
+
+        /// <summary>The save title a loose GameData.bin (a folder or zip that holds it alone) is imported into: the
+        /// installed disc's (the settings set it from game.pak).</summary>
+        internal static string LooseTitle = Titles[0];
 
         private const string ManifestEntry = "nebula-saves.json";
         private const string FormatName = "nebula-saves";
@@ -151,9 +170,10 @@ namespace Nebula.Launcher
             if (GameIsRunning()) throw new InvalidOperationException("Close the game before exporting saves.");
             string root = NebulaPaths.Saves;
             List<SaveItem> items = Directory.Exists(root) ? ReadTree(FileUtil.FinalPath(root)) : new List<SaveItem>();
-            SaveItem save = items.FirstOrDefault(i => !i.IsFolder && i.Path == GameDataPath);
-            if (save == null) throw new InvalidOperationException("There are no saves to export yet.");
-            if (!SaveFormat.IsGameData(save.Data)) throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
+            List<SaveItem> games = GameSaves(items);
+            if (games.Count == 0) throw new InvalidOperationException("There are no saves to export yet.");
+            if (games.Any(save => !SaveFormat.IsGameData(save.Data)))
+                throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
             if (items.Any(i => i.Streams.Keys.Any(s => s != "galaxy.isfs.meta" && s.StartsWith("galaxy.", StringComparison.Ordinal))) ||
                 Directory.EnumerateFileSystemEntries(FileUtil.FinalPath(root), "*", SearchOption.AllDirectories)
                     .Any(p => p.IndexOf(".__galaxy_isfs_", StringComparison.OrdinalIgnoreCase) >= 0))
@@ -234,10 +254,12 @@ namespace Nebula.Launcher
             if (GameIsRunning()) throw new InvalidOperationException("Close the game before importing saves.");
             List<SaveItem> items = ReadSource(source);
             var notes = new List<string>();
-            SaveItem save = items.FirstOrDefault(i => !i.IsFolder && i.Path == GameDataPath);
-            if (save == null) throw new InvalidDataException("No Super Mario Galaxy save (GameData.bin) was found.");
-            if (!SaveFormat.IsGameData(save.Data)) throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
-            LeaveOutInvalid(items, BannerPath, SaveFormat.IsBanner, "The save banner (banner.bin) is not valid and was left out.", notes);
+            List<SaveItem> games = GameSaves(items);
+            if (games.Count == 0) throw new InvalidDataException("No Super Mario Galaxy save (GameData.bin) was found.");
+            if (games.Any(save => !SaveFormat.IsGameData(save.Data)))
+                throw new InvalidDataException("GameData.bin is not a valid Super Mario Galaxy save.");
+            foreach (string title in Titles)
+                LeaveOutInvalid(items, BannerPathOf(title), SaveFormat.IsBanner, "The save banner (banner.bin) is not valid and was left out.", notes);
             LeaveOutInvalid(items, MiiDatabasePath, SaveFormat.IsMiiDatabase, "The Mii data (RFL_DB.dat) is not valid and was left out.", notes);
             items = WithFolders(items);
 
@@ -251,7 +273,7 @@ namespace Nebula.Launcher
                 Stage(staging, items);
                 if (!Same(items, ReadWholeTree(staging)))
                     throw new IOException("The staged saves do not match the source; nothing was changed.");
-                if (confirmReplace != null && File.Exists(HostPath(target, GameDataPath)) && !confirmReplace()) return null;
+                if (confirmReplace != null && Titles.Any(t => File.Exists(HostPath(target, GameDataPathOf(t)))) && !confirmReplace()) return null;
                 if (GameIsRunning()) throw new InvalidOperationException("Close the game before importing saves.");
                 backup = Replace(target, staging);
             }
@@ -265,6 +287,12 @@ namespace Nebula.Launcher
             foreach (string note in notes) message.Append("\r\n").Append(note);
             if (backup != null) message.Append("\r\nThe previous saves are in ").Append(backup).Append('.');
             return message.ToString();
+        }
+
+        /// <summary>The releases' saves (GameData.bin) among <paramref name="items"/>.</summary>
+        private static List<SaveItem> GameSaves(List<SaveItem> items)
+        {
+            return items.Where(i => !i.IsFolder && Titles.Any(t => i.Path == GameDataPathOf(t))).ToList();
         }
 
         private static void LeaveOutInvalid(List<SaveItem> items, string path, Func<byte[], bool> valid, string note, List<string> notes)
@@ -404,13 +432,13 @@ namespace Nebula.Launcher
         {
             foreach (string candidate in new[] { root, Path.Combine(root, "saves"), Path.Combine(root, "save-data"), Path.Combine(root, "nand") })
             {
-                if (File.Exists(HostPath(candidate, GameDataPath))) return ReadTree(FileUtil.FinalPath(candidate));
+                if (Titles.Any(t => File.Exists(HostPath(candidate, GameDataPathOf(t))))) return ReadTree(FileUtil.FinalPath(candidate));
             }
             string save = Path.Combine(root, "GameData.bin");
             if (!File.Exists(save)) throw new InvalidDataException("This folder does not contain a Super Mario Galaxy save.");
-            var items = new List<SaveItem> { ReadItem(save, GameDataPath, false) };
+            var items = new List<SaveItem> { ReadItem(save, GameDataPathOf(LooseTitle), false) };
             string banner = Path.Combine(root, "banner.bin");
-            if (File.Exists(banner)) items.Add(ReadItem(banner, BannerPath, false));
+            if (File.Exists(banner)) items.Add(ReadItem(banner, BannerPathOf(LooseTitle), false));
             return items;
         }
 
@@ -536,10 +564,14 @@ namespace Nebula.Launcher
             string prefix = null;
             foreach (string name in names)
             {
-                if (!name.EndsWith(GameDataPath, StringComparison.OrdinalIgnoreCase)) continue;
-                string head = name.Substring(0, name.Length - GameDataPath.Length);
-                if ((head.Length == 0 || head.EndsWith("/", StringComparison.Ordinal)) && (prefix == null || head.Length < prefix.Length))
-                    prefix = head;
+                foreach (string title in Titles)
+                {
+                    string path = GameDataPathOf(title);
+                    if (!name.EndsWith(path, StringComparison.OrdinalIgnoreCase)) continue;
+                    string head = name.Substring(0, name.Length - path.Length);
+                    if ((head.Length == 0 || head.EndsWith("/", StringComparison.Ordinal)) && (prefix == null || head.Length < prefix.Length))
+                        prefix = head;
+                }
             }
             var items = new List<SaveItem>();
             if (prefix != null)
@@ -555,9 +587,9 @@ namespace Nebula.Launcher
                                            n.EndsWith("/GameData.bin", StringComparison.OrdinalIgnoreCase))
                                .OrderBy(n => n.Length).FirstOrDefault();
             if (save == null) throw new InvalidDataException("This archive does not contain a Super Mario Galaxy save.");
-            items.Add(new SaveItem { Path = GameDataPath, Data = read(save, MaximumFileBytes) });
+            items.Add(new SaveItem { Path = GameDataPathOf(LooseTitle), Data = read(save, MaximumFileBytes) });
             byte[] banner = read(save.Substring(0, save.Length - "GameData.bin".Length) + "banner.bin", MaximumFileBytes);
-            if (banner != null) items.Add(new SaveItem { Path = BannerPath, Data = banner });
+            if (banner != null) items.Add(new SaveItem { Path = BannerPathOf(LooseTitle), Data = banner });
             return items;
         }
 

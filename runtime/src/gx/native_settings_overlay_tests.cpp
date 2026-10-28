@@ -120,6 +120,9 @@ int main() {
         initial_runtime.string().c_str());
 
     galaxy::gx::native_settings_reset_overlay_state_for_tests();
+    // North America's disc: English, French and Spanish.
+    const std::string usa_languages[] = {"UsEnglish", "UsFrench", "UsSpanish"};
+    galaxy::set_disc_languages(usa_languages);
     auto snapshot = galaxy::gx::native_settings_overlay_snapshot();
     passed &= expect(!snapshot.visible, "overlay starts hidden");
     passed &= expect(!snapshot.dirty, "overlay starts clean");
@@ -358,6 +361,7 @@ int main() {
 
     galaxy::RuntimeSettings runtime{};
     runtime.input_mode = galaxy::RuntimeInputMode::Auto;
+    runtime.language = galaxy::GameLanguage::English;  // chosen, not Auto: the steps below do not follow the system's
     galaxy::set_runtime_settings(runtime);
     using galaxy::input::ControlScheme;
     using galaxy::input::ControllerInfo;

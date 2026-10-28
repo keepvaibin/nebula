@@ -18,7 +18,7 @@ Vulkan-Headers, volk, VulkanMemoryAllocator, glslang, SPIRV-Tools and SPIRV-Head
 
 ```powershell
 cargo build --release --locked -p nebula-import
-.\target\release\nebula-import.exe identify D:\Games\SMG.rvz      # must report RMGE01
+.\target\release\nebula-import.exe identify D:\Games\SMG.rvz      # must report RMGE01, RMGP01 or RMGJ01
 .\target\release\nebula-import.exe import D:\Games\SMG.rvz --output D:\nebula\content
 ```
 

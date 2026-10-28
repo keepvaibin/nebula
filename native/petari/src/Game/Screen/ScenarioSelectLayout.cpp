@@ -1,4 +1,7 @@
 #include "Game/Screen/ScenarioSelectLayout.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaRegion.hpp"
+#endif
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/MultiEmitter.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -125,7 +128,11 @@ void ScenarioSelectLayout::init(const JMapInfoIter& rIter) {
     mBackButton = new BackButton("\226\337\202\351\203\173\203\136\203\223" /* 戻るボタン */, false);
     mBackButton->initWithoutIter();
 
-    #if (VERSION == RMGJ01 || VERSION == RMGE01)
+    #ifdef TARGET_PC
+    if (!NebulaRegion::isPal()) {
+        MR::hidePaneRecursive(this, "CometAppear");
+    }
+    #elif (VERSION == RMGJ01 || VERSION == RMGE01)
     MR::hidePaneRecursive(this, "CometAppear");
     #endif
 
@@ -211,7 +218,11 @@ void ScenarioSelectLayout::appear() {
     mScenarioSky->appear();
     MultiScene::startBtk(mScenarioSky, "ScenarioSelectSky");
 
-#if (VERSION == RMGP01 || VERSION == RMGK01)
+#ifdef TARGET_PC
+    if (NebulaRegion::isPal()) {
+        MR::hidePaneRecursive(this, "CometAppear");
+    }
+#elif (VERSION == RMGP01 || VERSION == RMGK01)
     MR::hidePaneRecursive(this, "CometAppear");
 #endif
 

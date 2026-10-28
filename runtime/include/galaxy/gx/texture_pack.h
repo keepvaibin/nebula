@@ -123,6 +123,7 @@ struct TextureReplacement {
 class TexturePacks {
 public:
     static constexpr std::uint32_t kNone = ~0u;
+    // The game id until the host sets the disc's (set_texture_pack_game_id).
     static constexpr const char* kGameId = "RMGE01";
 
     TexturePacks() = default;

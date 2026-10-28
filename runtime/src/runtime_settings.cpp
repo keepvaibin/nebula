@@ -26,6 +26,9 @@
 #include <string_view>
 
 #if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>
 #pragma comment(lib, "Shell32.lib")
 #endif
 
@@ -61,8 +64,8 @@ RuntimeSettings sanitize_settings(RuntimeSettings settings) {
         ? std::clamp(settings.audio.wiimote_speaker, 0.0f, 4.0f)
         : 0.0f;
     settings.text_speed = std::clamp(settings.text_speed, 1u, 4u);
-    if (settings.language != GameLanguage::French && settings.language != GameLanguage::Spanish) {
-        settings.language = GameLanguage::English;
+    if (std::find(std::begin(kGameLanguages), std::end(kGameLanguages), settings.language) == std::end(kGameLanguages)) {
+        settings.language = GameLanguage::Auto;
     }
     return settings;
 }
@@ -154,7 +157,8 @@ void apply_kv(RuntimeSettings& settings, const char* key, const char* value) {
             }
         }
     } else if (std::strcmp(key, "language") == 0) {
-        for (const GameLanguage language : {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish}) {
+        if (_stricmp(value, game_language_key(GameLanguage::Auto)) == 0) settings.language = GameLanguage::Auto;
+        for (const GameLanguage language : kGameLanguages) {
             if (_stricmp(value, game_language_key(language)) == 0) settings.language = language;
         }
     }
@@ -319,43 +323,91 @@ RuntimeSettings get_runtime_settings() {
 }
 
 namespace {
-// 0 until the game first asks for its language, then that language's SC code.
-std::atomic<std::uint8_t> s_running_language{0u};
+// kNotAsked until the game first asks for its language, then that language's SC code.
+constexpr std::uint8_t kNotAsked = 0xFFu;
+std::atomic<std::uint8_t> s_running_language{kNotAsked};
 // A bit for each GameLanguage on the disc (bit `value`); all until set_disc_languages.
 std::atomic<std::uint32_t> s_disc_languages{~0u};
 
-// The North American disc's folder for a language (the native game is RMGE01's).
-const char* disc_folder(GameLanguage language) noexcept {
-    switch (language) {
-    case GameLanguage::French: return "UsFrench";
-    case GameLanguage::Spanish: return "UsSpanish";
-    case GameLanguage::English: break;
+// The language a disc's folder holds, whatever its release ("UsEnglish", "EuEnglish": English); Auto for none.
+GameLanguage folder_language(std::string_view folder) noexcept {
+    static constexpr std::pair<std::string_view, GameLanguage> kNames[] = {
+        {"Japanese", GameLanguage::Japanese}, {"English", GameLanguage::English}, {"German", GameLanguage::German},
+        {"French", GameLanguage::French},     {"Spanish", GameLanguage::Spanish}, {"Italian", GameLanguage::Italian},
+        {"Dutch", GameLanguage::Dutch}};
+    if (folder.size() < 3u) return GameLanguage::Auto;
+    for (const auto& [name, language] : kNames) {
+        if (folder.substr(2) == name) return language;
     }
-    return "UsEnglish";
+    return GameLanguage::Auto;
+}
+
+// The system's language as a game language (Auto: none of the game's).
+GameLanguage system_language() noexcept {
+#if defined(_WIN32)
+    switch (PRIMARYLANGID(GetUserDefaultUILanguage())) {
+    case LANG_JAPANESE: return GameLanguage::Japanese;
+    case LANG_ENGLISH: return GameLanguage::English;
+    case LANG_GERMAN: return GameLanguage::German;
+    case LANG_FRENCH: return GameLanguage::French;
+    case LANG_SPANISH: return GameLanguage::Spanish;
+    case LANG_ITALIAN: return GameLanguage::Italian;
+    case LANG_DUTCH: return GameLanguage::Dutch;
+    default: return GameLanguage::Auto;
+    }
+#else
+    // POSIX locales ("de_DE.UTF-8"): LC_ALL, LC_MESSAGES, then LANG.
+    const char* locale = nullptr;
+    for (const char* name : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
+        locale = std::getenv(name);
+        if (locale != nullptr && locale[0] != '\0') break;
+    }
+    if (locale == nullptr) return GameLanguage::Auto;
+    const std::string_view code(locale, std::min<std::size_t>(std::strlen(locale), 2u));
+    static constexpr std::pair<std::string_view, GameLanguage> kCodes[] = {
+        {"ja", GameLanguage::Japanese}, {"en", GameLanguage::English}, {"de", GameLanguage::German},
+        {"fr", GameLanguage::French},   {"es", GameLanguage::Spanish}, {"it", GameLanguage::Italian},
+        {"nl", GameLanguage::Dutch}};
+    for (const auto& [prefix, language] : kCodes) {
+        if (code == prefix) return language;
+    }
+    return GameLanguage::Auto;
+#endif
 }
 }  // namespace
 
 void set_disc_languages(std::span<const std::string> folders) noexcept {
-    std::uint32_t bits = 1u << static_cast<unsigned>(GameLanguage::English);  // English whatever (the fallback)
-    for (const GameLanguage language : {GameLanguage::French, GameLanguage::Spanish}) {
-        if (std::find(folders.begin(), folders.end(), disc_folder(language)) != folders.end()) {
+    std::uint32_t bits = 0u;
+    for (const std::string& folder : folders) {
+        if (const GameLanguage language = folder_language(folder); language != GameLanguage::Auto) {
             bits |= 1u << static_cast<unsigned>(language);
         }
     }
-    s_disc_languages.store(bits, std::memory_order_release);
+    // A disc without language folders the game knows (not one it plays): English, as the game's own fallback.
+    s_disc_languages.store(bits != 0u ? bits : 1u << static_cast<unsigned>(GameLanguage::English),
+                           std::memory_order_release);
 }
 
 bool game_language_on_disc(GameLanguage language) noexcept {
-    return (s_disc_languages.load(std::memory_order_acquire) >> static_cast<unsigned>(language) & 1u) != 0u;
+    return language != GameLanguage::Auto &&
+           (s_disc_languages.load(std::memory_order_acquire) >> static_cast<unsigned>(language) & 1u) != 0u;
+}
+
+GameLanguage game_language_resolved(GameLanguage setting) noexcept {
+    if (game_language_on_disc(setting)) return setting;
+    if (const GameLanguage system = system_language(); game_language_on_disc(system)) return system;
+    if (game_language_on_disc(GameLanguage::English)) return GameLanguage::English;
+    for (const GameLanguage language : kGameLanguages) {
+        if (game_language_on_disc(language)) return language;
+    }
+    return GameLanguage::English;
 }
 
 GameLanguage game_language_for_boot() noexcept {
     std::uint8_t running = s_running_language.load(std::memory_order_acquire);
-    if (running == 0u) {
-        std::uint8_t expected = 0u;
-        GameLanguage setting = get_runtime_settings().language;
-        if (!game_language_on_disc(setting)) setting = GameLanguage::English;
-        const auto chosen = static_cast<std::uint8_t>(setting);
+    if (running == kNotAsked) {
+        std::uint8_t expected = kNotAsked;
+        const auto chosen = static_cast<std::uint8_t>(game_language_resolved(get_runtime_settings().language));
         running = s_running_language.compare_exchange_strong(expected, chosen, std::memory_order_acq_rel)
             ? chosen : expected;
     }
@@ -364,7 +416,7 @@ GameLanguage game_language_for_boot() noexcept {
 
 bool running_game_language(GameLanguage& language) noexcept {
     const std::uint8_t running = s_running_language.load(std::memory_order_acquire);
-    if (running == 0u) return false;
+    if (running == kNotAsked) return false;
     language = static_cast<GameLanguage>(running);
     return true;
 }
@@ -376,8 +428,13 @@ const char* button_icons_key(ButtonIcons icons) noexcept {
 
 const char* game_language_key(GameLanguage language) noexcept {
     switch (language) {
+    case GameLanguage::Japanese: return "japanese";
+    case GameLanguage::German: return "german";
     case GameLanguage::French: return "french";
     case GameLanguage::Spanish: return "spanish";
+    case GameLanguage::Italian: return "italian";
+    case GameLanguage::Dutch: return "dutch";
+    case GameLanguage::Auto: return "auto";
     case GameLanguage::English: break;
     }
     return "english";

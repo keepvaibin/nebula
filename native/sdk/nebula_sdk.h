@@ -48,6 +48,10 @@ void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(print
 /* The data tables the game keeps in main.dol, read from the user's disc (dol_data.c). */
 void nebula_load_dol_data(void);
 
+/* The disc's release (region.c): 'E' North America, 'P' Europe, 'J' Japan; and its save folder on the NAND. */
+char nebula_disc_region(void);
+const char* nebula_home_dir(void);
+
 /* The OS core (os/os_native.c). */
 /* A device interrupt by its SDK number (__OS_INTERRUPT_*), from any host thread: the handler registered with
    __OSSetInterruptHandler runs on the simulation thread at the next point interrupts are enabled. */

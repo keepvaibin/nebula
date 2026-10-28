@@ -5,8 +5,14 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <revolution/sc.h>
+#ifdef TARGET_PC
+#include "Game/System/NebulaRegion.hpp"
+#endif
 
-#if (VERSION == RMGJ01)
+#ifdef TARGET_PC
+// The disc's release's row (RMGJ01, RMGE01, RMGP01), as its own build picks it.
+#define SCLanguage2GameLanguageTableIndex (NebulaRegion::isJapan() ? 0 : NebulaRegion::isPal() ? 2 : 1)
+#elif (VERSION == RMGJ01)
 #define SCLanguage2GameLanguageTableIndex 0
 #elif (VERSION == RMGE01)
 #define SCLanguage2GameLanguageTableIndex 1

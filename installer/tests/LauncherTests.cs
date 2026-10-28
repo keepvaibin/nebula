@@ -54,7 +54,8 @@ namespace Nebula.Launcher
             using (var form = new UpdatePromptForm(release))
             {
                 var buttons = All(form).OfType<Button>().ToList();
-                var box = All(form).OfType<CheckBox>().Single();
+                // Don't ask again (a ray tracing machine's offer also holds Prepare ray tracing shaders).
+                var box = All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again");
                 Check(buttons.Any(b => b.Text == "Update") && buttons.Any(b => b.Text == "Not now") && !box.Checked &&
                       form.AcceptButton == buttons.First(b => b.Text == "Update"), "the update offer: Update by default, Not now, Don't ask again unticked");
                 CreateHandles(form);
@@ -70,10 +71,35 @@ namespace Nebula.Launcher
             }
             using (var form = new UpdatePromptForm(release))
             {
-                All(form).OfType<CheckBox>().Single().Checked = true;
+                All(form).OfType<CheckBox>().Single(b => b.Text == "Don't ask again").Checked = true;
                 form.Choose(false);
                 Check(form.DialogResult == DialogResult.No && form.DontAskAgain, "Not now keeps Don't ask again");
             }
+            // A release's notes as GitHub holds them (Markdown, 1.0.2's opening): plain text in the prompt.
+            var marked = new ReleaseInfo
+            {
+                Version = "9.9.9",
+                Notes = "> ## Join the Nebula Discord\r\n> **https://discord.gg/example**\r\n>\r\n> We post every update there.\r\n\r\n" +
+                        "## Why Windows flagged Nebula 1.0.1\r\n\r\nThe `Nebula.exe` it installs (see **Security** below, #26).\r\n\r\n" +
+                        "* One fix, [the notes](https://example.org/notes).\r\n- Another.\r\n\r\n---\r\n"
+            };
+            using (var form = new UpdatePromptForm(marked))
+            {
+                string shown = All(form).OfType<TextBox>().Single().Text;
+                Check(shown == "Join the Nebula Discord\r\nhttps://discord.gg/example\r\n\r\nWe post every update there.\r\n\r\n" +
+                               "Why Windows flagged Nebula 1.0.1\r\n\r\nThe Nebula.exe it installs (see Security below, #26).\r\n\r\n" +
+                               "- One fix, the notes (https://example.org/notes).\r\n- Another.",
+                      "the notes show as plain text (no Markdown marks): " + shown.Replace("\r\n", "|"));
+                CreateHandles(form);
+                form.PerformLayout();
+                using (var bitmap = new Bitmap(form.Width, form.Height))
+                {
+                    form.DrawToBitmap(bitmap, new Rectangle(Point.Empty, form.Size));
+                    bitmap.Save(Path.Combine(outDir, "update-prompt-notes.png"), ImageFormat.Png);
+                }
+            }
+            Check(ReleaseNotes.Plain(new string('a', 30) + "\r\n" + new string('b', 30), 40) == new string('a', 30) + "\r\n…",
+                  "long notes end at a line's end with an ellipsis");
         }
 
         // The pad in Nebula's dialogs: a press acts once, a held direction repeats at the game's pace, what is held as
@@ -565,6 +591,7 @@ namespace Nebula.Launcher
             var files = new Dictionary<string, byte[]>
             {
                 { SaveArchive.GameDataPath, GameData(seed) }, { SaveArchive.BannerPath, Banner(seed) },
+                { SaveArchive.GameDataPathOf("524d4750"), GameData(seed + 7) },
                 { SaveArchive.MiiDatabasePath, MiiDatabase(seed) }, { "shared2/sys/SYSCONF", Noise(0x4000, seed + 1) },
                 { "title/00000001/00000002/data/setting.txt", Noise(0x100, seed + 2) },
                 { "title/00000001/00000002/data/play_rec.dat", Noise(0x80, seed + 3) },
@@ -607,6 +634,43 @@ namespace Nebula.Launcher
             return path;
         }
 
+        // A game.pak's start: boot.bin with the game id and where the file table is, then the table with a directory
+        // at the root for each name (each empty), as the disc's file table lists them.
+        static byte[] TestPak(string gameId, params string[] directories)
+        {
+            var names = new List<byte>();
+            var entries = new List<byte>();
+            Action<byte, uint, uint, uint> entry = (kind, name, a, b) =>
+            {
+                entries.Add(kind);
+                entries.Add((byte)(name >> 16)); entries.Add((byte)(name >> 8)); entries.Add((byte)name);
+                foreach (uint word in new[] { a, b })
+                {
+                    entries.Add((byte)(word >> 24)); entries.Add((byte)(word >> 16)); entries.Add((byte)(word >> 8)); entries.Add((byte)word);
+                }
+            };
+            uint count = (uint)directories.Length + 1;
+            entry(1, 0, 0, count);
+            names.Add(0);
+            for (int i = 0; i < directories.Length; i++)
+            {
+                uint at = (uint)names.Count;
+                names.AddRange(System.Text.Encoding.ASCII.GetBytes(directories[i]));
+                names.Add(0);
+                entry(1, at, 0, (uint)i + 2);
+            }
+            var fst = new List<byte>(entries);
+            fst.AddRange(names);
+            while (fst.Count % 4 != 0) fst.Add(0);
+            var pak = new byte[0x440 + fst.Count];
+            System.Text.Encoding.ASCII.GetBytes(gameId).CopyTo(pak, 0);
+            uint offset = 0x440 >> 2, size = (uint)fst.Count >> 2;
+            pak[0x424] = (byte)(offset >> 24); pak[0x425] = (byte)(offset >> 16); pak[0x426] = (byte)(offset >> 8); pak[0x427] = (byte)offset;
+            pak[0x428] = (byte)(size >> 24); pak[0x429] = (byte)(size >> 16); pak[0x42a] = (byte)(size >> 8); pak[0x42b] = (byte)size;
+            fst.CopyTo(pak, 0x440);
+            return pak;
+        }
+
         static void GeneralCases()
         {
             string path = AudioSettings.SettingsPath;
@@ -620,20 +684,35 @@ namespace Nebula.Launcher
             string saved = File.ReadAllText(path);
             Check(saved.Contains("text_speed=3") && saved.Contains("audio_master_gain=0.5") && GeneralSettings.Load().TextSpeed == 3,
                   "text speed is saved beside the other runtime settings");
-            Check(GeneralSettings.Load().Language == 0 && GeneralSettings.Languages.Length == 3 &&
-                  GeneralSettings.Languages[1] == "Français" && GeneralSettings.Languages[2] == "Español",
-                  "the game's languages are listed in their own names, English first");
+            Check(GeneralSettings.Load().Language == 0 && GeneralSettings.LanguageNames[0] == "Automatic" &&
+                  GeneralSettings.LanguageNames[3] == "Fran\u00E7ais" && GeneralSettings.LanguageNames[7] == "\u65E5\u672C\u8A9E",
+                  "the game's languages are listed in their own names, Automatic first");
             general = GeneralSettings.Load();
-            general.Language = 2;
+            general.Language = 4;
             general.Save();
             saved = File.ReadAllText(path);
-            Check(saved.Contains("language=spanish") && saved.Contains("text_speed=3") && GeneralSettings.Load().Language == 2,
+            Check(saved.Contains("language=spanish") && saved.Contains("text_speed=3") && GeneralSettings.Load().Language == 4,
                   "the language is saved for the runtime");
             File.WriteAllText(path, "language=FRENCH\n");
-            Check(GeneralSettings.Load().Language == 1, "the runtime's language values read in any case");
+            Check(GeneralSettings.Load().Language == 3, "the runtime's language values read in any case");
             File.WriteAllText(path, "language=klingon\n");
-            Check(GeneralSettings.Load().Language == 0, "an unknown language reads as English");
+            Check(GeneralSettings.Load().Language == 0, "an unknown language reads as Automatic");
+            File.WriteAllText(path, "language=auto\n");
+            Check(GeneralSettings.Load().Language == 0, "auto reads as Automatic");
             File.Delete(path);
+
+            // The installed disc's languages: its game.pak's language folders, Automatic first.
+            string pak = Path.Combine(Path.GetTempPath(), "nebula-launcher-test-" + Guid.NewGuid().ToString("N") + ".pak");
+            File.WriteAllBytes(pak, TestPak("RMGP01", "EuEnglish", "EuGerman", "EuFrench", "LayoutData", "EuSpanish", "EuItalian"));
+            Check(GameDisc.GameId(pak) == "RMGP01", "game.pak's game id reads");
+            var europe = GeneralSettings.Offered(pak);
+            Check(string.Join(",", europe) == "0,1,2,3,4,5", "Europe's disc offers Automatic and its five languages");
+            File.WriteAllBytes(pak, TestPak("RMGJ01", "JpJapanese", "LayoutData"));
+            Check(string.Join(",", GeneralSettings.Offered(pak)) == "0,7", "Japan's disc offers Automatic and Japanese");
+            File.WriteAllBytes(pak, new byte[] { 1, 2, 3 });
+            Check(GeneralSettings.Offered(pak).Count == GeneralSettings.LanguageKeys.Length,
+                  "an unreadable game.pak offers every language");
+            File.Delete(pak);
         }
 
         // Nebula Settings open while the game runs: the in-game menu saves the same files. Settings write back
@@ -649,7 +728,7 @@ namespace Nebula.Launcher
             // The game: 2x text, music at half, SMAA and a window dragged to 1600x900.
             File.WriteAllText(runtime, "input_mode=auto\naudio_master_gain=1\naudio_music_gain=0.5\ntext_speed=2\nlanguage=english\n");
             File.WriteAllText(config, "aa=1\nsharpness=0\nper_pixel_lighting=0\nwindow_width=1600\nwindow_height=900\n");
-            general.Language = 1;
+            general.Language = 3;  // French
             general.Save();
             audio.Percent[0] = 80;
             audio.Save();
@@ -697,12 +776,13 @@ namespace Nebula.Launcher
 
             BuildSaves(saves, 1);
             List<SaveItem> first = SaveArchive.ReadTree(saves);
-            Check(first.Count == 18 && first.All(i => i.Streams.Count == 1), "save fixture: 12 folders and 6 files, each with a metadata stream");
+            Check(first.Count == 23 && first.All(i => i.Streams.Count == 1),
+                  "save fixture: 16 folders (every release's save folders) and 7 files (North America's and Europe's saves), each with a metadata stream");
             string zip = SaveArchive.Export(work);
             Check(Regex.IsMatch(Path.GetFileName(zip), @"^Nebula-Saves-\d{8}-\d{6}\.zip$"), "export writes Nebula-Saves-<yyyyMMdd-HHmmss>.zip: " + Path.GetFileName(zip));
             using (ZipArchive archive = ZipFile.OpenRead(zip))
                 Check(archive.Entries.All(e => !e.FullName.Contains("tmp/") && !e.FullName.EndsWith("desktop.ini", StringComparison.Ordinal)) &&
-                      archive.Entries.Count(e => e.FullName.StartsWith("streams/", StringComparison.Ordinal)) == 18,
+                      archive.Entries.Count(e => e.FullName.StartsWith("streams/", StringComparison.Ordinal)) == 23,
                       "export holds one stream entry per folder and file, and leaves out /tmp and files the game does not read");
             Check(SaveArchive.Same(first, SaveArchive.ReadArchive(zip)), "the archive reads back as the exported tree");
 
@@ -781,8 +861,10 @@ namespace Nebula.Launcher
             ZipFile.CreateFromDirectory(folder, plain, CompressionLevel.Optimal, true);
             SaveArchive.Import(plain, null);
             List<SaveItem> imported = SaveArchive.ReadWholeTree(saves);
-            Check(imported.Count(i => !i.IsFolder) == 6 && imported.All(i => i.Streams.Count == 0) &&
-                  imported.First(i => i.Path == SaveArchive.GameDataPath).Data.SequenceEqual(GameData(2)), "a plain zip of a saves folder imports the six files without streams");
+            Check(imported.Count(i => !i.IsFolder) == 7 && imported.All(i => i.Streams.Count == 0) &&
+                  imported.First(i => i.Path == SaveArchive.GameDataPath).Data.SequenceEqual(GameData(2)) &&
+                  imported.First(i => i.Path == SaveArchive.GameDataPathOf("524d4750")).Data.SequenceEqual(GameData(2 + 7)),
+                  "a plain zip of a saves folder imports the seven files (both releases' saves) without streams");
 
             string invalidBanner = Path.Combine(work, "invalid-banner");
             Directory.CreateDirectory(invalidBanner);

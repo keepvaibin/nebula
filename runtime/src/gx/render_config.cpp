@@ -794,6 +794,7 @@ std::vector<std::filesystem::path> s_mod_folders;
 std::atomic<std::uint64_t> s_mod_folders_generation{0};
 std::vector<std::filesystem::path> s_movie_folders;
 std::atomic<std::uint64_t> s_movie_folders_generation{0};
+std::string s_texture_pack_game_id = "RMGE01";  // TexturePacks::kGameId until the host sets the disc's
 
 }  // namespace
 
@@ -820,6 +821,16 @@ void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders) {
     const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
     s_mod_folders = std::move(folders);
     s_mod_folders_generation.fetch_add(1u, std::memory_order_release);
+}
+
+void set_texture_pack_game_id(std::string id) {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    s_texture_pack_game_id = std::move(id);
+}
+
+std::string texture_pack_game_id() {
+    const std::lock_guard<std::mutex> lock(s_mod_folders_mutex);
+    return s_texture_pack_game_id;
 }
 
 std::vector<std::filesystem::path> texture_pack_mod_folders() {

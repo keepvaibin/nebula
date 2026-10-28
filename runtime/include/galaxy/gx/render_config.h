@@ -350,6 +350,10 @@ bool reload_render_config_if_changed();
 // The enabled mods' textures/ folders in load order (the host sets them at start); the generation changes with each
 // set.
 void set_texture_pack_mod_folders(std::vector<std::filesystem::path> folders);
+// The disc's game id (RMGE01, RMGP01, RMGJ01; the host sets it at start, TexturePacks::kGameId until then): the packs'
+// game folders and the dumps' are named by it.
+void set_texture_pack_game_id(std::string id);
+[[nodiscard]] std::string texture_pack_game_id();
 [[nodiscard]] std::vector<std::filesystem::path> texture_pack_mod_folders();
 [[nodiscard]] std::uint64_t texture_pack_mod_folders_generation() noexcept;
 // HD movie replacements (movie_replacement.h): the Movies folder beside config.ini (GALAXY_MOVIE_DIR replaces it), and

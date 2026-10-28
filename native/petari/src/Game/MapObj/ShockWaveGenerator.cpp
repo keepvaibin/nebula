@@ -1,4 +1,7 @@
 #include "Game/MapObj/ShockWaveGenerator.hpp"
+#ifdef TARGET_PC
+#include "Game/System/NebulaRegion.hpp"
+#endif
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -58,7 +61,11 @@ void ShockWaveGenerator::exeWait() {
         MR::startBtk(this, "SpinHit");
         MR::setBrkFrameAndStop(this, 0.0f);
         MR::setBtkFrameAndStop(this, 0.0f);
-#if (VERSION == RMGP01 || VERSION == RMGK01)
+#ifdef TARGET_PC
+        if (NebulaRegion::isPal()) {
+            MR::validateClipping(this);
+        }
+#elif (VERSION == RMGP01 || VERSION == RMGK01)
         MR::validateClipping(this);
 #endif
     }
@@ -126,14 +133,24 @@ bool ShockWaveGenerator::isPlayerInCameraStartRange() const {
 }
 
 void ShockWaveGenerator::startShockWave() {
-#if (VERSION == RMGP01 || VERSION == RMGK01)
+#ifdef TARGET_PC
+    if (NebulaRegion::isPal()) {
+        MR::invalidateClipping(this);
+    }
+#elif (VERSION == RMGP01 || VERSION == RMGK01)
     MR::invalidateClipping(this);
 #endif
 
     MR::startSound(this, "SE_OJ_SHOCK_WAVE_GENERATE");
     if (mCameraInfo != nullptr) {
         if (isPlayerInCameraStartRange()) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01)
+#ifdef TARGET_PC
+            if (!NebulaRegion::isPal()) {
+                MR::requestStartDemoWithoutCinemaFrame(this, ::cDemoCameraName, GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvDemoEcho), nullptr);
+            } else if (MR::tryStartDemoWithoutCinemaFrame(this, ::cDemoCameraName)) {
+                setNerve(GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvDemoEcho));
+            }
+#elif (VERSION == RMGJ01 || VERSION == RMGE01)
             MR::requestStartDemoWithoutCinemaFrame(this, ::cDemoCameraName, GET_NERVE(ShockWaveGenerator, ShockWaveGeneratorNrvDemoEcho), nullptr);
 #else
             if (MR::tryStartDemoWithoutCinemaFrame(this, ::cDemoCameraName)) {

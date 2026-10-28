@@ -93,10 +93,10 @@ namespace Nebula.Launcher
                 Font = new Font("Segoe UI", 11f, FontStyle.Bold), Location = new Point(16, 14), Size = new Size(488, 26)
             });
             bool offerRayTracing = RayTracingPreparation.Offered();
-            string notes = release.Notes.Length > 1500 ? release.Notes.Substring(0, 1500) + "…" : release.Notes;
+            string notes = ReleaseNotes.Plain(release.Notes, 1500);
             Controls.Add(new TextBox
             {
-                Text = notes.Replace("\r\n", "\n").Replace("\n", "\r\n"), Multiline = true, ReadOnly = true,
+                Text = notes, Multiline = true, ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical, Location = new Point(16, 46), Size = new Size(488, offerRayTracing ? 162 : 190),
                 TabStop = false
             });

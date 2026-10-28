@@ -14,14 +14,30 @@ namespace Nebula.Launcher
     {
         public static readonly string[] TextSpeeds = { "1x (original)", "2x", "3x", "Instant" };
 
-        /// <summary>The game's three languages, each in its own name, and their runtime_settings.ini values.</summary>
-        public static readonly string[] Languages = { "English", "Français", "Español" };
-        private static readonly string[] LanguageKeys = { "english", "french", "spanish" };
+        /// <summary>The game's languages as runtime_settings.ini names them, each in its own name, and the language
+        /// its disc folders hold (UsEnglish, EuEnglish: English). Automatic: the system's language where the disc has it,
+        /// else English, else the disc's own (runtime_settings.cpp game_language_resolved).</summary>
+        public static readonly string[] LanguageKeys = { "auto", "english", "german", "french", "spanish", "italian", "dutch", "japanese" };
+        public static readonly string[] LanguageNames = { "Automatic", "English", "Deutsch", "Fran\u00E7ais", "Espa\u00F1ol", "Italiano", "Nederlands", "\u65E5\u672C\u8A9E" };
+        private static readonly string[] FolderLanguages = { null, "English", "German", "French", "Spanish", "Italian", "Dutch", "Japanese" };
+
+        /// <summary>The languages a game.pak offers, as indices into <see cref="LanguageKeys"/>: Automatic, then those its
+        /// language folders hold, in that order (every one when game.pak cannot be read).</summary>
+        public static List<int> Offered(string pak)
+        {
+            var folders = GameDisc.LanguageFolders(pak);
+            var offered = new List<int> { 0 };
+            for (int i = 1; i < LanguageKeys.Length; i++)
+            {
+                if (folders.Count == 0 || folders.Exists(folder => folder.Substring(2) == FolderLanguages[i])) offered.Add(i);
+            }
+            return offered;
+        }
 
         /// <summary>Steps of dialogue text revealed per frame, 1 to 3; 4 shows each page at once.</summary>
         public int TextSpeed = 1;
 
-        /// <summary>Index into <see cref="Languages"/>; the game starts in it.</summary>
+        /// <summary>Index into <see cref="LanguageKeys"/>; the game starts in it.</summary>
         public int Language = 0;
 
         public static GeneralSettings Load()

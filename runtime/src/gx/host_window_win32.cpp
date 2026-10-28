@@ -411,15 +411,17 @@ std::uint32_t s_handled_key_normalized = 0u;
 
 constexpr unsigned kNativeSettingsTabCount = 8;
 
-// The GENERAL page's languages, in the order LEFT/RIGHT steps through them.
-constexpr GameLanguage kGameLanguages[] = {GameLanguage::English, GameLanguage::French, GameLanguage::Spanish};
-
-// Each language in its own name; the UTF-8 Ç and Ñ are drawn by ui_text.
+// Each language in its own name (UTF-8: Ç, Ñ, 日本語); a disc offers only its own, whose letters its font has.
 const char* game_language_name(GameLanguage language) {
     switch (language) {
+    case GameLanguage::Japanese: return "\xE6\x97\xA5\xE6\x9C\xAC\xE8\xAA\x9E";
+    case GameLanguage::German: return "DEUTSCH";
     case GameLanguage::French: return "FRAN\xC3\x87" "AIS";
     case GameLanguage::Spanish: return "ESPA\xC3\x91" "OL";
-    case GameLanguage::English: break;
+    case GameLanguage::Italian: return "ITALIANO";
+    case GameLanguage::Dutch: return "NEDERLANDS";
+    case GameLanguage::English:
+    case GameLanguage::Auto: break;
     }
     return "ENGLISH";
 }
@@ -3265,7 +3267,8 @@ std::string language_name(std::string_view folder) {
 std::string next_start_language_folder() {
     std::string game_id = galaxy::mods::mods_game_id();
     if (game_id.empty()) game_id = "RMGE01";
-    return galaxy::mods::language_folder(game_id, static_cast<unsigned>(get_runtime_settings().language));
+    return galaxy::mods::language_folder(
+        game_id, static_cast<unsigned>(galaxy::game_language_resolved(get_runtime_settings().language)));
 }
 
 // The selection to a row of the MODS page (after a change moved it).
@@ -3628,21 +3631,29 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
                         },
                         "THE BUTTONS THE GAME'S ICONS SHOW. AUTO: THE CONTROLLER IN USE"});
     }
-    rows.push_back({"LANGUAGE", game_language_name(runtime.language),
+    rows.push_back({"LANGUAGE", game_language_name(galaxy::game_language_resolved(runtime.language)),
                     [](RenderConfig&, int delta) {
                         // Saved when applied; the game switches at the next start (game_language_for_boot).
-                        // The languages on the disc as it is read (galaxy::set_disc_languages).
+                        // The languages on the disc as it is read (galaxy::set_disc_languages); Auto shows the one
+                        // it plays in, and a step chooses from there.
+                        if (delta == 0) return;
                         RuntimeSettings& settings = s_runtime_draft;
                         std::vector<GameLanguage> offered;
-                        for (const GameLanguage language : kGameLanguages) {
+                        for (const GameLanguage language : galaxy::kGameLanguages) {
                             if (galaxy::game_language_on_disc(language)) offered.push_back(language);
                         }
+                        const GameLanguage current = galaxy::game_language_resolved(settings.language);
                         std::size_t index = 0u;
                         for (std::size_t i = 0; i < offered.size(); ++i) {
-                            if (offered[i] == settings.language) index = i;
+                            if (offered[i] == current) index = i;
                         }
-                        settings.language = offered[settings_step(static_cast<unsigned>(index),
-                                                                  static_cast<unsigned>(offered.size()), delta)];
+                        const GameLanguage chosen = offered[settings_step(static_cast<unsigned>(index),
+                                                                         static_cast<unsigned>(offered.size()), delta)];
+                        // Back on the language Auto plays in: Auto again, so nothing is left to apply.
+                        const GameLanguage saved = galaxy::get_runtime_settings().language;
+                        settings.language =
+                            saved == GameLanguage::Auto && chosen == galaxy::game_language_resolved(saved) ? saved
+                                                                                                         : chosen;
                     },
                     "THE GAME'S TEXT AND MENUS"});
     rows.push_back({"DISCORD STATUS", runtime.discord_status ? std::string("ON") : std::string("OFF"),
@@ -5307,7 +5318,8 @@ NativeSettingsView build_native_settings_view() {
         view.status_number = static_cast<int>(pending);
     } else if (s_settings_applied_ms != 0u && now_ms - s_settings_applied_ms < 2500u) {
         view.status = NativeSettingsStatus::Applied;
-    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) && running != row_runtime.language) {
+    } else if (GameLanguage running{}; tab == 4u && running_game_language(running) &&
+                                       running != galaxy::game_language_resolved(row_runtime.language)) {
         view.status = NativeSettingsStatus::LanguageRestart;
     } else if (tab == 5u && mods_restart_pending()) {
         view.status = NativeSettingsStatus::ModsRestart;

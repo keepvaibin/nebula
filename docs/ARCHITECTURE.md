@@ -1,7 +1,9 @@
 # Architecture
 
-Nebula runs the North American release of Super Mario Galaxy (`RMGE01`, revision 0) as native code. The game's code
-is the Petari decompilation compiled for the PC; the user's disc supplies only the game's files. Nothing translates
+Nebula runs Super Mario Galaxy's releases for North America (`RMGE01`), Europe (`RMGP01`) and Japan (`RMGJ01`),
+revision 0, as native code. The game's code is the Petari decompilation compiled for the PC, once for all three: where
+their code differs (Petari's `VERSION` switches between them, five places), the module follows the disc's game id
+(`native/sdk/region.c`, `NebulaRegion.hpp`). The user's disc supplies only the game's files. Nothing translates
 or interprets PowerPC instructions at any point.
 
 ## Repository layout

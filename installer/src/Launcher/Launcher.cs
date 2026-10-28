@@ -261,6 +261,8 @@ namespace Nebula.Launcher
         private AudioSettings audio = AudioSettings.Load();
         private GeneralSettings general = GeneralSettings.Load();
         private readonly ComboBox textSpeed = new ComboBox(), languageBox = new ComboBox();
+        // The installed disc's languages (GeneralSettings.Offered), as the Language row lists them.
+        private List<int> offeredLanguages = new List<int> { 0 };
         private readonly ControlsSettings controls = ControlsSettings.Load();
         private bool loading;
         // The player chose the upscaler, its quality, the interpolation or the frame rate. Without that, a save
@@ -346,6 +348,8 @@ namespace Nebula.Launcher
         public SettingsForm(LaunchSession session)
         {
             this.session = session;
+            offeredLanguages = GeneralSettings.Offered(Path.Combine(session.Content, "game.pak"));
+            SaveArchive.LooseTitle = SaveArchive.TitleOf(GameDisc.GameId(Path.Combine(session.Content, "game.pak")));
             upscalerChoices = GraphicsSettings.UpscalerChoices(graphics.Gpu);
             rayTracingOffered = GraphicsSettings.RayTracingAdapter(graphics.Gpu);
             bool firstRun = !session.SetupComplete;
@@ -493,7 +497,7 @@ namespace Nebula.Launcher
             Row(generalPage, "Text speed", textSpeed, ref y);
             textSpeed.Items.AddRange(GeneralSettings.TextSpeeds);
             Row(generalPage, "Language", languageBox, ref y);
-            languageBox.Items.AddRange(GeneralSettings.Languages);
+            foreach (int language in offeredLanguages) languageBox.Items.Add(GeneralSettings.LanguageNames[language]);
 
             y = 16;
             Label(advanced, "Game content", 12, y + 3);
@@ -954,7 +958,7 @@ namespace Nebula.Launcher
                 volumeValues[i].Text = volumes[i].Value + "%";
             }
             textSpeed.SelectedIndex = Math.Max(0, Math.Min(general.TextSpeed - 1, GeneralSettings.TextSpeeds.Length - 1));
-            languageBox.SelectedIndex = Math.Max(0, Math.Min(general.Language, GeneralSettings.Languages.Length - 1));
+            languageBox.SelectedIndex = Math.Max(0, offeredLanguages.IndexOf(general.Language));
             recording.SelectedIndex = (int)session.Recording;
             contentLabel.Text = session.Content;
             windowSize = new Size(graphics.WindowWidth, graphics.WindowHeight);
@@ -1193,7 +1197,7 @@ namespace Nebula.Launcher
                 for (int i = 0; i < volumes.Length; i++) audio.Percent[i] = volumes[i].Value;
                 audio.Save();
                 general.TextSpeed = Math.Max(0, textSpeed.SelectedIndex) + 1;
-                general.Language = Math.Max(0, languageBox.SelectedIndex);
+                general.Language = offeredLanguages[Math.Max(0, Math.Min(languageBox.SelectedIndex, offeredLanguages.Count - 1))];
                 general.Save();
                 EndCapture();
                 if (controls.InputMode != ControlsSettings.ModeRealWiimote) controls.InputMode = Math.Max(0, inputSource.SelectedIndex);
@@ -1230,6 +1234,13 @@ namespace Nebula.Launcher
                 if (dialog.ShowDialog(this) != DialogResult.OK) return false;
                 session.Content = Path.GetDirectoryName(dialog.FileName);
                 contentLabel.Text = session.Content;
+                // Another disc's languages: the row lists them, its choice kept where the disc has it.
+                int chosen = offeredLanguages[Math.Max(0, Math.Min(languageBox.SelectedIndex, offeredLanguages.Count - 1))];
+                offeredLanguages = GeneralSettings.Offered(Path.Combine(session.Content, "game.pak"));
+                SaveArchive.LooseTitle = SaveArchive.TitleOf(GameDisc.GameId(Path.Combine(session.Content, "game.pak")));
+                languageBox.Items.Clear();
+                foreach (int language in offeredLanguages) languageBox.Items.Add(GeneralSettings.LanguageNames[language]);
+                languageBox.SelectedIndex = Math.Max(0, offeredLanguages.IndexOf(chosen));
                 return true;
             }
         }
