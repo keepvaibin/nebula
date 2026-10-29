@@ -59,7 +59,6 @@ extern "C" void nebula_game_main(void) {
 #else
 void main(void) {
 #endif
-    OSInitFastCast();
     DVDInit();
     VIInit();
     HeapMemoryWatcher::createRootHeap();

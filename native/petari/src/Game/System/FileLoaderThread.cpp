@@ -19,7 +19,6 @@ FileLoaderThread::FileLoaderThread(int priority, int msgCount, JKRHeap* pHeap) :
 }
 
 void* FileLoaderThread::run() {
-    OSInitFastCast();
 
     while (true) {
         OSMessage msg;

@@ -5,7 +5,6 @@ NANDManagerThread::NANDManagerThread(int priority, int msgCount, JKRHeap* pHeap)
 }
 
 void* NANDManagerThread::run() {
-    OSInitFastCast();
 
     while (true) {
         OSMessage msg;

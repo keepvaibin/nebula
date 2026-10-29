@@ -80,7 +80,6 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
 
 void* JASTaskThread::run() {
     JASThreadCallStack* callstack;
-    OSInitFastCast();
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
         if (_84) {

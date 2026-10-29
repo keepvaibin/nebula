@@ -28,7 +28,6 @@ FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
 }
 
 void* FunctionAsyncExecutorThread::run() {
-    OSInitFastCast();
 
     while (true) {
         mIsSuspended = false;

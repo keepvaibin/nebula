@@ -32,7 +32,6 @@ void JASAudioThread::stop() {
 volatile int JASAudioThread::snIntCount;
 
 void* JASAudioThread::run() {
-    OSInitFastCast();
     JASDriver::initAI(DMACallback);
     JASDsp::boot(DSPCallback);
     JASDsp::initBuffer();
