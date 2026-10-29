@@ -8,42 +8,13 @@
 
 #ifdef TARGET_PC
 // The XF colour word, r in the top byte (the console read the four bytes as a u32).
-static inline u32 colorWord(const GXColor& color) {
-    return (u32)color.r << 24 | (u32)color.g << 16 | (u32)color.b << 8 | color.a;
-}
 
-inline void loadMatColors(const J3DGXColor* color) {
-    J3DGDWriteXFCmdHdr(0x100C, 2);
-    J3DGDWrite_u32(colorWord(color[0]));
-    J3DGDWrite_u32(colorWord(color[1]));
-}
 
-inline void loadAmbColors(const J3DGXColor* color) {
-    J3DGDWriteXFCmdHdr(0x100A, 2);
-    J3DGDWrite_u32(colorWord(color[0]));
-    J3DGDWrite_u32(colorWord(color[1]));
-}
 #else
-inline void loadMatColors(const J3DGXColor* color) {
-    J3DGDWriteXFCmdHdr(0x100C, 2);
-    J3DGDWrite_u32(*(u32*)color);
-    J3DGDWrite_u32(*(u32*)(color + 1));
-}
 
-inline void loadAmbColors(const J3DGXColor* color) {
-    J3DGDWriteXFCmdHdr(0x100A, 2);
-    J3DGDWrite_u32(*(u32*)color);
-    J3DGDWrite_u32(*(u32*)(color + 1));
-}
 #endif
 
-inline void loadTevColor(u32 reg, const J3DGXColorS10& color) {
-    J3DGDSetTevColorS10(GXTevRegID(reg + 1), color);
-}
 
-inline void loadTevKColor(u32 reg, const J3DGXColor& color) {
-    J3DGDSetTevKColor(GXTevKColorID(reg), color);
-}
 
 void J3DColorBlockLightOff::initialize() {
     mColorChanNum = 0;
@@ -361,80 +332,14 @@ static u32 SizeOfJ3DColorBlockAmbientOnLoad = SizeOfLoadMatColors + SizeOfLoadAm
 
 
 
-void J3DTevBlock16::ptrToIndex() {
-    GDSetCurrOffset(mTexNoOffset);
-    void* start = GDGetCurrPointer();
-
-    u32 offs = 0;
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexNo); i++) {
-        if (mTexNo[i] != 0xFFFF) {
-            GDSetCurrOffset(mTexNoOffset + offs);
-            patchTexNo_PtrToIdx(i, mTexNo[i]);
-
-            ResTIMG* img = j3dSys.getTexture()->getResTIMG(mTexNo[i]);
-
-            offs += 0x14;
-            if (img->mPaletteName == 1) {
-                offs += 0x23;
-            }
-        }
-    }
-
-    void* end = GDGetCurrPointer();
-    DCStoreRange(start, (uintptr_t)end - (uintptr_t)start);
-}
-
-void J3DTevBlockPatched::ptrToIndex() {
-    GDSetCurrOffset(mTexNoOffset);
-    void* start = GDGetCurrPointer();
-
-    u32 offs = 0;
-
-    for (u32 i = 0; i < ARRAY_SIZE(mTexNo); i++) {
-        if (mTexNo[i] != 0xFFFF) {
-            GDSetCurrOffset(mTexNoOffset + offs);
-            patchTexNo_PtrToIdx(i, mTexNo[i]);
-
-            ResTIMG* img = j3dSys.getTexture()->getResTIMG(mTexNo[i]);
-
-            offs += 0x14;
-            if (img->mPaletteName == 1) {
-                offs += 0x23;
-            }
-        }
-    }
-
-    void* end = GDGetCurrPointer();
-    DCStoreRange(start, (uintptr_t)end - (uintptr_t)start);
-}
-
-void J3DTevBlock::indexToPtr_private(u32 offs) {
-    GDSetCurrOffset(offs);
-    void* start = GDGetCurrPointer();
-
-    for (u32 i = 0;; i++) {
-        void* pDL = GDGetCurrPointer();
-        if (!isTexNoReg(pDL)) {
-            break;
-        }
-
-        u16 texNoReg = getTexNoReg(pDL);
-        loadTexNo(i, texNoReg);
-    }
-
-    void* end = GDGetCurrPointer();
-    DCStoreRange(start, (uintptr_t)end - (uintptr_t)start);
-}
 
 
 
 
 
 
-inline void loadZCompLoc(u8 compLoc) {
-    J3DGDSetZCompLoc(compLoc);
-}
+
+
 
 
 

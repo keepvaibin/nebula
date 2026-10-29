@@ -60,8 +60,6 @@ public:
         mInfo = j3dDefaultLightInfo;
     }
 
-    void load(u32) const;
-
     J3DLightInfo* getLightInfo() {
         return &mInfo;
     }
@@ -174,8 +172,6 @@ struct J3DTevStage {
     void setTexSel(u8 tex_sel) {
         mTexSel = tex_sel;
     }
-
-    void load(u32 param_1) const;
 
     // Copies the stage's settings, not its number.
     J3DTevStage& operator=(const J3DTevStage& other) {
@@ -376,12 +372,6 @@ struct J3DIndTevStage {
         mAlphaSel = alphaSel;
     }
 
-    void load(u32 param_1) const {
-        J3DGDWriteBPCmd((u32)mIndStage | (u32)mIndFormat << 2 | (u32)mBiasSel << 4 | (u32)mAlphaSel << 7 |
-                        (u32)mMtxSel << 9 | (u32)mWrapS << 13 | (u32)mWrapT << 16 | (u32)mLod << 19 |
-                        (u32)mPrev << 20 | (param_1 + 0x10) * 0x1000000);
-    }
-
     u8 mIndStage;
     u8 mIndFormat;
     u8 mBiasSel;
@@ -397,9 +387,6 @@ struct J3DNBTScale;
 struct J3DTexCoord;
 void loadNBTScale(J3DNBTScale& param_0);
 
-void loadTexCoordGens(u32 param_0, J3DTexCoord* param_1);
-void loadTexNo(u32 param_0, u16 const& param_1);
-void patchTexNo_PtrToIdx(u32 texID, u16 const& idx);
 bool isTexNoReg(void* param_0);
 u16 getTexNoReg(void* param_0);
 
@@ -504,10 +491,6 @@ struct J3DBlend : public J3DBlendInfo {
         return (GXLogicOp)mOp;
     }
 
-    void load(u8 ditherEnable) const {
-        J3DGDSetBlendMode((GXBlendMode)mType, (GXBlendFactor)mSrcFactor, (GXBlendFactor)mDstFactor, (GXLogicOp)mOp, ditherEnable);
-    }
-
     void setBlendInfo(const J3DBlendInfo& i_blendInfo) {
         *static_cast< J3DBlendInfo* >(this) = i_blendInfo;
     }
@@ -531,11 +514,6 @@ struct J3DFog : public J3DFogInfo {
 
     void setFogInfo(const J3DFogInfo* info) {
         *(J3DFogInfo*)this = *info;
-    }
-
-    void load() const {
-        J3DGDSetFog(GXFogType(mType), mStartZ, mEndZ, mNearZ, mFarZ, mColor);
-        J3DGDSetFogRangeAdj(mAdjEnable, mCenter, (GXFogAdjTable*)&mFogAdjTable);
     }
 };
 
@@ -599,10 +577,6 @@ struct J3DAlphaComp {
 
     u8 getRef1() const {
         return mRef1;
-    }
-
-    void load() const {
-        J3DGDSetAlphaCompare((GXCompare)getComp0(), mRef0, (GXAlphaOp)getOp(), (GXCompare)getComp1(), mRef1);
     }
 
     /* 0x00 */ u16 mID;
@@ -685,11 +659,6 @@ public:
         return *this;
     }
 
-    void load() const {
-        J3DGDWrite_u32(setChanCtrlMacro(getEnable(), (GXColorSrc)getAmbSrc(), (GXColorSrc)getMatSrc(), getLightMask(), (GXDiffuseFn)getDiffuseFn(),
-                                        (GXAttnFn)getAttnFn()));
-    }
-
     u8 mEnable;
     u8 mMatSrc;
     u8 mAmbSrc;
@@ -737,10 +706,6 @@ struct J3DZMode {
         mZModeID = calcZModeID(j3dZModeTable[mZModeID * 3], j3dZModeTable[mZModeID * 3 + 1], i_enable);
     }
 
-    void load() const {
-        J3DGDSetZMode(getCompareEnable(), GXCompare(getFunc()), getUpdateEnable());
-    }
-
     u8 getCompareEnable() const {
         return *(&j3dZModeTable[mZModeID * 3] + 0);
     }
@@ -756,6 +721,3 @@ struct J3DZMode {
     /* 0x0 */ u16 mZModeID;
 };
 
-inline void loadTexCoordScale(GXTexCoordID coord, const J3DTexCoordScaleInfo& info) {
-    J3DGDSetTexCoordScale2(coord, info.field_0x00, info.field_0x04 == 1, 0, info.field_0x02, info.field_0x06 == 1, 0);
-}

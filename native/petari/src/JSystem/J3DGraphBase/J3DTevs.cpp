@@ -9,50 +9,8 @@
 static void J3DGDLoadTexMtxImm(f32 (*)[4], u32, GXTexMtxType);
 static void J3DGDLoadPostTexMtxImm(f32 (*)[4], u32);
 
-void J3DLightObj::load(u32 lightIdx) const {
-    GDOverflowCheck(0x48);
-    J3DGDSetLightPos(GXLightID(1 << lightIdx), mInfo.mLightPosition.x, mInfo.mLightPosition.y, mInfo.mLightPosition.z);
-    J3DGDSetLightAttn(GXLightID(1 << lightIdx), mInfo.mCosAtten.x, mInfo.mCosAtten.y, mInfo.mCosAtten.z, mInfo.mDistAtten.x, mInfo.mDistAtten.y,
-                      mInfo.mDistAtten.z);
-    J3DGDSetLightColor(GXLightID(1 << lightIdx), mInfo.mColor);
-    J3DGDSetLightDir(GXLightID(1 << lightIdx), mInfo.mLightDirection.x, mInfo.mLightDirection.y, mInfo.mLightDirection.z);
-}
 
-void loadTexCoordGens(u32 texGenNum, J3DTexCoord* texCoords) {
-    u32 var_r28;
-    GDOverflowCheck(texGenNum * 4 * 2 + 10);
-    J3DGDWriteXFCmdHdr(0x1040, texGenNum);
 
-    for (int i = 0; i < texGenNum; i++) {
-        J3DGDSetTexCoordGen(GXTexGenType(texCoords[i].getTexGenType()), GXTexGenSrc(texCoords[i].getTexGenSrc()));
-    }
-
-    var_r28 = 61;
-    J3DGDWriteXFCmdHdr(0x1050, texGenNum);
-
-    if (j3dSys.checkFlag(0x40000000)) {
-        for (int i = 0; i < texGenNum; i++) {
-            if (texCoords[i].getTexGenMtx() != 60) {
-                var_r28 = i * 3;
-            } else {
-                var_r28 = 61;
-            }
-            J3DGDWrite_u32(var_r28);
-        }
-    } else {
-        for (int i = 0; i < texGenNum; i++) {
-            J3DGDWrite_u32(var_r28);
-        }
-    }
-}
-
-void J3DTexMtx::load(u32 mtxIdx) const {
-    if (j3dSys.checkFlag(J3DSysFlag_PostTexMtx)) {
-        loadPostTexMtx(mtxIdx);
-    } else {
-        loadTexMtx(mtxIdx);
-    }
-}
 
 void J3DTexMtx::calc(f32 const (*param_0)[4]) {
     calcTexMtx(param_0);
@@ -266,30 +224,7 @@ u16 getTexNoReg(void* pDL) {
     return var_r31 & 0xFFFFFF;
 }
 
-void loadTexNo(u32 param_0, const u16& texNo) {
-    ResTIMG* resTIMG = j3dSys.getTexture()->getResTIMG(texNo);
-    J3DSys::sTexCoordScaleTable[param_0].field_0x00 = (u16)resTIMG->mWidth;
-    J3DSys::sTexCoordScaleTable[param_0].field_0x02 = (u16)resTIMG->mHeight;
 
-    GDOverflowCheck(0x14);
-    J3DGDSetTexImgPtr(GXTexMapID(param_0), (u8*)resTIMG + resTIMG->mImageDataOffset);
-    J3DGDSetTexImgAttr(GXTexMapID(param_0), resTIMG->mWidth, resTIMG->mHeight, GXTexFmt(resTIMG->mFormat & 0x0f));
-    J3DGDSetTexLookupMode(GXTexMapID(param_0), GXTexWrapMode(resTIMG->mWrapS), GXTexWrapMode(resTIMG->mWrapT), GXTexFilter(resTIMG->mMinType),
-                          GXTexFilter(resTIMG->mMagType), static_cast< s8 >(resTIMG->mMinLod) * 0.125f, static_cast< s8 >(resTIMG->mMaxLod) * 0.125f,
-                          resTIMG->mLodBias * 0.01f, resTIMG->mBiasClamp, resTIMG->mDoEdgeLod, GXAnisotropy(resTIMG->mMaxAnisotropy));
-
-    if (resTIMG->mPaletteName == true) {
-        GXTlutSize tlutSize = resTIMG->mPaletteNum > 16 ? GX_TLUT_256 : GX_TLUT_16;
-        GDOverflowCheck(0x14);
-        J3DGDLoadTlut((u8*)resTIMG + resTIMG->mPaletteDataOffset, (param_0 << 13) + 0xf0000, tlutSize);
-        J3DGDSetTexTlut(GXTexMapID(param_0), (param_0 << 13) + 0xf0000, GXTlutFmt(resTIMG->mPaletteFormat));
-    }
-}
-
-void patchTexNo_PtrToIdx(u32 texID, const u16& idx) {
-    ResTIMG* timg = j3dSys.getTexture()->getResTIMG(idx);
-    J3DGDSetTexImgPtrRaw(GXTexMapID(texID), idx);
-}
 
 void loadNBTScale(J3DNBTScale& NBTScale) {
     if (NBTScale.mbHasScale == true) {
@@ -410,54 +345,9 @@ void makeTevSwapTable() {
     } while (i < 256);
 }
 
-void J3DTexMtx::loadTexMtx(u32 param_0) const {
-    GDOverflowCheck(0x35);
-    J3DGDLoadTexMtxImm((MtxPtr)mMtx, param_0 * 3 + 30, (_GXTexMtxType)mTexMtxInfo.mProjection);
-}
 
-void J3DTexMtx::loadPostTexMtx(u32 param_0) const {
-    GDOverflowCheck(0x35);
-    J3DGDLoadPostTexMtxImm((MtxPtr)mMtx, param_0 * 3 + 0x40);
-}
 
-inline void J3DGDLoadTexMtxImm(f32 (*param_1)[4], u32 param_2, _GXTexMtxType param_3) {
-    u16 addr = param_2 << 2;
-    u8 len = param_3 == GX_MTX2x4 ? 8 : 12;
-    J3DGDWriteXFCmdHdr(addr, len);
-    J3DGDWrite_f32(param_1[0][0]);
-    J3DGDWrite_f32(param_1[0][1]);
-    J3DGDWrite_f32(param_1[0][2]);
-    J3DGDWrite_f32(param_1[0][3]);
-    J3DGDWrite_f32(param_1[1][0]);
-    J3DGDWrite_f32(param_1[1][1]);
-    J3DGDWrite_f32(param_1[1][2]);
-    J3DGDWrite_f32(param_1[1][3]);
-    if (param_3 == GX_MTX3x4) {
-        J3DGDWrite_f32(param_1[2][0]);
-        J3DGDWrite_f32(param_1[2][1]);
-        J3DGDWrite_f32(param_1[2][2]);
-        J3DGDWrite_f32(param_1[2][3]);
-    }
-}
 
-inline void J3DGDLoadPostTexMtxImm(f32 (*param_1)[4], u32 param_2) {
-    u16 addr = (param_2 - 0x40) * 4 + 0x500;
-    int stride = 12;
-
-    J3DGDWriteXFCmdHdr(addr, stride);
-    J3DGDWrite_f32(param_1[0][0]);
-    J3DGDWrite_f32(param_1[0][1]);
-    J3DGDWrite_f32(param_1[0][2]);
-    J3DGDWrite_f32(param_1[0][3]);
-    J3DGDWrite_f32(param_1[1][0]);
-    J3DGDWrite_f32(param_1[1][1]);
-    J3DGDWrite_f32(param_1[1][2]);
-    J3DGDWrite_f32(param_1[1][3]);
-    J3DGDWrite_f32(param_1[2][0]);
-    J3DGDWrite_f32(param_1[2][1]);
-    J3DGDWrite_f32(param_1[2][2]);
-    J3DGDWrite_f32(param_1[2][3]);
-}
 
 const GXColor j3dDefaultColInfo = {0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -490,17 +380,3 @@ const u16 j3dDefaultAlphaCmpID = 0x00E7;
 
 const u16 j3dDefaultZModeID = 0x0017;
 
-void J3DTevStage::load(u32) const {
-    const auto op = [](u8 op, u8 bias, u8 scale, u8 clamp, u8 reg) -> u32 {
-        const u32 compare = op > 1;
-        return (compare ? 3u : bias) | (u32)(op & 1) << 2 | (u32)clamp << 3 | (compare ? (u32)(op >> 1 & 3) : scale) << 4 |
-               (u32)reg << 6;
-    };
-    const u32 colorOp = op(mColorOp, mColorBias, mColorScale, mColorClamp, mColorReg);
-    const u32 alphaOp = op(mAlphaOp, mAlphaBias, mAlphaScale, mAlphaClamp, mAlphaReg);
-    J3DGDWriteBPCmd((u32)(0xC0 + mStageNo * 2) << 24 | colorOp << 16 | (u32)(mColorIn[0] << 4 | mColorIn[1]) << 8 |
-                    (mColorIn[2] << 4 | mColorIn[3]));
-    J3DGDWriteBPCmd((u32)(0xC1 + mStageNo * 2) << 24 | alphaOp << 16 |
-                    (u32)(mAlphaIn[0] << 5 | mAlphaIn[1] << 2 | mAlphaIn[2] >> 1) << 8 |
-                    ((mAlphaIn[2] & 1) << 7 | mAlphaIn[3] << 4 | mTexSel << 2 | mRasSel));
-}

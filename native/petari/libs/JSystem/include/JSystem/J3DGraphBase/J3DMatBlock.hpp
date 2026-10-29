@@ -567,8 +567,6 @@ class J3DTevBlock {
 public:
     virtual void reset(J3DTevBlock*) {
     }
-
-    virtual void ptrToIndex() = 0;
     virtual u32 getType() = 0;
 
     virtual void setTexNo(u32, u16 const*) {
@@ -696,7 +694,6 @@ public:
     }
 
 protected:
-    void indexToPtr_private(u32);
 
     /* 0x4 */ u32 mTexNoOffset;
 };
@@ -743,9 +740,6 @@ public:
     virtual void reset(J3DTevBlock*) {
     }
 
-    virtual void ptrToIndex() {
-    }
-
     virtual u32 getType() {
         return 'TVNL';
     }
@@ -763,7 +757,6 @@ public:
     void initialize();
 
     virtual void reset(J3DTevBlock*);
-    virtual void ptrToIndex();
 
     virtual u32 getType() {
         return 'TVPT';
@@ -899,8 +892,6 @@ public:
     void initialize();
 
     virtual void reset(J3DTevBlock*);
-    virtual void ptrToIndex() {
-    }
 
     virtual u32 getType() {
         return 'TVB1';
@@ -985,8 +976,6 @@ public:
     void initialize();
 
     virtual void reset(J3DTevBlock*);
-    virtual void ptrToIndex() {
-    }
 
     virtual u32 getType() {
         return 'TVB2';
@@ -1160,8 +1149,6 @@ public:
     void initialize();
 
     virtual void reset(J3DTevBlock*);
-    virtual void ptrToIndex() {
-    }
 
     virtual u32 getType() {
         return 'TVB4';
@@ -1331,7 +1318,6 @@ public:
     void initialize();
 
     virtual void reset(J3DTevBlock*);
-    virtual void ptrToIndex();
 
     virtual u32 getType() {
         return 'TV16';
@@ -1506,10 +1492,6 @@ struct J3DIndTexMtx : public J3DIndTexMtxInfo {
     }
 
     ~J3DIndTexMtx() {
-    }
-
-    void load(u32 param_1) const {
-        J3DGDSetIndTexMtx((GXIndTexMtxID)(param_1 + GX_ITM_0), (Mtx3P)field_0x0, field_0x18);
     }
 };  // Size: 0x1C
 
