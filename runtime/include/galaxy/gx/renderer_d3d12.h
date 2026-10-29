@@ -598,6 +598,15 @@ public:
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
     // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
+    // Native presentation: whether this display copy can take the EFB's colour target instead of copying it
+    // (hand_over_efb_color): an exact copy of the EFB's top rows (the identity filter, no gamma or scaling) on the
+    // plain path (one sample a pixel, no HDR scene, ray tracing, temporal upscaler, output-resolution 2D layer,
+    // interpolation or frame generation, post-processing ready).
+    [[nodiscard]] bool can_hand_over_display_copy(const EfbCopyParams& params, const XfbTexture& dest) const;
+    // Gives the EFB's colour target (the picture of this display copy, as an XFB keeps it) to the caller and continues
+    // the EFB on `fresh` (a released texture of the EFB's description, or null for a new one). The picture is owed to
+    // the EFB until a clear covers it (settle_owed_efb).
+    [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh);
     [[nodiscard]] bool copy_efb_to_texture(
         const EfbCopyParams& params,
         TextureCache& textures,
@@ -836,6 +845,29 @@ private:
     unsigned gpu_budget_cap_ = 0;  // 0: none
     // (Re)creates the EFB color/depth conversion SRVs in their fixed slots.
     void refresh_efb_conversion_source_views();
+    // The EFB's conversion views (colour and depth) into `table`.
+    void write_efb_conversion_views(const DescriptorRing::Table& table);
+    // The picture a handed-over EFB still owes (hand_over_efb_color): anything but a clear that covers it copies it
+    // back before reading or writing the EFB's colour.
+    Microsoft::WRL::ComPtr<ID3D12Resource> efb_owed_;
+    // Inside the frame's command list; between lists the picture stays owed (create_efb_targets carries from it).
+    void settle_owed_efb() {
+        if (efb_owed_ && pass_list_open_) [[unlikely]] {
+            restore_owed_efb(nullptr);
+        }
+    }
+    // Copies the owed picture back, all of it or (`kept`) all but that rect, which a clear is about to cover.
+    void restore_owed_efb(const D3D12_RECT* kept);
+    // The conversion views after a handover: a table per handover in turn, as the GPU reads views when it runs.
+    std::array<std::optional<DescriptorRing::Table>, kFramesInFlight + 1u> conv_efb_tables_{};
+    unsigned conv_efb_table_next_ = 0;
+    // Presents so far (the native-presentation A/B alternates by them); handovers, and how their pictures were settled:
+    // a clear covered all of it, a clear left bands to copy back, or something read or wrote the EFB first.
+    std::uint64_t presented_frames_ = 0;
+    std::uint64_t efb_handovers_ = 0;
+    std::uint64_t efb_handovers_free_ = 0;
+    std::uint64_t efb_handovers_banded_ = 0;
+    std::uint64_t efb_handovers_restored_ = 0;
     bool create_root_signature();
     bool create_sampler_heap();
     void reset_sampler_frame(); // only after this slot's fence completes
@@ -1585,6 +1617,8 @@ private:
     // Targets replaced by an internal-resolution change, until begin_frame
     // has copied their contents into the new ones.
     Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_color_;
+    // The carried colour is a handed-over picture, kept as a shader resource (its XFB reads it too).
+    bool efb_carry_color_readable_ = false;
     Microsoft::WRL::ComPtr<ID3D12Resource> efb_carry_depth_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> efb_carry_depth_pso_;
     // Presentation image quality; present() keeps the plain blit while it is
@@ -1794,6 +1828,7 @@ private:
     // active shader-visible heap.
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_r8_;  // into one-channel copies
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;

@@ -53,6 +53,8 @@ public:
     bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
                     const PostProcessSettings& settings);
     void shutdown() noexcept;
+    // Whether it presents a picture held from the top left of a taller texture (a handed-over EFB).
+    [[nodiscard]] bool reads_held_pictures() const noexcept { return resample_box_ != nullptr; }
     [[nodiscard]] bool ready() const noexcept { return ready_; }
     // Capabilities, self-test results, last frame's AA pass and totals.
     [[nodiscard]] const PostProcessStatus& status() const noexcept { return status_; }
@@ -61,6 +63,7 @@ public:
     // into the `viewport` rectangle of `target_rtv`. Intermediate targets are
     // kept across frames and replaced only when a size changes; replaced
     // resources are released `frames_in_flight` frames later.
+    // `source` holds its `source_width` x `source_height` picture from its top left (a handed-over EFB is taller).
     void record(ID3D12GraphicsCommandList* list,
                 DescriptorRing& srv_ring,
                 ID3D12Resource* source,
@@ -163,6 +166,13 @@ private:
     // Bilinear enlargement and RCAS in one pass (no window-sized intermediate).
     Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_;
+    // The passes reading a picture held in a taller texture (post_process.hlsl SOURCE_BOX): all or none.
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> easu_box_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> rcas_scaled_box_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> resample_box_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_box_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_reduce_box_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_apply_box_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_reduce_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> deband_smooth_;

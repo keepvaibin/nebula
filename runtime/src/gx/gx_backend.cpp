@@ -13329,7 +13329,17 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
             screen_run_ = !frame_scene_seen_;
             frame_scene_seen_ = false;
             screen_frame_open_ = false;
-            renderer_.copy_efb_to_xfb(params, *xfb);
+            if (renderer_.can_hand_over_display_copy(params, *xfb)) {
+                // Native presentation: the XFB takes the EFB's colour target, and the EFB continues on a texture of
+                // its size the XFB pool released.
+                const auto scale = renderer_.efb_scale();
+                efb_copies_.adopt_picture(
+                    *xfb, renderer_.hand_over_efb_color(efb_copies_.take_idle_texture(
+                              static_cast<std::uint16_t>(kEfbWidth * scale),
+                              static_cast<std::uint16_t>(kEfbHeight * scale))));
+            } else {
+                renderer_.copy_efb_to_xfb(params, *xfb);
+            }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution EFB again.
             display_copy_on_output_ = renderer_.output_efb_active() && !params.clear;

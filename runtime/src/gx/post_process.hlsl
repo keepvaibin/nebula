@@ -24,6 +24,10 @@ cbuffer PostConstants : register(b0) {
     float4 g_params;
     // xy: viewport origin in render-target pixels.
     int4 g_origin;
+    // The pass input's picture inside its texture, from its top left (a handed-over EFB holds its 640 x 456 picture
+    // in 528 rows): xy scale a picture coordinate into the texture, zw the texture coordinate of the picture's last
+    // texel centre. Zero: the input is all picture.
+    float4 g_source;
 };
 
 SamplerState LinearSampler : register(s0);
@@ -44,6 +48,17 @@ FullscreenOut FullscreenTriangle(uint id) {
 // Integer pixel inside the pass viewport.
 int2 ViewportPixel(float4 pos) {
     return int2(pos.xy) - g_origin.xy;
+}
+
+// A picture coordinate (0-1 over the pass input's picture) in its texture. The SOURCE_BOX variants read a picture held
+// from the top left of a taller texture (a handed-over EFB), held inside it as the sampler's clamp holds a picture
+// that fills its texture; the others read the texture as it is.
+float2 SourceUv(float2 uv) {
+#if defined(SOURCE_BOX)
+    return min(uv * g_source.xy, g_source.zw);
+#else
+    return uv;
+#endif
 }
 
 #if defined(PASS_SMAA_EDGES) || defined(PASS_SMAA_WEIGHTS) || defined(PASS_SMAA_BLEND) || defined(PASS_SMAA_BLEND_KEEP)
@@ -72,9 +87,34 @@ int2 ViewportPixel(float4 pos) {
 Texture2D inputTex : register(t0);
 
 #if defined(PASS_FSR_EASU)
-AF4 FsrEasuRF(AF2 p) { return inputTex.GatherRed(LinearSampler, p); }
-AF4 FsrEasuGF(AF2 p) { return inputTex.GatherGreen(LinearSampler, p); }
-AF4 FsrEasuBF(AF2 p) { return inputTex.GatherBlue(LinearSampler, p); }
+// The 2x2 texels about picture coordinate `p` in GatherRed/Green/Blue's order. Inside a taller texture, a quad that
+// reaches past the picture's right or bottom edge takes the edge texels, as the sampler's clamp gives them.
+AF4 SourceGather(AF2 p, uint channel) {
+    AF2 q = p;
+#if defined(SOURCE_BOX)
+    {
+        const float2 picture = g_rt_metrics.zw;
+        const int2 base = int2(floor(p * picture - 0.5));
+        if (any(base + 1 >= int2(picture))) {
+            const int2 last = int2(picture) - 1;
+            const int2 t0 = clamp(base, int2(0, 0), last);
+            const int2 t1 = clamp(base + 1, int2(0, 0), last);
+            const float4 lower_left = inputTex.Load(int3(t0.x, t1.y, 0));
+            const float4 lower_right = inputTex.Load(int3(t1.x, t1.y, 0));
+            const float4 upper_right = inputTex.Load(int3(t1.x, t0.y, 0));
+            const float4 upper_left = inputTex.Load(int3(t0.x, t0.y, 0));
+            return AF4(lower_left[channel], lower_right[channel], upper_right[channel], upper_left[channel]);
+        }
+        q = p * g_source.xy;
+    }
+#endif
+    return channel == 0u ? inputTex.GatherRed(LinearSampler, q)
+         : channel == 1u ? inputTex.GatherGreen(LinearSampler, q)
+                         : inputTex.GatherBlue(LinearSampler, q);
+}
+AF4 FsrEasuRF(AF2 p) { return SourceGather(p, 0u); }
+AF4 FsrEasuGF(AF2 p) { return SourceGather(p, 1u); }
+AF4 FsrEasuBF(AF2 p) { return SourceGather(p, 2u); }
 #define FSR_EASU_F 1
 #endif
 
@@ -94,7 +134,7 @@ void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
 AF4 FsrRcasLoadF(ASU2 p) {
     const int2 last = int2(g_params.zw) - 1;
     const float2 uv = (float2(clamp(int2(p), int2(0, 0), last)) + 0.5) / g_params.zw;
-    return inputTex.SampleLevel(LinearSampler, uv, 0);
+    return inputTex.SampleLevel(LinearSampler, SourceUv(uv), 0);
 }
 void FsrRcasInputF(inout AF1 r, inout AF1 g, inout AF1 b) {}
 #define FSR_RCAS_F 1
@@ -304,10 +344,19 @@ float DebandRandom(inout uint seed) {
 }
 // Whether the pixel at `uv` (colour `color`) is more than two levels from one of its four neighbours.
 bool DebandEdge(float2 uv, float3 color) {
-    const float3 near = max(max(abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(1, 0)).rgb - color),
-                                abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(-1, 0)).rgb - color)),
-                            max(abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(0, 1)).rgb - color),
-                                abs(inputTex.SampleLevel(PointSampler, uv, 0, int2(0, -1)).rgb - color)));
+#if defined(SOURCE_BOX)
+    const float2 texel = g_rt_metrics.xy;
+    const float3 right = inputTex.SampleLevel(PointSampler, SourceUv(uv + float2(texel.x, 0.0)), 0).rgb;
+    const float3 left = inputTex.SampleLevel(PointSampler, SourceUv(uv - float2(texel.x, 0.0)), 0).rgb;
+    const float3 below = inputTex.SampleLevel(PointSampler, SourceUv(uv + float2(0.0, texel.y)), 0).rgb;
+    const float3 above = inputTex.SampleLevel(PointSampler, SourceUv(uv - float2(0.0, texel.y)), 0).rgb;
+#else
+    const float3 right = inputTex.SampleLevel(PointSampler, uv, 0, int2(1, 0)).rgb;
+    const float3 left = inputTex.SampleLevel(PointSampler, uv, 0, int2(-1, 0)).rgb;
+    const float3 below = inputTex.SampleLevel(PointSampler, uv, 0, int2(0, 1)).rgb;
+    const float3 above = inputTex.SampleLevel(PointSampler, uv, 0, int2(0, -1)).rgb;
+#endif
+    const float3 near = max(max(abs(right - color), abs(left - color)), max(abs(below - color), abs(above - color)));
     return max(near.r, max(near.g, near.b)) > 2.5 / 255.0;
 }
 // The two rings about pixel `p` (at `uv`, one pixel `texel`) of the input.
@@ -317,10 +366,10 @@ float3 DebandRings(int2 p, float2 uv, float2 texel, float3 color) {
         const float distance = DebandRandom(seed) * g_params.x * float(ring);
         const float angle = DebandRandom(seed) * 6.28318530718;
         const float2 o = float2(cos(angle), sin(angle)) * distance * texel;
-        const float3 mean = 0.25 * (inputTex.SampleLevel(LinearSampler, uv + o, 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, uv - o, 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, uv + float2(-o.y, o.x), 0).rgb +
-                                    inputTex.SampleLevel(LinearSampler, uv + float2(o.y, -o.x), 0).rgb);
+        const float3 mean = 0.25 * (inputTex.SampleLevel(LinearSampler, SourceUv(uv + o), 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv - o), 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv + float2(-o.y, o.x)), 0).rgb +
+                                    inputTex.SampleLevel(LinearSampler, SourceUv(uv + float2(o.y, -o.x)), 0).rgb);
         const float3 keep = step(g_params.y / float(ring), abs(color - mean));
         color = lerp(mean, color, keep);
         if (min(keep.r, min(keep.g, keep.b)) > 0.5) {
@@ -347,7 +396,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     const int2 p = ViewportPixel(i.pos);
     const float2 texel = g_rt_metrics.xy;
     const float2 uv = (float2(p) + 0.5) * texel;
-    const float3 color = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    const float3 color = inputTex.SampleLevel(PointSampler, SourceUv(uv), 0).rgb;
     if (DebandEdge(uv, color)) {
         return float4(color, 1.0);
     }
@@ -373,7 +422,7 @@ Texture2D smoothTex : register(t1);
 float4 PSMain(FullscreenOut i) : SV_Target {
     const int2 p = ViewportPixel(i.pos);
     const float2 uv = (float2(p) + 0.5) * g_rt_metrics.xy;
-    float3 color = inputTex.SampleLevel(PointSampler, uv, 0).rgb;
+    float3 color = inputTex.SampleLevel(PointSampler, SourceUv(uv), 0).rgb;
     if (DebandEdge(uv, color)) {
         return float4(color, 1.0);
     }
@@ -394,7 +443,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     float3 sum = 0.0;
     [loop] for (uint y = 1u; y < reduction; y += 2u) {
         [loop] for (uint x = 1u; x < reduction; x += 2u) {
-            sum += inputTex.SampleLevel(LinearSampler, (origin + float2(x, y)) * g_rt_metrics.xy, 0).rgb;
+            sum += inputTex.SampleLevel(LinearSampler, SourceUv((origin + float2(x, y)) * g_rt_metrics.xy), 0).rgb;
         }
     }
     const float taps = float((reduction / 2u) * (reduction / 2u));
@@ -420,7 +469,7 @@ float4 PSMain(FullscreenOut i) : SV_Target {
     [loop] for (int y = 0; y < taps.y; ++y) {
         [loop] for (int x = 0; x < taps.x; ++x) {
             const float2 p = start + (float2(x, y) + 0.5) * step;
-            sum += inputTex.SampleLevel(LinearSampler, p / source, 0).rgb;
+            sum += inputTex.SampleLevel(LinearSampler, SourceUv(p / source), 0).rgb;
         }
     }
     return float4(sum / float(taps.x * taps.y), 1.0);

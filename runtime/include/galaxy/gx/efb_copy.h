@@ -287,6 +287,11 @@ public:
         const EfbCopyParams& params,
         std::uint64_t frame_index);
     void mark_xfb_copied(XfbTexture& texture, std::uint64_t frame_index);
+    // Native presentation: `texture` (a handed-over EFB colour target, its picture from the top left, taller than the
+    // XFB) becomes the XFB's; the one it had is released as a copied XFB's would be.
+    void adopt_picture(XfbTexture& xfb, gpu::TextureRef texture);
+    // A released texture of this size no frame in flight still reads (a handed-over EFB's replacement), or null.
+    [[nodiscard]] gpu::TextureRef take_idle_texture(std::uint16_t width, std::uint16_t height);
 
     // Most recently copied-into XFB across all addresses; nullptr only
     // before the first display copy ever.

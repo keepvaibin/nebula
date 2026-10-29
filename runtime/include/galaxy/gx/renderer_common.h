@@ -114,6 +114,8 @@ struct EfbConversionShaderConstants {
 };
 
 [[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
+// A display copy one EFB pixel to one XFB pixel without gamma (efb_conversion_shader_source's arithmetic for it).
+[[nodiscard]] std::string_view display_filter_shader_source() noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the
 // fullscreen-triangle blit, the EFB colour-channel clear, the depth carry after a resolution change, and the

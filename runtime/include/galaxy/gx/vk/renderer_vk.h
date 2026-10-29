@@ -242,6 +242,9 @@ public:
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
     void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
     void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
+    // Native presentation (renderer_d3d12.h): not yet on Vulkan, whose display copies stay copies.
+    [[nodiscard]] bool can_hand_over_display_copy(const EfbCopyParams&, const XfbTexture&) const { return false; }
+    [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh) { return fresh; }
     [[nodiscard]] bool copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy);
     // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
@@ -534,6 +537,7 @@ private:
     // Pipelines the renderer owns.
     VkPipeline conversion_pipeline_ = VK_NULL_HANDLE;
     VkPipeline grey_conversion_pipeline_ = VK_NULL_HANDLE;  // into one-channel copies (grey_pass_)
+    VkPipeline display_filter_pipeline_ = VK_NULL_HANDLE;   // 1:1 display copies without gamma
     // The renderer's own draws into the EFB pass, per EFB sample count (log2), made at first use: masked clears,
     // and whole-colour and depth clears as draws (DeviceQuirks::clear_with_draw only; null otherwise).
     enum class EfbUtility : unsigned { ClearRgb, ClearAlpha, ClearRgba, ClearDepth, Count };

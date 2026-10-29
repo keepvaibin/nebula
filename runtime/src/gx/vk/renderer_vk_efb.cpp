@@ -1469,7 +1469,14 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     const VkRect2D scissor{{0, 0}, {dest_w, dest_h}};
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, grey ? grey_conversion_pipeline_ : conversion_pipeline_);
+    // A display copy one EFB pixel to one XFB pixel without gamma: its filter alone (display_filter_shader_source).
+    const bool display_filter = copy_format == 15u && keep_alpha && !intensity && !is_depth_copy && !grey &&
+                                (params.gamma & 3u) == 0u && step_x == 1.0f && step_y == 1.0f &&
+                                display_filter_pipeline_ != VK_NULL_HANDLE;
+    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                      display_filter ? display_filter_pipeline_
+                      : grey         ? grey_conversion_pipeline_
+                                     : conversion_pipeline_);
     const VkDescriptorSet source = is_depth_copy ? efb_.depth_source : efb_.color_source;
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const EfbConversionShaderConstants constants =

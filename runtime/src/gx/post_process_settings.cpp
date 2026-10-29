@@ -27,6 +27,19 @@ void set_post_input_size(PostConstants& constants, unsigned width, unsigned heig
     constants.rt_metrics[3] = static_cast<float>(height);
 }
 
+void set_post_source(PostConstants& constants, unsigned width, unsigned height, unsigned texture_width,
+                     unsigned texture_height) noexcept {
+    if (width == 0u || height == 0u || texture_width == 0u || texture_height == 0u ||
+        (width == texture_width && height == texture_height)) {
+        constants.source[0] = constants.source[1] = constants.source[2] = constants.source[3] = 0.0f;
+        return;
+    }
+    constants.source[0] = static_cast<float>(width) / static_cast<float>(texture_width);
+    constants.source[1] = static_cast<float>(height) / static_cast<float>(texture_height);
+    constants.source[2] = (static_cast<float>(width) - 0.5f) / static_cast<float>(texture_width);
+    constants.source[3] = (static_cast<float>(height) - 0.5f) / static_cast<float>(texture_height);
+}
+
 void set_deband_constants(PostConstants& constants, unsigned width, unsigned height, unsigned reduction) noexcept {
     constants.params[0] = std::max(8.0f, 48.0f * static_cast<float>(height) / 1080.0f) / static_cast<float>(reduction);
     constants.params[1] = 1.5f / 255.0f;

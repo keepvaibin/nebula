@@ -868,6 +868,8 @@ bool RendererVk::create_utility_pipelines() {
                                                    efb_conversion_shader_source(), kAll, false, false, false);
     grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, blit_vertex_shader_source(),
                                                         efb_conversion_shader_source(), kAll, false, false, false);
+    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
+                                                       display_filter_shader_source(), kAll, false, false, false);
     for (unsigned kind = 0u; kind < static_cast<unsigned>(EfbUtility::Count); ++kind) {
         (void)efb_utility_pipeline(static_cast<EfbUtility>(kind));
     }
@@ -959,8 +961,8 @@ void RendererVk::shutdown() {
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
         utility_commands_ = VK_NULL_HANDLE;
-        for (VkPipeline pipeline : {conversion_pipeline_, grey_conversion_pipeline_, blit_pipeline_,
-                                    ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
+        for (VkPipeline pipeline : {conversion_pipeline_, grey_conversion_pipeline_, display_filter_pipeline_,
+                                    blit_pipeline_, ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
                                     color_carry_pipeline_, depth_resolve_pipeline_}) {
             if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
         }
@@ -970,7 +972,8 @@ void RendererVk::shutdown() {
                 pipeline = VK_NULL_HANDLE;
             }
         }
-        conversion_pipeline_ = grey_conversion_pipeline_ = blit_pipeline_ = depth_resolve_pipeline_ = VK_NULL_HANDLE;
+        conversion_pipeline_ = grey_conversion_pipeline_ = display_filter_pipeline_ = blit_pipeline_ =
+            depth_resolve_pipeline_ = VK_NULL_HANDLE;
         ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
         for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
         samplers_.clear();

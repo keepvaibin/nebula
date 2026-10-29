@@ -58,11 +58,16 @@ struct PostConstants {
     std::uint32_t con3[4];
     float params[4];         // resample: source size, target size
     std::int32_t origin[4];  // the pass viewport's origin in the target
+    float source[4];         // the input's picture in its texture (set_post_source); zero: all picture
 };
-static_assert(sizeof(PostConstants) == 28u * 4u);
+static_assert(sizeof(PostConstants) == 32u * 4u);
 
 // rt_metrics for a pass reading a `width` x `height` input.
 void set_post_input_size(PostConstants& constants, unsigned width, unsigned height) noexcept;
+// `source` for a pass reading a `width` x `height` picture held from the top left of a `texture_width` x
+// `texture_height` texture (post_process.hlsl SourceUv); zero when the picture fills it.
+void set_post_source(PostConstants& constants, unsigned width, unsigned height, unsigned texture_width,
+                     unsigned texture_height) noexcept;
 // FsrEasuCon with the input viewport equal to the input resource.
 void set_fsr_easu_constants(PostConstants& constants, float in_width, float in_height, float out_width,
                             float out_height) noexcept;

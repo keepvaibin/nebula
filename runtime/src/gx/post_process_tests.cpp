@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -331,13 +332,265 @@ void scene_aa_on_warp() {
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the scene passes");
 }
 
+// A picture held from the top left of a taller texture (a handed-over EFB) presents bit for bit as the same picture
+// in a texture its own size, through every scaling path and window size. Run once debanded and once without
+// (--held-no-deband), since debanding reads the picture first and the passes after it read its own-sized output.
+void held_picture_on_warp() {
+    using Microsoft::WRL::ComPtr;
+    ComPtr<IDXGIFactory4> factory;
+    ComPtr<IDXGIAdapter> adapter;
+    ComPtr<ID3D12Device> device;
+    ComPtr<ID3D12CommandQueue> queue;
+    D3D12_COMMAND_QUEUE_DESC qd{};
+    if (FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) ||
+        FAILED(factory->EnumWarpAdapter(IID_PPV_ARGS(&adapter))) ||
+        FAILED(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&device))) ||
+        FAILED(device->CreateCommandQueue(&qd, IID_PPV_ARGS(&queue)))) {
+        std::cerr << "FAILED: WARP device\n";
+        ++failures;
+        return;
+    }
+    constexpr unsigned kWidth = 64u;
+    constexpr unsigned kHeight = 40u;
+    constexpr unsigned kHeldHeight = 52u;
+    constexpr unsigned kPitch = kWidth * 4u;
+    // Gradients with a little noise (debanding and EASU both act on them), different rows below the picture.
+    std::vector<unsigned char> held(kPitch * kHeldHeight);
+    std::uint32_t seed = 0x2545f491u;
+    for (unsigned y = 0; y < kHeldHeight; ++y) {
+        for (unsigned x = 0; x < kWidth; ++x) {
+            seed = seed * 1664525u + 1013904223u;
+            unsigned char* px = &held[y * kPitch + x * 4u];
+            const unsigned noise = (seed >> 24) & 3u;
+            px[0] = static_cast<unsigned char>(y < kHeight ? x * 2u + noise : seed >> 8);
+            px[1] = static_cast<unsigned char>(y < kHeight ? y * 3u + noise : seed >> 16);
+            px[2] = static_cast<unsigned char>(y < kHeight ? ((x / 8u + y / 8u) & 1u) * 200u + noise : seed);
+            px[3] = 255u;
+        }
+    }
+    struct Window {
+        unsigned width;
+        unsigned height;
+    };
+    const Window windows[] = {{128u, 80u}, {200u, 125u}, {64u, 40u}, {32u, 20u}, {48u, 30u}, {96u, 30u}, {40u, 64u}};
+    struct Setting {
+        PostProcessSettings::Upscaler upscaler;
+        unsigned sharpness;
+        const char* name;
+    };
+    const Setting settings_list[] = {
+        {PostProcessSettings::Upscaler::kBilinear, 0u, "bilinear"},
+        {PostProcessSettings::Upscaler::kBilinear, 20u, "bilinear sharpened"},
+        {PostProcessSettings::Upscaler::kFsr1, 0u, "FSR 1 unsharpened"},
+        {PostProcessSettings::Upscaler::kFsr1, 20u, "FSR 1"},
+    };
+    ComPtr<ID3D12CommandAllocator> allocator;
+    ComPtr<ID3D12GraphicsCommandList> list;
+    ComPtr<ID3D12Fence> fence;
+    ComPtr<ID3D12DescriptorHeap> rtv_heap;
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};
+    hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
+    hd.NumDescriptors = 1;
+    if (FAILED(device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocator))) ||
+        FAILED(device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocator.Get(), nullptr,
+                                         IID_PPV_ARGS(&list))) ||
+        FAILED(device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence))) ||
+        FAILED(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&rtv_heap)))) {
+        std::cerr << "FAILED: held picture test setup\n";
+        ++failures;
+        return;
+    }
+    list->Close();
+    std::uint64_t fence_value = 0u;
+    HANDLE done = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+    const auto execute = [&] {
+        list->Close();
+        ID3D12CommandList* lists[] = {list.Get()};
+        queue->ExecuteCommandLists(1, lists);
+        queue->Signal(fence.Get(), ++fence_value);
+        fence->SetEventOnCompletion(fence_value, done);
+        WaitForSingleObject(done, INFINITE);
+    };
+    D3D12_HEAP_PROPERTIES def{}, up{}, rb{};
+    def.Type = D3D12_HEAP_TYPE_DEFAULT;
+    up.Type = D3D12_HEAP_TYPE_UPLOAD;
+    rb.Type = D3D12_HEAP_TYPE_READBACK;
+    const auto texture_desc = [](unsigned width, unsigned height, D3D12_RESOURCE_FLAGS flags) {
+        D3D12_RESOURCE_DESC td{};
+        td.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        td.Width = width;
+        td.Height = height;
+        td.DepthOrArraySize = 1;
+        td.MipLevels = 1;
+        td.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        td.SampleDesc.Count = 1;
+        td.Flags = flags;
+        return td;
+    };
+    const auto buffer_desc = [](std::size_t bytes) {
+        D3D12_RESOURCE_DESC bd{};
+        bd.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+        bd.Width = bytes;
+        bd.Height = 1;
+        bd.DepthOrArraySize = 1;
+        bd.MipLevels = 1;
+        bd.SampleDesc.Count = 1;
+        bd.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+        return bd;
+    };
+    const auto barrier = [&](ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
+        D3D12_RESOURCE_BARRIER b{};
+        b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        b.Transition.pResource = resource;
+        b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        b.Transition.StateBefore = before;
+        b.Transition.StateAfter = after;
+        list->ResourceBarrier(1, &b);
+    };
+    // The picture in a texture its own size and in a taller one, both shader resources.
+    ComPtr<ID3D12Resource> sources[2];
+    ComPtr<ID3D12Resource> upload;
+    const D3D12_RESOURCE_DESC upload_desc = buffer_desc(held.size());
+    unsigned char* mapped = nullptr;
+    bool ready = SUCCEEDED(device->CreateCommittedResource(&up, D3D12_HEAP_FLAG_NONE, &upload_desc,
+                                                           D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+                                                           IID_PPV_ARGS(&upload))) &&
+                 SUCCEEDED(upload->Map(0, nullptr, reinterpret_cast<void**>(&mapped)));
+    if (ready) {
+        std::memcpy(mapped, held.data(), held.size());
+        upload->Unmap(0, nullptr);
+        allocator->Reset();
+        list->Reset(allocator.Get(), nullptr);
+        for (unsigned i = 0; i < 2u && ready; ++i) {
+            const unsigned height = i == 0u ? kHeight : kHeldHeight;
+            const D3D12_RESOURCE_DESC td = texture_desc(kWidth, height, D3D12_RESOURCE_FLAG_NONE);
+            ready = SUCCEEDED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td,
+                                                              D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                              IID_PPV_ARGS(&sources[i])));
+            if (ready) {
+                D3D12_TEXTURE_COPY_LOCATION buffer{};
+                buffer.pResource = upload.Get();
+                buffer.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                buffer.PlacedFootprint.Footprint = {DXGI_FORMAT_R8G8B8A8_UNORM, kWidth, height, 1, kPitch};
+                D3D12_TEXTURE_COPY_LOCATION texture{};
+                texture.pResource = sources[i].Get();
+                texture.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                list->CopyTextureRegion(&texture, 0, 0, 0, &buffer, nullptr);
+                barrier(sources[i].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            }
+        }
+        execute();
+    }
+    if (!ready) {
+        std::cerr << "FAILED: held picture sources\n";
+        ++failures;
+        CloseHandle(done);
+        return;
+    }
+    unsigned compared = 0u;
+    for (const Setting& setting : settings_list) {
+        PostProcessSettings settings{};
+        settings.aa = Aa::kOff;
+        settings.upscaler = setting.upscaler;
+        settings.sharpness = static_cast<std::uint8_t>(setting.sharpness);
+        galaxy::gx::PostProcessor post;
+        galaxy::gx::DescriptorRing ring;
+        if (!post.initialize(device.Get(), queue.Get(), settings) ||
+            !ring.initialize(device.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 64u, 1u)) {
+            std::cerr << "FAILED: held picture post-process (" << setting.name << ")\n";
+            ++failures;
+            continue;
+        }
+        expect(post.reads_held_pictures(), "the held-picture passes are built");
+        std::uint64_t frame = 0u;
+        for (const Window& window : windows) {
+            const unsigned pitch = (window.width * 4u + 255u) & ~255u;
+            std::vector<unsigned char> outputs[2];
+            for (unsigned i = 0; i < 2u; ++i) {
+                ComPtr<ID3D12Resource> target, readback;
+                const D3D12_RESOURCE_DESC td =
+                    texture_desc(window.width, window.height, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+                const D3D12_RESOURCE_DESC bd = buffer_desc(static_cast<std::size_t>(pitch) * window.height);
+                if (FAILED(device->CreateCommittedResource(&def, D3D12_HEAP_FLAG_NONE, &td,
+                                                           D3D12_RESOURCE_STATE_RENDER_TARGET, nullptr,
+                                                           IID_PPV_ARGS(&target))) ||
+                    FAILED(device->CreateCommittedResource(&rb, D3D12_HEAP_FLAG_NONE, &bd,
+                                                           D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
+                                                           IID_PPV_ARGS(&readback)))) {
+                    std::cerr << "FAILED: held picture target\n";
+                    ++failures;
+                    break;
+                }
+                const D3D12_CPU_DESCRIPTOR_HANDLE rtv = rtv_heap->GetCPUDescriptorHandleForHeapStart();
+                device->CreateRenderTargetView(target.Get(), nullptr, rtv);
+                allocator->Reset();
+                list->Reset(allocator.Get(), nullptr);
+                ring.begin_frame(0);
+                ID3D12DescriptorHeap* heaps[] = {ring.heap()};
+                list->SetDescriptorHeaps(1, heaps);
+                const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(window.width),
+                                              static_cast<float>(window.height), 0.0f, 1.0f};
+                const D3D12_RECT scissor{0, 0, static_cast<LONG>(window.width), static_cast<LONG>(window.height)};
+                list->RSSetScissorRects(1, &scissor);
+                post.record(list.Get(), ring, sources[i].Get(), kWidth, kHeight, rtv, viewport, ++frame, 1u);
+                barrier(target.Get(), D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_COPY_SOURCE);
+                D3D12_TEXTURE_COPY_LOCATION buffer{};
+                buffer.pResource = readback.Get();
+                buffer.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+                buffer.PlacedFootprint.Footprint = {DXGI_FORMAT_R8G8B8A8_UNORM, window.width, window.height, 1,
+                                                    pitch};
+                D3D12_TEXTURE_COPY_LOCATION texture{};
+                texture.pResource = target.Get();
+                texture.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+                list->CopyTextureRegion(&buffer, 0, 0, 0, &texture, nullptr);
+                execute();
+                readback->Map(0, nullptr, reinterpret_cast<void**>(&mapped));
+                outputs[i].resize(static_cast<std::size_t>(window.width) * 4u * window.height);
+                for (unsigned y = 0; y < window.height; ++y) {
+                    std::memcpy(&outputs[i][static_cast<std::size_t>(y) * window.width * 4u],
+                                mapped + static_cast<std::size_t>(y) * pitch, window.width * 4u);
+                }
+                readback->Unmap(0, nullptr);
+            }
+            if (outputs[0].empty() || outputs[0].size() != outputs[1].size()) {
+                continue;
+            }
+            std::size_t differing = 0u;
+            for (std::size_t i = 0; i < outputs[0].size(); ++i) {
+                differing += outputs[0][i] != outputs[1][i] ? 1u : 0u;
+            }
+            ++compared;
+            if (differing != 0u) {
+                std::cerr << "FAILED: held picture, " << setting.name << " into " << window.width << 'x'
+                          << window.height << ": " << differing << " of " << outputs[0].size()
+                          << " bytes differ from the picture in its own texture\n";
+                ++failures;
+            }
+        }
+    }
+    CloseHandle(done);
+    expect(compared == std::size(settings_list) * std::size(windows), "every held picture compared");
+    expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the held pictures");
+}
+
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc > 1 && std::strcmp(argv[1], "--held-no-deband") == 0) {
+        _putenv_s("GALAXY_DEBAND", "0");
+        held_picture_on_warp();
+        if (failures != 0) {
+            std::cerr << failures << " held picture checks failed\n";
+            return 1;
+        }
+        std::cout << "held picture checks passed\n";
+        return 0;
+    }
     plans();
     texts();
     self_test_on_warp();
     scene_aa_on_warp();
+    held_picture_on_warp();
     if (failures != 0) {
         std::cerr << failures << " post-process checks failed\n";
         return 1;

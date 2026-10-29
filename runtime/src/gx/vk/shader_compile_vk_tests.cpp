@@ -465,6 +465,7 @@ int main(int argc, char** argv) {
 
     constexpr RegisterBinding conversion[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}, {"s1", 0, 2}};
     expect("efb conversion ps", efb_conversion_shader_source(), ShaderStage::Fragment, conversion);
+    expect("display filter ps", display_filter_shader_source(), ShaderStage::Fragment, conversion);
 
     // The utility passes: one texture and sampler, constants as push constants.
     constexpr RegisterBinding utility[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}};

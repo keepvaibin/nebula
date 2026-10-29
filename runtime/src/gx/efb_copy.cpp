@@ -419,6 +419,17 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     return &entry;
 }
 
+void EfbCopyManager::adopt_picture(XfbTexture& xfb, gpu::TextureRef texture) {
+    retire_texture(xfb);
+    xfb.texture = std::move(texture);
+    xfb.rtv = {};
+    xfb.rtv_valid = false;
+}
+
+gpu::TextureRef EfbCopyManager::take_idle_texture(std::uint16_t width, std::uint16_t height) {
+    return acquire_idle_texture(width, height);
+}
+
 void EfbCopyManager::mark_xfb_copied(
     XfbTexture& texture,
     std::uint64_t frame_index) {
