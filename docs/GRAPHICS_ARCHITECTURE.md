@@ -84,13 +84,6 @@ render_frame(fifo, memory, services)
   renderer.end_frame()          submit and signal; never waits
 ```
 
-### Matrices
-
-Draws read XF rows (matrices, normal matrices, lights) through one shader function, `xf_row`. Outside temporal and
-interpolated frames those rows live in the matrix arena: 128-byte entries of the matrix ring, one per eight-row XF
-chunk, written when the chunk changes and named by the draw's 23-entry table (`GxVsConstants::mtx_chunks`). Temporal
-and interpolated frames still snapshot the whole palette per change, which their history and motion vectors read.
-
 ## Shaders and the pipeline cache
 
 Specialized pipelines are the steady state. When a draw needs a pipeline that is not compiled

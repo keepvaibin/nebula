@@ -81,11 +81,6 @@ public:
         mpDisplayList[1] = nullptr;
         mSize = 0;
         mMaxSize = 0;
-#ifdef TARGET_PC
-        mNebulaHandle = ++sNebulaHandles;
-        mNebulaVersion = 0;
-        mNebulaPreviousSize = 0;
-#endif
     }
 
 
@@ -110,27 +105,9 @@ public:
     static GDLObj sGDLObj;
     static s32 sInterruptFlag;
 
-#ifdef TARGET_PC
-    // Every write into the lists outside beginDL (J3DModelData::indexToPtr) calls this.
-    void nebulaRewritten() {
-        ++mNebulaVersion;
-    }
-    // After a rewrite into the other buffer: a list that came out as the previous one leaves the previous buffer
-    // current and the version as it was.
-    void nebulaKeepIfUnchanged();
-#endif
-
     /* 0x0 */ void* mpDisplayList[2];
     /* 0x8 */ u32 mSize;
     /* 0xC */ u32 mMaxSize;
-#ifdef TARGET_PC
-    // The renderer's handle for these lists (__NebulaGXCallVersionedDisplayList), never reused, and the version every
-    // rewrite raises: the renderer replays its recording of a handle while the version is the same.
-    static u32 sNebulaHandles;
-    u32 mNebulaHandle;
-    u32 mNebulaVersion;
-    u32 mNebulaPreviousSize;
-#endif
 };  // Size: 0x10
 
 class J3DPacket {

@@ -83,11 +83,6 @@ inline constexpr std::uint8_t kMarkerClearQuad = 16u;
 // its size in 32-byte units. The parser replays the list it recorded for the handle; a list not yet recorded, or
 // moved, is called as CALL_DL would.
 inline constexpr std::uint8_t kMarkerShapeList = 17u;
-// A J3D display list the game rewrites in place (J3DDisplayListObj::callDL: material lists, shape-packet difference
-// lists, shared lists; nebula_gx_fifo.h __NebulaGXVersionedListMarker): a its handle (never reused), b the version its
-// writers raise with every rewrite; the list's CALL_DL follows. The parser replays what it recorded for the handle while
-// the version, address and size are the same.
-inline constexpr std::uint8_t kMarkerVersionedList = 18u;
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene

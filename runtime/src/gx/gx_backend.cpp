@@ -1862,7 +1862,6 @@ void GxBackend::reset_fifo_session_state() {
     inline_matrices_stale_ = true;
     // The ring segment is reused, so no palette chunk is valid until the next upload.
     xf_palette_valid_ = 0u;
-    arena_valid_ = 0u;
     frame_bindings_dirty_ = true;
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
@@ -9539,7 +9538,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // palette chunk uploaded then is not at a known offset. Re-arm every chunk; the first palette
     // upload of the frame writes the full bank again.
     xf_palette_valid_ = 0u;
-    arena_valid_ = 0u;
     scene_chunk_restart_ = true;
 
     // Bind EFB with default (null) viewport. The XF viewport registers
@@ -10180,8 +10178,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_fifo_profile_.call_dl_cache_stores
                   << " fifo-call-dl-cache-uncacheable="
                   << frame_fifo_profile_.call_dl_cache_uncacheable
-                  << " fifo-bound-list-replays=" << frame_fifo_profile_.bound_list_replays
-                  << " fifo-versioned-list-calls=" << frame_fifo_profile_.versioned_list_calls
                   << " fifo-call-dl-miss-parse-us="
                   << frame_fifo_profile_.call_dl_miss_parse_us
                   << " fifo-call-dl-store-us="
@@ -11323,7 +11319,6 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             rt_light_forced_ += !matrix_palette_stale_ && current_matrix_palette_ != 0u ? 1u : 0u;
             matrix_palette_stale_ = true;
             xf_palette_valid_ = 0u;
-            arena_valid_ = 0u;
         }
         rt_draw_lights_ = lights;
         static unsigned traced = 0u;
@@ -11349,47 +11344,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     } else {
         rt_draw_lights_ = 0u;
     }
-    // GALAXY_MATRIX_ARENA=0 keeps whole palette snapshots; GALAXY_TEST_MATRIX_ARENA_AB=1 alternates the two by
-    // presented frame (a same-run comparison).
-    static const bool arena_enabled = read_env_u64("GALAXY_MATRIX_ARENA", 1u) != 0u;
-    static const bool arena_ab = read_env_u64("GALAXY_TEST_MATRIX_ARENA_AB", 0u) != 0u;
-    arena_draw_ = arena_enabled && palette_required && !history_scene_ &&
-                  rt_draw_lights_ == 0u && (!arena_ab || ((g_snapshot_presents + 1u) & 1u) == 0u);
-    arena_changed_ = false;
-    if (arena_draw_) {
-        const std::uint64_t dirty_chunks = state_.xf_palette_dirty();
-        std::uint32_t todo = (arena_slots_of(dirty_chunks) | ~arena_valid_) & kArenaSlotMask;
-        if (todo != 0u) {
-            const gpu::Address ring_base = renderer_.matrix_ring().gpu_base();
-            constexpr std::size_t kChunkBytes = GxState::kMatrixPaletteChunkWords * sizeof(std::uint32_t);
-            const bool lights_changed = (todo & kArenaLightSlots) != 0u;
-            arena_valid_ |= todo;
-            for (; todo != 0u; todo &= todo - 1u) {
-                const auto slot = static_cast<std::uint32_t>(std::countr_zero(todo));
-                const std::uint32_t chunk = slot < 8u ? slot : slot < 11u ? slot + 24u : slot + 29u;
-                const UploadRing::Allocation entry = renderer_.matrix_ring().allocate(kChunkBytes, kChunkBytes);
-                std::memcpy(entry.cpu, state_.xf_raw() + chunk * GxState::kMatrixPaletteChunkWords, kChunkBytes);
-                arena_chunks_[slot] = static_cast<std::uint32_t>((entry.gpu - ring_base) / kChunkBytes);
-                frame_matrix_upload_bytes_ += kChunkBytes;
-            }
-            if (lights_changed) {
-                const UploadRing::Allocation block = renderer_.matrix_ring().allocate(4u * kChunkBytes, 256u);
-                std::memcpy(block.cpu, state_.xf_raw() + 48u * GxState::kMatrixPaletteChunkWords, 4u * kChunkBytes);
-                arena_light_block_ = static_cast<std::uint32_t>((block.gpu - ring_base) / 16u);
-                frame_matrix_upload_bytes_ += 4u * kChunkBytes;
-            }
-            arena_changed_ = true;
-        }
-        if (dirty_chunks != 0u) {
-            // The palette path copies what it finds dirty: chunks the arena took are copied again there.
-            xf_palette_valid_ &= ~dirty_chunks;
-            state_.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
-        }
-    } else {
-        // Chunks the palette path is about to take are no longer current in the arena.
-        arena_valid_ &= ~arena_slots_of(state_.xf_palette_dirty());
-    }
-    if (!arena_draw_ && palette_required &&
+    if (palette_required &&
         (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // Clock reads on detail frames only; the upload counts below are always kept.
         const auto matrix_start = time_detail
@@ -11451,14 +11406,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                 elapsed_us(matrix_start, std::chrono::steady_clock::now());
         }
     }
-    draw_matrix_palette_ = history_scene_ || arena_draw_
+    draw_matrix_palette_ = history_scene_
         ? renderer_.matrix_ring().gpu_base()
         : current_matrix_palette_;
 
-    // Upload VS constants when scalar state or fixed inline matrices change, or the arena's entries do.
-    const bool arena_constants = arena_draw_ != vs_constants_arena_ || arena_changed_;
+    // Upload VS constants when scalar state or fixed inline matrices change.
     if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
-        frame_bindings_dirty_ || dirty == ~0u || arena_constants ||
+        frame_bindings_dirty_ || dirty == ~0u ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
@@ -11472,14 +11426,6 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             write_scene_vs_constants(vs_c, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
         }
         apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
-        if (arena_draw_) {
-            GxVsConstants& upload = *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu);
-            upload.flags |= kVsFlagMatrixArena;
-            std::memcpy(upload.mtx_chunks, arena_chunks_.data(), sizeof(upload.mtx_chunks));
-            // Per-pixel lighting reads the light objects at mtx_palette_base + 0x180 (XF 0x600 / 4).
-            upload.mtx_palette_base = arena_light_block_ - 0x180u;
-        }
-        vs_constants_arena_ = arena_draw_;
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
         if (time_detail) {
@@ -12761,12 +12707,6 @@ bool GxBackend::request_native_shape(NativeShape& native, std::uint32_t handle, 
     shapes::register_later(shapes::make_request(handle, list_address, std::span(list, list_bytes), state_), live);
     native.requested = true;
     return true;
-}
-
-bool GxBackend::use_versioned_lists() {
-    // GALAXY_TEST_LIST_HANDLES_AB=1: versioned lists by handle in every other presented frame, called in the others.
-    static const bool test_ab = read_env_u64("GALAXY_TEST_LIST_HANDLES_AB", 0u) != 0u;
-    return !test_ab || ((g_snapshot_presents + 1u) & 1u) == 0u;
 }
 
 bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address, std::uint32_t list_bytes) {

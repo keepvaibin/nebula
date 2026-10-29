@@ -12,7 +12,6 @@ u32 GXEndDisplayList(void);
 void GXCallDisplayList(const void *, u32);
 #ifdef TARGET_PC
 void __NebulaGXCallShapeDisplayList(const void* list, u32 nbytes, u32 handle);
-void __NebulaGXCallVersionedDisplayList(const void* list, u32 nbytes, u32 handle, u32 version);
 #endif
 
 #ifdef __cplusplus

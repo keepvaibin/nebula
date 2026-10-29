@@ -550,7 +550,7 @@ int main() {
         const std::string src = gen.generate_vs(k);
         check_contains(src, "uint pnmtx_row",
                        "vs_indexed_position_uses_palette");
-        check_contains(src, "xf_row(mtx_palette_base, tm + 0u)",
+        check_contains(src, "mtx_palette[tm+0u]",
                        "vs_indexed_texmatrix_uses_palette");
         check_contains(src, "inline_post_matrices[0]",
                        "vs_postmatrix_uses_inline_constants");

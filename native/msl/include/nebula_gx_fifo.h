@@ -184,20 +184,6 @@ static inline void __NebulaGXShapeListMarker(uint32_t handle, uint32_t address, 
     __NebulaGXStore32(p + 8, address);
 }
 
-/* A J3D display list that the game rewrites in place (J3DDisplayListObj: material lists, shape-packet difference lists,
-   shared lists; galaxy/motion_signals.h kMarkerVersionedList): its handle, never reused, and the version its writers
-   raise with every rewrite. The list's CALL_DL follows. In the main ring only. */
-enum { NEBULA_GX_MARKER_VERSIONED_LIST = 18 };
-
-static inline void __NebulaGXVersionedListMarker(uint32_t handle, uint32_t version) {
-    uint8_t* const p = __NebulaGXReserve(12);
-    p[0] = 0xF0;
-    p[1] = NEBULA_GX_MARKER_VERSIONED_LIST;
-    __NebulaGXStore16(p + 2, 0);
-    __NebulaGXStore32(p + 4, handle);
-    __NebulaGXStore32(p + 8, version);
-}
-
 /* Indexed load (0x20/0x28/0x30/0x38): the opcode, the index, the address and size word. */
 static inline void __NebulaGXCmdIndexed(uint8_t opcode, uint16_t index, uint16_t addr) {
     uint8_t* const p = __NebulaGXReserve(5);

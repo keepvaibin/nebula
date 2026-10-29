@@ -336,7 +336,6 @@ private:
         std::uint32_t total_vertices,
         std::uint32_t total_indices,
         std::span<const std::uint16_t> precomputed_indices) override;
-    [[nodiscard]] bool use_versioned_lists() override;
     [[nodiscard]] bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
                                        std::uint32_t list_bytes) override;
     void on_efb_copy(std::uint32_t exec_command) override;
@@ -1770,24 +1769,6 @@ private:
         GxState::kMatrixPaletteWords % GxState::kMatrixPaletteChunkWords == 0u,
         "palette chunks must tile the palette exactly");
     std::uint64_t xf_palette_valid_ = 0u;
-    // The matrix arena (GxVsConstants flags bit 24): each eight-row XF chunk the vertex shaders read has an entry in
-    // the matrix ring (offset / 128), appended only when the chunk changed, and the four light chunks also form one
-    // block for per-pixel lighting (mtx_palette_base). Outside temporal scenes and ray-traced actor lights, whose
-    // palettes feed interpolation, motion vectors and moved lights.
-    std::array<std::uint32_t, 23> arena_chunks_{};
-    static constexpr std::uint32_t kArenaSlotMask = (1u << 23u) - 1u;
-    static constexpr std::uint32_t kArenaLightSlots = 0xFu << 19u;
-    // The arena slots of a bitmap of dirty XF chunks: matrices 0-7, normal matrices 32-34, post-texture matrices
-    // 40-47 and lights 48-51 as slots 0-7, 8-10, 11-18, 19-22.
-    static constexpr std::uint32_t arena_slots_of(std::uint64_t chunks) noexcept {
-        return static_cast<std::uint32_t>((chunks & 0xFFu) | ((chunks >> 32u) & 0x7u) << 8u |
-                                          ((chunks >> 40u) & 0xFFu) << 11u | ((chunks >> 48u) & 0xFu) << 19u);
-    }
-    std::uint32_t arena_valid_ = 0u;        // bit per chunk slot: its entry is in this frame's segment
-    std::uint32_t arena_light_block_ = 0u;  // ring offset / 16 of the four light chunks
-    bool arena_draw_ = false;
-    bool arena_changed_ = false;
-    bool vs_constants_arena_ = false;  // the current VS constants address the arena
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when GX register state did not
     // change. EFB copies can also replace a guest-address texture alias

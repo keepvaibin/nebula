@@ -32,30 +32,8 @@ cbuffer GxVsConstants : register(b0) {
     // Physical ray tracing (flags bit 6): the model's baked light by facing (uber_constants.h).
     float4   debake_sh[7];
     float4   debake_peak;
-    // Matrix arena entries (uber_constants.h mtx_chunks, mtx_prev_chunks).
-    uint4    mtx_chunks[8];
 };
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
-
-// A row of the XF image the draw sees (16 bytes: four XF words) at `base`: position, texture and post-texture
-// matrices, normal matrices and light objects at their XF addresses / 4.
-float4 xf_row(uint base, uint row) {
-    if ((flags & 0x1000000u) != 0u) {
-        // The matrix arena: the draw's entry for the row's chunk (GxVsConstants::mtx_chunks).
-        const uint c = row >> 3u;
-        const uint slot = c < 8u ? c : c < 40u ? c - 24u : c - 29u;
-        return mtx_palette[mtx_chunks[slot >> 2u][slot & 3u] * 8u + (row & 7u)];
-    }
-    return mtx_palette[base + row];
-}
-// The previous record's position matrix rows (motion vectors).
-float4 xf_prev_row(uint base, uint row) {
-    if ((flags & 0x1000000u) != 0u) {
-        const uint slot = 23u + (row >> 3u);
-        return mtx_palette[mtx_chunks[slot >> 2u][slot & 3u] * 8u + (row & 7u)];
-    }
-    return mtx_palette[base + row];
-}
 
 struct VSIn {
     float3   pos      : POSITION;
@@ -75,7 +53,7 @@ struct VSOut {
 };
 
 float xfw(uint w) {
-    float4 v = xf_row(mtx_palette_base, (w >> 2u));
+    float4 v = mtx_palette[mtx_palette_base + (w >> 2u)];
     return v[w & 3u];
 }
 
@@ -97,10 +75,10 @@ uint key_post_texgen(uint i) {
 void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
                inout int3 lacc_i, inout int lacc_a_i) {
     const uint e = 0x180u + 4u * n;
-    uint  lcw  = asuint(xf_row(mtx_palette_base, e).w);
-    float4 le1 = xf_row(mtx_palette_base, e + 1u);
-    float4 le2 = xf_row(mtx_palette_base, e + 2u);
-    float4 le3 = xf_row(mtx_palette_base, e + 3u);
+    uint  lcw  = asuint(mtx_palette[mtx_palette_base + e].w);
+    float4 le1 = mtx_palette[mtx_palette_base + e + 1u];
+    float4 le2 = mtx_palette[mtx_palette_base + e + 2u];
+    float4 le3 = mtx_palette[mtx_palette_base + e + 3u];
     float3 lpos  = float3(le2.z, le2.w, le3.x);
     float3 ldvec = float3(le3.y, le3.z, le3.w);
     float3 cosA  = le1.xyz;
@@ -272,11 +250,11 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     float3 pos_in = v.pos;
     float4 wpos;
     if ((key_flags & 0x01u) != 0u) {
-        uint pnmtx_row = pn_row;
+        uint pnmtx_row = pn_row + mtx_palette_base;
         wpos = float4(
-            dot(xf_row(mtx_palette_base, pnmtx_row + 0u), float4(pos_in, 1.0)),
-            dot(xf_row(mtx_palette_base, pnmtx_row + 1u), float4(pos_in, 1.0)),
-            dot(xf_row(mtx_palette_base, pnmtx_row + 2u), float4(pos_in, 1.0)),
+            dot(mtx_palette[pnmtx_row+0u], float4(pos_in, 1.0)),
+            dot(mtx_palette[pnmtx_row+1u], float4(pos_in, 1.0)),
+            dot(mtx_palette[pnmtx_row+2u], float4(pos_in, 1.0)),
             1.0);
     } else {
         wpos = float4(
@@ -404,8 +382,8 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
             float3 emboss_tangent = mul(emboss_matrix, v.tangent);
             float3 emboss_binormal = mul(emboss_matrix, v.binormal);
             const uint light = 0x180u + 4u * ((tg >> 15u) & 7u);
-            float4 emboss_l2 = xf_row(mtx_palette_base, light + 2u);
-            float4 emboss_l3 = xf_row(mtx_palette_base, light + 3u);
+            float4 emboss_l2 = mtx_palette[mtx_palette_base + light + 2u];
+            float4 emboss_l3 = mtx_palette[mtx_palette_base + light + 3u];
             float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;
             float emboss_dist2 = dot(emboss_delta, emboss_delta);
             float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);
@@ -463,11 +441,11 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
                     packed = v.mtx_idx.z;
                     shift = 0u;
                 }
-                uint tm = min((packed >> shift) & 0xFFu, 61u);
+                uint tm = min((packed >> shift) & 0xFFu, 61u) + mtx_palette_base;
                 res = float3(
-                    dot(coord, xf_row(mtx_palette_base, tm + 0u)),
-                    dot(coord, xf_row(mtx_palette_base, tm + 1u)),
-                    stq ? dot(coord, xf_row(mtx_palette_base, tm + 2u)) : 1.0);
+                    dot(coord, mtx_palette[tm+0u]),
+                    dot(coord, mtx_palette[tm+1u]),
+                    stq ? dot(coord, mtx_palette[tm+2u]) : 1.0);
             } else {
                 const uint inline_base = i * 3u;
                 res = float3(

@@ -98,21 +98,6 @@ void __NebulaGXCallShapeDisplayList(const void* list, u32 nbytes, u32 handle) {
     }
     __NebulaGXShapeListMarker(handle, GX_PHY_ADDR(list), nbytes);
 }
-
-/* A J3D display list the game rewrites in place (J3DDisplayListObj::callDL): its handle and version, then the call. The
-   renderer replays what it recorded for the handle while the version and the list's address and size are the same. */
-void __NebulaGXCallVersionedDisplayList(const void* list, u32 nbytes, u32 handle, u32 version) {
-    if (handle != 0 && __NebulaGXLinked != 0 && nbytes != 0u) {
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
-        }
-        if (!(*(u32*)(&gx->vNumNot))) {
-            __GXSendFlushPrim();
-        }
-        __NebulaGXVersionedListMarker(handle, version);
-    }
-    GXCallDisplayList(list, nbytes);
-}
 #endif
 
 void GXCallDisplayList(const void *list, u32 nbytes) {

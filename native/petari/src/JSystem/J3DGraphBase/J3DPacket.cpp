@@ -12,14 +12,7 @@
 #include <cstdio>
 #include <mem.h>
 
-#ifdef TARGET_PC
-u32 J3DDisplayListObj::sNebulaHandles = 0;
-#endif
-
 J3DError J3DDisplayListObj::newDisplayList(u32 maxSize) {
-#ifdef TARGET_PC
-    nebulaRewritten();
-#endif
     mMaxSize = ALIGN_NEXT(maxSize, 0x20);
     mpDisplayList[0] = new (0x20) char[mMaxSize];
     mpDisplayList[1] = new (0x20) char[mMaxSize];
@@ -29,9 +22,6 @@ J3DError J3DDisplayListObj::newDisplayList(u32 maxSize) {
 }
 
 J3DError J3DDisplayListObj::newSingleDisplayList(u32 maxSize) {
-#ifdef TARGET_PC
-    nebulaRewritten();
-#endif
     mMaxSize = ALIGN_NEXT(maxSize, 0x20);
     mpDisplayList[0] = new (0x20) char[mMaxSize];
     mpDisplayList[1] = mpDisplayList[0];
@@ -42,9 +32,6 @@ J3DError J3DDisplayListObj::newSingleDisplayList(u32 maxSize) {
 
 int J3DDisplayListObj::single_To_Double() {
     if (mpDisplayList[0] == mpDisplayList[1]) {
-#ifdef TARGET_PC
-        nebulaRewritten();
-#endif
         mpDisplayList[1] = new (0x20) char[mMaxSize];
 
         memcpy(mpDisplayList[1], mpDisplayList[0], mMaxSize);
@@ -55,9 +42,6 @@ int J3DDisplayListObj::single_To_Double() {
 }
 
 void J3DDisplayListObj::setSingleDisplayList(void* pDLData, u32 size) {
-#ifdef TARGET_PC
-    nebulaRewritten();
-#endif
     mMaxSize = ALIGN_NEXT(size, 0x20);
     mpDisplayList[0] = pDLData;
     mpDisplayList[1] = mpDisplayList[0];
@@ -71,28 +55,10 @@ void J3DDisplayListObj::swapBuffer() {
 }
 
 void J3DDisplayListObj::callDL() const {
-#ifdef TARGET_PC
-    __NebulaGXCallVersionedDisplayList(mpDisplayList[0], mSize, mNebulaHandle, mNebulaVersion);
-#else
     GXCallDisplayList(mpDisplayList[0], mSize);
-#endif
 }
-
-#ifdef TARGET_PC
-void J3DDisplayListObj::nebulaKeepIfUnchanged() {
-    if (mpDisplayList[0] != mpDisplayList[1] && mSize == mNebulaPreviousSize &&
-        memcmp(mpDisplayList[0], mpDisplayList[1], mSize) == 0) {
-        swapBuffer();
-        --mNebulaVersion;
-    }
-}
-#endif
 
 void J3DDisplayListObj::beginDL() {
-#ifdef TARGET_PC
-    nebulaRewritten();
-    mNebulaPreviousSize = mSize;
-#endif
     swapBuffer();
     sInterruptFlag = OSDisableInterrupts();
     GDInitGDLObj(&sGDLObj, (u8*)mpDisplayList[0], mMaxSize);
@@ -105,9 +71,6 @@ u32 J3DDisplayListObj::endDL() {
     mSize = GDGetGDLObjOffset(&sGDLObj);
     GDFlushCurrToMem();
     GDSetCurrent(NULL);
-#ifdef TARGET_PC
-    nebulaKeepIfUnchanged();
-#endif
     return mSize;
 }
 
@@ -118,9 +81,6 @@ void J3DDisplayListObj::beginPatch() {
 u32 J3DDisplayListObj::endPatch() {
     OSRestoreInterrupts(sInterruptFlag);
     GDSetCurrent(NULL);
-#ifdef TARGET_PC
-    nebulaKeepIfUnchanged();
-#endif
     return mSize;
 }
 

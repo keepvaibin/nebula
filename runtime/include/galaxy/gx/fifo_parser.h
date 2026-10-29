@@ -292,9 +292,6 @@ struct FifoSink {
         return false;
     }
 
-    // Whether versioned display lists (motion::kMarkerVersionedList) replay by handle; false calls each as CALL_DL.
-    [[nodiscard]] virtual bool use_versioned_lists() { return true; }
-
     // BP 0x52 PE_COPY_EXECUTE write; `exec_command` is the 24-bit value.
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
     virtual void on_efb_copy(std::uint32_t exec_command) = 0;
@@ -342,10 +339,6 @@ struct FifoParserProfile {
     std::uint64_t call_dl_cache_misses = 0;
     std::uint64_t call_dl_cache_stores = 0;
     std::uint64_t call_dl_cache_uncacheable = 0;
-    // Shape and versioned lists replayed by their handle (no lookup, no byte comparison).
-    std::uint64_t bound_list_replays = 0;
-    // Versioned list markers taken (each followed by its call).
-    std::uint64_t versioned_list_calls = 0;
     // Cache misses: parsing the list (nested commands included) and storing it for replay.
     std::uint64_t call_dl_miss_parse_us = 0;
     std::uint64_t call_dl_store_us = 0;
@@ -586,29 +579,11 @@ private:
         GxState& state,
         std::size_t opcode_offset,
         DisplayListRecording* recording);
-    // A display list bound to a handle: the recording it left in the display-list cache, and the list version it was
-    // recorded at (0 for shape lists, which never change).
-    struct ListBinding {
+    struct ShapeBinding {
         std::uint32_t slot = ~std::uint32_t{0};
-        std::uint32_t version = 0;
         std::uint64_t cache_token = 0;
     };
-    std::vector<ListBinding> shape_bindings_;
-    std::vector<ListBinding> versioned_bindings_;
-    // The list at `guest_addr`/`byte_size` by its handle: the bound recording replayed while it is still that list at
-    // `version` (no cache lookup or byte comparison), else the list called as CALL_DL and the handle bound to what it
-    // recorded.
-    void call_bound_list(
-        std::vector<ListBinding>& bindings,
-        std::uint32_t handle,
-        std::uint32_t version,
-        std::uint32_t guest_addr,
-        std::uint32_t byte_size,
-        GuestMemory* memory,
-        FifoSink& sink,
-        GxState& state,
-        std::size_t opcode_offset,
-        DisplayListRecording* recording);
+    std::vector<ShapeBinding> shape_bindings_;
 
     void record_display_list_cp_dependency(
         DisplayListRecording* recording,

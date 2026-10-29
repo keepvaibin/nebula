@@ -937,100 +937,6 @@ bool test_shape_list_marker() {
     return true;
 }
 
-// A versioned list marker (motion::kMarkerVersionedList) then the list's CALL_DL: the first calls the list and binds
-// the handle at that version; the same version replays without a lookup or a byte comparison; a new version is called
-// again (found by its bytes when unchanged, recorded again when edited); a marker without its call does nothing.
-bool test_versioned_list_marker() {
-    struct RunSink final : FifoSink {
-        [[nodiscard]] std::size_t draw_payload_size(std::uint8_t, std::uint16_t vertex_count) const override {
-            return vertex_count;
-        }
-        void on_draw(PrimitiveClass, std::uint8_t, FifoCursor& cursor) override {
-            (void)cursor.take(cursor.read_u16());
-            ++direct_draws;
-        }
-        [[nodiscard]] bool on_cached_packet_draw_run(std::uint64_t, std::size_t, PrimitiveClass, std::uint8_t,
-                                                     std::span<const std::byte>, std::size_t,
-                                                     std::span<const galaxy::gx::CachedDrawPacket>, std::uint32_t,
-                                                     std::uint32_t, std::span<const std::uint16_t>) override {
-            ++packet_runs;
-            return true;
-        }
-        [[nodiscard]] bool use_versioned_lists() override { return handles; }
-        void on_host_marker(std::uint8_t, std::uint16_t, std::uint32_t, std::uint32_t) override { ++markers; }
-        void on_efb_copy(std::uint32_t) override {}
-        void on_pe_finish() override {}
-        void on_pe_token(std::uint16_t, bool) override {}
-        void on_invalidate_textures() override {}
-        void on_invalidate_vertex_cache() override {}
-        bool handles = true;
-        int direct_draws = 0;
-        int packet_runs = 0;
-        int markers = 0;
-    };
-
-    // Three triangle-strip packets at 0x80000000.
-    std::array<std::byte, 32> guest{};
-    for (std::size_t packet = 0; packet < 3u; ++packet) {
-        const std::size_t at = packet * 6u;
-        guest[at + 0] = std::byte{0x98};
-        guest[at + 2] = std::byte{0x03};
-        guest[at + 3] = static_cast<std::byte>(0x10u + packet);
-        guest[at + 4] = static_cast<std::byte>(0x20u + packet);
-        guest[at + 5] = static_cast<std::byte>(0x30u + packet);
-    }
-    galaxy::GuestMemory memory{};
-    memory.fast_regions[8].host_base = guest.data();
-    memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
-    const auto marked = [](std::uint32_t handle, std::uint32_t version, bool with_call) {
-        std::vector<std::byte> m{std::byte{0xF0}, std::byte{galaxy::motion::kMarkerVersionedList}, std::byte{0},
-                                 std::byte{0}};
-        for (unsigned i = 0; i < 4u; ++i) {
-            m.push_back(static_cast<std::byte>(handle >> (24u - 8u * i)));
-        }
-        for (unsigned i = 0; i < 4u; ++i) {
-            m.push_back(static_cast<std::byte>(version >> (24u - 8u * i)));
-        }
-        if (with_call) {
-            const auto call = frozen_lookup_call(0x80000000u);
-            m.insert(m.end(), call.begin(), call.end());
-        }
-        return m;
-    };
-    FifoParserProfile profile{};
-    FifoParser parser;
-    parser.set_profile(&profile);
-    GxState state;
-    RunSink sink;
-    const auto run = [&](std::span<const std::byte> stream) {
-        return parser.run_available(stream, &memory, sink, state) == stream.size();
-    };
-    const auto v1 = marked(5u, 1u, true);
-    if (!run(v1) || !expect(profile.call_dl_cache_misses == 1u && sink.direct_draws == 3 && sink.markers == 0,
-                            "a versioned list's first marker calls the list")) return false;
-    if (!run(v1) || !expect(profile.call_dl_cache_hits == 0u && profile.call_dl_cache_misses == 1u &&
-                                sink.packet_runs == 1,
-                            "the same version replays without a lookup")) return false;
-    const auto v2 = marked(5u, 2u, true);
-    if (!run(v2) || !expect(profile.call_dl_cache_hits == 1u && sink.packet_runs == 2,
-                            "a new version with the same bytes is found by its bytes")) return false;
-    if (!run(v2) || !expect(profile.call_dl_cache_hits == 1u && sink.packet_runs == 3,
-                            "the new version is bound")) return false;
-    guest[5] = std::byte{0x35};
-    if (!run(v2) || !expect(sink.packet_runs == 4 && sink.direct_draws == 3,
-                            "a bound version trusts its recording")) return false;
-    const auto v3 = marked(5u, 3u, true);
-    if (!run(v3) || !expect(profile.call_dl_cache_misses == 2u && sink.direct_draws == 6,
-                            "an edited list at a new version is recorded again")) return false;
-    const auto alone = marked(5u, 3u, false);
-    if (!run(alone) || !expect(sink.markers == 0 && sink.direct_draws == 6 && sink.packet_runs == 4,
-                               "a marker without its call does nothing")) return false;
-    sink.handles = false;
-    if (!run(v3) || !expect(profile.call_dl_cache_hits == 2u && sink.packet_runs == 5,
-                            "without handles the list is called as CALL_DL")) return false;
-    return true;
-}
-
 int main(int argc, char** argv) try {
     // Unknown GX commands throw, except in the cases below that test the default (skip).
     galaxy::gx::set_unknown_gx_commands_fatal(true);
@@ -1043,7 +949,6 @@ int main(int argc, char** argv) try {
     if (!test_display_list_variant_lookup_invalidation()) return 1;
     if (!test_unchanged_display_list_replays_prepared_packet_runs()) return 1;
     if (!test_shape_list_marker()) return 1;
-    if (!test_versioned_list_marker()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
     if (!test_xf_palette_chunk_tracking()) return 1;
     test_dependency_hash_cache();

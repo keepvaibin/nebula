@@ -43,9 +43,6 @@ void J3DModelData::indexToPtr() {
     for (u16 i = 0; i < matNum; i++) {
         J3DMaterial* matNode = getMaterialNodePointer(i);
         J3DDisplayListObj* dl_obj = matNode->getSharedDisplayListObj();
-#ifdef TARGET_PC
-        dl_obj->nebulaRewritten();
-#endif
 
         GDInitGDLObj(&gdl_obj, dl_obj->getDisplayList(0), dl_obj->getDisplayListSize());
         GDSetCurrent(&gdl_obj);

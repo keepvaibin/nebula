@@ -865,37 +865,16 @@ void FifoParser::call_shape_list(
         }
         return;
     }
-    call_bound_list(shape_bindings_, handle, 0u, guest_addr, byte_size, memory, sink, state, opcode_offset, recording);
-}
-
-void FifoParser::call_bound_list(
-    std::vector<ListBinding>& bindings,
-    std::uint32_t handle,
-    std::uint32_t version,
-    std::uint32_t guest_addr,
-    std::uint32_t byte_size,
-    GuestMemory* memory,
-    FifoSink& sink,
-    GxState& state,
-    std::size_t opcode_offset,
-    DisplayListRecording* recording) {
     guest_addr &= ~std::uint32_t{31u};
-    byte_size &= ~std::uint32_t{31u};
-    if (byte_size == 0u) {
-        return;
-    }
     const std::uint32_t canonical = normalize_display_list_guest_addr(guest_addr);
-    if (handle < bindings.size()) {
-        const ListBinding binding = bindings[handle];
-        if (binding.slot < display_list_cache_.size() && binding.version == version) {
+    if (handle < shape_bindings_.size()) {
+        const ShapeBinding binding = shape_bindings_[handle];
+        if (binding.slot < display_list_cache_.size()) {
             CachedDisplayList& cached = display_list_cache_[binding.slot];
             if (cached.valid && cached.cache_token == binding.cache_token && cached.guest_addr == canonical &&
                 cached.byte_size == byte_size && display_list_dependencies_match(cached, state)) {
                 if (memory_read_recorder_ != nullptr) {
                     memory_read_recorder_->record_guest_dependency_shape_read(guest_addr, byte_size);
-                }
-                if (profile_ != nullptr) {
-                    ++profile_->bound_list_replays;
                 }
                 cached.last_used = ++display_list_cache_tick_;
                 last_display_list_cache_index_ = binding.slot;
@@ -926,10 +905,10 @@ void FifoParser::call_bound_list(
     if (!cached.valid || cached.guest_addr != canonical || cached.byte_size != byte_size) {
         return;
     }
-    if (handle >= bindings.size()) {
-        bindings.resize(std::max<std::size_t>(handle + 1u, bindings.size() * 2u));
+    if (handle >= shape_bindings_.size()) {
+        shape_bindings_.resize(std::max<std::size_t>(handle + 1u, shape_bindings_.size() * 2u));
     }
-    bindings[handle] = {static_cast<std::uint32_t>(slot), version, cached.cache_token};
+    shape_bindings_[handle] = {static_cast<std::uint32_t>(slot), cached.cache_token};
 }
 
 void FifoParser::prepare_cached_display_list_draw_runs(
@@ -1898,28 +1877,6 @@ void FifoParser::run_window(
                 finish_profile(
                     &FifoParserProfile::call_dl_count,
                     &FifoParserProfile::call_dl_us);
-                break;
-            }
-            // The list's own CALL_DL follows; a window that ends before it leaves the call to run as it is.
-            if (kind == motion::kMarkerVersionedList && sink.use_versioned_lists() && cursor.remaining() >= 9u &&
-                static_cast<std::uint8_t>(cursor.data[cursor.offset]) == op::kCallDisplayList) {
-                cursor.offset += 1u;
-                if (profile != nullptr) {
-                    ++profile->versioned_list_calls;
-                }
-                const std::uint32_t list_addr = cursor.read_u32();
-                const std::uint32_t list_bytes = cursor.read_u32();
-                call_bound_list(versioned_bindings_, a, b, list_addr, list_bytes, memory, sink, state, opcode_offset,
-                                recording);
-                finish_profile(
-                    &FifoParserProfile::call_dl_count,
-                    &FifoParserProfile::call_dl_us);
-                break;
-            }
-            if (kind == motion::kMarkerVersionedList) {
-                finish_profile(
-                    &FifoParserProfile::nop_count,
-                    &FifoParserProfile::nop_us);
                 break;
             }
             sink.on_host_marker(kind, aux, a, b);
