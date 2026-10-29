@@ -51,6 +51,55 @@ typedef struct NebulaShapeCurrent {
     uint8_t texture[8];
 } NebulaShapeCurrent;
 
+/* A J3D material as the next shape draws use it (material in NebulaHostServices): every value as GX's functions take
+   it, no register words. Colours are RGBA bytes; TEV colours signed 10-bit values in int16_t. */
+typedef struct NebulaMaterialTevStage {
+    uint8_t tex_coord, tex_map, channel;          /* GXSetTevOrder */
+    uint8_t color_in[4], color_op, color_bias, color_scale, color_clamp, color_reg;
+    uint8_t alpha_in[4], alpha_op, alpha_bias, alpha_scale, alpha_clamp, alpha_reg;
+    uint8_t ras_swap, tex_swap, konst_color, konst_alpha;
+    uint8_t ind_stage, ind_format, ind_bias, ind_matrix, ind_wrap_s, ind_wrap_t, ind_prev, ind_lod, ind_alpha;
+} NebulaMaterialTevStage;
+
+typedef struct NebulaMaterialTexture {
+    uint64_t image;               /* the texture's identity: the game's address of its image (0: no texture) */
+    uint16_t width, height;
+    uint8_t format, wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy;
+    float min_lod, max_lod, lod_bias;
+    uint64_t palette;             /* colour-indexed formats: the palette's identity, else 0 */
+    uint16_t palette_entries;
+    uint8_t palette_format, bias_clamp;
+} NebulaMaterialTexture;
+
+typedef struct NebulaMaterialLight {
+    float position[3], direction[3];
+    float angle[3], distance[3];  /* attenuation coefficients */
+    uint8_t color[4];
+} NebulaMaterialLight;
+
+typedef struct NebulaMaterial {
+    uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
+    uint8_t dither, z_compare_location, reserved;
+    NebulaMaterialTevStage tev[16];
+    int16_t tev_color[4][4];
+    uint8_t konst_color[4][4];
+    uint8_t swap_table[4][4];
+    struct { uint8_t coord, map, scale_s, scale_t; } ind_order[4];
+    struct { float m[2][3]; int8_t scale; uint8_t reserved[3]; } ind_matrix[3];
+    struct { uint8_t type, source, matrix, normalize, post_matrix, reserved[3]; } tex_gen[8];
+    struct { uint16_t scale_s, scale_t; uint8_t bias_s, bias_t, wrap_s, wrap_t; } tex_coord_scale[8];
+    NebulaMaterialTexture texture[8];
+    struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
+    uint8_t material_color[2][4], ambient_color[2][4];
+    uint8_t light_mask;           /* the lights below that are set */
+    NebulaMaterialLight light[8];
+    struct { uint8_t type, adjust_enable; uint16_t adjust_center; float start, end, near_z, far_z; uint8_t color[4];
+             uint16_t adjust[10]; } fog;
+    struct { uint8_t comp0, ref0, op, comp1, ref1, reserved[3]; } alpha_compare;
+    struct { uint8_t type, source, destination, logic_op; } blend;
+    struct { uint8_t enable, func, update, reserved; } z_mode;
+} NebulaMaterial;
+
 /* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the
    array it converts; an array made there later replaces it) naming it. Positions and normals are 3 floats, a bump-mapped model's normals 9 (normal, tangent,
    binormal), colours one uint32_t each (R << 24 | G << 16 | B << 8 | A), texture coordinates 2 floats. */

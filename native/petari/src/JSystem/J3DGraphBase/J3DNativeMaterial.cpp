@@ -1,0 +1,227 @@
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
+#include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DSys.hpp"
+#include "JSystem/J3DGraphBase/J3DTexture.hpp"
+#include <nebula_game_api.h>
+#include <string.h>
+
+namespace {
+    u64 keyOf(const void* p) {
+        return static_cast< u64 >(reinterpret_cast< uintptr_t >(p));
+    }
+
+    void copyColor(u8* pOut, const GXColor& rColor) {
+        pOut[0] = rColor.r;
+        pOut[1] = rColor.g;
+        pOut[2] = rColor.b;
+        pOut[3] = rColor.a;
+    }
+
+    // Map `map`'s texture as J3D's loadTexNo sets it up (the image and palette inside the texture's resource).
+    void texture(u32 map, u16 texNo, NebulaMaterial* pOut, u16* pSizes) {
+        ResTIMG* pImg = j3dSys.getTexture()->getResTIMG(texNo);
+        NebulaMaterialTexture& rOut = pOut->texture[map];
+        rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
+        rOut.width = pImg->mWidth;
+        rOut.height = pImg->mHeight;
+        rOut.format = pImg->mFormat & 0x0F;
+        rOut.wrap_s = pImg->mWrapS;
+        rOut.wrap_t = pImg->mWrapT;
+        rOut.min_filter = pImg->mMinType;
+        rOut.mag_filter = pImg->mMagType;
+        rOut.mipmaps = pImg->mImageNum;
+        rOut.edge_lod = pImg->mDoEdgeLod;
+        rOut.bias_clamp = pImg->mBiasClamp;
+        rOut.anisotropy = pImg->mMaxAnisotropy;
+        rOut.min_lod = static_cast< s8 >(pImg->mMinLod) * 0.125f;
+        rOut.max_lod = static_cast< s8 >(pImg->mMaxLod) * 0.125f;
+        rOut.lod_bias = pImg->mLodBias * 0.01f;
+        if (pImg->mPaletteName == true) {
+            rOut.palette = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mPaletteDataOffset);
+            rOut.palette_entries = pImg->mPaletteNum;
+            rOut.palette_format = pImg->mPaletteFormat;
+        }
+        // The texture coordinate scale J3D keeps per map (J3DSys::sTexCoordScaleTable): the image's size.
+        pSizes[map * 2] = pImg->mWidth;
+        pSizes[map * 2 + 1] = pImg->mHeight;
+    }
+
+    // A texture coordinate's scale entry as loadTexCoordScale writes it from its map's table entry.
+    void coordScale(NebulaMaterial* pOut, u32 coord, u32 map) {
+        const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
+        pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
+        pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
+        pOut->tex_coord_scale[coord & 7].bias_s = rInfo.field_0x04 != 0;
+        pOut->tex_coord_scale[coord & 7].bias_t = rInfo.field_0x06 != 0;
+    }
+}  // namespace
+
+namespace J3DNativeMaterial {
+    void build(J3DMaterial* pMaterial, NebulaMaterial* pOut) {
+        memset(pOut, 0, sizeof(*pOut));
+        J3DTevBlock* pTev = pMaterial->mTevBlock;
+        J3DIndBlock* pInd = pMaterial->mIndBlock;
+        J3DTexGenBlock* pTexGen = pMaterial->mTexGenBlock;
+        J3DColorBlock* pColor = pMaterial->mColorBlock;
+        J3DPEBlock* pPE = pMaterial->mPEBlock;
+
+        pOut->tev_stages = pTev->getTevStageNum();
+        pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
+        pOut->channels = pColor->getColorChanNum();
+        pOut->ind_stages = pInd->getIndTexStageNum();
+        pOut->cull = pColor->getCullMode();
+
+        // Textures first: their sizes fill the coordinate scale table the stages then read.
+        u16 sizes[16];
+        memset(sizes, 0, sizeof(sizes));
+        for (u32 map = 0; map < 8; map++) {
+            const u16 texNo = pTev->getTexNo(map);
+            if (texNo != 0xFFFF) {
+                texture(map, texNo, pOut, sizes);
+                J3DSys::sTexCoordScaleTable[map].field_0x00 = sizes[map * 2];
+                J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
+            }
+        }
+        for (u32 i = 0; i < pOut->tev_stages; i++) {
+            NebulaMaterialTevStage& rOut = pOut->tev[i];
+            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(i)->getTevOrderInfo();
+            rOut.tex_coord = rOrder.mTexCoord;
+            rOut.tex_map = rOrder.mTexMap;
+            rOut.channel = rOrder.mColorChan;
+            coordScale(pOut, rOrder.mTexCoord, rOrder.mTexMap);
+            const J3DTevStage& rStage = *pTev->getTevStage(i);
+            for (u32 k = 0; k < 4; k++) {
+                rOut.color_in[k] = rStage.mColorIn[k];
+                rOut.alpha_in[k] = rStage.mAlphaIn[k];
+            }
+            rOut.color_op = rStage.mColorOp;
+            rOut.color_bias = rStage.mColorBias;
+            rOut.color_scale = rStage.mColorScale;
+            rOut.color_clamp = rStage.mColorClamp;
+            rOut.color_reg = rStage.mColorReg;
+            rOut.alpha_op = rStage.mAlphaOp;
+            rOut.alpha_bias = rStage.mAlphaBias;
+            rOut.alpha_scale = rStage.mAlphaScale;
+            rOut.alpha_clamp = rStage.mAlphaClamp;
+            rOut.alpha_reg = rStage.mAlphaReg;
+            rOut.ras_swap = rStage.mRasSel;
+            rOut.tex_swap = rStage.mTexSel;
+            rOut.konst_color = pTev->getTevKColorSel(i);
+            rOut.konst_alpha = pTev->getTevKAlphaSel(i);
+            const J3DIndTevStage& rInd = *pTev->getIndTevStage(i);
+            rOut.ind_stage = rInd.mIndStage;
+            rOut.ind_format = rInd.mIndFormat;
+            rOut.ind_bias = rInd.mBiasSel;
+            rOut.ind_matrix = rInd.mMtxSel;
+            rOut.ind_wrap_s = rInd.mWrapS;
+            rOut.ind_wrap_t = rInd.mWrapT;
+            rOut.ind_prev = rInd.mPrev;
+            rOut.ind_lod = rInd.mLod;
+            rOut.ind_alpha = rInd.mAlphaSel;
+        }
+        for (u32 i = 0; i < 3; i++) {
+            const J3DGXColorS10& rColor = *pTev->getTevColor(i);
+            pOut->tev_color[i][0] = rColor.r;
+            pOut->tev_color[i][1] = rColor.g;
+            pOut->tev_color[i][2] = rColor.b;
+            pOut->tev_color[i][3] = rColor.a;
+        }
+        for (u32 i = 0; i < 4; i++) {
+            copyColor(pOut->konst_color[i], *pTev->getTevKColor(i));
+            const J3DTevSwapModeTable& rSwap = *pTev->getTevSwapModeTable(i);
+            pOut->swap_table[i][0] = rSwap.getR();
+            pOut->swap_table[i][1] = rSwap.getG();
+            pOut->swap_table[i][2] = rSwap.getB();
+            pOut->swap_table[i][3] = rSwap.getA();
+        }
+
+        for (u32 i = 0; i < pOut->ind_stages && i < 4; i++) {
+            J3DIndTexOrder* pOrder = pInd->getIndTexOrder(i);
+            J3DIndTexCoordScale* pScale = pInd->getIndTexCoordScale(i);
+            pOut->ind_order[i].coord = pOrder->getCoord();
+            pOut->ind_order[i].map = pOrder->getMap();
+            pOut->ind_order[i].scale_s = pScale->getScaleS();
+            pOut->ind_order[i].scale_t = pScale->getScaleT();
+            coordScale(pOut, pOrder->getCoord(), pOrder->getMap());
+        }
+        for (u32 i = 0; i < pOut->ind_stages && i < 3; i++) {
+            const J3DIndTexMtx& rMtx = *pInd->getIndTexMtx(i);
+            memcpy(pOut->ind_matrix[i].m, rMtx.field_0x0, sizeof(pOut->ind_matrix[i].m));
+            pOut->ind_matrix[i].scale = static_cast< s8 >(rMtx.field_0x18);
+        }
+
+        for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
+            const J3DTexCoord& rCoord = *pTexGen->getTexCoord(i);
+            pOut->tex_gen[i].type = rCoord.getTexGenType();
+            pOut->tex_gen[i].source = rCoord.getTexGenSrc();
+            pOut->tex_gen[i].matrix = static_cast< u8 >(rCoord.getTexMtxReg());
+        }
+
+        for (u32 i = 0; i < 4; i++) {
+            const J3DColorChan& rChan = *pColor->getColorChan(i);
+            pOut->channel[i].enable = rChan.getEnable();
+            pOut->channel[i].material_source = rChan.getMatSrc();
+            pOut->channel[i].ambient_source = rChan.getAmbSrc();
+            pOut->channel[i].light_mask = rChan.getLightMask();
+            pOut->channel[i].diffuse = rChan.getDiffuseFn();
+            pOut->channel[i].attenuation = rChan.getAttnFn();
+        }
+        for (u32 i = 0; i < 2; i++) {
+            copyColor(pOut->material_color[i], *pColor->getMatColor(i));
+            copyColor(pOut->ambient_color[i], *pColor->getAmbColor(i));
+        }
+        for (u32 i = 0; i < 8; i++) {
+            const J3DLightObj* pLight = pColor->getLight(i);
+            if (pLight == NULL) {
+                continue;
+            }
+            pOut->light_mask |= 1 << i;
+            const J3DLightInfo& rInfo = pLight->mInfo;
+            NebulaMaterialLight& rOut = pOut->light[i];
+            rOut.position[0] = rInfo.mLightPosition.x;
+            rOut.position[1] = rInfo.mLightPosition.y;
+            rOut.position[2] = rInfo.mLightPosition.z;
+            rOut.direction[0] = rInfo.mLightDirection.x;
+            rOut.direction[1] = rInfo.mLightDirection.y;
+            rOut.direction[2] = rInfo.mLightDirection.z;
+            rOut.angle[0] = rInfo.mCosAtten.x;
+            rOut.angle[1] = rInfo.mCosAtten.y;
+            rOut.angle[2] = rInfo.mCosAtten.z;
+            rOut.distance[0] = rInfo.mDistAtten.x;
+            rOut.distance[1] = rInfo.mDistAtten.y;
+            rOut.distance[2] = rInfo.mDistAtten.z;
+            copyColor(rOut.color, rInfo.mColor);
+        }
+
+        const J3DFogInfo& rFog = *pPE->getFog()->getFogInfo();
+        pOut->fog.type = rFog.mType;
+        pOut->fog.adjust_enable = rFog.mAdjEnable;
+        pOut->fog.adjust_center = rFog.mCenter;
+        pOut->fog.start = rFog.mStartZ;
+        pOut->fog.end = rFog.mEndZ;
+        pOut->fog.near_z = rFog.mNearZ;
+        pOut->fog.far_z = rFog.mFarZ;
+        copyColor(pOut->fog.color, rFog.mColor);
+        for (u32 i = 0; i < 10; i++) {
+            pOut->fog.adjust[i] = rFog.mFogAdjTable.r[i];
+        }
+        const J3DAlphaComp& rAlpha = *pPE->getAlphaComp();
+        pOut->alpha_compare.comp0 = rAlpha.getComp0();
+        pOut->alpha_compare.ref0 = rAlpha.getRef0();
+        pOut->alpha_compare.op = rAlpha.getOp();
+        pOut->alpha_compare.comp1 = rAlpha.getComp1();
+        pOut->alpha_compare.ref1 = rAlpha.getRef1();
+        const J3DBlend& rBlend = *pPE->getBlend();
+        pOut->blend.type = rBlend.mType;
+        pOut->blend.source = rBlend.mSrcFactor;
+        pOut->blend.destination = rBlend.mDstFactor;
+        pOut->blend.logic_op = rBlend.mOp;
+        const J3DZMode& rZ = *pPE->getZMode();
+        pOut->z_mode.enable = rZ.getCompareEnable();
+        pOut->z_mode.func = rZ.getFunc();
+        pOut->z_mode.update = rZ.getUpdateEnable();
+        pOut->z_compare_location = pPE->getZCompLoc();
+        pOut->dither = pPE->getDither();
+    }
+};  // namespace J3DNativeMaterial
