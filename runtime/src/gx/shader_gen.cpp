@@ -320,6 +320,29 @@ cbuffer GxVsConstants : register(b0) {
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
 )HLSL";
 
+// The vertex shaders' reads of the XF image (palette or matrix arena), after their constants.
+static constexpr const char* kVsXfRows = R"HLSL(
+// A row of the XF image the draw sees (16 bytes: four XF words) at `base`: position, texture and post-texture
+// matrices, normal matrices and light objects at their XF addresses / 4.
+float4 xf_row(uint base, uint row) {
+    if ((flags & 0x1000000u) != 0u) {
+        // The matrix arena: the draw's entry for the row's chunk (GxVsConstants::mtx_chunks).
+        const uint c = row >> 3u;
+        const uint slot = c < 8u ? c : c < 40u ? c - 24u : c - 29u;
+        return mtx_palette[mtx_chunks[slot >> 2u][slot & 3u] * 8u + (row & 7u)];
+    }
+    return mtx_palette[base + row];
+}
+// The previous record's position matrix rows (motion vectors).
+float4 xf_prev_row(uint base, uint row) {
+    if ((flags & 0x1000000u) != 0u) {
+        const uint slot = 23u + (row >> 3u);
+        return mtx_palette[mtx_chunks[slot >> 2u][slot & 3u] * 8u + (row & 7u)];
+    }
+    return mtx_palette[base + row];
+}
+)HLSL";
+
 static constexpr const char* kPsConstantsDef = R"HLSL(
 cbuffer GxPsConstants : register(b1) {
     uint4    stage_config[16];
@@ -622,13 +645,19 @@ cbuffer GxPplConstants : register(b0) {
 };
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
 
+// A row of the XF image the draw sees (16 bytes: four XF words) at `base`: position, texture and post-texture
+// matrices, normal matrices and light objects at their XF addresses / 4.
+float4 xf_row(uint base, uint row) {
+    return mtx_palette[base + row];
+}
+
 void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
                    inout int3 lacc_i, inout int lacc_a_i) {
     const uint e = 0x180u + 4u * n;
-    uint  lcw  = asuint(mtx_palette[ppl_mtx_palette_base + e].w);
-    float4 le1 = mtx_palette[ppl_mtx_palette_base + e + 1u];
-    float4 le2 = mtx_palette[ppl_mtx_palette_base + e + 2u];
-    float4 le3 = mtx_palette[ppl_mtx_palette_base + e + 3u];
+    uint  lcw  = asuint(xf_row(ppl_mtx_palette_base, e).w);
+    float4 le1 = xf_row(ppl_mtx_palette_base, e + 1u);
+    float4 le2 = xf_row(ppl_mtx_palette_base, e + 2u);
+    float4 le3 = xf_row(ppl_mtx_palette_base, e + 3u);
     float3 lpos  = float3(le2.z, le2.w, le3.x);
     float3 ldvec = float3(le3.y, le3.z, le3.w);
     float3 cosA  = le1.xyz;
@@ -779,11 +808,11 @@ float enh_vis(float NoL, float NoV, float a) {
 // attenuation operands stay finite (kVsKeyFiniteLightAttn): a light the game left without a
 // direction keeps its light.
 void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
-    const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
-    const uint lcw = asuint(mtx_palette[e].w);
-    const float4 le1 = mtx_palette[e + 1u];
-    const float4 le2 = mtx_palette[e + 2u];
-    const float4 le3 = mtx_palette[e + 3u];
+    const uint e = 0x180u + 4u * n;
+    const uint lcw = asuint(xf_row(ppl_mtx_palette_base, e).w);
+    const float4 le1 = xf_row(ppl_mtx_palette_base, e + 1u);
+    const float4 le2 = xf_row(ppl_mtx_palette_base, e + 2u);
+    const float4 le3 = xf_row(ppl_mtx_palette_base, e + 3u);
     const float3 ldelta = float3(le2.z, le2.w, le3.x) - P;
     const float dist2 = dot(ldelta, ldelta);
     const float dist = sqrt(dist2);
@@ -1052,10 +1081,10 @@ static void emit_light(
     emit(s, "        {  // light %u\n", n);
     const unsigned e = 0x180u + 4u * n;
     emit(s,
-        "            uint  lcw  = asuint(mtx_palette[mtx_palette_base + %uu].w);\n"
-        "            float4 le1 = mtx_palette[mtx_palette_base + %uu];\n"
-        "            float4 le2 = mtx_palette[mtx_palette_base + %uu];\n"
-        "            float4 le3 = mtx_palette[mtx_palette_base + %uu];\n",
+        "            uint  lcw  = asuint(xf_row(mtx_palette_base, %uu).w);\n"
+        "            float4 le1 = xf_row(mtx_palette_base, %uu);\n"
+        "            float4 le2 = xf_row(mtx_palette_base, %uu);\n"
+        "            float4 le3 = xf_row(mtx_palette_base, %uu);\n",
         e, e + 1u, e + 2u, e + 3u);
     s << "            float3 lpos  = float3(le2.z, le2.w, le3.x);\n";
     s << "            float3 ldvec = float3(le3.y, le3.z, le3.w);\n";
@@ -1349,8 +1378,12 @@ void load_draw_rows(CurveDraw d, uint tid) {
         draw_rows[7] = float4(0.5 * asfloat(constant_data.Load2(d.constants + CB_RASTER)), 0.0, 0.0);
     }
     if ((d.flags & 1u) != 0u) {
-        const uint base = constant_data.Load(d.constants + CB_PALETTE_BASE);
-        draw_rows[8u + tid] = asfloat(palette_data.Load4(d.palette + 16u * (base + tid)));
+        uint row = constant_data.Load(d.constants + CB_PALETTE_BASE) + tid;
+        if ((constant_data.Load(d.constants + CB_FLAGS) & FLAG_MATRIX_ARENA) != 0u) {
+            // The matrix arena: the row's chunk entry (the position matrices are chunks 0-7).
+            row = constant_data.Load(d.constants + CB_MTX_CHUNKS + 4u * (tid >> 3u)) * 8u + (tid & 7u);
+        }
+        draw_rows[8u + tid] = asfloat(palette_data.Load4(d.palette + 16u * row));
     }
     GroupMemoryBarrierWithGroupSync();
 }
@@ -1488,13 +1521,15 @@ void scatter(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
 )HLSL";
 
 std::string ShaderGenerator::curve_sort_source() {
-    char defines[256];
+    char defines[384];
     std::snprintf(defines, sizeof(defines),
                   "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
-                  "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n",
+                  "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n"
+                  "#define CB_FLAGS %zuu\n#define CB_MTX_CHUNKS %zuu\n#define FLAG_MATRIX_ARENA %uu\n",
                   sizeof(GxVertexOut), offsetof(GxVertexOut, mtx_indices), offsetof(GxVertexOut, curve),
                   offsetof(GxVsConstants, mtx_palette_base), offsetof(GxVsConstants, inline_pos_matrix),
-                  offsetof(GxVsConstants, line_point_raster));
+                  offsetof(GxVsConstants, line_point_raster), offsetof(GxVsConstants, flags),
+                  offsetof(GxVsConstants, mtx_chunks), kVsFlagMatrixArena);
     return std::string("// Curved surfaces' triangles sorted (ShaderGenerator::curve_sort_source).\n") + defines +
            kCurveCodec + kCurveValue + kCurveSort;
 }
@@ -1583,8 +1618,10 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     const bool ppl_outputs = ppl || enhanced;
     const bool motion = (key.flags & kVsKeyMotion) != 0u;
     const bool curved = (key.flags & kVsKeyCurved) != 0u;
-    // Physical ray tracing's facing fit (flags bit 6) at the struct's end (c80, uber_constants.h).
-    static constexpr const char* kVsDebakeMembers = "    float4   debake_sh[7];\n    float4   debake_peak;\n";
+    // Physical ray tracing's facing fit (flags bit 6) at the struct's end (c80, uber_constants.h), then the matrix
+    // arena's entries (c88).
+    static constexpr const char* kVsDebakeMembers =
+        "    float4   debake_sh[7];\n    float4   debake_peak;\n    uint4    mtx_chunks[8];\n";
     std::string structs = ppl_outputs ? kVsStructsPpl : kVsStructs;
     if (motion) {
         s << insert_before_close(kVsConstantsDef, (std::string(kVsMotionConstantMembers) + kVsDebakeMembers).c_str(),
@@ -1594,6 +1631,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << insert_before_close(kVsConstantsDef,
                                  (std::string("    float4   debake_skip_[15];\n") + kVsDebakeMembers).c_str(), false);
     }
+    s << kVsXfRows;
     if (curved) {
         structs = insert_before_close(structs.c_str(), kCurvedInput, false);
         structs = insert_before_close(structs.c_str(), kCurvedInterpolants, true);
@@ -1632,7 +1670,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         // palette elements.  Dynamic vector subscripting is legal SM5.
         s << R"HLSL(
 float xfw(uint w) {
-    float4 v = mtx_palette[mtx_palette_base + (w >> 2u)];
+    float4 v = xf_row(mtx_palette_base, (w >> 2u));
     return v[w & 3u];
 }
 )HLSL";
@@ -1665,11 +1703,11 @@ float xfw(uint w) {
                                     : "    uint pn_row = min(matrix_index_a & 0x3Fu, 61u);\n");
     s << "    float3 pos_in = v.pos;\n";
     if ((key.flags & 0x01u) != 0u) {
-        s << "    uint pnmtx_row = pn_row + mtx_palette_base;\n";
+        s << "    uint pnmtx_row = pn_row;\n";
         s << "    float4 wpos = float4(\n";
-        s << "        dot(mtx_palette[pnmtx_row+0u], float4(pos_in, 1.0)),\n";
-        s << "        dot(mtx_palette[pnmtx_row+1u], float4(pos_in, 1.0)),\n";
-        s << "        dot(mtx_palette[pnmtx_row+2u], float4(pos_in, 1.0)),\n";
+        s << "        dot(xf_row(mtx_palette_base, pnmtx_row + 0u), float4(pos_in, 1.0)),\n";
+        s << "        dot(xf_row(mtx_palette_base, pnmtx_row + 1u), float4(pos_in, 1.0)),\n";
+        s << "        dot(xf_row(mtx_palette_base, pnmtx_row + 2u), float4(pos_in, 1.0)),\n";
         s << "        1.0);\n\n";
     } else {
         s << "    float4 wpos = float4(\n";
@@ -1690,10 +1728,10 @@ float xfw(uint w) {
         s << "    float3 prev_eye;\n";
         if ((key.flags & 0x01u) != 0u) {
             s << "    if (motion_ctrl.x == 0u) {\n"
-                 "        uint prow = pn_row + motion_ctrl.y;\n"
-                 "        prev_eye = float3(dot(mtx_palette[prow+0u], float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mtx_palette[prow+1u], float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mtx_palette[prow+2u], float4(vb_pos_prev, 1.0)));\n"
+                 "        uint prow = pn_row;\n"
+                 "        prev_eye = float3(dot(xf_prev_row(motion_ctrl.y, prow + 0u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(xf_prev_row(motion_ctrl.y, prow + 1u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(xf_prev_row(motion_ctrl.y, prow + 2u), float4(vb_pos_prev, 1.0)));\n"
                  "    } else {\n"
                  "        prev_eye = float3(dot(motion_prev_pos[0], wpos),\n"
                  "                          dot(motion_prev_pos[1], wpos),\n"
@@ -1745,10 +1783,10 @@ float xfw(uint w) {
         // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
         // Its nine words lie in three float4s of the palette, from word (nrm_base & 3) of the first.
         s << "    uint nrm_base = 0x400u + 3u * (pn_row & 31u);\n";
-        s << "    const uint nrm_q = mtx_palette_base + (nrm_base >> 2u);\n"
-             "    const float4 nq0 = mtx_palette[nrm_q];\n"
-             "    const float4 nq1 = mtx_palette[nrm_q + 1u];\n"
-             "    const float4 nq2 = mtx_palette[nrm_q + 2u];\n"
+        s << "    const uint nrm_q = nrm_base >> 2u;\n"
+             "    const float4 nq0 = xf_row(mtx_palette_base, nrm_q);\n"
+             "    const float4 nq1 = xf_row(mtx_palette_base, nrm_q + 1u);\n"
+             "    const float4 nq2 = xf_row(mtx_palette_base, nrm_q + 2u);\n"
              "    const uint nrm_o = nrm_base & 3u;\n"
              "    const float3 nrm_r0 = nrm_o == 0u ? nq0.xyz : nrm_o == 1u ? nq0.yzw\n"
              "                        : nrm_o == 2u ? float3(nq0.zw, nq1.x) : float3(nq0.w, nq1.xy);\n"
@@ -1765,8 +1803,8 @@ float xfw(uint w) {
         const bool palette = (key.flags & 0x01u) != 0u;
         for (unsigned r = 0; r < 3u; ++r) {
             emit(s, "    const float3 nrm_row%u = %s%u%s.xyz;\n", r,
-                 palette ? "mtx_palette[pnmtx_row+" : "inline_pos_matrix[", r,
-                 palette ? "u]" : "]");
+                 palette ? "xf_row(mtx_palette_base, pnmtx_row + " : "inline_pos_matrix[", r,
+                 palette ? "u)" : "]");
         }
         s << "    float3 nrm_t = float3(dot(nrm_row0, v.nrm), dot(nrm_row1, v.nrm),"
              " dot(nrm_row2, v.nrm));\n";
@@ -1889,8 +1927,8 @@ float xfw(uint w) {
                  "        float3 emboss_binormal = mul(emboss_matrix, v.binormal);\n";
             const unsigned light = 0x180u + 4u * tg.emboss_light;
             emit(s,
-                 "        float4 emboss_l2 = mtx_palette[mtx_palette_base + %uu];\n"
-                 "        float4 emboss_l3 = mtx_palette[mtx_palette_base + %uu];\n",
+                 "        float4 emboss_l2 = xf_row(mtx_palette_base, %uu);\n"
+                 "        float4 emboss_l3 = xf_row(mtx_palette_base, %uu);\n",
                  light + 2u, light + 3u);
             s << "        float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;\n"
                  "        float emboss_dist2 = dot(emboss_delta, emboss_delta);\n"
@@ -1940,7 +1978,7 @@ float xfw(uint w) {
                     : i < 7u ? 8u * (i - 3u) : 0u;
                 emit(s,
                     "        uint tm = min((v.mtx_idx.%s >> %uu) & 0xFFu,"
-                    " 61u) + mtx_palette_base;\n",
+                    " 61u);\n",
                     component,
                     shift);
             }
@@ -1949,13 +1987,13 @@ float xfw(uint w) {
             if (per_vertex) {
                 if (tg.generate_stq) {
                     s << "        float3 res = float3(\n"
-                         "            dot(coord, mtx_palette[tm+0u]),\n"
-                         "            dot(coord, mtx_palette[tm+1u]),\n"
-                         "            dot(coord, mtx_palette[tm+2u]));\n";
+                         "            dot(coord, xf_row(mtx_palette_base, tm + 0u)),\n"
+                         "            dot(coord, xf_row(mtx_palette_base, tm + 1u)),\n"
+                         "            dot(coord, xf_row(mtx_palette_base, tm + 2u)));\n";
                 } else {
                     s << "        float3 res = float3(\n"
-                         "            dot(coord, mtx_palette[tm+0u]),\n"
-                         "            dot(coord, mtx_palette[tm+1u]),\n"
+                         "            dot(coord, xf_row(mtx_palette_base, tm + 0u)),\n"
+                         "            dot(coord, xf_row(mtx_palette_base, tm + 1u)),\n"
                          "            1.0);\n";
                 }
             } else {
@@ -2014,8 +2052,8 @@ float xfw(uint w) {
         const bool palette = (key.flags & 0x01u) != 0u;
         for (unsigned r = 0; r < 3u; ++r) {
             emit(s, "    const float3 curve_r%u = %s%u%s.xyz;\n", r,
-                 palette ? "mtx_palette[pn_row + mtx_palette_base + " : "inline_pos_matrix[", r,
-                 palette ? "u]" : "]");
+                 palette ? "xf_row(mtx_palette_base, pn_row + " : "inline_pos_matrix[", r,
+                 palette ? "u)" : "]");
         }
         s << "    const float3x3 curve_cofactor = float3x3(cross(curve_r1, curve_r2), cross(curve_r2, curve_r0),\n"
              "                                             cross(curve_r0, curve_r1));\n"

@@ -72,6 +72,9 @@ static_assert(offsetof(GxPsConstants, ind_misc) == 736);
 static_assert(offsetof(GxPsConstants, uber_ps_header) == 752);
 static_assert(sizeof(GxPsConstants) == 768);
 
+// GxVsConstants::flags bit 24: the vertex shaders read matrices through mtx_chunks (the matrix arena).
+inline constexpr std::uint32_t kVsFlagMatrixArena = 1u << 24u;
+
 // Vertex-stage constants (root CBV b0). The XF matrix palette is a structured buffer (root SRV) instead: it is
 // large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
 struct alignas(256) GxVsConstants {
@@ -132,6 +135,12 @@ struct alignas(256) GxVsConstants {
     // paint and occlusion stay.
     float debake_sh[7][4];
     float debake_peak[4];
+    // The matrix arena (flags bit 24): the 128-byte matrix-ring entries (ring offset / 128) holding the eight-row XF
+    // chunks the vertex shaders read: position and texture matrices 0-7, normal matrices 8-10, post-texture matrices
+    // 11-18, light objects 19-22; then the previous record's matrix chunks for motion vectors.
+    std::uint32_t mtx_chunks[23];
+    std::uint32_t mtx_prev_chunks[8];
+    std::uint32_t mtx_chunks_pad;
 };
 
 static_assert(offsetof(GxVsConstants, projection) == 0);
@@ -153,6 +162,7 @@ static_assert(offsetof(GxVsConstants, motion_prev_proj) == 1168);
 static_assert(offsetof(GxVsConstants, motion_ctrl) == 1264);
 static_assert(offsetof(GxVsConstants, debake_sh) == 1280);
 static_assert(offsetof(GxVsConstants, debake_peak) == 1392);
+static_assert(offsetof(GxVsConstants, mtx_chunks) == 1408);
 static_assert(sizeof(GxVsConstants) == 1536);
 
 #if defined(_MSC_VER)

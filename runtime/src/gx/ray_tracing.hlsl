@@ -57,6 +57,9 @@ static const uint kVertexMatrixIndex2 = 128u;
 static const uint kVertexFlatCorner = 0x8000u;
 static const uint kVsFlags = 200u;
 static const uint kVsPaletteBase = 204u;
+// GxVsConstants::mtx_chunks and flags bit 24 (the matrix arena).
+static const uint kVsMtxChunks = 1408u;
+static const uint kVsFlagMatrixArena = 0x1000000u;
 static const uint kVsInlinePosMatrix = 224u;
 // GxVsConstants (uber_constants.h): the texture generators' matrices and post matrices, and the vertex key's flags
 // (bit 2: dual texture transforms), per-vertex texture matrices, texture generators and post generators.
@@ -97,6 +100,19 @@ uint pack_vertex_normal(float3 n)
 
 // A vertex in eye space, and its normal by the inverse transpose of the same matrix (rows of
 // cofactors; the determinant's sign keeps mirrored matrices facing out).
+// The matrix ring address of XF row `row` (16 bytes) of a draw: in its palette, or in its matrix arena entry (each
+// row on its own: a matrix's rows can lie in two entries).
+uint xf_row_address(uint4 draw2, uint vs_flags, uint palette_base, uint row)
+{
+    [branch] if ((vs_flags & kVsFlagMatrixArena) != 0u) {
+        const uint c = row >> 3u;
+        const uint slot = c < 8u ? c : c < 40u ? c - 24u : c - 29u;
+        const uint entry = g_constant_ring.Load(min(draw2.z, g_constant_ring_limit) + kVsMtxChunks + slot * 4u);
+        return min(draw2.w + (entry * 8u + (row & 7u)) * 16u, g_matrix_ring_limit);
+    }
+    return min(draw2.w + (palette_base + row) * 16u, g_matrix_ring_limit);
+}
+
 float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint palette_base, out float3 normal)
 {
     const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
@@ -117,10 +133,9 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     [branch] if ((vs_flags & 1u) != 0u) {
         // Per-vertex position matrix: XF row index (PNMTX n at row 3n), clamped as in the VS.
         const uint row = min(matrix_index & 0x3Fu, 61u);
-        const uint m = min(draw2.w + (palette_base + row) * 16u, g_matrix_ring_limit);
-        r0 = asfloat(g_matrix_ring.Load4(m));
-        r1 = asfloat(g_matrix_ring.Load4(m + 16u));
-        r2 = asfloat(g_matrix_ring.Load4(m + 32u));
+        r0 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row)));
+        r1 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row + 1u)));
+        r2 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row + 2u)));
     } else {
         const uint c = min(draw2.z, g_constant_ring_limit) + kVsInlinePosMatrix;
         r0 = asfloat(g_constant_ring.Load4(c));
@@ -206,10 +221,11 @@ float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_ba
         const uint3 indices = resident ? g_resident.Load3(a + kVertexMatrixIndex) : g_vertex_ring.Load3(a + kVertexMatrixIndex);
         const uint packed = gen < 3u ? indices.x : gen < 7u ? indices.y : indices.z;
         const uint shift = gen < 3u ? 8u + 8u * gen : gen < 7u ? 8u * (gen - 3u) : 0u;
-        const uint m = min(draw2.w + (palette_base + min((packed >> shift) & 0xFFu, 61u)) * 16u, g_matrix_ring_limit);
-        r0 = asfloat(g_matrix_ring.Load4(m));
-        r1 = asfloat(g_matrix_ring.Load4(m + 16u));
-        r2 = asfloat(g_matrix_ring.Load4(m + 32u));
+        const uint row = min((packed >> shift) & 0xFFu, 61u);
+        const uint vs_flags = g_constant_ring.Load(constants + kVsFlags);
+        r0 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row)));
+        r1 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row + 1u)));
+        r2 = asfloat(g_matrix_ring.Load4(xf_row_address(draw2, vs_flags, palette_base, row + 2u)));
     } else {
         const uint c = constants + kVsInlineTexMatrices + gen * 48u;
         r0 = asfloat(g_constant_ring.Load4(c));
