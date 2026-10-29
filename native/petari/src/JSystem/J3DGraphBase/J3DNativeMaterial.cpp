@@ -194,17 +194,41 @@ namespace J3DNativeMaterial {
             copyColor(rOut.color, rInfo.mColor);
         }
 
-        const J3DFogInfo& rFog = *pPE->getFog()->getFogInfo();
-        pOut->fog.type = rFog.mType;
-        pOut->fog.adjust_enable = rFog.mAdjEnable;
-        pOut->fog.adjust_center = rFog.mCenter;
-        pOut->fog.start = rFog.mStartZ;
-        pOut->fog.end = rFog.mEndZ;
-        pOut->fog.near_z = rFog.mNearZ;
-        pOut->fog.far_z = rFog.mFarZ;
-        copyColor(pOut->fog.color, rFog.mColor);
-        for (u32 i = 0; i < 10; i++) {
-            pOut->fog.adjust[i] = rFog.mFogAdjTable.r[i];
+        // The preset blocks write fixed modes and no fog, and keep the dither (J3DPEBlockOpa, TexEdge, Xlu load).
+        const u32 peType = pPE->getType();
+        if (peType == 'PEOP' || peType == 'PEED' || peType == 'PEXL') {
+            const bool edge = peType == 'PEED';
+            const bool xlu = peType == 'PEXL';
+            pOut->alpha_compare.comp0 = edge ? GX_GEQUAL : GX_ALWAYS;
+            pOut->alpha_compare.ref0 = edge ? 0x80 : 0;
+            pOut->alpha_compare.op = GX_AOP_AND;
+            pOut->alpha_compare.comp1 = edge ? GX_LEQUAL : GX_ALWAYS;
+            pOut->alpha_compare.ref1 = edge ? 0xFF : 0;
+            pOut->blend.type = xlu ? GX_BM_BLEND : GX_BM_NONE;
+            pOut->blend.source = xlu ? GX_BL_SRCALPHA : GX_BL_ONE;
+            pOut->blend.destination = xlu ? GX_BL_INVSRCALPHA : GX_BL_ZERO;
+            pOut->blend.logic_op = GX_LO_COPY;
+            pOut->z_mode.enable = 1;
+            pOut->z_mode.func = GX_LEQUAL;
+            pOut->z_mode.update = xlu ? 0 : 1;
+            pOut->z_compare_location = edge ? 0 : 1;
+            return;
+        }
+        pOut->loads |= NEBULA_MATERIAL_LOADS_DITHER;
+        if (J3DFog* pFog = pPE->getFog()) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_FOG;
+            const J3DFogInfo& rFog = *pFog->getFogInfo();
+            pOut->fog.type = rFog.mType;
+            pOut->fog.adjust_enable = rFog.mAdjEnable;
+            pOut->fog.adjust_center = rFog.mCenter;
+            pOut->fog.start = rFog.mStartZ;
+            pOut->fog.end = rFog.mEndZ;
+            pOut->fog.near_z = rFog.mNearZ;
+            pOut->fog.far_z = rFog.mFarZ;
+            copyColor(pOut->fog.color, rFog.mColor);
+            for (u32 i = 0; i < 10; i++) {
+                pOut->fog.adjust[i] = rFog.mFogAdjTable.r[i];
+            }
         }
         const J3DAlphaComp& rAlpha = *pPE->getAlphaComp();
         pOut->alpha_compare.comp0 = rAlpha.getComp0();

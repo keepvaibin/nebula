@@ -53,6 +53,11 @@ typedef struct NebulaShapeCurrent {
 
 /* A J3D material as the next shape draws use it (material in NebulaHostServices): every value as GX's functions take
    it, no register words. Colours are RGBA bytes; TEV colours signed 10-bit values in int16_t. */
+enum {
+    NEBULA_MATERIAL_LOADS_FOG = 1u << 0,
+    NEBULA_MATERIAL_LOADS_DITHER = 1u << 1,
+};
+
 typedef struct NebulaMaterialTevStage {
     uint8_t tex_coord, tex_map, channel;          /* GXSetTevOrder */
     uint8_t color_in[4], color_op, color_bias, color_scale, color_clamp, color_reg;
@@ -79,7 +84,8 @@ typedef struct NebulaMaterialLight {
 
 typedef struct NebulaMaterial {
     uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
-    uint8_t dither, z_compare_location, reserved;
+    uint8_t dither, z_compare_location;
+    uint8_t loads; /* NEBULA_MATERIAL_LOADS_*: the parts the material sets (the others keep what was set before) */
     NebulaMaterialTevStage tev[16];
     int16_t tev_color[4][4];
     uint8_t konst_color[4][4];
