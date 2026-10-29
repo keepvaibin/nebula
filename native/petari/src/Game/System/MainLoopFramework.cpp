@@ -6,7 +6,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <revolution/os.h>
 #include "Game/System/DrawSyncManager.hpp"
-#include "Game/Util/BothDirList.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JUtility/JUTAssert.hpp>
@@ -19,7 +18,6 @@
 
 MainLoopFramework* MainLoopFramework::sManager;
 
-MR::BothDirList< MainLoopFrameworkAlarm > MainLoopFrameworkAlarm::sList(false);
 
 GXTexObj clear_z_tobj;
 
@@ -41,9 +39,6 @@ namespace {
 
     void waitForTick(u32, u16);
 
-    void waitDrawDoneAndSetAlarm();
-
-    void handleGXAbortAlarm(OSAlarm*, OSContext*);
 };  // namespace
 
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
@@ -126,7 +121,7 @@ void MainLoopFramework::drawendXfb_single() {
     JUTXfb* pXfbMgr = JUTXfb::sManager;
     if (pXfbMgr->mDrawingXfbIndex >= 0) {
         prepareCopyDisp();
-        ::waitDrawDoneAndSetAlarm();
+        GXDrawDone();
         GXFlush();
         pXfbMgr->mDrawnXfbIndex = pXfbMgr->mDrawingXfbIndex;
     }
@@ -294,11 +289,11 @@ void MainLoopFramework::endFrame() {
         case 1:
             break;
         case 2:
-            ::waitDrawDoneAndSetAlarm();
+            GXDrawDone();
             GXFlush();
             break;
         case 3:
-            ::waitDrawDoneAndSetAlarm();
+            GXDrawDone();
             GXFlush();
             break;
         }
@@ -417,11 +412,6 @@ u32 MainLoopFramework::frameToTick(f32 frame) {
 }
 
 void MainLoopFramework::setForOSResetSystem() {
-    MR::BothDirPtrLink* pLink = MainLoopFrameworkAlarm::sList.mHead;
-    while (pLink) {
-        OSCancelAlarm((MainLoopFrameworkAlarm*)pLink->mValue);
-        pLink = pLink->mNextLink;
-    }
     JUTVideo::destroyManager();
     VISetBlack(TRUE);
     VIFlush();
@@ -478,36 +468,4 @@ namespace {
         }
     }
 
-    void waitDrawDoneAndSetAlarm() {
-        MainLoopFrameworkAlarm alarm;
-        {
-            MR::ProhibitSchedulerAndInterrupts prohibit(false);
-            OSCreateAlarm(&alarm);
-            MainLoopFrameworkAlarm::sList.append(&alarm.mLink);
-        }
-        OSTime tick = __cvt_dbl_usll(OS_BUS_CLOCK / 4 * 0.5);
-        OSSetAlarm(&alarm, tick, &handleGXAbortAlarm);
-        GXDrawDone();
-        DrawSyncManager::resetIfAborted();
-        {
-            MR::ProhibitSchedulerAndInterrupts prohibit(false);
-            OSCancelAlarm(&alarm);
-            MainLoopFrameworkAlarm::sList.remove(&alarm.mLink);
-        }
-    }
-
-    void handleGXAbortAlarm(OSAlarm* alarm, OSContext* context) {
-        u32 ras_busy2, clocks2, xf_wait_in2, xf_wait_out2;
-        u32 ras_busy, clocks, xf_wait_in, xf_wait_out;
-        GXReadXfRasMetric(&xf_wait_in, &xf_wait_out, &ras_busy, &clocks);
-        GXReadXfRasMetric(&xf_wait_in2, &xf_wait_out2, &ras_busy2, &clocks2);
-        GXBool brkpt, cmdIdle, readIdle, underlow, overhi;
-        GXGetGPStatus(&overhi, &underlow, &readIdle, &cmdIdle, &brkpt);
-        GXAbortFrame();
-        DrawSyncManager::sInstance->clearFifo();
-        GX_WRITE_U8(0x61);
-        GX_WRITE_U32(0x5800000f);
-        GXSetDrawDone();
-        DrawSyncManager::prepareReset();
-    }
 };  // namespace

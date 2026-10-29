@@ -1,22 +1,10 @@
 #pragma once
 
-#include "Game/Util/BothDirList.hpp"
 #include "Game/Util/Color.hpp"
 #include <JSystem/JUtility/JUTXfb.hpp>
 #include <revolution.h>
 
 typedef void (*PreRenderCallback)();
-
-class MainLoopFrameworkAlarm : public OSAlarm {
-public:
-    MainLoopFrameworkAlarm() : mLink(this) {
-    }
-
-    /* 0x30 */ u32 _30;
-    /* 0x34 */ MR::BothDirLink< MainLoopFrameworkAlarm > mLink;
-
-    static MR::BothDirList< MainLoopFrameworkAlarm > sList;
-};
 
 class MainLoopFramework {
 public:

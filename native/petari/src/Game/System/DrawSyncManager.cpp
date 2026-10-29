@@ -1,6 +1,4 @@
 #include "Game/System/DrawSyncManager.hpp"
-#include "Game/System/GameSystem.hpp"
-#include "Game/Util/SingletonHolder.hpp"
 
 DrawSyncManager* DrawSyncManager::sInstance;
 
@@ -10,28 +8,6 @@ DrawSyncManager* DrawSyncManager::start(u32 capacity, s32 priority) {
     }
 
     return sInstance;
-}
-
-void DrawSyncManager::prepareReset() {
-    if (sInstance == nullptr) {
-        return;
-    }
-
-    sInstance->reset(true);
-}
-
-void DrawSyncManager::resetIfAborted() {
-    if (sInstance == nullptr) {
-        return;
-    }
-
-    sInstance->reset(false);
-}
-
-void DrawSyncManager::clearFifo() {
-    while (mFifo->getCount() != 0) {
-        mFifo->pop();
-    }
 }
 
 void* Fifo::pop() {
@@ -97,13 +73,11 @@ void* DrawSyncManager::threadFunc(void* pArg) {
 }
 
 DrawSyncManager::DrawSyncManager(u32 capacity, s32 priority) {
-    mPreparingReset = false;
     mStack = nullptr;
     mMessageBuffer = nullptr;
     mFlags = 0;
     mLowTokenCount = 0;
     mHighTokenCount = 0;
-    mAborted = false;
 
     mStack = new u8[0x8000];
     OSCreateThread(&mThread, threadFunc, this, mStack + 0x8000, 0x8000, priority, 0);
@@ -132,20 +106,6 @@ u16 DrawSyncManager::setCallback(u32 index, u16 count, DrawSyncCallback* pCallba
     mTokenRanges[index] = TDrawSyncTokenRange(start, start + count - 1, pCallback);
     mHighTokenCount += count;
     return start;
-}
-
-void DrawSyncManager::reset(bool preparing) {
-    if (preparing) {
-        mPreparingReset = true;
-        return;
-    }
-
-    if (mPreparingReset) {
-        mPreparingReset = false;
-        mAborted = true;
-        GXSetDrawSyncCallback(drawSyncCallback);
-        SingletonHolder< GameSystem >::get()->initGX();
-    }
 }
 
 void DrawSyncManager::drawSyncCallbackSub(u16 token) {
