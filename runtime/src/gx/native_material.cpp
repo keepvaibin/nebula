@@ -92,19 +92,8 @@ std::uint32_t order_half(const TevStage& s) {
            static_cast<std::uint32_t>(kChannelToRas[s.channel & 15u]) << 7u;
 }
 
-void tev(Writer& w, const Material& m) {
-    for (unsigned map = 0; map < 8u; ++map) {
-        if (m.texture[map].image != 0u) {
-            texture(w, map, m.texture[map]);
-        }
-    }
-    for (unsigned i = 0; i < m.tev_stages; i += 2u) {
-        w.bp(static_cast<std::uint8_t>(0x28u + i / 2u), order_half(m.tev[i]) | order_half(m.tev[i + 1u]) << 12u);
-        coord_scale(w, m, m.tev[i].tex_coord);
-        if (i + 1u < m.tev_stages || m.tev[i + 1u].tex_map != kNullMap) {
-            coord_scale(w, m, m.tev[i + 1u].tex_coord);
-        }
-    }
+// TEV colours, then konst colours (J3DTevBlock*::load and diffTevReg).
+void tev_registers(Writer& w, const Material& m) {
     if ((m.loads & kLoadsTevColor) != 0u) {
         // The material's three colours are registers 1-3 (register 0 is the previous stage's output).
         for (unsigned r = 0; r < 3u; ++r) {
@@ -122,6 +111,22 @@ void tev(Writer& w, const Material& m) {
             w.bp(static_cast<std::uint8_t>(0xE1u + 2u * r), c[2] | static_cast<std::uint32_t>(c[1]) << 12u | 1u << 23u);
         }
     }
+}
+
+void tev(Writer& w, const Material& m) {
+    for (unsigned map = 0; map < 8u; ++map) {
+        if (m.texture[map].image != 0u) {
+            texture(w, map, m.texture[map]);
+        }
+    }
+    for (unsigned i = 0; i < m.tev_stages; i += 2u) {
+        w.bp(static_cast<std::uint8_t>(0x28u + i / 2u), order_half(m.tev[i]) | order_half(m.tev[i + 1u]) << 12u);
+        coord_scale(w, m, m.tev[i].tex_coord);
+        if (i + 1u < m.tev_stages || m.tev[i + 1u].tex_map != kNullMap) {
+            coord_scale(w, m, m.tev[i + 1u].tex_coord);
+        }
+    }
+    tev_registers(w, m);
     for (unsigned i = 0; i < m.tev_stages; ++i) {
         const TevStage& s = m.tev[i];
         w.bp(static_cast<std::uint8_t>(0xC0u + 2u * i),
@@ -230,6 +235,8 @@ void fog(Writer& w, const Material& m) {
     w.bp(0xE8u, static_cast<std::uint32_t>(f.adjust_center + 342u) | static_cast<std::uint32_t>(f.adjust_enable) << 10u);
 }
 
+void blend_and_z(Writer& w, const Material& m);
+
 void pixel(Writer& w, const Material& m) {
     if ((m.loads & kLoadsFog) != 0u) {
         fog(w, m);
@@ -237,6 +244,13 @@ void pixel(Writer& w, const Material& m) {
     const auto& ac = m.alpha_compare;
     w.bp(0xF3u, ac.ref0 | static_cast<std::uint32_t>(ac.ref1) << 8u | static_cast<std::uint32_t>(ac.comp0) << 16u |
                     static_cast<std::uint32_t>(ac.comp1) << 19u | static_cast<std::uint32_t>(ac.op) << 22u);
+    blend_and_z(w, m);
+    w.bp(0xFE000040u);
+    w.bp(0x43u, static_cast<std::uint32_t>(m.z_compare_location) << 6u);
+}
+
+// Blend (with the dither when the material sets it), then Z mode (J3DBlend::load, J3DZMode::load; diffBlend).
+void blend_and_z(Writer& w, const Material& m) {
     const auto& bl = m.blend;
     const bool dither = (m.loads & kLoadsDither) != 0u;
     w.bp(dither ? 0xFE00FFE7u : 0xFE00FFE3u);
@@ -247,8 +261,6 @@ void pixel(Writer& w, const Material& m) {
                     static_cast<std::uint32_t>(bl.logic_op) << 12u);
     w.bp(0x40u, static_cast<std::uint32_t>(m.z_mode.enable) | static_cast<std::uint32_t>(m.z_mode.func) << 1u |
                     static_cast<std::uint32_t>(m.z_mode.update) << 4u);
-    w.bp(0xFE000040u);
-    w.bp(0x43u, static_cast<std::uint32_t>(m.z_compare_location) << 6u);
 }
 
 // GXSetTexCoordGen as J3DGDSetTexCoordGen packs it.
@@ -284,6 +296,8 @@ std::uint32_t channel(const Material& m, unsigned i) {
            static_cast<std::uint32_t>(c.light_mask >> 4u) << 11u;
 }
 
+void channels_and_lights(Writer& w, const Material& m);
+
 void colour(Writer& w, const Material& m) {
     const std::uint32_t material[2] = {rgba(m.material_color[0]), rgba(m.material_color[1])};
     w.xf(0x100Cu, material, 2u);
@@ -291,6 +305,11 @@ void colour(Writer& w, const Material& m) {
         const std::uint32_t ambient[2] = {rgba(m.ambient_color[0]), rgba(m.ambient_color[1])};
         w.xf(0x100Au, ambient, 2u);
     }
+    channels_and_lights(w, m);
+}
+
+// Channel controls (colour 0, alpha 0, colour 1, alpha 1 as J3D orders them) and lights (diffLight).
+void channels_and_lights(Writer& w, const Material& m) {
     const std::uint32_t chans[4] = {channel(m, 0), channel(m, 2), channel(m, 1), channel(m, 3)};
     w.xf(0x100Eu, chans, 4u);
     for (unsigned i = 0; (m.loads & kLoadsLights) != 0u && i < 8u; ++i) {
@@ -313,10 +332,97 @@ void colour(Writer& w, const Material& m) {
     }
 }
 
+// Texgens and their post-transform matrices (loadTexCoordGens).
+void tex_gens(Writer& w, const Material& m) {
+    if (m.tex_gens == 0u) {
+        return;
+    }
+    std::uint32_t gens[8];
+    std::uint32_t post[8];
+    for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
+        gens[i] = tex_gen(m.tex_gen[i].type, m.tex_gen[i].source);
+        post[i] = m.tex_gen[i].post_matrix;
+    }
+    w.xf(0x1040u, gens, m.tex_gens);
+    w.xf(0x1050u, post, m.tex_gens);
+}
+
+// J3DMaterial::diff's writes for an instance's differed list (J3DMatBlock.cpp diff bodies), in its order.
+void differed(Writer& w, const Material& m) {
+    const std::uint32_t f = m.diff_flags;
+    if (((f >> 16u) & 15u) != 0u) {  // TexNoNum: diffTexNo
+        for (unsigned map = 0; map < 8u; ++map) {
+            if (m.texture[map].image != 0u) {
+                texture(w, map, m.texture[map]);
+            }
+        }
+    }
+    if ((f & 0x4000000u) != 0u) {  // TexCoordScale
+        for (unsigned i = 0; i < m.tev_stages; i += 2u) {
+            coord_scale(w, m, m.tev[i].tex_coord);
+            coord_scale(w, m, m.tev[i + 1u].tex_coord);
+        }
+    }
+    if (((f >> 20u) & 15u) != 0u) {  // TevStageNum: diffTevStage, then diffTevStageIndirect
+        for (unsigned i = 0; i < m.tev_stages; ++i) {
+            const TevStage& s = m.tev[i];
+            w.bp(static_cast<std::uint8_t>(0xC0u + 2u * i),
+                 tev_op(s.color_op, s.color_bias, s.color_scale, s.color_clamp, s.color_reg) | s.color_in[3] |
+                     static_cast<std::uint32_t>(s.color_in[2]) << 4u | static_cast<std::uint32_t>(s.color_in[1]) << 8u |
+                     static_cast<std::uint32_t>(s.color_in[0]) << 12u);
+            w.bp(static_cast<std::uint8_t>(0xC1u + 2u * i),
+                 tev_op(s.alpha_op, s.alpha_bias, s.alpha_scale, s.alpha_clamp, s.alpha_reg) | s.ras_swap |
+                     static_cast<std::uint32_t>(s.tex_swap) << 2u | static_cast<std::uint32_t>(s.alpha_in[3]) << 4u |
+                     static_cast<std::uint32_t>(s.alpha_in[2]) << 7u | static_cast<std::uint32_t>(s.alpha_in[1]) << 10u |
+                     static_cast<std::uint32_t>(s.alpha_in[0]) << 13u);
+        }
+        if ((f & 0x8000000u) != 0u) {
+            for (unsigned i = 0; i < m.tev_stages; ++i) {
+                const TevStage& s = m.tev[i];
+                w.bp(static_cast<std::uint8_t>(0x10u + i),
+                     static_cast<std::uint32_t>(s.ind_stage) | static_cast<std::uint32_t>(s.ind_format) << 2u |
+                         static_cast<std::uint32_t>(s.ind_bias) << 4u | static_cast<std::uint32_t>(s.ind_alpha) << 7u |
+                         static_cast<std::uint32_t>(s.ind_matrix) << 9u | static_cast<std::uint32_t>(s.ind_wrap_s) << 13u |
+                         static_cast<std::uint32_t>(s.ind_wrap_t) << 16u | static_cast<std::uint32_t>(s.ind_lod) << 19u |
+                         static_cast<std::uint32_t>(s.ind_prev) << 20u);
+            }
+        }
+    }
+    if ((f & 0x1000000u) != 0u) {  // TevReg: diffTevReg (TEV colours, then konst colours)
+        tev_registers(w, m);
+    }
+    if ((f & 0x10000000u) != 0u && (m.loads & kLoadsFog) != 0u) {  // Fog
+        fog(w, m);
+    }
+    if ((f & 0x20000000u) != 0u) {  // Blend: diffBlend (blend, then Z mode)
+        blend_and_z(w, m);
+    }
+    if ((f & 0x2000000u) != 0u) {  // KonstColor: GenMode_3Param and the texgen count
+        w.bp(0xFE073C0Fu);
+        w.bp(0x00u, static_cast<std::uint32_t>(m.tex_gens) | static_cast<std::uint32_t>(m.tev_stages - 1u) << 10u |
+                        static_cast<std::uint32_t>(m.ind_stages) << 16u);
+        w.xf(0x103Fu, m.tex_gens);
+    }
+    if (((f >> 8u) & 15u) != 0u && (f & 0x1000u) != 0u) {  // TexGenNum + TexGen: diffTexGen (matrices ride draws)
+        tex_gens(w, m);
+    }
+    if ((f & 0x1u) != 0u) {  // MatColor
+        const std::uint32_t material[2] = {rgba(m.material_color[0]), rgba(m.material_color[1])};
+        w.xf(0x100Cu, material, 2u);
+    }
+    if ((f & 0x2u) != 0u || ((f >> 4u) & 15u) != 0u) {  // ColorChan or LightObjNum: diffLight
+        channels_and_lights(w, m);
+    }
+}
+
 }  // namespace
 
 void apply(const Material& m, GxState& state, FifoSink* actions) {
     Writer w{state, actions};
+    if (m.diff_flags != 0u) {
+        differed(w, m);
+        return;
+    }
     if ((m.loads & kLoadsTev) != 0u) {
         tev(w, m);
     }
@@ -328,16 +434,7 @@ void apply(const Material& m, GxState& state, FifoSink* actions) {
     w.bp(0x00u, static_cast<std::uint32_t>(m.tex_gens) | static_cast<std::uint32_t>(m.channels) << 4u |
                     static_cast<std::uint32_t>(m.tev_stages - 1u) << 10u | static_cast<std::uint32_t>(kCull[m.cull & 3u]) << 14u |
                     static_cast<std::uint32_t>(m.ind_stages) << 16u);
-    if (m.tex_gens != 0u) {
-        std::uint32_t gens[8];
-        std::uint32_t post[8];
-        for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
-            gens[i] = tex_gen(m.tex_gen[i].type, m.tex_gen[i].source);
-            post[i] = m.tex_gen[i].post_matrix;
-        }
-        w.xf(0x1040u, gens, m.tex_gens);
-        w.xf(0x1050u, post, m.tex_gens);
-    }
+    tex_gens(w, m);
     if ((m.loads & kLoadsChannels) != 0u) {
         colour(w, m);
     }

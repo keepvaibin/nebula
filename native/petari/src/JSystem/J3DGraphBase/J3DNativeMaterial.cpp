@@ -315,9 +315,10 @@ namespace J3DNativeMaterial {
         return new (0x20) NebulaMaterial;
     }
 
-    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
+    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags) {
         if (pList != NULL && pList->mpNebulaMaterial != NULL) {
             build(pMaterial, pTexture, pList->mpNebulaMaterial);
+            pList->mpNebulaMaterial->diff_flags = diffFlags;
             pList->mNebulaCaptured = true;
         }
     }

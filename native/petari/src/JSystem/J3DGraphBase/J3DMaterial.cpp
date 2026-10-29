@@ -254,7 +254,7 @@ void J3DMaterial::diff(u32 diffFlags) {
 
         j3dSys.getMatPacket()->endDiff();
         J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture,
-                                   j3dSys.getMatPacket()->mpInitShapePacket->getDisplayListObj());
+                                   j3dSys.getMatPacket()->mpInitShapePacket->getDisplayListObj(), diffFlags);
     }
 }
 

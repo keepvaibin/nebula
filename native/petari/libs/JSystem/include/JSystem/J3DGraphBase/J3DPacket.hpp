@@ -81,6 +81,7 @@ public:
         mpDisplayList[1] = nullptr;
         mpNebulaMaterial = nullptr;
         mNebulaCaptured = false;
+        mNebulaDiffFlags = 0;
         mSize = 0;
         mMaxSize = 0;
     }
@@ -114,6 +115,7 @@ public:
     // patched.
     struct NebulaMaterial* mpNebulaMaterial;
     bool mNebulaCaptured;
+    u32 mNebulaDiffFlags;
 };
 
 class J3DPacket {

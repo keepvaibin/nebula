@@ -71,6 +71,7 @@ struct Material {
     struct { std::uint8_t comp0, ref0, op, comp1, ref1, reserved[3]; } alpha_compare;
     struct { std::uint8_t type, source, destination, logic_op; } blend;
     struct { std::uint8_t enable, func, update, reserved; } z_mode;
+    std::uint32_t diff_flags;  // 0: the whole material; else J3D's diff flags (apply sets only what they name)
 };
 
 // Sets `state` as J3D's material display list did (J3DMaterial::makeDisplayList_private's order: TEV block,

@@ -15,7 +15,8 @@ namespace J3DNativeMaterial {
     // A snapshot's storage, from the current heap (where a material list's buffers come from).
     NebulaMaterial* create();
     // The material as `pList` sets it now (made or patched), into its snapshot.
-    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList);
+    // `diffFlags`: the J3D diff flags of a differed list (0 for a whole list).
+    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags = 0);
     // The material `pList` sets (its snapshot; built now for a list from the model file, which has none).
     void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList);
     // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has

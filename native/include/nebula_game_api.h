@@ -114,6 +114,9 @@ typedef struct NebulaMaterial {
     struct { uint8_t comp0, ref0, op, comp1, ref1, reserved[3]; } alpha_compare;
     struct { uint8_t type, source, destination, logic_op; } blend;
     struct { uint8_t enable, func, update, reserved; } z_mode;
+    /* 0: the material as its list sets it. Else an instance's differed list: only the parts these J3D diff flags name
+       (J3DDiffFlag_*: counts of textures, stages, texgens and lights, TEV and konst registers, fog, blend, ...). */
+    uint32_t diff_flags;
 } NebulaMaterial;
 
 /* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the
