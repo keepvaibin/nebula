@@ -1,127 +1,99 @@
 #include "RVLFaceLibInternal.h"
 
-static const u8 scDefaultData[][sizeof(RFLiCharData)] = {
+// The library's default Miis (its guests), as character info.
+static const RFLiCharInfo scDefaultInfo[] = {
     // "Guest A"
-    {0x00, 0x08, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x00, 0xEC, 0xFF, 0x82, 0xD2, 0x10,
-     0x04, 0x88, 0x00, 0x31, 0x80, 0x08, 0xA2, 0x08, 0x8C, 0x08, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    {
+        .faceline = {{.type = 0, .color = 4, .texture = 0}},
+        .hair = {{.type = 68, .color = 0, .flip = 0}},
+        .eye = {{.type = 2, .color = 0, .scale = 4, .rotate = 4, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 6, .color = 0, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 4, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x00, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
     // "Guest B"
-    {0x00, 0x0A, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x01, 0xEC, 0xFF, 0x82, 0xD2, 0x00,
-     0x04, 0x6F, 0x80, 0x31, 0x80, 0xC8, 0xA2, 0x08, 0x8C, 0x88, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    {
+        .faceline = {{.type = 0, .color = 0, .texture = 0}},
+        .hair = {{.type = 55, .color = 6, .flip = 0}},
+        .eye = {{.type = 2, .color = 4, .scale = 4, .rotate = 4, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 6, .color = 6, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 5, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x01, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
     // "Guest C"
-    {0x00, 0x00, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x02, 0xEC, 0xFF, 0x82, 0xD2, 0x04,
-     0x04, 0x42, 0x40, 0x31, 0x80, 0x28, 0xA2, 0x08, 0x8C, 0x08, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    {
+        .faceline = {{.type = 0, .color = 1, .texture = 0}},
+        .hair = {{.type = 33, .color = 1, .flip = 0}},
+        .eye = {{.type = 2, .color = 0, .scale = 4, .rotate = 4, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 6, .color = 1, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 0, .bmonth = 0, .bday = 0, .color = 0, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x02, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
     // "Guest D"
-    {0x40, 0x04, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x03, 0xEC, 0xFF, 0x82, 0xD2, 0x08,
-     0x04, 0x30, 0x00, 0x01, 0x80, 0x08, 0xA2, 0x10, 0x6C, 0x08, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    {
+        .faceline = {{.type = 0, .color = 2, .texture = 0}},
+        .hair = {{.type = 24, .color = 0, .flip = 0}},
+        .eye = {{.type = 4, .color = 0, .scale = 4, .rotate = 3, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 0, .color = 0, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 2, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x03, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
     // "Guest E"
-    {0x40, 0x0C, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x04, 0xEC, 0xFF, 0x82, 0xD2, 0x00,
-     0x04, 0x1D, 0xC0, 0x01, 0x80, 0xE8, 0xA2, 0x10, 0x6C, 0xA8, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+    {
+        .faceline = {{.type = 0, .color = 0, .texture = 0}},
+        .hair = {{.type = 14, .color = 7, .flip = 0}},
+        .eye = {{.type = 4, .color = 5, .scale = 4, .rotate = 3, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 0, .color = 7, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 6, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x04, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
     // "Guest F"
-    {0x40, 0x0E, 0x00, 0x6E, 0x00, 0x6F, 0x00, 0x20, 0x00, 0x6E, 0x00,
-     0x61, 0x00, 0x6D, 0x00, 0x65, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x40, 0x40, 0x80, 0x00, 0x00, 0x05, 0xEC, 0xFF, 0x82, 0xD2, 0x00,
-     0x04, 0x18, 0x40, 0x01, 0x80, 0x28, 0xA2, 0x10, 0x6C, 0x08, 0x58,
-     0x14, 0x4A, 0xB8, 0x8D, 0x00, 0x8A, 0x00, 0x8A, 0x25, 0x04, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
-
-// The defaults are kept as the console's Mii records.
-static void convertRaw2InfoCore_(const RFLiCharData* data, RFLiCharInfo* info) {
-    info->faceline.type = RFLI_GET(RFLiCharData, data, faceType);
-    info->faceline.color = RFLI_GET(RFLiCharData, data, faceColor);
-    info->faceline.texture = RFLI_GET(RFLiCharData, data, faceTex);
-
-    info->hair.type = RFLI_GET(RFLiCharData, data, hairType);
-    info->hair.color = RFLI_GET(RFLiCharData, data, hairColor);
-    info->hair.flip = RFLI_GET(RFLiCharData, data, hairFlip);
-
-    info->eye.type = RFLI_GET(RFLiCharData, data, eyeType);
-    info->eye.color = RFLI_GET(RFLiCharData, data, eyeColor);
-    info->eye.scale = RFLI_GET(RFLiCharData, data, eyeScale);
-    info->eye.rotate = RFLI_GET(RFLiCharData, data, eyeRotate);
-    info->eye.x = RFLI_GET(RFLiCharData, data, eyeX);
-    info->eye.y = RFLI_GET(RFLiCharData, data, eyeY);
-
-    info->eyebrow.type = RFLI_GET(RFLiCharData, data, eyebrowType);
-    info->eyebrow.color = RFLI_GET(RFLiCharData, data, eyebrowColor);
-    info->eyebrow.scale = RFLI_GET(RFLiCharData, data, eyebrowScale);
-    info->eyebrow.rotate = RFLI_GET(RFLiCharData, data, eyebrowRotate);
-    info->eyebrow.x = RFLI_GET(RFLiCharData, data, eyebrowX);
-    info->eyebrow.y = RFLI_GET(RFLiCharData, data, eyebrowY);
-
-    info->nose.type = RFLI_GET(RFLiCharData, data, noseType);
-    info->nose.scale = RFLI_GET(RFLiCharData, data, noseScale);
-    info->nose.y = RFLI_GET(RFLiCharData, data, noseY);
-
-    info->mouth.type = RFLI_GET(RFLiCharData, data, mouthType);
-    info->mouth.color = RFLI_GET(RFLiCharData, data, mouthColor);
-    info->mouth.scale = RFLI_GET(RFLiCharData, data, mouthScale);
-    info->mouth.y = RFLI_GET(RFLiCharData, data, mouthY);
-
-    info->beard.mustache = RFLI_GET(RFLiCharData, data, mustacheType);
-    info->beard.type = RFLI_GET(RFLiCharData, data, beardType);
-    info->beard.color = RFLI_GET(RFLiCharData, data, beardColor);
-    info->beard.scale = RFLI_GET(RFLiCharData, data, beardScale);
-    info->beard.y = RFLI_GET(RFLiCharData, data, beardY);
-
-    info->glass.type = RFLI_GET(RFLiCharData, data, glassType);
-    info->glass.color = RFLI_GET(RFLiCharData, data, glassColor);
-    info->glass.scale = RFLI_GET(RFLiCharData, data, glassScale);
-    info->glass.y = RFLI_GET(RFLiCharData, data, glassY);
-
-    info->mole.type = RFLI_GET(RFLiCharData, data, moleType);
-    info->mole.scale = RFLI_GET(RFLiCharData, data, moleScale);
-    info->mole.x = RFLI_GET(RFLiCharData, data, moleX);
-    info->mole.y = RFLI_GET(RFLiCharData, data, moleY);
-
-    info->body.height = data->height;
-    info->body.build = data->build;
-
-    RFLI_COPY_NAME(info->personal.name, data->name, RFL_NAME_LEN);
-    info->personal.name[RFL_NAME_LEN] = L'\0';
-
-    memcpy(&info->createID, &data->createID, sizeof(RFLCreateID));
-
-    info->personal.sex = RFLI_GET(RFLiCharData, data, sex);
-    info->personal.bmonth = RFLI_GET(RFLiCharData, data, birthMonth);
-    info->personal.bday = RFLI_GET(RFLiCharData, data, birthDay);
-    info->personal.color = RFLI_GET(RFLiCharData, data, favoriteColor);
-    info->personal.favorite = RFLI_GET(RFLiCharData, data, favorite);
-    info->personal.localOnly = RFLI_GET(RFLiCharData, data, localonly);
-}
-
-static void convertRaw2Info_(const RFLiCharData* data, RFLiCharInfo* out) {
-    convertRaw2InfoCore_(data, out);
-
-    RFLI_COPY_NAME(out->personal.creator, data->creatorName, RFL_CREATOR_LEN);
-    out->personal.creator[RFL_CREATOR_LEN] = '\0';
-}
+    {
+        .faceline = {{.type = 0, .color = 0, .texture = 0}},
+        .hair = {{.type = 12, .color = 1, .flip = 0}},
+        .eye = {{.type = 4, .color = 0, .scale = 4, .rotate = 3, .x = 2, .y = 12}},
+        .eyebrow = {{.type = 0, .color = 1, .scale = 4, .rotate = 6, .x = 2, .y = 10}},
+        .nose = {{.type = 1, .scale = 4, .y = 9}},
+        .mouth = {{.type = 23, .color = 0, .scale = 4, .y = 13}},
+        .beard = {{.mustache = 0, .type = 0, .color = 0, .scale = 4, .y = 10}},
+        .glass = {{.type = 0, .color = 0, .scale = 4, .y = 10}},
+        .mole = {{.type = 0, .scale = 4, .x = 2, .y = 20}},
+        .body = {.height = 64, .build = 64},
+        .personal = {.name = L"no name", .creator = L"", .sex = 1, .bmonth = 0, .bday = 0, .color = 7, .favorite = 0, .localOnly = 1},
+        .createID = {{0x80, 0x00, 0x00, 0x05, 0xEC, 0xFF, 0x82, 0xD2}},
+    },
+};
 
 void RFLiGetDefaultData(RFLiCharInfo* info, u16 index) {
-    convertRaw2Info_((RFLiCharData*)&scDefaultData[index], info);
+    *info = scDefaultInfo[index];
 }
