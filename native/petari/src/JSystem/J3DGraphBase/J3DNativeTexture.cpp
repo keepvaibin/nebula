@@ -39,13 +39,15 @@ namespace J3DNativeTexture {
         case GX_TF_I8:
         case GX_TF_IA4:
         case GX_TF_C8:
+        case GX_TF_Z8:
             shiftX = 3;
             shiftY = 2;
             break;
         default:
             break;
         }
-        const u32 tileBytes = format == GX_TF_RGBA8 ? 64 : 32;
+        // RGBA8 and Z24X8 take two tiles a block (AR and GB, or the depth's halves).
+        const u32 tileBytes = format == GX_TF_RGBA8 || format == GX_TF_Z24X8 ? 64 : 32;
         u32 size = 0;
         u32 w = width, h = height;
         for (u32 level = 0; level < (levels != 0 ? levels : 1); level++) {

@@ -62,6 +62,7 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mLastVideoTickDelta = 0;
     mSingleBufferIndex = 0;
     _3E = 0;
+    J3DNativeTexture::registerImage(clearZTexData, GX_TF_Z24X8, 4, 4, 1);
     J3DNativeTexture::init(&clear_z_tobj, clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
     J3DNativeTexture::initLOD(&clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
     mRenderInterval = 1;
