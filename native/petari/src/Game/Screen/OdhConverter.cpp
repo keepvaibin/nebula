@@ -55,7 +55,6 @@ void OdhConverter::convert() {
     J3DNativeState::copyTex(pScreenTexImage, GX_FALSE);
     GXDrawDone();
     J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
-    DCStoreRange(pScreenTexImage, mCaptureWidth * mCaptureHeight * 2);
 
     mImageSize = ODHEncodeRGB565(pScreenTexImage, mImage, mCaptureWidth, mCaptureHeight, mLimitSize, ::cQuality, mCaptureImage);
 }
