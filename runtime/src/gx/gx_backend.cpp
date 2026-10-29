@@ -10178,6 +10178,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_fifo_profile_.call_dl_cache_stores
                   << " fifo-call-dl-cache-uncacheable="
                   << frame_fifo_profile_.call_dl_cache_uncacheable
+                  << " fifo-bound-list-replays=" << frame_fifo_profile_.bound_list_replays
+                  << " fifo-versioned-list-calls=" << frame_fifo_profile_.versioned_list_calls
                   << " fifo-call-dl-miss-parse-us="
                   << frame_fifo_profile_.call_dl_miss_parse_us
                   << " fifo-call-dl-store-us="
@@ -12707,6 +12709,12 @@ bool GxBackend::request_native_shape(NativeShape& native, std::uint32_t handle, 
     shapes::register_later(shapes::make_request(handle, list_address, std::span(list, list_bytes), state_), live);
     native.requested = true;
     return true;
+}
+
+bool GxBackend::use_versioned_lists() {
+    // GALAXY_TEST_LIST_HANDLES_AB=1: versioned lists by handle in every other presented frame, called in the others.
+    static const bool test_ab = read_env_u64("GALAXY_TEST_LIST_HANDLES_AB", 0u) != 0u;
+    return !test_ab || ((g_snapshot_presents + 1u) & 1u) == 0u;
 }
 
 bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address, std::uint32_t list_bytes) {

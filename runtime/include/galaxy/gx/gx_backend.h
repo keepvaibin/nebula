@@ -336,6 +336,7 @@ private:
         std::uint32_t total_vertices,
         std::uint32_t total_indices,
         std::span<const std::uint16_t> precomputed_indices) override;
+    [[nodiscard]] bool use_versioned_lists() override;
     [[nodiscard]] bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
                                        std::uint32_t list_bytes) override;
     void on_efb_copy(std::uint32_t exec_command) override;

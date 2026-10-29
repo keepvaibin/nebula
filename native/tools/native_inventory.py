@@ -79,6 +79,8 @@ SIGNALS = [
                     r"\baudio_dsp\b|\bai_dma\b", "DSP program model"),
     ("test_hook", r"\bGALAXY_(?:TEST|TRACE|EXPORT|DEBUG|DUMP)_[A-Z0-9_]+|\bNEBULA_TEST_[A-Z0-9_]+",
      "test/trace hook (release hygiene)"),
+    ("decomp_residue", r"\bTARGET_PC\b|\b__MWERKS__\b|\basm\s*\{|\b__asm\b|\bnofralloc\b|\bfralloc\b",
+     "decompilation residue: console/native dual paths, CodeWarrior assembly"),
 ]
 COMPILED = [(k, re.compile(p), d) for k, p, d in SIGNALS]
 HYGIENE = {"test_hook", "os_report"}
@@ -165,6 +167,8 @@ AREAS = [
     (r"^native/petari/(?:src|include)/Game/NWC24/", "game-nwc24", "REPLACE", "Message board: remove or native."),
     (r"^native/petari/(?:src|include)/Game/", "game", "CONVERT",
      "Gameplay: native; only the console signals listed for the file change (draws, math, data access)."),
+    (r"^native/petari/include/nebula_disc\.hpp$", "game-system", "CONVERT",
+     "The game's disc access helpers: files from the cooked asset store."),
     (r"^native/petari/", "petari-other", "KEEP", "Petari metadata."),
     (r"^native/", "native-build", "KEEP", "Module build and benches."),
     (r"^runtime/src/gx/vk/|^runtime/include/galaxy/gx/vk/", "renderer-vulkan", "CONVERT",
@@ -176,7 +180,7 @@ AREAS = [
      "GX translation: command parsing, register state, GX vertex/texture decoding, EFB/XFB copies, TEV/XF shader "
      "emulation, guest-memory change detection. Replace with the native record renderer; reuse parts that are "
      "native already (upload ring, placed allocator, texture backend) after removing GX shapes from them."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:gx_backend|native_shapes)", "renderer-core", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/(?:gx/gx_backend|gx/native_shapes|gx_d3d12)", "renderer-core", "CONVERT",
      "Backend between the game and the GPU: becomes the native record consumer (native shapes stay)."),
     (r"^runtime/(?:src|include/galaxy)/gx/(?:renderer_d3d12|renderer_common|pipeline_cache|render_config|"
      r"display_modes|window_owner|vblank_clock)", "renderer-d3d12", "CONVERT",
@@ -196,7 +200,8 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/gx/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
-    (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video)",
+    (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video|guest_memory|"
+     r"synthetic_kpad_buttons)",
      "host-console-model", "REPLACE",
      "Input as Wii Remote reports, virtual device data, disc image, software THP: replace with native input, "
      "cooked assets and native video."),
