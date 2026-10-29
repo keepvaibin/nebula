@@ -220,6 +220,7 @@ void J3DSys::reinitTransform() {
 
 void J3DSys::reinitTexture() {
     GXTexObj texObj;
+    J3DNativeTexture::registerImage(NullTexData, GX_TF_IA8, 4, 4, 1);
     J3DNativeTexture::init(&texObj, NullTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::load(&texObj, GX_TEXMAP0);
     J3DNativeTexture::load(&texObj, GX_TEXMAP1);
