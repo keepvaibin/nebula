@@ -15,14 +15,11 @@ public:
     // TODO: return types not confirmed
     static JUTVideo* createManager(GXRenderModeObj const*);
     static void destroyManager();
-    static void drawDoneStart();
-    static void dummyNoDrawWait();
     void setRenderMode(GXRenderModeObj const*);
     void waitRetraceIfNeed();
 
     static void preRetraceProc(u32);
     static void postRetraceProc(u32);
-    static void drawDoneCallback();
 
     u16 getFbWidth() const {
         return mRenderObj->fbWidth;

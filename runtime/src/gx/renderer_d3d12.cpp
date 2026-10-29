@@ -8238,7 +8238,8 @@ void RendererD3D12::copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTe
     swap_efb_with(fg_hudless_efb_);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
-    fg_hudless_xfb_addr_ = dest.guest_addr;
+    fg_hudless_taken_ = true;
+    fg_hudless_slot_ = dest.slot;
 }
 
 // The HUD-less XFB of the presented copy, presented as the frame is into a backbuffer-sized
@@ -8248,10 +8249,10 @@ void RendererD3D12::present_fg_hudless(const XfbTexture& source, const D3D12_VIE
     if (!frame_generation_running()) {
         return;
     }
-    const bool ready = fg_hudless_xfb_.texture && fg_hudless_xfb_addr_ != 0u &&
-                       fg_hudless_xfb_addr_ == source.guest_addr && fg_hudless_xfb_.width == source.width &&
+    const bool ready = fg_hudless_xfb_.texture && fg_hudless_taken_ &&
+                       fg_hudless_slot_ == source.slot && fg_hudless_xfb_.width == source.width &&
                        fg_hudless_xfb_.height == source.height;
-    fg_hudless_xfb_addr_ = 0u;
+    fg_hudless_taken_ = false;
     if (!ready) {
         streamline::tag_hudless(command_list_.Get(), nullptr, 0u, 0u);
         return;
@@ -9162,7 +9163,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
                 publish_replay_log();
             }
             replay_segment_ = ring_segment_;
-            replay_xfb_addr_ = dest.guest_addr;
+            replay_picture_slot_ = dest.slot;
             ++replay_serial_;
             if (replay_valid_) {
                 play_serial_ = replay_serial_;
@@ -10649,8 +10650,8 @@ bool RendererD3D12::debug_copy_selected_xfb_to_readback(const XfbTexture& source
     selected_xfb_readback_path_ = next_backbuffer_capture_path_ + ".xfb.ppm";
     selected_xfb_readback_fence_ = 0u;
     selected_xfb_readback_pending_ = true;
-    std::cerr << "[selected-xfb-capture] addr=0x" << std::hex << source.guest_addr
-              << " resource=0x" << reinterpret_cast<std::uintptr_t>(source.texture.Get())
+    std::cerr << "[selected-xfb-capture] slot=" << source.slot
+              << " resource=0x" << std::hex << reinterpret_cast<std::uintptr_t>(source.texture.Get())
               << std::dec << " serial=" << source.copy_serial << " stamp=" << source.frame_stamp
               << " extent=" << source.width << 'x' << source.height
               << " path=" << selected_xfb_readback_path_ << '\n';

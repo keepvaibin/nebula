@@ -29,18 +29,22 @@ FramePeCompletionToken render_frame(
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
-    std::uint32_t displayed_xfb_addr) {
+    bool black) {
     return backend().render_frame(
         fifo_data,
         fifo_size,
         memory,
         services,
         present_swap_chain,
-        displayed_xfb_addr);
+        black);
 }
 
 void wait_for_render_idle() {
     backend().wait_for_render_idle();
+}
+
+void set_frame_end_presents(bool enabled) noexcept {
+    backend().set_frame_end_presents(enabled);
 }
 
 bool wait_for_frame_pe_completion_for(

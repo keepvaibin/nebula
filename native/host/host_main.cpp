@@ -878,6 +878,9 @@ std::atomic<bool> gBootFast{[] {
 void end_boot_fast(const char* why) {
     if (gBootFast.exchange(false, std::memory_order_relaxed)) {
         boot_mark(why);
+#if defined(NEBULA_HOST_RENDERER)
+        galaxy::gx::set_frame_end_presents(true);
+#endif
     }
 }
 
@@ -1506,10 +1509,10 @@ void take_finished_tokens() {
     }
 }
 
-void submit_frame_unchecked(bool present, uint32_t xfb) {
+void submit_frame_unchecked(bool present, bool black) {
     const size_t size = gPendingSize;
     const auto token = galaxy::gx::render_frame(reinterpret_cast<const std::byte*>(gPending), size, &gMemory, &gNative,
-                                                present, xfb);
+                                                present, black);
     if (token) {
         gTokens.push_back(token);
         gSubmissions.fetch_add(1, std::memory_order_relaxed);
@@ -1523,9 +1526,9 @@ void submit_frame_unchecked(bool present, uint32_t xfb) {
 
 // The renderer's hard failures (the GX parser's: an unknown command, a truncated payload) end the game with their
 // line and a dump. Caught here: thrown on the game's stacks they could not unwind through its frames.
-void submit_frame(bool present, uint32_t xfb) {
+void submit_frame(bool present, bool black) {
     try {
-        submit_frame_unchecked(present, xfb);
+        submit_frame_unchecked(present, black);
     } catch (const galaxy::gx::GxFatalError& error) {
         char text[1024];
         std::snprintf(text, sizeof(text), "the renderer stopped: %s (opcode 0x%02X at stream offset %zu)", error.what(),
@@ -1560,7 +1563,7 @@ void svc_gx_pe_marker(void*, int finish, uint16_t token) {
 #if defined(NEBULA_HOST_RENDERER)
     (void)finish;
     (void)token;
-    submit_frame(false, 0);
+    submit_frame(false, false);
 #else
     gModule.gx_event(finish, token);
 #endif
@@ -1905,7 +1908,7 @@ uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type, uint16_t 
     uint32_t value = 0;
     const bool published = galaxy::gx::peek_efb_published(x, y, kind, token, value);
     if (!published) {
-        submit_frame(false, 0);
+        submit_frame(false, false);
         (void)galaxy::gx::peek_efb(x, y, kind, value);
     }
     // GALAXY_TRACE_PEEK: every peek, its token, pixel, answer and whether a published field gave it.
@@ -2378,6 +2381,41 @@ void svc_readback_capture(void*, const void* stream, uint32_t channel) {
 #endif
 }
 
+void svc_marker(void*, const void* stream, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Marker;
+    record.offset = record_offset(stream);
+    record.key = kind;
+    record.marker = {aux, a, b};
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)stream, (void)kind, (void)aux, (void)a, (void)b;
+#endif
+}
+
+// The game's frame end: everything it wrote is already handed over (a span ends at each flush), so the renderer
+// takes the frame as it stands.
+void svc_frame_end(void*, const void* stream) {
+#if defined(NEBULA_HOST_RENDERER)
+    if (record_offset(stream) != gPendingSize) {
+        // Its first bytes name the command that was written without a flush.
+        char bytes[3 * 16 + 1] = {};
+        const auto* first = gSpanEnd != nullptr ? gSpanEnd : static_cast<const uint8_t*>(stream);
+        const std::size_t count = std::min<std::size_t>(16u, record_offset(stream) - gPendingSize);
+        for (std::size_t i = 0; i < count; ++i) {
+            std::snprintf(bytes + 3 * i, 4, "%02X ", first[i]);
+        }
+        die("the game ended a frame with GX bytes it never handed over (%zu: %s)", record_offset(stream) - gPendingSize,
+            bytes);
+    }
+    submit_frame(false, false);
+#else
+    (void)stream;
+#endif
+}
+
 uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y) {
 #if defined(NEBULA_HOST_RENDERER)
     uint32_t value = 0;
@@ -2611,10 +2649,8 @@ const char* svc_disc_id(void*) {
 
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-std::atomic<uint32_t> gXfb{0};
-
 void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
-    gXfb.store(xfb, std::memory_order_relaxed);
+    (void)xfb;
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_VI_TIMES=1: each retrace's time, where a scripted press begins (press-to-present measurements).
@@ -2640,7 +2676,8 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
             present = now - shown >= std::chrono::milliseconds(16);
             if (present) shown = now;
         }
-        submit_frame(present, xfb == 0 || black ? galaxy::gx::kNoDisplayedXfbAddr : xfb);
+        // The renderer's newest picture, or black while the game shows black.
+        submit_frame(present, black != 0);
     }
     // GALAXY_TEST_MII_IMPORT=<retrace>:<file>: imports the file at that retrace, as the settings do.
     {
@@ -4000,6 +4037,8 @@ int main(int argc, char** argv) {
     services.mii_record = svc_mii_record;
     services.readback_capture = svc_readback_capture;
     services.readback_pixel = svc_readback_pixel;
+    services.frame_end = svc_frame_end;
+    services.marker = svc_marker;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
@@ -4052,6 +4091,8 @@ int main(int argc, char** argv) {
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");
+    // While the start runs ahead, the retraces' presents alone reach the screen (svc_vi_frame).
+    galaxy::gx::set_frame_end_presents(!gBootFast.load(std::memory_order_relaxed));
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
     gAudio->set_channel_owner(gModule.audio_channel_owner);
     // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation
@@ -4169,8 +4210,8 @@ int main(int argc, char** argv) {
         const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
         if (retraces != reported) {
             char text[384];
-            std::snprintf(text, sizeof(text), "retrace %u, xfb 0x%08X, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
-                          retraces, gXfb.load(std::memory_order_relaxed), gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
+            std::snprintf(text, sizeof(text), "retrace %u, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
+                          retraces, gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
                           gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
                           gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)

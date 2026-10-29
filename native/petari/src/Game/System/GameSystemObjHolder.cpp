@@ -163,15 +163,7 @@ void GameSystemObjHolder::initStarPointerDirector() {
 }
 
 void GameSystemObjHolder::initDisplay() {
-    MainLoopFramework* pManager;
-    s32 size = MR::getRequiredExternalFrameBufferSize();
-    JKRHeap* pStationedHeap = MR::getStationedHeapGDDR3();
-
-    _C = new (pStationedHeap, 32) u8[size];
-    _10 = new (pStationedHeap, 32) u8[size];
-    _14 = new (pStationedHeap, 32) u8[size];
-
-    pManager = MainLoopFramework::createManager(nullptr, _C, _10, _14, true);
+    MainLoopFramework* pManager = MainLoopFramework::createManager(nullptr, true);
     pManager->setClearColor(Color8(30, 30, 200, 0));
 
     mCaptureScreenDirector = new CaptureScreenDirector();

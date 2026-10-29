@@ -1526,7 +1526,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
     if (ring_mode_ == RingMode::Interp && !replaying_) {
         // The display copy closes the game frame: its log is complete and the next frame takes a new segment.
         if (logged) {
-            close_replay_log(dest.guest_addr);
+            close_replay_log(dest.slot);
         } else {
             ring_advance_pending_ = true;
         }

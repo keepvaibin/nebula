@@ -55,84 +55,13 @@ XfbSerialAccountingEvent account_xfb_present_serial(
     return event;
 }
 
-const XfbTexture* newest_finished_xfb(const XfbTexture* named, const XfbTexture* latest) noexcept {
-    return named != nullptr && latest != nullptr && latest->copy_serial > named->copy_serial ? latest : named;
-}
-
-XfbPresentSelection select_xfb_for_present(
-    bool requested_specific,
-    const XfbTexture* requested,
-    const XfbTexture* latest,
-    const XfbTexture* last_valid_selected,
-    std::uint64_t current_frame_stamp,
-    std::uint64_t max_preserved_age) {
-    XfbPresentSelection selection{};
-    if (!requested_specific) {
-        selection.selected = latest;
-        return selection;
-    }
-
-    if (requested != nullptr) {
-        if (latest != nullptr && requested->frame_stamp < latest->frame_stamp) {
-            selection.requested_stale = true;
-            // With double or triple buffering the XFB the VI names may trail the newest copy; it is still the one
-            // presented (latest() is only for unknown or pre-VI requests). A buffer the guest keeps naming is
-            // copied every frame, so it never ages out.
-            selection.stale_preserved = true;
-        }
-        selection.selected = requested;
-        return selection;
-    }
-
-    selection.missing = true;
-    if (last_valid_selected != nullptr) {
-        selection.selected = last_valid_selected;
-        selection.missing_preserved = true;
-        // A buffer missing from the registry receives no copies, so its age separates a sustained miss from the
-        // 1-3 frame flip jitter this covers; past the bound, latest() replaces the frozen frame. Age is a
-        // frame_stamp difference, which skipped presents do not change. Only this case is age-bounded: a named
-        // but trailing buffer is normal double buffering, and expiring it would flash black on every flip.
-        if (max_preserved_age != 0u &&
-            current_frame_stamp > last_valid_selected->frame_stamp &&
-            current_frame_stamp - last_valid_selected->frame_stamp >
-                max_preserved_age) {
-            selection.missing_expired = true;
-            if (latest != nullptr) {
-                selection.selected = latest;
-            }
-        }
-    }
-    return selection;
-}
-
 namespace {
 
 constexpr std::size_t kMaxIdleXfbTextures = 8u;
-
-[[nodiscard]] std::uint32_t normalize_xfb_guest_addr(
-    std::uint32_t address) noexcept {
-    // GX copy destination registers are physical byte addresses. JUTXfb keeps
-    // CPU pointers, so compare after removing the cached/uncached alias bases.
-    if (address >= 0x80000000u && address < 0x81800000u) {
-        return address - 0x80000000u;
-    }
-    if (address >= 0xC0000000u && address < 0xC1800000u) {
-        return address - 0xC0000000u;
-    }
-    if (address >= 0x90000000u && address < 0x94000000u) {
-        return 0x10000000u + (address - 0x90000000u);
-    }
-    if (address >= 0xD0000000u && address < 0xD4000000u) {
-        return 0x10000000u + (address - 0xD0000000u);
-    }
-    return address;
-}
+// Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
+constexpr std::uint32_t kPictures = 3u;
 
 }  // namespace
-
-std::uint32_t xfb_physical_address(std::uint32_t address) noexcept {
-    return normalize_xfb_guest_addr(address);
-}
 
 bool EfbCopyManager::initialize(gpu::Device* device, unsigned efb_scale) {
     device_ = device;
@@ -145,7 +74,8 @@ void EfbCopyManager::shutdown() {
     retired_textures_.clear();
     idle_textures_.clear();
     has_latest_ = false;
-    latest_addr_ = 0;
+    latest_slot_ = 0;
+    next_slot_ = 0;
     next_copy_serial_ = 1;
     efb_scale_ = 1;
     device_.Reset();
@@ -356,8 +286,8 @@ void EfbCopyManager::set_efb_scale(unsigned efb_scale) noexcept {
 XfbTexture* EfbCopyManager::acquire_xfb(
     const EfbCopyParams& params,
     std::uint64_t frame_index) {
-    const std::uint32_t registry_addr =
-        normalize_xfb_guest_addr(params.dest_addr);
+    // The ring moves on when a picture is published (mark_xfb_copied).
+    const std::uint32_t slot = next_slot_;
 
     const std::uint16_t logical_h =
         compute_xfb_copy_height(
@@ -371,7 +301,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     const std::uint16_t wanted_w = extent.width;
     const std::uint16_t wanted_h = extent.height;
 
-    auto it = registry_.find(registry_addr);
+    auto it = registry_.find(slot);
     if (it != registry_.end()) {
         XfbTexture& entry = it->second;
         // A failed allocation can leave an entry with matching dimensions
@@ -387,13 +317,13 @@ XfbTexture* EfbCopyManager::acquire_xfb(
         entry.rtv = {};
         entry.rtv_valid = false;
     } else {
-        auto [ins_it, ok] = registry_.emplace(registry_addr, XfbTexture{});
+        auto [ins_it, ok] = registry_.emplace(slot, XfbTexture{});
         (void)ok;
         it = ins_it;
     }
 
     XfbTexture& entry = it->second;
-    entry.guest_addr  = registry_addr;
+    entry.slot        = slot;
     entry.width       = wanted_w;
     entry.height      = wanted_h;
     entry.frame_stamp = frame_index;
@@ -410,8 +340,8 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     entry.texture = gpu::create_render_texture(device_.Get(), wanted_w, wanted_h);
     if (!entry.texture) {
         std::ostringstream message;
-        message << "[EfbCopyManager] XFB texture allocation failed"
-                << " addr=0x" << std::hex << registry_addr
+        message << "[EfbCopyManager] picture texture allocation failed"
+                << " slot=" << slot
                 << " size=" << std::dec << wanted_w << "x" << wanted_h;
         throw std::runtime_error(message.str());
     }
@@ -436,29 +366,23 @@ void EfbCopyManager::mark_xfb_copied(
     texture.frame_stamp = frame_index;
     texture.copy_serial = next_copy_serial_++;
     texture.presentable = true;
-    latest_addr_ = texture.guest_addr;
+    latest_slot_ = texture.slot;
+    next_slot_ = (texture.slot + 1u) % kPictures;
     has_latest_ = true;
 }
 
 const XfbTexture* EfbCopyManager::latest() const {
-    if (!has_latest_) {
-        return nullptr;
-    }
-    const auto it = registry_.find(latest_addr_);
+    return has_latest_ ? picture(latest_slot_) : nullptr;
+}
+
+const XfbTexture* EfbCopyManager::picture(std::uint32_t slot) const {
+    const auto it = registry_.find(slot);
     if (it == registry_.end()) {
         return nullptr;
     }
     return it->second.presentable ? &it->second : nullptr;
 }
 
-const XfbTexture* EfbCopyManager::find_xfb(
-    std::uint32_t guest_addr) const {
-    const auto it = registry_.find(normalize_xfb_guest_addr(guest_addr));
-    if (it == registry_.end()) {
-        return nullptr;
-    }
-    return it->second.presentable ? &it->second : nullptr;
-}
 
 std::optional<EfbCopyRect> efb_identity_copy_rect(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,

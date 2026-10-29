@@ -411,7 +411,7 @@ public:
     }
     // Completed logs, counted; the guest XFB the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
-    [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
+    [[nodiscard]] std::uint32_t replay_picture_slot() const noexcept { return replay_picture_slot_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
     // The log being recorded is a frame that draws no 3D scene, recorded as its screen layer alone (GxBackend::
@@ -1085,7 +1085,8 @@ private:
     Microsoft::WRL::ComPtr<ID3D12Resource> fg_hudless_target_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> fg_hudless_target_rtv_heap_;
     bool fg_hudless_scene_ = false;              // this frame's scene was taken
-    std::uint32_t fg_hudless_xfb_addr_ = 0u;     // the display copy it went with (0: none)
+    bool fg_hudless_taken_ = false;              // a picture's HUD-less copy is waiting
+    std::uint32_t fg_hudless_slot_ = 0u;         // the picture it went with
     void take_fg_hudless_scene();
     void copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTexture& dest);
     void present_fg_hudless(const XfbTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
@@ -1196,7 +1197,7 @@ private:
     bool replay_screen_frame_ = false;
     unsigned replay_segment_ = 0;
     std::uint64_t replay_serial_ = 0;
-    std::uint32_t replay_xfb_addr_ = 0;
+    std::uint32_t replay_picture_slot_ = 0;
     // Ring segmentation (begin_frame): Normal = frame slots; Temporal = the
     // matrix ring advances after palette-writing frames; Interp = every ring
     // and the sampler heap advance once per game frame.

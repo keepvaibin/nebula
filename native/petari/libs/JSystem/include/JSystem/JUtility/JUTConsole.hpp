@@ -27,7 +27,6 @@ public:
     enum EConsoleType {
         CONSOLE_TYPE_0 = 0,
         CONSOLE_TYPE_1 = 1,
-        CONSOLE_TYPE_2 = 2,
     };
 
     enum OutputFlag {
@@ -115,8 +114,6 @@ public:
     void appendConsole(JUTConsole*);
     void removeConsole(JUTConsole*);
     void draw() const;
-    void drawDirect(bool) const;
-    void setDirectConsole(JUTConsole*);
 
     static JUTConsoleManager* createManager(JKRHeap*);
 
@@ -128,7 +125,6 @@ public:
 
     /* 0x00 */ ConsoleList mList;
     /* 0x0C */ JUTConsole* mActiveConsole;
-    /* 0x10 */ JUTConsole* mDirectConsole;
 
     static JUTConsoleManager* const getManager() {
         return sManager;

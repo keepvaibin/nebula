@@ -21,11 +21,6 @@
 
 namespace galaxy::gx {
 
-// render_frame's displayed_xfb_addr when the XFB the VI shows is unknown (the newest copy is presented) and when
-// the VI shows black.
-inline constexpr std::uint32_t kUnknownDisplayedXfbAddr = 0xFFFFFFFFu;
-inline constexpr std::uint32_t kNoDisplayedXfbAddr = 0xFFFFFFFEu;
-
 struct HostPointerState {
     bool window_focused = false;
     bool inside_client = false;
@@ -79,21 +74,26 @@ bool initialize(int width, int height);
 // The reason initialize failed, as shown to the player; empty when unknown.
 std::string startup_failure();
 
+// Whether a game frame presents as soon as the renderer reaches its end (else only at the host's presents): off while
+// the host's fast start shows one frame a display period. On by default.
+void set_frame_end_presents(bool enabled) noexcept;
+
 // The game dump's content root (GamePaths::content_root), from which the settings overlay reads the game's UI art
 // (game_asset_extract.h). Call once, before the overlay is first shown; without it the overlay draws solid colors.
 void set_native_settings_content_root(const std::string& utf8_path);
 
-// Parses a captured GX FIFO, records its draws and optionally presents. `memory` and `services` resolve
-// display-list addresses and indexed vertex-array reads. An empty capture submits no GX work (at most a present
-// of the cached XFB) and returns an invalid token. Other tokens complete in submission order: at once for a
-// capture without a PE FINISH or TOKEN event, else after its GPU fence and PE callbacks.
+// Parses a captured GX FIFO, records its draws and optionally presents: the newest picture (the last frame end),
+// or black when `black`. `memory` and `services` resolve display-list addresses and indexed vertex-array reads. An
+// empty capture submits no GX work (at most a present) and returns an invalid token. Other tokens complete in
+// submission order: at once for a capture without a PE FINISH or TOKEN event, else after its GPU fence and PE
+// callbacks.
 [[nodiscard]] FramePeCompletionToken render_frame(
     const std::byte* fifo_data,
     std::size_t fifo_size,
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain = true,
-    std::uint32_t displayed_xfb_addr = 0);
+    bool black = false);
 
 // Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
@@ -261,11 +261,6 @@ struct XfbPresentStats {
     // Game-timed presents of a new XfbTexture::copy_serial, each counted once at its first presentation.
     // Frame-rate-decoupling re-presents and replays of an older copy do not count.
     std::uint64_t first_serial_presentations = 0;
-    std::uint64_t misses = 0;
-    std::uint64_t stale_fallbacks = 0;
-    std::uint64_t missing_fallbacks = 0;
-    std::uint64_t stale_preserved = 0;
-    std::uint64_t missing_preserved = 0;
     std::uint64_t repeated_or_stale_serial_requests = 0;
     std::uint64_t skipped_duplicate_presents = 0;
     std::uint64_t duplicate_run_max = 0;
@@ -276,7 +271,7 @@ struct XfbPresentStats {
     std::uint64_t highest_first_presented_copy_serial = 0;
     std::uint64_t last_presented_frame_stamp = 0;
     std::uint64_t last_presented_copy_serial = 0;
-    std::uint32_t last_presented_xfb_addr = 0;
+    std::uint32_t last_presented_slot = 0;
 };
 
 [[nodiscard]] bool native_settings_overlay_visible() noexcept;

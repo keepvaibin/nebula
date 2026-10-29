@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <JSystem/JUtility/JUTXfb.hpp>
 #include <revolution.h>
 
 typedef void (*PreRenderCallback)();
@@ -12,9 +11,8 @@ public:
         mClearColor = color;
     }
 
-    MainLoopFramework(void* pXfb1, void* pXfb2, void* pXfb3, bool useAlpha) : mClearColor(0xffffffff) {
+    MainLoopFramework(bool useAlpha) : mClearColor(0xffffffff) {
         ctor_subroutine(useAlpha);
-        JUTXfb::createManager(pXfb1, pXfb2, pXfb3);
     }
 
     ~MainLoopFramework();
@@ -23,13 +21,9 @@ public:
         return sManager;
     }
 
-    static MainLoopFramework* createManager(const GXRenderModeObj*, void*, void*, void*, bool);
+    static MainLoopFramework* createManager(const GXRenderModeObj*, bool);
     void ctor_subroutine(bool);
     void prepareCopyDisp();
-    void drawendXfb_single();
-    void exchangeXfb_double();
-    void exchangeXfb_triple();
-    void copyXfb_triple();
     void preGX();
     void endGX();
     void waitForRetrace();
@@ -48,7 +42,6 @@ public:
     /* 0x04 */ u32 mClearZ;
     /* 0x08 */ u16 mDispCopyGamma;
     /* 0x0A */ u16 mCopyClamp;
-    u32 _C;
     /* 0x10 */ u16 mRetraceCount;
     /* 0x14 */ u32 mTickDuration;
     /* 0x18 */ bool mUseAlpha;
@@ -66,8 +59,6 @@ public:
     u8 _36;
     u8 _37;
     /* 0x38 */ PreRenderCallback mPreRenderCallback;
-    /* 0x3C */ s16 mSingleBufferIndex;
-    u8 _3E;
 
     u32 _pad1;
     u32 _pad2;

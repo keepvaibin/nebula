@@ -65,6 +65,7 @@
 #include <deque>
 #include <exception>
 #include <memory>
+#include <optional>
 #include <mutex>
 #include <span>
 #include <thread>
@@ -117,11 +118,14 @@ public:
         GuestMemory* memory,
         const GxServices* services,
         bool present_swap_chain = true,
-        std::uint32_t displayed_xfb_addr = 0);
+        bool black = false);
     void present_cached_xfb(
-        std::uint32_t displayed_xfb_addr,
+        bool black,
         bool present_swap_chain = true);
     void wait_for_render_idle();
+    void set_frame_end_presents(bool enabled) noexcept {
+        frame_end_presents_.store(enabled, std::memory_order_relaxed);
+    }
     [[nodiscard]] bool wait_for_frame_pe_completion_for(
         FramePeCompletionToken token,
         std::uint32_t timeout_ms);
@@ -417,7 +421,7 @@ private:
         const GxServices* services = nullptr;
         FramePeCompletionToken pe_completion_token{};
         std::uint64_t producer_wait_ns = 0;
-        std::uint32_t displayed_xfb_addr = 0;
+        bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
         bool memory_snapshot_active = false;
@@ -504,12 +508,14 @@ private:
     static void deliver_pe_event(
         const GxServices* services,
         const PeEvent& event);
+    // Presents black, a named picture (`slot`) or the newest.
     void present_cached_xfb_on_thread(
-        std::uint32_t displayed_xfb_addr,
+        bool black,
         bool sleep_if_missing,
-        bool count_game_xfb_present = true);
+        bool count_game_xfb_present = true,
+        std::optional<std::uint32_t> slot = std::nullopt);
     void present_latest_frame_on_thread();
-    // The VI shows black (displayed_xfb_addr kNoDisplayedXfbAddr): one black present per black
+    // The output shows black (FrameChunk::black): one black present per black
     // run, repeated while the settings overlay is open. `in_frame`: inside a render chunk's
     // begin_frame/end_frame.
     void present_vi_black(bool in_frame);
@@ -897,17 +903,13 @@ private:
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
     bool interp_recording_ = false;
-    // Render thread: the chunk being rendered made a display (XFB) copy into an XFB a VI has shown, and the copy
-    // serial last presented when its chunk ended (present_on_copy_enabled).
+    // Render thread: the chunk being rendered ended a game frame (a new picture), and the picture serial last
+    // presented when its chunk ended (present_on_copy_enabled).
     bool xfb_copied_in_chunk_ = false;
+    std::atomic<bool> frame_end_presents_{true};  // set_frame_end_presents
     std::uint64_t copy_presented_serial_ = 0u;
-    // The guest XFBs the VI has named (the game's display buffers), so a copy elsewhere (a capture) never presents.
-    std::array<std::uint32_t, 4> vi_named_xfbs_{};
-    std::size_t vi_named_xfb_next_ = 0u;
-    [[nodiscard]] bool is_vi_named_xfb(std::uint32_t guest_addr) const noexcept;
     // Sub-frames show between game frames now (interpolation on and its governors allowing at least one).
     [[nodiscard]] bool subframes_shown() const;
-    void note_vi_named_xfb(std::uint32_t guest_addr) noexcept;
     unsigned interp_frames_ = 0;          // interpolated frames per game frame
     unsigned interp_scenes_in_chunk_ = 0;
     std::int32_t current_replay_record_ = -1;
@@ -975,7 +977,7 @@ private:
     void note_interp_log_completion();
     struct InterpSequence {
         bool active = false;
-        std::uint32_t xfb_addr = 0;
+        std::uint32_t picture_slot = 0;  // the game frame it ends on
         unsigned subframes = 0;
         unsigned next = 0;
         std::int64_t frame_qpc = 0;       // the frame's arrival (its present)
@@ -1056,7 +1058,7 @@ private:
     InterpSequence interp_sequence_{};
     // A recorded frame whose present arrives as a separate VI present.
     bool interp_log_waiting_ = false;
-    std::uint32_t interp_log_xfb_ = 0;
+    std::uint32_t interp_log_slot_ = 0;
     bool interp_stopping_ = false;        // render thread draining for a stop
     // RendererD3D12::replay_hold_segment() seen at the last render chunk.
     unsigned resident_hold_segment_ = ~0u;
@@ -1085,7 +1087,7 @@ private:
     std::uint64_t interp_late_slots_ = 0;   // slots a stall skipped
     std::uint64_t interp_superseded_ = 0;   // frames replaced before their own slot
     void supersede_interp_sequence();
-    void start_interp_sequence(std::uint32_t xfb_addr);
+    void start_interp_sequence(std::uint32_t picture_slot);
     void select_interp_before();
     // Sub-frames per game frame within the GPU budget.
     unsigned interp_gpu_governor(double& rate);
@@ -1490,7 +1492,7 @@ private:
         ~std::uint64_t{0}};
     std::atomic<std::uint64_t> last_presented_xfb_serial_{
         ~std::uint64_t{0}};
-    std::atomic<std::uint32_t> last_presented_xfb_addr_{0};
+    std::atomic<std::uint32_t> last_presented_slot_{0};
     // Present rates below the game's 60 Hz show the newest frame on their own cadence. A 30 Hz present
     // shows every other frame at full game speed.
     [[nodiscard]] bool skip_for_present_rate();
@@ -1895,11 +1897,6 @@ private:
     std::atomic<std::uint64_t> stat_xfb_present_requests_{0};
     std::atomic<std::uint64_t> stat_xfb_present_presented_{0};
     std::atomic<std::uint64_t> stat_xfb_first_serial_presentations_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_misses_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_stale_fallbacks_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_missing_fallbacks_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_stale_preserved_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_missing_preserved_{0};
     std::atomic<std::uint64_t>
         stat_xfb_repeated_or_stale_serial_requests_{0};
     std::atomic<std::uint64_t> stat_xfb_present_skipped_duplicate_presents_{0};

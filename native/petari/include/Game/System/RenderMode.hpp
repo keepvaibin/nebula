@@ -20,7 +20,6 @@ namespace MR {
 
     /// @brief Returns the required size for an external frame buffer.
     /// @return The size in bytes.
-    u32 getRequiredExternalFrameBufferSize();
 };  // namespace MR
 
 class RenderModeObj {

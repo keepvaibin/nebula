@@ -63,7 +63,10 @@ namespace J3DNativeState {
     f32 getYScaleFactor(u16 efbHeight, u16 xfbHeight);
     void setCopyClear(GXColor color, u32 depth);
     void setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
-    void copyDisp(void* pDest, GXBool clear);
+    // The frame's picture is drawn: it becomes the one shown (the display copy's settings above apply).
+    void showFrame();
+    // The game's frame is complete: the host renders what it drew.
+    void endFrame();
     void copyTex(void* pDest, GXBool clear);
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);

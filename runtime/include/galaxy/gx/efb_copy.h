@@ -1,13 +1,11 @@
 #pragma once
 
-// EfbCopyManager: tracks the XFB textures produced by GXCopyDisp.
+// EfbCopyManager: the frame pictures (one each time the game ends a frame) and the EFB copies' textures.
 //
-// The game double/triple-buffers XFBs in guest memory; every PE_COPY_EXECUTE with copy_to_xfb set blits the EFB
-// into the XFB texture registered at the copy's destination address. GxBackend presents the XFB the guest VI
-// selects; latest() is the source only while no VI-selected address is known.
+// Each frame end takes the next of a few pictures in turn (a ring the renderer owns, so a picture still being shown
+// is not drawn over); GxBackend presents the newest, latest().
 //
-// The XFB is never converted to YUV or written back to guest memory; a guest CPU read of the XFB range is a
-// hard-fail tripwire on the host side.
+// A picture is never converted to YUV or written to game memory.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -32,8 +30,8 @@ namespace galaxy::gx {
 
 struct XfbTexture {
     gpu::TextureRef texture;  // RGBA8
-    std::uint32_t guest_addr = 0;
-    // GPU dimensions after EFB scaling; the guest address, stride and VI selection stay in Wii units.
+    std::uint32_t slot = 0;  // place in the picture ring
+    // GPU dimensions after EFB scaling; the copy's rectangle stays in Wii units.
     std::uint16_t width = 0;
     std::uint16_t height = 0;       // after logical y-scale and EFB scale
     std::uint64_t frame_stamp = 0;  // frame index of the last copy into it
@@ -74,29 +72,6 @@ struct XfbSerialAccountingEvent {
     std::uint64_t& texture_accounted_serial,
     std::uint64_t copy_serial) noexcept;
 
-struct XfbPresentSelection {
-    const XfbTexture* selected = nullptr;
-    bool requested_stale = false;
-    bool stale_preserved = false;
-    bool stale_expired = false;
-    bool missing = false;
-    bool missing_preserved = false;
-    bool missing_expired = false;
-};
-
-[[nodiscard]] XfbPresentSelection select_xfb_for_present(
-    bool requested_specific,
-    const XfbTexture* requested,
-    const XfbTexture* latest,
-    const XfbTexture* last_valid_selected,
-    std::uint64_t current_frame_stamp,
-    std::uint64_t max_preserved_age);
-
-// The XFB shown when a VI names `named`: the newest finished copy when it is newer (the game shows a frame two VIs
-// after drawing it, three XFBs in turn), else the named one, which the selection above then takes as the request.
-[[nodiscard]] const XfbTexture* newest_finished_xfb(const XfbTexture* named, const XfbTexture* latest) noexcept;
-// A guest XFB address without its cached or uncached alias base, as copies and the XFB registry hold it.
-[[nodiscard]] std::uint32_t xfb_physical_address(std::uint32_t address) noexcept;
 
 [[nodiscard]] std::uint16_t compute_xfb_copy_height(
     std::uint16_t src_height,
@@ -280,9 +255,8 @@ public:
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
-    // Returns the XFB texture registered at the copy destination, creating
-    // or resizing it to match the copy parameters (src size x y-scale).  The
-    // caller (renderer) then records the EFB -> XFB blit into it.
+    // The next picture of the ring, created or resized to match the copy (its size times the y-scale). The caller
+    // (renderer) then records the EFB -> picture blit into it, or hands it the EFB's target (adopt_picture).
     XfbTexture* acquire_xfb(
         const EfbCopyParams& params,
         std::uint64_t frame_index);
@@ -293,15 +267,11 @@ public:
     // A released texture of this size no frame in flight still reads (a handed-over EFB's replacement), or null.
     [[nodiscard]] gpu::TextureRef take_idle_texture(std::uint16_t width, std::uint16_t height);
 
-    // Most recently copied-into XFB across all addresses; nullptr only
-    // before the first display copy ever.
+    // The newest finished picture; nullptr before the first frame end.
     [[nodiscard]] const XfbTexture* latest() const;
+    // The finished picture in `slot`, or nullptr.
+    [[nodiscard]] const XfbTexture* picture(std::uint32_t slot) const;
 
-    // Returns the XFB texture registered for a VI-selected guest address.
-    // The lookup accepts cached/uncached MEM1/MEM2 aliases and normalizes
-    // them to the physical address form stored in GX copy destinations.
-    [[nodiscard]] const XfbTexture* find_xfb(
-        std::uint32_t guest_addr) const;
 
 private:
     struct PooledTexture {
@@ -315,7 +285,8 @@ private:
         acquire_idle_texture(std::uint16_t width, std::uint16_t height);
 
     std::unordered_map<std::uint32_t, XfbTexture> registry_;
-    std::uint32_t latest_addr_ = 0;
+    std::uint32_t latest_slot_ = 0;
+    std::uint32_t next_slot_ = 0;
     std::uint64_t next_copy_serial_ = 1;
     bool has_latest_ = false;
     gpu::DeviceRef device_;

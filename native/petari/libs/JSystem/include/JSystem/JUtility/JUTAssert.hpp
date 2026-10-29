@@ -5,7 +5,6 @@
 namespace JUTAssertion {
     void create();
     u32 flush_subroutine();
-    void flushMessage();
     void flushMessage_dbPrint();
     void setVisible(bool);
     void setMessageCount(int);

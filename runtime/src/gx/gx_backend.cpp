@@ -297,6 +297,13 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     return end == value ? fallback : parsed;
 }
 
+// A present snapshot waits for the last one's readback instead of being skipped (a run of snapshots holds every
+// present); GALAXY_TEST_CAPTURE_NO_WAIT=1 skips instead.
+bool snapshot_waits() {
+    static const bool waits = read_env_u64("GALAXY_TEST_CAPTURE_NO_WAIT", 0u) == 0u;
+    return waits;
+}
+
 // GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
 // cycles ([rt-actor-light]); =2: the aim of every scene.
 std::uint64_t actor_light_trace_level() {
@@ -360,28 +367,12 @@ bool trace_gx_stalls_enabled() {
     return enabled;
 }
 
-// select_xfb_for_present holds the last good frame while the VI-selected XFB is briefly not
-// presentable (it is re-acquired as the next copy target during a double or triple buffer flip),
-// and falls forward to the latest copy only after a sustained miss. 30 presents (about 0.5 s) ride
-// out the 1-3 frame jitter of a flip or of the render queue and still end a real freeze.
-constexpr std::uint64_t kMaxXfbPreserveAge = 30u;
-
-// A game frame presents when the chunk with its display copy ends, not at the VI that later names it (that VI finds it
-// shown): about 14 ms sooner at 60 fps. Not while frames interpolate (their sequences keep their own clock).
-// GALAXY_PRESENT_ON_COPY=0 waits for the VI (A/B).
+// A game frame presents when the chunk with its frame end ends, not at the next retrace (that finds it shown): about
+// 14 ms sooner at 60 fps. Not while frames interpolate (their sequences keep their own clock).
+// GALAXY_PRESENT_ON_COPY=0 waits for the retrace (A/B).
 bool present_on_copy_enabled() {
     static const bool enabled = read_env_u64("GALAXY_PRESENT_ON_COPY", 1u) != 0u;
     return enabled;
-}
-
-// The XFB a VI shows: the newest finished copy in the place of the one it names (newest_finished_xfb), a game frame
-// sooner (47 ms from the copy to the present at 60 fps before). Not while sub-frames show (subframes_shown): their
-// sequence ends on the frame the VI names, and the newer one shown before its sub-frames would step time back each
-// game frame (fades and motion see-saw at 60 Hz). GALAXY_PRESENT_NEWEST_XFB=0 shows the named (A/B).
-const XfbTexture* displayed_xfb(const XfbTexture* named, const XfbTexture* latest, bool latest_displayed,
-                                bool subframes) {
-    static const bool enabled = read_env_u64("GALAXY_PRESENT_NEWEST_XFB", 1u) != 0u;
-    return enabled && latest_displayed && !subframes ? newest_finished_xfb(named, latest) : named;
 }
 
 // GALAXY_GX_FRAME_TIMING_SAMPLE=N times every draw of one frame in N (N >= 2), so a recording holds
@@ -1603,7 +1594,7 @@ void GxBackend::reset_fifo_session_state() {
         ~std::uint64_t{0}, std::memory_order_relaxed);
     last_presented_xfb_serial_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
-    last_presented_xfb_addr_.store(0u, std::memory_order_relaxed);
+    last_presented_slot_.store(0u, std::memory_order_relaxed);
 
     for (std::atomic_uint64_t& word : dirty_page_words_) {
         word.store(0u, std::memory_order_relaxed);
@@ -1697,7 +1688,7 @@ bool GxBackend::initialize(int w, int h) {
                 return galaxy::telemetry::Counts{
                     xfb_copy_count(), stats.first_serial_presentations, stats.presented,
                     stats.repeated_or_stale_serial_requests, stats.last_presented_copy_serial,
-                    stats.last_presented_frame_stamp, stats.last_presented_xfb_addr,
+                    stats.last_presented_frame_stamp, stats.last_presented_slot,
                     xfb_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
                     xfb_first_serial_present_cadence_.published_last_sample_ns.load(std::memory_order_relaxed)};
             }, static_cast<std::uint64_t>(w), static_cast<std::uint64_t>(h),
@@ -2140,11 +2131,6 @@ XfbPresentStats GxBackend::xfb_present_stats() const noexcept {
         stat_xfb_present_requests_.load(std::memory_order_relaxed),
         stat_xfb_present_presented_.load(std::memory_order_relaxed),
         stat_xfb_first_serial_presentations_.load(std::memory_order_relaxed),
-        stat_xfb_present_misses_.load(std::memory_order_relaxed),
-        stat_xfb_present_stale_fallbacks_.load(std::memory_order_relaxed),
-        stat_xfb_present_missing_fallbacks_.load(std::memory_order_relaxed),
-        stat_xfb_present_stale_preserved_.load(std::memory_order_relaxed),
-        stat_xfb_present_missing_preserved_.load(std::memory_order_relaxed),
         stat_xfb_repeated_or_stale_serial_requests_.load(
             std::memory_order_relaxed),
         stat_xfb_present_skipped_duplicate_presents_.load(
@@ -2159,7 +2145,7 @@ XfbPresentStats GxBackend::xfb_present_stats() const noexcept {
             std::memory_order_relaxed),
         last_stamp == ~std::uint64_t{0} ? 0u : last_stamp,
         last_serial == ~std::uint64_t{0} ? 0u : last_serial,
-        last_presented_xfb_addr_.load(std::memory_order_relaxed),
+        last_presented_slot_.load(std::memory_order_relaxed),
     };
 }
 
@@ -2342,22 +2328,9 @@ bool GxBackend::subframes_shown() const {
     return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
 }
 
-bool GxBackend::is_vi_named_xfb(std::uint32_t guest_addr) const noexcept {
-    const std::uint32_t addr = xfb_physical_address(guest_addr);
-    return std::find(vi_named_xfbs_.begin(), vi_named_xfbs_.end(), addr) != vi_named_xfbs_.end();
-}
-
-void GxBackend::note_vi_named_xfb(std::uint32_t guest_addr) noexcept {
-    const std::uint32_t addr = xfb_physical_address(guest_addr);
-    if (!is_vi_named_xfb(addr)) {
-        vi_named_xfbs_[vi_named_xfb_next_] = addr;
-        vi_named_xfb_next_ = (vi_named_xfb_next_ + 1u) % vi_named_xfbs_.size();
-    }
-}
-
 void GxBackend::record_presented_xfb_copy(
     const XfbTexture& texture) noexcept {
-    galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.guest_addr,
+    galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.slot,
                          texture.copy_serial);
     record_pointer_response(texture);
     ++stat_xfb_present_presented_;
@@ -2805,7 +2778,7 @@ FramePeCompletionToken GxBackend::render_frame(
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
-    std::uint32_t displayed_xfb_addr)
+    bool black)
 {
     if (!initialized_) {
         return {};
@@ -2817,7 +2790,9 @@ FramePeCompletionToken GxBackend::render_frame(
         trace_gx_stalls ||
         frame_gx_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
-    const bool fifo_empty = fifo_data == nullptr || fifo_size == 0u;
+    // Nothing to render: no commands and nothing attached (records, scene markers, captures).
+    const bool fifo_empty = (fifo_data == nullptr || fifo_size == 0u) && producer_shape_records_.empty() &&
+        producer_fifo_marker_count_ == 0u && producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
     std::vector<GuestWriteRange>& drained_dirty_ranges = drain_scratch_ranges_;
     drain_guest_memory_writes(drained_dirty_ranges);
     coalesce_dirty_ranges(drained_dirty_ranges);
@@ -2831,7 +2806,7 @@ FramePeCompletionToken GxBackend::render_frame(
             coalesce_dirty_ranges(pending_async_dirty_ranges_);
         }
         if (present_swap_chain) {
-            present_cached_xfb(displayed_xfb_addr, true);
+            present_cached_xfb(black, true);
         } else {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             if (render_thread_error_ != nullptr) {
@@ -2860,7 +2835,7 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.services = services;
     chunk.memory   = memory;
     chunk.present_swap_chain = present_swap_chain;
-    chunk.displayed_xfb_addr = displayed_xfb_addr;
+    chunk.black = black;
     const GxTimingConfig& timing = get_gx_timing_config();
     if (!timing.vi_render_fifo_wait && !timing.pe_events_gpu_fence) {
         scan_pe_events_on_sim_thread(fifo_data, fifo_size, memory, services);
@@ -3756,10 +3731,10 @@ void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fi
     if (producer_stripe_particles_.empty()) {
         return;
     }
-    // Marks past this submission (staged gather bytes) move to the next one.
+    // Marks past this submission move to the next one (one at its end belongs to it, as a record does).
     std::size_t kept = 0u;
     for (const StripeParticleMark& mark : producer_stripe_particles_) {
-        if (mark.offset < fifo_size) {
+        if (mark.offset <= fifo_size) {
             chunk.stripe_particles.push_back(mark);
         } else {
             StripeParticleMark rest = mark;
@@ -6427,7 +6402,7 @@ void GxBackend::note_interp_log_completion() {
     interp_scenes_[interp_log_scene_].serial = serial;
     interp_log_waiting_ = interp_scenes_[interp_log_scene_].valid &&
         !native_settings_overlay_visible();
-    interp_log_xfb_ = renderer_.replay_xfb_addr();
+    interp_log_slot_ = renderer_.replay_picture_slot();
 }
 
 void GxBackend::run_pending_interp_start() {
@@ -6440,12 +6415,12 @@ void GxBackend::run_pending_interp_start() {
     }
     if (interp_log_waiting_ && renderer_.replay_available()) {
         interp_log_waiting_ = false;
-        start_interp_sequence(interp_log_xfb_);
+        start_interp_sequence(interp_log_slot_);
         advance_interp_sequence(false);
     }
 }
 
-void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
+void GxBackend::start_interp_sequence(std::uint32_t picture_slot) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     const std::int64_t now = galaxy::qpc_now();
     if (!renderer_.start_replay_playback()) {
@@ -6485,7 +6460,7 @@ void GxBackend::start_interp_sequence(std::uint32_t xfb_addr) {
     interp_sequence_.classified = false;
     interp_sequence_.scene = interp_log_scene_;
     select_interp_before();
-    interp_sequence_.xfb_addr = xfb_addr;
+    interp_sequence_.picture_slot = picture_slot;
     interp_sequence_.subframes = interp_gpu_governor(rate);
     if (on_vblanks) {
         fit_rate_to_vblanks();  // a rate the governors lowered
@@ -6997,7 +6972,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
         interp_snapshot_path_ = interp_snapshot_path("real");
         renderer_.set_capture_waits(!interp_snapshot_path_.empty());
         interp_presenting_real_ = true;
-        present_cached_xfb_on_thread(sequence.xfb_addr, false, true);
+        present_cached_xfb_on_thread(false, false, true, sequence.picture_slot);
         note_present_vblank(slot);
         note_interp_timeline(slot, 1.0, true);
         interp_presenting_real_ = false;
@@ -7682,7 +7657,7 @@ bool GxBackend::skip_for_present_rate() {
 }
 
 void GxBackend::present_cached_xfb(
-    std::uint32_t displayed_xfb_addr,
+    bool black,
     bool present_swap_chain) {
     if (!initialized_ || !present_swap_chain) {
         return;
@@ -7701,14 +7676,14 @@ void GxBackend::present_cached_xfb(
         if (!frame_queue_.empty()) {
             FrameChunk& back = frame_queue_.back();
             if (back.present_only) {
-                back.displayed_xfb_addr = displayed_xfb_addr;
+                back.black = black;
                 queue_cv_.notify_one();
                 return;
             }
             if (!back.efb_peek_only &&
                 !back.present_only && !back.present_swap_chain) {
                 back.present_swap_chain = true;
-                back.displayed_xfb_addr = displayed_xfb_addr;
+                back.black = black;
                 queue_cv_.notify_one();
                 return;
             }
@@ -7716,7 +7691,7 @@ void GxBackend::present_cached_xfb(
         FrameChunk chunk;
         chunk.present_only = true;
         chunk.present_swap_chain = true;
-        chunk.displayed_xfb_addr = displayed_xfb_addr;
+        chunk.black = black;
         frame_queue_.push_back(std::move(chunk));
     }
     queue_cv_.notify_one();
@@ -7914,7 +7889,7 @@ void GxBackend::render_thread_main() {
                     FrameChunk present = std::move(frame_queue_.front());
                     frame_queue_.pop_front();
                     chunk.present_swap_chain = present.present_swap_chain;
-                    chunk.displayed_xfb_addr = present.displayed_xfb_addr;
+                    chunk.black = present.black;
                 }
                 if (chunk.efb_peek_only) {
                     active_peek = chunk.efb_peek_request;
@@ -7957,19 +7932,17 @@ void GxBackend::render_thread_main() {
                     active_pointer_depth.reset();
                 } else if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
-                    if (chunk.displayed_xfb_addr == kNoDisplayedXfbAddr) {
+                    if (chunk.black) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
-                        present_cached_xfb_on_thread(chunk.displayed_xfb_addr, false);
+                        present_cached_xfb_on_thread(true, false);
                     } else if (interp_log_waiting_ && renderer_.replay_available()) {
                         supersede_interp_sequence();
                         interp_log_waiting_ = false;
-                        start_interp_sequence(interp_log_xfb_);
+                        start_interp_sequence(interp_log_slot_);
                         advance_interp_sequence(false);
                     } else if (!interp_sequence_.active) {
-                        present_cached_xfb_on_thread(
-                            chunk.displayed_xfb_addr,
-                            false);
+                        present_cached_xfb_on_thread(false, false);
                     } else {
                         ++interp_present_skipped_;
                     }
@@ -7994,15 +7967,13 @@ void GxBackend::render_thread_main() {
             } else if (idle_present) {
                 present_latest_frame_on_thread();
             } else if (overlay_idle) {
-                // A due slot presents again the frame last presented (never another: the game's two display copies
-                // may differ, and alternating them would flicker) unless a present of the game's own landed in it.
+                // A due slot presents again the picture last presented (never a newer one between the game's own
+                // presents) unless a present of the game's own landed in it.
                 const std::int64_t now = galaxy::qpc_now();
                 if (now >= overlay_idle_due_qpc_) {
                     if (renderer_.last_present_qpc() < overlay_idle_due_qpc_ - interp_slot_period_qpc_) {
-                        const std::uint32_t shown = last_presented_xfb_addr_.load(std::memory_order_relaxed);
-                        if (shown != 0u) {
-                            present_cached_xfb_on_thread(shown, false, false);
-                        }
+                        present_cached_xfb_on_thread(false, false, false,
+                                                     last_presented_slot_.load(std::memory_order_relaxed));
                     }
                     overlay_idle_due_qpc_ += interp_slot_period_qpc_;
                     if (now >= overlay_idle_due_qpc_) {
@@ -8494,26 +8465,20 @@ void GxBackend::present_vi_black(bool in_frame) {
 }
 
 void GxBackend::present_latest_frame_on_thread() {
-    present_cached_xfb_on_thread(
-        kUnknownDisplayedXfbAddr,
-        true,
-        false);
+    present_cached_xfb_on_thread(false, true, false);
 }
 
 void GxBackend::present_cached_xfb_on_thread(
-    std::uint32_t displayed_xfb_addr,
+    bool black,
     bool sleep_if_missing,
-    bool count_game_xfb_present) {
+    bool count_game_xfb_present,
+    std::optional<std::uint32_t> slot) {
     if (count_game_xfb_present) {
         ++stat_xfb_present_requests_;
     }
     const std::uint64_t current_present_epoch =
         present_epoch_ + (count_game_xfb_present ? 1u : 0u);
-    const bool display_xfb_unknown =
-        displayed_xfb_addr == kUnknownDisplayedXfbAddr;
-    const bool display_xfb_none =
-        displayed_xfb_addr == kNoDisplayedXfbAddr;
-    if (display_xfb_none) {
+    if (black) {
         if (count_game_xfb_present) {
             present_epoch_ = current_present_epoch;
             present_vi_black(false);
@@ -8521,53 +8486,7 @@ void GxBackend::present_cached_xfb_on_thread(
         return;
     }
     vi_black_shown_ = false;
-    const bool requested_specific_xfb =
-        displayed_xfb_addr != 0u && !display_xfb_unknown &&
-        !display_xfb_none;
-    if (requested_specific_xfb) {
-        note_vi_named_xfb(displayed_xfb_addr);
-    }
-    const XfbTexture* latest = efb_copies_.latest();
-    const std::uint32_t last_presented_addr =
-        last_presented_xfb_addr_.load(std::memory_order_relaxed);
-    const XfbTexture* last_valid = last_presented_addr != 0u
-        ? efb_copies_.find_xfb(last_presented_addr)
-        : nullptr;
-    const XfbTexture* selected = display_xfb_none
-        ? nullptr
-        : (requested_specific_xfb
-            ? displayed_xfb(efb_copies_.find_xfb(displayed_xfb_addr), latest,
-                            latest != nullptr && is_vi_named_xfb(latest->guest_addr), subframes_shown())
-            : latest);
-    const std::uint64_t current_xfb_stamp =
-        latest != nullptr
-            ? std::max(latest->frame_stamp, current_present_epoch)
-            : std::max(frame_index_, current_present_epoch);
-    const XfbPresentSelection selection = display_xfb_none
-        ? XfbPresentSelection{}
-        : select_xfb_for_present(
-            requested_specific_xfb,
-            selected,
-            latest,
-            last_valid,
-            current_xfb_stamp,
-            kMaxXfbPreserveAge);
-    selected = selection.selected;
-    if (count_game_xfb_present && selection.stale_preserved) {
-        ++stat_xfb_present_stale_preserved_;
-    }
-    if (count_game_xfb_present && selection.stale_expired) {
-        ++stat_xfb_present_stale_fallbacks_;
-    }
-    if (count_game_xfb_present && selection.missing) {
-        ++stat_xfb_present_misses_;
-    }
-    if (count_game_xfb_present && selection.missing_preserved) {
-        ++stat_xfb_present_missing_preserved_;
-    }
-    if (count_game_xfb_present && selection.missing_expired) {
-        ++stat_xfb_present_missing_fallbacks_;
-    }
+    const XfbTexture* selected = slot ? efb_copies_.picture(*slot) : efb_copies_.latest();
     if (selected == nullptr) {
         if (sleep_if_missing) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -8593,6 +8512,7 @@ void GxBackend::present_cached_xfb_on_thread(
         : !count_game_xfb_present ? std::string{} : present_snapshot_path();
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, snapshot_path);
+        renderer_.set_capture_waits(snapshot_waits());
     }
     const bool game_frame_only =
         interp_recording_ && count_game_xfb_present && !interp_presenting_real_ && !duplicate_stamp;
@@ -8624,6 +8544,7 @@ void GxBackend::present_cached_xfb_on_thread(
     }
     if (!snapshot_path.empty()) {
         renderer_.set_debug_capture_paths({}, {});
+        renderer_.set_capture_waits(false);
     }
     if (!replayed) {
         renderer_.end_frame();
@@ -8631,8 +8552,7 @@ void GxBackend::present_cached_xfb_on_thread(
     if (count_game_xfb_present) {
         present_epoch_ = current_present_epoch;
         record_presented_xfb_copy(*selected);
-        last_presented_xfb_addr_.store(
-            selected->guest_addr, std::memory_order_relaxed);
+        last_presented_slot_.store(selected->slot, std::memory_order_relaxed);
     }
     renderer_.debug_log_backbuffer_readback();
 }
@@ -8973,7 +8893,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (fifo_data != nullptr && fifo_size > 0) {
+    if (fifo_size > 0 || !chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
+        !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
         const bool saved_pe_callbacks_enabled = frame_pe_callbacks_enabled_;
         std::vector<PeEvent>* const saved_pe_events = frame_pe_events_;
         frame_pe_callbacks_enabled_ = !chunk.pe_events_scanned_on_sim_thread;
@@ -9164,16 +9085,11 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         : 0u;
     mark_frame_cpu_reads_done(chunk);
 
-    // Every VI presents once a valid XFB exists, including retraces that queued no FIFO, or the
-    // flip-model cadence collapses into gaps. Before the first XFB the window stays hidden.
-    if (chunk.displayed_xfb_addr != 0u && chunk.displayed_xfb_addr != kUnknownDisplayedXfbAddr &&
-        chunk.displayed_xfb_addr != kNoDisplayedXfbAddr) {
-        note_vi_named_xfb(chunk.displayed_xfb_addr);
-    }
-    // The chunk with a game frame's display copy presents it (present_on_copy_enabled); a VI presents the newest.
-    // Not while the VI is black, the settings overlay draws over every present, or presents are paced elsewhere
+    // The chunk with a game frame's end presents its picture (present_on_copy_enabled); a present between frames
+    // shows the newest. Not while the output is black, the settings overlay draws over every present, or presents are paced elsewhere
     // (interpolation, a temporal upscaler, frame generation).
     const bool copy_present = !chunk.present_swap_chain && xfb_copied_in_chunk_ && present_on_copy_enabled() &&
+        frame_end_presents_.load(std::memory_order_relaxed) &&
         !interp_recording_ && !vi_black_shown_ && !native_settings_overlay_visible() && !renderer_.temporal_mode() &&
         !frame_generation_running();
     const bool presents = chunk.present_swap_chain || copy_present;
@@ -9182,64 +9098,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     }
     const std::uint64_t current_present_epoch =
         presents ? present_epoch_ + 1u : present_epoch_;
-    const bool display_xfb_unknown =
-        chunk.displayed_xfb_addr == kUnknownDisplayedXfbAddr;
-    const bool display_xfb_none =
-        chunk.displayed_xfb_addr == kNoDisplayedXfbAddr;
-    const bool requested_specific_xfb =
-        chunk.displayed_xfb_addr != 0u && !display_xfb_unknown &&
-        !display_xfb_none;
-    const XfbTexture* latest_xfb = efb_copies_.latest();
-    const std::uint32_t last_presented_addr =
-        last_presented_xfb_addr_.load(std::memory_order_relaxed);
-    const XfbTexture* last_valid_xfb = last_presented_addr != 0u
-        ? efb_copies_.find_xfb(last_presented_addr)
-        : nullptr;
-    const XfbTexture* selected_xfb = display_xfb_none
-        ? nullptr
-        : (requested_specific_xfb
-            ? displayed_xfb(efb_copies_.find_xfb(chunk.displayed_xfb_addr), latest_xfb,
-                            latest_xfb != nullptr && is_vi_named_xfb(latest_xfb->guest_addr), subframes_shown())
-            : latest_xfb);
-    const std::uint64_t current_xfb_stamp =
-        latest_xfb != nullptr
-            ? std::max(latest_xfb->frame_stamp, current_present_epoch)
-            : std::max(frame_index_, current_present_epoch);
-    const XfbPresentSelection selection = display_xfb_none
-        ? XfbPresentSelection{}
-        : select_xfb_for_present(
-            requested_specific_xfb,
-            selected_xfb,
-            latest_xfb,
-            last_valid_xfb,
-            current_xfb_stamp,
-            kMaxXfbPreserveAge);
-    selected_xfb = selection.selected;
-    bool stale_fallback = false;
-    bool missing_fallback = false;
-    if (presents && selection.stale_preserved) {
-        ++stat_xfb_present_stale_preserved_;
-    }
-    if (presents && selection.stale_expired) {
-        stale_fallback = true;
-        ++stat_xfb_present_stale_fallbacks_;
-    }
-    if (presents && selection.missing) {
-        ++stat_xfb_present_misses_;
-    }
-    if (presents && selection.missing_preserved) {
-        ++stat_xfb_present_missing_preserved_;
-    }
-    if (presents && selection.missing_expired) {
-        missing_fallback = true;
-        ++stat_xfb_present_missing_fallbacks_;
-    }
-    if (selection.missing) {
-    }
-    if (selected_xfb == nullptr && !requested_specific_xfb &&
-        !display_xfb_none) {
-        selected_xfb = efb_copies_.latest();
-    }
+    const XfbTexture* const selected_xfb = chunk.black ? nullptr : efb_copies_.latest();
     const bool duplicate_xfb_present =
         selected_xfb != nullptr &&
         selected_xfb->copy_serial ==
@@ -9257,7 +9116,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     bool present_swap_chain =
         presents && selected_xfb != nullptr &&
         !skip_duplicate_present && !skip_rate_present;
-    const bool present_black = chunk.present_swap_chain && display_xfb_none;
+    const bool present_black = chunk.present_swap_chain && chunk.black;
     if (present_black) {
         supersede_interp_sequence();
         interp_log_waiting_ = false;
@@ -9303,10 +9162,12 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         const std::string snapshot_path = present_snapshot_path();
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, snapshot_path);
+            renderer_.set_capture_waits(snapshot_waits());
         }
         renderer_.present(selected_xfb, !snapshot_path.empty());
         if (!snapshot_path.empty()) {
             renderer_.set_debug_capture_paths({}, {});
+            renderer_.set_capture_waits(false);
         }
         if (frame_timing_enabled) {
             present_record_us =
@@ -9357,8 +9218,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         selected_xfb != nullptr) {
         present_epoch_ = current_present_epoch;
         record_presented_xfb_copy(*selected_xfb);
-        last_presented_xfb_addr_.store(
-            selected_xfb->guest_addr, std::memory_order_relaxed);
+        last_presented_slot_.store(selected_xfb->slot, std::memory_order_relaxed);
     } else if (present_black) {
         present_epoch_ = current_present_epoch;
     }
@@ -11559,6 +11419,10 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Immediate:
         draw_record_immediate(*record.immediate);
         return;
+    case shapes::Record::Kind::Marker:
+        on_host_marker(static_cast<std::uint8_t>(record.key), static_cast<std::uint16_t>(record.marker[0]),
+                       record.marker[1], record.marker[2]);
+        return;
     case shapes::Record::Kind::Readback:
         // The picture here, as the channel's next field (its reads take the latest finished one).
         flush_pending_draw_batch();
@@ -12186,8 +12050,8 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     flush_pending_draw_batch();
     const EfbCopyParams params = state_.efb_copy(exec_command);
     if (params.copy_to_xfb) {
-        galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, params.dest_addr);
-        xfb_copied_in_chunk_ = xfb_copied_in_chunk_ || is_vi_named_xfb(params.dest_addr);
+        galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
+        xfb_copied_in_chunk_ = true;
     }
     const bool time_copy = frame_time_detail_;
     const auto copy_start = time_copy

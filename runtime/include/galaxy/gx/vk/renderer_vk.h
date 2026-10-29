@@ -269,7 +269,7 @@ public:
     // A present rate above 60.
     [[nodiscard]] bool interpolation_mode() const;
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
-    [[nodiscard]] std::uint32_t replay_xfb_addr() const noexcept { return replay_xfb_addr_; }
+    [[nodiscard]] std::uint32_t replay_picture_slot() const noexcept { return replay_picture_slot_; }
     void note_replay_scene() noexcept { ++replay_scene_count_; }
     // As RendererD3D12: a frame that draws no 3D scene, recorded as its screen layer alone.
     void note_replay_screen_frame() noexcept { replay_screen_frame_ = true; }
@@ -732,7 +732,7 @@ private:
     void note_feedback_reads(const std::array<VkImageView, kMaxTextureMaps>& views);
     void take_log_snapshots();
     // The display copy closes the log: one 3D scene makes it replayable.
-    void close_replay_log(std::uint32_t xfb_addr);
+    void close_replay_log(std::uint32_t picture_slot);
     // GX work recorded now goes into the log (not while a replay records, nor inside a logged operation's own
     // clears and rebinds: LogPause).
     [[nodiscard]] bool logging() const noexcept { return recording_log_valid_ && !replaying_ && !log_paused_; }
@@ -759,7 +759,7 @@ private:
     bool replay_screen_frame_ = false;
     unsigned replay_reject_ = 0;
     std::uint64_t replay_serial_ = 0;
-    std::uint32_t replay_xfb_addr_ = 0;
+    std::uint32_t replay_picture_slot_ = 0;
     std::vector<std::int32_t> run_ps_previous_;
     // Vertex blending (prepare_vertex_blend): per playing draw its earlier vertices and verdict slot; the pairs the
     // GPU checks (current offset, earlier offset, vertices, buffers); stripe vertices gathered from the log before.

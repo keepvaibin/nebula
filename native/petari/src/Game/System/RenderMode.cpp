@@ -313,10 +313,6 @@ namespace MR {
     bool isAspectRatioFlag16Per9() {
         return SCGetAspectRatio() == SC_ASPECT_RATIO_16x9;
     }
-
-    u32 getRequiredExternalFrameBufferSize() {
-        return 0xA9600;
-    }
 };  // namespace MR
 
 u32 RenderModeObj::getViWidthMax() {

@@ -283,14 +283,14 @@ void RendererVk::begin_replay_record() {
     }
 }
 
-void RendererVk::close_replay_log(std::uint32_t xfb_addr) {
+void RendererVk::close_replay_log(std::uint32_t picture_slot) {
     recording_log_valid_ = false;
     // One 3D scene, or none in a frame recorded as its screen layer alone (the pause menu): a frame without one
     // otherwise (menus between scenes), or with two, is shown as it is.
     const bool valid = replay_scene_count_ == 1u || (replay_scene_count_ == 0u && replay_screen_frame_);
     replay_reject_ = valid ? 0u : replay_scene_count_ == 0u ? 1u : 2u;
     ++replay_serial_;
-    replay_xfb_addr_ = xfb_addr;
+    replay_picture_slot_ = picture_slot;
     if (valid) {
         recording_log_.serial = replay_serial_;
         std::swap(recording_log_, ready_log_);

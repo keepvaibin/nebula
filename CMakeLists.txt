@@ -650,7 +650,7 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name shader_gen fifo_parser vertex_loader curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         frame_completion memory_snapshot sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
-        xfb_present_selection line_point_raster xf_lighting sorted_dirty_ranges native_settings_overlay post_process
+        efb_copy line_point_raster xf_lighting sorted_dirty_ranges native_settings_overlay post_process
         efb_conversion)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()

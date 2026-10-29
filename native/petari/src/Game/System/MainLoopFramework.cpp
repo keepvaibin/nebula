@@ -9,9 +9,7 @@
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JUtility/JUTAssert.hpp>
 #include <JSystem/JUtility/JUTConsole.hpp>
-#include <JSystem/JUtility/JUTDirectPrint.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <JSystem/JUtility/JUTXfb.hpp>
 #include <revolution/gx/GXRegs.h>
 #include <runtime.h>
 
@@ -34,8 +32,6 @@ u32 clearZTexData[] ATTRIBUTE_ALIGN(32) = {0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0
 #endif
 
 namespace {
-    s32 getDisplayingXfbIndex() NO_INLINE;
-
     void waitForTick(u32, u16);
 
 };  // namespace
@@ -45,7 +41,6 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mClearZ = 0xffffff;
     mDispCopyGamma = GX_GM_1_0;
     mCopyClamp = GX_CLAMP_TOP | GX_CLAMP_BOTTOM;
-    _C = 1;
     mRetraceCount = 1;
     mTickDuration = 0;
     mUseAlpha = useAlpha;
@@ -54,8 +49,6 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mTick = OSGetTick();
     mLastFrameTime = 0;
     mLastVideoTickDelta = 0;
-    mSingleBufferIndex = 0;
-    _3E = 0;
     J3DNativeTexture::registerImage(clearZTexData, GX_TF_Z24X8, 4, 4, 1);
     J3DNativeTexture::init(&clear_z_tobj, clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
     J3DNativeTexture::initLOD(&clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
@@ -69,26 +62,16 @@ MainLoopFramework::~MainLoopFramework() {
     if (JUTVideo::getManager()) {
         waitBlanking(2);
     }
-    JUTXfb::destroyManager();
 }
 
-MainLoopFramework* MainLoopFramework::createManager(const GXRenderModeObj* pRenderModeObj, void* xfb1, void* xfb2, void* xfb3, bool useAlpha) {
+MainLoopFramework* MainLoopFramework::createManager(const GXRenderModeObj* pRenderModeObj, bool useAlpha) {
     if (pRenderModeObj) {
         JUTVideo::getManager()->setRenderMode(pRenderModeObj);
     }
     if (!sManager) {
-        sManager = new MainLoopFramework(xfb1, xfb2, xfb3, useAlpha);
+        sManager = new MainLoopFramework(useAlpha);
     }
     return sManager;
-}
-
-void callDirectDraw() {
-    u16 efbHeight, fbWidth;
-    fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
-    efbHeight = JUTVideo::getManager()->getRenderMode()->efbHeight;
-    void* pXfb = JUTXfb::sManager->getDrawingXfb();
-    JUTDirectPrint::sDirectPrint->changeFrameBuffer(pXfb, fbWidth, efbHeight);
-    JUTAssertion::flushMessage();
 }
 
 #pragma push
@@ -116,84 +99,6 @@ void MainLoopFramework::prepareCopyDisp() {
 }
 #pragma pop
 
-void MainLoopFramework::drawendXfb_single() {
-    JUTXfb* pXfbMgr = JUTXfb::sManager;
-    if (pXfbMgr->mDrawingXfbIndex >= 0) {
-        prepareCopyDisp();
-        GXDrawDone();
-        GXFlush();
-        pXfbMgr->mDrawnXfbIndex = pXfbMgr->mDrawingXfbIndex;
-    }
-}
-
-void MainLoopFramework::exchangeXfb_double() {
-    JUTXfb* pXfbMgr = JUTXfb::sManager;
-    if (pXfbMgr->mDrawnXfbIndex == pXfbMgr->mDisplayingXfbIndex) {
-        if (pXfbMgr->mDrawingXfbIndex >= 0) {
-            if (mPreRenderCallback) {
-                mPreRenderCallback();
-            }
-            prepareCopyDisp();
-            J3DNativeState::copyDisp(pXfbMgr->getDrawingXfb(), GX_TRUE);
-            if (!_C) {
-                pXfbMgr->mDrawnXfbIndex = pXfbMgr->mDrawingXfbIndex;
-                GXDrawDone();
-                JUTVideo::dummyNoDrawWait();
-            } else {
-                JUTVideo::drawDoneStart();
-            }
-            if (!_C) {
-                callDirectDraw();
-            }
-        }
-        s16 lastIdx = pXfbMgr->mDrawingXfbIndex;
-        pXfbMgr->mDrawnXfbIndex = lastIdx;
-        pXfbMgr->mDrawingXfbIndex = lastIdx >= 0 ? lastIdx ^ 1 : 0;
-    } else {
-        clearEfb(mClearColor);
-        if (pXfbMgr->mDrawingXfbIndex < 0) {
-            pXfbMgr->mDrawingXfbIndex = 0;
-        }
-    }
-}
-
-namespace {
-    s32 getDisplayingXfbIndex() {
-        return JUTXfb::getManager()->getDisplayingXfbIndex();
-    }
-};  // namespace
-
-void MainLoopFramework::exchangeXfb_triple() {
-    JUTXfb* pXfbMgr = JUTXfb::sManager;
-    if (pXfbMgr->mDrawingXfbIndex >= 0) {
-        callDirectDraw();
-    }
-    pXfbMgr->mDrawnXfbIndex = pXfbMgr->mDrawingXfbIndex;
-    s16 nextIdx = pXfbMgr->mDrawingXfbIndex + 1;
-    do {
-        if (nextIdx >= 3 || nextIdx < 0) {
-            nextIdx = 0;
-        }
-#ifdef TARGET_PC
-        if (nextIdx == ::getDisplayingXfbIndex()) {
-            __NebulaPoll();
-        }
-#endif
-    } while (nextIdx == ::getDisplayingXfbIndex());
-    pXfbMgr->mDrawingXfbIndex = nextIdx;
-}
-
-void MainLoopFramework::copyXfb_triple() {
-    JUTXfb* pXfbMgr = JUTXfb::sManager;
-    if (pXfbMgr->mDrawingXfbIndex >= 0) {
-        if (mPreRenderCallback) {
-            mPreRenderCallback();
-        }
-        prepareCopyDisp();
-        J3DNativeState::copyDisp(pXfbMgr->getDrawingXfb(), GX_FALSE);
-    }
-}
-
 void MainLoopFramework::preGX() {
     J3DNativeState::invalidateTexAll();
     if (JUTVideo::getManager()->getRenderMode()->aa) {
@@ -215,10 +120,7 @@ void MainLoopFramework::endGX() {
         ortho.setPort();
         JUTConsoleManager::sManager->draw();
     }
-    if (_C || JUTXfb::sManager->mBufferNum == 1) {
-        JUTAssertion::flushMessage_dbPrint();
-    }
-    GXFlush();
+    JUTAssertion::flushMessage_dbPrint();
 }
 
 void MainLoopFramework::waitForRetrace() {
@@ -233,27 +135,6 @@ void MainLoopFramework::beginRender() {
 
     mLastVideoTickDelta = currentTick - JUTVideo::getVideoLastTick();
 
-    if (mDoRenderFrame) {
-        JUTXfb* xfb = JUTXfb::sManager;
-        switch (xfb->mBufferNum) {
-        case 1:
-            if (xfb->mSDrawingFlag != 2) {
-                xfb->mSDrawingFlag = 1;
-                clearEfb(mClearColor);
-            } else {
-                xfb->mSDrawingFlag = 1;
-            }
-            xfb->mDrawingXfbIndex = mSingleBufferIndex;
-            break;
-        case 2:
-            exchangeXfb_double();
-            break;
-        case 3:
-            exchangeXfb_triple();
-            break;
-        }
-    }
-
     if ((mDoRenderFrame = ++mRenderCounter >= mRenderInterval)) {
         mRenderCounter = 0;
     }
@@ -266,46 +147,17 @@ void MainLoopFramework::beginRender() {
 void MainLoopFramework::endRender() {
     endGX();
     if (mDoRenderFrame) {
-        JUTXfb* xfb = JUTXfb::sManager;
-        switch (xfb->mBufferNum) {
-        case 1:
-            drawendXfb_single();
-            break;
-        case 2:
-            break;
-        case 3:
-            copyXfb_triple();
-            break;
+        if (mPreRenderCallback) {
+            mPreRenderCallback();
         }
+        prepareCopyDisp();
+        J3DNativeState::showFrame();
     }
     calcCombinationRatio();
 }
 
 void MainLoopFramework::endFrame() {
-    if (mDoRenderFrame) {
-        JUTXfb* xfb = JUTXfb::sManager;
-        switch (xfb->mBufferNum) {
-        case 1:
-            break;
-        case 2:
-            GXDrawDone();
-            GXFlush();
-            break;
-        case 3:
-            GXDrawDone();
-            GXFlush();
-            break;
-        }
-    }
-
-    if (mDoRenderFrame) {
-        static s8 lbl_806B6ED4;
-        if (!lbl_806B6ED4) {
-            VIGetRetraceCount();
-            lbl_806B6ED4 = 1;
-        }
-        VIGetRetraceCount();
-    }
+    J3DNativeState::endFrame();
 }
 
 void MainLoopFramework::waitBlanking(int tickCount) {

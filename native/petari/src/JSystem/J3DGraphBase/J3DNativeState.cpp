@@ -1,7 +1,10 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include <nebula_gx_fifo.h>
 #include <math.h>
 #include <string.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // GXInit's cull mode and pixel format.
@@ -601,8 +604,13 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void copyDisp(void* pDest, GXBool clear) {
-        sendCopy(pDest, clear, true);
+    void showFrame() {
+        sendCopy(nullptr, GX_FALSE, true);
+    }
+
+    void endFrame() {
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_end(pHost->user, __NebulaGXWriter.ptr);
     }
 
     void copyTex(void* pDest, GXBool clear) {

@@ -1515,27 +1515,28 @@ V main(uint id : SV_VertexID) {
         }
         EfbCopyParams params{};
         params.src_width = params.src_height = 8u;
-        params.dest_addr = 0x01000000u;
         params.copy_to_xfb = true;
-        auto* original = manager.acquire_xfb(params, 1u);
-        manager.mark_xfb_copied(*original, 1u);
-        auto* original_resource = original->texture.Get();
-        const auto original_serial = original->copy_serial;
+        // Three published pictures fill the ring; the next acquire is the first again.
+        XfbTexture* shown = nullptr;
+        for (std::uint64_t frame = 1u; frame <= 3u; ++frame) {
+            shown = manager.acquire_xfb(params, frame);
+            manager.mark_xfb_copied(*shown, frame);
+        }
+        auto* shown_resource = shown->texture.Get();
+        const auto shown_serial = shown->copy_serial;
         // A resize before the first begin_frame has no retirement list: the ownership failure path.
         params.src_width = 16u;
         bool rejected = false;
-        try { (void)manager.acquire_xfb(params, 2u); }
+        try { (void)manager.acquire_xfb(params, 4u); }
         catch (const std::runtime_error&) { rejected = true; }
-        const auto* preserved = manager.find_xfb(params.dest_addr);
-        bool passed = expect(rejected && preserved == original &&
-            preserved != nullptr && preserved->texture.Get() == original_resource &&
-            preserved->width == 8u && preserved->height == 8u &&
-            preserved->copy_serial == original_serial && preserved->frame_stamp == 1u &&
-            manager.latest() == preserved,
-            "failed resize retirement preserves the live XFB resource and presentation identity");
+        const auto* latest = manager.latest();
+        bool passed = expect(rejected && latest == shown && latest->texture.Get() == shown_resource &&
+            latest->width == 8u && latest->height == 8u && latest->copy_serial == shown_serial &&
+            latest->frame_stamp == 3u,
+            "failed resize retirement preserves the shown picture's resource and identity");
         manager.begin_frame(0u, kFramesInFlight);
-        const auto* resized = manager.acquire_xfb(params, 2u);
-        passed &= expect(resized->texture != nullptr && resized->width == 16u &&
+        const auto* resized = manager.acquire_xfb(params, 4u);
+        passed &= expect(resized->slot == 0u && resized->texture != nullptr && resized->width == 16u &&
             resized->height == 8u && !resized->presentable && resized->copy_serial == 0u,
             "resize succeeds after retirement storage is available without inventing a copied frame");
         // No GPU commands reference these resources in this lifecycle fixture.
@@ -1552,7 +1553,6 @@ V main(uint id : SV_VertexID) {
         manager.begin_frame(0u, kFramesInFlight);
         EfbCopyParams params{};
         params.src_height = 8u;
-        params.dest_addr = 0x01000000u;
         params.copy_to_xfb = true;
         // Eight one-off sizes fill the idle pool; the ninth is the current XFB.
         for (unsigned i = 0; i < 9u; ++i) {

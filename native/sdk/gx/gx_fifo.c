@@ -339,8 +339,10 @@ void GXInitFifoLimits(GXFifoObj* fifo, u32 hi, u32 lo) {
 static void relink(void) {
     const GXBool linked = sCPUFifoReady && sGPFifoReady && sCPUFifo.base == sGPFifo.base;
     if (linked && !sLinked) {
-        /* Back to the main FIFO: the ring continues where it left off. */
+        /* Back to the main FIFO: the ring continues where it left off. The host learns that place now (an empty
+           span), so a record made before the next flush runs after the commands written before it. */
         __NebulaGXWriter.ptr = sSpanStart;
+        nebula_host()->gx_submit(nebula_host()->user, sSpanStart, 0);
     }
     sLinked = linked;
     update_markers();

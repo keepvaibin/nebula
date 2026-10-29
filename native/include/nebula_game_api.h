@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 43u
+#define NEBULA_GAME_API_VERSION 44u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -734,7 +734,8 @@ typedef struct NebulaHostServices {
     void (*fatal)(void* user, const char* text);
 
     /* GX: the game's command stream (the console's main FIFO), in order, as spans of the module's command ring. A
-       span is contiguous, ends where the game flushed (GXFlush, a draw sync, a draw done: a command boundary) and
+       span is contiguous, ends where the game flushed (GXFlush, a draw sync, a draw done: a command boundary; an
+       empty one where the game starts writing into the ring) and
        stays valid and unchanged until the host releases it (nebula_game_gx_release), so the renderer parses it in
        place. When the ring is full the game waits for releases, as the console's CPU waits on a full GP FIFO. */
     void (*gx_submit)(void* user, const uint8_t* bytes, size_t size);
@@ -926,6 +927,12 @@ typedef struct NebulaHostServices {
     /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
        (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
+    /* The game's frame is complete (its picture was shown earlier in the stream): the renderer takes everything
+       written before `stream`, which the game has handed over in full. */
+    void (*frame_end)(void* user, const void* stream);
+    /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad) after every command
+       written before `stream`. */
+    void (*marker)(void* user, const void* stream, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b);
 } NebulaHostServices;
 
 

@@ -172,8 +172,8 @@ void GameSystem::initGX() {
     }
 
     GXInit(mFifoBase, GX_FIFO_SIZE);
-    // The defaults GXInit leaves to its first draw, sent now: the game's records follow them.
-    __GXSetDirtyState();
+    // GXInit's defaults (with those it leaves to its first draw) reach the renderer now, ahead of every record.
+    GXFlush();
 }
 
 void GameSystem::initAfterStationedResourceLoaded() {

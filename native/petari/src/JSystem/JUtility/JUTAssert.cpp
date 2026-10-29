@@ -1,7 +1,6 @@
 #include "JSystem/JUtility/JUTAssert.hpp"
 #include "JSystem/JUtility/JUTConsole.hpp"
 #include "JSystem/JUtility/JUTDbPrint.hpp"
-#include "JSystem/JUtility/JUTDirectPrint.hpp"
 #include "JSystem/JUtility/JUTFont.hpp"
 #include <cstdio>
 #include <revolution/vi.h>
@@ -36,17 +35,6 @@ namespace JUTAssertion {
         }
 
         return 0;
-    }
-
-    void flushMessage() {
-        if (flush_subroutine() && sAssertVisible == true) {
-            JUTDirectPrint* manager = JUTDirectPrint::getManager();
-            JUtility::TColor color = manager->getCharColor();
-            manager->setCharColor(JUtility::TColor(255, 200, 200, 255));
-            manager->drawString(16, 16, sMessageFileLine);
-            manager->drawString(16, 24, sMessageString);
-            manager->setCharColor(color);
-        }
     }
 
     void flushMessage_dbPrint() {

@@ -1,7 +1,5 @@
 #include "JSystem/JUtility/JUTVideo.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include "JSystem/JUtility/JUTDirectPrint.hpp"
-#include "JSystem/JUtility/JUTXfb.hpp"
 
 JUTVideo* JUTVideo::sManager;
 
@@ -9,7 +7,6 @@ OSTick JUTVideo::sVideoLastTick;
 
 OSTick JUTVideo::sVideoInterval;
 
-static bool data_80451544;
 
 JUTVideo* JUTVideo::createManager(_GXRenderModeObj const* param_0) {
     if (sManager == nullptr) {
@@ -44,7 +41,6 @@ JUTVideo::JUTVideo(GXRenderModeObj const* param_0) {
     mPreCallback = nullptr;
     mPostCallback = nullptr;
     OSInitMessageQueue(&mMessageQueue, &mMessage, 1);
-    GXSetDrawDoneCallback(drawDoneCallback);
 }
 
 JUTVideo::~JUTVideo() {
@@ -61,22 +57,7 @@ void JUTVideo::preRetraceProc(u32 retrace_count) {
     sVideoInterval = tick - sVideoLastTick;
     sVideoLastTick = tick;
 
-    JUTXfb* xfb = JUTXfb::sManager;
-    if (!xfb) {
-        VISetBlack(TRUE);
-        VIFlush();
-        return;
-    }
-
-    static void* frameBuffer = nullptr;
-
-    if (frameBuffer) {
-        JUTVideo* videoManager = JUTGetVideoManager();
-        const GXRenderModeObj* renderMode = videoManager->getRenderMode();
-        JUTDirectPrint* directPrint = JUTDirectPrint::getManager();
-        directPrint->changeFrameBuffer(frameBuffer, renderMode->fbWidth, renderMode->efbHeight);
-    }
-
+    // The picture shown is the renderer's newest; black for the first retraces.
     if (sManager->mSetBlack == 1) {
         s32 frame_count = sManager->mSetBlackFrameCount;
         if (frame_count > 0) {
@@ -89,75 +70,8 @@ void JUTVideo::preRetraceProc(u32 retrace_count) {
         VIFlush();
         return;
     }
-
-    if (!xfb) {
-        VISetBlack(TRUE);
-        VIFlush();
-        return;
-    }
-
-    u32 bufferNum = xfb->getBufferNum();
-    if (bufferNum == 2 || bufferNum == 3) {
-        if (!data_80451544) {
-            s16 index = xfb->getDrawnXfbIndex();
-            xfb->setDisplayingXfbIndex(index);
-            if (index < 0) {
-                VISetBlack(1);
-                VIFlush();
-            } else {
-                VISetNextFrameBuffer(xfb->getDisplayingXfb());
-                VIFlush();
-                VISetBlack(FALSE);
-                frameBuffer = xfb->getDisplayingXfb();
-            }
-        }
-    } else if (xfb->getBufferNum() == 1) {
-        if (xfb->getSDrawingFlag() == 0) {
-            s16 index = xfb->getDrawnXfbIndex();
-            if (index >= 0) {
-                xfb->setDisplayingXfbIndex(index);
-                J3DNativeState::copyDisp(xfb->getDisplayingXfb(), GX_TRUE);
-                GXFlush();
-                xfb->setSDrawingFlag(2);
-                frameBuffer = xfb->getDisplayingXfb();
-                if (VIGetNextFrameBuffer()) {
-                    VISetBlack(FALSE);
-                }
-            } else {
-                VISetBlack(TRUE);
-            }
-        }
-        VIFlush();
-    }
-}
-
-void JUTVideo::drawDoneStart() {
-    data_80451544 = true;
-    GXSetDrawDone();
-}
-
-void JUTVideo::dummyNoDrawWait() {
-    data_80451544 = false;
-}
-
-void JUTVideo::drawDoneCallback() {
-    JUTXfb* xfb = JUTXfb::sManager;
-    if (!xfb) {
-        return;
-    }
-
-    data_80451544 = false;
-    if (xfb->getBufferNum() == 1) {
-        if (xfb->getSDrawingFlag() == 1) {
-            xfb->setSDrawingFlag(0);
-
-            void* frameBuffer = xfb->getDrawnXfb();
-            if (frameBuffer) {
-                VISetNextFrameBuffer(xfb->getDrawnXfb());
-                VIFlush();
-            }
-        }
-    }
+    VISetBlack(FALSE);
+    VIFlush();
 }
 
 void JUTVideo::postRetraceProc(u32 retrace_count) {

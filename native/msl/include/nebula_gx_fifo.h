@@ -11,6 +11,8 @@
 
 #include <stdint.h>
 
+#include <nebula_game_api.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -105,18 +107,19 @@ static inline uint8_t* __NebulaGXCmdXFWords(uint16_t addr, unsigned count) {
    tracing; asked at each scene's begin) and the writer is in the main ring, not a display list. */
 extern uint8_t __NebulaGXMarkers;
 
-/* A host marker (galaxy/gx/fifo_parser.h op::kHostMarker, galaxy/motion_signals.h): the game object whose GX commands
-   follow, or a scene signal. 12 bytes: 0xF0, the kind, then aux, a and b big-endian. Never inside a GXBegin. */
+const struct NebulaHostServices* nebula_host(void);
+
+/* A host marker (galaxy/motion_signals.h) to the renderer, after every command written so far. */
+static inline void __NebulaGXMarker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
+    const struct NebulaHostServices* const host = nebula_host();
+    host->marker(host->user, __NebulaGXWriter.ptr, kind, aux, a, b);
+}
+
+/* A host marker: the game object whose drawing follows, or a scene signal. Never inside a GXBegin. */
 static inline void __NebulaGXHostMarker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
-    if (__NebulaGXMarkers == 0) {
-        return;
+    if (__NebulaGXMarkers != 0) {
+        __NebulaGXMarker(kind, aux, a, b);
     }
-    uint8_t* const p = __NebulaGXReserve(12);
-    p[0] = 0xF0;
-    p[1] = kind;
-    __NebulaGXStore16(p + 2, aux);
-    __NebulaGXStore32(p + 4, a);
-    __NebulaGXStore32(p + 8, b);
 }
 
 /* Nonzero while the writer is in the main ring (not a display list). */
@@ -133,15 +136,9 @@ enum {
 };
 
 static inline void __NebulaGXBloomMarker(uint16_t phase, uint32_t a, uint32_t b) {
-    if (__NebulaGXLinked == 0) {
-        return;
+    if (__NebulaGXLinked != 0) {
+        __NebulaGXMarker(NEBULA_GX_MARKER_BLOOM, phase, a, b);
     }
-    uint8_t* const p = __NebulaGXReserve(12);
-    p[0] = 0xF0;
-    p[1] = NEBULA_GX_MARKER_BLOOM;
-    __NebulaGXStore16(p + 2, phase);
-    __NebulaGXStore32(p + 4, a);
-    __NebulaGXStore32(p + 8, b);
 }
 
 /* The next draw is an EFB clear quad (MainLoopFramework::clearEfb, MR::clearZBuffer): one quad filling its viewport
@@ -152,15 +149,9 @@ static inline void __NebulaGXBloomMarker(uint16_t phase, uint32_t a, uint32_t b)
 enum { NEBULA_GX_MARKER_CLEAR_QUAD = 16 };
 
 static inline void __NebulaGXClearQuadMarkerWith(uint32_t z, uint16_t has_colour, uint32_t rgba) {
-    if (__NebulaGXLinked == 0) {
-        return;
+    if (__NebulaGXLinked != 0) {
+        __NebulaGXMarker(NEBULA_GX_MARKER_CLEAR_QUAD, has_colour, z, rgba);
     }
-    uint8_t* const p = __NebulaGXReserve(12);
-    p[0] = 0xF0;
-    p[1] = NEBULA_GX_MARKER_CLEAR_QUAD;
-    __NebulaGXStore16(p + 2, has_colour);
-    __NebulaGXStore32(p + 4, z);
-    __NebulaGXStore32(p + 8, rgba);
 }
 
 static inline void __NebulaGXClearQuadMarker(uint32_t z) {
