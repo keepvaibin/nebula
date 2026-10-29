@@ -10211,56 +10211,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " fifo-xf-us=" << frame_fifo_profile_.xf_us
                   << " fifo-indx-count=" << frame_fifo_profile_.indx_count
                   << " fifo-indx-us=" << frame_fifo_profile_.indx_us
-                  << " fifo-call-dl-count="
-                  << frame_fifo_profile_.call_dl_count
-                  << " fifo-call-dl-us=" << frame_fifo_profile_.call_dl_us
-                  << " fifo-call-dl-bytes="
-                  << frame_fifo_profile_.call_dl_bytes
-                  << " fifo-call-dl-cache-hits="
-                  << frame_fifo_profile_.call_dl_cache_hits
-                  << " fifo-call-dl-cache-misses="
-                  << frame_fifo_profile_.call_dl_cache_misses
-                  << " fifo-call-dl-cache-stores="
-                  << frame_fifo_profile_.call_dl_cache_stores
-                  << " fifo-call-dl-cache-uncacheable="
-                  << frame_fifo_profile_.call_dl_cache_uncacheable
-                  << " fifo-call-dl-miss-parse-us="
-                  << frame_fifo_profile_.call_dl_miss_parse_us
-                  << " fifo-call-dl-store-us="
-                  << frame_fifo_profile_.call_dl_store_us
-                  << " fifo-call-dl-replay-command-count="
-                  << frame_fifo_profile_.call_dl_replay_command_count
-                  << " fifo-call-dl-replay-command-us="
-                  << frame_fifo_profile_.call_dl_replay_command_us
-                  << " fifo-call-dl-replay-prepared-run-count="
-                  << frame_fifo_profile_.call_dl_replay_prepared_run_count
-                  << " fifo-call-dl-replay-prepared-source-draw-count="
-                  << frame_fifo_profile_
-                         .call_dl_replay_prepared_source_draw_count
-                  << " fifo-call-dl-replay-prepared-payload-bytes="
-                  << frame_fifo_profile_
-                         .call_dl_replay_prepared_payload_bytes
-                  << " fifo-call-dl-replay-packet-run-count="
-                  << frame_fifo_profile_.call_dl_replay_packet_run_count
-                  << " fifo-call-dl-replay-packet-source-draw-count="
-                  << frame_fifo_profile_
-                         .call_dl_replay_packet_source_draw_count
-                  << " fifo-call-dl-replay-state-count="
-                  << frame_fifo_profile_.call_dl_replay_state_count
-                  << " fifo-call-dl-replay-state-us="
-                  << frame_fifo_profile_.call_dl_replay_state_us
-                  << " fifo-call-dl-replay-indx-count="
-                  << frame_fifo_profile_.call_dl_replay_indx_count
-                  << " fifo-call-dl-replay-indx-us="
-                  << frame_fifo_profile_.call_dl_replay_indx_us
-                  << " fifo-call-dl-replay-draw-count="
-                  << frame_fifo_profile_.call_dl_replay_draw_count
-                  << " fifo-call-dl-replay-draw-us="
-                  << frame_fifo_profile_.call_dl_replay_draw_us
-                  << " fifo-call-dl-replay-misc-count="
-                  << frame_fifo_profile_.call_dl_replay_misc_count
-                  << " fifo-call-dl-replay-misc-us="
-                  << frame_fifo_profile_.call_dl_replay_misc_us
                   << " fifo-metrics-count="
                   << frame_fifo_profile_.metrics_count
                   << " fifo-metrics-us=" << frame_fifo_profile_.metrics_us
