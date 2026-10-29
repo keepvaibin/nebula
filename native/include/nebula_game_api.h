@@ -56,6 +56,12 @@ typedef struct NebulaShapeCurrent {
 enum {
     NEBULA_MATERIAL_LOADS_FOG = 1u << 0,
     NEBULA_MATERIAL_LOADS_DITHER = 1u << 1,
+    NEBULA_MATERIAL_LOADS_TEV_COLOR = 1u << 2,
+    NEBULA_MATERIAL_LOADS_KONST_COLOR = 1u << 3,
+    NEBULA_MATERIAL_LOADS_KONST_SELECT = 1u << 4,
+    NEBULA_MATERIAL_LOADS_SWAP_TABLE = 1u << 5,
+    NEBULA_MATERIAL_LOADS_AMBIENT = 1u << 6,
+    NEBULA_MATERIAL_LOADS_LIGHTS = 1u << 7,
 };
 
 typedef struct NebulaMaterialTevStage {

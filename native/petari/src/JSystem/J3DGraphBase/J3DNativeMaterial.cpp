@@ -120,20 +120,33 @@ namespace J3DNativeMaterial {
             rOut.ind_lod = rInd.mLod;
             rOut.ind_alpha = rInd.mAlphaSel;
         }
-        for (u32 i = 0; i < 3; i++) {
-            const J3DGXColorS10& rColor = *pTev->getTevColor(i);
-            pOut->tev_color[i][0] = rColor.r;
-            pOut->tev_color[i][1] = rColor.g;
-            pOut->tev_color[i][2] = rColor.b;
-            pOut->tev_color[i][3] = rColor.a;
+        // The parts a TEV block variant keeps (J3DTevBlock1 has no colours, selectors or swap tables; the patched
+        // block no swap tables): left as set before.
+        if (pTev->getTevColor(0) != NULL) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_TEV_COLOR;
+            for (u32 i = 0; i < 3; i++) {
+                const J3DGXColorS10& rColor = *pTev->getTevColor(i);
+                pOut->tev_color[i][0] = rColor.r;
+                pOut->tev_color[i][1] = rColor.g;
+                pOut->tev_color[i][2] = rColor.b;
+                pOut->tev_color[i][3] = rColor.a;
+            }
         }
-        for (u32 i = 0; i < 4; i++) {
-            copyColor(pOut->konst_color[i], *pTev->getTevKColor(i));
-            const J3DTevSwapModeTable& rSwap = *pTev->getTevSwapModeTable(i);
-            pOut->swap_table[i][0] = rSwap.getR();
-            pOut->swap_table[i][1] = rSwap.getG();
-            pOut->swap_table[i][2] = rSwap.getB();
-            pOut->swap_table[i][3] = rSwap.getA();
+        if (pTev->getTevKColor(0) != NULL) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_COLOR;
+            for (u32 i = 0; i < 4; i++) {
+                copyColor(pOut->konst_color[i], *pTev->getTevKColor(i));
+            }
+        }
+        if (pTev->getTevSwapModeTable(0) != NULL) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_SELECT | NEBULA_MATERIAL_LOADS_SWAP_TABLE;
+            for (u32 i = 0; i < 4; i++) {
+                const J3DTevSwapModeTable& rSwap = *pTev->getTevSwapModeTable(i);
+                pOut->swap_table[i][0] = rSwap.getR();
+                pOut->swap_table[i][1] = rSwap.getG();
+                pOut->swap_table[i][2] = rSwap.getB();
+                pOut->swap_table[i][3] = rSwap.getA();
+            }
         }
 
         for (u32 i = 0; i < pOut->ind_stages && i < 4; i++) {
@@ -168,10 +181,17 @@ namespace J3DNativeMaterial {
             pOut->channel[i].attenuation = rChan.getAttnFn();
         }
         for (u32 i = 0; i < 2; i++) {
-            copyColor(pOut->material_color[i], *pColor->getMatColor(i));
-            copyColor(pOut->ambient_color[i], *pColor->getAmbColor(i));
+            if (pColor->getMatColor(i) != NULL) {
+                copyColor(pOut->material_color[i], *pColor->getMatColor(i));
+            }
+            if (pColor->getAmbColor(i) != NULL) {
+                pOut->loads |= NEBULA_MATERIAL_LOADS_AMBIENT;
+                copyColor(pOut->ambient_color[i], *pColor->getAmbColor(i));
+            }
         }
-        for (u32 i = 0; i < 8; i++) {
+        // Lights only from the blocks that load them (J3DColorBlockLightOn).
+        for (u32 i = 0; i < 8 && pColor->getType() == 'CLON'; i++) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_LIGHTS;
             const J3DLightObj* pLight = pColor->getLight(i);
             if (pLight == NULL) {
                 continue;
