@@ -52,8 +52,8 @@ namespace {
         const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
         pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
         pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
-        pOut->tex_coord_scale[coord & 7].bias_s = rInfo.field_0x04 != 0;
-        pOut->tex_coord_scale[coord & 7].bias_t = rInfo.field_0x06 != 0;
+        pOut->tex_coord_scale[coord & 7].bias_s = rInfo.field_0x04 == 1;
+        pOut->tex_coord_scale[coord & 7].bias_t = rInfo.field_0x06 == 1;
     }
 }  // namespace
 
