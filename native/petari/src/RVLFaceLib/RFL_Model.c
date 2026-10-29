@@ -787,19 +787,13 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         ptr8 += sizeof(Vec);
         memcpy(shape->hairTrans, ptr8, sizeof(Vec));
         ptr8 += sizeof(Vec);
-#ifdef TARGET_PC
-        // The resource's floats are big-endian; the CPU uses these.
-        RFLiSwapWords(shape->noseTrans, 3);
-        RFLiSwapWords(shape->beardTrans, 3);
-        RFLiSwapWords(shape->hairTrans, 3);
-#endif
     }
 
     /**
      * Vertex positions
      */
 
-    if (RFLI_LD16(*(u16*)ptr8) == 0) {
+    if (*(u16*)ptr8 == 0) {
         shape->numVtxPos = 0;
         shape->numVtxNrm = 0;
         shape->numVtxTxc = 0;
@@ -808,7 +802,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         return;
     }
 
-    shape->numVtxPos = RFLI_LD16(*(u16*)ptr8);
+    shape->numVtxPos = *(u16*)ptr8;
     ptr8 += sizeof(u16);
 
     {
@@ -826,13 +820,13 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
                 s16 temp[3];
 
                 if (shape->flipX) {
-                    temp[0] = tx + ((-RFLI_LDS16(ptr16[0]) * s) >> 8);
+                    temp[0] = tx + ((-ptr16[0] * s) >> 8);
                 } else {
-                    temp[0] = tx + ((RFLI_LDS16(ptr16[0]) * s) >> 8);
+                    temp[0] = tx + ((ptr16[0] * s) >> 8);
                 }
 
-                temp[1] = ty + ((RFLI_LDS16(ptr16[1]) * s) >> 8);
-                temp[2] = tz + ((RFLI_LDS16(ptr16[2]) * s) >> 8);
+                temp[1] = ty + ((ptr16[1] * s) >> 8);
+                temp[2] = tz + ((ptr16[2] * s) >> 8);
 
                 RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
                 ptr16 += VTX_COORDS_IN_POS;
@@ -842,21 +836,16 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
             for (i = 0; i < shape->numVtxPos; i++) {
                 s16 temp[3];
 
-                temp[0] = -RFLI_LDS16(ptr16[0]);
-                temp[1] = RFLI_LDS16(ptr16[1]);
-                temp[2] = RFLI_LDS16(ptr16[2]);
+                temp[0] = -ptr16[0];
+                temp[1] = ptr16[1];
+                temp[2] = ptr16[2];
 
                 RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
                 ptr16 += VTX_COORDS_IN_POS;
             }
         } else {
             for (i = 0; i < shape->numVtxPos; i++) {
-#ifdef TARGET_PC
-                const s16 temp[3] = {RFLI_LDS16(ptr16[0]), RFLI_LDS16(ptr16[1]), RFLI_LDS16(ptr16[2])};
-                RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
-#else
                 RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], ptr16);
-#endif
                 ptr16 += VTX_COORDS_IN_POS;
             }
         }
@@ -868,7 +857,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
      * Vertex normals
      */
 
-    shape->numVtxNrm = RFLI_LD16(*(u16*)ptr8);
+    shape->numVtxNrm = *(u16*)ptr8;
     ptr8 += sizeof(u16);
 
     {
@@ -880,9 +869,9 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
             for (i = 0; i < shape->numVtxNrm; i++) {
                 s16 temp[3];
 
-                temp[0] = -RFLI_LDS16(ptr16[0]);
-                temp[1] = RFLI_LDS16(ptr16[1]);
-                temp[2] = RFLI_LDS16(ptr16[2]);
+                temp[0] = -ptr16[0];
+                temp[1] = ptr16[1];
+                temp[2] = ptr16[2];
 
                 RFLiTransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], temp);
                 ptr16 += VTX_COORDS_IN_NRM;
@@ -890,12 +879,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         } else {
             int i;
             for (i = 0; i < shape->numVtxNrm; i++) {
-#ifdef TARGET_PC
-                const s16 temp[3] = {RFLI_LDS16(ptr16[0]), RFLI_LDS16(ptr16[1]), RFLI_LDS16(ptr16[2])};
-                RFLiTransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], temp);
-#else
                 RFLiTransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], ptr16);
-#endif
                 ptr16 += VTX_COORDS_IN_NRM;
             }
         }
@@ -913,18 +897,11 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         if (skipTxc) {
             shape->numVtxTxc = 0;
         } else {
-            shape->numVtxTxc = RFLI_LD16(*(u16*)ptr8);
+            shape->numVtxTxc = *(u16*)ptr8;
             ptr8 += sizeof(u16);
 
             byteSize = SIZE_VTX_TXC(shape->numVtxTxc);
-            {
-                // The resource's big-endian coordinates, in host byte order for RFLiDrawShape.
-                const s16* ptr16 = (const s16*)ptr8;
-                u32 k;
-                for (k = 0; k < byteSize / sizeof(s16); k++) {
-                    shape->vtxTxcBuf[k] = RFLI_LDS16(ptr16[k]);
-                }
-            }
+            memcpy(shape->vtxTxcBuf, ptr8, byteSize);
             ptr8 += byteSize;
         }
     }
@@ -973,21 +950,21 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
 
     switch (part) {
     case RFLiPartsShpTex_Face:
-        texSize = RFLI_LD16(tex->height) * RFLI_LD16(tex->width) * 2;
+        texSize = tex->height * tex->width * 2;
         break;
     case RFLiPartsShpTex_Cap:
     case RFLiPartsShpTex_Noseline:
-        texSize = RFLI_LD16(tex->height) * RFLI_LD16(tex->width) / 2;
+        texSize = tex->height * tex->width / 2;
         break;
     case RFLiPartsShpTex_Glass:
-        texSize = RFLI_LD16(tex->height) * RFLI_LD16(tex->width);
+        texSize = tex->height * tex->width;
         break;
     }
 
     memcpy(buffer, RFLiGetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
-    J3DNativeTextureRegisterImage(buffer, tex->format, RFLI_LD16(tex->width), RFLI_LD16(tex->height), 1);
-    J3DNativeTextureInit(texObj, buffer, RFLI_LD16(tex->width), RFLI_LD16(tex->height), tex->format, tex->wrapS, tex->wrapT, FALSE);
+    J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
+    J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->format, tex->wrapS, tex->wrapT, FALSE);
     J3DNativeTextureInitLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
     RFLiFree(tex);
 }

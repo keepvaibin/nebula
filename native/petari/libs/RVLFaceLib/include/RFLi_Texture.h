@@ -31,9 +31,8 @@ typedef struct RFLiTexture {
     u32 imageOfs;       // at 0x1C
 } RFLiTexture;
 
-// RFL_Res.dat texture headers are big-endian (RFLI_LD*, RFLi_Endian.h).
 inline void* RFLiGetTexImage(const RFLiTexture* tex) {
-    return (u8*)tex + RFLI_LD32(tex->imageOfs);
+    return (u8*)tex + tex->imageOfs;
 }
 
 #ifdef __cplusplus

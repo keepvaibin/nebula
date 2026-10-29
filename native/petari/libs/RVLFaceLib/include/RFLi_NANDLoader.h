@@ -28,6 +28,8 @@ typedef struct RFLiLoader {
 } RFLiLoader;
 
 void RFLiInitLoader(void);
+// The archive RFLInitResAsync is given, in host byte order (converted once); FALSE when it is not one.
+BOOL RFLiCookResource(void* res, u32 size);
 RFLErrcode RFLiLoadResourceHeaderAsync(void);
 u32 RFLiGetTexSize(RFLiPartsTex part, u16 file);
 struct RFLiTexture* RFLiLoadTexture(RFLiPartsTex part, u16 file, void* dst);

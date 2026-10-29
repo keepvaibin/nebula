@@ -34,8 +34,6 @@ RFLErrcode RFLiReadAsync(RFLiFileType type, void* dst, u32 size, RFLiCallback ca
 RFLErrcode RFLiWriteAsync(RFLiFileType type, const void* src, u32 size, RFLiCallback callback, s32 offset);
 RFLErrcode RFLiCloseAsync(RFLiFileType type, RFLiCallback callback);
 RFLErrcode RFLiGetLengthAsync(RFLiFileType type, u32* out, RFLiCallback callback);
-// The parts archive read at once (the loader's cache fill and single parts): the bytes read, or a negative result.
-s32 RFLiReadParts(void* dst, u32 size, u32 offset);
 
 #ifdef __cplusplus
 }

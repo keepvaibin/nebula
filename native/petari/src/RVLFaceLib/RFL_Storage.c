@@ -4,15 +4,11 @@
 
 const NebulaHostServices* nebula_host(void);
 
-// The host's store for each of the library's files.
-static const u32 scStores[RFLiFileType_Max] = {
-    NEBULA_MII_DATABASE, // RFLiFileType_Database
-    NEBULA_MII_PARTS     // RFLiFileType_Resource
-};
-
+// The library's database file is the host's Mii database (its parts archive comes from the game: RFLInitResAsync).
 static s32 store_(RFLiFileType type, u32 op, u32 offset, void* data, u32 size) {
     const NebulaHostServices* host = nebula_host();
-    return host->mii_storage(host->user, scStores[type], op, offset, data, size);
+    (void)type;
+    return host->mii_storage(host->user, op, offset, data, size);
 }
 
 void RFLiInitAccessInfo(void) {
@@ -206,8 +202,4 @@ RFLErrcode RFLiGetLengthAsync(RFLiFileType type, u32* out, RFLiCallback callback
     RFLiStartWorking();
     RFLiGetAccInfo(type)->lengthOut = out;
     return start_(type, RFLiAsyncTag_GetLengthAsync, callback);
-}
-
-s32 RFLiReadParts(void* dst, u32 size, u32 offset) {
-    return store_(RFLiFileType_Resource, NEBULA_MII_READ, offset, dst, size);
 }

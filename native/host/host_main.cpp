@@ -2207,17 +2207,14 @@ void svc_texture_image(void*, const void* stream, const NebulaTextureImage* imag
 }
 
 
-// The Mii library's stores: the system database and parts archive in the files a console keeps them in, so the
-// Miis a NAND (or an earlier Nebula) already holds stay where they are. Game thread only.
-fs::path mii_store_path(uint32_t store) {
-    return gNandRoot / "shared2/menu/FaceLib" / (store == NEBULA_MII_DATABASE ? "RFL_DB.dat" : "RFL_Res.dat");
+// The Mii database in the file a console keeps it in, so the Miis a NAND (or an earlier Nebula) already holds stay
+// where they are. Game thread only.
+fs::path mii_database_path() {
+    return gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
 }
 
-int32_t svc_mii_storage(void*, uint32_t store, uint32_t op, uint32_t offset, void* data, uint32_t size) {
-    if (store != NEBULA_MII_DATABASE && store != NEBULA_MII_PARTS) {
-        return NEBULA_MII_FAILED;
-    }
-    const fs::path path = mii_store_path(store);
+int32_t svc_mii_storage(void*, uint32_t op, uint32_t offset, void* data, uint32_t size) {
+    const fs::path path = mii_database_path();
     std::error_code error;
     const bool exists = fs::exists(path, error);
     switch (op) {
@@ -3753,7 +3750,7 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
     // The system's Mii database, which every console has: an empty one when this NAND has none (the game treats a
     // missing database as a NAND error when it saves).
-    const fs::path mii_database = mii_store_path(NEBULA_MII_DATABASE);
+    const fs::path mii_database = mii_database_path();
     if (!fs::exists(mii_database, error)) {
         fs::create_directories(mii_database.parent_path(), error);
         const std::vector<std::byte> bytes = galaxy::host::native_game_empty_mii_database();

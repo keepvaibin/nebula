@@ -41,7 +41,7 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
     RFLErrcode errcode;
     u32 wholesize;
 
-    if (resBuffer == NULL) {
+    if (resBuffer == NULL || !RFLiCookResource(resBuffer, resSize)) {
         return RFLErrcode_Fatal;
     }
 
