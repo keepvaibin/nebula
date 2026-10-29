@@ -169,7 +169,8 @@ namespace J3DNativeMaterial {
             }
         }
 
-        for (u32 i = 0; i < pOut->ind_stages && i < 4; i++) {
+        // J3DIndBlockFull writes all four orders and coordinate scales whatever its stage count (the null block nothing).
+        for (u32 i = 0; i < 4 && pInd->getIndTexOrder(0) != NULL; i++) {
             J3DIndTexOrder* pOrder = pInd->getIndTexOrder(i);
             J3DIndTexCoordScale* pScale = pInd->getIndTexCoordScale(i);
             pOut->ind_order[i].coord = pOrder->getCoord();
