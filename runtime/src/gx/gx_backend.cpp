@@ -42,8 +42,6 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
-#include "galaxy/gx/sorted_dirty_ranges.h"
-#include "galaxy/gx/snapshot_region_lookup.h"
 #include "galaxy/motion_signals.h"
 
 #include <algorithm>
@@ -729,8 +727,7 @@ struct ScopedFlushTiming {
 [[nodiscard]] const std::byte* resolve_guest_const_bytes(
     GuestMemory* memory,
     std::uint32_t guest_addr,
-    std::uint32_t size,
-    bool regions_disjoint_sorted = false) {
+    std::uint32_t size) {
     if (memory == nullptr || size == 0u) {
         return nullptr;
     }
@@ -740,10 +737,6 @@ struct ScopedFlushTiming {
     }
     if (memory->regions == nullptr) {
         return nullptr;
-    }
-    if (regions_disjoint_sorted) {
-        return detail::resolve_sorted_snapshot_region(
-            {memory->regions, memory->region_count}, guest_addr, size);
     }
     const std::uint64_t end =
         static_cast<std::uint64_t>(guest_addr) + size;
