@@ -6,7 +6,6 @@
 #include <revolution/gx.h>
 
 #include <RFLi_DataUtility.h>
-#include <RFLi_Format.h>
 
 extern "C" __attribute__((noreturn)) void nebula_sdk_missing(const char* name);
 
@@ -39,10 +38,6 @@ namespace nw4r {
         }
     }  // namespace ut
 }  // namespace nw4r
-
-extern "C" RFLErrcode RFLiFormatAsync(RFLiCallback) {
-    nebula_sdk_missing("RFLiFormatAsync");
-}
 
 extern "C" BOOL RFLiIsSameFaceCore(const RFLiCharInfo*, const RFLiCharInfo*) {
     nebula_sdk_missing("RFLiIsSameFaceCore");

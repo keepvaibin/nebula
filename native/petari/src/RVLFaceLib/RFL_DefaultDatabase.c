@@ -50,6 +50,78 @@ static const u8 scDefaultData[][sizeof(RFLiCharData)] = {
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}};
 
+// The defaults are kept as the console's Mii records.
+static void convertRaw2InfoCore_(const RFLiCharData* data, RFLiCharInfo* info) {
+    info->faceline.type = RFLI_GET(RFLiCharData, data, faceType);
+    info->faceline.color = RFLI_GET(RFLiCharData, data, faceColor);
+    info->faceline.texture = RFLI_GET(RFLiCharData, data, faceTex);
+
+    info->hair.type = RFLI_GET(RFLiCharData, data, hairType);
+    info->hair.color = RFLI_GET(RFLiCharData, data, hairColor);
+    info->hair.flip = RFLI_GET(RFLiCharData, data, hairFlip);
+
+    info->eye.type = RFLI_GET(RFLiCharData, data, eyeType);
+    info->eye.color = RFLI_GET(RFLiCharData, data, eyeColor);
+    info->eye.scale = RFLI_GET(RFLiCharData, data, eyeScale);
+    info->eye.rotate = RFLI_GET(RFLiCharData, data, eyeRotate);
+    info->eye.x = RFLI_GET(RFLiCharData, data, eyeX);
+    info->eye.y = RFLI_GET(RFLiCharData, data, eyeY);
+
+    info->eyebrow.type = RFLI_GET(RFLiCharData, data, eyebrowType);
+    info->eyebrow.color = RFLI_GET(RFLiCharData, data, eyebrowColor);
+    info->eyebrow.scale = RFLI_GET(RFLiCharData, data, eyebrowScale);
+    info->eyebrow.rotate = RFLI_GET(RFLiCharData, data, eyebrowRotate);
+    info->eyebrow.x = RFLI_GET(RFLiCharData, data, eyebrowX);
+    info->eyebrow.y = RFLI_GET(RFLiCharData, data, eyebrowY);
+
+    info->nose.type = RFLI_GET(RFLiCharData, data, noseType);
+    info->nose.scale = RFLI_GET(RFLiCharData, data, noseScale);
+    info->nose.y = RFLI_GET(RFLiCharData, data, noseY);
+
+    info->mouth.type = RFLI_GET(RFLiCharData, data, mouthType);
+    info->mouth.color = RFLI_GET(RFLiCharData, data, mouthColor);
+    info->mouth.scale = RFLI_GET(RFLiCharData, data, mouthScale);
+    info->mouth.y = RFLI_GET(RFLiCharData, data, mouthY);
+
+    info->beard.mustache = RFLI_GET(RFLiCharData, data, mustacheType);
+    info->beard.type = RFLI_GET(RFLiCharData, data, beardType);
+    info->beard.color = RFLI_GET(RFLiCharData, data, beardColor);
+    info->beard.scale = RFLI_GET(RFLiCharData, data, beardScale);
+    info->beard.y = RFLI_GET(RFLiCharData, data, beardY);
+
+    info->glass.type = RFLI_GET(RFLiCharData, data, glassType);
+    info->glass.color = RFLI_GET(RFLiCharData, data, glassColor);
+    info->glass.scale = RFLI_GET(RFLiCharData, data, glassScale);
+    info->glass.y = RFLI_GET(RFLiCharData, data, glassY);
+
+    info->mole.type = RFLI_GET(RFLiCharData, data, moleType);
+    info->mole.scale = RFLI_GET(RFLiCharData, data, moleScale);
+    info->mole.x = RFLI_GET(RFLiCharData, data, moleX);
+    info->mole.y = RFLI_GET(RFLiCharData, data, moleY);
+
+    info->body.height = data->height;
+    info->body.build = data->build;
+
+    RFLI_COPY_NAME(info->personal.name, data->name, RFL_NAME_LEN);
+    info->personal.name[RFL_NAME_LEN] = L'\0';
+
+    memcpy(&info->createID, &data->createID, sizeof(RFLCreateID));
+
+    info->personal.sex = RFLI_GET(RFLiCharData, data, sex);
+    info->personal.bmonth = RFLI_GET(RFLiCharData, data, birthMonth);
+    info->personal.bday = RFLI_GET(RFLiCharData, data, birthDay);
+    info->personal.color = RFLI_GET(RFLiCharData, data, favoriteColor);
+    info->personal.favorite = RFLI_GET(RFLiCharData, data, favorite);
+    info->personal.localOnly = RFLI_GET(RFLiCharData, data, localonly);
+}
+
+static void convertRaw2Info_(const RFLiCharData* data, RFLiCharInfo* out) {
+    convertRaw2InfoCore_(data, out);
+
+    RFLI_COPY_NAME(out->personal.creator, data->creatorName, RFL_CREATOR_LEN);
+    out->personal.creator[RFL_CREATOR_LEN] = '\0';
+}
+
 void RFLiGetDefaultData(RFLiCharInfo* info, u16 index) {
-    RFLiConvertRaw2Info((RFLiCharData*)&scDefaultData[index], info);
+    convertRaw2Info_((RFLiCharData*)&scDefaultData[index], info);
 }

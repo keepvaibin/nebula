@@ -723,6 +723,103 @@ MiiFileContents read_bytes(std::span<const std::byte> b, std::string_view extens
 
 }  // namespace
 
+namespace {
+
+u32 get_bits(const MiiRecord& r, WiiField f) {
+    const std::size_t unit = (f.pos >> 4u) * 2u;
+    const u32 shift = 16u - (f.pos & 15u) - f.len;
+    const u32 word = static_cast<u32>(r[unit]) << 8u | static_cast<u32>(r[unit + 1u]);
+    return (word >> shift) & ((1u << f.len) - 1u);
+}
+
+constexpr std::size_t kName = 0x02, kHeight = 0x16, kBuild = 0x17, kCreateIdAt = 0x18, kCreator = 0x36;
+
+}  // namespace
+
+MiiFields decode_wii_mii(const MiiRecord& r) noexcept {
+    MiiFields m;
+    const auto get = [&r](WiiField f) { return static_cast<u8>(get_bits(r, f)); };
+    m.sex = get(kSex);
+    m.birth_month = get(kBirthMonth);
+    m.birth_day = get(kBirthDay);
+    m.favorite_color = get(kFavoriteColor);
+    m.favorite = get(kFavorite);
+    m.local_only = get(kLocalOnly);
+    m.height = static_cast<u8>(r[kHeight]);
+    m.build = static_cast<u8>(r[kBuild]);
+    m.face_type = get(kFaceType);
+    m.face_color = get(kFaceColor);
+    m.face_texture = get(kFaceTex);
+    m.hair_type = get(kHairType);
+    m.hair_color = get(kHairColor);
+    m.hair_flip = get(kHairFlip);
+    m.eye_type = get(kEyeType);
+    m.eye_color = get(kEyeColor);
+    m.eye_scale = get(kEyeScale);
+    m.eye_rotate = get(kEyeRotate);
+    m.eye_x = get(kEyeX);
+    m.eye_y = get(kEyeY);
+    m.eyebrow_type = get(kEyebrowType);
+    m.eyebrow_color = get(kEyebrowColor);
+    m.eyebrow_scale = get(kEyebrowScale);
+    m.eyebrow_rotate = get(kEyebrowRotate);
+    m.eyebrow_x = get(kEyebrowX);
+    m.eyebrow_y = get(kEyebrowY);
+    m.nose_type = get(kNoseType);
+    m.nose_scale = get(kNoseScale);
+    m.nose_y = get(kNoseY);
+    m.mouth_type = get(kMouthType);
+    m.mouth_color = get(kMouthColor);
+    m.mouth_scale = get(kMouthScale);
+    m.mouth_y = get(kMouthY);
+    m.mustache = get(kMustacheType);
+    m.beard_type = get(kBeardType);
+    m.beard_color = get(kBeardColor);
+    m.beard_scale = get(kBeardScale);
+    m.beard_y = get(kBeardY);
+    m.glass_type = get(kGlassType);
+    m.glass_color = get(kGlassColor);
+    m.glass_scale = get(kGlassScale);
+    m.glass_y = get(kGlassY);
+    m.mole_type = get(kMoleType);
+    m.mole_scale = get(kMoleScale);
+    m.mole_x = get(kMoleX);
+    m.mole_y = get(kMoleY);
+    for (std::size_t i = 0; i < 10; ++i) {
+        m.name[i] = static_cast<u16>(static_cast<u16>(r[kName + 2 * i]) << 8 | static_cast<u16>(r[kName + 2 * i + 1]));
+        m.creator[i] =
+            static_cast<u16>(static_cast<u16>(r[kCreator + 2 * i]) << 8 | static_cast<u16>(r[kCreator + 2 * i + 1]));
+    }
+    for (std::size_t i = 0; i < 8; ++i) {
+        m.create_id[i] = static_cast<u8>(r[kCreateIdAt + i]);
+    }
+    return m;
+}
+
+void fix_wii_mii(MiiRecord& r) noexcept {
+    static constexpr std::array<u8, 13> kDayMax{0, 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    const u32 month = get_bits(r, kBirthMonth);
+    const u32 day = get_bits(r, kBirthDay);
+    if ((month == 0) != (day == 0) || month > 12 || day > kDayMax[month]) {
+        set_bits(r, kBirthMonth, 0);
+        set_bits(r, kBirthDay, 0);
+    }
+    // A special Mii (its create ID's first bit clear) stays on this console.
+    if ((static_cast<u8>(r[kCreateIdAt]) & 0x80u) == 0u) {
+        set_bits(r, kLocalOnly, 1);
+    }
+    if (get_bits(r, kFavoriteColor) >= 12u) {
+        set_bits(r, kFavoriteColor, 0);
+    }
+    if (r[kName] == std::byte{0} && r[kName + 1] == std::byte{0}) {
+        static constexpr char kNoName[] = "no name";
+        for (std::size_t i = 0; kNoName[i] != '\0'; ++i) {
+            r[kName + 2 * i] = std::byte{0};
+            r[kName + 2 * i + 1] = static_cast<std::byte>(kNoName[i]);
+        }
+    }
+}
+
 bool mii_placeholder_id(const MiiRecord& r) noexcept {
     const u32 mii = static_cast<u32>(r[0x18]) << 24u | static_cast<u32>(r[0x19]) << 16u |
                     static_cast<u32>(r[0x1A]) << 8u | static_cast<u32>(r[0x1B]);

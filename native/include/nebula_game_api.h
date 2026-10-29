@@ -704,6 +704,24 @@ enum {
     NEBULA_SETTINGS_SET_VALUE,   /* arg: the step the selected setting's slider is dragged to */
 };
 
+/* A Mii as the game draws it (the Mii library's character info): every part, colour, scale and position as a number,
+   names UTF-16 (host byte order, 10 characters, unused ones 0), the create ID as the console stores it. */
+typedef struct NebulaMii {
+    uint8_t sex, birth_month, birth_day, favorite_color, favorite, local_only, height, build;
+    uint8_t face_type, face_color, face_texture;
+    uint8_t hair_type, hair_color, hair_flip;
+    uint8_t eye_type, eye_color, eye_scale, eye_rotate, eye_x, eye_y;
+    uint8_t eyebrow_type, eyebrow_color, eyebrow_scale, eyebrow_rotate, eyebrow_x, eyebrow_y;
+    uint8_t nose_type, nose_scale, nose_y;
+    uint8_t mouth_type, mouth_color, mouth_scale, mouth_y;
+    uint8_t mustache, beard_type, beard_color, beard_scale, beard_y;
+    uint8_t glass_type, glass_color, glass_scale, glass_y;
+    uint8_t mole_type, mole_scale, mole_x, mole_y;
+    uint16_t name[10];
+    uint16_t creator[10];
+    uint8_t create_id[8];
+} NebulaMii;
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -899,24 +917,11 @@ typedef struct NebulaHostServices {
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on, after every command written before `stream`. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const void* stream, const NebulaTextureImage* image);
-    /* The Mii database (the Mii library's database file format), kept where the host chooses: `op`
-       (NEBULA_MII_READ, _WRITE, _LENGTH, _CREATE, _DELETE) on `size` bytes at `offset`. Returns the bytes read or
-       written, the length, or 0 (create, delete); NEBULA_MII_MISSING when there is none, NEBULA_MII_FAILED when the
-       host could not read or write it. */
-    int32_t (*mii_storage)(void* user, uint32_t op, uint32_t offset, void* data, uint32_t size);
+    /* The Mii in a slot of the console's Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
+       an empty slot. */
+    int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
 } NebulaHostServices;
 
-enum {
-    NEBULA_MII_READ = 0,
-    NEBULA_MII_WRITE = 1,   /* the store grows to take the bytes */
-    NEBULA_MII_LENGTH = 2,
-    NEBULA_MII_CREATE = 3,  /* an empty store when there is none */
-    NEBULA_MII_DELETE = 4,
-};
-enum {
-    NEBULA_MII_MISSING = -1,
-    NEBULA_MII_FAILED = -2,
-};
 
 enum {
     NEBULA_MOVIE_NONE = -1,
@@ -989,8 +994,10 @@ NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint3
    its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
    the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread
    (the host's retrace). */
-NEBULA_GAME_API uint32_t nebula_game_mii_prepare(uint8_t* record);
-NEBULA_GAME_API uint32_t nebula_game_mii_install(uint32_t slot, const uint8_t* record);
+/* Whether the game takes a Mii into its database (its parts and values in range); the host keeps only these. */
+NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
+/* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */
+NEBULA_GAME_API void nebula_game_mii_changed(void);
 /* A Wii Remote connected (with its calibration) or disconnected. */
 NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
 /* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;

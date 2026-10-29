@@ -23,6 +23,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/gx/fifo_parser.h"
+#include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/guest_memory.h"
@@ -303,8 +304,8 @@ struct Module {
     decltype(&nebula_game_fs_complete) fs_complete;
     decltype(&nebula_game_ai_interrupt) ai_interrupt;
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
-    decltype(&nebula_game_mii_prepare) mii_prepare;
-    decltype(&nebula_game_mii_install) mii_install;
+    decltype(&nebula_game_mii_valid) mii_valid;
+    decltype(&nebula_game_mii_changed) mii_changed;
     decltype(&nebula_game_gx_event) gx_event;
     decltype(&nebula_game_gx_release) gx_release;
     decltype(&nebula_game_memory_regions) memory_regions;
@@ -439,10 +440,9 @@ void load_module(const fs::path& path) {
     gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
     gModule.audio_channel_owner = reinterpret_cast<decltype(gModule.audio_channel_owner)>(
         find_symbol(module, "nebula_game_audio_channel_owner"));
-    gModule.mii_prepare =
-        reinterpret_cast<decltype(gModule.mii_prepare)>(find_symbol(module, "nebula_game_mii_prepare"));
-    gModule.mii_install =
-        reinterpret_cast<decltype(gModule.mii_install)>(find_symbol(module, "nebula_game_mii_install"));
+    gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
+    gModule.mii_changed =
+        reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
     gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
     gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
@@ -2208,56 +2208,74 @@ void svc_texture_image(void*, const void* stream, const NebulaTextureImage* imag
 
 
 // The Mii database in the file a console keeps it in, so the Miis a NAND (or an earlier Nebula) already holds stay
-// where they are. Game thread only.
+// where they are; the game reads its slots as typed records.
 fs::path mii_database_path() {
     return gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
 }
 
-int32_t svc_mii_storage(void*, uint32_t op, uint32_t offset, void* data, uint32_t size) {
-    const fs::path path = mii_database_path();
-    std::error_code error;
-    const bool exists = fs::exists(path, error);
-    switch (op) {
-    case NEBULA_MII_CREATE:
-        if (!exists) {
-            fs::create_directories(path.parent_path(), error);
-            FILE* file = std::fopen(path.string().c_str(), "wb");
-            if (file == nullptr) {
-                return NEBULA_MII_FAILED;
-            }
-            std::fclose(file);
-        }
+NebulaMii nebula_mii(const galaxy::host::MiiFields& f) {
+    NebulaMii m{};
+    m.sex = f.sex;
+    m.birth_month = f.birth_month;
+    m.birth_day = f.birth_day;
+    m.favorite_color = f.favorite_color;
+    m.favorite = f.favorite;
+    m.local_only = f.local_only;
+    m.height = f.height;
+    m.build = f.build;
+    m.face_type = f.face_type;
+    m.face_color = f.face_color;
+    m.face_texture = f.face_texture;
+    m.hair_type = f.hair_type;
+    m.hair_color = f.hair_color;
+    m.hair_flip = f.hair_flip;
+    m.eye_type = f.eye_type;
+    m.eye_color = f.eye_color;
+    m.eye_scale = f.eye_scale;
+    m.eye_rotate = f.eye_rotate;
+    m.eye_x = f.eye_x;
+    m.eye_y = f.eye_y;
+    m.eyebrow_type = f.eyebrow_type;
+    m.eyebrow_color = f.eyebrow_color;
+    m.eyebrow_scale = f.eyebrow_scale;
+    m.eyebrow_rotate = f.eyebrow_rotate;
+    m.eyebrow_x = f.eyebrow_x;
+    m.eyebrow_y = f.eyebrow_y;
+    m.nose_type = f.nose_type;
+    m.nose_scale = f.nose_scale;
+    m.nose_y = f.nose_y;
+    m.mouth_type = f.mouth_type;
+    m.mouth_color = f.mouth_color;
+    m.mouth_scale = f.mouth_scale;
+    m.mouth_y = f.mouth_y;
+    m.mustache = f.mustache;
+    m.beard_type = f.beard_type;
+    m.beard_color = f.beard_color;
+    m.beard_scale = f.beard_scale;
+    m.beard_y = f.beard_y;
+    m.glass_type = f.glass_type;
+    m.glass_color = f.glass_color;
+    m.glass_scale = f.glass_scale;
+    m.glass_y = f.glass_y;
+    m.mole_type = f.mole_type;
+    m.mole_scale = f.mole_scale;
+    m.mole_x = f.mole_x;
+    m.mole_y = f.mole_y;
+    std::copy(f.name.begin(), f.name.end(), m.name);
+    std::copy(f.creator.begin(), f.creator.end(), m.creator);
+    std::copy(f.create_id.begin(), f.create_id.end(), m.create_id);
+    return m;
+}
+
+int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
+    const std::optional<galaxy::host::MiiRecord> record = galaxy::host::mii_library_slot(slot);
+    if (!record) {
         return 0;
-    case NEBULA_MII_DELETE:
-        return fs::remove(path, error) || !exists ? 0 : NEBULA_MII_FAILED;
-    case NEBULA_MII_LENGTH: {
-        if (!exists) {
-            return NEBULA_MII_MISSING;
-        }
-        const auto length = fs::file_size(path, error);
-        return error ? NEBULA_MII_FAILED : static_cast<int32_t>(length);
     }
-    case NEBULA_MII_READ:
-    case NEBULA_MII_WRITE: {
-        if (!exists) {
-            return NEBULA_MII_MISSING;
-        }
-        const bool write = op == NEBULA_MII_WRITE;
-        FILE* file = std::fopen(path.string().c_str(), write ? "r+b" : "rb");
-        if (file == nullptr) {
-            return NEBULA_MII_FAILED;
-        }
-        size_t done = 0;
-        if (std::fseek(file, static_cast<long>(offset), SEEK_SET) == 0) {
-            done = write ? std::fwrite(data, 1, size, file) : std::fread(data, 1, size, file);
-        }
-        const bool flushed = !write || std::fflush(file) == 0;
-        std::fclose(file);
-        return flushed ? static_cast<int32_t>(done) : NEBULA_MII_FAILED;
+    if (mii != nullptr) {
+        *mii = nebula_mii(galaxy::host::decode_wii_mii(*record));
     }
-    default:
-        return NEBULA_MII_FAILED;
-    }
+    return 1;
 }
 
 void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
@@ -2588,10 +2606,10 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
             }
         }
     }
-    // Miis imported from the settings while the game runs: into its loaded database too (the file has them).
-    for (const auto& [slot, mii] : galaxy::host::take_mii_installs()) {
-        const uint32_t placed = gModule.mii_install(slot, reinterpret_cast<const uint8_t*>(mii.data()));
-        std::fprintf(stderr, "[mii] slot %u %s\n", slot, placed != 0u ? "installed" : "left for the next start");
+    // Miis imported from the settings while the game runs: the game reads its slots again.
+    if (const auto placed = galaxy::host::take_mii_installs(); !placed.empty()) {
+        gModule.mii_changed();
+        std::fprintf(stderr, "[mii] %zu imported while running\n", placed.size());
     }
     // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented:
     // queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
@@ -3777,7 +3795,9 @@ int main(int argc, char** argv) {
         }
         galaxy::host::set_mii_library(mii_database, import_folder,
                                       [](galaxy::host::MiiRecord& mii) {
-                                          return gModule.mii_prepare(reinterpret_cast<uint8_t*>(mii.data())) != 0u;
+                                          galaxy::host::fix_wii_mii(mii);
+                                          const NebulaMii fields = nebula_mii(galaxy::host::decode_wii_mii(mii));
+                                          return gModule.mii_valid(&fields) != 0u;
                                       });
         std::string message;
         (void)galaxy::host::import_mii_folder(&message);
@@ -3926,7 +3946,7 @@ int main(int argc, char** argv) {
     services.state = svc_state;
     services.immediate = svc_immediate;
     services.texture_image = svc_texture_image;
-    services.mii_storage = svc_mii_storage;
+    services.mii_record = svc_mii_record;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

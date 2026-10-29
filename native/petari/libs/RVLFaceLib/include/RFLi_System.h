@@ -2,8 +2,6 @@
 #define RVL_FACE_LIBRARY_INTERNAL_SYSTEM_H
 #include "RFL_System.h"
 #include "RFLi_Database.h"
-#include "RFLi_HiddenDatabase.h"
-#include "RFLi_Storage.h"
 #include "RFLi_NANDLoader.h"
 #include "RFLi_Types.h"
 #include <revolution/mem.h>
@@ -17,7 +15,6 @@ typedef struct RFLiManager {
     MEMiHeapHead* rootHeap;                // at 0x4
     MEMiHeapHead* systemHeap;              // at 0x8
     MEMiHeapHead* tmpHeap;                 // at 0xC
-    RFLiDBManager dbMgr;                   // at 0x10
     RFLiLoader loader;                     // at 0xC0
     BOOL working;                          // at 0x1B34
     BOOL deluxeTex;                        // at 0x1B38
@@ -26,7 +23,6 @@ typedef struct RFLiManager {
     RFLErrcode beforeCloseErr;             // at 0x1B44
     s32 lastReason;                        // at 0x1B48
     s32 beforeCloseReason;                 // at 0x1B4C
-    RFLiAccessInfo info[RFLiFileType_Max]; // at 0x1B50
     RFLiCallback systemCb;                 // at 0x1F10
     RFLCallback iconDrawCb;                // at 0x1F14
     RFLCallback modelDrawCb;               // at 0x1F18
@@ -38,12 +34,14 @@ RFLErrcode RFLiBootLoadAsync(void);
 void* RFLiAlloc(u32 size);
 void* RFLiAlloc32(u32 size);
 void RFLiFree(void* block);
-RFLiDBManager* RFLiGetDBManager(void);
 RFLiLoader* RFLiGetLoader(void);
 BOOL RFLiGetWorking(void);
 void RFLiSetWorking(BOOL working);
 RFLiManager* RFLiGetManager(void);
-RFLiAccessInfo* RFLiGetAccInfo(RFLiFileType type);
+BOOL RFLiIsWorking(void);
+void RFLiStartWorking(void);
+void RFLiEndWorkingReason(RFLErrcode err, s32 reason);
+void RFLiEndWorking(RFLErrcode err);
 s32 RFLiGetLastReason(void);
 void RFLiSetFileBroken(RFLiFileBrokenType type);
 BOOL RFLiNotFoundError(void);

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <filesystem>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <utility>
@@ -55,6 +56,8 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
 MiiMergeResult import_mii_folder(std::string* message);
 // The Miis in the library; 0 without one.
 [[nodiscard]] unsigned mii_library_count();
+// The Mii in a slot of the library's database (as the game reads it), none for an empty slot.
+[[nodiscard]] std::optional<MiiRecord> mii_library_slot(unsigned slot);
 // The game thread: the Miis written since the last call, by slot, for its loaded database.
 [[nodiscard]] std::vector<std::pair<unsigned, MiiRecord>> take_mii_installs();
 
