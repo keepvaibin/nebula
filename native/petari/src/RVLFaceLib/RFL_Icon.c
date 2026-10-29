@@ -140,9 +140,8 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateCopyTex(buf, TRUE);
 
-    if (RFLiGetManager()->iconDrawCb == NULL) {
-        GXDrawDone();
-    } else {
+    // The icon is drawn from records in order: only a caller's own callback needs telling.
+    if (RFLiGetManager()->iconDrawCb != NULL) {
         RFLiGetManager()->iconDrawCb();
     }
 

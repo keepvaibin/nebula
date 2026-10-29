@@ -503,7 +503,6 @@ void MarioActor::drawColdWaterDamage() const {
     u32 next;
     u32 stripHeight = 4;
     GXTexObj textures[2];
-    GXDrawDone();
     u16 width = MR::getFrameBufferWidth();
     TDDraw::setup(1, 0, 2);
     u16 current = 0;
@@ -539,8 +538,6 @@ void MarioActor::drawColdWaterDamage() const {
 
         current = next;
     }
-
-    GXDrawDone();
 }
 
 void MarioActor::setRasterScroll(s32 i1, s32 i2, s32 i3) {
@@ -580,7 +577,6 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     u32 next;
     u32 stripHeight = 4;
     GXTexObj textures[2];
-    GXDrawDone();
     u16 width = MR::getFrameBufferWidth();
     TDDraw::setup(1, 0, 2);
     u16 current = 0;
@@ -614,8 +610,6 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
 
         current = next;
     }
-
-    GXDrawDone();
 }
 
 void MarioActor::drawMosaic() const {

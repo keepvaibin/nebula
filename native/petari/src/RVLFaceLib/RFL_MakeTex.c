@@ -716,9 +716,8 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
 
     J3DNativeStateSetColorUpdate(TRUE);
 
-    if (RFLiGetManager()->modelDrawCb == NULL) {
-        GXDrawDone();
-    } else {
+    // The masks are drawn from records in order: only a caller's own callback needs telling.
+    if (RFLiGetManager()->modelDrawCb != NULL) {
         RFLiGetManager()->modelDrawCb();
     }
 
