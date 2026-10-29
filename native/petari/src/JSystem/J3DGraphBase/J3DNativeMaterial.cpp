@@ -319,6 +319,7 @@ namespace J3DNativeMaterial {
         if (pList != NULL && pList->mpNebulaMaterial != NULL) {
             build(pMaterial, pTexture, pList->mpNebulaMaterial);
             pList->mpNebulaMaterial->diff_flags = diffFlags;
+            pList->mpNebulaMaterial->origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
             pList->mNebulaCaptured = true;
         }
     }

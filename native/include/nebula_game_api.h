@@ -94,7 +94,7 @@ typedef struct NebulaMaterialLight {
 typedef struct NebulaMaterial {
     uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
     uint8_t dither, z_compare_location;
-    uint8_t reserved;
+    uint8_t origin; /* where the game captured it: 1 a packet's list, 2 a differed list, 3 a shared list, 0 at the draw */
     uint16_t loads; /* NEBULA_MATERIAL_LOADS_*: the parts the material sets (the others keep what was set before) */
     NebulaMaterialTevStage tev[16];
     int16_t tev_color[4][4];

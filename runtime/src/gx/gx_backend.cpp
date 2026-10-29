@@ -12726,8 +12726,11 @@ void GxBackend::apply_record_material(const material::Material& m) {
         differs = true;
         if (reported < 400u) {
             ++reported;
-            std::fprintf(stderr, "[material-check] %s %03X list=%08X record=%08X stages=%u loads=%03X\n", kind, address,
-                         list, record, m.tev_stages, m.loads);
+            std::fprintf(stderr,
+                         "[material-check] %s %03X list=%08X record=%08X stages=%u loads=%03X origin=%u diff=%08X "
+                         "tex0=%08llX\n",
+                         kind, address, list, record, m.tev_stages, m.loads, m.origin, m.diff_flags,
+                         static_cast<unsigned long long>(m.texture[0].image));
         }
     };
     for (unsigned r = 0; r < 256u; ++r) {

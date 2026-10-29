@@ -51,7 +51,7 @@ struct Light {
 struct Material {
     std::uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
     std::uint8_t dither, z_compare_location;
-    std::uint8_t reserved;
+    std::uint8_t origin;  // 1 a packet's list, 2 a differed list, 3 a shared list, 0 built at the draw
     std::uint16_t loads;
     TevStage tev[16];
     std::int16_t tev_color[4][4];
