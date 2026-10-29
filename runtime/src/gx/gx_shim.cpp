@@ -23,16 +23,12 @@ std::string startup_failure() {
     return backend().startup_failure();
 }
 
-FramePeCompletionToken render_frame(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
+void render_frame(
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
     bool black) {
-    return backend().render_frame(
-        fifo_data,
-        fifo_size,
+    backend().render_frame(
         memory,
         services,
         present_swap_chain,
@@ -45,12 +41,6 @@ void wait_for_render_idle() {
 
 void set_frame_end_presents(bool enabled) noexcept {
     backend().set_frame_end_presents(enabled);
-}
-
-bool wait_for_frame_pe_completion_for(
-    FramePeCompletionToken token,
-    std::uint32_t timeout_ms) {
-    return backend().wait_for_frame_pe_completion_for(token, timeout_ms);
 }
 
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,

@@ -1438,7 +1438,6 @@ using galaxy::GxServices;
 GuestMemory gMemory{};
 std::vector<GuestMemoryRegion> gRegions;
 GxServices gNative{};
-std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
 void native_log(void*, GxLogLevel, const char* text) {
@@ -1482,20 +1481,10 @@ const std::byte* guest_bytes(uint32_t address, uint32_t size) {
     return nullptr;
 }
 
-// Takes the receipts of finished submissions, in order (each is consumed once).
-void take_finished_tokens() {
-    while (!gTokens.empty() && galaxy::gx::wait_for_frame_pe_completion_for(gTokens.front(), 0)) {
-        gTokens.pop_front();
-    }
-}
 
 void submit_frame_unchecked(bool present, bool black) {
-    const auto token = galaxy::gx::render_frame(nullptr, 0, &gMemory, &gNative, present, black);
-    if (token) {
-        gTokens.push_back(token);
-        gSubmissions.fetch_add(1, std::memory_order_relaxed);
-    }
-    take_finished_tokens();
+    galaxy::gx::render_frame(&gMemory, &gNative, present, black);
+    gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
 // The renderer's hard failures (the GX parser's: an unknown command, a truncated payload) end the game with their

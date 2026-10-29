@@ -106,15 +106,13 @@ inline constexpr std::uint64_t kMix64Prime = 1099511628211ull;
     return (hash ^ value) * kMix64Prime;
 }
 
-class GxBackend final : public FifoSink {
+class GxBackend final {
 public:
     GxBackend() = default;
 
     bool initialize(int width, int height);
     [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
-    [[nodiscard]] FramePeCompletionToken render_frame(
-        const std::byte* fifo_data,
-        std::size_t fifo_size,
+    void render_frame(
         GuestMemory* memory,
         const GxServices* services,
         bool present_swap_chain = true,
@@ -126,9 +124,6 @@ public:
     void set_frame_end_presents(bool enabled) noexcept {
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
-    [[nodiscard]] bool wait_for_frame_pe_completion_for(
-        FramePeCompletionToken token,
-        std::uint32_t timeout_ms);
     // Scene boundaries one render chunk carries (3D and 2D, two frames).
     static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
@@ -243,11 +238,6 @@ public:
         std::uint32_t& value);
     // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
     [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
-    void scan_pe_events_on_sim_thread(
-        const std::byte* fifo_data,
-        std::size_t fifo_size,
-        GuestMemory* memory,
-        const GxServices* services);
     void notify_guest_memory_write(
         std::uint32_t address,
         std::uint32_t size) noexcept;
@@ -273,13 +263,6 @@ private:
     [[nodiscard]] const VertexLayoutCacheEntry& cached_vertex_layout(
         std::uint8_t vtxfmt) const;
 
-    [[nodiscard]] std::size_t draw_payload_size(
-        std::uint8_t vtxfmt,
-        std::uint16_t vertex_count) const override;
-    void on_draw(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor) override;
     // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
     // only when this returns true.
     [[nodiscard]] bool begin_cached_draw_run(
@@ -291,14 +274,12 @@ private:
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         FifoCursor& cursor);
-    void on_efb_copy(std::uint32_t exec_command) override;
-    void on_pe_finish() override;
-    void on_pe_token(std::uint16_t token, bool interrupt) override;
-    void on_invalidate_textures() override;
-    void on_invalidate_vertex_cache() override;
-    void on_tlut_load() override;
+    void on_efb_copy(std::uint32_t exec_command);
+    void on_invalidate_textures();
+    void on_invalidate_vertex_cache();
+    void on_tlut_load();
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                        std::uint32_t b) override;
+                        std::uint32_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
     void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b);
 
@@ -355,44 +336,13 @@ private:
     std::size_t last_reported_shader_records_ = 0;
     std::size_t last_reported_pso_records_ = 0;
 
-    struct MemorySnapshotStorage {
-        std::byte* source = nullptr;
-        std::uint32_t size = 0;
-        bool used = false;
-        bool copied = false;
-        std::vector<std::byte> bytes;
-    };
 
-    struct MemorySnapshot {
-        GuestMemory memory{};
-        std::vector<GuestMemoryRegion> regions;
-        std::vector<MemorySnapshotStorage> storage;
-        // Rebuilt lazily per capture; entries are slot indices, so growth and moves keep them valid.
-        std::vector<std::size_t> storage_lookup;
-        std::size_t storage_used_count = 0;
-        bool storage_lookup_active = false;
-        // Every requested byte is copied and no pointer into live guest memory remains: the regions
-        // point into `storage` only.
-        bool sealed = false;
-        // These regions (not guest views in general) are sorted and disjoint.
-        bool regions_disjoint_sorted = false;
-    };
 
     struct GuestWriteRange {
         std::uint32_t guest_addr = 0;
         std::uint32_t size = 0;
     };
 
-    struct PeEvent {
-        enum class Kind : std::uint8_t {
-            Finish,
-            Token,
-        };
-
-        Kind kind = Kind::Finish;
-        std::uint16_t token = 0;
-        bool interrupt = false;
-    };
 
     struct EfbPeekRequest {
         std::uint16_t x = 0;
@@ -415,23 +365,14 @@ private:
         bool prerecorded_movie{};
         float safety_surround{};
         MovieFrameMark movie_frame{};
-        std::vector<std::byte> fifo;
         std::vector<GuestWriteRange> dirty_ranges;
-        std::vector<GuestMemoryRange> memory_ranges;
-        std::vector<PeEvent> pe_events;
         GuestMemory* memory = nullptr;
         const GxServices* services = nullptr;
-        FramePeCompletionToken pe_completion_token{};
         std::uint64_t producer_wait_ns = 0;
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        bool memory_snapshot_active = false;
-        bool memory_snapshot_strict = false;
         bool cpu_reads_pending = false;
-        bool fifo_effects_pending = false;
-        bool pe_completion_requires_resolution = false;
-        bool pe_events_scanned_on_sim_thread = false;
         bool efb_peek_only = false;
         EfbPeekRequest* efb_peek_request = nullptr;
         std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
@@ -458,24 +399,15 @@ private:
         std::vector<StripeParticleMark> stripe_particles;
         // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
         std::vector<shapes::Record> shape_records;
-        std::uint64_t dependency_scan_ns = 0;
-        std::uint64_t snapshot_ns = 0;
-        std::uint64_t snapshot_bytes = 0;
-        std::uint64_t snapshot_range_bytes = 0;
         std::uint64_t dirty_bytes = 0;
-        std::size_t snapshot_range_count = 0;
         std::size_t dirty_range_count = 0;
-        bool dependency_cache_hit = false;
-        MemorySnapshot memory_snapshot;
     };
 
     struct PendingFrameEffects {
-        FramePeCompletionToken pe_completion_token{};
         std::uint64_t fence_value = 0;
         std::uint64_t diagnostic_fence_bound_ns = 0;
         std::uint64_t diagnostic_fence_observed_ns = 0;
         const GxServices* services = nullptr;
-        std::vector<PeEvent> pe_events;
     };
 
     void drain_guest_memory_writes(std::vector<GuestWriteRange>& out) noexcept;
@@ -501,15 +433,6 @@ private:
     void poll_async_peek_fields();
     void submit_async_peek_fields_if_requested();
     void mark_frame_cpu_reads_done(FrameChunk& chunk);
-    void mark_frame_fifo_effects_done(FrameChunk& chunk);
-    void wait_for_render_cpu_reads_idle();
-    void queue_frame_fifo_effects_fence(
-        FrameChunk& chunk,
-        std::uint64_t fence_value);
-    void poll_completed_frame_effects();
-    static void deliver_pe_event(
-        const GxServices* services,
-        const PeEvent& event);
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_xfb_on_thread(
         bool black,
@@ -561,7 +484,7 @@ private:
     std::size_t parse_stripe_next_ = 0;
     std::vector<StripeVertex> pending_stripe_vertices_;
     std::vector<StripeVertex> draw_stripe_vertices_;
-    void take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size);
+    void take_attached_stripe_particles(FrameChunk& chunk);
     // Render thread, after a chunk's parse: trace of the stripe-particle marks.
     void note_stripe_particles(const FrameChunk& chunk);
     // Render thread: inside GameScene::draw3D (between the scene markers).
@@ -613,10 +536,6 @@ private:
     bool identity_continuity_particle_ = false;
     // Category in force (draw phase and the latest CategoryList call).
     std::uint32_t identity_category_ = 0x00FF0000u;
-    // FIFO offset of the span the parser is running (run_stream), so marker
-    // offsets map to the chunk's FIFO.
-    std::size_t parse_span_base_ = 0;
-    std::size_t parse_span_prefix_ = 0;
     std::uint64_t motion_category_markers_ = 0;
     std::uint64_t motion_image_effect_markers_ = 0;
     std::uint64_t motion_scene_markers_ = 0;
@@ -1224,53 +1143,16 @@ private:
         MonotonicCadenceAccumulator& accumulator) noexcept;
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
-    static MemorySnapshotStorage* snapshot_storage_for(
-        MemorySnapshot& snapshot,
-        std::byte* source,
-        std::uint32_t size);
-    static void copy_memory_snapshot_storage(MemorySnapshot& snapshot);
-    static std::uint64_t memory_snapshot_used_bytes(
-        const MemorySnapshot& snapshot) noexcept;
-    void capture_memory_snapshot(
-        GuestMemory* source,
-        MemorySnapshot& snapshot,
-        const std::vector<GuestMemoryRange>& ranges,
-        bool strict_ranges);
-    void collect_memory_dependency_ranges(
-        const std::byte* fifo_data,
-        std::size_t fifo_size,
-        GuestMemory* memory,
-        std::vector<GuestMemoryRange>& out,
-        bool& cache_hit);
-    void invalidate_dependency_range_cache(
-        const std::vector<GuestWriteRange>& ranges) noexcept;
     GxState state_;
-    FifoParser parser_;
-    std::mutex parser_cache_mutex_;
-    // Exclusively owned by the selected snapshot producer (CPU or worker).
-    // Renderer compilation/recording must not lock dependency discovery.
-    FifoParser dependency_parser_;
-    FifoParser event_parser_;
     VertexLoader vertex_loader_;
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;
     Renderer renderer_;
-    // A VI retrace is not a GX command boundary. Preserve only an incomplete
-    // top-level command tail and prepend the next capture chunk.
-    // (Render-thread state, like everything below it down to the stats.)
-    std::vector<std::byte> pending_fifo_;
-    GxState event_state_;
-    std::vector<std::byte> event_pending_fifo_;
-    GxState dependency_state_;
-    std::vector<std::byte> dependency_pending_fifo_;
 
     // Valid only inside render_frame_on_thread (parser callbacks need them).
     GuestMemory* frame_memory_ = nullptr;
-    bool frame_memory_regions_disjoint_sorted_ = false;
     const GxServices* frame_services_ = nullptr;
-    std::vector<PeEvent>* frame_pe_events_ = nullptr;
-    bool frame_pe_callbacks_enabled_ = true;
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
@@ -1296,15 +1178,11 @@ private:
     static_assert(
         kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
         "the chunk pool must cover twice the deepest render queue plus the consumer's chunk");
-    std::vector<std::vector<std::byte>> fifo_pool_;
-    std::vector<std::vector<GuestMemoryRange>> memory_range_pool_;
     // Dirty-range vectors travel with the chunk; recycled like the FIFO so
     // the producer does not grow a fresh vector every frame.
     std::vector<std::vector<GuestWriteRange>> dirty_range_pool_;
     // Producer-thread scratch for drain_guest_memory_writes.
     std::vector<GuestWriteRange> drain_scratch_ranges_;
-    std::vector<MemorySnapshot> memory_snapshot_pool_;
-    std::deque<PendingFrameEffects> pending_frame_effects_;
     // Only the render owner accesses this record outside queue_mutex_. All
     // mutations hold that mutex for simulation-thread idle predicates.
     struct PendingPointerDepthCapture {
@@ -1312,9 +1190,9 @@ private:
         std::uint64_t fence_value = 0;
         std::chrono::steady_clock::time_point started{};
     } pending_pointer_depth_capture_;
-    void take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size);
+    void take_attached_pointer_depth_capture(FrameChunk& chunk);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
-    void take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept;
+    void take_attached_fifo_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's GxVsConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
@@ -1364,30 +1242,14 @@ private:
     std::uint64_t async_peek_requests_ = 0;  // simulation thread
     // Render owner: records the fields of channels bound to `token` where the stream reaches it.
     void record_async_peek_fields_at_token(std::uint16_t token);
-    FramePeCompletionContract frame_pe_completions_;
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
     std::size_t utility_chunks_in_flight_ = 0;
     std::size_t render_cpu_reads_in_flight_ = 0;
-    std::size_t render_fifo_effects_in_flight_ = 0;
     // Sim-thread only: dirty guest ranges observed on retraces with no FIFO.
     // They do not need a full render chunk, but the next real render must
     // invalidate texture/display-list caches before parsing.
     std::vector<GuestWriteRange> pending_async_dirty_ranges_;
-    struct DependencyRangeCacheEntry {
-        bool valid = false;
-        std::uint64_t fifo_hash = 0;
-        std::uint64_t state_hash = 0;
-        GxState::DependencyShapeWords shape_words{};
-        std::uint32_t pending_bp_write_mask = 0x00FFFFFFu;
-        std::uint64_t last_used = 0;
-        std::vector<std::byte> fifo;
-        std::vector<GuestMemoryRange> ranges;
-        std::vector<GuestMemoryRange> shape_ranges;
-        GxState final_state;
-    };
-    std::array<DependencyRangeCacheEntry, 64> dependency_range_cache_{};
-    std::uint64_t dependency_range_cache_tick_ = 0;
 
     // GPU-resident decoded vertices (render thread only). One persistently
     // mapped UPLOAD buffer, created lazily per device; see
@@ -1415,9 +1277,6 @@ private:
     // The clear quad's constant colour (RGBA), where its marker gave one.
     std::uint32_t clear_quad_colour_ = 0;
     bool clear_quad_has_colour_ = false;
-    // The game's EFB clear quad as a depth clear and its colour (motion::kMarkerClearQuad); false: the quad is not
-    // the expected one and draws as written.
-    bool draw_clear_quad(std::uint8_t vtxfmt, FifoCursor& cursor);
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
@@ -1454,7 +1313,7 @@ private:
     };
     std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
     std::vector<shapes::Record> producer_shape_records_;
-    void take_attached_shape_records(FrameChunk& chunk, std::size_t fifo_size);
+    void take_attached_shape_records(FrameChunk& chunk);
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
@@ -1894,7 +1753,6 @@ private:
     PrimitiveClass cached_draw_run_primitive_ = PrimitiveClass::Points;
     std::uint8_t cached_draw_run_vtxfmt_ = 0;
     DrawCall cached_draw_run_state_call_{};
-    FifoParserProfile frame_fifo_profile_{};
     std::atomic<std::uint64_t> stat_xfb_copies_{0};
     std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;
     std::atomic<std::uint64_t> stat_xfb_present_requests_{0};

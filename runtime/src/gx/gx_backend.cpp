@@ -239,53 +239,6 @@ std::string present_snapshot_path() {
     return directory + "\\present_" + std::to_string(presents) + ".ppm";
 }
 
-class PeEventSink final : public FifoSink {
-public:
-    PeEventSink(GxState& state, const GxServices* services)
-        : state_(state), services_(services) {}
-
-    [[nodiscard]] std::size_t draw_payload_size(
-        std::uint8_t vtxfmt,
-        std::uint16_t vertex_count) const override {
-        return VertexLoader::source_vertex_size(state_.vertex_desc(vtxfmt)) *
-               static_cast<std::size_t>(vertex_count);
-    }
-
-    void on_draw(
-        PrimitiveClass,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor) override {
-        const std::uint16_t vertex_count = cursor.read_u16();
-        (void)cursor.take(draw_payload_size(vtxfmt, vertex_count));
-    }
-
-    void on_efb_copy(std::uint32_t) override {}
-
-    void on_pe_finish() override {
-        if (services_ == nullptr || services_->gx_pe_finish == nullptr) {
-            throw std::runtime_error(
-                "GX PE_FINISH requires a native gx_pe_finish service");
-        }
-        services_->gx_pe_finish(services_->user);
-    }
-
-    void on_pe_token(std::uint16_t token, bool interrupt) override {
-        if (services_ == nullptr || services_->gx_pe_token == nullptr) {
-            throw std::runtime_error(
-                "GX PE_TOKEN requires a native gx_pe_token service");
-        }
-        services_->gx_pe_token(services_->user, token, interrupt);
-    }
-
-    void on_invalidate_textures() override {}
-    void on_tlut_load() override {}
-    void on_invalidate_vertex_cache() override {}
-
-private:
-    GxState& state_;
-    const GxServices* services_;
-};
-
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
@@ -385,74 +338,6 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     }
     // frame_index is the count before this frame's increment.
     return (frame_index + 1u) % period == 0u;
-}
-
-// Compact snapshots copy only the dependency ranges a chunk reads; they apply whenever the renderer
-// does not wait on live memory.
-bool compact_memory_snapshot_enabled() {
-    static const bool enabled = !get_gx_timing_config().render_live_memory_wait;
-    return enabled;
-}
-
-void record_guest_memory_range(
-    std::vector<GuestMemoryRange>& ranges,
-    std::uint32_t guest_base,
-    std::uint32_t size) {
-    if (size == 0u) {
-        return;
-    }
-    const std::uint64_t end =
-        static_cast<std::uint64_t>(guest_base) + size;
-    if (end > 0x1'0000'0000ull) {
-        throw std::runtime_error(
-            "[GxBackend] guest-memory snapshot range overflows u32 address space");
-    }
-    ranges.push_back(GuestMemoryRange{guest_base, size});
-}
-
-void normalize_guest_memory_ranges(std::vector<GuestMemoryRange>& ranges) {
-    if (ranges.empty()) {
-        return;
-    }
-    std::sort(
-        ranges.begin(),
-        ranges.end(),
-        [](const GuestMemoryRange& a, const GuestMemoryRange& b) {
-            return a.guest_base < b.guest_base ||
-                (a.guest_base == b.guest_base && a.size < b.size);
-        });
-    // Merge in place: the write index never passes the read index.
-    std::size_t out = 0u;
-    for (const GuestMemoryRange& range : ranges) {
-        if (range.size == 0u) {
-            continue;
-        }
-        const std::uint64_t begin = range.guest_base;
-        const std::uint64_t end = begin + range.size;
-        if (out == 0u) {
-            ranges[out++] = range;
-            continue;
-        }
-        GuestMemoryRange& tail = ranges[out - 1u];
-        const std::uint64_t tail_begin = tail.guest_base;
-        const std::uint64_t tail_end = tail_begin + tail.size;
-        if (begin <= tail_end) {
-            const std::uint64_t merged_end = std::max(tail_end, end);
-            tail.size = static_cast<std::uint32_t>(merged_end - tail_begin);
-        } else {
-            ranges[out++] = range;
-        }
-    }
-    ranges.resize(out);
-}
-
-std::uint64_t guest_memory_range_bytes(
-    const std::vector<GuestMemoryRange>& ranges) noexcept {
-    std::uint64_t bytes = 0;
-    for (const GuestMemoryRange& range : ranges) {
-        bytes += range.size;
-    }
-    return bytes;
 }
 
 std::uint64_t dependency_shape_state_hash(const GxState& state) noexcept {
@@ -711,449 +596,6 @@ void record_indexed_array_access(
     range.begin = std::min(range.begin, address);
     range.end = std::max(range.end, end);
 }
-
-class DependencyRangeSink final : public FifoSink {
-public:
-    DependencyRangeSink(
-        GxState& state,
-        GuestMemory* memory,
-        std::vector<GuestMemoryRange>& ranges)
-        : state_(state),
-          memory_(memory),
-          ranges_(ranges) {}
-
-    [[nodiscard]] std::size_t draw_payload_size(
-        std::uint8_t vtxfmt,
-        std::uint16_t vertex_count) const override {
-        return VertexLoader::source_vertex_size(state_.vertex_desc(vtxfmt)) *
-            static_cast<std::size_t>(vertex_count);
-    }
-
-    void on_draw(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor) override {
-        (void)primitive;
-        const VertexDescriptor desc = state_.vertex_desc(vtxfmt);
-        const std::uint16_t vertex_count = cursor.read_u16();
-        const std::size_t stride = VertexLoader::source_vertex_size(desc);
-        const std::span<const std::byte> raw =
-            cursor.take(stride * vertex_count);
-        if (record_broad_draw_dependencies_for_vtxfmt(vtxfmt)) {
-            return;
-        }
-        std::array<SnapshotArrayRange, 12> array_ranges{};
-        scan_draw_payload_dependencies(desc, raw, vertex_count, array_ranges);
-        flush_array_ranges(array_ranges);
-        record_texture_dependency_ranges_once();
-    }
-
-    void on_efb_copy(std::uint32_t exec_command) override {
-        (void)exec_command;
-    }
-
-    void on_pe_finish() override {}
-    void on_pe_token(std::uint16_t token, bool interrupt) override {
-        (void)token;
-        (void)interrupt;
-    }
-    void on_invalidate_textures() override {}
-    void on_invalidate_vertex_cache() override {}
-
-    void on_tlut_load() override {
-        const TlutTransfer transfer = decode_wii_tlut_transfer(
-            state_.bp(bp::kTlutSrcAddr), state_.bp(bp::kTlutDest));
-        if (transfer.byte_count != 0u) {
-            record_dependency_range(transfer.source_address, transfer.byte_count);
-        }
-    }
-
-private:
-    void record_dependency_range(
-        std::uint32_t guest_base,
-        std::uint32_t size) {
-        if (size == 0u) {
-            return;
-        }
-        const std::uint64_t key =
-            (static_cast<std::uint64_t>(guest_base) << 32) | size;
-        if (!emitted_range_keys_.insert(key)) {
-            return;
-        }
-        record_guest_memory_range(ranges_, guest_base, size);
-    }
-
-    void record_texture_dependency_ranges_to(
-        std::vector<GuestMemoryRange>& target) const {
-        const std::uint8_t texture_map_mask =
-            sampled_texture_map_mask(state_);
-        for (unsigned map = 0; map < kMaxTextureMaps; ++map) {
-            if ((texture_map_mask & (1u << map)) == 0u) {
-                continue;
-            }
-            const TexImage image = state_.tex_image(map);
-            const TexMode mode = state_.tex_mode(map);
-            record_guest_memory_range(
-                target,
-                image.guest_addr,
-                snapshot_texture_guest_size(image, mode));
-        }
-    }
-
-    static void flush_array_ranges_to(
-        const std::array<SnapshotArrayRange, 12>& array_ranges,
-        std::vector<GuestMemoryRange>& target) {
-        for (const SnapshotArrayRange& range : array_ranges) {
-            if (range.used) {
-                record_guest_memory_range(
-                    target,
-                    range.begin,
-                    static_cast<std::uint32_t>(range.end - range.begin));
-            }
-        }
-    }
-
-    void record_texture_dependency_ranges_once() {
-        const std::uint8_t texture_map_mask =
-            sampled_texture_map_mask(state_);
-        for (unsigned map = 0; map < kMaxTextureMaps; ++map) {
-            if ((texture_map_mask & (1u << map)) == 0u) {
-                continue;
-            }
-            const TexImage image = state_.tex_image(map);
-            const TexMode mode = state_.tex_mode(map);
-            record_dependency_range(
-                image.guest_addr,
-                snapshot_texture_guest_size(image, mode));
-        }
-    }
-
-    void flush_array_ranges(
-        const std::array<SnapshotArrayRange, 12>& array_ranges) {
-        for (const SnapshotArrayRange& range : array_ranges) {
-            if (range.used) {
-                record_dependency_range(
-                    range.begin,
-                    static_cast<std::uint32_t>(range.end - range.begin));
-            }
-        }
-    }
-
-    [[nodiscard]] bool record_broad_draw_dependencies_for_vtxfmt(
-        std::uint8_t vtxfmt) {
-        // The memo is keyed on the state's mutation revision, not a hash: this sink owns the parse
-        // of one register instance, so the revision identifies every change exactly (zero, after the
-        // counter saturates, forbids reuse).
-        if (broad_draw_memo_.contains(state_.dependency_shape_revision(), vtxfmt)) {
-            return true;
-        }
-        const VertexDescriptor desc = state_.vertex_desc(vtxfmt);
-        if (!record_broad_draw_dependencies(desc)) {
-            return false;
-        }
-        record_texture_dependency_ranges_once();
-        broad_draw_memo_.mark(vtxfmt);
-        return true;
-    }
-
-    [[nodiscard]] std::uint32_t guest_region_remaining(
-        std::uint32_t guest_addr) const {
-        if (memory_ == nullptr) {
-            return 0u;
-        }
-        const std::uint32_t normalized =
-            normalize_dependency_guest_addr(guest_addr);
-        for (std::uint32_t i = 0; i < memory_->region_count; ++i) {
-            const GuestMemoryRegion& region = memory_->regions[i];
-            if (region.host_base == nullptr || region.size == 0u) {
-                continue;
-            }
-            const std::uint32_t region_base =
-                normalize_dependency_guest_addr(region.guest_base);
-            const std::uint64_t region_end =
-                static_cast<std::uint64_t>(region_base) + region.size;
-            if (normalized >= region_base && normalized < region_end) {
-                return static_cast<std::uint32_t>(region_end - normalized);
-            }
-        }
-        return 0u;
-    }
-
-    [[nodiscard]] bool record_broad_indexed_attribute(
-        unsigned attr_index,
-        const VertexAttribute& attr,
-        std::size_t element_size) {
-        if (attr.vcd == VcdType::None || attr.vcd == VcdType::Direct) {
-            return true;
-        }
-        if (attr.vcd != VcdType::Index8 && attr.vcd != VcdType::Index16) {
-            return false;
-        }
-        if (element_size > std::numeric_limits<std::uint32_t>::max()) {
-            throw std::runtime_error(
-                "[GxBackend] dependency scan: indexed array element size "
-                "overflows u32");
-        }
-        const std::uint64_t max_index =
-            attr.vcd == VcdType::Index8 ? 255ull : 65535ull;
-        const std::uint32_t base = state_.array_base(attr_index);
-        const std::uint32_t stride = state_.array_stride(attr_index);
-        const std::uint64_t requested =
-            max_index * static_cast<std::uint64_t>(stride) + element_size;
-        if (requested > std::numeric_limits<std::uint32_t>::max()) {
-            return false;
-        }
-        const std::uint32_t remaining = guest_region_remaining(base);
-        if (remaining == 0u) {
-            return false;
-        }
-        const std::uint32_t size = std::min<std::uint32_t>(
-            remaining,
-            static_cast<std::uint32_t>(requested));
-        record_dependency_range(base, size);
-        return true;
-    }
-
-    [[nodiscard]] bool record_broad_draw_dependencies(
-        const VertexDescriptor& desc) {
-        if (!record_broad_indexed_attribute(
-                0u,
-                desc.position,
-                desc.position.vcd == VcdType::None
-                    ? 0u
-                    : snapshot_attr_direct_size_pos(desc.position))) {
-            return false;
-        }
-        if (desc.normal.vcd == VcdType::Index8 ||
-            desc.normal.vcd == VcdType::Index16) {
-            const std::size_t normal_element_size =
-                snapshot_normal_uses_three_indices(desc)
-                    ? snapshot_normal_vector_size(desc.normal) * 3u
-                    : snapshot_attr_direct_size_nrm(desc.normal);
-            if (!record_broad_indexed_attribute(
-                    1u,
-                    desc.normal,
-                    normal_element_size)) {
-                return false;
-            }
-        } else if (desc.normal.vcd != VcdType::None &&
-                   desc.normal.vcd != VcdType::Direct) {
-            return false;
-        }
-        for (unsigned color = 0; color < 2u; ++color) {
-            const VertexAttribute& attr = desc.color[color];
-            if (!record_broad_indexed_attribute(
-                    2u + color,
-                    attr,
-                    attr.vcd == VcdType::None
-                        ? 0u
-                        : snapshot_color_byte_size(attr.format))) {
-                return false;
-            }
-        }
-        for (unsigned tex = 0; tex < 8u; ++tex) {
-            const VertexAttribute& attr = desc.texcoord[tex];
-            if (!record_broad_indexed_attribute(
-                    4u + tex,
-                    attr,
-                    attr.vcd == VcdType::None
-                        ? 0u
-                        : snapshot_attr_direct_size_tex(attr))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    void scan_attribute(
-        std::array<SnapshotArrayRange, 12>& array_ranges,
-        unsigned attr_index,
-        const VertexAttribute& attr,
-        std::size_t element_size,
-        const std::byte* source,
-        std::size_t& offset) const {
-        switch (attr.vcd) {
-        case VcdType::None:
-            return;
-        case VcdType::Direct:
-            offset += element_size;
-            return;
-        case VcdType::Index8: {
-            const std::uint32_t index =
-                std::to_integer<std::uint8_t>(source[offset]);
-            offset += 1u;
-            record_indexed_array_access(
-                array_ranges,
-                attr_index,
-                state_.array_base(attr_index) +
-                    index * state_.array_stride(attr_index),
-                static_cast<std::uint32_t>(element_size));
-            return;
-        }
-        case VcdType::Index16: {
-            const std::uint32_t index = snapshot_read_be_u16(source + offset);
-            offset += 2u;
-            record_indexed_array_access(
-                array_ranges,
-                attr_index,
-                state_.array_base(attr_index) +
-                    index * state_.array_stride(attr_index),
-                static_cast<std::uint32_t>(element_size));
-            return;
-        }
-        default:
-            throw std::runtime_error(
-                "[GxBackend] dependency scan: unknown VCD type");
-        }
-    }
-
-    void scan_draw_payload_dependencies(
-        const VertexDescriptor& desc,
-        std::span<const std::byte> raw,
-        std::uint32_t vertex_count,
-        std::array<SnapshotArrayRange, 12>& array_ranges) const {
-        const std::size_t stride = VertexLoader::source_vertex_size(desc);
-        if (raw.size() != stride * static_cast<std::size_t>(vertex_count)) {
-            throw std::runtime_error(
-                "[GxBackend] dependency scan: draw payload size mismatch");
-        }
-
-        for (std::uint32_t vertex = 0; vertex < vertex_count; ++vertex) {
-            const std::byte* source =
-                raw.data() + static_cast<std::size_t>(vertex) * stride;
-            std::size_t offset = 0;
-
-            if (desc.has_pn_matrix_index) {
-                offset += 1u;
-            }
-            for (unsigned tex = 0; tex < 8u; ++tex) {
-                if (desc.has_tex_matrix_index[tex]) {
-                    offset += 1u;
-                }
-            }
-
-            scan_attribute(
-                array_ranges,
-                0u,
-                desc.position,
-                desc.position.vcd == VcdType::None
-                    ? 0u
-                    : snapshot_attr_direct_size_pos(desc.position),
-                source,
-                offset);
-
-            if (desc.normal.vcd == VcdType::Direct) {
-                offset += snapshot_attr_direct_size_nrm(desc.normal);
-            } else if (desc.normal.vcd == VcdType::Index8 ||
-                       desc.normal.vcd == VcdType::Index16) {
-                const std::size_t index_size =
-                    desc.normal.vcd == VcdType::Index8 ? 1u : 2u;
-                const std::size_t elem_size =
-                    snapshot_normal_vector_size(desc.normal);
-                if (snapshot_normal_uses_three_indices(desc)) {
-                    std::uint32_t indices[3]{};
-                    for (unsigned ni = 0; ni < 3u; ++ni) {
-                        indices[ni] = desc.normal.vcd == VcdType::Index8
-                            ? std::to_integer<std::uint8_t>(
-                                  source[offset + ni])
-                            : snapshot_read_be_u16(
-                                  source + offset + ni * index_size);
-                    }
-                    offset += index_size * 3u;
-                    for (unsigned ni = 0; ni < 3u; ++ni) {
-                        record_indexed_array_access(
-                            array_ranges,
-                            1u,
-                            state_.array_base(1u) +
-                                indices[ni] * state_.array_stride(1u) +
-                                static_cast<std::uint32_t>(ni * elem_size),
-                            static_cast<std::uint32_t>(elem_size));
-                    }
-                } else {
-                    const std::uint32_t index =
-                        desc.normal.vcd == VcdType::Index8
-                        ? std::to_integer<std::uint8_t>(source[offset])
-                        : snapshot_read_be_u16(source + offset);
-                    offset += index_size;
-                    record_indexed_array_access(
-                        array_ranges,
-                        1u,
-                        state_.array_base(1u) +
-                            index * state_.array_stride(1u),
-                        static_cast<std::uint32_t>(
-                            snapshot_normal_has_nbt(desc)
-                                ? elem_size * 3u
-                                : elem_size));
-                }
-            } else if (desc.normal.vcd != VcdType::None) {
-                throw std::runtime_error(
-                    "[GxBackend] dependency scan: unknown normal VCD type");
-            }
-
-            for (unsigned color = 0; color < 2u; ++color) {
-                const VertexAttribute& attr = desc.color[color];
-                scan_attribute(
-                    array_ranges,
-                    2u + color,
-                    attr,
-                    attr.vcd == VcdType::None
-                        ? 0u
-                        : snapshot_color_byte_size(attr.format),
-                    source,
-                    offset);
-            }
-
-            for (unsigned tex = 0; tex < 8u; ++tex) {
-                const VertexAttribute& attr = desc.texcoord[tex];
-                scan_attribute(
-                    array_ranges,
-                    4u + tex,
-                    attr,
-                    attr.vcd == VcdType::None
-                        ? 0u
-                        : snapshot_attr_direct_size_tex(attr),
-                    source,
-                    offset);
-            }
-
-            if (offset != stride) {
-                throw std::runtime_error(
-                    "[GxBackend] dependency scan: vertex stride mismatch");
-            }
-        }
-    }
-
-    GxState& state_;
-    GuestMemory* memory_ = nullptr;
-    std::vector<GuestMemoryRange>& ranges_;
-    detail::DependencyRangeMemo emitted_range_keys_;
-    detail::BroadDrawDependencyMemo broad_draw_memo_;
-};
-
-class DependencyParserReadRecorder final
-    : public FifoGuestMemoryReadRecorder {
-public:
-    explicit DependencyParserReadRecorder(
-        std::vector<GuestMemoryRange>& ranges,
-        std::vector<GuestMemoryRange>& shape_ranges)
-        : ranges_(ranges), shape_ranges_(shape_ranges) {}
-
-    void record_guest_memory_read(
-        std::uint32_t guest_addr,
-        std::uint32_t size) override {
-        record_guest_memory_range(ranges_, guest_addr, size);
-    }
-
-    void record_guest_dependency_shape_read(
-        std::uint32_t guest_addr,
-        std::uint32_t size) override {
-        record_guest_memory_range(shape_ranges_, guest_addr, size);
-    }
-
-private:
-    std::vector<GuestMemoryRange>& ranges_;
-    std::vector<GuestMemoryRange>& shape_ranges_;
-};
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
 std::int64_t vblanks_per_slot(double refresh, double rate) {
@@ -1502,30 +944,9 @@ static_assert(
 }  // anonymous namespace
 
 void GxBackend::reset_fifo_session_state() {
-    // The render parser, event parser and dependency scanner read the same command stream on
-    // different schedules, so all of them reset together, while no producer or render thread
-    // runs: stale state or a partial command in one of them would shift command boundaries.
+    // While no producer or render thread runs.
     state_ = GxState{};
     state_.mark_all_dirty();
-    // A new parser also drops the previous session's display-list cache and its capacity.
-    parser_ = FifoParser{};
-    parser_.set_dump_dir("generated");
-    pending_fifo_.clear();
-
-    event_state_ = GxState{};
-    event_parser_ = FifoParser{};
-    event_parser_.set_dump_dir("generated");
-    event_pending_fifo_.clear();
-
-    dependency_state_ = GxState{};
-    dependency_state_.mark_all_dirty();
-    dependency_parser_ = FifoParser{};
-    dependency_parser_.set_dump_dir("generated");
-    dependency_pending_fifo_.clear();
-    for (DependencyRangeCacheEntry& entry : dependency_range_cache_) {
-        entry = DependencyRangeCacheEntry{};
-    }
-    dependency_range_cache_tick_ = 0u;
 
     pending_async_dirty_ranges_.clear();
     // Runs before the renderer initializes, so nothing still reads the buffer.
@@ -1533,10 +954,7 @@ void GxBackend::reset_fifo_session_state() {
     vertex_layout_cache_ = {};
 
     frame_memory_ = nullptr;
-    frame_memory_regions_disjoint_sorted_ = false;
     frame_services_ = nullptr;
-    frame_pe_events_ = nullptr;
-    frame_pe_callbacks_enabled_ = true;
     pending_draw_batch_ = {};
     cached_draw_run_active_ = false;
     cached_draw_run_scissor_reject_ = false;
@@ -1546,7 +964,6 @@ void GxBackend::reset_fifo_session_state() {
     cached_draw_run_primitive_ = PrimitiveClass::Points;
     cached_draw_run_vtxfmt_ = 0u;
     cached_draw_run_state_call_ = {};
-    frame_fifo_profile_.reset();
 
     // Derived state below holds descriptors and resources of the previous renderer session.
     ps_key_ = {};
@@ -1611,9 +1028,6 @@ bool GxBackend::initialize(int w, int h) {
 
     cadence_diagnostics_ = cadence::global_session_if_enabled();
 
-    // Before any resource is created: the reset audits the previous session and advances the token
-    // epoch, so no token of an earlier session can alias one of this session.
-    frame_pe_completions_.reset();
     reset_fifo_session_state();
 
     const RenderConfig cfg = get_render_config();
@@ -1677,8 +1091,6 @@ bool GxBackend::initialize(int w, int h) {
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
     render_cpu_reads_in_flight_ = 0;
-    render_fifo_effects_in_flight_ = 0;
-    pending_frame_effects_.clear();
     pending_pointer_depth_capture_ = {};
     render_thread_ = std::thread(&GxBackend::render_thread_main, this);
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
@@ -1698,416 +1110,6 @@ bool GxBackend::initialize(int w, int h) {
     return true;
 }
 
-GxBackend::MemorySnapshotStorage* GxBackend::snapshot_storage_for(
-    MemorySnapshot& snapshot,
-    std::byte* source,
-    std::uint32_t size) {
-    if (source == nullptr || size == 0u) {
-        return nullptr;
-    }
-
-    constexpr std::size_t small_capture_limit = 16u;
-    constexpr std::size_t empty_slot = std::numeric_limits<std::size_t>::max();
-    const auto hash_key = [](std::byte* address, std::uint32_t bytes) {
-        auto key = static_cast<std::uint64_t>(
-            reinterpret_cast<std::uintptr_t>(address));
-        key ^= static_cast<std::uint64_t>(bytes) * 0x9e3779b97f4a7c15ull;
-        key ^= key >> 30u;
-        key *= 0xbf58476d1ce4e5b9ull;
-        key ^= key >> 27u;
-        return static_cast<std::size_t>(key ^ (key >> 31u));
-    };
-    const auto insert_slot = [&](std::size_t index) {
-        const auto& entry = snapshot.storage[index];
-        const std::size_t mask = snapshot.storage_lookup.size() - 1u;
-        std::size_t bucket = hash_key(entry.source, entry.size) & mask;
-        while (snapshot.storage_lookup[bucket] != empty_slot) {
-            bucket = (bucket + 1u) & mask;
-        }
-        snapshot.storage_lookup[bucket] = index;
-    };
-
-    MemorySnapshotStorage* target = nullptr;
-    if (snapshot.storage_used_count < small_capture_limit) {
-        // Tiny captures avoid table setup; unused slots are never scanned.
-        for (std::size_t index = 0u; index < snapshot.storage_used_count; ++index) {
-            auto& storage = snapshot.storage[index];
-            if (storage.source == source && storage.size == size) {
-                target = &storage;
-                break;
-            }
-        }
-    } else {
-        if (!snapshot.storage_lookup_active ||
-            snapshot.storage_used_count >= snapshot.storage_lookup.size() / 2u) {
-            const std::size_t required = snapshot.storage_used_count * 4u;
-            std::size_t capacity = 64u;
-            while (capacity < required) capacity *= 2u;
-            // Keep allocated capacity across captures, but never reuse keys.
-            capacity = std::max(capacity, snapshot.storage_lookup.size());
-            snapshot.storage_lookup.assign(capacity, empty_slot);
-            for (std::size_t index = 0u; index < snapshot.storage_used_count; ++index) {
-                insert_slot(index);
-            }
-            snapshot.storage_lookup_active = true;
-        }
-        const std::size_t mask = snapshot.storage_lookup.size() - 1u;
-        std::size_t bucket = hash_key(source, size) & mask;
-        while (snapshot.storage_lookup[bucket] != empty_slot) {
-            auto& storage = snapshot.storage[snapshot.storage_lookup[bucket]];
-            if (storage.source == source && storage.size == size) {
-                target = &storage;
-                break;
-            }
-            bucket = (bucket + 1u) & mask;
-        }
-    }
-    if (target == nullptr) {
-        const std::size_t index = snapshot.storage_used_count;
-        if (index == snapshot.storage.size()) snapshot.storage.emplace_back();
-        target = &snapshot.storage[index];
-        target->source = source;
-        target->size = size;
-        if (snapshot.storage_lookup_active) insert_slot(index);
-        ++snapshot.storage_used_count;
-    }
-
-    target->used = true;
-    if (target->bytes.size() != size) {
-        target->bytes.resize(size);
-    }
-    return target;
-}
-
-void GxBackend::copy_memory_snapshot_storage(MemorySnapshot& snapshot) {
-    for (MemorySnapshotStorage& storage : snapshot.storage) {
-        if (storage.used && !storage.copied &&
-            storage.source != nullptr && storage.size != 0u) {
-            std::memcpy(storage.bytes.data(), storage.source, storage.size);
-            storage.copied = true;
-            // The snapshot owns the copy; drop the pointer into live memory.
-            storage.source = nullptr;
-        }
-    }
-}
-
-std::uint64_t GxBackend::memory_snapshot_used_bytes(
-    const MemorySnapshot& snapshot) noexcept {
-    std::uint64_t bytes = 0;
-    for (const MemorySnapshotStorage& storage : snapshot.storage) {
-        if (storage.used && storage.copied) {
-            bytes += storage.size;
-        }
-    }
-    return bytes;
-}
-
-void GxBackend::capture_memory_snapshot(
-    GuestMemory* source,
-    MemorySnapshot& snapshot,
-    const std::vector<GuestMemoryRange>& dependency_ranges,
-    bool strict_ranges) {
-    snapshot.storage_used_count = 0u;
-    snapshot.storage_lookup_active = false;
-    snapshot.regions_disjoint_sorted = false;
-    if (source == nullptr) {
-        snapshot.memory = {};
-        snapshot.regions.clear();
-        snapshot.sealed = false;
-        for (MemorySnapshotStorage& storage : snapshot.storage) {
-            storage.source = nullptr;
-            storage.used = false;
-            storage.copied = false;
-        }
-        return;
-    }
-
-    snapshot.sealed = false;
-    for (MemorySnapshotStorage& storage : snapshot.storage) {
-        storage.source = nullptr;
-        storage.used = false;
-        storage.copied = false;
-    }
-
-    std::vector<GuestMemoryRange> ranges = dependency_ranges;
-    normalize_guest_memory_ranges(ranges);
-
-    snapshot.memory = *source;
-    // The render-side copy belongs to the snapshot: nothing in it reaches back to the live game.
-    snapshot.memory.user = nullptr;
-    snapshot.regions.clear();
-    snapshot.regions.reserve(
-        source->region_count +
-        static_cast<std::uint32_t>(ranges.size()));
-
-    if (strict_ranges) {
-        const auto append_snapshot_copy =
-            [&](const GuestMemoryRange& range) {
-                std::uint64_t cursor = range.guest_base;
-                const std::uint64_t range_end = cursor + range.size;
-                while (cursor < range_end) {
-                    const GuestMemoryRegion* source_region = nullptr;
-                    std::uint64_t source_region_end = 0;
-                    for (std::uint32_t i = 0; i < source->region_count; ++i) {
-                        const GuestMemoryRegion& region = source->regions[i];
-                        if (region.host_base == nullptr || region.size == 0u) {
-                            continue;
-                        }
-                        const std::uint64_t region_end =
-                            static_cast<std::uint64_t>(region.guest_base) +
-                            region.size;
-                        if (cursor >= region.guest_base &&
-                            cursor < region_end) {
-                            source_region = &region;
-                            source_region_end = region_end;
-                            break;
-                        }
-                    }
-                    if (source_region == nullptr) {
-                        throw std::runtime_error(
-                            "[GxBackend] compact memory snapshot range is unmapped");
-                    }
-
-                    const std::uint64_t copy_end =
-                        std::min(range_end, source_region_end);
-                    const std::uint32_t copy_size =
-                        static_cast<std::uint32_t>(copy_end - cursor);
-                    const std::uint32_t source_offset =
-                        static_cast<std::uint32_t>(
-                            cursor - source_region->guest_base);
-                    GuestMemoryRegion copy{};
-                    copy.guest_base = static_cast<std::uint32_t>(cursor);
-                    copy.size = copy_size;
-                    std::byte* source_bytes =
-                        source_region->host_base + source_offset;
-                    if (MemorySnapshotStorage* storage =
-                                   snapshot_storage_for(
-                                       snapshot,
-                                       source_bytes,
-                                       copy_size);
-                               storage != nullptr) {
-                        copy.host_base = storage->bytes.data();
-                        snapshot.regions.push_back(copy);
-                    }
-                    cursor = copy_end;
-                }
-            };
-
-        for (const GuestMemoryRange& range : ranges) {
-            append_snapshot_copy(range);
-        }
-
-        for (GuestMemoryFastRegion& fast : snapshot.memory.fast_regions) {
-            fast = {};
-        }
-        snapshot.memory.region_count =
-            static_cast<std::uint32_t>(snapshot.regions.size());
-        snapshot.memory.regions = snapshot.regions.data();
-        copy_memory_snapshot_storage(snapshot);
-        // Small views keep the linear lookup; larger ones use binary search only when the regions
-        // are verified sorted and disjoint.
-        snapshot.regions_disjoint_sorted = snapshot.regions.size() >= 32u &&
-            detail::snapshot_regions_are_disjoint_sorted(snapshot.regions);
-        snapshot.sealed = true;
-        return;
-    }
-
-    for (std::uint32_t i = 0; i < source->region_count; ++i) {
-        const GuestMemoryRegion& region = source->regions[i];
-        GuestMemoryRegion copy = region;
-        if (MemorySnapshotStorage* storage =
-                snapshot_storage_for(snapshot, region.host_base, region.size);
-            storage != nullptr) {
-            copy.host_base = storage->bytes.data();
-        }
-        snapshot.regions.push_back(copy);
-    }
-
-    for (GuestMemoryFastRegion& fast : snapshot.memory.fast_regions) {
-        fast = {};
-    }
-    for (std::size_t i = 0; i < 16u; ++i) {
-        const GuestMemoryFastRegion& fast = source->fast_regions[i];
-        if (MemorySnapshotStorage* storage =
-                snapshot_storage_for(snapshot, fast.host_base, fast.size);
-            storage != nullptr) {
-            snapshot.memory.fast_regions[i] = {
-                fast.size,
-                storage->bytes.data(),
-            };
-        }
-    }
-
-    snapshot.memory.region_count =
-        static_cast<std::uint32_t>(snapshot.regions.size());
-    snapshot.memory.regions = snapshot.regions.data();
-    copy_memory_snapshot_storage(snapshot);
-    snapshot.sealed = true;
-}
-
-void GxBackend::collect_memory_dependency_ranges(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
-    GuestMemory* memory,
-    std::vector<GuestMemoryRange>& out,
-    bool& cache_hit) {
-    out.clear();
-    cache_hit = false;
-    if (fifo_data == nullptr || fifo_size == 0u) {
-        return;
-    }
-
-    const std::span<const std::byte> fifo(fifo_data, fifo_size);
-    const bool cacheable = dependency_pending_fifo_.empty();
-    // The fingerprint only filters; a hit still compares the whole FIFO and the initial state.
-    const std::uint64_t fifo_hash =
-        cacheable ? dependency_fifo_fingerprint(fifo) : 0u;
-    const std::uint64_t state_hash =
-        cacheable ? dependency_shape_state_hash(dependency_state_) : 0u;
-    const auto shape_words = cacheable ? dependency_state_.dependency_shape_words()
-                                      : GxState::DependencyShapeWords{};
-    // A hit restores the final parser state, and the pending one-shot BP write mask changes how this
-    // FIFO and later ones parse, so it is part of the key.
-    const std::uint32_t pending_bp_write_mask =
-        dependency_state_.pending_bp_write_mask();
-    if (cacheable) {
-        for (DependencyRangeCacheEntry& entry : dependency_range_cache_) {
-            if (!entry.valid ||
-                entry.fifo_hash != fifo_hash ||
-                entry.state_hash != state_hash ||
-                entry.shape_words != shape_words ||
-                entry.pending_bp_write_mask != pending_bp_write_mask ||
-                entry.fifo.size() != fifo_size) {
-                continue;
-            }
-            if (std::memcmp(fifo_data, entry.fifo.data(), fifo_size) != 0) {
-                continue;
-            }
-            out = entry.ranges;
-            dependency_state_ = entry.final_state;
-            entry.last_used = ++dependency_range_cache_tick_;
-            cache_hit = true;
-            return;
-        }
-    }
-
-    std::vector<GuestMemoryRange> shape_ranges;
-    DependencyRangeSink sink(
-        dependency_state_,
-        memory,
-        out);
-    DependencyParserReadRecorder recorder(out, shape_ranges);
-    dependency_parser_.set_memory_read_recorder(&recorder);
-    try {
-        if (dependency_pending_fifo_.empty()) {
-            const std::size_t consumed =
-                dependency_parser_.run_available(
-                    fifo,
-                    memory,
-                    sink,
-                    dependency_state_);
-            if (consumed < fifo.size()) {
-                dependency_pending_fifo_.assign(
-                    fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
-                    fifo.end());
-            }
-        } else {
-            dependency_pending_fifo_.insert(
-                dependency_pending_fifo_.end(),
-                fifo_data,
-                fifo_data + fifo_size);
-            const std::size_t consumed =
-                dependency_parser_.run_available(
-                    dependency_pending_fifo_,
-                    memory,
-                    sink,
-                    dependency_state_);
-            if (consumed == dependency_pending_fifo_.size()) {
-                dependency_pending_fifo_.clear();
-            } else if (consumed > 0u) {
-                dependency_pending_fifo_.erase(
-                    dependency_pending_fifo_.begin(),
-                    dependency_pending_fifo_.begin() +
-                        static_cast<std::ptrdiff_t>(consumed));
-            }
-        }
-    } catch (const GxFatalError& e) {
-        dependency_parser_.set_memory_read_recorder(nullptr);
-        std::cerr << "[GxBackend] fatal dependency scan error: "
-                  << e.what()
-                  << " at offset 0x" << std::hex << e.fifo_offset()
-                  << " opcode=0x" << static_cast<unsigned>(e.opcode())
-                  << std::dec << '\n';
-        throw;
-    } catch (...) {
-        dependency_parser_.set_memory_read_recorder(nullptr);
-        throw;
-    }
-    dependency_parser_.set_memory_read_recorder(nullptr);
-
-    normalize_guest_memory_ranges(shape_ranges);
-    // Display lists reached by CALL_DL are render input too, so the snapshot owns their bytes and
-    // does not depend on the parser's display-list cache.
-    out.insert(out.end(), shape_ranges.begin(), shape_ranges.end());
-    normalize_guest_memory_ranges(out);
-
-    DependencyRangeCacheEntry* target = nullptr;
-    for (DependencyRangeCacheEntry& entry : dependency_range_cache_) {
-        if (!entry.valid) {
-            target = &entry;
-            break;
-        }
-        if (target == nullptr || entry.last_used < target->last_used) {
-            target = &entry;
-        }
-    }
-    if (cacheable && dependency_pending_fifo_.empty() && target != nullptr) {
-        constexpr std::size_t kMaxOwnedCacheBytes = 16u * 1024u * 1024u;
-        std::size_t needed = fifo_size;
-        if (needed > kMaxOwnedCacheBytes) return;
-        for (const auto count : {out.size(), shape_ranges.size()}) {
-            if (count > (kMaxOwnedCacheBytes - needed) / sizeof(GuestMemoryRange))
-                return;
-            needed += count * sizeof(GuestMemoryRange);
-        }
-        // Prepare every allocating field before publishing a valid replacement.
-        DependencyRangeCacheEntry next;
-        next.fifo.assign(fifo.begin(), fifo.end());
-        next.ranges = out;
-        next.shape_ranges = std::move(shape_ranges);
-        next.fifo_hash = fifo_hash;
-        next.state_hash = state_hash;
-        next.shape_words = shape_words;
-        next.pending_bp_write_mask = pending_bp_write_mask;
-        next.last_used = ++dependency_range_cache_tick_;
-        next.final_state = dependency_state_;
-        const auto owned_bytes = [](const DependencyRangeCacheEntry& entry) {
-            return entry.fifo.capacity() +
-                (entry.ranges.capacity() + entry.shape_ranges.capacity()) *
-                    sizeof(GuestMemoryRange);
-        };
-        if (owned_bytes(next) > kMaxOwnedCacheBytes) return;
-        next.valid = true;
-        *target = std::move(next);
-        // Bound retained vector storage, including invalidated entries. The
-        // fixed 64 parser-state slots are separate, already bounded storage.
-        std::size_t retained = 0;
-        for (const auto& entry : dependency_range_cache_) retained += owned_bytes(entry);
-        while (retained > kMaxOwnedCacheBytes) {
-            DependencyRangeCacheEntry* victim = nullptr;
-            for (auto& entry : dependency_range_cache_) {
-                if (&entry == target || owned_bytes(entry) == 0u) continue;
-                if (victim == nullptr || (!entry.valid && victim->valid) ||
-                    (entry.valid == victim->valid && entry.last_used < victim->last_used))
-                    victim = &entry;
-            }
-            if (victim == nullptr) break;
-            retained -= owned_bytes(*victim);
-            *victim = DependencyRangeCacheEntry{};
-        }
-    }
-
-}
 void GxBackend::pump_messages() {
     if (initialized_) {
         renderer_.pump_messages();
@@ -2644,43 +1646,6 @@ std::size_t GxBackend::invalidate_dirty_texture_ranges(
     return evicted;
 }
 
-void GxBackend::invalidate_dependency_range_cache(
-    const std::vector<GuestWriteRange>& ranges) noexcept {
-    if (ranges.empty()) {
-        return;
-    }
-    std::uint64_t invalidated = 0;
-    for (DependencyRangeCacheEntry& entry : dependency_range_cache_) {
-        if (!entry.valid || entry.shape_ranges.empty()) {
-            continue;
-        }
-        bool overlaps = false;
-        // The dirty ranges are coalesced and sorted, so each shape range takes one search.
-        for (const GuestMemoryRange& shape : entry.shape_ranges) {
-            if (shape.size == 0u) {
-                continue;
-            }
-            const std::uint64_t shape_begin =
-                normalize_dependency_guest_addr(shape.guest_base);
-            const std::uint64_t shape_end = shape_begin + shape.size;
-            const auto dirty = std::lower_bound(
-                ranges.begin(), ranges.end(), shape_begin,
-                [](const GuestWriteRange& range, std::uint64_t begin) {
-                    return static_cast<std::uint64_t>(range.guest_addr) +
-                               range.size <= begin;
-                });
-            if (dirty != ranges.end() && dirty->guest_addr < shape_end) {
-                overlaps = true;
-                break;
-            }
-        }
-        if (overlaps) {
-            entry.valid = false;
-            ++invalidated;
-        }
-    }
-}
-
 bool GxBackend::ensure_resident_vertex_buffer() {
     gpu::Device* const device = renderer_.device();
     if (device == nullptr) {
@@ -2727,61 +1692,16 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
     resident_vertices_.reset(0u, kFramesInFlight);
 }
 
-void GxBackend::scan_pe_events_on_sim_thread(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
-    GuestMemory* memory,
-    const GxServices* services) {
-    if (fifo_data == nullptr || fifo_size == 0) {
-        return;
-    }
-
-    PeEventSink sink(event_state_, services);
-    try {
-        if (event_pending_fifo_.empty()) {
-            const std::span<const std::byte> fifo(fifo_data, fifo_size);
-            const std::size_t consumed =
-                event_parser_.run_available(fifo, memory, sink, event_state_);
-            if (consumed < fifo.size()) {
-                event_pending_fifo_.assign(
-                    fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
-                    fifo.end());
-            }
-        } else {
-            event_pending_fifo_.insert(
-                event_pending_fifo_.end(), fifo_data, fifo_data + fifo_size);
-            const std::size_t consumed = event_parser_.run_available(
-                event_pending_fifo_, memory, sink, event_state_);
-            if (consumed == event_pending_fifo_.size()) {
-                event_pending_fifo_.clear();
-            } else if (consumed > 0) {
-                event_pending_fifo_.erase(
-                    event_pending_fifo_.begin(),
-                    event_pending_fifo_.begin() +
-                        static_cast<std::ptrdiff_t>(consumed));
-            }
-        }
-    } catch (const GxFatalError& e) {
-        std::cerr << "[GxBackend] fatal PE event scan error: " << e.what()
-                  << " at offset 0x" << std::hex << e.fifo_offset()
-                  << " opcode=0x" << static_cast<unsigned>(e.opcode())
-                  << std::dec << '\n';
-        throw;
-    }
-}
-
 // Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
 // while the queue is full.
-FramePeCompletionToken GxBackend::render_frame(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
+void GxBackend::render_frame(
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
     bool black)
 {
     if (!initialized_) {
-        return {};
+        return;
     }
 
     const bool trace_gx_stalls = trace_gx_stalls_enabled();
@@ -2790,15 +1710,14 @@ FramePeCompletionToken GxBackend::render_frame(
         trace_gx_stalls ||
         frame_gx_timing_sample_enabled(
             timing_frame_index_.load(std::memory_order_relaxed));
-    // Nothing to render: no commands and nothing attached (records, scene markers, captures).
-    const bool fifo_empty = (fifo_data == nullptr || fifo_size == 0u) && producer_shape_records_.empty() &&
-        producer_fifo_marker_count_ == 0u && producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
+    // Nothing to render: nothing attached (records, scene markers, captures).
+    const bool empty = producer_shape_records_.empty() && producer_fifo_marker_count_ == 0u &&
+        producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
     std::vector<GuestWriteRange>& drained_dirty_ranges = drain_scratch_ranges_;
     drain_guest_memory_writes(drained_dirty_ranges);
     coalesce_dirty_ranges(drained_dirty_ranges);
-    if (fifo_empty) {
+    if (empty) {
         if (!drained_dirty_ranges.empty()) {
-            invalidate_dependency_range_cache(drained_dirty_ranges);
             pending_async_dirty_ranges_.insert(
                 pending_async_dirty_ranges_.end(),
                 drained_dirty_ranges.begin(),
@@ -2815,9 +1734,9 @@ FramePeCompletionToken GxBackend::render_frame(
                 std::rethrow_exception(error);
             }
         }
-        return {};
+        return;
     }
-    galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, fifo_size);
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitBegin, 0u);
     // Taken under the same condition that measures producer_wait_ns (the simulation thread's wait
     // for queue space), so a measured frame never subtracts a default time_point.
     const auto wait_start = producer_time_detail
@@ -2825,10 +1744,10 @@ FramePeCompletionToken GxBackend::render_frame(
         : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_pointer_depth_capture(chunk, fifo_size);
-    take_attached_fifo_markers(chunk, fifo_size);
-    take_attached_stripe_particles(chunk, fifo_size);
-    take_attached_shape_records(chunk, fifo_size);
+    take_attached_pointer_depth_capture(chunk);
+    take_attached_fifo_markers(chunk);
+    take_attached_stripe_particles(chunk);
+    take_attached_shape_records(chunk);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.movie_frame=producer_movie_frame_;
@@ -2837,23 +1756,11 @@ FramePeCompletionToken GxBackend::render_frame(
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
     const GxTimingConfig& timing = get_gx_timing_config();
-    if (!timing.vi_render_fifo_wait && !timing.pe_events_gpu_fence) {
-        scan_pe_events_on_sim_thread(fifo_data, fifo_size, memory, services);
-        chunk.pe_events_scanned_on_sim_thread = true;
-    }
 
     std::uint64_t producer_wait_ns = 0;
     std::uint64_t diagnostic_queue_wait_ns = 0;
     std::size_t queue_depth_after_push = 0;
-    FramePeCompletionToken submitted_token{};
     const std::size_t queue_depth_limit = timing.render_queue_depth;
-    const bool live_memory_wait =
-        timing.render_live_memory_wait && memory != nullptr;
-    const bool snapshot_memory =
-        timing.render_memory_snapshot &&
-        memory != nullptr;
-    const bool compact_snapshot =
-        snapshot_memory && compact_memory_snapshot_enabled();
     {
         std::unique_lock<std::mutex> lock(queue_mutex_);
         const auto queued_render_chunks = [this] {
@@ -2913,32 +1820,15 @@ FramePeCompletionToken GxBackend::render_frame(
             std::rethrow_exception(error);
         }
         if (stop_render_thread_) {
-            return {};
-        }
-        if (!fifo_pool_.empty()) {
-            chunk.fifo = std::move(fifo_pool_.back());
-            fifo_pool_.pop_back();
-            chunk.fifo.clear();
+            return;
         }
         if (!dirty_range_pool_.empty()) {
             chunk.dirty_ranges = std::move(dirty_range_pool_.back());
             dirty_range_pool_.pop_back();
             chunk.dirty_ranges.clear();
         }
-        if (snapshot_memory && !memory_snapshot_pool_.empty()) {
-            chunk.memory_snapshot = std::move(memory_snapshot_pool_.back());
-            memory_snapshot_pool_.pop_back();
-        }
-        if (compact_snapshot && !memory_range_pool_.empty()) {
-            chunk.memory_ranges = std::move(memory_range_pool_.back());
-            memory_range_pool_.pop_back();
-            chunk.memory_ranges.clear();
-        }
     }
 
-    if (fifo_data != nullptr && fifo_size > 0) {
-        chunk.fifo.assign(fifo_data, fifo_data + fifo_size);
-    }
     if (!pending_async_dirty_ranges_.empty()) {
         chunk.dirty_ranges.swap(pending_async_dirty_ranges_);
         pending_async_dirty_ranges_.clear();
@@ -2950,77 +1840,6 @@ FramePeCompletionToken GxBackend::render_frame(
     coalesce_dirty_ranges(chunk.dirty_ranges);
     chunk.dirty_range_count = chunk.dirty_ranges.size();
     chunk.dirty_bytes = dirty_range_bytes(chunk.dirty_ranges);
-    invalidate_dependency_range_cache(chunk.dirty_ranges);
-    if (snapshot_memory) {
-        if (compact_snapshot) {
-            const auto dependency_scan_start = producer_time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-            collect_memory_dependency_ranges(
-                chunk.fifo.data(),
-                chunk.fifo.size(),
-                memory,
-                chunk.memory_ranges,
-                chunk.dependency_cache_hit);
-            if (producer_time_detail) {
-                const auto dependency_scan_end =
-                    std::chrono::steady_clock::now();
-                chunk.dependency_scan_ns = static_cast<std::uint64_t>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        dependency_scan_end - dependency_scan_start).count());
-            }
-            chunk.snapshot_range_count = chunk.memory_ranges.size();
-            chunk.snapshot_range_bytes =
-                guest_memory_range_bytes(chunk.memory_ranges);
-            chunk.memory_snapshot_strict = true;
-        } else {
-            chunk.memory_ranges.clear();
-            chunk.memory_snapshot_strict = false;
-        }
-        const auto snapshot_start = producer_time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        capture_memory_snapshot(
-            memory,
-            chunk.memory_snapshot,
-            chunk.memory_ranges,
-            chunk.memory_snapshot_strict);
-        if (!chunk.memory_snapshot.sealed) {
-            throw std::runtime_error(
-                "[GxBackend] render memory snapshot was not sealed");
-        }
-        if (producer_time_detail) {
-            const auto snapshot_end = std::chrono::steady_clock::now();
-            chunk.snapshot_ns = static_cast<std::uint64_t>(
-                std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    snapshot_end - snapshot_start).count());
-        }
-        chunk.snapshot_bytes = memory_snapshot_used_bytes(chunk.memory_snapshot);
-        chunk.memory = &chunk.memory_snapshot.memory;
-        chunk.memory_snapshot_active = true;
-    }
-
-    if (trace_gx_stalls) {
-        const std::uint64_t dependency_scan_us =
-            chunk.dependency_scan_ns / 1000u;
-        if (dependency_scan_us >= trace_gx_stall_threshold_us()) {
-            std::cerr << "[gx-dependency-scan] us=" << dependency_scan_us
-                      << " fifo-bytes=" << fifo_size
-                      << " ranges=" << chunk.snapshot_range_count
-                      << " range-bytes=" << chunk.snapshot_range_bytes
-                      << " pending-fifo=" << dependency_pending_fifo_.size()
-                      << '\n';
-        }
-        const std::uint64_t snapshot_us = chunk.snapshot_ns / 1000u;
-        if (snapshot_us >= trace_gx_stall_threshold_us()) {
-            std::cerr << "[gx-memory-snapshot] us=" << snapshot_us
-                      << " copied-bytes=" << chunk.snapshot_bytes
-                      << " ranges=" << chunk.snapshot_range_count
-                      << " range-bytes=" << chunk.snapshot_range_bytes
-                      << " strict=" << (chunk.memory_snapshot_strict ? 1 : 0)
-                      << '\n';
-        }
-    }
 
     chunk.producer_wait_ns = producer_wait_ns;
     {
@@ -3031,25 +1850,8 @@ FramePeCompletionToken GxBackend::render_frame(
             std::rethrow_exception(error);
         }
         if (stop_render_thread_) {
-            // Same retention bound as the render thread's return path.
-            if (chunk.memory_snapshot_active) {
-                if (memory_snapshot_pool_.size() < kChunkPoolRetainedBuffers) {
-                    memory_snapshot_pool_.push_back(
-                        std::move(chunk.memory_snapshot));
-                }
-            }
-            if (!chunk.memory_ranges.empty()) {
-                if (memory_range_pool_.size() < kChunkPoolRetainedBuffers) {
-                    memory_range_pool_.push_back(std::move(chunk.memory_ranges));
-                }
-            }
-            return {};
+            return;
         }
-        // The render thread resolves the token when it has consumed the chunk (its PE events, if
-        // any, delivered then): the stream is parsed once, there, not again here to find events.
-        submitted_token = frame_pe_completions_.issue();
-        chunk.pe_completion_token = submitted_token;
-        chunk.pe_completion_requires_resolution = true;
         frame_queue_.push_back(std::move(chunk));
         queue_depth_after_push = frame_queue_.size();
     }
@@ -3057,27 +1859,16 @@ FramePeCompletionToken GxBackend::render_frame(
         cadence_diagnostics_->record_phase(
             cadence::TimingPhase::ProducerQueueWait,
             diagnostic_queue_wait_ns);
-        cadence_diagnostics_->record_token_issued(submitted_token.kind);
     }
-    // Publication and token accounting precede wakeup; diagnostics do not.
     queue_cv_.notify_one();
     const std::uint64_t producer_wait_us = producer_wait_ns / 1000u;
     if (trace_gx_stalls &&
         producer_wait_us >= trace_gx_stall_threshold_us()) {
         std::cerr << "[gx-queue-wait] wait-us=" << producer_wait_us
-                  << " fifo-bytes=" << fifo_size
                   << " queue-depth=" << queue_depth_after_push
                   << " queue-limit=" << queue_depth_limit << '\n';
     }
-    if (live_memory_wait) {
-        const cadence::ScopedPhaseTimer live_memory_wait_timer{
-            cadence_diagnostics_,
-            cadence::TimingPhase::LiveMemoryReadBarrierWait};
-        wait_for_render_cpu_reads_idle();
-    }
-    galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, submitted_token.value,
-                             static_cast<std::uint64_t>(submitted_token.kind));
-    return submitted_token;
+    galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
 }
 
 void GxBackend::wait_for_render_idle() {
@@ -3094,7 +1885,6 @@ void GxBackend::wait_for_render_idle() {
                 render_chunks_in_flight_ == 0u &&
                 present_chunks_in_flight_ == 0u &&
                 utility_chunks_in_flight_ == 0u &&
-                pending_frame_effects_.empty() &&
                 !pending_pointer_depth_capture_.capture);
     });
     if (render_thread_error_ != nullptr) {
@@ -3104,86 +1894,6 @@ void GxBackend::wait_for_render_idle() {
     }
 }
 
-void GxBackend::wait_for_render_cpu_reads_idle() {
-    if (!initialized_) {
-        return;
-    }
-
-    const GxTimingConfig& timing = get_gx_timing_config();
-    // When the renderer reads its own snapshot, or reads guest memory live by design (the game's
-    // GXDrawDone discipline bounds its writes), this waits only for queue space, as render_frame()'s
-    // push does; a full drain would serialize the two threads. Otherwise the renderer reads memory
-    // the game is about to change, and the queue must drain.
-    const std::size_t queue_depth_limit = timing.render_queue_depth;
-    const bool renderer_owns_its_memory =
-        timing.render_memory_snapshot || timing.render_live_memory_reads;
-
-    const GameWaitTimer game_wait{game_wait_qpc_};
-    std::unique_lock<std::mutex> lock(queue_mutex_);
-    const auto queued_render_chunks = [this] {
-        return static_cast<std::size_t>(
-            std::count_if(
-                frame_queue_.begin(),
-                frame_queue_.end(),
-                [](const FrameChunk& queued) {
-                    return !queued.present_only;
-                }));
-    };
-    queue_space_cv_.wait(lock, [this, &queued_render_chunks, queue_depth_limit,
-                                renderer_owns_its_memory] {
-        if (stop_render_thread_ || render_thread_error_ != nullptr) {
-            return true;
-        }
-        if (renderer_owns_its_memory) {
-            // Depth only: render_cpu_reads_in_flight_ drops after the render thread pops a chunk,
-            // so also waiting for it here can deadlock against a full queue.
-            return queued_render_chunks() < queue_depth_limit;
-        }
-        return queued_render_chunks() == 0u &&
-               render_cpu_reads_in_flight_ == 0u;
-    });
-    if (render_thread_error_ != nullptr) {
-        std::exception_ptr error = render_thread_error_;
-        render_thread_error_ = nullptr;
-        std::rethrow_exception(error);
-    }
-}
-
-bool GxBackend::wait_for_frame_pe_completion_for(
-    FramePeCompletionToken token,
-    std::uint32_t timeout_ms) {
-    if (!initialized_) {
-        throw std::logic_error(
-            "frame-specific PE completion wait used an uninitialized GX backend");
-    }
-
-    const auto deadline = std::chrono::steady_clock::now() +
-        std::chrono::milliseconds(timeout_ms);
-    const GameWaitTimer game_wait{game_wait_qpc_};
-    std::unique_lock<std::mutex> lock(queue_mutex_);
-    for (;;) {
-        if (render_thread_error_ != nullptr) {
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
-        if (frame_pe_completions_.probe_wait(token) ==
-            FramePeWaitState::Complete) {
-            frame_pe_completions_.consume_wait(token);
-            galaxy::timeline::record(galaxy::timeline::Event::TokenConsumed, token.value);
-            return true;
-        }
-        if (stop_render_thread_) {
-            throw std::runtime_error(
-                "render thread stopped before frame-specific PE completion");
-        }
-        if (timeout_ms == 0u ||
-            std::chrono::steady_clock::now() >= deadline) {
-            return false;
-        }
-        (void)queue_space_cv_.wait_until(lock, deadline);
-    }
-}
 
 // A perspective draw in the temporal scene: the clip-space offset that moves
 // the image by the scene jitter in render pixels at this draw's viewport.
@@ -3727,52 +2437,35 @@ void GxBackend::on_scene_2d_begin() {
     ++window_2d_scenes_;
 }
 
-void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fifo_size) {
+void GxBackend::take_attached_stripe_particles(FrameChunk& chunk) {
     if (producer_stripe_particles_.empty()) {
         return;
     }
-    // Marks past this submission move to the next one (one at its end belongs to it, as a record does).
-    std::size_t kept = 0u;
-    for (const StripeParticleMark& mark : producer_stripe_particles_) {
-        if (mark.offset <= fifo_size) {
-            chunk.stripe_particles.push_back(mark);
-        } else {
-            StripeParticleMark rest = mark;
-            rest.offset -= fifo_size;
-            producer_stripe_particles_[kept++] = rest;
-        }
-    }
-    producer_stripe_particles_.resize(kept);
+    chunk.stripe_particles.insert(chunk.stripe_particles.end(), producer_stripe_particles_.begin(),
+                                  producer_stripe_particles_.end());
+    producer_stripe_particles_.clear();
 }
 
-void GxBackend::take_attached_shape_records(FrameChunk& chunk, std::size_t fifo_size) {
+void GxBackend::take_attached_shape_records(FrameChunk& chunk) {
     if (producer_shape_records_.empty()) {
         return;
     }
-    // A record at the submission's end runs before the next one's commands; later ones move to the next submission.
-    std::size_t kept = 0u;
     for (shapes::Record& record : producer_shape_records_) {
-        if (record.offset <= fifo_size) {
-            chunk.shape_records.push_back(std::move(record));
-        } else {
-            record.offset -= fifo_size;
-            producer_shape_records_[kept++] = std::move(record);
-        }
+        chunk.shape_records.push_back(std::move(record));
     }
-    producer_shape_records_.resize(kept);
+    producer_shape_records_.clear();
 }
 
 void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
 }
 
-void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_size) noexcept {
+void GxBackend::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
     chunk.fifo_marker_count = 0;
     chunk.fifo_marker_view_mask = 0;
     chunk.fifo_marker_sky_up_mask = 0;
     for (std::uint8_t i = 0; i < producer_fifo_marker_count_; ++i) {
-        if (producer_fifo_markers_[i].first <= fifo_size &&
-            chunk.fifo_marker_count < chunk.fifo_markers.size()) {
+        if (chunk.fifo_marker_count < chunk.fifo_markers.size()) {
             const std::uint8_t index = chunk.fifo_marker_count++;
             chunk.fifo_markers[index] = producer_fifo_markers_[i];
             chunk.fifo_marker_serials[index] = producer_fifo_marker_serials_[i];
@@ -6299,15 +4992,11 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
 }
 
-void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk, std::size_t fifo_size) {
+void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk) {
     if (!producer_pointer_depth_capture_) return;
-    if (producer_pointer_depth_capture_offset_ <= fifo_size) {
-        chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
-        chunk.pointer_depth_capture_fifo_offset = producer_pointer_depth_capture_offset_;
-        chunk.pointer_depth_in_frame = true;
-    } else {
-        producer_pointer_depth_capture_->publish_complete();
-    }
+    chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
+    chunk.pointer_depth_capture_fifo_offset = producer_pointer_depth_capture_offset_;
+    chunk.pointer_depth_in_frame = true;
     producer_pointer_depth_capture_.reset();
     producer_pointer_depth_capture_offset_ = 0;
 }
@@ -7774,7 +6463,6 @@ void GxBackend::render_thread_main() {
     try {
     for (;;) {
         try {
-            poll_completed_frame_effects();
             poll_completed_pointer_depth_capture();
             poll_async_peek_fields();
         } catch (...) {
@@ -7792,7 +6480,6 @@ void GxBackend::render_thread_main() {
             const RenderConfig cfg = get_render_config();
             idle_present = cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
-            const bool poll_frame_effects = !pending_frame_effects_.empty();
             const bool poll_pointer_depth =
                 static_cast<bool>(pending_pointer_depth_capture_.capture) ||
                 renderer_.any_async_peek_field_pending();
@@ -7833,7 +6520,7 @@ void GxBackend::render_thread_main() {
                     interp_sleep_us(remaining_us);
                     lock.lock();
                 }
-            } else if (idle_present || poll_frame_effects || poll_pointer_depth) {
+            } else if (idle_present || poll_pointer_depth) {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
@@ -7870,14 +6557,10 @@ void GxBackend::render_thread_main() {
             }
             if (frame_queue_.empty()) {
                 if (stop_render_thread_) {
-                    if (pending_frame_effects_.empty() &&
-                        !pending_pointer_depth_capture_.capture) {
-                        break;  // stop requested, queue and PE fences drained
+                    if (!pending_pointer_depth_capture_.capture) {
+                        break;  // stop requested, queue and capture fences drained
                     }
-                    shutdown_fence = pending_frame_effects_.empty() ? 0u :
-                        pending_frame_effects_.back().fence_value;
-                    shutdown_fence = std::max(shutdown_fence,
-                        pending_pointer_depth_capture_.fence_value);
+                    shutdown_fence = pending_pointer_depth_capture_.fence_value;
                 }
             } else {
                 chunk = std::move(frame_queue_.front());
@@ -7898,19 +6581,13 @@ void GxBackend::render_thread_main() {
                 } else if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
-                    galaxy::timeline::record(galaxy::timeline::Event::RenderBegin,
-                                        chunk.pe_completion_token.value,
-                                        chunk.fifo.size());
+                    galaxy::timeline::record(galaxy::timeline::Event::RenderBegin, 0u, 0u);
                     render_chunk_started_ns_ = static_cast<std::uint64_t>(
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::steady_clock::now().time_since_epoch()).count());
                     ++render_chunks_in_flight_;
                     ++render_cpu_reads_in_flight_;
                     chunk.cpu_reads_pending = true;
-                    if (chunk.pe_completion_requires_resolution) {
-                        ++render_fifo_effects_in_flight_;
-                        chunk.fifo_effects_pending = true;
-                    }
                 }
                 have_chunk = true;
             }
@@ -7918,11 +6595,8 @@ void GxBackend::render_thread_main() {
 
         try {
             if (shutdown_fence != 0u) {
-                // Shutdown is not allowed to discard a submitted PE event.
-                // Wait for only the last outstanding effects fence; queue
-                // ordering then proves every earlier token is also complete.
+                // Shutdown finishes the pointer capture in flight.
                 renderer_.wait_for_fence_value(shutdown_fence);
-                poll_completed_frame_effects();
                 poll_completed_pointer_depth_capture();
             } else if (have_chunk) {
                 queue_space_cv_.notify_all();
@@ -7999,11 +6673,6 @@ void GxBackend::render_thread_main() {
                         --render_cpu_reads_in_flight_;
                         chunk.cpu_reads_pending = false;
                     }
-                    if (chunk.fifo_effects_pending &&
-                        render_fifo_effects_in_flight_ != 0u) {
-                        --render_fifo_effects_in_flight_;
-                        chunk.fifo_effects_pending = false;
-                    }
                     --render_chunks_in_flight_;
                 }
             }
@@ -8027,25 +6696,9 @@ void GxBackend::render_thread_main() {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             // Every chunk returns its buffers here. Past kChunkPoolRetainedBuffers a buffer is
             // dropped (one re-allocation later) rather than kept at its peak capacity.
-            if (fifo_pool_.size() < kChunkPoolRetainedBuffers) {
-                fifo_pool_.push_back(std::move(chunk.fifo));
-            }
             if (chunk.dirty_ranges.capacity() != 0u &&
                 dirty_range_pool_.size() < kChunkPoolRetainedBuffers) {
                 dirty_range_pool_.push_back(std::move(chunk.dirty_ranges));
-            }
-            if (!chunk.memory_ranges.empty()) {
-                if (memory_range_pool_.size() < kChunkPoolRetainedBuffers) {
-                    memory_range_pool_.push_back(std::move(chunk.memory_ranges));
-                }
-            }
-            if (chunk.memory_snapshot_active) {
-                // Guest bytes are consumed while command lists are recorded; GPU work references
-                // only upload and default-heap resources, which retire on their own fences.
-                if (memory_snapshot_pool_.size() < kChunkPoolRetainedBuffers) {
-                    memory_snapshot_pool_.push_back(
-                        std::move(chunk.memory_snapshot));
-                }
             }
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
@@ -8292,7 +6945,7 @@ void GxBackend::mark_frame_cpu_reads_done(FrameChunk& chunk) {
     if (!chunk.cpu_reads_pending) {
         return;
     }
-    galaxy::timeline::record(galaxy::timeline::Event::RenderReadsDone, chunk.pe_completion_token.value);
+    galaxy::timeline::record(galaxy::timeline::Event::RenderReadsDone, 0u);
     {
         std::lock_guard<std::mutex> lock(queue_mutex_);
         if (render_cpu_reads_in_flight_ != 0u) {
@@ -8301,157 +6954,6 @@ void GxBackend::mark_frame_cpu_reads_done(FrameChunk& chunk) {
         chunk.cpu_reads_pending = false;
     }
     queue_space_cv_.notify_all();
-}
-
-void GxBackend::mark_frame_fifo_effects_done(FrameChunk& chunk) {
-    if (!chunk.fifo_effects_pending) {
-        return;
-    }
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        if (!chunk.pe_completion_token) {
-            throw std::logic_error(
-                "GX frame FIFO effects completed without a frame token");
-        }
-        frame_pe_completions_.resolve_on_submission(
-            chunk.pe_completion_token);
-        if (render_fifo_effects_in_flight_ != 0u) {
-            --render_fifo_effects_in_flight_;
-        }
-        chunk.fifo_effects_pending = false;
-    }
-    queue_space_cv_.notify_all();
-}
-
-void GxBackend::queue_frame_fifo_effects_fence(
-    FrameChunk& chunk,
-    std::uint64_t fence_value) {
-    if (!chunk.fifo_effects_pending) {
-        return;
-    }
-    if (chunk.pe_events.empty()) {
-        // No PE event in this capture: its token resolves at this submission boundary (after close,
-        // submit and signal; before any present). Later work is queue-ordered, so no GPU-idle wait.
-        mark_frame_fifo_effects_done(chunk);
-        return;
-    }
-    if (get_gx_timing_config().pe_events_at_consumption) {
-        // The capture has been consumed: parsed, every texture decode joined
-        // and its command list submitted in queue order. Raise its PE events
-        // now, in FIFO order, then resolve the token at this submission
-        // boundary exactly like an event-free capture.
-        for (const PeEvent& event : chunk.pe_events) {
-            deliver_pe_event(chunk.services, event);
-            galaxy::timeline::record(
-                galaxy::timeline::Event::PeDelivered,
-                event.kind == PeEvent::Kind::Finish ? 1u : 2u, event.token);
-        }
-        chunk.pe_events.clear();
-        mark_frame_fifo_effects_done(chunk);
-        return;
-    }
-    PendingFrameEffects pending;
-    pending.pe_completion_token = chunk.pe_completion_token;
-    pending.fence_value = fence_value;
-    pending.diagnostic_fence_bound_ns =
-        cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    pending.services = chunk.services;
-    pending.pe_events = std::move(chunk.pe_events);
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        if (!chunk.pe_completion_token) {
-            throw std::logic_error(
-                "GX frame GPU effects bound without a frame token");
-        }
-        pending_frame_effects_.push_back(std::move(pending));
-        try {
-            frame_pe_completions_.resolve_to_fence(
-                chunk.pe_completion_token,
-                fence_value);
-        } catch (...) {
-            pending_frame_effects_.pop_back();
-            throw;
-        }
-        chunk.fifo_effects_pending = false;
-    }
-    queue_cv_.notify_one();
-}
-
-void GxBackend::poll_completed_frame_effects() {
-    std::vector<PendingFrameEffects> ready;
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        if (pending_frame_effects_.empty()) {
-            return;
-        }
-        const std::uint64_t completed = renderer_.completed_fence_value();
-        const std::uint64_t fence_observed_ns =
-            cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-        while (!pending_frame_effects_.empty() &&
-               pending_frame_effects_.front().fence_value <= completed) {
-            pending_frame_effects_.front().diagnostic_fence_observed_ns =
-                fence_observed_ns;
-            ready.push_back(std::move(pending_frame_effects_.front()));
-            pending_frame_effects_.pop_front();
-        }
-    }
-    for (const PendingFrameEffects& frame : ready) {
-        if (cadence_diagnostics_ != nullptr &&
-            frame.diagnostic_fence_bound_ns != 0u) {
-            cadence_diagnostics_->record_phase(
-                cadence::TimingPhase::PeFenceWait,
-                frame.diagnostic_fence_observed_ns >=
-                        frame.diagnostic_fence_bound_ns
-                    ? frame.diagnostic_fence_observed_ns -
-                          frame.diagnostic_fence_bound_ns
-                    : 0u);
-        }
-        galaxy::timeline::record(galaxy::timeline::Event::FenceObserved, frame.fence_value,
-                                 frame.pe_completion_token.value);
-        for (const PeEvent& event : frame.pe_events) {
-            deliver_pe_event(frame.services, event);
-            galaxy::timeline::record(galaxy::timeline::Event::PeDelivered,
-                                 event.kind == PeEvent::Kind::Finish ? 1u : 2u,
-                                 event.token);
-        }
-        {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            (void)frame_pe_completions_.observe_completed_fence(
-                frame.fence_value);
-            if (render_fifo_effects_in_flight_ != 0u) {
-                --render_fifo_effects_in_flight_;
-            }
-        }
-        queue_space_cv_.notify_all();
-    }
-}
-
-void GxBackend::deliver_pe_event(
-    const GxServices* services,
-    const PeEvent& event) {
-    if (services == nullptr) {
-        throw std::runtime_error(
-            "GX PE event reached completion without native services");
-    }
-    switch (event.kind) {
-    case PeEvent::Kind::Finish:
-        if (services->gx_pe_finish == nullptr) {
-            throw std::runtime_error(
-                "GX PE_FINISH reached completion without gx_pe_finish");
-        }
-        services->gx_pe_finish(services->user);
-        break;
-    case PeEvent::Kind::Token:
-        if (services->gx_pe_token == nullptr) {
-            throw std::runtime_error(
-                "GX PE_TOKEN reached completion without gx_pe_token");
-        }
-        services->gx_pe_token(
-            services->user,
-            event.token,
-            event.interrupt);
-        break;
-    }
 }
 
 void GxBackend::present_vi_black(bool in_frame) {
@@ -8577,8 +7079,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     render_safety_surround_=chunk.safety_surround;
     render_movie_frame_=chunk.movie_frame;
     const bool trace_gx_stalls = trace_gx_stalls_enabled();
-    const bool defer_pe_events_to_gpu_fence =
-        get_gx_timing_config().pe_events_gpu_fence;
     // Per-draw clock reads run on stall-traced and sampled frames only.
     frame_time_sample_ = frame_gx_timing_sample_enabled(frame_index_);
     frame_time_detail_ = trace_gx_stalls || frame_time_sample_;
@@ -8647,13 +7147,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_curved_split_draws_ = 0;
     frame_clear_quads_ = 0;
     pending_draw_batch_ = {};
-    frame_fifo_profile_.reset();
-    const std::byte* fifo_data =
-        chunk.fifo.empty() ? nullptr : chunk.fifo.data();
-    const std::size_t fifo_size = chunk.fifo.size();
-    GuestMemory* memory = chunk.memory_snapshot_active
-        ? &chunk.memory_snapshot.memory
-        : chunk.memory;
+    GuestMemory* memory = chunk.memory;
     const GxServices* services = chunk.services;
     coalesce_dirty_ranges(chunk.dirty_ranges);
     chunk.dirty_range_count = chunk.dirty_ranges.size();
@@ -8860,7 +7354,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
     std::size_t dirty_texture_evictions = 0u;
-    std::unique_lock<std::mutex> parser_lock;
     {
         const cadence::ScopedPhaseTimer cache_invalidation_timer{
             cadence_diagnostics_,
@@ -8870,11 +7363,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 cadence_diagnostics_, cadence::TimingPhase::RenderTextureInvalidation};
             dirty_texture_evictions =
                 invalidate_dirty_texture_ranges(chunk.dirty_ranges);
-        }
-        {
-            const cadence::ScopedPhaseTimer timer{
-                cadence_diagnostics_, cadence::TimingPhase::RenderParserLockWait};
-            parser_lock = std::unique_lock<std::mutex>(parser_cache_mutex_);
         }
     }
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
@@ -8900,175 +7388,79 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         renderer_.clear_efb(0u, 0u, 0x00FFFFFFu, true, true, true);
     }
 
-    parser_.set_profile(
-        trace_gx_stalls ? &frame_fifo_profile_ : nullptr);
     const auto parse_start = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
-    if (fifo_size > 0 || !chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
+    if (!chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
         !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
-        const bool saved_pe_callbacks_enabled = frame_pe_callbacks_enabled_;
-        std::vector<PeEvent>* const saved_pe_events = frame_pe_events_;
-        frame_pe_callbacks_enabled_ = !chunk.pe_events_scanned_on_sim_thread;
-        frame_pe_events_ =
-            defer_pe_events_to_gpu_fence ? &chunk.pe_events : nullptr;
         frame_memory_   = memory;
-        frame_memory_regions_disjoint_sorted_ = chunk.memory_snapshot_active &&
-            chunk.memory_snapshot.sealed &&
-            memory == &chunk.memory_snapshot.memory &&
-            chunk.memory_snapshot.regions_disjoint_sorted;
         frame_services_ = services;
-        // A sealed snapshot keeps texture bytes unchanged until this chunk is submitted, so first-use
-        // decodes may run on workers. With live-memory reads a worker reads the bytes within the same
-        // window the render thread would.
-        texture_cache_.set_async_decode_allowed(
-            ((chunk.memory_snapshot_active && chunk.memory_snapshot.sealed &&
-              memory == &chunk.memory_snapshot.memory) ||
-             (!chunk.memory_snapshot_active &&
-              get_gx_timing_config().render_live_memory_reads)));
-
+        // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
+        // on workers.
+        texture_cache_.set_async_decode_allowed(true);
         try {
-            // An in-frame pointer depth field splits the run at the marked
-            // offset: everything before it is drawn, the field is recorded
-            // into this frame's command list, then the rest runs. A command
-            // straddling the marker simply finishes in the second run.
-            // Scene markers split the run the same way, in stream order; a
-            // marker never lands inside a command (the producer flushes the
-            // gather pipe at the guest call boundary).
+            // The chunk's records, scene markers and pointer capture in the order the game made them.
             const bool capture_in_frame =
                 chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
-            const auto run_stream = [&](std::span<const std::byte> stream,
-                                        std::size_t prefix) -> std::size_t {
-                std::vector<StreamSplit>& splits = stream_splits_;
-                splits.clear();
-                if (capture_in_frame) {
-                    splits.push_back({prefix + chunk.pointer_depth_capture_fifo_offset, 0u, -1, -1});
-                }
-                for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
-                    splits.push_back({prefix + chunk.fifo_markers[i].first, chunk.fifo_marker_serials[i],
-                                      static_cast<int>(chunk.fifo_markers[i].second), static_cast<int>(i)});
-                }
-                for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
-                    splits.push_back({prefix + chunk.shape_records[i].offset, chunk.shape_records[i].serial,
-                                      kSplitShapeRecord, static_cast<int>(i)});
-                }
-                // In stream order; at one offset in the order the game made them (a marker before the records
-                // made after it).
-                std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
-                    return a.offset != b.offset ? a.offset < b.offset
-                         : a.serial != b.serial ? a.serial < b.serial
-                                                : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
-                });
-                std::size_t consumed = 0;
-                for (std::size_t i = 0; i < splits.size(); ++i) {
-                    const StreamSplit split = splits[i];
-                    if (split.offset > stream.size()) {
-                        continue;
-                    }
-                    if (split.offset > consumed) {
-                        parse_span_base_ = consumed;
-                        parse_span_prefix_ = prefix;
-                        consumed += parser_.run_available(
-                            stream.subspan(consumed, split.offset - consumed),
-                            memory, *this, state_,
-                            frame_memory_regions_disjoint_sorted_);
-                    }
-                    if (split.marker == kSplitShapeRecord) {
-                        on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
-                    } else if (split.marker < 0) {
-                        record_pointer_depth_capture_in_frame(chunk);
-                    } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
-                        on_scene_2d_begin();
-                    } else if (split.marker != static_cast<int>(FifoMarker::Scene2DEnd)) {
-                        const auto index = static_cast<std::size_t>(split.view);
-                        const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
-                        on_fifo_marker(static_cast<FifoMarker>(split.marker),
-                            split.view >= 0 &&
-                                    (chunk.fifo_marker_view_mask & (1u << index)) != 0u
-                                ? &chunk.fifo_marker_views[index]
-                                : nullptr,
-                            sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up,
-                            split.view >= 0 ? &chunk.fifo_marker_stages[index] : nullptr);
-                    }
-                }
-                if (consumed < stream.size()) {
-                    parse_span_base_ = consumed;
-                    parse_span_prefix_ = prefix;
-                    consumed += parser_.run_available(
-                        stream.subspan(consumed), memory, *this, state_,
-                        frame_memory_regions_disjoint_sorted_);
-                }
-                return consumed;
-            };
+            std::vector<StreamSplit>& splits = stream_splits_;
+            splits.clear();
+            if (capture_in_frame) {
+                splits.push_back({chunk.pointer_depth_capture_fifo_offset, 0u, -1, -1});
+            }
+            for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
+                splits.push_back({chunk.fifo_markers[i].first, chunk.fifo_marker_serials[i],
+                                  static_cast<int>(chunk.fifo_markers[i].second), static_cast<int>(i)});
+            }
+            for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
+                splits.push_back({chunk.shape_records[i].offset, chunk.shape_records[i].serial,
+                                  kSplitShapeRecord, static_cast<int>(i)});
+            }
+            // At one place in the order the game made them (a marker before the records made after it).
+            std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
+                return a.offset != b.offset ? a.offset < b.offset
+                     : a.serial != b.serial ? a.serial < b.serial
+                                            : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
+            });
             parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)
                                                : std::span<const StripeParticleMark>{};
             parse_stripe_next_ = 0u;
-            if (pending_fifo_.empty()) {
-                const std::span<const std::byte> fifo(fifo_data, fifo_size);
-                const std::size_t consumed = run_stream(fifo, 0u);
-                if (consumed < fifo.size()) {
-                    pending_fifo_.assign(
-                        fifo.begin() + static_cast<std::ptrdiff_t>(consumed),
-                        fifo.end());
-                }
-            } else {
-                const std::size_t pending_prefix = pending_fifo_.size();
-                if (fifo_data != nullptr && fifo_size > 0) {
-                    pending_fifo_.insert(
-                        pending_fifo_.end(), fifo_data, fifo_data + fifo_size);
-                }
-                const std::size_t consumed =
-                    run_stream(pending_fifo_, pending_prefix);
-                if (consumed == pending_fifo_.size()) {
-                    pending_fifo_.clear();
-                } else if (consumed > 0) {
-                    pending_fifo_.erase(
-                        pending_fifo_.begin(),
-                        pending_fifo_.begin() +
-                            static_cast<std::ptrdiff_t>(consumed));
+            for (std::size_t i = 0; i < splits.size(); ++i) {
+                const StreamSplit split = splits[i];
+                if (split.marker == kSplitShapeRecord) {
+                    on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
+                } else if (split.marker < 0) {
+                    record_pointer_depth_capture_in_frame(chunk);
+                } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
+                    on_scene_2d_begin();
+                } else if (split.marker != static_cast<int>(FifoMarker::Scene2DEnd)) {
+                    const auto index = static_cast<std::size_t>(split.view);
+                    const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
+                    on_fifo_marker(static_cast<FifoMarker>(split.marker),
+                        split.view >= 0 &&
+                                (chunk.fifo_marker_view_mask & (1u << index)) != 0u
+                            ? &chunk.fifo_marker_views[index]
+                            : nullptr,
+                        sky_up ? chunk.fifo_marker_sky_up[index] : 0u, sky_up,
+                        split.view >= 0 ? &chunk.fifo_marker_stages[index] : nullptr);
                 }
             }
             parse_stripes_ = {};
             if (!chunk.stripe_particles.empty()) [[unlikely]] {
                 note_stripe_particles(chunk);
             }
-        } catch (const GxFatalError& e) {
-            texture_cache_.set_async_decode_allowed(false);
-            texture_cache_.finish_pending_decodes_noexcept();
-            parser_.set_profile(nullptr);
-            frame_memory_ = nullptr;
-            frame_memory_regions_disjoint_sorted_ = false;
-            frame_services_ = nullptr;
-            frame_pe_events_ = saved_pe_events;
-            frame_pe_callbacks_enabled_ = saved_pe_callbacks_enabled;
-            std::cerr << "[GxBackend] fatal FIFO error: " << e.what()
-                      << " at offset 0x" << std::hex << e.fifo_offset()
-                      << " opcode=0x" << static_cast<unsigned>(e.opcode())
-                      << std::dec << '\n';
-            throw;
         } catch (...) {
             texture_cache_.set_async_decode_allowed(false);
             texture_cache_.finish_pending_decodes_noexcept();
-            parser_.set_profile(nullptr);
             frame_memory_ = nullptr;
-            frame_memory_regions_disjoint_sorted_ = false;
             frame_services_ = nullptr;
-            frame_pe_events_ = saved_pe_events;
-            frame_pe_callbacks_enabled_ = saved_pe_callbacks_enabled;
             throw;
         }
-
         texture_cache_.set_async_decode_allowed(false);
         frame_memory_   = nullptr;
-        frame_memory_regions_disjoint_sorted_ = false;
         frame_services_ = nullptr;
-        frame_pe_events_ = saved_pe_events;
-        frame_pe_callbacks_enabled_ = saved_pe_callbacks_enabled;
     }
-    parser_.set_profile(nullptr);
-    parser_lock.unlock();
     if (cadence_diagnostics_ != nullptr) {
         const std::uint64_t diagnostic_parse_end_ns =
             cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
@@ -9216,16 +7608,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         present_swap_chain,
         [](void* opaque, std::uint64_t fence_value) {
             auto& context = *static_cast<SubmissionContext*>(opaque);
-            galaxy::timeline::record(
-                galaxy::timeline::Event::RenderSubmitted,
-                context.chunk->pe_completion_token.value,
-                fence_value |
-                    (context.chunk->pe_events.empty() ? 0u : (1ull << 63u)));
-            context.backend->queue_frame_fifo_effects_fence(
-                *context.chunk, fence_value);
-            // Deliver only events whose actual signaled fence is complete.
-            // One nonblocking poll can retire ready work before Present waits.
-            context.backend->poll_completed_frame_effects();
+            (void)context;
+            galaxy::timeline::record(galaxy::timeline::Event::RenderSubmitted, 0u, fence_value);
         },
         &submission_context);
     if (presents && present_swap_chain &&
@@ -9307,7 +7691,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " sample=" << (frame_time_sample_ ? 1 : 0)
                   << " profile=" << (trace_gx_stalls ? 1 : 0)
                   << " detail=" << (frame_time_detail_ ? 1 : 0)
-                  << " fifo-bytes=" << fifo_size
                   << " total-us=" << total_us
                   << " frame-interval-us=" << frame_interval_us
                   << " thread-cpu-us=" << frame_cpu_interval.value / 10u
@@ -9329,16 +7712,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " begin-reset-us="
                   << renderer_.last_begin_reset_us()
                   << " producer-wait-us=" << producer_wait_us
-                  << " dependency-scan-us="
-                  << (chunk.dependency_scan_ns / 1000u)
-                  << " dependency-cache-hit="
-                  << (chunk.dependency_cache_hit ? 1 : 0)
-                  << " snapshot-us=" << (chunk.snapshot_ns / 1000u)
-                  << " snapshot-bytes=" << chunk.snapshot_bytes
-                  << " snapshot-ranges=" << chunk.snapshot_range_count
-                  << " snapshot-range-bytes=" << chunk.snapshot_range_bytes
-                  << " snapshot-strict="
-                  << (chunk.memory_snapshot_strict ? 1 : 0)
                   << " dirty-ranges=" << chunk.dirty_range_count
                   << " dirty-bytes=" << chunk.dirty_bytes
                   << " dirty-tex-evictions=" << dirty_texture_evictions
@@ -9357,7 +7730,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << frame_texture_binding_cache_prunes_
                   << " nontri-skips=" << frame_nontri_skips_
                   << " scissor-skips=" << frame_scissor_skips_
-                  << " pending-fifo=" << pending_fifo_.size()
                   << " flush-us=" << frame_flush_us_
                   << " flush-pso-us=" << frame_flush_pso_us_
                   << " flush-pso-cycles=" << frame_flush_pso_cycles_
@@ -9434,35 +7806,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << renderer_.efb_copy_dest_bytes()
                   << " efb-copy-dest-budget-bytes="
                   << renderer_.efb_copy_dest_budget_bytes()
-                  << " fifo-commands=" << frame_fifo_profile_.command_count
-                  << " fifo-command-us=" << frame_fifo_profile_.command_us
-                  << " fifo-nop-count=" << frame_fifo_profile_.nop_count
-                  << " fifo-nop-us=" << frame_fifo_profile_.nop_us
-                  << " fifo-cp-count=" << frame_fifo_profile_.cp_count
-                  << " fifo-cp-us=" << frame_fifo_profile_.cp_us
-                  << " fifo-xf-count=" << frame_fifo_profile_.xf_count
-                  << " fifo-xf-us=" << frame_fifo_profile_.xf_us
-                  << " fifo-metrics-count="
-                  << frame_fifo_profile_.metrics_count
-                  << " fifo-metrics-us=" << frame_fifo_profile_.metrics_us
-                  << " fifo-inval-vtx-count="
-                  << frame_fifo_profile_.inval_vtx_count
-                  << " fifo-inval-vtx-us="
-                  << frame_fifo_profile_.inval_vtx_us
-                  << " fifo-bp-count=" << frame_fifo_profile_.bp_count
-                  << " fifo-bp-us=" << frame_fifo_profile_.bp_us
-                  << " fifo-draw-count=" << frame_fifo_profile_.draw_count
-                  << " fifo-draw-us=" << frame_fifo_profile_.draw_us
-                  << " fifo-draw-probe-us="
-                  << frame_fifo_profile_.draw_payload_probe_us
-                  << " fifo-draw-vertices="
-                  << frame_fifo_profile_.draw_vertices
-                  << " fifo-draw-payload-bytes="
-                  << frame_fifo_profile_.draw_payload_bytes
-                  << " fifo-hw-noop-count="
-                  << frame_fifo_profile_.hw_noop_count
-                  << " fifo-hw-noop-us="
-                  << frame_fifo_profile_.hw_noop_us
                   << '\n';
             std::cerr << timing_message.str();
         }
@@ -9785,88 +8128,6 @@ void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs,
 }
 
 }  // namespace
-
-bool GxBackend::draw_clear_quad(std::uint8_t vtxfmt, FifoCursor& cursor) {
-    // The quad as the game draws it: the compare always, written, no blending or logic op, depth from a Z24X8
-    // texture (replace); a 16-bit depth EFB stores another depth.
-    const ZMode zm = state_.z_mode();
-    const BlendMode bm = state_.blend_mode();
-    const std::uint32_t zenv1 = state_.bp(bp::kTevZEnv1);
-    const auto pixel_format = static_cast<std::uint8_t>(state_.pe_control().pixel_format);
-    if (!zm.test_enable || zm.func != CompareFunc::Always || !zm.update_enable || bm.blend_enable ||
-        bm.logic_op_enable || ((zenv1 >> 2u) & 0x3u) != 2u || (zenv1 & 0x3u) != 2u || pixel_format > 1u) {
-        return false;
-    }
-    cursor.require(2);
-    if (((static_cast<std::uint32_t>(cursor.data[cursor.offset]) << 8u) |
-         static_cast<std::uint32_t>(cursor.data[cursor.offset + 1u])) != 4u) {
-        return false;
-    }
-    // It fills its viewport: the scissor's rectangle, where the viewport covers it.
-    const EfbScissor efb_sc = state_.efb_scissor();
-    const ScissorRect sc = efb_sc.rect;
-    const auto viewport = [&](std::uint16_t i) {
-        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
-    };
-    const float left = viewport(3u) - 342.0f - static_cast<float>(efb_sc.offset.x) - viewport(0u);
-    const float top = viewport(4u) - 342.0f - static_cast<float>(efb_sc.offset.y) + viewport(1u);
-    const float right = left + 2.0f * viewport(0u);
-    const float bottom = top - 2.0f * viewport(1u);
-    if (sc.x1 < sc.x0 || sc.y1 < sc.y0 || sc.x0 < 0 || sc.y0 < 0 || left > static_cast<float>(sc.x0) ||
-        top > static_cast<float>(sc.y0) || right < static_cast<float>(sc.x1 + 1) ||
-        bottom < static_cast<float>(sc.y1 + 1)) {
-        return false;
-    }
-    flush_pending_draw_batch();
-    // The depth the pixel shader writes (zout.depth, from the texture plus the Z texture's bias), as a clear.
-    const std::uint32_t z24 = (clear_quad_z24_ + (state_.bp(bp::kTevZEnv0) & 0xFFFFFFu)) & 0xFFFFFFu;
-    renderer_.clear_efb(0u, 0u, z24, false, false, true, static_cast<unsigned>(sc.x0), static_cast<unsigned>(sc.y0),
-                        static_cast<unsigned>(sc.x1 - sc.x0 + 1), static_cast<unsigned>(sc.y1 - sc.y0 + 1),
-                        pixel_format);
-    ++frame_clear_quads_;
-    const bool colour = bm.color_update || (bm.alpha_update && pixel_format == 1u);
-    if (colour && clear_quad_has_colour_ && !motion_scene_ && !lit_translucent_ && !lit_late_) {
-        // A constant colour without fog or dither: the 8-bit value the quad's pixel shader stores, as a clear. Its
-        // alpha (an EFB with alpha) is 6-bit: the TEV's (one writes zero) or the destination alpha constant.
-        const PixelShaderKey key = build_pixel_shader_key(state_, renderer_.efb_scale());
-        if (key.num_tev_stages == 1u && key.fog_type == 0u && (key.output_flags & 0x08u) == 0u) {
-            const std::uint32_t c = clear_quad_colour_;
-            std::uint32_t alpha = c & 0xFFu;
-            if (pixel_format == 1u) {
-                alpha = (key.flags & 0x04u) != 0u ? bm.const_alpha : (alpha == 1u ? 0u : alpha);
-                alpha = ((alpha >> 2u) * 255u + 31u) / 63u;
-            }
-            const std::uint32_t ar = (alpha << 8u) | (c >> 24u);
-            const std::uint32_t gb = c >> 8u & 0xFFFFu;
-            // The whole EFB as a whole-target clear (a fast clear where the GPU has one).
-            const bool whole = sc.x0 == 0 && sc.y0 == 0 && static_cast<unsigned>(sc.x1) + 1u >= kEfbWidth &&
-                               static_cast<unsigned>(sc.y1) + 1u >= kEfbHeight;
-            renderer_.clear_efb(ar, gb, 0u, bm.color_update, bm.alpha_update && pixel_format == 1u, false,
-                                whole ? 0u : static_cast<unsigned>(sc.x0), whole ? 0u : static_cast<unsigned>(sc.y0),
-                                whole ? 0u : static_cast<unsigned>(sc.x1 - sc.x0 + 1),
-                                whole ? 0u : static_cast<unsigned>(sc.y1 - sc.y0 + 1),
-                                static_cast<std::uint8_t>(pixel_format | kEfbClearExact));
-            const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-            const std::uint16_t count = cursor.read_u16();
-            cursor.take(layout.source_size * static_cast<std::size_t>(count));
-            return true;
-        }
-    }
-    if (colour) {
-        // Its colour: the same quad without the Z texture or the depth compare and write.
-        const std::uint32_t zmode = state_.bp(bp::kZMode);
-        state_.load_bp((static_cast<std::uint32_t>(bp::kTevZEnv1) << 24u) | (zenv1 & ~0xCu & 0xFFFFFFu));
-        state_.load_bp(static_cast<std::uint32_t>(bp::kZMode) << 24u);
-        on_draw(PrimitiveClass::Quads, vtxfmt, cursor);
-        state_.load_bp((static_cast<std::uint32_t>(bp::kTevZEnv1) << 24u) | (zenv1 & 0xFFFFFFu));
-        state_.load_bp((static_cast<std::uint32_t>(bp::kZMode) << 24u) | (zmode & 0xFFFFFFu));
-    } else {
-        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-        const std::uint16_t count = cursor.read_u16();
-        cursor.take(layout.source_size * static_cast<std::size_t>(count));
-    }
-    return true;
-}
 
 std::uint32_t GxBackend::split_curved_triangles(std::span<const GxVertexOut> vertices,
                                                 std::span<const std::uint16_t> triangles,
@@ -11359,13 +9620,6 @@ const GxBackend::VertexLayoutCacheEntry& GxBackend::cached_vertex_layout(
     return entry;
 }
 
-std::size_t GxBackend::draw_payload_size(
-    std::uint8_t vtxfmt,
-    std::uint16_t vertex_count) const {
-    return cached_vertex_layout(vtxfmt).source_size *
-           static_cast<std::size_t>(vertex_count);
-}
-
 void GxBackend::on_shape_record(const shapes::Record& record) {
     switch (record.kind) {
     case shapes::Record::Kind::Array:
@@ -11446,7 +9700,7 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
 }
 
 void GxBackend::apply_record_material(const material::Material& m) {
-    material::apply(m, state_, this);
+    material::apply(m, state_, [](void* backend) { static_cast<GxBackend*>(backend)->on_tlut_load(); }, this);
     // The material wrote its coordinate scales.
     scales_from_textures_ = false;
 }
@@ -11799,267 +10053,6 @@ void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void GxBackend::on_draw(
-    PrimitiveClass primitive,
-    std::uint8_t vtxfmt,
-    FifoCursor& cursor)
-{
-    display_copy_on_output_ = false;
-    if (cached_draw_run_active_) {
-        on_cached_draw_run_draw(primitive, vtxfmt, cursor);
-        return;
-    }
-    if (std::exchange(clear_quad_pending_, false) && clear_quads_ && primitive == PrimitiveClass::Quads &&
-        draw_clear_quad(vtxfmt, cursor)) {
-        return;
-    }
-
-    const bool time_detail = frame_time_detail_;
-    gpu::Topology topology{};
-    gpu::TopologyType topology_type{};
-    gx_topology_for_primitive(primitive, topology, topology_type);
-
-    const EfbScissor efb_sc = state_.efb_scissor();
-    const ScissorRect sc = efb_sc.rect;
-    const bool scissor_reject =
-        sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
-        sc.x1 < 0 || sc.y1 < 0 ||
-        sc.x0 >= static_cast<std::int32_t>(kEfbWidth) ||
-        sc.y0 >= static_cast<std::int32_t>(kEfbHeight);
-    const bool cull_reject =
-        cull_all_suppresses_primitive(state_.gen_mode().cull, primitive);
-    if (cull_reject || scissor_reject) {
-        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-        const std::uint16_t vertex_count = cursor.read_u16();
-        cursor.take(
-            layout.source_size * static_cast<std::size_t>(vertex_count));
-        ++frame_scissor_skips_;
-        return;
-    }
-
-    cursor.require(2);
-    const std::uint16_t source_vertex_count =
-        static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(cursor.data[cursor.offset]) << 8) |
-            static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
-    // The FIFO position of the vertex data (top-level stream draws only:
-    // display-list cursors address list memory).
-    const bool stream_draw = cursor.recover_truncation && cursor.base_offset == 0u;
-    const std::size_t vertex_stream_offset = parse_span_base_ + cursor.offset + 2u;
-
-    gpu::Pipeline* pso = nullptr;
-    {
-        ScopedFlushTiming flush_timing{
-            frame_flush_timed_calls_,
-            frame_flush_total_us_,
-            frame_flush_timed_samples_};
-        pso = flush_draw_state(topology_type, vtxfmt);
-    }
-    if (pso == nullptr) {
-        flush_pending_draw_batch();
-        // No pipeline ready: the draw is skipped, but its vertex data is still
-        // consumed so the cursor stays at a command boundary.
-        ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
-        const auto vertex_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-        vertex_loader_.load_with_layout(
-            cursor, primitive, state_, layout.desc,
-            layout.source_size, frame_memory_, renderer_.vertex_ring(),
-            renderer_.index_ring());
-        if (time_detail) {
-            frame_vertex_load_us_ +=
-                elapsed_us(vertex_start, std::chrono::steady_clock::now());
-        }
-        return;
-    }
-
-    const gpu::Rect scissor_rect = gpu::rect(
-        sc.x0 < 0 ? 0 : sc.x0, sc.y0 < 0 ? 0 : sc.y0, sc.x1 + 1, sc.y1 + 1);
-
-    DrawCall state_call{};
-    state_call.pipeline       = pso;
-    state_call.vs_constants   = current_vs_constants_;
-    state_call.ps_constants   = current_ps_constants_;
-    state_call.texture_table  = current_texture_table_;
-    state_call.sampler_table  = (current_sampler_table_.ptr != 0)
-        ? current_sampler_table_
-        : renderer_.default_sampler_table();
-    state_call.matrix_palette = draw_matrix_palette_;
-    state_call.aux_target     = current_pipeline_aux_;
-    state_call.replay_record  = current_replay_record_;
-    state_call.ps_record      = current_ps_record_;
-    state_call.topology       = draw_topology(topology);
-    state_call.scissor        = scissor_rect;
-    for (unsigned i = 0; i < 6; ++i) {
-        state_call.xf_viewport[i] = std::bit_cast<float>(
-            state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
-    }
-    // Viewport origin in EFB pixels: screen position minus the scissor offset.
-    state_call.xf_viewport[3] -= static_cast<float>(efb_sc.offset.x);
-    state_call.xf_viewport[4] -= static_cast<float>(efb_sc.offset.y);
-    state_call.has_viewport =
-        state_call.xf_viewport[0] > 0.0f &&
-        state_call.xf_viewport[1] < 0.0f;
-
-    const bool primitive_indexed =
-        primitive != PrimitiveClass::Triangles;
-    bool append_to_pending =
-        pending_draw_batch_.active && !pending_draw_batch_.resident &&
-        draw_calls_batch_compatible(
-            pending_draw_batch_.call,
-            state_call,
-            pending_draw_batch_.indexed,
-            primitive_indexed);
-    if (append_to_pending && !primitive_indexed &&
-        primitive == PrimitiveClass::Triangles &&
-        (pending_draw_batch_.vertex_count % 3u != 0u || source_vertex_count % 3u != 0u)) {
-        append_to_pending = false;
-    }
-    if (append_to_pending && primitive_indexed &&
-        pending_draw_batch_.vertex_count +
-            static_cast<std::uint32_t>(source_vertex_count) >
-            std::numeric_limits<std::uint16_t>::max()) {
-        flush_pending_draw_batch();
-        append_to_pending = false;
-    }
-    if (pending_draw_batch_.active && !append_to_pending) {
-        flush_pending_draw_batch();
-    }
-
-    const auto vertex_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-    const LoadedPrimitive prim = vertex_loader_.load_with_layout(
-        cursor, primitive, state_, layout.desc, layout.source_size,
-        frame_memory_, renderer_.vertex_ring(), renderer_.index_ring(),
-        append_to_pending && primitive_indexed
-            ? pending_draw_batch_.base_vertex
-            : 0u,
-        append_to_pending && primitive_indexed);
-    if (time_detail) {
-        frame_vertex_load_us_ +=
-            elapsed_us(vertex_start, std::chrono::steady_clock::now());
-    }
-
-    if (prim.index_count == 0) {
-        if (pending_draw_batch_.active) {
-            flush_pending_draw_batch();
-        }
-        return;
-    }
-    ++stat_draws_issued_;
-    ++frame_draws_issued_;
-    // Stripe particles drawn by this primitive: each mark is the FIFO position
-    // of a particle's two vertices.
-    draw_stripe_vertices_.clear();
-    if (stream_draw && parse_stripe_next_ < parse_stripes_.size() && vertex_stream_offset >= parse_span_prefix_)
-        [[unlikely]] {
-        const std::size_t start = vertex_stream_offset - parse_span_prefix_;
-        const std::size_t end = start + layout.source_size * static_cast<std::size_t>(source_vertex_count);
-        const std::uint32_t base = append_to_pending ? pending_draw_batch_.vertex_count : 0u;
-        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < start) {
-            ++parse_stripe_next_;
-        }
-        while (parse_stripe_next_ < parse_stripes_.size() && parse_stripes_[parse_stripe_next_].offset < end &&
-               layout.source_size != 0u) {
-            const StripeParticleMark& mark = parse_stripes_[parse_stripe_next_++];
-            const auto local = static_cast<std::uint32_t>((mark.offset - start) / layout.source_size);
-            for (std::uint8_t side = 0; side < 2u && local + side < prim.vertex_count; ++side) {
-                draw_stripe_vertices_.push_back({base + local + side, mark.particle, mark.age_lifetime, mark.strip,
-                                                 side});
-            }
-        }
-    }
-
-
-    // Vertex and index views at the primitive's offsets in the (persistently mapped) rings.
-    const gpu::VertexView vbv = gpu::vertex_view(
-        renderer_.vertex_ring().gpu_base() + prim.vertex_byte_offset,
-        prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
-
-    gpu::IndexView ibv{};
-    if (prim.indexed) {
-        ibv = gpu::index_view(
-            renderer_.index_ring().gpu_base() + static_cast<std::size_t>(prim.first_index) * sizeof(std::uint16_t),
-            prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
-    }
-
-    DrawCall call = state_call;
-    call.vertex_view    = vbv;
-    call.index_view     = ibv;
-    call.index_count    = prim.index_count;
-
-
-    const std::size_t vertex_byte_end =
-        prim.vertex_byte_offset +
-        static_cast<std::size_t>(prim.vertex_count) * sizeof(GxVertexOut);
-    const bool compatible_after_load =
-        pending_draw_batch_.active &&
-        (prim.indexed || primitive != PrimitiveClass::Triangles ||
-            (pending_draw_batch_.vertex_count % 3u == 0u && prim.vertex_count % 3u == 0u)) &&
-        draw_calls_batch_compatible(
-            pending_draw_batch_.call,
-            call,
-            pending_draw_batch_.indexed,
-            prim.indexed);
-    if (append_to_pending && !compatible_after_load) {
-        throw GxFatalError(
-            "GxBackend: draw batch compatibility changed after index rebase",
-            cursor.command_offset,
-            0);
-    }
-    if (compatible_after_load) {
-        const bool vertex_contiguous =
-            prim.vertex_byte_offset == pending_draw_batch_.vertex_byte_end;
-        const bool index_contiguous =
-            !prim.indexed ||
-            prim.first_index ==
-                pending_draw_batch_.first_index +
-                pending_draw_batch_.index_count;
-        if (!vertex_contiguous || !index_contiguous) {
-            throw GxFatalError(
-                "GxBackend: draw batch upload rings were not contiguous",
-                cursor.command_offset,
-                0);
-        }
-        pending_draw_batch_.call.index_count += prim.index_count;
-        pending_draw_batch_.call.vertex_view.SizeInBytes +=
-            prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
-        if (prim.indexed) {
-            pending_draw_batch_.call.index_view.SizeInBytes +=
-                prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
-        }
-        pending_draw_batch_.vertex_count += prim.vertex_count;
-        pending_draw_batch_.vertex_byte_end = vertex_byte_end;
-        pending_draw_batch_.index_count += prim.index_count;
-        ++pending_draw_batch_.draw_count;
-    } else {
-        flush_pending_draw_batch();
-        pending_draw_batch_.active = true;
-        pending_draw_batch_.call = call;
-        pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
-        exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
-        pending_draw_batch_.hidden = rt_hidden_draw();
-        pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
-        pending_draw_batch_.debake_model = debake_sample_key_;
-        pending_draw_batch_.indexed = prim.indexed;
-        pending_draw_batch_.base_vertex = prim.base_vertex;
-        pending_draw_batch_.vertex_count = prim.vertex_count;
-        pending_draw_batch_.vertex_byte_end = vertex_byte_end;
-        pending_draw_batch_.first_index = prim.first_index;
-        pending_draw_batch_.index_count = prim.index_count;
-        pending_draw_batch_.draw_count = 1;
-    }
-    if (!draw_stripe_vertices_.empty()) [[unlikely]] {
-        pending_stripe_vertices_.insert(pending_stripe_vertices_.end(), draw_stripe_vertices_.begin(),
-                                        draw_stripe_vertices_.end());
-    }
-}
-
 void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     flush_pending_draw_batch();
     const EfbCopyParams params = state_.efb_copy(exec_command);
@@ -12188,38 +10181,6 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     }
 }
 
-void GxBackend::on_pe_finish() {
-    flush_pending_draw_batch();
-    if (!frame_pe_callbacks_enabled_) {
-        return;
-    }
-    if (frame_pe_events_ != nullptr) {
-        if (frame_services_ == nullptr ||
-            frame_services_->gx_pe_finish == nullptr) {
-            throw std::runtime_error(
-                "GX PE_FINISH requires a native gx_pe_finish service");
-        }
-        frame_pe_events_->push_back(PeEvent{PeEvent::Kind::Finish, 0, false});
-        return;
-    }
-    if (frame_services_ == nullptr ||
-        frame_services_->gx_pe_finish == nullptr) {
-        throw std::runtime_error(
-            "GX PE_FINISH requires a native gx_pe_finish service");
-    }
-    frame_services_->gx_pe_finish(frame_services_->user);
-    // The optional log is capped: these callbacks fire on every GXDrawDone.
-    static int s_pe_done_logs = 0;
-    if (frame_services_ != nullptr && frame_services_->log != nullptr &&
-        s_pe_done_logs < 4) {
-        ++s_pe_done_logs;
-        frame_services_->log(
-            frame_services_->user,
-            galaxy::GxLogLevel::Trace,
-            "[GxBackend] PE_DONE (GXDrawDone)");
-    }
-}
-
 void GxBackend::record_async_peek_fields_at_token(std::uint16_t token) {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
         AsyncPeekFieldState& state = async_peek_[index];
@@ -12244,50 +10205,6 @@ void GxBackend::record_async_peek_fields_at_token(std::uint16_t token) {
             state.pending_slot = slot;
             state.pending_generation = generation;
         }
-    }
-}
-
-void GxBackend::on_pe_token(std::uint16_t token, bool interrupt) {
-    flush_pending_draw_batch();
-    if (token != 0u) {
-        record_async_peek_fields_at_token(token);
-    }
-    if (!frame_pe_callbacks_enabled_) {
-        return;
-    }
-    if (frame_pe_events_ != nullptr) {
-        if (frame_services_ == nullptr ||
-            frame_services_->gx_pe_token == nullptr) {
-            throw std::runtime_error(
-                "GX PE_TOKEN requires a native gx_pe_token service");
-        }
-        frame_pe_events_->push_back(
-            PeEvent{PeEvent::Kind::Token, token, interrupt});
-        return;
-    }
-    if (frame_services_ == nullptr ||
-        frame_services_->gx_pe_token == nullptr) {
-        throw std::runtime_error(
-            "GX PE_TOKEN requires a native gx_pe_token service");
-    }
-    frame_services_->gx_pe_token(
-        frame_services_->user,
-        token,
-        interrupt);
-    static int s_pe_token_logs = 0;
-    if (frame_services_ != nullptr && frame_services_->log != nullptr &&
-        s_pe_token_logs < 4) {
-        ++s_pe_token_logs;
-        char buf[64]{};
-        std::snprintf(
-            buf, sizeof(buf),
-            "[GxBackend] PE_TOKEN token=0x%04X int=%d",
-            static_cast<unsigned>(token),
-            interrupt ? 1 : 0);
-        frame_services_->log(
-            frame_services_->user,
-            galaxy::GxLogLevel::Trace,
-            buf);
     }
 }
 

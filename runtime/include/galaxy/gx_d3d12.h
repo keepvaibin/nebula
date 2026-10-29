@@ -82,14 +82,10 @@ void set_frame_end_presents(bool enabled) noexcept;
 // (game_asset_extract.h). Call once, before the overlay is first shown; without it the overlay draws solid colors.
 void set_native_settings_content_root(const std::string& utf8_path);
 
-// Parses a captured GX FIFO, records its draws and optionally presents: the newest picture (the last frame end),
-// or black when `black`. `memory` and `services` resolve display-list addresses and indexed vertex-array reads. An
-// empty capture submits no GX work (at most a present) and returns an invalid token. Other tokens complete in
-// submission order: at once for a capture without a PE FINISH or TOKEN event, else after its GPU fence and PE
-// callbacks.
-[[nodiscard]] FramePeCompletionToken render_frame(
-    const std::byte* fifo_data,
-    std::size_t fifo_size,
+// Renders the game's frame from the records it attached (and the scene markers, stripe particles and pointer
+// capture with them) and optionally presents: the newest picture (the last frame end), or black when `black`.
+// `memory` resolves the game objects the ray tracer reads. Nothing attached: at most a present.
+void render_frame(
     GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain = true,
@@ -98,12 +94,6 @@ void set_native_settings_content_root(const std::string& utf8_path);
 // Blocks until the render queue and every in-flight render chunk are idle.
 void wait_for_render_idle();
 
-// Waits up to `timeout_ms` for `token`. Returns true and consumes the token on completion, false without
-// consuming it on timeout; a zero timeout polls. A renderer failure, a stale token or a stopped render thread
-// throws.
-[[nodiscard]] bool wait_for_frame_pe_completion_for(
-    FramePeCompletionToken token,
-    std::uint32_t timeout_ms);
 
 // Simulation thread: the next render_frame submission handles `marker` when
 // its parser reaches `fifo_offset` bytes into the submitted FIFO.

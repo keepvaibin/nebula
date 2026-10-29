@@ -24,11 +24,12 @@ constexpr std::uint8_t kTexDisable = 0x00;  // map bit 0x100 cannot be set in a 
 
 struct Writer {
     GxState& state;
-    FifoSink* actions;
+    void (*tlut_load)(void*);
+    void* context;
     void bp(std::uint32_t word) {
         state.load_bp(word);
-        if (actions != nullptr && word >> 24u == 0x65u) {
-            actions->on_tlut_load();  // the palette copy the TLUT destination write starts
+        if (tlut_load != nullptr && word >> 24u == 0x65u) {
+            tlut_load(context);  // the palette copy the TLUT destination write starts
         }
     }
     void bp(std::uint8_t id, std::uint32_t value) { bp(static_cast<std::uint32_t>(id) << 24u | (value & 0xFFFFFFu)); }
@@ -440,8 +441,8 @@ void differed(Writer& w, const Material& m) {
 
 }  // namespace
 
-void apply(const Material& m, GxState& state, FifoSink* actions) {
-    Writer w{state, actions};
+void apply(const Material& m, GxState& state, void (*tlut_load)(void*), void* context) {
+    Writer w{state, tlut_load, context};
     if (m.diff_flags != 0u) {
         differed(w, m);
         return;
