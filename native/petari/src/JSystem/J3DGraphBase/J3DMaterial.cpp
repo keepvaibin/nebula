@@ -179,11 +179,6 @@ void J3DMaterial::initialize() {
     mSharedDLObj = NULL;
 }
 
-u32 J3DMaterial::countDLSize() {
-    return (mColorBlock->countDLSize() + mTexGenBlock->countDLSize() + mTevBlock->countDLSize() + mIndBlock->countDLSize() + mPEBlock->countDLSize() +
-            31) &
-           ~0x1f;
-}
 
 void J3DMaterial::makeDisplayList() {
     if (!j3dSys.getMatPacket()->isLocked()) {
@@ -284,14 +279,14 @@ void J3DMaterial::change() {
     }
 }
 
-s32 J3DMaterial::newSharedDisplayList(u32 dlSize) {
+s32 J3DMaterial::newSharedDisplayList() {
     if (mSharedDLObj == NULL) {
         mSharedDLObj = new J3DDisplayListObj();
         if (mSharedDLObj == NULL) {
             return kJ3DError_Alloc;
         }
 
-        s32 ret = mSharedDLObj->newDisplayList(dlSize);
+        s32 ret = mSharedDLObj->newDisplayList();
         if (ret != kJ3DError_Success) {
             return ret;
         }
@@ -300,21 +295,6 @@ s32 J3DMaterial::newSharedDisplayList(u32 dlSize) {
     return kJ3DError_Success;
 }
 
-s32 J3DMaterial::newSingleSharedDisplayList(u32 dlSize) {
-    if (mSharedDLObj == NULL) {
-        mSharedDLObj = new J3DDisplayListObj();
-        if (mSharedDLObj == NULL) {
-            return kJ3DError_Alloc;
-        }
-
-        s32 ret = mSharedDLObj->newSingleDisplayList(dlSize);
-        if (ret != kJ3DError_Success) {
-            return ret;
-        }
-    }
-
-    return kJ3DError_Success;
-}
 
 void J3DPatchedMaterial::initialize() {
     J3DMaterial::initialize();

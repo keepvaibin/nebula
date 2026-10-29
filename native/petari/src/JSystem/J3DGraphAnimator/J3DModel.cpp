@@ -127,32 +127,27 @@ s32 J3DModel::createMatPacket(J3DModelData* pModelData, u32 mdlFlags) {
                     matPacket->setDisplayListObj(matPacket->mpDisplayListObj);
                 } else {
                     J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
-                    s32 ret = dlobj->single_To_Double();
-                    if (ret != kJ3DError_Success) {
-                        return ret;
-                    }
 
                     matPacket->setDisplayListObj(dlobj);
                 }
             } else if (mdlFlags & J3DMdlFlag_UseSharedDL) {
                 if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-                    materialNode->newSingleSharedDisplayList(materialNode->countDLSize());
+                    materialNode->newSharedDisplayList();
 
                     J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
                     matPacket->setDisplayListObj(dlobj);
                 } else {
-                    materialNode->newSharedDisplayList(materialNode->countDLSize());
+                    materialNode->newSharedDisplayList();
 
                     J3DDisplayListObj* dlobj = materialNode->getSharedDisplayListObj();
-                    dlobj->single_To_Double();
 
                     matPacket->setDisplayListObj(dlobj);
                 }
             } else {
                 if (mdlFlags & J3DMdlFlag_UseSingleDL) {
-                    matPacket->newSingleDisplayList(materialNode->countDLSize());
+                    matPacket->newDisplayList();
                 } else {
-                    matPacket->newDisplayList(materialNode->countDLSize());
+                    matPacket->newDisplayList();
                 }
             }
         }

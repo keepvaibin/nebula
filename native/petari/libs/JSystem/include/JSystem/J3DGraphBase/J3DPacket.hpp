@@ -74,45 +74,18 @@ inline int calcDifferedBufferSize_TevStageDirectSize(u32 param_1) {
     return param_1 * 5;
 }
 
+// A material's typed snapshot (J3DNativeMaterial), where J3D kept the material's display list: made with its owner
+// (a material, a material packet, an instance's shape packet), refreshed where J3D built or patched the list.
 class J3DDisplayListObj {
 public:
     J3DDisplayListObj() {
-        mpDisplayList[0] = nullptr;
-        mpDisplayList[1] = nullptr;
         mpNebulaMaterial = nullptr;
         mNebulaCaptured = false;
         mNebulaDiffFlags = 0;
-        mSize = 0;
-        mMaxSize = 0;
     }
 
+    J3DError newDisplayList();
 
-    J3DError newDisplayList(u32);
-    J3DError newSingleDisplayList(u32);
-    int single_To_Double();
-    void setSingleDisplayList(void*, u32);
-    void swapBuffer();
-    void callDL() const;
-    void beginDL();
-    u32 endDL();
-    void beginPatch();
-    u32 endPatch();
-
-    u8* getDisplayList(int idx) {
-        return (u8*)mpDisplayList[idx];
-    }
-    u32 getDisplayListSize() {
-        return mSize;
-    }
-
-    static GDLObj sGDLObj;
-    static s32 sInterruptFlag;
-
-    /* 0x0 */ void* mpDisplayList[2];
-    /* 0x8 */ u32 mSize;
-    /* 0xC */ u32 mMaxSize;
-    // The material this list sets, as the renderer takes it (J3DNativeMaterial), kept where the list is made and
-    // patched.
     struct NebulaMaterial* mpNebulaMaterial;
     bool mNebulaCaptured;
     u32 mNebulaDiffFlags;
@@ -167,8 +140,7 @@ class J3DDrawPacket : public J3DPacket {
 public:
     J3DDrawPacket();
     ~J3DDrawPacket();
-    J3DError newDisplayList(u32);
-    J3DError newSingleDisplayList(u32);
+    J3DError newDisplayList();
     virtual void draw();
 
     J3DDisplayListObj* getDisplayListObj() {
@@ -181,33 +153,6 @@ public:
 
     bool isValidDisplayListObj() const {
         return mpDisplayListObj;
-    }
-
-    void beginPatch() {
-        mpDisplayListObj->beginPatch();
-    }
-
-    void endPatch() {
-        mpDisplayListObj->endPatch();
-    }
-
-    void callDL() const {
-        mpDisplayListObj->callDL();
-    }
-
-    void beginDL() {
-        mpDisplayListObj->beginDL();
-    }
-
-    void endDL() {
-        mpDisplayListObj->endDL();
-    }
-
-    void* getDisplayList(int i) {
-        return mpDisplayListObj->mpDisplayList[i];
-    }
-    u32 getDisplayListSize() const {
-        return mpDisplayListObj->mSize;
     }
 
     enum {
@@ -291,8 +236,6 @@ class J3DMatPacket : public J3DDrawPacket {
 public:
     J3DMatPacket();
     void addShapePacket(J3DShapePacket*);
-    void beginDiff();
-    void endDiff();
     bool isSame(J3DMatPacket*) const;
 
     J3DMaterial* getMaterial() const {

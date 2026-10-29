@@ -44,12 +44,10 @@ public:
     static u32 calcSizeIndBlock(int);
     static u32 calcSizePEBlock(u32, u32);
     void initialize();
-    u32 countDLSize();
     void setCurrentMtx();
     void calcCurrentMtx();
     void copy(J3DMaterial*);
-    s32 newSharedDisplayList(u32);
-    s32 newSingleSharedDisplayList(u32);
+    s32 newSharedDisplayList();
 
     inline J3DMaterialAnm* getMaterialAnm() {
 #ifdef TARGET_PC

@@ -381,8 +381,6 @@ J3DMaterial* J3DMaterialFactory::createLockedMaterial(J3DMaterial* i_material, i
     i_material->getPEBlock()->setFogOffset(mpPatchingInfo[i_idx].mFogOffset);
     if (i_material->mSharedDLObj == nullptr) {
         i_material->mSharedDLObj = new J3DDisplayListObj();
-        i_material->mSharedDLObj->setSingleDisplayList((void*)(mpDisplayListInit[i_idx].mOffset + (uintptr_t)&mpDisplayListInit[i_idx]),
-                                                       mpDisplayListInit[i_idx].field_0x4);
     }
 
     return i_material;
