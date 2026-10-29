@@ -12,13 +12,12 @@
 
 namespace {
     inline bool isUseLightChanNo(J3DMaterial* pMaterial, int channel, int index) {
-        u16 channelID = pMaterial->mColorBlock->getColorChan(channel)->mColorChanID;
-        if (((channelID >> 1) & 0x1) == 0) {
+        const J3DColorChan* pChan = pMaterial->mColorBlock->getColorChan(channel);
+        if (pChan->getEnable() == 0) {
             return false;
         }
 
-        u8 useLightChan = (channelID >> 2 & 0xF | channelID >> 7 & 0xF0);
-        return useLightChan & (1 << index);
+        return pChan->getLightMask() & (1 << index);
     }
 };  // namespace
 

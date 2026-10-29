@@ -489,3 +489,18 @@ const u8 j3dDefaultTevSwapTableID = 0x1B;
 const u16 j3dDefaultAlphaCmpID = 0x00E7;
 
 const u16 j3dDefaultZModeID = 0x0017;
+
+void J3DTevStage::load(u32) const {
+    const auto op = [](u8 op, u8 bias, u8 scale, u8 clamp, u8 reg) -> u32 {
+        const u32 compare = op > 1;
+        return (compare ? 3u : bias) | (u32)(op & 1) << 2 | (u32)clamp << 3 | (compare ? (u32)(op >> 1 & 3) : scale) << 4 |
+               (u32)reg << 6;
+    };
+    const u32 colorOp = op(mColorOp, mColorBias, mColorScale, mColorClamp, mColorReg);
+    const u32 alphaOp = op(mAlphaOp, mAlphaBias, mAlphaScale, mAlphaClamp, mAlphaReg);
+    J3DGDWriteBPCmd((u32)(0xC0 + mStageNo * 2) << 24 | colorOp << 16 | (u32)(mColorIn[0] << 4 | mColorIn[1]) << 8 |
+                    (mColorIn[2] << 4 | mColorIn[3]));
+    J3DGDWriteBPCmd((u32)(0xC1 + mStageNo * 2) << 24 | alphaOp << 16 |
+                    (u32)(mAlphaIn[0] << 5 | mAlphaIn[1] << 2 | mAlphaIn[2] >> 1) << 8 |
+                    ((mAlphaIn[2] & 1) << 7 | mAlphaIn[3] << 4 | mTexSel << 2 | mRasSel));
+}
