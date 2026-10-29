@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 42u
+#define NEBULA_GAME_API_VERSION 43u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -899,7 +899,28 @@ typedef struct NebulaHostServices {
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on, after every command written before `stream`. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const void* stream, const NebulaTextureImage* image);
+    /* The Mii library's stores (NEBULA_MII_DATABASE, NEBULA_MII_PARTS), kept where the host chooses: `op`
+       (NEBULA_MII_READ, _WRITE, _LENGTH, _CREATE, _DELETE) on `size` bytes at `offset`. Returns the bytes read or
+       written, the length, or 0 (create, delete); NEBULA_MII_MISSING when the store does not exist, NEBULA_MII_FAILED
+       when the host could not read or write it. */
+    int32_t (*mii_storage)(void* user, uint32_t store, uint32_t op, uint32_t offset, void* data, uint32_t size);
 } NebulaHostServices;
+
+enum {
+    NEBULA_MII_DATABASE = 0, /* the Miis (the library's database file format) */
+    NEBULA_MII_PARTS = 1,    /* their shapes and textures (the library's resource archive) */
+};
+enum {
+    NEBULA_MII_READ = 0,
+    NEBULA_MII_WRITE = 1,   /* the store grows to take the bytes */
+    NEBULA_MII_LENGTH = 2,
+    NEBULA_MII_CREATE = 3,  /* an empty store when there is none */
+    NEBULA_MII_DELETE = 4,
+};
+enum {
+    NEBULA_MII_MISSING = -1,
+    NEBULA_MII_FAILED = -2,
+};
 
 enum {
     NEBULA_MOVIE_NONE = -1,

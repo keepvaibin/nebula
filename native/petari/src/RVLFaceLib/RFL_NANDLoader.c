@@ -1,14 +1,10 @@
 #include "RVLFaceLibInternal.h"
 #include "RFLi_Texture.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <revolution/nand.h>
 #include <cstdio>
 
 #define LOADER_HEADER_BUF_1_SIZE 0x100
 #define LOADER_HEADER_BUF_2_SIZE 0x20
-#define TEMP_BUF_SIZE 0x400
-
-static const char* scResFileFullPathName = "/shared2/FaceLib/RFL_Res.dat";
 
 void RFLiInitLoader(void) {
     RFLiLoader* loader;
@@ -214,31 +210,23 @@ static u32 getCachedLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
     return next - self;
 }
 
-static u32 getNANDLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
-    NANDFileInfo file;
-    RFLiArchive* arc;
-    void* tmpBuf;
-    u32 length = 0;
+// A part's offset and the next one's, from its archive's table in the parts store.
+static BOOL getStoredSpan_(RFLiArchive* arc, u16 fileIdx, u32* pSelf, u32* pNext) {
+    u32 offsets[2];
 
-    tmpBuf = RFLiAlloc32(TEMP_BUF_SIZE);
-    arc = &loader->archives[arcIdx];
-
-    if (NANDPrivateOpen(scResFileFullPathName, &file, 1) ==
-        NAND_RESULT_OK) {
-        const u32 readSize = ROUND_UP(arc->numFiles * 4 + 4, 32);
-        NANDSeek(&file, arc->offset, 0);
-
-        if (NANDRead(&file, tmpBuf, readSize) == readSize) {
-            const u32 self = RFLI_LD32(((u32*)tmpBuf)[fileIdx]);
-            const u32 next = RFLI_LD32(((u32*)tmpBuf)[fileIdx + 1]);
-            length = next - self;
-        }
-
-        NANDClose(&file);
+    if (RFLiReadParts(offsets, sizeof(offsets), arc->offset + fileIdx * 4) != (s32)sizeof(offsets)) {
+        return FALSE;
     }
+    *pSelf = RFLI_LD32(offsets[0]);
+    *pNext = RFLI_LD32(offsets[1]);
+    return TRUE;
+}
 
-    RFLiFree(tmpBuf);
-    return length;
+static u32 getStoredLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
+    u32 self;
+    u32 next;
+
+    return getStoredSpan_(&loader->archives[arcIdx], fileIdx, &self, &next) ? next - self : 0;
 }
 
 static u32 getLength_(u32 arcIdx, u16 fileIdx) {
@@ -256,7 +244,7 @@ static u32 getLength_(u32 arcIdx, u16 fileIdx) {
     if (RFLIsResourceCached()) {
         return getCachedLength_(loader, arcIdx, fileIdx);
     } else {
-        return getNANDLength_(loader, arcIdx, fileIdx);
+        return getStoredLength_(loader, arcIdx, fileIdx);
     }
 }
 
@@ -274,67 +262,17 @@ static void* getCachedFile_(void* dst, RFLiLoader* loader, u32 arcIdx,
     return dst;
 }
 
-static void* getNANDFile_(void* dst, RFLiLoader* loader, u32 arcIdx,
-                          u16 fileIdx) {
-    NANDFileInfo file;
-    RFLiArchive* arc;
-    void* tmpBuf;
-    void* arcBuf;
-    void* ret;
-    u32 readSize;
+static void* getStoredFile_(void* dst, RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
+    RFLiArchive* arc = &loader->archives[arcIdx];
+    u32 self;
+    u32 next;
 
-    ret = NULL;
-    arc = &loader->archives[arcIdx];
-    tmpBuf = RFLiAlloc32(TEMP_BUF_SIZE);
-
-    if (NANDPrivateOpen(scResFileFullPathName, &file, 1) ==
-        NAND_RESULT_OK) {
-        u32 arcBufSize;
-        s32 seekOffset;
-        u32 arcSize;
-        u32 arcOffset;
-
-        readSize = ROUND_UP(arc->numFiles * 4 + 4, 32);
-        arcSize = 0;
-        arcOffset = 0;
-
-        NANDSeek(&file, arc->offset, 0);
-
-        if (NANDRead(&file, tmpBuf, readSize) == readSize) {
-            const u32 next = RFLI_LD32(((u32*)tmpBuf)[fileIdx + 1]);
-            const u32 self = RFLI_LD32(((u32*)tmpBuf)[fileIdx]);
-            arcSize = next - self;
-            arcOffset = self;
-        } else {
-            RFLiSetFileBroken(RFLiFileBrokenType_ResBroken);
-            RFLiFree(tmpBuf);
-            return NULL;
-        }
-
-        seekOffset = arc->offset + arc->numFiles * 4 + 4 + arcOffset;
-        arcBufSize = ROUND_UP(arcSize, 32);
-
-        arcBuf = RFLiAlloc32(arcBufSize);
-        NANDSeek(&file, seekOffset, 0);
-
-        if (NANDRead(&file, arcBuf, arcBufSize) == arcBufSize) {
-            memcpy(dst, arcBuf, arcSize);
-            ret = dst;
-        } else {
-            RFLiSetFileBroken(RFLiFileBrokenType_ResBroken);
-            RFLiFree(tmpBuf);
-            RFLiFree(arcBuf);
-            return NULL;
-        }
-
-        RFLiFree(arcBuf);
-        NANDClose(&file);
-    } else {
+    if (!getStoredSpan_(arc, fileIdx, &self, &next) ||
+        RFLiReadParts(dst, next - self, arc->offset + arc->numFiles * 4 + 4 + self) != (s32)(next - self)) {
         RFLiSetFileBroken(RFLiFileBrokenType_ResBroken);
+        return NULL;
     }
-
-    RFLiFree(tmpBuf);
-    return ret;
+    return dst;
 }
 
 static void* getFile_(void* dst, u32 arcIdx, u16 fileIdx) {
@@ -356,7 +294,7 @@ static void* getFile_(void* dst, u32 arcIdx, u16 fileIdx) {
     if (RFLIsResourceCached()) {
         return getCachedFile_(dst, loader, arcIdx, fileIdx);
     } else {
-        return getNANDFile_(dst, loader, arcIdx, fileIdx);
+        return getStoredFile_(dst, loader, arcIdx, fileIdx);
     }
 }
 

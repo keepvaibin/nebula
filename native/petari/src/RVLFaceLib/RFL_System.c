@@ -85,7 +85,7 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
         RFLiInitLoader();
         RFLiInitCtrlBuf(RFLiGetManager()->systemHeap);
         RFLiInitHiddenDatabase();
-        RFLiInitAccessInfo(RFLiGetManager()->systemHeap);
+        RFLiInitAccessInfo();
         RFLiSetCoordinateData(&scCoordinate);
 
         if (resBuffer != NULL) {

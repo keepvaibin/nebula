@@ -16,7 +16,7 @@ extern "C" {
 #include "RFLi_MakeTex.h"
 #include "RFLi_MiddleDatabase.h"
 #include "RFLi_Model.h"
-#include "RFLi_NANDAccess.h"
+#include "RFLi_Storage.h"
 #include "RFLi_NANDLoader.h"
 #include "RFLi_System.h"
 #include "RFLi_Texture.h"

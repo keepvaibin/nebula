@@ -2206,6 +2206,63 @@ void svc_texture_image(void*, const void* stream, const NebulaTextureImage* imag
 #endif
 }
 
+
+// The Mii library's stores: the system database and parts archive in the files a console keeps them in, so the
+// Miis a NAND (or an earlier Nebula) already holds stay where they are. Game thread only.
+fs::path mii_store_path(uint32_t store) {
+    return gNandRoot / "shared2/menu/FaceLib" / (store == NEBULA_MII_DATABASE ? "RFL_DB.dat" : "RFL_Res.dat");
+}
+
+int32_t svc_mii_storage(void*, uint32_t store, uint32_t op, uint32_t offset, void* data, uint32_t size) {
+    if (store != NEBULA_MII_DATABASE && store != NEBULA_MII_PARTS) {
+        return NEBULA_MII_FAILED;
+    }
+    const fs::path path = mii_store_path(store);
+    std::error_code error;
+    const bool exists = fs::exists(path, error);
+    switch (op) {
+    case NEBULA_MII_CREATE:
+        if (!exists) {
+            fs::create_directories(path.parent_path(), error);
+            FILE* file = std::fopen(path.string().c_str(), "wb");
+            if (file == nullptr) {
+                return NEBULA_MII_FAILED;
+            }
+            std::fclose(file);
+        }
+        return 0;
+    case NEBULA_MII_DELETE:
+        return fs::remove(path, error) || !exists ? 0 : NEBULA_MII_FAILED;
+    case NEBULA_MII_LENGTH: {
+        if (!exists) {
+            return NEBULA_MII_MISSING;
+        }
+        const auto length = fs::file_size(path, error);
+        return error ? NEBULA_MII_FAILED : static_cast<int32_t>(length);
+    }
+    case NEBULA_MII_READ:
+    case NEBULA_MII_WRITE: {
+        if (!exists) {
+            return NEBULA_MII_MISSING;
+        }
+        const bool write = op == NEBULA_MII_WRITE;
+        FILE* file = std::fopen(path.string().c_str(), write ? "r+b" : "rb");
+        if (file == nullptr) {
+            return NEBULA_MII_FAILED;
+        }
+        size_t done = 0;
+        if (std::fseek(file, static_cast<long>(offset), SEEK_SET) == 0) {
+            done = write ? std::fwrite(data, 1, size, file) : std::fread(data, 1, size, file);
+        }
+        const bool flushed = !write || std::fflush(file) == 0;
+        std::fclose(file);
+        return flushed ? static_cast<int32_t>(done) : NEBULA_MII_FAILED;
+    }
+    default:
+        return NEBULA_MII_FAILED;
+    }
+}
+
 void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -3696,7 +3753,7 @@ int main(int argc, char** argv) {
 #if defined(NEBULA_HOST_RENDERER)
     // The system's Mii database, which every console has: an empty one when this NAND has none (the game treats a
     // missing database as a NAND error when it saves).
-    const fs::path mii_database = gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
+    const fs::path mii_database = mii_store_path(NEBULA_MII_DATABASE);
     if (!fs::exists(mii_database, error)) {
         fs::create_directories(mii_database.parent_path(), error);
         const std::vector<std::byte> bytes = galaxy::host::native_game_empty_mii_database();
@@ -3872,6 +3929,7 @@ int main(int argc, char** argv) {
     services.state = svc_state;
     services.immediate = svc_immediate;
     services.texture_image = svc_texture_image;
+    services.mii_storage = svc_mii_storage;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
