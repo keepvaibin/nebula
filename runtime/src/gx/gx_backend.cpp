@@ -4908,7 +4908,7 @@ std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
     // part is the same for every format).
     std::uint64_t key = 0u;
     if (record_inputs_ != nullptr) {
-        if (!record_inputs_->colored) {
+        if (!record_inputs_->colored || record_inputs_->own_positions) {
             return channels;
         }
         key = record_inputs_->colors;
@@ -5312,7 +5312,7 @@ bool GxBackend::rt_water_draw() const noexcept {
 // particles out).
 bool GxBackend::rt_ocean_water_draw() const noexcept {
     if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
-        record_inputs_ != nullptr || state_.vertex_desc(0u).position.vcd != VcdType::Direct ||
+        draw_positions_indexed() ||
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
         return false;
     }
@@ -10560,7 +10560,7 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
 
 bool GxBackend::draw_positions_indexed() const noexcept {
     if (record_inputs_ != nullptr) {
-        return true;
+        return !record_inputs_->own_positions;
     }
     const VcdType position = state_.vertex_desc(0u).position.vcd;
     return position == VcdType::Index8 || position == VcdType::Index16;
@@ -12859,6 +12859,7 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
                          (((geometry.attributes / shapes::kTextureMatrix0) & 0xFFu) << 1u);
     inputs.positions = keys[0];
     inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
+    inputs.own_positions = (geometry.attributes & shapes::kOwnPositions) != 0u;
     inputs.colors = keys[2] ^ (keys[3] * 0x9E3779B97F4A7C15ull);
     inputs.curved = shape.curved.get();
     struct RecordScope {

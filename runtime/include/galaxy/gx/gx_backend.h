@@ -1668,12 +1668,14 @@ private:
         std::uint64_t positions = 0;    // the position array's key
         std::uint64_t colors = 0;       // the colour arrays' keys, combined
         bool colored = false;
+        // Positions and colours the group's own values (geometry the game builds): drawn as direct vertices were.
+        bool own_positions = false;
         const curved::Model* curved = nullptr;
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
     // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
     std::uint64_t vs_key_vertex_source_ = 0;
-    // Whether the draw being made reads indexed positions (a model's): a record always does.
+    // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.
     [[nodiscard]] bool draw_positions_indexed() const noexcept;
     // Render thread: decode scratch for runs outside the decoded cache (capacity bounded by
     // kDecodedPacketRunCacheMaxEntryBytes).

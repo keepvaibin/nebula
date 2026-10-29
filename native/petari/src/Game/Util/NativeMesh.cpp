@@ -227,7 +227,7 @@ void NativeMesh::send() {
     NebulaShapeGeometry geometry;
     memset(&geometry, 0, sizeof(geometry));
     geometry.key = static_cast< u64 >(reinterpret_cast< uintptr_t >(this));
-    geometry.attributes = mAttributes;
+    geometry.attributes = mAttributes | ((mOwned & (1u << SLOT_POSITION)) != 0 ? NEBULA_SHAPE_OWN_POSITIONS : 0);
     for (u32 slot = 0; slot < 12; slot++) {
         geometry.arrays[slot] = reads(mAttributes, slot) ? mArrays[slot] : 0;
     }

@@ -53,6 +53,8 @@ inline constexpr std::uint32_t kNbt = 1u << 11;
 inline constexpr std::uint32_t kNbtThree = 1u << 12;
 inline constexpr std::uint32_t kPositionMatrix = 1u << 13;
 inline constexpr std::uint32_t kTextureMatrix0 = 1u << 14;
+// Positions (and colours) the group's own values: geometry the game builds, not a model's arrays.
+inline constexpr std::uint32_t kOwnPositions = 1u << 22;
 
 // A shape group: which arrays its corners read (by default: position, normal or NBT, colour 0 and 1, texture
 // coordinates 0-7; 0 where none), its corners and its triangles.

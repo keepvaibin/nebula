@@ -207,6 +207,8 @@ enum {
     NEBULA_SHAPE_NBT_THREE = 1u << 12,        /* separate normal, tangent and binormal entries */
     NEBULA_SHAPE_POSITION_MATRIX = 1u << 13,  /* corners carry their position matrix slot */
     NEBULA_SHAPE_TEXTURE_MATRIX0 = 1u << 14,  /* to 1u << 21: corners carry texture matrix 0-7's slot */
+    NEBULA_SHAPE_OWN_POSITIONS = 1u << 22,    /* positions (and colours) are the group's own values, not an array a
+                                                 model or the game keeps: geometry the game builds */
 };
 
 /* A shape group (shape_geometry): its corners, each distinct one once, and its triangles (three corner indices each,
