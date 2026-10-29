@@ -106,6 +106,10 @@ bool peek_efb_published(
     return backend().peek_efb_published(x, y, kind, token, value);
 }
 
+std::uint32_t readback_serial(std::uint16_t token) noexcept {
+    return backend().readback_serial(token);
+}
+
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept {

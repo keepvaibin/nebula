@@ -933,6 +933,9 @@ typedef struct NebulaHostServices {
     /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad) after every command
        written before `stream`. */
     void (*marker)(void* user, const void* stream, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b);
+    /* How many captures of `channel`'s colour have finished since the game first read it (0: none): a capture made
+       when the count was n is readable once it passes n. */
+    uint32_t (*readback_serial)(void* user, uint32_t channel);
 } NebulaHostServices;
 
 

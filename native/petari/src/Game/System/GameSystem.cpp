@@ -1,4 +1,5 @@
 #include "Game/System/GameSystem.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Screen/HomeButtonLayout.hpp"
@@ -82,7 +83,7 @@ void main(void) {
 }
 
 GameSystem::GameSystem()
-    : NerveExecutor("GameSystem"), mFifoBase(nullptr), mSequenceDirector(nullptr), mErrorWatcher(nullptr), mFontHolder(nullptr),
+    : NerveExecutor("GameSystem"), mSequenceDirector(nullptr), mErrorWatcher(nullptr), mFontHolder(nullptr),
       mFrameControl(nullptr), mObjHolder(nullptr), mSceneController(nullptr), mStationedArchiveLoader(nullptr), mHomeButtonLayout(nullptr),
       mSystemWipeHolder(nullptr), mHomeButtonStateNotifier(nullptr), mIsExecuteLoadSystemArchive(false) {
 }
@@ -167,13 +168,8 @@ void GameSystem::exeNormal() {
 }
 
 void GameSystem::initGX() {
-    if (mFifoBase == nullptr) {
-        mFifoBase = new (32) u8[GX_FIFO_SIZE];
-    }
-
-    GXInit(mFifoBase, GX_FIFO_SIZE);
-    // GXInit's defaults (with those it leaves to its first draw) reach the renderer now, ahead of every record.
-    GXFlush();
+    // The drawing state the game starts from, before anything is drawn.
+    J3DNativeState::initDefaults();
 }
 
 void GameSystem::initAfterStationedResourceLoaded() {

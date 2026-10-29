@@ -216,6 +216,9 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t token,
     std::uint32_t& value);
 
+// How many captures of readback channel `token`'s colour have finished (GxBackend::readback_serial).
+[[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) noexcept;
+
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept;

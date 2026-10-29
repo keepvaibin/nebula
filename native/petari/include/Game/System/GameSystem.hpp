@@ -42,7 +42,6 @@ public:
     void updateSceneController();
     void calcAnim();
 
-    /* 0x08 */ void* mFifoBase;
     /* 0x0C */ GameSequenceDirector* mSequenceDirector;
     /* 0x10 */ GameSystemDimmingWatcher* mDimmingWatcher;
     /* 0x14 */ GameSystemErrorWatcher* mErrorWatcher;

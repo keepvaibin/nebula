@@ -258,10 +258,9 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
         }
     }
 
-    // Dual-tex (post-transform matrix) enable: XF 0x1012 bit 0 (XFMEM_DUALTEX in Dolphin's
-    // XFMemory.h). Gates the post-matrix multiply in the VS.
-    const bool dual_tex =
-        (state.xf(xf::kDualTexTrans) & 1u) != 0u;
+    // The post-transform matrices always apply: the console switched them on once at its start (GXInit's revision
+    // bits) and the game never switches them off.
+    const bool dual_tex = true;
 
     key.flags = static_cast<std::uint8_t>(
         (per_vertex_posmtx ? 0x01u : 0u) |

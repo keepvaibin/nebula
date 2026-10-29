@@ -2431,6 +2431,15 @@ uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x,
 #endif
 }
 
+uint32_t svc_readback_serial(void*, uint32_t channel) {
+#if defined(NEBULA_HOST_RENDERER)
+    return galaxy::gx::readback_serial(static_cast<uint16_t>(channel));
+#else
+    (void)channel;
+    return 0;
+#endif
+}
+
 void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -4039,6 +4048,7 @@ int main(int argc, char** argv) {
     services.readback_pixel = svc_readback_pixel;
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;
+    services.readback_serial = svc_readback_serial;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

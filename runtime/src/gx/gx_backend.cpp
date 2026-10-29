@@ -8061,6 +8061,16 @@ void GxBackend::render_thread_main() {
     }
 }
 
+std::uint32_t GxBackend::readback_serial(std::uint16_t token) const noexcept {
+    const std::uint32_t key = async_peek_key(EfbPeekKind::Color, token);
+    for (const AsyncPeekFieldState& state : async_peek_) {
+        if (state.key.load(std::memory_order_acquire) == key) {
+            return state.publications.load(std::memory_order_acquire);
+        }
+    }
+    return 0u;
+}
+
 std::size_t GxBackend::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
     const std::uint32_t key = async_peek_key(kind, token);
     std::size_t oldest = 0;
@@ -8074,6 +8084,7 @@ std::size_t GxBackend::async_peek_channel(EfbPeekKind kind, std::uint16_t token)
     }
     AsyncPeekFieldState& state = async_peek_[oldest];
     state.generation.fetch_add(1u, std::memory_order_acq_rel);
+    state.publications.store(0u, std::memory_order_release);
     state.key.store(key, std::memory_order_release);
     return oldest;
 }
@@ -8146,6 +8157,9 @@ void GxBackend::poll_async_peek_fields() {
             state.published.store(
                 (std::uint64_t{state.pending_generation} << 32u) | static_cast<std::uint32_t>(slot + 1),
                 std::memory_order_release);
+            if (state.pending_generation == state.generation.load(std::memory_order_acquire)) {
+                state.publications.fetch_add(1u, std::memory_order_release);
+            }
         }
     }
 }

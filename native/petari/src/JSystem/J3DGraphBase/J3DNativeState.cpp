@@ -1,5 +1,8 @@
 #include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include <nebula_gx_fifo.h>
 #include <math.h>
 #include <string.h>
@@ -602,6 +605,108 @@ namespace J3DNativeState {
         J3DStateList list(ops, 2);
         list.setCopyFilter(antialias, samples, verticalFilter, coefficients);
         list.send();
+    }
+
+    // The texture every map holds until the game loads its own: 4x4 white IA8.
+    static u16 sDefaultTexData[16] ATTRIBUTE_ALIGN(32) = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
+                                                         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+    // The projection before the game sets its own (orthographic, -1..1 depth).
+    static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
+
+    void initDefaults() {
+        const GXColor clear = {64, 64, 64, 255};
+        const GXColor black = {0, 0, 0, 0};
+        const GXColor white = {255, 255, 255, 255};
+        const GXRenderModeObj& rMode = GXNtsc480IntDf;
+
+        setCopyClear(clear, 0xFFFFFF);
+        for (u32 i = 0; i < 8; i++) {
+            setTexCoordGen2(static_cast< GXTexCoordID >(i), GX_TG_MTX2x4, static_cast< GXTexGenSrc >(GX_TG_TEX0 + i),
+                            GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+        }
+        setNumTexGens(1);
+        setLineWidth(6, GX_TO_ZERO);
+        setPointSize(6, GX_TO_ZERO);
+        for (u32 i = 0; i < 8; i++) {
+            enableTexOffsets(static_cast< GXTexCoordID >(i), GX_FALSE, GX_FALSE);
+        }
+
+        Mtx identity;
+        NebulaMtxIdentity(identity);
+        J3DNativeShape::sendPosition(identity, GX_PNMTX0);
+        J3DNativeShape::sendNormal(identity, GX_PNMTX0);
+        setCurrentMtx(GX_PNMTX0);
+        J3DNativeShape::sendTexture(identity, GX_IDENTITY, GX_MTX3x4);
+        J3DNativeShape::sendTexture(identity, GX_PTIDENTITY, GX_MTX3x4);
+        J3DNativeView::setViewport(0.0f, 0.0f, rMode.fbWidth, rMode.xfbHeight, 0.0f, 1.0f);
+        J3DNativeView::setProjectionv(sDefaultProjection);
+
+        setCoPlanar(GX_FALSE);
+        setCullMode(GX_CULL_BACK);
+        setClipMode(GX_CLIP_ENABLE);
+        J3DNativeView::setScissor(0, 0, rMode.fbWidth, rMode.efbHeight);
+        J3DNativeView::setScissorBoxOffset(0, 0);
+        setNumChans(0);
+        setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+        setChanAmbColor(GX_COLOR0A0, black);
+        setChanMatColor(GX_COLOR0A0, white);
+        setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+        setChanAmbColor(GX_COLOR1A1, black);
+        setChanMatColor(GX_COLOR1A1, white);
+        invalidateTexAll();
+
+        static GXTexObj sDefaultTexture;
+        J3DNativeTexture::registerImage(sDefaultTexData, GX_TF_IA8, 4, 4, 1);
+        J3DNativeTexture::init(&sDefaultTexture, sDefaultTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+        for (u32 i = 0; i < 8; i++) {
+            J3DNativeTexture::load(&sDefaultTexture, static_cast< GXTexMapID >(i));
+        }
+
+        for (u32 i = 0; i < 8; i++) {
+            setTevOrder(static_cast< GXTevStageID >(i), static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i),
+                        GX_COLOR0A0);
+        }
+        for (u32 i = 8; i < 16; i++) {
+            setTevOrder(static_cast< GXTevStageID >(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
+        }
+        setNumTevStages(1);
+        setTevOp(GX_TEVSTAGE0, GX_REPLACE);
+        setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+        setZTexture(GX_ZT_DISABLE, GX_TF_Z8, 0);
+        for (u32 i = 0; i < 16; i++) {
+            setTevKColorSel(static_cast< GXTevStageID >(i), GX_TEV_KCSEL_1_4);
+            setTevKAlphaSel(static_cast< GXTevStageID >(i), GX_TEV_KASEL_1);
+            setTevSwapMode(static_cast< GXTevStageID >(i), GX_TEV_SWAP0, GX_TEV_SWAP0);
+        }
+        setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+        setTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
+        setTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
+        setTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
+        for (u32 i = 0; i < 16; i++) {
+            setTevDirect(static_cast< GXTevStageID >(i));
+        }
+        setNumIndStages(0);
+        for (u32 i = 0; i < 4; i++) {
+            setIndTexCoordScale(static_cast< GXIndTexStageID >(i), GX_ITS_1, GX_ITS_1);
+        }
+
+        setFog(GX_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, black);
+        setFogRangeAdj(GX_FALSE, 0, nullptr);
+        setBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+        setColorUpdate(GX_TRUE);
+        setAlphaUpdate(GX_TRUE);
+        setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+        setZCompLoc(GX_TRUE);
+        setDither(GX_TRUE);
+        setDstAlpha(GX_FALSE, 0);
+        setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+        setDispCopySrc(0, 0, rMode.fbWidth, rMode.efbHeight);
+        setDispCopyDst(rMode.fbWidth, rMode.efbHeight);
+        setDispCopyYScale(static_cast< f32 >(rMode.xfbHeight) / static_cast< f32 >(rMode.efbHeight));
+        setCopyClamp(static_cast< GXFBClamp >(GX_CLAMP_TOP | GX_CLAMP_BOTTOM));
+        setCopyFilter(rMode.aa, rMode.sample_pattern, GX_TRUE, rMode.vfilter);
+        setDispCopyGamma(GX_GM_1_0);
+        setDispCopyFrame2Field(GX_COPY_PROGRESSIVE);
     }
 
     void showFrame() {

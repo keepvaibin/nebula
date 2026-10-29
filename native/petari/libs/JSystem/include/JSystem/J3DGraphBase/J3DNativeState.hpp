@@ -63,6 +63,8 @@ namespace J3DNativeState {
     f32 getYScaleFactor(u16 efbHeight, u16 xfbHeight);
     void setCopyClear(GXColor color, u32 depth);
     void setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
+    // The drawing state the game starts from (what GXInit set on the console), sent before anything is drawn.
+    void initDefaults();
     // The frame's picture is drawn: it becomes the one shown (the display copy's settings above apply).
     void showFrame();
     // The game's frame is complete: the host renders what it drew.

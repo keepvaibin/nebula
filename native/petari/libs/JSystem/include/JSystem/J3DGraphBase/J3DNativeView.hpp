@@ -25,6 +25,8 @@ namespace J3DNativeView {
     void captureReadback(u32 channel);
     u32 readbackColor(u32 channel, s32 x, s32 y);
     u32 readbackDepth(u32 channel, s32 x, s32 y);
+    // How many captures of `channel`'s colour have finished (a capture made at count n is readable past n).
+    u32 readbackSerial(u32 channel);
 };  // namespace J3DNativeView
 
 extern "C" {

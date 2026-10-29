@@ -199,12 +199,17 @@ static GXBool sLinked; /* the CPU FIFO is the main FIFO: writes go to the ring *
 /* Host markers (nebula_gx_fifo.h): the renderer wants them (asked at each scene's begin) and the writer is in the main
    ring. */
 uint8_t __NebulaGXMarkers;
-uint8_t __NebulaGXLinked;
+uint8_t __NebulaGXLinked = 1;
 static u8 sMarkersWanted;
 
+/* A display list being recorded: a CPU FIFO of its own. Markers and records never go into one. */
+static int recording_display_list(void) {
+    return sCPUFifoReady && !sLinked;
+}
+
 static void update_markers(void) {
-    __NebulaGXMarkers = (uint8_t)(sLinked && sMarkersWanted);
-    __NebulaGXLinked = (uint8_t)(sLinked != 0);
+    __NebulaGXMarkers = (uint8_t)(!recording_display_list() && sMarkersWanted);
+    __NebulaGXLinked = (uint8_t)!recording_display_list();
 }
 /* Where a display list's writes go once it has overflowed (the SDK then reports the wrap and the list as empty);
    larger than any single reservation. */
@@ -278,7 +283,7 @@ void __NebulaGXPeMarker(int finish, u16 token) {
 }
 
 void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
-    if (sLinked) {
+    if (!recording_display_list()) {
         if (marker == NEBULA_SCENE_3D_BEGIN || marker == NEBULA_SCENE_2D_BEGIN) {
             sMarkersWanted = (u8)(nebula_host()->option(nebula_host()->user, NEBULA_OPTION_DRAW_IDENTITIES) != 0);
             update_markers();
@@ -290,8 +295,8 @@ void __NebulaGXSceneMarker(u32 marker, const f32 (*view)[4]) {
 
 void __NebulaGXStripeParticle(u32 particle, u32 ageLifetime, u8 strip) {
     if (__NebulaGXMarkers != 0) {
-        nebula_host()->gx_stripe_particle(nebula_host()->user, (size_t)(__NebulaGXWriter.ptr - sSpanStart), particle,
-                                          ageLifetime, strip);
+        nebula_host()->gx_stripe_particle(nebula_host()->user, sLinked ? (size_t)(__NebulaGXWriter.ptr - sSpanStart) : 0,
+                                          particle, ageLifetime, strip);
     }
 }
 

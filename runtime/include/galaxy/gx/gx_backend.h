@@ -241,6 +241,8 @@ public:
         EfbPeekKind kind,
         std::uint16_t token,
         std::uint32_t& value);
+    // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
+    [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
     void scan_pe_events_on_sim_thread(
         const std::byte* fifo_data,
         std::size_t fifo_size,
@@ -1345,6 +1347,7 @@ private:
         std::atomic<std::uint64_t> published{0};
         std::atomic<bool> requested{false};
         std::atomic<std::uint64_t> published_answers{0};
+        std::atomic<std::uint32_t> publications{0};  // fields published for the current binding
         std::uint64_t last_request = 0;  // simulation thread
         std::uint64_t completed = 0;
     };
