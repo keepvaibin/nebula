@@ -1,4 +1,5 @@
 #include "Game/MapObj/ElectricRailMoving.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/Gravity/GravityInfo.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
@@ -249,7 +250,7 @@ void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f3
 
 void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, _E4 * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, _E4 * 2, NEBULA_SHAPE_TEXCOORD0);
 
         for (s32 j = 0; j < _E4; j++) {
             setVertexAttribute(j, i, a1, a2, a3, a4, nullptr);
@@ -306,10 +307,10 @@ void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 
         pMesh->texCoord(0, texCoord, 1.0f);
         pMesh->corner();
     } else {
-        GXPosition3f32(x0, y0, z0);
-        GXTexCoord2f32(texCoord, 0.0f);
-        GXPosition3f32(x1, y1, z1);
-        GXTexCoord2f32(texCoord, 1.0f);
+        J3DNativeDraw::position(x0, y0, z0);
+        J3DNativeDraw::texCoord(texCoord, 0.0f);
+        J3DNativeDraw::position(x1, y1, z1);
+        J3DNativeDraw::texCoord(texCoord, 1.0f);
     }
 }
 

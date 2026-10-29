@@ -1,4 +1,5 @@
 #include "Game/Map/WaterPlant.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
@@ -246,24 +247,24 @@ void WaterPlant::drawDirect() const {
 
         f32 drawOffsetX = mHalfWidth * ::sDrawVec.x;
         f32 drawOffsetZ = mHalfWidth * ::sDrawVec.z;
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 8);
-        GXPosition3f32(drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ);
-        GXPosition1x8(0);
-        GXPosition3f32(drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ);
-        GXPosition1x8(1);
-        GXPosition3f32(drawVec2.x - drawOffsetX, drawVec2.y, drawVec2.z - drawOffsetZ);
-        GXPosition1x8(2);
-        GXPosition3f32(drawVec2.x + drawOffsetX, drawVec2.y, drawVec2.z + drawOffsetZ);
-        GXPosition1x8(3);
-        GXPosition3f32(drawVec1.x - drawOffsetX, drawVec1.y, drawVec1.z - drawOffsetZ);
-        GXPosition1x8(4);
-        GXPosition3f32(drawVec1.x + drawOffsetX, drawVec1.y, drawVec1.z + drawOffsetZ);
-        GXPosition1x8(5);
-        GXPosition3f32(position->x - drawOffsetX, position->y, position->z - drawOffsetZ);
-        GXPosition1x8(6);
-        GXPosition3f32(position->x + drawOffsetX, position->y, position->z + drawOffsetZ);
-        GXPosition1x8(7);
-        GXEnd();
+        // Each vertex's texture coordinate is its entry of ::gxArray.
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 8, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 0], ::gxArray[2 * 0 + 1]);
+        J3DNativeDraw::position(drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 1], ::gxArray[2 * 1 + 1]);
+        J3DNativeDraw::position(drawVec2.x - drawOffsetX, drawVec2.y, drawVec2.z - drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 2], ::gxArray[2 * 2 + 1]);
+        J3DNativeDraw::position(drawVec2.x + drawOffsetX, drawVec2.y, drawVec2.z + drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 3], ::gxArray[2 * 3 + 1]);
+        J3DNativeDraw::position(drawVec1.x - drawOffsetX, drawVec1.y, drawVec1.z - drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 4], ::gxArray[2 * 4 + 1]);
+        J3DNativeDraw::position(drawVec1.x + drawOffsetX, drawVec1.y, drawVec1.z + drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 5], ::gxArray[2 * 5 + 1]);
+        J3DNativeDraw::position(position->x - drawOffsetX, position->y, position->z - drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 6], ::gxArray[2 * 6 + 1]);
+        J3DNativeDraw::position(position->x + drawOffsetX, position->y, position->z + drawOffsetZ);
+        J3DNativeDraw::texCoord(::gxArray[2 * 7], ::gxArray[2 * 7 + 1]);
     }
 }
 
@@ -344,12 +345,6 @@ void WaterPlantDrawInit::updateSwingPos() {
 #pragma push
 #pragma opt_propagation off
 void WaterPlantDrawInit::initDraw() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
-    GXSetArray(GX_VA_TEX0, &::gxArray, sizeof(TVec2f));
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(1);

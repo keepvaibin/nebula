@@ -1,4 +1,5 @@
 #include "Game/Util/DrawUtil.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/Screen/ScreenAlphaCapture.hpp"
@@ -130,11 +131,6 @@ namespace MR {
         mtxImm.identity();
         GXLoadPosMtxImm(mtxImm, GX_PNMTX0);
         GXSetCurrentMtx(GX_PNMTX0);
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-        GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_U8, 0);
         GXSetNumChans(0);
         GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -167,21 +163,20 @@ namespace MR {
 #ifdef TARGET_PC
         __NebulaGXClearQuadMarker(0xFFFFFF);
 #endif
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
-            GXPosition2u16(0, 0);
-            GXTexCoord2u8(0, 0);
+            J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-            GXPosition2u16(width, 0);
-            GXTexCoord2u8(1, 0);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(width)), 0.0f, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-            GXPosition2u16(width, height);
-            GXTexCoord2u8(1, 1);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(width)), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-            GXPosition2u16(0, height);
-            GXTexCoord2u8(0, 1);
+            J3DNativeDraw::position(0.0f, static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 1.0f);
         }
-        GXEnd();
 
         GXSetZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
         GXSetZCompLoc(GX_TRUE);
@@ -205,9 +200,6 @@ namespace MR {
         Mtx matrix;
         PSMTXIdentity(matrix);
         GXLoadPosMtxImm(matrix, GX_PNMTX0);
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
         GXSetNumTexGens(0);
         GXSetNumTevStages(1);
         GXSetTevDirect(GX_TEVSTAGE0);
@@ -225,23 +217,19 @@ namespace MR {
         GXSetAlphaUpdate(GX_TRUE);
         GXSetDstAlpha(GX_TRUE, alpha);
 
-        GXBegin(GX_TRIANGLES, GX_VTXFMT0, 6);
-        GXPosition3f32(rPosition.x, rPosition.y, 0.0f);
-        GXPosition3f32(width + rPosition.x, rPosition.y, 0.0f);
-        GXPosition3f32(width + rPosition.x, height + rPosition.y, 0.0f);
-        GXPosition3f32(rPosition.x, rPosition.y, 0.0f);
-        GXPosition3f32(width + rPosition.x, height + rPosition.y, 0.0f);
-        GXPosition3f32(rPosition.x, height + rPosition.y, 0.0f);
-        GXEnd();
+        J3DNativeDraw::begin(GX_TRIANGLES, 6, 0);
+        J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
+        J3DNativeDraw::position(width + rPosition.x, rPosition.y, 0.0f);
+        J3DNativeDraw::position(width + rPosition.x, height + rPosition.y, 0.0f);
+        J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
+        J3DNativeDraw::position(width + rPosition.x, height + rPosition.y, 0.0f);
+        J3DNativeDraw::position(rPosition.x, height + rPosition.y, 0.0f);
 
         GXSetDstAlpha(GX_FALSE, 0);
         GXSetClipMode(GX_CLIP_ENABLE);
     }
 
     void fillScreenSetup(const GXColor& rColor) {
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
         TMtx34f mtxImm;
         mtxImm.identity();
         GXLoadPosMtxImm(mtxImm, GX_PNMTX0);
@@ -268,19 +256,18 @@ namespace MR {
     }
 
     void fillScreenArea(const TVec2s& rMin, const TVec2s& rMax) {
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, 0);
         {
             u16 maxX = rMax.x;
             u16 minX = rMin.x;
             u16 minY = rMin.y;
             u16 maxY = rMax.y;
 
-            GXPosition2u16(minX, minY);
-            GXPosition2u16(maxX, minY);
-            GXPosition2u16(maxX, maxY);
-            GXPosition2u16(minX, maxY);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(minX)), static_cast< f32 >(static_cast< u16 >(minY)), 0.0f);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(maxX)), static_cast< f32 >(static_cast< u16 >(minY)), 0.0f);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(maxX)), static_cast< f32 >(static_cast< u16 >(maxY)), 0.0f);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(minX)), static_cast< f32 >(static_cast< u16 >(maxY)), 0.0f);
         }
-        GXEnd();
     }
 
     void fillScreen(const GXColor& color) {
@@ -334,11 +321,6 @@ namespace MR {
         mtxImm.identity();
         GXLoadPosMtxImm(mtxImm, GX_PNMTX0);
         GXSetCurrentMtx(GX_PNMTX0);
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-        GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
         GXSetNumChans(1);
         GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -363,24 +345,23 @@ namespace MR {
         GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
         GXSetTevColor(GX_TEVREG0, Color8(0x00000080));
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
         {
             u16 width = MR::getScreenWidth();
             u16 height = MR::getScreenHeight();
 
-            GXPosition2u16(0, 0);
-            GXTexCoord2f32(0.0f, 0.0f);
+            J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-            GXPosition2u16(width, 0);
-            GXTexCoord2f32(1.0f, 0.0f);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(width)), 0.0f, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-            GXPosition2u16(0, height);
-            GXTexCoord2f32(0.0f, 1.0f);
+            J3DNativeDraw::position(0.0f, static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-            GXPosition2u16(width, height);
-            GXTexCoord2f32(1.0f, 1.0f);
+            J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(width)), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 1.0f);
         }
-        GXEnd();
 
         GXSetDstAlpha(GX_FALSE, 0);
         GXSetAlphaUpdate(GX_FALSE);

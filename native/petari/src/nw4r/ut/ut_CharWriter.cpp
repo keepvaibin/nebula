@@ -1,4 +1,5 @@
 #include "nw4r/ut/CharWriter.h"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/ut/Font.h"
 #include <revolution/gx/GXVert.h>
 
@@ -55,13 +56,6 @@ namespace nw4r {
         }
 
         void CharWriter::SetupVertexFormat() {
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_U16, TEXTURE_COODINATE_FRACTION_BITS);
-            GXClearVtxDesc();
-            GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-            GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-            GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
         }
 
         void CharWriter::SetupGX() {
@@ -187,25 +181,24 @@ namespace nw4r {
 
             LoadTexture(glyph, GX_TEXMAP0);
 
-            GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+            J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {
-                GXPosition3f32(posLeft, posTop, posZ);
-                GXColor1u32(mVertexColor.lu);
-                GXTexCoord2u16(texLeft, texTop);
+                J3DNativeDraw::position(posLeft, posTop, posZ);
+                J3DNativeDraw::color(mVertexColor.lu);
+                J3DNativeDraw::texCoord(texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
 
-                GXPosition3f32(posRight, posTop, posZ);
-                GXColor1u32(mVertexColor.ru);
-                GXTexCoord2u16(texRight, texTop);
+                J3DNativeDraw::position(posRight, posTop, posZ);
+                J3DNativeDraw::color(mVertexColor.ru);
+                J3DNativeDraw::texCoord(texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texTop / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
 
-                GXPosition3f32(posRight, posBottom, posZ);
-                GXColor1u32(mVertexColor.rd);
-                GXTexCoord2u16(texRight, texBottom);
+                J3DNativeDraw::position(posRight, posBottom, posZ);
+                J3DNativeDraw::color(mVertexColor.rd);
+                J3DNativeDraw::texCoord(texRight / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
 
-                GXPosition3f32(posLeft, posBottom, posZ);
-                GXColor1u32(mVertexColor.ld);
-                GXTexCoord2u16(texLeft, texBottom);
+                J3DNativeDraw::position(posLeft, posBottom, posZ);
+                J3DNativeDraw::color(mVertexColor.ld);
+                J3DNativeDraw::texCoord(texLeft / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS), texBottom / static_cast< f32 >(1 << TEXTURE_COODINATE_FRACTION_BITS));
             }
-            GXEnd();
         }
 
         void CharWriter::UpdateVertexColor() {

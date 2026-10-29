@@ -1,4 +1,5 @@
 #include <revolution.h>
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <revolution/gx/GXVert.h>
 
 #ifdef __cplusplus
@@ -52,11 +53,6 @@ void THPGXYuv2RgbSetup(GXRenderModeObj* rmode) {
     GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
     GXSetTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
     GXInvalidateTexAll();
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT7, GX_VA_POS, GX_POS_XYZ, GX_S16, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT7, GX_VA_TEX0, GX_TEX_ST, GX_U16, 0);
     GXSetNumTevStages(4);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
     GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_KONST, GX_CC_C0);
@@ -115,18 +111,17 @@ void THPGXYuv2RgbDraw(u8* y_data, u8* u_data, u8* v_data, s16 x, s16 y, s16 text
     GXInitTexObjLOD(&tobj2, filter, filter, 0, 0, 0, 0, 0, GX_ANISO_1);
     GXLoadTexObj(&tobj2, GX_TEXMAP2);
 
-    GXBegin(GX_QUADS, GX_VTXFMT7, 4);
+    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     {
-        GXPosition3s16(x, y, 0);
-        GXTexCoord2u16(0, 0);
-        GXPosition3s16(x + polygonWidth, y, 0);
-        GXTexCoord2u16(1, 0);
-        GXPosition3s16(x + polygonWidth, y + polygonHeight, 0);
-        GXTexCoord2u16(1, 1);
-        GXPosition3s16(x, y + polygonHeight, 0);
-        GXTexCoord2u16(0, 1);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x)), static_cast< f32 >(static_cast< s16 >(y)), 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x + polygonWidth)), static_cast< f32 >(static_cast< s16 >(y)), 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x + polygonWidth)), static_cast< f32 >(static_cast< s16 >(y + polygonHeight)), 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< s16 >(x)), static_cast< f32 >(static_cast< s16 >(y + polygonHeight)), 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
     }
-    GXEnd();
 }
 
 #ifdef __cplusplus

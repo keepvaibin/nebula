@@ -197,11 +197,6 @@ void HomeButtonLayout::draw() const {
         return;
     }
 
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT4, GX_VA_POS, GX_POS_XY, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT4, GX_VA_CLR0, GX_CLR_RGB, GX_S8, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
     GXSetNumChans(1);
     GXSetNumTexGens(0);
     GXSetNumTevStages(1);

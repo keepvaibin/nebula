@@ -1,4 +1,5 @@
 #include "Game/Map/OceanRingDrawer.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/OceanRing.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -194,21 +195,21 @@ void OceanRingPartDrawer::drawDynamic() const {
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mOceanRing->mStride * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            GXPosition3f32(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            GXColor4u8(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            GXTexCoord2f32(f27, f17);
-            GXTexCoord2f32(f25, f16);
-            GXTexCoord2f32(f23, f15);
+            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
+            J3DNativeDraw::color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
+            J3DNativeDraw::texCoord(f27, f17);
+            J3DNativeDraw::texCoord(f25, f16);
+            J3DNativeDraw::texCoord(f23, f15);
 
             pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            GXPosition3f32(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            GXColor4u8(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            GXTexCoord2f32(f26, f20);
-            GXTexCoord2f32(f24, f19);
-            GXTexCoord2f32(f22, f18);
+            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
+            J3DNativeDraw::color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
+            J3DNativeDraw::texCoord(f26, f20);
+            J3DNativeDraw::texCoord(f24, f19);
+            J3DNativeDraw::texCoord(f22, f18);
 
             f17 += f28;
             f16 += f28;
@@ -218,7 +219,6 @@ void OceanRingPartDrawer::drawDynamic() const {
             f18 += f29;
         }
 
-        GXEnd();
 
         f27 = f26;
         f25 = f24;
@@ -259,17 +259,17 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mOceanRing->mStride * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, mOceanRing->mStride * 2, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
             WaterPoint* pPoint2 = mOceanRing->getPoint(j, indexPlusOne);
-            GXPosition3f32(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            GXTexCoord2f32(f27, f17);
-            GXTexCoord2f32(f25, f16);
+            J3DNativeDraw::position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
+            J3DNativeDraw::texCoord(f27, f17);
+            J3DNativeDraw::texCoord(f25, f16);
 
-            GXPosition3f32(pPoint2->mPosition.x, pPoint2->mPosition.y, pPoint2->mPosition.z);
-            GXTexCoord2f32(f26, f20);
-            GXTexCoord2f32(f24, f19);
+            J3DNativeDraw::position(pPoint2->mPosition.x, pPoint2->mPosition.y, pPoint2->mPosition.z);
+            J3DNativeDraw::texCoord(f26, f20);
+            J3DNativeDraw::texCoord(f24, f19);
 
             f17 += f28;
             f16 += f28;
@@ -277,7 +277,6 @@ void OceanRingPartDrawer::drawDynamicBloom() const {
             f19 += f28;
         }
 
-        GXEnd();
 
         f27 = f26;
         f25 = f24;
@@ -439,17 +438,6 @@ void OceanRingDrawer::drawGD() {
 }
 
 void OceanRingDrawer::loadMaterial() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_POS_XYZ, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_POS_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX2, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(1);
@@ -532,13 +520,6 @@ void OceanRingDrawer::loadMaterial() const {
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(0);

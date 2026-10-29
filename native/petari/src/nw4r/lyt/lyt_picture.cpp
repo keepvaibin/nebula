@@ -119,8 +119,6 @@ namespace nw4r {
 
             bool useVtxColor = mpMaterial->SetupGX(detail::IsModulateVertexColor(mVtxColors, mGlbAlpha), mGlbAlpha);
 
-            detail::SetVertexFormat(useVtxColor, mTexCoordAry.GetSize());
-
             detail::DrawQuad(GetVtxPos(), mSize, mTexCoordAry.GetSize(), mTexCoordAry.GetArray(), useVtxColor ? mVtxColors : NULL, mGlbAlpha);
         }
 

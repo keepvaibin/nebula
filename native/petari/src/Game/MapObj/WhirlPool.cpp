@@ -1,4 +1,5 @@
 #include "Game/MapObj/WhirlPool.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Map/WhirlPoolAccelerator.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -121,7 +122,7 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
     MR::makeMtxRotate(rotation, 0.0f, mRotation, 0.0f);
     rotation.mult(offset, offset);
     MR::makeMtxRotate(rotation, 0.0f, 25.0f, 0.0f);
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mPointCount * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, mPointCount * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
     const WhirlPoolPoint* pPoint;
 
     for (s32 i = 0; i < mPointCount; i++) {
@@ -134,37 +135,24 @@ void WhirlPool::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32 u1, f32 u2
         position.add(offset);
         rotation.mult(offset, offset);
 
-        GXPosition3f32(position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0);
-        GXColor4u8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        GXTexCoord2f32(u0 + pPoint->mTexCoord, v0);
-        GXTexCoord2f32(u2 + pPoint->mTexCoord, v1);
-        GXTexCoord2f32(u0 + pPoint->mTexCoord, v2);
+        J3DNativeDraw::position(position.x + side.x * x0 + normal.x * y0, position.y + side.y * x0 + normal.y * y0, position.z + side.z * x0 + normal.z * y0);
+        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
+        J3DNativeDraw::texCoord(u0 + pPoint->mTexCoord, v0);
+        J3DNativeDraw::texCoord(u2 + pPoint->mTexCoord, v1);
+        J3DNativeDraw::texCoord(u0 + pPoint->mTexCoord, v2);
 
-        GXPosition3f32(position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1);
-        GXColor4u8(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
-        GXTexCoord2f32(u1 + pPoint->mTexCoord, v0);
+        J3DNativeDraw::position(position.x + side.x * x1 + normal.x * y1, position.y + side.y * x1 + normal.y * y1, position.z + side.z * x1 + normal.z * y1);
+        J3DNativeDraw::color(0xFF, 0xFF, 0xFF, mPoints[i]->mAlpha);
+        J3DNativeDraw::texCoord(u1 + pPoint->mTexCoord, v0);
         v0 += 0.01f;
-        GXTexCoord2f32(u3 + pPoint->mTexCoord, v1);
+        J3DNativeDraw::texCoord(u3 + pPoint->mTexCoord, v1);
         v1 += 0.01f;
-        GXTexCoord2f32(u1 + pPoint->mTexCoord, v2);
+        J3DNativeDraw::texCoord(u1 + pPoint->mTexCoord, v2);
         v2 += 0.01f;
     }
-
-    GXEnd();
 }
 
 void WhirlPool::loadMaterial() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX2, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), GX_PNMTX0);
     GXSetCurrentMtx(GX_PNMTX0);
     GXSetNumChans(1);

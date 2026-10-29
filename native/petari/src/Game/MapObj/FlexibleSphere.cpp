@@ -228,7 +228,6 @@ void FlexibleSphere::draw() const {
     if (!MR::isDead(this)) {
         J3DModelX* model = static_cast< J3DModelX* >(MR::getJ3DModel(this));
         model->viewCalc2();
-        GXInvalidateVtxCache();
         scale = 0.05f / mScale.x + 0.95f;
         model->directDraw(nullptr);
     }

@@ -31,6 +31,8 @@ public:
                     s32 numPointsV, f32);
     void updateFlag();
     void loadMaterial() const;
+    // Vertex `index`'s colour and texture coordinate (its mColors and mTexST entries) for the draw being sent.
+    void sendEntry(u8 index) const;
 
     s32 getNumPointsU() const {
         return mNumPointsU;

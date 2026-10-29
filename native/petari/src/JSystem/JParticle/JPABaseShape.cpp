@@ -1,4 +1,5 @@
 #include "JSystem/JParticle/JPABaseShape.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Inline.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JMath/JMATrigonometric.hpp"
@@ -419,20 +420,36 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
 }
 #pragma pop
 
-static u8 jpa_dl[32] ATTRIBUTE_ALIGN(32) = {
-    0x80, 0x00, 0x04, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00,
-    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
+namespace {
+    // The quad arrays JPAResource set for the particles being drawn: positions 3 signed bytes, texture coordinates 2.
+    const u8* sQuadPositions = nullptr;
+    const u8* sQuadTexCoords = nullptr;
 
-static u8 jpa_dl_x[32] ATTRIBUTE_ALIGN(32) = {
-    0x80, 0x00, 0x08, 0x00, 0x00, 0x01, 0x01, 0x02, 0x02, 0x03, 0x03, 0x48, 0x00, 0x49, 0x01, 0x4A,
-    0x02, 0x4B, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-};
+    void sendQuadVertex(u32 position, u32 texCoord) {
+        const s8* pPos = reinterpret_cast< const s8* >(sQuadPositions) + 3 * position;
+        const s8* pCrd = reinterpret_cast< const s8* >(sQuadTexCoords) + 2 * texCoord;
+        J3DNativeDraw::position(pPos[0], pPos[1], pPos[2]);
+        J3DNativeDraw::texCoord(pCrd[0], pCrd[1]);
+    }
+}  // namespace
 
-static u8* p_dl[2] = {
-    jpa_dl,
-    jpa_dl_x,
-};
+void JPASetQuadArrays(const u8* pPositions, const u8* pTexCoords) {
+    sQuadPositions = pPositions;
+    sQuadTexCoords = pTexCoords;
+}
+
+void JPADrawQuad(u32 type) {
+    // Positions 0-3 with texture coordinates 0-3; the crossed type adds positions 0x48-0x4B with the same coordinates.
+    J3DNativeDraw::begin(GX_QUADS, type != 0 ? 8 : 4, NEBULA_SHAPE_TEXCOORD0);
+    for (u32 i = 0; i < 4; i++) {
+        sendQuadVertex(i, i);
+    }
+    if (type != 0) {
+        for (u32 i = 0; i < 4; i++) {
+            sendQuadVertex(0x48 + i, i);
+        }
+    }
+}
 
 typedef void (*projectionFunc)(JPAEmitterWorkData const*, const Mtx);
 
@@ -461,7 +478,7 @@ void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[0][1] = 0.0f;
         GXLoadPosMtxImm(local_38, 0);
         p_prj[work->mPrjType](work, local_38);
-        GXCallDisplayList(jpa_dl, sizeof(jpa_dl));
+        JPADrawQuad(0);
     }
 }
 
@@ -489,7 +506,7 @@ void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[0][2] = 0.0f;
         GXLoadPosMtxImm(local_38, 0);
         p_prj[work->mPrjType](work, local_38);
-        GXCallDisplayList(jpa_dl, sizeof(jpa_dl));
+        JPADrawQuad(0);
     }
 }
 
@@ -652,7 +669,7 @@ void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
         PSMTXConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
         GXLoadPosMtxImm(auStack_88, 0);
         p_prj[param_0->mPrjType](param_0, auStack_88);
-        GXCallDisplayList(p_dl[param_0->mDLType], sizeof(jpa_dl));
+        JPADrawQuad(param_0->mDLType);
     }
 }
 
@@ -661,14 +678,9 @@ void JPADrawPoint(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
         return;
     }
 
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXBegin(GX_POINTS, GX_VTXFMT1, 1);
-    GXPosition3f32(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z);
-    GXTexCoord2f32(0.0f, 0.0f);
-    GXEnd();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
+    J3DNativeDraw::begin(GX_POINTS, 1, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(ptcl->mPosition.x, ptcl->mPosition.y, ptcl->mPosition.z);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
 }
 
 #ifndef TARGET_PC
@@ -688,16 +700,11 @@ void JPADrawLine(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
 
     local_28.setLength(param_0->mGlobalPtclScl.y * (25.0f * param_1->mParticleScaleY));
     local_28.sub(local_1c, local_28);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXBegin(GX_LINES, GX_VTXFMT1, 2);
-    GXPosition3f32(local_1c.x, local_1c.y, local_1c.z);
-    GXTexCoord2f32(0.0f, 0.0f);
-    GXPosition3f32(local_28.x, local_28.y, local_28.z);
-    GXTexCoord2f32(0.0f, 1.0f);
-    GXEnd();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
+    J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(local_1c.x, local_1c.y, local_1c.z);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    J3DNativeDraw::position(local_28.x, local_28.y, local_28.z);
+    J3DNativeDraw::texCoord(0.0f, 1.0f);
 }
 #endif
 
@@ -745,9 +752,7 @@ void JPADrawStripe(JPAEmitterWorkData* param_0) {
 
     GXLoadPosMtxImm(param_0->mPosCamMtx, 0);
     p_prj[param_0->mPrjType](param_0, param_0->mPosCamMtx);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT1, ptcl_num << 1);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, ptcl_num << 1, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* node = startNode; node != param_0->mpAlivePtcl->getEnd(); node = node_func(node), coord += step) {
         param_0->mpCurNode = node;
         JPABaseParticle* particle = node->getObject();
@@ -786,14 +791,11 @@ void JPADrawStripe(JPAEmitterWorkData* param_0) {
         local_c8[2][2] = particle->mBaseAxis.z;
         local_c8[2][3] = 0.0f;
         PSMTXMultVecArraySR(local_c8, local_e0, local_e0, 2);
-        GXPosition3f32(local_e0[0].x + local_ec.x, local_e0[0].y + local_ec.y, local_e0[0].z + local_ec.z);
-        GXTexCoord2f32(0.0f, coord);
-        GXPosition3f32(local_e0[1].x + local_ec.x, local_e0[1].y + local_ec.y, local_e0[1].z + local_ec.z);
-        GXTexCoord2f32(1.0f, coord);
+        J3DNativeDraw::position(local_e0[0].x + local_ec.x, local_e0[0].y + local_ec.y, local_e0[0].z + local_ec.z);
+        J3DNativeDraw::texCoord(0.0f, coord);
+        J3DNativeDraw::position(local_e0[1].x + local_ec.x, local_e0[1].y + local_ec.y, local_e0[1].z + local_ec.z);
+        J3DNativeDraw::texCoord(1.0f, coord);
     }
-    GXEnd();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
 }
 #endif
 
@@ -834,9 +836,7 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
 
     GXLoadPosMtxImm(param_0->mPosCamMtx, 0);
     p_prj[param_0->mPrjType](param_0, param_0->mPosCamMtx);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT1, ptcl_num << 1);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, ptcl_num << 1, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* node = startNode; node != param_0->mpAlivePtcl->getEnd(); node = node_func(node), coord += step) {
         param_0->mpCurNode = node;
         JPABaseParticle* particle = node->getObject();
@@ -875,15 +875,14 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
         local_90[2][2] = particle->mBaseAxis.z;
         local_90[2][3] = 0.0f;
         PSMTXMultVecArraySR(local_90, local_a8, local_a8, 2);
-        GXPosition3f32(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
-        GXTexCoord2f32(0.0f, coord);
-        GXPosition3f32(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);
-        GXTexCoord2f32(1.0f, coord);
+        J3DNativeDraw::position(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
+        J3DNativeDraw::texCoord(0.0f, coord);
+        J3DNativeDraw::position(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);
+        J3DNativeDraw::texCoord(1.0f, coord);
     }
-    GXEnd();
 
     coord = start_coord;
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT1, ptcl_num << 1);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, ptcl_num << 1, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* node = startNode; node != param_0->mpAlivePtcl->getEnd(); node = node_func(node), coord += step) {
         param_0->mpCurNode = node;
         JPABaseParticle* particle = node->getObject();
@@ -922,14 +921,11 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
         local_90[2][2] = particle->mBaseAxis.z;
         local_90[2][3] = 0.0f;
         PSMTXMultVecArraySR(local_90, local_a8, local_a8, 2);
-        GXPosition3f32(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
-        GXTexCoord2f32(0.0f, coord);
-        GXPosition3f32(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);
-        GXTexCoord2f32(1.0f, coord);
+        J3DNativeDraw::position(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
+        J3DNativeDraw::texCoord(0.0f, coord);
+        J3DNativeDraw::position(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);
+        J3DNativeDraw::texCoord(1.0f, coord);
     }
-    GXEnd();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
 }
 #endif
 

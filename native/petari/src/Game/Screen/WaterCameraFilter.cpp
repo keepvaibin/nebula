@@ -1,4 +1,5 @@
 #include "Game/Screen/WaterCameraFilter.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -128,40 +129,32 @@ void WaterCameraFilter::draw() const {
     f32 centerU = 1.0f - pos.x;
     f32 centerV = 1.0f - pos.y;
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
-        GXPosition2u16(0, 0);
-        GXTexCoord2f32(centerU - halfSize, centerV - halfSize);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(centerU - halfSize, centerV - halfSize);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition2u16(MR::getFrameBufferWidth(), 0);
-        GXTexCoord2f32(centerU + halfSize, centerV - halfSize);
-        GXTexCoord2f32(1.0f, 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getFrameBufferWidth())), 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(centerU + halfSize, centerV - halfSize);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-        GXPosition2u16(0, MR::getScreenHeight());
-        GXTexCoord2f32(centerU - halfSize, centerV + halfSize);
-        GXTexCoord2f32(0.0f, 1.0f);
+        J3DNativeDraw::position(0.0f, static_cast< f32 >(static_cast< u16 >(MR::getScreenHeight())), 0.0f);
+        J3DNativeDraw::texCoord(centerU - halfSize, centerV + halfSize);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
 
         s32 height = MR::getScreenHeight();
-        GXPosition2u16(MR::getFrameBufferWidth(), height);
-        GXTexCoord2f32(centerU + halfSize, centerV + halfSize);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(MR::getFrameBufferWidth())), static_cast< f32 >(static_cast< u16 >(height)), 0.0f);
+        J3DNativeDraw::texCoord(centerU + halfSize, centerV + halfSize);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
     }
 
-    GXEnd();
 
     MR::loadProjectionMtx();
     MR::loadViewMtx();
 }
 
 void WaterCameraFilter::loadMaterial() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
     C_MTXOrtho(projection, 0.0f, height, 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);

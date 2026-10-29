@@ -290,8 +290,6 @@ namespace nw4r {
         void Window::DrawContent(const math::VEC2& rBase, const WindowFrameSize& rFrameSize, u8 alpha) {
             bool useVtxColor = mpMaterial->SetupGX(detail::IsModulateVertexColor(mContent.vtxColors, alpha), alpha);
 
-            detail::SetVertexFormat(useVtxColor, mContent.texCoordAry.GetSize());
-
             detail::DrawQuad(math::VEC2(rBase.x + rFrameSize.l - mContentInflation.l, rBase.y + rFrameSize.t - mContentInflation.t),
 
                              Size(mSize.width - rFrameSize.l + mContentInflation.l - rFrameSize.r + mContentInflation.r,
@@ -310,8 +308,6 @@ namespace nw4r {
             const u8 texCoordNum = 1;
 
             const bool bUseVtxCol = frame.pMaterial->SetupGX(detail::IsModulateVertexColor(NULL, alpha), alpha);
-
-            detail::SetVertexFormat(bUseVtxCol, texCoordNum);
 
             const Size texSize = detail::GetTextureSize(frame.pMaterial, 0);
             ut::Color vtxColors[4];
@@ -349,7 +345,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[0].pMaterial->SetupGX(bModVtxCol, alpha);
                 GetLTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
                 GetLTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[0].pMaterial, 0), frames[0].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -357,7 +352,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[1].pMaterial->SetupGX(bModVtxCol, alpha);
                 GetRTFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[1].pMaterial, 0), frames[1].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -365,7 +359,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[3].pMaterial->SetupGX(bModVtxCol, alpha);
                 GetRBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[3].pMaterial, 0), frames[3].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -373,7 +366,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[2].pMaterial->SetupGX(bModVtxCol, alpha);
                 GetLBFrameSize(&polPt, &polSize, basePt, mSize, frameSize);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[2].pMaterial, 0), frames[2].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(polPt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
         }
@@ -389,7 +381,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[0].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.l, frameSize.t);
                 GetLTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[0].pMaterial, 0), frames[0].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(basePt, polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -397,7 +388,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[6].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(mSize.width - frameSize.l - frameSize.r, frameSize.t);
                 GetLTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[6].pMaterial, 0), frames[6].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x + frameSize.l, basePt.y), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
 
@@ -405,7 +395,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[1].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.r, frameSize.t);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[1].pMaterial, 0), frames[1].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0,
                                  alpha);
             }
@@ -414,7 +403,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[5].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.r, mSize.height - frameSize.t - frameSize.b);
                 GetRTTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[5].pMaterial, 0), frames[5].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y + frameSize.t), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -423,7 +411,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[3].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.r, frameSize.b);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[3].pMaterial, 0), frames[3].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x + mSize.width - frameSize.r, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum,
                                  texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -432,7 +419,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[7].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(mSize.width - frameSize.l - frameSize.r, frameSize.b);
                 GetRBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[7].pMaterial, 0), frames[7].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x + frameSize.l, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -441,7 +427,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[2].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.l, frameSize.b);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[2].pMaterial, 0), frames[2].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x, basePt.y + mSize.height - frameSize.b), polSize, texCoordNum, texCds,
                                  bUseVtxCol ? vtxColors : 0, alpha);
             }
@@ -450,7 +435,6 @@ namespace nw4r {
                 const bool bUseVtxCol = frames[4].pMaterial->SetupGX(bModVtxCol, alpha);
                 polSize = Size(frameSize.l, mSize.height - frameSize.t - frameSize.b);
                 GetLBTexCoord(texCds[0], polSize, detail::GetTextureSize(frames[4].pMaterial, 0), frames[4].textureFlip);
-                detail::SetVertexFormat(bUseVtxCol, texCoordNum);
                 detail::DrawQuad(math::VEC2(basePt.x, basePt.y + frameSize.t), polSize, texCoordNum, texCds, bUseVtxCol ? vtxColors : 0, alpha);
             }
         }

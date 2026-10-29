@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerBlur.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -168,16 +169,15 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, range * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
-            GXPosition2f32(pos.x - offset.x, pos.y - offset.y);
-            GXTexCoord2f32(0.0f, mBlurTexCoords[point]);
-            GXPosition2f32(pos.x + offset.x, pos.y + offset.y);
-            GXTexCoord2f32(1.0f, mBlurTexCoords[point]);
+            J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
+            J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, mBlurTexCoords[point]);
         }
-        GXEnd();
 
         start = end;
     }
@@ -192,29 +192,21 @@ void StarPointerBlur::draw2() const {
             continue;
         }
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, range * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, range * 2, NEBULA_SHAPE_TEXCOORD0);
         for (s32 point = start; point < end; point++) {
             const TVec2f& pos = mBlurPoints[point].mPos;
             const TVec2f& offset = dir * mBlurThicks[point];
-            GXPosition2f32(pos.x - offset.x, pos.y - offset.y);
-            GXTexCoord2f32(0.0f, mBlurTexCoords[point]);
-            GXPosition2f32(pos.x + offset.x, pos.y + offset.y);
-            GXTexCoord2f32(1.0f, mBlurTexCoords[point]);
+            J3DNativeDraw::position(pos.x - offset.x, pos.y - offset.y, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, mBlurTexCoords[point]);
+            J3DNativeDraw::position(pos.x + offset.x, pos.y + offset.y, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, mBlurTexCoords[point]);
         }
-        GXEnd();
 
         start = end;
     }
 }
 
 void StarPointerBlur::initDraw() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-
     GXSetNumTexGens(1);
     GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_TEX0, 60, GX_FALSE, 125);
     mTexture->load(GX_TEXMAP0);

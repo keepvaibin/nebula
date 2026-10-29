@@ -78,13 +78,6 @@ void JPAEmitterManager::draw(JPADrawInfo const* drawInfo, u8 group_id) {
     GXEnableTexOffsets(GX_TEXCOORD2, GX_TRUE, GX_TRUE);
     GXSetCullMode(GX_CULL_NONE);
     GXSetCoPlanar(GX_FALSE);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX8);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX8);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_S8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_S8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
     GXSetCurrentMtx(GX_PNMTX0);
     GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);

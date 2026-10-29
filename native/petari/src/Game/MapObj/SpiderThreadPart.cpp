@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpiderThreadPart.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/MapObj/SpiderThreadMainPoint.hpp"
@@ -503,87 +504,84 @@ void SpiderThreadPart::updateDrawVec() {
 namespace {
     // this is extremely hacky, and I'm not sure I like this. However, this matches.
     inline void upperPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
+        J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
     inline void upperPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
+        J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
 
     inline void rightLowerPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
+        J3DNativeDraw::position(rPos.x + x * rSide.x + y * rFront.x, rPos.y + x * rSide.y + y * rFront.y, rPos.z + x * rSide.z + y * rFront.z);
     }
     inline void rightLowerPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
+        J3DNativeDraw::position(rPos.x - x * rSide.x - y * rFront.x, rPos.y - x * rSide.y - y * rFront.y, rPos.z - x * rSide.z - y * rFront.z);
     }
 
     inline void leftLowerPoint1(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
+        J3DNativeDraw::position(rPos.x + x * rSide.x - y * rFront.x, rPos.y + x * rSide.y - y * rFront.y, rPos.z + x * rSide.z - y * rFront.z);
     }
     inline void leftLowerPoint2(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 x, f32 y) {
-        GXPosition3f32(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
+        J3DNativeDraw::position(rPos.x - x * rSide.x + y * rFront.x, rPos.y - x * rSide.y + y * rFront.y, rPos.z - x * rSide.z + y * rFront.z);
     }
 
     void sendPointsUpper(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
         upperPoint1(rPos, rSide, rFront, 18.0f, 3.0f);
-        GXColor1u32(sColorMinusX);
-        GXTexCoord2f32(0.0f, texY1);
-        GXTexCoord2f32(0.0f, texY2);
+        J3DNativeDraw::color(sColorMinusX);
+        J3DNativeDraw::texCoord(0.0f, texY1);
+        J3DNativeDraw::texCoord(0.0f, texY2);
 
         upperPoint2(rPos, rSide, rFront, 18.0f, 3.0f);
-        GXColor1u32(sColorPlusX);
-        GXTexCoord2f32(1.0f, texY1);
-        GXTexCoord2f32(1.0f, texY2);
+        J3DNativeDraw::color(sColorPlusX);
+        J3DNativeDraw::texCoord(1.0f, texY1);
+        J3DNativeDraw::texCoord(1.0f, texY2);
     }
 
     void sendPointsRightLower(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
         rightLowerPoint1(rPos, rSide, rFront, 18.0f, 18.0f);
-        GXColor1u32(sColorPlusX);
-        GXTexCoord2f32(0.0f, texY1);
-        GXTexCoord2f32(0.0f, texY2);
+        J3DNativeDraw::color(sColorPlusX);
+        J3DNativeDraw::texCoord(0.0f, texY1);
+        J3DNativeDraw::texCoord(0.0f, texY2);
 
         rightLowerPoint2(rPos, rSide, rFront, 15.0f, 18.0f);
-        GXColor1u32(sColorMinusY);
-        GXTexCoord2f32(1.0f, texY1);
-        GXTexCoord2f32(1.0f, texY2);
+        J3DNativeDraw::color(sColorMinusY);
+        J3DNativeDraw::texCoord(1.0f, texY1);
+        J3DNativeDraw::texCoord(1.0f, texY2);
     }
 
     void sendPointsLeftLower(const TVec3f& rPos, const TVec3f& rSide, const TVec3f& rFront, f32 texY1, f32 texY2) {
         leftLowerPoint1(rPos, rSide, rFront, 15.0f, 18.0f);
-        GXColor1u32(sColorMinusY);
-        GXTexCoord2f32(0.0f, texY1);
-        GXTexCoord2f32(0.0f, texY2);
+        J3DNativeDraw::color(sColorMinusY);
+        J3DNativeDraw::texCoord(0.0f, texY1);
+        J3DNativeDraw::texCoord(0.0f, texY2);
 
         leftLowerPoint2(rPos, rSide, rFront, 18.0f, 18.0f);
-        GXColor1u32(sColorMinusX);
-        GXTexCoord2f32(1.0f, texY1);
-        GXTexCoord2f32(1.0f, texY2);
+        J3DNativeDraw::color(sColorMinusX);
+        J3DNativeDraw::texCoord(1.0f, texY1);
+        J3DNativeDraw::texCoord(1.0f, texY2);
     }
 };  // namespace
 
 void SpiderThreadPart::drawLine() const {
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsUpper(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsRightLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         ::sendPointsLeftLower(mPointB->mPosition, mSide, mUp, mDistBetweenMainPoints * ::sTexRateV,
                               mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 }
 
 void SpiderThreadPart::drawPoints() const {
@@ -591,7 +589,7 @@ void SpiderThreadPart::drawPoints() const {
     f32 delta1 = (mDistBetweenMainPoints * ::sTexRateV) / (mNumPoints + 1);
     f32 delta2 = (mDistBetweenMainPoints * ::sIndirectTexRateV) / (mNumPoints + 1);
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (mNumPoints + 2) * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsUpper(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
 
@@ -606,9 +604,8 @@ void SpiderThreadPart::drawPoints() const {
         ::sendPointsUpper(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                           mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (mNumPoints + 2) * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsRightLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;
@@ -622,9 +619,8 @@ void SpiderThreadPart::drawPoints() const {
         ::sendPointsRightLower(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                                mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (mNumPoints + 2) * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, (mNumPoints + 2) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1);
     {
         ::sendPointsLeftLower(mPointA->mPosition, mSide, mUp, 0.0f, mTextureOffset);
         offset1 = delta1;
@@ -638,5 +634,4 @@ void SpiderThreadPart::drawPoints() const {
         ::sendPointsLeftLower(mPointB->mPosition, mSide, getPoint(mNumPoints - 1)->mUp, mDistBetweenMainPoints * ::sTexRateV,
                               mTextureOffset + mDistBetweenMainPoints * ::sIndirectTexRateV);
     }
-    GXEnd();
 }

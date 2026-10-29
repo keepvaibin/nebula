@@ -1,4 +1,5 @@
 #include "Game/Screen/DepthOfFieldBlur.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
@@ -58,11 +59,6 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
                static_cast< s32 >(JUTVideo::getManager()->getFbWidth()), -::sViewDistance, ::sViewDistance);
     GXSetProjection(projectionMtx, GX_ORTHOGRAPHIC);
     MR::loadViewMtxFor2DModel();
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT1, GX_VA_CLR0, GX_POS_XY, GX_S8, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
 
     TMtx34f posMtx;
     posMtx.identity();
@@ -90,7 +86,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
     GXSetLineWidth(12, GX_TO_ZERO);
 
-    GXBegin(GX_LINESTRIP, GX_VTXFMT1, 4);
+    J3DNativeDraw::begin(GX_LINESTRIP, 4, NEBULA_SHAPE_COLOR0);
     {
         u8 blurMinDist;
         u8 blurMaxDist = 248;
@@ -106,27 +102,25 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
         }
 
         if (blurMaxDist >= blurMinDist) {
-            GXPosition3f32(0.0f, 1.0f, 0.0f);
-            GXPosition3u8(0, 0, 0);
-            GXPosition3f32(blurMinDist * 0.5f, 1.0f, 0.0f);
-            GXPosition3u8(0, 0, 0);
-            GXPosition3f32(blurMaxDist * 0.5f, 1.0f, 0.0f);
-            GXPosition3u8(255, 255, 255);
-            GXPosition3f32(128.0f, 1.0f, 0.0f);
-            GXPosition3u8(255, 255, 255);
+            J3DNativeDraw::position(0.0f, 1.0f, 0.0f);
+            J3DNativeDraw::color(0, 0, 0, 0xFF);
+            J3DNativeDraw::position(blurMinDist * 0.5f, 1.0f, 0.0f);
+            J3DNativeDraw::color(0, 0, 0, 0xFF);
+            J3DNativeDraw::position(blurMaxDist * 0.5f, 1.0f, 0.0f);
+            J3DNativeDraw::color(255, 255, 255, 0xFF);
+            J3DNativeDraw::position(128.0f, 1.0f, 0.0f);
+            J3DNativeDraw::color(255, 255, 255, 0xFF);
         } else {
-            GXPosition3f32(128.0f, 1.0f, 0.0f);
-            GXPosition3u8(0, 0, 0);
-            GXPosition3f32(blurMinDist * 0.5f, 1.0f, 0.0f);
-            GXPosition3u8(0, 0, 0);
-            GXPosition3f32(blurMaxDist * 0.5f, 1.0f, 0.0f);
-            GXPosition3u8(255, 255, 255);
-            GXPosition3f32(0.0f, 1.0f, 0.0f);
-            GXPosition3u8(255, 255, 255);
+            J3DNativeDraw::position(128.0f, 1.0f, 0.0f);
+            J3DNativeDraw::color(0, 0, 0, 0xFF);
+            J3DNativeDraw::position(blurMinDist * 0.5f, 1.0f, 0.0f);
+            J3DNativeDraw::color(0, 0, 0, 0xFF);
+            J3DNativeDraw::position(blurMaxDist * 0.5f, 1.0f, 0.0f);
+            J3DNativeDraw::color(255, 255, 255, 0xFF);
+            J3DNativeDraw::position(0.0f, 1.0f, 0.0f);
+            J3DNativeDraw::color(255, 255, 255, 0xFF);
         }
     }
-
-    GXEnd();
 }
 
 void DepthOfFieldBlur::createBlurTexture() const {

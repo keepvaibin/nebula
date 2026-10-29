@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipFieldFillDraw.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Screen/ScreenAlphaCapture.hpp"
@@ -39,11 +40,6 @@ void ClipFieldFillDraw::setUpFillScreen() const {
     GXLoadPosMtxImm((MtxPtr)&posMtx, GX_PNMTX0);
     GXSetCurrentMtx(GX_PNMTX0);
 
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
     GXSetNumChans(1);
     GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -82,25 +78,23 @@ void ClipFieldFillDraw::setUpFillScreen() const {
 void ClipFieldFillDraw::sendFillScreen(GXColor color) const {
     GXSetTevColor(GX_TEVREG0, color);
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
         u16 screenWidth = MR::getScreenWidth();
         u16 screenHeight = MR::getScreenHeight();
 
-        GXPosition2u16(0, 0);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition2u16(screenWidth, 0);
-        GXTexCoord2f32(1.0f, 0.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(screenWidth)), 0.0f, 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-        GXPosition2u16(0, screenHeight);
-        GXTexCoord2f32(0.0f, 1.0f);
+        J3DNativeDraw::position(0.0f, static_cast< f32 >(static_cast< u16 >(screenHeight)), 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-        GXPosition2u16(screenWidth, screenHeight);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(screenWidth)), static_cast< f32 >(static_cast< u16 >(screenHeight)), 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
     }
-
-    GXEnd();
 }
 
 void ClipFieldFillDraw::draw() const {

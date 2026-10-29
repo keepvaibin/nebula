@@ -595,7 +595,6 @@ void GhostPlayer::draw() const {
 
     J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(this));
     model->viewCalc2();
-    GXInvalidateVtxCache();
     model->mFlags.clear();
     model->directDraw(nullptr);
     if (mHasJetTurtle) {

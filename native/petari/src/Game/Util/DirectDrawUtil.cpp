@@ -1,10 +1,5 @@
 #include "Game/Util/DirectDrawUtil.hpp"
-
-extern "C" {
-void GXPosition3f32(f32, f32, f32);
-void GXNormal3f32(f32, f32, f32);
-void GXTexCoord2f32(f32, f32);
-}
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 
 u32 mVtxMode;
 u32 mLightingFlag;
@@ -13,34 +8,6 @@ u16 mLightingMask;
 namespace MR {
     void ddSetVtxFormat(u32 format) {
         mVtxMode = format;
-        u32 mode = mVtxMode;
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-        if ((mode & 1) != 0) {
-            GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
-        }
-
-        if ((mode & 2) != 0) {
-            GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-        }
-
-        if ((mode & 4) != 0) {
-            GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-        }
-
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_RGBA6, 0);
-        if ((mode & 1) != 0) {
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_POS_XY, GX_RGBA6, 0);
-        }
-
-        if ((mode & 2) != 0) {
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_RGBA6, 0);
-        }
-
-        if ((mode & 4) != 0) {
-            GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_POS_XYZ, GX_RGBA8, 0);
-        }
-
         if (mLightingFlag != 0) {
             ddLightingOn(mLightingMask);
         } else {
@@ -84,21 +51,35 @@ namespace MR {
     }
 
     void ddSendVtxData(const TVec3f& rVec1, const TVec3f& rVec2, const TVec2f& rVec3) {
-        GXPosition3f32(rVec1.x, rVec1.y, rVec1.z);
+        J3DNativeDraw::position(rVec1.x, rVec1.y, rVec1.z);
         if ((mVtxMode & 1) != 0) {
-            GXNormal3f32(rVec2.x, rVec2.y, rVec2.z);
+            J3DNativeDraw::normal(rVec2.x, rVec2.y, rVec2.z);
         }
 
         if ((mVtxMode & 2) != 0) {
-            GXTexCoord2f32(rVec3.x, rVec3.y);
+            J3DNativeDraw::texCoord(rVec3.x, rVec3.y);
         }
     }
 
     void ddSendVtxData(const TVec3f& rVec1, const TVec2f& rVec2) {
-        GXPosition3f32(rVec1.x, rVec1.y, rVec1.z);
+        J3DNativeDraw::position(rVec1.x, rVec1.y, rVec1.z);
         if ((mVtxMode & 2) != 0) {
-            GXTexCoord2f32(rVec2.x, rVec2.y);
+            J3DNativeDraw::texCoord(rVec2.x, rVec2.y);
         }
+    }
+
+    u32 ddVtxAttributes() {
+        u32 attributes = 0;
+        if ((mVtxMode & 1) != 0) {
+            attributes |= NEBULA_SHAPE_NORMAL;
+        }
+        if ((mVtxMode & 2) != 0) {
+            attributes |= NEBULA_SHAPE_TEXCOORD0;
+        }
+        if ((mVtxMode & 4) != 0) {
+            attributes |= NEBULA_SHAPE_COLOR0;
+        }
+        return attributes;
     }
 
     void ddLightingOn(u16 light) {
@@ -120,7 +101,3 @@ namespace MR {
         }
     }
 };  // namespace MR
-
-void DirectDrawUtil_FORCE_MATCH(const TVec3f& rNormal) {
-    GXNormal3f32(rNormal.x, rNormal.y, rNormal.z);
-}

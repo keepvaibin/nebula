@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Player/DLchanger.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Player/MarioActor.hpp"
@@ -171,16 +172,15 @@ void MarioActor::writeBackScreenBox() const {
     GXTexModeSync();
     maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
     GXSetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-    GXPosition3f32(minimum.x, minimum.y, 0.9999f);
-    GXTexCoord2f32(0.0f, 0.0f);
-    GXPosition3f32(maximum.x, minimum.y, 0.9999f);
-    GXTexCoord2f32(1.0f, 0.0f);
-    GXPosition3f32(maximum.x, maximum.y, 0.9999f);
-    GXTexCoord2f32(1.0f, 1.0f);
-    GXPosition3f32(minimum.x, maximum.y, 0.9999f);
-    GXTexCoord2f32(0.0f, 1.0f);
-    GXEnd();
+    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    J3DNativeDraw::position(maximum.x, minimum.y, 0.9999f);
+    J3DNativeDraw::texCoord(1.0f, 0.0f);
+    J3DNativeDraw::position(maximum.x, maximum.y, 0.9999f);
+    J3DNativeDraw::texCoord(1.0f, 1.0f);
+    J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
+    J3DNativeDraw::texCoord(0.0f, 1.0f);
     GXSetDstAlpha(GX_FALSE, 0);
     GXSetAlphaUpdate(GX_FALSE);
     TDDraw::close();
@@ -470,13 +470,6 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
     GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     mMaskTextures[_B88]->load(GX_TEXMAP0);
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     Mtx rotation;
     TVec3f tangent(0.0f, rNormal.z, -rNormal.y);
 
@@ -486,21 +479,19 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
 
     MR::normalizeOrZero(&tangent);
     PSMTXRotAxisRad(rotation, &rNormal, 0.3926991f);
-    GXBegin(GX_TRIANGLEFAN, GX_VTXFMT0, 18);
-    GXPosition3f32(rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z);
-    GXColor1u32(128);
-    GXTexCoord2f32(0.0f, 0.0f);
+    J3DNativeDraw::begin(GX_TRIANGLEFAN, 18, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z);
+    J3DNativeDraw::color(128);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
 
     for (u32 i = 0; i <= 16; i++) {
         f32 angle = 2.0f * ((i / 16.0f) * JGeometry::TUtil< f32 >::PI());
         TVec3f point = subtractOffset(rPosition, rNormal * 5.0f) + tangent * radius;
-        GXPosition3f32(point.x, point.y, point.z);
-        GXColor1u32(1);
-        GXTexCoord2f32(10.0f * JMACosRadian(angle), 10.0f * MR::sin(angle));
+        J3DNativeDraw::position(point.x, point.y, point.z);
+        J3DNativeDraw::color(1);
+        J3DNativeDraw::texCoord(10.0f * JMACosRadian(angle), 10.0f * MR::sin(angle));
         PSMTXMultVecSR(rotation, &tangent, &tangent);
     }
-
-    GXEnd();
 }
 #pragma pop
 
@@ -541,12 +532,11 @@ void MarioActor::drawColdWaterDamage() const {
 
         for (u32 row = y; row < y + 4; row++) {
             f32 offset = 5.0f * MR::sin(2.0f * (((_37C + row * frequency) / MR::getScreenHeight()) * JGeometry::TUtil< f32 >::PI()));
-            GXBegin(GX_LINES, GX_VTXFMT0, 2);
-            GXPosition3f32(offset, row, 0.0f);
-            GXTexCoord2f32(0.0f, v);
-            GXPosition3f32(offset + MR::getScreenWidth(), row, 0.0f);
-            GXTexCoord2f32(1.0f, v);
-            GXEnd();
+            J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::position(offset, row, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, v);
+            J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, v);
             v += textureStep;
         }
 
@@ -621,12 +611,11 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         for (u32 row = y; row < y + 4; row++) {
             f32 angle = MR::sin(spatialPhase * row) * JGeometry::TUtil< f32 >::PI();
             f32 offset = amplitude * MR::sin(angle + phase);
-            GXBegin(GX_LINES, GX_VTXFMT0, 2);
-            GXPosition3f32(offset, row, 0.0f);
-            GXTexCoord2f32(0.0f, v);
-            GXPosition3f32(offset + MR::getScreenWidth(), row, 0.0f);
-            GXTexCoord2f32(1.0f, v);
-            GXEnd();
+            J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+            J3DNativeDraw::position(offset, row, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, v);
+            J3DNativeDraw::position(offset + MR::getScreenWidth(), row, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, v);
             v += textureStep;
         }
 
@@ -827,16 +816,15 @@ bool MarioActor::drawDarkMask() const {
     left &= ~1;
     MR::convertFrameBufferPosToScreenPos(&minimum, TVec2f(left, top));
     MR::convertFrameBufferPosToScreenPos(&maximum, TVec2f(left + width, top + height));
-    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-    GXPosition3f32(minimum.x, minimum.y, 0.0f);
-    GXTexCoord2f32(0.0f, 0.0f);
-    GXPosition3f32(maximum.x, minimum.y, 0.0f);
-    GXTexCoord2f32(4.0f, 0.0f);
-    GXPosition3f32(maximum.x, maximum.y, 0.0f);
-    GXTexCoord2f32(4.0f, 4.0f);
-    GXPosition3f32(minimum.x, maximum.y, 0.0f);
-    GXTexCoord2f32(0.0f, 4.0f);
-    GXEnd();
+    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(minimum.x, minimum.y, 0.0f);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    J3DNativeDraw::position(maximum.x, minimum.y, 0.0f);
+    J3DNativeDraw::texCoord(4.0f, 0.0f);
+    J3DNativeDraw::position(maximum.x, maximum.y, 0.0f);
+    J3DNativeDraw::texCoord(4.0f, 4.0f);
+    J3DNativeDraw::position(minimum.x, maximum.y, 0.0f);
+    J3DNativeDraw::texCoord(0.0f, 4.0f);
     GXSetDstAlpha(GX_FALSE, 0);
     GXSetColorUpdate(GX_TRUE);
     GXSetZCompLoc(GX_TRUE);

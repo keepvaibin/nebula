@@ -1,4 +1,5 @@
 #include "nw4r/lyt/common.h"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
@@ -101,70 +102,48 @@ namespace nw4r {
                 }
             }
 
-            void SetVertexFormat(bool a1, u8 num) {
-                GXClearVtxDesc();
-                GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-                if (a1) {
-                    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-                }
-
-                for (int i = 0; i < num; i++) {
-                    GXSetVtxDesc(GXAttr(GX_VA_TEX0 + i), GX_DIRECT);
-                }
-
-                GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
-                if (a1) {
-                    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-                }
-
-                for (int i = 0; i < num; ++i) {
-                    GXSetVtxAttrFmt(GX_VTXFMT0, GXAttr(GX_VA_TEX0 + i), GX_TEX_ST, GX_F32, 0);
-                }
-            }
-
             void DrawQuad(const math::VEC2& basePt, const Size& size, u8 num, const math::VEC2 (*texCoords)[4], const ut::Color* vtxColors) {
-                GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-                GXPosition2f32(basePt.x, basePt.y);
+                J3DNativeDraw::begin(GX_QUADS, 4,
+                                     (vtxColors ? NEBULA_SHAPE_COLOR0 : 0) | ((1u << num) - 1u) * NEBULA_SHAPE_TEXCOORD0);
+                J3DNativeDraw::position(basePt.x, basePt.y, 0.0f);
 
                 if (vtxColors) {
-                    GXColor1u32(vtxColors[0]);
+                    J3DNativeDraw::color(vtxColors[0]);
                 }
 
                 for (int i = 0; i < num; i++) {
-                    GXTexCoord2f32(texCoords[i][0].x, texCoords[i][0].y);
+                    J3DNativeDraw::texCoord(texCoords[i][0].x, texCoords[i][0].y);
                 }
 
-                GXPosition2f32(basePt.x + size.width, basePt.y);
+                J3DNativeDraw::position(basePt.x + size.width, basePt.y, 0.0f);
 
                 if (vtxColors) {
-                    GXColor1u32(vtxColors[1]);
+                    J3DNativeDraw::color(vtxColors[1]);
                 }
 
                 for (int i = 0; i < num; i++) {
-                    GXTexCoord2f32(texCoords[i][1].x, texCoords[i][1].y);
+                    J3DNativeDraw::texCoord(texCoords[i][1].x, texCoords[i][1].y);
                 }
 
-                GXPosition2f32(basePt.x + size.width, basePt.y + size.height);
+                J3DNativeDraw::position(basePt.x + size.width, basePt.y + size.height, 0.0f);
 
                 if (vtxColors) {
-                    GXColor1u32(vtxColors[3]);
+                    J3DNativeDraw::color(vtxColors[3]);
                 }
 
                 for (int i = 0; i < num; i++) {
-                    GXTexCoord2f32(texCoords[i][3].x, texCoords[i][3].y);
+                    J3DNativeDraw::texCoord(texCoords[i][3].x, texCoords[i][3].y);
                 }
 
-                GXPosition2f32(basePt.x, basePt.y + size.height);
+                J3DNativeDraw::position(basePt.x, basePt.y + size.height, 0.0f);
 
                 if (vtxColors) {
-                    GXColor1u32(vtxColors[2]);
+                    J3DNativeDraw::color(vtxColors[2]);
                 }
 
                 for (int i = 0; i < num; i++) {
-                    GXTexCoord2f32(texCoords[i][2].x, texCoords[i][2].y);
+                    J3DNativeDraw::texCoord(texCoords[i][2].x, texCoords[i][2].y);
                 }
-
-                GXEnd();
             }
 
             void DrawQuad(const math::VEC2& basePt, const Size& size, u8 num, const math::VEC2 (*texCoords)[4], const ut::Color* vtxColors,

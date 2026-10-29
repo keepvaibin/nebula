@@ -23,9 +23,6 @@ void ShadowVolumeBox::setSize(const TVec3f& rSize) {
 void ShadowVolumeBox::loadModelDrawMtx() const {
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
     makeVertexBuffer();
 }
 

@@ -1,4 +1,5 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/NameObj/NameObjAdaptor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Screen/BloomEffect.hpp"
@@ -42,12 +43,6 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     GXSetProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
-
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
 
     TMtx34f posMtx;
     posMtx.identity();
@@ -122,19 +117,18 @@ void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     f32 bottom = (row + 1) * height;
     f32 top = row * height;
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
-    GXPosition3f32(left, bottom, 0.0f);
-    GXTexCoord2f32(0.0f, 1.0f);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::position(left, bottom, 0.0f);
+    J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-    GXPosition3f32(left, top, 0.0f);
-    GXTexCoord2f32(0.0f, 0.0f);
+    J3DNativeDraw::position(left, top, 0.0f);
+    J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-    GXPosition3f32(right, bottom, 0.0f);
-    GXTexCoord2f32(1.0f, 1.0f);
+    J3DNativeDraw::position(right, bottom, 0.0f);
+    J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-    GXPosition3f32(right, top, 0.0f);
-    GXTexCoord2f32(1.0f, 0.0f);
-    GXEnd();
+    J3DNativeDraw::position(right, top, 0.0f);
+    J3DNativeDraw::texCoord(1.0f, 0.0f);
 }
 
 #pragma push

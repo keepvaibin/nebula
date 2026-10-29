@@ -1,4 +1,5 @@
 #include "Game/Map/OceanBowl.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/OceanBowlBloomDrawer.hpp"
 #include "Game/Map/OceanBowlPoint.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
@@ -365,48 +366,36 @@ void OceanBowl::draw() const {
     u16 even = 0;
     u16 odd = 1;
     for (s32 x = 0; x < 24; x++) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 50);
+        // Texture coordinates 0-3 are entries of the bowl's arrays (two floats each), the vertex's index in all four.
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 50,
+                             NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 |
+                                 NEBULA_SHAPE_TEXCOORD0 << 2 | NEBULA_SHAPE_TEXCOORD0 << 3);
 
         for (s32 y = 0; y < 25; y++) {
             OceanBowlPoint* pPoint = getPoint(x + 1, y);
             OceanBowlPoint* pPoint2 = getPoint(x, y);
 
-            GXPosition3f32(pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z);
-            GXColor4u8(255, 255, 255, getPoint(x + 1, y)->mAlpha);
-            GXTexCoord2s16(even, even);
-            GXTexCoord2s16(even, even);
+            J3DNativeDraw::position(pPoint->mVertexPosition.x, pPoint->mVertexPosition.y, pPoint->mVertexPosition.z);
+            J3DNativeDraw::color(255, 255, 255, getPoint(x + 1, y)->mAlpha);
+            J3DNativeDraw::texCoord(mVtxTex0Array[2 * even], mVtxTex0Array[2 * even + 1]);
+            J3DNativeDraw::texCoord(mVtxTex1Array[2 * even], mVtxTex1Array[2 * even + 1]);
+            J3DNativeDraw::texCoord(mVtxTex2Array[2 * even], mVtxTex2Array[2 * even + 1]);
+            J3DNativeDraw::texCoord(mVtxTex3Array[2 * even], mVtxTex3Array[2 * even + 1]);
 
-            GXPosition3f32(pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z);
-            GXColor4u8(255, 255, 255, getPoint(x, y)->mAlpha);
-            GXTexCoord2s16(odd, odd);
-            GXTexCoord2s16(odd, odd);
+            J3DNativeDraw::position(pPoint2->mVertexPosition.x, pPoint2->mVertexPosition.y, pPoint2->mVertexPosition.z);
+            J3DNativeDraw::color(255, 255, 255, getPoint(x, y)->mAlpha);
+            J3DNativeDraw::texCoord(mVtxTex0Array[2 * odd], mVtxTex0Array[2 * odd + 1]);
+            J3DNativeDraw::texCoord(mVtxTex1Array[2 * odd], mVtxTex1Array[2 * odd + 1]);
+            J3DNativeDraw::texCoord(mVtxTex2Array[2 * odd], mVtxTex2Array[2 * odd + 1]);
+            J3DNativeDraw::texCoord(mVtxTex3Array[2 * odd], mVtxTex3Array[2 * odd + 1]);
 
             even += 2;
             odd += 2;
         }
-
-        GXEnd();
     }
 }
 
 void OceanBowl::loadMaterial() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX3, GX_TEX_ST, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX1, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX2, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX3, GX_INDEX16);
-    GXSetArray(GX_VA_TEX0, mVtxTex0Array, 8);
-    GXSetArray(GX_VA_TEX1, mVtxTex1Array, 8);
-    GXSetArray(GX_VA_TEX2, mVtxTex2Array, 8);
-    GXSetArray(GX_VA_TEX3, mVtxTex3Array, 8);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(1);
@@ -509,17 +498,6 @@ void OceanBowl::loadMaterial() const {
 }
 
 void OceanBowl::loadMaterialBloom() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_TEX_ST, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX1, GX_INDEX16);
-    GXSetArray(GX_VA_TEX0, mVtxTex0Array, 8);
-    GXSetArray(GX_VA_TEX1, mVtxTex1Array, 8);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(1);

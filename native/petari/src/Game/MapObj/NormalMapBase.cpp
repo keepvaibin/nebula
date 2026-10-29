@@ -1,4 +1,5 @@
 #include "Game/MapObj/NormalMapBase.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Animation/BtkPlayer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -180,13 +181,6 @@ void NormalMapBase::draw() const {
         GXSetAlphaUpdate(GX_FALSE);
         GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
         GXSetDither(GX_FALSE);
-        GXClearVtxDesc();
-        GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-        GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
-        GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_POS_XY, GX_F32, 0);
-        GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
         const TPos3f& rCameraViewMtx = MR::getCameraViewMtx();
         TPos3f lightMtx;
         Mtx mtx;
@@ -892,16 +886,15 @@ void NormalMapBase::indirectCapture() const {
                 s32 screenHeight = MR::getScreenHeight();
                 f32 scaleY = static_cast< f32 >(MR::getScreenHeight()) / screenHeight;
                 TVec3f position(0.0f, 0.0f, 0.0f);
-                GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-                GXPosition3f32(position.x, position.y, 0.0f);
-                GXTexCoord2f32(0.0f, 0.0f);
-                GXPosition3f32(position.x + scaleX * pTexture->getWidth(), position.y, 0.0f);
-                GXTexCoord2f32(1.0f, 0.0f);
-                GXPosition3f32(position.x + scaleX * pTexture->getWidth(), position.y + scaleY * pTexture->getHeight(), 0.0f);
-                GXTexCoord2f32(1.0f, 1.0f);
-                GXPosition3f32(position.x, position.y + scaleY * pTexture->getHeight(), 0.0f);
-                GXTexCoord2f32(0.0f, 1.0f);
-                GXEnd();
+                J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+                J3DNativeDraw::position(position.x, position.y, 0.0f);
+                J3DNativeDraw::texCoord(0.0f, 0.0f);
+                J3DNativeDraw::position(position.x + scaleX * pTexture->getWidth(), position.y, 0.0f);
+                J3DNativeDraw::texCoord(1.0f, 0.0f);
+                J3DNativeDraw::position(position.x + scaleX * pTexture->getWidth(), position.y + scaleY * pTexture->getHeight(), 0.0f);
+                J3DNativeDraw::texCoord(1.0f, 1.0f);
+                J3DNativeDraw::position(position.x, position.y + scaleY * pTexture->getHeight(), 0.0f);
+                J3DNativeDraw::texCoord(0.0f, 1.0f);
                 _4B8->capture(0, 0, GX_CTF_RA8, false, 0);
                 break;
             }

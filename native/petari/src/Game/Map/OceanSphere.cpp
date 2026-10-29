@@ -1,4 +1,5 @@
 #include "Game/Map/OceanSphere.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/OceanSpherePoint.hpp"
 #include "Game/Map/WaterAreaHolder.hpp"
@@ -46,13 +47,13 @@ namespace {
 };  // namespace
 
 namespace {
-    // `pMesh`: the mesh recording the sphere (null to draw it now).
-    void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh) {
+    // `pMesh`: the mesh recording the sphere (null to draw it now, its vertices giving `attributes`).
+    void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh, u32 attributes) {
+        const u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
         if (pMesh != nullptr) {
-            pMesh->begin(GX_TRIANGLESTRIP, (u16)(((pointCount - 1 - idx) * 2 + 1)));
+            pMesh->begin(GX_TRIANGLESTRIP, vtxCount);
         } else {
-            u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
-            GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, vtxCount);
+            J3DNativeDraw::begin(GX_TRIANGLESTRIP, vtxCount, attributes);
         }
     }
 };  // namespace
@@ -597,25 +598,10 @@ const GXColor sOceanSphereFogFace = {0xFF, 0xFF, 0xFF, 0};
 const GXColor sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 
 void OceanSphere::loadMaterialFace() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
-#ifdef TARGET_PC
-    // The sphere's normals with its face (unlit: the picture is unchanged), so ray tracing shades the water as the
-    // sphere it is rather than as its flat triangles.
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_NRM_XYZ, GX_F32, 0);
-#endif
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-#ifdef TARGET_PC
-    GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
-#endif
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
-#ifdef TARGET_PC
+    // The face's vertices carry the sphere's normals (unlit: the picture is unchanged), so ray tracing shades the
+    // water as the sphere it is rather than as its flat triangles.
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
-#endif
     GXSetCurrentMtx(0);
     GXSetNumChans(1);
     GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -661,11 +647,6 @@ void OceanSphere::loadMaterialFace() const {
 }
 
 void OceanSphere::loadMaterialBack() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_NRM_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
     GXSetNumChans(0);
@@ -701,9 +682,10 @@ void OceanSphere::loadMaterialBack() const {
 
 void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
     const OceanSpherePoint* pPoint;
+    const u32 attributes = useEnvMap ? NEBULA_SHAPE_NORMAL : NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1;
 
     for (s32 i = 0; i < mPointCount - 1; i++) {
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
         sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
@@ -712,9 +694,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
             sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointLeftUpper(mPointCount - 1 - j, i + 1);
@@ -723,9 +704,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
         }
 
         sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, pMesh);
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
         sendVertex(getPlanePointRightUpper(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
@@ -734,9 +714,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
             sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointRightUpper(mPointCount - 1 - j, i + 1);
@@ -745,9 +724,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
         }
 
         sendVertex(getPlanePointRightUpper(i, i), useEnvMap, pMesh);
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
         sendVertex(getPlanePointLeftLower(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
@@ -756,9 +734,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
             sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointLeftLower(mPointCount - 1 - j, i + 1);
@@ -767,9 +744,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
         }
 
         sendVertex(getPlanePointLeftLower(i, i), useEnvMap, pMesh);
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
         sendVertex(getPlanePointRightLower(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
@@ -778,9 +754,8 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
             sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, pMesh);
+        ::beginDrawPolygon(i, mPointCount, pMesh, attributes);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointRightLower(mPointCount - 1 - j, i + 1);
@@ -789,7 +764,6 @@ void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
         }
 
         sendVertex(getPlanePointRightLower(i, i), useEnvMap, pMesh);
-        GXEnd();
     }
 }
 
@@ -803,23 +777,12 @@ void OceanSphere::sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, Nat
         }
         pMesh->corner();
     } else {
-        GXPosition3f32(pPoint->mPos.x, pPoint->mPos.y, pPoint->mPos.z);
-#ifdef TARGET_PC
+        // The face's vertices carry the sphere's normals too (loadMaterialFace), the back's only them.
+        J3DNativeDraw::position(pPoint->mPos.x, pPoint->mPos.y, pPoint->mPos.z);
+        J3DNativeDraw::normal(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
         if (!useEnvMap) {
-            GXNormal3f32(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
-        }
-#endif
-
-        if (useEnvMap) {
-            GXNormal3f32(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
-        } else {
-            f32 v0 = pPoint->mTexCoord.y;
-            f32 u0 = pPoint->mTexCoord.x;
-            GXTexCoord2f32(mTexOffs0X + u0, mTexOffs0Y + v0);
-
-            f32 v1 = pPoint->mTexCoord.y;
-            f32 u1 = pPoint->mTexCoord.x;
-            GXTexCoord2f32(mTexOffs1X + u1, mTexOffs1Y + v1);
+            J3DNativeDraw::texCoord(mTexOffs0X + pPoint->mTexCoord.x, mTexOffs0Y + pPoint->mTexCoord.y);
+            J3DNativeDraw::texCoord(mTexOffs1X + pPoint->mTexCoord.x, mTexOffs1Y + pPoint->mTexCoord.y);
         }
     }
 }

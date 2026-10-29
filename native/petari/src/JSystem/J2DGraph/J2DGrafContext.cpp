@@ -1,4 +1,5 @@
 #include "JSystem/J2DGraph/J2DGrafContext.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <revolution/gx/GXVert.h>
 
 J2DGrafContext::J2DGrafContext(f32 x, f32 y, f32 width, f32 height)
@@ -90,15 +91,7 @@ void J2DGrafContext::setup2D() {
     GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     GXSetCurrentMtx(0);
     GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, 0x7D);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_RGBA4, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_CLR_RGBA, GX_RGBX8, 0xf);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_CLR_RGBA, GX_RGBX8, 0xf);
     GXSetLineWidth(mLineWidth, GX_TO_ZERO);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_NONE);
 }
 
 void J2DGrafContext::setScissor() {
@@ -128,18 +121,15 @@ void J2DGrafContext::place(JGeometry::TBox2< f32 > const& rBounds) {
 void J2DGrafContext::fillBox(JGeometry::TBox2< f32 > const& rBox) {
     GXSetBlendMode((GXBlendMode)mBoxPart.mType, (GXBlendFactor)mBoxPart.mSrcFactor, (GXBlendFactor)mBoxPart.mDestFactor, GX_LO_SET);
     GXLoadPosMtxImm(mPosMtx, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_F32, 0);
-    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-    GXPosition3f32(rBox.i.x, rBox.i.y, 0);
-    GXColor1u32(mColorTL);
-    GXPosition3f32(rBox.f.x, rBox.i.y, 0);
-    GXColor1u32(mColorTR);
-    GXPosition3f32(rBox.f.x, rBox.f.y, 0);
-    GXColor1u32(mColorBL);
-    GXPosition3f32(rBox.i.x, rBox.f.y, 0);
-    GXColor1u32(mColorBR);
-    GXEnd();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_RGBA4, 0);
+    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::position(rBox.i.x, rBox.i.y, 0);
+    J3DNativeDraw::color(mColorTL);
+    J3DNativeDraw::position(rBox.f.x, rBox.i.y, 0);
+    J3DNativeDraw::color(mColorTR);
+    J3DNativeDraw::position(rBox.f.x, rBox.f.y, 0);
+    J3DNativeDraw::color(mColorBL);
+    J3DNativeDraw::position(rBox.i.x, rBox.f.y, 0);
+    J3DNativeDraw::color(mColorBR);
 }
 
 void J2DGrafContext::setLookat() {

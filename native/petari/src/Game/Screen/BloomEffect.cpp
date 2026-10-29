@@ -1,4 +1,5 @@
 #include "Game/Screen/BloomEffect.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
@@ -208,11 +209,6 @@ void BloomEffect::initDraw() const {
     GXSetProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
 
     TMtx34f posMtx;
     posMtx.identity();
@@ -264,21 +260,20 @@ void BloomEffect::drawTexture(JUTTexture* pTexture, s32 param2, s32 param3, u8 i
     f32 bottom = (row + 1) * height;
     f32 top = row * height;
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
-        GXPosition3f32(left, bottom, -1.0f);
-        GXTexCoord2f32(0.0f, 1.0f);
+        J3DNativeDraw::position(left, bottom, -1.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-        GXPosition3f32(left, top, -1.0f);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::position(left, top, -1.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition3f32(right, bottom, -1.0f);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::position(right, bottom, -1.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-        GXPosition3f32(right, top, -1.0f);
-        GXTexCoord2f32(1.0f, 0.0f);
+        J3DNativeDraw::position(right, top, -1.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
     }
-    GXEnd();
 }
 
 void BloomEffect::blurTexture(JUTTexture* pTexture, Mtx* pMtx, s32 param3, s32 param4, u32 param5, f32 param6, u32 param7, const f32* pParam8) const {
@@ -333,7 +328,6 @@ void BloomEffect::initBlur(JUTTexture* pTexture, u32 param2, f32 intensity) cons
 
 void BloomEffect::drawBlur(s32 divisions, s32 tile, Mtx* pMtx, u32 stageCount, u32 matrixCount) const {
     GXSetArray(GX_TEX_MTX_ARRAY, pMtx, sizeof(Mtx));
-
     s32 row = tile / divisions;
     s32 column = tile % divisions;
     f32 width = static_cast< f32 >(MR::getFrameBufferWidth()) / divisions;
@@ -358,19 +352,18 @@ void BloomEffect::drawBlur(s32 divisions, s32 tile, Mtx* pMtx, u32 stageCount, u
             GXLoadTexMtxIndx(i + j, ::sTexMtxID[j], GX_MTX3x4);
         }
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
-        GXPosition3f32(left, bottom, -1.0f);
-        GXTexCoord2f32(0.0f, 1.0f);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(left, bottom, -1.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-        GXPosition3f32(left, top, -1.0f);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::position(left, top, -1.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition3f32(right, bottom, -1.0f);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::position(right, bottom, -1.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-        GXPosition3f32(right, top, -1.0f);
-        GXTexCoord2f32(1.0f, 0.0f);
-        GXEnd();
+        J3DNativeDraw::position(right, top, -1.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
 
         if (i == 0) {
             GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);

@@ -1,4 +1,5 @@
 #include "Game/Ride/PlantStalk.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/MapObj/PlantPoint.hpp"
 #include "Game/MapObj/PlantRailInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -172,7 +173,7 @@ f32 PlantStalk::calcPlayerCoord() const {
 }
 
 void PlantStalk::drawGrowUp() const {
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mGrownPlantPoints * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -180,21 +181,20 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        GXPosition3f32(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
+        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
                        point->mPosition.z + ::sDrawWidthLongOffsetX * front.z);
-        GXColor1u32(::sColorPlusZ);
-        GXTexCoord2f32(0.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorPlusZ);
+        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
 
-        GXPosition3f32(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
+        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
                        point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
                        point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        GXColor1u32(::sColorPlusX);
-        GXTexCoord2f32(1.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorPlusX);
+        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
     }
 
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mGrownPlantPoints * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -202,21 +202,20 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        GXPosition3f32(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
+        J3DNativeDraw::position(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
                        point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
                        point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        GXColor1u32(::sColorMinusX);
-        GXTexCoord2f32(0.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorMinusX);
+        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
 
-        GXPosition3f32(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
+        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthLongOffsetX * front.x, point->mPosition.y + ::sDrawWidthLongOffsetX * front.y,
                        point->mPosition.z + ::sDrawWidthLongOffsetX * front.z);
-        GXColor1u32(::sColorPlusZ);
-        GXTexCoord2f32(1.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorPlusZ);
+        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
     }
 
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, mGrownPlantPoints * 2);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, mGrownPlantPoints * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     for (s32 idx = 0; idx < mGrownPlantPoints; idx++) {
         PlantPoint* point = mPlantPoints[idx];
         TVec3f side(mPlantPoints[idx]->mSide);
@@ -224,20 +223,18 @@ void PlantStalk::drawGrowUp() const {
         side.scale(mPlantPoints[idx]->mThickness);
         front.scale(mPlantPoints[idx]->mThickness);
 
-        GXPosition3f32(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
+        J3DNativeDraw::position(point->mPosition.x + ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
                        point->mPosition.y + ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
                        point->mPosition.z + ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        GXColor1u32(::sColorPlusX);
-        GXTexCoord2f32(0.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorPlusX);
+        J3DNativeDraw::texCoord(0.0f, idx * ::sTexRate);
 
-        GXPosition3f32(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
+        J3DNativeDraw::position(point->mPosition.x - ::sDrawWidthShortOffsetX * side.x - ::sDrawWidthShortOffsetZ * front.x,
                        point->mPosition.y - ::sDrawWidthShortOffsetX * side.y - ::sDrawWidthShortOffsetZ * front.y,
                        point->mPosition.z - ::sDrawWidthShortOffsetX * side.z - ::sDrawWidthShortOffsetZ * front.z);
-        GXColor1u32(::sColorMinusX);
-        GXTexCoord2f32(1.0f, idx * ::sTexRate);
+        J3DNativeDraw::color(::sColorMinusX);
+        J3DNativeDraw::texCoord(1.0f, idx * ::sTexRate);
     }
-
-    GXEnd();
 }
 
 PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
@@ -248,15 +245,6 @@ PlantStalkDrawInit::PlantStalkDrawInit(const char* pName) : NameObj(pName) {
 }
 
 void PlantStalkDrawInit::initDraw() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_POS_XYZ, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
 

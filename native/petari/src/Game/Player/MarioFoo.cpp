@@ -1,4 +1,5 @@
 #include "Game/Player/MarioFoo.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/MapObj/DashRing.hpp"
 #include "Game/Player/Mario.hpp"
@@ -709,23 +710,21 @@ void MarioFoo::draw3D() const {
         beamVertices[1] = center - side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center - side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center - side * 50.0f;
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
         MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
         MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
         MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
         MR::ddSendVtxData(beamVertices[3], TVec2f(0.0f, 1.0f));
-        GXEnd();
 
         beamVertices[0] = center + side * 70.0f;
         beamVertices[1] = center + side * 70.0f + front * 2000.0f * length;
         beamVertices[2] = center + side * 50.0f + front * 2000.0f * length;
         beamVertices[3] = center + side * 50.0f;
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
         MR::ddSendVtxData(beamVertices[0], TVec2f(0.0f, 0.0f));
         MR::ddSendVtxData(beamVertices[1], TVec2f(0.5f, 0.0f));
         MR::ddSendVtxData(beamVertices[2], TVec2f(0.5f, 1.0f));
         MR::ddSendVtxData(beamVertices[3], TVec2f(0.0f, 1.0f));
-        GXEnd();
     }
 
     const Color8 color2(255, 64, 64, 255);
@@ -794,21 +793,19 @@ void MarioFoo::draw3D() const {
                 width.setLength(10.0f);
                 nextLeftEdge[0] = rPosition + width - _3B0[index] * ::cWidth;
                 nextLeftEdge[1] = rPosition - width - _3B0[index] * ::cWidth;
-                GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+                J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
                 MR::ddSendVtxData(leftEdge[0], texCoords[0]);
                 MR::ddSendVtxData(nextLeftEdge[0], nextTexCoords[0]);
                 MR::ddSendVtxData(nextLeftEdge[1], nextTexCoords[1]);
                 MR::ddSendVtxData(leftEdge[1], texCoords[1]);
-                GXEnd();
 
                 nextRightEdge[0] = rPosition + width + _3B0[index] * ::cWidth;
                 nextRightEdge[1] = rPosition - width + _3B0[index] * ::cWidth;
-                GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+                J3DNativeDraw::begin(GX_QUADS, 4, MR::ddVtxAttributes());
                 MR::ddSendVtxData(rightEdge[0], texCoords[0]);
                 MR::ddSendVtxData(nextRightEdge[0], nextTexCoords[0]);
                 MR::ddSendVtxData(nextRightEdge[1], nextTexCoords[1]);
                 MR::ddSendVtxData(rightEdge[1], texCoords[1]);
-                GXEnd();
 
                 leftEdge[0] = nextLeftEdge[0];
                 texCoords[0] = nextTexCoords[0];

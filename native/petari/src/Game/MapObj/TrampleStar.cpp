@@ -1,4 +1,5 @@
 #include "Game/MapObj/TrampleStar.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/AllLiveActorGroup.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -493,7 +494,6 @@ void TrampleStar::draw() const {
     if (!MR::isDead(this)) {
         TDDraw::setup(0, 1, 0);
         GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-        GXInvalidateVtxCache();
         drawSelf();
         GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
         MR::reinitGX();
@@ -655,7 +655,7 @@ void TrampleStar::drawSelf() const {
         GXSetTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     }
 
-    GXBegin(GX_TRIANGLES, GX_VTXFMT0, mNumDrawVtxs);
+    J3DNativeDraw::begin(GX_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
     {
         TVec3f* pos = mDrawPos;
         TVec3f* norm = mDrawNorm;
@@ -669,7 +669,6 @@ void TrampleStar::drawSelf() const {
         }
     }
 
-    GXEnd();
 }
 
 void TrampleStar_FORCE_MATCH_TEXTURE(const ResTIMG* pImage) {

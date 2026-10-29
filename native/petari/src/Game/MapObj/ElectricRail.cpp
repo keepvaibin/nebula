@@ -1,4 +1,5 @@
 #include "Game/MapObj/ElectricRail.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/LiveActor/ShadowVolumeDrawer.hpp"
@@ -96,9 +97,6 @@ ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, Elec
 void ElectricRailShadowDrawer::loadModelDrawMtx() const {
     GXLoadPosMtxImm(MR::getCameraViewMtx(), GX_PNMTX0);
     GXSetCurrentMtx(GX_PNMTX0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_CLR_RGBA, GX_RGBA6, 0);
 }
 
 void ElectricRailShadowDrawer::drawShape() const {
@@ -489,7 +487,7 @@ void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
     const TVec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 2 * mSeparatorCount);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * mSeparatorCount, 0);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
@@ -501,13 +499,13 @@ void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
             v20.scale(100.0f * i);
             v21.add(v21, v20);
 
-            GXPosition3f32(((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
+            J3DNativeDraw::position(((v21.x + (s->mSide.x * a1)) + (pUp->x * a2)), ((v21.y + (s->mSide.y * a1)) + (pUp->y * a2)),
                            ((v21.z + (s->mSide.z * a1)) + (pUp->z * a2)));
 
             GXCmd1f32(v15);
             GXCmd1f32(0.0f);
 
-            GXPosition3f32(((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
+            J3DNativeDraw::position(((v21.x + (s->mSide.x * a3)) + (pUp->x * a4)), ((v21.y + (s->mSide.y * a3)) + (pUp->y * a4)),
                            ((v21.z + (s->mSide.z * a3)) + (pUp->z * a4)));
 
             GXCmd1f32(v15);

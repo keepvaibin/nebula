@@ -1,4 +1,5 @@
 #include "Game/Enemy/RingBeam.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -77,7 +78,7 @@ void RingBeamShadowDrawer::drawShape() const {
         PSMTXMultVec(mtx, &XDirScaled, &XDirScaled);
     }
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 64);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getTrans(Trans);
@@ -85,12 +86,11 @@ void RingBeamShadowDrawer::drawShape() const {
         listXDirScaledPos.scale(5.0f, listXDir);
         temp.add(Trans, listXDirScaledNeg);
         temp2.add(Trans, listXDirScaledPos);
-        GXPosition3f32(temp2.x, temp2.y, temp2.z);
-        GXPosition3f32(temp.x, temp.y, temp.z);
+        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
+        J3DNativeDraw::position(temp.x, temp.y, temp.z);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 64);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -103,12 +103,11 @@ void RingBeamShadowDrawer::drawShape() const {
         temp2.add(Trans, listXDirScaledPos);
         temp.add(negYDirScaled);
         temp2.add(negYDirScaled);
-        GXPosition3f32(temp.x, temp.y, temp.z);
-        GXPosition3f32(temp2.x, temp2.y, temp2.z);
+        J3DNativeDraw::position(temp.x, temp.y, temp.z);
+        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 64);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -119,12 +118,11 @@ void RingBeamShadowDrawer::drawShape() const {
         temp.add(Trans, listXDirScaledNeg);
         temp2.add(Trans, listXDirScaledNeg);
         temp2.add(negYDirScaled);
-        GXPosition3f32(temp.x, temp.y, temp.z);
-        GXPosition3f32(temp2.x, temp2.y, temp2.z);
+        J3DNativeDraw::position(temp.x, temp.y, temp.z);
+        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
-    GXEnd();
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 64);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -135,18 +133,14 @@ void RingBeamShadowDrawer::drawShape() const {
         temp.add(Trans, listXDirScaledPos);
         temp2.add(Trans, listXDirScaledPos);
         temp2.add(negYDirScaled);
-        GXPosition3f32(temp2.x, temp2.y, temp2.z);
-        GXPosition3f32(temp.x, temp.y, temp.z);
+        J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
+        J3DNativeDraw::position(temp.x, temp.y, temp.z);
     }
-    GXEnd();
 }
 
 void RingBeamShadowDrawer::loadModelDrawMtx() const {
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
 };
 
 bool RingBeamShadowDrawer::isDraw() const {

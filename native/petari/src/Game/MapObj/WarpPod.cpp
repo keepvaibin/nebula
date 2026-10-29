@@ -1,4 +1,5 @@
 #include "Game/MapObj/WarpPod.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -637,7 +638,7 @@ void WarpPod::drawCylinder(u32) const {
         vecC0 = _C4[i] + vec164;
         vecB4 = _C4[i] - vec164;
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 8);
+        J3DNativeDraw::begin(GX_QUADS, 8, MR::ddVtxAttributes());
 
         MR::ddSendVtxData(vecA8, previousTexCoords[0]);
         MR::ddSendVtxData(vecD8, currentTexCoords[0]);

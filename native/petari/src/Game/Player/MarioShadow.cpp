@@ -1,4 +1,5 @@
 #include "Game/Player/MarioShadow.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/HitInfo.hpp"
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -297,9 +298,9 @@ void CollisionShadow::sendVtx() const {
 
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        GXBegin(GX_QUADS, GX_VTXFMT0, vertexCount);
+        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        GXBegin(GX_TRIANGLES, GX_VTXFMT0, vertexCount);
+        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     const TVec2f* pTex;
@@ -309,8 +310,8 @@ void CollisionShadow::sendVtx() const {
             const TVec3f& point = getDrawPos(index);
             pTex = &_64[_68[index]];
             index++;
-            GXPosition3f32(point.x, point.y, point.z);
-            GXTexCoord2f32(pTex->x, pTex->y);
+            J3DNativeDraw::position(point.x, point.y, point.z);
+            J3DNativeDraw::texCoord(pTex->x, pTex->y);
         }
     }
 }
@@ -318,9 +319,9 @@ void CollisionShadow::sendVtx() const {
 void CollisionShadow::sendZsortedVtx(bool offset) const {
     u16 vertexCount = _54 * _5A;
     if (_5A == 4) {
-        GXBegin(GX_QUADS, GX_VTXFMT0, vertexCount);
+        J3DNativeDraw::begin(GX_QUADS, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     } else {
-        GXBegin(GX_TRIANGLES, GX_VTXFMT0, vertexCount);
+        J3DNativeDraw::begin(GX_TRIANGLES, vertexCount, NEBULA_SHAPE_TEXCOORD0);
     }
 
     TVec3f shift(-_24 * 5.0f);
@@ -329,12 +330,12 @@ void CollisionShadow::sendZsortedVtx(bool offset) const {
             const TVec3f& point = getDrawPos(i, j);
             const TVec2f& tex = getDrawTx(i, j);
             if (offset) {
-                GXPosition3f32(point.x + shift.x, point.y + shift.y, point.z + shift.z);
+                J3DNativeDraw::position(point.x + shift.x, point.y + shift.y, point.z + shift.z);
             } else {
-                GXPosition3f32(point.x, point.y, point.z);
+                J3DNativeDraw::position(point.x, point.y, point.z);
             }
 
-            GXTexCoord2f32(tex.x, tex.y);
+            J3DNativeDraw::texCoord(tex.x, tex.y);
         }
     }
 }
@@ -497,9 +498,6 @@ void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDept
     GXSetAlphaUpdate(GX_TRUE);
     GXSetColorUpdate(GX_FALSE);
     GXSetDstAlpha(GX_FALSE, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
@@ -575,12 +573,12 @@ void CollisionShadow::draw3() const {
     sendZsortedVtx(true);
     if (_6E) {
         GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-        GXBegin(GX_TRIANGLES, GX_VTXFMT0, _6E * 3);
+        J3DNativeDraw::begin(GX_TRIANGLES, _6E * 3, NEBULA_SHAPE_TEXCOORD0);
         for (u32 i = 0; i < _6E; i++) {
             for (u32 j = 0; j < 3; j++) {
                 const TVec3f& point = *_32C[_70[i]].getPos(j);
-                GXPosition3f32(point.x, point.y, point.z);
-                GXTexCoord2f32(-1.0f, -1.0f);
+                J3DNativeDraw::position(point.x, point.y, point.z);
+                J3DNativeDraw::texCoord(-1.0f, -1.0f);
             }
         }
     }
@@ -596,31 +594,31 @@ void CollisionShadow::draw3() const {
         GXSetColorUpdate(GX_FALSE);
         GXSetDstAlpha(GX_FALSE, 0);
         if (_5A == 4) {
-            GXBegin(GX_QUADS, GX_VTXFMT0, _5A);
+            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            GXBegin(GX_TRIANGLES, GX_VTXFMT0, _5A);
+            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
             const TVec3f& point = getDrawPos(i, j);
             const TVec2f& tex = getDrawTx(i, j);
-            GXPosition3f32(point.x, point.y, point.z);
-            GXTexCoord2f32(tex.x, tex.y);
+            J3DNativeDraw::position(point.x, point.y, point.z);
+            J3DNativeDraw::texCoord(tex.x, tex.y);
         }
 
         GXSetColorUpdate(GX_TRUE);
         GXSetDstAlpha(GX_TRUE, 0);
         if (_5A == 4) {
-            GXBegin(GX_QUADS, GX_VTXFMT0, _5A);
+            J3DNativeDraw::begin(GX_QUADS, _5A, NEBULA_SHAPE_TEXCOORD0);
         } else {
-            GXBegin(GX_TRIANGLES, GX_VTXFMT0, _5A);
+            J3DNativeDraw::begin(GX_TRIANGLES, _5A, NEBULA_SHAPE_TEXCOORD0);
         }
 
         for (u32 j = 0; j < _5A; j++) {
             const TVec3f& point = getDrawPos(i, j);
             const TVec2f& tex = getDrawTx(i, j);
-            GXPosition3f32(point.x, point.y, point.z);
-            GXTexCoord2f32(tex.x, tex.y);
+            J3DNativeDraw::position(point.x, point.y, point.z);
+            J3DNativeDraw::texCoord(tex.x, tex.y);
         }
     }
 

@@ -1,4 +1,5 @@
 #include "Game/Ride/Trapeze.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/Ride/SwingRopePoint.hpp"
@@ -699,95 +700,92 @@ bool Trapeze::isStartSwingBack() const {
 namespace {
     void drawPolygon0(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
-            GXPosition3f32(rPosA.x - x1 * rSide.x + y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x - x1 * rSide.x + y1 * rFront.x,   //
                            rPosA.y - x1 * rSide.y + y1 * rFront.y,   //
                            rPosA.z - x1 * rSide.z + y1 * rFront.z);  //
-            GXColor1u32(::sColorPlusZ);
-            GXTexCoord2f32(0.0f, texA);
+            J3DNativeDraw::color(::sColorPlusZ);
+            J3DNativeDraw::texCoord(0.0f, texA);
 
-            GXPosition3f32(rPosA.x + x2 * rSide.x - y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x + x2 * rSide.x - y2 * rFront.x,   //
                            rPosA.y + x2 * rSide.y - y2 * rFront.y,   //
                            rPosA.z + x2 * rSide.z - y2 * rFront.z);  //
-            GXColor1u32(::sColorPlusX);
-            GXTexCoord2f32(1.0f, texA);
+            J3DNativeDraw::color(::sColorPlusX);
+            J3DNativeDraw::texCoord(1.0f, texA);
 
-            GXPosition3f32(rPosB.x - x1 * rSide.x + y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x - x1 * rSide.x + y1 * rFront.x,   //
                            rPosB.y - x1 * rSide.y + y1 * rFront.y,   //
                            rPosB.z - x1 * rSide.z + y1 * rFront.z);  //
-            GXColor1u32(::sColorPlusZ);
-            GXTexCoord2f32(0.0f, texB);
+            J3DNativeDraw::color(::sColorPlusZ);
+            J3DNativeDraw::texCoord(0.0f, texB);
 
-            GXPosition3f32(rPosB.x + x2 * rSide.x - y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x + x2 * rSide.x - y2 * rFront.x,   //
                            rPosB.y + x2 * rSide.y - y2 * rFront.y,   //
                            rPosB.z + x2 * rSide.z - y2 * rFront.z);  //
-            GXColor1u32(::sColorPlusX);
-            GXTexCoord2f32(1.0f, texB);
+            J3DNativeDraw::color(::sColorPlusX);
+            J3DNativeDraw::texCoord(1.0f, texB);
         }
-        GXEnd();
     }
 
     void drawPolygon1(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
-            GXPosition3f32(rPosA.x - x1 * rSide.x - y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x - x1 * rSide.x - y1 * rFront.x,   //
                            rPosA.y - x1 * rSide.y - y1 * rFront.y,   //
                            rPosA.z - x1 * rSide.z - y1 * rFront.z);  //
-            GXColor1u32(::sColorMinusX);
-            GXTexCoord2f32(0.0f, texA);
+            J3DNativeDraw::color(::sColorMinusX);
+            J3DNativeDraw::texCoord(0.0f, texA);
 
-            GXPosition3f32(rPosA.x + x2 * rSide.x + y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x + x2 * rSide.x + y2 * rFront.x,   //
                            rPosA.y + x2 * rSide.y + y2 * rFront.y,   //
                            rPosA.z + x2 * rSide.z + y2 * rFront.z);  //
-            GXColor1u32(::sColorPlusZ);
-            GXTexCoord2f32(1.0f, texA);
+            J3DNativeDraw::color(::sColorPlusZ);
+            J3DNativeDraw::texCoord(1.0f, texA);
 
-            GXPosition3f32(rPosB.x - x1 * rSide.x - y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x - x1 * rSide.x - y1 * rFront.x,   //
                            rPosB.y - x1 * rSide.y - y1 * rFront.y,   //
                            rPosB.z - x1 * rSide.z - y1 * rFront.z);  //
-            GXColor1u32(::sColorMinusX);
-            GXTexCoord2f32(0.0f, texB);
+            J3DNativeDraw::color(::sColorMinusX);
+            J3DNativeDraw::texCoord(0.0f, texB);
 
-            GXPosition3f32(rPosB.x + x2 * rSide.x + y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x + x2 * rSide.x + y2 * rFront.x,   //
                            rPosB.y + x2 * rSide.y + y2 * rFront.y,   //
                            rPosB.z + x2 * rSide.z + y2 * rFront.z);  //
-            GXColor1u32(::sColorPlusZ);
-            GXTexCoord2f32(1.0f, texB);
+            J3DNativeDraw::color(::sColorPlusZ);
+            J3DNativeDraw::texCoord(1.0f, texB);
         }
-        GXEnd();
     }
 
     void drawPolygon2(const TVec3f& rPosA, const TVec3f& rPosB, const TVec3f& rSide, const TVec3f& rFront, f32 x1, f32 y1, f32 x2, f32 y2, f32 texA,
                       f32 texB) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
-            GXPosition3f32(rPosA.x + x1 * rSide.x - y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x + x1 * rSide.x - y1 * rFront.x,   //
                            rPosA.y + x1 * rSide.y - y1 * rFront.y,   //
                            rPosA.z + x1 * rSide.z - y1 * rFront.z);  //
-            GXColor1u32(::sColorPlusX);
-            GXTexCoord2f32(0.0f, texA);
+            J3DNativeDraw::color(::sColorPlusX);
+            J3DNativeDraw::texCoord(0.0f, texA);
 
-            GXPosition3f32(rPosA.x - x2 * rSide.x - y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosA.x - x2 * rSide.x - y2 * rFront.x,   //
                            rPosA.y - x2 * rSide.y - y2 * rFront.y,   //
                            rPosA.z - x2 * rSide.z - y2 * rFront.z);  //
-            GXColor1u32(::sColorMinusX);
-            GXTexCoord2f32(1.0f, texA);
+            J3DNativeDraw::color(::sColorMinusX);
+            J3DNativeDraw::texCoord(1.0f, texA);
 
-            GXPosition3f32(rPosB.x + x1 * rSide.x - y1 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x + x1 * rSide.x - y1 * rFront.x,   //
                            rPosB.y + x1 * rSide.y - y1 * rFront.y,   //
                            rPosB.z + x1 * rSide.z - y1 * rFront.z);  //
-            GXColor1u32(::sColorPlusX);
-            GXTexCoord2f32(0.0f, texB);
+            J3DNativeDraw::color(::sColorPlusX);
+            J3DNativeDraw::texCoord(0.0f, texB);
 
-            GXPosition3f32(rPosB.x - x2 * rSide.x - y2 * rFront.x,   //
+            J3DNativeDraw::position(rPosB.x - x2 * rSide.x - y2 * rFront.x,   //
                            rPosB.y - x2 * rSide.y - y2 * rFront.y,   //
                            rPosB.z - x2 * rSide.z - y2 * rFront.z);  //
-            GXColor1u32(::sColorMinusX);
-            GXTexCoord2f32(1.0f, texB);
+            J3DNativeDraw::color(::sColorMinusX);
+            J3DNativeDraw::texCoord(1.0f, texB);
         }
-        GXEnd();
     }
 };  // namespace
 
@@ -811,15 +809,6 @@ TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
 }
 
 void TrapezeRopeDrawInit::initDraw() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_POS_XYZ, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
 

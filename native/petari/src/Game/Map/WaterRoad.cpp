@@ -1,4 +1,5 @@
 #include "Game/Map/WaterRoad.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/AudioLib/AudSoundObject.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -261,12 +262,6 @@ void WaterRoadModelInfo::drawGD() const {
 
 void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
     loadMaterialHigh(pRoad);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_NRM, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX2, GX_DIRECT);
 
     s32 pointNum = calcDemoDrawPointNum(pRoad);
     u16 numPoints = pointNum * 2;
@@ -287,7 +282,7 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             nextLoopIdx = 0;
         }
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, numPoints);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, numPoints, NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2);
 
         for (s32 lineIdx = 0; lineIdx < pointNum; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;
@@ -300,17 +295,17 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             const TVec3s& normA = mNormals[calcPointIndex(lineIdx, loopIdx)];
             const TVec3s& normB = mNormals[calcPointIndex(lineIdx, nextLoopIdx)];
 
-            GXPosition3f32(pointA.x, pointA.y, pointA.z);
-            GXPosition3s16(normA.x, normA.y, normA.z);
-            GXTexCoord2f32(texU0A, texV0);
-            GXTexCoord2f32(texU1A, texV1);
-            GXTexCoord2f32(texU2A, texV2);
+            J3DNativeDraw::position(pointA.x, pointA.y, pointA.z);
+            J3DNativeDraw::normal(normA.x / 16384.0f, normA.y / 16384.0f, normA.z / 16384.0f);
+            J3DNativeDraw::texCoord(texU0A, texV0);
+            J3DNativeDraw::texCoord(texU1A, texV1);
+            J3DNativeDraw::texCoord(texU2A, texV2);
 
-            GXPosition3f32(pointB.x, pointB.y, pointB.z);
-            GXPosition3s16(normB.x, normB.y, normB.z);
-            GXTexCoord2f32(texU0B, texV0);
-            GXTexCoord2f32(texU1B, texV1);
-            GXTexCoord2f32(texU2B, texV2);
+            J3DNativeDraw::position(pointB.x, pointB.y, pointB.z);
+            J3DNativeDraw::normal(normB.x / 16384.0f, normB.y / 16384.0f, normB.z / 16384.0f);
+            J3DNativeDraw::texCoord(texU0B, texV0);
+            J3DNativeDraw::texCoord(texU1B, texV1);
+            J3DNativeDraw::texCoord(texU2B, texV2);
         }
 
         if (pointNum < mNumLinePoints) {
@@ -344,17 +339,17 @@ void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
             f32 texV1 = MR::getRailCoord(pRoad) * ::sTexRateV1;
             f32 texV2 = MR::getRailCoord(pRoad) * ::sTexRateV2;
 
-            GXPosition3f32(vA.x, vA.y, vA.z);
-            GXPosition3s16(nA.x, nA.y, nA.z);
-            GXTexCoord2f32(texU0A, texV0);
-            GXTexCoord2f32(texU1A, texV1);
-            GXTexCoord2f32(texU2A, texV2);
+            J3DNativeDraw::position(vA.x, vA.y, vA.z);
+            J3DNativeDraw::normal(nA.x / 16384.0f, nA.y / 16384.0f, nA.z / 16384.0f);
+            J3DNativeDraw::texCoord(texU0A, texV0);
+            J3DNativeDraw::texCoord(texU1A, texV1);
+            J3DNativeDraw::texCoord(texU2A, texV2);
 
-            GXPosition3f32(vB.x, vB.y, vB.z);
-            GXPosition3s16(nB.x, nB.y, nB.z);
-            GXTexCoord2f32(texU0B, texV0);
-            GXTexCoord2f32(texU1B, texV1);
-            GXTexCoord2f32(texU2B, texV2);
+            J3DNativeDraw::position(vB.x, vB.y, vB.z);
+            J3DNativeDraw::normal(nB.x / 16384.0f, nB.y / 16384.0f, nB.z / 16384.0f);
+            J3DNativeDraw::texCoord(texU0B, texV0);
+            J3DNativeDraw::texCoord(texU1B, texV1);
+            J3DNativeDraw::texCoord(texU2B, texV2);
         }
 
         texU0A = texU0B;
@@ -377,17 +372,6 @@ s32 WaterRoadModelInfo::calcDemoDrawPointNum(const WaterRoad* pRoad) const {
 }
 
 void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_POS_XY, GX_S16, 16);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX2, GX_POS_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_NRM, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX2, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
@@ -478,15 +462,6 @@ void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
 }
 
 void WaterRoadModelInfo::loadMaterialLow() const {
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_NRM, GX_POS_XY, GX_S16, 0x10);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX1, GX_POS_XYZ, GX_F32, 0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_NRM, GX_INDEX16);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);

@@ -1,4 +1,5 @@
 #include "Game/Screen/ScreenBlurEffect.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
@@ -46,12 +47,6 @@ void ScreenBlurEffect::drawBlur() const {
     projectionMtx.makePerspective(MR::getRenderFovy(), MR::getAspect(), MR::getNearZ(), MR::getFarZ());
     GXSetProjection(projectionMtx, GX_PERSPECTIVE);
 
-    GXClearVtxDesc();
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_F32, 0);
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-
     TMtx34f posMtx;
     posMtx.identity();
     GXLoadPosMtxImm((MtxPtr)&posMtx, GX_PNMTX0);
@@ -95,23 +90,22 @@ void ScreenBlurEffect::drawBlur() const {
     f32 y = MR::tanDegree(MR::getRenderFovy() * 0.5f) * mScale;
     f32 x = MR::getAspect() * y;
 
-    GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
         f32 z = -mScale;
 
-        GXPosition3f32(-x, -y, z);
-        GXTexCoord2f32(0.0f, 1.0f);
+        J3DNativeDraw::position(-x, -y, z);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
 
-        GXPosition3f32(-x, y, z);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::position(-x, y, z);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition3f32(x, -y, z);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::position(x, -y, z);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-        GXPosition3f32(x, y, z);
-        GXTexCoord2f32(1.0f, 0.0f);
+        J3DNativeDraw::position(x, y, z);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
     }
-    GXEnd();
 }
 
 void ScreenBlurEffect::captureBlur() const {

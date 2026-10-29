@@ -928,8 +928,7 @@ void JPAResource::setPTev() {
     }
     int pos_offset = center_offset + base_plane_type * 0x6C;
     int crd_offset = (mpBaseShape->getTilingS() + 2 * mpBaseShape->getTilingT()) * 8;
-    GXSetArray(GX_VA_POS, jpa_pos + pos_offset, 3);
-    GXSetArray(GX_VA_TEX0, jpa_crd + crd_offset, 2);
+    JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd + crd_offset);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
 
     if (mpExTexShape != NULL) {
@@ -973,8 +972,7 @@ void JPAResource::setPTev() {
 void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
     int pos_offset = 0x30 + base_plane_type * 0x6C;
-    GXSetArray(GX_VA_POS, jpa_pos + pos_offset, 3);
-    GXSetArray(GX_VA_TEX0, jpa_crd, 2);
+    JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR_NULL);
     GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3C, GX_FALSE, 0x7D);
     GXSetTevDirect(GX_TEVSTAGE0);

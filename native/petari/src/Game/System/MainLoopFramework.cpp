@@ -1,4 +1,5 @@
 #include "Game/System/MainLoopFramework.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <revolution/os.h>
 #include "Game/System/DrawSyncManager.hpp"
 #include "Game/Util/BothDirList.hpp"
@@ -197,7 +198,6 @@ void MainLoopFramework::copyXfb_triple() {
 
 void MainLoopFramework::preGX() {
     GXInvalidateTexAll();
-    GXInvalidateVtxCache();
     if (JUTVideo::getManager()->getRenderMode()->aa) {
         GXSetPixelFmt(GX_PF_RGB565_Z16, GX_ZC_LINEAR);
         GXSetDither(GX_TRUE);
@@ -337,11 +337,6 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     GXSetScissor(0, 0, fbWidth, efbHeight);
     GXLoadPosMtxImm(e_mtx, GX_PNMTX0);
     GXSetCurrentMtx(GX_PNMTX0);
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_U16, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_POS_XYZ, GX_U8, 0);
     GXSetNumChans(0);
     GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     GXSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -372,21 +367,20 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     __NebulaGXClearQuadColourMarker(0xFFFFFF, (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                                                   (static_cast< u32 >(color.b) << 8) | color.a);
 #endif
-    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     {
-        GXPosition2u16(param1, param2);
-        GXTexCoord2u8(0, 0);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1)), static_cast< f32 >(static_cast< u16 >(param2)), 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
-        GXPosition2u16(param1 + param3, param2);
-        GXTexCoord2u8(1, 0);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1 + param3)), static_cast< f32 >(static_cast< u16 >(param2)), 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
 
-        GXPosition2u16(param1 + param3, param2 + param4);
-        GXTexCoord2u8(1, 1);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1 + param3)), static_cast< f32 >(static_cast< u16 >(param2 + param4)), 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
 
-        GXPosition2u16(param1, param2 + param4);
-        GXTexCoord2u8(0, 1);
+        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1)), static_cast< f32 >(static_cast< u16 >(param2 + param4)), 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
     }
-    GXEnd();
 
     GXSetZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
     GXSetZCompLoc(GX_TRUE);
