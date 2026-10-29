@@ -346,10 +346,6 @@ namespace J3DNativeMaterial {
             pSnapshot = &sMaterial;
         }
         J3DNativeShape::flushState();
-        // The drawing state the game set through GX's functions, written before the record (as a GX call would).
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
-        }
         const NebulaHostServices* pHost = nebula_host();
         pHost->material(pHost->user, __NebulaGXWriter.ptr, pSnapshot);
     }
@@ -359,9 +355,6 @@ namespace J3DNativeMaterial {
             return;
         }
         J3DNativeShape::flushState();
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
-        }
         const NebulaHostServices* pHost = nebula_host();
         pHost->material(pHost->user, __NebulaGXWriter.ptr, pList->mpNebulaMaterial);
     }

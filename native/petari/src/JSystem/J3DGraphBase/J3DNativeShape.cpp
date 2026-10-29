@@ -641,10 +641,6 @@ namespace J3DNativeShape {
     }
 
     void draw(const J3DShapeDraw* pDraw) {
-        // The drawing state the game set through GX's functions, written before the draw (as GXCallDisplayList did).
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
-        }
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), __NebulaGXWriter.ptr, keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sMatrices, sMatrixCount,
@@ -657,9 +653,6 @@ namespace J3DNativeShape {
     void flushState() {
         if (sMatrixCount == 0 && !sCurrentSet && sTexGenCount == 0) {
             return;
-        }
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
         }
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, 0, __NebulaGXWriter.ptr, 0, 0, 0, sMatrices, sMatrixCount,

@@ -38,6 +38,7 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
+#include <revolution/gx/GXRegs.h>
 #endif
 
 #define GX_FIFO_SIZE 0x80000
@@ -174,6 +175,8 @@ void GameSystem::initGX() {
     }
 
     GXInit(mFifoBase, GX_FIFO_SIZE);
+    // The defaults GXInit leaves to its first draw, sent now: the game's records follow them.
+    __GXSetDirtyState();
 }
 
 void GameSystem::initAfterStationedResourceLoaded() {

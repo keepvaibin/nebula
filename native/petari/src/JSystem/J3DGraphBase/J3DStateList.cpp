@@ -37,10 +37,6 @@ void J3DStateList::send() const {
         return;
     }
     J3DNativeShape::flushState();
-    // The drawing state the game set through GX's functions, written before the record (as a GX call would).
-    if (gx->dirtyState) {
-        __GXSetDirtyState();
-    }
     const NebulaHostServices* pHost = nebula_host();
     pHost->state(pHost->user, __NebulaGXWriter.ptr, mOps, mCount);
 }

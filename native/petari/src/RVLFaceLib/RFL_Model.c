@@ -486,9 +486,6 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
     Vec beardTrans;
     Vec hairTrans;
 
-    GXSetMisc(1, 0);
-    GXSetMisc(2, 1);
-
     /**
      * Faceline shape
      */

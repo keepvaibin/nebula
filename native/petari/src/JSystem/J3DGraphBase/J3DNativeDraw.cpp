@@ -45,10 +45,6 @@ namespace {
 
     void send() {
         J3DNativeShape::flushState();
-        // The drawing state the game set through GX's functions, written before the draw (as GXBegin did).
-        if (gx->dirtyState) {
-            __GXSetDirtyState();
-        }
         NebulaImmediate draw = {};
         draw.primitive = sPrimitive;
         draw.attributes = sAttributes;

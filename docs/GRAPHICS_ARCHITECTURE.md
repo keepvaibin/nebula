@@ -55,8 +55,9 @@ path that replaces the GX stream step by step. Each record carries the GX writer
 Values the game reads back or that decide whether a setter writes (cull mode, pixel format, copy settings, the view)
 are kept in the game's native layer. Each op's encoding was checked against the SDK function it replaces before the
 conversion (random arguments and register files; every register, XF and CP word, light memory and, for copies, the
-write sequence). What still goes through the GX stream: TEV order, texture objects and indirect order (with the
-texture coordinate scales they set), and the frame's sync calls.
+write sequence). Texture coordinate scales are not sent: the renderer derives each coordinate's scale from the
+texture sampled with it (`coordinate_scales`). What still goes through the GX stream: the frame's sync calls, Nebula's
+own markers, and the state GX's initialisation writes.
 
 ## Components
 
