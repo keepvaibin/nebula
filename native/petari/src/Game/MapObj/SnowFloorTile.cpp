@@ -1,4 +1,5 @@
 #include "Game/MapObj/SnowFloorTile.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
@@ -383,7 +384,7 @@ void SnowFloorTile::createTexture() {
         }
 
         TDDraw::tileConversion8(mImage, mTextureSize, mTextureSize);
-        DCStoreRange(mImage, mTextureSize * mTextureSize);
+        J3DNativeTexture::registerImage(mImage, GX_TF_I8, mTextureSize, mTextureSize, 1);
     }
 }
 

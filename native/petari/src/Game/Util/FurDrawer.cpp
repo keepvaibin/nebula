@@ -1,4 +1,5 @@
 #include "Game/Util/FurDrawer.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/LiveActor/MaterialCtrl.hpp"
@@ -297,5 +298,5 @@ void FurDrawer::createFurMap() {
         }
     }
 
-    DCStoreRange(pPixels, count * sizeof(u16));
+    J3DNativeTexture::registerImage(pPixels, GX_TF_IA8, width, height, 1);
 }

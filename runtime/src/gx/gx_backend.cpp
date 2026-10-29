@@ -2958,6 +2958,8 @@ std::size_t GxBackend::invalidate_dirty_texture_ranges(
             TextureCache::GuestRange{range.guest_addr, range.size});
     }
 
+    // Memory the game rewrote and only flushed: an image handed over there is out of date, so it decodes from memory.
+    texture_cache_.drop_registered_images(dirty_texture_ranges_scratch_);
     const std::size_t evicted =
         texture_cache_.invalidate_guest_ranges(dirty_texture_ranges_scratch_);
     if (evicted != 0u) {
@@ -12747,6 +12749,12 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
         state::encode(record.state, events);
         return;
     }
+    case shapes::Record::Kind::TextureImage:
+        flush_pending_draw_batch();
+        texture_cache_.register_image(static_cast<std::uint32_t>(record.key), record.image);
+        texture_bindings_dirty_ = true;
+        current_texture_binding_key_valid_ = false;
+        return;
     case shapes::Record::Kind::Immediate:
         draw_record_immediate(*record.immediate);
         return;

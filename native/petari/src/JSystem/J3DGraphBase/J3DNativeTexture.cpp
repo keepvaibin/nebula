@@ -1,5 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include <nebula_gx_fifo.h>
 #include <string.h>
 
 static_assert(sizeof(J3DNativeTexObj) <= sizeof(GXTexObj), "a GXTexObj holds a J3DNativeTexObj");
@@ -22,7 +23,54 @@ namespace {
     }
 }  // namespace
 
+extern "C" const NebulaHostServices* nebula_host(void);
+
 namespace J3DNativeTexture {
+    u32 imageSize(GXTexFmt format, u16 width, u16 height, u8 levels) {
+        // A tile is 32 bytes (RGBA8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel.
+        u32 shiftX = 2, shiftY = 2;
+        switch (format) {
+        case GX_TF_I4:
+        case GX_TF_C4:
+        case GX_TF_CMPR:
+            shiftX = 3;
+            shiftY = 3;
+            break;
+        case GX_TF_I8:
+        case GX_TF_IA4:
+        case GX_TF_C8:
+            shiftX = 3;
+            shiftY = 2;
+            break;
+        default:
+            break;
+        }
+        const u32 tileBytes = format == GX_TF_RGBA8 ? 64 : 32;
+        u32 size = 0;
+        u32 w = width, h = height;
+        for (u32 level = 0; level < (levels != 0 ? levels : 1); level++) {
+            size += ((w + (1 << shiftX) - 1) >> shiftX) * ((h + (1 << shiftY) - 1) >> shiftY) * tileBytes;
+            w = w > 1 ? w >> 1 : 1;
+            h = h > 1 ? h >> 1 : 1;
+        }
+        return size;
+    }
+
+    void registerImage(const void* pImage, GXTexFmt format, u16 width, u16 height, u8 levels) {
+        if (pImage == nullptr || width == 0 || height == 0) {
+            return;
+        }
+        NebulaTextureImage image;
+        image.bytes = pImage;
+        image.size = imageSize(format, width, height, levels);
+        image.width = width;
+        image.height = height;
+        image.format = static_cast< u8 >(format);
+        image.levels = levels;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->texture_image(pHost->user, __NebulaGXWriter.ptr, &image);
+    }
+
     void init(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,
               GXTexWrapMode wrapT, GXBool mipmap) {
         J3DNativeTexObj& rTex = texture(pObj);

@@ -784,7 +784,7 @@ void NormalMapBase::createGradTexture() {
     }
 
     TDDraw::tileConversion16(static_cast< u16* >(mImagePtr), width, height);
-    DCStoreRange(mImagePtr, width * height * 2);
+    J3DNativeTexture::registerImage(mImagePtr, GX_TF_IA8, width, height, 1);
 }
 
 void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
@@ -801,7 +801,7 @@ void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
         }
     }
 
-    DCStoreRange(pTexture->mImage, pTexture->getWidth() * pTexture->getHeight() * 4);
+    J3DNativeTexture::registerImage(pTexture->mImage, GX_TF_RGBA8, pTexture->getWidth(), pTexture->getHeight(), 1);
 }
 
 namespace {

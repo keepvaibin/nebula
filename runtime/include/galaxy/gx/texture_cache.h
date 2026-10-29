@@ -30,6 +30,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <span>
@@ -167,6 +168,14 @@ public:
     // content lives on the GPU, not in guest memory.
     void invalidate_all();
 
+    // An image's bytes the game handed over (texture_image): textures at `guest_addr` decode from this copy from now
+    // on; entries decoded from earlier bytes there are retired.
+    void register_image(std::uint32_t guest_addr, std::shared_ptr<const std::vector<std::byte>> bytes);
+    // Forgets the handed-over images overlapping the ranges (memory the game rewrote without handing it over).
+    void drop_registered_images(std::span<const GuestRange> ranges);
+    // Decodes that read guest memory (images the game has not handed over), for the log.
+    [[nodiscard]] std::uint64_t guest_memory_decodes() const noexcept { return guest_memory_decodes_; }
+
     std::size_t invalidate_guest_range(
         std::uint32_t guest_addr,
         std::uint32_t size);
@@ -262,6 +271,13 @@ public:
     [[nodiscard]] bool movie_handle(std::uint32_t srv_index) const noexcept;
 
 private:
+    // Handed-over images by address, and copies replaced while a decode may still read them (released at the next
+    // finish_pending_decodes).
+    std::map<std::uint32_t, std::shared_ptr<const std::vector<std::byte>>> registered_images_;
+    std::vector<std::shared_ptr<const std::vector<std::byte>>> replaced_images_;
+    std::uint64_t guest_memory_decodes_ = 0;
+    [[nodiscard]] const std::byte* registered_bytes(std::uint32_t guest_addr, std::uint32_t size) const;
+
     struct Key {
         std::uint32_t guest_addr;
         std::uint16_t width;

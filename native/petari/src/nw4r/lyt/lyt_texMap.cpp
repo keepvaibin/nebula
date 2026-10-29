@@ -56,6 +56,8 @@ namespace nw4r {
         void TexMap::ReplaceImage(const TPLDescriptor* pTPLDesc) {
             const TPLHeader& header = *pTPLDesc->textureHeader;
             mImage = header.data;
+            J3DNativeTexture::registerImage(header.data, GXTexFmt(u32(header.format)), header.width, header.height,
+                                            static_cast< u8 >(header.maxLOD + 1));
             SetSize(header.width, header.height);
             SetTexelFormat(GXTexFmt(u32(header.format)));
 

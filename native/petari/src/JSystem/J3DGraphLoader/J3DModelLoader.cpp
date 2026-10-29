@@ -1,4 +1,5 @@
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "Game/System/NebulaCurvedSurfaces.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
@@ -511,6 +512,16 @@ void J3DModelLoader::readShape(J3DShapeBlock const* i_block, u32 i_flags) {
     }
 }
 
+// The model's images handed to the renderer as they load (J3DNativeTexture::registerImage).
+static void registerTextureImages(const ResTIMG* pRes, u32 num) {
+    for (u32 i = 0; i < num; i++) {
+        const ResTIMG& rTimg = pRes[i];
+        const u8* pImage = reinterpret_cast< const u8* >(&rTimg) + (s32)rTimg.mImageDataOffset;
+        J3DNativeTexture::registerImage(pImage, static_cast< GXTexFmt >(rTimg.mFormat), rTimg.mWidth, rTimg.mHeight,
+                                        rTimg.mMipmap ? rTimg.mImageNum : 1);
+    }
+}
+
 void J3DModelLoader::readTexture(J3DTextureBlock const* i_block) {
     ResTIMG* texture_res;
     u32 texture_num = i_block->mTextureNum;
@@ -521,6 +532,7 @@ void J3DModelLoader::readTexture(J3DTextureBlock const* i_block) {
         mpMaterialTable->mTextureName = NULL;
     }
     mpMaterialTable->mTexture = new J3DTexture(texture_num, texture_res);
+    registerTextureImages(texture_res, texture_num);
 }
 
 void J3DModelLoader_v26::readMaterialTable(J3DMaterialBlock const* i_block, u32 i_flags) {
@@ -567,6 +579,7 @@ void J3DModelLoader::readTextureTable(J3DTextureBlock const* i_block) {
         mpMaterialTable->mTextureName = NULL;
     }
     mpMaterialTable->mTexture = new J3DTexture(texture_num, texture_res);
+    registerTextureImages(texture_res, texture_num);
 }
 
 void J3DModelLoader::readPatchedMaterial(J3DMaterialBlock const* i_block, u32 i_flags) {

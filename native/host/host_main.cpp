@@ -2173,6 +2173,39 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
 
 // The material the next shape draws use (record_offset's place); texture identities become the physical addresses
 // the texture cache names images by.
+void svc_texture_image(void*, const void* stream, const NebulaTextureImage* image) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    if (image == nullptr || image->bytes == nullptr || image->size == 0u) {
+        return;
+    }
+    (void)stream;
+    const auto* first = static_cast<const std::byte*>(image->bytes);
+    const uint64_t address = physical_of(reinterpret_cast<uint64_t>(image->bytes));
+    // The copies the renderer has: an image handed over again unchanged needs nothing. Loading threads hand images
+    // over too, so the record joins the stream ahead of the next one, as shape registrations do.
+    static std::mutex handed_lock;
+    static std::unordered_map<uint64_t, std::shared_ptr<const std::vector<std::byte>>> handed;
+    std::shared_ptr<const std::vector<std::byte>> copy;
+    {
+        std::lock_guard guard(handed_lock);
+        auto& last = handed[address];
+        if (last != nullptr && last->size() == image->size && std::memcmp(last->data(), first, image->size) == 0) {
+            return;
+        }
+        last = std::make_shared<const std::vector<std::byte>>(first, first + image->size);
+        copy = last;
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TextureImage;
+    record.key = address;
+    record.image = std::move(copy);
+    queue_shape_record(std::move(record));
+#else
+    (void)stream, (void)image;
+#endif
+}
+
 void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -3838,6 +3871,7 @@ int main(int argc, char** argv) {
     services.material = svc_material;
     services.state = svc_state;
     services.immediate = svc_immediate;
+    services.texture_image = svc_texture_image;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

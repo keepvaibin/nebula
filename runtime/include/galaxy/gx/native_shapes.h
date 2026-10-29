@@ -99,7 +99,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 
 // Records of the game's stream, in the order it made them (gx_backend.h attach_shape_record).
 struct Record {
-    enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State, Immediate };
+    enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State, Immediate, TextureImage };
     std::size_t offset = 0;  // bytes into the submitted GX stream: it runs after every command before it
     std::uint64_t serial = 0;  // its place among the records (and so among markers at the same offset)
     Kind kind = Kind::Draw;
@@ -110,6 +110,8 @@ struct Record {
     std::shared_ptr<const material::Material> material;
     std::vector<state::Op> state;  // drawing-state changes outside materials, in order
     std::shared_ptr<const Immediate> immediate;
+    // An image's bytes (TextureImage), at `key`: its physical address.
+    std::shared_ptr<const std::vector<std::byte>> image;
     // A draw's matrices, and the matrices its corners take when they carry none (position, texture coordinates 0-7)
     // when the game set them since its last draw.
     std::vector<Matrix> matrices;

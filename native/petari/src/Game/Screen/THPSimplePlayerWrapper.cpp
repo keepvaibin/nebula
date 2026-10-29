@@ -85,7 +85,6 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
 }
 
 bool THPSimplePlayerWrapper::init(s32 audio) {
-    LCEnable();
     if (!THPInit()) {
         return false;
     }
@@ -107,7 +106,6 @@ bool THPSimplePlayerWrapper::init(s32 audio) {
 }
 
 void THPSimplePlayerWrapper::quit() {
-    LCDisable();
     JASDriver::registerMixCallback(nullptr, (JASMixMode)3);
     THPSimplePlayerStaticAudio::mPlayer = nullptr;
     _8 = 0;

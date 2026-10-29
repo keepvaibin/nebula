@@ -449,7 +449,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
         }
     }
 
-    DCStoreRange(image, 64);
+    J3DNativeTexture::registerImage(image, GX_TF_IA4, 8, 8, 1);
 }
 
 namespace {
@@ -761,7 +761,7 @@ void MarioActor::updateDarkMask(u16 unused) {
     s32 index = x + y * 8;
     image[index] = 0xF0;
     previous[index] = 0xF0;
-    DCStoreRange(image, 64);
+    J3DNativeTexture::registerImage(image, GX_TF_IA4, 8, 8, 1);
     _1C4++;
 }
 

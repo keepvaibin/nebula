@@ -85,8 +85,6 @@ BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), _14(255), 
     for (u32 i = 0; i < ARRAY_SIZE(::sL2RadAndOfs); i++) {
         initBlurMtx(&_4C[i * ::sL2RoundPoints], ::sL2RoundPoints, ::sL2RadAndOfs[i]._0, ::sL2RadAndOfs[i]._4);
     }
-
-    PPCSync();
 }
 
 void BloomEffect::preDraw() const {

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 41u
+#define NEBULA_GAME_API_VERSION 42u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -140,6 +140,15 @@ typedef struct NebulaStateOp {
     float f[6];
     uint64_t image;
 } NebulaStateOp;
+
+/* An image (texture_image): its identity (the game's address of its bytes), format (GXTexFmt), size, mipmap levels
+   and its bytes (`size` of them, in the format's layout). */
+typedef struct NebulaTextureImage {
+    const void* bytes;
+    uint32_t size;
+    uint16_t width, height;
+    uint8_t format, levels;
+} NebulaTextureImage;
 
 /* Vertices the game sends as it draws (immediate): `count` of them grouped as `primitive` (GXBegin's: quads,
    triangles, strips, fans, lines, line strips, points), each with the values `attributes` names (NEBULA_SHAPE_NORMAL,
@@ -887,6 +896,9 @@ typedef struct NebulaHostServices {
     void (*state)(void* user, const void* stream, const NebulaStateOp* ops, uint32_t count);
     /* Vertices drawn as the game sends them (NebulaImmediate), after every command written before `stream`. */
     void (*immediate)(void* user, const void* stream, const NebulaImmediate* draw);
+    /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
+       it from here on, after every command written before `stream`. Sent when the image is loaded or rewritten. */
+    void (*texture_image)(void* user, const void* stream, const NebulaTextureImage* image);
 } NebulaHostServices;
 
 enum {

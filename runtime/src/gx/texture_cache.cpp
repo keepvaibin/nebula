@@ -1171,10 +1171,54 @@ bool TextureCache::initialize(gpu::Device* device) {
 
 void TextureCache::finish_pending_decodes() {
     if (!async_decode_pending_ || !decode_pool_) {
+        replaced_images_.clear();
         return;
     }
     async_decode_pending_ = false;
     decode_pool_->wait_all();
+    replaced_images_.clear();
+}
+
+void TextureCache::register_image(std::uint32_t guest_addr, std::shared_ptr<const std::vector<std::byte>> bytes) {
+    if (bytes == nullptr || bytes->empty()) {
+        return;
+    }
+    const auto size = static_cast<std::uint32_t>(bytes->size());
+    (void)invalidate_guest_range(guest_addr, size);
+    auto& slot = registered_images_[guest_addr];
+    if (slot != nullptr) {
+        replaced_images_.push_back(std::move(slot));
+    }
+    slot = std::move(bytes);
+}
+
+void TextureCache::drop_registered_images(std::span<const GuestRange> ranges) {
+    for (const GuestRange& range : ranges) {
+        const std::uint64_t begin = range.guest_addr, end = begin + range.size;
+        auto it = registered_images_.lower_bound(static_cast<std::uint32_t>(std::min<std::uint64_t>(end, 0xFFFFFFFFull)));
+        while (it != registered_images_.begin()) {
+            --it;
+            if (it->first + it->second->size() <= begin) {
+                break;
+            }
+            replaced_images_.push_back(std::move(it->second));
+            it = registered_images_.erase(it);
+        }
+    }
+}
+
+const std::byte* TextureCache::registered_bytes(std::uint32_t guest_addr, std::uint32_t size) const {
+    // The image whose bytes start at or before the address and cover the whole range.
+    auto it = registered_images_.upper_bound(guest_addr);
+    if (it == registered_images_.begin()) {
+        return nullptr;
+    }
+    --it;
+    const std::uint64_t offset = guest_addr - it->first;
+    if (offset + size > it->second->size()) {
+        return nullptr;
+    }
+    return it->second->data() + offset;
 }
 
 void TextureCache::finish_pending_decodes_noexcept() noexcept {
@@ -2205,8 +2249,17 @@ TextureHandle TextureCache::get(
         throw std::runtime_error("[TextureCache] palette exceeds TMEM");
     }
 
+    const std::byte* handed_over = registered_bytes(image.guest_addr, total_guest_size);
+    if (handed_over == nullptr) {
+        ++guest_memory_decodes_;
+        static const bool log_guest = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
+        if (log_guest) {
+            std::fprintf(stderr, "[texture] from guest memory: %08X %ux%u format %u (%u bytes)\n", image.guest_addr,
+                         image.width, image.height, static_cast<unsigned>(image.format), total_guest_size);
+        }
+    }
     const auto* src = reinterpret_cast<const std::uint8_t*>(
-        resolve_guest_tex(memory, image.guest_addr, total_guest_size));
+        handed_over != nullptr ? handed_over : resolve_guest_tex(memory, image.guest_addr, total_guest_size));
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
