@@ -140,23 +140,22 @@ public:
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
-    // The GPU texture for the image registers, decoded from guest memory on first use. Palettized formats use
-    // the TLUT at `tlut.tmem_offset`. Throws on an unmapped guest range (reported as GxFatalError).
+    // The GPU texture for the image registers, decoded on first use from the image the game handed over
+    // (register_image; one never handed over decodes from zeros). Palettized formats use the TLUT at
+    // `tlut.tmem_offset`.
     [[nodiscard]] TextureHandle get(
         const TexImage& image,
         const TexMode& mode,
-        const TlutRef& tlut,
-        GuestMemory* memory);
+        const TlutRef& tlut);
     // Render thread only: marks a cached handle used (LRU) without reading guest memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
-    // BP 0x64/0x65: copies a palette from guest memory into the TLUT bank (TMEM). Returns whether bytes changed;
+    // BP 0x64/0x65: copies a handed-over palette into the TLUT bank (TMEM). Returns whether bytes changed;
     // retires only textures whose own palette bytes changed, so bindings survive identical reloads.
     [[nodiscard]] bool load_tlut(
         std::uint32_t src_reg,
-        std::uint32_t dest_reg,
-        GuestMemory* memory);
+        std::uint32_t dest_reg);
 
     // Aliases an EFB copy-to-texture at `guest_addr`, retiring every overlapping decoded entry and older copy.
     [[nodiscard]] bool register_efb_copy(
@@ -173,8 +172,8 @@ public:
     void register_image(std::uint32_t guest_addr, std::shared_ptr<const std::vector<std::byte>> bytes);
     // Forgets the handed-over images overlapping the ranges (memory the game rewrote without handing it over).
     void drop_registered_images(std::span<const GuestRange> ranges);
-    // Decodes that read guest memory (images the game has not handed over), for the log.
-    [[nodiscard]] std::uint64_t guest_memory_decodes() const noexcept { return guest_memory_decodes_; }
+    // Images and palettes sampled without having been handed over (each logged).
+    [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
 
     std::size_t invalidate_guest_range(
         std::uint32_t guest_addr,
@@ -275,7 +274,7 @@ private:
     // finish_pending_decodes).
     std::map<std::uint32_t, std::shared_ptr<const std::vector<std::byte>>> registered_images_;
     std::vector<std::shared_ptr<const std::vector<std::byte>>> replaced_images_;
-    std::uint64_t guest_memory_decodes_ = 0;
+    std::uint64_t missing_images_ = 0;
     [[nodiscard]] const std::byte* registered_bytes(std::uint32_t guest_addr, std::uint32_t size) const;
 
     struct Key {

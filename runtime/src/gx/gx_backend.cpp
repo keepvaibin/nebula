@@ -10854,11 +10854,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                                 const auto get_start = time_detail
                                     ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
-                                texture_handles[m] = texture_cache_.get(
-                                    img,
-                                    mode,
-                                    tlut,
-                                    frame_memory_);
+                                texture_handles[m] = texture_cache_.get(img, mode, tlut);
                                 if (time_detail) {
                                     texture_get_us += elapsed_us(
                                         get_start,
@@ -12435,13 +12431,7 @@ void GxBackend::on_tlut_load() {
     flush_pending_draw_batch();
     // BP 0x64 (source) is latched by GxState; BP 0x65 (destination) triggers the load into TMEM, which
     // palettized (C4/C8/C14X2) textures decode against.
-    if (frame_memory_ == nullptr) {
-        return;
-    }
-    if (!texture_cache_.load_tlut(
-        state_.bp(bp::kTlutSrcAddr),
-        state_.bp(bp::kTlutDest),
-        frame_memory_)) {
+    if (!texture_cache_.load_tlut(state_.bp(bp::kTlutSrcAddr), state_.bp(bp::kTlutDest))) {
         return;
     }
     texture_handle_cache_.clear();

@@ -34,6 +34,11 @@
 
 namespace {
 
+// Hands bytes to the texture cache as the game hands over an image (texture_image).
+void hand_over(galaxy::gx::TextureCache& cache, std::uint32_t address, const std::byte* bytes, std::size_t size) {
+    cache.register_image(address, std::make_shared<const std::vector<std::byte>>(bytes, bytes + size));
+}
+
 using Microsoft::WRL::ComPtr;
 
 struct Pixel {
@@ -1604,32 +1609,28 @@ V main(uint id : SV_VertexID) {
         constexpr unsigned kTextures = 18u;
         std::vector<std::byte> bytes(kTextures * stride);
         for (unsigned i = 0u; i < kTextures; ++i) bytes[i * stride] = static_cast<std::byte>(i);
-        galaxy::GuestMemoryRegion region{
-            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.regions = &region;
-        memory.region_count = 1u;
+        hand_over(cache, address, bytes.data(), bytes.size());
         TexImage image{};
         image.guest_addr = address;
         image.width = image.height = 1024u;
         image.format = TexFormat::CMPR;
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
-        const auto first = cache.get(image, mode, TlutRef{}, &memory);
+        const auto first = cache.get(image, mode, TlutRef{});
         const auto desc = first.resource->GetDesc();
         const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
         bool passed = expect(allocation > first.guest_byte_size &&
             cache.decoded_map_stats().resident_bytes == allocation &&
             cache.decoded_entry_guest_bytes() == stride,
             "compressed texture charges device allocation, preserving guest-byte metric");
-        const auto again = cache.get(image, mode, TlutRef{}, &memory);
+        const auto again = cache.get(image, mode, TlutRef{});
         passed &= expect(again.resource == first.resource &&
             cache.decoded_map_stats().resident_bytes == allocation,
             "ordinary texture hit does not charge allocation twice");
         TextureHandle last{};
         for (unsigned i = 1u; i < kTextures; ++i) {
             image.guest_addr = address + i * stride;
-            last = cache.get(image, mode, TlutRef{}, &memory);
+            last = cache.get(image, mode, TlutRef{});
         }
         const auto stats = cache.decoded_map_stats();
         passed &= expect(stats.budget_bytes == (64ull << 20u) &&
@@ -1653,7 +1654,7 @@ V main(uint id : SV_VertexID) {
         image.format = TexFormat::I4;
         mode.min_filter = TexMinFilter::NearMipNear;
         mode.max_lod_x16 = 7u * 16u;
-        const auto mipped = cache.get(image, mode, TlutRef{}, &memory);
+        const auto mipped = cache.get(image, mode, TlutRef{});
         const auto mip_desc = mipped.resource->GetDesc();
         const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
         passed &= expect(mip_desc.MipLevels > 1u &&
@@ -1680,11 +1681,6 @@ V main(uint id : SV_VertexID) {
         for (std::size_t i = 0; i < bytes.size(); ++i) {
             bytes[i] = static_cast<std::byte>((i * 2654435761u) >> 13u);
         }
-        galaxy::GuestMemoryRegion region{
-            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
         struct Case {
             TexFormat format;
             std::uint16_t width;
@@ -1720,8 +1716,9 @@ V main(uint id : SV_VertexID) {
             check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
                 allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create async decode list");
             cache.backend().set_upload_list(list.Get());
-            // 256-entry palette in slot 0 from guest bytes at +0x8000.
-            (void)cache.load_tlut((address + 0x8000u) >> 5u, 16u << 10u, &memory);
+            hand_over(cache, address, bytes.data(), bytes.size());
+            // 256-entry palette in slot 0 from the handed-over bytes at +0x8000.
+            (void)cache.load_tlut((address + 0x8000u) >> 5u, 16u << 10u);
             cache.set_async_decode_allowed(async);
             std::vector<TextureHandle> handles;
             std::uint32_t offset = 0u;
@@ -1733,12 +1730,12 @@ V main(uint id : SV_VertexID) {
                 image.format = test.format;
                 TexMode mode{};
                 mode.min_filter = TexMinFilter::Near;
-                handles.push_back(cache.get(image, mode, TlutRef{0u, test.tlut}, &memory));
+                handles.push_back(cache.get(image, mode, TlutRef{0u, test.tlut}));
                 offset += 0x400u;
             }
             // Reloads the slot with different bytes before the join. Queued jobs must decode with the
             // palette captured at lookup time.
-            (void)cache.load_tlut((address + 0x9000u) >> 5u, 16u << 10u, &memory);
+            (void)cache.load_tlut((address + 0x9000u) >> 5u, 16u << 10u);
             cache.set_async_decode_allowed(false);
             cache.finish_pending_decodes();
             if (async && cache.async_decode_jobs() != cases.size()) {
@@ -1864,11 +1861,7 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 512> bytes{};
-        galaxy::GuestMemoryRegion region{
-            address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
+        hand_over(cache, address, bytes.data(), bytes.size());
         TexImage image{};
         image.guest_addr = address;
         image.width = image.height = 8u;
@@ -1876,8 +1869,8 @@ V main(uint id : SV_VertexID) {
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
         const auto initial_revision = cache.retirement_revision();
-        const auto first = cache.get(image, mode, TlutRef{}, &memory);
-        const auto hit = cache.get(image, mode, TlutRef{}, &memory);
+        const auto first = cache.get(image, mode, TlutRef{});
+        const auto hit = cache.get(image, mode, TlutRef{});
         passed &= expect(hit.srv_index == first.srv_index &&
             !cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision,
@@ -1887,14 +1880,14 @@ V main(uint id : SV_VertexID) {
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
         image.guest_addr = address + 128u;
-        const auto same_frame = cache.get(image, mode, TlutRef{}, &memory);
+        const auto same_frame = cache.get(image, mode, TlutRef{});
         passed &= expect(same_frame.srv_index != first.srv_index &&
             !cache.srv_index_retired(same_frame.srv_index) &&
             first.resource->GetDesc().Width == 8u,
             "retired resource and CPU descriptor survive later lookups in the same frame");
         cache.begin_frame(1u, kFramesInFlight);
         image.guest_addr = address + 256u;
-        const auto other_slot = cache.get(image, mode, TlutRef{}, &memory);
+        const auto other_slot = cache.get(image, mode, TlutRef{});
         passed &= expect(other_slot.srv_index != first.srv_index &&
             cache.srv_index_retired(first.srv_index) &&
             !cache.srv_index_retired(other_slot.srv_index),
@@ -1904,7 +1897,7 @@ V main(uint id : SV_VertexID) {
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "reclaimed slot retains its retired identity until allocation");
         image.guest_addr = address + 384u;
-        const auto reclaimed = cache.get(image, mode, TlutRef{}, &memory);
+        const auto reclaimed = cache.get(image, mode, TlutRef{});
         passed &= expect(reclaimed.srv_index == first.srv_index &&
             !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
@@ -1931,10 +1924,8 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
         std::array<std::byte, 2048> bytes{};
-        galaxy::GuestMemoryRegion region{address, static_cast<std::uint32_t>(bytes.size()), bytes.data()};
-        galaxy::GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
+        hand_over(cache, address, bytes.data(), 1536u);
+        hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
         TexImage image{};
         image.guest_addr = address;
         image.width = image.height = 8u;
@@ -1942,7 +1933,7 @@ V main(uint id : SV_VertexID) {
         TexMode mode{};
         mode.min_filter = TexMinFilter::NearMipNear;
         mode.max_lod_x16 = 32u;
-        const auto decoded = cache.get(image, mode, TlutRef{}, &memory);
+        const auto decoded = cache.get(image, mode, TlutRef{});
         // Independent tiled footprint: 8x8=4*32, 4x4=32, 2x2=32.
         passed &= expect(decoded.guest_byte_size == 192u && decoded.mip_levels == 3u,
             "authored mip handle retains all three block-rounded source levels");
@@ -1951,10 +1942,10 @@ V main(uint id : SV_VertexID) {
                             TexFormat::RGB565, TexFormat::RGB5A3, TexFormat::RGBA8, TexFormat::CMPR}) {
             auto direct_image = image; direct_image.guest_addr = address + 768u;
             direct_image.format = format;
-            const auto original = cache.get(direct_image, mode, TlutRef{}, &memory);
+            const auto original = cache.get(direct_image, mode, TlutRef{});
             for (auto palette_format : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3})
                 for (std::uint16_t slot : {std::uint16_t{0}, std::uint16_t{1}, std::uint16_t{1023}}) {
-                const auto reused = cache.get(direct_image, mode, TlutRef{slot, palette_format}, &memory);
+                const auto reused = cache.get(direct_image, mode, TlutRef{slot, palette_format});
                 passed &= expect(reused.resource == original.resource && reused.srv_index == original.srv_index &&
                     reused.guest_byte_size == original.guest_byte_size && reused.mip_levels == original.mip_levels,
                     "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
@@ -1963,51 +1954,54 @@ V main(uint id : SV_VertexID) {
         auto indexed_image = image; indexed_image.guest_addr = address + 512u;
         indexed_image.format = TexFormat::C4;
         TexMode indexed_mode{}; indexed_mode.min_filter = TexMinFilter::Near;
-        const auto indexed = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
-        const auto other_palette_format = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::RGB565}, &memory);
-        const auto other_palette_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        const auto indexed = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8});
+        const auto other_palette_format = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::RGB565});
+        const auto other_palette_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8});
         passed &= expect(indexed.srv_index != other_palette_format.srv_index &&
             indexed.srv_index != other_palette_slot.srv_index,
             "indexed textures retain palette format and slot dependencies even when palette bytes match");
         constexpr auto palette_source = address + 1536u;
-        passed &= expect(!cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory),
+        passed &= expect(!cache.load_tlut(palette_source >> 5u, 1u << 10u),
             "32 unchanged palette bytes report no binding invalidation");
-        const auto after_identical_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
+        const auto after_identical_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8});
         passed &= expect(after_identical_reload.resource == indexed.resource &&
             after_identical_reload.srv_index == indexed.srv_index,
             "identical palette reload retains its decoded texture and descriptor");
         bytes[1536] = std::byte{0xff};
-        passed &= expect(cache.load_tlut(palette_source >> 5u, 1u << 10u, &memory),
+        hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 1u << 10u),
             "changed palette bytes report required binding invalidation");
-        const auto after_changed_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8}, &memory);
-        const auto unaffected_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8}, &memory);
+        const auto after_changed_reload = cache.get(indexed_image, indexed_mode, TlutRef{0u, TlutFormat::IA8});
+        const auto unaffected_slot = cache.get(indexed_image, indexed_mode, TlutRef{1u, TlutFormat::IA8});
         passed &= expect(after_changed_reload.resource != indexed.resource &&
             unaffected_slot.resource == other_palette_slot.resource && unaffected_slot.srv_index == other_palette_slot.srv_index,
             "changed palette bytes retire overlapping resources while retaining an unaffected slot");
 
         auto c8_image = indexed_image; c8_image.format = TexFormat::C8;
-        const auto c8_before = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        const auto c8_before = cache.get(c8_image, indexed_mode, TlutRef{});
         bytes[1536u + 510u] = std::byte{0x12};  // outside C4, inside C8
-        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+        hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u),
             "wide TLUT transfer reports changed C8-tail bytes");
-        const auto c4_after_tail = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
-        const auto c8_after_tail = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        const auto c4_after_tail = cache.get(indexed_image, indexed_mode, TlutRef{});
+        const auto c8_after_tail = cache.get(c8_image, indexed_mode, TlutRef{});
         passed &= expect(c4_after_tail.resource == after_changed_reload.resource &&
             c4_after_tail.srv_index == after_changed_reload.srv_index &&
             c8_after_tail.resource != c8_before.resource,
             "changed transfer preserves identical C4 prefix but retires changed C8 palette");
         bytes[1538u] = std::byte{0x77};  // now both palettes consume changed bytes
-        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+        hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
+        passed &= expect(cache.load_tlut(palette_source >> 5u, 16u << 10u),
             "wide TLUT transfer reports changed shared prefix");
-        const auto c4_after_prefix = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
-        const auto c8_after_prefix = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        const auto c4_after_prefix = cache.get(indexed_image, indexed_mode, TlutRef{});
+        const auto c8_after_prefix = cache.get(c8_image, indexed_mode, TlutRef{});
         passed &= expect(c4_after_prefix.resource != c4_after_tail.resource &&
             c8_after_prefix.resource != c8_after_tail.resource,
             "changed shared prefix retires both C4 and C8 textures");
-        passed &= expect(!cache.load_tlut(palette_source >> 5u, 16u << 10u, &memory),
+        passed &= expect(!cache.load_tlut(palette_source >> 5u, 16u << 10u),
             "identical wide reload reports no change");
-        const auto c4_after_repeat = cache.get(indexed_image, indexed_mode, TlutRef{}, &memory);
-        const auto c8_after_repeat = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        const auto c4_after_repeat = cache.get(indexed_image, indexed_mode, TlutRef{});
+        const auto c8_after_repeat = cache.get(c8_image, indexed_mode, TlutRef{});
         passed &= expect(c4_after_repeat.resource == c4_after_prefix.resource &&
             c4_after_repeat.srv_index == c4_after_prefix.srv_index &&
             c8_after_repeat.resource == c8_after_prefix.resource &&
@@ -2015,13 +2009,13 @@ V main(uint id : SV_VertexID) {
             "identical wide reload retains both resources and descriptors");
 
         auto c14_image = indexed_image; c14_image.format = TexFormat::C14X2;
-        const auto c14_before_partial = cache.get(c14_image, indexed_mode, TlutRef{}, &memory);
+        const auto c14_before_partial = cache.get(c14_image, indexed_mode, TlutRef{});
         // Slot 1 is inside the C14 palette starting at slot 0, but outside
         // the C4/C8 palettes starting there. Incoming prefix differs from zero.
-        passed &= expect(cache.load_tlut(palette_source >> 5u, (1u << 10u) | 1u, &memory),
+        passed &= expect(cache.load_tlut(palette_source >> 5u, (1u << 10u) | 1u),
             "partial transfer into later slot changes C14 palette bytes");
-        const auto c14_after_partial = cache.get(c14_image, indexed_mode, TlutRef{}, &memory);
-        const auto c8_after_partial = cache.get(c8_image, indexed_mode, TlutRef{}, &memory);
+        const auto c14_after_partial = cache.get(c14_image, indexed_mode, TlutRef{});
+        const auto c8_after_partial = cache.get(c8_image, indexed_mode, TlutRef{});
         passed &= expect(c14_after_partial.resource != c14_before_partial.resource &&
             c8_after_partial.resource == c8_after_repeat.resource &&
             c8_after_partial.srv_index == c8_after_repeat.srv_index,
@@ -2037,12 +2031,12 @@ V main(uint id : SV_VertexID) {
         enhanced_mode.wrap_t = TexWrap::Mirror;
         enhanced_mode.min_filter = TexMinFilter::Linear;
         enhanced_mode.mag_filter = TexMagFilter::Linear;
-        const auto no_enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
+        const auto no_enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{});
         mip_config.enhanced_mipmaps = true; set_render_config(mip_config);
-        const auto enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{}, &memory);
+        const auto enhancement = cache.get(enhanced_image, enhanced_mode, TlutRef{});
         TexMode decal_mode = enhanced_mode;
         decal_mode.wrap_t = TexWrap::Clamp;
-        const auto decal = cache.get(enhanced_image, decal_mode, TlutRef{}, &memory);
+        const auto decal = cache.get(enhanced_image, decal_mode, TlutRef{});
         set_render_config(original_config);
         passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
             enhancement.mip_levels == 7u && enhancement.generated_mips &&
@@ -2112,13 +2106,13 @@ V main(uint id : SV_VertexID) {
             "restore packed alias after footprint-extension eviction");
         image.format = TexFormat::RGBA8;
         mode.min_filter = TexMinFilter::Near;
-        passed &= expect(cache.get(image, mode, TlutRef{}, &memory).guest_byte_size == 256u,
+        passed &= expect(cache.get(image, mode, TlutRef{}).guest_byte_size == 256u,
             "exact alias handle publishes current packed footprint");
         bool rejected = false;
         try { (void)cache.register_efb_copy(address, copy, {}); }
         catch (const std::runtime_error&) { rejected = true; }
         passed &= expect(rejected, "null alias is rejected before retiring live entry");
-        passed &= expect(cache.get(image, mode, TlutRef{}, &memory).resource == alias.Get(),
+        passed &= expect(cache.get(image, mode, TlutRef{}).resource == alias.Get(),
             "rejected alias leaves the previous resource owned and bindable");
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();

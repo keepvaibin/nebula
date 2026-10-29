@@ -1,4 +1,4 @@
-// GX texture decode from guest memory into GPU textures. An unmapped guest range or unknown format is fatal.
+// GX texture decode from the images the game handed over into GPU textures. An unknown format is fatal.
 // The SRV heap is not shader-visible; the renderer copies its slots into the frame's descriptor ring per draw.
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -142,32 +142,14 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// Throws std::runtime_error on an unmapped range (there is no GxServices here); the caller reports GxFatalError.
-static const std::byte* resolve_guest_tex(
-    GuestMemory* memory,
-    std::uint32_t address,
-    std::uint32_t size) {
-    if (std::byte* fast = resolve_guest_fast(memory, address, size);
-        fast != nullptr) {
-        return fast;
+// An image the game never handed over decodes from zeros (transparent): the renderer reads no game memory. The
+// largest GX image (1024x1024 RGBA8 with every level) fits.
+static const std::byte* missing_image_bytes(std::uint32_t size) {
+    static const std::vector<std::byte> zeros(texture_guest_byte_size(TexFormat::RGBA8, 1024u, 1024u, 11u));
+    if (size > zeros.size()) {
+        throw std::runtime_error("[TextureCache] image larger than any GX image");
     }
-    if (memory != nullptr && memory->regions != nullptr) {
-        const std::uint64_t req_end =
-            static_cast<std::uint64_t>(address) + size;
-        for (std::uint32_t i = 0; i < memory->region_count; ++i) {
-            const GuestMemoryRegion& r = memory->regions[i];
-            if (r.host_base == nullptr) { continue; }
-            const std::uint64_t reg_end =
-                static_cast<std::uint64_t>(r.guest_base) + r.size;
-            if (address >= r.guest_base && req_end <= reg_end) {
-                return r.host_base + (address - r.guest_base);
-            }
-        }
-    }
-    std::ostringstream ss;
-    ss << "[TextureCache] guest address 0x" << std::hex << std::uppercase
-       << address << " (size " << std::dec << size << ") is not mapped";
-    throw std::runtime_error(ss.str());
+    return zeros.data();
 }
 
 // SIMD tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64). Each decodes one complete tile with the
@@ -1630,8 +1612,7 @@ std::uint32_t TextureCache::allocate_srv_index() {
 
 bool TextureCache::load_tlut(
     std::uint32_t src_reg,
-    std::uint32_t dest_reg,
-    GuestMemory* memory) {
+    std::uint32_t dest_reg) {
     const TlutTransfer decoded = decode_wii_tlut_transfer(src_reg, dest_reg);
     const std::uint32_t src_addr = decoded.source_address;
     const std::uint32_t dest_byte_offset = decoded.destination_offset;
@@ -1645,14 +1626,13 @@ bool TextureCache::load_tlut(
     }
 
     // A palette the game handed over (texture_image) loads from its copy.
-    const std::byte* handed_over = registered_bytes(src_addr, transfer);
-    if (handed_over == nullptr) {
-        static const bool log_guest = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-        if (log_guest) {
-            std::fprintf(stderr, "[texture] palette from guest memory: %08X (%u bytes)\n", src_addr, transfer);
-        }
+    const std::byte* src_ptr = registered_bytes(src_addr, transfer);
+    if (src_ptr == nullptr) {
+        // Never handed over: the palette stays as it was.
+        ++missing_images_;
+        std::fprintf(stderr, "[texture] palette not handed over: %08X (%u bytes)\n", src_addr, transfer);
+        return false;
     }
-    const std::byte* src_ptr = handed_over != nullptr ? handed_over : resolve_guest_tex(memory, src_addr, transfer);
     // An identical reload changes no palette.
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
         return false;
@@ -2145,8 +2125,7 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
 TextureHandle TextureCache::get(
     const TexImage& image,
     const TexMode& mode,
-    const TlutRef& tlut,
-    GuestMemory* memory) {
+    const TlutRef& tlut) {
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {
@@ -2282,15 +2261,12 @@ TextureHandle TextureCache::get(
 
     const std::byte* handed_over = registered_bytes(image.guest_addr, total_guest_size);
     if (handed_over == nullptr) {
-        ++guest_memory_decodes_;
-        static const bool log_guest = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-        if (log_guest) {
-            std::fprintf(stderr, "[texture] from guest memory: %08X %ux%u format %u (%u bytes)\n", image.guest_addr,
-                         image.width, image.height, static_cast<unsigned>(image.format), total_guest_size);
-        }
+        ++missing_images_;
+        std::fprintf(stderr, "[texture] image not handed over: %08X %ux%u format %u (%u bytes)\n", image.guest_addr,
+                     image.width, image.height, static_cast<unsigned>(image.format), total_guest_size);
     }
     const auto* src = reinterpret_cast<const std::uint8_t*>(
-        handed_over != nullptr ? handed_over : resolve_guest_tex(memory, image.guest_addr, total_guest_size));
+        handed_over != nullptr ? handed_over : missing_image_bytes(total_guest_size));
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
@@ -2352,13 +2328,9 @@ TextureHandle TextureCache::get(
         const std::uint64_t pre_miss_us =
             elapsed_us(get_start, miss_start);
         if (pre_miss_us >= trace_gx_stall_threshold_us()) {
-            const bool fast_available =
-                resolve_guest_fast(memory, image.guest_addr, total_guest_size) != nullptr;
             std::cerr << "[gx-texture-premiss] addr=0x" << std::hex
                       << image.guest_addr << std::dec
                       << " size=" << total_guest_size
-                      << " regions=" << (memory ? memory->region_count : 0u)
-                      << " fast=" << (fast_available ? 1u : 0u)
                       << " config-us="
                       << elapsed_us(get_start, config_end)
                       << " key-us=" << elapsed_us(config_end, key_end)
