@@ -92,7 +92,7 @@ void MarioSearchLight::updateHitSensor(HitSensor* pSensor) {
 
 void MarioSearchLight::calcAndSetBaseMtx() {
     Mtx baseMtx;
-    PSMTXCopy(getBaseMtx(), baseMtx);
+    NebulaMtxCopy(getBaseMtx(), baseMtx);
 
     PartsModel::calcAndSetBaseMtx();
     MR::blendMtxRotateSlerp(baseMtx, getBaseMtx(), 0.1f, baseMtx);
@@ -183,14 +183,14 @@ void MarioActor::calcViewSearchLight() {
         MR::multMtx(modelMdx, model->getBaseTRMtx(), j3dSys.getViewMtx());
 
         Mtx invBaseMtx;
-        PSMTXInverse(model->getBaseTRMtx(), invBaseMtx);
+        NebulaMtxInverse(model->getBaseTRMtx(), invBaseMtx);
 
         model->viewCalc3(0, nullptr);
 
         for (u32 i = 0; i < ARRAY_SIZE(mConst->getTable()->mSearchLightBlurScale); i++) {
             Mtx scaledMtx;
             f32 scale = mConst->getTable()->mSearchLightBlurScale[i];
-            PSMTXScale(scaledMtx, scale, scale, scale);
+            NebulaMtxScale(scaledMtx, scale, scale, scale);
 
             MR::multMtx(scaledMtx, scaledMtx, modelMdx);
             MR::multMtx(j3dSys.getViewMtx(), invBaseMtx, scaledMtx);
@@ -362,5 +362,5 @@ void MarioActor::getThrowVec(TVec3f* pVec) const {
     Mtx trMtx;
     MR::makeMtxTR(trMtx, 0.0f, 0.0f, 0.0f, rotate.x, rotate.y, rotate.z);
 
-    PSMTXMultVec(trMtx, dirZ, pVec);
+    NebulaMtxMultVec(trMtx, dirZ, pVec);
 }

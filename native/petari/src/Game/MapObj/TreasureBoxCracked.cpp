@@ -207,7 +207,7 @@ void TreasureBoxCracked::exeAlwaysOpen() {
         MR::startBck(this, "Open");
         MR::setBckFrameAndStop(this, MR::getBckCtrl(this)->getEnd());
         TVec3f position;
-        PSMTXMultVec(getBaseMtx(), &::sTopOpenEndOffset, &position);
+        NebulaMtxMultVec(getBaseMtx(), &::sTopOpenEndOffset, &position);
         mTopMtx.setTrans(position);
     }
 }
@@ -221,7 +221,7 @@ void TreasureBoxCracked::control() {
             TVec3f offset;
             MR::vecBlend(TVec3f(::sTopOpenStartOffset), TVec3f(::sTopOpenEndOffset), &offset, rate);
             TVec3f position;
-            PSMTXMultVec(getBaseMtx(), &offset, &position);
+            NebulaMtxMultVec(getBaseMtx(), &offset, &position);
             mTopMtx.setTrans(position);
 
             if (frame == 0.0f) {
@@ -359,7 +359,7 @@ void TreasureBoxCracked::initItemTrans() {
         offset = &::sAirBubbleOffset;
     }
 
-    PSMTXMultVec(getBaseMtx(), offset, &mItemTargetPos);
+    NebulaMtxMultVec(getBaseMtx(), offset, &mItemTargetPos);
     mItem->mPosition.set(mPosition);
     mItem->mRotation.set(mRotation);
 }

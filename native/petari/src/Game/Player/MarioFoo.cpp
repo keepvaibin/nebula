@@ -100,7 +100,7 @@ MarioFoo::MarioFoo(MarioActor* pActor) : MarioState(pActor, MarioStatus_Foo) {
     _64.zero();
     _70 = 0.0f;
     _74 = 0.0f;
-    PSMTXIdentity(_78);
+    NebulaMtxIdentity(_78);
     _A8 = 0;
     _AA = 0;
     _6B0 = 0;
@@ -553,9 +553,9 @@ void MarioFoo::updateTilt() {
     _74 = 0.1f * frontTilt + 0.9f * _74;
     TMtx34f sideMtx;
     TMtx34f frontMtx;
-    PSMTXRotRad(sideMtx, 'X', _70);
-    PSMTXRotRad(frontMtx, 'Z', _74);
-    PSMTXConcat(sideMtx, frontMtx, _78);
+    NebulaMtxRotRad(sideMtx, 'X', _70);
+    NebulaMtxRotRad(frontMtx, 'Z', _74);
+    NebulaMtxConcat(sideMtx, frontMtx, _78);
     u16 upperJoint = getAnimator()->getUpperJointID();
     setJointGlobalMtx(upperJoint, _78);
 }

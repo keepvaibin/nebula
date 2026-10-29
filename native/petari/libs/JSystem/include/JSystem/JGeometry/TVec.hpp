@@ -537,11 +537,11 @@ namespace JGeometry {
         }
 
         void add(const TVec3< f32 >& b) {
-            JMathInlineVEC::PSVECAdd(this, &b, this);
+            NebulaVecAdd(this, &b, this);
         }
 
         void add(const TVec3& a, const TVec3& b) {
-            JMathInlineVEC::PSVECAdd(&a, &b, this);
+            NebulaVecAdd(&a, &b, this);
         }
 
         TVec3 operator-(const TVec3& op) const {
@@ -555,11 +555,11 @@ namespace JGeometry {
         }
 
         void sub(const TVec3< f32 >& b) {
-            JMathInlineVEC::PSVECSubtract(this, &b, this);
+            NebulaVecSubtract(this, &b, this);
         }
 
         void sub(const TVec3& a, const TVec3& b) {
-            JMathInlineVEC::PSVECSubtract(&a, &b, this);
+            NebulaVecSubtract(&a, &b, this);
         }
 
         TVec3 operator*(f32 scalar) const {
@@ -813,7 +813,7 @@ namespace JGeometry {
 
         f32 normalize() {
             f32 magnitude = length();
-            PSVECNormalize(this, this);
+            NebulaVecNormalize(this, this);
             return magnitude;
         }
 
@@ -823,17 +823,17 @@ namespace JGeometry {
         }
 
         void cross(const TVec3< f32 >& a, const TVec3< f32 >& b) {
-            PSVECCrossProduct(a, b, *this);
+            NebulaVecCrossProduct(a, b, *this);
         }
 
         TVec3 cross(const TVec3& b) const {
             TVec3 ret;
-            PSVECCrossProduct(this, &b, &ret);
+            NebulaVecCrossProduct(this, &b, &ret);
             return ret;
         }
 
         f32 squared() const {
-            return JMathInlineVEC::PSVECSquareMag(this);
+            return NebulaVecSquareMag(this);
         };
 
         operator f32*(void) {
@@ -845,7 +845,7 @@ namespace JGeometry {
         }
 
 #ifdef __MWERKS__
-        // this theoretically should just forward JMathInlineVEC::PSVECSquareDistance,
+        // this theoretically should just forward NebulaVecSquareDistance,
         // however using the exact same asm causes mismatches. Keeping it here instead
         // keeps the exact matches, and even allows for more use cases that match.
         f32 squared(const TVec3& rB) const {
@@ -912,11 +912,11 @@ namespace JGeometry {
         };
 
         f32 length() const {
-            return PSVECMag(this);
+            return NebulaVecMag(this);
         }
 
         inline f32 distance(const TVec3& rOther) const {
-            return PSVECDistance(this, &rOther);
+            return NebulaVecDistance(this, &rOther);
         }
 
         template < typename T >
@@ -1214,7 +1214,7 @@ namespace JGeometry {
             if (crossPart <= TUtil< f32 >::epsilon()) {
                 this->template set< f32 >(0.0f, 0.0f, 0.0f, 1.0f);
             } else {
-                f32 dotPart = JMathInlineVEC::PSVECDotProduct(&rA, &rB);
+                f32 dotPart = NebulaVecDotProduct(&rA, &rB);
                 f32 halfAngle = 0.5f * JMAATan2(crossPart, dotPart);
                 f32 scale = static_cast< f32 >(sin(halfAngle)) / crossPart;
                 this->x = dir.x * scale;
@@ -1308,19 +1308,19 @@ namespace JGeometry {
         }
 
         void mult(const TQuat4& q) {
-            PSQUATMultiply(&q, this, this);
+            NebulaQuatMultiply(&q, this, this);
         }
 
         void mult(const TQuat4& q1, const TQuat4& q2) {
-            PSQUATMultiply(q1, q2, this);
+            NebulaQuatMultiply(q1, q2, this);
         }
 
         f32 dot(const TQuat4& q) const {
-            return PSQUATDotProduct(this, &q);
+            return NebulaQuatDotProduct(this, &q);
         }
 
         f32 squared() const {
-            return PSQUATDotProduct(this, this);
+            return NebulaQuatDotProduct(this, this);
         }
 
         void makeMtx(MtxPtr pMtx) const {

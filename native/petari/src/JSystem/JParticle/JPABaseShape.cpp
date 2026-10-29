@@ -385,7 +385,7 @@ static void noLoadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
 
 void loadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
     Mtx mtx;
-    PSMTXConcat(work->mPrjMtx, srt, mtx);
+    NebulaMtxConcat(work->mPrjMtx, srt, mtx);
     J3DNativeShape::sendTexture(mtx, GX_TEXMTX0, GX_MTX3x4);
 }
 
@@ -416,8 +416,8 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     local_108[2][1] = 0.0f;
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
-    PSMTXConcat(local_108, work->mPrjMtx, local_108);
-    PSMTXConcat(local_108, srt, local_108);
+    NebulaMtxConcat(local_108, work->mPrjMtx, local_108);
+    NebulaMtxConcat(local_108, srt, local_108);
     J3DNativeShape::sendTexture(local_108, 0x1e, GX_MTX3x4);
 }
 #pragma pop
@@ -464,7 +464,7 @@ static projectionFunc p_prj[3] = {
 void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
         JGeometry::TVec3< f32 > local_48;
-        PSMTXMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
+        NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
         Mtx local_38;
         local_38[0][0] = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
         local_38[0][3] = local_48.x;
@@ -487,7 +487,7 @@ void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
 void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     if (param_1->checkStatus(8) == 0) {
         JGeometry::TVec3< f32 > local_48;
-        PSMTXMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
+        NebulaMtxMultVec(work->mPosCamMtx, &param_1->mPosition, &local_48);
         f32 sinRot = JMASSin(param_1->mRotateAngle);
         f32 cosRot = JMath::sSinCosTable.cosShort(param_1->mRotateAngle);
         f32 particleX = work->mGlobalPtclScl.x * param_1->mParticleScaleX;
@@ -668,7 +668,7 @@ void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
         auStack_88[0][3] = param_1->mPosition.x;
         auStack_88[1][3] = param_1->mPosition.y;
         auStack_88[2][3] = param_1->mPosition.z;
-        PSMTXConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
+        NebulaMtxConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
         J3DNativeShape::sendPosition(auStack_88, 0);
         p_prj[param_0->mPrjType](param_0, auStack_88);
         JPADrawQuad(param_0->mDLType);
@@ -792,7 +792,7 @@ void JPADrawStripe(JPAEmitterWorkData* param_0) {
         local_c8[2][1] = local_f8.z;
         local_c8[2][2] = particle->mBaseAxis.z;
         local_c8[2][3] = 0.0f;
-        PSMTXMultVecArraySR(local_c8, local_e0, local_e0, 2);
+        NebulaMtxMultVecArraySR(local_c8, local_e0, local_e0, 2);
         J3DNativeDraw::position(local_e0[0].x + local_ec.x, local_e0[0].y + local_ec.y, local_e0[0].z + local_ec.z);
         J3DNativeDraw::texCoord(0.0f, coord);
         J3DNativeDraw::position(local_e0[1].x + local_ec.x, local_e0[1].y + local_ec.y, local_e0[1].z + local_ec.z);
@@ -876,7 +876,7 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
         local_90[2][1] = local_c0.z;
         local_90[2][2] = particle->mBaseAxis.z;
         local_90[2][3] = 0.0f;
-        PSMTXMultVecArraySR(local_90, local_a8, local_a8, 2);
+        NebulaMtxMultVecArraySR(local_90, local_a8, local_a8, 2);
         J3DNativeDraw::position(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
         J3DNativeDraw::texCoord(0.0f, coord);
         J3DNativeDraw::position(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);
@@ -922,7 +922,7 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
         local_90[2][1] = local_c0.z;
         local_90[2][2] = particle->mBaseAxis.z;
         local_90[2][3] = 0.0f;
-        PSMTXMultVecArraySR(local_90, local_a8, local_a8, 2);
+        NebulaMtxMultVecArraySR(local_90, local_a8, local_a8, 2);
         J3DNativeDraw::position(local_a8[0].x + local_b4.x, local_a8[0].y + local_b4.y, local_a8[0].z + local_b4.z);
         J3DNativeDraw::texCoord(0.0f, coord);
         J3DNativeDraw::position(local_a8[1].x + local_b4.x, local_a8[1].y + local_b4.y, local_a8[1].z + local_b4.z);

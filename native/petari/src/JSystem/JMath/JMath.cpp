@@ -106,6 +106,6 @@ void JMAVECLerp(__REGISTER const Vec* a, __REGISTER const Vec* b, __REGISTER Vec
 
 void JMAMTXApplyScale(const Mtx src, Mtx dst, f32 x, f32 y, f32 z) {
     Mtx scale;
-    PSMTXScale(scale, x, y, z);
-    PSMTXConcat(src, scale, dst);
+    NebulaMtxScale(scale, x, y, z);
+    NebulaMtxConcat(src, scale, dst);
 }

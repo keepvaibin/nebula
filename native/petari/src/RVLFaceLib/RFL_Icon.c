@@ -93,19 +93,19 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
         fovy = 2 * (RAD_TO_DEG * atan2f(43.2f, 500.0f));
     }
 
-    C_MTXPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);
+    NebulaMtxPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);
     J3DNativeViewSetProjection(projMtx, GX_PERSPECTIVE);
 
     cameraPos = (Vec){0.0f, 34.5f, 600.0f};
     target = (Vec){0.0f, 34.5f, 0.0f};
     cameraUp = (Vec){0.0f, 1.0f, 0.0f};
 
-    C_MTXLookAt(viewMtx, &cameraPos, &cameraUp, &target);
+    NebulaMtxLookAt(viewMtx, &cameraPos, &cameraUp, &target);
     J3DNativeStateInitLightColor(&light, (GXColor){255, 255, 255, 255});
 
     pos = (Vec){1600.0f, 1500.0f, 6000.0f};
 
-    PSMTXMultVec(viewMtx, &pos, &pos);
+    NebulaMtxMultVec(viewMtx, &pos, &pos);
     J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
     J3DNativeStateLoadLightObjImm(&light, GX_LIGHT0);
     RFLSetMtx(&model, viewMtx);

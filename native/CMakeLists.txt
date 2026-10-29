@@ -44,10 +44,12 @@ add_library(smg_game SHARED
     ${game_sources}
     ${sdk_sources}
     ${layer_sources}
-    msl/src/msl_runtime.c)
+    msl/src/msl_runtime.c
+    math/src/nebula_math.c)
 
 target_include_directories(smg_game BEFORE PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/msl/include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/math/include"
     "${petari}/include"
     "${petari}/libs/JSystem/include"
     "${petari}/libs/MSL_C++/include"

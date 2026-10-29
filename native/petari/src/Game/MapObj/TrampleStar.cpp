@@ -572,14 +572,14 @@ void TrampleStar::drawSelf() const {
     TPos3f mtx2;
 
     if (MR::vecKillElement(diff, shadowPos, &diff) > 0.0f) {
-        PSMTXTrans(mtx, -playerPos.x, -playerPos.y, -playerPos.z);
+        NebulaMtxTrans(mtx, -playerPos.x, -playerPos.y, -playerPos.z);
     } else {
-        PSMTXTrans(mtx, 1000000.0f, 1000000.0f, 1000000.0f);
+        NebulaMtxTrans(mtx, 1000000.0f, 1000000.0f, 1000000.0f);
     }
 
     MR::makeMtxRotate(rot, -*MR::getPlayerRotate());
 
-    PSMTXIdentity(mtx2);
+    NebulaMtxIdentity(mtx2);
 
     TVec3f front;
     MR::getPlayerFrontVec(&front);
@@ -597,7 +597,7 @@ void TrampleStar::drawSelf() const {
     }
 
     MR::makeMtxUpFront(&mtx2, -MR::getMarioShadowVec(), -front);
-    PSMTXInverse(mtx2, mtx2);
+    NebulaMtxInverse(mtx2, mtx2);
 
     MR::multMtx(mtx3, mtx, mtx2);
     TPos3f mtx4;

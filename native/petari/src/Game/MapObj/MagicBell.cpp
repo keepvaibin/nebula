@@ -48,14 +48,14 @@ void MagicBell::exeWait() {
     }
 
     if (!tryRing()) {
-        PSMTXCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
-        PSMTXCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+        NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
+        NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
         TVec3f v3(0.0f, 0.0f, 0.0f);
         MR::setMtxTrans(mSurface2Mtx, v3.x, v3.y, v3.z);
         TVec3f v2(0.0f, 0.0f, 0.0f);
         MR::setMtxTrans(mSurface1Mtx, v2.x, v2.y, v2.z);
-        PSMTXScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
-        PSMTXScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
+        NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
+        NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
         MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
         MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
     }
@@ -96,14 +96,14 @@ void MagicBell::exeRing() {
             mHitMarkPosition.set(mBellRodSwinger->_8);
         }
     }
-    PSMTXCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
-    PSMTXCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
+    NebulaMtxCopy(mBellSwinger->_60.toMtxPtr(), mSurface2Mtx);
+    NebulaMtxCopy(mBellRodSwinger->_60.toMtxPtr(), mSurface1Mtx);
     TVec3f v16(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mSurface2Mtx, v16.x, v16.y, v16.z);
     TVec3f v15(0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mSurface1Mtx, v15.x, v15.y, v15.z);
-    PSMTXScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
-    PSMTXScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScaleApply(mSurface2Mtx, mSurface2Mtx, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScaleApply(mSurface1Mtx, mSurface1Mtx, mScale.x, mScale.y, mScale.z);
     MR::setMtxTrans(mSurface2Mtx, mPosition.x, mPosition.y, mPosition.z);
     MR::setMtxTrans(mSurface1Mtx, mPosition.x, mPosition.y, mPosition.z);
 

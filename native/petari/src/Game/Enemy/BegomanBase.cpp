@@ -244,7 +244,7 @@ void BegomanBase::control() {
     _A8.set(mGravity);
 
     yRotationQuat.setRotate(0.0f, 1.0f, 0.0f, mRotation.y);
-    PSQUATMultiply(&yRotationQuat, &_D0, &_D0);
+    NebulaQuatMultiply(&yRotationQuat, &_D0, &_D0);
 }
 
 void BegomanBase::startClipped() {
@@ -670,8 +670,8 @@ void BegomanBase::launchBegomanCore(LiveActor* pActor, BegomanBase** pBegomanArr
         MR::calcSideVec(&vec2, pActor);
     } else {
         vec1.set(*pVec);
-        PSVECCrossProduct(pActor->getGravity(), &vec1, &vec2);
-        PSVECCrossProduct(&vec2, pActor->getGravity(), &vec1);
+        NebulaVecCrossProduct(pActor->getGravity(), &vec1, &vec2);
+        NebulaVecCrossProduct(&vec2, pActor->getGravity(), &vec1);
     }
 
     f32 angle = 0.0f;

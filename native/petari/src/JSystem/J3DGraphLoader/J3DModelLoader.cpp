@@ -367,7 +367,7 @@ void J3DModelLoader::readEnvelop(J3DEnvelopeBlock const* i_block) {
     mpModelData->getJointTree().mWEvlpMixWeight = JSUConvertOffsetToPtr< NEBULA_BE(f32) >(i_block, i_block->mpWEvlpMixWeight);
 #ifdef TARGET_PC
     {
-        // The inverse joint matrices run to the end of the block (padded by less than one matrix); PSMTX reads them
+        // The inverse joint matrices run to the end of the block (padded by less than one matrix); NebulaMtx reads them
         // natively, so copy them.
         const BEData< Mtx >* src = JSUConvertOffsetToPtr< BEData< Mtx > >(i_block, i_block->mpInvJointMtx);
         Mtx* mtx = NULL;

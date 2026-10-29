@@ -208,7 +208,7 @@ void HomeButtonLayout::draw() const {
     Mtx44 projectionMtx;
     f32 screenHalfHeight = static_cast< s32 >(JUTGetVideoManager()->getEfbHeight()) / 2.0f;
     f32 screenHalfWidth = MR::getScreenWidth() / 2.0f;
-    C_MTXOrtho(projectionMtx, screenHalfHeight, -screenHalfHeight, -screenHalfWidth, screenHalfWidth, 0.0f, 500.0f);
+    NebulaMtxOrtho(projectionMtx, screenHalfHeight, -screenHalfHeight, -screenHalfWidth, screenHalfWidth, 0.0f, 500.0f);
     J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     J3DNativeState::setCullMode(GX_CULL_NONE);

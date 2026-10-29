@@ -42,7 +42,7 @@ void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile
 
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
-    C_MTXOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
     J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();

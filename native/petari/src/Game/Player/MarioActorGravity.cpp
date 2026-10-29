@@ -257,8 +257,8 @@ void MarioActor::updateGravityVec(bool reset, bool usePosition) {
         TVec3f side;
         f32 cosine;
         if (MR::makeAxisAndCosignVecToVec(&axis, &cosine, _24C, gravity)) {
-            PSMTXRotAxisRad(rotation, &axis, JMAAcosRadian(cosine));
-            PSMTXMultVecSR(rotation, &_258, &_258);
+            NebulaMtxRotAxisRad(rotation, &axis, JMAAcosRadian(cosine));
+            NebulaMtxMultVecSR(rotation, &_258, &_258);
             side.cross(_258, gravity);
             if (!MR::normalizeOrZero(&side)) {
                 _258.cross(gravity, side);

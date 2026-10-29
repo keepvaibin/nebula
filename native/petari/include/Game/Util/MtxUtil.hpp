@@ -95,6 +95,6 @@ namespace MR {
 
     // Non-official symbol.
     inline void multMtx(Mtx pOut, const Mtx pA, const Mtx pB) {
-        PSMTXConcat(pB, pA, pOut);
+        NebulaMtxConcat(pB, pA, pOut);
     }
 };  // namespace MR

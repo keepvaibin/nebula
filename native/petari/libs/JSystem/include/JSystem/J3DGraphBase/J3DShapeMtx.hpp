@@ -20,7 +20,7 @@ public:
     }
 
     void setMtx(u16 idx, const Mtx mtx) {
-        PSMTXCopy(mtx, mpTexMtx[idx]);
+        NebulaMtxCopy(mtx, mpTexMtx[idx]);
     }
 
     Mtx44& getEffectMtx(u16 idx) {

@@ -367,7 +367,7 @@ void CollisionShadow::setViewMtx(const TVec3f& rDirection) {
     TPos3f matrix;
     matrix.identity();
     matrix.setPositionFromLookAt(eye, _30, _2F0);
-    PSMTXCopy(matrix, j3dSys.mViewMtx);
+    NebulaMtxCopy(matrix, j3dSys.mViewMtx);
     TDDraw::setViewMtx(matrix);
     MR::setMarioShadowVec(rDirection);
 }
@@ -388,7 +388,7 @@ void CollisionShadow::calcView(J3DModelX* pModel, u32 view, J3DModelX* pReferenc
     _306 = 1;
     if (_C == 3) {
         Mtx matrix;
-        PSMTXCopy(pReference->getBaseTRMtx(), matrix);
+        NebulaMtxCopy(pReference->getBaseTRMtx(), matrix);
         if (pReference != nullptr) {
             pModel->viewCalcRefPos(view, pReference, _48, _24);
         }
@@ -420,7 +420,7 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         setViewMtx(_24);
         TDDraw::setup(0, 0, 1);
         Mtx44 projection;
-        C_MTXOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
+        NebulaMtxOrtho(projection, -150.0f, 150.0f, 150.0f, -150.0f, 10.0f, 100000.0f);
         J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
         if (_307) {
             J3DNativeView::setViewport(608 - (_2FC + 32), -32.0f, 64.0f + _2FC, 64.0f + _2FE, 0.0f, 1.0f);

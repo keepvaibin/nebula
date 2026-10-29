@@ -182,7 +182,7 @@ void Mario::recordRelativePosition() {
             invalidateRelativePosition();
         } else {
             pPosition = &mActor->mPosition;
-            PSMTXMultVec(*_8C8->getBaseInvMtx(), pPosition, &_8A4);
+            NebulaMtxMultVec(*_8C8->getBaseInvMtx(), pPosition, &_8A4);
         }
     }
 
@@ -191,7 +191,7 @@ void Mario::recordRelativePosition() {
             _8CC[0]->mIdx = -1;
         } else {
             pPosition = &mActor->mPosition;
-            PSMTXMultVec(*_8CC[0]->getBaseInvMtx(), pPosition, &_8B0);
+            NebulaMtxMultVec(*_8CC[0]->getBaseInvMtx(), pPosition, &_8B0);
         }
     }
 
@@ -200,7 +200,7 @@ void Mario::recordRelativePosition() {
             _8CC[1]->mIdx = -1;
         } else {
             pPosition = &mActor->mPosition;
-            PSMTXMultVec(*_8CC[1]->getBaseInvMtx(), pPosition, &_8BC);
+            NebulaMtxMultVec(*_8CC[1]->getBaseInvMtx(), pPosition, &_8BC);
         }
     }
 }
@@ -240,7 +240,7 @@ u32 Mario::moveRelativePosition(u32) {
     }
 
     TVec3f movePos;
-    PSMTXMultVec(*rTri->getBaseMtx(), &_8A4, &movePos);
+    NebulaMtxMultVec(*rTri->getBaseMtx(), &_8A4, &movePos);
     _184 = movePos - mPosition;
 
     if (isSwimming()) {
@@ -298,7 +298,7 @@ u32 Mario::moveRelativePositionWall() {
 
         const TVec3f* relPos = &mRelativeWallPos[i];
         TVec3f movePos;
-        PSMTXMultVec(*tri->getBaseMtx(), relPos, &movePos);
+        NebulaMtxMultVec(*tri->getBaseMtx(), relPos, &movePos);
 
         TVec3f add(movePos);
         add -= mPosition;
@@ -324,12 +324,12 @@ u32 Mario::moveRelativePositionWall() {
 
 void Mario::recordLastGround() {
     *_474 = *mGroundPolygon;
-    PSMTXMultVec(*_474->getBaseInvMtx(), &mGroundPos, &_4BC);
+    NebulaMtxMultVec(*_474->getBaseInvMtx(), &mGroundPos, &_4BC);
 }
 
 void Mario::getLastGroundPos(TVec3f* pPos) const {
     if (_474->isValid()) {
-        PSMTXMultVec(*_474->getBaseMtx(), &_4BC, pPos);
+        NebulaMtxMultVec(*_474->getBaseMtx(), &_4BC, pPos);
     } else {
         pPos->zero();
     }

@@ -212,7 +212,7 @@ bool ScenarioSelectScene::isResetEnd() const {
 }
 
 void ScenarioSelectScene::setupCameraMtx() const {
-    PSMTXCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
+    NebulaMtxCopy(mCameraContext->getViewMtx(), j3dSys.mViewMtx);
     J3DNativeView::setProjection(mCameraContext->mProjection, GX_PERSPECTIVE);
 }
 

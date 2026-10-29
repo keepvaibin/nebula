@@ -304,11 +304,11 @@ bool Mario::checkSidePress() {
                 MR::diffAngleAbsHorizontal(firstNormal, secondNormal, getAirGravityVec());
                 f32 normalDot = firstNormal.dot(secondNormal);
                 TVec3f tangent;
-                PSVECCrossProduct(&firstNormal, &getAirGravityVec(), &tangent);
+                NebulaVecCrossProduct(&firstNormal, &getAirGravityVec(), &tangent);
                 MR::normalizeOrZero(&tangent);
                 TVec3f firstUp = tangent.cross(firstNormal);
                 MR::normalizeOrZero(&firstUp);
-                PSVECCrossProduct(&secondNormal, &getAirGravityVec(), &tangent);
+                NebulaVecCrossProduct(&secondNormal, &getAirGravityVec(), &tangent);
                 MR::normalizeOrZero(&tangent);
                 TVec3f secondUp = tangent.cross(secondNormal);
                 MR::normalizeOrZero(&secondUp);

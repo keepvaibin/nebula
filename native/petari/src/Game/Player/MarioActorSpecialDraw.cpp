@@ -479,7 +479,7 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
     }
 
     MR::normalizeOrZero(&tangent);
-    PSMTXRotAxisRad(rotation, &rNormal, 0.3926991f);
+    NebulaMtxRotAxisRad(rotation, &rNormal, 0.3926991f);
     J3DNativeDraw::begin(GX_TRIANGLEFAN, 18, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(rPosition.x - 5.0f * rNormal.x, rPosition.y - 5.0f * rNormal.y, rPosition.z - 5.0f * rNormal.z);
     J3DNativeDraw::color(128);
@@ -491,7 +491,7 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
         J3DNativeDraw::position(point.x, point.y, point.z);
         J3DNativeDraw::color(1);
         J3DNativeDraw::texCoord(10.0f * JMACosRadian(angle), 10.0f * MR::sin(angle));
-        PSMTXMultVecSR(rotation, &tangent, &tangent);
+        NebulaMtxMultVecSR(rotation, &tangent, &tangent);
     }
 }
 #pragma pop
@@ -672,7 +672,7 @@ void MarioActor::drawSpinEffect() const {
     TVec3f center = _2A0 + mMario->mHeadVec * _6D8;
     TVec3f direction(mMario->mFrontVec);
     TVec3f previous;
-    PSMTXRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
+    NebulaMtxRotAxisRad(rotation, &mMario->mHeadVec, 0.09817477f);
     J3DNativeState::setLineWidth(36, GX_TO_ZERO);
 
     for (u32 i = 0; i <= 64; i++) {
@@ -685,7 +685,7 @@ void MarioActor::drawSpinEffect() const {
         }
 
         previous = point;
-        PSMTXMultVecSR(rotation, &direction, &direction);
+        NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
     J3DNativeState::setLineWidth(18, GX_TO_ZERO);
@@ -703,7 +703,7 @@ void MarioActor::drawSpinEffect() const {
         }
 
         previous = point;
-        PSMTXMultVecSR(rotation, &direction, &direction);
+        NebulaMtxMultVecSR(rotation, &direction, &direction);
     }
 
     TDDraw::close();

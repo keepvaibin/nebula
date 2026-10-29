@@ -57,7 +57,7 @@ void RingBeamShadowDrawer::drawShape() const {
     baseMtxCopy.getXDir(XDir);
     baseMtxCopy.getYDir(YDir);
     baseMtxCopy.getTrans(Trans);
-    PSMTXRotAxisRad(mtx, &YDir, f1);
+    NebulaMtxRotAxisRad(mtx, &YDir, f1);
     XDirScaled.scale(_20, XDir);
     f32 f2 = 0.0f;
     for (int i = 0; i < 32; i++) {
@@ -77,7 +77,7 @@ void RingBeamShadowDrawer::drawShape() const {
         MtxList[i][1][3] = temp.y;
         MtxList[i][2][3] = temp.z;
 
-        PSMTXMultVec(mtx, &XDirScaled, &XDirScaled);
+        NebulaMtxMultVec(mtx, &XDirScaled, &XDirScaled);
     }
 
     J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);

@@ -28,14 +28,14 @@ StarPointerTarget::StarPointerTarget(f32 radius, const TVec3f* pPosition, MtxPtr
 bool StarPointerTarget::calcScreenPosition(TVec2f* pScreenPos) const {
     TVec3f worldPos, viewPos;
     calcPosition(&worldPos);
-    PSMTXMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
+    NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
     return calcScreenPositionFromView(pScreenPos, viewPos);
 }
 
 bool StarPointerTarget::isPointing(const TVec2f& rPointerPos, f32 zMargin, f32 radiusMargin) const {
     TVec3f worldPos, viewPos;
     calcPosition(&worldPos);
-    PSMTXMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
+    NebulaMtxMultVec(MR::getStarPointerViewMtx(), &worldPos, &viewPos);
 
     if (-viewPos.z <= 0.0f) {
         return false;

@@ -35,7 +35,7 @@ void ClipFieldFillDraw::setModeSubColor() {
 
 void ClipFieldFillDraw::setUpFillScreen() const {
     Mtx44 projectionMtx;
-    C_MTXOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
     J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     TMtx34f posMtx;

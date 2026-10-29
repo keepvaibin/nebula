@@ -38,9 +38,9 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMaya(mTexMtxInfo.mSRT, mtx2);
         }
-        PSMTXConcat(mtx2, qMtx, mtx2);
+        NebulaMtxConcat(mtx2, qMtx, mtx2);
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 7:
         if (r30 == 0) {
@@ -48,8 +48,8 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMaya(mTexMtxInfo.mSRT, mtx1);
         }
-        PSMTXConcat(mtx1, qMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, qMtx, mtx1);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 10:
         if (r30 == 0) {
@@ -57,9 +57,9 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx2);
         }
-        PSMTXConcat(mtx2, qMtx2, mtx2);
+        NebulaMtxConcat(mtx2, qMtx2, mtx2);
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 6:
         if (r30 == 0) {
@@ -67,8 +67,8 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx1);
         }
-        PSMTXConcat(mtx1, qMtx2, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, qMtx2, mtx1);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 1:
         if (r30 == 0) {
@@ -76,7 +76,7 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx1);
         }
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 2:
     case 3:
@@ -87,7 +87,7 @@ void J3DTexMtx::calcTexMtx(const Mtx param_0) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx2);
         }
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 4:
         if (r30 == 0) {
@@ -128,9 +128,9 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMaya(mTexMtxInfo.mSRT, mtx2);
         }
-        PSMTXConcat(mtx2, qMtx, mtx2);
+        NebulaMtxConcat(mtx2, qMtx, mtx2);
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 9:
         if (r30 == 0) {
@@ -138,7 +138,7 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMaya(mTexMtxInfo.mSRT, mtx2);
         }
-        PSMTXConcat(mtx2, qMtx, mtx2);
+        NebulaMtxConcat(mtx2, qMtx, mtx2);
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mMtx);
         break;
     case 7:
@@ -147,7 +147,7 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMaya(mTexMtxInfo.mSRT, mtx1);
         }
-        PSMTXConcat(mtx1, qMtx, mMtx);
+        NebulaMtxConcat(mtx1, qMtx, mMtx);
         break;
     case 10:
         if (r30 == 0) {
@@ -155,9 +155,9 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx2);
         }
-        PSMTXConcat(mtx2, qMtx2, mtx2);
+        NebulaMtxConcat(mtx2, qMtx2, mtx2);
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 6:
         if (r30 == 0) {
@@ -165,7 +165,7 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
         } else if (r30 == 1) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx1);
         }
-        PSMTXConcat(mtx1, qMtx2, mMtx);
+        NebulaMtxConcat(mtx1, qMtx2, mMtx);
         break;
     case 1:
         if (r30 == 0) {
@@ -182,7 +182,7 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
             J3DGetTextureMtxMayaOld(mTexMtxInfo.mSRT, mtx2);
         }
         J3DMtxProjConcat(mtx2, mTexMtxInfo.mEffectMtx, mtx1);
-        PSMTXConcat(mtx1, param_0, mMtx);
+        NebulaMtxConcat(mtx1, param_0, mMtx);
         break;
     case 3:
         if (r30 == 0) {

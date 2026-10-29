@@ -36,9 +36,9 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
     initModelManagerWithAnm("ItemBubble", nullptr, false);
     MR::connectToSceneMapObj(this);
     mScale.mult(1.2f);
-    PSMTXScale(_9C, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScale(_9C, mScale.x, mScale.y, mScale.z);
     MR::setMtxTrans(_9C, mPosition.x, mPosition.y, mPosition.z);
-    PSMTXCopy(_9C, _CC);
+    NebulaMtxCopy(_9C, _CC);
     _108 = mPosition;
     initHitSensor(1);
     MR::addHitSensorMapObj(this, "body", 8, mScale.x * ::cHitSensorRadius, TVec3f(0.0f, 0.0f, 0.0f));
@@ -138,7 +138,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
         vec2.zero();
 
         TRot3f mtx;
-        PSMTXRotRad(mtx, (char)90, TWO_PI / static_cast< f32 >(itemCount));
+        NebulaMtxRotRad(mtx, (char)90, TWO_PI / static_cast< f32 >(itemCount));
 
         if (itemType == 0) {
             vec3.set< f32 >(0.0f, -60.0f, 0.0f);
@@ -152,7 +152,7 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
             }
 
             _90[i]->initFixedPosition(_CC, vec + vec3, vec2);
-            PSMTXMultVec(mtx, vec, vec);
+            NebulaMtxMultVec(mtx, vec, vec);
         }
     }
 
@@ -264,7 +264,7 @@ void ItemBubble::exeWait() {
         MR::moveCoordAndFollowTrans(this, mRailSpeed);
     }
 
-    PSMTXScale(_9C, mScale.x, mScale.y, mScale.z);
+    NebulaMtxScale(_9C, mScale.x, mScale.y, mScale.z);
     MtxPtr pMtx = MR::tmpMtxRotZDeg(mRotation.z);
     MR::multMtx(_9C, pMtx, _9C);
 
@@ -273,7 +273,7 @@ void ItemBubble::exeWait() {
     MR::setMtxTrans(_9C, mPosition.x, mPosition.y, mPosition.z);
 
     if (mUseRail) {
-        PSMTXCopy(_9C, _CC);
+        NebulaMtxCopy(_9C, _CC);
     } else {
         MR::blendMtx(_CC, _9C, 0.1f, _CC);
     }

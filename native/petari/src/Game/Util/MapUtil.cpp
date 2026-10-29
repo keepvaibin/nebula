@@ -415,9 +415,9 @@ namespace MR {
         }
 
         TVec3f localPoint;
-        PSMTXMultVec(pTriangle->getBaseInvMtx()->toMtxPtr(), rPoint, &localPoint);
+        NebulaMtxMultVec(pTriangle->getBaseInvMtx()->toMtxPtr(), rPoint, &localPoint);
         TVec3f previousPoint;
-        PSMTXMultVec(pTriangle->getPrevBaseMtx()->toMtxPtr(), &localPoint, &previousPoint);
+        NebulaMtxMultVec(pTriangle->getPrevBaseMtx()->toMtxPtr(), &localPoint, &previousPoint);
         *pVelocity = rPoint - previousPoint;
     }
 

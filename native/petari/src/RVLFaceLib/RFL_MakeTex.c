@@ -452,7 +452,7 @@ void RFLiInitRFLTexture(RFLiTexObj* tobj) {
 void RFLiSetup2DCameraAndParam(void) {
     Mtx44 proj;
 
-    C_MTXOrtho(proj, 0.0f, 448.0f, 0.0f, 608.0f, 0.0f, 1.0f);
+    NebulaMtxOrtho(proj, 0.0f, 448.0f, 0.0f, 608.0f, 0.0f, 1.0f);
     J3DNativeViewSetProjection(proj, GX_ORTHOGRAPHIC);
     J3DNativeViewSetViewport(0.0f, 0.0f, 608.0f, 448.0f, 0.0f, 1.0f);
     J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
@@ -737,12 +737,12 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
     s16 s0;
     s16 s1;
 
-    PSMTXIdentity(pos);
-    PSMTXScaleApply(pos, pos, width, height, 1.0f);
-    PSMTXRotRad(rot, 'z', (3.141592653589793f / 180.0f) * rotZ);
-    PSMTXConcat(rot, pos, pos);
-    PSMTXScaleApply(pos, pos, RFLi_TEX_SCALE_X, RFLi_TEX_SCALE_Y, 1.0f);
-    PSMTXTransApply(pos, pos, x, y, 0.0f);
+    NebulaMtxIdentity(pos);
+    NebulaMtxScaleApply(pos, pos, width, height, 1.0f);
+    NebulaMtxRotRad(rot, 'z', (3.141592653589793f / 180.0f) * rotZ);
+    NebulaMtxConcat(rot, pos, pos);
+    NebulaMtxScaleApply(pos, pos, RFLi_TEX_SCALE_X, RFLi_TEX_SCALE_Y, 1.0f);
+    NebulaMtxTransApply(pos, pos, x, y, 0.0f);
 
     J3DNativeShapeSendPosition(pos, GX_PNMTX0);
     J3DNativeStateSetCurrentMtx(GX_PNMTX0);

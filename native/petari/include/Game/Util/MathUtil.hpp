@@ -687,5 +687,5 @@ namespace MR {
 
 };  // namespace MR
 
-f32 PSVECKillElement(const Vec*, const Vec*, const Vec*);
+f32 VecKillElement(const Vec*, const Vec*, const Vec*);
 f32 JMASqrt(f32);

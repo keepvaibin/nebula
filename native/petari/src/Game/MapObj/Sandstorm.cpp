@@ -41,7 +41,7 @@ void SunakazeKunTrap::init(const JMapInfoIter& rIter) {
 
     MR::setShadowDropDirection(this, nullptr, up);
     MR::setShadowDropLength(this, nullptr, 500.0f);
-    PSMTXMultVec(mHost->getBaseMtx(), &_94, &mPosition);
+    NebulaMtxMultVec(mHost->getBaseMtx(), &_94, &mPosition);
     MR::invalidateClipping(this);
     initNerve(GET_NERVE(SunakazeKunTrap, SunakazeKunTrapNrvTrap));
     makeActorAppeared();
@@ -51,7 +51,7 @@ void SunakazeKunTrap::exeTrap() {
     TVec3f axis = TVec3f(0.0f, 1.0f, 0.0f);
 
     MR::rotateVecDegree(&_94, axis, ::sTrapRotateSpeed);
-    PSMTXMultVec(mHost->getBaseMtx(), &_94, &mPosition);
+    NebulaMtxMultVec(mHost->getBaseMtx(), &_94, &mPosition);
     f32 value = MR::getEaseInValue(getNerveStep() % 100, 0.5f, 1.0f, 30.0f);
     f32 angle = MR::sinDegree(getNerveStep() * 5.0f);
 
@@ -448,7 +448,7 @@ void Sandstorm::updateBindActorMtx() {
     }
 
     pPosition = &mBindActor->mPosition;
-    PSMTXMultVec(getBaseMtx(), &vec, pPosition);
+    NebulaMtxMultVec(getBaseMtx(), &vec, pPosition);
     TPos3f mtx;
     mtx.set(mBindActor->getBaseMtx());
     mtx.setTrans(mBindActor->mPosition);

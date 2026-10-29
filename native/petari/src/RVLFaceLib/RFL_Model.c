@@ -262,8 +262,8 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
 
 void RFLSetMtx(RFLCharModel* model, const Mtx mvMtx) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
-    PSMTXCopy(mvMtx, imodel->posMtx);
-    PSMTXInvXpose(mvMtx, imodel->nrmMtx);
+    NebulaMtxCopy(mvMtx, imodel->posMtx);
+    NebulaMtxInvXpose(mvMtx, imodel->nrmMtx);
 }
 
 void RFLSetExpression(RFLCharModel* model, RFLExpression expr) {

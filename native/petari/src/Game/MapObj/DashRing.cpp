@@ -231,7 +231,7 @@ void DashRing::calcAndSetBaseMtx() {
     if (mDoLoop) {
         TPos3f pos;
         MR::makeMtxFrontSidePos(&pos, mAxis, mSubAxis, mPosition);
-        PSMTXCopy(pos, getBaseMtx());
+        NebulaMtxCopy(pos, getBaseMtx());
     }
 }
 
@@ -241,7 +241,7 @@ void DashRing::calcAxis() {
     Mtx mtxTR;
     MR::makeMtxTR(mtxTR, 0.0f, 0.0f, 0.0f, mRotation.x, mRotation.y, mRotation.z);
 
-    PSMTXMultVec(mtxTR, &axis, &axis);
+    NebulaMtxMultVec(mtxTR, &axis, &axis);
     mAxis = axis;
 
     calcSubAxis();
@@ -290,7 +290,7 @@ void DashRing::draw() const {
     f32 segmentLength = (f2 * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / 64.0f;
 
     TPos3f rotMtx;
-    PSMTXRotAxisRad(rotMtx, axis, TWO_PI / 64.0f);
+    NebulaMtxRotAxisRad(rotMtx, axis, TWO_PI / 64.0f);
 
     TDDraw::setup(0, 1, 0);
 
@@ -304,6 +304,6 @@ void DashRing::draw() const {
 
         TDDraw::drawCylinder(vecB0 - crossVec * segmentLength * 0.5f, crossVec * segmentLength, mScale.y * f1 * 30.0f, 0x00808060, 0x00808080, 0x10);
 
-        PSMTXMultVec(rotMtx, subAxis, subAxis);
+        NebulaMtxMultVec(rotMtx, subAxis, subAxis);
     }
 }

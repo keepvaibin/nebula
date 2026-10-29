@@ -37,7 +37,7 @@ namespace TDDraw {
     }
 
     void setViewMtx(MtxPtr pMtx) {
-        PSMTXCopy(pMtx, ::mViewMtx);
+        NebulaMtxCopy(pMtx, ::mViewMtx);
     }
 
     void loadViewMtx(MtxPtr pMtx) {
@@ -50,7 +50,7 @@ namespace TDDraw {
     }
 
     void resetViewMtx() {
-        PSMTXCopy(MR::getCameraViewMtx(), ::mViewMtx);
+        NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
         J3DNativeShape::sendPosition(::mViewMtx, 0);
     }
 
@@ -80,13 +80,13 @@ namespace TDDraw {
         J3DNativeState::setNumChans(1);
 
         Mtx mtx;
-        PSMTXIdentity(mtx);
+        NebulaMtxIdentity(mtx);
 
         switch (viewMode) {
         case 0:
-            PSMTXCopy(MR::getCameraViewMtx(), ::mViewMtx);
+            NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
             J3DNativeShape::sendPosition(::mViewMtx, 0);
-            PSMTXCopy(::mViewMtx, mtx);
+            NebulaMtxCopy(::mViewMtx, mtx);
             break;
         case 1:
             MR::loadProjectionMtx();
@@ -94,7 +94,7 @@ namespace TDDraw {
             break;
         case 2:
             cameraInit2D();
-            PSMTXTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+            NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
             mtx[1][1] = -1.0f;
             J3DNativeShape::sendPosition(mtx, 0);
             break;
@@ -185,14 +185,14 @@ namespace TDDraw {
     void drawCircle(const TVec3f& rCenter, const TVec3f& rNormal, const TVec3f& rAxis, f32 radius, u32 color, u32 segments) {
         TVec3f axis(rAxis);
         Mtx rotation;
-        PSMTXRotAxisRad(rotation, rNormal, 6.2831855f / segments);
+        NebulaMtxRotAxisRad(rotation, rNormal, 6.2831855f / segments);
 
         J3DNativeDraw::begin(GX_LINESTRIP, segments + 1, NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f point(rCenter + axis * radius);
             J3DNativeDraw::position(point.x, point.y, point.z);
             J3DNativeDraw::color(color);
-            PSMTXMultVec(rotation, axis, axis);
+            NebulaMtxMultVec(rotation, axis, axis);
         }
     }
 
@@ -221,7 +221,7 @@ namespace TDDraw {
 
         MR::normalizeOrZero(&axis);
         Mtx rotation;
-        PSMTXRotAxisRad(rotation, rNormal, (6.2831855f / segments));
+        NebulaMtxRotAxisRad(rotation, rNormal, (6.2831855f / segments));
 
         J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
@@ -230,7 +230,7 @@ namespace TDDraw {
 
             for (u32 i = 0; i <= segments; i++) {
                 TVec3f point(rCenter + axis * radius);
-                PSMTXMultVec(rotation, axis, axis);
+                NebulaMtxMultVec(rotation, axis, axis);
                 J3DNativeDraw::position(point.x, point.y, point.z);
                 J3DNativeDraw::color(color);
             }
@@ -239,11 +239,11 @@ namespace TDDraw {
 
     void drawFillFan(const TVec3f& rCenter, const TVec3f& rNormal, const TVec3f& rAxis, u32 color, f32 startAngle, f32 endAngle, u32 segments) {
         Mtx startRotation;
-        PSMTXRotAxisRad(startRotation, rNormal, startAngle);
+        NebulaMtxRotAxisRad(startRotation, rNormal, startAngle);
         Mtx stepRotation;
-        PSMTXRotAxisRad(stepRotation, rNormal, (endAngle - startAngle) / (segments));
+        NebulaMtxRotAxisRad(stepRotation, rNormal, (endAngle - startAngle) / (segments));
         TVec3f axis;
-        PSMTXMultVec(startRotation, rAxis, axis);
+        NebulaMtxMultVec(startRotation, rAxis, axis);
 
         J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
@@ -255,7 +255,7 @@ namespace TDDraw {
                 point += rCenter;
                 J3DNativeDraw::position(point.x, point.y, point.z);
                 J3DNativeDraw::color(color);
-                PSMTXMultVec(stepRotation, axis, axis);
+                NebulaMtxMultVec(stepRotation, axis, axis);
             }
         }
     }
@@ -277,7 +277,7 @@ namespace TDDraw {
         TVec3f top(rBase);
         top += rHeight;
         Mtx rotation;
-        PSMTXRotAxisRad(rotation, rHeight, (TWO_PI / segments));
+        NebulaMtxRotAxisRad(rotation, rHeight, (TWO_PI / segments));
 
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
@@ -287,7 +287,7 @@ namespace TDDraw {
             J3DNativeDraw::color(baseColor);
             J3DNativeDraw::position(topPoint.x, topPoint.y, topPoint.z);
             J3DNativeDraw::color(topColor);
-            PSMTXMultVec(rotation, axis, axis);
+            NebulaMtxMultVec(rotation, axis, axis);
         }
     }
 
@@ -495,7 +495,7 @@ namespace TDDraw {
         width = MR::getScreenWidth() / 2;
         height = MR::getScreenHeight() / 2;
         Mtx44 projection;
-        C_MTXOrtho(projection, height, -height, -width, width, nearZ, -farZ);
+        NebulaMtxOrtho(projection, height, -height, -width, width, nearZ, -farZ);
         J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
         MR::setDefaultViewportAndScissor();
     }
@@ -619,8 +619,8 @@ namespace TDDraw {
         }
 
         Mtx inverseView;
-        PSMTXInverse(pView, inverseView);
-        PSMTXMultVec(inverseView, viewPos, pDest);
+        NebulaMtxInverse(pView, inverseView);
+        NebulaMtxMultVec(inverseView, viewPos, pDest);
     }
 
     void project2D(TVec3f* pDest, const TVec3f& rPosition) {

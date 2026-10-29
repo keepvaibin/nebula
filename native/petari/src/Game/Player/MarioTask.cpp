@@ -276,8 +276,8 @@ bool Mario::taskOnHipDropSlide(u32 flags) {
     }
 
     Mtx rot;
-    PSMTXRotAxisRad(rot, &_A58, sHipDropSlideRot);
-    PSMTXMultVecSR(rot, &dir, &dir);
+    NebulaMtxRotAxisRad(rot, &_A58, sHipDropSlideRot);
+    NebulaMtxMultVecSR(rot, &dir, &dir);
     dir.setLength(_A64);
     dir -= dirCopy;
     dir.setLength(sHipDropSlideLen);

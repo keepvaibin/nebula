@@ -83,17 +83,17 @@ namespace nw4r {
         };
 
         inline MTX34* MTX34Copy(MTX34* pOut, const MTX34* pIn) {
-            PSMTXCopy(*pIn, *pOut);
+            NebulaMtxCopy(*pIn, *pOut);
             return pOut;
         }
 
         inline MTX34* MTX34Identity(MTX34* pOut) {
-            PSMTXIdentity(*pOut);
+            NebulaMtxIdentity(*pOut);
             return pOut;
         }
 
         inline MTX34* MTX34Mult(MTX34* pOut, const MTX34* pA, const MTX34* pB) {
-            PSMTXConcat(*pA, *pB, *pOut);
+            NebulaMtxConcat(*pA, *pB, *pOut);
             return pOut;
         }
 

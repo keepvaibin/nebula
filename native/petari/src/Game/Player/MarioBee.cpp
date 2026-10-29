@@ -73,8 +73,8 @@ bool Mario::beeMarioOnAir() {
                 MR::normalizeOrZero(&mJumpVec);
                 if (!MR::vecBlendSphere(mJumpVec, mFrontVec, &mJumpVec, mActor->getConst().getTable()->mBeeSpeedRotateRatio)) {
                     Mtx rotation;
-                    PSMTXRotAxisRad(rotation, &mHeadVec, 0.1f);
-                    PSMTXMultVecSR(rotation, &mJumpVec, &mJumpVec);
+                    NebulaMtxRotAxisRad(rotation, &mHeadVec, 0.1f);
+                    NebulaMtxMultVecSR(rotation, &mJumpVec, &mJumpVec);
                 }
 
                 mJumpVec.setLength(speed);

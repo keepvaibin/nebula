@@ -595,7 +595,7 @@ void StringSpider::exeSpinned() {
 
     TQuat4f v14;
     v14.setRotate(TVec3f(0, 1, 0), (-0.6f * nerveRateMinus));
-    PSQUATMultiply(_A0, v14, _A0);
+    NebulaQuatMultiply(_A0, v14, _A0);
     calcPosture(0.25f, false);
 
     if (MR::isGreaterStep(this, 480)) {

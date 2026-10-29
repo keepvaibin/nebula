@@ -38,7 +38,7 @@ namespace {
 void MirrorCamera::setMirrorMapInfo(const TVec3f& rNormal, const TVec3f& rPosition) {
     _18.set(rNormal);
     _C.set(rPosition);
-    _24 = -PSVECDotProduct(_18, _C);
+    _24 = -NebulaVecDotProduct(_18, _C);
 }
 
 void MirrorCamera::setMirrorMapInfo(J3DModelData* pModelData) {

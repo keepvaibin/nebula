@@ -285,8 +285,8 @@ void MarioWarp::updateJump() {
 
     Mtx rotation;
     TVec3f offset;
-    PSMTXRotAxisRad(rotation, &_5C, _80 * (1.0f - progress) + _84 * progress);
-    PSMTXMultVecSR(rotation, &_74, &offset);
+    NebulaMtxRotAxisRad(rotation, &_5C, _80 * (1.0f - progress) + _84 * progress);
+    NebulaMtxMultVecSR(rotation, &_74, &offset);
     TVec3f position = _68 + offset;
     f32 followRate = 0.5f;
     if (_45 == 2) {

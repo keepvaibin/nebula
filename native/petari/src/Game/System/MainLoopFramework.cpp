@@ -329,7 +329,7 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     u16 fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
     u16 efbHeight = JUTVideo::getManager()->getRenderMode()->efbHeight;
     Mtx44 proj;
-    C_MTXOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
+    NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
     J3DNativeView::setProjection(proj, GX_ORTHOGRAPHIC);
     J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);

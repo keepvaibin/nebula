@@ -361,7 +361,7 @@ void BossStinkBug::updateJointControl() {
 
 void BossStinkBug::appearStarPiece(s32 num) {
     TVec3f offsetVec;
-    PSMTXMultVec(MR::getJointMtx(this, "Body"), ::sAppearStarPieceOffset, offsetVec);
+    NebulaMtxMultVec(MR::getJointMtx(this, "Body"), ::sAppearStarPieceOffset, offsetVec);
     MR::appearStarPieceToDirection(this, offsetVec, -mGravity, num, 30.0f, 40.0f, false);
     MR::startSound(this, "SE_OJ_STAR_PIECE_BURST");
 }

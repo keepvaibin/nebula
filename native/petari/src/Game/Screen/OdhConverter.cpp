@@ -92,7 +92,7 @@ namespace MR {
         right = getFrameBufferWidth() + left;
         bottom = top - getFrameBufferHeight();
 
-        C_MTXOrtho(mtx, top, bottom, left, right, -1000.0f, 1000.0f);
+        NebulaMtxOrtho(mtx, top, bottom, left, right, -1000.0f, 1000.0f);
         J3DNativeView::setProjection(mtx, GX_ORTHOGRAPHIC);
     }
 

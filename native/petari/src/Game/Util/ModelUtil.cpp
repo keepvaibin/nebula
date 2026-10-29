@@ -177,7 +177,7 @@ namespace MR {
 
     void calcFogStartEnd(TVec3f vec, f32 f1, f32* pFogStart, f32* pFogEnd) {
         Vec multVec;
-        PSMTXMultVec(j3dSys.mViewMtx, vec, &multVec);
+        NebulaMtxMultVec(j3dSys.mViewMtx, vec, &multVec);
 
         f32 flt = -multVec.z;
         if (f1 == 0.0f) {
@@ -569,10 +569,10 @@ namespace MR {
 
         initJ3DShapePacketUserData(newModel);
         Mtx mtx;
-        PSMTXIdentity(mtx);
+        NebulaMtxIdentity(mtx);
         newModel->unlock();
         OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
-        PSMTXCopy(mtx, j3dSys.mViewMtx);
+        NebulaMtxCopy(mtx, j3dSys.mViewMtx);
         newModel->calc();
         newModel->calcMaterial();
         newModel->viewCalc();

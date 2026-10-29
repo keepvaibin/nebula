@@ -19,7 +19,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
     mTime = 0.0f;
 
     initStatus(0);
-    PSMTXMultVecSR(pWork->mGlobalSR, &pWork->mVolumeCalcData.mVolumePos, &mLocalPosition);
+    NebulaMtxMultVecSR(pWork->mGlobalSR, &pWork->mVolumeCalcData.mVolumePos, &mLocalPosition);
 
     if (emtr->checkFlag(8)) {
         setStatus(0x20);
@@ -50,7 +50,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
     if (emtr->mDirSpeed) {
         Mtx mtx;
         JPAGetYZRotateMtx((s32)(emtr->get_r_zp() * 0x8000 * emtr->mSpread), emtr->mRndm.get_rndm_ss(), mtx);
-        PSMTXConcat(pWork->mDirectionMtx, mtx, mtx);
+        NebulaMtxConcat(pWork->mDirectionMtx, mtx, mtx);
         velDir.set< f32 >(emtr->mDirSpeed * mtx[0][2], emtr->mDirSpeed * mtx[1][2], emtr->mDirSpeed * mtx[2][2]);
     } else {
         velDir.zero();
@@ -75,7 +75,7 @@ void JPABaseParticle::init_p(JPAEmitterWorkData* pWork) {
         mVelType1.mul(emtr->mLocalScl);
     }
 
-    PSMTXMultVecSR(pWork->mGlobalRot, &mVelType1, &mVelType1);
+    NebulaMtxMultVecSR(pWork->mGlobalRot, &mVelType1, &mVelType1);
 
     mVelType0.zero();
 

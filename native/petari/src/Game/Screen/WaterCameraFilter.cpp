@@ -160,7 +160,7 @@ void WaterCameraFilter::draw() const {
 void WaterCameraFilter::loadMaterial() const {
     Mtx44 projection;
     s32 height = MR::getScreenHeight();
-    C_MTXOrtho(projection, 0.0f, height, 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projection, 0.0f, height, 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
     J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
     TMtx34f modelView;
     modelView.identity();

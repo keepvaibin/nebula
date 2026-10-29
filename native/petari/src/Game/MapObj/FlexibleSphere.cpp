@@ -24,7 +24,7 @@
 f32 scale = 1.0f;
 void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
-    PSMTXScale(mtx, scale, scale, 0.0f);
+    NebulaMtxScale(mtx, scale, scale, 0.0f);
     J3DNativeShape::sendTexture(mtx, 30, GX_MTX2x4);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);

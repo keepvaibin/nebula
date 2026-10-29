@@ -158,7 +158,7 @@ void CrystalCageMoving::control() {
         MapObjActor::control();
         _C8.set(MR::getJointMtx(this, 0));
         TVec3f trans;
-        PSMTXMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &trans);
+        NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &trans);
         _C8.setTrans(trans);
     }
 }
@@ -221,7 +221,7 @@ void CrystalCageMoving::connectToScene(const MapObjActorInitInfo& rInfo) {
 void CrystalCageMoving::initDummyModel(const JMapInfoIter& rIter) {
     _C8.set(MR::getJointMtx(this, 0));
     TVec3f stack_8;
-    PSMTXMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &stack_8);
+    NebulaMtxMultVec(_C8.toMtxPtr(), &::sDummyModelOffset, &stack_8);
     _C8.setTrans(stack_8);
     mTicoModel = new ModelObj("\223\256\202\255\203\116\203\212\203\130\203\136\203\213\203\120\201\133\203\127\222\206\220\147" /* 動くクリスタルケージ中身 */, "Tico", _C8.toMtxPtr(), MR::DrawBufferType_CrystalItem, -2, -2, false);
     mTicoModel->initWithoutIter();

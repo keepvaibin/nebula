@@ -87,9 +87,9 @@ void SnowFloorTile::initLocalPoint(const JMapInfoIter& rIter) {
     mForward.set(0.0f, 0.0f, 1.0f);
     Mtx mtx;
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, mRotation.x, mRotation.y, mRotation.z);
-    PSMTXMultVecSR(mtx, &mRight, &mRight);
-    PSMTXMultVecSR(mtx, &mUp, &mUp);
-    PSMTXMultVecSR(mtx, &mForward, &mForward);
+    NebulaMtxMultVecSR(mtx, &mRight, &mRight);
+    NebulaMtxMultVecSR(mtx, &mUp, &mUp);
+    NebulaMtxMultVecSR(mtx, &mForward, &mForward);
 }
 
 bool SnowFloorTile::calcLocalPoint(const TVec3f& rPosition, TVec3f* pPoint, f32 heightLimit) {

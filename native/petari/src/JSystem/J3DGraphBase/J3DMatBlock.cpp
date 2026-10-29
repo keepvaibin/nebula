@@ -644,9 +644,9 @@ void J3DTexGenBlockPatched::calc(const Mtx modelMtx) {
             case J3DTexMtxMode_Envmap:
 
                 if (j3dSys.checkFlag(8) == 0) {
-                    PSMTXConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
+                    NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
                 } else {
-                    PSMTXCopy(j3dSys.getViewMtx(), viewMtx);
+                    NebulaMtxCopy(j3dSys.getViewMtx(), viewMtx);
                 }
                 viewMtx[0][3] = 0.0f;
                 viewMtx[1][3] = 0.0f;
@@ -664,7 +664,7 @@ void J3DTexGenBlockPatched::calc(const Mtx modelMtx) {
             case J3DTexMtxMode_ViewProjmapBasic:
             case J3DTexMtxMode_ViewProjmap:
                 if (j3dSys.checkFlag(4) == 0) {
-                    PSMTXConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
+                    NebulaMtxConcat(j3dSys.getViewMtx(), modelMtx, viewMtx);
                     mTexMtx[i]->calc(viewMtx);
                 } else {
                     mTexMtx[i]->calc(j3dSys.getViewMtx());
@@ -674,7 +674,7 @@ void J3DTexGenBlockPatched::calc(const Mtx modelMtx) {
             case J3DTexMtxMode_EnvmapOldEffectMtx:
             case J3DTexMtxMode_EnvmapEffectMtx:
                 if (j3dSys.checkFlag(8) == 0) {
-                    PSMTXCopy(modelMtx, viewMtx);
+                    NebulaMtxCopy(modelMtx, viewMtx);
                     viewMtx[0][3] = 0.0f;
                     viewMtx[1][3] = 0.0f;
                     viewMtx[2][3] = 0.0f;
@@ -720,7 +720,7 @@ void J3DTexGenBlockPatched::calcWithoutViewMtx(const Mtx modelMtx) {
             case J3DTexMtxMode_EnvmapOldEffectMtx:
             case J3DTexMtxMode_EnvmapEffectMtx:
                 if (j3dSys.checkFlag(8) == 0) {
-                    PSMTXCopy(modelMtx, mtx);
+                    NebulaMtxCopy(modelMtx, mtx);
                     mtx[0][3] = 0.0f;
                     mtx[1][3] = 0.0f;
                     mtx[2][3] = 0.0f;
@@ -753,7 +753,7 @@ void J3DTexGenBlockPatched::calcPostTexMtx(const Mtx modelMtx) {
                 break;
             case J3DTexMtxMode_ProjmapBasic:
             case J3DTexMtxMode_Projmap:
-                PSMTXInverse(j3dSys.getViewMtx(), mtx1);
+                NebulaMtxInverse(j3dSys.getViewMtx(), mtx1);
                 mTexCoord[i].setTexMtxReg(0);
                 mTexMtx[i]->calcPostTexMtx(mtx1);
                 break;
@@ -765,7 +765,7 @@ void J3DTexGenBlockPatched::calcPostTexMtx(const Mtx modelMtx) {
             case J3DTexMtxMode_Unknown5:
             case J3DTexMtxMode_EnvmapOldEffectMtx:
             case J3DTexMtxMode_EnvmapEffectMtx:
-                PSMTXInverse(j3dSys.getViewMtx(), mtx2);
+                NebulaMtxInverse(j3dSys.getViewMtx(), mtx2);
                 mtx2[0][3] = 0.0f;
                 mtx2[1][3] = 0.0f;
                 mtx2[2][3] = 0.0f;

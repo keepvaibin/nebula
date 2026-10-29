@@ -40,10 +40,10 @@ void MarioSlider::calcGroundAccel() {
 bool MarioSlider::postureCtrl(MtxPtr) {
     Mtx rotMtx;
     TVec3f& frontVec = getFrontVec();
-    PSMTXRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * _3C / 2.0f));
+    NebulaMtxRotAxisRad(rotMtx, &frontVec, 0.2f * (MR::pi() * _3C / 2.0f));
 
     TVec3f newHeadVec;
-    PSMTXMultVec(rotMtx, &getPlayer()->_368, &newHeadVec);
+    NebulaMtxMultVec(rotMtx, &getPlayer()->_368, &newHeadVec);
 
     MarioConst* pConst = mActor->mConst;
     Mario* pPlayer = getPlayer();

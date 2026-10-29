@@ -124,7 +124,7 @@ void Mario::updateOnimasu() {
     TVec3f localPosition;
     TVec3f previousPosition;
     previousPosition = _600;
-    PSMTXMultVec(inverse, &mActor->mPosition, &localPosition);
+    NebulaMtxMultVec(inverse, &mActor->mPosition, &localPosition);
     if (_60C) {
         _600 = localPosition;
         _60C = 0;
@@ -136,7 +136,7 @@ void Mario::updateOnimasu() {
             if (MR::isInRange(localPosition.x, -400.0f, 400.0f) && MR::isInRange(localPosition.z, -400.0f, 400.0f)) {
                 localPosition = _600;
                 TVec3f position;
-                PSMTXMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
+                NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
                 setTrans(position, nullptr);
                 mVelocity.zero();
             }
@@ -162,7 +162,7 @@ void Mario::updateOnimasu() {
             mVelocity.zero();
             localPosition = _600;
             TVec3f position;
-            PSMTXMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
+            NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
             TVec3f displacement(position - mPosition);
             f32 height = 10.0f + mVerticalSpeed;
             if (-displacement.dot(getShadowNorm()) > height) {
@@ -288,7 +288,7 @@ void Mario::updateOnimasu() {
 
         if (correctX | correctY | correctZ) {
             TVec3f position;
-            PSMTXMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
+            NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &localPosition, &position);
             if (mMovementStates._8 || mMovementStates._19 || mMovementStates._1A) {
                 TVec3f displacement(position - mPosition);
                 if (getWallNorm().dot(displacement) < 0.0f) {
@@ -329,7 +329,7 @@ void Mario::updateOnimasu() {
 
         if (corrected) {
             TVec3f position;
-            PSMTXMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &_600, &position);
+            NebulaMtxMultVec(sensor->mHost->mCollisionParts->mBaseMatrix, &_600, &position);
             setTrans(position, nullptr);
             localPosition = _600;
         }

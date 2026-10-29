@@ -74,7 +74,7 @@ void ShadowVolumeOval::loadModelDrawMtx() const {
 
     mtx.setXDir(side);
     mtx.setZDir(front);
-    PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
+    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
     J3DNativeShape::sendPosition(mtx, 0);
 }
 

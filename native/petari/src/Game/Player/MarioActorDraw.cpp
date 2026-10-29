@@ -738,7 +738,7 @@ void MarioActor::initBlur() {
             mBlurMatrices[i][j] = new (0x20) Mtx[_B14];
 
             for (u32 k = 0; k < _B14; k++) {
-                PSMTXIdentity(mBlurMatrices[i][j][k]);
+                NebulaMtxIdentity(mBlurMatrices[i][j][k]);
             }
         }
     }
@@ -770,8 +770,8 @@ void MarioActor::calcViewMainModel() {
 
     Mtx invView;
     Mtx invBase;
-    PSMTXInverse(_BF8, invView);
-    PSMTXInverse(mModels[mCurrModel]->mBaseTransformMtx, invBase);
+    NebulaMtxInverse(_BF8, invView);
+    NebulaMtxInverse(mModels[mCurrModel]->mBaseTransformMtx, invBase);
     MR::multMtx(_BC8, invBase, invView);
 }
 
@@ -961,7 +961,7 @@ void MarioActor::drawModelBlur() const {
     model->mFlags._13 = true;
 
     Mtx inv;
-    PSMTXInverse(const_cast< TMtx34f& >(_AB0).toMtxPtr(), inv);
+    NebulaMtxInverse(const_cast< TMtx34f& >(_AB0).toMtxPtr(), inv);
     MR::multMtx(inv, inv, MR::getCameraViewMtx());
     for (u32 i = 1; i < 8; i++) {
         const u32 idx = static_cast< u32 >(i + _B12) & 7;

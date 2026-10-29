@@ -21,7 +21,7 @@ public:
 
         mtx.setRotateDegree(mRotation);
 
-        PSMTXConcat(getBaseMtx(), mtx, getBaseMtx());
+        NebulaMtxConcat(getBaseMtx(), mtx, getBaseMtx());
     }
 };
 

@@ -11,8 +11,8 @@ void Mario::set25Dmode(const AreaObj* pArea) {
     TVec3f normal(0.0f, 0.0f, 1.0f);
     TVec3f up(0.0f, 1.0f, 0.0f);
     MR::makeMtxTR(matrix, 0.0f, 0.0f, 0.0f, rotation.x, rotation.y, rotation.z);
-    PSMTXMultVec(matrix, &normal, &normal);
-    PSMTXMultVec(matrix, &up, &up);
+    NebulaMtxMultVec(matrix, &normal, &normal);
+    NebulaMtxMultVec(matrix, &up, &up);
     _6D0 = normal;
     _6DC = up;
     _6E8.cross(_6D0, _6DC);

@@ -40,11 +40,11 @@ void THPGXYuv2RgbSetup(GXRenderModeObj* rmode) {
     scrHeight = rmode->efbHeight;
 
     J3DNativeState::setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
-    C_MTXOrtho(pMtx, 0.0f, scrHeight, 0.0f, scrWidth, 0.0f, -1.0f);
+    NebulaMtxOrtho(pMtx, 0.0f, scrHeight, 0.0f, scrWidth, 0.0f, -1.0f);
     J3DNativeView::setProjection(pMtx, GX_ORTHOGRAPHIC);
     J3DNativeView::setViewport(0.0f, 0.0f, scrWidth, scrHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, scrWidth, scrHeight);
-    PSMTXIdentity(mMtx);
+    NebulaMtxIdentity(mMtx);
     J3DNativeShape::sendPosition(mMtx, GX_PNMTX0);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setZMode(GX_ENABLE, GX_ALWAYS, GX_DISABLE);

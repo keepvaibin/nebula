@@ -1158,11 +1158,11 @@ void Mario::saveLastSafetyTrans() {
     if (_7E0->isValid() && MR::isSameMtx(*_7E0->getBaseMtx(), _7E4) && MR::isSameMtx(*_7E0->getBaseMtx(), *_7E0->getPrevBaseMtx())) {
         _814 = _7D4;
         *_820 = *_7E0;
-        PSMTXCopy(_7E4, _824);
+        NebulaMtxCopy(_7E4, _824);
     }
 
     *_7E0 = *mGroundPolygon;
-    PSMTXCopy(*mGroundPolygon->getBaseMtx(), _7E4);
+    NebulaMtxCopy(*mGroundPolygon->getBaseMtx(), _7E4);
     _7D4 = (mPosition * 5.0f + *mGroundPolygon->getPos(0) + *mGroundPolygon->getPos(1) + *mGroundPolygon->getPos(2)) * 0.125f;
 
     if ((_7D4 - mPosition).length() > 50.0f) {
@@ -1797,7 +1797,7 @@ bool Mario::checkGround() {
     }
 
     TMtx34f rotation;
-    PSMTXRotAxisRad(rotation, &axis, 2.0943952f);
+    NebulaMtxRotAxisRad(rotation, &axis, 2.0943952f);
     u8 hit[4];
     u8 tooFar[4] = {0, 0, 0, 0};
     Triangle triangles[4];
@@ -1903,7 +1903,7 @@ bool Mario::checkGround() {
             }
         }
 
-        PSMTXMultVec(rotation, &offset, &offset);
+        NebulaMtxMultVec(rotation, &offset, &offset);
     }
 
     u32 i;

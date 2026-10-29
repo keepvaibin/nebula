@@ -118,10 +118,10 @@ bool MarioStick::update() {
     Mario* player = getPlayer();
     Mtx secondRotMtx;
     Mtx rotMtx;
-    PSMTXRotAxisRad(rotMtx, &player->mSideVec, 0.01f * getStickY());
+    NebulaMtxRotAxisRad(rotMtx, &player->mSideVec, 0.01f * getStickY());
 
     TVec3f stack_2C(_14 - _38);
-    PSMTXMultVec(rotMtx, &stack_2C, &stack_2C);
+    NebulaMtxMultVec(rotMtx, &stack_2C, &stack_2C);
 
     if (MR::diffAngleAbs(stack_2C, _2C) < 1.308997f) {
         TVec3f stack_20(-stack_2C);
@@ -134,8 +134,8 @@ bool MarioStick::update() {
 
     const f32 angle = 0.01f * -getStickX();
     const TVec3f* gravityVec = getPlayer()->getGravityVec();
-    PSMTXRotAxisRad(secondRotMtx, gravityVec, angle);
-    PSMTXMultVec(secondRotMtx, &stack_2C, &stack_2C);
+    NebulaMtxRotAxisRad(secondRotMtx, gravityVec, angle);
+    NebulaMtxMultVec(secondRotMtx, &stack_2C, &stack_2C);
 
     if (getStickP() > 0.0f) {
         changeAnimation("\203\156\203\140\211\324\210\332\223\256" /* ハチ花移動 */);

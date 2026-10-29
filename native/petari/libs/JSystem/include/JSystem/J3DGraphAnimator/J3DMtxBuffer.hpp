@@ -29,13 +29,13 @@ public:
         return mpAnmMtx[idx];
     }
     void setAnmMtx(int i, Mtx m) {
-        PSMTXCopy(m, (MtxPtr)mpAnmMtx[i]);
+        NebulaMtxCopy(m, (MtxPtr)mpAnmMtx[i]);
     }
     MtxPtr getWeightAnmMtx(int idx) {
         return mpWeightEvlpMtx[idx];
     }
     void setWeightAnmMtx(int i, Mtx m) {
-        PSMTXCopy(m, (MtxPtr)mpWeightEvlpMtx[i]);
+        NebulaMtxCopy(m, (MtxPtr)mpWeightEvlpMtx[i]);
     }
     MtxPtr getUserAnmMtx(int idx) {
         return mpUserAnmMtx[idx];

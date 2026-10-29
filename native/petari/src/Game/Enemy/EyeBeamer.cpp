@@ -263,14 +263,14 @@ void EyeBeamer::exeDemoTurn() {
     TVec3f stack_24;
     _CC.getXDir(stack_24);
     stack_30.setRotate(stack_24, PI * easeIn);
-    PSQUATMultiply((Quaternion*)&stack_30, (Quaternion*)&_CC, (Quaternion*)&_DC);
+    NebulaQuatMultiply((Quaternion*)&stack_30, (Quaternion*)&_CC, (Quaternion*)&_DC);
 
     if (MR::isDemoPartLastStep("\203\101\203\103\203\162\201\133\203\175\201\133\211\361\223\135" /* アイビーマー回転 */)) {
         TQuat4f stack_14;
         TVec3f stack_8;
         _CC.getXDir(stack_8);
         stack_14.setRotate(stack_8, PI);
-        PSQUATMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
+        NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
         setNerve(GET_NERVE(EyeBeamer, EyeBeamerNrvDemoWait));
     }
 }
@@ -295,7 +295,7 @@ void EyeBeamer::exeTurn() {
     TVec3f stack_8;
     _CC.getXDir(stack_8);
     stack_14.setRotate(stack_8, PI * easeInOut);
-    PSQUATMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
+    NebulaQuatMultiply((Quaternion*)&stack_14, (Quaternion*)&_CC, (Quaternion*)&_DC);
 
     if (tryGotoPatrol())
         return;
@@ -316,7 +316,7 @@ void EyeBeamer::exePatrol() {
         TQuat4f stack_38;
         _CC.getXDir(stack_48);
         stack_38.setRotate(stack_48, PI);
-        PSQUATMultiply((Quaternion*)&stack_38, (Quaternion*)&_CC, (Quaternion*)&_DC);
+        NebulaQuatMultiply((Quaternion*)&stack_38, (Quaternion*)&_CC, (Quaternion*)&_DC);
         if (_160 > 0)
             MR::emitEffect(this, "BeamSurface");
     }

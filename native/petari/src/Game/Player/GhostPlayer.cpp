@@ -198,7 +198,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     mWaitingToStart = true;
     _112 = true;
     MR::getRotatedAxisZ(&mInitialDirection, mRotation);
-    PSMTXCopy(getBaseMtx(), mTargetRotationMtx);
+    NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
     mJetTurtleShadow = new JetTurtleShadow("\203\112\203\201\203\126\203\203\203\150\203\105\203\202\203\146\203\213" /* カメシャドウモデル */);
     mJetTurtleShadow->initWithoutIter();
     mHandRPos = new FixedPosition(this, "HandR", TVec3f(15.59f, 42.5f, 42.93f), TVec3f(-17.05f, -0.7f, 113.55f));
@@ -280,7 +280,7 @@ void GhostPlayer::exeWait() {
 
 void GhostPlayer::warpPosition(const char* pName) {
     MR::findNamePos(pName, getBaseMtx());
-    PSMTXCopy(getBaseMtx(), mTargetRotationMtx);
+    NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
     MR::extractMtxTrans(getBaseMtx(), &mPosition);
 }
 
@@ -404,7 +404,7 @@ void GhostPlayer::exePreStartDemo2() {
             frontVec = normalizedFrontVec;
         }
         MR::makeMtxUpFront(reinterpret_cast< TPos3f* >(getBaseMtx()), upVec, frontVec);
-        PSMTXCopy(getBaseMtx(), mTargetRotationMtx);
+        NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
     if (!mRaceManagerLayout->isPlayCountAnim()) {
@@ -459,8 +459,8 @@ void GhostPlayer::exeWinDemo() {
     }
 
     if (mPowerStarTarget != nullptr) {
-        PSMTXCopy(mPowerStarTarget->getBaseMtx(), getBaseMtx());
-        PSMTXCopy(getBaseMtx(), mTargetRotationMtx);
+        NebulaMtxCopy(mPowerStarTarget->getBaseMtx(), getBaseMtx());
+        NebulaMtxCopy(getBaseMtx(), mTargetRotationMtx);
         MR::extractMtxTrans(getBaseMtx(), &mPosition);
     }
 

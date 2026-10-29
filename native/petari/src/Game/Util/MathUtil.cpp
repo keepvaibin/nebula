@@ -746,7 +746,7 @@ namespace MR {
     }
 
     void normalize(TVec3f* pVec) {
-        PSVECNormalize(pVec, pVec);
+        NebulaVecNormalize(pVec, pVec);
     }
 
     void normalize(TPos3f* pMtx) {
@@ -1155,7 +1155,7 @@ namespace MR {
     };
 };  // namespace MR
 
-f32 PSVECKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __REGISTER const Vec* pDst) {
+f32 VecKillElement(__REGISTER const Vec* pSrc, __REGISTER const Vec* pKill, __REGISTER const Vec* pDst) {
 #ifdef TARGET_PC
     const f32 sx = pSrc->x, sy = pSrc->y, sz = pSrc->z;
     const f32 kx = pKill->x, ky = pKill->y, kz = pKill->z;
@@ -1195,7 +1195,7 @@ namespace MR {
             return 0.0f;
         }
 
-        return PSVECKillElement(rSrc, rKillDir, pDst);
+        return VecKillElement(rSrc, rKillDir, pDst);
     }
 
     void vecScaleAdd(const register TVec3f* pA1, const register TVec3f* pA2, register f32 a3) {
@@ -1255,8 +1255,8 @@ namespace MR {
             vA.zero();
         } else {
             vA.set(rFrom);
-            PSVECNormalize(vA, vA);
-            PSVECScale(vA, vA, 1.0f - rate);
+            NebulaVecNormalize(vA, vA);
+            NebulaVecScale(vA, vA, 1.0f - rate);
         }
 
         TVec3f vB;
@@ -1264,11 +1264,11 @@ namespace MR {
             vB.zero();
         } else {
             vB.set(rTo);
-            PSVECNormalize(vB, vB);
-            PSVECScale(vB, vB, rate);
+            NebulaVecNormalize(vB, vB);
+            NebulaVecScale(vB, vB, rate);
         }
 
-        PSVECAdd(vA, vB, pVec);
+        NebulaVecAdd(vA, vB, pVec);
     }
 
     bool vecBlendSphere(const TVec3f& rFrom, const TVec3f& rTo, TVec3f* pVec, f32 rate) {
@@ -1324,8 +1324,8 @@ namespace MR {
             }
 
             TPos3f rot;
-            PSMTXRotAxisRad(rot, rAxis, angle);
-            PSMTXMultVec(rot, rFrom, pVec);
+            NebulaMtxRotAxisRad(rot, rAxis, angle);
+            NebulaMtxMultVec(rot, rFrom, pVec);
             return;
         }
 
@@ -1469,9 +1469,9 @@ namespace MR {
         vecKillElement(rB, rAxis, &horizonB);
         f32 angleAbs = diffAngleAbs(horizonA, horizonB);
         TPos3f mtx;
-        PSMTXRotAxisRad(mtx, rAxis, 0.00017453293f);
+        NebulaMtxRotAxisRad(mtx, rAxis, 0.00017453293f);
         f32 angle1 = horizonA.dot(horizonB);
-        PSMTXMultVec(mtx, horizonA, horizonA);
+        NebulaMtxMultVec(mtx, horizonA, horizonA);
         f32 angle2 = horizonA.dot(horizonB);
 
         if (angle2 > angle1) {
@@ -1642,7 +1642,7 @@ namespace MR {
         TVec3f vec(0.0f, 0.0f, 1.0f);
         TPos3f mtx;
         MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, rPSrc.x, rPSrc.y, rPSrc.z);
-        PSMTXMultVec(mtx, &vec, pDst);
+        NebulaMtxMultVec(mtx, &vec, pDst);
     }
 };  // namespace MR
 

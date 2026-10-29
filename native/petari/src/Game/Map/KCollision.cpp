@@ -1367,16 +1367,16 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, c
     TVec3f* faceNormal = &mFile->mNorms[pPrism->mNormalIndex];
 
     TVec3f rel;
-    PSVECSubtract(rOrigin, v0, rel);
+    NebulaVecSubtract(rOrigin, v0, rel);
 
-    f32 t = PSVECDotProduct(rel, faceNormal);
+    f32 t = NebulaVecDotProduct(rel, faceNormal);
 
     if (t <= 0.0f) {
         *pFlag = 0;
         return false;
     }
 
-    f32 dirDotFace = PSVECDotProduct(faceNormal, rDir);
+    f32 dirDotFace = NebulaVecDotProduct(faceNormal, rDir);
 
     if (0.0f < t + dirDotFace) {
         *pFlag = 0;
@@ -1392,7 +1392,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, c
     bool onEdge1 = false;
     bool onEdge2 = false;
 
-    f32 e0 = PSVECDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[0]]);
+    f32 e0 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[0]]);
 
     if (0.01f < e0) {
         *pFlag = 0;
@@ -1403,7 +1403,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, c
         onEdge0 = true;
     }
 
-    f32 e1 = PSVECDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[1]]);
+    f32 e1 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[1]]);
 
     if (0.01f < e1) {
         *pFlag = 0;
@@ -1414,7 +1414,7 @@ bool KCollisionServer::KCHitArrow(KC_PrismData* pPrism, const TVec3f& rOrigin, c
         onEdge1 = true;
     }
 
-    f32 e2 = PSVECDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[2]]);
+    f32 e2 = NebulaVecDotProduct(hit, mFile->mNorms[pPrism->mEdgeIndices[2]]);
 
     if (0.01f + pPrism->mHeight < e2) {
         *pFlag = 0;

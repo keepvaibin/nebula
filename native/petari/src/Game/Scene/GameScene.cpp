@@ -585,7 +585,7 @@ void GameScene::drawMirror() const {
 #ifdef TARGET_PC
         MotionSignal::mirror(true);
 #endif
-        PSMTXCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
+        NebulaMtxCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
         J3DNativeState::setAlphaUpdate(GX_FALSE);

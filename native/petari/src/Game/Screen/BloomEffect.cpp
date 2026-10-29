@@ -206,7 +206,7 @@ void BloomEffect::initDraw() const {
     J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
 
     Mtx44 projectionMtx;
-    C_MTXOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
     J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
@@ -296,7 +296,7 @@ void BloomEffect::initBlurMtx(Mtx* pMtx, u32 count, f32 radius, f32 offset) cons
     radius = -radius;
 
     for (u32 i = 0; i < count; i++) {
-        PSMTXTrans(pMtx[i], invAspect * (radius * JMACosRadian(offset + i * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / count)),
+        NebulaMtxTrans(pMtx[i], invAspect * (radius * JMACosRadian(offset + i * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / count)),
                    radius * JMASinRadian(offset + i * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / count), 0.0f);
     }
 

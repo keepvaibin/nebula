@@ -93,7 +93,7 @@ void WarpCube::draw() const {
 
     Mtx matrix;
     MR::makeMtxTR(matrix, 0.0f, 0.0f, 0.0f, cubeRotate.x, cubeRotate.y, cubeRotate.z);
-    PSMTXMultVecSR(matrix, &up, &up);
+    NebulaMtxMultVecSR(matrix, &up, &up);
 
     TVec3f cubePos;
     MR::calcCubePos(this, &cubePos);

@@ -24,23 +24,23 @@ void JointController::registerCallBack() {
 void JointController::calcJointMatrixAndSetSystem(J3DJoint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
     TPos3f mtx;
-    PSMTXCopy(pJointMtx, mtx);
+    NebulaMtxCopy(pJointMtx, mtx);
     JointControllerInfo info = {this, pJoint};
 
     if (calcJointMatrix(&mtx, info)) {
-        PSMTXCopy(mtx, pJointMtx);
-        PSMTXCopy(mtx, J3DSys::mCurrentMtx);
+        NebulaMtxCopy(mtx, pJointMtx);
+        NebulaMtxCopy(mtx, J3DSys::mCurrentMtx);
     }
 }
 
 void JointController::calcJointMatrixAfterChildAndSetSystem(J3DJoint* pJoint) {
     MtxPtr pJointMtx = mModel->getAnmMtx(pJoint->getJntNo());
     TPos3f mtx;
-    PSMTXCopy(pJointMtx, mtx);
+    NebulaMtxCopy(pJointMtx, mtx);
     JointControllerInfo info = {this, pJoint};
 
     if (calcJointMatrixAfterChild(&mtx, info)) {
-        PSMTXCopy(mtx, pJointMtx);
+        NebulaMtxCopy(mtx, pJointMtx);
     }
 }
 

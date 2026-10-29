@@ -31,8 +31,8 @@ void MarioActor::initBlackHoleOut() {
     f32 flt = MR::vecKillElement(mCamPos - mPosition, mCamDirZ, &killed);
     flt *= mConst->getTable()->mBlackHoleFirstRadius;
 
-    PSMTXRotAxisRad(rotation, &rotateAxis, atan(flt / mag));
-    PSMTXMultVec(rotation, &mPosRelativeToBlackHole, &mBlackHoleRotateAxis);
+    NebulaMtxRotAxisRad(rotation, &rotateAxis, atan(flt / mag));
+    NebulaMtxMultVec(rotation, &mPosRelativeToBlackHole, &mBlackHoleRotateAxis);
     MR::normalizeOrZero(&mBlackHoleRotateAxis);
 
     damageDropThrowMemoSensor();
@@ -93,8 +93,8 @@ void MarioActor::exeGameOverBlackHole2() {
     }
 
     Mtx rotationMatrix;
-    PSMTXRotAxisRad(rotationMatrix, &mBlackHoleRotateAxis, angle);
-    PSMTXMultVec(rotationMatrix, &mPosRelativeToBlackHole, &mPosRelativeToBlackHole);
+    NebulaMtxRotAxisRad(rotationMatrix, &mBlackHoleRotateAxis, angle);
+    NebulaMtxMultVec(rotationMatrix, &mPosRelativeToBlackHole, &mPosRelativeToBlackHole);
 
     MR::vecBlendSphere(mBlackHoleRotateAxis, -mCamDirZ, &mBlackHoleRotateAxis, 0.01f);
 

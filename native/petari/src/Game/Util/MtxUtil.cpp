@@ -295,18 +295,18 @@ namespace MR {
 
     void blendMtxRotate(MtxPtr pMtxA, MtxPtr pMtxB, f32 blend, MtxPtr pDst) {
         Quaternion quatA, quatB, quatR;
-        C_QUATMtx(&quatA, pMtxA);
-        C_QUATMtx(&quatB, pMtxB);
+        NebulaQuatFromMtx(&quatA, pMtxA);
+        NebulaQuatFromMtx(&quatB, pMtxB);
         JMAQuatLerp(&quatA, &quatB, blend, &quatR);
-        PSMTXQuat(pDst, &quatR);
+        NebulaMtxQuat(pDst, &quatR);
     }
 
     void blendMtxRotateSlerp(MtxPtr pMtxA, MtxPtr pMtxB, f32 blend, MtxPtr pDst) {
         Quaternion quatA, quatB, quatR;
-        C_QUATMtx(&quatA, pMtxA);
-        C_QUATMtx(&quatB, pMtxB);
-        C_QUATSlerp(&quatA, &quatB, &quatR, blend);
-        PSMTXQuat(pDst, &quatR);
+        NebulaQuatFromMtx(&quatA, pMtxA);
+        NebulaQuatFromMtx(&quatB, pMtxB);
+        NebulaQuatSlerp(&quatA, &quatB, &quatR, blend);
+        NebulaMtxQuat(pDst, &quatR);
     }
 
     void blendMtx(MtxPtr pMtxA, MtxPtr pMtxB, f32 blend, MtxPtr pDst) {
@@ -516,8 +516,8 @@ namespace MR {
         pY = &axisY;
         pZ = &axisZ;
 
-        PSVECCrossProduct(pY, pZ, &axisX);
-        PSVECCrossProduct(pZ, &axisX, pY);
+        NebulaVecCrossProduct(pY, pZ, &axisX);
+        NebulaVecCrossProduct(pZ, &axisX, pY);
 
         axisX.normalize();
         pY->normalize();
@@ -747,11 +747,11 @@ namespace MR {
         TVec3f localY(0.0f, 1.0f, 0.0f);
 
         Mtx invA;
-        PSMTXInverse(pMtxA, invA);
+        NebulaMtxInverse(pMtxA, invA);
 
         TVec3f axisYA, axisYB;
-        PSMTXMultVecSR(invA, &localY, &axisYA);
-        PSMTXMultVecSR(pMtxB, &axisYA, &axisYB);
+        NebulaMtxMultVecSR(invA, &localY, &axisYA);
+        NebulaMtxMultVecSR(pMtxB, &axisYA, &axisYB);
 
         TVec3f cross = localY.cross(axisYB);
 
@@ -881,8 +881,8 @@ namespace MR {
 
     void rotAxisVecRad(const TVec3f& rAxis, const TVec3f& rVec, TVec3f* pOut, f32 rad) {
         Mtx rot;
-        PSMTXRotAxisRad(rot, &rVec, rad);
-        PSMTXMultVec(rot, &rAxis, pOut);
+        NebulaMtxRotAxisRad(rot, &rVec, rad);
+        NebulaMtxMultVec(rot, &rAxis, pOut);
     }
 };  // namespace MR
 

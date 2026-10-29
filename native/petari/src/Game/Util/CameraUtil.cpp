@@ -147,7 +147,7 @@ namespace MR {
     }
 
     void loadViewMtx() {
-        PSMTXCopy(::getCameraContext()->getViewMtx(), j3dSys.mViewMtx);
+        NebulaMtxCopy(::getCameraContext()->getViewMtx(), j3dSys.mViewMtx);
     }
 
     const TPos3f& getCameraViewMtx() {

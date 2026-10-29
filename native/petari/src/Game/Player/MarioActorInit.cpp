@@ -129,7 +129,7 @@ void MarioActor::initMember() {
     _3E6 = 0;
     _3E7 = 0;
     _3E8 = 0;
-    PSMTXIdentity(_3EC.toMtxPtr());
+    NebulaMtxIdentity(_3EC.toMtxPtr());
     _420 = 0;
     _424 = 0;
     for (int i = 0; i < ARRAY_SIZE(_428); i++) {
@@ -273,8 +273,8 @@ void MarioActor::initMember() {
         _A90[i] = nullptr;
     }
 
-    PSMTXIdentity(_AB0.toMtxPtr());
-    PSMTXIdentity(_AE0.toMtxPtr());
+    NebulaMtxIdentity(_AB0.toMtxPtr());
+    NebulaMtxIdentity(_AE0.toMtxPtr());
     _B10 = 0;
     _B12 = 0;
     _B14 = 0;
@@ -322,28 +322,28 @@ void MarioActor::initMember() {
     _BAC.zero();
     _BB8.zero();
     _BC4 = 0;
-    PSMTXIdentity(_BC8.toMtxPtr());
-    PSMTXIdentity(_BF8.toMtxPtr());
+    NebulaMtxIdentity(_BC8.toMtxPtr());
+    NebulaMtxIdentity(_BF8.toMtxPtr());
     _C28 = nullptr;
-    PSMTXIdentity(_C2C.toMtxPtr());
-    PSMTXIdentity(_C5C.toMtxPtr());
-    PSMTXIdentity(_C8C.toMtxPtr());
-    PSMTXIdentity(_CBC.toMtxPtr());
-    PSMTXIdentity(_CEC.toMtxPtr());
-    PSMTXIdentity(_D1C.toMtxPtr());
-    PSMTXIdentity(_D4C.toMtxPtr());
-    PSMTXIdentity(_D7C.toMtxPtr());
-    PSMTXIdentity(_DAC.toMtxPtr());
-    PSMTXIdentity(_DDC.toMtxPtr());
-    PSMTXIdentity(_E0C.toMtxPtr());
-    PSMTXIdentity(_E3C.toMtxPtr());
-    PSMTXIdentity(_E6C.toMtxPtr());
+    NebulaMtxIdentity(_C2C.toMtxPtr());
+    NebulaMtxIdentity(_C5C.toMtxPtr());
+    NebulaMtxIdentity(_C8C.toMtxPtr());
+    NebulaMtxIdentity(_CBC.toMtxPtr());
+    NebulaMtxIdentity(_CEC.toMtxPtr());
+    NebulaMtxIdentity(_D1C.toMtxPtr());
+    NebulaMtxIdentity(_D4C.toMtxPtr());
+    NebulaMtxIdentity(_D7C.toMtxPtr());
+    NebulaMtxIdentity(_DAC.toMtxPtr());
+    NebulaMtxIdentity(_DDC.toMtxPtr());
+    NebulaMtxIdentity(_E0C.toMtxPtr());
+    NebulaMtxIdentity(_E3C.toMtxPtr());
+    NebulaMtxIdentity(_E6C.toMtxPtr());
     mBlendMtxTimer = 0;
     _EA0 = 0.0f;
     _EA4 = 0;
     _EA5 = 0;
     _EA6 = 0;
-    PSMTXIdentity(_EA8.toMtxPtr());
+    NebulaMtxIdentity(_EA8.toMtxPtr());
     _ED8.zero();
     _EE4 = nullptr;
     mSuperKinokoCollected = false;

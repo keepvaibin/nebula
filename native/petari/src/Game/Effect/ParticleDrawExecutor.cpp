@@ -49,11 +49,11 @@ void ParticleDrawExecutor::draw2D() const {
         height *= 0.5f;
 
         Mtx44 projection;
-        C_MTXOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
+        NebulaMtxOrtho(projection, height, -height, -width, width, -1000.0f, 1000.0f);
         J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
         J3DNativeState::setCullMode(GX_CULL_NONE);
         J3DNativeState::setZMode(GX_FALSE, GX_NEVER, GX_FALSE);
-        C_MTXLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
+        NebulaMtxLightOrtho(drawInfo.mPrjMtx, height, -height, -width, width, 0.5f, 0.5f, 0.5f, 0.5f);
         mHost->mEmitterManager->draw(&drawInfo, 6);
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
         mHost->mEmitterManager->draw(&drawInfo, 7);

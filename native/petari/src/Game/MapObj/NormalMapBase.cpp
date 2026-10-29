@@ -37,7 +37,7 @@ NormalMapBase::NormalMapBase(const char* pName) : LiveActor(pName) {
     mBtkPlayer = nullptr;
     _150 = 0;
     for (u32 i = 0; i < ARRAY_SIZE(_184); i++) {
-        PSMTXIdentity(_184[i]);
+        NebulaMtxIdentity(_184[i]);
     }
 
     _13A = 0;
@@ -186,10 +186,10 @@ void NormalMapBase::draw() const {
         const TPos3f& rCameraViewMtx = MR::getCameraViewMtx();
         TPos3f lightMtx;
         Mtx mtx;
-        PSMTXIdentity(mtx);
+        NebulaMtxIdentity(mtx);
         MR::makeMtxTRS(mtx, this);
         MR::multMtx(mtx, mtx, rCameraViewMtx);
-        PSMTXCopy((const MtxPtr)mtx, (MtxPtr)_F4);
+        NebulaMtxCopy((const MtxPtr)mtx, (MtxPtr)_F4);
 
         MR::makeMtxTR(lightMtx, this);
         MR::normalize(&lightMtx);
@@ -247,10 +247,10 @@ void NormalMapBase::updateLightMtx(MtxPtr pMtx) const {
     MR::normalizeOrZero(&lightB);
     localA = lightA;
     localB = lightB;
-    PSMTXInverse(getBaseMtx(), inverse);
+    NebulaMtxInverse(getBaseMtx(), inverse);
     MR::normalize(&inverse);
-    PSMTXMultVecSR(inverse, &localA, &localA);
-    PSMTXMultVecSR(inverse, &localB, &localB);
+    NebulaMtxMultVecSR(inverse, &localA, &localA);
+    NebulaMtxMultVecSR(inverse, &localB, &localB);
     if (pMtx) {
         TVec3f light(localA * 0.5f);
         light *= 1.0077f;
@@ -318,17 +318,17 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                     f32 rotationX = rTransform.mRotation.x * (180.0f / 32768.0f);
                     MR::makeMtxTRS(localMtx, rTransform.mTranslate.x, rTransform.mTranslate.y, rTransform.mTranslate.z, rotationX, rotationY,
                                    rotationZ, rTransform.mScale.x, rTransform.mScale.y, rTransform.mScale.z);
-                    PSMTXConcat(_F4, localMtx, viewMtx);
+                    NebulaMtxConcat(_F4, localMtx, viewMtx);
                     if (pJoint->getMtxType() == 1) {
                         J3DCalcBBoardMtx(viewMtx);
                         TPos3f inverse;
-                        PSMTXInverse(_F4, inverse);
-                        PSMTXConcat(inverse, viewMtx, localMtx);
+                        NebulaMtxInverse(_F4, inverse);
+                        NebulaMtxConcat(inverse, viewMtx, localMtx);
                     } else if (pJoint->getMtxType() == 2) {
                         J3DCalcYBBoardMtx(viewMtx);
                         TPos3f inverse;
-                        PSMTXInverse(_F4, inverse);
-                        PSMTXConcat(inverse, viewMtx, localMtx);
+                        NebulaMtxInverse(_F4, inverse);
+                        NebulaMtxConcat(inverse, viewMtx, localMtx);
                     }
 
                     J3DNativeShape::loadPosition(viewMtx, GX_PNMTX0);
@@ -480,7 +480,7 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
 void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     updateLightMtx(pMtx);
     Mtx scale_mtx;
-    PSMTXScale(scale_mtx, 0.0f, 0.0f, 0.0f);
+    NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
     J3DNativeShape::sendTexture(scale_mtx, 0x21, GX_MTX2x4);
     J3DNativeState::setCullMode(GX_CULL_BACK);
@@ -639,7 +639,7 @@ void NormalMapBase::setTevForDebug() const {
     J3DNativeState::setTevDirect(GX_TEVSTAGE0);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
     Mtx mtx;
-    PSMTXScale(mtx, 0.0f, 0.0f, 0.0f);
+    NebulaMtxScale(mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mtx, 0.5f, 0.5f, 0.0f);
     J3DNativeShape::sendTexture(mtx, 0x1E, GX_MTX2x4);
     loadDiffuseGradTex(GX_TEXMAP0);
@@ -653,7 +653,7 @@ void NormalMapBase::setTevForDebug() const {
 void NormalMapBase::drawSettingForDebug(MtxPtr pMtx) const {
     updateLightMtx(pMtx);
     Mtx texMtx;
-    PSMTXScale(texMtx, 0.0f, 0.0f, 0.0f);
+    NebulaMtxScale(texMtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(texMtx, 0.0f, 0.0f, 0.0f);
     J3DNativeShape::sendTexture(texMtx, GX_TEXMTX0, GX_MTX2x4);
     J3DNativeState::setCullMode(GX_CULL_BACK);
@@ -818,9 +818,9 @@ void NormalMapBase::indirectCapture() const {
     J3DNativeState::setColorUpdate(1);
     J3DNativeState::setAlphaUpdate(1);
     Mtx texMtx;
-    PSMTXIdentity(texMtx);
+    NebulaMtxIdentity(texMtx);
     updateLightMtx(texMtx);
-    PSMTXScale(texMtx, 0.0f, 0.0f, 0.0f);
+    NebulaMtxScale(texMtx, 0.0f, 0.0f, 0.0f);
     f32 exponent = sgrad_tex_thresh - 1;
     f32 threshold = pow(2.0, exponent);
     MR::setMtxTrans(texMtx, 0.5f, 1.0f - threshold, 0.0f);

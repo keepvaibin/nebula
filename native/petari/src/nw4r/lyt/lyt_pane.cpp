@@ -203,18 +203,18 @@ namespace nw4r {
                 scale.y *= rInfo.GetLocationAdjustScale().y;
             }
 
-            PSMTXScale(mtx2, scale.x, scale.y, 1.0f);
+            NebulaMtxScale(mtx2, scale.x, scale.y, 1.0f);
 
-            PSMTXRotRad(rotateMtx, 'x', NW4R_MATH_DEG_TO_RAD(mRotate.x));
-            PSMTXConcat(rotateMtx, mtx2, mtx1);
+            NebulaMtxRotRad(rotateMtx, 'x', NW4R_MATH_DEG_TO_RAD(mRotate.x));
+            NebulaMtxConcat(rotateMtx, mtx2, mtx1);
 
-            PSMTXRotRad(rotateMtx, 'y', NW4R_MATH_DEG_TO_RAD(mRotate.y));
-            PSMTXConcat(rotateMtx, mtx1, mtx2);
+            NebulaMtxRotRad(rotateMtx, 'y', NW4R_MATH_DEG_TO_RAD(mRotate.y));
+            NebulaMtxConcat(rotateMtx, mtx1, mtx2);
 
-            PSMTXRotRad(rotateMtx, 'z', NW4R_MATH_DEG_TO_RAD(mRotate.z));
-            PSMTXConcat(rotateMtx, mtx2, mtx1);
+            NebulaMtxRotRad(rotateMtx, 'z', NW4R_MATH_DEG_TO_RAD(mRotate.z));
+            NebulaMtxConcat(rotateMtx, mtx2, mtx1);
 
-            PSMTXTransApply(mtx1, mMtx, mTranslate.x, mTranslate.y, mTranslate.z);
+            NebulaMtxTransApply(mtx1, mMtx, mTranslate.x, mTranslate.y, mTranslate.z);
 
             if (mpParent != NULL) {
                 math::MTX34Mult(&mGlbMtx, &mpParent->mGlbMtx, &mMtx);

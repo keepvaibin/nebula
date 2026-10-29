@@ -95,7 +95,7 @@ public:
         mAnmCluster = anm;
     }
     void normalize(f32* i_vec) {
-        PSVECNormalize((Vec*)i_vec, (Vec*)i_vec);
+        NebulaVecNormalize((Vec*)i_vec, (Vec*)i_vec);
     }
 
     /* 0x00 */ J3DDeformData* mDeformData;

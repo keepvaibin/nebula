@@ -88,7 +88,7 @@ void J2DGrafContext::setup2D() {
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeShape::sendPosition(mPosMtx, 0);
     Mtx mtx;
-    PSMTXIdentity(mtx);
+    NebulaMtxIdentity(mtx);
     J3DNativeShape::sendTexture(mtx, GX_IDENTITY, GX_MTX3x4);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);

@@ -42,8 +42,8 @@ void J3DMtxCalcCalcTransformBasic::calcTransform(J3DTransformInfo const& transIn
         mtxBuf->setScaleFlag(jntNo, 1);
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
-    PSMTXCopy(J3DSys::mCurrentMtx, anmMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, anmMtx);
 }
 
 void J3DMtxCalcCalcTransformSoftimage::calcTransform(J3DTransformInfo const& transInfo) {
@@ -54,7 +54,7 @@ void J3DMtxCalcCalcTransformSoftimage::calcTransform(J3DTransformInfo const& tra
 
     J3DGetTranslateRotateMtx(transInfo.mRotation.x, transInfo.mRotation.y, transInfo.mRotation.z, transInfo.mTranslate.x * J3DSys::mCurrentS.x,
                              transInfo.mTranslate.y * J3DSys::mCurrentS.y, transInfo.mTranslate.z * J3DSys::mCurrentS.z, anmMtx);
-    PSMTXConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
 
     J3DSys::mCurrentS.x *= transInfo.mScale.x;
     J3DSys::mCurrentS.y *= transInfo.mScale.y;
@@ -68,7 +68,7 @@ void J3DMtxCalcCalcTransformSoftimage::calcTransform(J3DTransformInfo const& tra
         anmMtx[2][3] = J3DSys::mCurrentMtx[2][3];
     } else {
         mtxBuf->setScaleFlag(jntNo, 1);
-        PSMTXCopy(J3DSys::mCurrentMtx, anmMtx);
+        NebulaMtxCopy(J3DSys::mCurrentMtx, anmMtx);
     }
 }
 
@@ -106,8 +106,8 @@ void J3DMtxCalcCalcTransformMaya::calcTransform(J3DTransformInfo const& transInf
         anmMtx[2][2] *= inverseScale.z;
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
-    PSMTXCopy(J3DSys::mCurrentMtx, anmMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, anmMtx, J3DSys::mCurrentMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, anmMtx);
 
     J3DSys::mParentS.x = transInfo.mScale.x;
     J3DSys::mParentS.y = transInfo.mScale.y;
@@ -184,7 +184,7 @@ void J3DJoint::recursiveCalc() {
     Vec parentScale;
     J3DJointCallBack callback;
     J3DMtxCalc* previousCalc = NULL;
-    PSMTXCopy(J3DSys::mCurrentMtx, currentMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, currentMtx);
     currentScale = J3DSys::mCurrentS;
     parentScale = J3DSys::mParentS;
     J3DMtxCalc* calc = mMtxCalc;
@@ -204,7 +204,7 @@ void J3DJoint::recursiveCalc() {
     if (mChild != NULL) {
         mChild->recursiveCalc();
     }
-    PSMTXCopy(currentMtx, J3DSys::mCurrentMtx);
+    NebulaMtxCopy(currentMtx, J3DSys::mCurrentMtx);
     J3DSys::mCurrentS = currentScale;
     J3DSys::mParentS = parentScale;
     if (previousCalc != NULL) {

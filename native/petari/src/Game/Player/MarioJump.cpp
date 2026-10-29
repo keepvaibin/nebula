@@ -1999,10 +1999,10 @@ void Mario::doAirWalk() {
             MR::normalizeOrZero(&sideVec);
 
             Mtx rotMtx;
-            PSMTXRotAxisRad(rotMtx, &sideVec, MR::diffAngleSignedHorizontal(_2EC, getAirGravityVec(), sideVec));
+            NebulaMtxRotAxisRad(rotMtx, &sideVec, MR::diffAngleSignedHorizontal(_2EC, getAirGravityVec(), sideVec));
 
             TVec3f frontRot;
-            PSMTXMultVecSR(rotMtx, &_2E0, &frontRot);
+            NebulaMtxMultVecSR(rotMtx, &_2E0, &frontRot);
             if (frontRot.dot(mFrontVec) < 0.0f) {
                 moveDir = -mFrontVec;
             } else {

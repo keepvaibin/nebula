@@ -87,7 +87,7 @@ void BigBubbleDrawer::setUpMaterial() const {
     J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
 
     Mtx normalMtx;
-    PSMTXIdentity(normalMtx);
+    NebulaMtxIdentity(normalMtx);
     J3DNativeShape::sendNormal(normalMtx, 0);
     J3DNativeState::setCurrentMtx(0);
     MR::loadProjectionMtx();

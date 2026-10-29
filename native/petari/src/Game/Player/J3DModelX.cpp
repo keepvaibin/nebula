@@ -100,7 +100,7 @@ void J3DMtxBuffer2::calcDrawMtx2(u32 mode, const Vec& scale, const Mtx& base, J3
     J3DCalcViewBaseMtx(j3dSys.getViewMtx(), scale, base, viewBase);
 
     for (u16 i = 0, count = mJointTree->getDrawFullWgtMtxNum(); i < count; i++) {
-        PSMTXConcat(viewBase, buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), *getDrawMtx(i));
+        NebulaMtxConcat(viewBase, buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), *getDrawMtx(i));
     }
 
     if (mJointTree->getDrawMtxNum() > mJointTree->getDrawFullWgtMtxNum()) {
@@ -124,16 +124,16 @@ void J3DMtxBuffer2::calcDrawMtx3(u32 mode, const Vec& scale, const Mtx& base, J3
         MR::vecKillElement(trans - pos, normal, &planar);
         trans = pos + planar;
 
-        PSMTXCopy(buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), jointMtx);
+        NebulaMtxCopy(buffer->getAnmMtx(mJointTree->getDrawMtxIndex(i)), jointMtx);
         MR::setMtxTrans(jointMtx, 0.0f, 0.0f, 0.0f);
         MR::makeMtxUpNoSupportPos(&orientation, normal, TVec3f(0.0f, 0.0f, 0.0f));
-        PSMTXConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
-        PSMTXScale(flatten, 1.0f, 0.1f, 1.0f);
-        PSMTXConcat(flatten, jointMtx, jointMtx);
-        PSMTXInverse(orientation.toMtxPtr(), orientation.toMtxPtr());
-        PSMTXConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
+        NebulaMtxConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
+        NebulaMtxScale(flatten, 1.0f, 0.1f, 1.0f);
+        NebulaMtxConcat(flatten, jointMtx, jointMtx);
+        NebulaMtxInverse(orientation.toMtxPtr(), orientation.toMtxPtr());
+        NebulaMtxConcat(orientation.toMtxPtr(), jointMtx, jointMtx);
         MR::setMtxTrans(jointMtx, trans.x, trans.y, trans.z);
-        PSMTXConcat(viewBase, jointMtx, *getDrawMtx(i));
+        NebulaMtxConcat(viewBase, jointMtx, *getDrawMtx(i));
     }
 }
 

@@ -203,8 +203,8 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     _FCC = false;
     _FCD = false;
 
-    PSMTXIdentity((MtxPtr)&_EA8);
-    PSMTXIdentity((MtxPtr)&_3EC);
+    NebulaMtxIdentity((MtxPtr)&_EA8);
+    NebulaMtxIdentity((MtxPtr)&_3EC);
 
     _1F0.zero();
     _1FC.zero();
@@ -284,11 +284,11 @@ MarioActor::MarioActor(const char* pName) : LiveActor(pName), _1B0(0xFFFFFFFF) {
     _F24 = 0;
     _F28 = 0;
 
-    PSMTXIdentity((MtxPtr)&_C2C);
-    PSMTXIdentity((MtxPtr)&_C5C);
-    PSMTXIdentity((MtxPtr)&_D1C);
-    PSMTXIdentity((MtxPtr)&_D4C);
-    PSMTXIdentity((MtxPtr)&_D7C);
+    NebulaMtxIdentity((MtxPtr)&_C2C);
+    NebulaMtxIdentity((MtxPtr)&_C5C);
+    NebulaMtxIdentity((MtxPtr)&_D1C);
+    NebulaMtxIdentity((MtxPtr)&_D4C);
+    NebulaMtxIdentity((MtxPtr)&_D7C);
 
     _1B4 = 0;
     _1C3 = false;
@@ -493,8 +493,8 @@ void MarioActor::calcBaseFrontVec(const TVec3f& rVec) {
         if (MR::makeAxisAndCosignVecToVec(&cross, &cosine, rVec, j)) {
             TVec3f k(0.0f, 0.0f, 1.0f);
             Mtx transformation;
-            PSMTXRotAxisRad(transformation, &cross, -MR::acos(cosine));
-            PSMTXMultVecSR(transformation, &k, &_258);
+            NebulaMtxRotAxisRad(transformation, &cross, -MR::acos(cosine));
+            NebulaMtxMultVecSR(transformation, &k, &_258);
             MR::normalize(&_258);
         } else {
             _258.set(0.0f, 0.0f, 1.0f);
@@ -749,8 +749,8 @@ void MarioActor::movement() {
     _46C = nullptr;
     _378++;
     _1E1 = 0;
-    PSMTXCopy(_AE0.toMtxPtr(), _AB0.toMtxPtr());
-    PSMTXCopy(MR::getCameraViewMtx(), _AE0.toMtxPtr());
+    NebulaMtxCopy(_AE0.toMtxPtr(), _AB0.toMtxPtr());
+    NebulaMtxCopy(MR::getCameraViewMtx(), _AE0.toMtxPtr());
     updateCameraInfo();
     _4A8 = 0;
     _4AC = HALF_PI / 2.0f;
@@ -851,8 +851,8 @@ void MarioActor::movement() {
                     CollisionParts* parts = mMario->_45C->mParts;
                     if (parts && !mMario->_45C->mParts->_D4) {
                         TVec3f stack_C8, stack_BC, stack_B0;
-                        PSMTXMultVec(parts->mInvBaseMatrix.toMtxPtr(), &mMario->mShadowPos, &stack_C8);
-                        PSMTXMultVec(parts->mPrevBaseMatrix.toMtxPtr(), &stack_C8, &stack_BC);
+                        NebulaMtxMultVec(parts->mInvBaseMatrix.toMtxPtr(), &mMario->mShadowPos, &stack_C8);
+                        NebulaMtxMultVec(parts->mPrevBaseMatrix.toMtxPtr(), &stack_C8, &stack_BC);
                         stack_B0 = mMario->mShadowPos - stack_BC;
                         if (stack_B0.dot(stack_128) > 0.0f) {
                             eject = false;
@@ -1448,9 +1448,9 @@ void MarioActor::updateRealMtx() {
     updateBaseScaleMtx();
     getRealMtx(_C2C.toMtxPtr(), "HandL");
     getRealMtx(_C5C.toMtxPtr(), "HandR");
-    PSMTXCopy(MR::getJointMtx(this, "HandL"), _C8C.toMtxPtr());
-    PSMTXCopy(MR::getJointMtx(this, "HandR"), _CBC.toMtxPtr());
-    PSMTXCopy(MR::getJointMtx(this, "Face0"), _CEC.toMtxPtr());
+    NebulaMtxCopy(MR::getJointMtx(this, "HandL"), _C8C.toMtxPtr());
+    NebulaMtxCopy(MR::getJointMtx(this, "HandR"), _CBC.toMtxPtr());
+    NebulaMtxCopy(MR::getJointMtx(this, "Face0"), _CEC.toMtxPtr());
     getRealMtx(_D1C.toMtxPtr(), "FootR");
     getRealMtx(_D4C.toMtxPtr(), "Spine1");
     getRealMtx(_D7C.toMtxPtr(), "CapPosition");
@@ -1742,9 +1742,9 @@ void MarioActor::scaleMtx(MtxPtr pRawMtx) {
 
 void MarioActor::updateBaseScaleMtx() {
     if (mMario->mMovementStates._3C) {
-        PSMTXScale(_BF8.toMtxPtr(), mScale.x, mScale.y, mScale.z);
+        NebulaMtxScale(_BF8.toMtxPtr(), mScale.x, mScale.y, mScale.z);
     } else {
-        PSMTXIdentity(_BF8.toMtxPtr());
+        NebulaMtxIdentity(_BF8.toMtxPtr());
     }
 }
 
@@ -1914,7 +1914,7 @@ void MarioActor::calcAnimInMovement() {
 void MarioActor::forceSetBaseMtx(MtxPtr pMtx) {
     _EA5 = true;
     _1C0 = true;
-    PSMTXCopy(pMtx, _EA8);
+    NebulaMtxCopy(pMtx, _EA8);
     MR::extractMtxTrans(pMtx, &mCameraTrans);
     if (_482) {
         MR::extractMtxTrans(pMtx, &mPosition);
@@ -2132,17 +2132,17 @@ void MarioActor::calcAnim() {
     }
 
     if (mCurrModel != 0) {
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "HandL0"), MR::getJointMtx(mModels[0], "HandL0"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "HandR0"), MR::getJointMtx(mModels[0], "HandR0"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "FootL"), MR::getJointMtx(mModels[0], "FootL"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "FootR"), MR::getJointMtx(mModels[0], "FootR"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "Center"), MR::getJointMtx(mModels[0], "Center"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "All_Root"), MR::getJointMtx(mModels[0], "All_Root"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "Spine1"), MR::getJointMtx(mModels[0], "Spine1"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "Hip"), MR::getJointMtx(mModels[0], "Hip"));
-        PSMTXCopy(MR::getJointMtx(getJ3DModel(), "Face0"), MR::getJointMtx(mModels[0], "Face0"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "HandL0"), MR::getJointMtx(mModels[0], "HandL0"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "HandR0"), MR::getJointMtx(mModels[0], "HandR0"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "FootL"), MR::getJointMtx(mModels[0], "FootL"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "FootR"), MR::getJointMtx(mModels[0], "FootR"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Center"), MR::getJointMtx(mModels[0], "Center"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "All_Root"), MR::getJointMtx(mModels[0], "All_Root"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Spine1"), MR::getJointMtx(mModels[0], "Spine1"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Hip"), MR::getJointMtx(mModels[0], "Hip"));
+        NebulaMtxCopy(MR::getJointMtx(getJ3DModel(), "Face0"), MR::getJointMtx(mModels[0], "Face0"));
 
-        PSMTXCopy(getJ3DModel()->getBaseTRMtx(), mModels[0]->getBaseTRMtx());
+        NebulaMtxCopy(getJ3DModel()->getBaseTRMtx(), mModels[0]->getBaseTRMtx());
     }
 
     updateRasterScroll();
@@ -2182,7 +2182,7 @@ void MarioActor::calcAndSetBaseMtx() {
 
     if (_EA4 || _EA5) {
         if (_EA5) {
-            PSMTXCopy(_EA8.mMtx, getBaseMtx());
+            NebulaMtxCopy(_EA8.mMtx, getBaseMtx());
 
             TVec3f frontVec;
             TVec3f headVec;
@@ -2218,7 +2218,7 @@ void MarioActor::calcAndSetBaseMtx() {
         mMario->invalidateRelativePosition();
 
         _938 = *getPosition() - vec;
-        PSMTXCopy(getBaseMtx(), receivedMtx);
+        NebulaMtxCopy(getBaseMtx(), receivedMtx);
 
         if (mMario->mMovementStates_HIGH_WORD >> 8 & 1) {
             mMario->_688 = *pPosition;
@@ -2235,7 +2235,7 @@ void MarioActor::calcAndSetBaseMtx() {
     }
 
     TPos3f mtx2;
-    PSMTXIdentity(mtx2);
+    NebulaMtxIdentity(mtx2);
 
     mMario->createAngleMtx(mtx2, b1);
 
@@ -2243,12 +2243,12 @@ void MarioActor::calcAndSetBaseMtx() {
         getRealPos("CapPosition", &_2AC);
 
         if ((_2AC - mPosition).length() > 500.0f) {
-            PSMTXCopy(getBaseMtx(), mtx2);
+            NebulaMtxCopy(getBaseMtx(), mtx2);
             MR::setMtxTrans(mtx2, 0.0f, 0.0f, 0.0f);
         }
     }
 
-    PSMTXConcat(mtx2, MR::tmpMtxRotYRad(mMario->mYAngleOffset), mtx2);
+    NebulaMtxConcat(mtx2, MR::tmpMtxRotYRad(mMario->mYAngleOffset), mtx2);
 
     if (mPlayerMode == 6) {
         updateBaseMtxTeresa(mtx2);
@@ -2265,7 +2265,7 @@ void MarioActor::calcAndSetBaseMtx() {
         TVec3f vec5;
         f32 dot = 0.0f;
         if (!MR::normalizeOrZero(&vec4)) {
-            PSVECCrossProduct(&mMario->mFrontVec, &vec4, &vec5);
+            NebulaVecCrossProduct(&mMario->mFrontVec, &vec4, &vec5);
             if (!MR::normalizeOrZero(&vec5)) {
                 dot = MR::acosEx(_9F4.dot(vec4));
                 const MarioConstTable* pTable = getConst().getTable();
@@ -2279,10 +2279,10 @@ void MarioActor::calcAndSetBaseMtx() {
         }
 
         Mtx rotation;
-        PSMTXRotAxisRad(rotation, &vec5, dot);
-        PSMTXConcat(pTranslation, mtx2, mtx2);
-        PSMTXConcat(rotation, mtx2, mtx2);
-        PSMTXConcat(MR::tmpMtxTrans(vec), mtx2, mtx2);
+        NebulaMtxRotAxisRad(rotation, &vec5, dot);
+        NebulaMtxConcat(pTranslation, mtx2, mtx2);
+        NebulaMtxConcat(rotation, mtx2, mtx2);
+        NebulaMtxConcat(MR::tmpMtxTrans(vec), mtx2, mtx2);
         TVec3f vec240(_9F4 * getConst().getTable()->mBeePoseDelayAccel);
         MR::vecKillElement(vec240, _360, &vec240);
         _354 = _354 + vec240;
@@ -2299,13 +2299,13 @@ void MarioActor::calcAndSetBaseMtx() {
 
         if (dot2 > val) {
             TVec3f vec264;
-            PSVECCrossProduct(&_9F4, &vec258, &vec264);
+            NebulaVecCrossProduct(&_9F4, &vec258, &vec264);
             if (MR::normalizeOrZero(&vec264)) {
                 _360 = _9F4;
             } else {
                 Mtx rotation;
-                PSMTXRotAxisRad(rotation, vec264, val);
-                PSMTXMultVec(rotation, &_9F4, &_360);
+                NebulaMtxRotAxisRad(rotation, vec264, val);
+                NebulaMtxMultVec(rotation, &_9F4, &_360);
             }
         }
 
@@ -2355,8 +2355,8 @@ void MarioActor::calcAndSetBaseMtx() {
 
     if (b1) {
         Mtx inverse;
-        PSMTXInverse(mtx2, inverse);
-        PSMTXConcat(inverse, receivedMtx, _E3C.mMtx);
+        NebulaMtxInverse(mtx2, inverse);
+        NebulaMtxConcat(inverse, receivedMtx, _E3C.mMtx);
         XjointTransform* pJoint = mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(0);
         pJoint->_64 = _E3C.mMtx;
     } else {
@@ -2364,7 +2364,7 @@ void MarioActor::calcAndSetBaseMtx() {
         TVec3f offset;
         mMario->createCorrectionMtx(correction, &offset);
         mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(1)->_2C = offset;
-        PSMTXCopy(correction, _E3C.mMtx);
+        NebulaMtxCopy(correction, _E3C.mMtx);
         XjointTransform* pJoint = mMarioAnim->getXanimePlayer()->getCore()->getJointTransform(0);
         pJoint->_64 = _E3C.mMtx;
     }
@@ -2456,13 +2456,13 @@ void MarioActor::calcAndSetBaseMtx() {
         mBlendMtxTimer--;
     }
 
-    PSMTXCopy(mtx2, _3EC.mMtx);
+    NebulaMtxCopy(mtx2, _3EC.mMtx);
 
     if (_3B0 != 1.0f) {
         scaleMtx(mtx2);
     }
 
-    PSMTXCopy(mtx2, getJ3DModel()->mBaseTransformMtx);
+    NebulaMtxCopy(mtx2, getJ3DModel()->mBaseTransformMtx);
     getJ3DModel()->mBaseScale = mScale;
 
     _EA5 = false;

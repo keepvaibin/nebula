@@ -1051,28 +1051,28 @@ void JPAResource::calcWorkData_c(JPAEmitterWorkData* work) {
     work->mVolumeAngleMax = 1;
     work->mDivNumber = mpDynamicsBlock->getDivNumber() * 2 + 1;
     Mtx local_scl_mtx, local_rot_mtx, global_mtx;
-    PSMTXScale(local_scl_mtx, work->mpEmtr->mLocalScl.x, work->mpEmtr->mLocalScl.y, work->mpEmtr->mLocalScl.z);
+    NebulaMtxScale(local_scl_mtx, work->mpEmtr->mLocalScl.x, work->mpEmtr->mLocalScl.y, work->mpEmtr->mLocalScl.z);
     JPAGetXYZRotateMtx(work->mpEmtr->mLocalRot.x * 182, work->mpEmtr->mLocalRot.y * 182, work->mpEmtr->mLocalRot.z * 182, local_rot_mtx);
-    PSMTXScale(global_mtx, work->mpEmtr->mGlobalScl.x, work->mpEmtr->mGlobalScl.y, work->mpEmtr->mGlobalScl.z);
-    PSMTXConcat(work->mpEmtr->mGlobalRot, global_mtx, global_mtx);
+    NebulaMtxScale(global_mtx, work->mpEmtr->mGlobalScl.x, work->mpEmtr->mGlobalScl.y, work->mpEmtr->mGlobalScl.z);
+    NebulaMtxConcat(work->mpEmtr->mGlobalRot, global_mtx, global_mtx);
     global_mtx[0][3] = work->mpEmtr->mGlobalTrs.x;
     global_mtx[1][3] = work->mpEmtr->mGlobalTrs.y;
     global_mtx[2][3] = work->mpEmtr->mGlobalTrs.z;
-    PSMTXCopy(work->mpEmtr->mGlobalRot, work->mRotationMtx);
-    PSMTXConcat(work->mRotationMtx, local_rot_mtx, work->mGlobalRot);
-    PSMTXConcat(work->mGlobalRot, local_scl_mtx, work->mGlobalSR);
+    NebulaMtxCopy(work->mpEmtr->mGlobalRot, work->mRotationMtx);
+    NebulaMtxConcat(work->mRotationMtx, local_rot_mtx, work->mGlobalRot);
+    NebulaMtxConcat(work->mGlobalRot, local_scl_mtx, work->mGlobalSR);
     work->mEmitterPos.set(work->mpEmtr->mLocalTrs);
     work->mGlobalScl.mul(work->mpEmtr->mGlobalScl, work->mpEmtr->mLocalScl);
     JPAGetDirMtx(work->mpEmtr->mLocalDir, work->mDirectionMtx);
     work->mPublicScale.set(work->mpEmtr->mGlobalScl);
-    PSMTXMultVec(global_mtx, &work->mpEmtr->mLocalTrs, &work->mGlobalPos);
+    NebulaMtxMultVec(global_mtx, &work->mpEmtr->mLocalTrs, &work->mGlobalPos);
 }
 
 void JPAResource::calcWorkData_d(JPAEmitterWorkData* work) {
     Mtx mtx;
     JPAGetXYZRotateMtx(work->mpEmtr->mLocalRot.x * 0xB6, work->mpEmtr->mLocalRot.y * 0xB6, work->mpEmtr->mLocalRot.z * 0xB6, mtx);
-    PSMTXConcat(work->mpEmtr->mGlobalRot, mtx, work->mGlobalRot);
-    PSMTXMultVecSR(work->mGlobalRot, &work->mpEmtr->mLocalDir, &work->mGlobalEmtrDir);
+    NebulaMtxConcat(work->mpEmtr->mGlobalRot, mtx, work->mGlobalRot);
+    NebulaMtxMultVecSR(work->mGlobalRot, &work->mpEmtr->mLocalDir, &work->mGlobalEmtrDir);
 }
 
 #include "JSystem/JParticle/JPAFieldBlockInline.hpp"

@@ -261,9 +261,9 @@ void ResourceHolder::backupInitMaterialData(const J3DModelData* pModelData) {
         for (u32 mtxIdx = 0; mtxIdx < 8; mtxIdx++) {
             J3DTexMtx* texMtx = material->getTexGenBlock()->getTexMtx(mtxIdx);
             if (texMtx != nullptr) {
-                PSMTX44Copy(texMtx->getTexMtxInfo().mEffectMtx, mBackupMaterialData[matIdx * 8 + mtxIdx]);
+                NebulaMtx44Copy(texMtx->getTexMtxInfo().mEffectMtx, mBackupMaterialData[matIdx * 8 + mtxIdx]);
             } else {
-                PSMTX44Identity(mBackupMaterialData[matIdx * 8 + mtxIdx]);
+                NebulaMtx44Identity(mBackupMaterialData[matIdx * 8 + mtxIdx]);
             }
         }
     }

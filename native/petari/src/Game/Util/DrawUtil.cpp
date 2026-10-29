@@ -73,8 +73,8 @@ namespace MR {
 
     void loadViewMtxFor2DModel() {
         Mtx viewMtx;
-        PSMTXIdentity(viewMtx);
-        PSMTXCopy(viewMtx, j3dSys.mViewMtx);
+        NebulaMtxIdentity(viewMtx);
+        NebulaMtxCopy(viewMtx, j3dSys.mViewMtx);
     }
 
     void drawInitFor2DModel() {
@@ -82,12 +82,12 @@ namespace MR {
         J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
 
         Mtx44 projMtx;
-        C_MTXOrtho(projMtx, 0.0f, -MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), ::cNearZ, ::cFarZ);
+        NebulaMtxOrtho(projMtx, 0.0f, -MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), ::cNearZ, ::cFarZ);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
 
         Mtx viewMtx;
-        PSMTXIdentity(viewMtx);
-        PSMTXCopy(viewMtx, j3dSys.mViewMtx);
+        NebulaMtxIdentity(viewMtx);
+        NebulaMtxCopy(viewMtx, j3dSys.mViewMtx);
     }
 
     void setDefaultViewportAndScissor() {
@@ -117,7 +117,7 @@ namespace MR {
         halfWidth *= scale;
         height *= scale;
         Mtx44 projMtx;
-        C_MTXOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
+        NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
         J3DNativeState::setCullMode(GX_CULL_NONE);
         J3DNativeState::setZMode(GX_FALSE, GX_NEVER, GX_FALSE);
@@ -128,7 +128,7 @@ namespace MR {
         u16 width = pJUTVideo->getFbWidth();
         u16 height = pJUTVideo->getEfbHeight();
         Mtx44 projMtx;
-        C_MTXOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
+        NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
         MR::setDefaultViewportAndScissor();
         TMtx34f mtxImm;
@@ -199,11 +199,11 @@ namespace MR {
         u16 width = (s32)(rSize.x);
         u16 height = (s32)(rSize.y);
         Mtx44 projection;
-        C_MTXOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getFrameBufferWidth(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getFrameBufferWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         Mtx matrix;
-        PSMTXIdentity(matrix);
+        NebulaMtxIdentity(matrix);
         J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
         J3DNativeState::setNumTexGens(0);
         J3DNativeState::setNumTevStages(1);
@@ -240,7 +240,7 @@ namespace MR {
         J3DNativeShape::sendPosition(mtxImm, GX_PNMTX0);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         Mtx44 projMtx;
-        C_MTXOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
         J3DNativeState::setNumChans(1);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -318,7 +318,7 @@ namespace MR {
         MR::captureScreenAlpha(0);
         MR::loadScreenAlphaTexture(0, GX_TEXMAP0);
         Mtx44 projMtx;
-        C_MTXOrtho(projMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
+        NebulaMtxOrtho(projMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
         J3DNativeState::setTevDirect(GX_TEVSTAGE0);
         J3DNativeState::setNumIndStages(0);

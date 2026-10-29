@@ -311,7 +311,7 @@ void WaterPlantDrawInit::movement() {
     }
 
     TPos3f inverseViewMtx;
-    PSMTXInverse(MR::getCameraViewMtx(), inverseViewMtx);
+    NebulaMtxInverse(MR::getCameraViewMtx(), inverseViewMtx);
     // normal getXDir call here reverses float load order
     ::sDrawVec.set< f32 >(inverseViewMtx[0][0], inverseViewMtx[1][0], inverseViewMtx[2][0]);
 }

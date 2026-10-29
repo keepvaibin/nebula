@@ -108,7 +108,7 @@ namespace MR {
     void convertPaneLocalPosToScreenPos(TVec2f* pScreenPos, const nw4r::lyt::Pane* pPane, const TVec2f& rLocalPos) {
         TVec3f pos(rLocalPos);
         TVec3f layoutPos;
-        PSMTXMultVec(pPane->mGlbMtx, pos, layoutPos);
+        NebulaMtxMultVec(pPane->mGlbMtx, pos, layoutPos);
         convertLayoutPosToScreenPos(pScreenPos, layoutPos);
     }
 };  // namespace MR

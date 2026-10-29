@@ -249,7 +249,7 @@ void Flag::movement() {
 #pragma opt_propagation off
 #pragma opt_loop_invariants off
 void Flag::updateFlag() {
-    PSVECCrossProduct(&mSide, &mUp, &mFront);
+    NebulaVecCrossProduct(&mSide, &mUp, &mFront);
     if (MR::isNearZero(mFront)) {
         mFront.set(mSide);
     } else {

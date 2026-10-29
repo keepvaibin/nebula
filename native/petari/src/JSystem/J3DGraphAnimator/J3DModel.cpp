@@ -18,8 +18,8 @@ void J3DModel::initialize() {
     mBaseScale.y = 1.0f;
     mBaseScale.z = 1.0f;
 
-    PSMTXIdentity(mBaseTransformMtx);
-    PSMTXIdentity(mInternalView);
+    NebulaMtxIdentity(mBaseTransformMtx);
+    NebulaMtxIdentity(mInternalView);
 
     mMtxBuffer = NULL;
     mMatPacket = NULL;

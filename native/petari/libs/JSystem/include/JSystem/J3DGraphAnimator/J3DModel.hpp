@@ -92,7 +92,7 @@ public:
     }
 
     void setBaseTRMtx(Mtx m) {
-        PSMTXCopy(m, mBaseTransformMtx);
+        NebulaMtxCopy(m, mBaseTransformMtx);
     }
 
     u32 getMtxCalcMode() {

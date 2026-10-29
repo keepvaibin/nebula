@@ -51,6 +51,6 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
     controller->getProjectionPos(&position);
     mtx.setTrans(position);
 
-    PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
+    NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
     J3DNativeShape::sendPosition(mtx, 0);
 }

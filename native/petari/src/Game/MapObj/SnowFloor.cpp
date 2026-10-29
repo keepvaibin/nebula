@@ -97,8 +97,8 @@ void SnowFloor::drawSetup() {
         Mtx mtx;
         f32 angle = angleRange * (static_cast< f32 >(i) / (::sStripCount - 1)) - mHalfAngle;
         angle += halfStripAngle;
-        PSMTXRotAxisRad(mtx, &mAxis, angle);
-        PSMTXMultVecSR(mtx, &mUp, &mDirections[i]);
+        NebulaMtxRotAxisRad(mtx, &mAxis, angle);
+        NebulaMtxMultVecSR(mtx, &mUp, &mDirections[i]);
     }
 
     mTexCoords[i] = 1.0f;
@@ -110,8 +110,8 @@ void SnowFloor::initLocalPoint(const JMapInfoIter& rIter) {
     MR::makeMtxTR(mtx, 0.0f, 0.0f, 0.0f, mRotation.x, mRotation.y, mRotation.z);
     mUp.set(0.0f, 1.0f, 0.0f);
     mAxis.set(0.0f, 0.0f, 1.0f);
-    PSMTXMultVecSR(mtx, &mUp, &mUp);
-    PSMTXMultVecSR(mtx, &mAxis, &mAxis);
+    NebulaMtxMultVecSR(mtx, &mUp, &mUp);
+    NebulaMtxMultVecSR(mtx, &mAxis, &mAxis);
     f32 halfLength = ::sTextureSize * ::sCellSize;
     mRadius = 900.0f;
     mHalfLength = halfLength;

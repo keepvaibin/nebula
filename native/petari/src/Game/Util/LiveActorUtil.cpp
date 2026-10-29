@@ -748,18 +748,18 @@ namespace MR {
     }
 
     void setBaseTRMtx(LiveActor* pActor, MtxPtr pMtx) {
-        PSMTXCopy(pMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy(pMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const TPos3f& rMtx) {
-        PSMTXCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy((MtxPtr)rMtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseTRMtx(LiveActor* pActor, const TQuat4f& rQuat) {
         TPos3f mtx;
         mtx.setQT(rQuat, pActor->mPosition);
 
-        PSMTXCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
+        NebulaMtxCopy((MtxPtr)mtx.mMtx, (MtxPtr)&getJ3DModel(pActor)->mBaseTransformMtx);
     }
 
     void setBaseScale(LiveActor* pActor, const TVec3f& rScale) {

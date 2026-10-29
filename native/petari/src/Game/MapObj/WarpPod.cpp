@@ -501,9 +501,9 @@ void WarpPod::initDraw() {
         }
 
         TPos3f rotation;
-        PSMTXRotAxisRad(rotation, axis, startAngle * (1.0f - blend) + halfAngle * blend);
+        NebulaMtxRotAxisRad(rotation, axis, startAngle * (1.0f - blend) + halfAngle * blend);
         TVec3f point;
-        PSMTXMultVecSR(rotation, arcStart, point);
+        NebulaMtxMultVecSR(rotation, arcStart, point);
         TVec3f position(arcCenter + point);
         _C4[i] = position + up * 200.0f;
     }

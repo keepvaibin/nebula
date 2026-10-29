@@ -186,7 +186,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
     if (totalWeight == 0.0f) {
         *pScale = mJointList[joint]._28._0;
         *pTranslate = mJointList[joint]._28._C;
-        PSMTXQuat(pMtx, &mJointList[joint]._28.mRotation);
+        NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
         return;
     }
 
@@ -236,7 +236,7 @@ void XanimeCore::calcBlend(TVec3f* pScale, TVec3f* pTranslate) {
     mJointList[joint]._28._0 = *pScale;
     mJointList[joint]._28._C = *pTranslate;
     mJointList[joint]._28.mRotation = rotation;
-    PSMTXQuat(pMtx, &rotation);
+    NebulaMtxQuat(pMtx, &rotation);
 }
 
 void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
@@ -248,7 +248,7 @@ void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
     if (mTrackList[0]._0 == nullptr) {
         *pScale = mJointList[joint]._28._0;
         *pTranslate = mJointList[joint]._28._C;
-        PSMTXQuat(pMtx, &mJointList[joint]._28.mRotation);
+        NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
         return;
     }
 
@@ -274,7 +274,7 @@ void XanimeCore::calcSingle(TVec3f* pScale, TVec3f* pTranslate) {
     mJointList[joint]._28._0 = *pScale;
     mJointList[joint]._28._C = *pTranslate;
     mJointList[joint]._28.mRotation = rotation;
-    PSMTXQuat(pMtx, &rotation);
+    NebulaMtxQuat(pMtx, &rotation);
 }
 
 void XanimeCore::calcBlendSpecial() {
@@ -385,18 +385,18 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
 
     if (mTransformList != nullptr) {
         if (mTransformList[joint]._64 != nullptr) {
-            PSMTXConcat(pMtx, mTransformList[joint]._64, pMtx);
+            NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
         }
 
         if (mTransformList[joint]._68 != 0) {
-            PSMTXConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
+            NebulaMtxConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
         }
     }
 
     if (mTransformList != nullptr && mTransformList[joint]._4 != 0xFFFF && mTransformList[mTransformList[joint]._4]._68 != 0) {
         Mtx inverse;
-        PSMTXInverse(reinterpret_cast< MtxPtr >(mTransformList[mTransformList[joint]._4]._68), inverse);
-        PSMTXConcat(inverse, pMtx, pMtx);
+        NebulaMtxInverse(reinterpret_cast< MtxPtr >(mTransformList[mTransformList[joint]._4]._68), inverse);
+        NebulaMtxConcat(inverse, pMtx, pMtx);
     }
 
     pMtx[0][3] = rTranslate.x;
@@ -470,13 +470,13 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
         }
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
 
     if (mTransformList != nullptr && mTransformList[joint]._6C != nullptr) {
         TVec3f translate;
         MR::extractMtxTrans(J3DSys::mCurrentMtx, &translate);
         MR::setMtxTrans(J3DSys::mCurrentMtx, 0.0f, 0.0f, 0.0f);
-        PSMTXConcat(mTransformList[joint]._6C, J3DSys::mCurrentMtx, J3DSys::mCurrentMtx);
+        NebulaMtxConcat(mTransformList[joint]._6C, J3DSys::mCurrentMtx, J3DSys::mCurrentMtx);
         MR::setMtxTrans(J3DSys::mCurrentMtx, translate.x, translate.y, translate.z);
     }
 
@@ -486,7 +486,7 @@ void XanimeCore::calcScaleBlendMaya(const TVec3f& rScale, const TVec3f& rTransla
         J3DSys::mCurrentMtx[2][3] += mTransformList[joint]._38.z;
     }
 
-    PSMTXCopy(J3DSys::mCurrentMtx, pMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, pMtx);
 
     if (mTransformList != nullptr) {
         pMtx[0][3] += mTransformList[joint]._20.x;
@@ -541,8 +541,8 @@ void XanimeCore::calcScaleBlendMayaNoTransform(const TVec3f& rScale, const TVec3
         }
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
-    PSMTXCopy(J3DSys::mCurrentMtx, pMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, pMtx);
 
     J3DSys::mParentS.x = rScale.x;
     J3DSys::mParentS.y = rScale.y;
@@ -558,11 +558,11 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
 
     if (mTransformList != nullptr) {
         if (mTransformList[joint]._64 != nullptr) {
-            PSMTXConcat(pMtx, mTransformList[joint]._64, pMtx);
+            NebulaMtxConcat(pMtx, mTransformList[joint]._64, pMtx);
         }
 
         if (mTransformList[joint]._68 != 0) {
-            PSMTXConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
+            NebulaMtxConcat(pMtx, reinterpret_cast< MtxPtr >(mTransformList[joint]._68), pMtx);
         }
     }
 
@@ -637,7 +637,7 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
         pMtx[2][3] += mTransformList[joint]._2C.z;
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
 
     rCurrentScale.x *= rScale.x;
     rCurrentScale.y *= rScale.y;
@@ -645,7 +645,7 @@ void XanimeCore::calcScaleBlendSI(const TVec3f& rScale, const TVec3f& rTranslate
 
     if (rCurrentScale.x == 1.0f && rCurrentScale.y == 1.0f && rCurrentScale.z == 1.0f) {
         pMtxBuffer->setScaleFlag(joint, 1);
-        PSMTXCopy(J3DSys::mCurrentMtx, pMtx);
+        NebulaMtxCopy(J3DSys::mCurrentMtx, pMtx);
     } else {
         pMtxBuffer->setScaleFlag(joint, 0);
         JMAMTXApplyScale(J3DSys::mCurrentMtx, pMtx, rCurrentScale.x, rCurrentScale.y, rCurrentScale.z);
@@ -683,8 +683,8 @@ void XanimeCore::calcScaleBlendBasic(const TVec3f& rScale, const TVec3f& rTransl
         JMAMTXApplyScale(pMtx, pMtx, rScale.x, rScale.y, rScale.z);
     }
 
-    PSMTXConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
-    PSMTXCopy(J3DSys::mCurrentMtx, pMtx);
+    NebulaMtxConcat(J3DSys::mCurrentMtx, pMtx, J3DSys::mCurrentMtx);
+    NebulaMtxCopy(J3DSys::mCurrentMtx, pMtx);
 }
 
 void XanimeCore::calcScaleBlendSpecial() {
@@ -694,7 +694,7 @@ void XanimeCore::calcScaleBlendSpecial() {
     TVec3f translate;
     scale = mJointList[joint]._28._0;
     translate = mJointList[joint]._28._C;
-    PSMTXQuat(pMtx, &mJointList[joint]._28.mRotation);
+    NebulaMtxQuat(pMtx, &mJointList[joint]._28.mRotation);
     calcScaleBlendMaya(scale, translate);
 }
 

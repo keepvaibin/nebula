@@ -47,8 +47,8 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     pImage->mImageDataOffset = sizeof(ResTIMG);
     mFurTexture = new JUTTexture(pImage, 0);
     mUseDensityMap = 0;
-    PSMTXIdentity(mFurTexMtx);
-    PSMTXIdentity(mIndirectTexMtx);
+    NebulaMtxIdentity(mFurTexMtx);
+    NebulaMtxIdentity(mIndirectTexMtx);
     mMixFog = 0;
     mFogPosition.x = mFogPosition.y = mFogPosition.z = 0.0f;
     mFogWidth = 0.0f;
@@ -73,7 +73,7 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
 }
 
 void FurDrawer::update() {
-    PSMTXScale(mFurTexMtx, mFurUVScale, mFurUVScale, 1.0f);
+    NebulaMtxScale(mFurTexMtx, mFurUVScale, mFurUVScale, 1.0f);
 }
 
 f32 FurDrawer::CLayerParam::calcValue(s32 layer, s32 numLayers) const {
@@ -149,15 +149,15 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     Mtx bodyMtx;
     Mtx furMtx;
     Mtx indirectMtx;
-    PSMTXCopy(mFurTexMtx, furMtx);
+    NebulaMtxCopy(mFurTexMtx, furMtx);
 
     if (mUseIndirect) {
-        PSMTXCopy(mIndirectTexMtx, indirectMtx);
+        NebulaMtxCopy(mIndirectTexMtx, indirectMtx);
     } else {
-        PSMTXIdentity(indirectMtx);
+        NebulaMtxIdentity(indirectMtx);
     }
 
-    PSMTXScale(bodyMtx, mBodyUVScale, mBodyUVScale, 1.0f);
+    NebulaMtxScale(bodyMtx, mBodyUVScale, mBodyUVScale, 1.0f);
     J3DNativeShape::sendTexture(bodyMtx, GX_TEXMTX0, GX_MTX2x4);
     J3DNativeShape::sendTexture(furMtx, GX_TEXMTX1, GX_MTX2x4);
 

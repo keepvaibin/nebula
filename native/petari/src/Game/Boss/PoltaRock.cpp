@@ -138,7 +138,7 @@ void PoltaRock::exeFloat() {
         MR::emitEffect(this, "Appear");
     }
     MR::startLevelSound(this, "SE_OJ_LV_POLTA_ROCK_FLOAT");
-    PSMTXMultVec(getOwner()->getBaseMtx(), &_AC, v3);
+    NebulaMtxMultVec(getOwner()->getBaseMtx(), &_AC, v3);
     MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
     MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
     MR::attenuateVelocity(this, 0.92f);
@@ -154,7 +154,7 @@ void PoltaRock::exeSign() {
     if (MR::isFirstStep(this)) {
         MR::startAction(this, "Sign");
     }
-    PSMTXMultVec(getOwner()->getBaseMtx(), &_AC, v3);
+    NebulaMtxMultVec(getOwner()->getBaseMtx(), &_AC, v3);
     MR::addVelocityMoveToTarget(this, v3, 0.0f, 1.2f, 0.0f, 200.0f);
     MR::addVelocityKeepHeightUseShadow(this, 800.0f, 1.5f, 300.0f, nullptr);
     MR::attenuateVelocity(this, 0.92f);

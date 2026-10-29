@@ -98,7 +98,7 @@ void KirairaChain::draw() const {
 
         mtx.setTrans(point->mPosition);
 
-        PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
+        NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
         J3DNativeShape::loadPosition(mtx, GX_PNMTX0);
         J3DNativeShape::loadNormal(mtx, GX_PNMTX0);
         mModelDrawer->mShapeDraw->draw();

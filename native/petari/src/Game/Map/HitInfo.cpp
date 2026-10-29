@@ -33,10 +33,10 @@ void Triangle::fillData(CollisionParts* pParts, u32 index, HitSensor* pSensor) {
 
     pMatrix = &mParts->mBaseMatrix;
 
-    PSMTXMultVecSR(pMatrix->mMtx, &mNormals[0], &mNormals[0]);
-    PSMTXMultVecSR(pMatrix->mMtx, &mNormals[1], &mNormals[1]);
-    PSMTXMultVecSR(pMatrix->mMtx, &mNormals[2], &mNormals[2]);
-    PSMTXMultVecSR(pMatrix->mMtx, &mNormals[3], &mNormals[3]);
+    NebulaMtxMultVecSR(pMatrix->mMtx, &mNormals[0], &mNormals[0]);
+    NebulaMtxMultVecSR(pMatrix->mMtx, &mNormals[1], &mNormals[1]);
+    NebulaMtxMultVecSR(pMatrix->mMtx, &mNormals[2], &mNormals[2]);
+    NebulaMtxMultVecSR(pMatrix->mMtx, &mNormals[3], &mNormals[3]);
 
     MR::normalize(&mNormals[0]);
     MR::normalize(&mNormals[1]);
@@ -93,28 +93,28 @@ const TVec3f* Triangle::calcAndGetNormal(int index) {
     switch (index) {
     case 0: {
         mNormals[0].set(*server->getFaceNormal(prism));
-        PSMTXMultVecSR(matrix, &mNormals[0], &mNormals[0]);
+        NebulaMtxMultVecSR(matrix, &mNormals[0], &mNormals[0]);
         MR::normalize(&mNormals[0]);
 
         return &mNormals[0];
     } break;
     case 1: {
         mNormals[1].set(*server->getEdgeNormal1(prism));
-        PSMTXMultVecSR(matrix, &mNormals[1], &mNormals[1]);
+        NebulaMtxMultVecSR(matrix, &mNormals[1], &mNormals[1]);
         MR::normalize(&mNormals[1]);
 
         return &mNormals[1];
     } break;
     case 2: {
         mNormals[2].set(*server->getEdgeNormal2(prism));
-        PSMTXMultVecSR(matrix, &mNormals[2], &mNormals[2]);
+        NebulaMtxMultVecSR(matrix, &mNormals[2], &mNormals[2]);
         MR::normalize(&mNormals[2]);
 
         return &mNormals[2];
     } break;
     case 3: {
         mNormals[3].set(*server->getEdgeNormal3(prism));
-        PSMTXMultVecSR(matrix, &mNormals[3], &mNormals[3]);
+        NebulaMtxMultVecSR(matrix, &mNormals[3], &mNormals[3]);
         MR::normalize(&mNormals[3]);
 
         return &mNormals[3];
@@ -133,21 +133,21 @@ const TVec3f* Triangle::calcAndGetEdgeNormal(int index) {
     switch (index) {
     case 0: {
         mNormals[1].set(*server->getEdgeNormal1(prism));
-        PSMTXMultVecSR(matrix, &mNormals[1], &mNormals[1]);
+        NebulaMtxMultVecSR(matrix, &mNormals[1], &mNormals[1]);
         MR::normalize(&mNormals[1]);
 
         return &mNormals[1];
     } break;
     case 1: {
         mNormals[2].set(*server->getEdgeNormal2(prism));
-        PSMTXMultVecSR(matrix, &mNormals[2], &mNormals[2]);
+        NebulaMtxMultVecSR(matrix, &mNormals[2], &mNormals[2]);
         MR::normalize(&mNormals[2]);
 
         return &mNormals[2];
     } break;
     case 2: {
         mNormals[3].set(*server->getEdgeNormal3(prism));
-        PSMTXMultVecSR(matrix, &mNormals[3], &mNormals[3]);
+        NebulaMtxMultVecSR(matrix, &mNormals[3], &mNormals[3]);
         MR::normalize(&mNormals[3]);
 
         return &mNormals[3];

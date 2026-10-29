@@ -100,14 +100,14 @@ void EarthenPipe::init(const JMapInfoIter& rIter) {
     TPos3f v24;
     v24.identity();
     MR::makeMtxUpFrontPos(&v24, _98, v23, _8C);
-    PSMTXCopy(v24, mTopJointMtx);
+    NebulaMtxCopy(v24, mTopJointMtx);
     _BC.setInline(v24);
     TVec3f v22(_8C);
     TVec3f v21(_98);
     v21.scale(50.0f);
     v22.sub(v21);
     v24.setTrans(v22);
-    PSMTXCopy(v24, mBottomJointMtx);
+    NebulaMtxCopy(v24, mBottomJointMtx);
     MR::setBaseTRMtx(this, mTopJointMtx);
     MR::connectToSceneMapObjNoCalcAnimStrongLight(this);
 

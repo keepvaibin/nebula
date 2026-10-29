@@ -298,7 +298,7 @@ const ResTIMG* J2DPicture::changeTexture(char const* param_0, u8 param_1, JUTPal
 
 void J2DPicture::drawSelf(f32 param_0, f32 param_1) {
     Mtx tmp;
-    PSMTXIdentity(tmp);
+    NebulaMtxIdentity(tmp);
 
     drawSelf(param_0, param_1, &tmp);
 }
@@ -358,7 +358,7 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
         J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
 
         Mtx m;
-        PSMTXIdentity(m);
+        NebulaMtxIdentity(m);
         J3DNativeShape::sendPosition(m, GX_PNMTX0);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     }
@@ -426,7 +426,7 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
 
         getNewColor(black);
         setTevMode();
-        PSMTXConcat((MtxPtr)param_12, mGlobalMtx, outputMtx);
+        NebulaMtxConcat((MtxPtr)param_12, mGlobalMtx, outputMtx);
 
         J3DNativeShape::sendPosition(outputMtx, 0);
         J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);

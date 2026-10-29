@@ -85,7 +85,7 @@ BenefitItemObj::BenefitItemObj(const char* pName, const char* pPowerUp) : LiveAc
     _BC.zero();
     _C8.zero();
     _120 = pPowerUp;
-    PSMTXIdentity(_F0);
+    NebulaMtxIdentity(_F0);
 }
 
 void BenefitItemObj::initModelAndEfx() {
@@ -366,7 +366,7 @@ void BenefitItemObj::appear() {
 
     LiveActor::calcAndSetBaseMtx();
 
-    PSMTXCopy(getBaseMtx(), _F0);
+    NebulaMtxCopy(getBaseMtx(), _F0);
 
     if (_E4) {
         _E6 = 1;
@@ -828,10 +828,10 @@ void BenefitItemObj::calcAndSetBaseMtxInMovement() {
     if (isNerve(GET_NERVE(BenefitItemObj, HostTypeNrvWait))) {
         LiveActor::calcAndSetBaseMtx();
 
-        PSMTXCopy(getBaseMtx(), _F0);
+        NebulaMtxCopy(getBaseMtx(), _F0);
 
         if (mFollowMtx != nullptr) {
-            PSMTXCopy(mFollowMtx, _F0);
+            NebulaMtxCopy(mFollowMtx, _F0);
             MR::extractMtxTrans(mFollowMtx, &mPosition);
         }
 
