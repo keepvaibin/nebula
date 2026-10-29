@@ -11563,6 +11563,11 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Immediate:
         draw_record_immediate(*record.immediate);
         return;
+    case shapes::Record::Kind::Readback:
+        // The picture here, as the channel's next field (its reads take the latest finished one).
+        flush_pending_draw_batch();
+        record_async_peek_fields_at_token(static_cast<std::uint16_t>(record.key));
+        return;
     }
 }
 

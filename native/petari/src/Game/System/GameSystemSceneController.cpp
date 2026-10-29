@@ -27,7 +27,6 @@
 #include <cstdio>
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-#include "Game/System/DrawSyncManager.hpp"
 #endif
 
 namespace {
@@ -143,7 +142,6 @@ void GameSystemSceneController::destroyScene() {
     bool stopSound = isStopSound();
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-    DrawSyncManager::sInstance->clearSceneCallback();
     delete mScene;
     mScene = nullptr;
 #else

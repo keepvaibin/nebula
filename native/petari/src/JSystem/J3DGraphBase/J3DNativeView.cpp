@@ -54,6 +54,21 @@ namespace {
 }  // namespace
 
 namespace J3DNativeView {
+    void captureReadback(u32 channel) {
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->readback_capture(pHost->user, __NebulaGXWriter.ptr, channel);
+    }
+
+    u32 readbackColor(u32 channel, s32 x, s32 y) {
+        const NebulaHostServices* pHost = nebula_host();
+        return pHost->readback_pixel(pHost->user, channel, 0, static_cast< u32 >(x), static_cast< u32 >(y));
+    }
+
+    u32 readbackDepth(u32 channel, s32 x, s32 y) {
+        const NebulaHostServices* pHost = nebula_host();
+        return pHost->readback_pixel(pHost->user, channel, 1, static_cast< u32 >(x), static_cast< u32 >(y));
+    }
+
     void setProjection(const f32 (*pMtx)[4], GXProjectionType type) {
         // GXSetProjection's terms: the orthographic one takes the translation column, the perspective one the third.
         sPerspective = type == GX_PERSPECTIVE;

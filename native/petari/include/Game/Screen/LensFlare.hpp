@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
-#include "Game/System/DrawSyncManager.hpp"
 #include "Game/Util/Array.hpp"
 
 class BrightCamInfo;
@@ -68,7 +67,7 @@ public:
     virtual void controlAnim();
 };
 
-class LensFlareDirector : public NameObj, public DrawSyncCallback {
+class LensFlareDirector : public NameObj {
 public:
     /// @brief Creates a new `LensFlareDirector`.
     LensFlareDirector();
@@ -80,9 +79,9 @@ public:
     virtual void init(const JMapInfoIter& rIter);
 
     virtual void movement();
-    virtual void drawSyncCallback(u16);
-
     void pauseOff();
+    // The picture where the drawing has reached, as this frame's readback; the bright objects measure their
+    // visibility in it.
     void setDrawSyncToken();
     s32 checkArea();
     bool checkBrightObj(bool);

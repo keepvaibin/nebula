@@ -1,4 +1,5 @@
 #include "Game/MapObj/BrightObj.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
@@ -173,8 +174,6 @@ BrightObjBase::BrightObjBase() : mInfo(), mBrightCenter(0.0f, 0.0f), mNowCenter(
 }
 
 void BrightObjBase::checkVisibilityOfSphere(u16 index, const BrightCamInfo& rCamInfo) {
-    GXPokeAlphaRead(GX_READ_NONE);
-
     TVec3f drawPos(mDrawInfo.mPosition[index]);
     TVec3f camDir(rCamInfo.mCameraDir[index]);
     TVec3f drawDir(rCamInfo.mCameraPos[index] - drawPos);
@@ -197,6 +196,7 @@ void BrightObjBase::checkVisibilityOfSphere(u16 index, const BrightCamInfo& rCam
 
     const TPos3f& rView = ::getBrightView(rCamInfo, index);
     CheckArg args = CheckArg();
+    args.mReadback = cReadbackChannel + index;
     const TProj3f& rProj = rCamInfo.mProjectionMtx[index];
 
     ::calcScreenPosition(&args.mCenter, drawPos, rView, rProj);
@@ -232,8 +232,7 @@ void BrightObjBase::checkVisible(BrightObjBase::CheckArg* pArg, const TVec3f& rT
         TVec2f frameBufferPos;
         MR::convertScreenPosToFrameBufferPos(&frameBufferPos, screenPos);
 
-        u32 color;
-        GXPeekARGB((s32)(frameBufferPos.x), (s32)(frameBufferPos.y), &color);
+        const u32 color = J3DNativeView::readbackColor(pArg->mReadback, (s32)(frameBufferPos.x), (s32)(frameBufferPos.y));
 
         if ((color & 0xFF000000) >= 0xF0000000) {
             pArg->mCurrBrightness++;

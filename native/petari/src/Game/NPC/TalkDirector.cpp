@@ -45,18 +45,15 @@ namespace NrvTalkDirector {
     NEW_NERVE(TalkDirectorNrvTerm, TalkDirector, Term);
 };  // namespace NrvTalkDirector
 
-TalkPeekZ::TalkPeekZ() : mDrawSync(DrawSyncManager::sInstance->setCallback(4, 1, this)) {
+TalkPeekZ::TalkPeekZ() {
 }
 
 void TalkPeekZ::setDrawSyncToken() {
     J3DNativeView::getProjectionv(&_20);
     J3DNativeView::getViewportv(&_3C);
     _8 = 0;
-    DrawSyncManager::sInstance->pushBreakPoint();
-    GXSetDrawSync(mDrawSync);
-}
+    J3DNativeView::captureReadback(cReadbackChannel);
 
-void TalkPeekZ::drawSyncCallback(u16 arg) {
     if (!MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) ||
         !MR::isInRange(mScreenPos.y, 0.0f, JUTVideo::getManager()->getEfbHeight() - 1)) {
         return;
@@ -65,7 +62,7 @@ void TalkPeekZ::drawSyncCallback(u16 arg) {
     TVec2f pos;
     MR::convertScreenPosToFrameBufferPos(&pos, mScreenPos);
 
-    GXPeekZ((s32)(pos.x), (s32)(pos.y), &_8);
+    _8 = J3DNativeView::readbackDepth(cReadbackChannel, (s32)(pos.x), (s32)(pos.y));
 
     TDDraw::invProject(&_14, TVec3f(mScreenPos.x, mScreenPos.y, static_cast< f32 >(_8)), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
                        &_3C, false);

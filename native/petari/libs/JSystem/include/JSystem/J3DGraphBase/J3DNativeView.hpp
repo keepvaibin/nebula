@@ -20,6 +20,11 @@ namespace J3DNativeView {
     void setScissor(u32 left, u32 top, u32 width, u32 height);
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight);
     void setScissorBoxOffset(s32 x, s32 y);
+    // The picture's colour and depth where the drawing has reached, kept as `channel`'s; reads take the latest finished
+    // capture (a frame or so old) and never wait. Frame-buffer coordinates.
+    void captureReadback(u32 channel);
+    u32 readbackColor(u32 channel, s32 x, s32 y);
+    u32 readbackDepth(u32 channel, s32 x, s32 y);
 };  // namespace J3DNativeView
 
 extern "C" {

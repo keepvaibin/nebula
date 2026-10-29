@@ -2343,6 +2343,34 @@ void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
 #endif
 }
 
+void svc_readback_capture(void*, const void* stream, uint32_t channel) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Readback;
+    record.offset = record_offset(stream);
+    record.key = channel;
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)stream, (void)channel;
+#endif
+}
+
+uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y) {
+#if defined(NEBULA_HOST_RENDERER)
+    uint32_t value = 0;
+    const auto kind = depth != 0u ? galaxy::gx::EfbPeekKind::Depth : galaxy::gx::EfbPeekKind::Color;
+    if (!galaxy::gx::peek_efb_published(static_cast<uint16_t>(x), static_cast<uint16_t>(y), kind,
+                                        static_cast<uint16_t>(channel), value)) {
+        return 0;
+    }
+    return value;
+#else
+    (void)channel, (void)depth, (void)x, (void)y;
+    return 0;
+#endif
+}
+
 void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -3947,6 +3975,8 @@ int main(int argc, char** argv) {
     services.immediate = svc_immediate;
     services.texture_image = svc_texture_image;
     services.mii_record = svc_mii_record;
+    services.readback_capture = svc_readback_capture;
+    services.readback_pixel = svc_readback_pixel;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <revolution/os.h>
-#include "Game/System/DrawSyncManager.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JUtility/JUTAssert.hpp>

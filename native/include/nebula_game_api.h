@@ -920,6 +920,12 @@ typedef struct NebulaHostServices {
     /* The Mii in a slot of the console's Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
+    /* The picture's colour and depth where the drawing has reached (after every command written before `stream`),
+       kept as `channel`'s. */
+    void (*readback_capture)(void* user, const void* stream, uint32_t channel);
+    /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
+       (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
+    uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
 } NebulaHostServices;
 
 
