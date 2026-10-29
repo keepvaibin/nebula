@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerDirector.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #endif
@@ -169,8 +170,8 @@ StarPointerPeekZ::StarPointerPeekZ() {
 }
 
 void StarPointerPeekZ::setDrawSyncToken() {
-    GXGetProjectionv(mProjectionParameters);
-    GXGetViewportv(mViewportParameters);
+    J3DNativeView::getProjectionv(mProjectionParameters);
+    J3DNativeView::getViewportv(mViewportParameters);
     DrawSyncManager::sInstance->pushBreakPoint();
     GXSetDrawSync(mToken);
 }

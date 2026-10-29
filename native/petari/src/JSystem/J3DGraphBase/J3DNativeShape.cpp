@@ -526,6 +526,21 @@ namespace J3DNativeShape {
         }
     }
 
+    void sendPosition(const f32 (*pMtx)[4], u32 id) {
+        loadPosition(pMtx, id, 0);
+        flushState();
+    }
+
+    void sendNormal(const f32 (*pMtx)[4], u32 id) {
+        loadNormal(pMtx, id, 0);
+        flushState();
+    }
+
+    void sendTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type) {
+        loadTexture(pMtx, id, type);
+        flushState();
+    }
+
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix) {
         if (sTexGenCount == 8) {
             fail("more texture coordinate generators before one draw than a draw can carry", nullptr);
@@ -662,3 +677,11 @@ namespace J3DNativeShape {
         sendArray(pArray, kPosition, count, format, false);
     }
 };  // namespace J3DNativeShape
+
+void J3DNativeShapeSendPosition(const f32 (*pMtx)[4], u32 id) {
+    J3DNativeShape::sendPosition(pMtx, id);
+}
+
+void J3DNativeShapeSendNormal(const f32 (*pMtx)[4], u32 id) {
+    J3DNativeShape::sendNormal(pMtx, id);
+}

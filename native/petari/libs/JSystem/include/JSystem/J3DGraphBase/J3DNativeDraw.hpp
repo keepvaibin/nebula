@@ -3,6 +3,7 @@
 #include <nebula_game_api.h>
 #include <revolution.h>
 
+#ifdef __cplusplus
 // Vertices the game draws as it sends them, as typed values (nebula_game_api.h immediate): a primitive (GXBegin's)
 // and each vertex's values, one record per primitive after every command written before it.
 namespace J3DNativeDraw {
@@ -18,3 +19,15 @@ namespace J3DNativeDraw {
     void color(u8 r, u8 g, u8 b, u8 a);
     void texCoord(f32 s, f32 t);
 };  // namespace J3DNativeDraw
+
+extern "C" {
+#endif
+// The same for the C sources (RVLFaceLib).
+void J3DNativeDrawBegin(GXPrimitive primitive, u16 count, u32 attributes);
+void J3DNativeDrawPosition(f32 x, f32 y, f32 z);
+void J3DNativeDrawNormal(f32 x, f32 y, f32 z);
+void J3DNativeDrawColor(u32 rgba);
+void J3DNativeDrawTexCoord(f32 s, f32 t);
+#ifdef __cplusplus
+}
+#endif

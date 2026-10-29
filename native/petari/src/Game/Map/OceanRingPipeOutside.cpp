@@ -1,4 +1,6 @@
 #include "Game/Map/OceanRingPipeOutside.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -51,27 +53,27 @@ void OceanRingPipeOutside::draw() const {
 
     loadMaterial();
     mMesh.draw();
-    GXSetTevDirect(GX_TEVSTAGE0);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
 }
 
 const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 
 void OceanRingPipeOutside::loadMaterial() const {
-    GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
-    GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
-    GXSetCurrentMtx(0);
-    GXSetNumChans(1);
-    GXSetChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    GXSetChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, 4, GX_DF_CLAMP, GX_AF_NONE);
-    GXSetNumTexGens(2);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
-    GXSetTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_NRM, 0x21, 0, 0x7D);
+    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeState::setCurrentMtx(0);
+    J3DNativeState::setNumChans(1);
+    J3DNativeState::setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+    J3DNativeState::setChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, 4, GX_DF_CLAMP, GX_AF_NONE);
+    J3DNativeState::setNumTexGens(2);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_NRM, 0x21, 0, 0x7D);
 
     TPos3f mtx;
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
-    GXLoadTexMtxImm(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
+    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
 
     TPos3f mtx2;
     mtx2.identity();
@@ -86,13 +88,13 @@ void OceanRingPipeOutside::loadMaterial() const {
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);
-    GXLoadTexMtxImm(mtx2, 0x21, GX_MTX2x4);
+    J3DNativeShape::sendTexture(mtx2, 0x21, GX_MTX2x4);
 
     mWaterPipeIndirectTex->load(GX_TEXMAP0);
     mWaterPipeHighLightTex->load(GX_TEXMAP1);
-    GXSetNumIndStages(1);
+    J3DNativeState::setNumIndStages(1);
     GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD0, GX_TEXMAP0);
-    GXSetTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
+    J3DNativeState::setTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
     Mtx23 new_mtx;
     new_mtx[0][0] = ::sIndirectScale;
     new_mtx[0][1] = 0.0f;
@@ -100,35 +102,35 @@ void OceanRingPipeOutside::loadMaterial() const {
     new_mtx[1][0] = 0.0f;
     new_mtx[1][1] = ::sIndirectScale;
     new_mtx[1][2] = 0.0f;
-    GXSetIndTexMtx(GX_ITM_0, new_mtx, 0);
+    J3DNativeState::setIndTexMtx(GX_ITM_0, new_mtx, 0);
 
-    GXSetTevColor(GX_TEVREG0, ::sTevReg0);
+    J3DNativeState::setTevColor(GX_TEVREG0, ::sTevReg0);
 
-    GXSetNumTevStages(2);
+    J3DNativeState::setNumTevStages(2);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_SUBHALF, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_SUBHALF, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
 
     GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE1, GX_CC_CPREV, GX_CC_ZERO, GX_CC_ZERO, GX_CC_APREV);
-    GXSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_CPREV, GX_CC_ZERO, GX_CC_ZERO, GX_CC_APREV);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
 
-    GXSetBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP);
-    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GXSetZMode(1, GX_LEQUAL, 1);
-    GXSetZCompLoc(1);
+    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP);
+    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    J3DNativeState::setZMode(1, GX_LEQUAL, 1);
+    J3DNativeState::setZCompLoc(1);
     if (mRingPipe->_90) {
-        GXSetCullMode(GX_CULL_BACK);
+        J3DNativeState::setCullMode(GX_CULL_BACK);
     } else {
-        GXSetCullMode(GX_CULL_NONE);
+        J3DNativeState::setCullMode(GX_CULL_NONE);
     }
 
-    GXSetClipMode(GX_CLIP_ENABLE);
-    GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, MR::getNearZ(), MR::getFarZ(), sFogCol);
+    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, MR::getNearZ(), MR::getFarZ(), sFogCol);
 }
 
 void OceanRingPipeOutside::sendGD() {

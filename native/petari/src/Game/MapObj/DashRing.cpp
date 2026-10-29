@@ -1,4 +1,5 @@
 #include "Game/MapObj/DashRing.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -293,7 +294,7 @@ void DashRing::draw() const {
 
     TDDraw::setup(0, 1, 0);
 
-    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
 
     for (u32 idx = 0; idx <= 64; idx++) {
         TVec3f vecB0 = mPosition + subAxis * f2;

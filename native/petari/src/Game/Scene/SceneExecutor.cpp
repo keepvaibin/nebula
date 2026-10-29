@@ -1,4 +1,5 @@
 #include "Game/Map/Air.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #endif
@@ -241,10 +242,10 @@ void SceneFunction::executeDrawListOpa() {
     CategoryList::execute(MR::DrawType_SpaceCocoon);
     CategoryList::execute(MR::DrawType_0x17);
     CategoryList::execute(MR::DrawType_WarpPodPath);
-    GXSetTevDirect(GX_TEVSTAGE0);
-    GXSetTevDirect(GX_TEVSTAGE1);
-    GXSetTevDirect(GX_TEVSTAGE2);
-    GXSetTevDirect(GX_TEVSTAGE3);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE3);
     CategoryList::execute(MR::DrawType_KirairaChain);
     CategoryList::execute(MR::DrawType_WaterPlant);
     CategoryList::execute(MR::DrawType_BigBubbleGoal);

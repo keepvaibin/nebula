@@ -12706,9 +12706,32 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Material:
         apply_record_material(*record.material);
         return;
-    case shapes::Record::Kind::State:
-        state::apply(record.state, state_);
+    case shapes::Record::Kind::State: {
+        // As the stream parser applies the same writes: a copy, a texture invalidation or a TLUT load acts at once.
+        struct Events final : state::Writes {
+            GxBackend& backend;
+            explicit Events(GxBackend& b) : backend(b) {}
+            void bp(std::uint32_t word) override {
+                backend.state_.load_bp(word);
+                const auto reg = static_cast<std::uint8_t>(word >> 24u);
+                const std::uint32_t value = backend.state_.bp(reg);
+                if (reg == bp::kCopyExecute) {
+                    backend.on_efb_copy(value);
+                } else if (reg == 0x66u && value == 0u) {
+                    backend.on_invalidate_textures();
+                } else if (reg == bp::kTlutDest) {
+                    backend.on_tlut_load();
+                }
+            }
+            void xf(std::uint16_t address, std::uint32_t value) override { backend.state_.load_xf(address, &value, 1u); }
+            void cp(std::uint8_t reg, std::uint32_t value) override { backend.state_.load_cp(reg, value); }
+            std::uint32_t bp_read(std::uint8_t reg) override { return backend.state_.bp(reg); }
+            std::uint32_t xf_read(std::uint16_t address) override { return backend.state_.xf(address); }
+            std::uint32_t cp_read(std::uint8_t reg) override { return backend.state_.cp(reg); }
+        } events(*this);
+        state::encode(record.state, events);
         return;
+    }
     case shapes::Record::Kind::Immediate:
         draw_record_immediate(*record.immediate);
         return;

@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaUi.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutCoreUtil.hpp"
@@ -520,9 +521,9 @@ namespace NebulaUi {
         if (x1 <= x0 || y1 <= y0) {
             return;
         }
-        GXSetScissor(x0, y0, x1 - x0, y1 - y0);
+        J3DNativeView::setScissor(x0, y0, x1 - x0, y1 - y0);
         pPane->Draw(rDrawInfo);
-        GXSetScissor(0, 0, static_cast< u32 >(frameWidth), static_cast< u32 >(frameHeight));
+        J3DNativeView::setScissor(0, 0, static_cast< u32 >(frameWidth), static_cast< u32 >(frameHeight));
     }
 };  // namespace NebulaUi
 #endif

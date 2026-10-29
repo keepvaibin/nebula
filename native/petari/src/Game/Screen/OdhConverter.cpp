@@ -1,4 +1,6 @@
 #include "Game/Screen/OdhConverter.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/NameObj/NameObjAdaptor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -47,12 +49,12 @@ void OdhConverter::convert() {
     pScreenTexImage = MR::getScreenTexImage();
     pRenderModeObj = JUTVideo::getManager()->getRenderMode();
 
-    GXSetCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
-    GXSetTexCopySrc(::cTexPosX, ::cTexPosY, mCaptureWidth, mCaptureHeight);
-    GXSetTexCopyDst(mCaptureWidth, mCaptureHeight, GX_TF_RGB565, GX_FALSE);
-    GXCopyTex(pScreenTexImage, GX_FALSE);
+    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
+    J3DNativeState::setTexCopySrc(::cTexPosX, ::cTexPosY, mCaptureWidth, mCaptureHeight);
+    J3DNativeState::setTexCopyDst(mCaptureWidth, mCaptureHeight, GX_TF_RGB565, GX_FALSE);
+    J3DNativeState::copyTex(pScreenTexImage, GX_FALSE);
     GXDrawDone();
-    GXSetCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
+    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
     DCStoreRange(pScreenTexImage, mCaptureWidth * mCaptureHeight * 2);
 
     mImageSize = ODHEncodeRGB565(pScreenTexImage, mImage, mCaptureWidth, mCaptureHeight, mLimitSize, ::cQuality, mCaptureImage);
@@ -92,7 +94,7 @@ namespace MR {
         bottom = top - getFrameBufferHeight();
 
         C_MTXOrtho(mtx, top, bottom, left, right, -1000.0f, 1000.0f);
-        GXSetProjection(mtx, GX_ORTHOGRAPHIC);
+        J3DNativeView::setProjection(mtx, GX_ORTHOGRAPHIC);
     }
 
     const u8* getOdhImage() {

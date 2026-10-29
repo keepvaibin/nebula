@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeSphere.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include <revolution/gx.h>
@@ -51,5 +52,5 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
     mtx.setTrans(position);
 
     PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
-    GXLoadPosMtxImm(mtx, 0);
+    J3DNativeShape::sendPosition(mtx, 0);
 }

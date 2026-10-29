@@ -1,4 +1,7 @@
 #include "RVLFaceLibInternal.h"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <cstddef>
 #include <cstdio>
 #include <revolution/gx/GXVert.h>
@@ -287,36 +290,36 @@ GXColor RFLiGetFacelineColor(const RFLiCharInfo* info) {
 }
 
 void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
-    GXSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
-    GXSetZMode(TRUE, GX_LEQUAL, TRUE);
-    GXSetZCompLoc(setting->compLoc);
-    GXSetColorUpdate(TRUE);
-    GXSetAlphaUpdate(TRUE);
-    GXSetDither(FALSE);
-    GXSetDstAlpha(FALSE, 0);
+    J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
+    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
+    J3DNativeStateSetZCompLoc(setting->compLoc);
+    J3DNativeStateSetColorUpdate(TRUE);
+    J3DNativeStateSetAlphaUpdate(TRUE);
+    J3DNativeStateSetDither(FALSE);
+    J3DNativeStateSetDstAlpha(FALSE, 0);
 
     if (setting->lightEnable) {
-        GXSetTevDirect(GX_TEVSTAGE1);
-        GXSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
+        J3DNativeStateSetTevDirect(GX_TEVSTAGE1);
+        J3DNativeStateSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
         GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        GXSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-        GXSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-        GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-        GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+        J3DNativeStateSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
+        J3DNativeStateSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+        J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+        J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
 
         RFLLoadMaterialSetting(&cDefaultDrawCoreSetting2Tev);
         RFLLoadVertexSetting(&cDefaultDrawCoreSetting2Tev);
-        GXSetNumChans(1);
+        J3DNativeStateSetNumChans(1);
 
-        GXSetChanCtrl(GX_COLOR0, TRUE, GX_SRC_REG, GX_SRC_REG, setting->lightMask, setting->diffuse, setting->attn);
-        GXSetChanCtrl(GX_ALPHA0, FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        GXSetChanAmbColor(GX_COLOR0, setting->ambColor);
-        GXSetChanMatColor(GX_COLOR0, cWhite);
+        J3DNativeStateSetChanCtrl(GX_COLOR0, TRUE, GX_SRC_REG, GX_SRC_REG, setting->lightMask, setting->diffuse, setting->attn);
+        J3DNativeStateSetChanCtrl(GX_ALPHA0, FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+        J3DNativeStateSetChanAmbColor(GX_COLOR0, setting->ambColor);
+        J3DNativeStateSetChanMatColor(GX_COLOR0, cWhite);
     } else {
         RFLLoadMaterialSetting(&cDefaultDrawCoreSetting1Tev);
         RFLLoadVertexSetting(&cDefaultDrawCoreSetting1Tev);
-        GXSetNumChans(0);
+        J3DNativeStateSetNumChans(0);
     }
 }
 
@@ -328,112 +331,119 @@ void RFLDrawXlu(const RFLCharModel* model) {
     RFLDrawXluCore(model, &cDefaultDrawCoreSetting2Tev);
 }
 
+// A shape's primitives (RFLiInitShapeRes's stream) with its 16-bit fixed-point arrays: positions with 8 fraction bits,
+// normals with 14, texture coordinates with 13.
+static void RFLiDrawShape(const s16* pos, const s16* nrm, const s16* txc, const void* dl, u32 size) {
+    const u8* p = (const u8*)dl;
+    const u8* end = p + size;
+
+    while (p + 3 <= end) {
+        const BOOL streamTxc = (p[0] & 1) != 0;
+        const BOOL hasTxc = streamTxc && txc != NULL;
+        const GXPrimitive prim = (GXPrimitive)(p[0] & 0xF8);
+        const u16 count = (u16)(p[1] << 8 | p[2]);
+        int i;
+
+        p += 3;
+        J3DNativeDrawBegin(prim, count, NEBULA_SHAPE_NORMAL | (hasTxc ? NEBULA_SHAPE_TEXCOORD0 : 0));
+        for (i = 0; i < count; i++) {
+            const s16* v = pos + 3 * p[0];
+            const s16* n = nrm + 3 * p[1];
+
+            J3DNativeDrawPosition(v[0] / 256.0f, v[1] / 256.0f, v[2] / 256.0f);
+            J3DNativeDrawNormal(n[0] / 16384.0f, n[1] / 16384.0f, n[2] / 16384.0f);
+            if (hasTxc) {
+                const s16* c = txc + 2 * p[2];
+                J3DNativeDrawTexCoord(c[0] / 8192.0f, c[1] / 8192.0f);
+            }
+            p += streamTxc ? 3 : 2;
+        }
+    }
+}
+
 void RFLLoadVertexSetting(const RFLDrawCoreSetting* setting) {
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_VA_TEX1MTXIDX);
-    GXSetVtxDesc(GX_VA_NRM, GX_VA_TEX1MTXIDX);
-    GXSetVtxDesc(GX_VA_TEX0, GX_VA_TEX1MTXIDX);
-    GXSetVtxAttrFmt(0, GX_VA_POS, 1, 3, 8);
-    GXSetVtxAttrFmt(0, GX_VA_NRM, 0, 3, 14);
-    GXSetVtxAttrFmt(0, GX_VA_TEX0, 1, 3, 13);
-    GXSetNumTexGens(setting->txcGenNum);
+    J3DNativeStateSetNumTexGens(setting->txcGenNum);
 }
 
 void RFLLoadMaterialSetting(const RFLDrawCoreSetting* setting) {
-    GXSetTevSwapModeTable(setting->tevSwapTable, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-    GXSetTevSwapModeTable(setting->tevSwapTable + 1, GX_CH_RED, GX_CH_ALPHA, GX_CH_BLUE, GX_CH_GREEN);
-    GXSetNumTevStages(setting->tevStageNum);
-    GXSetTevDirect(GX_TEVSTAGE0);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
-    GXSetTevKColorSel(GX_TEVSTAGE0, (GXTevKColorSel)(setting->tevKColorID + GX_TEV_KCSEL_K0));
-    GXSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_8_8);
+    J3DNativeStateSetTevSwapModeTable(setting->tevSwapTable, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+    J3DNativeStateSetTevSwapModeTable(setting->tevSwapTable + 1, GX_CH_RED, GX_CH_ALPHA, GX_CH_BLUE, GX_CH_GREEN);
+    J3DNativeStateSetNumTevStages(setting->tevStageNum);
+    J3DNativeStateSetTevDirect(GX_TEVSTAGE0);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
+    J3DNativeStateSetTevKColorSel(GX_TEVSTAGE0, (GXTevKColorSel)(setting->tevKColorID + GX_TEV_KCSEL_K0));
+    J3DNativeStateSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_8_8);
 }
 
 void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     RFLiCharModelRes* res = imodel->res;
 
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
 
     // @bug Copy-paste error
-    GXSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
-    GXSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
 
-    GXSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
+    J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
 
-    GXLoadPosMtxImm(imodel->posMtx, setting->posNrmMtxID);
-    GXLoadNrmMtxImm(imodel->nrmMtx, setting->posNrmMtxID);
-    GXSetCurrentMtx(setting->posNrmMtxID);
+    J3DNativeShapeSendPosition(imodel->posMtx, setting->posNrmMtxID);
+    J3DNativeShapeSendNormal(imodel->nrmMtx, setting->posNrmMtxID);
+    J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
-    GXSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_POS, 60, 0, 0x7D);
-    GXSetVtxDesc(GX_VA_TEX0, GX_VA_PNMTXIDX);
+    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_POS, 60, 0, 0x7D);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_KONST);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_KONST);
 
     if (res->beardDlSize > 0) {
-        GXSetTevKColor(setting->tevKColorID, cBeardColor[res->beardColor]);
-        GXSetArray(GX_VA_POS, res->beardVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->beardVtxNrm, 6);
-        GXCallDisplayList(res->beardDl, res->beardDlSize);
+        J3DNativeStateSetTevKColor(setting->tevKColorID, cBeardColor[res->beardColor]);
+        RFLiDrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
     }
 
-    GXSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
+    J3DNativeStateSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
 
     if (res->noseDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->noseVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->noseVtxNrm, 6);
-        GXCallDisplayList(res->noseDl, res->noseDlSize);
+        RFLiDrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
     }
 
     if (res->flipHair) {
-        GXSetCullMode(setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT);
+        J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT);
     }
 
     if (res->foreheadDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->foreheadVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->foreheadVtxNrm, 6);
-        GXCallDisplayList(res->foreheadDl, res->foreheadDlSize);
+        RFLiDrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
     }
 
     if (res->hairDlSize > 0) {
-        GXSetTevKColor(setting->tevKColorID, cHairColor[res->hairColor]);
-        GXSetArray(GX_VA_POS, res->hairVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->hairVtxNrm, 6);
-        GXCallDisplayList(res->hairDl, res->hairDlSize);
+        J3DNativeStateSetTevKColor(setting->tevKColorID, cHairColor[res->hairColor]);
+        RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
     }
 
     GXSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
-    GXSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
-    GXSetVtxDesc(GX_VA_TEX0, GX_VA_TEX1MTXIDX);
+    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
 
     if (res->capDlSize > 0) {
-        GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_KONST);
-        GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, 1, setting->tevOutRegID);
-        GXSetTevKColor(setting->tevKColorID, cFavoriteColor[res->favoriteColor]);
+        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_KONST);
+        J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, 1, setting->tevOutRegID);
+        J3DNativeStateSetTevKColor(setting->tevKColorID, cFavoriteColor[res->favoriteColor]);
 
         GXLoadTexObj(&res->capTexObj, setting->texMapID);
-        GXSetArray(GX_VA_POS, res->capVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->capVtxNrm, 6);
-        GXSetArray(GX_VA_TEX0, res->capVtxTxc, 4);
-        GXCallDisplayList(res->capDl, res->capDlSize);
+        RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
 
-        GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
+        J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
     }
 
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_KONST, GX_CC_TEXC, GX_CC_TEXA, GX_CC_ZERO);
-    GXSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
-    GXSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, (GXTevSwapSel)(setting->tevSwapTable + 1));
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_KONST, GX_CC_TEXC, GX_CC_TEXA, GX_CC_ZERO);
+    J3DNativeStateSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, (GXTevSwapSel)(setting->tevSwapTable + 1));
 
     if (res->flipHair) {
-        GXSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
+        J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
     }
 
     GXLoadTexObj(&res->faceTexObj, setting->texMapID);
-    GXSetArray(GX_VA_POS, res->faceVtxPos, 6);
-    GXSetArray(GX_VA_NRM, res->faceVtxNrm, 6);
-    GXSetArray(GX_VA_TEX0, res->faceVtxTxc, 4);
-    GXCallDisplayList(res->faceDl, res->faceDlSize);
+    RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
 }
 
 void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
@@ -441,41 +451,32 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     RFLiCharModelRes* res = imodel->res;
 
     GXSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
 
-    GXLoadPosMtxImm(imodel->posMtx, setting->posNrmMtxID);
-    GXLoadNrmMtxImm(imodel->nrmMtx, setting->posNrmMtxID);
-    GXSetCurrentMtx(setting->posNrmMtxID);
+    J3DNativeShapeSendPosition(imodel->posMtx, setting->posNrmMtxID);
+    J3DNativeShapeSendNormal(imodel->nrmMtx, setting->posNrmMtxID);
+    J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
-    GXSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
-    GXSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
+    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
+    J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
 
     GXLoadTexObj(imodel->maskTexObj[imodel->expression], setting->texMapID);
-    GXSetArray(GX_VA_POS, res->maskVtxPos, 6);
-    GXSetArray(GX_VA_NRM, res->maskVtxNrm, 6);
-    GXSetArray(GX_VA_TEX0, res->maskVtxTxc, 4);
-    GXCallDisplayList(res->maskDl, res->maskDlSize);
+    RFLiDrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
 
     if (res->noselineDlSize > 0) {
-        GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
         GXLoadTexObj(&res->noseTexObj, setting->texMapID);
-        GXSetArray(GX_VA_POS, res->noselineVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->noselineVtxNrm, 6);
-        GXSetArray(GX_VA_TEX0, res->noselineVtxTxc, 4);
-        GXCallDisplayList(res->noselineDl, res->noselineDlSize);
+        RFLiDrawShape(res->noselineVtxPos, res->noselineVtxNrm, res->noselineVtxTxc, res->noselineDl, res->noselineDlSize);
     }
 
     if (res->glassesDlSize > 0) {
-        GXSetTevKColor(setting->tevKColorID, cGlassColor[res->glassesColor]);
-        GXSetCullMode(GX_CULL_NONE);
-        GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_ZERO);
+        J3DNativeStateSetTevKColor(setting->tevKColorID, cGlassColor[res->glassesColor]);
+        J3DNativeStateSetCullMode(GX_CULL_NONE);
+        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_ZERO);
         GXLoadTexObj(&res->glassesTexObj, setting->texMapID);
-        GXSetArray(GX_VA_POS, res->glassesVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->glassesVtxNrm, 6);
-        GXSetArray(GX_VA_TEX0, res->glassesVtxTxc, 4);
-        GXCallDisplayList(res->glassesDl, res->glassesDlSize);
+        RFLiDrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
 
@@ -933,29 +934,29 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         int j;
         s32 primitiveNum = *ptr8++;
 
-        DCInvalidateRange(shape->dlBuf, shape->dlBufSize);
-        GXBeginDisplayList(shape->dlBuf, shape->dlBufSize);
+        // The shape's primitives as RFLiDrawShape reads them: the primitive (bit 0 set when its vertices have
+        // texture coordinates), the vertex count (high byte first), then each vertex's position, normal and texture
+        // coordinate indices - the size of GX's display list of them.
+        u8* out = (u8*)shape->dlBuf;
 
         for (i = 0; i < primitiveNum; i++) {
             u16 vtxNum = *ptr8++;
             GXPrimitive prim = *ptr8++;
 
-            GXBegin(prim, 0, vtxNum);
-            {
-                for (j = 0; j < vtxNum; j++) {
-                    GXPosition1x8(*ptr8++);
-                    GXNormal1x8(*ptr8++);
+            *out++ = (u8)(prim | (skipTxc ? 0 : 1));
+            *out++ = (u8)(vtxNum >> 8);
+            *out++ = (u8)vtxNum;
+            for (j = 0; j < vtxNum; j++) {
+                *out++ = *ptr8++;
+                *out++ = *ptr8++;
 
-                    if (!skipTxc) {
-                        GXTexCoord1x8(*ptr8++);
-                    }
+                if (!skipTxc) {
+                    *out++ = *ptr8++;
                 }
             }
-            GXEnd();
         }
+        shape->dlSize = (u32)(out - (u8*)shape->dlBuf);
     }
-
-    shape->dlSize = GXEndDisplayList();
     RFLiFree(res);
 }
 
@@ -997,76 +998,55 @@ static void RFLDrawShape(const RFLCharModel* model) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     RFLiCharModelRes* res = imodel->res;
 
-    GXClearVtxDesc();
-    GXSetVtxDesc(GX_VA_POS, GX_VA_TEX1MTXIDX);
-    GXSetVtxDesc(GX_VA_NRM, GX_VA_TEX1MTXIDX);
-    GXSetVtxAttrFmt(0, GX_VA_POS, 1, 3, 8);
-    GXSetVtxAttrFmt(0, GX_VA_NRM, 0, 3, 14);
-    GXSetVtxAttrFmt(0, GX_VA_TEX0, 1, 3, 13);
 
-    GXLoadPosMtxImm(imodel->posMtx, 0);
-    GXLoadNrmMtxImm(imodel->nrmMtx, 0);
-    GXSetCurrentMtx(0);
+    J3DNativeShapeSendPosition(imodel->posMtx, 0);
+    J3DNativeShapeSendNormal(imodel->nrmMtx, 0);
+    J3DNativeStateSetCurrentMtx(0);
 
     if (res->beardDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->beardVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->beardVtxNrm, 6);
-        GXCallDisplayList(res->beardDl, res->beardDlSize);
+        RFLiDrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
     }
 
     if (res->noseDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->noseVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->noseVtxNrm, 6);
-        GXCallDisplayList(res->noseDl, res->noseDlSize);
+        RFLiDrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
     }
 
     if (res->flipHair) {
-        GXGetCullMode(&cullMode);
+        J3DNativeStateGetCullMode(&cullMode);
         switch (cullMode) {
         case GX_CULL_BACK:
-            GXSetCullMode(GX_CULL_FRONT);
+            J3DNativeStateSetCullMode(GX_CULL_FRONT);
             break;
         case GX_CULL_FRONT:
-            GXSetCullMode(GX_CULL_BACK);
+            J3DNativeStateSetCullMode(GX_CULL_BACK);
             break;
         }
     }
 
     if (res->foreheadDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->foreheadVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->foreheadVtxNrm, 6);
-        GXCallDisplayList(res->foreheadDl, res->foreheadDlSize);
+        RFLiDrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
     }
 
     if (res->hairDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->hairVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->hairVtxNrm, 6);
-        GXCallDisplayList(res->hairDl, res->hairDlSize);
+        RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
     }
 
-    GXSetVtxDesc(GX_VA_TEX0, GX_VA_TEX1MTXIDX);
     if (res->capDlSize > 0) {
-        GXSetArray(GX_VA_POS, res->capVtxPos, 6);
-        GXSetArray(GX_VA_NRM, res->capVtxNrm, 6);
-        GXSetArray(GX_VA_TEX0, res->capVtxTxc, 4);
-        GXCallDisplayList(res->capDl, res->capDlSize);
+        RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
     }
 
     if (res->flipHair) {
         switch (cullMode) {
         case GX_CULL_BACK:
-            GXSetCullMode(GX_CULL_BACK);
+            J3DNativeStateSetCullMode(GX_CULL_BACK);
             break;
         case GX_CULL_FRONT:
-            GXSetCullMode(GX_CULL_FRONT);
+            J3DNativeStateSetCullMode(GX_CULL_FRONT);
             break;
         }
     }
 
-    GXSetArray(GX_VA_POS, res->faceVtxPos, 6);
-    GXSetArray(GX_VA_NRM, res->faceVtxNrm, 6);
-    GXSetArray(GX_VA_TEX0, res->faceVtxTxc, 4);
-    GXCallDisplayList(res->faceDl, res->faceDlSize);
+    RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
 }
 
 void RFLSetModelDrawDoneCallback(RFLCallback cb) {

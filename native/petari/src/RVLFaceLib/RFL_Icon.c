@@ -1,4 +1,6 @@
 #include "RVLFaceLibInternal.h"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 
 static const f32 RAD_TO_DEG = 57.29578f;
 
@@ -76,13 +78,13 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     }
     backColor.a = 0;
 
-    GXGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
-    GXSetScissor(0, 0, setting->width, setting->height);
+    J3DNativeViewGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
+    J3DNativeViewSetScissor(0, 0, setting->width, setting->height);
 
     RFLiSetupCopyTex(GX_RGBA8, setting->width, setting->height, buf, backColor);
 
-    GXGetViewportv(vp);
-    GXSetViewport(0.0f, 0.0f, setting->width, setting->height, 0.0f, 1.0f);
+    J3DNativeViewGetViewportv(vp);
+    J3DNativeViewSetViewport(0.0f, 0.0f, setting->width, setting->height, 0.0f, 1.0f);
 
     aspect = (f32)setting->width / (f32)setting->height;
     if (setting->width < setting->height) {
@@ -92,20 +94,20 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     }
 
     C_MTXPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);
-    GXSetProjection(projMtx, GX_PERSPECTIVE);
+    J3DNativeViewSetProjection(projMtx, GX_PERSPECTIVE);
 
     cameraPos = (Vec){0.0f, 34.5f, 600.0f};
     target = (Vec){0.0f, 34.5f, 0.0f};
     cameraUp = (Vec){0.0f, 1.0f, 0.0f};
 
     C_MTXLookAt(viewMtx, &cameraPos, &cameraUp, &target);
-    GXInitLightColor(&light, (GXColor){255, 255, 255, 255});
+    J3DNativeStateInitLightColor(&light, (GXColor){255, 255, 255, 255});
 
     pos = (Vec){1600.0f, 1500.0f, 6000.0f};
 
     PSMTXMultVec(viewMtx, &pos, &pos);
-    GXInitLightPos(&light, pos.x, pos.y, pos.z);
-    GXLoadLightObjImm(&light, GX_LIGHT0);
+    J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
+    J3DNativeStateLoadLightObjImm(&light, GX_LIGHT0);
     RFLSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;
@@ -117,27 +119,26 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     RFLLoadDrawSetting(&drawSetting);
 
     if (!setting->drawXluOnly) {
-        GXSetColorUpdate(TRUE);
-        GXSetAlphaUpdate(TRUE);
-        GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+        J3DNativeStateSetColorUpdate(TRUE);
+        J3DNativeStateSetAlphaUpdate(TRUE);
+        J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
         RFLDrawOpa(&model);
     }
 
-    GXSetZMode(TRUE, GX_LEQUAL, FALSE);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
-    GXSetColorUpdate(TRUE);
-    GXSetAlphaUpdate(FALSE);
+    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, FALSE);
+    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeStateSetColorUpdate(TRUE);
+    J3DNativeStateSetAlphaUpdate(FALSE);
     RFLDrawXlu(&model);
 
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVSRCALPHA, GX_LO_COPY);
-    GXSetAlphaUpdate(TRUE);
-    GXSetColorUpdate(FALSE);
+    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeStateSetAlphaUpdate(TRUE);
+    J3DNativeStateSetColorUpdate(FALSE);
     RFLDrawXlu(&model);
 
-    GXSetZMode(TRUE, GX_LEQUAL, TRUE);
-    GXSetColorUpdate(TRUE);
-    GXCopyTex(buf, TRUE);
-    GXPixModeSync();
+    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
+    J3DNativeStateSetColorUpdate(TRUE);
+    J3DNativeStateCopyTex(buf, TRUE);
 
     if (RFLiGetManager()->iconDrawCb == NULL) {
         GXDrawDone();
@@ -146,8 +147,8 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     }
 
     RFLiFree(modelBuf);
-    GXSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
-    GXSetScissor(scissorOffsetX, scissorOffsetY, scissorWidth, scissorHeight);
+    J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
+    J3DNativeViewSetScissor(scissorOffsetX, scissorOffsetY, scissorWidth, scissorHeight);
     RFLiSetCoordinateData(&coordData);
 }
 

@@ -1,4 +1,5 @@
 #include "JSystem/JUtility/JUTVideo.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JUtility/JUTDirectPrint.hpp"
 #include "JSystem/JUtility/JUTXfb.hpp"
 
@@ -115,7 +116,7 @@ void JUTVideo::preRetraceProc(u32 retrace_count) {
             s16 index = xfb->getDrawnXfbIndex();
             if (index >= 0) {
                 xfb->setDisplayingXfbIndex(index);
-                GXCopyDisp(xfb->getDisplayingXfb(), GX_TRUE);
+                J3DNativeState::copyDisp(xfb->getDisplayingXfb(), GX_TRUE);
                 GXFlush();
                 xfb->setSDrawingFlag(2);
                 frameBuffer = xfb->getDisplayingXfb();

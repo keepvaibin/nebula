@@ -1,6 +1,7 @@
 #define JPA_LIST_DEFER_INLINE
 #define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "JSystem/JParticle/JPAResource.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #endif
@@ -835,7 +836,6 @@ void JPAResource::drawP(JPAEmitterWorkData* work) {
         }
     }
 
-    GXSetMisc(GX_MT_XF_FLUSH, 0);
 
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
@@ -906,7 +906,6 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
         }
     }
 
-    GXSetMisc(GX_MT_XF_FLUSH, 0);
 
     if (work->mpEmtr->mpEmtrCallBack != NULL) {
         work->mpEmtr->mpEmtrCallBack->drawAfter(work->mpEmtr);
@@ -934,39 +933,38 @@ void JPAResource::setPTev() {
     if (mpExTexShape != NULL) {
         if (mpExTexShape->isUseIndirect()) {
             GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP2);
-            GXSetIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
+            J3DNativeState::setIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
 #ifdef TARGET_PC
             f32 indTexMtx[2][3];
             mpExTexShape->getIndTexMtx(indTexMtx);
-            GXSetIndTexMtx(GX_ITM_0, indTexMtx, mpExTexShape->getExpScale());
+            J3DNativeState::setIndTexMtx(GX_ITM_0, indTexMtx, mpExTexShape->getExpScale());
 #else
-            GXSetIndTexMtx(GX_ITM_0, (f32(*)[3])mpExTexShape->getIndTexMtx(), mpExTexShape->getExpScale());
+            J3DNativeState::setIndTexMtx(GX_ITM_0, (f32(*)[3])mpExTexShape->getIndTexMtx(), mpExTexShape->getExpScale());
 #endif
-            GXSetTevIndirect(GX_TEVSTAGE0, GX_INDTEXSTAGE0, GX_ITF_8, GX_ITB_STU, GX_ITM_0, GX_ITW_OFF, GX_ITW_OFF, 0, 0, GX_ITBA_OFF);
+            J3DNativeState::setTevIndirect(GX_TEVSTAGE0, GX_INDTEXSTAGE0, GX_ITF_8, GX_ITB_STU, GX_ITM_0, GX_ITW_OFF, GX_ITW_OFF, 0, 0, GX_ITBA_OFF);
             ind_stages++;
             tex_gens++;
             tex_coord = GX_TEXCOORD2;
         }
         if (mpExTexShape->isUseSecTex()) {
             GXSetTevOrder(GX_TEVSTAGE1, tex_coord, GX_TEXMAP3, GX_COLOR_NULL);
-            GXSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
-            GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_APREV, GX_CA_ZERO);
-            GXSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+            J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
+            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_APREV, GX_CA_ZERO);
+            J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
             tev_stages++;
             tex_gens++;
         }
     }
 
-    GXSetNumTevStages(tev_stages);
-    GXSetNumIndStages(ind_stages);
+    J3DNativeState::setNumTevStages(tev_stages);
+    J3DNativeState::setNumIndStages(ind_stages);
     if (mpBaseShape->isClipOn()) {
-        GXSetMisc(GX_MT_XF_FLUSH, 8);
-        GXSetClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     } else {
-        GXSetClipMode(GX_CLIP_DISABLE);
+        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
     }
-    GXSetNumTexGens(tex_gens);
+    J3DNativeState::setNumTexGens(tex_gens);
 }
 
 void JPAResource::setCTev(JPAEmitterWorkData* work) {
@@ -974,17 +972,16 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int pos_offset = 0x30 + base_plane_type * 0x6C;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR_NULL);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3C, GX_FALSE, 0x7D);
-    GXSetTevDirect(GX_TEVSTAGE0);
-    GXSetNumTevStages(1);
-    GXSetNumIndStages(0);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3C, GX_FALSE, 0x7D);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
+    J3DNativeState::setNumTevStages(1);
+    J3DNativeState::setNumIndStages(0);
     if (mpChildShape->isClipOn()) {
-        GXSetMisc(GX_MT_XF_FLUSH, 8);
-        GXSetClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     } else {
-        GXSetClipMode(GX_CLIP_DISABLE);
+        J3DNativeState::setClipMode(GX_CLIP_DISABLE);
     }
-    GXSetNumTexGens(1);
+    J3DNativeState::setNumTexGens(1);
     work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GX_TEXMAP1);
 }
 

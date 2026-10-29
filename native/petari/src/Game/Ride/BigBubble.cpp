@@ -1,4 +1,5 @@
 #include "Game/Ride/BigBubble.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/AreaObj/BigBubbleGoalArea.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -233,7 +234,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        GXSetTevColor(GX_TEVREG1, mWarningColor);
+        J3DNativeState::setTevColor(GX_TEVREG1, mWarningColor);
         mSurface->draw();
     }
 }

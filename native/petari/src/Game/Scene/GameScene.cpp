@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
@@ -586,8 +587,8 @@ void GameScene::drawMirror() const {
         PSMTXCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
-        GXSetAlphaUpdate(GX_FALSE);
-        GXSetColorUpdate(GX_TRUE);
+        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DNativeState::setColorUpdate(GX_TRUE);
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
@@ -624,25 +625,25 @@ void GameScene::draw3D() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_TRUE, 0);
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
     SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow();
-    GXSetAlphaUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
     CategoryList::execute(MR::DrawType_ShadowVolume);
-    GXSetColorUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_TRUE, 0);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
     CategoryList::execute(MR::DrawType_BrightSun);
     MR::setLensFlareDrawSyncToken();
-    GXSetAlphaUpdate(GX_FALSE);
-    GXSetDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setDstAlpha(GX_FALSE, 0);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);
@@ -659,7 +660,7 @@ void GameScene::draw3D() const {
     MR::setStarPointerDrawSyncToken();
     MR::setTalkDirectorDrawSyncToken();
     SceneFunction::executeDrawImageEffect();
-    GXSetDither(GX_TRUE);
+    J3DNativeState::setDither(GX_TRUE);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     CategoryList::execute(MR::DrawType_EffectDrawAfterImageEffect);

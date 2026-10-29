@@ -1,4 +1,5 @@
 #include "Game/MapObj/BrightObj.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #endif
@@ -270,19 +271,19 @@ void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
     TDDraw::setup(0, 0, 1);
     TDDraw::loadViewMtx(mtx);
 
-    GXSetColorUpdate(GX_FALSE);
-    GXSetAlphaUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_FALSE, 0);
-    GXSetZMode(GX_TRUE, GX_ALWAYS, GX_FALSE);
+    J3DNativeState::setColorUpdate(GX_FALSE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_FALSE);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius * 1.1f, 0xFF000000, 0x10);
 
-    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius, 0x00FF00FF, 0x10);
 
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_FALSE);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_FALSE);
 }
 
 BrightObj::BrightObj(const char* pName) : LiveActor(pName), BrightObjBase(), mRadius(::sSunModelScale) {

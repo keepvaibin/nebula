@@ -34,6 +34,30 @@ The parser reads an opcode-dispatched, big-endian byte stream:
 
 BP register numbers are named in `gx_bitfields.h` (`namespace bp`).
 
+## Native record stream
+
+The game also hands the renderer typed records (`native/include/nebula_game_api.h`, host services), the native
+path that replaces the GX stream step by step. Each record carries the GX writer's position when it was made, so
+`run_stream` applies records and remaining GX commands in the order the game issued them.
+
+| Game side | Record | Host side |
+|---|---|---|
+| `J3DNativeShape` (J3D shapes) | `shape_array`, `shape_geometry` once; `shape_draw` with its matrices, current matrices and texgen overrides | `native_shapes` expands corners into resident vertices; `draw_record_shape` |
+| `J3DNativeMaterial` (J3D materials, per-instance differed parts) | `material` (`NebulaMaterial`: every block's values) | `native_material::apply` |
+| `NativeMesh` (geometry the game builds once: water road, ocean ring and pipe, spheres, electric rails) | the shape records, positions owned or the game's arrays by key | as shapes; owned positions keep the direct-vertex classification |
+| `J3DNativeDraw` (vertices sent as drawn: effects, shadows, 2D, text, particles, movie quad) | `immediate` (`NebulaImmediate`: primitive and typed vertex arrays) | `draw_record_immediate`, batched like direct draws |
+| `J3DStateList` (state lists built once: Mario's, CollisionShadow) and `J3DNativeState` (state set as the game draws: TEV, blend, depth, channels, texgens, counts, cull, lights, pixel format, fog) | `state` (`NebulaStateOp`: GX setter semantics; a partial setter changes only its fields of the live register) | `native_state::encode`, applied with the parser's side effects (copy, texture invalidation, TLUT load) |
+| `J3DNativeView` (projection, viewport, depth scale, scissor: kept game-side for read-back) | `state` | as above |
+| `J3DNativeState` copies (settings kept game-side) | `state` `NEBULA_STATE_COPY` | GXCopyDisp/GXCopyTex's sequence on the live Z, blend and pixel state, then `on_efb_copy` |
+| `J3DNativeShape::send*` (matrices the game loads) | a state-only `shape_draw` | `apply_record_matrices` |
+| RVLFaceLib (Miis) | its state through C entry points; its shapes as immediate vertices from its own index streams | as above |
+
+Values the game reads back or that decide whether a setter writes (cull mode, pixel format, copy settings, the view)
+are kept in the game's native layer. Each op's encoding was checked against the SDK function it replaces before the
+conversion (random arguments and register files; every register, XF and CP word, light memory and, for copies, the
+write sequence). What still goes through the GX stream: TEV order, texture objects and indirect order (with the
+texture coordinate scales they set), and the frame's sync calls.
+
 ## Components
 
 ```

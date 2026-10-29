@@ -1,4 +1,6 @@
 #include "Game/LiveActor/ShadowVolumeBox.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/ShadowController.hpp"
@@ -21,8 +23,8 @@ void ShadowVolumeBox::setSize(const TVec3f& rSize) {
 }
 
 void ShadowVolumeBox::loadModelDrawMtx() const {
-    GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
-    GXSetCurrentMtx(0);
+    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeState::setCurrentMtx(0);
     makeVertexBuffer();
 }
 

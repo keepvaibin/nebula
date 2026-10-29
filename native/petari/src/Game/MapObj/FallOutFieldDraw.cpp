@@ -1,4 +1,6 @@
 #include "Game/MapObj/FallOutFieldDraw.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/StageSwitch.hpp"
 #include "Game/MapObj/ClipAreaHolder.hpp"
@@ -18,7 +20,7 @@ void FallOutFieldDraw_FORCE_MATCH_SDATA2() {
 
 namespace {
     inline void drawFillScreen(GXColor color) {
-        GXSetTevColor(GX_TEVREG0, color);
+        J3DNativeState::setTevColor(GX_TEVREG0, color);
         ImageEffectLocalUtil::sendTextureVertex(1, 0);
     }
 };  // namespace
@@ -45,34 +47,34 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
 }
 
 void FallOutFieldDraw::setUpFillScreen() const {
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
-    GXSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
+    J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
 
     GXTevAlphaArg alphaA = _C ? GX_CA_TEXA : GX_CA_KONST;
     GXTevAlphaArg alphaB = _C ? GX_CA_KONST : GX_CA_TEXA;
 
-    GXSetTevAlphaIn(GX_TEVSTAGE0, alphaA, alphaB, GX_CA_A0, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, ::sAlphaTevOperater, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GXSetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    GXSetZCompLoc(GX_FALSE);
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_FALSE);
-    GXSetZScaleOffset(0.0f, 1.0f);
-    GXSetBlendMode(::sFillBlendMode, ::sFillSrcFactor, ::sFillDstFactor, ::sFillLogicOp);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, alphaA, alphaB, GX_CA_A0, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, ::sAlphaTevOperater, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
+    J3DNativeState::setZCompLoc(GX_FALSE);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeView::setZScaleOffset(0.0f, 1.0f);
+    J3DNativeState::setBlendMode(::sFillBlendMode, ::sFillSrcFactor, ::sFillDstFactor, ::sFillLogicOp);
 }
 
 void FallOutFieldDraw::setUpEdgeAndClearAlpha() const {
-    GXSetTevColor(GX_TEVREG1, ::sEdgeColor);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_C1, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setTevColor(GX_TEVREG1, ::sEdgeColor);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C1, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_TRUE, 0);
 }
 
 void FallOutFieldDraw::init(const JMapInfoIter& rIter) {
@@ -114,34 +116,34 @@ void FallOutFieldDraw::draw() const {
 
     ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GX_CTF_A8, true, 0);
 
-    GXSetTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
-    GXSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
-    GXSetTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K0_A);
-    GXSetTevColor(GX_TEVREG0, Color8(255, 255, 255, 255));
+    J3DNativeState::setTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
+    J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
+    J3DNativeState::setTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K0_A);
+    J3DNativeState::setTevColor(GX_TEVREG0, Color8(255, 255, 255, 255));
 
     GXTevColorArg colorA = _C ? GX_CC_TEXA : GX_CC_KONST;
     GXTevColorArg colorB = _C ? GX_CC_KONST : GX_CC_TEXA;
 
-    GXSetTevColorIn(GX_TEVSTAGE0, colorA, colorB, GX_CC_ZERO, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_COMP_RGB8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, colorA, colorB, GX_CC_ZERO, GX_CC_ZERO);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_COMP_RGB8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
 
     GXTevAlphaArg alphaA = _C ? GX_CA_TEXA : GX_CA_KONST;
     GXTevAlphaArg alphaB = _C ? GX_CA_KONST : GX_CA_TEXA;
 
-    GXSetTevAlphaIn(GX_TEVSTAGE0, alphaA, alphaB, GX_CA_A0, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_COMP_A8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetColorUpdate(GX_FALSE);
-    GXSetAlphaUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_FALSE, 0);
-    GXSetZScaleOffset(0.0f, 0.0f);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, alphaA, alphaB, GX_CA_A0, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_COMP_A8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setColorUpdate(GX_FALSE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeView::setZScaleOffset(0.0f, 0.0f);
 
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
     ImageEffectLocalUtil::capture(pScreenAlphaTexture3, 2, 0, GX_CTF_A8, true, 0);
 
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_TEXA, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXA, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
 
     ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, 4, 4, 5, 0.004f, 1.0f);
     ImageEffectLocalUtil::capture(pScreenAlphaTexture4, 4, 4, GX_CTF_A8, false, 0);
@@ -155,10 +157,10 @@ void FallOutFieldDraw::draw() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_TRUE);
-    GXSetDstAlpha(GX_TRUE, 0);
-    GXSetZScaleOffset(1.0f, 0.0f);
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 }
 
 namespace MR {

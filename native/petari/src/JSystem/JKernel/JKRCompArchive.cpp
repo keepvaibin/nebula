@@ -88,7 +88,6 @@ bool JKRCompArchive::open(s32 entryNum) {
         int alignment;
 
         JKRDvdToMainRam(entryNum, (u8*)arcHeader, EXPAND_SWITCH_UNKNOWN1, 32, NULL, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, &_5C, NULL);
-        DCInvalidateRange(arcHeader, 32);
 
         mSizeOfMemPart = arcHeader->mMRamDataSize;
         mSizeOfAramPart = arcHeader->mARamDataSize;
@@ -103,7 +102,6 @@ bool JKRCompArchive::open(s32 entryNum) {
             } else {
                 JKRDvdToMainRam(entryNum, (u8*)mInfoBlock, EXPAND_SWITCH_UNKNOWN1, (uintptr_t)arcHeader->mFileDataOffset + mSizeOfMemPart, NULL,
                                 JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0x20, NULL, NULL);
-                DCInvalidateRange(mInfoBlock, (uintptr_t)arcHeader->mFileDataOffset + mSizeOfMemPart);
                 field_0x64 = (uintptr_t)mInfoBlock + arcHeader->mFileDataOffset;
 
                 if (mSizeOfAramPart != 0) {
@@ -133,7 +131,6 @@ bool JKRCompArchive::open(s32 entryNum) {
                 mMountMode = 0;
             } else {
                 JKRDvdToMainRam(entryNum, buf, EXPAND_SWITCH_UNKNOWN2, alignedSize, NULL, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, NULL, NULL);
-                DCInvalidateRange(buf, alignedSize);
                 u32 expandSize = ALIGN_NEXT(JKRDecompExpandSize(buf), 32);
                 u8* mem = (u8*)JKRAllocFromHeap(mHeap, expandSize, -alignment);
 
@@ -345,11 +342,9 @@ u32 JKRCompArchive::getExpandedResSize(const void* resource) const {
     u8* bufPtr = (u8*)ALIGN_NEXT((uintptr_t)buf, 32);
     if ((flags & 0x20) != 0) {
         JKRAramToMainRam(fileEntry->mDataOffset + mAramPart->getAddress(), bufPtr, sizeof(buf) / 2, EXPAND_SWITCH_UNKNOWN0, 0, NULL, -1, NULL);
-        DCInvalidateRange(bufPtr, sizeof(buf) / 2);
     } else if ((flags & 0x40) != 0) {
         JKRDvdToMainRam(mEntryNum, bufPtr, EXPAND_SWITCH_UNKNOWN2, sizeof(buf) / 2, NULL, JKRDvdRipper::ALLOC_DIRECTION_FORWARD,
                         field_0x6c + fileEntry->mDataOffset, NULL, NULL);
-        DCInvalidateRange(bufPtr, sizeof(buf) / 2);
     } else {
         JUTException::panic(__FILE__, 943, "illegal resource.");
     }

@@ -1,4 +1,5 @@
 #include "Game/Screen/ScreenAlphaCapture.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -35,9 +36,9 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
     GXRenderModeObj* renderModeObj = JUTVideo::getManager()->getRenderMode();
 
-    GXSetCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_FALSE, renderModeObj->vfilter);
+    J3DNativeState::setCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_FALSE, renderModeObj->vfilter);
     mTexture[textureIndex]->capture(0, 0, GX_CTF_A8, false, 0);
-    GXSetCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_TRUE, renderModeObj->vfilter);
+    J3DNativeState::setCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_TRUE, renderModeObj->vfilter);
 }
 
 void ScreenAlphaCapture::loadScreenTexture(s32 index, GXTexMapID id) {

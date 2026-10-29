@@ -1,4 +1,6 @@
 #include "Game/System/ShapePacketUserData.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/System/WPad.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -194,14 +196,13 @@ extern "C" void JUTWarningConsole(const char* pMessage) {
 
 void JUTTexture::captureDolTexture(void* pBuffer, int width, int height, int x, int y, bool mipmap, GXTexFmt format) {
     if (mipmap) {
-        GXSetTexCopySrc(x, y, width * 2, height * 2);
+        J3DNativeState::setTexCopySrc(x, y, width * 2, height * 2);
     } else {
-        GXSetTexCopySrc(x, y, width, height);
+        J3DNativeState::setTexCopySrc(x, y, width, height);
     }
 
-    GXSetTexCopyDst(width, height, format, mipmap);
-    GXCopyTex(pBuffer, GX_FALSE);
-    GXPixModeSync();
+    J3DNativeState::setTexCopyDst(width, height, format, mipmap);
+    J3DNativeState::copyTex(pBuffer, GX_FALSE);
 }
 
 JSUOutputStream::~JSUOutputStream() {
@@ -256,7 +257,7 @@ namespace {
     void loadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         Mtx mtx;
         PSMTXConcat(pWork->mPrjMtx, pSrt, mtx);
-        GXLoadTexMtxImm(mtx, GX_TEXMTX0, GX_MTX3x4);
+        J3DNativeShape::sendTexture(mtx, GX_TEXMTX0, GX_MTX3x4);
     }
 
 // only way I can get these to match
@@ -290,7 +291,7 @@ namespace {
         matrix[2][3] = 0.0f;
         PSMTXConcat(matrix, pWork->mPrjMtx, matrix);
         PSMTXConcat(matrix, pSrt, matrix);
-        GXLoadTexMtxImm(matrix, 0x1e, GX_MTX3x4);
+        J3DNativeShape::sendTexture(matrix, 0x1e, GX_MTX3x4);
     }
 #pragma pop
 
@@ -547,7 +548,7 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][3] = pParticle->mPosition.z;
     p_plane[pWork->mPlaneType](matrix, scaleX, scaleY);
     PSMTXConcat(pWork->mPosCamMtx, matrix, matrix);
-    GXLoadPosMtxImm(matrix, GX_PNMTX0);
+    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -595,7 +596,7 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     matrix[2][3] = pParticle->mPosition.z;
     PSMTXConcat(matrix, rotation, rotation);
     PSMTXConcat(pWork->mPosCamMtx, rotation, matrix);
-    GXLoadPosMtxImm(matrix, GX_PNMTX0);
+    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -629,7 +630,7 @@ void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = 1.0f;
     matrix[2][3] = position.z;
     matrix[0][2] = matrix[1][2] = matrix[2][0] = matrix[2][1] = 0.0f;
-    GXLoadPosMtxImm(matrix, GX_PNMTX0);
+    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -685,7 +686,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    GXLoadPosMtxImm(pWork->mPosCamMtx, GX_PNMTX0);
+    J3DNativeShape::sendPosition(pWork->mPosCamMtx, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
@@ -778,7 +779,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    GXLoadPosMtxImm(pWork->mPosCamMtx, GX_PNMTX0);
+    J3DNativeShape::sendPosition(pWork->mPosCamMtx, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
@@ -1003,7 +1004,7 @@ void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = pWork->mYBBCamMtx[2][2];
     matrix[2][3] = position.z;
     matrix[0][1] = matrix[0][2] = matrix[1][0] = matrix[2][0] = 0.0f;
-    GXLoadPosMtxImm(matrix, GX_PNMTX0);
+    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -1041,7 +1042,7 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     matrix[2][1] = cosY * z;
     matrix[2][2] = y;
     matrix[2][3] = position.z;
-    GXLoadPosMtxImm(matrix, GX_PNMTX0);
+    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }

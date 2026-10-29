@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ShadowVolumeCylinder.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -38,5 +39,5 @@ void ShadowVolumeCylinder::loadModelDrawMtx() const {
     TVec3f scale(radius, calcBaseDropLength() / ::sModelScale, radius);
     MR::preScaleMtx(mtx, scale);
     PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
-    GXLoadPosMtxImm(mtx, 0);
+    J3DNativeShape::sendPosition(mtx, 0);
 }

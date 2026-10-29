@@ -1,4 +1,6 @@
 #include "Game/MapObj/ElectricRailHolder.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
@@ -137,9 +139,9 @@ void ElectricRailHolder::control() {
 }
 
 void ElectricRailHolder::initDraw() const {
-    GXLoadPosMtxImm(MR::getCameraViewMtx(), GX_PNMTX0);
-    GXSetCurrentMtx(GX_PNMTX0);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
 }
 
 void ElectricRailFunction::registerRail(const LiveActor* pActor, ElectricRailType railType) {

@@ -1,4 +1,5 @@
 #include "Game/Screen/CaptureScreenDirector.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -32,9 +33,9 @@ void CaptureScreenDirector::captureIfAllow(const char* pName) {
 void CaptureScreenDirector::capture() {
     GXRenderModeObj* pRenderModeObj = JUTVideo::getManager()->getRenderMode();
 
-    GXSetCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
+    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
     mTexture->capture(0, 0, GX_TF_RGB565, false, 0);
-    GXSetCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
+    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
 }
 
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {

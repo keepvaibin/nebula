@@ -238,6 +238,19 @@ void J3DStateList::setTexImgPtr(GXTexMapID map, const void* pImage) {
     r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pImage));
 }
 
+void J3DStateList::setTexTlut(GXTexMapID map, GXTlutFmt format, u32 tlutName) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEX_TLUT);
+    r.a[0] = map;
+    r.a[1] = format;
+    r.a[2] = static_cast< u8 >(tlutName);
+}
+
+void J3DStateList::loadTlut(u32 tlutName, const void* pLut) {
+    NebulaStateOp& r = add(NEBULA_STATE_TLUT_LOAD);
+    r.a[0] = static_cast< u8 >(tlutName);
+    r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pLut));
+}
+
 void J3DStateList::setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
     NebulaStateOp& r = add(NEBULA_STATE_FOG);
     r.a[0] = type;
@@ -246,4 +259,315 @@ void J3DStateList::setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 far
     r.f[1] = end;
     r.f[2] = nearZ;
     r.f[3] = farZ;
+}
+
+void J3DStateList::setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR_IN);
+    r.a[0] = stage;
+    r.a[1] = a;
+    r.a[2] = b;
+    r.a[3] = c;
+    r.a[4] = d;
+}
+
+void J3DStateList::setTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_ALPHA_IN);
+    r.a[0] = stage;
+    r.a[1] = a;
+    r.a[2] = b;
+    r.a[3] = c;
+    r.a[4] = d;
+}
+
+void J3DStateList::setTevColorOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp,
+                                 GXTevRegID out) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR_OP);
+    r.a[0] = stage;
+    r.a[1] = op;
+    r.a[2] = bias;
+    r.a[3] = scale;
+    r.a[4] = clamp;
+    r.a[5] = out;
+}
+
+void J3DStateList::setTevAlphaOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp,
+                                 GXTevRegID out) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_ALPHA_OP);
+    r.a[0] = stage;
+    r.a[1] = op;
+    r.a[2] = bias;
+    r.a[3] = scale;
+    r.a[4] = clamp;
+    r.a[5] = out;
+}
+
+void J3DStateList::setTevKColorSel(GXTevStageID stage, GXTevKColorSel sel) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_KCOLOR_SEL);
+    r.a[0] = stage;
+    r.a[1] = sel;
+}
+
+void J3DStateList::setTevKAlphaSel(GXTevStageID stage, GXTevKAlphaSel sel) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_KALPHA_SEL);
+    r.a[0] = stage;
+    r.a[1] = sel;
+}
+
+void J3DStateList::setTevSwapMode(GXTevStageID stage, GXTevSwapSel rasSwap, GXTevSwapSel texSwap) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_SWAP_MODE);
+    r.a[0] = stage;
+    r.a[1] = rasSwap;
+    r.a[2] = texSwap;
+}
+
+void J3DStateList::setTevStageOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_STAGE_ORDER);
+    r.a[0] = stage;
+    r.a[1] = static_cast< u8 >(coord);
+    r.a[2] = static_cast< u8 >(map);
+    r.a[3] = static_cast< u8 >(color);
+}
+
+void J3DStateList::setColorUpdate(GXBool enable) {
+    add(NEBULA_STATE_COLOR_UPDATE).a[0] = enable;
+}
+
+void J3DStateList::setAlphaUpdate(GXBool enable) {
+    add(NEBULA_STATE_ALPHA_UPDATE).a[0] = enable;
+}
+
+void J3DStateList::setDither(GXBool enable) {
+    add(NEBULA_STATE_DITHER).a[0] = enable;
+}
+
+void J3DStateList::setTevKColor(GXTevKColorID id, GXColor color) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_KCOLOR);
+    r.a[0] = id;
+    setColor(r.a + 1, color);
+}
+
+void J3DStateList::setTevSwapModeTable(GXTevSwapSel table, GXTevColorChan red, GXTevColorChan green,
+                                      GXTevColorChan blue, GXTevColorChan alpha) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_SWAP_TABLE);
+    r.a[0] = table;
+    r.a[1] = red;
+    r.a[2] = green;
+    r.a[3] = blue;
+    r.a[4] = alpha;
+}
+
+void J3DStateList::setTevOp(GXTevStageID stage, GXTevMode mode) {
+    // The first stage reads the rasterised colour where later stages read the previous stage's result.
+    const bool first = stage == GX_TEVSTAGE0;
+    const GXTevColorArg c = first ? GX_CC_RASC : GX_CC_CPREV;
+    const GXTevAlphaArg a = first ? GX_CA_RASA : GX_CA_APREV;
+    switch (mode) {
+    case GX_MODULATE:
+        setTevColorIn(stage, GX_CC_ZERO, GX_CC_TEXC, c, GX_CC_ZERO);
+        setTevAlphaIn(stage, GX_CA_ZERO, GX_CA_TEXA, a, GX_CA_ZERO);
+        break;
+    case GX_DECAL:
+        setTevColorIn(stage, c, GX_CC_TEXC, GX_CC_TEXA, GX_CC_ZERO);
+        setTevAlphaIn(stage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, a);
+        break;
+    case GX_BLEND:
+        setTevColorIn(stage, c, GX_CC_ONE, GX_CC_TEXC, GX_CC_ZERO);
+        setTevAlphaIn(stage, GX_CA_ZERO, GX_CA_TEXA, a, GX_CA_ZERO);
+        break;
+    case GX_REPLACE:
+        setTevColorIn(stage, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
+        setTevAlphaIn(stage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+        break;
+    default:
+        setTevColorIn(stage, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, static_cast< GXTevColorArg >(c));
+        setTevAlphaIn(stage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, a);
+        break;
+    }
+    setTevColorOp(stage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    setTevAlphaOp(stage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+}
+
+void J3DStateList::setTexCoordGen2(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, u32 mtx, GXBool normalize,
+                                   u32 postMtx) {
+    setTexCoordGen(coord, type, src, normalize, postMtx);
+    NebulaStateOp& r = mOps[mCount - 1];
+    r.a[5] = 1;
+    r.a[6] = static_cast< u8 >(mtx);
+}
+
+void J3DStateList::setNumTexGens(u8 count) {
+    add(NEBULA_STATE_NUM_TEX_GENS).a[0] = count;
+}
+
+void J3DStateList::setNumChans(u8 count) {
+    add(NEBULA_STATE_NUM_CHANS).a[0] = count;
+}
+
+void J3DStateList::setNumTevStages(u8 count) {
+    add(NEBULA_STATE_NUM_TEV_STAGES).a[0] = count;
+}
+
+void J3DStateList::setNumIndStages(u8 count) {
+    add(NEBULA_STATE_NUM_IND_STAGES).a[0] = count;
+}
+
+void J3DStateList::setCoPlanar(GXBool enable) {
+    add(NEBULA_STATE_CO_PLANAR).a[0] = enable;
+}
+
+void J3DStateList::setZCompLoc(GXBool beforeTex) {
+    add(NEBULA_STATE_Z_COMP_LOC).a[0] = beforeTex;
+}
+
+void J3DStateList::setCurrentMtx(u32 id) {
+    add(NEBULA_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id);
+}
+
+void J3DStateList::setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format,
+                                  GXIndTexBiasSel bias, GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT,
+                                  GXBool addPrev, GXBool utcLod, GXIndTexAlphaSel alpha) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_INDIRECT);
+    r.a[0] = stage;
+    r.a[1] = indStage;
+    r.a[2] = format;
+    r.a[3] = bias;
+    r.a[4] = matrix;
+    r.a[5] = wrapS;
+    r.a[6] = wrapT;
+    r.a[7] = addPrev;
+    r.a[8] = utcLod;
+    r.a[9] = alpha;
+}
+
+void J3DStateList::setTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode,
+                                 GXIndTexMtxID matrix) {
+    const GXIndTexWrap wrap = replaceMode ? GX_ITW_0 : GX_ITW_OFF;
+    setTevIndirect(stage, indStage, GX_ITF_8, signedOffset ? GX_ITB_STU : GX_ITB_NONE, matrix, wrap, wrap, GX_FALSE,
+                   GX_FALSE, GX_ITBA_OFF);
+}
+
+void J3DStateList::setIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale scaleS, GXIndTexScale scaleT) {
+    NebulaStateOp& r = add(NEBULA_STATE_IND_TEX_SCALE);
+    r.a[0] = indStage;
+    r.a[1] = scaleS;
+    r.a[2] = scaleT;
+}
+
+void J3DStateList::setLineWidth(u8 width, GXTexOffset texOffsets) {
+    NebulaStateOp& r = add(NEBULA_STATE_LINE_WIDTH);
+    r.a[0] = width;
+    r.a[1] = texOffsets;
+}
+
+void J3DStateList::setPointSize(u8 size, GXTexOffset texOffsets) {
+    NebulaStateOp& r = add(NEBULA_STATE_POINT_SIZE);
+    r.a[0] = size;
+    r.a[1] = texOffsets;
+}
+
+void J3DStateList::setLight(GXLightID id, const J3DNativeLight& rLight) {
+    // The light's number: its id's highest bit (GXLoadLightObjImm).
+    u8 index = 0;
+    for (u32 bits = id; bits > 1; bits >>= 1) {
+        index++;
+    }
+    NebulaStateOp& rAttn = add(NEBULA_STATE_LIGHT_ATTENUATION);
+    rAttn.a[0] = index & 7;
+    memcpy(rAttn.a + 1, rLight.mColor, 4);
+    for (u32 i = 0; i < 3; i++) {
+        rAttn.f[i] = rLight.mAngle[i];
+        rAttn.f[3 + i] = rLight.mDistance[i];
+    }
+    NebulaStateOp& rPos = add(NEBULA_STATE_LIGHT_POSITION);
+    rPos.a[0] = index & 7;
+    for (u32 i = 0; i < 3; i++) {
+        rPos.f[i] = rLight.mPosition[i];
+        rPos.f[3 + i] = rLight.mDirection[i];
+    }
+}
+
+void J3DStateList::setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed) {
+    // GXSetPixelFmt's table of the hardware's pixel types.
+    static const u8 sHardwareType[8] = {0, 1, 2, 3, 4, 4, 4, 5};
+    NebulaStateOp& r = add(NEBULA_STATE_PIXEL_FORMAT);
+    r.a[0] = changed;
+    r.a[1] = sHardwareType[format & 7];
+    r.a[2] = zFormat;
+    r.a[3] = format == GX_PF_RGB565_Z16;
+    r.a[4] = sHardwareType[format & 7] == 4;
+    r.a[5] = static_cast< u8 >((format - GX_PF_Y8) & 3);
+}
+
+void J3DStateList::invalidateTexAll() {
+    add(NEBULA_STATE_INVALIDATE_TEXTURES);
+}
+
+void J3DStateList::setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {
+    NebulaStateOp& r = add(NEBULA_STATE_Z_TEXTURE);
+    r.a[0] = op;
+    r.a[1] = format;
+    r.a[2] = static_cast< u8 >(bias);
+    r.a[3] = static_cast< u8 >(bias >> 8);
+    r.a[4] = static_cast< u8 >(bias >> 16);
+}
+
+void J3DStateList::setCopyClear(GXColor color, u32 depth) {
+    NebulaStateOp& r = add(NEBULA_STATE_COPY_CLEAR);
+    setColor(r.a, color);
+    r.a[4] = static_cast< u8 >(depth);
+    r.a[5] = static_cast< u8 >(depth >> 8);
+    r.a[6] = static_cast< u8 >(depth >> 16);
+}
+
+void J3DStateList::setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter,
+                                 const u8 coefficients[7]) {
+    NebulaStateOp& rSamples = add(NEBULA_STATE_COPY_SAMPLES);
+    rSamples.a[0] = antialias;
+    if (antialias) {
+        for (u32 i = 0; i < 12; i++) {
+            rSamples.a[1 + i] = static_cast< u8 >((samples[i][0] & 15) | (samples[i][1] & 15) << 4);
+        }
+    }
+    NebulaStateOp& rFilter = add(NEBULA_STATE_COPY_VFILTER);
+    rFilter.a[0] = verticalFilter;
+    if (verticalFilter) {
+        memcpy(rFilter.a + 1, coefficients, 7);
+    }
+}
+
+void J3DStateList::setCopyYScale(u32 scale) {
+    add(NEBULA_STATE_COPY_YSCALE).size[0] = static_cast< u16 >(scale);
+}
+
+void J3DStateList::copy(const NebulaStateOp& rCopy) {
+    NebulaStateOp& r = add(NEBULA_STATE_COPY);
+    r = rCopy;
+    r.kind = NEBULA_STATE_COPY;
+}
+
+void J3DStateList::setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable) {
+    if (enable) {
+        for (u32 i = 0; i < 5; i++) {
+            NebulaStateOp& rPair = add(NEBULA_STATE_FOG_RANGE_TABLE);
+            rPair.a[0] = static_cast< u8 >(i);
+            rPair.size[0] = pTable->r[2 * i];
+            rPair.size[1] = pTable->r[2 * i + 1];
+        }
+    }
+    NebulaStateOp& r = add(NEBULA_STATE_FOG_RANGE);
+    r.a[0] = enable;
+    r.size[0] = center;
+}
+
+void J3DStateList::setClipMode(GXClipMode mode) {
+    add(NEBULA_STATE_CLIP_MODE).a[0] = mode;
+}
+
+void J3DStateList::setTevColorS10(GXTevRegID id, GXColorS10 color) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR_S10);
+    r.a[0] = id;
+    r.size[0] = static_cast< u16 >(color.r);
+    r.size[1] = static_cast< u16 >(color.g);
+    r.f[0] = color.b;
+    r.f[1] = color.a;
 }

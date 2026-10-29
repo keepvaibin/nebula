@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 40u
+#define NEBULA_GAME_API_VERSION 41u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -62,21 +62,80 @@ enum {
     NEBULA_STATE_TEV_DIRECT,        /* stage */
     NEBULA_STATE_TEV_ORDER,         /* even stage, coord 0, map 0, channel 0, coord 1, map 1, channel 1 */
     NEBULA_STATE_TEV_COLOR,         /* register, r, g, b, a */
-    NEBULA_STATE_MATERIAL_COLOR,    /* channel, r, g, b, a */
-    NEBULA_STATE_AMBIENT_COLOR,     /* channel, r, g, b, a */
-    NEBULA_STATE_TEX_COORD_GEN,     /* coord, type, source, normalize, post-transform matrix id */
+    NEBULA_STATE_MATERIAL_COLOR,    /* channel, r, g, b, a, GXSetChan*Color's form (1: a colour channel sets only
+                                       r, g, b, an alpha channel only a; 0: GDSetChan*Color's, the whole word) */
+    NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
+    NEBULA_STATE_TEX_COORD_GEN,     /* coord, type, source, normalize, post-transform matrix id, GXSetTexCoordGen2's
+                                       form (1: also the coordinate's matrix index, a[6]; 0: GDSetTexCoordGen's) */
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t, min filter, mag filter, bias clamp, edge LOD, anisotropy;
                                        f: min LOD, max LOD, LOD bias */
     NEBULA_STATE_TEX_IMAGE_ATTR,    /* map, format; size: width, height */
     NEBULA_STATE_TEX_IMAGE,         /* map; image */
-    NEBULA_STATE_FOG,               /* type, r, g, b, a; f: start, end, near, far */
+    NEBULA_STATE_FOG,               /* type, r, g, b, a, GXSetFog's form (1: a projected type writes its second and
+                                       third words with register id 0, as GXSetFog does; 0: GDSetFog's); f: start,
+                                       end, near, far */
+    /* Changes of some fields of a register, the others as they are (GX's partial setters): */
+    NEBULA_STATE_TEV_COLOR_IN,      /* stage, a, b, c, d */
+    NEBULA_STATE_TEV_ALPHA_IN,      /* stage, a, b, c, d */
+    NEBULA_STATE_TEV_COLOR_OP,      /* stage, op, bias, scale, clamp, output */
+    NEBULA_STATE_TEV_ALPHA_OP,      /* stage, op, bias, scale, clamp, output */
+    NEBULA_STATE_TEV_KCOLOR_SEL,    /* stage, selection */
+    NEBULA_STATE_TEV_KALPHA_SEL,    /* stage, selection */
+    NEBULA_STATE_TEV_SWAP_MODE,     /* stage, raster swap, texture swap */
+    NEBULA_STATE_TEV_STAGE_ORDER,   /* stage, coord, map, channel */
+    NEBULA_STATE_COLOR_UPDATE,      /* enable */
+    NEBULA_STATE_ALPHA_UPDATE,      /* enable */
+    NEBULA_STATE_DITHER,            /* enable */
+    NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
+    NEBULA_STATE_VIEWPORT,          /* f: x scale, y scale, z scale, x origin, y origin, z origin (GX's terms) */
+    NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
+    NEBULA_STATE_SCISSOR_OFFSET,    /* f: x, y (pixels) */
+    NEBULA_STATE_TEV_KCOLOR,        /* konst register, r, g, b, a */
+    NEBULA_STATE_TEV_COLOR_S10,     /* register; size: r, g; f: b, a (signed 10-bit values) */
+    NEBULA_STATE_CLIP_MODE,         /* mode (GXClipMode) */
+    NEBULA_STATE_IND_TEX_MATRIX,    /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
+                                       [0][1], [1][1], [0][2], [1][2] */
+    NEBULA_STATE_TEV_SWAP_TABLE,    /* table (GXTevSwapSel), red, green, blue, alpha (GXTevColorChan) */
+    NEBULA_STATE_NUM_TEX_GENS,      /* count */
+    NEBULA_STATE_NUM_CHANS,         /* count */
+    NEBULA_STATE_NUM_TEV_STAGES,    /* count */
+    NEBULA_STATE_NUM_IND_STAGES,    /* count */
+    NEBULA_STATE_CO_PLANAR,         /* enable */
+    NEBULA_STATE_Z_COMP_LOC,        /* before texturing */
+    NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix id (GXSetCurrentMtx) */
+    NEBULA_STATE_TEV_INDIRECT,      /* TEV stage, indirect stage, format, bias, matrix, wrap s, wrap t, add previous,
+                                       unmodified LOD, alpha (GXSetTevIndirect's arguments) */
+    NEBULA_STATE_IND_TEX_SCALE,     /* indirect stage, scale s, scale t */
+    NEBULA_STATE_LINE_WIDTH,        /* width, texture offset */
+    NEBULA_STATE_POINT_SIZE,        /* size, texture offset */
+    NEBULA_STATE_LIGHT_ATTENUATION, /* light (0-7), r, g, b, a; f: angle attenuation a0-a2, distance k0-k2 */
+    NEBULA_STATE_LIGHT_POSITION,    /* light (0-7); f: position x, y, z, direction x, y, z */
+    NEBULA_STATE_PIXEL_FORMAT,      /* changed (the format and depth format are new), pixel type (the hardware's:
+                                       GXSetPixelFmt's table), depth format, antialiasing, YUV (a Y8/U8/V8 format),
+                                       YUV component */
+    NEBULA_STATE_INVALIDATE_TEXTURES, /* none: textures in memory changed (GXInvalidateTexAll) */
+    NEBULA_STATE_Z_TEXTURE,         /* operation (GXZTexOp), format (GXTexFmt), bias (24 bits, a[2..4] low first) */
+    NEBULA_STATE_COPY_CLEAR,        /* r, g, b, a, depth (24 bits, a[4..6] low first) */
+    NEBULA_STATE_COPY_SAMPLES,      /* antialiasing, then (when set) the 12 sample points' x, y (4 bits each, two a
+                                       byte from a[1], x low) */
+    NEBULA_STATE_COPY_VFILTER,      /* vertical filter on, its 7 coefficients */
+    NEBULA_STATE_COPY_YSCALE,       /* size[0]: the display copy's vertical scale (256 / scale, 9 bits) */
+    NEBULA_STATE_COPY,              /* an EFB copy, run with the current state: display (1) or texture (0), clear,
+                                       texture format (GXTexFmt), mipmap, clamp top, clamp bottom, interlaced (GXCopyMode),
+                                       vertical scale on, gamma (GXGamma); f: source left, top, width, height; size: the
+                                       destination's width and height (a display copy: its width); image: destination */
+    NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
+                                       table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */
+    NEBULA_STATE_FOG_RANGE_TABLE,   /* pair index (0-4); size: the pair's two entries */
+    NEBULA_STATE_TEX_TLUT,          /* map, palette format (GXTlutFmt), palette place (GX's 20 TLUT names) */
+    NEBULA_STATE_TLUT_LOAD,         /* palette place; image: the palette */
 };
 
 typedef struct NebulaStateOp {
     uint8_t kind;
     uint8_t a[13];
     uint16_t size[2];
-    float f[4];
+    float f[6];
     uint64_t image;
 } NebulaStateOp;
 

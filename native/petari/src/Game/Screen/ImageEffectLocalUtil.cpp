@@ -1,4 +1,7 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/NameObj/NameObjAdaptor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -14,7 +17,7 @@ namespace {
     void setTextureTrans(f32 x, f32 y) {
         TPos3f transMtx;
         transMtx.makeTrans(x, y, 0.0f);
-        GXLoadTexMtxImm(transMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
+        J3DNativeShape::sendTexture(transMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
     }
 
 };  // namespace
@@ -40,67 +43,67 @@ void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
     C_MTXOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
-    GXSetProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
-    GXLoadPosMtxImm(posMtx.toMtxPtr(), GX_PNMTX0);
-    GXSetCurrentMtx(GX_PNMTX0);
+    J3DNativeShape::sendPosition(posMtx.toMtxPtr(), GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GX_PNMTX0);
 
-    GXSetCullMode(GX_CULL_NONE);
-    GXSetClipMode(GX_CLIP_ENABLE);
-    GXSetNumChans(1);
-    GXSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    GXSetNumTexGens(1);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    GXLoadTexMtxImm(posMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
-    GXSetNumTevStages(1);
+    J3DNativeState::setCullMode(GX_CULL_NONE);
+    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setNumChans(1);
+    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
+    J3DNativeState::setNumTexGens(1);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
+    J3DNativeShape::sendTexture(posMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeState::setNumTevStages(1);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevOp(GX_TEVSTAGE0, GX_MODULATE);
-    GXSetZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
-    GXSetNumIndStages(0);
-    GXSetTevDirect(GX_TEVSTAGE0);
-    GXSetTevDirect(GX_TEVSTAGE1);
-    GXSetTevDirect(GX_TEVSTAGE2);
-    GXSetTevDirect(GX_TEVSTAGE3);
-    GXSetTevDirect(GX_TEVSTAGE4);
-    GXSetTevDirect(GX_TEVSTAGE5);
-    GXSetTevDirect(GX_TEVSTAGE6);
-    GXSetTevDirect(GX_TEVSTAGE7);
-    GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
-    GXSetColorUpdate(GX_TRUE);
-    GXSetAlphaUpdate(GX_FALSE);
-    GXSetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    GXSetZCompLoc(GX_TRUE);
-    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GXSetDither(GX_FALSE);
+    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
+    J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
+    J3DNativeState::setNumIndStages(0);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE3);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE4);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE5);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE6);
+    J3DNativeState::setTevDirect(GX_TEVSTAGE7);
+    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
+    J3DNativeState::setColorUpdate(GX_TRUE);
+    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
+    J3DNativeState::setZCompLoc(GX_TRUE);
+    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    J3DNativeState::setDither(GX_FALSE);
 }
 
 void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType) {
     pTexture->load(GX_TEXMAP0);
 
     if (texDrawType == TexDrawType_2) {
-        GXSetChanMatColor(GX_COLOR0A0, Color8(255, 255, 255, intensity));
-        GXSetChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
+        J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(255, 255, 255, intensity));
+        J3DNativeState::setChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
     } else {
-        GXSetChanMatColor(GX_COLOR0A0, Color8(intensity, intensity, intensity, 255));
-        GXSetChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
+        J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(intensity, intensity, intensity, 255));
+        J3DNativeState::setChanAmbColor(GX_COLOR0A0, Color8(0, 0, 0, 255));
     }
 
     switch (texDrawType) {
     case TexDrawType_0:
-        GXSetBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
+        J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
         break;
     case TexDrawType_1:
-        GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
+        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
         break;
     case TexDrawType_2:
-        GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
         break;
     case TexDrawType_3:
-        GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCCLR, GX_BL_ZERO, GX_LO_CLEAR);
+        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCCLR, GX_BL_ZERO, GX_LO_CLEAR);
         break;
     }
 

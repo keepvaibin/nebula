@@ -163,3 +163,23 @@ namespace J3DNativeDraw {
         arrive(step);
     }
 };  // namespace J3DNativeDraw
+
+void J3DNativeDrawBegin(GXPrimitive primitive, u16 count, u32 attributes) {
+    J3DNativeDraw::begin(primitive, count, attributes);
+}
+
+void J3DNativeDrawPosition(f32 x, f32 y, f32 z) {
+    J3DNativeDraw::position(x, y, z);
+}
+
+void J3DNativeDrawNormal(f32 x, f32 y, f32 z) {
+    J3DNativeDraw::normal(x, y, z);
+}
+
+void J3DNativeDrawColor(u32 rgba) {
+    J3DNativeDraw::color(rgba);
+}
+
+void J3DNativeDrawTexCoord(f32 s, f32 t) {
+    J3DNativeDraw::texCoord(s, t);
+}

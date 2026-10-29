@@ -1,4 +1,5 @@
 #include "Game/NPC/TalkDirector.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NPC/TalkBalloon.hpp"
@@ -48,8 +49,8 @@ TalkPeekZ::TalkPeekZ() : mDrawSync(DrawSyncManager::sInstance->setCallback(4, 1,
 }
 
 void TalkPeekZ::setDrawSyncToken() {
-    GXGetProjectionv(&_20);
-    GXGetViewportv(&_3C);
+    J3DNativeView::getProjectionv(&_20);
+    J3DNativeView::getViewportv(&_3C);
     _8 = 0;
     DrawSyncManager::sInstance->pushBreakPoint();
     GXSetDrawSync(mDrawSync);

@@ -104,7 +104,6 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
         mHeader = reinterpret_cast< RarcHeader* >(pData);
 
         if (pData != nullptr) {
-            DCInvalidateRange(pData, size);
         }
     } else {
         u32 size;
@@ -115,7 +114,6 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
         mHeader = reinterpret_cast< RarcHeader* >(pData);
 
         if (pData != nullptr) {
-            DCInvalidateRange(pData, size);
         }
     }
 

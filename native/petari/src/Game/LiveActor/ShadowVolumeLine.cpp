@@ -1,4 +1,6 @@
 #include "Game/LiveActor/ShadowVolumeLine.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -12,8 +14,8 @@ ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("\211\145\225\140\211\
 }
 
 void ShadowVolumeLine::loadModelDrawMtx() const {
-    GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
-    GXSetCurrentMtx(0);
+    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeState::setCurrentMtx(0);
 }
 
 void ShadowVolumeLine::drawShape() const {

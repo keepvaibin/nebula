@@ -1,4 +1,6 @@
 #include "Game/MapObj/FlexibleSphere.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -23,10 +25,10 @@ f32 scale = 1.0f;
 void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
     PSMTXScale(mtx, scale, scale, 0.0f);
-    GXLoadTexMtxImm(mtx, 30, GX_MTX2x4);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
-    GXSetTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
-    GXSetTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DNativeShape::sendTexture(mtx, 30, GX_MTX2x4);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DNativeState::setTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {

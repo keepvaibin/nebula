@@ -60,7 +60,6 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
 
             VIWaitForRetrace();
         }
-        DCInvalidateRange(bufPtr, 0x20);
 
         compression = JKRCheckCompressed_noASR(bufPtr);
         expandSize = JKRDecompExpandSize(bufPtr);
@@ -119,7 +118,6 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
                 }
                 VIWaitForRetrace();
             }
-            DCInvalidateRange(bufPtr, 32);
 
             compression2 = JKRCheckCompressed_noASR(bufPtr);
             JKRDecompExpandSize(bufPtr);
@@ -170,7 +168,6 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
             VIWaitForRetrace();
         }
 
-        DCInvalidateRange(mem, fileSizeAligned);
         JKRDecompress(mem, dst, expandSize, offset);
         JKRFree(mem);
         if (param_8) {
@@ -239,7 +236,6 @@ static inline u8* nextSrcData(u8* src) {
 
         VIWaitForRetrace();
     }
-    DCInvalidateRange((dest + limit), transSize);
     srcOffset += transSize;
     transLeft -= transSize;
     if (transLeft == 0)
@@ -266,7 +262,6 @@ static inline u8* firstSrcData() {
         VIWaitForRetrace();
     }
 
-    DCInvalidateRange(buffer, length);
     srcOffset += length;
     transLeft -= length;
     return buffer;

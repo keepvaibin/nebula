@@ -1,5 +1,6 @@
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/LightDataHolder.hpp"
@@ -145,7 +146,7 @@ namespace GameLightSignal {
         __NebulaGameLight(NEBULA_LIGHT_POINT, __NebulaObjectId(pInfo), values);
     }
 
-    // LightPointCtrl blends its light with GXInitLightDistAttn(15, brightness, GX_DA_GENTLE): it halves at
+    // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, GX_DA_GENTLE): it halves at
     // 15 sqrt(b / (1 - b)).
     void pointRequest(const LiveActor* pActor, const TVec3f& rPosition, Color8 color, f32 brightness) {
         const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;

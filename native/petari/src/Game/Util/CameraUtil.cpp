@@ -1,4 +1,5 @@
 #include "Game/Util/CameraUtil.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Camera/CameraAnim.hpp"
 #include "Game/Camera/CameraCalc.hpp"
 #include "Game/Camera/CameraContext.hpp"
@@ -142,7 +143,7 @@ namespace MR {
     }
 
     void loadProjectionMtx() {
-        GXSetProjection(::getCameraContext()->mProjection, (GXProjectionType) nullptr);
+        J3DNativeView::setProjection(::getCameraContext()->mProjection, (GXProjectionType) nullptr);
     }
 
     void loadViewMtx() {

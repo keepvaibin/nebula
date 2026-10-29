@@ -1,4 +1,6 @@
 #include "JSystem/J2DGraph/J2DOrthoGraph.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 
 J2DOrthoGraph::J2DOrthoGraph() : J2DGrafContext(0, 0, 0, 0) {
     this->setLookat();
@@ -14,7 +16,7 @@ J2DOrthoGraph::J2DOrthoGraph(f32 x, f32 y, f32 width, f32 height, f32 far, f32 n
 void J2DOrthoGraph::setPort() {
     this->J2DGrafContext::setPort();
     C_MTXOrtho(mMtx44, mOrtho.i.y, mOrtho.f.y, mOrtho.i.x, mOrtho.f.x, mNear, mFar);
-    GXSetProjection(mMtx44, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(mMtx44, GX_ORTHOGRAPHIC);
 }
 
 void J2DOrthoGraph::setOrtho(JGeometry::TBox2< f32 > const& bounds, f32 far, f32 near) {
@@ -25,7 +27,7 @@ void J2DOrthoGraph::setOrtho(JGeometry::TBox2< f32 > const& bounds, f32 far, f32
 
 void J2DOrthoGraph::setLookat() {
     PSMTXIdentity(mPosMtx);
-    GXLoadPosMtxImm(mPosMtx, 0);
+    J3DNativeShape::sendPosition(mPosMtx, 0);
 }
 
 void J2DFillBox(f32 x, f32 y, f32 width, f32 height, JUtility::TColor color) {

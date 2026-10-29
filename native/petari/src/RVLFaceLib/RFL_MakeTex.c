@@ -1,22 +1,24 @@
 #include "RVLFaceLibInternal.h"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <cmath>
 #include <revolution/gx/GXVert.h>
 
 void RFLiSetupCopyTex(GXTexFmt fmt, u16 width, u16 height, void* buffer, GXColor clearColor) {
-    GXSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});
-    GXSetColorUpdate(TRUE);
-    GXSetAlphaUpdate(TRUE);
-    GXSetDstAlpha(FALSE, 0);
-    GXSetZMode(TRUE, GX_LEQUAL, TRUE);
-    GXSetPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
-    GXSetCopyFilter(FALSE, NULL, FALSE, NULL);
-    GXSetCopyClamp(3);
-    GXSetTexCopySrc(0, 0, width, height);
-    GXSetTexCopyDst(width, height, fmt, FALSE);
-    GXSetCopyClear(clearColor, 0xFFFFFF);
-    DCInvalidateRange(buffer, 2 * width * height);
-    GXCopyTex(buffer, TRUE);
-    GXPixModeSync();
+    J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});
+    J3DNativeStateSetColorUpdate(TRUE);
+    J3DNativeStateSetAlphaUpdate(TRUE);
+    J3DNativeStateSetDstAlpha(FALSE, 0);
+    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
+    J3DNativeStateSetPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
+    J3DNativeStateSetCopyFilter(FALSE, NULL, FALSE, NULL);
+    J3DNativeStateSetCopyClamp(3);
+    J3DNativeStateSetTexCopySrc(0, 0, width, height);
+    J3DNativeStateSetTexCopyDst(width, height, fmt, FALSE);
+    J3DNativeStateSetCopyClear(clearColor, 0xFFFFFF);
+    J3DNativeStateCopyTex(buffer, TRUE);
 }
 
 void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resolution) {
@@ -344,11 +346,10 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
     size = RFLiGetMaskBufSize(resolution);
     for (i = 0; i < RFLExp_Max; i++) {
         if (buffers[i] != NULL) {
-            DCInvalidateRange(buffers[i], size);
         }
     }
 
-    GXGetScissor(&sx, &sy, &sw, &sh);
+    J3DNativeViewGetScissor(&sx, &sy, &sw, &sh);
     for (i = 0; i < RFLExp_Max; i++) {
         if (buffers[i] == NULL) {
             continue;
@@ -357,36 +358,36 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         ptr = buffers[i];
 
         if (resolution & 256) {
-            GXSetTexCopySrc(0, 0, 256, 256);
-            GXSetTexCopyDst(256, 256, GX_TF_RGB5A3, FALSE);
-            GXSetScissor(0, 0, 256, 256);
+            J3DNativeStateSetTexCopySrc(0, 0, 256, 256);
+            J3DNativeStateSetTexCopyDst(256, 256, GX_TF_RGB5A3, FALSE);
+            J3DNativeViewSetScissor(0, 0, 256, 256);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_256);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_256);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_256);
         }
 
         if (resolution & 128) {
-            GXSetTexCopySrc(0, 0, 128, 128);
-            GXSetTexCopyDst(128, 128, GX_TF_RGB5A3, FALSE);
-            GXSetScissor(0, 0, 128, 128);
+            J3DNativeStateSetTexCopySrc(0, 0, 128, 128);
+            J3DNativeStateSetTexCopyDst(128, 128, GX_TF_RGB5A3, FALSE);
+            J3DNativeViewSetScissor(0, 0, 128, 128);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_128);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_128);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_128);
         }
 
         if (resolution & 64) {
-            GXSetTexCopySrc(0, 0, 64, 64);
-            GXSetTexCopyDst(64, 64, GX_TF_RGB5A3, FALSE);
-            GXSetScissor(0, 0, 64, 64);
+            J3DNativeStateSetTexCopySrc(0, 0, 64, 64);
+            J3DNativeStateSetTexCopyDst(64, 64, GX_TF_RGB5A3, FALSE);
+            J3DNativeViewSetScissor(0, 0, 64, 64);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_64);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_64);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_64);
         }
 
         if (resolution & 32) {
-            GXSetTexCopySrc(0, 0, 32, 32);
-            GXSetTexCopyDst(32, 32, GX_TF_RGB5A3, FALSE);
-            GXSetScissor(0, 0, 32, 32);
+            J3DNativeStateSetTexCopySrc(0, 0, 32, 32);
+            J3DNativeStateSetTexCopyDst(32, 32, GX_TF_RGB5A3, FALSE);
+            J3DNativeViewSetScissor(0, 0, 32, 32);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_32);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_32);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_32);
@@ -441,7 +442,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         RFLiFree(mouthOpen);
     }
 
-    GXSetScissor(sx, sy, sw, sh);
+    J3DNativeViewSetScissor(sx, sy, sw, sh);
 }
 
 void RFLiInitRFLTexture(RFLiTexObj* tobj) {
@@ -456,96 +457,89 @@ void RFLiSetup2DCameraAndParam(void) {
     Mtx44 proj;
 
     C_MTXOrtho(proj, 0.0f, 448.0f, 0.0f, 608.0f, 0.0f, 1.0f);
-    GXSetProjection(proj, GX_ORTHOGRAPHIC);
-    GXSetViewport(0.0f, 0.0f, 608.0f, 448.0f, 0.0f, 1.0f);
-    GXSetZScaleOffset(1.0f, 0.0f);
-    GXSetCullMode(GX_CULL_BACK);
-    GXSetZMode(FALSE, GX_LEQUAL, FALSE);
-    GXSetZCompLoc(FALSE);
-    GXSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
-    GXSetAlphaUpdate(TRUE);
-    GXSetDither(FALSE);
-    GXClearVtxDesc();
+    J3DNativeViewSetProjection(proj, GX_ORTHOGRAPHIC);
+    J3DNativeViewSetViewport(0.0f, 0.0f, 608.0f, 448.0f, 0.0f, 1.0f);
+    J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
+    J3DNativeStateSetCullMode(GX_CULL_BACK);
+    J3DNativeStateSetZMode(FALSE, GX_LEQUAL, FALSE);
+    J3DNativeStateSetZCompLoc(FALSE);
+    J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
+    J3DNativeStateSetAlphaUpdate(TRUE);
+    J3DNativeStateSetDither(FALSE);
     GXInvalidateVtxCache();
-    GXSetVtxDesc(GX_VA_POS, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_CLR0, GX_DIRECT);
-    GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_POS, GX_POS_XY, GX_F32, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_CLR0, GX_CLR_RGBA, GX_RGBA8, 0);
-    GXSetVtxAttrFmt(GX_VTXFMT0, GX_VA_TEX0, GX_TEX_ST, GX_S16, 8);
-    GXSetNumChans(1);
-    GXSetChanCtrl(GX_COLOR0A0, FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, 2);
-    GXSetNumTexGens(1);
-    GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
-    GXSetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-    GXSetTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-    GXSetTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-    GXSetTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
+    J3DNativeStateSetNumChans(1);
+    J3DNativeStateSetChanCtrl(GX_COLOR0A0, FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, 2);
+    J3DNativeStateSetNumTexGens(1);
+    J3DNativeStateSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
+    J3DNativeStateSetTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+    J3DNativeStateSetTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
+    J3DNativeStateSetTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
+    J3DNativeStateSetTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
 }
 
 void RFLiSetTev4Mole(void) {
-    GXSetNumTevStages(1);
+    J3DNativeStateSetNumTevStages(1);
 
-    GXSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevColor(GX_TEVREG0, RFLi_MOLE_COLOR0);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColor(GX_TEVREG0, RFLi_MOLE_COLOR0);
 }
 
 void RFLiSetTev4Mouth(u32 color) {
-    GXSetNumTevStages(3);
+    J3DNativeStateSetNumTevStages(3);
 
-    GXSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP1, GX_TEV_SWAP1);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP1, GX_TEV_SWAP1);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_C0, GX_CC_TEXC, GX_CC_ZERO);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_C0, GX_CC_TEXC, GX_CC_ZERO);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
 
-    GXSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP3, GX_TEV_SWAP2);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP3, GX_TEV_SWAP2);
     GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_C1, GX_CC_TEXC, GX_CC_CPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    GXSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_C1, GX_CC_TEXC, GX_CC_CPREV);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
 
-    GXSetTevSwapMode(GX_TEVSTAGE2, GX_TEV_SWAP2, GX_TEV_SWAP3);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE2, GX_TEV_SWAP2, GX_TEV_SWAP3);
     GXSetTevOrder(GX_TEVSTAGE2, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_ONE, GX_CC_TEXC, GX_CC_CPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    GXSetTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_ONE, GX_CC_TEXC, GX_CC_CPREV);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
 
-    GXSetTevColor(GX_TEVREG0, RFLi_MOUTH_COLOR0[color]);
-    GXSetTevColor(GX_TEVREG1, RFLi_MOUTH_COLOR1[color]);
+    J3DNativeStateSetTevColor(GX_TEVREG0, RFLi_MOUTH_COLOR0[color]);
+    J3DNativeStateSetTevColor(GX_TEVREG1, RFLi_MOUTH_COLOR1[color]);
 }
 
 void RFLiSetTev4Eye(u32 color, u32 type) {
     GXColor color0;
     GXColor color1;
 
-    GXSetNumTevStages(3);
-    GXSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP1, GX_TEV_SWAP1);
+    J3DNativeStateSetNumTevStages(3);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP1, GX_TEV_SWAP1);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_C0, GX_CC_TEXC, GX_CC_ZERO);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP3, GX_TEV_SWAP3);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_C0, GX_CC_TEXC, GX_CC_ZERO);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP3, GX_TEV_SWAP3);
     GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_C1, GX_CC_TEXC, GX_CC_CPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    GXSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevSwapMode(GX_TEVSTAGE2, GX_TEV_SWAP2, GX_TEV_SWAP2);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_C1, GX_CC_TEXC, GX_CC_CPREV);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE2, GX_TEV_SWAP2, GX_TEV_SWAP2);
     GXSetTevOrder(GX_TEVSTAGE2, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_ONE, GX_CC_TEXC, GX_CC_CPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    GXSetTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_ONE, GX_CC_TEXC, GX_CC_CPREV);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
 
     switch (type) {
     case 9:
@@ -561,30 +555,30 @@ void RFLiSetTev4Eye(u32 color, u32 type) {
 
     color1 = RFLi_EYE_COLOR1[color];
 
-    GXSetTevColor(GX_TEVREG0, color0);
-    GXSetTevColor(GX_TEVREG1, color1);
+    J3DNativeStateSetTevColor(GX_TEVREG0, color0);
+    J3DNativeStateSetTevColor(GX_TEVREG1, color1);
 }
 
 void RFLiSetTev4Eyebrow(u32 color) {
-    GXSetNumTevStages(1);
-    GXSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
+    J3DNativeStateSetNumTevStages(1);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevColor(GX_TEVREG0, RFLi_EYEBROW_COLOR0[color]);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColor(GX_TEVREG0, RFLi_EYEBROW_COLOR0[color]);
 }
 
 void RFLiSetTev4Mustache(u32 color) {
-    GXSetNumTevStages(1);
-    GXSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
+    J3DNativeStateSetNumTevStages(1);
+    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-    GXSetTevColor(GX_TEVREG0, RFLi_BEARD_COLOR0[color]);
+    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
+    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+    J3DNativeStateSetTevColor(GX_TEVREG0, RFLi_BEARD_COLOR0[color]);
 }
 
 void RFLiSetFaceParts(const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRSL resolution) {
@@ -675,15 +669,15 @@ void RFLiSetFaceParts(const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRS
 void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRSL resolution) {
     f32 vp[6];
 
-    GXInvalidateTexAll();
-    GXGetViewportv(vp);
+    J3DNativeStateInvalidateTexAll();
+    J3DNativeViewGetViewportv(vp);
     RFLiSetup2DCameraAndParam();
 
-    GXSetTevDirect(GX_TEVSTAGE0);
-    GXSetTevDirect(GX_TEVSTAGE1);
-    GXSetTevDirect(GX_TEVSTAGE2);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_SET);
-    GXSetColorUpdate(TRUE);
+    J3DNativeStateSetTevDirect(GX_TEVSTAGE0);
+    J3DNativeStateSetTevDirect(GX_TEVSTAGE1);
+    J3DNativeStateSetTevDirect(GX_TEVSTAGE2);
+    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_SET);
+    J3DNativeStateSetColorUpdate(TRUE);
 
     RFLiSetTev4Mustache(info->beard.color);
     RFLiDrawFaceParts(&face->mustacheR);
@@ -703,10 +697,9 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
     RFLiSetTev4Mole();
     RFLiDrawFaceParts(&face->mole);
 
-    GXSetColorUpdate(FALSE);
-    GXCopyTex(buffer, TRUE);
-    GXPixModeSync();
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_ONE, GX_LO_SET);
+    J3DNativeStateSetColorUpdate(FALSE);
+    J3DNativeStateCopyTex(buffer, TRUE);
+    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_ONE, GX_LO_SET);
 
     RFLiSetTev4Mustache(info->beard.color);
     RFLiDrawFaceParts(&face->mustacheR);
@@ -726,7 +719,7 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
     RFLiSetTev4Mole();
     RFLiDrawFaceParts(&face->mole);
 
-    GXSetColorUpdate(TRUE);
+    J3DNativeStateSetColorUpdate(TRUE);
 
     if (RFLiGetManager()->modelDrawCb == NULL) {
         GXDrawDone();
@@ -734,10 +727,8 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
         RFLiGetManager()->modelDrawCb();
     }
 
-    DCInvalidateRange(buffer, RFLiGetMaskSize(resolution));
-    GXCopyTex(buffer, 1);
-    GXPixModeSync();
-    GXSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
+    J3DNativeStateCopyTex(buffer, 1);
+    J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
 }
 
 void RFLiDrawFaceParts(RFLiPart* part) {
@@ -759,8 +750,8 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
     PSMTXScaleApply(pos, pos, RFLi_TEX_SCALE_X, RFLi_TEX_SCALE_Y, 1.0f);
     PSMTXTransApply(pos, pos, x, y, 0.0f);
 
-    GXLoadPosMtxImm(pos, GX_PNMTX0);
-    GXSetCurrentMtx(GX_PNMTX0);
+    J3DNativeShapeSendPosition(pos, GX_PNMTX0);
+    J3DNativeStateSetCurrentMtx(GX_PNMTX0);
 
     switch (origin) {
     case RFL_ORIGIN_CENTER:
@@ -780,25 +771,24 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
         break;
     }
 
-    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+    J3DNativeDrawBegin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
     {
-        GXPosition2f32(1.0 + baseX, -0.5f);
-        GXColor1u32(0x000000FF);
-        GXTexCoord2s16(s0, 0);
+        J3DNativeDrawPosition(1.0 + baseX, -0.5f, 0.0f);
+        J3DNativeDrawColor(0x000000FF);
+        J3DNativeDrawTexCoord((s0) / 256.0f, (0) / 256.0f);
 
-        GXPosition2f32(1.0 + baseX, 0.5f);
-        GXColor1u32(0x000000FF);
-        GXTexCoord2s16(s0, 256);
+        J3DNativeDrawPosition(1.0 + baseX, 0.5f, 0.0f);
+        J3DNativeDrawColor(0x000000FF);
+        J3DNativeDrawTexCoord((s0) / 256.0f, (256) / 256.0f);
 
-        GXPosition2f32(baseX, 0.5f);
-        GXColor1u32(0x000000FF);
-        GXTexCoord2s16(s1, 256);
+        J3DNativeDrawPosition(baseX, 0.5f, 0.0f);
+        J3DNativeDrawColor(0x000000FF);
+        J3DNativeDrawTexCoord((s1) / 256.0f, (256) / 256.0f);
 
-        GXPosition2f32(baseX, -0.5f);
-        GXColor1u32(0x000000FF);
-        GXTexCoord2s16(s1, 0);
+        J3DNativeDrawPosition(baseX, -0.5f, 0.0f);
+        J3DNativeDrawColor(0x000000FF);
+        J3DNativeDrawTexCoord((s1) / 256.0f, (0) / 256.0f);
     }
-    GXEnd();
 }
 
 RFLi_MASKRSL RFLiGetMaxMaskRsl(RFLResolution resolution) {

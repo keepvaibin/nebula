@@ -193,32 +193,23 @@ bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         mTextureSet.ytexture = pBuffer;
-        DCInvalidateRange(pBuffer, ysize);
         pBuffer += ysize;
         mTextureSet.utexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
         mTextureSet.vtexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
 #else
         mTextureSet[0].ytexture = pBuffer;
-        DCInvalidateRange(pBuffer, ysize);
         pBuffer += ysize;
         mTextureSet[0].utexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
         mTextureSet[0].vtexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
         mTextureSet[1].ytexture = pBuffer;
-        DCInvalidateRange(pBuffer, ysize);
         pBuffer += ysize;
         mTextureSet[1].utexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
         mTextureSet[1].vtexture = pBuffer;
-        DCInvalidateRange(pBuffer, uvsize);
         pBuffer += uvsize;
 #endif
 

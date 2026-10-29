@@ -1,4 +1,5 @@
 #include "Game/MapObj/WarpPod.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/LiveActor/LiveActorGroup.hpp"
@@ -531,15 +532,15 @@ void WarpPod::drawCylinder(u32) const {
     }
 
     TDDraw::setup(0, 1, 0);
-    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
     MR::ddSetVtxFormat(2);
     MR::ddLightingOff();
-    GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ONE, GX_CC_TEXA, GX_CC_ZERO);
-    GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_CC_APREV, GX_TEVPREV);
-    GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, GX_CA_ZERO);
-    GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TB_ADDHALF, GX_TEVPREV);
-    GXSetTevColor(GX_TEVREG0, ::gGlowEffectEnvColor[mGlowColorIndex]);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ONE, GX_CC_TEXA, GX_CC_ZERO);
+    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_CC_APREV, GX_TEVPREV);
+    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, GX_CA_ZERO);
+    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TB_ADDHALF, GX_TEVPREV);
+    J3DNativeState::setTevColor(GX_TEVREG0, ::gGlowEffectEnvColor[mGlowColorIndex]);
+    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
 
     _D4->load(GX_TEXMAP0);
     _D8->load(GX_TEXMAP1);
@@ -677,7 +678,7 @@ void WarpPod::draw() const {
     }
 
     TDDraw::setup(0, 1, 0);
-    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
 
     for (u32 i = 0; i < _C8; i++) {
         TDDraw::drawCylinder(_C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);

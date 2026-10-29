@@ -34,13 +34,58 @@ enum Kind : std::uint8_t {
     kTexImageAttr,
     kTexImage,
     kFog,
+    kTevColorIn,
+    kTevAlphaIn,
+    kTevColorOp,
+    kTevAlphaOp,
+    kTevKColorSel,
+    kTevKAlphaSel,
+    kTevSwapMode,
+    kTevStageOrder,
+    kColorUpdate,
+    kAlphaUpdate,
+    kDither,
+    kProjection,
+    kViewport,
+    kScissor,
+    kScissorOffset,
+    kTevKColor,
+    kTevColorS10,
+    kClipMode,
+    kIndTexMatrix,
+    kTevSwapTable,
+    kNumTexGens,
+    kNumChans,
+    kNumTevStages,
+    kNumIndStages,
+    kCoPlanar,
+    kZCompLoc,
+    kCurrentMatrix,
+    kTevIndirect,
+    kIndTexScale,
+    kLineWidth,
+    kPointSize,
+    kLightAttenuation,
+    kLightPosition,
+    kPixelFormat,
+    kInvalidateTextures,
+    kZTexture,
+    kCopyClear,
+    kCopySamples,
+    kCopyVfilter,
+    kCopyYScale,
+    kCopy,
+    kFogRange,
+    kFogRangeTable,
+    kTexTlut,
+    kTlutLoad,
 };
 
 struct Op {
     std::uint8_t kind;
     std::uint8_t a[13];
     std::uint16_t size[2];
-    float f[4];
+    float f[6];
     std::uint64_t image;  // host-side: the image's physical address
 };
 
@@ -48,6 +93,11 @@ struct Op {
 struct Writes {
     virtual void bp(std::uint32_t word) = 0;
     virtual void xf(std::uint16_t address, std::uint32_t value) = 0;
+    virtual void cp(std::uint8_t reg, std::uint32_t value) = 0;
+    // The BP, XF and CP registers' current values (the ops that change part of one, and copies).
+    virtual std::uint32_t bp_read(std::uint8_t reg) = 0;
+    virtual std::uint32_t xf_read(std::uint16_t address) = 0;
+    virtual std::uint32_t cp_read(std::uint8_t reg) = 0;
 
 protected:
     ~Writes() = default;

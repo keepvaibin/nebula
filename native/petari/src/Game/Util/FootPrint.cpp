@@ -1,4 +1,5 @@
 #include "Game/Util/FootPrint.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -124,7 +125,7 @@ void FootPrint::draw() const {
     }
 
     TDDraw::setup(2, 1, 0);
-    GXSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
     _C->load(GX_TEXMAP0);
 
     Color8 color(0, 0, 0, 255);
@@ -135,7 +136,7 @@ void FootPrint::draw() const {
         }
 
         color.a = (s32)(255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
-        GXSetTevColor(GX_TEVREG0, color);
+        J3DNativeState::setTevColor(GX_TEVREG0, color);
 
         TVec3f cross = mPrints[i]._C.cross(mPrints[i]._18);
         TVec3f v1;

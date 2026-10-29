@@ -1,4 +1,6 @@
 #include "Game/LiveActor/DisplayListMaker.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/LiveActor/ModelManager.hpp"
 #include "Game/MapObj/CollectCounter.hpp"
 #include "Game/MapObj/IceStep.hpp"
@@ -501,8 +503,8 @@ void MarioActor::drawMarioModel() const {
         }
 
         if (mBeeWallWalk != 0) {
-            GXSetAlphaUpdate(GX_TRUE);
-            GXSetDstAlpha(GX_TRUE, 0);
+            J3DNativeState::setAlphaUpdate(GX_TRUE);
+            J3DNativeState::setDstAlpha(GX_TRUE, 0);
         }
 
         model->setDrawView(0);
@@ -525,8 +527,8 @@ void MarioActor::drawMarioModel() const {
     }
 
     if (mBeeWallWalk != 0) {
-        GXSetAlphaUpdate(GX_FALSE);
-        GXSetDstAlpha(GX_FALSE, 0);
+        J3DNativeState::setAlphaUpdate(GX_FALSE);
+        J3DNativeState::setDstAlpha(GX_FALSE, 0);
     }
 }
 
@@ -904,7 +906,7 @@ void MarioActor::drawReflectModel() const {
     model->mFlags.clear();
 
     if (_A08 == 2) {
-        GXSetZScaleOffset(1.0f, 0.00001f);
+        J3DNativeView::setZScaleOffset(1.0f, 0.00001f);
         model->mFlags._1A = true;
         model->setDrawView(3);
         model->directDraw(nullptr);
@@ -919,7 +921,7 @@ void MarioActor::drawReflectModel() const {
         model->mFlags._14 = true;
     }
 
-    GXSetZScaleOffset(1.0f, 0.0f);
+    J3DNativeView::setZScaleOffset(1.0f, 0.0f);
     model->setDrawView(3);
     model->directDraw(nullptr);
     model->mFlags.clear();

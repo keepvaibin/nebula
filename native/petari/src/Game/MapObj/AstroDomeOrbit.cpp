@@ -1,4 +1,6 @@
 #include "Game/MapObj/AstroDomeOrbit.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/SphereSelector.hpp"
 #include "Game/MapObj/MiniatureGalaxyHolder.hpp"
@@ -101,20 +103,20 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     TPos3f rotateMtx;
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
-    GXLoadPosMtxImm(rotateMtx, GX_PNMTX0);
-    GXSetCurrentMtx(GX_PNMTX0);
-    GXSetNumChans(1);
-    GXSetChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    GXSetChanMatColor(GX_COLOR0A0, rColor);
-    GXSetNumTexGens(0);
-    GXSetNumTevStages(1u);
+    J3DNativeShape::sendPosition(rotateMtx, GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setNumChans(1);
+    J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+    J3DNativeState::setChanMatColor(GX_COLOR0A0, rColor);
+    J3DNativeState::setNumTexGens(0);
+    J3DNativeState::setNumTevStages(1u);
     GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-    GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GXSetZMode(1u, GX_LEQUAL, 0);
-    GXSetZCompLoc(0);
-    GXSetCullMode(GX_CULL_BACK);
+    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
+    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    J3DNativeState::setZMode(1u, GX_LEQUAL, 0);
+    J3DNativeState::setZCompLoc(0);
+    J3DNativeState::setCullMode(GX_CULL_BACK);
 }
 
 void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const {

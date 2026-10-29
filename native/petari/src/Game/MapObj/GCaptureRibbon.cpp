@@ -1,4 +1,5 @@
 #include "Game/MapObj/GCaptureRibbon.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -23,7 +24,7 @@ void GCaptureRibbon::draw() const {
         TDDraw::setup(1, 2, 0);
         f32 width = calcLineWidth();
         mTexture->load(GX_TEXMAP0);
-        GXSetZMode(true, GX_LEQUAL, false);
+        J3DNativeState::setZMode(true, GX_LEQUAL, false);
 
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {

@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 
@@ -199,13 +200,12 @@ void JUTTexture::load(GXTexMapID texMapID) {
 void JUTTexture::capture(int width, int height, GXTexFmt format, bool mipmap, GXBool clear) {
     if (mFlag & 0x1) {
         if (mipmap) {
-            GXSetTexCopySrc(width, height, mTIMG->mWidth * 2, mTIMG->mHeight * 2);
+            J3DNativeState::setTexCopySrc(width, height, mTIMG->mWidth * 2, mTIMG->mHeight * 2);
         } else {
-            GXSetTexCopySrc(width, height, mTIMG->mWidth, mTIMG->mHeight);
+            J3DNativeState::setTexCopySrc(width, height, mTIMG->mWidth, mTIMG->mHeight);
         }
 
-        GXSetTexCopyDst(mTIMG->mWidth, mTIMG->mHeight, format, mipmap);
-        GXCopyTex(mImage, clear);
-        GXPixModeSync();
+        J3DNativeState::setTexCopyDst(mTIMG->mWidth, mTIMG->mHeight, format, mipmap);
+        J3DNativeState::copyTex(mImage, clear);
     }
 }

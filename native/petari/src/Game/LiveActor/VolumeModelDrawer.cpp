@@ -1,4 +1,6 @@
 #include "Game/LiveActor/VolumeModelDrawer.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
@@ -24,36 +26,36 @@ VolumeModelDrawer::VolumeModelDrawer(const char* pName, const char* pFileName, M
 void VolumeModelDrawer::draw() const {
     MR::loadProjectionMtx();
     loadModelDrawMtx();
-    GXSetCurrentMtx(0);
-    GXSetColorUpdate(0);
-    GXSetAlphaUpdate(1);
-    GXSetDstAlpha(1, 0);
-    GXSetCullMode(GX_CULL_NONE);
+    J3DNativeState::setCurrentMtx(0);
+    J3DNativeState::setColorUpdate(0);
+    J3DNativeState::setAlphaUpdate(1);
+    J3DNativeState::setDstAlpha(1, 0);
+    J3DNativeState::setCullMode(GX_CULL_NONE);
     GXColor color_1 = mColor;
-    GXSetTevColor(GX_TEVREG0, color_1);
-    GXSetZMode(0, GX_ALWAYS, 0);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setTevColor(GX_TEVREG0, color_1);
+    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
+    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
     MR::drawSimpleModel(mModelData);
-    GXSetDstAlpha(0, 0);
-    GXSetZMode(1, GX_GEQUAL, 0);
-    GXSetCullMode(GX_CULL_FRONT);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setDstAlpha(0, 0);
+    J3DNativeState::setZMode(1, GX_GEQUAL, 0);
+    J3DNativeState::setCullMode(GX_CULL_FRONT);
+    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ZERO, GX_LO_COPY);
     MR::drawSimpleModel(mModelData);
-    GXSetCullMode(GX_CULL_BACK);
-    GXSetBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setCullMode(GX_CULL_BACK);
+    J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
     MR::drawSimpleModel(mModelData);
     GXColor color_2 = mColor;
-    GXSetTevColor(GX_TEVREG0, color_2);
-    GXSetCullMode(GX_CULL_NONE);
-    GXSetBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_COPY);
-    GXSetColorUpdate(1);
-    GXSetDstAlpha(1, 0);
-    GXSetZMode(0, GX_ALWAYS, 0);
+    J3DNativeState::setTevColor(GX_TEVREG0, color_2);
+    J3DNativeState::setCullMode(GX_CULL_NONE);
+    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_COPY);
+    J3DNativeState::setColorUpdate(1);
+    J3DNativeState::setDstAlpha(1, 0);
+    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
     MR::drawSimpleModel(mModelData);
 }
 
 void VolumeModelDrawer::loadModelDrawMtx() const {
     Mtx drawMtx;
     MR::multMtx(drawMtx, mMtx, MR::getCameraViewMtx().mMtx);
-    GXLoadPosMtxImm(drawMtx, 0);
+    J3DNativeShape::sendPosition(drawMtx, 0);
 }

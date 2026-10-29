@@ -181,7 +181,6 @@ void JASDriver::readDspBuffer(s16* param_0, u32 param_1) {
         }
     } else {
         sDspDacReadBuffer = nbuf;
-        DCInvalidateRange(sDspDacBuffer[sDspDacReadBuffer], param_1 * 2 * 2);
     }
     s16* dacBuffer = sDspDacBuffer[sDspDacReadBuffer];
     s16* endDacBuffer = dacBuffer + param_1;

@@ -1,4 +1,5 @@
 #include "Game/Util/FurCtrl.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -45,7 +46,7 @@ void FurDrawManager::draw() const {
         }
     }
 
-    GXSetClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }
 
 FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 drawOrder) : mParam(pParam), mVisible(), mFurUVScale(1.0f) {
@@ -148,8 +149,8 @@ void FurCtrl::drawFur() {
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
     GXColor fogColor = {0, 0, 0, 0};
-    GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
-    GXSetClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
+    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }
 
 void FurCtrl::createFurMap() {

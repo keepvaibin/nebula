@@ -1,0 +1,157 @@
+#include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
+#include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include <string.h>
+
+static_assert(sizeof(J3DNativeTexObj) <= sizeof(GXTexObj), "a GXTexObj holds a J3DNativeTexObj");
+static_assert(sizeof(J3DNativeTlutObj) <= sizeof(GXTlutObj), "a GXTlutObj holds a J3DNativeTlutObj");
+
+namespace {
+    J3DNativeTexObj& texture(GXTexObj* pObj) {
+        return *reinterpret_cast< J3DNativeTexObj* >(pObj);
+    }
+
+    const J3DNativeTexObj& texture(const GXTexObj* pObj) {
+        return *reinterpret_cast< const J3DNativeTexObj* >(pObj);
+    }
+
+    // The format of the palette last loaded into each of GX's 20 palette places.
+    u8 sTlutFormat[20];
+
+    bool isColorIndexed(GXTexFmt format) {
+        return format == GX_TF_C4 || format == GX_TF_C8 || format == GX_TF_C14X2;
+    }
+}  // namespace
+
+namespace J3DNativeTexture {
+    void init(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,
+              GXTexWrapMode wrapT, GXBool mipmap) {
+        J3DNativeTexObj& rTex = texture(pObj);
+        memset(&rTex, 0, sizeof(rTex));
+        rTex.mImage = pImage;
+        rTex.mWidth = width;
+        rTex.mHeight = height;
+        rTex.mFormat = static_cast< u8 >(format);
+        rTex.mWrapS = static_cast< u8 >(wrapS);
+        rTex.mWrapT = static_cast< u8 >(wrapT);
+        rTex.mMagFilter = GX_LINEAR;
+        rTex.mMipmap = mipmap;
+        rTex.mEdgeLod = GX_TRUE;
+        if (mipmap) {
+            // A mipmap's levels down to 1x1: the larger side's power of two.
+            u32 levels = 0;
+            for (u32 side = width > height ? width : height; side > 1; side >>= 1) {
+                levels++;
+            }
+            rTex.mMinFilter = isColorIndexed(format) ? GX_LIN_MIP_NEAR : GX_LIN_MIP_LIN;
+            rTex.mMaxLod = static_cast< f32 >(levels);
+        } else {
+            rTex.mMinFilter = GX_LINEAR;
+        }
+    }
+
+    void initCI(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXCITexFmt format, GXTexWrapMode wrapS,
+                GXTexWrapMode wrapT, GXBool mipmap, u32 tlutName) {
+        init(pObj, pImage, width, height, static_cast< GXTexFmt >(format), wrapS, wrapT, mipmap);
+        texture(pObj).mPalette = 1;
+        texture(pObj).mTlutName = tlutName;
+    }
+
+    void initLOD(GXTexObj* pObj, GXTexFilter minFilter, GXTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias,
+                 GXBool biasClamp, GXBool edgeLod, GXAnisotropy maxAniso) {
+        // GXInitTexObjLOD's clamps and steps: the bias in 1/32 (-4 to 3.99), the LOD range in 1/16 (0 to 10).
+        if (lodBias < -4.0f) {
+            lodBias = -4.0f;
+        } else if (lodBias >= 4.0f) {
+            lodBias = 3.99f;
+        }
+        minLod = minLod < 0.0f ? 0.0f : minLod > 10.0f ? 10.0f : minLod;
+        maxLod = maxLod < 0.0f ? 0.0f : maxLod > 10.0f ? 10.0f : maxLod;
+        J3DNativeTexObj& rTex = texture(pObj);
+        rTex.mMinFilter = static_cast< u8 >(minFilter);
+        rTex.mMagFilter = magFilter == GX_LINEAR ? GX_LINEAR : GX_NEAR;
+        rTex.mLodBias = static_cast< s8 >(static_cast< s32 >(lodBias * 32.0f)) / 32.0f;
+        rTex.mMinLod = static_cast< u8 >(static_cast< s32 >(minLod * 16.0f)) / 16.0f;
+        rTex.mMaxLod = static_cast< u8 >(static_cast< s32 >(maxLod * 16.0f)) / 16.0f;
+        rTex.mBiasClamp = biasClamp;
+        rTex.mEdgeLod = edgeLod;
+        rTex.mMaxAniso = static_cast< u8 >(maxAniso);
+    }
+
+    void load(const GXTexObj* pObj, GXTexMapID map) {
+        const J3DNativeTexObj& rTex = texture(pObj);
+        NebulaStateOp ops[4];
+        J3DStateList list(ops, 4);
+        list.setTexLookupMode(map, static_cast< GXTexWrapMode >(rTex.mWrapS), static_cast< GXTexWrapMode >(rTex.mWrapT),
+                              static_cast< GXTexFilter >(rTex.mMinFilter), static_cast< GXTexFilter >(rTex.mMagFilter),
+                              rTex.mMinLod, rTex.mMaxLod, rTex.mLodBias, rTex.mBiasClamp, rTex.mEdgeLod,
+                              static_cast< GXAnisotropy >(rTex.mMaxAniso));
+        // The image's format as the texture unit takes it (a depth texture's low four bits).
+        list.setTexImgAttr(map, rTex.mWidth, rTex.mHeight, static_cast< GXTexFmt >(rTex.mFormat & 0xF));
+        list.setTexImgPtr(map, rTex.mImage);
+        if (rTex.mPalette) {
+            list.setTexTlut(map, static_cast< GXTlutFmt >(sTlutFormat[rTex.mTlutName % 20]), rTex.mTlutName);
+        }
+        list.send();
+    }
+
+    void getAll(const GXTexObj* pObj, void** ppImage, u16* pWidth, u16* pHeight, GXTexFmt* pFormat,
+                GXTexWrapMode* pWrapS, GXTexWrapMode* pWrapT, GXBool* pMipmap) {
+        const J3DNativeTexObj& rTex = texture(pObj);
+        *ppImage = const_cast< void* >(rTex.mImage);
+        *pWidth = rTex.mWidth;
+        *pHeight = rTex.mHeight;
+        *pFormat = static_cast< GXTexFmt >(rTex.mFormat);
+        *pWrapS = static_cast< GXTexWrapMode >(rTex.mWrapS);
+        *pWrapT = static_cast< GXTexWrapMode >(rTex.mWrapT);
+        *pMipmap = rTex.mMipmap;
+    }
+
+    void getLODAll(const GXTexObj* pObj, GXTexFilter* pMinFilter, GXTexFilter* pMagFilter, f32* pMinLod, f32* pMaxLod,
+                   f32* pLodBias, GXBool* pBiasClamp, GXBool* pEdgeLod, GXAnisotropy* pMaxAniso) {
+        const J3DNativeTexObj& rTex = texture(pObj);
+        *pMinFilter = static_cast< GXTexFilter >(rTex.mMinFilter);
+        *pMagFilter = static_cast< GXTexFilter >(rTex.mMagFilter);
+        *pMinLod = rTex.mMinLod;
+        *pMaxLod = rTex.mMaxLod;
+        *pLodBias = rTex.mLodBias;
+        *pBiasClamp = rTex.mBiasClamp;
+        *pEdgeLod = rTex.mEdgeLod;
+        *pMaxAniso = static_cast< GXAnisotropy >(rTex.mMaxAniso);
+    }
+
+    u32 getTlut(const GXTexObj* pObj) {
+        return texture(pObj).mTlutName;
+    }
+
+    void initTlut(GXTlutObj* pObj, void* pLut, GXTlutFmt format, u16 entries) {
+        J3DNativeTlutObj& rTlut = *reinterpret_cast< J3DNativeTlutObj* >(pObj);
+        memcpy(rTlut.mLut, &pLut, sizeof(pLut));
+        rTlut.mFormat = static_cast< u8 >(format);
+        rTlut.mEntries = entries;
+    }
+
+    void loadTlut(const GXTlutObj* pObj, u32 tlutName) {
+        const J3DNativeTlutObj& rTlut = *reinterpret_cast< const J3DNativeTlutObj* >(pObj);
+        sTlutFormat[tlutName % 20] = rTlut.mFormat;
+        const void* pLut;
+        memcpy(&pLut, rTlut.mLut, sizeof(pLut));
+        NebulaStateOp op;
+        J3DStateList list(&op, 1);
+        list.loadTlut(tlutName, pLut);
+        list.send();
+    }
+};  // namespace J3DNativeTexture
+
+void J3DNativeTextureInit(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,
+                          GXTexWrapMode wrapT, GXBool mipmap) {
+    J3DNativeTexture::init(pObj, pImage, width, height, format, wrapS, wrapT, mipmap);
+}
+
+void J3DNativeTextureInitLOD(GXTexObj* pObj, GXTexFilter minFilter, GXTexFilter magFilter, f32 minLod, f32 maxLod,
+                             f32 lodBias, GXBool biasClamp, GXBool edgeLod, GXAnisotropy maxAniso) {
+    J3DNativeTexture::initLOD(pObj, minFilter, magFilter, minLod, maxLod, lodBias, biasClamp, edgeLod, maxAniso);
+}
+
+void J3DNativeTextureLoad(const GXTexObj* pObj, GXTexMapID map) {
+    J3DNativeTexture::load(pObj, map);
+}

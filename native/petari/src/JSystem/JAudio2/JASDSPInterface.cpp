@@ -68,7 +68,6 @@ void JASDsp::flushBuffer() {
 }
 
 void JASDsp::invalChannelAll() {
-    DCInvalidateRange(CH_BUF, sizeof(TChannel) * 64);
 }
 
 u8 const ATTRIBUTE_ALIGN(32) JASDsp::DSPADPCM_FILTER[64] = {

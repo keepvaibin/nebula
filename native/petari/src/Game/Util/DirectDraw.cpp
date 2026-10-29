@@ -1,4 +1,7 @@
 #include "Game/Util/DirectDraw.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeView.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
@@ -38,43 +41,43 @@ namespace TDDraw {
     }
 
     void loadViewMtx(MtxPtr pMtx) {
-        GXLoadPosMtxImm(pMtx, 0);
+        J3DNativeShape::sendPosition(pMtx, 0);
     }
 
     void setModelMtx(MtxPtr pMtx) {
         MR::multMtx(::mViewMtx, pMtx, MR::getCameraViewMtx());
-        GXLoadPosMtxImm(::mViewMtx, 0);
+        J3DNativeShape::sendPosition(::mViewMtx, 0);
     }
 
     void resetViewMtx() {
         PSMTXCopy(MR::getCameraViewMtx(), ::mViewMtx);
-        GXLoadPosMtxImm(::mViewMtx, 0);
+        J3DNativeShape::sendPosition(::mViewMtx, 0);
     }
 
     void close() {
         MR::loadProjectionMtx();
         MR::loadViewMtx();
-        GXSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
     }
 
     void setup(u32 drawMode, u32 blendMode, u8 viewMode) {
         GXColor color = {0, 0, 0, 0};
 
-        GXSetCullMode(GX_CULL_NONE);
-        GXSetClipMode(GX_CLIP_ENABLE);
-        GXSetCoPlanar(0);
-        GXSetZMode(0, GX_ALWAYS, 0);
-        GXSetZCompLoc(0);
-        GXSetColorUpdate(GX_TRUE);
-        GXSetAlphaUpdate(0);
-        GXSetLineWidth(6, GX_TO_ZERO);
-        GXSetChanMatColor(GX_COLOR0A0, color);
-        GXSetChanAmbColor(GX_COLOR0A0, color);
-        GXSetChanMatColor(GX_COLOR1A1, color);
-        GXSetChanAmbColor(GX_COLOR1A1, color);
-        GXSetChanCtrl(GX_COLOR0A0, 0, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-        GXSetChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-        GXSetNumChans(1);
+        J3DNativeState::setCullMode(GX_CULL_NONE);
+        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setCoPlanar(0);
+        J3DNativeState::setZMode(0, GX_ALWAYS, 0);
+        J3DNativeState::setZCompLoc(0);
+        J3DNativeState::setColorUpdate(GX_TRUE);
+        J3DNativeState::setAlphaUpdate(0);
+        J3DNativeState::setLineWidth(6, GX_TO_ZERO);
+        J3DNativeState::setChanMatColor(GX_COLOR0A0, color);
+        J3DNativeState::setChanAmbColor(GX_COLOR0A0, color);
+        J3DNativeState::setChanMatColor(GX_COLOR1A1, color);
+        J3DNativeState::setChanAmbColor(GX_COLOR1A1, color);
+        J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
+        J3DNativeState::setChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+        J3DNativeState::setNumChans(1);
 
         Mtx mtx;
         PSMTXIdentity(mtx);
@@ -82,69 +85,69 @@ namespace TDDraw {
         switch (viewMode) {
         case 0:
             PSMTXCopy(MR::getCameraViewMtx(), ::mViewMtx);
-            GXLoadPosMtxImm(::mViewMtx, 0);
+            J3DNativeShape::sendPosition(::mViewMtx, 0);
             PSMTXCopy(::mViewMtx, mtx);
             break;
         case 1:
             MR::loadProjectionMtx();
-            GXLoadPosMtxImm(::mViewMtx, 0);
+            J3DNativeShape::sendPosition(::mViewMtx, 0);
             break;
         case 2:
             cameraInit2D();
             PSMTXTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
             mtx[1][1] = -1.0f;
-            GXLoadPosMtxImm(mtx, 0);
+            J3DNativeShape::sendPosition(mtx, 0);
             break;
         }
 
-        GXLoadNrmMtxImm(mtx, 0);
-        GXSetCurrentMtx(0);
-        GXSetTevDirect(GX_TEVSTAGE0);
-        GXSetNumIndStages(0);
+        J3DNativeShape::sendNormal(mtx, 0);
+        J3DNativeState::setCurrentMtx(0);
+        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
+        J3DNativeState::setNumIndStages(0);
 
         switch (drawMode) {
         case 0:
-            GXSetNumTexGens(0);
-            GXSetNumTevStages(1);
+            J3DNativeState::setNumTexGens(0);
+            J3DNativeState::setNumTevStages(1);
             GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-            GXSetTevOp(GX_TEVSTAGE0, GX_PASSCLR);
+            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
             break;
         case 1:
-            GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-            GXSetNumTexGens(1);
-            GXSetNumTevStages(1);
+            J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+            J3DNativeState::setNumTexGens(1);
+            J3DNativeState::setNumTevStages(1);
             GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            GXSetTevOp(GX_TEVSTAGE0, GX_REPLACE);
+            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_REPLACE);
             break;
         case 2:
-            GXSetTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-            GXSetNumTexGens(1);
-            GXSetNumTevStages(1);
+            J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+            J3DNativeState::setNumTexGens(1);
+            J3DNativeState::setNumTevStages(1);
             GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            GXSetTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-            GXSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-            GXSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-            GXSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
+            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
+            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
+            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
             break;
         }
 
         switch (blendMode) {
         case 2:
-            GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
-            GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
             break;
         case 1:
-            GXSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
-            GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
             break;
         case 0:
-            GXSetBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
-            GXSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
+            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
             break;
         }
 
-        GXSetFog(GX_FOG_NONE, 0.0, 0.0, 0.0, 0.0, color);
-        GXSetFogRangeAdj(GX_FALSE, 0, nullptr);
+        J3DNativeState::setFog(GX_FOG_NONE, 0.0, 0.0, 0.0, 0.0, color);
+        J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
     }
 
     void sendPoint(const TVec3f& rPoint, u32 color) NO_INLINE {
@@ -493,7 +496,7 @@ namespace TDDraw {
         height = MR::getScreenHeight() / 2;
         Mtx44 projection;
         C_MTXOrtho(projection, height, -height, -width, width, nearZ, -farZ);
-        GXSetProjection(projection, GX_ORTHOGRAPHIC);
+        J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
         MR::setDefaultViewportAndScissor();
     }
 
@@ -505,7 +508,7 @@ namespace TDDraw {
         f32 start;
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
-        GXSetFog(GX_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
+        J3DNativeState::setFog(GX_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
     }
 
     namespace {
@@ -623,7 +626,7 @@ namespace TDDraw {
     void project2D(TVec3f* pDest, const TVec3f& rPosition) {
         f32 projection[7];
         f32 viewport[6];
-        GXGetViewportv(viewport);
+        J3DNativeView::getViewportv(viewport);
         const TProj3f& rProjection = MR::getCameraProjectionMtx();
         projection[0] = 0.0f;
         projection[1] = rProjection.mMtx[0][0];

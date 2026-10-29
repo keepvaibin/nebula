@@ -1,4 +1,5 @@
 #include "Game/Map/LightFunction.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
 #include "Game/Util/MotionSignal.hpp"
@@ -22,14 +23,14 @@ void LightFunction::initLightRegisterAll() {
 
     for (s32 i = 0; i < 8; i++) {
         GXLightObj obj;
-        GXInitLightColor(&obj, c);
-        GXInitLightPos(&obj, 0.0f, 0.0f, 0.0f);
-        GXInitLightDir(&obj, 0.0f, -1.0f, 0.0f);
-        GXInitLightAttn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+        J3DNativeState::initLightColor(&obj, c);
+        J3DNativeState::initLightPos(&obj, 0.0f, 0.0f, 0.0f);
+        J3DNativeState::initLightDir(&obj, 0.0f, -1.0f, 0.0f);
+        J3DNativeState::initLightAttn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
         GXInitSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
         GXInitSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
-        GXInitLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
-        GXLoadLightObjImm(&obj, cLightDataIDs[i]);
+        J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
+        J3DNativeState::loadLightObjImm(&obj, cLightDataIDs[i]);
     }
 }
 
@@ -166,12 +167,12 @@ namespace {
     void loadLightDiffuse(GXColor color, const TVec3f& rPos, GXLightID lightID) NO_INLINE {
         GXLightObj lightObj;
 
-        GXInitLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
-        GXInitLightAttn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
+        J3DNativeState::initLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
+        J3DNativeState::initLightAttn(&lightObj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
 
         GXColor new_color(color);
-        GXInitLightColor(&lightObj, new_color);
-        GXLoadLightObjImm(&lightObj, lightID);
+        J3DNativeState::initLightColor(&lightObj, new_color);
+        J3DNativeState::loadLightObjImm(&lightObj, lightID);
     }
 
     inline void loadCameraLight(const LightInfo& rInfo, GXLightID lightID) {
@@ -201,7 +202,7 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     u8 alpha = pInfo->mAlpha2;
     GXColor c = {0, 0, 0, alpha};
     ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), GX_LIGHT2);
-    GXSetChanAmbColor(GX_COLOR0A0, GXColor(pInfo->mColor));
+    J3DNativeState::setChanAmbColor(GX_COLOR0A0, GXColor(pInfo->mColor));
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
@@ -212,10 +213,10 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     TVec3f v7(0.0f, 0.0f, -1.0f);
     GXLightObj obj;
     f32 v = pInfo->_18;
-    GXInitLightColor(&obj, GXColor(pInfo->_14));
+    J3DNativeState::initLightColor(&obj, GXColor(pInfo->_14));
     GXInitSpecularDir(&obj, v7.x, v7.y, v7.z);
-    GXInitLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
-    GXLoadLightObjImm(&obj, GX_LIGHT3);
+    J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
+    J3DNativeState::loadLightObjImm(&obj, GX_LIGHT3);
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
@@ -226,11 +227,11 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
     TVec3f v7(pInfo->mPos);
     MR::getCameraViewMtx().mult(v7, v7);
     GXLightObj obj;
-    GXInitLightPos(&obj, v7.x, v7.y, v7.z);
-    GXInitLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
-    GXInitLightSpot(&obj, 0.0, GX_SP_OFF);
-    GXInitLightColor(&obj, pInfo->mColor);
-    GXLoadLightObjImm(&obj, GX_LIGHT4);
+    J3DNativeState::initLightPos(&obj, v7.x, v7.y, v7.z);
+    J3DNativeState::initLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
+    J3DNativeState::initLightSpot(&obj, 0.0, GX_SP_OFF);
+    J3DNativeState::initLightColor(&obj, pInfo->mColor);
+    J3DNativeState::loadLightObjImm(&obj, GX_LIGHT4);
 }
 
 void LightFunction::loadAllLightWhite() {
@@ -241,11 +242,11 @@ void LightFunction::loadAllLightWhite() {
 
     for (u32 i = 0; i < ARRAY_SIZE(cLightDataIDs); i++) {
         GXLightObj lightObj;
-        GXInitLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
+        J3DNativeState::initLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
 
         GXColor color = {255, 255, 255, 255};
-        GXInitLightColor(&lightObj, color);
-        GXLoadLightObjImm(&lightObj, cLightDataIDs[i]);
+        J3DNativeState::initLightColor(&lightObj, color);
+        J3DNativeState::loadLightObjImm(&lightObj, cLightDataIDs[i]);
     }
 }
 

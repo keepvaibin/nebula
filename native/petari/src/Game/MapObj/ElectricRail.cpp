@@ -1,4 +1,6 @@
 #include "Game/MapObj/ElectricRail.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/AudioLib/AudAnmSoundObject.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -95,8 +97,8 @@ ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, Elec
 }
 
 void ElectricRailShadowDrawer::loadModelDrawMtx() const {
-    GXLoadPosMtxImm(MR::getCameraViewMtx(), GX_PNMTX0);
-    GXSetCurrentMtx(GX_PNMTX0);
+    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GX_PNMTX0);
 }
 
 void ElectricRailShadowDrawer::drawShape() const {

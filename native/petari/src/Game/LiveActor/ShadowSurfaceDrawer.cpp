@@ -1,4 +1,5 @@
 #include "Game/LiveActor/ShadowSurfaceDrawer.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/Color.hpp"
@@ -11,14 +12,14 @@ ShadowSurfaceDrawInit::ShadowSurfaceDrawInit(const char* pName) : NameObj(pName)
 
 void ShadowSurfaceDrawInit::initDraw() {
     TDDraw::setup(0, 1, 1);
-    GXSetChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    GXSetChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    GXSetChanMatColor(GX_COLOR0A0, Color8(128));
-    GXSetZMode(1, GX_LEQUAL, 0);
-    GXSetCullMode(GX_CULL_BACK);
-    GXSetColorUpdate(1);
-    GXSetAlphaUpdate(1);
-    GXSetDstAlpha(1, 0);
+    J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+    J3DNativeState::setChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
+    J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(128));
+    J3DNativeState::setZMode(1, GX_LEQUAL, 0);
+    J3DNativeState::setCullMode(GX_CULL_BACK);
+    J3DNativeState::setColorUpdate(1);
+    J3DNativeState::setAlphaUpdate(1);
+    J3DNativeState::setDstAlpha(1, 0);
 }
 
 ShadowSurfaceDrawer::ShadowSurfaceDrawer(const char* pName) : ShadowDrawer(pName) {
