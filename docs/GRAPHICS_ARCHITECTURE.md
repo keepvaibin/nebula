@@ -13,7 +13,7 @@ GX hardware, and is not derived from Dolphin's video backend. Headers are in
 | Render targets | All draws go to an offscreen EFB (RGBA8 and D24S8, 640x528 times the internal scale). `GXCopyDisp` copies into an XFB texture; presentation scales the XFB the video interface selected | EFB-to-texture copies, which the game relies on, need a real EFB |
 | Depth format | `D24_UNORM_S8_UINT`, reversed | Matches the Wii's 24-bit Z; copy-clear values map exactly |
 | Shader compilation | Specialized pipelines compiled on worker threads, an uber shader while they compile, and a disk cache | No compile stalls on the render thread; no uber-shader cost in steady state |
-| Texture invalidation | Explicit only (`GXInvalidateTexAll`, EFB copies to the same address) | Hashing texture contents costs too much on low-end CPUs |
+| Texture data | The game hands each image's bytes over where it loads or rewrites it (`texture_image`); the renderer decodes from its copy. Images not handed over yet decode from game memory, invalidated by the game's flushes | Records name images by identity; no hashing of texture contents on low-end CPUs |
 | Byte order | Checked big-endian reads for commands; SSSE3 byte-swap kernels for vertex arrays | Vertex data is the hot path |
 | Unknown input | Unknown opcodes, register writes, truncated payloads and unresolvable guest pointers raise `GxFatalError` and write a `.gxdump` | Unsupported behaviour must not be skipped silently |
 
@@ -27,12 +27,12 @@ The parser reads an opcode-dispatched, big-endian byte stream:
 | `0x08` | LOAD_CP_REG | u8 register, u32 value (vertex descriptors, attribute formats, array bases) |
 | `0x10` | LOAD_XF_REG | u16 count-1, u16 base, count u32 values (matrices, texgen, channels, projection) |
 | `0x20`, `0x28`, `0x30`, `0x38` | LOAD_INDX A-D | u16 index, u16 length and address: indexed matrix load from guest arrays (skinning) |
-| `0x40` | CALL_DL | u32 guest address, u32 size: nested display list, depth up to 4 |
 | `0x48` | INVAL_VTX_CACHE | none |
 | `0x61` | LOAD_BP_REG | u32: register in bits 31-24, value in bits 23-0 |
 | `0x80`-`0xBF` | DRAW | primitive in bits 7-3, vertex format in bits 2-0; u16 count and the vertex data |
 
-BP register numbers are named in `gx_bitfields.h` (`namespace bp`).
+BP register numbers are named in `gx_bitfields.h` (`namespace bp`). Display lists (`0x40`) are no longer sent: the game's
+geometry arrives as records, and the parser treats `0x40` as an unknown command.
 
 ## Native record stream
 
