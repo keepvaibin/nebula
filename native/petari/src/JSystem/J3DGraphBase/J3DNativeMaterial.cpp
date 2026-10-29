@@ -175,6 +175,9 @@ namespace J3DNativeMaterial {
         }
 
         // J3DIndBlockFull writes all four orders and coordinate scales whatever its stage count (the null block nothing).
+        if (pInd->getIndTexOrder(0) != NULL) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_INDIRECT;
+        }
         for (u32 i = 0; i < 4 && pInd->getIndTexOrder(0) != NULL; i++) {
             J3DIndTexOrder* pOrder = pInd->getIndTexOrder(i);
             J3DIndTexCoordScale* pScale = pInd->getIndTexCoordScale(i);
@@ -195,6 +198,9 @@ namespace J3DNativeMaterial {
             pOut->tex_gen[i].type = rCoord.getTexGenType();
             pOut->tex_gen[i].source = rCoord.getTexGenSrc();
             pOut->tex_gen[i].matrix = static_cast< u8 >(rCoord.getTexMtxReg());
+            // The post-transform matrix loadTexCoordGens names (identity unless j3dSys asks for post matrices).
+            pOut->tex_gen[i].post_matrix =
+                j3dSys.checkFlag(0x40000000) && rCoord.getTexGenMtx() != 60 ? static_cast< u8 >(i * 3) : 61;
         }
 
         // The null colour block writes no channels or colours.

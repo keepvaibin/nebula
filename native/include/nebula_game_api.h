@@ -64,6 +64,7 @@ enum {
     NEBULA_MATERIAL_LOADS_LIGHTS = 1u << 7,
     NEBULA_MATERIAL_LOADS_TEV = 1u << 8,       /* textures, stage orders, stages, indirect stages */
     NEBULA_MATERIAL_LOADS_CHANNELS = 1u << 9,  /* channel controls and material colours */
+    NEBULA_MATERIAL_LOADS_INDIRECT = 1u << 10, /* indirect matrices, scales and orders */
 };
 
 typedef struct NebulaMaterialTevStage {
