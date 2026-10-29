@@ -216,6 +216,22 @@ AREAS = [
     (r"", "root", "KEEP", "Build and repo files."),
 ]
 AREAS = [(re.compile(p), a, d, w) for p, a, d, w in AREAS]
+# Requirement IDs per area (the requirements document's map from areas to requirements).
+REQUIREMENTS = {
+    "game": "B-01..B-07", "game-system": "B-10..B-17", "game-screen": "B-20..B-22, E-12", "game-util": "B-25, B-26",
+    "game-audio": "B-30, H", "game-nwc24": "B-31", "j3d": "B-40, E-04, E-05", "j2d": "B-41, E-12", "jpa": "B-42",
+    "jaudio": "B-43, H", "jkernel": "B-44, D-01", "jutility": "B-45", "jsystem-support": "B-46, C-08",
+    "nw4r-lyt": "B-50", "nw4r-ut": "B-51", "nw4r-db": "B-52", "nw4r-other": "B-52", "mii": "B-55",
+    "petari-other": "B-04, P-05", "msl": "C-07", "byte-order": "C-05", "host-api": "C-06",
+    "host-module-bridge": "C-06", "native-build": "C-09", "tools": "N-03", "dev-tools": "N-03",
+    "renderer-translation": "E-02", "renderer-core": "E-01, E-03", "renderer-d3d12": "E-04..E-17",
+    "renderer-vulkan": "E-04..E-17", "renderer-other": "E-04..E-17", "feature-graphics": "F",
+    "feature-temporal": "F", "feature-rt": "G", "feature-packs": "D-05, D-06, M-04", "host-ui-win32": "L-01",
+    "host-dsp": "H-01", "host-console-model": "M-02, I-01, I-07", "host-input-devices": "I-02..I-06",
+    "host-mods": "D-04, M-03", "host-mii": "B-55, M-03", "host-runtime": "M-01, K", "platform-hosts": "S, L-01",
+    "importer": "N-01, D-01..D-07", "installer": "N-02, D-07", "docs": "R", "localization": "L-02",
+    "third-party": "P-05", "root": "Q-06, R-01",
+}
 
 
 def strip_comments(text, ext):
@@ -230,6 +246,12 @@ files = [f for f in files if f]
 rows = []
 for rel in files:
     area, disp, what = next((a, d, w) for p, a, d, w in AREAS if p.search(rel))
+    if area.startswith("sdk-"):
+        reqs = "B-70"
+    elif area.startswith("shim-"):
+        reqs = "C-01..C-05, C-08"
+    else:
+        reqs = REQUIREMENTS[area]
     ext = os.path.splitext(rel)[1].lower()
     counts = collections.Counter()
     lines = 0
@@ -244,29 +266,32 @@ for rel in files:
             n = len(rx.findall(body))
             if n:
                 counts[key] = n
-    rows.append((rel, area, disp, lines, counts, what))
+    rows.append((rel, area, disp, lines, counts, what, reqs))
 
 os.makedirs(out, exist_ok=True)
 keys = [k for k, _, _ in SIGNALS]
 with open(os.path.join(out, "inventory.tsv"), "w", encoding="utf-8", newline="\n") as f:
-    f.write("path\tarea\tdisposition\tlines\t" + "\t".join(keys) + "\taction\n")
-    for rel, area, disp, lines, counts, what in rows:
-        f.write(f"{rel}\t{area}\t{disp}\t{lines}\t" + "\t".join(str(counts.get(k, 0)) for k in keys) + f"\t{what}\n")
+    f.write("path\tarea\tdisposition\trequirements\tlines\t" + "\t".join(keys) + "\taction\n")
+    for rel, area, disp, lines, counts, what, reqs in rows:
+        f.write(f"{rel}\t{area}\t{disp}\t{reqs}\t{lines}\t" + "\t".join(str(counts.get(k, 0)) for k in keys) +
+                f"\t{what}\n")
 
 totals = collections.Counter()
 files_with = collections.Counter()
 by_area = collections.OrderedDict()
-for rel, area, disp, lines, counts, what in rows:
+for rel, area, disp, lines, counts, what, reqs in rows:
     totals.update(counts)
     for k in counts:
         files_with[k] += 1
-    a = by_area.setdefault(area, {"disp": disp, "what": what, "files": 0, "lines": 0, "signals": collections.Counter(),
-                                  "flagged": []})
+    a = by_area.setdefault(area, {"disp": disp, "what": what, "reqs": reqs, "files": 0, "lines": 0,
+                                  "signals": collections.Counter(), "flagged": []})
     a["files"] += 1
     a["lines"] += lines
     a["signals"].update(counts)
     if counts and any(k not in HYGIENE for k in counts) or disp == "REPLACE":
         a["flagged"].append((rel, lines, counts))
+    else:
+        a.setdefault("clean", []).append(rel)
 
 desc = {k: d for k, _, d in SIGNALS}
 with open(os.path.join(out, "inventory.md"), "w", encoding="utf-8", newline="\n") as f:
@@ -275,15 +300,27 @@ with open(os.path.join(out, "inventory.md"), "w", encoding="utf-8", newline="\n"
             "signals; KEEP: native; THIRD: vendored.\n\n## Signals\n\n| signal | meaning | matches | files |\n|---|---|---|---|\n")
     for k in keys:
         f.write(f"| {k} | {desc[k]} | {totals.get(k, 0)} | {files_with.get(k, 0)} |\n")
-    f.write("\n## Areas\n\n| area | disposition | files | lines | signals (matches) |\n|---|---|---|---|---|\n")
+    f.write("\n## Areas\n\n| area | disposition | requirements | files | lines | signals (matches) |\n"
+            "|---|---|---|---|---|---|\n")
     for area, a in by_area.items():
         sig = ", ".join(f"{k} {n}" for k, n in a["signals"].most_common())
-        f.write(f"| {area} | {a['disp']} | {a['files']} | {a['lines']} | {sig} |\n")
+        f.write(f"| {area} | {a['disp']} | {a['reqs']} | {a['files']} | {a['lines']} | {sig} |\n")
     for area, a in by_area.items():
         if not a["flagged"]:
             continue
-        f.write(f"\n## {area} ({a['disp']})\n\n{a['what']}\n\n")
+        f.write(f"\n## {area} ({a['disp']}; {a['reqs']})\n\n{a['what']}\n\n")
         for rel, lines, counts in sorted(a["flagged"]):
             sig = ", ".join(f"{k} {n}" for k, n in counts.most_common()) or "whole file"
             f.write(f"- `{rel}` ({lines} lines): {sig}\n")
+    f.write("\n## Every other file\n\nNo console signal found. Each is still covered by its area's requirements and may "
+            "change when its area does.\n")
+    for area, a in by_area.items():
+        if not a.get("clean"):
+            continue
+        f.write(f"\n### {area} ({a['reqs']})\n\n")
+        folders = collections.OrderedDict()
+        for rel in sorted(a["clean"]):
+            folders.setdefault(os.path.dirname(rel) or ".", []).append(os.path.basename(rel))
+        for folder, names in folders.items():
+            f.write(f"- `{folder}/`: " + ", ".join(names) + "\n")
 print(f"{len(rows)} files; " + ", ".join(f"{k} {totals.get(k, 0)}/{files_with.get(k, 0)}" for k in keys))
