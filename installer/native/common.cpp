@@ -465,7 +465,7 @@ void DeleteFileQuietly(const wstring& path) {
 }
 
 static void DeleteTreeOnce(const wstring& path) {
-    wstring native = NativePath(path);
+    wstring native = TrimEnd(NativePath(path), L"\\");
     WIN32_FIND_DATAW data;
     HANDLE find = FindFirstFileW((native + L"\\*").c_str(), &data);
     if (find != INVALID_HANDLE_VALUE) {
@@ -516,7 +516,7 @@ void RemoveEmptyDirectory(const wstring& path) {
 
 static void List(const wstring& directory, bool files, bool dirs, bool recursive, std::vector<wstring>& out) {
     WIN32_FIND_DATAW data;
-    HANDLE find = FindFirstFileW((NativePath(directory) + L"\\*").c_str(), &data);
+    HANDLE find = FindFirstFileW((TrimEnd(NativePath(directory), L"\\") + L"\\*").c_str(), &data);
     if (find == INVALID_HANDLE_VALUE) {
         DWORD error = GetLastError();
         if (error == ERROR_FILE_NOT_FOUND || error == ERROR_NO_MORE_FILES) return;
