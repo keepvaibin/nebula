@@ -12713,7 +12713,51 @@ void GxBackend::release_record_shape(RecordShape& shape) noexcept {
     shape.resident_epoch = 0u;
 }
 
+void GxBackend::apply_record_matrices(const shapes::Record& record) {
+    for (const shapes::Matrix& m : record.matrices) {
+        std::uint16_t base = static_cast<std::uint16_t>(4u * m.id);
+        std::uint16_t count = 12u;
+        switch (m.kind) {
+        case shapes::MatrixKind::Normal:
+            base = static_cast<std::uint16_t>(0x400u + 3u * m.id);
+            count = 9u;
+            break;
+        case shapes::MatrixKind::Texture2x4:
+            count = 8u;
+            break;
+        case shapes::MatrixKind::PostTexture:
+            base = static_cast<std::uint16_t>(0x500u + 4u * (m.id - 64u));
+            break;
+        default:
+            break;
+        }
+        std::array<std::uint32_t, 12> words{};
+        for (unsigned i = 0; i < count; ++i) {
+            words[i] = std::bit_cast<std::uint32_t>(m.values[i]);
+        }
+        if (m.model_matrix != 0u) {
+            // A model's draw matrix by its index, named as its indexed load named it (array 0 positions, 1 normals).
+            const std::uint32_t array = m.kind == shapes::MatrixKind::Normal ? 1u : 0u;
+            state_.load_xf_indexed(base, words.data(), count, array << 16u | (m.model_matrix - 1u));
+        } else {
+            state_.load_xf(base, words.data(), count);
+        }
+    }
+    if (record.has_current) {
+        const auto& c = record.current;
+        const std::uint32_t a = c[0] | static_cast<std::uint32_t>(c[1]) << 6u | static_cast<std::uint32_t>(c[2]) << 12u |
+                                static_cast<std::uint32_t>(c[3]) << 18u | static_cast<std::uint32_t>(c[4]) << 24u;
+        const std::uint32_t b = c[5] | static_cast<std::uint32_t>(c[6]) << 6u | static_cast<std::uint32_t>(c[7]) << 12u |
+                                static_cast<std::uint32_t>(c[8]) << 18u;
+        state_.load_cp(cp::kMatrixIndexA, a);
+        state_.load_cp(cp::kMatrixIndexB, b);
+        const std::uint32_t words[2] = {a, b};
+        state_.load_xf(0x1018u, words, 2u);
+    }
+}
+
 void GxBackend::draw_record_shape(const shapes::Record& record) {
+    apply_record_matrices(record);
     const auto found = record_shapes_.find(record.key);
     if (found == record_shapes_.end() || found->second.geometry == nullptr) {
         ++frame_native_shape_misses_;

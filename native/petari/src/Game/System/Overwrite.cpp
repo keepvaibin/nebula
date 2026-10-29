@@ -241,8 +241,8 @@ bool JUTException::queryMapAddress_single(char* pMap, u32 address, s32 section, 
 }
 
 void J3DShapeMtx::loadMtxIndx_PNGP(int slot, u16 index) const {
-    J3DFifoLoadIndx(0x20, index, 0xB000 | static_cast< u16 >(slot * 12));
-    J3DFifoLoadNrmMtxIndx3x3(index, slot * 3);
+    j3dSys.loadPosMtxIndx(slot, index);
+    j3dSys.loadNrmMtxIndx(slot, index);
     ShapePacketUserData* pData = MR::getJ3DShapePacketUserData(j3dSys.getShapePacket());
     if (pData != nullptr) {
         pData->loadTexMtx(j3dSys.getShapePacket()->getShape()->getMaterial(), slot, index);

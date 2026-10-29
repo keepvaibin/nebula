@@ -1,4 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DFifo.hpp"
 #include "JSystem/J3DGraphBase/J3DTevs.hpp"
 #include <revolution/gx/GXGeometry.h>
@@ -61,12 +62,13 @@ J3DSys::J3DSys() {
     }
 }
 
+// The model's draw and normal matrices `indx` into matrix slot `addr` (the next shape draw carries them).
 void J3DSys::loadPosMtxIndx(int addr, u16 indx) const {
-    J3DFifoLoadIndx(0x20, indx, 0xB000 | ((u16)(addr * 0x0C)));
+    J3DNativeShape::loadPosition(mModelDrawMtx[indx], addr * 3, indx + 1);
 }
 
 void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
-    J3DFifoLoadNrmMtxIndx3x3(indx, addr * 3);
+    J3DNativeShape::loadNormal33(mModelNrmMtx[indx], addr * 3, indx + 1);
 }
 
 void J3DSys::setTexCacheRegion(GXTexCacheSize size) {

@@ -455,9 +455,83 @@ namespace {
         }
         return true;
     }
+    // The matrices and current slots the next draw reads.
+    NebulaShapeMatrix sMatrices[64];
+    u32 sMatrixCount = 0;
+    NebulaShapeCurrent sCurrent;
+    bool sCurrentSet = false;
+
+    NebulaShapeMatrix* nextMatrix(u32 kind, u32 id, u16 modelMatrix) {
+        if (sMatrixCount == sizeof(sMatrices) / sizeof(sMatrices[0])) {
+            fail("more matrices before one draw than a draw can carry", nullptr);
+            return nullptr;
+        }
+        NebulaShapeMatrix* pOut = &sMatrices[sMatrixCount++];
+        memset(pOut, 0, sizeof(*pOut));
+        pOut->kind = static_cast< u8 >(kind);
+        pOut->id = static_cast< u8 >(id);
+        pOut->model_matrix = modelMatrix;
+        return pOut;
+    }
+
+    void copyRows(f32* pOut, const f32* pIn, u32 rows, u32 columns, u32 stride, u32 outColumns) {
+        for (u32 r = 0; r < rows; r++) {
+            for (u32 c = 0; c < outColumns; c++) {
+                pOut[r * outColumns + c] = c < columns ? pIn[r * stride + c] : 0.0f;
+            }
+        }
+    }
 }  // namespace
 
 namespace J3DNativeShape {
+    void loadPosition(const f32 (*pMtx)[4], u32 id, u16 modelMatrix) {
+        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_POSITION, id, modelMatrix)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 4, 4, 4);
+        }
+    }
+
+    void loadNormal(const f32 (*pMtx)[4], u32 id, u16 modelMatrix) {
+        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_NORMAL, id, modelMatrix)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 3, 4, 3);
+        }
+    }
+
+    void loadNormal33(const f32 (*pMtx)[3], u32 id, u16 modelMatrix) {
+        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_NORMAL, id, modelMatrix)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 3);
+        }
+    }
+
+    // A normal matrix as a texture matrix: its fourth column zero.
+    void loadNormalToTexture(const f32 (*pMtx)[4], u32 id) {
+        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_TEXTURE, id, 0)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 3, 4, 4);
+        }
+    }
+
+    void loadNormal33ToTexture(const f32 (*pMtx)[3], u32 id) {
+        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_TEXTURE, id, 0)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 4);
+        }
+    }
+
+    void loadTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type) {
+        const u32 kind = id >= GX_PTTEXMTX0 ? NEBULA_SHAPE_MATRIX_POST_TEXTURE :
+                         type == GX_MTX2x4  ? NEBULA_SHAPE_MATRIX_TEXTURE_2X4 :
+                                              NEBULA_SHAPE_MATRIX_TEXTURE;
+        if (NebulaShapeMatrix* pOut = nextMatrix(kind, id, 0)) {
+            copyRows(pOut->values, &pMtx[0][0], kind == NEBULA_SHAPE_MATRIX_TEXTURE_2X4 ? 2 : 3, 4, 4, 4);
+        }
+    }
+
+    void setCurrent(u8 position, const u8* pTexture) {
+        sCurrent.position = position;
+        for (u32 t = 0; t < 8; t++) {
+            sCurrent.texture[t] = pTexture[t];
+        }
+        sCurrentSet = true;
+    }
+
     void registerModel(J3DModelData* pModelData) {
         if (pModelData == nullptr) {
             return;
@@ -542,7 +616,10 @@ namespace J3DNativeShape {
         }
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), __NebulaGXWriter.ptr, keyOf(j3dSys.getVtxPos()),
-                          keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()));
+                          keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sMatrices, sMatrixCount,
+                          sCurrentSet ? &sCurrent : nullptr);
+        sMatrixCount = 0;
+        sCurrentSet = false;
     }
 
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac) {

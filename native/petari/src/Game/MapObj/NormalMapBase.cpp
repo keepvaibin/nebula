@@ -1,4 +1,5 @@
 #include "Game/MapObj/NormalMapBase.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Animation/BtkPlayer.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -334,8 +335,8 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                         PSMTXConcat(inverse, viewMtx, localMtx);
                     }
 
-                    GXLoadPosMtxImm(viewMtx, GX_PNMTX0);
-                    GXLoadNrmMtxImm(viewMtx, GX_PNMTX0);
+                    J3DNativeShape::loadPosition(viewMtx, GX_PNMTX0);
+                    J3DNativeShape::loadNormal(viewMtx, GX_PNMTX0);
                     MR::normalize(&localMtx);
                     updateLightMtx(localMtx);
                     drawMaterialSetting(pMaterial);
@@ -369,8 +370,8 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
                 u16 index = pShapeMtx->getUseMtxIndex(j);
                 if (index != 0xFFFF) {
                     MtxPtr pMtx = pModel->getDrawMtx(index);
-                    GXLoadPosMtxImm(pMtx, static_cast< u16 >(j * 3));
-                    GXLoadNrmMtxImm(pMtx, static_cast< u16 >(j * 3));
+                    J3DNativeShape::loadPosition(pMtx, static_cast< u16 >(j * 3));
+                    J3DNativeShape::loadNormal(pMtx, static_cast< u16 >(j * 3));
                 }
             }
 

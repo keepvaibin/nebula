@@ -23,7 +23,33 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 35u
+#define NEBULA_GAME_API_VERSION 36u
+
+/* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
+   matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
+   matrix rows of three, a 2x4 texture matrix two rows). `model_matrix`: the model's draw matrix it is (its index + 1;
+   0 for any other), which names it from frame to frame. */
+enum {
+    NEBULA_SHAPE_MATRIX_POSITION = 0,
+    NEBULA_SHAPE_MATRIX_NORMAL = 1,
+    NEBULA_SHAPE_MATRIX_TEXTURE = 2,
+    NEBULA_SHAPE_MATRIX_TEXTURE_2X4 = 3,
+    NEBULA_SHAPE_MATRIX_POST_TEXTURE = 4,
+};
+
+typedef struct NebulaShapeMatrix {
+    uint8_t kind;
+    uint8_t id;
+    uint16_t model_matrix;
+    float values[12];
+} NebulaShapeMatrix;
+
+/* The matrices a shape draw's corners take when they carry none (shape_draw): the position matrix's id and texture
+   coordinates 0-7's. */
+typedef struct NebulaShapeCurrent {
+    uint8_t position;
+    uint8_t texture[8];
+} NebulaShapeCurrent;
 
 /* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the
    array it converts; an array made there later replaces it) naming it. Positions and normals are 3 floats, a bump-mapped model's normals 9 (normal, tangent,
@@ -650,10 +676,11 @@ typedef struct NebulaHostServices {
     void (*shape_geometry)(void* user, const struct NebulaShapeGeometry* geometry);
     /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
        normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
-       the rest). `stream` is the game's GX command writer when it draws: the draw comes after every command written
-       before it. */
+       the rest), after `matrices` (`matrix_count` of them) and, when not null, `current` take effect. `stream` is the
+       game's GX command writer when it draws: the draw comes after every command written before it. */
     void (*shape_draw)(void* user, uint64_t shape, const void* stream, uint64_t position, uint64_t normal,
-                       uint64_t color);
+                       uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
+                       const NebulaShapeCurrent* current);
 } NebulaHostServices;
 
 enum {

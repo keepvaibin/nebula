@@ -70,6 +70,16 @@ using DrawArrays = std::array<const Array*, 12>;
 [[nodiscard]] bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
                           const curved::Model* curved, std::vector<GxVertexOut>& out);
 
+// A matrix a draw reads, by GX's matrix id (as nebula_game_api.h's NebulaShapeMatrix): rows of four (a normal
+// matrix's of three, a 2x4 texture matrix's two); `model_matrix` the model's draw matrix it is (index + 1), else 0.
+enum class MatrixKind : std::uint8_t { Position, Normal, Texture, Texture2x4, PostTexture };
+struct Matrix {
+    MatrixKind kind = MatrixKind::Position;
+    std::uint8_t id = 0;
+    std::uint16_t model_matrix = 0;
+    std::array<float, 12> values{};
+};
+
 // Records of the game's stream, in the order it made them (gx_backend.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t { Array, Geometry, Draw };
@@ -80,6 +90,11 @@ struct Record {
     std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays
     std::shared_ptr<const Array> array;
     std::shared_ptr<const Geometry> geometry;
+    // A draw's matrices, and the matrices its corners take when they carry none (position, texture coordinates 0-7)
+    // when the game set them since its last draw.
+    std::vector<Matrix> matrices;
+    bool has_current = false;
+    std::array<std::uint8_t, 9> current{};
 };
 
 }  // namespace galaxy::gx::shapes

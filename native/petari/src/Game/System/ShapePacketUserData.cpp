@@ -1,4 +1,5 @@
 #include "Game/System/ShapePacketUserData.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
@@ -73,12 +74,12 @@ void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index
             if (mTexMtxInfo[i].mType == 2) {
                 mtx.set(j3dSys.getModelDrawMtx(index));
                 mtx.setTrans(0.0f, 0.0f, 0.0f);
-                GXLoadTexMtxImm(mtx, GX_TEXMTX0 + slot * 3, static_cast< GXTexMtxType >(pMaterial->getTexCoord(i)->getTexGenType()));
+                J3DNativeShape::loadTexture(mtx, GX_TEXMTX0 + slot * 3, static_cast< GXTexMtxType >(pMaterial->getTexCoord(i)->getTexGenType()));
             }
 
             J3DTexMtx* const pTexMtx = pMaterial->getTexMtx(i);
             pTexMtx->calcPostTexMtx(MR::getCameraInvViewMtx());
-            GXLoadTexMtxImm(pTexMtx->getMtx(), mTexMtxInfo[i].mPostMtx, GX_MTX3x4);
+            J3DNativeShape::loadTexture(pTexMtx->getMtx(), mTexMtxInfo[i].mPostMtx, GX_MTX3x4);
         }
     }
 }

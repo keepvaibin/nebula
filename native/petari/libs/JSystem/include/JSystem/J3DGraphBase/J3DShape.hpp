@@ -41,38 +41,46 @@ struct BEData< J3DCurrentMtxInfo > {
 };
 #endif
 
-class J3DCurrentMtx : public J3DCurrentMtxInfo {
+// The matrices a shape's corners take when they carry none: its position matrix's id and texture coordinates 0-7's
+// (GX_IDENTITY where a coordinate has no matrix).
+class J3DCurrentMtx {
 public:
     J3DCurrentMtx() {
-        mMtxIdxRegA = 0x3cf3cf00;
-        mMtxIdxRegB = 0x00f3cf3c;
+        mPosition = 0;
+        for (int i = 0; i < 8; i++) {
+            mTexture[i] = GX_IDENTITY;
+        }
     }
 
+    // The model file's form: six bits per id, the position's and four texture coordinates' in the first word, the
+    // other four in the second.
     J3DCurrentMtx& operator=(J3DCurrentMtxInfo const& info) {
-        mMtxIdxRegA = info.mMtxIdxRegA;
-        mMtxIdxRegB = info.mMtxIdxRegB;
+        mPosition = info.mMtxIdxRegA & 0x3F;
+        for (int i = 0; i < 4; i++) {
+            mTexture[i] = (info.mMtxIdxRegA >> (6 * (i + 1))) & 0x3F;
+            mTexture[4 + i] = (info.mMtxIdxRegB >> (6 * i)) & 0x3F;
+        }
         return *this;
     }
 
-    u32 getMtxIdxRegA() const {
-        return mMtxIdxRegA;
-    }
-    u32 getMtxIdxRegB() const {
-        return mMtxIdxRegB;
-    }
-
     void load() const {
-        J3DFifoLoadCPCmd(0x30, mMtxIdxRegA);
-        J3DFifoLoadCPCmd(0x40, mMtxIdxRegB);
-        J3DFifoLoadXFCmdHdr(0x1018, 2);
-        GXCmd1u32(mMtxIdxRegA);
-        GXCmd1u32(mMtxIdxRegB);
+        J3DNativeShape::setCurrent(mPosition, mTexture);
     }
 
     inline void setCurrentTexMtx(u8 param_1, u8 param_2, u8 param_3, u8 param_4, u8 param_5, u8 param_6, u8 param_7, u8 param_8) {
-        mMtxIdxRegA = (param_1 << 6) | (param_2 << 0xc) | (param_3 << 0x12) | (param_4 << 0x18);
-        mMtxIdxRegB = (param_5) | param_6 << 6 | param_7 << 0xc | param_8 << 0x12;
+        mPosition = 0;
+        mTexture[0] = param_1;
+        mTexture[1] = param_2;
+        mTexture[2] = param_3;
+        mTexture[3] = param_4;
+        mTexture[4] = param_5;
+        mTexture[5] = param_6;
+        mTexture[6] = param_7;
+        mTexture[7] = param_8;
     }
+
+    /* 0x00 */ u8 mPosition;
+    /* 0x01 */ u8 mTexture[8];
 };
 
 typedef void (J3DShapeMtx::*J3DShapeMtx_LoadFunc)(int, u16) const;

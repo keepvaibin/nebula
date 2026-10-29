@@ -15,6 +15,17 @@ namespace J3DNativeShape {
     void registerShape(J3DShape* pShape);
     // Group `pDraw` drawn with the arrays j3dSys names.
     void draw(const J3DShapeDraw* pDraw);
+    // Matrices the next draw reads, by GX's matrix id (nebula_game_api.h NebulaShapeMatrix): `modelMatrix` the model's
+    // draw matrix it is (its index + 1), 0 for any other.
+    void loadPosition(const f32 (*pMtx)[4], u32 id, u16 modelMatrix = 0);
+    void loadNormal(const f32 (*pMtx)[4], u32 id, u16 modelMatrix = 0);
+    void loadNormal33(const f32 (*pMtx)[3], u32 id, u16 modelMatrix = 0);
+    void loadNormalToTexture(const f32 (*pMtx)[4], u32 id);
+    void loadNormal33ToTexture(const f32 (*pMtx)[3], u32 id);
+    // A texture matrix as GXLoadTexMtxImm takes it (`type` GX_MTX3x4 or GX_MTX2x4; ids from 64 post-transform).
+    void loadTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type);
+    // The matrices the next draw's corners take when they carry none.
+    void setCurrent(u8 position, const u8* pTexture);
     // A position array the game wrote (`count` entries in its model's position format) as values.
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac);
 };  // namespace J3DNativeShape

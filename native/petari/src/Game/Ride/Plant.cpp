@@ -1,4 +1,5 @@
 #include "Game/Ride/Plant.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Camera/CameraTargetArg.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
@@ -720,8 +721,8 @@ void Plant::draw() const {
     }
 
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        GXLoadPosMtxImm(mLeaves[leaf]->mPosMtx, 0);
-        GXLoadNrmMtxImm(mLeaves[leaf]->mPosMtx, 0);
+        J3DNativeShape::loadPosition(mLeaves[leaf]->mPosMtx, 0);
+        J3DNativeShape::loadNormal(mLeaves[leaf]->mPosMtx, 0);
         mShapeDraw->draw();
     }
 }

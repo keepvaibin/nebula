@@ -2089,7 +2089,8 @@ void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 
 // A group drawn: after every command the game wrote before it (its writer's place past the submitted spans), and
 // after the arrays and groups it registered before it.
-void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color) {
+void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color,
+                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     const auto* writer = static_cast<const uint8_t*>(stream);
@@ -2121,9 +2122,27 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
     record.position = position;
     record.normal = normal;
     record.color = color;
+    record.matrices.resize(matrices != nullptr ? matrix_count : 0u);
+    for (std::size_t i = 0; i < record.matrices.size(); ++i) {
+        const NebulaShapeMatrix& in = matrices[i];
+        if (in.kind > NEBULA_SHAPE_MATRIX_POST_TEXTURE) {
+            die("a shape draw's matrix of unknown kind %u", in.kind);
+        }
+        shapes::Matrix& out = record.matrices[i];
+        out.kind = static_cast<shapes::MatrixKind>(in.kind);
+        out.id = in.id;
+        out.model_matrix = in.model_matrix;
+        std::memcpy(out.values.data(), in.values, sizeof(in.values));
+    }
+    if (current != nullptr) {
+        record.has_current = true;
+        record.current[0] = current->position;
+        std::memcpy(record.current.data() + 1, current->texture, 8);
+    }
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)shape, (void)stream, (void)position, (void)normal, (void)color;
+    (void)shape, (void)stream, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
+        (void)current;
 #endif
 }
 

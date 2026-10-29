@@ -1655,6 +1655,8 @@ private:
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
+    // A draw record's matrices and current matrices, into the matrix state its draw reads.
+    void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.
     void release_record_shape(RecordShape& shape) noexcept;
     // The vertex inputs of the draw being made when a native shape record draws (its corners' matrix slots, its
