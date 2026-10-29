@@ -11,7 +11,6 @@
 #include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/gd/GDBase.h>
 #include <revolution/gx/GXVert.h>
 
 namespace {
@@ -49,9 +48,6 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
     _1C = *pTexCoordU0;
     _20 = *pTexCoordU1;
     _24 = *pTexCoordU2;
-    mDispListLength = 0;
-    mDispList = nullptr;
-
     initDisplayList(pTexCoordU0, pTexCoordU1, pTexCoordU2);
 
     for (int i = 0; i < a4; i++) {
@@ -68,30 +64,20 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
 }
 
 void OceanRingPartDrawer::initDisplayList(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
-    MR::ProhibitSchedulerAndInterrupts prohibit(false);
-
-    u32 x = _14 * 0x50;
-    u32 size = (((x * mOceanRing->mStride + 3) >> 5) + 2) << 5;
-    mDispList = new (0x20) u8[size];
-    DCInvalidateRange(mDispList, size);
-    GDLObj obj;
-    GDInitGDLObj(&obj, mDispList, size);
-    __GDCurrentDL = &obj;
+    mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * mOceanRing->mStride * (_14 - 1));
     drawGD(pTexCoordU0, pTexCoordU1, pTexCoordU2);
-    GDPadCurr32();
-    mDispListLength = obj.ptr - obj.start;
-    DCStoreRange(mDispList, size);
+    mMesh.send();
 }
 
 void OceanRingPartDrawer::draw() const {
     if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartDL) {
         drawDynamic();
     } else {
-        GXCallDisplayList(mDispList, mDispListLength);
+        mMesh.draw();
     }
 }
 
-void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) const {
+void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
     f32 f30 = 0.05f;
     f32 f29;
     f32 f28;
@@ -130,28 +116,24 @@ void OceanRingPartDrawer::drawGD(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCo
         f32 f17 = 0.0f;
         f32 f16 = 0.0f;
         f32 f15 = 0.0f;
-        GDBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (u16)mOceanRing->mStride << 1);
+        mMesh.begin(GX_TRIANGLESTRIP, (u16)mOceanRing->mStride << 1);
 
         for (s32 j = 0; j < mOceanRing->mStride; j++) {
             WaterPoint* pPoint = mOceanRing->getPoint(j, index);
-            GDPosition3f32(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            GDColor4u8(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            GDWrite_f32(f27);
-            GDWrite_f32(f17);
-            GDWrite_f32(f25);
-            GDWrite_f32(f16);
-            GDWrite_f32(f23);
-            GDWrite_f32(f15);
+            mMesh.position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
+            mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
+            mMesh.texCoord(0, f27, f17);
+            mMesh.texCoord(1, f25, f16);
+            mMesh.texCoord(2, f23, f15);
+            mMesh.corner();
 
             pPoint = mOceanRing->getPoint(j, indexPlusOne);
-            GDPosition3f32(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
-            GDColor4u8(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-            GDWrite_f32(f26);
-            GDWrite_f32(f20);
-            GDWrite_f32(f24);
-            GDWrite_f32(f19);
-            GDWrite_f32(f22);
-            GDWrite_f32(f18);
+            mMesh.position(pPoint->mPosition.x, pPoint->mPosition.y, pPoint->mPosition.z);
+            mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
+            mMesh.texCoord(0, f26, f20);
+            mMesh.texCoord(1, f24, f19);
+            mMesh.texCoord(2, f22, f18);
+            mMesh.corner();
 
             f17 += f28;
             f16 += f28;
@@ -314,8 +296,6 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     _20 = 0.0f;
     mWaterTex = nullptr;
     mWaterIndTex = nullptr;
-    mDispListLength = 0;
-    mDispList = nullptr;
 
     mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
     mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
@@ -336,7 +316,7 @@ void OceanRingDrawer::draw() const {
     loadMaterial();
 
     if (mRing->mIsClipped) {
-        GXCallDisplayList(mDispList, mDispListLength);
+        mMesh.draw();
     } else {
         for (s32 i = 0; i < mDrawerCount; i++) {
             getDrawer(i)->draw();
@@ -389,28 +369,18 @@ void OceanRingDrawer::initParts() {
 }
 
 void OceanRingDrawer::initDisplayList() {
-    MR::ProhibitSchedulerAndInterrupts prohibit(false);
-
     s32 flag = 0;
 
     if (MR::isLoopRail(mRing)) {
         flag = 1;
     }
 
-    u32 x = 0x50 * (flag + mRing->mSegCount);
-    u32 length = (((x + 3) >> 5) + 2) << 5;
-    mDispList = new (0x20) u8[length];
-    DCInvalidateRange(mDispList, length);
-    GDLObj obj;
-    GDInitGDLObj(&obj, mDispList, length);
-    __GDCurrentDL = &obj;
+    mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * (flag + mRing->mSegCount));
     drawGD();
-    GDPadCurr32();
-    mDispListLength = obj.ptr - obj.start;
-    DCStoreRange(mDispList, length);
+    mMesh.send();
 }
 
-void OceanRingDrawer::drawGD() const {
+void OceanRingDrawer::drawGD() {
     s32 flag = 0;
 
     if (MR::isLoopRail(mRing)) {
@@ -430,7 +400,7 @@ void OceanRingDrawer::drawGD() const {
     f32 V10 = 0.05f * m;
     f32 V20 = 0.1f * m;
 
-    GDBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (flag + mRing->mSegCount) * 2);
+    mMesh.begin(GX_TRIANGLESTRIP, (flag + mRing->mSegCount) * 2);
 
     scalex = 1.0f;
     f32 V0 = V00 * scalex;
@@ -448,23 +418,19 @@ void OceanRingDrawer::drawGD() const {
         s32 ddd = index * mRing->mStride;
         pPoint = mRing->mWaterPoints[mRing->mStride + ddd - 1];
         pPoint2 = mRing->mWaterPoints[ddd];
-        GDPosition3f32(pPoint->mOrigPos.x, pPoint->mOrigPos.y, pPoint->mOrigPos.z);
-        GDColor4u8(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
-        GDWrite_f32(U0);
-        GDWrite_f32(V0);
-        GDWrite_f32(U1);
-        GDWrite_f32(V1);
-        GDWrite_f32(U2);
-        GDWrite_f32(V2);
+        mMesh.position(pPoint->mOrigPos.x, pPoint->mOrigPos.y, pPoint->mOrigPos.z);
+        mMesh.color(0xFF, 0xFF, 0xFF, pPoint->mAlpha);
+        mMesh.texCoord(0, U0, V0);
+        mMesh.texCoord(1, U1, V1);
+        mMesh.texCoord(2, U2, V2);
+        mMesh.corner();
 
-        GDPosition3f32(pPoint2->mOrigPos.x, pPoint2->mOrigPos.y, pPoint2->mOrigPos.z);
-        GDColor4u8(0xFF, 0xFF, 0xFF, pPoint2->mAlpha);
-        GDWrite_f32(U0);
-        GDWrite_f32(V01);
-        GDWrite_f32(U1);
-        GDWrite_f32(V11);
-        GDWrite_f32(U2);
-        GDWrite_f32(V21);
+        mMesh.position(pPoint2->mOrigPos.x, pPoint2->mOrigPos.y, pPoint2->mOrigPos.z);
+        mMesh.color(0xFF, 0xFF, 0xFF, pPoint2->mAlpha);
+        mMesh.texCoord(0, U0, V01);
+        mMesh.texCoord(1, U1, V11);
+        mMesh.texCoord(2, U2, V21);
+        mMesh.corner();
 
         U0 += (0.05f * scalex);
         U1 += (0.05f * scalex);

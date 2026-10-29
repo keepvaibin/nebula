@@ -25,8 +25,7 @@ namespace {
 };  // namespace
 
 OceanRingPipeInside::OceanRingPipeInside(const OceanRingPipe* pPipe)
-    : LiveActor("\203\111\201\133\203\126\203\203\203\223\203\212\203\223\203\117\202\314\223\340\221\244" /* オーシャンリングの内側 */), mRingPipe(pPipe), mTexU0(), mTexV0(), mTexU1(), mTexV1(), mWaterPipeInsideTex(), mDispListLength(),
-      mDispList() {
+    : LiveActor("\203\111\201\133\203\126\203\203\203\223\203\212\203\223\203\117\202\314\223\340\221\244" /* オーシャンリングの内側 */), mRingPipe(pPipe), mTexU0(), mTexV0(), mTexU1(), mTexV1(), mWaterPipeInsideTex() {
 }
 
 void OceanRingPipeInside::init(const JMapInfoIter& rIter) {
@@ -45,19 +44,10 @@ void OceanRingPipeInside::movement() {
 }
 
 void OceanRingPipeInside::initDisplayList() {
-    MR::ProhibitSchedulerAndInterrupts prohibit(false);
-
-    u32 x = (mRingPipe->_9C - 1) * (36 * mRingPipe->_98 + 3);
-    u32 length = 0x20 * ((x >> 5) + 2);
-    mDispList = new (0x20) u8[length];
-    DCInvalidateRange(mDispList, length);
-    GDLObj obj;
-    GDInitGDLObj(&obj, mDispList, length);
-    __GDCurrentDL = &obj;
+    mMesh.init(NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, 2 * mRingPipe->_98 * (mRingPipe->_9C - 1));
+    mMesh.useArray(NativeMesh::SLOT_POSITION, mRingPipe->_A0);
     sendGD();
-    GDPadCurr32();
-    mDispListLength = obj.ptr - obj.start;
-    DCStoreRange(mDispList, length);
+    mMesh.send();
 }
 
 void OceanRingPipeInside::draw() const {
@@ -66,7 +56,7 @@ void OceanRingPipeInside::draw() const {
     }
 
     loadMaterial();
-    GXCallDisplayList(mDispList, mDispListLength);
+    mMesh.draw();
 }
 
 const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
@@ -78,11 +68,6 @@ void OceanRingPipeInside::loadMaterial() const {
     GXSetVtxDesc(GX_VA_POS, GX_INDEX16);
     GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-#ifdef TARGET_PC
-    GXSetArray(GX_VA_POS, mRingPipe->mGpuPositions, 12);
-#else
-    GXSetArray(GX_VA_POS, mRingPipe->_A0, 12);
-#endif
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
@@ -131,7 +116,7 @@ void OceanRingPipeInside::loadMaterial() const {
     GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, MR::getNearZ(), MR::getFarZ(), sFogCol);
 }
 
-void OceanRingPipeInside::sendGD() const {
+void OceanRingPipeInside::sendGD() {
     u8 something = 0x98;
     s32 vv;
     s32 v;
@@ -152,21 +137,18 @@ void OceanRingPipeInside::sendGD() const {
         f32 f24 = 0.0f;
         f32 f23 = 0.0f;
         vv = mRingPipe->_98;
-        GDWrite_u8(something);
-        GDWrite_u16((u16)(vv << 1));
+        mMesh.begin(static_cast< GXPrimitive >(something), (u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
-            GDWrite_u16(i + v);
-            GDWrite_f32(f24);
-            GDWrite_f32(f26);
-            GDWrite_f32(f23);
-            GDWrite_f32(f25);
+            mMesh.index(NativeMesh::SLOT_POSITION, i + v);
+            mMesh.texCoord(0, f24, f26);
+            mMesh.texCoord(1, f23, f25);
+            mMesh.corner();
 
-            GDWrite_u16(i + (v + 1));
-            GDWrite_f32(f24);
-            GDWrite_f32(f28);
-            GDWrite_f32(f23);
-            GDWrite_f32(f27);
+            mMesh.index(NativeMesh::SLOT_POSITION, i + (v + 1));
+            mMesh.texCoord(0, f24, f28);
+            mMesh.texCoord(1, f23, f27);
+            mMesh.corner();
 
             f24 += f29;
             f23 += f30;

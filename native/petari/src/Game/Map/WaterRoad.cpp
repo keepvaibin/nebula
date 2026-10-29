@@ -22,7 +22,6 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gd/GDBase.h>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXLighting.h>
@@ -108,35 +107,10 @@ namespace NrvWaterRoad {
 };  // namespace NrvWaterRoad
 
 WaterRoadModelInfo::WaterRoadModelInfo(WaterRoad* pRoad, bool isLow)
-    : mIsLow(isLow), mNumPoints(), mNumLinePoints(), mNumLoopPoints(12), mPoints(), mNormals(), mRailCoords(), mDispListLength(), mDispList() {
+    : mIsLow(isLow), mNumPoints(), mNumLinePoints(), mNumLoopPoints(12), mPoints(), mNormals(), mRailCoords() {
     initPoints(pRoad);
     initDisplayList();
 }
-
-#ifdef TARGET_PC
-namespace {
-    // GX reads vertex arrays in the console's byte order: big-endian copies of the CPU's arrays.
-    BEData< TVec3f >* makeGpuPositions(const TVec3f* pSrc, u32 num) {
-        BEData< TVec3f >* pDst = new (32) BEData< TVec3f >[num];
-        for (u32 i = 0; i < num; i++) {
-            pDst[i].x = pSrc[i].x;
-            pDst[i].y = pSrc[i].y;
-            pDst[i].z = pSrc[i].z;
-        }
-        return pDst;
-    }
-
-    BEData< TVec3s >* makeGpuNormals(const TVec3s* pSrc, u32 num) {
-        BEData< TVec3s >* pDst = new (32) BEData< TVec3s >[num];
-        for (u32 i = 0; i < num; i++) {
-            pDst[i].x = pSrc[i].x;
-            pDst[i].y = pSrc[i].y;
-            pDst[i].z = pSrc[i].z;
-        }
-        return pDst;
-    }
-}  // namespace
-#endif
 
 void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
     f32 dotPointCreate;
@@ -198,31 +172,31 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
         front.set(MR::getRailDirection(pRoad));
     }
 
-#ifdef TARGET_PC
-    mGpuPoints = makeGpuPositions(mPoints, mNumPoints);
-    mGpuNormals = makeGpuNormals(mNormals, mNumPoints);
-#endif
 }
 
 void WaterRoadModelInfo::initDisplayList() {
-    MR::ProhibitSchedulerAndInterrupts scheduler(false);
-
-    u32 GDDataSize =
-        (((((mIsLow ? sizeof(f32) * 4 : sizeof(f32) * 6) + sizeof(u16) * 2) * 2) * mNumLinePoints) + sizeof(u8) + sizeof(u16)) * mNumLoopPoints;
-
-    u32 length = ((GDDataSize / 32) + 2) * 32;
-    mDispList = new (0x20) u8[length];
-    DCInvalidateRange(mDispList, length);
-    GDLObj obj;
-    GDInitGDLObj(&obj, mDispList, length);
-    GDSetCurrent(&obj);
+    u32 attributes = NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1;
+    if (!mIsLow) {
+        attributes |= NEBULA_SHAPE_TEXCOORD0 << 2;
+    }
+    mMesh.init(attributes, 2 * mNumLinePoints * mNumLoopPoints);
+    mMesh.useArray(NativeMesh::SLOT_POSITION, mPoints);
+    mMesh.useArray(NativeMesh::SLOT_NORMAL, mNormals);
+    NativeMesh::sendArray(mPoints, NEBULA_SHAPE_ARRAY_POSITION, mNumPoints, mPoints);
+    // The normals as GX reads S16 normals (1.14 fixed point).
+    f32* pNormals = new f32[3 * mNumPoints];
+    for (s32 i = 0; i < mNumPoints; i++) {
+        pNormals[3 * i] = mNormals[i].x / 16384.0f;
+        pNormals[3 * i + 1] = mNormals[i].y / 16384.0f;
+        pNormals[3 * i + 2] = mNormals[i].z / 16384.0f;
+    }
+    NativeMesh::sendArray(mNormals, NEBULA_SHAPE_ARRAY_NORMAL, mNumPoints, pNormals);
+    delete[] pNormals;
     sendGD();
-    GDPadCurr32();
-    mDispListLength = GDGetGDLObjOffset(&obj);
-    DCStoreRange(mDispList, length);
+    mMesh.send();
 }
 
-void WaterRoadModelInfo::sendGD() const {
+void WaterRoadModelInfo::sendGD() {
     f32 texU0A = 0.0f;
     f32 texU0B = ::sTexRateU0;
     f32 texU1A = 0.0f;
@@ -237,8 +211,7 @@ void WaterRoadModelInfo::sendGD() const {
         }
 
         u16 numPoints = mNumLinePoints * 2;
-        GDWrite_u8(GX_TRIANGLESTRIP);
-        GDWrite_u16(numPoints);
+        mMesh.begin(GX_TRIANGLESTRIP, numPoints);
 
         for (s32 lineIdx = 0; lineIdx < mNumLinePoints; lineIdx++) {
             f32 texV0 = mRailCoords[lineIdx] * ::sTexRateV0;
@@ -248,27 +221,23 @@ void WaterRoadModelInfo::sendGD() const {
             u16 pointIdx = calcPointIndex(lineIdx, loopIdx);
             u16 nextIdx = calcPointIndex(lineIdx, nextLoopIdx);
 
-            GDWrite_u16(pointIdx);
-            GDWrite_u16(pointIdx);
-            GDWrite_f32(texU0A);
-            GDWrite_f32(texV0);
-            GDWrite_f32(texU1A);
-            GDWrite_f32(texV1);
+            mMesh.index(NativeMesh::SLOT_POSITION, pointIdx);
+            mMesh.index(NativeMesh::SLOT_NORMAL, pointIdx);
+            mMesh.texCoord(0, texU0A, texV0);
+            mMesh.texCoord(1, texU1A, texV1);
             if (!mIsLow) {
-                GDWrite_f32(texU2A);
-                GDWrite_f32(texV2);
+                mMesh.texCoord(2, texU2A, texV2);
             }
+            mMesh.corner();
 
-            GDWrite_u16(nextIdx);
-            GDWrite_u16(nextIdx);
-            GDWrite_f32(texU0B);
-            GDWrite_f32(texV0);
-            GDWrite_f32(texU1B);
-            GDWrite_f32(texV1);
+            mMesh.index(NativeMesh::SLOT_POSITION, nextIdx);
+            mMesh.index(NativeMesh::SLOT_NORMAL, nextIdx);
+            mMesh.texCoord(0, texU0B, texV0);
+            mMesh.texCoord(1, texU1B, texV1);
             if (!mIsLow) {
-                GDWrite_f32(texU2B);
-                GDWrite_f32(texV2);
+                mMesh.texCoord(2, texU2B, texV2);
             }
+            mMesh.corner();
         }
 
         texU0A = texU0B;
@@ -287,7 +256,7 @@ void WaterRoadModelInfo::drawGD() const {
         loadMaterialHigh(nullptr);
     }
 
-    GXCallDisplayList(mDispList, mDispListLength);
+    mMesh.draw();
 }
 
 void WaterRoadModelInfo::drawDirect(const WaterRoad* pRoad) const {
@@ -419,13 +388,6 @@ void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
     GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
     GXSetVtxDesc(GX_VA_TEX2, GX_DIRECT);
-#ifdef TARGET_PC
-    GXSetArray(GX_VA_POS, mGpuPoints, sizeof(TVec3f));
-    GXSetArray(GX_VA_NRM, mGpuNormals, sizeof(TVec3s));
-#else
-    GXSetArray(GX_VA_POS, mPoints, sizeof(TVec3f));
-    GXSetArray(GX_VA_NRM, mNormals, sizeof(TVec3s));
-#endif
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);
@@ -525,13 +487,6 @@ void WaterRoadModelInfo::loadMaterialLow() const {
     GXSetVtxDesc(GX_VA_NRM, GX_INDEX16);
     GXSetVtxDesc(GX_VA_TEX0, GX_DIRECT);
     GXSetVtxDesc(GX_VA_TEX1, GX_DIRECT);
-#ifdef TARGET_PC
-    GXSetArray(GX_VA_POS, mGpuPoints, sizeof(TVec3f));
-    GXSetArray(GX_VA_NRM, mGpuNormals, sizeof(TVec3s));
-#else
-    GXSetArray(GX_VA_POS, mPoints, sizeof(TVec3f));
-    GXSetArray(GX_VA_NRM, mNormals, sizeof(TVec3s));
-#endif
     GXLoadPosMtxImm(MR::getCameraViewMtx(), 0);
     GXLoadNrmMtxImm(MR::getCameraViewMtx(), 0);
     GXSetCurrentMtx(0);

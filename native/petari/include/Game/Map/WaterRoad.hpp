@@ -2,6 +2,7 @@
 
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/JMapInfo.hpp"
+#include "Game/Util/NativeMesh.hpp"
 #include <JSystem/JGeometry.hpp>
 
 class JUTTexture;
@@ -61,7 +62,7 @@ public:
 
     void initPoints(WaterRoad*);
     void initDisplayList();
-    void sendGD() const;
+    void sendGD();
     void drawGD() const;
     void drawDirect(const WaterRoad*) const;
     s32 calcDemoDrawPointNum(const WaterRoad*) const;
@@ -79,11 +80,6 @@ public:
     /* 0x10 */ TVec3f* mPoints;
     /* 0x14 */ TVec3s* mNormals;
     /* 0x18 */ f32* mRailCoords;
-    /* 0x1C */ u32 mDispListLength;
-    /* 0x20 */ u8* mDispList;
-#ifdef TARGET_PC
-    // mPoints and mNormals as GX reads them (the console's byte order).
-    BEData< TVec3f >* mGpuPoints;
-    BEData< TVec3s >* mGpuNormals;
-#endif
+    // The tube as the renderer draws it (its points and normals by index, texture coordinates its own).
+    NativeMesh mMesh;
 };

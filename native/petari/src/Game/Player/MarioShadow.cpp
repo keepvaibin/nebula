@@ -16,7 +16,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <cstring>
-#include <revolution/gd.h>
 
 void MarioShadow_FORCE_MATCH_SDATA2() {
     (void)1.0f;
@@ -74,8 +73,6 @@ CollisionShadow::CollisionShadow(f32 radius, f32 length) : NameObj("\223\212\211
     _33A = 0;
     _33C = 0;
     _340 = nullptr;
-    _344 = nullptr;
-    _348 = 0;
     _308 = 0;
     _E = 0;
     _14 = radius;
@@ -632,27 +629,16 @@ void CollisionShadow::draw3() const {
 }
 
 void CollisionShadow::createDL() {
-    u8 buffer[512] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts guard(false);
-    GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-    GDSetCurrent(&displayList);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GDSetTevDirect(GX_TEVSTAGE0);
-    GDSetGenMode(0, 1, 1);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
+    _344.reserve(7);
+    _344.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    _344.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    _344.setTevDirect(GX_TEVSTAGE0);
+    _344.setGenMode(0, 1, 1);
+    _344.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    _344.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
+                                GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
     GXColor color = {0, 0, 0, 4};
-    GDSetTevColor(GX_TEVREG0, color);
-    GDPadCurr32();
-    u32 size = GDGetGDLObjOffset(&displayList);
-    _348 = size;
-    size = (size + 31) & ~31;
-    _344 = new (32) u8[size];
-    MR::copyMemory(_344, buffer, size);
-    DCStoreRange(_344, size);
+    _344.setTevColor(GX_TEVREG0, color);
 }
 
 void CollisionShadow::drawVolume() const {

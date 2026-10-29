@@ -34,9 +34,4 @@ public:
     /* 0xAC */ f32 _AC;
     /* 0xB0 */ OceanRingPipeInside* mPipeInside;
     /* 0xB4 */ OceanRingPipeOutside* mPipeOutside;
-#ifdef TARGET_PC
-    // _A0 and _A4 as GX reads them (the console's byte order); the CPU keeps using _A0/_A4.
-    BEData< TVec3f >* mGpuPositions;
-    BEData< TVec3s >* mGpuNormals;
-#endif
 };

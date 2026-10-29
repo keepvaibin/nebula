@@ -1,10 +1,8 @@
 #pragma once
 
 #include "Game/LiveActor/LiveActor.hpp"
+#include "Game/Util/NativeMesh.hpp"
 #include <JSystem/JGeometry.hpp>
-
-typedef void (*PosAttrFunc)(f32, f32, f32);
-typedef void (*TexAttrFunc)(f32, f32);
 
 class ElectricRailMovingPoint : public LiveActor {
 public:
@@ -35,9 +33,10 @@ public:
     void initPoints();
     void initDisplayList();
     void drawRailGX(f32) const;
-    void drawPlane(f32, f32, f32, f32) const;
+    void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
     void drawPlaneGX(f32, f32, f32, f32) const;
-    void setVertexAttribute(int, int, f32, f32, f32, f32, PosAttrFunc, TexAttrFunc) const;
+    // A segment's two corners into `pMesh`, or drawn now when it is null.
+    void setVertexAttribute(int, int, f32, f32, f32, f32, NativeMesh* pMesh) const;
     void updateHitSensorPos();
     bool updatePointPos();
     void updatePointPosAndModel();
@@ -61,8 +60,8 @@ public:
     /* 0xD0 */ TVec3f* mSensorOffsets;
     /* 0xD4 */ ElectricRailMovingPoint* mMovingPoints;
     s32 _D8;
-    void* _DC;
-    u32 _E0;
+    // The rail as the renderer draws it while it waits.
+    NativeMesh mMesh;
     s32 _E4;
     TVec3f* _E8;
     f32 _EC;

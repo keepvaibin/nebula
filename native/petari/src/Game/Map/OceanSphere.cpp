@@ -10,6 +10,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
+#include "Game/Util/NativeMesh.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
@@ -45,19 +46,10 @@ namespace {
 };  // namespace
 
 namespace {
-    u32 calcDisplayListSize(u32 count, u32 stride) {
-        count = (((count + 1) * count) & ~1) - count - 1;
-        return (((((count - 1) * 3 + stride * count) >> 2) & 0x07FFFFFF) + 2) << 5;
-    }
-
-    void beginDrawPolygon(int idx, s32 pointCount, bool useGD) {
-        if (useGD) {
-            GDOverflowCheck(1);
-            *__GDCurrentDL->ptr++ = GX_TRIANGLESTRIP;
-            GDOverflowCheck(2);
-            u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
-            *__GDCurrentDL->ptr++ = (u8)(vtxCount >> 8);
-            *__GDCurrentDL->ptr++ = (u8)vtxCount;
+    // `pMesh`: the mesh recording the sphere (null to draw it now).
+    void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh) {
+        if (pMesh != nullptr) {
+            pMesh->begin(GX_TRIANGLESTRIP, (u16)(((pointCount - 1 - idx) * 2 + 1)));
         } else {
             u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
             GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, vtxCount);
@@ -152,10 +144,6 @@ OceanSphere::OceanSphere(const char* pName)
     mTevReg1Back = back;
 
     mUseDisplayList = false;
-    mDispListFaceLen = 0;
-    mDispListFace = nullptr;
-    mDispListBackLen = 0;
-    mDispListBack = nullptr;
     mAlwaysUseRealDrawing = false;
     mIsCameraInside = false;
     mIsStartPosCamera = true;
@@ -316,31 +304,14 @@ void OceanSphere::initPoints() {
 }
 
 void OceanSphere::initDisplayList() {
-    MR::ProhibitSchedulerAndInterrupts prohibit(false);
-#ifdef TARGET_PC
-    // The face vertices carry their normals too (sendVertex): position, normal, two texture coordinates.
-    u32 sizeFace = ::calcDisplayListSize(mPointCount, 0x28);
-#else
-    u32 sizeFace = ::calcDisplayListSize(mPointCount, 0x1C);
-#endif
-    mDispListFace = new (0x20) u8[sizeFace];
-    DCInvalidateRange(mDispListFace, sizeFace);
-    GDLObj obj;
-    GDInitGDLObj(&obj, mDispListFace, sizeFace);
-    __GDCurrentDL = &obj;
-    drawSphere(false, true);
-    GDPadCurr32();
-    mDispListFaceLen = obj.ptr - obj.start;
-    DCStoreRange(mDispListFace, sizeFace);
-    u32 sizeBack = ::calcDisplayListSize(mPointCount, 0x18);
-    mDispListBack = new (0x20) u8[sizeBack];
-    DCInvalidateRange(mDispListBack, sizeBack);
-    GDInitGDLObj(&obj, mDispListBack, sizeBack);
-    __GDCurrentDL = &obj;
-    drawSphere(true, true);
-    GDPadCurr32();
-    mDispListBackLen = obj.ptr - obj.start;
-    DCStoreRange(mDispListBack, sizeBack);
+    // The face's corners carry the sphere's normals too (loadMaterialFace), the back's only them.
+    const u32 corners = 8 * mPointCount * (mPointCount + 1);
+    mMeshFace.init(NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1, corners);
+    drawSphere(false, &mMeshFace);
+    mMeshFace.send();
+    mMeshBack.init(NEBULA_SHAPE_NORMAL, corners);
+    drawSphere(true, &mMeshBack);
+    mMeshBack.send();
 }
 
 void OceanSphere::control() {
@@ -585,9 +556,9 @@ void OceanSphere::draw() const {
         loadMaterialBack();
 
         if (mUseDisplayList) {
-            GXCallDisplayList(mDispListBack, mDispListBackLen);
+            mMeshBack.draw();
         } else {
-            drawSphere(true, false);
+            drawSphere(true, nullptr);
         }
     }
 
@@ -599,16 +570,16 @@ void OceanSphere::draw() const {
         }
 
         if (mUseDisplayList) {
-            GXCallDisplayList(mDispListFace, mDispListFaceLen);
+            mMeshFace.draw();
         } else {
-            drawSphere(false, false);
+            drawSphere(false, nullptr);
         }
 
         return;
     }
 
     GXSetCullMode(GX_CULL_FRONT);
-    drawSphere(false, false);
+    drawSphere(false, nullptr);
 
     if (mIsCameraInside) {
         return;
@@ -619,7 +590,7 @@ void OceanSphere::draw() const {
     GXSetTevColor(GX_TEVREG1, mTevReg1Back);
     GXSetTevColor(GX_TEVREG2, sOceanSphereTevReg2Back);
     GXSetTevKColor(GX_KCOLOR0, sOceanSphereKColor0Back);
-    drawSphere(false, false);
+    drawSphere(false, nullptr);
 }
 
 const GXColor sOceanSphereFogFace = {0xFF, 0xFF, 0xFF, 0};
@@ -728,141 +699,109 @@ void OceanSphere::loadMaterialBack() const {
     GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, sOceanSphereFogBack);
 }
 
-void OceanSphere::drawSphere(bool useEnvMap, bool useGD) const {
+void OceanSphere::drawSphere(bool useEnvMap, NativeMesh* pMesh) const {
     const OceanSpherePoint* pPoint;
 
     for (s32 i = 0; i < mPointCount - 1; i++) {
-        ::beginDrawPolygon(i, mPointCount, useGD);
-        sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
+        sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
             pPoint = getPlanePointLeftUpper(i, j);
-            sendVertex(getPlanePointLeftUpper(i + 1, j), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointLeftUpper(i + 1, j), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointLeftUpper(mPointCount - 1 - j, i + 1);
-            sendVertex(getPlanePointLeftUpper(mPointCount - 1 - j, i), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointLeftUpper(mPointCount - 1 - j, i), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, useGD);
+        sendVertex(getPlanePointLeftUpper(i, i), useEnvMap, pMesh);
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
-        sendVertex(getPlanePointRightUpper(i, i), useEnvMap, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
+        sendVertex(getPlanePointRightUpper(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
             pPoint = getPlanePointRightUpper(i, j);
-            sendVertex(getPlanePointRightUpper(i + 1, j), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointRightUpper(i + 1, j), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointRightUpper(mPointCount - 1 - j, i + 1);
-            sendVertex(getPlanePointRightUpper(mPointCount - 1 - j, i), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointRightUpper(mPointCount - 1 - j, i), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        sendVertex(getPlanePointRightUpper(i, i), useEnvMap, useGD);
+        sendVertex(getPlanePointRightUpper(i, i), useEnvMap, pMesh);
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
-        sendVertex(getPlanePointLeftLower(i, i), useEnvMap, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
+        sendVertex(getPlanePointLeftLower(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
             pPoint = getPlanePointLeftLower(i, j);
-            sendVertex(getPlanePointLeftLower(i + 1, j), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointLeftLower(i + 1, j), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointLeftLower(mPointCount - 1 - j, i + 1);
-            sendVertex(getPlanePointLeftLower(mPointCount - 1 - j, i), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointLeftLower(mPointCount - 1 - j, i), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        sendVertex(getPlanePointLeftLower(i, i), useEnvMap, useGD);
+        sendVertex(getPlanePointLeftLower(i, i), useEnvMap, pMesh);
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
-        sendVertex(getPlanePointRightLower(i, i), useEnvMap, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
+        sendVertex(getPlanePointRightLower(i, i), useEnvMap, pMesh);
 
         for (s32 j = i + 1; j < mPointCount; j++) {
             pPoint = getPlanePointRightLower(i, j);
-            sendVertex(getPlanePointRightLower(i + 1, j), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointRightLower(i + 1, j), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
         GXEnd();
 
-        ::beginDrawPolygon(i, mPointCount, useGD);
+        ::beginDrawPolygon(i, mPointCount, pMesh);
 
         for (s32 j = 0; j < mPointCount - i - 1; j++) {
             pPoint = getPlanePointRightLower(mPointCount - 1 - j, i + 1);
-            sendVertex(getPlanePointRightLower(mPointCount - 1 - j, i), useEnvMap, useGD);
-            sendVertex(pPoint, useEnvMap, useGD);
+            sendVertex(getPlanePointRightLower(mPointCount - 1 - j, i), useEnvMap, pMesh);
+            sendVertex(pPoint, useEnvMap, pMesh);
         }
 
-        sendVertex(getPlanePointRightLower(i, i), useEnvMap, useGD);
+        sendVertex(getPlanePointRightLower(i, i), useEnvMap, pMesh);
         GXEnd();
     }
 }
 
-void OceanSphere::sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, bool useGD) const {
-    if (useGD) {
-        f32 posX, posY, posZ;
-        posX = pPoint->mPos.x;
-        posZ = pPoint->mPos.z;
-        posY = pPoint->mPos.y;
-        GDWrite_f32(posX);
-        GDWrite_f32(posY);
-        GDWrite_f32(posZ);
-
-#ifdef TARGET_PC
-        // The face's vertices carry the normal too, between the position and the texture coordinates
-        // (loadMaterialFace).
+void OceanSphere::sendVertex(const OceanSpherePoint* pPoint, bool useEnvMap, NativeMesh* pMesh) const {
+    if (pMesh != nullptr) {
+        pMesh->position(pPoint->mPos.x, pPoint->mPos.y, pPoint->mPos.z);
+        pMesh->normal(pPoint->mNormal.x, pPoint->mNormal.y, pPoint->mNormal.z);
         if (!useEnvMap) {
-            GDWrite_f32(pPoint->mNormal.x);
-            GDWrite_f32(pPoint->mNormal.y);
-            GDWrite_f32(pPoint->mNormal.z);
+            pMesh->texCoord(0, mTexOffs0X + pPoint->mTexCoord.x, mTexOffs0Y + pPoint->mTexCoord.y);
+            pMesh->texCoord(1, mTexOffs1X + pPoint->mTexCoord.x, mTexOffs1Y + pPoint->mTexCoord.y);
         }
-#endif
-
-        if (useEnvMap) {
-            f32 normalX, normalY, normalZ;
-            normalX = pPoint->mNormal.x;
-            normalZ = pPoint->mNormal.z;
-            normalY = pPoint->mNormal.y;
-            GDWrite_f32(normalX);
-            GDWrite_f32(normalY);
-            GDWrite_f32(normalZ);
-        } else {
-            f32 u0 = pPoint->mTexCoord.x;
-            f32 v0 = pPoint->mTexCoord.y;
-            f32 texY0 = mTexOffs0Y + v0;
-            f32 texX0 = mTexOffs0X + u0;
-            GDTexCoord2f32(texX0, texY0);
-
-            f32 u1 = pPoint->mTexCoord.x;
-            f32 v1 = pPoint->mTexCoord.y;
-            f32 texY1 = mTexOffs1Y + v1;
-            f32 texX1 = mTexOffs1X + u1;
-            GDTexCoord2f32(texX1, texY1);
-        }
+        pMesh->corner();
     } else {
         GXPosition3f32(pPoint->mPos.x, pPoint->mPos.y, pPoint->mPos.z);
 #ifdef TARGET_PC

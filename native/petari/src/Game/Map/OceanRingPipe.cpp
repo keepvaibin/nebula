@@ -1,3 +1,4 @@
+#include "Game/Util/NativeMesh.hpp"
 #include "Game/Map/OceanRingPipe.hpp"
 #include "Game/Map/Flag.hpp"
 #include "Game/Map/OceanRing.hpp"
@@ -65,31 +66,6 @@ void OceanRingPipe::movement() {
         _90 = false;
     }
 }
-
-#ifdef TARGET_PC
-namespace {
-    // GX reads vertex arrays in the console's byte order: big-endian copies of the CPU's arrays.
-    BEData< TVec3f >* makeGpuPositions(const TVec3f* pSrc, u32 num) {
-        BEData< TVec3f >* pDst = new (32) BEData< TVec3f >[num];
-        for (u32 i = 0; i < num; i++) {
-            pDst[i].x = pSrc[i].x;
-            pDst[i].y = pSrc[i].y;
-            pDst[i].z = pSrc[i].z;
-        }
-        return pDst;
-    }
-
-    BEData< TVec3s >* makeGpuNormals(const TVec3s* pSrc, u32 num) {
-        BEData< TVec3s >* pDst = new (32) BEData< TVec3s >[num];
-        for (u32 i = 0; i < num; i++) {
-            pDst[i].x = pSrc[i].x;
-            pDst[i].y = pSrc[i].y;
-            pDst[i].z = pSrc[i].z;
-        }
-        return pDst;
-    }
-}  // namespace
-#endif
 
 void OceanRingPipe::initPoints() {
     _98 = static_cast< s32 >(MR::getRailTotalLength(this) / 300.0f) + 1;
@@ -167,8 +143,14 @@ void OceanRingPipe::initPoints() {
         MR::moveCoord(this, length);
     }
 
-#ifdef TARGET_PC
-    mGpuPositions = makeGpuPositions(_A0, _94);
-    mGpuNormals = makeGpuNormals(_A4, _94);
-#endif
+    // The points and normals as the renderer reads them (the normals as GX reads S16 normals: 1.14 fixed point).
+    NativeMesh::sendArray(_A0, NEBULA_SHAPE_ARRAY_POSITION, _94, _A0);
+    f32* pNormals = new f32[3 * _94];
+    for (s32 i = 0; i < _94; i++) {
+        pNormals[3 * i] = _A4[i].x / 16384.0f;
+        pNormals[3 * i + 1] = _A4[i].y / 16384.0f;
+        pNormals[3 * i + 2] = _A4[i].z / 16384.0f;
+    }
+    NativeMesh::sendArray(_A4, NEBULA_SHAPE_ARRAY_NORMAL, _94, pNormals);
+    delete[] pNormals;
 }

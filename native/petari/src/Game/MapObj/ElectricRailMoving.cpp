@@ -8,7 +8,6 @@
 #include "Game/Util/Color.hpp"
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/gd/GDBase.h>
 #include <revolution/gx/GXEnum.h>
 
 namespace {
@@ -49,7 +48,7 @@ void ElectricRailMovingPoint::attackSensor(HitSensor* pSender, HitSensor* pRecei
 }
 
 ElectricRailMoving::ElectricRailMoving(const char* pName)
-    : LiveActor(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), _CC(0x80), mSensorOffsets(), _DC(), _E0(),
+    : LiveActor(pName), mSegmentNum(10), mMovementSpeed(10.0f), mSegmentLength(500.0f), mStackHeight(1), _CC(0x80), mSensorOffsets(),
       _E4(), _E8(), _EC(), _F0(30.0f) {
     _9C.identity();
 }
@@ -79,7 +78,7 @@ void ElectricRailMoving::draw() const {
         GXSetTevColor(GX_TEVREG1, Color8(0xFF, 0xFF, 0xFF, _CC));
 
         if (isNerve(GET_NERVE(ElectricRailMoving, ElectricRailMovingNrvWait))) {
-            GXCallDisplayList(_DC, _E0);
+            mMesh.draw();
         } else {
             drawRailGX(_F0);
         }
@@ -227,19 +226,10 @@ void ElectricRailMoving::initPoints() {
 }
 
 void ElectricRailMoving::initDisplayList() {
-    MR::ProhibitSchedulerAndInterrupts interrupt(false);
-    _E0 = ElectricRailFunction::calcDisplayListSize(20, _E4 * 4 * mStackHeight);
-    _DC = new (32) u8[_E0];
-
-    GDLObj dl;
-    GDInitGDLObj(&dl, _DC, _E0);
-    __GDCurrentDL = &dl;
-
-    drawPlane(30.0f, 30.0f, -30.0f, -30.0f);
-    drawPlane(-30.0f, 30.0f, 30.0f, -30.0f);
-    GDPadCurr32();
-    _E0 = dl.ptr - dl.start;
-    DCStoreRange(_DC, _E0);
+    mMesh.init(NEBULA_SHAPE_TEXCOORD0, _E4 * 4 * mStackHeight);
+    drawPlane(mMesh, 30.0f, 30.0f, -30.0f, -30.0f);
+    drawPlane(mMesh, -30.0f, 30.0f, 30.0f, -30.0f);
+    mMesh.send();
 }
 
 void ElectricRailMoving::drawRailGX(f32 a1) const {
@@ -247,19 +237,12 @@ void ElectricRailMoving::drawRailGX(f32 a1) const {
     drawPlaneGX(-a1, a1, a1, -a1);
 }
 
-void ElectricRailMoving::drawPlane(f32 a2, f32 a3, f32 a4, f32 a5) const {
+void ElectricRailMoving::drawPlane(NativeMesh& rMesh, f32 a2, f32 a3, f32 a4, f32 a5) const {
     for (s32 i = 0; i < mStackHeight; i++) {
-        u32 vertexFormat = (2 * _E4) & 0xFFFE;
-
-        GDOverflowCheck(1);
-        *__GDCurrentDL->ptr++ = 0x98;
-
-        GDOverflowCheck(2);
-        *__GDCurrentDL->ptr++ = vertexFormat >> 8;
-        *__GDCurrentDL->ptr++ = vertexFormat;
+        rMesh.begin(GX_TRIANGLESTRIP, (2 * _E4) & 0xFFFE);
 
         for (s32 j = 0; j < _E4; j++) {
-            setVertexAttribute(j, i, a2, a3, a4, a5, GDPosition3f32, GDTexCoord2f32);
+            setVertexAttribute(j, i, a2, a3, a4, a5, &rMesh);
         }
     }
 }
@@ -269,12 +252,12 @@ void ElectricRailMoving::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
         GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, _E4 * 2);
 
         for (s32 j = 0; j < _E4; j++) {
-            setVertexAttribute(j, i, a1, a2, a3, a4, GXPosition3f32, GXTexCoord2f32);
+            setVertexAttribute(j, i, a1, a2, a3, a4, nullptr);
         }
     }
 }
 
-void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, PosAttrFunc pPosAttr, TexAttrFunc pTexAttr) const {
+void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 a6, f32 a7, NativeMesh* pMesh) const {
     f32 railLength = MR::getRailTotalLength(this);
 
     if (100.0f * a2 >= railLength) {
@@ -309,10 +292,25 @@ void ElectricRailMoving::setVertexAttribute(int a2, int a3, f32 a4, f32 a5, f32 
         MR::makeAxisFrontUp(&axis1, &axis2, negRailDirection, gravity);
     }
 
-    pPosAttr(position.x + axis1.x * a4 + axis2.x * a5, position.y + axis1.y * a4 + axis2.y * a5, position.z + axis1.z * a4 + axis2.z * a5);
-    pTexAttr(texCoord, 0.0f);
-    pPosAttr(position.x + axis1.x * a6 + axis2.x * a7, position.y + axis1.y * a6 + axis2.y * a7, position.z + axis1.z * a6 + axis2.z * a7);
-    pTexAttr(texCoord, 1.0f);
+    const f32 x0 = position.x + axis1.x * a4 + axis2.x * a5;
+    const f32 y0 = position.y + axis1.y * a4 + axis2.y * a5;
+    const f32 z0 = position.z + axis1.z * a4 + axis2.z * a5;
+    const f32 x1 = position.x + axis1.x * a6 + axis2.x * a7;
+    const f32 y1 = position.y + axis1.y * a6 + axis2.y * a7;
+    const f32 z1 = position.z + axis1.z * a6 + axis2.z * a7;
+    if (pMesh != nullptr) {
+        pMesh->position(x0, y0, z0);
+        pMesh->texCoord(0, texCoord, 0.0f);
+        pMesh->corner();
+        pMesh->position(x1, y1, z1);
+        pMesh->texCoord(0, texCoord, 1.0f);
+        pMesh->corner();
+    } else {
+        GXPosition3f32(x0, y0, z0);
+        GXTexCoord2f32(texCoord, 0.0f);
+        GXPosition3f32(x1, y1, z1);
+        GXTexCoord2f32(texCoord, 1.0f);
+    }
 }
 
 void ElectricRailMoving::updateHitSensorPos() {
