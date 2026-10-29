@@ -379,6 +379,30 @@ namespace J3DNativeState {
         rLight.mDirection[2] = -nz;
     }
 
+    // GX's distance for a light at infinity.
+    const f32 cInfiniteLightDistance = 1.0e18f;
+
+    void initSpecularDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz) {
+        const f32 hx = -nx;
+        const f32 hy = -ny;
+        const f32 hz = 1.0f - nz;
+        f32 mag = hx * hx + hy * hy + hz * hz;
+        if (mag != 0.0f) {
+            mag = 1.0f / sqrtf(mag);
+        }
+        initSpecularDirHA(pObj, nx, ny, nz, hx * mag, hy * mag, hz * mag);
+    }
+
+    void initSpecularDirHA(GXLightObj* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
+        J3DNativeLight& rLight = light(pObj);
+        rLight.mDirection[0] = hx;
+        rLight.mDirection[1] = hy;
+        rLight.mDirection[2] = hz;
+        rLight.mPosition[0] = nx * -cInfiniteLightDistance;
+        rLight.mPosition[1] = ny * -cInfiniteLightDistance;
+        rLight.mPosition[2] = nz * -cInfiniteLightDistance;
+    }
+
     void initLightAttn(GXLightObj* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
         J3DNativeLight& rLight = light(pObj);
         rLight.mAngle[0] = a0;

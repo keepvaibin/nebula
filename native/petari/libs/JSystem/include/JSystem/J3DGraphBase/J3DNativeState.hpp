@@ -38,6 +38,10 @@ namespace J3DNativeState {
     void initLightColor(GXLightObj* pObj, GXColor color);
     void initLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z);
     void initLightDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz);
+    // A specular light: its direction as a light at infinity, with the half-angle vector (computed for a viewer down
+    // -Z, or given).
+    void initSpecularDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz);
+    void initSpecularDirHA(GXLightObj* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz);
     void initLightAttn(GXLightObj* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2);
     void initLightSpot(GXLightObj* pObj, f32 cutoff, GXSpotFn spotFn);
     void initLightDistAttn(GXLightObj* pObj, f32 refDistance, f32 refBrightness, GXDistAttnFn distFn);

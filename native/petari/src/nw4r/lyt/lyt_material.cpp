@@ -747,7 +747,7 @@ namespace nw4r {
                             tlutName = tlutID++;
                         }
 
-                        GXInitTexObjTlut(&texObj, tlutName);
+                        J3DNativeTexture::setTlut(&texObj, tlutName);
 
                         GXTlutObj tlutObj;
                         rTexMap.Get(&tlutObj);

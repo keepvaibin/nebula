@@ -27,31 +27,59 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace J3DNativeTexture {
     u32 imageSize(u8 format, u16 width, u16 height, u8 levels) {
-        // A tile is 32 bytes (RGBA8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel.
-        u32 shiftX = 2, shiftY = 2;
+        // A tile is 32 bytes (RGBA8 and Z24X8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel
+        // (texture and copy formats); an unknown format is a tile per texel, as GX counts it.
+        u32 shiftX, shiftY;
         switch (format) {
-        case GX_TF_I4:
         case GX_TF_C4:
+        case GX_TF_I4:
         case GX_TF_CMPR:
+        case GX_CTF_R4:
+        case GX_CTF_Z4:
             shiftX = 3;
             shiftY = 3;
             break;
+        case GX_TF_C8:
         case GX_TF_I8:
         case GX_TF_IA4:
-        case GX_TF_C8:
+        case GX_TF_A8:
         case GX_TF_Z8:
+        case GX_CTF_RA4:
+        case GX_CTF_R8:
+        case GX_CTF_G8:
+        case GX_CTF_B8:
+        case GX_CTF_Z8M:
+        case GX_CTF_Z8L:
             shiftX = 3;
             shiftY = 2;
             break;
+        case GX_TF_C14X2:
+        case GX_TF_IA8:
+        case GX_TF_RGB565:
+        case GX_TF_RGB5A3:
+        case GX_TF_RGBA8:
+        case GX_TF_Z16:
+        case GX_TF_Z24X8:
+        case GX_CTF_RA8:
+        case GX_CTF_RG8:
+        case GX_CTF_GB8:
+        case GX_CTF_Z16L:
+            shiftX = 2;
+            shiftY = 2;
+            break;
         default:
+            shiftX = 0;
+            shiftY = 0;
             break;
         }
-        // RGBA8 and Z24X8 take two tiles a block (AR and GB, or the depth's halves).
         const u32 tileBytes = format == GX_TF_RGBA8 || format == GX_TF_Z24X8 ? 64 : 32;
         u32 size = 0;
         u32 w = width, h = height;
         for (u32 level = 0; level < (levels != 0 ? levels : 1); level++) {
             size += ((w + (1 << shiftX) - 1) >> shiftX) * ((h + (1 << shiftY) - 1) >> shiftY) * tileBytes;
+            if (w == 1 && h == 1) {
+                break;
+            }
             w = w > 1 ? w >> 1 : 1;
             h = h > 1 ? h >> 1 : 1;
         }
@@ -187,6 +215,10 @@ namespace J3DNativeTexture {
 
     u32 getTlut(const GXTexObj* pObj) {
         return texture(pObj).mTlutName;
+    }
+
+    void setTlut(GXTexObj* pObj, u32 tlutName) {
+        texture(pObj).mTlutName = tlutName;
     }
 
     void initTlut(GXTlutObj* pObj, void* pLut, GXTlutFmt format, u16 entries) {

@@ -23,7 +23,7 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
         mUseIndirect = 0;
     }
 
-    u32 size = GXGetTexBufferSize(32, 32, GX_TF_IA8, GX_FALSE, 1);
+    u32 size = J3DNativeTexture::imageSize(GX_TF_IA8, 32, 32, 1);
     ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new (32) u8[size + sizeof(ResTIMG)]);
     pImage->mFormat = GX_TF_IA8;
     pImage->mWidth = 32;

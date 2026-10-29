@@ -6,7 +6,7 @@
 
 JUTTexture::JUTTexture(int width, int height, GXTexFmt format) {
     mFlag = mFlag & 2 | 1;
-    u32 bufSize = GXGetTexBufferSize(width, height, format, GX_FALSE, 1);
+    u32 bufSize = J3DNativeTexture::imageSize(format, width, height, 1);
 
     ResTIMG* texBuf = reinterpret_cast< ResTIMG* >(new (sizeof(ResTIMG)) u8[bufSize + sizeof(ResTIMG)]);
     _3C = texBuf;

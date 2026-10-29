@@ -27,8 +27,8 @@ void LightFunction::initLightRegisterAll() {
         J3DNativeState::initLightPos(&obj, 0.0f, 0.0f, 0.0f);
         J3DNativeState::initLightDir(&obj, 0.0f, -1.0f, 0.0f);
         J3DNativeState::initLightAttn(&obj, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f);
-        GXInitSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
-        GXInitSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
+        J3DNativeState::initSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
+        J3DNativeState::initSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
         J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
         J3DNativeState::loadLightObjImm(&obj, cLightDataIDs[i]);
     }
@@ -214,7 +214,7 @@ void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     GXLightObj obj;
     f32 v = pInfo->_18;
     J3DNativeState::initLightColor(&obj, GXColor(pInfo->_14));
-    GXInitSpecularDir(&obj, v7.x, v7.y, v7.z);
+    J3DNativeState::initSpecularDir(&obj, v7.x, v7.y, v7.z);
     J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
     J3DNativeState::loadLightObjImm(&obj, GX_LIGHT3);
 }

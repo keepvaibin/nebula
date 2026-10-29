@@ -49,6 +49,8 @@ namespace J3DNativeTexture {
     void getLODAll(const GXTexObj* pObj, GXTexFilter* pMinFilter, GXTexFilter* pMagFilter, f32* pMinLod, f32* pMaxLod,
                    f32* pLodBias, GXBool* pBiasClamp, GXBool* pEdgeLod, GXAnisotropy* pMaxAniso);
     u32 getTlut(const GXTexObj* pObj);
+    // GXInitTexObjTlut: the palette place a colour-indexed texture reads.
+    void setTlut(GXTexObj* pObj, u32 tlutName);
     // An image's bytes handed to the renderer (nebula_game_api.h texture_image): where it is loaded or rewritten.
     // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps).
     void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);

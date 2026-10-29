@@ -624,18 +624,22 @@ namespace TDDraw {
     }
 
     void project2D(TVec3f* pDest, const TVec3f& rPosition) {
-        f32 projection[7];
+        // The point in the camera's view, its perspective projection, then the viewport (left, top, width, height,
+        // near, far).
         f32 viewport[6];
         J3DNativeView::getViewportv(viewport);
         const TProj3f& rProjection = MR::getCameraProjectionMtx();
-        projection[0] = 0.0f;
-        projection[1] = rProjection.mMtx[0][0];
-        projection[2] = rProjection.mMtx[0][2];
-        projection[3] = rProjection.mMtx[1][1];
-        projection[4] = rProjection.mMtx[1][2];
-        projection[5] = rProjection.mMtx[2][2];
-        projection[6] = rProjection.mMtx[2][3];
-        GXProject(rPosition.x, rPosition.y, rPosition.z, MR::getCameraViewMtx(), projection, viewport, &pDest->x, &pDest->y, &pDest->z);
+        const TPos3f& rView = MR::getCameraViewMtx();
+        const f32 eyeX = rView.mMtx[0][0] * rPosition.x + rView.mMtx[0][1] * rPosition.y + rView.mMtx[0][2] * rPosition.z + rView.mMtx[0][3];
+        const f32 eyeY = rView.mMtx[1][0] * rPosition.x + rView.mMtx[1][1] * rPosition.y + rView.mMtx[1][2] * rPosition.z + rView.mMtx[1][3];
+        const f32 eyeZ = rView.mMtx[2][0] * rPosition.x + rView.mMtx[2][1] * rPosition.y + rView.mMtx[2][2] * rPosition.z + rView.mMtx[2][3];
+        const f32 clipX = eyeX * rProjection.mMtx[0][0] + eyeZ * rProjection.mMtx[0][2];
+        const f32 clipY = eyeY * rProjection.mMtx[1][1] + eyeZ * rProjection.mMtx[1][2];
+        const f32 clipZ = eyeZ * rProjection.mMtx[2][2] + rProjection.mMtx[2][3];
+        const f32 invW = 1.0f / -eyeZ;
+        pDest->x = clipX * viewport[2] / 2 * invW + viewport[0] + viewport[2] / 2;
+        pDest->y = -clipY * viewport[3] / 2 * invW + viewport[1] + viewport[3] / 2;
+        pDest->z = clipZ * (viewport[5] - viewport[4]) * invW + viewport[5];
         if (MR::isScreen16Per9()) {
             pDest->x *= static_cast< f32 >(MR::getScreenWidth()) / MR::getFrameBufferWidth();
         }
