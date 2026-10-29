@@ -216,10 +216,6 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t token,
     std::uint32_t& value);
 
-// The native game builds the arrays LOAD_INDX reads (matrices, lights) in host byte order; the host sets this
-// before the first frame. Everything else the GPU reads stays big-endian.
-void set_indexed_load_host_order(bool host_order) noexcept;
-
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept;

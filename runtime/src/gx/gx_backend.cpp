@@ -10209,8 +10209,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " fifo-cp-us=" << frame_fifo_profile_.cp_us
                   << " fifo-xf-count=" << frame_fifo_profile_.xf_count
                   << " fifo-xf-us=" << frame_fifo_profile_.xf_us
-                  << " fifo-indx-count=" << frame_fifo_profile_.indx_count
-                  << " fifo-indx-us=" << frame_fifo_profile_.indx_us
                   << " fifo-metrics-count="
                   << frame_fifo_profile_.metrics_count
                   << " fifo-metrics-us=" << frame_fifo_profile_.metrics_us

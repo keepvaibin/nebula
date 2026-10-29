@@ -102,11 +102,6 @@ bool peek_efb_published(
     return backend().peek_efb_published(x, y, kind, token, value);
 }
 
-void set_indexed_load_host_order(bool host_order) noexcept {
-    extern std::atomic<bool> g_indexed_load_host_order;
-    g_indexed_load_host_order.store(host_order, std::memory_order_relaxed);
-}
-
 void notify_guest_memory_write(
     std::uint32_t address,
     std::uint32_t size) noexcept {

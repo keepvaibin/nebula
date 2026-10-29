@@ -306,8 +306,6 @@ struct FifoParserProfile {
     std::uint64_t cp_us = 0;
     std::uint64_t xf_count = 0;
     std::uint64_t xf_us = 0;
-    std::uint64_t indx_count = 0;
-    std::uint64_t indx_us = 0;
     std::uint64_t metrics_count = 0;
     std::uint64_t metrics_us = 0;
     std::uint64_t inval_vtx_count = 0;
@@ -384,7 +382,6 @@ private:
     const GuestMemory* frozen_sorted_memory_ = nullptr;
     void run_window(
         FifoCursor& cursor,
-        GuestMemory* memory,
         FifoSink& sink,
         GxState& state,
         int depth);

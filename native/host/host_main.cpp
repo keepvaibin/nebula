@@ -3924,7 +3924,6 @@ int main(int argc, char** argv) {
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");
-    galaxy::gx::set_indexed_load_host_order(true);
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the AI thread is detached)
     gAudio->set_channel_owner(gModule.audio_channel_owner);
     // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation

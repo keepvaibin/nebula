@@ -28,17 +28,6 @@ std::uint64_t elapsed_fifo_us(
             end - start).count());
 }
 
-// The arrays LOAD_INDX reads (matrices, lights) are computed by the CPU: big-endian from the console's CPU, in host
-// order from the native game (set_indexed_load_host_order), where data from files stays big-endian.
-std::atomic<bool> g_indexed_load_host_order{false};
-
-void read_indexed_values(const std::byte* src, std::uint32_t* dst, std::size_t count) {
-    if (g_indexed_load_host_order.load(std::memory_order_relaxed)) {
-        std::memcpy(dst, src, count * sizeof(std::uint32_t));
-    } else {
-        swap32_block(src, dst, count);
-    }
-}
 
 void swap32_block(
     const std::byte* src,
@@ -197,7 +186,7 @@ void FifoParser::run(
     cursor.recover_truncation = false;
 
     try {
-        run_window(cursor, memory, sink, state, 0);
+        run_window(cursor, sink, state, 0);
     } catch (const GxFatalError& err) {
         write_dump(fifo, err.fifo_offset());
         throw;
@@ -220,7 +209,7 @@ std::size_t FifoParser::run_available(
     cursor.recover_truncation = true;
 
     try {
-        run_window(cursor, memory, sink, state, 0);
+        run_window(cursor, sink, state, 0);
         return cursor.offset;
     } catch (const FifoNeedMoreData& pending) {
         return pending.command_offset();
@@ -256,10 +245,6 @@ static bool top_level_command_complete(
     case op::kLoadXfReg:
         return available >= 4u &&
             available >= 4u + 4u * ((static_cast<std::size_t>(u16_at(0)) & 0xFu) + 1u);
-    case op::kLoadIndxA:
-    case op::kLoadIndxB:
-    case op::kLoadIndxC:
-    case op::kLoadIndxD:
     case op::kLoadBpReg:
         return available >= 4u;
     case op::kHostMarker:
@@ -286,7 +271,6 @@ static bool top_level_command_complete(
 
 void FifoParser::run_window(
     FifoCursor& cursor,
-    GuestMemory* memory,
     FifoSink& sink,
     GxState& state,
     int depth) {
@@ -366,49 +350,6 @@ void FifoParser::run_window(
                 &FifoParserProfile::xf_us);
             break;
         }
-
-        case op::kLoadIndxA:
-        case op::kLoadIndxB:
-        case op::kLoadIndxC:
-        case op::kLoadIndxD: {
-            // A-D read the GXSetArray position-matrix, normal-matrix, texture-matrix and light
-            // arrays: bases in CP 0xAC-0xAF, strides in bytes per element (not the transfer
-            // size) in CP 0xBC-0xBF.
-            const std::uint8_t array_slot =
-                static_cast<std::uint8_t>((opcode - op::kLoadIndxA) / 8u);
-
-            const std::uint16_t idx      = cursor.read_u16();
-            const std::uint16_t len_addr = cursor.read_u16();
-            const std::uint16_t length   =
-                static_cast<std::uint16_t>((len_addr >> 12) + 1u);
-            const std::uint16_t xf_addr  =
-                static_cast<std::uint16_t>(len_addr & 0x0FFFu);
-
-            // The stride register, not the length, spaces the elements: a normal-matrix load
-            // reads 9 words from an array of 12-word matrices.
-            const std::uint32_t array_base =
-                state.cp(static_cast<std::uint8_t>(0xACu + array_slot));
-            const std::uint32_t array_stride =
-                state.cp(static_cast<std::uint8_t>(0xBCu + array_slot));
-            const std::uint32_t guest_addr =
-                array_base + static_cast<std::uint32_t>(idx) * array_stride;
-
-            const std::uint32_t byte_size =
-                static_cast<std::uint32_t>(length) * 4u;
-            const auto guest_window =
-                resolve_guest(memory, guest_addr, byte_size, cursor);
-            std::array<std::uint32_t, 16> values{};
-            read_indexed_values(guest_window.data(), values.data(), length);
-            state.load_xf_indexed(xf_addr, values.data(), length,
-                                  (static_cast<std::uint32_t>(array_slot) << 16u) |
-                                      static_cast<std::uint32_t>(idx));
-            finish_profile(
-                &FifoParserProfile::indx_count,
-                &FifoParserProfile::indx_us);
-            break;
-        }
-
-
 
         case op::kHostMarker: {
             if (depth != 0) {
