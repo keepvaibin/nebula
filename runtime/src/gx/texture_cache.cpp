@@ -1201,6 +1201,12 @@ void TextureCache::drop_registered_images(std::span<const GuestRange> ranges) {
             if (it->first + it->second->size() <= begin) {
                 break;
             }
+            static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
+            if (log_drops) {
+                std::fprintf(stderr, "[texture] handed-over image dropped: %08X (%zu bytes) by a write at %08llX+%llu\n", it->first,
+                             it->second->size(), static_cast<unsigned long long>(begin),
+                             static_cast<unsigned long long>(end - begin));
+            }
             replaced_images_.push_back(std::move(it->second));
             it = registered_images_.erase(it);
         }
