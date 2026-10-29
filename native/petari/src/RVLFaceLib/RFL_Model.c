@@ -917,7 +917,14 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
             ptr8 += sizeof(u16);
 
             byteSize = SIZE_VTX_TXC(shape->numVtxTxc);
-            memcpy(shape->vtxTxcBuf, ptr8, byteSize);
+            {
+                // The resource's big-endian coordinates, in host byte order for RFLiDrawShape.
+                const s16* ptr16 = (const s16*)ptr8;
+                u32 k;
+                for (k = 0; k < byteSize / sizeof(s16); k++) {
+                    shape->vtxTxcBuf[k] = RFLI_LDS16(ptr16[k]);
+                }
+            }
             ptr8 += byteSize;
         }
     }
@@ -984,10 +991,10 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
 }
 
 static void RFLiTransformCoordinate(s16* to, const s16* from) {
-    // to is a GX vertex array: the console's byte order (RFLI_ST16).
-    RFLI_ST16(to[coordinateData.rOff], coordinateData.rRev ? -from[0] : from[0]);
-    RFLI_ST16(to[coordinateData.uOff], coordinateData.uRev ? -from[1] : from[1]);
-    RFLI_ST16(to[coordinateData.fOff], coordinateData.fRev ? -from[2] : from[2]);
+    // to is one of the shape's arrays RFLiDrawShape reads (host byte order).
+    to[coordinateData.rOff] = coordinateData.rRev ? -from[0] : from[0];
+    to[coordinateData.uOff] = coordinateData.uRev ? -from[1] : from[1];
+    to[coordinateData.fOff] = coordinateData.fRev ? -from[2] : from[2];
 }
 
 static void RFLDrawShape(const RFLCharModel* model) {

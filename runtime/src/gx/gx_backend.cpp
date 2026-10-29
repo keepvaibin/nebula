@@ -12242,6 +12242,12 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
         }
     } else {
         ++frame_tex_copies_;
+        // The copy overwrites its destination: an image handed over there (memory the game freed and reused, as
+        // the Mii library's face masks reuse its part textures' buffers) no longer describes those bytes. The
+        // extent is the destination's tile rows (4 lines each, the shortest tile) over the source height.
+        const TextureCache::GuestRange copied{
+            params.dest_addr, params.dest_stride * ((static_cast<std::uint32_t>(params.src_height) + 3u) / 4u)};
+        texture_cache_.drop_registered_images(std::span<const TextureCache::GuestRange>(&copied, 1u));
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = state_.pe_control().pixel_format == 3u;
