@@ -16,7 +16,6 @@
 #include <JSystem/JKernel/JKRUnitHeap.hpp>
 
 #include <JSystem/JUtility/JUTConsole.hpp>
-#include <JSystem/JUtility/JUTException.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 #include <JSystem/JSupport/JSUInputStream.hpp>
@@ -215,30 +214,6 @@ extern "C" void PSMTXRotRad(Mtx pMtx, char axis, f32 radians) {
     f32 sin = JMASinRadian(radians);
     f32 cos = JMACosRadian(radians);
     PSMTXRotTrig(pMtx, axis, sin, cos);
-}
-
-bool JUTException::readPad(u32* pTrigger, u32* pHold) {
-    OSTime startTime = OSGetTime();
-    OSTime elapsed;
-
-    do {
-        elapsed = OSTicksToMilliseconds(OSGetTime() - startTime);
-    } while (elapsed < 50);
-
-    *pHold = 0;
-    *pTrigger = 0;
-
-    MR::getPadDataForExceptionNoInit(WPAD_CHAN0, pHold, pTrigger);
-    MR::getPadDataForExceptionNoInit(WPAD_CHAN1, pHold, pTrigger);
-    MR::getPadDataForExceptionNoInit(WPAD_CHAN2, pHold, pTrigger);
-    MR::getPadDataForExceptionNoInit(WPAD_CHAN3, pHold, pTrigger);
-
-    return true;
-}
-
-bool JUTException::queryMapAddress_single(char* pMap, u32 address, s32 section, u32* pAddress, u32* pSize, char* pLine, u32 length, bool print,
-                                          bool newline) {
-    return false;
 }
 
 void J3DShapeMtx::loadMtxIndx_PNGP(int slot, u16 index) const {
