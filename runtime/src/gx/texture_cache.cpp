@@ -1646,6 +1646,12 @@ bool TextureCache::load_tlut(
 
     // A palette the game handed over (texture_image) loads from its copy.
     const std::byte* handed_over = registered_bytes(src_addr, transfer);
+    if (handed_over == nullptr) {
+        static const bool log_guest = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
+        if (log_guest) {
+            std::fprintf(stderr, "[texture] palette from guest memory: %08X (%u bytes)\n", src_addr, transfer);
+        }
+    }
     const std::byte* src_ptr = handed_over != nullptr ? handed_over : resolve_guest_tex(memory, src_addr, transfer);
     // An identical reload changes no palette.
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
@@ -2174,6 +2180,24 @@ TextureHandle TextureCache::get(
             levels = full_chain;
             guest_levels = 1;
             generated_mips = levels > 1u;
+        }
+    }
+    // Authored levels come from the image the game handed over: a sampler asking for more than it holds gets those.
+    if (guest_levels > 1u) {
+        const auto handed = registered_images_.find(image.guest_addr);
+        if (handed != registered_images_.end()) {
+            const unsigned wanted = guest_levels;
+            while (guest_levels > 1u &&
+                   texture_guest_byte_size(image.format, image.width, image.height, guest_levels) > handed->second->size()) {
+                --guest_levels;
+            }
+            levels = guest_levels;
+            static const bool log_clamp = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
+            if (log_clamp && guest_levels != wanted) {
+                std::fprintf(stderr, "[texture] levels limited to the handed-over image: %08X %ux%u format %u %u of %u\n",
+                             image.guest_addr, image.width, image.height, static_cast<unsigned>(image.format),
+                             guest_levels, wanted);
+            }
         }
     }
     const auto config_end = trace_stalls

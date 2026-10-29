@@ -517,8 +517,9 @@ static void registerTextureImages(const ResTIMG* pRes, u32 num) {
     for (u32 i = 0; i < num; i++) {
         const ResTIMG& rTimg = pRes[i];
         const u8* pImage = reinterpret_cast< const u8* >(&rTimg) + (s32)rTimg.mImageDataOffset;
+        // Every level the file holds: a material may sample levels the image's own mip flag leaves off.
         J3DNativeTexture::registerImage(pImage, rTimg.mFormat, rTimg.mWidth, rTimg.mHeight,
-                                        rTimg.mMipmap ? rTimg.mImageNum : 1);
+                                        rTimg.mImageNum != 0 ? rTimg.mImageNum : 1);
         if (rTimg.mPaletteNum != 0) {
             J3DNativeTexture::registerPalette(reinterpret_cast< const u8* >(&rTimg) + (s32)rTimg.mPaletteDataOffset,
                                               rTimg.mPaletteNum);

@@ -88,6 +88,7 @@ inline int64_t perf_hint_retrace() noexcept { return 0; }
 #include <fstream>
 #include <functional>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <optional>
 #include <span>
@@ -461,6 +462,26 @@ void load_module(const fs::path& path) {
 #if defined(NEBULA_HOST_RENDERER)
 void svc_gpu_coherent(void*, uint32_t physical, uint32_t size);
 
+#if defined(NEBULA_HOST_RENDERER)
+// The images handed to the renderer (texture_image), by physical address: one handed over again unchanged needs no
+// new record. Any write over one forgets it, as the renderer drops its copy then: the game handing the same bytes over
+// after reloading a file must reach the renderer again.
+std::mutex gHandedLock;
+std::map<uint64_t, std::shared_ptr<const std::vector<std::byte>>> gHanded;
+
+void forget_handed(uint64_t physical, uint32_t size) {
+    const std::lock_guard guard(gHandedLock);
+    auto it = gHanded.lower_bound(physical + size);
+    while (it != gHanded.begin()) {
+        --it;
+        if (it->first + it->second->size() <= physical) {
+            break;
+        }
+        it = gHanded.erase(it);
+    }
+}
+#endif
+
 // Host writes into game memory (disc DMA): the renderer drops what it holds of it. `dst` is in one of the game's
 // regions.
 void mark_written(const void* dst, uint32_t size) {
@@ -470,6 +491,9 @@ void mark_written(const void* dst, uint32_t size) {
     for (int i = 0; i < count; i++) {
         if (p >= regions[i].host && p < regions[i].host + regions[i].size) {
             galaxy::gx::notify_guest_memory_write(regions[i].physical + (uint32_t)(p - regions[i].host), size);
+#if defined(NEBULA_HOST_RENDERER)
+            forget_handed(regions[i].physical + (uint32_t)(p - regions[i].host), size);
+#endif
             return;
         }
     }
@@ -2182,14 +2206,12 @@ void svc_texture_image(void*, const void* stream, const NebulaTextureImage* imag
     (void)stream;
     const auto* first = static_cast<const std::byte*>(image->bytes);
     const uint64_t address = physical_of(reinterpret_cast<uint64_t>(image->bytes));
-    // The copies the renderer has: an image handed over again unchanged needs nothing. Loading threads hand images
-    // over too, so the record joins the stream ahead of the next one, as shape registrations do.
-    static std::mutex handed_lock;
-    static std::unordered_map<uint64_t, std::shared_ptr<const std::vector<std::byte>>> handed;
+    // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
+    // images over too, so the record joins the stream ahead of the next one, as shape registrations do.
     std::shared_ptr<const std::vector<std::byte>> copy;
     {
-        std::lock_guard guard(handed_lock);
-        auto& last = handed[address];
+        std::lock_guard guard(gHandedLock);
+        auto& last = gHanded[address];
         if (last != nullptr && last->size() == image->size && std::memcmp(last->data(), first, image->size) == 0) {
             return;
         }
@@ -2502,6 +2524,7 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::gx::notify_guest_memory_write(physical, size);
+    forget_handed(physical, size);
 #else
     (void)physical;
     (void)size;
