@@ -13,7 +13,7 @@ instructions.
 | `crates/nebula-recomp-cli` | `nebula-recomp`: `identify`, `extract`, `package-content`, `generate` and related commands |
 | `runtime/include/galaxy`, `runtime/src` | The runtime: guest memory, hardware devices, audio, input, settings, scheduling |
 | `runtime/include/galaxy/gx`, `runtime/src/gx` | The GX graphics backend on Direct3D 12 |
-| `installer/src` | Setup (`Setup/`), the launcher and settings app (`Launcher/`), shared code (`Common/`) |
+| `installer/native` | Setup, the launcher and the settings app: native C++ Win32 programs (`setup*.cpp`, `launcher*.cpp`), shared code (`common`, `archive`, `ui`) |
 | `metadata/rmge01` | Function boundaries of the supported executable (addresses and sizes) |
 | `third_party` | Vendored code; see [PROVENANCE.md](PROVENANCE.md) |
 | `tools` | Repository audit, build environment and diagnostics scripts |
