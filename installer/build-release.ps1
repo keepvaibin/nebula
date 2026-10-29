@@ -250,6 +250,7 @@ END
     # 4. Nebula.exe and NebulaSettings.exe: native programs (installer/native, MSVC, static C runtime, no .NET).
     $nativeOut = Join-Path $work 'native'
     $publicKeyFile = Join-Path $src 'installer\release-public-key.xml'
+    $publicKey = (Get-Content -LiteralPath $publicKeyFile -Raw).Trim()
     & (Join-Path $src 'installer\native\build.ps1') -Version $Version -Commit $resolved -Repository $Repository `
         -PublicKeyFile $publicKeyFile -OutputDirectory $nativeOut
     $launcher = Join-Path $nativeOut 'Nebula.exe'
