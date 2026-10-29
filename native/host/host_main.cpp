@@ -1419,6 +1419,8 @@ std::vector<GuestMemoryRegion> gRegions;
 GxServices gNative{};
 const uint8_t* gPending = nullptr;
 size_t gPendingSize = 0;
+// The end of the last span the game submitted: its GX writer continues there (or a ring's length before it).
+const uint8_t* gSpanEnd = nullptr;
 std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
@@ -1523,6 +1525,7 @@ void svc_gx_submit(void*, const uint8_t* bytes, size_t size) {
         die("a GX span does not continue the last (%p after %p + %zu)", (const void*)bytes, (const void*)gPending, gPendingSize);
     }
     gPendingSize += size;
+    gSpanEnd = bytes + size;
 #else
     (void)bytes;
     gModule.gx_release(size);
@@ -1971,13 +1974,11 @@ void svc_galaxy_select_name(void*, uint32_t, uint32_t, const uint16_t*) {}
 
 // A loaded model's triangles: the analysis its curved surfaces are rounded by, kept by its position array's address
 // (galaxy/gx/curved_surfaces.h).
-void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32_t array_bytes, const float* positions,
-                        uint32_t position_count, const float* normals, uint32_t normal_count, const uint16_t* corners,
-                        uint32_t triangle_count) {
+void svc_curved_surface(void*, uint64_t key, const float* positions, uint32_t position_count, const float* normals,
+                        uint32_t normal_count, const uint16_t* corners, uint32_t triangle_count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace curved = galaxy::gx::curved;
-    if (array == nullptr || array_bytes == 0u || positions == nullptr || normals == nullptr || corners == nullptr ||
-        triangle_count == 0u) {
+    if (positions == nullptr || normals == nullptr || corners == nullptr || triangle_count == 0u) {
         return;
     }
     std::vector<curved::Vec3> p(position_count);
@@ -1988,44 +1989,141 @@ void svc_curved_surface(void*, uint32_t array_address, const void* array, uint32
     for (std::size_t i = 0; i < c.size(); ++i) {
         c[i] = curved::Corner{corners[2u * i], corners[2u * i + 1u]};
     }
-    curved::register_model_later(array_address, std::span(static_cast<const std::byte*>(array), array_bytes),
-                                 std::move(p), std::move(n), std::move(c));
+    curved::register_model_later(key, std::move(p), std::move(n), std::move(c));
 #else
-    (void)array_address, (void)array, (void)array_bytes, (void)positions, (void)position_count, (void)normals,
-        (void)normal_count, (void)corners, (void)triangle_count;
+    (void)key, (void)positions, (void)position_count, (void)normals, (void)normal_count, (void)corners,
+        (void)triangle_count;
 #endif
 }
 
-// A model's shape list once its model is final: built on the shape thread under the vertex state its draws will have
-// (galaxy/gx/native_shapes.h): the description list's VCD, VAT and arrays, then the arrays J3DShape::loadVtxArray
-// sets and the shape's current matrix.
-void svc_native_shape(void*, uint32_t handle, const void* list, uint32_t list_address, uint32_t list_bytes,
-                      const void* description, uint32_t description_bytes, const uint32_t* arrays,
-                      uint32_t matrix_index_a, uint32_t matrix_index_b) {
 #if defined(NEBULA_HOST_RENDERER)
-    namespace gx = galaxy::gx;
-    if (list == nullptr || list_bytes == 0u || description == nullptr || arrays == nullptr) {
+// Native shape arrays and groups (galaxy/gx/native_shapes.h): the game registers them from its loading threads too,
+// so they wait here and join the stream ahead of the next draw record (which the game makes after them).
+std::mutex gShapeLock;
+std::vector<galaxy::gx::shapes::Record> gShapePending;
+std::atomic<bool> gShapePendingAny{false};
+
+void queue_shape_record(galaxy::gx::shapes::Record record) {
+    std::lock_guard guard(gShapeLock);
+    gShapePending.push_back(std::move(record));
+    gShapePendingAny.store(true, std::memory_order_release);
+}
+#endif
+
+void svc_shape_array(void*, const NebulaShapeArray* array) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    if (array == nullptr || (array->values == nullptr && array->count != 0u)) {
         return;
     }
-    gx::GxState state;
-    if (!gx::shapes::load_description(
-            std::span(static_cast<const std::byte*>(description), description_bytes), state)) {
-        return;
+    auto values = std::make_shared<shapes::Array>();
+    values->count = array->count;
+    std::size_t floats = 0;
+    switch (array->kind) {
+    case NEBULA_SHAPE_ARRAY_POSITION: values->kind = shapes::ArrayKind::Position; floats = 3u; break;
+    case NEBULA_SHAPE_ARRAY_NORMAL: values->kind = shapes::ArrayKind::Normal; floats = 3u; break;
+    case NEBULA_SHAPE_ARRAY_NBT: values->kind = shapes::ArrayKind::Nbt; floats = 9u; break;
+    case NEBULA_SHAPE_ARRAY_TEXCOORD: values->kind = shapes::ArrayKind::TexCoord; floats = 2u; break;
+    case NEBULA_SHAPE_ARRAY_COLOR: values->kind = shapes::ArrayKind::Color; break;
+    default: die("a shape array of unknown kind %u", array->kind);
     }
-    state.load_cp(gx::cp::kArrayBaseBase + 0u, arrays[0]);
-    if (arrays[1] != 0u) {
-        state.load_cp(gx::cp::kArrayBaseBase + 1u, arrays[1]);
+    if (values->kind == shapes::ArrayKind::Color) {
+        const auto* colors = static_cast<const uint32_t*>(array->values);
+        values->colors.assign(colors, colors + array->count);
+    } else {
+        const auto* f = static_cast<const float*>(array->values);
+        values->floats.assign(f, f + static_cast<std::size_t>(array->count) * floats);
     }
-    state.load_cp(gx::cp::kArrayBaseBase + 2u, arrays[2]);
-    state.load_cp(gx::cp::kMatrixIndexA, matrix_index_a);
-    state.load_cp(gx::cp::kMatrixIndexB, matrix_index_b);
-    gx::shapes::register_later(
-        gx::shapes::make_request(handle, list_address, std::span(static_cast<const std::byte*>(list), list_bytes),
-                                 state),
-        &gMemory);
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Array;
+    record.key = array->key;
+    record.array = std::move(values);
+    queue_shape_record(std::move(record));
 #else
-    (void)handle, (void)list, (void)list_address, (void)list_bytes, (void)description, (void)description_bytes,
-        (void)arrays, (void)matrix_index_a, (void)matrix_index_b;
+    (void)array;
+#endif
+}
+
+void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    if (geometry == nullptr || (geometry->corner_count != 0u && geometry->corners == nullptr) ||
+        (geometry->index_count != 0u && geometry->indices == nullptr)) {
+        return;
+    }
+    auto g = std::make_shared<shapes::Geometry>();
+    g->attributes = geometry->attributes;
+    for (std::size_t i = 0; i < g->arrays.size(); ++i) {
+        g->arrays[i] = geometry->arrays[i];
+    }
+    g->corners.resize(geometry->corner_count);
+    for (uint32_t i = 0; i < geometry->corner_count; ++i) {
+        const NebulaShapeCorner& in = geometry->corners[i];
+        shapes::Corner& out = g->corners[i];
+        out.position = in.position;
+        out.normal = in.normal;
+        out.tangent = in.tangent;
+        out.binormal = in.binormal;
+        out.color = {in.color[0], in.color[1]};
+        for (unsigned k = 0; k < 8u; ++k) {
+            out.texcoord[k] = in.texcoord[k];
+            out.texture_matrix[k] = in.texture_matrix[k];
+        }
+        out.position_matrix = in.position_matrix;
+    }
+    g->indices.assign(geometry->indices, geometry->indices + geometry->index_count);
+    for (const uint16_t index : g->indices) {
+        if (index >= geometry->corner_count) {
+            die("a shape group's triangle names corner %u of %u", index, geometry->corner_count);
+        }
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Geometry;
+    record.key = geometry->key;
+    record.geometry = std::move(g);
+    queue_shape_record(std::move(record));
+#else
+    (void)geometry;
+#endif
+}
+
+// A group drawn: after every command the game wrote before it (its writer's place past the submitted spans), and
+// after the arrays and groups it registered before it.
+void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    const auto* writer = static_cast<const uint8_t*>(stream);
+    std::size_t ahead = 0;
+    if (gSpanEnd != nullptr) {
+        ahead = writer >= gSpanEnd ? static_cast<std::size_t>(writer - gSpanEnd)
+                                   : static_cast<std::size_t>(writer + kGxRingSize - gSpanEnd);
+        if (ahead >= kGxRingSize) {
+            die("a shape draw outside the GX command ring (%p after %p)", stream, (const void*)gSpanEnd);
+        }
+    }
+    const std::size_t offset = gPendingSize + ahead;
+    if (gShapePendingAny.load(std::memory_order_acquire)) {
+        std::vector<shapes::Record> pending;
+        {
+            std::lock_guard guard(gShapeLock);
+            pending.swap(gShapePending);
+            gShapePendingAny.store(false, std::memory_order_relaxed);
+        }
+        for (shapes::Record& record : pending) {
+            record.offset = offset;
+            galaxy::gx::attach_shape_record(std::move(record));
+        }
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Draw;
+    record.offset = offset;
+    record.key = shape;
+    record.position = position;
+    record.normal = normal;
+    record.color = color;
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)shape, (void)stream, (void)position, (void)normal, (void)color;
 #endif
 }
 
@@ -3579,7 +3677,9 @@ int main(int argc, char** argv) {
     services.galaxy_select_names_wanted = svc_galaxy_select_names_wanted;
     services.galaxy_select_name = svc_galaxy_select_name;
     services.curved_surface = svc_curved_surface;
-    services.native_shape = svc_native_shape;
+    services.shape_array = svc_shape_array;
+    services.shape_geometry = svc_shape_geometry;
+    services.shape_draw = svc_shape_draw;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

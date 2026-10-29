@@ -4,7 +4,6 @@
 // indexed arrays throw GxFatalError.
 
 #include "galaxy/gx/vertex_loader.h"
-#include "galaxy/gx/curved_surfaces.h"
 #include "galaxy/gx/vertex_dequant.h"
 
 #include "galaxy/gx/fifo_parser.h"
@@ -651,9 +650,6 @@ struct PreparedVertexInputs {
     // Bit `ti` set when texcoord `ti` is in the vertex stream; absent channels are written as
     // (0, 0) without decoding.
     std::uint8_t active_texcoord_mask = 0u;
-    // The model whose position array the draw indexes, when the game registered it for curved surfaces
-    // (curved_surfaces.h): each vertex's displacement normal goes in GxVertexOut::bend.
-    std::shared_ptr<const curved::Model> curved;
 };
 
 PreparedVertexInputs prepare_vertex_inputs(
@@ -695,33 +691,6 @@ PreparedVertexInputs prepare_vertex_inputs(
         }
     }
     return inputs;
-}
-
-// The registered model behind an indexed position array, while the array still holds the bytes it was registered
-// with (its memory may since hold another model's: then it is forgotten). Checked through a resolver of its own, so
-// a cached decode depends only on the bytes it read. Only for indexed normals (the analysis knows the corners by
-// their normal indices) and not for NBT draws (bump mapped: none is rounded).
-void attach_curved_model(
-    PreparedVertexInputs& inputs,
-    const VertexDescriptor& desc,
-    GuestMemory* memory,
-    std::size_t fifo_error_offset) {
-    if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) ||
-        (desc.normal.vcd != VcdType::Index8 && desc.normal.vcd != VcdType::Index16) || normal_has_nbt(desc)) {
-        return;
-    }
-    const std::uint32_t base = inputs.array_bases[0u];
-    std::shared_ptr<const curved::Model> model = curved::find_model(base);
-    if (model == nullptr || model->bytes == 0u) {
-        return;
-    }
-    IndexedArrayResolver check(memory);
-    const std::byte* bytes = check.resolve(0u, base, model->bytes, fifo_error_offset);
-    if (curved::fingerprint(std::span(bytes, model->bytes)) != model->fingerprint) {
-        curved::forget_model(base, model.get());
-        return;
-    }
-    inputs.curved = std::move(model);
 }
 
 void decode_vertex_stream(
@@ -775,8 +744,6 @@ void decode_vertex_stream(
             (static_cast<std::uint32_t>(texmtx_idx[6]) << 24);
         out.mtx_indices[2] = static_cast<std::uint32_t>(texmtx_idx[7]);
 
-        std::uint32_t position_index = ~0u;
-        std::uint32_t normal_index = ~0u;
         if (desc.position.vcd == VcdType::Direct) {
             const std::size_t sz = inputs.element_bytes[0u];
             decode_pos(vsrc + off, out, desc.position, desc.byte_dequant);
@@ -791,7 +758,6 @@ void decode_vertex_stream(
                 idx = read_be_u16(vsrc + off);
                 off += 2;
             }
-            position_index = idx;
             const std::uint32_t arr_base = inputs.array_bases[0u];
             const std::uint32_t arr_stride = inputs.array_strides[0u];
             const std::uint32_t addr = arr_base + idx * arr_stride;
@@ -832,7 +798,6 @@ void decode_vertex_stream(
                     idx = read_be_u16(vsrc + off);
                     off += 2;
                 }
-                normal_index = idx;
                 const std::uint32_t read_sz = inputs.element_bytes[1u];
                 const std::uint32_t addr = arr_base + idx * arr_stride;
                 const std::byte* ap = array_resolver.resolve(
@@ -885,27 +850,9 @@ void decode_vertex_stream(
             zero_vec3(out.tangent);
             zero_vec3(out.binormal);
         }
-        // A registered model's curve data (curved_surfaces.h): the corner's displacement normal by its normal index,
-        // its place's crease normal, its place and crease neighbours.
-        if (inputs.curved != nullptr && position_index < inputs.curved->places.size()) {
-            const curved::Model& model = *inputs.curved;
-            out.curve[0] = model.bend_of(position_index, normal_index);
-            out.curve[1] = model.crease[position_index];
-            out.curve[2] = model.places[position_index];
-            out.mtx_indices[2] |= static_cast<std::uint32_t>(model.second[position_index]) << 16u;
-            // Bit 15: a flat solid's corner shaded soft (Model::flat_of; ray_tracing.hlsl GeometryCS shades its face).
-            out.mtx_indices[2] |= model.flat_of(position_index, normal_index) ? kVertexFlatCorner : 0u;
-        } else if (inputs.curved != nullptr) {
-            // Outside the registered arrays: no place, no neighbours.
-            out.curve[0] = 0u;
-            out.curve[1] = 0u;
-            out.curve[2] = 0xFFFFFFFFu;
-            out.mtx_indices[2] |= 0xFFFFu << 16u;
-        } else {
-            out.curve[0] = 0u;
-            out.curve[1] = 0u;
-            out.curve[2] = 0u;
-        }
+        out.curve[0] = 0u;
+        out.curve[1] = 0u;
+        out.curve[2] = 0u;
 
         for (unsigned ci = 0; ci < 2; ++ci) {
             const VertexAttribute& ca = desc.color[ci];
@@ -1258,7 +1205,6 @@ LoadedPrimitive VertexLoader::load_with_layout(
     IndexedArrayResolver array_resolver(memory);
 
     PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
-    attach_curved_model(inputs, desc, memory, fifo_error_offset);
     decode_vertex_stream(
         raw_ptr, vtx_count, src_stride, desc, inputs,
         array_resolver, fifo_error_offset, verts);
@@ -1458,7 +1404,6 @@ VertexLoader::decode_cached_packet_run_vertices_with_layout(
         memory,
         record_indexed_read_ranges ? &decoded.guest_array_reads : nullptr);
     PreparedVertexInputs inputs = prepare_vertex_inputs(desc, state);
-    attach_curved_model(inputs, desc, memory, base_offset);
     std::uint32_t dst_vertex = 0;
     for (const CachedDrawPacket& packet : packets) {
         if (packet.vertex_count == 0u) {

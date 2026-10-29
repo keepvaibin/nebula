@@ -465,10 +465,8 @@ struct Entry {
 };
 
 struct Job {
-    std::uint32_t address = 0;
+    std::uint64_t key = 0;
     std::uint64_t generation = 0;
-    std::uint64_t fingerprint = 0;
-    std::uint32_t bytes = 0;
     std::vector<Vec3> positions;
     std::vector<Vec3> normals;
     std::vector<Corner> corners;
@@ -477,7 +475,7 @@ struct Job {
 struct Registry {
     std::mutex lock;
     std::condition_variable done;
-    std::unordered_map<std::uint32_t, Entry> models;
+    std::unordered_map<std::uint64_t, Entry> models;
     std::uint64_t generation = 0;
     std::condition_variable work;
     std::deque<Job> jobs;
@@ -491,12 +489,10 @@ Registry& registry() {
 }
 
 // The model a registration keeps, or null when nothing in it bends and no corner is flat (its draws stay plain).
-std::shared_ptr<const Model> make_model(std::uint64_t fingerprint, std::uint32_t bytes, const Surface& surface) {
+std::shared_ptr<const Model> make_model(const Surface& surface) {
     const bool bends = surface.bends_anything();
     if (!bends && !surface.flat_anything()) return nullptr;
     auto model = std::make_shared<Model>();
-    model->fingerprint = fingerprint;
-    model->bytes = bytes;
     model->bends = bends;
     const std::size_t positions = surface.place.size();
     model->places.resize(positions);
@@ -526,7 +522,7 @@ std::shared_ptr<const Model> make_model(std::uint64_t fingerprint, std::uint32_t
 }
 
 // Publishes a finished registration unless a later one for the address replaced it.
-void publish(Registry& r, std::uint32_t address, std::uint64_t generation, std::shared_ptr<const Model> model) {
+void publish(Registry& r, std::uint64_t address, std::uint64_t generation, std::shared_ptr<const Model> model) {
     {
         std::lock_guard guard(r.lock);
         const auto it = r.models.find(address);
@@ -554,11 +550,11 @@ void analysis_worker() {
         }
         std::shared_ptr<const Model> model;
         try {
-            model = make_model(job.fingerprint, job.bytes, analyse(job.positions, job.normals, job.corners));
+            model = make_model(analyse(job.positions, job.normals, job.corners));
         } catch (...) {
             // Without its analysis the model draws plain, as one that bends nothing.
         }
-        publish(r, job.address, job.generation, std::move(model));
+        publish(r, job.key, job.generation, std::move(model));
     }
 }
 
@@ -1000,50 +996,25 @@ bool Model::flat_of(std::uint32_t position, std::uint32_t normal) const noexcept
     return false;
 }
 
-std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept {
-    std::uint64_t h = 0xCBF29CE484222325ull;
-    const auto word = [&h, &bytes](std::size_t index) {
-        std::uint64_t w;
-        std::memcpy(&w, bytes.data() + index * 8u, 8u);
-        h = (h ^ w) * 0x100000001B3ull;
-    };
-    const std::size_t words = bytes.size() / 8u;
-    if (words <= kFingerprintWords) {
-        for (std::size_t i = 0; i < words; ++i) {
-            word(i);
-        }
-    } else {
-        for (std::size_t k = 0; k < kFingerprintWords; ++k) {
-            word(k * (words - 1u) / (kFingerprintWords - 1u));
-        }
-    }
-    for (std::size_t i = words * 8u; i < bytes.size(); ++i) {
-        h = (h ^ static_cast<std::uint64_t>(bytes[i])) * 0x100000001B3ull;
-    }
-    return h ^ bytes.size();
-}
-
-void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface) {
+void register_model(std::uint64_t key, const Surface& surface) {
     Registry& r = registry();
     std::uint64_t generation;
     {
         std::lock_guard guard(r.lock);
-        Entry& entry = r.models[array_address];
+        Entry& entry = r.models[key];
         entry = Entry{nullptr, ++r.generation, true};
         generation = entry.generation;
     }
-    publish(r, array_address, generation,
-            make_model(fingerprint(array_bytes), static_cast<std::uint32_t>(array_bytes.size()), surface));
+    publish(r, key, generation, make_model(surface));
 }
 
-void register_model_later(std::uint32_t array_address, std::span<const std::byte> array_bytes,
-                          std::vector<Vec3> positions, std::vector<Vec3> normals, std::vector<Corner> corners) {
+void register_model_later(std::uint64_t key, std::vector<Vec3> positions, std::vector<Vec3> normals,
+                          std::vector<Corner> corners) {
     Registry& r = registry();
-    Job job{array_address, 0u, fingerprint(array_bytes), static_cast<std::uint32_t>(array_bytes.size()),
-            std::move(positions), std::move(normals), std::move(corners)};
+    Job job{key, 0u, std::move(positions), std::move(normals), std::move(corners)};
     {
         std::lock_guard guard(r.lock);
-        Entry& entry = r.models[array_address];
+        Entry& entry = r.models[key];
         entry = Entry{nullptr, ++r.generation, true};
         job.generation = entry.generation;
         r.jobs.push_back(std::move(job));
@@ -1055,25 +1026,18 @@ void register_model_later(std::uint32_t array_address, std::span<const std::byte
     r.work.notify_one();
 }
 
-std::shared_ptr<const Model> find_model(std::uint32_t array_address) {
+std::shared_ptr<const Model> find_model(std::uint64_t key) {
     Registry& r = registry();
     std::unique_lock guard(r.lock);
-    auto it = r.models.find(array_address);
+    auto it = r.models.find(key);
     if (it == r.models.end()) return nullptr;
     // The model's first draw waits for its analysis rather than drawing plain and then rounding.
     const std::uint64_t generation = it->second.generation;
     while (it != r.models.end() && it->second.pending && it->second.generation == generation) {
         r.done.wait(guard);
-        it = r.models.find(array_address);
+        it = r.models.find(key);
     }
     return it != r.models.end() && !it->second.pending ? it->second.model : nullptr;
-}
-
-void forget_model(std::uint32_t array_address, const Model* model) {
-    Registry& r = registry();
-    std::lock_guard guard(r.lock);
-    const auto it = r.models.find(array_address);
-    if (it != r.models.end() && !it->second.pending && it->second.model.get() == model) r.models.erase(it);
 }
 
 void clear_models() {

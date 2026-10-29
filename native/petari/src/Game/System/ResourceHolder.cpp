@@ -12,7 +12,7 @@
 #include <revolution.h>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
-#include "Game/System/NebulaNativeShapes.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #endif
 
 namespace {
@@ -231,7 +231,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         }
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
-        NebulaNativeShapes::registerModel(modelData);
+        J3DNativeShape::registerModel(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }
@@ -242,7 +242,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
         modelData->newSharedDisplayList(0);
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
-        NebulaNativeShapes::registerModel(modelData);
+        J3DNativeShape::registerModel(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }

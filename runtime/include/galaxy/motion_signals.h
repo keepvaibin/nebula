@@ -78,11 +78,6 @@ inline constexpr std::uint16_t kBloomRestore = 4u;
 // The next draw is the game's EFB clear quad (nebula_gx_fifo.h __NebulaGXClearQuadMarker), a its Z texture's depth;
 // aux 1: b its constant colour (TEV C0 and A0, RGBA).
 inline constexpr std::uint8_t kMarkerClearQuad = 16u;
-// A loaded model's shape group drawn by its display list (J3DShapeDraw::draw, nebula_gx_fifo.h
-// __NebulaGXShapeListMarker): a the shape's handle (one per J3DShapeDraw, never reused), b the list's address, aux
-// its size in 32-byte units. The parser replays the list it recorded for the handle; a list not yet recorded, or
-// moved, is called as CALL_DL would.
-inline constexpr std::uint8_t kMarkerShapeList = 17u;
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene

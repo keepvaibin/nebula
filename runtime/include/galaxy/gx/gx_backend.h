@@ -135,6 +135,7 @@ public:
         if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
             const std::uint8_t index = producer_fifo_marker_count_++;
             producer_fifo_markers_[index] = {fifo_offset, marker};
+            producer_fifo_marker_serials_[index] = producer_shape_record_serial_;
             producer_fifo_marker_views_[index] = producer_scene_view_;
             producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
             if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
@@ -191,6 +192,12 @@ public:
     // Simulation thread.
     void attach_stripe_particle(const StripeParticleMark& mark) {
         if (producer_stripe_particles_.size() < 65536u) producer_stripe_particles_.push_back(mark);
+    }
+    // Simulation thread: a native shape record (native_shapes.h) the next submission carries, run when its parser
+    // reaches the record's offset.
+    void attach_shape_record(shapes::Record record) {
+        record.serial = producer_shape_record_serial_++;
+        producer_shape_records_.push_back(std::move(record));
     }
     // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
     void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
@@ -336,8 +343,6 @@ private:
         std::uint32_t total_vertices,
         std::uint32_t total_indices,
         std::span<const std::uint16_t> precomputed_indices) override;
-    [[nodiscard]] bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
-                                       std::uint32_t list_bytes) override;
     void on_efb_copy(std::uint32_t exec_command) override;
     void on_pe_finish() override;
     void on_pe_token(std::uint16_t token, bool interrupt) override;
@@ -493,6 +498,8 @@ private:
         // Scene boundaries in this chunk's FIFO, in stream order (3D and 2D
         // scenes of up to two frames).
         std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> fifo_markers{};
+        // Per marker: how many shape records the game had made before it (their order at one offset).
+        std::array<std::uint64_t, kFifoMarkersPerChunk> fifo_marker_serials{};
         std::uint8_t fifo_marker_count = 0;
         // Game camera (world to eye) per SceneBegin marker; bit i of the
         // mask marks marker i's view valid.
@@ -505,6 +512,8 @@ private:
         std::array<SceneStage, kFifoMarkersPerChunk> fifo_marker_stages{};
         // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
+        // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
+        std::vector<shapes::Record> shape_records;
         std::uint64_t dependency_scan_ns = 0;
         std::uint64_t snapshot_ns = 0;
         std::uint64_t snapshot_bytes = 0;
@@ -571,6 +580,18 @@ private:
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::size_t producer_pointer_depth_capture_offset_ = 0;
     std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> producer_fifo_markers_{};
+    std::array<std::uint64_t, kFifoMarkersPerChunk> producer_fifo_marker_serials_{};
+    // Shape records made so far (attach_shape_record): each record's and marker's place among them.
+    std::uint64_t producer_shape_record_serial_ = 0;
+    // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
+    struct StreamSplit {
+        std::size_t offset;
+        std::uint64_t serial;
+        int marker;  // a FifoMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
+        int view;    // the marker's index (its camera) or the record's, -1 none
+    };
+    static constexpr int kSplitShapeRecord = -2;
+    std::vector<StreamSplit> stream_splits_;
     std::uint8_t producer_fifo_marker_count_ = 0;
     std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
     std::uint8_t producer_fifo_marker_view_mask_ = 0;
@@ -1603,40 +1624,53 @@ private:
                                                 std::span<const std::uint16_t> triangles,
                                                 std::vector<std::uint16_t>& split);
 
-    // Native shapes (native_shapes.h) by handle: the built shape, its resident vertices, its curved split and the
-    // array bytes it was built from, compared with guest memory once per write generation. A shape whose list, vertex
-    // state or arrays no longer match draws as GX would; one whose arrays changed is retired.
-    struct NativeShape {
-        std::shared_ptr<const shapes::Shape> shape;
+    // Native shapes (native_shapes.h): the game's arrays and groups by key as its records registered them (a key
+    // registered again is replaced: the game made something new at that address), and per group the vertices last
+    // expanded for it, resident while the arrays they came from are the same.
+    struct ShapeArrayEntry {
+        std::shared_ptr<const shapes::Array> array;
+        std::uint64_t version = 0;
+    };
+    std::unordered_map<std::uint64_t, ShapeArrayEntry> shape_arrays_;
+    std::uint64_t shape_array_versions_ = 0;
+    struct RecordShape {
+        std::shared_ptr<const shapes::Geometry> geometry;
+        std::array<std::uint64_t, 12> versions{};  // of the arrays its vertices came from
+        std::uint8_t position_matrix = 0;
+        std::shared_ptr<const curved::Model> curved;
+        bool expanded = false;
+        std::vector<GxVertexOut> vertices;
         ImmutableUploadToken index_upload_token;
         std::uint64_t resident_epoch = 0;
         std::uint32_t resident_offset = 0;
+        std::uint32_t resident_units = 0;
         std::vector<std::uint16_t> split_indices;
         std::uint32_t split_flat_indices = 0;
         bool split_built = false;
         ImmutableUploadToken split_upload_token;
-        DecodedPacketRunCacheEntry::GuestDependencySnapshots snapshots;
-        std::uint64_t validated_generation = 0;
-        std::uint64_t last_used = 0;  // frame_index_ of its last draw
-        bool requested = false;
-        bool rebuilt = false;
-        bool retired = false;
     };
-    // By handle. A new galaxy's models come with new handles, and the game frees the old ones with their heap (no
-    // destructors run): a shape not drawn for kNativeShapeIdleChunks render chunks is dropped.
-    std::unordered_map<std::uint32_t, NativeShape> native_shapes_;
-    static constexpr std::uint64_t kNativeShapeIdleChunks = 3600u;
-    void sweep_native_shapes() noexcept;
-    // The game's live memory (render_frame's), which the shape builder reads; frame memory may be a snapshot.
-    std::atomic<GuestMemory*> live_memory_{nullptr};
-    // Queues the build of the list at `list_address` under the current vertex state; false when the list is not in
-    // this frame's memory.
-    bool request_native_shape(NativeShape& native, std::uint32_t handle, std::uint32_t list_address,
-                              std::uint32_t list_bytes);
-    // The shape's snapshots from frame memory, when its arrays still hold the bytes it was built from.
-    [[nodiscard]] bool adopt_native_shape(NativeShape& native, std::shared_ptr<const shapes::Shape> shape);
-    // Gives back the shape's resident block and drops it.
-    void drop_native_shape(NativeShape& native) noexcept;
+    std::unordered_map<std::uint64_t, RecordShape> record_shapes_;
+    std::vector<shapes::Record> producer_shape_records_;
+    void take_attached_shape_records(FrameChunk& chunk, std::size_t fifo_size);
+    // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
+    void on_shape_record(const shapes::Record& record);
+    void draw_record_shape(const shapes::Record& record);
+    // Gives back a group's resident block.
+    void release_record_shape(RecordShape& shape) noexcept;
+    // The vertex inputs of the draw being made when a native shape record draws (its corners' matrix slots, its
+    // model's arrays), in place of the GX vertex description the stream's draws carry.
+    struct RecordVertexInputs {
+        std::uint32_t matrix_bits = 0;  // bit 0 position matrix per corner, bits 1-8 texture matrices 0-7
+        std::uint64_t positions = 0;    // the position array's key
+        std::uint64_t colors = 0;       // the colour arrays' keys, combined
+        bool colored = false;
+        const curved::Model* curved = nullptr;
+    };
+    const RecordVertexInputs* record_inputs_ = nullptr;
+    // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
+    std::uint64_t vs_key_vertex_source_ = 0;
+    // Whether the draw being made reads indexed positions (a model's): a record always does.
+    [[nodiscard]] bool draw_positions_indexed() const noexcept;
     // Render thread: decode scratch for runs outside the decoded cache (capacity bounded by
     // kDecodedPacketRunCacheMaxEntryBytes).
     std::vector<GxVertexOut> decoded_packet_vertex_scratch_;
@@ -2009,7 +2043,6 @@ private:
     std::uint64_t frame_replay_packet_batches_ = 0;
     std::uint64_t frame_native_shape_draws_ = 0;
     std::uint64_t frame_native_shape_misses_ = 0;
-    std::uint64_t frame_native_shape_waits_ = 0;  // drawn as GX while their shape is built
     std::uint64_t frame_replay_simple_batches_ = 0;
     std::uint64_t frame_replay_generic_draws_ = 0;
     std::uint64_t frame_flush_matrix_us_ = 0;

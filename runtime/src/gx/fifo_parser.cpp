@@ -850,67 +850,6 @@ void FifoParser::store_cached_display_list(
     evict_display_list_cache_to_budget(target_index);
 }
 
-void FifoParser::call_shape_list(
-    std::uint32_t handle,
-    std::uint32_t guest_addr,
-    std::uint32_t byte_size,
-    GuestMemory* memory,
-    FifoSink& sink,
-    GxState& state,
-    std::size_t opcode_offset,
-    DisplayListRecording* recording) {
-    if (sink.on_native_shape(handle, guest_addr, byte_size)) {
-        if (memory_read_recorder_ != nullptr) {
-            memory_read_recorder_->record_guest_dependency_shape_read(guest_addr & ~std::uint32_t{31u}, byte_size);
-        }
-        return;
-    }
-    guest_addr &= ~std::uint32_t{31u};
-    const std::uint32_t canonical = normalize_display_list_guest_addr(guest_addr);
-    if (handle < shape_bindings_.size()) {
-        const ShapeBinding binding = shape_bindings_[handle];
-        if (binding.slot < display_list_cache_.size()) {
-            CachedDisplayList& cached = display_list_cache_[binding.slot];
-            if (cached.valid && cached.cache_token == binding.cache_token && cached.guest_addr == canonical &&
-                cached.byte_size == byte_size && display_list_dependencies_match(cached, state)) {
-                if (memory_read_recorder_ != nullptr) {
-                    memory_read_recorder_->record_guest_dependency_shape_read(guest_addr, byte_size);
-                }
-                cached.last_used = ++display_list_cache_tick_;
-                last_display_list_cache_index_ = binding.slot;
-                replay_cached_display_list(cached, memory, sink, state, opcode_offset);
-                return;
-            }
-        }
-    }
-    std::array<std::byte, 9> call{};
-    call[0] = std::byte{op::kCallDisplayList};
-    for (unsigned i = 0; i < 4u; ++i) {
-        call[1u + i] = static_cast<std::byte>(guest_addr >> (24u - 8u * i));
-        call[5u + i] = static_cast<std::byte>(byte_size >> (24u - 8u * i));
-    }
-    FifoCursor cursor;
-    cursor.data = call;
-    cursor.offset = 0;
-    cursor.base_offset = opcode_offset;
-    cursor.command_offset = opcode_offset;
-    cursor.recover_truncation = false;
-    last_display_list_cache_index_ = static_cast<std::size_t>(-1);
-    run_window(cursor, memory, sink, state, 0, recording);
-    const std::size_t slot = last_display_list_cache_index_;
-    if (handle == 0u || slot >= display_list_cache_.size()) {
-        return;
-    }
-    const CachedDisplayList& cached = display_list_cache_[slot];
-    if (!cached.valid || cached.guest_addr != canonical || cached.byte_size != byte_size) {
-        return;
-    }
-    if (handle >= shape_bindings_.size()) {
-        shape_bindings_.resize(std::max<std::size_t>(handle + 1u, shape_bindings_.size() * 2u));
-    }
-    shape_bindings_[handle] = {static_cast<std::uint32_t>(slot), cached.cache_token};
-}
-
 void FifoParser::prepare_cached_display_list_draw_runs(
     CachedDisplayList& cached) const {
     cached.prepared_draw_runs.clear();
@@ -1871,14 +1810,6 @@ void FifoParser::run_window(
             const std::uint16_t aux = cursor.read_u16();
             const std::uint32_t a = cursor.read_u32();
             const std::uint32_t b = cursor.read_u32();
-            if (kind == motion::kMarkerShapeList) {
-                call_shape_list(a, b, static_cast<std::uint32_t>(aux) << 5u, memory, sink, state, opcode_offset,
-                                recording);
-                finish_profile(
-                    &FifoParserProfile::call_dl_count,
-                    &FifoParserProfile::call_dl_us);
-                break;
-            }
             sink.on_host_marker(kind, aux, a, b);
             finish_profile(
                 &FifoParserProfile::nop_count,

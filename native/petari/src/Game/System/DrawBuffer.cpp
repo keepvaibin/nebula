@@ -186,7 +186,6 @@ void DrawBuffer::resetLightSort(const ActorLightCtrl* pLightCtrl) {
 
 void DrawBuffer::drawOpa() const {
     if (mNumActors > 0) {
-        J3DShape::sOldVcdVatCmd = nullptr;
         for (s32 idx = 0; idx < mNumOpaShapeDrawers; idx++) {
             getShapeDrawerByIndex(idx)->draw();
         }
@@ -195,7 +194,6 @@ void DrawBuffer::drawOpa() const {
 
 void DrawBuffer::drawXlu() const {
     if (mNumActors > 0) {
-        J3DShape::sOldVcdVatCmd = nullptr;
         for (s32 idx = mNumOpaShapeDrawers; idx < mNumShapeDrawers; idx++) {
             getShapeDrawerByIndex(idx)->draw();
         }

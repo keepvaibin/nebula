@@ -66,7 +66,6 @@ namespace MR {
     void reinitGX() {
         j3dSys.reinitGX();
         GXSetAlphaUpdate(GX_FALSE);
-        J3DShape::resetVcdVatCache();
 
         if (sIsReinitTextureCache) {
             j3dSys.setTexCacheRegion(sReinitTextureCacheSize);
@@ -450,7 +449,6 @@ namespace MR {
 
     void simpleDraw(J3DModel* pModel, J3DMaterial* pMaterial) {
         if (pMaterial != nullptr && pMaterial->mShape != nullptr && !pMaterial->mShape->checkFlag(1)) {
-            J3DShape::resetVcdVatCache();
             J3DMatPacket* pMatPacket = pModel->getMatPacket(pMaterial->mIndex);
             J3DShapePacket* pShapePacket = pModel->getShapePacket(pMaterial->mShape->mIndex);
             j3dSys.setMatPacket(pMatPacket);

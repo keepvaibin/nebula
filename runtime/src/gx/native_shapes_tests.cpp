@@ -1,21 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Native shapes (native_shapes.h): a list's triangles corner for corner as the renderer decodes them, each distinct
-// vertex once, the vertex state they were built under, and lists the builder leaves to GX.
+// Native shapes (native_shapes.h): a group's corners expanded into vertices from the arrays a draw names, matrix
+// slots packed as the shaders read them, NBT entries split by their indices, curve data from the model's analysis,
+// and groups whose arrays are missing or short refused.
 #include "galaxy/gx/native_shapes.h"
 
-#include "galaxy/gx/fifo_parser.h"
-#include "galaxy/gx/gx_bitfields.h"
-#include "galaxy/gx/gx_state.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/curved_surfaces.h"
 
-#include <array>
 #include <cstdio>
-#include <cstring>
+#include <memory>
 #include <vector>
 
 namespace {
 
 using namespace galaxy::gx;
+using namespace galaxy::gx::shapes;
 
 bool expect(bool condition, const char* what) {
     if (!condition) {
@@ -24,144 +22,103 @@ bool expect(bool condition, const char* what) {
     return condition;
 }
 
-void append_u16(std::vector<std::byte>& out, std::uint16_t value) {
-    out.push_back(static_cast<std::byte>(value >> 8u));
-    out.push_back(static_cast<std::byte>(value & 0xFFu));
-}
-
-constexpr std::uint32_t kPositions = 0x00001000u;
-constexpr std::uint32_t kList = 0x00002000u;
-
-struct Scene {
-    std::vector<std::byte> positions = std::vector<std::byte>(4u * 6u);
-    std::array<galaxy::GuestMemoryRegion, 1> regions{};
-    galaxy::GuestMemory memory{};
-    GxState state;
-
-    Scene() {
-        // Four corners of a square, signed 16-bit XYZ, big-endian as GX reads them.
-        const std::array<std::array<std::int16_t, 3>, 4> corners{{{0, 0, 0}, {16, 0, 0}, {0, 16, 0}, {16, 16, 0}}};
-        for (std::size_t i = 0; i < corners.size(); ++i) {
-            for (std::size_t c = 0; c < 3u; ++c) {
-                const auto v = static_cast<std::uint16_t>(corners[i][c]);
-                positions[i * 6u + c * 2u] = static_cast<std::byte>(v >> 8u);
-                positions[i * 6u + c * 2u + 1u] = static_cast<std::byte>(v & 0xFFu);
-            }
-        }
-        regions[0] = {kPositions, static_cast<std::uint32_t>(positions.size()), positions.data()};
-        memory.regions = regions.data();
-        memory.region_count = 1u;
-        state.load_cp(cp::kVcdLo, 3u << 9u);           // position: 16-bit index
-        state.load_cp(cp::kVatABase, 1u | (3u << 1u));  // XYZ, signed 16-bit, no fraction
-        state.load_cp(cp::kArrayBaseBase, kPositions);
-        state.load_cp(cp::kArrayStrideBase, 6u);
-        state.load_cp(cp::kMatrixIndexA, 3u);
-    }
-};
-
-// A strip over the square, then a triangle list naming three of its corners again, padded to 32 bytes.
-std::vector<std::byte> square_list(std::uint8_t second_opcode) {
-    std::vector<std::byte> list;
-    list.push_back(std::byte{0x98});
-    append_u16(list, 4u);
-    for (std::uint16_t i = 0; i < 4u; ++i) append_u16(list, i);
-    list.push_back(static_cast<std::byte>(second_opcode));
-    append_u16(list, 3u);
-    for (const std::uint16_t i : {std::uint16_t{2}, std::uint16_t{1}, std::uint16_t{3}}) append_u16(list, i);
-    while (list.size() % 32u != 0u) list.push_back(std::byte{0});
-    return list;
-}
-
-bool test_corners_match_decoder() {
-    Scene scene;
-    const std::vector<std::byte> list = square_list(0x90u);
-    const auto shape = shapes::build(shapes::make_request(1u, kList, list, scene.state), &scene.memory);
-    if (!expect(shape != nullptr, "a strip and a triangle list build")) return false;
-    bool ok = expect(shape->vertices.size() == 4u, "each corner stored once");
-    ok = expect(shape->draws == 2u, "the list's two draws counted") && ok;
-    ok = expect(shape->state == shapes::vertex_state(scene.state, 0u), "built under the draw's vertex state") && ok;
-    ok = expect(shapes::vertex_state_matches(*shape, scene.state), "the draw's state matches it") && ok;
-    GxState moved = scene.state;
-    moved.load_cp(cp::kArrayBaseBase, kPositions + 6u);
-    ok = expect(!shapes::vertex_state_matches(*shape, moved), "another array does not") && ok;
-    GxState other_matrix = scene.state;
-    other_matrix.load_cp(cp::kMatrixIndexA, 6u);
-    ok = expect(!shapes::vertex_state_matches(*shape, other_matrix),
-                "another default matrix does not, for vertices without their own") && ok;
-    ok = expect(shape->list_address == kList && shape->list_bytes == list.size(), "the list it was built from") && ok;
-
-    // The renderer's own decode of each run, its triangles corner by corner.
-    VertexLoader loader;
-    const VertexDescriptor desc = scene.state.vertex_desc(0u);
-    const std::size_t size = VertexLoader::source_vertex_size(desc);
-    std::vector<GxVertexOut> expected;
-    const std::array<std::pair<PrimitiveClass, CachedDrawPacket>, 2> runs{{
-        {PrimitiveClass::TriangleStrip, CachedDrawPacket{0x98u, 4u, 0u, 1u, 4u * size}},
-        {PrimitiveClass::Triangles, CachedDrawPacket{0x90u, 3u, 3u + 4u * size, 4u + 4u * size, 3u * size}}}};
-    std::vector<std::uint16_t> triangles;
-    for (const auto& [primitive, packet] : runs) {
-        const std::array<CachedDrawPacket, 1> packets{packet};
-        const DecodedPacketRunVertices decoded = loader.decode_cached_packet_run_vertices_with_layout(
-            list, 0u, packets, primitive, scene.state, desc, size, &scene.memory);
-        VertexLoader::cached_packet_run_triangles(static_cast<std::uint32_t>(decoded.vertices.size()), 0u, packets,
-                                                  primitive, decoded.total_indices, {}, triangles);
-        for (const std::uint16_t i : triangles) expected.push_back(decoded.vertices[i]);
-    }
-    ok = expect(shape->indices.size() == expected.size(), "as many corners as the decoder's triangles") && ok;
-    for (std::size_t k = 0; ok && k < expected.size(); ++k) {
-        ok = expect(std::memcmp(&shape->vertices[shape->indices[k]], &expected[k], sizeof(GxVertexOut)) == 0,
-                    "each corner the decoder's vertex");
-    }
-    std::size_t read = 0;
-    for (const VertexDecodeGuestRange& range : shape->reads) read += range.size;
-    ok = expect(!shape->reads.empty() && shape->read_bytes.size() == read, "the array bytes it was built from") && ok;
-    return ok;
-}
-
-bool test_lists_left_to_gx() {
-    Scene scene;
-    bool ok = expect(shapes::build(shapes::make_request(1u, kList, square_list(0xA8u), scene.state),
-                                   &scene.memory) == nullptr,
-                     "a list with lines stays GX's");
-    std::vector<std::byte> state_list = square_list(0x90u);
-    state_list.insert(state_list.begin(), {std::byte{0x08}, std::byte{0x50}, std::byte{0}, std::byte{0},
-                                           std::byte{0x06}, std::byte{0}});
-    ok = expect(shapes::build(shapes::make_request(1u, kList, state_list, scene.state), &scene.memory) == nullptr,
-                "a list that loads registers stays GX's") && ok;
-    return ok;
-}
-
-bool test_registry() {
-    Scene scene;
-    shapes::register_later(shapes::make_request(7u, kList, square_list(0x90u), scene.state), &scene.memory);
-    shapes::register_later(shapes::make_request(8u, kList, square_list(0xA8u), scene.state), &scene.memory);
-    shapes::wait_idle();
-    bool pending = true;
-    bool ok = expect(shapes::take(7u, pending) != nullptr && !pending, "a registered shape is taken once built");
-    pending = true;
-    ok = expect(shapes::take(7u, pending) == nullptr && !pending, "a taken shape leaves the registry") && ok;
-    pending = true;
-    ok = expect(shapes::take(8u, pending) == nullptr && !pending, "one that cannot be built is not pending") && ok;
-    pending = true;
-    ok = expect(shapes::take(9u, pending) == nullptr && !pending, "an unknown handle is not pending") && ok;
-    // The description list a J3D shape makes (J3DShape::makeVcdVatCmd): its CP loads, its XF load skipped.
-    std::vector<std::byte> description{std::byte{0x08}, std::byte{0x50}, std::byte{0}, std::byte{0},
-                                       std::byte{0x06}, std::byte{0}, std::byte{0x10}, std::byte{0},
-                                       std::byte{0},    std::byte{0x10}, std::byte{0x08}, std::byte{0},
-                                       std::byte{0},    std::byte{0},    std::byte{0x01}};
-    description.resize(32u);
-    GxState described;
-    ok = expect(shapes::load_description(description, described) && described.cp(cp::kVcdLo) == 0x600u,
-                "a description list's CP loads") && ok;
-    return ok;
+Array floats(ArrayKind kind, std::uint32_t per, std::uint32_t count) {
+    Array a;
+    a.kind = kind;
+    a.count = count;
+    for (std::uint32_t i = 0; i < count * per; ++i) a.floats.push_back(static_cast<float>(i) * 0.5f);
+    return a;
 }
 
 }  // namespace
 
 int main() {
-    bool ok = test_corners_match_decoder();
-    ok = test_lists_left_to_gx() && ok;
-    ok = test_registry() && ok;
-    std::printf("native_shapes_tests: %s\n", ok ? "PASS" : "FAIL");
-    return ok ? 0 : 1;
+    bool passed = true;
+    const Array positions = floats(ArrayKind::Position, 3u, 4u);
+    const Array normals = floats(ArrayKind::Normal, 3u, 4u);
+    Array colors;
+    colors.kind = ArrayKind::Color;
+    colors.count = 2u;
+    colors.colors = {0x11223344u, 0xAABBCCDDu};
+    const Array uvs = floats(ArrayKind::TexCoord, 2u, 3u);
+
+    Geometry g;
+    g.attributes = kNormal | kColor0 | (kTexCoord0 << 1u) | kPositionMatrix | (kTextureMatrix0 << 1u);
+    Corner c;
+    c.position = 2u;
+    c.normal = 1u;
+    c.color[0] = 1u;
+    c.texcoord[1] = 2u;
+    c.position_matrix = 3u;
+    c.texture_matrix[1] = 30u;
+    g.corners = {c};
+    g.indices = {0u, 0u, 0u};
+    DrawArrays arrays{};
+    arrays[0] = &positions;
+    arrays[1] = &normals;
+    arrays[2] = &colors;
+    arrays[5] = &uvs;
+    std::vector<GxVertexOut> out;
+    passed &= expect(expand(g, arrays, 0u, nullptr, out) && out.size() == 1u, "a group expands");
+    if (out.size() == 1u) {
+        const GxVertexOut& v = out[0];
+        passed &= expect(v.position[0] == 3.0f && v.position[1] == 3.5f && v.position[2] == 4.0f,
+                         "positions come from the corner's entry");
+        passed &= expect(v.normal[0] == 1.5f && v.tangent[0] == 0.0f, "normals from theirs, no tangent");
+        passed &= expect(v.color0 == 0xAABBCCDDu && v.color1 == 0u, "colour 0 from its entry, colour 1 absent");
+        passed &= expect(v.uv[1][0] == 2.0f && v.uv[1][1] == 2.5f && v.uv[0][0] == 0.0f, "texture coordinates");
+        passed &= expect(v.mtx_indices[0] == (3u | 30u << 16u) && v.mtx_indices[1] == 0u && v.mtx_indices[2] == 0u,
+                         "matrix slots as the shaders read them");
+    }
+
+    // Without per-corner position matrices, the draw's.
+    Geometry plain = g;
+    plain.attributes &= ~kPositionMatrix;
+    passed &= expect(expand(plain, arrays, 9u, nullptr, out) && (out[0].mtx_indices[0] & 0xFFu) == 9u,
+                     "corners without a position matrix take the draw's");
+
+    // NBT: normal, tangent and binormal from three entries.
+    const Array nbt = floats(ArrayKind::Nbt, 9u, 3u);
+    Geometry bump = g;
+    bump.attributes |= kNbt | kNbtThree;
+    bump.corners[0].normal = 0u;
+    bump.corners[0].tangent = 1u;
+    bump.corners[0].binormal = 2u;
+    DrawArrays bump_arrays = arrays;
+    bump_arrays[1] = &nbt;
+    passed &= expect(expand(bump, bump_arrays, 0u, nullptr, out) && out[0].normal[0] == 0.0f &&
+                         out[0].tangent[0] == 6.0f && out[0].binormal[0] == 12.0f,
+                     "NBT corners split by their three entries");
+
+    // Missing or short arrays refuse the group.
+    DrawArrays missing = arrays;
+    missing[2] = nullptr;
+    passed &= expect(!expand(g, missing, 0u, nullptr, out), "a missing array refuses the group");
+    Geometry far = g;
+    far.corners[0].position = 4u;
+    passed &= expect(!expand(far, arrays, 0u, nullptr, out), "an entry past the array refuses the group");
+    DrawArrays wrong = arrays;
+    wrong[1] = &positions;
+    passed &= expect(!expand(g, wrong, 0u, nullptr, out), "an array of another kind refuses the group");
+
+    // Curve data: a corner's place from the model's analysis; past its positions, none.
+    curved::Model model;
+    model.places = {1u, 2u, 7u | 5u << 16u};
+    model.second = {0u, 0u, 4u};
+    model.crease = {0u, 0u, 0x12345u};
+    model.first = {0u, 0u, 0u, 0u};
+    passed &= expect(expand(g, arrays, 0u, &model, out) && out[0].curve[1] == 0x12345u &&
+                         out[0].curve[2] == (7u | 5u << 16u) && (out[0].mtx_indices[2] >> 16u) == 4u,
+                     "curve data from the model's analysis");
+    Geometry outside = g;
+    outside.corners[0].position = 3u;
+    passed &= expect(expand(outside, arrays, 0u, &model, out) && out[0].curve[2] == 0xFFFFFFFFu &&
+                         (out[0].mtx_indices[2] >> 16u) == 0xFFFFu,
+                     "a corner past the analysis has no place");
+
+    if (!passed) {
+        return 1;
+    }
+    std::printf("native_shapes tests passed\n");
+    return 0;
 }

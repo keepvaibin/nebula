@@ -34,9 +34,7 @@ struct J3DShapeFactory {
     J3DShape* create(int, u32, GXVtxDescList*);
     J3DShapeMtx* newShapeMtx(u32, int, int) const;
     J3DShapeDraw* newShapeDraw(int, int) const;
-    void allocVcdVatCmdBuffer(u32);
     s32 calcSize(int, u32);
-    s32 calcSizeVcdVatCmdBuffer(u32);
     s32 calcSizeShapeMtx(u32, int, int) const;
 
     /* 0x00 */ J3DShapeInitData* mShapeInitData;
@@ -46,7 +44,6 @@ struct J3DShapeFactory {
     /* 0x10 */ u8* mDisplayListData;
     /* 0x14 */ J3DShapeMtxInitData* mMtxInitData;
     /* 0x18 */ J3DShapeDrawInitData* mDrawInitData;
-    /* 0x1C */ u8* mVcdVatCmdBuffer;
 
     u32 getMtxGroupNum(int no) const {
         return mShapeInitData[mIndexTable[no]].mMtxGroupNum;

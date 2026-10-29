@@ -23,7 +23,64 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 34u
+#define NEBULA_GAME_API_VERSION 35u
+
+/* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the
+   array it converts; an array made there later replaces it) naming it. Positions and normals are 3 floats, a bump-mapped model's normals 9 (normal, tangent,
+   binormal), colours one uint32_t each (R << 24 | G << 16 | B << 8 | A), texture coordinates 2 floats. */
+enum {
+    NEBULA_SHAPE_ARRAY_POSITION = 0,
+    NEBULA_SHAPE_ARRAY_NORMAL = 1,
+    NEBULA_SHAPE_ARRAY_NBT = 2,
+    NEBULA_SHAPE_ARRAY_COLOR = 3,
+    NEBULA_SHAPE_ARRAY_TEXCOORD = 4,
+};
+
+typedef struct NebulaShapeArray {
+    uint64_t key;
+    uint32_t kind;
+    uint32_t count;
+    const void* values;
+} NebulaShapeArray;
+
+/* One corner of a shape group: the entry it takes from each array and its matrix slots. */
+typedef struct NebulaShapeCorner {
+    uint16_t position;
+    uint16_t normal; /* for a bump-mapped group with three normal indices: the normal's */
+    uint16_t tangent;
+    uint16_t binormal;
+    uint16_t color[2];
+    uint16_t texcoord[8];
+    uint8_t position_matrix;
+    uint8_t texture_matrix[8];
+    uint8_t reserved[3];
+} NebulaShapeCorner;
+
+/* Which arrays a shape group's corners read and which matrix slots they carry (NebulaShapeGeometry::attributes). */
+enum {
+    NEBULA_SHAPE_NORMAL = 1u << 0,
+    NEBULA_SHAPE_COLOR0 = 1u << 1,
+    NEBULA_SHAPE_COLOR1 = 1u << 2,
+    NEBULA_SHAPE_TEXCOORD0 = 1u << 3,         /* to 1u << 10 for texture coordinate 7 */
+    NEBULA_SHAPE_NBT = 1u << 11,              /* normals from the NBT array */
+    NEBULA_SHAPE_NBT_THREE = 1u << 12,        /* separate normal, tangent and binormal entries */
+    NEBULA_SHAPE_POSITION_MATRIX = 1u << 13,  /* corners carry their position matrix slot */
+    NEBULA_SHAPE_TEXTURE_MATRIX0 = 1u << 14,  /* to 1u << 21: corners carry texture matrix 0-7's slot */
+};
+
+/* A shape group (shape_geometry): its corners, each distinct one once, and its triangles (three corner indices each,
+   front faces as the game winds them). `arrays` name the arrays its corners read by default (position, normal or NBT,
+   colour 0, colour 1, texture coordinates 0-7; 0 where it reads none); shape_draw names the first three per draw. */
+typedef struct NebulaShapeGeometry {
+    uint64_t key; /* the group's identity: the game's address of it (a group made there later replaces it) */
+    uint32_t attributes;
+    uint32_t reserved;
+    uint64_t arrays[12];
+    uint32_t corner_count;
+    uint32_t index_count;
+    const NebulaShapeCorner* corners;
+    const uint16_t* indices;
+} NebulaShapeGeometry;
 
 /* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
 typedef struct NebulaGameMemoryRegion {
@@ -581,21 +638,22 @@ typedef struct NebulaHostServices {
     /* A name for the galaxy select in the game's own words in the played language (UTF-16, NUL-terminated): galaxy
        `index`'s (`star` 0) or its star's. */
     void (*galaxy_select_name)(void* user, uint32_t index, uint32_t star, const uint16_t* name);
-    /* A model the game loaded (J3D), for its curved surfaces (galaxy/gx/curved_surfaces.h): its position array as GX
-       reads it (`array_address` the physical address GXSetArray gives, `array` and `array_bytes` its bytes), its
-       positions and normals decoded (3 floats each), and its triangles, three corners each, a corner a position index
-       then a normal index. */
-    void (*curved_surface)(void* user, uint32_t array_address, const void* array, uint32_t array_bytes,
-                           const float* positions, uint32_t position_count, const float* normals, uint32_t normal_count,
-                           const uint16_t* corners, uint32_t triangle_count);
-    /* A model's shape list (J3DShapeDraw `handle`: the shape-list marker's) once its model is final, for the renderer
-       to build ahead of its first draw (galaxy/gx/native_shapes.h): the list (`list`, `list_bytes`, at physical
-       `list_address`), its shape's vertex description list (`description`, `description_bytes`: VCD, VAT and array
-       commands), the arrays the shape sets before each draw (`arrays`: position, normal and colour 0 physical
-       addresses; normal 0 for a bump-mapped shape) and its current matrix (`matrix_index_a`, `matrix_index_b`). */
-    void (*native_shape)(void* user, uint32_t handle, const void* list, uint32_t list_address, uint32_t list_bytes,
-                         const void* description, uint32_t description_bytes, const uint32_t* arrays,
-                         uint32_t matrix_index_a, uint32_t matrix_index_b);
+    /* A model the game loaded (J3D), for its curved surfaces (galaxy/gx/curved_surfaces.h): its position array's
+       identity (`key`, as shape_draw names it), its positions and normals (3 floats each), and its triangles, three
+       corners each, a corner a position index then a normal index. */
+    void (*curved_surface)(void* user, uint64_t key, const float* positions, uint32_t position_count,
+                           const float* normals, uint32_t normal_count, const uint16_t* corners,
+                           uint32_t triangle_count);
+    /* A model's vertex array as values (NebulaShapeArray), registered or replaced; the host copies it. */
+    void (*shape_array)(void* user, const struct NebulaShapeArray* array);
+    /* A model's shape group (J3DShapeDraw) as typed geometry (NebulaShapeGeometry); the host copies it. */
+    void (*shape_geometry)(void* user, const struct NebulaShapeGeometry* geometry);
+    /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
+       normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
+       the rest). `stream` is the game's GX command writer when it draws: the draw comes after every command written
+       before it. */
+    void (*shape_draw)(void* user, uint64_t shape, const void* stream, uint64_t position, uint64_t normal,
+                       uint64_t color);
 } NebulaHostServices;
 
 enum {

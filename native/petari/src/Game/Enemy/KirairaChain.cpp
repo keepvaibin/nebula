@@ -100,7 +100,7 @@ void KirairaChain::draw() const {
         PSMTXConcat(MR::getCameraViewMtx(), mtx, mtx);
         GXLoadPosMtxImm(mtx, GX_PNMTX0);
         GXLoadNrmMtxImm(mtx, GX_PNMTX0);
-        GXCallDisplayList(mModelDrawer->mShapeDraw->getDisplayList(), mModelDrawer->mShapeDraw->getDisplayListSize());
+        mModelDrawer->mShapeDraw->draw();
     }
 }
 

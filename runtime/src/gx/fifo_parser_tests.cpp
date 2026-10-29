@@ -853,90 +853,6 @@ bool test_unchanged_display_list_replays_prepared_packet_runs() {
     return true;
 }
 
-// A shape list marker (motion::kMarkerShapeList): the first one calls the list as CALL_DL and binds its handle; later
-// ones replay the recording without looking it up or comparing its bytes; a list that moved is called again.
-bool test_shape_list_marker() {
-    struct RunSink final : FifoSink {
-        [[nodiscard]] std::size_t draw_payload_size(std::uint8_t, std::uint16_t vertex_count) const override {
-            return vertex_count;
-        }
-        void on_draw(PrimitiveClass, std::uint8_t, FifoCursor& cursor) override {
-            (void)cursor.take(cursor.read_u16());
-            ++direct_draws;
-        }
-        [[nodiscard]] bool on_cached_packet_draw_run(std::uint64_t cache_token, std::size_t, PrimitiveClass,
-                                                     std::uint8_t, std::span<const std::byte>, std::size_t,
-                                                     std::span<const galaxy::gx::CachedDrawPacket> packets,
-                                                     std::uint32_t, std::uint32_t,
-                                                     std::span<const std::uint16_t>) override {
-            ++packet_runs;
-            replayed_draws += static_cast<int>(packets.size());
-            last_token = cache_token;
-            return true;
-        }
-        void on_host_marker(std::uint8_t, std::uint16_t, std::uint32_t, std::uint32_t) override { ++markers; }
-        void on_efb_copy(std::uint32_t) override {}
-        void on_pe_finish() override {}
-        void on_pe_token(std::uint16_t, bool) override {}
-        void on_invalidate_textures() override {}
-        void on_invalidate_vertex_cache() override {}
-        int direct_draws = 0;
-        int replayed_draws = 0;
-        int packet_runs = 0;
-        int markers = 0;
-        std::uint64_t last_token = 0;
-    };
-
-    // The same three triangle-strip packets at 0x80000000 and, copied, at 0x80000020.
-    std::array<std::byte, 64> guest{};
-    for (std::size_t copy = 0; copy < 2u; ++copy) {
-        for (std::size_t packet = 0; packet < 3u; ++packet) {
-            const std::size_t at = copy * 32u + packet * 6u;
-            guest[at + 0] = std::byte{0x98};
-            guest[at + 2] = std::byte{0x03};
-            guest[at + 3] = static_cast<std::byte>(0x10u + packet);
-            guest[at + 4] = static_cast<std::byte>(0x20u + packet);
-            guest[at + 5] = static_cast<std::byte>(0x30u + packet);
-        }
-    }
-    galaxy::GuestMemory memory{};
-    memory.fast_regions[8].host_base = guest.data();
-    memory.fast_regions[8].size = static_cast<std::uint32_t>(guest.size());
-    const auto marker = [](std::uint32_t handle, std::uint32_t address) {
-        std::array<std::byte, 12> m{std::byte{0xF0}, std::byte{galaxy::motion::kMarkerShapeList}, std::byte{0},
-                                    std::byte{1}};
-        for (unsigned i = 0; i < 4u; ++i) {
-            m[4u + i] = static_cast<std::byte>(handle >> (24u - 8u * i));
-            m[8u + i] = static_cast<std::byte>(address >> (24u - 8u * i));
-        }
-        return m;
-    };
-    FifoParserProfile profile{};
-    FifoParser parser;
-    parser.set_profile(&profile);
-    GxState state;
-    RunSink sink;
-    const auto run = [&](std::span<const std::byte> stream) {
-        return parser.run_available(stream, &memory, sink, state) == stream.size();
-    };
-    const auto first = marker(7u, 0x80000000u);
-    if (!run(first) || !expect(profile.call_dl_cache_misses == 1u && profile.call_dl_cache_stores == 1u &&
-                                   sink.direct_draws == 3 && sink.markers == 0,
-                               "a shape list's first marker calls the list")) return false;
-    if (!run(first) || !expect(profile.call_dl_cache_hits == 0u && sink.packet_runs == 1 && sink.replayed_draws == 3,
-                               "a bound shape list replays without a lookup")) return false;
-    const std::uint64_t token = sink.last_token;
-    const auto call = frozen_lookup_call(0x80000000u);
-    if (!run(call) || !expect(profile.call_dl_cache_hits == 1u && sink.packet_runs == 2 && sink.last_token == token,
-                              "CALL_DL of the same list replays the same recording")) return false;
-    const auto moved = marker(7u, 0x80000020u);
-    if (!run(moved) || !expect(profile.call_dl_cache_misses == 2u && sink.direct_draws == 6,
-                               "a moved shape list is called again")) return false;
-    if (!run(moved) || !expect(profile.call_dl_cache_misses == 2u && sink.packet_runs == 3 && sink.last_token != token,
-                               "a moved shape list binds its new recording")) return false;
-    return true;
-}
-
 int main(int argc, char** argv) try {
     // Unknown GX commands throw, except in the cases below that test the default (skip).
     galaxy::gx::set_unknown_gx_commands_fatal(true);
@@ -948,7 +864,6 @@ int main(int argc, char** argv) try {
     if (!test_frozen_fifo_lookup()) return 1;
     if (!test_display_list_variant_lookup_invalidation()) return 1;
     if (!test_unchanged_display_list_replays_prepared_packet_runs()) return 1;
-    if (!test_shape_list_marker()) return 1;
     if (!test_xf_matrix_span_updates()) return 1;
     if (!test_xf_palette_chunk_tracking()) return 1;
     test_dependency_hash_cache();

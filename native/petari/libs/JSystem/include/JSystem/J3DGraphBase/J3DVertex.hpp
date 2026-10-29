@@ -115,6 +115,9 @@ public:
     /* 0x50 */ GXCompType mVtxPosType;
     /* 0x54 */ u8 mVtxNrmFrac;
     /* 0x58 */ GXCompType mVtxNrmType;
+    // Entries of each array the renderer has as values (J3DNativeShape): position, normal, NBT, colour 0-1,
+    // texture coordinates 0-7.
+    u32 mNebulaArrayCount[13];
 };
 
 class J3DVertexBuffer {

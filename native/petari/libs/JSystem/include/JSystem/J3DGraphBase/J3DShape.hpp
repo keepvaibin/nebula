@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DFifo.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "nebula_disc.hpp"
 #include <revolution.h>
 
@@ -127,17 +128,12 @@ public:
         initialize();
     }
 
-    static const int kVcdVatDLSize = 0xC0;
-
     void initialize();
     void addTexMtxIndexInDL(_GXAttr, u32);
     void addTexMtxIndexInVcd(_GXAttr);
     void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
     u16 countBumpMtxNum() const;
-    void loadVtxArray() const;
-    bool isSameVcdVatCmd(J3DShape*);
-    void makeVtxArrayCmd();
-    void makeVcdVatCmd();
+    void initVtxAttr();
     void loadPreDrawSetting() const;
     void setArrayAndBindPipeline() const;
 
@@ -170,11 +166,11 @@ public:
         mVertexData = pVtxData;
     }
 
-    void* getVcdVatCmd() {
-        return mVcdVatCmd;
-    }
-    void setVcdVatCmd(void* pVatCmd) {
-        mVcdVatCmd = (u8*)pVatCmd;
+    // Its groups' geometry and its model's arrays registered with the renderer before its first draw.
+    void prepareGeometry() const {
+        if (!mNebulaRegistered) {
+            J3DNativeShape::registerShape(const_cast< J3DShape* >(this));
+        }
     }
     void show() {
         offFlag(J3DShpFlag_Visible);
@@ -247,11 +243,6 @@ public:
         return &mMax;
     }
 
-    static void resetVcdVatCache() {
-        sOldVcdVatCmd = NULL;
-    }
-
-    static void* sOldVcdVatCmd;
     static bool sEnvelopeFlag;
     friend struct J3DShapeFactory;
     friend class J3DJointTree;
@@ -263,7 +254,7 @@ public:
     /* 0x10 */ f32 mRadius;
     /* 0x14 */ Vec mMin;
     /* 0x20 */ Vec mMax;
-    /* 0x2C */ u8* mVcdVatCmd;
+    /* 0x2C */ bool mNebulaRegistered;
     /* 0x30 */ GXVtxDescList* mVtxDesc;
     /* 0x34 */ bool mHasNBT;
     /* 0x38 */ J3DShapeMtx** mShapeMtx;

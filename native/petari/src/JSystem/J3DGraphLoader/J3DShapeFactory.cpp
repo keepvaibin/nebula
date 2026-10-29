@@ -24,7 +24,7 @@ J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
     mMtxTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, JSU_OFFSET_VALUE(block.mpMtxTable));
     mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, JSU_OFFSET_VALUE(block.mpDisplayListData)),
     mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, JSU_OFFSET_VALUE(block.mpMtxInitData)),
-    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, JSU_OFFSET_VALUE(block.mpDrawInitData)), mVcdVatCmdBuffer = NULL;
+    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, JSU_OFFSET_VALUE(block.mpDrawInitData));
 }
 
 #ifdef TARGET_PC
@@ -52,7 +52,6 @@ J3DShape* J3DShapeFactory::create(int no, u32 flag, GXVtxDescList* vtxDesc) {
     shape->mShapeDraw = new J3DShapeDraw*[shape->mMtxGroupNum];
     shape->mMin = getMin(no);
     shape->mMax = getMax(no);
-    shape->mVcdVatCmd = mVcdVatCmdBuffer + no * J3DShape::kVcdVatDLSize;
 
     for (s32 i = 0; i < shape->mMtxGroupNum; i++) {
         shape->mShapeMtx[i] = newShapeMtx(flag, no, i);
@@ -114,12 +113,6 @@ J3DShapeDraw* J3DShapeFactory::newShapeDraw(int shapeNo, int mtxGroupNo) const {
     return new J3DShapeDraw(&mDisplayListData[drawInitData.mDisplayListIndex], drawInitData.mDisplayListSize);
 }
 
-void J3DShapeFactory::allocVcdVatCmdBuffer(u32 count) {
-    mVcdVatCmdBuffer = new (0x20) u8[J3DShape::kVcdVatDLSize * count];
-    for (u32 i = 0; i < (J3DShape::kVcdVatDLSize * count) / 4; i++)
-        ((u32*)mVcdVatCmdBuffer)[i] = 0;
-}
-
 s32 J3DShapeFactory::calcSize(int shapeNo, u32 flag) {
     s32 size = 0x68;
 
@@ -134,10 +127,6 @@ s32 J3DShapeFactory::calcSize(int shapeNo, u32 flag) {
     }
 
     return size;
-}
-
-s32 J3DShapeFactory::calcSizeVcdVatCmdBuffer(u32 count) {
-    return ALIGN_NEXT(count * J3DShape::kVcdVatDLSize, 0x20);
 }
 
 s32 J3DShapeFactory::calcSizeShapeMtx(u32 flag, int shapeNo, int mtxGroupNo) const {

@@ -1,83 +1,85 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Native shapes: a model's shape lists (J3DShapeDraw), each built once on a worker into its vertices (each distinct
-// one once) and its triangles in the list's order, from the list and vertex state of its first draw (after the game's
-// own edits of its models: ModelUtil rewrites some lists, descriptions and position arrays after they load). The
-// shape-list marker (motion::kMarkerShapeList) then draws them by the list's handle while the list and vertex state
-// are the ones they were built for; otherwise the list is called as GX would call it.
+// Native shapes: the game's J3D shape groups as typed records (nebula_game_api.h shape_array, shape_geometry,
+// shape_draw). A model's arrays arrive as values, each group as its distinct corners (an entry of each array per
+// corner) and its triangles; a draw names its group and the position, normal and colour arrays it reads. The
+// renderer expands a group's corners into vertices (expand) and draws them under the state the stream has set.
 #pragma once
 
 #include "galaxy/gx/vertex_loader.h"
-#include "galaxy/guest_memory.h"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <iterator>
 #include <memory>
-#include <span>
 #include <vector>
 
-namespace galaxy::gx {
-class GxState;
+namespace galaxy::gx::curved {
+struct Model;
 }
 
 namespace galaxy::gx::shapes {
 
-// The CP registers a shape's vertices depend on: the VCD, its vertex format's VAT, every array's base and stride, and
-// MatrixIndexA's position matrix where the vertices carry none of their own (0 where they do).
-inline constexpr std::size_t kStateWords = 2u + 3u + 12u + 12u + 1u;
-using VertexState = std::array<std::uint32_t, kStateWords>;
-[[nodiscard]] VertexState vertex_state(const GxState& state, std::uint8_t vtxfmt);
+enum class ArrayKind : std::uint8_t { Position, Normal, Nbt, Color, TexCoord };
 
-struct Shape {
-    std::uint32_t list_address = 0;  // physical, as the marker carries it
-    std::uint32_t list_bytes = 0;
-    std::uint8_t vtxfmt = 0;
-    bool vertex_matrix = false;  // its vertices carry their position-matrix index
-    std::uint32_t draws = 0;     // the list's GX draws
-    VertexState state{};
-    std::vector<GxVertexOut> vertices;
-    std::vector<std::uint16_t> indices;  // a triangle list
-    // The guest array ranges the vertices came from, and their bytes then, back to back: a write to them retires the
-    // shape.
-    std::vector<VertexDecodeGuestRange> reads;
-    std::vector<std::byte> read_bytes;
+// A model's vertex array as values: 3 floats per position or normal, 9 per NBT entry (normal, tangent, binormal),
+// 2 per texture coordinate; one RGBA word per colour (R << 24 | G << 16 | B << 8 | A).
+struct Array {
+    ArrayKind kind = ArrayKind::Position;
+    std::uint32_t count = 0;
+    std::vector<float> floats;
+    std::vector<std::uint32_t> colors;
 };
 
-// The CP registers a list's draws are decoded under: the matrix indices, the VCD, every vertex format's VAT and every
-// array's base and stride.
-inline constexpr std::uint8_t kRequestRegisters[] = {
-    0x30, 0x40, 0x50, 0x60, 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85,
-    0x86, 0x87, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7,
-    0xA8, 0xA9, 0xAA, 0xAB, 0xB0, 0xB1, 0xB2, 0xB3, 0xB4, 0xB5, 0xB6, 0xB7, 0xB8, 0xB9, 0xBA, 0xBB};
-
-struct Request {
-    std::uint32_t handle = 0;
-    std::uint32_t list_address = 0;  // as the marker carries it
-    std::vector<std::byte> list;
-    std::array<std::uint32_t, std::size(kRequestRegisters)> registers{};
+// One corner of a group: the entry it takes from each array and its matrix slots.
+struct Corner {
+    std::uint16_t position = 0;
+    std::uint16_t normal = 0;
+    std::uint16_t tangent = 0;
+    std::uint16_t binormal = 0;
+    std::array<std::uint16_t, 2> color{};
+    std::array<std::uint16_t, 8> texcoord{};
+    std::uint8_t position_matrix = 0;
+    std::array<std::uint8_t, 8> texture_matrix{};
 };
-[[nodiscard]] Request make_request(std::uint32_t handle, std::uint32_t list_address, std::span<const std::byte> list,
-                                   const GxState& state);
 
-// Whether `state` is the vertex state `shape` was built under (vertex_state's words, without decoding the VCD).
-[[nodiscard]] bool vertex_state_matches(const Shape& shape, const GxState& state);
+// Geometry::attributes (as nebula_game_api.h's NEBULA_SHAPE_*).
+inline constexpr std::uint32_t kNormal = 1u << 0;
+inline constexpr std::uint32_t kColor0 = 1u << 1;
+inline constexpr std::uint32_t kColor1 = 1u << 2;
+inline constexpr std::uint32_t kTexCoord0 = 1u << 3;
+inline constexpr std::uint32_t kNbt = 1u << 11;
+inline constexpr std::uint32_t kNbtThree = 1u << 12;
+inline constexpr std::uint32_t kPositionMatrix = 1u << 13;
+inline constexpr std::uint32_t kTextureMatrix0 = 1u << 14;
 
-// The shape `request` describes, its vertices decoded from `memory` as the renderer decodes a list's draws; null when
-// the lists hold anything but triangle draws (lists, strips, fans, quads) of one vertex format, or more than 65,536
-// distinct vertices.
-[[nodiscard]] std::shared_ptr<const Shape> build(const Request& request, GuestMemory* memory);
+// A shape group: which arrays its corners read (by default: position, normal or NBT, colour 0 and 1, texture
+// coordinates 0-7; 0 where none), its corners and its triangles.
+struct Geometry {
+    std::uint32_t attributes = 0;
+    std::array<std::uint64_t, 12> arrays{};
+    std::vector<Corner> corners;
+    std::vector<std::uint16_t> indices;
+};
 
-// A shape description list's CP loads (J3DShape::makeVcdVatCmd: VCD, VAT and arrays) into `state`; its XF load (the
-// input specification) changes no decode. False for anything else in it.
-bool load_description(std::span<const std::byte> list, GxState& state);
+// The arrays one draw of a group reads, by its slots (Geometry::arrays's order); null where it reads none.
+using DrawArrays = std::array<const Array*, 12>;
 
-// Builds `request` on the shape thread, from `memory` (a handle registered again replaces its registration).
-void register_later(Request request, GuestMemory* memory);
-// The shape built for `handle`, which the registry then forgets; null with `pending` set while it is being built,
-// null without when it could not be built or was never registered (or was registered long ago and never taken).
-[[nodiscard]] std::shared_ptr<const Shape> take(std::uint32_t handle, bool& pending);
-// Waits until every shape registered so far is built (tests).
-void wait_idle();
+// The group's vertices: each corner from its arrays, `position_matrix` the position matrix slot of corners that carry
+// none; `curved` (or null) the curve data of the model whose positions it reads (curved_surfaces.h). False when an
+// array it reads is missing, of another kind, or shorter than a corner's entry.
+[[nodiscard]] bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
+                          const curved::Model* curved, std::vector<GxVertexOut>& out);
+
+// Records of the game's stream, in the order it made them (gx_backend.h attach_shape_record).
+struct Record {
+    enum class Kind : std::uint8_t { Array, Geometry, Draw };
+    std::size_t offset = 0;  // bytes into the submitted GX stream: it runs after every command before it
+    std::uint64_t serial = 0;  // its place among the records (and so among markers at the same offset)
+    Kind kind = Kind::Draw;
+    std::uint64_t key = 0;   // the array's or the group's
+    std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays
+    std::shared_ptr<const Array> array;
+    std::shared_ptr<const Geometry> geometry;
+};
 
 }  // namespace galaxy::gx::shapes

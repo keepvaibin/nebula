@@ -344,6 +344,9 @@ struct MemoizedPsoKeyHasher {
     return build_pixel_shader_key(state, efb_scale, true);
 }
 [[nodiscard]] VertexShaderKey build_vertex_shader_key(const GxState& state);
+// The same with the vertices' matrix slots given (bit 0 a position matrix per vertex, bits 1-8 texture matrices 0-7:
+// GX's VCD bits 0-8, or a native shape's) in place of the VCD's.
+[[nodiscard]] VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matrix_bits);
 [[nodiscard]] RenderStateKey build_render_state_key(const GxState& state);
 
 }  // namespace galaxy::gx

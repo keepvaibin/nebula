@@ -169,19 +169,6 @@ void __NebulaGalaxySelectName(u32 index, u32 star, const u16* name) {
     sHost->galaxy_select_name(sHost->user, index, star, name);
 }
 
-void __NebulaCurvedSurface(u32 array_address, const void* array, u32 array_bytes, const f32* positions,
-                           u32 position_count, const f32* normals, u32 normal_count, const u16* corners,
-                           u32 triangle_count) {
-    sHost->curved_surface(sHost->user, array_address, array, array_bytes, positions, position_count, normals,
-                          normal_count, corners, triangle_count);
-}
-
-void __NebulaNativeShape(u32 handle, const void* list, u32 list_address, u32 list_bytes, const void* description,
-                         u32 description_bytes, const u32* arrays, u32 matrix_index_a, u32 matrix_index_b) {
-    sHost->native_shape(sHost->user, handle, list, list_address, list_bytes, description, description_bytes, arrays,
-                        matrix_index_a, matrix_index_b);
-}
-
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
     NebulaMemoryRegion regions[4];
     int count = 0;

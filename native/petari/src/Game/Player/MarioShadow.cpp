@@ -477,7 +477,6 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
 
     GXSetAlphaUpdate(GX_FALSE);
     GXSetColorUpdate(GX_TRUE);
-    J3DShape::resetVcdVatCache();
     MR::setDefaultViewportAndScissor();
     TDDraw::cameraInit3D();
     GXSetDstAlpha(GX_FALSE, 0);

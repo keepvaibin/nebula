@@ -406,72 +406,41 @@ int main() {
     }
     {
         clear_models();
-        const std::byte a[4] = {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{4}};
-        const std::byte b[4] = {std::byte{1}, std::byte{2}, std::byte{3}, std::byte{5}};
         const Mesh p = pipe();
         const Surface round = analyse(p.positions, p.normals, p.corners);
-        register_model(0x1000u, a, round);
+        register_model(0x1000u, round);
         const auto model = find_model(0x1000u);
-        passed &= expect(model != nullptr && model->fingerprint == fingerprint(a) &&
-                             model->fingerprint != fingerprint(b),
-                         "a registered model is found with its array's fingerprint");
         passed &= expect(model != nullptr && model->places.size() == p.positions.size() &&
                              model->bend_of(0u, 0u) == pack_normal(edge_normal(round, 0u, 0u, 16u)) &&
                              (model->places[0] & 0xFFFFu) == round.place[0],
                          "a registered model carries each position's place and each corner's bend");
-        forget_model(0x1000u, nullptr);
-        passed &= expect(find_model(0x1000u) != nullptr, "forgetting another model's entry keeps this one");
-        forget_model(0x1000u, model.get());
-        passed &= expect(find_model(0x1000u) == nullptr, "a forgotten model is gone");
-        register_model(0x1000u, a, round);
         const Mesh cube = box({1, 1, 1}, [](const Vec3&, int f) {
             static const Vec3 n[6] = {{0, 0, -1}, {0, 0, 1}, {-1, 0, 0}, {1, 0, 0}, {0, -1, 0}, {0, 1, 0}};
             return n[f];
         });
-        register_model(0x1000u, b, analyse(cube.positions, cube.normals, cube.corners));
+        register_model(0x1000u, analyse(cube.positions, cube.normals, cube.corners));
         passed &= expect(find_model(0x1000u) == nullptr,
-                         "a model in which nothing bends is not kept, and replaces the address's earlier one");
+                         "a model in which nothing bends is not kept, and replaces the key's earlier one");
 
         // Analysed on the background thread: found once it is done, the same model.
-        register_model_later(0x2000u, a, p.positions, p.normals, p.corners);
+        register_model_later(0x2000u, p.positions, p.normals, p.corners);
         const auto later = find_model(0x2000u);
-        passed &= expect(later != nullptr && model != nullptr && later->fingerprint == model->fingerprint &&
-                             later->places == model->places && later->second == model->second &&
-                             later->crease == model->crease && later->first == model->first &&
-                             later->bend_normal == model->bend_normal && later->bend == model->bend &&
-                             later->bend_flat == model->bend_flat,
+        passed &= expect(later != nullptr && model != nullptr && later->places == model->places &&
+                             later->second == model->second && later->crease == model->crease &&
+                             later->first == model->first && later->bend_normal == model->bend_normal &&
+                             later->bend == model->bend && later->bend_flat == model->bend_flat,
                          "a model analysed in the background is the one analysed at once");
-        // A later registration of the address wins over one still being analysed.
+        // A later registration of the key wins over one still being analysed.
         for (int round_trip = 0; round_trip < 20; ++round_trip) {
-            register_model_later(0x3000u, a, p.positions, p.normals, p.corners);
-            register_model_later(0x3000u, b, cube.positions, cube.normals, cube.corners);
-            passed &= expect(find_model(0x3000u) == nullptr, "the address's latest registration decides");
-            register_model_later(0x3000u, b, cube.positions, cube.normals, cube.corners);
-            register_model_later(0x3000u, a, p.positions, p.normals, p.corners);
+            register_model_later(0x3000u, p.positions, p.normals, p.corners);
+            register_model_later(0x3000u, cube.positions, cube.normals, cube.corners);
+            passed &= expect(find_model(0x3000u) == nullptr, "the key's latest registration decides");
+            register_model_later(0x3000u, cube.positions, cube.normals, cube.corners);
+            register_model_later(0x3000u, p.positions, p.normals, p.corners);
             const auto found = find_model(0x3000u);
-            passed &= expect(found != nullptr && found->fingerprint == fingerprint(a),
-                             "the address's latest registration decides, whichever finishes first");
+            passed &= expect(found != nullptr && found->places == model->places,
+                             "the key's latest registration decides, whichever finishes first");
         }
-    }
-    {
-        // A large array: its first and last words and its tail are always among the fingerprint's.
-        std::vector<std::byte> big(600003u);
-        for (std::size_t i = 0; i < big.size(); ++i) {
-            big[i] = static_cast<std::byte>(i * 2654435761u >> 13);
-        }
-        const std::uint64_t whole = fingerprint(big);
-        std::vector<std::byte> other = big;
-        other[0] ^= std::byte{1};
-        bool differ = fingerprint(other) != whole;
-        other = big;
-        other[600000u - 1u] ^= std::byte{1};
-        differ &= fingerprint(other) != whole;
-        other = big;
-        other.back() ^= std::byte{1};
-        differ &= fingerprint(other) != whole;
-        other.pop_back();
-        differ &= fingerprint(other) != whole;
-        passed &= expect(differ, "a large array's first and last words, tail and size each change its fingerprint");
     }
 
     if (!passed) {

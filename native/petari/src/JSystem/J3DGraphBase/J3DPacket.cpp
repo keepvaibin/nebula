@@ -183,8 +183,6 @@ void J3DMatPacket::draw() {
         packet->drawFast();
         packet = (J3DShapePacket*)packet->getNextPacket();
     }
-
-    J3DShape::resetVcdVatCache();
 }
 
 static u32 sDifferedRegister[7] = {

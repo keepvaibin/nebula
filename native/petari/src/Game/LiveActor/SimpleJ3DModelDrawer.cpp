@@ -23,8 +23,6 @@ void SimpleJ3DModelDrawer::initDraw() const {
     j3dSys.mVtxPos = data->getVtxPosArray();
     j3dSys.mVtxNrm = data->getVtxNrmArray();
     j3dSys.mVtxCol = data->getVtxColorArray(0);
-    J3DShape::sOldVcdVatCmd = 0;
     mMaterial->loadSharedDL();
     mShape->loadPreDrawSetting();
-    mShape->loadVtxArray();
 }

@@ -281,17 +281,6 @@ struct FifoSink {
         return false;
     }
 
-    // A model shape list by its handle (motion::kMarkerShapeList): the sink draws the shape built for `handle`
-    // (native_shapes.h) when it is still the list at `list_address` (as the marker carries it) under the vertex state it
-    // was built for, and returns true; else the list is called as GX would call it.
-    [[nodiscard]] virtual bool on_native_shape(std::uint32_t handle, std::uint32_t list_address,
-                                               std::uint32_t list_bytes) {
-        (void)handle;
-        (void)list_address;
-        (void)list_bytes;
-        return false;
-    }
-
     // BP 0x52 PE_COPY_EXECUTE write; `exec_command` is the 24-bit value.
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
     virtual void on_efb_copy(std::uint32_t exec_command) = 0;
@@ -566,24 +555,6 @@ private:
         FifoSink& sink,
         GxState& state,
         std::size_t opcode_offset) const;
-
-    // A shape list marker (motion::kMarkerShapeList): its handle's recording replayed when it is still the list at
-    // that address and size (a model's list does not change while its handle lives), else the list called as CALL_DL
-    // and the handle bound to what that recorded.
-    void call_shape_list(
-        std::uint32_t handle,
-        std::uint32_t guest_addr,
-        std::uint32_t byte_size,
-        GuestMemory* memory,
-        FifoSink& sink,
-        GxState& state,
-        std::size_t opcode_offset,
-        DisplayListRecording* recording);
-    struct ShapeBinding {
-        std::uint32_t slot = ~std::uint32_t{0};
-        std::uint64_t cache_token = 0;
-    };
-    std::vector<ShapeBinding> shape_bindings_;
 
     void record_display_list_cp_dependency(
         DisplayListRecording* recording,

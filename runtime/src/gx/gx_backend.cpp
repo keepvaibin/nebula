@@ -3448,12 +3448,12 @@ FramePeCompletionToken GxBackend::render_frame(
     take_attached_pointer_depth_capture(chunk, fifo_size);
     take_attached_fifo_markers(chunk, fifo_size);
     take_attached_stripe_particles(chunk, fifo_size);
+    take_attached_shape_records(chunk, fifo_size);
     chunk.prerecorded_movie=producer_movie_content_;
     chunk.safety_surround=producer_safety_surround_;
     chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
     chunk.memory   = memory;
-    live_memory_.store(memory, std::memory_order_relaxed);
     chunk.present_swap_chain = present_swap_chain;
     chunk.displayed_xfb_addr = displayed_xfb_addr;
     const GxTimingConfig& timing = get_gx_timing_config();
@@ -3908,9 +3908,10 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     TransformRecord record{};
     record.signature = combine64(
         combine64(mix64(current_vs_hash_ & ~0ull), current_ps_hash_),
-        (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
-            (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^
-            state_.cp(cp::kVcdHi));
+        record_inputs_ != nullptr
+            ? record_inputs_->positions ^ (static_cast<std::uint64_t>(record_inputs_->matrix_bits) << 48u)
+            : (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
+                  (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^ state_.cp(cp::kVcdHi));
     record.identity = record_identity();
     record.layout = current_vs_hash_;
     record.load_signature = state_.matrix_load_signature();
@@ -4364,6 +4365,23 @@ void GxBackend::take_attached_stripe_particles(FrameChunk& chunk, std::size_t fi
     producer_stripe_particles_.resize(kept);
 }
 
+void GxBackend::take_attached_shape_records(FrameChunk& chunk, std::size_t fifo_size) {
+    if (producer_shape_records_.empty()) {
+        return;
+    }
+    // A record at the submission's end runs before the next one's commands; later ones move to the next submission.
+    std::size_t kept = 0u;
+    for (shapes::Record& record : producer_shape_records_) {
+        if (record.offset <= fifo_size) {
+            chunk.shape_records.push_back(std::move(record));
+        } else {
+            record.offset -= fifo_size;
+            producer_shape_records_[kept++] = std::move(record);
+        }
+    }
+    producer_shape_records_.resize(kept);
+}
+
 void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
 }
@@ -4377,6 +4395,7 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk, std::size_t fifo_s
             chunk.fifo_marker_count < chunk.fifo_markers.size()) {
             const std::uint8_t index = chunk.fifo_marker_count++;
             chunk.fifo_markers[index] = producer_fifo_markers_[i];
+            chunk.fifo_marker_serials[index] = producer_fifo_marker_serials_[i];
             if ((producer_fifo_marker_view_mask_ & (1u << i)) != 0u) {
                 chunk.fifo_marker_views[index] = producer_fifo_marker_views_[i];
                 chunk.fifo_marker_view_mask |= static_cast<std::uint8_t>(1u << index);
@@ -4885,17 +4904,26 @@ std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
     if ((channels & 3u) == 0u) {
         return channels;
     }
-    // Indexed colours only (a model's arrays; the descriptor's VCD part is the same for every format).
-    const VertexDescriptor desc = state_.vertex_desc(0u);
-    if (desc.color[0].vcd != VcdType::Index8 && desc.color[0].vcd != VcdType::Index16) {
-        return channels;
+    // Indexed colours only (a model's arrays: a record's keys, else the GX array registers; the descriptor's VCD
+    // part is the same for every format).
+    std::uint64_t key = 0u;
+    if (record_inputs_ != nullptr) {
+        if (!record_inputs_->colored) {
+            return channels;
+        }
+        key = record_inputs_->colors;
+    } else {
+        const VertexDescriptor desc = state_.vertex_desc(0u);
+        if (desc.color[0].vcd != VcdType::Index8 && desc.color[0].vcd != VcdType::Index16) {
+            return channels;
+        }
+        key = static_cast<std::uint64_t>(state_.array_base(2u)) |
+              (static_cast<std::uint64_t>(state_.array_base(3u)) << 32u);
     }
     if (const std::uint32_t stage = rt_materials_stage_serial(); stage != debake_models_stage_) {
         debake_models_.clear();
         debake_models_stage_ = stage;
     }
-    const std::uint64_t key = static_cast<std::uint64_t>(state_.array_base(2u)) |
-                              (static_cast<std::uint64_t>(state_.array_base(3u)) << 32u);
     DebakeModel& model = debake_models_[key];
     if (!model.decided) {
         if (model.frame == 0u) {
@@ -5284,7 +5312,7 @@ bool GxBackend::rt_water_draw() const noexcept {
 // particles out).
 bool GxBackend::rt_ocean_water_draw() const noexcept {
     if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
-        state_.vertex_desc(0u).position.vcd != VcdType::Direct ||
+        record_inputs_ != nullptr || state_.vertex_desc(0u).position.vcd != VcdType::Direct ||
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
         return false;
     }
@@ -5866,11 +5894,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     bool clear_added = false;
     if (translucent && !lens && renderer_.rt_water_open() && rt_glow_draw()) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         clear_added = clear != nullptr && !clear->particle && !clear->waterfall && clear->emission == RtEmission::None &&
                       (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
                        clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                      (position == VcdType::Index8 || position == VcdType::Index16);
+                      position_indexed;
     }
     // A helper row (an environment map) is the draw's own surface when it is the only texture the draw samples (clear
     // materials made of a highlight map alone), or when every texture it samples is a helper (glass spheres mapping an
@@ -5895,12 +5923,12 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
          rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect))) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
         const BlendMode blend = state_.blend_mode();
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         clear_blended = clear != nullptr && !clear->particle && (!clear->helper || own_helper) && !clear->waterfall &&
                         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
                         blend.blend_enable && !blend.logic_op_enable && !blend.subtract && blend.color_update &&
                         blend.dst_factor != BlendFactor::One &&
-                        (position == VcdType::Index8 || position == VcdType::Index16);
+                        position_indexed;
     }
     // A blended coat the table names metal (the Observatory's gold rings: an environment-mapped layer the translucent
     // phase draws over the model's dark base, after the composite): a surface of the water pass, its traced reflection
@@ -5912,10 +5940,10 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
          rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu))) {
         const RtMaterial* const metal = rt_material(current_rt_material_);
         const BlendMode blend = state_.blend_mode();
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         metal_coat = metal != nullptr && !metal->particle && (!metal->helper || own_helper) && metal->metallic >= 0.5f &&
                      metal->emission == RtEmission::None && blend.blend_enable && !blend.logic_op_enable &&
-                     !blend.subtract && blend.color_update && (position == VcdType::Index8 || position == VcdType::Index16);
+                     !blend.subtract && blend.color_update && position_indexed;
     }
     // The table's traced clear surfaces join the water window under the engine whatever their blend (their draw is
     // hidden: the engine traces them, rt_engine.hlsl EngineClearCS).
@@ -5923,8 +5951,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     const bool traced = traced_clear != nullptr && traced_clear->traced && !traced_clear->solid &&
                         renderer_.rt_engine_clear() &&
                         renderer_.rt_water_open() && scene_phase_ && side_layer_ == kSceneLayer &&
-                        (state_.vertex_desc(0u).position.vcd == VcdType::Index8 ||
-                         state_.vertex_desc(0u).position.vcd == VcdType::Index16);
+                        draw_positions_indexed();
     const bool ocean = translucent && !lens && rt_ocean_water_draw();
     const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
                       (rt_glow_draw() || rt_sprite_light_draw());
@@ -5941,11 +5968,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     bool opaque_clear = false;
     if (!water && translucent && !glow && !lens && rt_late_draw() && renderer_.rt_water_open()) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         opaque_clear = clear != nullptr && !clear->particle && (!clear->helper || own_helper) &&
                        (clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
                         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                       (position == VcdType::Index8 || position == VcdType::Index16);
+                       position_indexed;
         water = opaque_clear;
     }
     const bool late = translucent && !glow && !water && !lens && rt_late_draw();
@@ -5958,14 +5985,14 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                           (water ? 1u << 24u : 0u) | (renderer_.rt_water_open() ? 1u << 25u : 0u) |
                           (side_layer_ == kSceneLayer ? 1u << 26u : 0u)).second) {
             const BlendMode blend = state_.blend_mode();
-            const VcdType position = state_.vertex_desc(0u).position.vcd;
+            const bool position_indexed = draw_positions_indexed();
             std::fprintf(stderr,
                          "[rt-clear] material=%u class=%u phase=%u blend=%d src=%u dst=%u indexed=%d geometry=%d "
                          "water-eligible=%d glow=%d water=%d late=%d water-open=%d scene-layer=%d maps=%02X\n",
                          static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(clear->surface_class),
                          static_cast<unsigned>(rt_phase_), blend.blend_enable ? 1 : 0,
                          static_cast<unsigned>(blend.src_factor), static_cast<unsigned>(blend.dst_factor),
-                         position == VcdType::Index8 || position == VcdType::Index16 ? 1 : 0, translucent ? 0 : 1,
+                         position_indexed ? 1 : 0, translucent ? 0 : 1,
                          rt_water_eligible_ ? 1 : 0, glow ? 1 : 0, water ? 1 : 0, late ? 1 : 0,
                          renderer_.rt_water_open() ? 1 : 0, side_layer_ == kSceneLayer ? 1 : 0,
                          static_cast<unsigned>(current_texture_map_mask_));
@@ -9261,10 +9288,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_replay_packet_batches_ = 0;
     frame_native_shape_draws_ = 0;
     frame_native_shape_misses_ = 0;
-    frame_native_shape_waits_ = 0;
-    if ((frame_index_ & 0xFFu) == 0u) {
-        sweep_native_shapes();
-    }
     frame_replay_simple_batches_ = 0;
     frame_replay_generic_draws_ = 0;
     for (PipelineMemoEntry& entry : pipeline_memo_) {
@@ -9591,28 +9614,29 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                 chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
             const auto run_stream = [&](std::span<const std::byte> stream,
                                         std::size_t prefix) -> std::size_t {
-                struct Split {
-                    std::size_t offset;
-                    int marker;  // -1: pointer depth field
-                    int view;    // marker index (its camera), -1 none
-                };
-                std::array<Split, 1u + kFifoMarkersPerChunk> splits{};
-                std::size_t split_count = 0;
+                std::vector<StreamSplit>& splits = stream_splits_;
+                splits.clear();
                 if (capture_in_frame) {
-                    splits[split_count++] = {
-                        prefix + chunk.pointer_depth_capture_fifo_offset, -1, -1};
+                    splits.push_back({prefix + chunk.pointer_depth_capture_fifo_offset, 0u, -1, -1});
                 }
                 for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
-                    splits[split_count++] = {
-                        prefix + chunk.fifo_markers[i].first,
-                        static_cast<int>(chunk.fifo_markers[i].second),
-                        static_cast<int>(i)};
+                    splits.push_back({prefix + chunk.fifo_markers[i].first, chunk.fifo_marker_serials[i],
+                                      static_cast<int>(chunk.fifo_markers[i].second), static_cast<int>(i)});
                 }
-                std::stable_sort(splits.begin(), splits.begin() + split_count,
-                    [](const Split& a, const Split& b) { return a.offset < b.offset; });
+                for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
+                    splits.push_back({prefix + chunk.shape_records[i].offset, chunk.shape_records[i].serial,
+                                      kSplitShapeRecord, static_cast<int>(i)});
+                }
+                // In stream order; at one offset in the order the game made them (a marker before the records
+                // made after it).
+                std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
+                    return a.offset != b.offset ? a.offset < b.offset
+                         : a.serial != b.serial ? a.serial < b.serial
+                                                : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
+                });
                 std::size_t consumed = 0;
-                for (std::size_t i = 0; i < split_count; ++i) {
-                    const Split split = splits[i];
+                for (std::size_t i = 0; i < splits.size(); ++i) {
+                    const StreamSplit split = splits[i];
                     if (split.offset > stream.size()) {
                         continue;
                     }
@@ -9624,7 +9648,9 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                             memory, *this, state_,
                             frame_memory_regions_disjoint_sorted_);
                     }
-                    if (split.marker < 0) {
+                    if (split.marker == kSplitShapeRecord) {
+                        on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
+                    } else if (split.marker < 0) {
                         record_pointer_depth_capture_in_frame(chunk);
                     } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
                         on_scene_2d_begin();
@@ -10104,7 +10130,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " replay-packet-offers=" << frame_replay_packet_batches_
                   << " native-shape-draws=" << frame_native_shape_draws_
                   << " native-shape-misses=" << frame_native_shape_misses_
-                  << " native-shape-waits=" << frame_native_shape_waits_
                   << " replay-simple-offers=" << frame_replay_simple_batches_
                   << " replay-generic-draws=" << frame_replay_generic_draws_
                   << " flush-matrix-us=" << frame_flush_matrix_us_
@@ -10527,16 +10552,18 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
         state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
         return false;
     }
-    const VertexDescriptor& desc = cached_vertex_layout(vtxfmt).desc;
-    // Indexed positions and normals (the analysis knows a model's corners by their indices; a shape without normals
-    // was not part of it), no NBT (bump mapped: none is rounded).
-    if ((desc.position.vcd != VcdType::Index8 && desc.position.vcd != VcdType::Index16) ||
-        (desc.normal.vcd != VcdType::Index8 && desc.normal.vcd != VcdType::Index16) || desc.normal.count != 0u) {
-        return false;
+    (void)vtxfmt;
+    // A native shape record whose model the analysis rounds (curved_surfaces.h; a model kept only for its flat
+    // corners draws plainly).
+    return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
+}
+
+bool GxBackend::draw_positions_indexed() const noexcept {
+    if (record_inputs_ != nullptr) {
+        return true;
     }
-    // A model kept only for its flat corners (curved_surfaces.h Model::bends) draws plainly.
-    const std::shared_ptr<const curved::Model> model = curved::find_model(state_.array_base(0u));
-    return model != nullptr && model->bends;
+    const VcdType position = state_.vertex_desc(0u).position.vcd;
+    return position == VcdType::Index8 || position == VcdType::Index16;
 }
 
 namespace {
@@ -10754,7 +10781,19 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         GxState::kDirtyXfMatrices;
     const bool dirty_needs_body =
         (dirty & ~kDirtySatisfiedByCachedUploads) != 0u;
+    // The draw's vertex inputs: a native shape record's, else the GX vertex description's (VCD bits 0-8). Another
+    // source (a record of another model, or GX after a record) rebuilds the keys that depend on it.
+    const std::uint32_t matrix_bits =
+        record_inputs_ != nullptr ? record_inputs_->matrix_bits : (state_.cp(cp::kVcdLo) & 0x1FFu);
+    const std::uint64_t vertex_source =
+        record_inputs_ != nullptr
+            ? ((record_inputs_->positions * 0x9E3779B97F4A7C15ull) ^ record_inputs_->colors ^
+               (static_cast<std::uint64_t>(matrix_bits) << 1u) ^ 1u)
+            : static_cast<std::uint64_t>(matrix_bits) << 1u;
+    const bool vertex_source_changed = vertex_source != vs_key_vertex_source_;
+    vs_key_vertex_source_ = vertex_source;
     if (!dirty_needs_body &&
+        !vertex_source_changed &&
         !texture_bindings_dirty_ &&
         !frame_bindings_dirty_ &&
         (!matrix_palette_stale_ || !current_palette_required_) &&
@@ -10847,8 +10886,8 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             current_ps_hash_ = ps_key_.hash();
         }
     }
-    if (xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
-        const auto next = build_vertex_shader_key(state_);
+    if (xf_dirty || vcd_dirty || vertex_source_changed || !shader_key_hashes_valid_) {
+        const auto next = build_vertex_shader_key(state_, matrix_bits);
         if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
             vs_key_ = next;
             current_vs_hash_ = vs_key_.hash();
@@ -10877,9 +10916,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             glow_changed = true;
         }
         // Indexed positions: a model (a star's fiery surface); direct ones: sprites and sparks.
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         const std::uint8_t kind =
-            !glow ? 0u : (position == VcdType::Index8 || position == VcdType::Index16) ? 2u : 1u;
+            !glow ? 0u : position_indexed ? 2u : 1u;
         if (kind != glow_kind_) {
             glow_kind_ = kind;
             glow_changed = true;
@@ -11054,7 +11093,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
         // Water and clear materials are models (indexed positions); particles (steam, smoke, haze with
         // indirect warps) are direct-vertex sprites and never water.
-        const VcdType position = state_.vertex_desc(0u).position.vcd;
+        const bool position_indexed = draw_positions_indexed();
         rt_sprite_eligible_ =
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update &&
@@ -11067,7 +11106,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
-            (position == VcdType::Index8 || position == VcdType::Index16);
+            position_indexed;
     }
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
@@ -12649,182 +12688,160 @@ bool GxBackend::on_cached_packet_draw_run(
     return true;
 }
 
-bool GxBackend::adopt_native_shape(NativeShape& native, std::shared_ptr<const shapes::Shape> shape) {
-    // The arrays as the builder read them: changed since (a model the game rewrote between its load and its first
-    // draw), the shape is retired.
-    std::size_t at = 0;
-    for (const VertexDecodeGuestRange& read : shape->reads) {
-        const std::byte* live =
-            resolve_guest_const_bytes(frame_memory_, read.guest_base, read.size, frame_memory_regions_disjoint_sorted_);
-        if (live == nullptr || at + read.size > shape->read_bytes.size() ||
-            std::memcmp(live, shape->read_bytes.data() + at, read.size) != 0) {
-            native.retired = true;
-            return false;
-        }
-        at += read.size;
+void GxBackend::on_shape_record(const shapes::Record& record) {
+    switch (record.kind) {
+    case shapes::Record::Kind::Array:
+        shape_arrays_[record.key] = ShapeArrayEntry{record.array, ++shape_array_versions_};
+        return;
+    case shapes::Record::Kind::Geometry: {
+        RecordShape& shape = record_shapes_[record.key];
+        release_record_shape(shape);
+        shape = RecordShape{};
+        shape.geometry = record.geometry;
+        return;
     }
-    std::size_t captured = 0;
-    if (!capture_decoded_packet_run_dependencies(frame_memory_, shape->reads, kDecodedPacketRunCacheMaxEntryBytes,
-                                                 native.snapshots, captured, frame_memory_regions_disjoint_sorted_)) {
-        native.retired = true;
-        return false;
-    }
-    native.validated_generation = decoded_packet_run_generation_;
-    native.shape = std::move(shape);
-    return true;
-}
-
-void GxBackend::sweep_native_shapes() noexcept {
-    for (auto it = native_shapes_.begin(); it != native_shapes_.end();) {
-        if (frame_index_ - it->second.last_used > kNativeShapeIdleChunks) {
-            drop_native_shape(it->second);
-            it = native_shapes_.erase(it);
-        } else {
-            ++it;
-        }
+    case shapes::Record::Kind::Draw:
+        draw_record_shape(record);
+        return;
     }
 }
 
-void GxBackend::drop_native_shape(NativeShape& native) noexcept {
-    if (native.shape != nullptr && native.resident_epoch != 0u && native.resident_epoch == resident_vertices_.epoch()) {
-        resident_vertices_.release(native.resident_offset, static_cast<std::uint32_t>(native.shape->vertices.size()));
+void GxBackend::release_record_shape(RecordShape& shape) noexcept {
+    if (shape.resident_epoch != 0u && shape.resident_epoch == resident_vertices_.epoch()) {
+        resident_vertices_.release(shape.resident_offset, shape.resident_units);
     }
-    const bool requested = native.requested;
-    const bool rebuilt = native.rebuilt;
-    native = NativeShape{};
-    native.requested = requested;
-    native.rebuilt = rebuilt;
+    shape.resident_epoch = 0u;
 }
 
-bool GxBackend::request_native_shape(NativeShape& native, std::uint32_t handle, std::uint32_t list_address,
-                                     std::uint32_t list_bytes) {
-    GuestMemory* const live = live_memory_.load(std::memory_order_relaxed);
-    const std::byte* list = resolve_guest_const_bytes(frame_memory_, list_address & ~std::uint32_t{31u}, list_bytes,
-                                                      frame_memory_regions_disjoint_sorted_);
-    if (live == nullptr || list == nullptr) {
-        return false;
-    }
-    shapes::register_later(shapes::make_request(handle, list_address, std::span(list, list_bytes), state_), live);
-    native.requested = true;
-    return true;
-}
-
-bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address, std::uint32_t list_bytes) {
-    static const bool enabled = read_env_u64("GALAXY_NATIVE_SHAPES", 1u) != 0u;
-    // GALAXY_TEST_NATIVE_SHAPES_AB=1: native shapes in every other presented frame, the lists called in the others (a
-    // same-run picture comparison; a frame can take several render chunks).
-    static const bool test_ab = read_env_u64("GALAXY_TEST_NATIVE_SHAPES_AB", 0u) != 0u;
-    if (!enabled || cached_draw_run_active_ || (test_ab && ((g_snapshot_presents + 1u) & 1u) != 0u)) {
-        return false;
-    }
-    NativeShape& native = native_shapes_[handle];
-    native.last_used = frame_index_;
-    if (native.retired) {
-        return false;
-    }
-    if (native.shape == nullptr) {
-        // Registered when its model loaded, or else built from this first draw (drawn as GX would meanwhile).
-        bool pending = false;
-        std::shared_ptr<const shapes::Shape> built = shapes::take(handle, pending);
-        if (built == nullptr) {
-            if (pending) {
-                native.requested = true;
-                ++frame_native_shape_waits_;
-            } else if (!native.requested) {
-                request_native_shape(native, handle, list_address, list_bytes);
-                ++frame_native_shape_waits_;
-            } else {
-                native.retired = true;
-            }
-            return false;
-        }
-        if (!adopt_native_shape(native, std::move(built))) {
-            return false;
-        }
-    }
-    const shapes::Shape& shape = *native.shape;
-    if (shape.list_address != list_address || shape.list_bytes != list_bytes ||
-        !shapes::vertex_state_matches(shape, state_)) {
+void GxBackend::draw_record_shape(const shapes::Record& record) {
+    const auto found = record_shapes_.find(record.key);
+    if (found == record_shapes_.end() || found->second.geometry == nullptr) {
         ++frame_native_shape_misses_;
-        // Another list or vertex state than it was built from: built once more from this one.
-        if (!native.rebuilt) {
-            drop_native_shape(native);
-            native.rebuilt = true;
-            native.requested = false;
-            request_native_shape(native, handle, list_address, list_bytes);
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            std::fprintf(stderr, "[native-shapes] a draw of group %llx, which was never registered\n",
+                         static_cast<unsigned long long>(record.key));
         }
-        return false;
+        return;
     }
-    // The array bytes, once per batch of guest writes.
-    if (native.validated_generation != decoded_packet_run_generation_) {
-        std::uint64_t validated = 0u;
-        if (!decoded_packet_run_dependencies_match(frame_memory_, native.validated_generation,
-                                                   decoded_packet_run_generation_, native.snapshots, validated,
-                                                   frame_memory_regions_disjoint_sorted_)) {
-            // Arrays the game writes (a deformed or recoloured model): drawn as GX would from now on.
-            drop_native_shape(native);
-            native.retired = true;
-            return false;
+    RecordShape& shape = found->second;
+    const shapes::Geometry& geometry = *shape.geometry;
+    // The arrays it reads: the draw's position, normal and colour 0 (a bump-mapped group's NBT array is its own), the
+    // group's for the rest.
+    std::array<std::uint64_t, 12> keys = geometry.arrays;
+    keys[0] = record.position;
+    if ((geometry.attributes & shapes::kNbt) == 0u) {
+        keys[1] = record.normal;
+    }
+    keys[2] = record.color;
+    shapes::DrawArrays arrays{};
+    std::array<std::uint64_t, 12> versions{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        if (keys[i] == 0u) {
+            continue;
         }
-        native.validated_generation = validated != 0u ? validated : decoded_packet_run_generation_;
+        if (const auto a = shape_arrays_.find(keys[i]); a != shape_arrays_.end()) {
+            arrays[i] = a->second.array.get();
+            versions[i] = a->second.version;
+        }
+    }
+    // Corners without a position matrix of their own take the one J3DCurrentMtx::load set.
+    const auto position_matrix = static_cast<std::uint8_t>(
+        (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : state_.cp(cp::kMatrixIndexA) & 0x3Fu);
+    if (!shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix) {
+        // The model's analysis for its curved surfaces (its first draw waits for it).
+        shape.curved = curved::find_model(keys[0]);
+        if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), shape.vertices) ||
+            shape.vertices.empty() || shape.vertices.size() > 0x10000u) {
+            ++frame_native_shape_misses_;
+            static bool warned = false;
+            if (!warned) {
+                warned = true;
+                std::fprintf(stderr, "[native-shapes] group %llx reads an array the game never registered\n",
+                             static_cast<unsigned long long>(record.key));
+            }
+            shape.expanded = false;
+            return;
+        }
+        release_record_shape(shape);
+        shape.expanded = true;
+        shape.versions = versions;
+        shape.position_matrix = position_matrix;
+        shape.split_built = false;
+        shape.split_indices.clear();
     }
     if (!ensure_resident_vertex_buffer()) {
-        return false;
+        return;
     }
     const auto units = static_cast<std::uint32_t>(shape.vertices.size());
-    if (native.resident_epoch != resident_vertices_.epoch()) {
-        native.resident_epoch = 0u;
+    if (shape.resident_epoch != resident_vertices_.epoch()) {
+        shape.resident_epoch = 0u;
         const std::optional<std::uint32_t> offset = resident_vertices_.allocate(units);
         if (!offset.has_value()) {
-            return false;
+            return;
         }
-        // Written once while the block belongs to this shape, so no in-flight frame sees a partial write.
+        // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
         std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
                     shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(GxVertexOut));
         renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(GxVertexOut),
                                          static_cast<std::uint64_t>(units) * sizeof(GxVertexOut));
-        native.resident_epoch = resident_vertices_.epoch();
-        native.resident_offset = *offset;
+        shape.resident_epoch = resident_vertices_.epoch();
+        shape.resident_offset = *offset;
+        shape.resident_units = units;
     }
 
-    struct CachedRunScope {
+    RecordVertexInputs inputs;
+    inputs.matrix_bits = ((geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u) |
+                         (((geometry.attributes / shapes::kTextureMatrix0) & 0xFFu) << 1u);
+    inputs.positions = keys[0];
+    inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
+    inputs.colors = keys[2] ^ (keys[3] * 0x9E3779B97F4A7C15ull);
+    inputs.curved = shape.curved.get();
+    struct RecordScope {
         GxBackend* backend = nullptr;
-        ~CachedRunScope() {
-            backend->end_cached_draw_run();
+        bool run = false;
+        ~RecordScope() {
+            if (run) {
+                backend->end_cached_draw_run();
+            }
+            backend->record_inputs_ = nullptr;
         }
     };
-    if (!begin_cached_draw_run(PrimitiveClass::Triangles, shape.vtxfmt, shape.draws)) {
-        return false;
+    record_inputs_ = &inputs;
+    RecordScope scope{this};
+    if (!begin_cached_draw_run(PrimitiveClass::Triangles, 0u, 1u)) {
+        return;
     }
-    const CachedRunScope scope{this};
+    scope.run = true;
     ++frame_native_shape_draws_;
     if (cached_draw_run_scissor_reject_) {
-        frame_scissor_skips_ += shape.draws;
-        return true;
+        ++frame_scissor_skips_;
+        return;
     }
     if (cached_draw_run_no_pso_) {
-        stat_draws_no_pso_ += shape.draws;
-        frame_draws_no_pso_ += shape.draws;
-        return true;
+        ++stat_draws_no_pso_;
+        ++frame_draws_no_pso_;
+        return;
     }
     flush_pending_draw_batch();
     cached_draw_run_batch_compatible_known_ = false;
 
     const bool curved = current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr;
-    if (curved && !native.split_built) {
-        native.split_built = true;
-        native.split_flat_indices = split_curved_triangles(shape.vertices, shape.indices, native.split_indices);
+    if (curved && !shape.split_built) {
+        shape.split_built = true;
+        shape.split_flat_indices = split_curved_triangles(shape.vertices, geometry.indices, shape.split_indices);
     }
-    const bool split = curved && !native.split_indices.empty();
-    const std::vector<std::uint16_t>& indices = split ? native.split_indices : shape.indices;
+    const bool split = curved && !shape.split_indices.empty();
+    const std::vector<std::uint16_t>& indices = split ? shape.split_indices : geometry.indices;
     const UploadRing::Allocation ib = renderer_.index_ring().upload_immutable(
         indices.data(), indices.size() * sizeof(std::uint16_t), sizeof(std::uint16_t),
-        split ? native.split_upload_token : native.index_upload_token);
+        split ? shape.split_upload_token : shape.index_upload_token);
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
     const auto index_count = static_cast<std::uint32_t>(indices.size());
-    const std::size_t vertex_byte_offset = static_cast<std::size_t>(native.resident_offset) * sizeof(GxVertexOut);
-    stat_draws_issued_ += shape.draws;
-    frame_draws_issued_ += shape.draws;
+    const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(GxVertexOut);
+    ++stat_draws_issued_;
+    ++frame_draws_issued_;
     ++frame_resident_vertex_hits_;
     frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(GxVertexOut);
 
@@ -12840,12 +12857,12 @@ bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address
     call.index_count = index_count;
     if (split) {
         call.flat_pipeline = current_flat_pipeline_;
-        call.flat_index_count = native.split_flat_indices;
+        call.flat_index_count = shape.split_flat_indices;
         // The sort's view of this frame: of the triangles after the flat ones, those the hull shader would leave
         // whole draw after the flat ones.
         call.curve_sort = renderer_.sort_curved(
-            vbv.BufferLocation, ibv.BufferLocation + native.split_flat_indices * sizeof(std::uint16_t),
-            (index_count - native.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
+            vbv.BufferLocation, ibv.BufferLocation + shape.split_flat_indices * sizeof(std::uint16_t),
+            (index_count - shape.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
             (vs_key_.flags & 0x01u) != 0u);
         call.curve_sort_list = renderer_.curve_sort_list();
     }
@@ -12857,15 +12874,14 @@ bool GxBackend::on_native_shape(std::uint32_t handle, std::uint32_t list_address
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
     pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = true;
-    pending_draw_batch_.base_vertex = native.resident_offset;
+    pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
     pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(GxVertexOut);
     pending_draw_batch_.first_index = first_index;
     pending_draw_batch_.index_count = index_count;
-    pending_draw_batch_.draw_count = shape.draws;
+    pending_draw_batch_.draw_count = 1u;
     pending_draw_batch_.resident = true;
     pending_draw_batch_.sealed = true;
-    return true;
 }
 
 void GxBackend::on_cached_draw_run_draw(

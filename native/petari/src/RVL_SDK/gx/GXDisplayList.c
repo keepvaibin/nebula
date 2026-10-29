@@ -81,25 +81,6 @@ u32 GXEndDisplayList(void) {
     }
 }
 
-#ifdef TARGET_PC
-/* A loaded model's shape group (J3DShapeDraw::draw): GXCallDisplayList's flushes, then the list by its handle, which the
-   renderer replays as it recorded it. Inside a display list being made, or with a size the marker can't hold, the
-   plain call. */
-void __NebulaGXCallShapeDisplayList(const void* list, u32 nbytes, u32 handle) {
-    if (handle == 0 || __NebulaGXLinked == 0 || (nbytes & 31u) != 0u || nbytes == 0u || (nbytes >> 5) > 0xFFFFu) {
-        GXCallDisplayList(list, nbytes);
-        return;
-    }
-    if (gx->dirtyState) {
-        __GXSetDirtyState();
-    }
-    if (!(*(u32*)(&gx->vNumNot))) {
-        __GXSendFlushPrim();
-    }
-    __NebulaGXShapeListMarker(handle, GX_PHY_ADDR(list), nbytes);
-}
-#endif
-
 void GXCallDisplayList(const void *list, u32 nbytes) {
     if (gx->dirtyState)  {
         __GXSetDirtyState();

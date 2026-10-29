@@ -136,7 +136,6 @@ void FurCtrl::drawFur() {
     J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
     pShape->mCurrentMtx.mMtxIdxRegA = 0x3C921780;
     pShape->mCurrentMtx.mMtxIdxRegB = 0x00F3CF3C;
-    J3DShape::sOldVcdVatCmd = nullptr;
     J3DShapePacket* pPacket;
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {
@@ -150,7 +149,6 @@ void FurCtrl::drawFur() {
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
     GXColor fogColor = {0, 0, 0, 0};
     GXSetFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
-    J3DShape::sOldVcdVatCmd = nullptr;
     GXSetClipMode(GX_CLIP_ENABLE);
 }
 

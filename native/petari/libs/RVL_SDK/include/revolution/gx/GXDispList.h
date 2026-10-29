@@ -10,9 +10,6 @@ extern "C" {
 void GXBeginDisplayList(void *, u32);
 u32 GXEndDisplayList(void);
 void GXCallDisplayList(const void *, u32);
-#ifdef TARGET_PC
-void __NebulaGXCallShapeDisplayList(const void* list, u32 nbytes, u32 handle);
-#endif
 
 #ifdef __cplusplus
 }

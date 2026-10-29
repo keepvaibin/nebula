@@ -87,13 +87,10 @@ struct Surface {
 [[nodiscard]] std::uint32_t pack_normal(const Vec3& n) noexcept;
 [[nodiscard]] Vec3 unpack_normal(std::uint32_t packed) noexcept;
 
-// A registered model: its position array's size and fingerprint as GX reads it (to tell it from whatever later
-// occupies the same memory), and per position what its vertices carry (GxVertexOut::curve): the place with its
+// A registered model: per position what its vertices carry (GxVertexOut::curve): the place with its
 // first crease neighbour (place | neighbour << 16), the second crease neighbour (kNoPlace where none), the crease
 // normal (packed), and the bends by normal index (packed).
 struct Model {
-    std::uint64_t fingerprint = 0;
-    std::uint32_t bytes = 0;
     std::vector<std::uint32_t> places;         // per position: place | first crease neighbour << 16
     std::vector<std::uint16_t> second;         // per position: the second crease neighbour
     std::vector<std::uint32_t> crease;         // per position: the crease normal, packed
@@ -109,24 +106,15 @@ struct Model {
     [[nodiscard]] bool flat_of(std::uint32_t position, std::uint32_t normal) const noexcept;
 };
 
-// FNV-1a over at most kFingerprintWords 8-byte words spread evenly across the bytes (the first and the last among
-// them), the bytes past the last whole word and the size. Checked at every decode of a model's draws, it reads a
-// fixed amount whatever the array's size (hashing every byte of a 600 KB array per draw cost tens of milliseconds a
-// frame); another model's positions differ from these almost anywhere.
-inline constexpr std::size_t kFingerprintWords = 64u;
-[[nodiscard]] std::uint64_t fingerprint(std::span<const std::byte> bytes) noexcept;
-
-// The models by their position array's GX address (thread-safe: the game registers while the renderer decodes). A
-// model in which nothing bends and no corner is flat is not kept: its draws stay plain triangles; the address's
-// earlier model, if any, is forgotten all the same.
-void register_model(std::uint32_t array_address, std::span<const std::byte> array_bytes, const Surface& surface);
-// The same, with the analysis on a background thread: the array's fingerprint is taken now, and find_model for the
-// address waits for the analysis (a model's first draw is already rounded).
-void register_model_later(std::uint32_t array_address, std::span<const std::byte> array_bytes,
-                          std::vector<Vec3> positions, std::vector<Vec3> normals, std::vector<Corner> corners);
-[[nodiscard]] std::shared_ptr<const Model> find_model(std::uint32_t array_address);
-// A model whose array no longer holds its bytes (its memory reused): forgotten.
-void forget_model(std::uint32_t array_address, const Model* model);
+// The models by their position array's identity (the game's key for it: nebula_game_api.h curved_surface;
+// thread-safe: the game registers while the renderer draws). A model in which nothing bends and no corner is flat is
+// not kept: its draws stay plain triangles; the key's earlier model, if any, is forgotten all the same.
+void register_model(std::uint64_t key, const Surface& surface);
+// The same, with the analysis on a background thread: find_model for the key waits for the analysis (a model's first
+// draw is already rounded).
+void register_model_later(std::uint64_t key, std::vector<Vec3> positions, std::vector<Vec3> normals,
+                          std::vector<Corner> corners);
+[[nodiscard]] std::shared_ptr<const Model> find_model(std::uint64_t key);
 void clear_models();
 
 }  // namespace galaxy::gx::curved

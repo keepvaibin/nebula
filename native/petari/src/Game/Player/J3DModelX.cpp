@@ -171,8 +171,6 @@ void J3DModelX::directDraw(J3DModel* model) {
             drawIn(material, fog, mBaseTransformMtx, nullptr);
         }
     }
-
-    J3DShape::resetVcdVatCache();
 }
 
 void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* model) {
@@ -257,7 +255,6 @@ bool J3DModelX::simpleDrawSetup(J3DMaterial* material) {
         return false;
     }
 
-    J3DShape::resetVcdVatCache();
     J3DMatPacket* matPacket = getMatPacket(material->getIndex());
     J3DShapePacket* packet = getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
@@ -480,11 +477,7 @@ void J3DModelX::shapePacketDrawFast(J3DShapePacketX* packet) const {
 }
 
 void J3DModelX::shapeDrawFast(J3DShapeX* shape) const {
-    if (J3DShape::sOldVcdVatCmd != shape->mVcdVatCmd) {
-        GXCallDisplayList(shape->mVcdVatCmd, 0xC0);
-        J3DShape::sOldVcdVatCmd = shape->mVcdVatCmd;
-    }
-
+    shape->prepareGeometry();
     if (J3DShape::sEnvelopeFlag && !shape->mHasPNMTXIdx) {
         shape->mCurrentMtx.load();
     }

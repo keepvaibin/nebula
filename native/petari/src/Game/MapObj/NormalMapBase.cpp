@@ -359,7 +359,7 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
 }
 
 void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
-    GXCallDisplayList(pShape->getVcdVatCmd(), J3DShape::kVcdVatDLSize);
+    pShape->prepareGeometry();
     u16 groupCount = pShape->getMtxGroupNum();
     for (u16 i = 0; i < groupCount; i++) {
         if (pShape->getShapeDraw(i)) {

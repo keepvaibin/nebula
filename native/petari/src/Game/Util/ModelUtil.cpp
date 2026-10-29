@@ -296,15 +296,8 @@ namespace MR {
         return false;
     }
 
-    inline void setShapeVcdVatCmdSelf(J3DShape* pShape) {
-        void* vcdVatCmd = pShape->getVcdVatCmd();
-        u8* arr = new (0x20) u8[J3DShape::kVcdVatDLSize];
-        copyMemory(arr, vcdVatCmd, J3DShape::kVcdVatDLSize);
-        pShape->setVcdVatCmd(arr);
-    }
-
     void initEnvelopeAndEnvMapOrProjMapModelData(J3DModelData* pModelData) {
-        bool doSort = false;
+
 
         for (int i = 0; i < pModelData->getMaterialNum(); i++) {
             J3DMaterial* material = pModelData->getMaterialNodePointer(i);
@@ -319,8 +312,6 @@ namespace MR {
             }
 
             J3DShape* shape = material->getShape();
-            setShapeVcdVatCmdSelf(shape);
-            doSort = true;
             if (isUseEnvMap) {
                 shape->setTexMtxLoadType(0x2000);
             }
@@ -336,10 +327,6 @@ namespace MR {
                     shape->addTexMtxIndexInVcd(attr);
                 }
             }
-        }
-
-        if (doSort) {
-            pModelData->mShapeTable.sortVcdVatCmd();
         }
     }
 
@@ -510,11 +497,6 @@ namespace MR {
             vertexPosArray[i] >>= 1;
         }
 
-        DCStoreRange(vertexPosArray, vtxNum * 6);
-
-        for (u32 i = 0; i < pModelData->getShapeTable()->getShapeNum(); i++) {
-            pModelData->getShapeTable()->getShapeNodePointer(i)->makeVcdVatCmd();
-        }
     }
 
     void calcModelBoundingBox(TBox3f* pOut, const LiveActor* pActor) {

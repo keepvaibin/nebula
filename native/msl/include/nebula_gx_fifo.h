@@ -171,19 +171,6 @@ static inline void __NebulaGXClearQuadColourMarker(uint32_t z, uint32_t rgba) {
     __NebulaGXClearQuadMarkerWith(z, 1, rgba);
 }
 
-/* A loaded model's shape group drawn by its display list (galaxy/motion_signals.h kMarkerShapeList): the handle the
-   list keeps for as long as it lives, its size in 32-byte units and its address. In the main ring only. */
-enum { NEBULA_GX_MARKER_SHAPE_LIST = 17 };
-
-static inline void __NebulaGXShapeListMarker(uint32_t handle, uint32_t address, uint32_t size) {
-    uint8_t* const p = __NebulaGXReserve(12);
-    p[0] = 0xF0;
-    p[1] = NEBULA_GX_MARKER_SHAPE_LIST;
-    __NebulaGXStore16(p + 2, (uint16_t)(size >> 5));
-    __NebulaGXStore32(p + 4, handle);
-    __NebulaGXStore32(p + 8, address);
-}
-
 /* Indexed load (0x20/0x28/0x30/0x38): the opcode, the index, the address and size word. */
 static inline void __NebulaGXCmdIndexed(uint8_t opcode, uint16_t index, uint16_t addr) {
     uint8_t* const p = __NebulaGXReserve(5);

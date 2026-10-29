@@ -121,7 +121,6 @@ J3DModelData* J3DModelLoader::load(void const* i_data, u32 i_flags) {
     }
     J3DModelHierarchy const* hierarchy = mpModelData->getHierarchy();
     mpModelData->makeHierarchy(NULL, &hierarchy);
-    mpModelData->getShapeTable()->sortVcdVatCmd();
     mpModelData->getJointTree().findImportantMtxIndex();
     setupBBoardInfo();
     if (mpModelData->getFlag() & 0x100) {
@@ -213,7 +212,6 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
     }
     J3DModelHierarchy const* hierarchy = mpModelData->getHierarchy();
     mpModelData->makeHierarchy(NULL, &hierarchy);
-    mpModelData->getShapeTable()->sortVcdVatCmd();
     mpModelData->getJointTree().findImportantMtxIndex();
     setupBBoardInfo();
     mpModelData->indexToPtr();
@@ -498,7 +496,6 @@ void J3DModelLoader::readShape(J3DShapeBlock const* i_block, u32 i_flags) {
         shape_table->mShapeName = NULL;
     }
     shape_table->mShapeNodePointer = new J3DShape*[shape_table->mShapeNum];
-    factory.allocVcdVatCmdBuffer(shape_table->mShapeNum);
     J3DModelHierarchy const* hierarchy_entry = mpModelData->getHierarchy();
     GXVtxDescList* vtx_desc_list = NULL;
     for (; hierarchy_entry->mType != 0; hierarchy_entry++) {
