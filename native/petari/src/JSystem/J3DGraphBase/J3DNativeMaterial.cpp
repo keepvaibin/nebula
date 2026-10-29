@@ -107,8 +107,6 @@ namespace J3DNativeMaterial {
             rOut.alpha_reg = rStage.mAlphaReg;
             rOut.ras_swap = rStage.mRasSel;
             rOut.tex_swap = rStage.mTexSel;
-            rOut.konst_color = pTev->getTevKColorSel(i);
-            rOut.konst_alpha = pTev->getTevKAlphaSel(i);
             const J3DIndTevStage& rInd = *pTev->getIndTevStage(i);
             rOut.ind_stage = rInd.mIndStage;
             rOut.ind_format = rInd.mIndFormat;
@@ -119,6 +117,28 @@ namespace J3DNativeMaterial {
             rOut.ind_prev = rInd.mPrev;
             rOut.ind_lod = rInd.mLod;
             rOut.ind_alpha = rInd.mAlphaSel;
+        }
+        // Orders are written in pairs: an odd count's last stage pairs with the next entry the block holds.
+        if ((pOut->tev_stages & 1) != 0 && pOut->tev_stages < 16 && pTev->getType() != 'TVB1') {
+            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(pOut->tev_stages)->getTevOrderInfo();
+            pOut->tev[pOut->tev_stages].tex_coord = rOrder.mTexCoord;
+            pOut->tev[pOut->tev_stages].tex_map = rOrder.mTexMap;
+            pOut->tev[pOut->tev_stages].channel = rOrder.mColorChan;
+            coordScale(pOut, rOrder.mTexCoord, rOrder.mTexMap);
+        }
+        // Konst selectors for all 16 stages, as the blocks write them: their own entries repeated (two in J3DTevBlock2,
+        // four in J3DTevBlock4, sixteen in J3DTevBlock16).
+        const u32 tevType = pTev->getType();
+        const u32 konst = tevType == 'TV16' ? 16 : tevType == 'TVB4' ? 4 : tevType == 'TVB2' ? 2 : 0;
+        for (u32 i = 0; konst != 0 && i < 16; i++) {
+            pOut->tev[i].konst_color = pTev->getTevKColorSel(i % konst);
+            pOut->tev[i].konst_alpha = pTev->getTevKAlphaSel(i % konst);
+        }
+        // J3DTevBlock1 writes its one stage's order paired with a null second stage.
+        if (tevType == 'TVB1') {
+            pOut->tev[1].tex_coord = GX_TEXCOORD_NULL;
+            pOut->tev[1].tex_map = GX_TEXMAP_NULL;
+            pOut->tev[1].channel = GX_COLOR_NULL;
         }
         // The parts a TEV block variant keeps (J3DTevBlock1 has no colours, selectors or swap tables; the patched
         // block no swap tables): left as set before.
@@ -138,7 +158,7 @@ namespace J3DNativeMaterial {
                 copyColor(pOut->konst_color[i], *pTev->getTevKColor(i));
             }
         }
-        if (pTev->getTevSwapModeTable(0) != NULL) {
+        if (konst != 0) {
             pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_SELECT | NEBULA_MATERIAL_LOADS_SWAP_TABLE;
             for (u32 i = 0; i < 4; i++) {
                 const J3DTevSwapModeTable& rSwap = *pTev->getTevSwapModeTable(i);
