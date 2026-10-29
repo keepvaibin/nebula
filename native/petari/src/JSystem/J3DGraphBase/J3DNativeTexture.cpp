@@ -153,6 +153,7 @@ namespace J3DNativeTexture {
         // The image's format as the texture unit takes it (a depth texture's low four bits).
         list.setTexImgAttr(map, rTex.mWidth, rTex.mHeight, static_cast< GXTexFmt >(rTex.mFormat & 0xF));
         list.setTexImgPtr(map, rTex.mImage);
+        ops[2].a[1] = 1;  // GXLoadTexObj's: the coordinate scales follow the texture
         if (rTex.mPalette) {
             list.setTexTlut(map, static_cast< GXTlutFmt >(sTlutFormat[rTex.mTlutName % 20]), rTex.mTlutName);
         }

@@ -70,7 +70,7 @@ enum {
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t, min filter, mag filter, bias clamp, edge LOD, anisotropy;
                                        f: min LOD, max LOD, LOD bias */
     NEBULA_STATE_TEX_IMAGE_ATTR,    /* map, format; size: width, height */
-    NEBULA_STATE_TEX_IMAGE,         /* map; image */
+    NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
     NEBULA_STATE_FOG,               /* type, r, g, b, a, GXSetFog's form (1: a projected type writes its second and
                                        third words with register id 0, as GXSetFog does; 0: GDSetFog's); f: start,
                                        end, near, far */

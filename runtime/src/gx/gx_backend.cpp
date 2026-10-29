@@ -133,13 +133,17 @@ namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
-// Each texture coordinate's scale (texels per unit, s and t): the size of the texture sampled with it - indirect
-// stages, then TEV stages, the last one winning, as GX set its coordinate scales. A coordinate no stage samples keeps
-// one texel.
-std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state) {
+// Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
+// TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
+// sampled with it - indirect stages, then TEV stages, the last one winning - as GX re-derived them then.
+std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state, bool derive) {
     std::array<std::array<std::uint32_t, 2>, 8> scales{};
-    for (auto& scale : scales) {
-        scale = {1u, 1u};
+    for (unsigned c = 0; c < 8u; ++c) {
+        scales[c] = {(state.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + c * 2u)) & 0xFFFFu) + 1u,
+                     (state.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + c * 2u + 1u)) & 0xFFFFu) + 1u};
+    }
+    if (!derive) {
+        return scales;
     }
     const GenMode gm = state.gen_mode();
     const std::uint32_t ind_ref = state.bp(bp::kIndRef);
@@ -1620,7 +1624,7 @@ struct ScopedFlushTiming {
     return nullptr;
 }
 
-void fill_ps_constants(const GxState& state, GxPsConstants& out) {
+void fill_ps_constants(const GxState& state, GxPsConstants& out, bool derive_scales) {
     std::memset(&out, 0, sizeof(out));
 
     const GenMode gm = state.gen_mode();
@@ -1709,7 +1713,7 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
 
     // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
     // before sampling.
-    const auto scales = coordinate_scales(state);
+    const auto scales = coordinate_scales(state, derive_scales);
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const TexImage img = state.tex_image(m);
         out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
@@ -4669,7 +4673,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
     tev.header = stages | (texgens << 28u);
-    const auto scales = coordinate_scales(state_);
+    const auto scales = coordinate_scales(state_, scales_from_textures_);
     for (unsigned s = 0; s < stages; ++s) {
         const TevStagePacked& packed = ps_key_.stages[s];
         RtTevStage& stage = stages_out[s];
@@ -5151,7 +5155,7 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         RtTevIndirect& ind = info.tev_indirect;
         ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
         const auto coord_size = [this](unsigned coord, unsigned axis) {
-            return coordinate_scales(state_)[coord & 7u][axis];
+            return coordinate_scales(state_, scales_from_textures_)[coord & 7u][axis];
         };
         for (unsigned i = 0; i < ind_stages; ++i) {
             const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
@@ -6230,7 +6234,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 break;
             }
             const auto coord_size = [&](unsigned coord, unsigned axis) {
-                return static_cast<float>(coordinate_scales(state_)[coord & 7u][axis]);
+                return static_cast<float>(coordinate_scales(state_, scales_from_textures_)[coord & 7u][axis]);
             };
             const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
             const TexImage wave_image = state_.tex_image(wave_map);
@@ -11699,7 +11703,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         GxPsConstants ps_c{};
-        fill_ps_constants(state_, ps_c);
+        fill_ps_constants(state_, ps_c, scales_from_textures_);
         if (tint_cleared > 0.0f) {
             for (auto& reg : ps_c.tev_regs) {
                 clear_register_tint(reg, tint_cleared);
@@ -12746,6 +12750,14 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
             std::uint32_t xf_read(std::uint16_t address) override { return backend.state_.xf(address); }
             std::uint32_t cp_read(std::uint8_t reg) override { return backend.state_.cp(reg); }
         } events(*this);
+        // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
+        for (const state::Op& op : record.state) {
+            if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
+                (op.kind == state::kTexImage && op.a[1] != 0u)) {
+                scales_from_textures_ = true;
+                break;
+            }
+        }
         state::encode(record.state, events);
         return;
     }
@@ -12763,6 +12775,8 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
 
 void GxBackend::apply_record_material(const material::Material& m) {
     material::apply(m, state_, this);
+    // The material wrote its coordinate scales.
+    scales_from_textures_ = false;
 }
 
 void GxBackend::release_record_shape(RecordShape& shape) noexcept {

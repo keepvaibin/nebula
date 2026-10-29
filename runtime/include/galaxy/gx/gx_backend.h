@@ -1820,6 +1820,9 @@ private:
     // without rewriting its BP texture registers.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
+    // Coordinate scales come from the sampled textures (the game changed TEV order or textures since the last
+    // material) rather than from the scale registers (coordinate_scales).
+    bool scales_from_textures_ = false;
     std::uint8_t current_texture_map_mask_ = 0;
     // sampled_texture_map_mask(state_) reads GenMode, the TEV order, indirect-command and IND_REF registers,
     // all of which set kDirtyTev; invalidated wherever the BP register file resets.
