@@ -52,7 +52,7 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
 
         sRFLManager = (RFLiManager*)workBuffer;
         sRFLLastErrCode = RFLErrcode_NotAvailable;
-        sRFLLastReason = NAND_RESULT_OK;
+        sRFLLastReason = 0;
         sRFLiFileBrokenType = RFLiFileBrokenType_DBNotFound;
         sRFLManager->workBuffer = (u8*)workBuffer + sizeof(RFLiManager);
 
@@ -83,8 +83,6 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
         RFLiSetWorking(FALSE);
         RFLiInitDatabase(RFLiGetManager()->systemHeap);
         RFLiInitLoader();
-        RFLiInitCtrlBuf(RFLiGetManager()->systemHeap);
-        RFLiInitHiddenDatabase();
         RFLiInitAccessInfo();
         RFLiSetCoordinateData(&scCoordinate);
 
@@ -176,10 +174,6 @@ RFLiDBManager* RFLiGetDBManager(void) {
     return !RFLAvailable() ? NULL : &RFLiGetManager()->dbMgr;
 }
 
-RFLiHDBManager* RFLiGetHDBManager(void) {
-    return !RFLAvailable() ? NULL : &RFLiGetManager()->hdbMgr;
-}
-
 RFLiLoader* RFLiGetLoader(void) {
     return !RFLAvailable() ? NULL : &RFLiGetManager()->loader;
 }
@@ -233,10 +227,6 @@ static RFLErrcode RFLWaitAsync(void) {
 
 RFLiAccessInfo* RFLiGetAccInfo(RFLiFileType type) {
     return !RFLAvailable() ? NULL : &RFLiGetManager()->info[type];
-}
-
-RFLiCtrlBufManager* RFLiGetCtrlBufManager(void) {
-    return !RFLAvailable() ? NULL : &RFLiGetManager()->ctrlMgr;
 }
 
 BOOL RFLiGetUseDeluxTex(void) {

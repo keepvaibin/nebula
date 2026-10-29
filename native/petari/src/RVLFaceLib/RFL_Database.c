@@ -1,4 +1,5 @@
 #include "RVLFaceLibInternal.h"
+#include <nebula_game_api.h>
 
 #define ASYNC_CRC_STEP 0x1400
 
@@ -39,17 +40,9 @@ static void bootloadDBcallback_(void) {
         RFLiCheckHeaderCRCAsync(bootloadCheckCRCCb_);
         break;
     case RFLErrcode_NANDCommandfail:
-        switch (RFLiGetLastReason()) {
-        case NAND_RESULT_CORRUPT:
-            RFLiSetFileBroken(RFLiFileBrokenType_Corrupt);
-            break;
-        case NAND_RESULT_AUTHENTICATION:
-        case NAND_RESULT_ECC_CRIT:
-        default:
-            RFLiGetManager()->lastErrCode = RFLErrcode_Loadfail;
-            RFLiSetFileBroken(RFLiFileBrokenType_DBBroken);
-            break;
-        }
+        // The host could not read its Mii database.
+        RFLiGetManager()->lastErrCode = RFLErrcode_Loadfail;
+        RFLiSetFileBroken(RFLiFileBrokenType_DBBroken);
         RFLiCloseAsync(RFLiFileType_Database, mgr->bootloadCb);
         break;
     case RFLErrcode_NotAvailable:
@@ -78,26 +71,15 @@ static void bootloadDBopencallback_(void) {
         }
         break;
     case RFLErrcode_NANDCommandfail:
-        switch (RFLiGetLastReason()) {
-        case NAND_RESULT_NOEXISTS:
+        // No database yet (an empty one, as a new console's), or one the host could not read.
+        if (RFLiGetLastReason() == NEBULA_MII_MISSING) {
             RFLiSetFileBroken(RFLiFileBrokenType_DBNotFound);
             RFLiGetManager()->lastErrCode = RFLErrcode_Success;
-            if (mgr->bootloadCb != NULL) {
-                mgr->bootloadCb();
-            }
-            break;
-        case NAND_RESULT_CORRUPT:
-            RFLiSetFileBroken(RFLiFileBrokenType_Corrupt);
-            break;
-        case NAND_RESULT_AUTHENTICATION:
-        case NAND_RESULT_ECC_CRIT:
+        } else {
             RFLiSetFileBroken(RFLiFileBrokenType_DBBroken);
-            if (mgr->bootloadCb != NULL) {
-                mgr->bootloadCb();
-            }
-            break;
-        default:
-            break;
+        }
+        if (mgr->bootloadCb != NULL) {
+            mgr->bootloadCb();
         }
         break;
     case RFLErrcode_NotAvailable:
@@ -127,7 +109,7 @@ RFLErrcode RFLiBootLoadDatabaseAsync(RFLiCallback callback) {
     switch (RFLiOpenAsync(RFLiFileType_Database, 1,
                           bootloadDBopencallback_)) {
     case RFLErrcode_NANDCommandfail:
-        if (RFLiGetLastReason() == NAND_RESULT_NOEXISTS) {
+        if (RFLiGetLastReason() == NEBULA_MII_MISSING) {
             initBrokenDatabase_();
             RFLiGetManager()->lastErrCode = RFLErrcode_Success;
 
@@ -804,7 +786,6 @@ static void RFLiCheckHeaderCRCAsync(RFLiExCallback callback) {
 }
 
 #ifdef TARGET_PC
-#include <nebula_game_api.h>
 
 /* Mii import (the host's settings and its import folder). Records keep the console's bytes in memory (RFLi_Endian.h):
  * a stored Mii is copied as it is. */

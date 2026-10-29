@@ -1,7 +1,6 @@
 #ifndef RVL_FACE_LIBRARY_INTERNAL_SYSTEM_H
 #define RVL_FACE_LIBRARY_INTERNAL_SYSTEM_H
 #include "RFL_System.h"
-#include "RFLi_Controller.h"
 #include "RFLi_Database.h"
 #include "RFLi_HiddenDatabase.h"
 #include "RFLi_Storage.h"
@@ -20,8 +19,6 @@ typedef struct RFLiManager {
     MEMiHeapHead* tmpHeap;                 // at 0xC
     RFLiDBManager dbMgr;                   // at 0x10
     RFLiLoader loader;                     // at 0xC0
-    RFLiHDBManager hdbMgr;                 // at 0x16C
-    RFLiCtrlBufManager ctrlMgr;            // at 0x1AAC
     BOOL working;                          // at 0x1B34
     BOOL deluxeTex;                        // at 0x1B38
     u8 brokenType;                         // at 0x1B3C
@@ -42,13 +39,11 @@ void* RFLiAlloc(u32 size);
 void* RFLiAlloc32(u32 size);
 void RFLiFree(void* block);
 RFLiDBManager* RFLiGetDBManager(void);
-RFLiHDBManager* RFLiGetHDBManager(void);
 RFLiLoader* RFLiGetLoader(void);
 BOOL RFLiGetWorking(void);
 void RFLiSetWorking(BOOL working);
 RFLiManager* RFLiGetManager(void);
 RFLiAccessInfo* RFLiGetAccInfo(RFLiFileType type);
-RFLiCtrlBufManager* RFLiGetCtrlBufManager(void);
 s32 RFLiGetLastReason(void);
 void RFLiSetFileBroken(RFLiFileBrokenType type);
 BOOL RFLiNotFoundError(void);

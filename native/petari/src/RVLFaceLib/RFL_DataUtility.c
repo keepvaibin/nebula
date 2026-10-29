@@ -185,27 +185,15 @@ RFLErrcode RFLiPickupCharInfo(RFLiCharInfo* info, RFLDataSource source,
     case RFLDataSource_Official:
         err = RFLiGetCharInfo(info, index);
         break;
-    case RFLDataSource_Controller1:
-    case RFLDataSource_Controller2:
-    case RFLDataSource_Controller3:
-    case RFLDataSource_Controller4:
-        if (RFLiGetControllerData(info, source - RFLDataSource_Controller1,
-                                  (u8)index, FALSE)) {
-            err = RFLErrcode_Success;
-        } else {
-            err = RFLErrcode_Broken;
-        }
-        break;
-    case RFLDataSource_Middle:
-        if (RFLiGetCharInfoMiddleDB(info, db, index)) {
-            err = RFLErrcode_Success;
-        } else {
-            err = RFLErrcode_Broken;
-        }
-        break;
     case RFLDataSource_Default:
         RFLiGetDefaultData(info, index);
         err = RFLErrcode_Success;
+        break;
+    default:
+        // The game keeps its Miis in the official database (and the library's defaults): no remote's Miis, no
+        // middle database.
+        (void)db;
+        err = RFLErrcode_Broken;
         break;
     }
 
