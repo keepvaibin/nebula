@@ -468,7 +468,6 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/gx_shim.cpp
     runtime/src/gx/gx_headers_compile.cpp
     runtime/src/gx/gx_state.cpp
-    runtime/src/gx/frame_completion.cpp
     runtime/src/gx/render_config.cpp
     runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/vblank_clock_win32.cpp
@@ -521,7 +520,6 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/frame_interpolation.cpp
     runtime/src/gx/interp_gpu.cpp
     runtime/src/gx/display_modes.cpp
-    runtime/src/gx/fifo_parser.cpp
     runtime/src/gx/gx_backend.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
@@ -648,8 +646,8 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name shader_gen fifo_parser vertex_loader curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
-        frame_completion memory_snapshot sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
+foreach(name shader_gen vertex_loader curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
+        sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         efb_copy line_point_raster xf_lighting sorted_dirty_ranges native_settings_overlay post_process
         efb_conversion)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
@@ -705,8 +703,7 @@ if(NEBULA_VULKAN)
     add_library(galaxy_gx_vk STATIC
         runtime/src/gx/gx_shim.cpp
         runtime/src/gx/gx_state.cpp
-        runtime/src/gx/frame_completion.cpp
-        runtime/src/gx/render_config.cpp
+            runtime/src/gx/render_config.cpp
         runtime/src/gx/host_window_win32.cpp
         runtime/src/gx/vblank_clock_win32.cpp
         runtime/src/gx/renderer_common.cpp
@@ -730,8 +727,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/post_process_settings.cpp
         runtime/src/gx/transform_history.cpp
         runtime/src/gx/display_modes.cpp
-        runtime/src/gx/fifo_parser.cpp
-        runtime/src/gx/gx_backend.cpp
+            runtime/src/gx/gx_backend.cpp
         runtime/src/gx/game_lights.cpp
         runtime/src/gx/game_objects.cpp
     runtime/src/gx/rt_tev_eval.cpp

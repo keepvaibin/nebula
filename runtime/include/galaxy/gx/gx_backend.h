@@ -29,6 +29,7 @@
 
 #include "galaxy/gx/actor_lights.h"
 #include "galaxy/gx/efb_copy.h"
+#include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/movie_replacement.h"

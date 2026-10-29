@@ -3,7 +3,6 @@
 // The renderer API the host calls (D3D12 or Vulkan behind one GxBackend): window, GX FIFO submission and
 // presentation, the game's scene and light reports, and the native settings overlay.
 
-#include "galaxy/gx/frame_completion.h"
 #include "galaxy/gx/native_shapes.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/pointer_response.h"

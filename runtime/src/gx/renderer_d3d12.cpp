@@ -87,6 +87,9 @@ bool detail::ConversionRtvSlot::bind(
 
 namespace {
 
+// How long a GPU fence wait may take before the device is treated as lost.
+constexpr std::uint32_t kFenceWaitTimeoutMs = 30'000u;
+
 // Present-blit root signature; lives as long as the RendererD3D12.
 static ComPtr<ID3D12RootSignature> s_blit_root_sig;
 // EFB-copy conversion blit root signature.
@@ -4696,7 +4699,7 @@ std::uint64_t RendererD3D12::completed_fence_value() const {
     if (completed == ~std::uint64_t{0}) {
         dump_device_removal(device_.Get());
         throw std::runtime_error(
-            "device removed while polling frame PE completion");
+            "device removed while polling a GPU fence");
     }
     return completed;
 }
@@ -4709,13 +4712,13 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
     if (completed_before == ~std::uint64_t{0}) {
         dump_device_removal(device_.Get());
         throw std::runtime_error(
-            "device removed before frame-specific GPU PE completion");
+            "device removed before a GPU fence completed");
     }
     if (completed_before >= fence_value) {
         return;
     }
     const auto deadline = std::chrono::steady_clock::now() +
-        std::chrono::milliseconds(kFramePeCompletionTimeoutMs);
+        std::chrono::milliseconds(kFenceWaitTimeoutMs);
     const HRESULT event_hr =
         fence_->SetEventOnCompletion(fence_value, fence_event_);
     if (FAILED(event_hr)) {
@@ -4734,7 +4737,7 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
         if (now >= deadline) {
             dump_device_removal(device_.Get());
             throw std::runtime_error(
-                "frame-specific GPU PE completion wait timed out");
+                "GPU fence wait timed out");
         }
         const auto remaining = std::chrono::ceil<std::chrono::milliseconds>(
             deadline - now).count();
@@ -4747,7 +4750,7 @@ void RendererD3D12::wait_for_fence_value(std::uint64_t fence_value) {
         const DWORD wait_error = GetLastError();
         dump_device_removal(device_.Get());
         throw std::runtime_error(
-            "frame-specific GPU PE completion wait failed: result=" +
+            "GPU fence wait failed: result=" +
             std::to_string(wait_result) +
             " win32=" + std::to_string(wait_error));
     }
