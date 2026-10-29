@@ -332,6 +332,23 @@ void channels_and_lights(Writer& w, const Material& m) {
     }
 }
 
+// Texture matrices (J3DTexMtx::load): the listed ones for a whole material, every present one for a differed list.
+void texture_matrices(Writer& w, const Material& m, bool differed_list) {
+    for (unsigned i = 0; i < 8u; ++i) {
+        const auto& t = m.texture_matrix[i];
+        if (!t.present || (!differed_list && !t.listed)) {
+            continue;
+        }
+        std::uint32_t words[12];
+        const unsigned count = t.rows == 2u ? 8u : 12u;
+        for (unsigned k = 0; k < count; ++k) {
+            words[k] = std::bit_cast<std::uint32_t>(t.m[k]);
+        }
+        const auto base = static_cast<std::uint16_t>(t.id >= 64u ? 0x500u + 4u * (t.id - 64u) : 4u * t.id);
+        w.xf(base, words, static_cast<std::uint16_t>(count));
+    }
+}
+
 // Texgens and their post-transform matrices (loadTexCoordGens).
 void tex_gens(Writer& w, const Material& m) {
     if (m.tex_gens == 0u) {
@@ -403,8 +420,11 @@ void differed(Writer& w, const Material& m) {
                         static_cast<std::uint32_t>(m.ind_stages) << 16u);
         w.xf(0x103Fu, m.tex_gens);
     }
-    if (((f >> 8u) & 15u) != 0u && (f & 0x1000u) != 0u) {  // TexGenNum + TexGen: diffTexGen (matrices ride draws)
-        tex_gens(w, m);
+    if (((f >> 8u) & 15u) != 0u) {  // TexGenNum: diffTexMtx, then (TexGen) diffTexGen
+        texture_matrices(w, m, true);
+        if ((f & 0x1000u) != 0u) {
+            tex_gens(w, m);
+        }
     }
     if ((f & 0x1u) != 0u) {  // MatColor
         const std::uint32_t material[2] = {rgba(m.material_color[0]), rgba(m.material_color[1])};
@@ -434,6 +454,7 @@ void apply(const Material& m, GxState& state, FifoSink* actions) {
     w.bp(0x00u, static_cast<std::uint32_t>(m.tex_gens) | static_cast<std::uint32_t>(m.channels) << 4u |
                     static_cast<std::uint32_t>(m.tev_stages - 1u) << 10u | static_cast<std::uint32_t>(kCull[m.cull & 3u]) << 14u |
                     static_cast<std::uint32_t>(m.ind_stages) << 16u);
+    texture_matrices(w, m, false);
     tex_gens(w, m);
     if ((m.loads & kLoadsChannels) != 0u) {
         colour(w, m);

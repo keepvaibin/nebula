@@ -12746,6 +12746,17 @@ void GxBackend::apply_record_material(const material::Material& m) {
             report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));
         }
     }
+    // Texture and post-transform matrices the material lists load.
+    for (unsigned a = 0x078u; a < 0x100u; ++a) {
+        if (copy.xf(static_cast<std::uint16_t>(a)) != state_.xf(static_cast<std::uint16_t>(a))) {
+            report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));
+        }
+    }
+    for (unsigned a = 0x500u; a < 0x600u; ++a) {
+        if (copy.xf(static_cast<std::uint16_t>(a)) != state_.xf(static_cast<std::uint16_t>(a))) {
+            report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));
+        }
+    }
     for (unsigned a = 0x600u; a < 0x680u; ++a) {
         if (copy.xf(static_cast<std::uint16_t>(a)) != state_.xf(static_cast<std::uint16_t>(a))) {
             report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));

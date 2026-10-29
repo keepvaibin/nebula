@@ -117,6 +117,10 @@ typedef struct NebulaMaterial {
     /* 0: the material as its list sets it. Else an instance's differed list: only the parts these J3D diff flags name
        (J3DDiffFlag_*: counts of textures, stages, texgens and lights, TEV and konst registers, fog, blend, ...). */
     uint32_t diff_flags;
+    /* Texgen i's texture matrix (J3DTexMtx), when the material has one: `id` GX's matrix id (a post-transform one from
+       64), `rows` 2 or 3, `listed` whether the material's list loads it (its texgen's matrix is not the identity; a
+       differed list loads every one). */
+    struct { uint8_t present, listed, id, rows; float m[12]; } texture_matrix[8];
 } NebulaMaterial;
 
 /* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the

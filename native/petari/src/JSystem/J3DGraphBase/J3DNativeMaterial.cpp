@@ -213,6 +213,19 @@ namespace J3DNativeMaterial {
         if (pColor->getColorChan(0) != NULL) {
             pOut->loads |= NEBULA_MATERIAL_LOADS_CHANNELS;
         }
+        // Texture matrices as the texgen block's list loads them (J3DTexMtx::load, with this moment's j3dSys flags).
+        for (u32 i = 0; i < 8; i++) {
+            J3DTexMtx* pMtx = pTexGen->getTexMtx(i);
+            if (pMtx == NULL) {
+                continue;
+            }
+            const bool post = j3dSys.checkFlag(J3DSysFlag_PostTexMtx);
+            pOut->texture_matrix[i].present = 1;
+            pOut->texture_matrix[i].listed = i < pOut->tex_gens && pTexGen->getTexCoord(i)->getTexGenMtx() != GX_IDENTITY;
+            pOut->texture_matrix[i].id = static_cast< u8 >(post ? i * 3 + 0x40 : i * 3 + 30);
+            pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GX_MTX2x4 ? 3 : 2;
+            memcpy(pOut->texture_matrix[i].m, pMtx->getMtx(), sizeof(pOut->texture_matrix[i].m));
+        }
         for (u32 i = 0; i < 4 && pColor->getColorChan(0) != NULL; i++) {
             const J3DColorChan& rChan = *pColor->getColorChan(i);
             pOut->channel[i].enable = rChan.getEnable();
