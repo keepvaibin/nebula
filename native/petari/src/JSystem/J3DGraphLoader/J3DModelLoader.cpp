@@ -162,7 +162,8 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
     mpModelData = new J3DModelData();
     mpModelData->clear();
     mpModelData->mpRawData = i_data;
-    mpModelData->setModelDataType(1);
+    // Its materials are full ones made from MAT3 (no precompiled lists): the model is drawn as a .bmd one.
+    mpModelData->setModelDataType(0);
     mpMaterialTable = &mpModelData->mMaterialTable;
     J3DModelFileData const* data = (J3DModelFileData*)i_data;
     J3DModelBlock const* block = data->mBlocks;
@@ -192,8 +193,8 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
             readTexture((J3DTextureBlock*)block);
             break;
         case 'MDL3':
-            readMaterialDL((J3DMaterialDLBlock*)block, i_flags);
-            modifyMaterial(i_flags);
+            // The file's precompiled material lists (console commands): its materials come from MAT3, their lists
+            // from J3DModel::makeDL as a .bmd model's.
             break;
         case 'MAT3':
             flags = 0x50100000;
@@ -214,7 +215,6 @@ J3DModelData* J3DModelLoader::loadBinaryDisplayList(void const* i_data, u32 i_fl
     mpModelData->makeHierarchy(NULL, &hierarchy);
     mpModelData->getJointTree().findImportantMtxIndex();
     setupBBoardInfo();
-    mpModelData->indexToPtr();
     return mpModelData;
 }
 
