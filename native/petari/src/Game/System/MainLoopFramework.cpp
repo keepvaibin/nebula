@@ -503,7 +503,6 @@ namespace {
         GXReadXfRasMetric(&xf_wait_in2, &xf_wait_out2, &ras_busy2, &clocks2);
         GXBool brkpt, cmdIdle, readIdle, underlow, overhi;
         GXGetGPStatus(&overhi, &underlow, &readIdle, &cmdIdle, &brkpt);
-        GXDisableBreakPt();
         GXAbortFrame();
         DrawSyncManager::sInstance->clearFifo();
         GX_WRITE_U8(0x61);

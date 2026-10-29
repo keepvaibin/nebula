@@ -1138,7 +1138,6 @@ JASAudioThread::JASAudioThread(int priority, int, u32)
 
 JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAramThreadStackSize, ::sAramThreadMsgSize, priority) {
     u32 reserved = ARInit(mStackArray, 3);
-    ARQInit();
     u32 total = ARGetSize();
     mAudioMemorySize = audioSize;
     if (graphSize == 0xFFFFFFFF) {

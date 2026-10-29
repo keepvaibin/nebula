@@ -175,7 +175,6 @@ void JUTVideo::setRenderMode(GXRenderModeObj const* pObj) {
         mSetBlackFrameCount = 4;
     }
     mRenderObj = const_cast< GXRenderModeObj* >(pObj);
-    VIConfigure(mRenderObj);
     VIFlush();
 
     if (mSetBlack) {

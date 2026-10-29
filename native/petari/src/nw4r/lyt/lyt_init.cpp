@@ -13,7 +13,6 @@ namespace {
 namespace nw4r {
     namespace lyt {
         void LytInit() {
-            OSRegisterVersion(NW4R_LYT_Version_);
         }
     };  // namespace lyt
 };  // namespace nw4r

@@ -32,7 +32,6 @@ u32 WPadReadDataInfo::getValidStatusCount() const {
 }
 
 WPadHolder::WPadHolder() : mReadDataInfoArray(), mMode(WPAD_SENSOR_BAR_POS_TOP) {
-    WPADRegisterAllocator(MR::allocFromWPadHeap, MR::freeFromWPadHeap);
     KPADInit();
 
     mReadDataInfoArray = new WPadReadDataInfo[WPAD_MAX_CONTROLLERS];
@@ -189,8 +188,7 @@ namespace MR {
     }
 
     void setAutoSleepTimeWiiRemote(bool isLongAutoSleep) {
-        u8 minute = isLongAutoSleep ? 15 : 5;
-
-        WPADSetAutoSleepTime(minute);
+        // Remotes sleep as the host decides.
+        (void)isLongAutoSleep;
     }
 };  // namespace MR

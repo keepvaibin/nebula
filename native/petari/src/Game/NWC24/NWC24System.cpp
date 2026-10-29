@@ -11,7 +11,6 @@ extern "C" {
 NWC24Err NWC24OpenLib(void*);
 NWC24Err NWC24CloseLib(void);
 s32 NWC24GetErrorCode(void);
-void VFInitEx(void*, u32);
 };
 
 namespace {
@@ -20,7 +19,6 @@ namespace {
 
 NWC24System::NWC24System(JKRHeap* pHeap, s32 threadPriority) : _0(), mWorkBuffer(), mVFWorkBuffer() {
     mVFWorkBuffer = new (pHeap, 32) u8[::sWorkSize];
-    VFInitEx(mVFWorkBuffer, ::sWorkSize);
     mWorkBuffer = new (pHeap, 32) u8[NWC24_WORK_MEM_SIZE];
     mSendThread = new NWC24SendThread(threadPriority, pHeap);
 }

@@ -46,7 +46,6 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
     }
 
     if (RFLiGetManager() == NULL) {
-        OSRegisterVersion(__RFLVersion);
 
         wholesize = useDeluxTex ? RFL_DELUXE_WORK_SIZE : RFL_WORK_SIZE;
         memset(workBuffer, 0, wholesize);

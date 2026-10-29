@@ -86,23 +86,8 @@ void* DrawSyncManager::threadFunc(void* pArg) {
         if (reinterpret_cast< u32 >(message) >= 0x80000000) {
 #endif
             pManager->mFifo->push(message);
-            const bool aborted = pManager->mAborted;
-
-            if (pManager->mFifo->getCount() == 2) {
-                GXEnableBreakPt(message);
-            }
         } else if (reinterpret_cast< uintptr_t >(message) < 0x10000) {
             pManager->mFifo->pop();
-            const bool aborted = pManager->mAborted;
-
-            u32 count = pManager->mFifo->getCount();
-            if (count != 0) {
-                if (count == 1) {
-                    GXDisableBreakPt();
-                } else if (count >= 2) {
-                    GXEnableBreakPt(pManager->mFifo->peek(1));
-                }
-            }
         } else {
             break;
         }
@@ -131,7 +116,6 @@ DrawSyncManager::DrawSyncManager(u32 capacity, s32 priority) {
 
 DrawSyncManager::~DrawSyncManager() {
     GXSetDrawSyncCallback(nullptr);
-    GXDisableBreakPt();
     OSSendMessage(&mQueue, reinterpret_cast< OSMessage >(0x10000), OS_MESSAGE_BLOCK);
     OSJoinThread(&mThread, nullptr);
 }
