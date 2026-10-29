@@ -158,7 +158,7 @@ namespace MR {
         u32 alignment = reinterpret_cast< uintptr_t >(pDst) & 3;
 
         if ((reinterpret_cast< uintptr_t >(pDst) & 0x1F) == 0 && (size & 0x1F) == 0) {
-            DCZeroRange(pDst, size);
+            memset(pDst, 0, size);
         } else if (alignment == 0 && (size & 0xF) == 0) {
             for (u32 count = size / 16; count != 0; count--) {
                 u32* pWords = reinterpret_cast< u32* >(pDstBytes);

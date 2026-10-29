@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DTevs.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 #include <stdint.h>
 
@@ -32,6 +33,12 @@ public:
         mpRes[index] = timg;
         mpRes[index].mImageDataOffset = ((mpRes[index].mImageDataOffset + (uintptr_t)&timg - (uintptr_t)(mpRes + index)));
         mpRes[index].mPaletteDataOffset = ((mpRes[index].mPaletteDataOffset + (uintptr_t)&timg - (uintptr_t)(mpRes + index)));
+        // The new image (and palette) handed to the renderer, as the model's own were at load.
+        J3DNativeTexture::registerImage(reinterpret_cast< const u8* >(&timg) + (s32)timg.mImageDataOffset, timg.mFormat, timg.mWidth,
+                                        timg.mHeight, timg.mMipmap ? timg.mImageNum : 1);
+        if (timg.mPaletteNum != 0) {
+            J3DNativeTexture::registerPalette(reinterpret_cast< const u8* >(&timg) + (s32)timg.mPaletteDataOffset, timg.mPaletteNum);
+        }
     }
 };
 
