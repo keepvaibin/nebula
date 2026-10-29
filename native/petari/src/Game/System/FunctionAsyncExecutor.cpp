@@ -1,4 +1,5 @@
 #include "Game/System/FunctionAsyncExecutor.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/MutexHolder.hpp"
@@ -163,7 +164,7 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
     // The console read past the list's end here; natively a missing name is reported.
     if (cur == lst) {
         for (FunctionAsyncExecInfo* const* p = mHolders.begin(); p != lst; p++) {
-            OSReport("  async function %p \"%s\" end %d\n", (*p)->mName, (*p)->mName, (*p)->mIsEnd);
+            JUTNativeLog("  async function %p \"%s\" end %d\n", (*p)->mName, (*p)->mName, (*p)->mIsEnd);
         }
         OSPanic(__FILE__, __LINE__, "isEnd: no async function %p \"%s\" among %d", pName, pName, (int)mHolders.size());
     }

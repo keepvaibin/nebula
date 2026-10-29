@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRExpHeap.hpp"
@@ -274,7 +275,7 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
 JASHeap JASKernel::audioAramHeap;
 
 void JASKernel::setupAramHeap(u32 base, u32 size) {
-    OSReport("setupAramHeap %x, %x, %x\n", base, ARGetBaseAddress(), size);
+    JUTNativeLog("setupAramHeap %x, %x, %x\n", base, ARGetBaseAddress(), size);
     base = ARGetBaseAddress();
     sAramBase = base;
     // An ARAM address, not a pointer: the heap only does arithmetic on it.

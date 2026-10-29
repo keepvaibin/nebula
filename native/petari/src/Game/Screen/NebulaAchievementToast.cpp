@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaAchievementToast.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutManager.hpp"
@@ -217,7 +218,7 @@ void NebulaAchievementToast::loadTextures() {
             mTextures[i] = MR::createLytTexMap(pIcon->mArchive, pIcon->mTexture);
         }
         if (mTextures[i] == nullptr) {
-            OSReport("NebulaAchievementToast: no %s in %s\n", pIcon->mTexture, pIcon->mArchive);
+            JUTNativeLog("NebulaAchievementToast: no %s in %s\n", pIcon->mTexture, pIcon->mArchive);
         }
     }
     if (mTextures[0] != nullptr) {

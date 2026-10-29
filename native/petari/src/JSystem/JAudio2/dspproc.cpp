@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/dspproc.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASDspInterface.hpp"
 #include "JSystem/JAudio2/dsptask.hpp"
 #include <revolution/os.h>
@@ -23,7 +24,7 @@ static volatile BOOL flag;
 static volatile BOOL d_waitflag;
 
 static void setup_callback(u16 param_0) {
-    OSReport("Finish %d\n", param_0);
+    JUTNativeLog("Finish %d\n", param_0);
     flag = FALSE;
 }
 
@@ -34,7 +35,7 @@ void DsetupTable(u32 param_0, uintptr_t param_1, uintptr_t param_2, uintptr_t pa
     table[2] = DSP_ADDR(param_2);
     table[3] = DSP_ADDR(param_3);
     table[4] = DSP_ADDR(param_4);
-    OSReport("Table Setup\n");
+    JUTNativeLog("Table Setup\n");
 
     flag = TRUE;
     DSPSendCommands2(table, 5, setup_callback);
@@ -70,7 +71,7 @@ void DsyncFrame4ch(u32 param_0, uintptr_t param_1, uintptr_t param_2, uintptr_t 
 
 static void dummy_callback(u16 param_0) {
     d_waitflag = FALSE;
-    OSReport("D-Wait end\n");
+    JUTNativeLog("D-Wait end\n");
 }
 
 void DsetVARAM(uintptr_t param_0) {

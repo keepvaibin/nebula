@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JUtility/JUTException.hpp"
 #include <revolution/os/OSBootInfo.h>
 
@@ -100,7 +101,7 @@ bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
     void* arenaLo = OSGetArenaLo();
     void* arenaHi = OSGetArenaHi();
 
-    OSReport("original arenaLo = %p arenaHi = %p\n", arenaLo, arenaHi);
+    JUTNativeLog("original arenaLo = %p arenaHi = %p\n", arenaLo, arenaHi);
 
     if (arenaLo == arenaHi) {
         return false;

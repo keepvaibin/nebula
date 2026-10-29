@@ -1,4 +1,5 @@
 #include "Game/NPC/NebulaAchievementLuma.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #ifdef TARGET_PC
 #include "Game/LiveActor/Nerve.hpp"
@@ -63,7 +64,7 @@ void NebulaAchievementLuma::init(const JMapInfoIter& rIter) {
     mPosition.set(place);
     // Facing where Mario arrives.
     mRotation.set(0.0f, static_cast< f32 >(atan2(start.x - place.x, start.z - place.z)) * (180.0f / 3.14159265f), 0.0f);
-    OSReport("NebulaAchievementLuma: at %.0f %.0f %.0f (start %.0f %.0f %.0f)\n", place.x, place.y, place.z, start.x, start.y, start.z);
+    JUTNativeLog("NebulaAchievementLuma: at %.0f %.0f %.0f (start %.0f %.0f %.0f)\n", place.x, place.y, place.z, start.x, start.y, start.z);
 
     initBase(cColor);
     initMessage(cMessageId);

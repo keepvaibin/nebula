@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRAramPiece.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JKernel/JKRAram.hpp"
 #include "JSystem/JKernel/JKRAramStream.hpp"
 #include "JSystem/JKernel/JKRDecomp.hpp"
@@ -26,10 +27,10 @@ JKRAMCommand* JKRAramPiece::orderAsync(int direction, uintptr_t source, uintptr_
                                        JKRAMCommand::AsyncCallback callback) {
     lock();
     if ((source & 0x1f) != 0 || (destination & 0x1f) != 0) {
-        OSReport("direction = %x\n", direction);
-        OSReport("source = %x\n", source);
-        OSReport("destination = %x\n", destination);
-        OSReport("length = %x\n", length);
+        JUTNativeLog("direction = %x\n", direction);
+        JUTNativeLog("source = %x\n", source);
+        JUTNativeLog("destination = %x\n", destination);
+        JUTNativeLog("length = %x\n", length);
         JUTException::panic(__FILE__, 108, "illegal address. abort.");
     }
 

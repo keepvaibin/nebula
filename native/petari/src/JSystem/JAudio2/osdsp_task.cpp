@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/dspproc.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <private/flipper.h>
 #include <revolution/dsp.h>
 
@@ -15,7 +16,7 @@ static u8 lbl_806B75B9;
 DSPTaskInfo* DSP_prior_task;
 
 void osdsp_task_FORCE_MATCH_RODATA(void* pTask) {
-    OSReport("GEN-REQ HALT (Task %x)\n", pTask);
+    JUTNativeLog("GEN-REQ HALT (Task %x)\n", pTask);
 }
 
 #ifndef TARGET_PC
@@ -61,10 +62,10 @@ extern "C" void __DSPHandler(__OSInterrupt interrupt, OSContext* pContext) {
             __DSP_curr_task->res_cb(__DSP_curr_task);
         }
 
-        OSReport("Audio Resumed\n");
+        JUTNativeLog("Audio Resumed\n");
         break;
     case 0xDCD10002:
-        OSReport("Yield Handler\n");
+        JUTNativeLog("Yield Handler\n");
         DSPSendMailToDSP(0xCDD10001);
         while (DSPCheckMailToDSP() != 0) {
         }
@@ -81,7 +82,7 @@ extern "C" void __DSPHandler(__OSInterrupt interrupt, OSContext* pContext) {
 
         break;
     case 0xDCD10003:
-        OSReport("Done DSP Task  %x \n", __DSP_curr_task);
+        JUTNativeLog("Done DSP Task  %x \n", __DSP_curr_task);
         if (__DSP_curr_task->done_cb != NULL) {
             __DSP_curr_task->done_cb(__DSP_curr_task);
         }
@@ -118,7 +119,7 @@ extern "C" void __DSPHandler(__OSInterrupt interrupt, OSContext* pContext) {
             __DSP_curr_task = DSP_prior_task;
             Dsp_Update_Request();
         } else {
-            OSReport("Audio Yield Start\n");
+            JUTNativeLog("Audio Yield Start\n");
             DspRunningStatus = 3;
             DSPSendMailToDSP(0xCDD10001);
             while (DSPCheckMailToDSP() != 0) {
@@ -126,7 +127,7 @@ extern "C" void __DSPHandler(__OSInterrupt interrupt, OSContext* pContext) {
 
             __DSP_exec_task(DSP_prior_task, __DSP_first_task);
             __DSP_curr_task = __DSP_first_task;
-            OSReport("Audio Yield Finish\n");
+            JUTNativeLog("Audio Yield Finish\n");
         }
 
         break;
@@ -142,7 +143,7 @@ static uintptr_t sync_stack[5];
 
 void DsyncFrame2(u32 param_0, uintptr_t param_1, uintptr_t param_2) {
     if (DspRunningStatus != 1) {
-        OSReport("Yield\222\206\202\305\202\267\n" /* Yield中です\n */);
+        JUTNativeLog("Yield\222\206\202\305\202\267\n" /* Yield中です\n */);
         sync_stack[0] = param_0;
         lbl_806B75B9 = 1;
         sync_stack[1] = param_1;

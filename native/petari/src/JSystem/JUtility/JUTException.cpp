@@ -1,4 +1,5 @@
 #include "JSystem/JUtility/JUTException.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/JUTConsole.hpp"
 #include "JSystem/JUtility/JUTDirectPrint.hpp"
@@ -173,7 +174,7 @@ void JUTException::panic_f_va(const char* file, int line, const char* format, va
     exCallbackObject.dar = 0;
 
     if (sConsole == nullptr || (sConsole != nullptr && (sConsole->getOutput() & 2) == 0)) {
-        OSReport("%s in \"%s\" on line %d\n", buffer, file, line);
+        JUTNativeLog("%s in \"%s\" on line %d\n", buffer, file, line);
     }
 
     if (sConsole != nullptr) {

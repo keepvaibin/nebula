@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
@@ -943,7 +944,7 @@ void NebulaSettingsScreen::init(const JMapInfoIter& rIter) {
     memcpy(pManager->mLayoutName, cLayoutName, sizeof(cLayoutName));
     mBuilt = build();
     if (!mBuilt) {
-        OSReport("NebulaSettingsMenu: a layout or pane is missing\n");
+        JUTNativeLog("NebulaSettingsMenu: a layout or pane is missing\n");
     }
     kill();
 }

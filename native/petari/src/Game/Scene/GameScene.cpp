@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/GameLightSignal.hpp"
@@ -362,7 +363,7 @@ void GameScene::draw() const {
             } else if (const GameEventFlag* pFlag = GameEventFlagTable::findFlag(action.stage)) {
                 GameDataFunction::getCurrentGameDataHolder()->mEventFlagChecker->getChunk()->set(pFlag, true);
             } else {
-                OSReport("test: no event flag %s\n", action.stage);
+                JUTNativeLog("test: no event flag %s\n", action.stage);
             }
         } else if (action.kind == NEBULA_TEST_LIST_ACTORS) {
             AllLiveActorGroup* pGroup = MR::getAllLiveActorGroup();
@@ -376,7 +377,7 @@ void GameScene::draw() const {
                 // (ClippingActorInfo::isWantedForLight).
                 const char* pBck = MR::getPlayingBckName(pActor);
                 const ClippingActorInfo* pInfo = MR::getClippingDirector()->mActorHolder->find(pActor);
-                OSReport("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d caster=%d\n",
+                JUTNativeLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d caster=%d\n",
                          MR::getModelResName(pActor), pActor->mPosition.x, pActor->mPosition.y, pActor->mPosition.z,
                          pBck != nullptr ? pBck : "none", pBck != nullptr ? MR::getBckFrame(pActor) : 0.0f,
                          pBck != nullptr ? MR::getBckRate(pActor) : 0.0f, pBck != nullptr && MR::isBckStopped(pActor) ? 1 : 0,
@@ -390,7 +391,7 @@ void GameScene::draw() const {
                 LiveActor* pActor = pGroup->getActor(i);
                 if (pActor != nullptr && pActor->mModelManager != nullptr && !MR::isDead(pActor) &&
                     MR::isEqualStringCase(MR::getModelResName(pActor), action.stage)) {
-                    OSReport("test: kill %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
+                    JUTNativeLog("test: kill %s %.0f %.0f %.0f\n", action.stage, pActor->mPosition.x, pActor->mPosition.y,
                              pActor->mPosition.z);
                     pActor->kill();
                 }
@@ -402,7 +403,7 @@ void GameScene::draw() const {
             if (MR::isExistSceneObj(SceneObj_MoviePlayingSequenceHolder)) {
                 MR::startMovie(action.scenario);
             } else {
-                OSReport("test: no movie sequence in this stage\n");
+                JUTNativeLog("test: no movie sequence in this stage\n");
             }
         }
     }

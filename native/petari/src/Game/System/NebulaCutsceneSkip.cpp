@@ -1,4 +1,5 @@
 #include "Game/System/NebulaCutsceneSkip.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 
 #ifdef TARGET_PC
 #include "Game/AudioLib/AudSystem.hpp"
@@ -163,7 +164,7 @@ namespace {
         const bool isScene = isGameSceneRunning();
         const DemoDirector* pDirector = isScene ? getActiveDemo() : nullptr;
         const DemoExecutor* pExecutor = pDirector != nullptr ? getExecutor(pDirector) : nullptr;
-        OSReport("cutscene skip: %s (%s%s%s%s)\n", pWhat, MR::isActiveMoviePlayer() ? "movie" : "",
+        JUTNativeLog("cutscene skip: %s (%s%s%s%s)\n", pWhat, MR::isActiveMoviePlayer() ? "movie" : "",
                  isScene && GameSceneFunction::isExecScenarioOpeningCamera() ? "opening camera" : "",
                  pExecutor != nullptr && pExecutor->mSheetName != nullptr ? pExecutor->mSheetName : "",
                  pExecutor == nullptr && pDirector != nullptr && pDirector->_2C != nullptr ? pDirector->_2C->mName : "");
@@ -219,7 +220,7 @@ namespace {
         MR::openSystemWipeFade();
         mute(false);
         silenceSe(false);
-        OSReport("cutscene skip: done after %d steps (%s)\n", sSteps, pWhy);
+        JUTNativeLog("cutscene skip: done after %d steps (%s)\n", sSteps, pWhy);
     }
 };  // namespace
 
@@ -279,7 +280,7 @@ namespace NebulaCutsceneSkip {
             if (!sWindow->isSelectedYes() || !isSkippableNow()) {
                 sState = State_Idle;
                 mute(false);
-                OSReport("cutscene skip: declined\n");
+                JUTNativeLog("cutscene skip: declined\n");
                 break;
             }
             sState = State_FadeOut;

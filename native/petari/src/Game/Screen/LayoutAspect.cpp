@@ -1,5 +1,6 @@
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutAspect.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/LayoutPaneCtrl.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -210,7 +211,7 @@ namespace {
         if (depth > 16) {
             return;
         }
-        OSReport("layout %s: %*s%s t=(%.1f,%.1f) size=(%.1f,%.1f) base=%u %s\n", pLayout, depth * 2, "", pPane->mName,
+        JUTNativeLog("layout %s: %*s%s t=(%.1f,%.1f) size=(%.1f,%.1f) base=%u %s\n", pLayout, depth * 2, "", pPane->mName,
                  pPane->mTranslate.x, pPane->mTranslate.y, pPane->mSize.width, pPane->mSize.height,
                  (u32)pPane->mBasePosition, pPane->IsVisible() ? "" : "hidden");
         nw4r::lyt::PaneList& children = const_cast< nw4r::lyt::Pane* >(pPane)->GetChildList();

@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaIcons.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 
 #ifdef TARGET_PC
@@ -1368,7 +1369,7 @@ namespace {
             usable = pFont->HasGlyph(cCodes[i]);
         }
         if (!usable) {
-            OSReport("NebulaIcons: the picture font's icons are not RGB5A3 cells; they stay the Wii's\n");
+            JUTNativeLog("NebulaIcons: the picture font's icons are not RGB5A3 cells; they stay the Wii's\n");
             return FontUnusable;
         }
         Font& f = sFont;
@@ -1423,7 +1424,7 @@ namespace {
                          : nullptr;
         if (pBlock == nullptr || !fitsSelfRel(pInfo, pBlock) || !fitsSelfRel(pInfo, pBlock + bytes) ||
             !fitsSelfRel(pBlock, pInfo->pWidth.get()) || !fitsSelfRel(pBlock, pInfo->pMap.get())) {
-            OSReport("NebulaIcons: no room for the icons (%u bytes, the stationed heap has %d); they stay the Wii's\n", bytes,
+            JUTNativeLog("NebulaIcons: no room for the icons (%u bytes, the stationed heap has %d); they stay the Wii's\n", bytes,
                      pHeap != nullptr ? pHeap->getFreeSize() : -1);
             return FontUnusable;
         }
@@ -1613,7 +1614,7 @@ namespace {
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
     void exportArt() {
         if (sFont.mSheetWidth * cHdScale > cHdSheetMax || sFont.mSheetHeight * cHdScale > cHdSheetMax) {
-            OSReport("NebulaIcons: the picture font's sheets are too large to export at eight times\n");
+            JUTNativeLog("NebulaIcons: the picture font's sheets are too large to export at eight times\n");
             return;
         }
         const s32 hdIcon = cCellMax * cHdScale;
@@ -1628,7 +1629,7 @@ namespace {
         u8* pImage = static_cast< u8* >(malloc(static_cast< size_t >(imagePixels) * 4));
         u8* pHdSheet = static_cast< u8* >(malloc(static_cast< size_t >(hdSheetWidth) * hdSheetHeight * 4));
         if (pHdPixels == nullptr || pHdImage == nullptr || pImage == nullptr || pHdSheet == nullptr) {
-            OSReport("NebulaIcons: no memory to export the icons\n");
+            JUTNativeLog("NebulaIcons: no memory to export the icons\n");
             free(pHdPixels);
             free(pHdImage);
             free(pImage);
@@ -1744,7 +1745,7 @@ namespace {
         free(pHdImage);
         free(pImage);
         free(pHdSheet);
-        OSReport("NebulaIcons: exported the icons\n");
+        JUTNativeLog("NebulaIcons: exported the icons\n");
     }
 
     // The Pair Joy-Con picture: each half a texture of Nebula's own (RGB5A3): a Joy-Con's front drawn simply, in the
@@ -2081,7 +2082,7 @@ namespace NebulaIcons {
         }
         sFontState = install();
         if (sFontState == FontUnread) {
-            OSReport("NebulaIcons: the picture font is not loaded; its icons stay the Wii's\n");
+            JUTNativeLog("NebulaIcons: the picture font is not loaded; its icons stay the Wii's\n");
             sFontState = FontUnusable;
         } else if (sFontState == FontReady && __NebulaArtExport(nullptr) != 0) {
             exportArt();
@@ -2174,7 +2175,7 @@ namespace NebulaIcons {
         if (rSet.mNext < cJcPictures) {
             return true;
         }
-        OSReport("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
+        JUTNativeLog("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
                  static_cast< int >(rSet.mHeight), static_cast< int >(OSTicksToMicroseconds(rSet.mSpent)),
                  static_cast< int >(rSet.mCalls));
         if (sJoyConShown >= 0) {
