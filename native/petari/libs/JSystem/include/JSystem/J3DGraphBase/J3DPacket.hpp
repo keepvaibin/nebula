@@ -79,6 +79,8 @@ public:
     J3DDisplayListObj() {
         mpDisplayList[0] = nullptr;
         mpDisplayList[1] = nullptr;
+        mpNebulaMaterial = nullptr;
+        mNebulaCaptured = false;
         mSize = 0;
         mMaxSize = 0;
     }
@@ -108,7 +110,11 @@ public:
     /* 0x0 */ void* mpDisplayList[2];
     /* 0x8 */ u32 mSize;
     /* 0xC */ u32 mMaxSize;
-};  // Size: 0x10
+    // The material this list sets, as the renderer takes it (J3DNativeMaterial), kept where the list is made and
+    // patched.
+    struct NebulaMaterial* mpNebulaMaterial;
+    bool mNebulaCaptured;
+};
 
 class J3DPacket {
 public:

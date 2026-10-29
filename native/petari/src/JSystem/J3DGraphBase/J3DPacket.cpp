@@ -17,6 +17,7 @@ J3DError J3DDisplayListObj::newDisplayList(u32 maxSize) {
     mMaxSize = ALIGN_NEXT(maxSize, 0x20);
     mpDisplayList[0] = new (0x20) char[mMaxSize];
     mpDisplayList[1] = new (0x20) char[mMaxSize];
+    mpNebulaMaterial = J3DNativeMaterial::create();
     mSize = 0;
 
     return kJ3DError_Success;
@@ -25,6 +26,7 @@ J3DError J3DDisplayListObj::newDisplayList(u32 maxSize) {
 J3DError J3DDisplayListObj::newSingleDisplayList(u32 maxSize) {
     mMaxSize = ALIGN_NEXT(maxSize, 0x20);
     mpDisplayList[0] = new (0x20) char[mMaxSize];
+    mpNebulaMaterial = J3DNativeMaterial::create();
     mpDisplayList[1] = mpDisplayList[0];
     mSize = 0;
 
@@ -172,7 +174,7 @@ bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
 void J3DMatPacket::draw() {
     mpMaterial->load();
     callDL();
-    J3DNativeMaterial::send(mpMaterial, mpTexture);
+    J3DNativeMaterial::send(mpMaterial, mpTexture, mpDisplayListObj);
 
     J3DShapePacket* packet = getShapePacket();
     packet->getShape()->loadPreDrawSetting();
@@ -180,6 +182,7 @@ void J3DMatPacket::draw() {
     while (packet != NULL) {
         if (packet->getDisplayListObj() != NULL) {
             packet->getDisplayListObj()->callDL();
+            J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
         }
 
         packet->drawFast();
@@ -333,6 +336,7 @@ void J3DShapePacket::draw() {
 
         if (mpDisplayListObj != NULL) {
             mpDisplayListObj->callDL();
+            J3DNativeMaterial::sendDiffered(mpDisplayListObj);
         }
 
         mpShape->draw();

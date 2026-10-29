@@ -80,10 +80,11 @@ void ElectricRailHolder::draw() const {
 
         J3DMatPacket* pPacket = pItem->mMatPacket;
         pItem->mMatPacket->callDL();
-        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture);
+        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getDisplayListObj());
 
         if (pPacket->mpShapePacket->mpDisplayListObj != nullptr) {
             pPacket->mpShapePacket->mpDisplayListObj->callDL();
+            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpDisplayListObj);
         }
 
         pItem->mHost->draw();

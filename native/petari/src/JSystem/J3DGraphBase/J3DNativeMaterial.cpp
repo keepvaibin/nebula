@@ -1,8 +1,10 @@
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
+#include "JSystem/JKernel/JKRHeap.hpp"
 #include <nebula_game_api.h>
 #include <nebula_gx_fifo.h>
 #include <revolution/gx/GXRegs.h>
@@ -309,14 +311,40 @@ namespace J3DNativeMaterial {
         pOut->dither = pPE->getDither();
     }
 
-    void send(J3DMaterial* pMaterial, J3DTexture* pTexture) {
+    NebulaMaterial* create() {
+        return new (0x20) NebulaMaterial;
+    }
+
+    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
+        if (pList != NULL && pList->mpNebulaMaterial != NULL) {
+            build(pMaterial, pTexture, pList->mpNebulaMaterial);
+            pList->mNebulaCaptured = true;
+        }
+    }
+
+    void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
         static NebulaMaterial sMaterial;
-        build(pMaterial, pTexture, &sMaterial);
+        const NebulaMaterial* pSnapshot = pList != NULL && pList->mNebulaCaptured ? pList->mpNebulaMaterial : NULL;
+        if (pSnapshot == NULL) {
+            build(pMaterial, pTexture, &sMaterial);
+            pSnapshot = &sMaterial;
+        }
         // The drawing state the game set through GX's functions, written before the record (as a GX call would).
         if (gx->dirtyState) {
             __GXSetDirtyState();
         }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, __NebulaGXWriter.ptr, &sMaterial);
+        pHost->material(pHost->user, __NebulaGXWriter.ptr, pSnapshot);
+    }
+
+    void sendDiffered(J3DDisplayListObj* pList) {
+        if (pList == NULL || !pList->mNebulaCaptured) {
+            return;
+        }
+        if (gx->dirtyState) {
+            __GXSetDirtyState();
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->material(pHost->user, __NebulaGXWriter.ptr, pList->mpNebulaMaterial);
     }
 };  // namespace J3DNativeMaterial
