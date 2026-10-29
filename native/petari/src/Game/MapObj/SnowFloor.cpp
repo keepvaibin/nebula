@@ -6,10 +6,10 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
-    u16 sTextureSize = 128;
+    const u16 sTextureSize = 128;
     u16 sTextureShift = 7;
     u16 sStripCount = 16;
-    s16 sLayerCount = 12;
+    const s16 sLayerCount = 12;
     s16 sColorR = 220;
     s16 sColorStepR = -3;
     s16 sColorG = 220;
@@ -32,7 +32,7 @@ namespace {
     f32 cSnowFallRateQuick = 0.5f;
     f32 cSnowFallRateFirst = 0.1f;
     f32 cPlayerWalkResist = 0.5f;
-    u16 sCellSize = 1024 / sTextureSize;
+    const u16 sCellSize = 1024 / sTextureSize;
 };  // namespace
 
 SnowFloor::~SnowFloor() {

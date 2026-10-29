@@ -216,7 +216,7 @@ void ElectricRailMoving::initPoints() {
     s32 v15 = 0;
 
     while (v14 < _D8) {
-        if (v14 % (2 * mStackHeight) >= 2) {
+        if ((mStackHeight != 0 ? v14 % (2 * mStackHeight) : v14) >= 2) {
             mMovingPoints[v15]._8C = 0;
         }
 

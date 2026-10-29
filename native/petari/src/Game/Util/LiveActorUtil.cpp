@@ -1807,7 +1807,7 @@ namespace MR {
     }
 
     bool isIntervalStep(const LiveActor* pActor, s32 step) {
-        return pActor->getNerveStep() % step == 0;
+        return (step != 0 ? pActor->getNerveStep() % step : pActor->getNerveStep()) == 0;
     }
 
     bool isNewNerve(const LiveActor* pActor) {

@@ -6,9 +6,9 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 namespace {
-    u16 sTextureSize = 32;
+    const u16 sTextureSize = 32;
     u16 sStripCount = 16;
-    s16 sLayerCount = 12;
+    const s16 sLayerCount = 12;
     s16 sColorR = 220;
     s16 sColorStepR = -3;
     s16 sColorG = 220;
@@ -25,7 +25,7 @@ namespace {
     f32 cSwingDigRadius = 100.0f;
     f32 cHipdropDigAmount = 1000.0f;
     f32 cHipdropDigRadius = 50.0f;
-    u16 sCellSize = 128 / sTextureSize;
+    const u16 sCellSize = 128 / sTextureSize;
 };  // namespace
 
 SnowFloorTile::~SnowFloorTile() {

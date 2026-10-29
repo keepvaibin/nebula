@@ -9,7 +9,8 @@
 namespace {
     void setResultFlyStartFrame(LiveActor* liveActor, s32 frame) NO_INLINE {
         int maxFrames = MR::getBckFrameMax(liveActor);
-        MR::setBckFrame(liveActor, maxFrames - frame % maxFrames);
+        // An animation without frames: the frame itself as the remainder.
+        MR::setBckFrame(liveActor, maxFrames != 0 ? maxFrames - frame % maxFrames : -frame);
     }
 };  // namespace
 

@@ -181,7 +181,7 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
 
     TVec3f position = mPosition;
 
-    s32 fireBallCount = mFireBallCount / mStickCount;
+    s32 fireBallCount = mStickCount != 0 ? mFireBallCount / mStickCount : 0;
 
     TVec3f up;
     MR::calcUpVec(&up, this);
@@ -224,18 +224,19 @@ void FireBar::updateHitSensor(HitSensor* pSensor) {
 // meh
 void FireBar::initFireBarBall(const JMapInfoIter& rIter) {
     mFireBalls = new FireBarBall*[mFireBallCount];
-    s32 totalNum = mFireBallCount / mStickCount;
+    s32 totalNum = mStickCount != 0 ? mFireBallCount / mStickCount : 0;
     f32 startVal = 0.0f;
 
     for (s32 i = 0; i < mFireBallCount; i++) {
         mFireBalls[i] = new FireBarBall(this);
         mFireBalls[i]->init(rIter);
         MR::startBtk(mFireBalls[i], "FireBarBall");
-        s32 div = i / totalNum;
+        s32 div = totalNum != 0 ? i / totalNum : 0;
         div *= totalNum;
 
         startVal = !(i - div) ? 0.0f : 25.0f + startVal;
-        startVal = static_cast< s32 >(startVal) % static_cast< s32 >(MR::getBtkFrameMax(mFireBalls[i]));
+        const s32 frameMax = MR::getBtkFrameMax(mFireBalls[i]);
+        startVal = frameMax != 0 ? static_cast< s32 >(startVal) % frameMax : static_cast< s32 >(startVal);
         MR::setBtkFrame(mFireBalls[i], startVal);
     }
 
@@ -249,10 +250,10 @@ void FireBar::fixFireBarBall() {
     TVec3f final_pos;
     final_pos.zero();
 
-    s32 totalNum = mFireBallCount / mStickCount;
+    s32 totalNum = mStickCount != 0 ? mFireBallCount / mStickCount : 0;
 
     for (s32 i = 0; i < mFireBallCount; i++) {
-        s32 div = i / totalNum;
+        s32 div = totalNum != 0 ? i / totalNum : 0;
         div *= totalNum;
 
         if (i - div == 0) {

@@ -37,7 +37,7 @@ The renderer interface GxBackend uses has 75 methods; about half are diagnostics
 - **macOS** runs the Vulkan backend on MoltenVK (Apache-2.0), with the same limits as Android for geometry shaders and
   logic ops.
 - **arm64** (Android, Apple silicon) needs its own context switch (`context_switch.c` is x86-64 assembly) and its own
-  division semantics check (arm64 does not trap; `__nebula_divw` already gives PowerPC's results).
+  division semantics check (arm64 does not trap; every division states its zero-divisor result in source).
 
 ## Driver compatibility
 

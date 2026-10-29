@@ -27,15 +27,13 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
 }
 
 void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool clear, u8 filter) {
-#ifdef TARGET_PC
-    // FallOutFieldDraw::draw passes 0 divisions each frame it draws; x86 division would trap there.
-    const s32 row = __nebula_divw(tile, divisions);
-    pTexture->capture(__nebula_divw((tile - row * divisions) * MR::getFrameBufferWidth(), divisions),
-                      __nebula_divw(row * MR::getFrameBufferHeight(), divisions), format, clear, filter);
-#else
+    // FallOutFieldDraw::draw passes 0 divisions each frame it draws: the capture then starts at the origin.
+    if (divisions == 0) {
+        pTexture->capture(0, 0, format, clear, filter);
+        return;
+    }
     pTexture->capture((tile % divisions) * MR::getFrameBufferWidth() / divisions, (tile / divisions) * MR::getFrameBufferHeight() / divisions, format,
                       clear, filter);
-#endif
 }
 
 void ImageEffectLocalUtil::setupDrawTexture() {

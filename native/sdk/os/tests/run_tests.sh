@@ -18,7 +18,7 @@ case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) LIBS="-lwinmm"; EXE=.exe ;;
     *) LIBS="-lpthread"; EXE= ;;
 esac
-OS="$N/sdk/os/os_native.c $N/sdk/os/context_switch.c $N/sdk/os/divide_native.c $N/sdk/memory.c $N/msl/src/msl_runtime.c"
+OS="$N/sdk/os/os_native.c $N/sdk/os/context_switch.c $N/sdk/memory.c $N/msl/src/msl_runtime.c"
 SDK="$P/src/RVL_SDK/os/OSThread.c $P/src/RVL_SDK/os/OSMutex.c $P/src/RVL_SDK/os/OSMessage.c $P/src/RVL_SDK/os/OSAlarm.c
      $P/src/RVL_SDK/os/OSTime.c $P/src/RVL_SDK/os/OSArena.c"
 $CC $FL "$N/sdk/os/tests/context_switch_tests.c" "$N/sdk/os/context_switch.c" -o "$OUT/context_switch_tests$EXE"

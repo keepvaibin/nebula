@@ -671,7 +671,7 @@ bool MR::isGreaterEqualStep(const LayoutActor* pActor, s32 step) {
 }
 
 bool MR::isIntervalStep(const LayoutActor* pActor, s32 step) {
-    return pActor->getNerveStep() % step == 0;
+    return (step != 0 ? pActor->getNerveStep() % step : pActor->getNerveStep()) == 0;
 }
 
 bool MR::isNewNerve(const LayoutActor* pActor) {

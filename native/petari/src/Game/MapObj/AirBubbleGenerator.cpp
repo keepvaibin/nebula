@@ -51,7 +51,7 @@ void AirBubbleGenerator::control() {
 }
 
 void AirBubbleGenerator::exeWait() {
-    if (mWaitTime - 1 == getNerveStep() % mWaitTime) {
+    if (mWaitTime != 0 && mWaitTime - 1 == getNerveStep() % mWaitTime) {
         setNerve(GET_NERVE(AirBubbleGenerator, AirBubbleGeneratorNrvGenerate));
     }
 }

@@ -7,7 +7,7 @@ JPAKeyBlock::JPAKeyBlock(const u8* data) : mDataStart(data), field_0x4(reinterpr
 f32 JPAKeyBlock::calc(float p1) {
     if (mDataStart[0xB] != '\0') {
         int v1 = (int)field_0x4[(mDataStart[9] - 1) * 4] + 1;
-        int v2 = ((int)p1 / v1);
+        int v2 = v1 != 0 ? (int)p1 / v1 : (int)p1 < 0 ? -1 : 0;
         p1 = p1 - (v2 * v1);
     }
     return JPACalcKeyAnmValue(p1, mDataStart[9], field_0x4);

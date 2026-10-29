@@ -300,7 +300,7 @@ void ScenarioStarter::calcShootMotionTime() {
         flyTime = 90;
     }
 
-    mFlyMotionStartStep = startTime * (flyTime / startTime);
+    mFlyMotionStartStep = startTime != 0 ? startTime * (flyTime / startTime) : 0;
     if (_F8 <= mFlyMotionStartStep) {
         mFlyMotionStartStep = 0;
     }

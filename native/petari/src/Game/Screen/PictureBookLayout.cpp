@@ -292,7 +292,7 @@ void PictureBookLayout::updateTexture() {
         MR::replacePaneTexture(this, "PicTurnRightPage", pTexMap, 0);
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
-        s32 ind = texMapIndex % textureNum + 1;
+        s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
         nw4r::lyt::TexMap* pTexMap = _48[ind - 1];
 
         MR::replacePaneTexture(this, "PicLeftPage", pTexMap, 0);
@@ -312,7 +312,7 @@ void PictureBookLayout::updateTexture() {
         MR::replacePaneTexture(this, "PicTurnLeftPage", pTexMap, 0);
     } else {
         s32 texMapIndex = textureNum + pageNo - 1;
-        s32 ind = texMapIndex % textureNum + 1;
+        s32 ind = (textureNum != 0 ? texMapIndex % textureNum : texMapIndex) + 1;
         nw4r::lyt::TexMap* pTexMap = _48[ind - 1];
 
         MR::replacePaneTexture(this, "PicRightPage", pTexMap, 0);

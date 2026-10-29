@@ -68,14 +68,11 @@ void JPAVolumeCube(JPAEmitterWorkData* work) {
 static void JPAVolumeSphere(JPAEmitterWorkData* work) {
     s16 phi, theta;
     if (work->mpEmtr->checkFlag(JPADynFlag_FixedInterval)) {
-#ifdef TARGET_PC
-        // A ring of one angle (mVolumeAngleMax 1) divides by 0 each spawn: the console's divw gives 0.
-        phi = (u16)(__nebula_divw(work->mVolumeX * 0x8000, work->mDivNumber - 1) + 0x4000);
-        u16 angle = (u16)__nebula_divw(work->mVolumeAngleNum * 0x10000, work->mVolumeAngleMax - 1);
-#else
-        phi = (u16)(work->mVolumeX * 0x8000 / (work->mDivNumber - 1) + 0x4000);
-        u16 angle = (u16)(work->mVolumeAngleNum * 0x10000 / (work->mVolumeAngleMax - 1));
-#endif
+        // A ring of one angle (mVolumeAngleMax 1) or one division puts every particle at the first angle.
+        const s32 divisions = work->mDivNumber - 1;
+        const s32 angles = work->mVolumeAngleMax - 1;
+        phi = (u16)((divisions != 0 ? work->mVolumeX * 0x8000 / divisions : 0) + 0x4000);
+        u16 angle = (u16)(angles != 0 ? work->mVolumeAngleNum * 0x10000 / angles : 0);
         theta = (s32)((f32)angle * work->mVolumeSweep + 0x8000);
         work->mVolumeAngleNum++;
         if (work->mVolumeAngleNum == work->mVolumeAngleMax) {

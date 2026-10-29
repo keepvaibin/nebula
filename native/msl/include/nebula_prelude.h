@@ -106,14 +106,4 @@ static inline int nebula_msl_stricmp(const char* s1, const char* s2) {
 #define __fpclassifyf nebula_msl_fpclassifyf
 #define __fpclassifyd nebula_msl_fpclassifyd
 
-/* PowerPC's divw: no trap; a zero divisor (or 0x80000000 / -1) gives 0, or -1 for a negative dividend. For sites that
-   divide by zero every frame, where a trap (os/divide_native.c finishes it with this result) would cost time. */
-static inline int __nebula_divw(int a, int b) {
-    return b == 0 || (a == (int)0x80000000 && b == -1) ? (a < 0 ? -1 : 0) : a / b;
-}
-/* PowerPC's divwu: a zero divisor gives 0. */
-static inline unsigned __nebula_divwu(unsigned a, unsigned b) {
-    return b == 0 ? 0 : a / b;
-}
-
 #endif

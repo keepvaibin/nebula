@@ -63,6 +63,13 @@ namespace nw4r {
                 return false;
             }
 
+            // Every glyph lookup divides by the sheet's rows, lines and size: a font without them is not used.
+            const FontTextureGlyph* pGlyph = pFontInfo->pGlyph;
+            if (pGlyph == NULL || pGlyph->sheetRow == 0 || pGlyph->sheetLine == 0 || pGlyph->sheetWidth == 0 ||
+                pGlyph->sheetHeight == 0) {
+                return false;
+            }
+
             SetResourceBuffer(brfnt, pFontInfo);
             InitReaderFunc(GetEncoding());
 

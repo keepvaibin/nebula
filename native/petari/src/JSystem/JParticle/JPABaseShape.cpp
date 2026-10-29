@@ -160,8 +160,8 @@ void JPACalcClrIdxReverse(JPAEmitterWorkData* work) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     int maxFrm = shape->getClrAnmMaxFrm();
     u32 tick = work->mpEmtr->mTick;
-    u32 uVar1 = tick / maxFrm;
-    tick = tick % maxFrm;
+    u32 uVar1 = maxFrm != 0 ? tick / maxFrm : 0;
+    tick = maxFrm != 0 ? tick % maxFrm : tick;
     uVar1 &= 1;
     work->mClrKeyFrame = tick + (uVar1) * (maxFrm - tick * 2);
 }
@@ -170,8 +170,9 @@ void JPACalcClrIdxReverse(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     s32 tick = param_1->mAge + shape->getClrLoopOfst(param_1->mAnmRandom);
     s32 maxFrm = shape->getClrAnmMaxFrm();
-    s32 rem = tick % maxFrm;
-    work->mClrKeyFrame = rem + ((tick / maxFrm) & 1) * (maxFrm - rem * 2);
+    s32 rem = maxFrm != 0 ? tick % maxFrm : tick;
+    s32 div = maxFrm != 0 ? tick / maxFrm : tick < 0 ? -1 : 0;
+    work->mClrKeyFrame = rem + (div & 1) * (maxFrm - rem * 2);
 }
 
 void JPACalcClrIdxMerge(JPAEmitterWorkData* work) {
@@ -319,12 +320,13 @@ void JPACalcTexIdxNormal(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
 
 void JPACalcTexIdxRepeat(JPAEmitterWorkData* work) {
     JPABaseShape* const shape = work->mpRes->getBsp();
-    work->mpEmtr->mTexAnmIdx = shape->getTexIdx(work->mpEmtr->mTick % shape->getTexAnmKeyNum());
+    work->mpEmtr->mTexAnmIdx = shape->getTexIdx(shape->getTexAnmKeyNum() != 0 ? work->mpEmtr->mTick % shape->getTexAnmKeyNum() : work->mpEmtr->mTick);
 }
 
 void JPACalcTexIdxRepeat(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
-    u8 texIdx = ((int)shape->getTexLoopOfst(param_1->mAnmRandom) + param_1->mAge) % shape->getTexAnmKeyNum();
+    const int frame = (int)shape->getTexLoopOfst(param_1->mAnmRandom) + param_1->mAge;
+    u8 texIdx = shape->getTexAnmKeyNum() != 0 ? frame % shape->getTexAnmKeyNum() : frame;
     param_1->mTexAnmIdx = shape->getTexIdx(texIdx);
 }
 
@@ -332,8 +334,8 @@ void JPACalcTexIdxReverse(JPAEmitterWorkData* work) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     int tick = work->mpEmtr->mTick;
     int keyNum = (int)shape->getTexAnmKeyNum() - 1;
-    int div = tick / keyNum;
-    int rem = tick % keyNum;
+    int div = keyNum != 0 ? tick / keyNum : tick < 0 ? -1 : 0;
+    int rem = keyNum != 0 ? tick % keyNum : tick;
     work->mpEmtr->mTexAnmIdx = shape->getTexIdx(rem + (div & 1) * (keyNum - rem * 2));
 }
 
@@ -341,8 +343,8 @@ void JPACalcTexIdxReverse(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     s32 tick = shape->getTexLoopOfst(param_1->mAnmRandom) + param_1->mAge;
     int keyNum = (int)shape->getTexAnmKeyNum() - 1;
-    int div = tick / keyNum;
-    int rem = tick % keyNum;
+    int div = keyNum != 0 ? tick / keyNum : tick < 0 ? -1 : 0;
+    int rem = keyNum != 0 ? tick % keyNum : tick;
     u8 texIdx = rem + (div & 1) * (keyNum - rem * 2);
     param_1->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
 }
@@ -355,7 +357,7 @@ void JPACalcTexIdxMerge(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
     s32 maxFrm = shape->getTexAnmKeyNum();
     s32 tick = (s32)(maxFrm * param_1->mTime) + shape->getTexLoopOfst(param_1->mAnmRandom);
-    u8 texIdx = tick % maxFrm;
+    u8 texIdx = maxFrm != 0 ? tick % maxFrm : tick;
     param_1->mTexAnmIdx = work->mpRes->getBsp()->getTexIdx(texIdx);
 }
 
@@ -365,7 +367,8 @@ void JPACalcTexIdxRandom(JPAEmitterWorkData* work) {
 
 void JPACalcTexIdxRandom(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
     JPABaseShape* const shape = work->mpRes->getBsp();
-    u8 texIdx = ((int)shape->getTexLoopOfst(param_1->mAnmRandom)) % shape->getTexAnmKeyNum();
+    const int frame = shape->getTexLoopOfst(param_1->mAnmRandom);
+    u8 texIdx = shape->getTexAnmKeyNum() != 0 ? frame % shape->getTexAnmKeyNum() : frame;
     param_1->mTexAnmIdx = shape->getTexIdx(texIdx);
 }
 

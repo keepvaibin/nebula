@@ -328,7 +328,7 @@ void MogucchiHill::killPieces(MogucchiHillPiece* pIter) {
     s32 index = pIter - _90 - 2;
 
     for (s32 i = 0; i < 3; i++) {
-        index = (index + _94 + 1) % _94;
+        index = _94 != 0 ? (index + _94 + 1) % _94 : index + 1;
 
         if (MR::isDead(&_90[index])) {
             continue;
@@ -443,12 +443,12 @@ void MogucchiHill::appearPiece() {
         s32 count = _94;
         s32 index = _98;
         _CC = false;
-        _98 = (index + count + 1) % count;
+        _98 = count != 0 ? (index + count + 1) % count : index + 1;
     }
 }
 
 void MogucchiHill::killPieceOverAppear() {
-    s32 index = (_94 + (_98 - mAppearNum)) % _94;
+    s32 index = _94 != 0 ? (_94 + (_98 - mAppearNum)) % _94 : _98 - mAppearNum;
 
     _90[index].crumble();
 }

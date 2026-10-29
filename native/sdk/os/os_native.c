@@ -946,7 +946,6 @@ void nebula_os_boot(void (*gameMain)(void)) {
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
-    nebula_divide_init();
     sGameMain = gameMain;
     void* sp = nebula_prepare_stack(__NebulaBootStackBase(), kBootStackSize, boot_thread, NULL);
     void* fake = NULL;

@@ -428,14 +428,14 @@ void OceanRing::updatePoints() {
     if (v8 < 0) {
         v13 = mSegCount - 1;
         updatePointsInLine(0, v9, 0, 3);
-        updatePointsInLine((v13 + v8) % v13, mSegCount - 1, 3, 0);
+        updatePointsInLine(v13 != 0 ? (v13 + v8) % v13 : v8, mSegCount - 1, 3, 0);
         return;
     }
 
     v13 = mSegCount - 1;
     if (v9 > v13) {
         updatePointsInLine(v8, v13, 3, 0);
-        updatePointsInLine(0, (v13 + v9) % v13, 0, 3);
+        updatePointsInLine(0, v13 != 0 ? (v13 + v9) % v13 : v9, 0, 3);
     }
 }
 
