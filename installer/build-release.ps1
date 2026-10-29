@@ -1,12 +1,12 @@
-﻿<#
+<#
 .SYNOPSIS
 Builds Nebula-Setup.exe from one exact source revision.
 
 .DESCRIPTION
 Exports the revision with `git archive` and records each file's SHA-256
 (Setup checks the source it installs against it), builds nebula-recomp and the
-runtime from that export, then compiles the launcher and Setup with the
-in-box C# compiler and embeds everything. -SigningKey also writes
+runtime from that export, then builds the launcher, Nebula Settings and Setup as native
+programs (installer/native, MSVC) and embeds everything in Setup as one zip resource. -SigningKey also writes
 Nebula-Setup.exe.sig for the updater. -CodeSigningMetadata Authenticode-signs
 every program Nebula ships (nebula-recomp, both runtimes, the launcher, Nebula
 Settings and Setup) through Azure Artifact Signing, with Microsoft's timestamp,
@@ -247,43 +247,59 @@ END
     $runtimeIsaPath = Join-Path $work 'runtime-isa.txt'
     [IO.File]::WriteAllText($runtimeIsaPath, ($effectiveIsas -join '+'), (New-Object Text.UTF8Encoding $false))
 
-    # 4. Build information and C# executables.
-    $publicKey = (Get-Content -LiteralPath (Join-Path $src 'installer\release-public-key.xml') -Raw).Trim()
-    $buildInfo = @"
-namespace Nebula
-{
-    internal static class BuildInfo
-    {
-        public const string Version = "$Version";
-        public const string FileVersion = "$numericVersion";
-        public const string Commit = "$resolved";
-        public const string Repository = "$Repository";
-        public const string ReleasePublicKeyXml = "$($publicKey.Replace('"', '\"'))";
+    # 4. Nebula.exe and NebulaSettings.exe: native programs (installer/native, MSVC, static C runtime, no .NET).
+    $nativeOut = Join-Path $work 'native'
+    $publicKeyFile = Join-Path $src 'installer\release-public-key.xml'
+    & (Join-Path $src 'installer\native\build.ps1') -Version $Version -Commit $resolved -Repository $Repository `
+        -PublicKeyFile $publicKeyFile -OutputDirectory $nativeOut
+    $launcher = Join-Path $nativeOut 'Nebula.exe'
+    $settingsApp = Join-Path $nativeOut 'NebulaSettings.exe'
+    foreach ($program in $launcher, $settingsApp) {
+        if (-not (Test-Path -LiteralPath $program)) { throw "The native build produced no $program" }
+        if ([Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($program)).Contains('NEBULA_UI_SNAPSHOT_DIR')) { throw "$program contains the UI snapshot test mode." }
     }
-}
-"@
-    $buildInfoPath = Join-Path $work 'BuildInfo.cs'
-    [IO.File]::WriteAllText($buildInfoPath, $buildInfo, (New-Object Text.UTF8Encoding $false))
-    $csc = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
-    $common = @(Get-ChildItem (Join-Path $src 'installer\src\Common\*.cs') | ForEach-Object FullName) + $buildInfoPath
-    $references = @('/r:System.Web.Extensions.dll', '/r:System.IO.Compression.dll', '/r:System.IO.Compression.FileSystem.dll',
-        '/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Core.dll')
-    $manifestFile = Join-Path $src 'installer\app.manifest'
-    $iconFile = Join-Path $src 'installer\assets\nebula.ico'
-    $launcherSources = @(Get-ChildItem (Join-Path $src 'installer\src\Launcher\*.cs') | ForEach-Object FullName)
-    $launcher = Join-Path $work 'Nebula.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$launcher") + $references + $common +
-        $launcherSources)
-    # Same program; always opens the settings window instead of the game.
-    $settingsApp = Join-Path $work 'NebulaSettings.exe'
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', '/define:NEBULA_SETTINGS_APP', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$settingsApp") + $references + $common +
-        $launcherSources)
     Invoke-CodeSign @($launcher, $settingsApp)
+
+    # The toolchain's identity (the folder it unpacks to and part of every module key): the first 16 hex digits of the
+    # SHA-256 of toolchain.json as Nebula's C# Setup serialized it (JavaScriptSerializer, indented two spaces), so
+    # installs made by earlier versions keep their toolchain and retained objects.
+    Add-Type -AssemblyName System.Web.Extensions
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = [int]::MaxValue
+    $serializer.RecursionLimit = 256
+    $compact = $serializer.Serialize($serializer.DeserializeObject((Get-Content -LiteralPath (Join-Path $src 'installer\toolchain.json') -Raw)))
+    $pretty = New-Object Text.StringBuilder
+    $indent = 0; $quoted = $false
+    for ($i = 0; $i -lt $compact.Length; $i++) {
+        $c = $compact[$i]
+        if ($quoted) {
+            [void]$pretty.Append($c)
+            if ($c -eq '\' -and $i + 1 -lt $compact.Length) { $i++; [void]$pretty.Append($compact[$i]) }
+            elseif ($c -eq '"') { $quoted = $false }
+            continue
+        }
+        switch ($c) {
+            '"' { $quoted = $true; [void]$pretty.Append($c) }
+            { $_ -eq '{' -or $_ -eq '[' } {
+                [void]$pretty.Append($c)
+                if ($i + 1 -lt $compact.Length -and ($compact[$i + 1] -eq '}' -or $compact[$i + 1] -eq ']')) { $i++; [void]$pretty.Append($compact[$i]) }
+                else { $indent++; [void]$pretty.Append("`n").Append(' ', 2 * $indent) }
+            }
+            { $_ -eq '}' -or $_ -eq ']' } { $indent--; [void]$pretty.Append("`n").Append(' ', 2 * $indent).Append($c) }
+            ',' { [void]$pretty.Append(",`n").Append(' ', 2 * $indent) }
+            ':' { [void]$pretty.Append(': ') }
+            default { [void]$pretty.Append($c) }
+        }
+    }
+    $toolchainId = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash((New-Object Text.UTF8Encoding $false).GetBytes($pretty.ToString()))).Replace('-', '').ToLowerInvariant().Substring(0, 16)
+    $toolchainIdPath = Join-Path $work 'toolchain-id.txt'
+    [IO.File]::WriteAllText($toolchainIdPath, $toolchainId, (New-Object Text.UTF8Encoding $false))
+    Write-Host "Toolchain id $toolchainId"
 
     $resources = @{
         'nebula-recomp.exe' = $recomp; 'Nebula.exe' = $launcher; 'NebulaSettings.exe' = $settingsApp; 'source-manifest.json' = $manifestPath
         'toolchain.json' = (Join-Path $src 'installer\toolchain.json'); 'runtime-env.json' = (Join-Path $src 'installer\runtime-env.json')
-        'runtime-isa.txt' = $runtimeIsaPath
+        'runtime-isa.txt' = $runtimeIsaPath; 'toolchain-id.txt' = $toolchainIdPath
         'LICENSE' = (Join-Path $src 'LICENSE'); 'THIRD-PARTY-NOTICES.md' = (Join-Path $src 'THIRD-PARTY-NOTICES.md'); 'README.md' = (Join-Path $src 'README.md')
         # The exact source (SourceTree.EmbeddedArchiveName): Setup never needs GitHub for it.
         'nebula-source.zip' = $zip
@@ -329,15 +345,37 @@ namespace Nebula
         $resources['shadercache-seed.' + $seedName] = $seedPath
     }
 
-    $resourceArgs = @($resources.GetEnumerator() | ForEach-Object { "/resource:$($_.Value),$($_.Key)" })
     # Older updaters inspect every prerelease but recognize only the standard asset name. Keep beta
     # assets separate even for those clients.
     $setupName = if ($Version -match '-beta\.') { 'Nebula-Beta-Setup.exe' } else { 'Nebula-Setup.exe' }
     $setup = Join-Path $OutputDirectory $setupName
     # Every program it carries passes Microsoft Defender first (MpCmdRun, no remediation): a detection stops the release.
     Assert-DefenderClean @($resources.Values | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })
-    Invoke-Checked $csc (@('/nologo', '/target:winexe', '/platform:x64', '/optimize+', "/win32manifest:$manifestFile", "/win32icon:$iconFile", "/out:$setup") + $references + $resourceArgs + $common +
-        @(Get-ChildItem (Join-Path $src 'installer\src\Setup\*.cs') | ForEach-Object FullName))
+    # Nothing it carries names the build PC's user profile (the payload is compressed, so each file is checked first).
+    foreach ($file in @($resources.Values | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf })) {
+        $bytes = [IO.File]::ReadAllBytes($file)
+        $ascii = [Text.Encoding]::ASCII.GetString($bytes); $wide = [Text.Encoding]::Unicode.GetString($bytes)
+        foreach ($needle in @($env:USERPROFILE, "Users\$profileName")) {
+            if ($ascii.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $wide.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw "$file names the build PC's user profile ($needle)."
+            }
+        }
+    }
+    # Setup carries the files it installs in one compressed zip resource (PAYLOAD), read by name.
+    $payloadZip = Join-Path $work 'payload.zip'
+    Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+    $payloadStream = [IO.File]::Open($payloadZip, [IO.FileMode]::CreateNew)
+    try {
+        $archive = New-Object IO.Compression.ZipArchive($payloadStream, [IO.Compression.ZipArchiveMode]::Create)
+        foreach ($pair in ($resources.GetEnumerator() | Sort-Object Key)) {
+            [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $pair.Value, $pair.Key, [IO.Compression.CompressionLevel]::Optimal)
+        }
+        $archive.Dispose()
+    } finally { $payloadStream.Dispose() }
+    & (Join-Path $src 'installer\native\build.ps1') -Version $Version -Commit $resolved -Repository $Repository `
+        -PublicKeyFile $publicKeyFile -OutputDirectory $nativeOut -Payload $payloadZip
+    Copy-Item -LiteralPath (Join-Path $nativeOut 'Nebula-Setup.exe') -Destination $setup -Force
+    if ([Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($setup)).Contains('NEBULA_UI_SNAPSHOT_DIR')) { throw "$setup contains the UI snapshot test mode." }
     Invoke-CodeSign @($setup)
     # Setup carries every program as is: none of them names the build PC's user profile.
     $setupText = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($setup))

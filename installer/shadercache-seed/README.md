@@ -2,7 +2,7 @@
 
 `RMGE01/shaders.bin` and `RMGE01/psos.bin` are copies of the runtime's shader cache, recorded by
 playing the game. `installer/build-release.ps1` embeds them in Setup, and Setup's
-`SeedShaderCache` (`installer/src/Setup/InstallEngine.cs`) copies them to
+`SeedShaderCache` (`installer/native/setup_engine.cpp`) copies them to
 `%LOCALAPPDATA%\Nebula\shadercache\RMGE01\` on a fresh install so the first launch does not
 compile every shader. Existing cache files are never replaced.
 

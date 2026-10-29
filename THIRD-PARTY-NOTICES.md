@@ -108,6 +108,12 @@ liblzma (0BSD) and bzip2 (bzip2 license). Their license texts are in
 [docs/licenses/rust-dependencies.txt](docs/licenses/rust-dependencies.txt), which is installed with
 Nebula. The `nod` and `powerpc` crates ship no license file; both declare `MIT OR Apache-2.0`.
 
+## miniz 3.0.2 (MIT)
+
+Nebula Setup, the launcher and Nebula Settings read and write zip archives with miniz by Rich
+Geldreich and contributors (<https://github.com/richgel999/miniz>). License:
+`installer/native/third_party/miniz/LICENSE`.
+
 ## Tools downloaded by Setup
 
 Setup downloads these from their publishers and checks pinned SHA-256 hashes. Nebula does not
