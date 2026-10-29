@@ -26,6 +26,11 @@ namespace J3DNativeShape {
     void loadTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type);
     // The matrices the next draw's corners take when they carry none.
     void setCurrent(u8 position, const u8* pTexture);
+    // Texture coordinate `coord` of the next draw generated as given (GXSetTexCoordGen's values).
+    void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
+    // Matrices, current matrices and texgens set since the last draw, as a record now (before a material record,
+    // which must not overtake them).
+    void flushState();
     // A position array the game wrote (`count` entries in its model's position format) as values.
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac);
 };  // namespace J3DNativeShape

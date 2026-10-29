@@ -2131,7 +2131,8 @@ uint64_t physical_of(uint64_t key) {
 
 // A group drawn (record_offset's place).
 void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color,
-                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current) {
+                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
+                    const NebulaShapeTexGen* texgens, uint32_t texgen_count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     const std::size_t offset = record_offset(stream);
@@ -2154,6 +2155,10 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
         out.model_matrix = in.model_matrix;
         std::memcpy(out.values.data(), in.values, sizeof(in.values));
     }
+    for (uint32_t i = 0; texgens != nullptr && i < texgen_count; ++i) {
+        const NebulaShapeTexGen& g = texgens[i];
+        record.texgens.push_back({g.coord, g.type, g.source, g.normalize, g.post_matrix});
+    }
     if (current != nullptr) {
         record.has_current = true;
         record.current[0] = current->position;
@@ -2162,7 +2167,7 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
     galaxy::gx::attach_shape_record(std::move(record));
 #else
     (void)shape, (void)stream, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
-        (void)current;
+        (void)current, (void)texgens, (void)texgen_count;
 #endif
 }
 

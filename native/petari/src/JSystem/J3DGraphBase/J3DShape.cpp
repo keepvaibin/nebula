@@ -114,11 +114,6 @@ u16 J3DShape::countBumpMtxNum() const {
     return num;
 }
 
-void J3DLoadCPCmd(u8 addr, u32 val) {
-    GXCmd1u8(8);
-    GXCmd1u8(addr);
-    GXCmd1u32(val);
-}
 
 // What the shape's vertex description and its model's formats imply for drawing it: the vertex data's position and
 // normal formats (J3DDeformer reads them), NBT normals and per-vertex position matrices.

@@ -460,6 +460,8 @@ namespace {
     u32 sMatrixCount = 0;
     NebulaShapeCurrent sCurrent;
     bool sCurrentSet = false;
+    NebulaShapeTexGen sTexGens[8];
+    u32 sTexGenCount = 0;
 
     NebulaShapeMatrix* nextMatrix(u32 kind, u32 id, u16 modelMatrix) {
         if (sMatrixCount == sizeof(sMatrices) / sizeof(sMatrices[0])) {
@@ -522,6 +524,20 @@ namespace J3DNativeShape {
         if (NebulaShapeMatrix* pOut = nextMatrix(kind, id, 0)) {
             copyRows(pOut->values, &pMtx[0][0], kind == NEBULA_SHAPE_MATRIX_TEXTURE_2X4 ? 2 : 3, 4, 4, 4);
         }
+    }
+
+    void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix) {
+        if (sTexGenCount == 8) {
+            fail("more texture coordinate generators before one draw than a draw can carry", nullptr);
+            return;
+        }
+        NebulaShapeTexGen& rOut = sTexGens[sTexGenCount++];
+        rOut.coord = coord;
+        rOut.type = type;
+        rOut.source = source;
+        rOut.normalize = normalize ? 1 : 0;
+        rOut.post_matrix = postMatrix;
+        rOut.reserved[0] = rOut.reserved[1] = rOut.reserved[2] = 0;
     }
 
     void setCurrent(u8 position, const u8* pTexture) {
@@ -617,9 +633,25 @@ namespace J3DNativeShape {
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), __NebulaGXWriter.ptr, keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sMatrices, sMatrixCount,
-                          sCurrentSet ? &sCurrent : nullptr);
+                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
         sMatrixCount = 0;
         sCurrentSet = false;
+        sTexGenCount = 0;
+    }
+
+    void flushState() {
+        if (sMatrixCount == 0 && !sCurrentSet && sTexGenCount == 0) {
+            return;
+        }
+        if (gx->dirtyState) {
+            __GXSetDirtyState();
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->shape_draw(pHost->user, 0, __NebulaGXWriter.ptr, 0, 0, 0, sMatrices, sMatrixCount,
+                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
+        sMatrixCount = 0;
+        sCurrentSet = false;
+        sTexGenCount = 0;
     }
 
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac) {

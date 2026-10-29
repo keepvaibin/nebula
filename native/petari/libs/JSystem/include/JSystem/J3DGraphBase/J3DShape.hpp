@@ -1,6 +1,5 @@
 #pragma once
 
-#include "JSystem/J3DGraphBase/J3DFifo.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "nebula_disc.hpp"
 #include <revolution.h>

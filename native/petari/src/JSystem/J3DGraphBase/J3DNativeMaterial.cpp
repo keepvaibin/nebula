@@ -1,6 +1,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
@@ -344,6 +345,7 @@ namespace J3DNativeMaterial {
             build(pMaterial, pTexture, &sMaterial);
             pSnapshot = &sMaterial;
         }
+        J3DNativeShape::flushState();
         // The drawing state the game set through GX's functions, written before the record (as a GX call would).
         if (gx->dirtyState) {
             __GXSetDirtyState();
@@ -356,6 +358,7 @@ namespace J3DNativeMaterial {
         if (pList == NULL || !pList->mNebulaCaptured) {
             return;
         }
+        J3DNativeShape::flushState();
         if (gx->dirtyState) {
             __GXSetDirtyState();
         }

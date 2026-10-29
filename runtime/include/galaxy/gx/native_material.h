@@ -75,6 +75,9 @@ struct Material {
     struct { std::uint8_t present, listed, id, rows; float m[12]; } texture_matrix[8];
 };
 
+// GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
+[[nodiscard]] std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source);
+
 // Sets `state` as J3D's material display list did (J3DMaterial::makeDisplayList_private's order: TEV block,
 // indirect block, pixel block, mode, texgens, colour block, channel and texgen counts); `actions` (or null) takes
 // what the writes start, as the parser's sink would (a palette's copy).

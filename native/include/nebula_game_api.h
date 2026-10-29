@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 37u
+#define NEBULA_GAME_API_VERSION 38u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -43,6 +43,13 @@ typedef struct NebulaShapeMatrix {
     uint16_t model_matrix;
     float values[12];
 } NebulaShapeMatrix;
+
+/* A texture coordinate a shape draw generates differently from its material (shape_draw): GXSetTexCoordGen's values
+   (type, source, normalize, post-transform matrix id). */
+typedef struct NebulaShapeTexGen {
+    uint8_t coord, type, source, normalize, post_matrix;
+    uint8_t reserved[3];
+} NebulaShapeTexGen;
 
 /* The matrices a shape draw's corners take when they carry none (shape_draw): the position matrix's id and texture
    coordinates 0-7's. */
@@ -748,11 +755,13 @@ typedef struct NebulaHostServices {
     void (*shape_geometry)(void* user, const struct NebulaShapeGeometry* geometry);
     /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
        normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
-       the rest), after `matrices` (`matrix_count` of them) and, when not null, `current` take effect. `stream` is the
-       game's GX command writer when it draws: the draw comes after every command written before it. */
+       the rest), after `matrices` (`matrix_count` of them), `texgens` and, when not null, `current` take effect.
+       `stream` is the game's GX command writer when it draws: the draw comes after every command written before it.
+       Shape 0 draws nothing: only the matrices, current matrices and texgens take effect (state the game set before a
+       material record, kept in order with it). */
     void (*shape_draw)(void* user, uint64_t shape, const void* stream, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
-                       const NebulaShapeCurrent* current);
+                       const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count);
     /* The material the next shape draws use (NebulaMaterial), after every command the game wrote before it (`stream`
        as shape_draw takes it). */
     void (*material)(void* user, const void* stream, const NebulaMaterial* material);

@@ -11,7 +11,8 @@ public:
     ShapePacketUserData();
 
     void init(J3DMaterial* pMaterial);
-    void callDL() const;
+    // The texture coordinates and current matrices its material generates differently, for the next draw.
+    void load() const;
     void loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const;
 
     struct TexMtxInfo {
@@ -24,8 +25,9 @@ public:
 
     /* 0x00 */ TexMtxInfo mTexMtxInfo[8];
     /* 0x40 */ u32 mTexGenNum;
-    /* 0x44 */ u32 mDisplayListSize;
-    /* 0x48 */ u8* mDisplayList;
+    bool mEnvMap;
+    u8 mTexGenType[8];
+    u8 mTexGenSource[8];
 };
 
 namespace MR {

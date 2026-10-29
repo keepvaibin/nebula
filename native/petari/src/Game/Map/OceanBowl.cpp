@@ -443,7 +443,6 @@ void OceanBowl::loadMaterial() const {
     screentex.load(GX_TEXMAP1);
     mWaterIndirectTex->load(GX_TEXMAP2);
     mMaskTex->load(GX_TEXMAP3);
-    MR::resetTextureCacheSize();
     if (MR::isCameraInWater()) {
         GXSetNumIndStages(0);
     } else {

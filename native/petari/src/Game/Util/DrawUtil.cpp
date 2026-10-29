@@ -29,8 +29,6 @@ static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF
                                               0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
                                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-static bool sIsReinitTextureCache = true;
-static GXTexCacheSize sReinitTextureCacheSize = GX_TEXCACHE_128K;
 
 void DrawUtil_FORCE_MATCH_SDATA2() {
     (void)-10000.0f;
@@ -61,22 +59,11 @@ namespace MR {
     void drawInit() {
         j3dSys.offFlag(2);
         j3dSys.drawInit();
-        j3dSys.setTexCacheRegion(GX_TEXCACHE_128K);
     }
 
     void reinitGX() {
         j3dSys.reinitGX();
         GXSetAlphaUpdate(GX_FALSE);
-
-        if (sIsReinitTextureCache) {
-            j3dSys.setTexCacheRegion(sReinitTextureCacheSize);
-        }
-    }
-
-    void resetTextureCacheSize() {
-        if (sIsReinitTextureCache) {
-            j3dSys.setTexCacheRegion(sReinitTextureCacheSize);
-        }
     }
 
     void loadViewMtxFor2DModel() {

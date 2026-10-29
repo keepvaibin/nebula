@@ -1,6 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
-#include "JSystem/J3DGraphBase/J3DFifo.hpp"
 #include "JSystem/J3DGraphBase/J3DTevs.hpp"
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/os/OSFastCast.h>
@@ -71,37 +70,6 @@ void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
     J3DNativeShape::loadNormal33(mModelNrmMtx[indx], addr * 3, indx + 1);
 }
 
-void J3DSys::setTexCacheRegion(GXTexCacheSize size) {
-    const u32 kSize[] = {
-        0x00008000,
-        0x00020000,
-        0x00080000,
-        0x00000000,
-    };
-
-    const u32 kRegionNum[] = {8, 4, 1, 0};
-
-    mTexCacheRegionNum = kRegionNum[size];
-
-    if (checkFlag(0x80000000)) {
-        u32 regionNum = kRegionNum[size];
-        for (u32 i = 0; i < regionNum; i++) {
-            if (i & 1) {
-                GXInitTexCacheRegion(&mTexCacheRegion[i], GX_FALSE, i * kSize[size] + 0x80000, size, i * kSize[size], size);
-                J3DFifoLoadTexCached(static_cast< GXTexMapID >(i), i * kSize[size] + 0x80000, size, i * kSize[size], size);
-            } else {
-                GXInitTexCacheRegion(&mTexCacheRegion[i], GX_FALSE, i * kSize[size], size, i * kSize[size] + 0x80000, size);
-                J3DFifoLoadTexCached(static_cast< GXTexMapID >(i), i * kSize[size], size, i * kSize[size] + 0x80000, size);
-            }
-        }
-    } else {
-        u32 regionNum = kRegionNum[size];
-        for (u32 i = 0; i < regionNum; i++) {
-            GXInitTexCacheRegion(&mTexCacheRegion[i], GX_FALSE, i * kSize[size], size, i * kSize[size] + 0x80000, size);
-            J3DFifoLoadTexCached(static_cast< GXTexMapID >(i), i * kSize[size], size, i * kSize[size] + 0x80000, size);
-        }
-    }
-}
 
 void J3DSys::drawInit() {
     GXInvalidateVtxCache();
@@ -224,7 +192,6 @@ void J3DSys::drawInit() {
         }
 #endif
 
-    setTexCacheRegion(GX_TEXCACHE_32K);
 }
 
 void J3DSys::reinitGX() {

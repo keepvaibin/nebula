@@ -97,6 +97,8 @@ struct Record {
     std::vector<Matrix> matrices;
     bool has_current = false;
     std::array<std::uint8_t, 9> current{};
+    // Texture coordinates generated differently from the material: coord, type, source, normalize, post matrix id.
+    std::vector<std::array<std::uint8_t, 5>> texgens;
 };
 
 }  // namespace galaxy::gx::shapes

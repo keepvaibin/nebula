@@ -45,7 +45,7 @@ void DrawBufferShapeDrawer::draw() const {
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();
     if (MR::getJ3DShapePacketUserData(firstPacket) != nullptr) {
-        MR::getJ3DShapePacketUserData(firstPacket)->callDL();
+        MR::getJ3DShapePacketUserData(firstPacket)->load();
     }
 
     for (s32 idx = 0; idx < mNumPackets; idx++) {

@@ -19,7 +19,6 @@
 #include <JSystem/JSupport/JSUInputStream.hpp>
 #include <JSystem/JSupport/JSUOutputStream.hpp>
 
-#include <JSystem/J3DGraphBase/J3DFifo.hpp>
 #include <JSystem/J3DGraphBase/J3DPacket.hpp>
 #include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>

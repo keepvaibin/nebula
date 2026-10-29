@@ -263,8 +263,9 @@ void blend_and_z(Writer& w, const Material& m) {
                     static_cast<std::uint32_t>(m.z_mode.update) << 4u);
 }
 
-// GXSetTexCoordGen as J3DGDSetTexCoordGen packs it.
-std::uint32_t tex_gen(std::uint8_t type, std::uint8_t source) {
+}  // namespace
+
+std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source) {
     std::uint32_t form = 0, proj = 0, row = 5, emboss_row = 5, emboss_lit = 0, tg = 0;
     switch (source) {
     case 0: row = 0; form = 1; break;   // POS
@@ -285,6 +286,8 @@ std::uint32_t tex_gen(std::uint8_t type, std::uint8_t source) {
     }
     return proj << 1u | form << 2u | tg << 4u | row << 7u | emboss_row << 12u | emboss_lit << 15u;
 }
+
+namespace {
 
 std::uint32_t channel(const Material& m, unsigned i) {
     const auto& c = m.channel[i];
@@ -357,7 +360,7 @@ void tex_gens(Writer& w, const Material& m) {
     std::uint32_t gens[8];
     std::uint32_t post[8];
     for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
-        gens[i] = tex_gen(m.tex_gen[i].type, m.tex_gen[i].source);
+        gens[i] = tex_gen_word(m.tex_gen[i].type, m.tex_gen[i].source);
         post[i] = m.tex_gen[i].post_matrix;
     }
     w.xf(0x1040u, gens, m.tex_gens);

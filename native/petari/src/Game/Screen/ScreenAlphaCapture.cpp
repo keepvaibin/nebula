@@ -42,7 +42,6 @@ void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
 
 void ScreenAlphaCapture::loadScreenTexture(s32 index, GXTexMapID id) {
     mTexture[index]->load(id);
-    MR::resetTextureCacheSize();
 }
 
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {

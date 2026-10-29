@@ -256,7 +256,6 @@ void SceneFunction::executeDrawListOpa() {
     CategoryList::execute(MR::DrawType_Fur);
     CategoryList::execute(MR::DrawType_OceanSphere);
     CategoryList::execute(MR::DrawType_Flag);
-    MR::resetTextureCacheSize();
 }
 
 void SceneFunction::executeDrawListXlu() {
@@ -272,7 +271,6 @@ void SceneFunction::executeDrawListXlu() {
     CategoryList::execute(MR::DrawType_ClipAreaDropLaser);
     CategoryList::execute(MR::DrawType_SpiderThread);
     CategoryList::execute(MR::DrawType_DashRing);
-    MR::resetTextureCacheSize();
 }
 
 void SceneFunction::executeDrawSilhouetteAndFillShadow() {
@@ -325,7 +323,6 @@ void SceneFunction::executeDrawAfterIndirect() {
     CategoryList::execute(MR::DrawType_EffectDrawAfterIndirect);
     CategoryList::execute(MR::DrawType_OceanRingPipeInside);
     CategoryList::execute(MR::DrawType_WaterCameraFilter);
-    MR::resetTextureCacheSize();
 }
 
 void SceneFunction::executeDrawImageEffect() {

@@ -200,7 +200,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
     }
     if (MR::getJ3DShapePacketUserData(packet)) {
-        MR::getJ3DShapePacketUserData(packet)->callDL();
+        MR::getJ3DShapePacketUserData(packet)->load();
     }
 
     for (u32 i = 0; i <= 15; i++) {

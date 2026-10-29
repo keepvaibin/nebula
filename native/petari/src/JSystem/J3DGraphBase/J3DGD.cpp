@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DGD.hpp"
-#include "JSystem/J3DGraphBase/J3DFifo.hpp"
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -68,10 +67,3 @@ static u8 J3DTexImage2Ids[8] = {
     0x90, 0x91, 0x92, 0x93, 0xB0, 0xB1, 0xB2, 0xB3,
 };
 
-void J3DFifoLoadTexCached(GXTexMapID id, u32 tmem_even, GXTexCacheSize size_even, u32 tmem_odd, GXTexCacheSize size_odd) {
-    J3DFifoLoadBPCmd(BP_TEX_CACHE_EVEN(tmem_even >> 5, size_even + 3, size_even + 3, 0, J3DTexImage1Ids[id]));
-
-    if (size_odd != 3 && tmem_odd < 0x100000) {
-        J3DFifoLoadBPCmd(BP_TEX_CACHE_ODD(tmem_odd >> 5, size_odd + 3, size_odd + 3, J3DTexImage2Ids[id]));
-    }
-}

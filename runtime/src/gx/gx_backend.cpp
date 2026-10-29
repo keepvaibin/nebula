@@ -12761,10 +12761,19 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         const std::uint32_t words[2] = {a, b};
         state_.load_xf(0x1018u, words, 2u);
     }
+    for (const auto& g : record.texgens) {
+        const std::uint32_t gen = material::tex_gen_word(g[1], g[2]);
+        const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
+        state_.load_xf(static_cast<std::uint16_t>(0x1040u + g[0]), &gen, 1u);
+        state_.load_xf(static_cast<std::uint16_t>(0x1050u + g[0]), &post, 1u);
+    }
 }
 
 void GxBackend::draw_record_shape(const shapes::Record& record) {
     apply_record_matrices(record);
+    if (record.key == 0u) {
+        return;  // state only (the matrices, current matrices and texgens set before a material record)
+    }
     const auto found = record_shapes_.find(record.key);
     if (found == record_shapes_.end() || found->second.geometry == nullptr) {
         ++frame_native_shape_misses_;
