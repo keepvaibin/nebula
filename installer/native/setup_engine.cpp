@@ -1564,6 +1564,7 @@ void InstallEngine::Run() { impl_->Run(); }
 namespace integration {
 static const wchar_t* const kUninstallKey = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Nebula";
 static const wchar_t* const kRemoverPrefix = L"Nebula-Uninstall-";
+void FinishUninstallSteps(DWORD setupProcess, const wstring& root);
 
 static wstring StartMenuFolder() { return PathCombine(KnownFolder(FOLDERID_Programs), L"Nebula"); }
 static wstring DesktopLink() { return PathCombine(KnownFolder(FOLDERID_Desktop), L"Nebula.lnk"); }
@@ -1689,6 +1690,14 @@ void Uninstall(const InstallLayout& layout, bool removeUserData) {
 // The temporary copy's part of an uninstall: once Setup has ended, its copy in the install folder and the emptied
 // folder are removed, and so are the temporary copies of earlier uninstalls.
 void FinishUninstall(DWORD setupProcess, const wstring& root) {
+    try {
+        FinishUninstallSteps(setupProcess, root);
+    } catch (const std::exception&) {
+        // Leftovers in the temporary folder are removed by the next uninstall, or by Windows.
+    }
+}
+
+void FinishUninstallSteps(DWORD setupProcess, const wstring& root) {
     HANDLE setup = OpenProcess(SYNCHRONIZE, FALSE, setupProcess);
     if (setup) {
         WaitForSingleObject(setup, 60000);

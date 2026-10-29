@@ -256,7 +256,15 @@ END
     $settingsApp = Join-Path $nativeOut 'NebulaSettings.exe'
     foreach ($program in $launcher, $settingsApp) {
         if (-not (Test-Path -LiteralPath $program)) { throw "The native build produced no $program" }
-        if ([Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($program)).Contains('NEBULA_UI_SNAPSHOT_DIR')) { throw "$program contains the UI snapshot test mode." }
+        $bytes = [IO.File]::ReadAllBytes($program)
+        $ascii = [Text.Encoding]::ASCII.GetString($bytes); $wide = [Text.Encoding]::Unicode.GetString($bytes)
+        if ($wide.Contains('NEBULA_UI_SNAPSHOT_DIR')) { throw "$program contains the UI snapshot test mode." }
+        # No folder of the build PC (the work folder, the source export) and no e-mail address in a program.
+        foreach ($needle in @($work, $src, (Split-Path -Leaf $work), '@users.noreply', '@gmail')) {
+            if ($ascii.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0 -or $wide.IndexOf($needle, [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                throw "$program contains '$needle'."
+            }
+        }
     }
     Invoke-CodeSign @($launcher, $settingsApp)
 

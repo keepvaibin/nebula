@@ -91,7 +91,7 @@ END
     return $res
 }
 
-$cxx = @('/nologo', '/c', '/std:c++20', '/O2', '/MT', '/EHsc', '/W4', '/permissive-', '/utf-8', '/Zc:__cplusplus', '/GS', '/guard:cf',
+$cxx = @('/nologo', '/c', '/std:c++20', '/O2', '/MT', '/DNDEBUG', '/EHsc', '/W4', '/permissive-', '/utf-8', '/Zc:__cplusplus', '/GS', '/guard:cf',
     '/Brepro', '/DUNICODE', '/D_UNICODE', '/D_WIN32_WINNT=0x0A00', '/DWINVER=0x0A00', "/I$gen", "/I$native")
 if ($UiSnapshots) { $cxx += '/DNEBULA_UI_SNAPSHOTS' }
 $linkFlags = @('/nologo', '/SUBSYSTEM:WINDOWS', '/DYNAMICBASE', '/NXCOMPAT', '/HIGHENTROPYVA', '/guard:cf', '/OPT:REF', '/OPT:ICF',
@@ -99,7 +99,7 @@ $linkFlags = @('/nologo', '/SUBSYSTEM:WINDOWS', '/DYNAMICBASE', '/NXCOMPAT', '/H
 
 function Compile([string]$Source, [string]$Object, [string[]]$Extra = @()) {
     if ($Source.EndsWith('.c')) {
-        Invoke-Checked cl.exe (@('/nologo', '/c', '/O2', '/MT', '/W3', '/GS', '/guard:cf', '/Brepro', '/utf-8', "/Fo$Object", $Source) + $Extra)
+        Invoke-Checked cl.exe (@('/nologo', '/c', '/O2', '/MT', '/DNDEBUG', '/W3', '/GS', '/guard:cf', '/Brepro', '/utf-8', "/Fo$Object", $Source) + $Extra)
     } else {
         Invoke-Checked cl.exe ($cxx + $Extra + @("/Fo$Object", $Source))
     }
