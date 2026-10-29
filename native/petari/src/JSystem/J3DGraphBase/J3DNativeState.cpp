@@ -599,6 +599,27 @@ namespace J3DNativeState {
         list.send();
     }
 
+    void setTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {
+        NebulaStateOp op;
+        J3DStateList list(&op, 1);
+        list.setTevStageOrder(stage, coord, map, color);
+        list.send();
+    }
+
+    void setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map) {
+        NebulaStateOp op;
+        J3DStateList list(&op, 1);
+        list.setIndTexOrder(stage, coord, map);
+        list.send();
+    }
+
+    void enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points) {
+        NebulaStateOp op;
+        J3DStateList list(&op, 1);
+        list.enableTexOffsets(coord, lines, points);
+        list.send();
+    }
+
     void setCullMode(GXCullMode mode) {
         sCullMode = mode;
         NebulaStateOp op;
@@ -705,6 +726,18 @@ void J3DNativeStateSetCopyFilter(GXBool antialias, const u8 samples[12][2], GXBo
 
 void J3DNativeStateCopyTex(void* pDest, GXBool clear) {
     J3DNativeState::copyTex(pDest, clear);
+}
+
+void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {
+    J3DNativeState::setTevOrder(stage, coord, map, color);
+}
+
+void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map) {
+    J3DNativeState::setIndTexOrder(stage, coord, map);
+}
+
+void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points) {
+    J3DNativeState::enableTexOffsets(coord, lines, points);
 }
 
 void J3DNativeStateSetCullMode(GXCullMode mode) {

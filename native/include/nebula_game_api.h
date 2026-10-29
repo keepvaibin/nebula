@@ -129,6 +129,8 @@ enum {
     NEBULA_STATE_FOG_RANGE_TABLE,   /* pair index (0-4); size: the pair's two entries */
     NEBULA_STATE_TEX_TLUT,          /* map, palette format (GXTlutFmt), palette place (GX's 20 TLUT names) */
     NEBULA_STATE_TLUT_LOAD,         /* palette place; image: the palette */
+    NEBULA_STATE_IND_TEX_ORDER,     /* indirect stage, texture coordinate, map (GXSetIndTexOrder's) */
+    NEBULA_STATE_TEX_OFFSETS,       /* texture coordinate, lines offset it, points offset it */
 };
 
 typedef struct NebulaStateOp {

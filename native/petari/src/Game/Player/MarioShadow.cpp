@@ -500,7 +500,7 @@ void CollisionShadow::drawVolumeBox(const TVec3f& rPosition, const TVec3f& rDept
     J3DNativeState::setAlphaUpdate(GX_TRUE);
     J3DNativeState::setColorUpdate(GX_FALSE);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
     J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);

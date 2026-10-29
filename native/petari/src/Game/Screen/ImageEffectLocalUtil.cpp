@@ -60,7 +60,7 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
     J3DNativeShape::sendTexture(posMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
     J3DNativeState::setNumTevStages(1);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
     J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
     J3DNativeState::setNumIndStages(0);

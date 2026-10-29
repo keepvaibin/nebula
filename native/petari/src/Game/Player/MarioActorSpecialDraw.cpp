@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -163,8 +164,8 @@ void MarioActor::writeBackScreenBox() const {
     TVec2f minimum;
     TVec2f maximum;
     TDDraw::setup(1, 0, 2);
-    GXInitTexObj(&texture, _B44, (s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    GXLoadTexObj(&texture, GX_TEXMAP0);
+    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::load(&texture, GX_TEXMAP0);
     MR::convertFrameBufferPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertFrameBufferPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_NOOP);
@@ -464,7 +465,7 @@ void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f
     f32 radius = 100.0f;
     TDDraw::setup(1, 1, 0);
     J3DNativeState::setZMode(GX_TRUE, GX_GREATER, GX_FALSE);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
     J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
     J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
     J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
@@ -506,8 +507,8 @@ void MarioActor::drawColdWaterDamage() const {
     u16 width = MR::getFrameBufferWidth();
     TDDraw::setup(1, 0, 2);
     u16 current = 0;
-    GXInitTexObj(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    GXInitTexObj(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeState::setLineWidth(6, GX_TO_ZERO);
     J3DNativeState::setTexCopyDst(width, 4, GX_TF_RGB565, GX_FALSE);
     J3DNativeState::setTexCopySrc(0, 0, width, 4);
@@ -523,7 +524,7 @@ void MarioActor::drawColdWaterDamage() const {
         J3DNativeState::setTexCopySrc(0, y + 4, width, 4);
         next = 1 - current;
         J3DNativeState::copyTex(mRasterBuffers[next], GX_FALSE);
-        GXLoadTexObj(&textures[current], GX_TEXMAP0);
+        J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
         f32 v = 0.0f;
 
         for (u32 row = y; row < y + 4; row++) {
@@ -583,8 +584,8 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     u16 width = MR::getFrameBufferWidth();
     TDDraw::setup(1, 0, 2);
     u16 current = 0;
-    GXInitTexObj(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    GXInitTexObj(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeState::setLineWidth(6, GX_TO_ZERO);
     J3DNativeState::setTexCopyDst(width, 4, GX_TF_RGB565, GX_FALSE);
     J3DNativeState::setTexCopySrc(0, 0, width, 4);
@@ -597,7 +598,7 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
         J3DNativeState::setTexCopySrc(0, y + 4, width, 4);
         next = 1 - current;
         J3DNativeState::copyTex(mRasterBuffers[next], GX_FALSE);
-        GXLoadTexObj(&textures[current], GX_TEXMAP0);
+        J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
         f32 v = 0.0f;
 
         for (u32 row = y; row < y + 4; row++) {

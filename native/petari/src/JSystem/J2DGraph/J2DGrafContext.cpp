@@ -84,7 +84,7 @@ void J2DGrafContext::setup2D() {
     J3DNativeState::setNumChans(1);
     J3DNativeState::setNumTevStages(1);
     J3DNativeState::setNumTexGens(0);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeShape::sendPosition(mPosMtx, 0);
     Mtx mtx;

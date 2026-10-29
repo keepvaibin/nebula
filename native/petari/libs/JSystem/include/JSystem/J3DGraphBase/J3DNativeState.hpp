@@ -63,6 +63,9 @@ namespace J3DNativeState {
     void copyTex(void* pDest, GXBool clear);
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);
+    void setTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
+    void setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
+    void enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);
     // The cull mode (kept here: the game reads it back), GX's mapping.
     void setCullMode(GXCullMode mode);
     void getCullMode(GXCullMode* pMode);
@@ -110,6 +113,9 @@ void J3DNativeStateSetCopyClamp(GXFBClamp clamp);
 void J3DNativeStateSetCopyClear(GXColor color, u32 depth);
 void J3DNativeStateSetCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
 void J3DNativeStateCopyTex(void* pDest, GXBool clear);
+void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
+void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
+void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);
 void J3DNativeStateSetCullMode(GXCullMode mode);
 void J3DNativeStateGetCullMode(GXCullMode* pMode);
 void J3DNativeStateSetChanMatColor(GXChannelID chan, GXColor color);

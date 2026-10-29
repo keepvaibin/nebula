@@ -1,4 +1,5 @@
 #include "nw4r/lyt/animation.h"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "nw4r/lyt/layout.h"
@@ -751,10 +752,10 @@ namespace nw4r {
                         GXTlutObj tlutObj;
                         rTexMap.Get(&tlutObj);
 
-                        GXLoadTlut(&tlutObj, tlutName);
+                        J3DNativeTexture::loadTlut(&tlutObj, tlutName);
                     }
 
-                    GXLoadTexObj(&texObj, static_cast< GXTexMapID >(i));
+                    J3DNativeTexture::load(&texObj, static_cast< GXTexMapID >(i));
                 }
             }
 
@@ -799,7 +800,7 @@ namespace nw4r {
                 for (int i = 0; i < mGXMemNum.tevStage; i++) {
                     GXTevStageID tevStage = static_cast< GXTevStageID >(i);
 
-                    GXSetTevOrder(tevStage, pTevStage[i].GetTexCoordGen(), pTevStage[i].GetTexMap(), pTevStage[i].GetColorChan());
+                    J3DNativeState::setTevOrder(tevStage, pTevStage[i].GetTexCoordGen(), pTevStage[i].GetTexMap(), pTevStage[i].GetColorChan());
 
                     J3DNativeState::setTevSwapMode(tevStage, pTevStage[i].GetRasSwapSel(), pTevStage[i].GetTexSwapSel());
 
@@ -836,7 +837,7 @@ namespace nw4r {
                 if (mGXMemNum.texMap == 0) {
                     GXTevStageID tevStage = GX_TEVSTAGE0;
 
-                    GXSetTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+                    J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
                     J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_C1, GX_CC_RASC, GX_CC_ZERO);
                     J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_A1, GX_CA_RASA, GX_CA_ZERO);
 
@@ -846,7 +847,7 @@ namespace nw4r {
                     if (mGXMemNum.texMap == 1) {
                         GXTevStageID tevStage = GX_TEVSTAGE0;
 
-                        GXSetTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
                         J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
                         J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
 
@@ -855,13 +856,13 @@ namespace nw4r {
                         if (mGXMemNum.texMap == 2) {
                             GXTevStageID tevStage = GX_TEVSTAGE0;
 
-                            GXSetTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
                             J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
                             J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
 
                             tevStage = GX_TEVSTAGE1;
 
-                            GXSetTevOrder(tevStage, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
                             J3DNativeState::setTevColorIn(tevStage, GX_CC_TEXC, GX_CC_CPREV, GX_CC_KONST, GX_CC_ZERO);
                             J3DNativeState::setTevAlphaIn(tevStage, GX_CA_TEXA, GX_CA_APREV, GX_CA_KONST, GX_CA_ZERO);
 
@@ -873,7 +874,7 @@ namespace nw4r {
                             for (int i = 0; i < mGXMemNum.texMap; i++) {
                                 GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
 
-                                GXSetTevOrder(tevStage, static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i), GX_COLOR_NULL);
+                                J3DNativeState::setTevOrder(tevStage, static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i), GX_COLOR_NULL);
 
                                 GXTevColorArg colorD = i == GX_TEXMAP0 ? GX_CC_ZERO : GX_CC_CPREV;
                                 GXTevAlphaArg alphaD = i == GX_TEXMAP0 ? GX_CA_ZERO : GX_CA_APREV;
@@ -891,7 +892,7 @@ namespace nw4r {
                         if (mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1])) {
                             GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
 
-                            GXSetTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
+                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
                             J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO);
                             J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
 
@@ -902,7 +903,7 @@ namespace nw4r {
                     if (useRasStage) {
                         GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
 
-                        GXSetTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
                         J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
                         J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
 
@@ -945,7 +946,7 @@ namespace nw4r {
                 for (int i = 0; i < mGXMemNum.indStage; i++) {
                     GXIndTexStageID indStage = static_cast< GXIndTexStageID >(i);
 
-                    GXSetIndTexOrder(indStage, pIndStage[i].GetTexCoordGen(), pIndStage[i].GetTexMap());
+                    J3DNativeState::setIndTexOrder(indStage, pIndStage[i].GetTexCoordGen(), pIndStage[i].GetTexMap());
 
                     J3DNativeState::setIndTexCoordScale(indStage, pIndStage[i].GetScaleS(), pIndStage[i].GetScaleT());
                 }

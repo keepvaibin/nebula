@@ -72,6 +72,8 @@ public:
     void setTevKAlphaSel(GXTevStageID stage, GXTevKAlphaSel sel);
     void setTevSwapMode(GXTevStageID stage, GXTevSwapSel rasSwap, GXTevSwapSel texSwap);
     void setTevStageOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
+    void setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
+    void enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);
     void setColorUpdate(GXBool enable);
     void setAlphaUpdate(GXBool enable);
     void setDither(GXBool enable);

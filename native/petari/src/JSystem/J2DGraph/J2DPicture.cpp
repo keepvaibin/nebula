@@ -355,7 +355,7 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
         J3DNativeState::setNumTexGens(0);
         J3DNativeState::setNumTevStages(1);
         J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
 
         Mtx m;
         PSMTXIdentity(m);
@@ -403,7 +403,7 @@ void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2
         J3DNativeState::setNumTexGens(0);
         J3DNativeState::setNumTevStages(1);
         J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     }
 }
@@ -454,7 +454,7 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
 void J2DPicture::setTevMode() {
     u8 i;
     for (i = 0; i < mTextureNum; i++) {
-        GXSetTevOrder(GXTevStageID(i), GXTexCoordID(i), GXTexMapID(i), GX_COLOR_NULL);
+        J3DNativeState::setTevOrder(GXTevStageID(i), GXTexCoordID(i), GXTexMapID(i), GX_COLOR_NULL);
     }
 
     J3DNativeState::setTevColor(GX_TEVREG2, JUtility::TColor(0xFFFFFFFF));
@@ -491,7 +491,7 @@ void J2DPicture::setTevMode() {
     }
 
     if (mBlack != 0 || mWhite != 0xFFFFFFFF) {
-        GXSetTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
+        J3DNativeState::setTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
         J3DNativeState::setTevColor(GX_TEVREG0, mBlack);
         J3DNativeState::setTevColor(GX_TEVREG1, mWhite);
         J3DNativeState::setTevColorIn(GXTevStageID(i), GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO);
@@ -503,7 +503,7 @@ void J2DPicture::setTevMode() {
 
     if (mColorAlpha != 0xFF || mCornerColor[0] != 0xFFFFFFFF || mCornerColor[1] != 0xFFFFFFFF || mCornerColor[2] != 0xFFFFFFFF ||
         mCornerColor[3] != 0xFFFFFFFF) {
-        GXSetTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        J3DNativeState::setTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
         J3DNativeState::setTevColorIn(GXTevStageID(i), GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
         J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
         J3DNativeState::setTevColorOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);

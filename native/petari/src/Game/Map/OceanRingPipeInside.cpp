@@ -82,7 +82,7 @@ void OceanRingPipeInside::loadMaterial() const {
 
     mWaterPipeInsideTex->load(GX_TEXMAP0);
     J3DNativeState::setNumIndStages(1);
-    GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP0);
+    J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP0);
     J3DNativeState::setTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
     Mtx23 new_mtx;
     new_mtx[0][0] = ::sIndirectScale;
@@ -96,7 +96,7 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeState::setTevColor(GX_TEVREG0, ::sTevReg0);
     J3DNativeState::setTevColor(GX_TEVREG1, ::sTevReg1);
     J3DNativeState::setNumTevStages(1);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
     J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
     J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_4, GX_TRUE, GX_TEVPREV);
     J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_TEXA, GX_CA_ZERO);

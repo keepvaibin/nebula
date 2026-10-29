@@ -1,4 +1,5 @@
 #include "JSystem/JUtility/JUTPalette.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <revolution/os.h>
 
 void JUTPalette::storeTLUT(_GXTlut param_0, ResTLUT* tlut) {
@@ -10,7 +11,7 @@ void JUTPalette::storeTLUT(_GXTlut param_0, ResTLUT* tlut) {
     mTransparency = tlut->mTransparency;
     mLutNum = tlut->mLutNum;
     mColorTable = tlut + 8;
-    GXInitTlutObj(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
+    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
 }
 
 void JUTPalette::storeTLUT(_GXTlut param_0, _GXTlutFmt param_1, JUTTransparency param_2, u16 param_3, void* param_4) {
@@ -19,13 +20,13 @@ void JUTPalette::storeTLUT(_GXTlut param_0, _GXTlutFmt param_1, JUTTransparency 
     mTransparency = param_2;
     mLutNum = param_3;
     mColorTable = static_cast< ResTLUT* >(param_4);
-    GXInitTlutObj(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
+    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
 }
 
 bool JUTPalette::load() {
     bool check = mLutNum != 0;
     if (check) {
-        GXLoadTlut(&mObj, mName);
+        J3DNativeTexture::loadTlut(&mObj, mName);
     }
 
     return check;

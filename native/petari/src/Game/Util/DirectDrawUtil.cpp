@@ -24,10 +24,10 @@ namespace MR {
             J3DNativeState::setNumTexGens(1);
             J3DNativeState::setNumTevStages(1);
             if (mLightingFlag != 0) {
-                GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+                J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
                 J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
             } else {
-                GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+                J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
                 J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_REPLACE);
             }
         } else {
@@ -36,16 +36,16 @@ namespace MR {
                 J3DNativeState::setNumTexGens(1);
                 J3DNativeState::setNumTevStages(1);
                 if (mLightingFlag != 0) {
-                    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+                    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
                     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
                 } else {
-                    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+                    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
                     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_REPLACE);
                 }
             } else {
                 J3DNativeState::setNumTexGens(0);
                 J3DNativeState::setNumTevStages(1);
-                GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+                J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
                 J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
             }
         }

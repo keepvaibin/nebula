@@ -326,6 +326,7 @@ void J3DStateList::setTevStageOrder(GXTevStageID stage, GXTexCoordID coord, GXTe
     r.a[1] = static_cast< u8 >(coord);
     r.a[2] = static_cast< u8 >(map);
     r.a[3] = static_cast< u8 >(color);
+    r.a[4] = (map & GX_TEX_DISABLE) != 0 && map != GX_TEXMAP_NULL;
 }
 
 void J3DStateList::setColorUpdate(GXBool enable) {
@@ -557,6 +558,20 @@ void J3DStateList::setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable
     NebulaStateOp& r = add(NEBULA_STATE_FOG_RANGE);
     r.a[0] = enable;
     r.size[0] = center;
+}
+
+void J3DStateList::setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map) {
+    NebulaStateOp& r = add(NEBULA_STATE_IND_TEX_ORDER);
+    r.a[0] = stage;
+    r.a[1] = static_cast< u8 >(coord);
+    r.a[2] = static_cast< u8 >(map);
+}
+
+void J3DStateList::enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points) {
+    NebulaStateOp& r = add(NEBULA_STATE_TEX_OFFSETS);
+    r.a[0] = coord;
+    r.a[1] = lines;
+    r.a[2] = points;
 }
 
 void J3DStateList::setClipMode(GXClipMode mode) {

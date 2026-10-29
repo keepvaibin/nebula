@@ -110,7 +110,7 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     J3DNativeState::setChanMatColor(GX_COLOR0A0, rColor);
     J3DNativeState::setNumTexGens(0);
     J3DNativeState::setNumTevStages(1u);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);

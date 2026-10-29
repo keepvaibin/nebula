@@ -928,11 +928,11 @@ void JPAResource::setPTev() {
     int pos_offset = center_offset + base_plane_type * 0x6C;
     int crd_offset = (mpBaseShape->getTilingS() + 2 * mpBaseShape->getTilingT()) * 8;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd + crd_offset);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
 
     if (mpExTexShape != NULL) {
         if (mpExTexShape->isUseIndirect()) {
-            GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP2);
+            J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP2);
             J3DNativeState::setIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
 #ifdef TARGET_PC
             f32 indTexMtx[2][3];
@@ -947,7 +947,7 @@ void JPAResource::setPTev() {
             tex_coord = GX_TEXCOORD2;
         }
         if (mpExTexShape->isUseSecTex()) {
-            GXSetTevOrder(GX_TEVSTAGE1, tex_coord, GX_TEXMAP3, GX_COLOR_NULL);
+            J3DNativeState::setTevOrder(GX_TEVSTAGE1, tex_coord, GX_TEXMAP3, GX_COLOR_NULL);
             J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
             J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_APREV, GX_CA_ZERO);
             J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
@@ -971,7 +971,7 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     int base_plane_type = (mpChildShape->getType() == 3 || mpChildShape->getType() == 7) ? mpChildShape->getBasePlaneType() : 0;
     int pos_offset = 0x30 + base_plane_type * 0x6C;
     JPASetQuadArrays(jpa_pos + pos_offset, jpa_crd);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR_NULL);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP1, GX_COLOR_NULL);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x3C, GX_FALSE, 0x7D);
     J3DNativeState::setTevDirect(GX_TEVSTAGE0);
     J3DNativeState::setNumTevStages(1);

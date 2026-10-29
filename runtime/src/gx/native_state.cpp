@@ -525,6 +525,19 @@ void encode(std::span<const Op> ops, Writes& s) {
             bp(s, 0x64u, static_cast<std::uint32_t>(op.image >> 5u) & 0xFFFFFFu);
             bp(s, 0x65u, tlut_offset(a[0]) | (a[0] < 16u ? 16u : 64u) << 10u);
             break;
+        case kIndTexOrder: {
+            // GXSetIndTexOrder: a null map or coordinate reads as 0; six bits a stage.
+            const std::uint32_t map = a[2] >= 8u ? 0u : a[2], coord = a[1] >= 8u ? 0u : a[1];
+            const unsigned shift = 6u * (a[0] & 3u);
+            mask(s, 0x3Fu << shift);
+            bp(s, 0x27u, (map | coord << 3u) << shift);
+            break;
+        }
+        case kTexOffsets:
+            mask(s, 3u << 18u);
+            bp(s, static_cast<std::uint8_t>(0x30u + 2u * (a[0] & 7u)),
+               static_cast<std::uint32_t>(a[1] & 1u) << 18u | static_cast<std::uint32_t>(a[2] & 1u) << 19u);
+            break;
         case kTevSwapTable:
             // The low four bits of the table's two konst-select registers: red, green / blue, alpha.
             mask(s, 0x00000Fu);
@@ -540,7 +553,7 @@ void encode(std::span<const Op> ops, Writes& s) {
             // GXSetTevOrder's mapping (not GD's): a null coordinate or map reads as 0, the map enabled only when real.
             const std::uint32_t coord = a[1] >= 8u ? 0u : a[1];
             const std::uint32_t map = a[2] >= 8u ? 0u : a[2];
-            const std::uint32_t half = map | coord << 3u | static_cast<std::uint32_t>(a[2] != 0xFFu) << 6u |
+            const std::uint32_t half = map | coord << 3u | static_cast<std::uint32_t>(a[2] != 0xFFu && a[4] == 0u) << 6u |
                                        static_cast<std::uint32_t>(a[3] == 0xFFu ? 7u : kChannelToRas[a[3] & 15u]) << 7u;
             mask(s, (a[0] & 1u) != 0u ? 0x3FF000u : 0x0003FFu);
             bp(s, static_cast<std::uint8_t>(0x28u + a[0] / 2u), (a[0] & 1u) != 0u ? half << 12u : half);

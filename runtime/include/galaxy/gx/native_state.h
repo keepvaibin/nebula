@@ -79,6 +79,8 @@ enum Kind : std::uint8_t {
     kFogRangeTable,
     kTexTlut,
     kTlutLoad,
+    kIndTexOrder,
+    kTexOffsets,
 };
 
 struct Op {

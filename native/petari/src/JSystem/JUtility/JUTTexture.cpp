@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
@@ -165,10 +166,10 @@ void JUTTexture::initTexObj() {
     }
     u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
     image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
-    GXInitTexObj(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXTexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
+    J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXTexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
                  static_cast< GXTexWrapMode >(mWrapT), mipmapEnabled);
 
-    GXInitTexObjLOD(&mObj, static_cast< GXTexFilter >(mMinType), static_cast< GXTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
+    J3DNativeTexture::initLOD(&mObj, static_cast< GXTexFilter >(mMinType), static_cast< GXTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
                     mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GXAnisotropy >(mTIMG->mMaxAnisotropy));
 }
 
@@ -182,10 +183,10 @@ void JUTTexture::initTexObj(GXTlut lut) {
     mTlutName = lut;
     u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
     image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
-    GXInitTexObjCI(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXCITexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
+    J3DNativeTexture::initCI(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXCITexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
                    static_cast< GXTexWrapMode >(mWrapT), mipmapEnabled, lut);
 
-    GXInitTexObjLOD(&mObj, static_cast< GXTexFilter >(mMinType), static_cast< GXTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
+    J3DNativeTexture::initLOD(&mObj, static_cast< GXTexFilter >(mMinType), static_cast< GXTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
                     mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GXAnisotropy >(mTIMG->mMaxAnisotropy));
 }
 
@@ -194,7 +195,7 @@ void JUTTexture::load(GXTexMapID texMapID) {
         mPalette->load();
     }
 
-    GXLoadTexObj(&mObj, texMapID);
+    J3DNativeTexture::load(&mObj, texMapID);
 }
 
 void JUTTexture::capture(int width, int height, GXTexFmt format, bool mipmap, GXBool clear) {

@@ -74,9 +74,9 @@ void JPAEmitterManager::draw(JPADrawInfo const* drawInfo, u8 group_id) {
     calcYBBCam();
     J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXEnableTexOffsets(GX_TEXCOORD0, GX_TRUE, GX_TRUE);
-    GXEnableTexOffsets(GX_TEXCOORD1, GX_TRUE, GX_TRUE);
-    GXEnableTexOffsets(GX_TEXCOORD2, GX_TRUE, GX_TRUE);
+    J3DNativeState::enableTexOffsets(GX_TEXCOORD0, GX_TRUE, GX_TRUE);
+    J3DNativeState::enableTexOffsets(GX_TEXCOORD1, GX_TRUE, GX_TRUE);
+    J3DNativeState::enableTexOffsets(GX_TEXCOORD2, GX_TRUE, GX_TRUE);
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeState::setCoPlanar(GX_FALSE);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);

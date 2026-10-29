@@ -104,7 +104,7 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     J3DNativeState::setZCompLoc(mZCompLoc);
     J3DNativeState::setTevDirect(GX_TEVSTAGE0);
     J3DNativeState::setNumTevStages(2);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
+    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
     J3DNativeState::setTevKColorSel(GX_TEVSTAGE0, GX_TEV_KCSEL_K3_R);
     J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K3_G);
     J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_RASC, GX_CC_KONST);
@@ -115,10 +115,10 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE1, GX_TEV_KASEL_K3_B);
 
     if (useSpecular) {
-        GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR1A1);
+        J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR1A1);
         J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_C2, GX_CC_CPREV, GX_CC_TEXC, GX_CC_RASC);
     } else {
-        GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+        J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
         J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_C2, GX_CC_CPREV, GX_CC_TEXC, GX_CC_ZERO);
     }
 
@@ -163,7 +163,7 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     if (mUseIndirect) {
         J3DNativeShape::sendTexture(indirectMtx, GX_TEXMTX2, GX_MTX2x4);
         J3DNativeState::setNumTexGens(3);
-        GXSetIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP2);
+        J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP2);
         J3DNativeState::setIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);
         J3DNativeState::setTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX2, GX_FALSE, GX_PTIDENTITY);
     } else {

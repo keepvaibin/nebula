@@ -1,4 +1,5 @@
 #include "nw4r/lyt/common.h"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/lyt/texMap.h"
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGet.h>
@@ -9,18 +10,18 @@ namespace nw4r {
     namespace lyt {
         void TexMap::Get(_GXTexObj* pTexObj) const {
             if (detail::IsCITexelFormat(GetTexelFormat())) {
-                u32 tlutName = GXGetTexObjTlut(pTexObj);
-                GXInitTexObjCI(pTexObj, mImage, mWidth, mHeight, GXCITexFmt(GetTexelFormat()), GetWrapModeS(), GetWrapModeT(), IsMipMap(), tlutName);
+                u32 tlutName = J3DNativeTexture::getTlut(pTexObj);
+                J3DNativeTexture::initCI(pTexObj, mImage, mWidth, mHeight, GXCITexFmt(GetTexelFormat()), GetWrapModeS(), GetWrapModeT(), IsMipMap(), tlutName);
             } else {
-                GXInitTexObj(pTexObj, mImage, mWidth, mHeight, GetTexelFormat(), GetWrapModeS(), GetWrapModeT(), IsMipMap());
+                J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetTexelFormat(), GetWrapModeS(), GetWrapModeT(), IsMipMap());
             }
 
-            GXInitTexObjLOD(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(), IsBiasClampEnable(), IsEdgeLODEnable(),
+            J3DNativeTexture::initLOD(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(), IsBiasClampEnable(), IsEdgeLODEnable(),
                             GetAnisotropy());
         }
 
         void TexMap::Get(_GXTlutObj* pTlutObj) const {
-            GXInitTlutObj(pTlutObj, GetPalette(), GetPaletteFormat(), GetPaletteEntryNum());
+            J3DNativeTexture::initTlut(pTlutObj, GetPalette(), GetPaletteFormat(), GetPaletteEntryNum());
         }
 
         void TexMap::Set(const GXTexObj& texObj) {
@@ -30,7 +31,7 @@ namespace nw4r {
             GXTexWrapMode wrapS, wrapT;
             GXBool mipmap;
 
-            GXGetTexObjAll(&texObj, &image, &width, &height, &format, &wrapS, &wrapT, &mipmap);
+            J3DNativeTexture::getAll(&texObj, &image, &width, &height, &format, &wrapS, &wrapT, &mipmap);
 
             mImage = image;
             SetSize(width, height);
@@ -42,7 +43,7 @@ namespace nw4r {
             f32 minLOD, maxLOD, lodBias;
             GXBool biasCLampEnable, edgeLODEnable;
             GXAnisotropy aniso;
-            GXGetTexObjLODAll(&texObj, &minFilter, &magFilter, &minLOD, &maxLOD, &lodBias, &biasCLampEnable, &edgeLODEnable, &aniso);
+            J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLOD, &maxLOD, &lodBias, &biasCLampEnable, &edgeLODEnable, &aniso);
 
             SetFilter(minFilter, magFilter);
             SetLOD(minLOD, maxLOD);

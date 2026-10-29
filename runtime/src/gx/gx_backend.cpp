@@ -133,6 +133,32 @@ namespace {
 
 static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 
+// Each texture coordinate's scale (texels per unit, s and t): the size of the texture sampled with it - indirect
+// stages, then TEV stages, the last one winning, as GX set its coordinate scales. A coordinate no stage samples keeps
+// one texel.
+std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state) {
+    std::array<std::array<std::uint32_t, 2>, 8> scales{};
+    for (auto& scale : scales) {
+        scale = {1u, 1u};
+    }
+    const GenMode gm = state.gen_mode();
+    const std::uint32_t ind_ref = state.bp(bp::kIndRef);
+    for (unsigned i = 0; i < gm.num_ind_stages && i < 4u; ++i) {
+        const TexImage image = state.tex_image((ind_ref >> (6u * i)) & 7u);
+        scales[(ind_ref >> (6u * i + 3u)) & 7u] = {std::max<std::uint32_t>(image.width, 1u),
+                                                   std::max<std::uint32_t>(image.height, 1u)};
+    }
+    for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
+        const TevOrder order = state.tev_order(s);
+        if (order.tex_enable) {
+            const TexImage image = state.tex_image(order.texmap);
+            scales[order.texcoord & 7u] = {std::max<std::uint32_t>(image.width, 1u),
+                                           std::max<std::uint32_t>(image.height, 1u)};
+        }
+    }
+    return scales;
+}
+
 std::atomic<unsigned> s_layer_2d_scale{0u};
 // The 3D image's scale as shown, at each scene's begin (scene_display_scale).
 std::atomic<unsigned> s_scene_display_scale{0u};
@@ -1681,24 +1707,15 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out) {
         out.fog_params[7] = fp.projection ? 1.0f : 0.0f;  // 1 = orthographic
     }
 
-    // xy: texture size; zw: texcoord scale (BP 0x30-0x3F, scale_minus_1 + 1), which indirect TEV
-    // applies before sampling.
+    // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
+    // before sampling.
+    const auto scales = coordinate_scales(state);
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const TexImage img = state.tex_image(m);
-        const float w = static_cast<float>(img.width  > 0 ? img.width  : 1);
-        const float h = static_cast<float>(img.height > 0 ? img.height : 1);
-        const std::uint32_t s_scale_raw =
-            state.bp(static_cast<std::uint8_t>(
-                bp::kTexCoordSizeBase + m * 2u));
-        const std::uint32_t t_scale_raw =
-            state.bp(static_cast<std::uint8_t>(
-                bp::kTexCoordSizeBase + m * 2u + 1u));
-        out.tex_dims[m][0] = w;
-        out.tex_dims[m][1] = h;
-        out.tex_dims[m][2] =
-            static_cast<float>((s_scale_raw & 0xFFFFu) + 1u);
-        out.tex_dims[m][3] =
-            static_cast<float>((t_scale_raw & 0xFFFFu) + 1u);
+        out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
+        out.tex_dims[m][1] = static_cast<float>(img.height > 0 ? img.height : 1);
+        out.tex_dims[m][2] = static_cast<float>(scales[m][0]);
+        out.tex_dims[m][3] = static_cast<float>(scales[m][1]);
     }
 
     // Z-texture bias (BP 0xF4, 24-bit z24 units), normalized to [0,1).
@@ -4650,6 +4667,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
     tev.header = stages | (texgens << 28u);
+    const auto scales = coordinate_scales(state_);
     for (unsigned s = 0; s < stages; ++s) {
         const TevStagePacked& packed = ps_key_.stages[s];
         RtTevStage& stage = stages_out[s];
@@ -4661,10 +4679,8 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         const unsigned map = packed.order & 7u;
         const unsigned coord = (packed.order >> 3u) & 7u;
         const TexImage image = state_.tex_image(map);
-        const std::uint32_t s_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u));
-        const std::uint32_t t_scale = state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + 1u));
-        stage.scale_s = static_cast<float>((s_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.width, 1u));
-        stage.scale_t = static_cast<float>((t_scale & 0xFFFFu) + 1u) / static_cast<float>(std::max<unsigned>(image.height, 1u));
+        stage.scale_s = static_cast<float>(scales[coord][0]) / static_cast<float>(std::max<unsigned>(image.width, 1u));
+        stage.scale_t = static_cast<float>(scales[coord][1]) / static_cast<float>(std::max<unsigned>(image.height, 1u));
         const TexMode tex_mode = state_.tex_mode(map);
         stage.pad[1] = static_cast<std::uint32_t>(tex_mode.wrap_s) | (static_cast<std::uint32_t>(tex_mode.wrap_t) << 2u);
         // Its indirect command (the raster's: active with indirect stages and a nonzero command), and whether the
@@ -5133,7 +5149,7 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         RtTevIndirect& ind = info.tev_indirect;
         ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
         const auto coord_size = [this](unsigned coord, unsigned axis) {
-            return (state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + axis)) & 0xFFFFu) + 1u;
+            return coordinate_scales(state_)[coord & 7u][axis];
         };
         for (unsigned i = 0; i < ind_stages; ++i) {
             const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
@@ -6212,8 +6228,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 break;
             }
             const auto coord_size = [&](unsigned coord, unsigned axis) {
-                return static_cast<float>(
-                    (state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + coord * 2u + axis)) & 0xFFFFu) + 1u);
+                return static_cast<float>(coordinate_scales(state_)[coord & 7u][axis]);
             };
             const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
             const TexImage wave_image = state_.tex_image(wave_map);

@@ -1,4 +1,5 @@
 #include "RVLFaceLibInternal.h"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -241,12 +242,12 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
 
     for (i = 0; i < RFLExp_Max; i++) {
         if (imodel->maskTexObj[i] != NULL) {
-            GXInitTexObj(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, mipmap);
+            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, mipmap);
 
             if (mipmap) {
-                GXInitTexObjLOD(imodel->maskTexObj[i], GX_LIN_MIP_LIN, GX_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GX_ANISO_1);
+                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GX_LIN_MIP_LIN, GX_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GX_ANISO_1);
             } else {
-                GXInitTexObjLOD(imodel->maskTexObj[i], GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
+                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
             }
 
             if (!setExpr) {
@@ -302,7 +303,7 @@ void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
     if (setting->lightEnable) {
         J3DNativeStateSetTevDirect(GX_TEVSTAGE1);
         J3DNativeStateSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
-        GXSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+        J3DNativeStateSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
         J3DNativeStateSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
         J3DNativeStateSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
         J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
@@ -393,7 +394,7 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
     J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_POS, 60, 0, 0x7D);
-    GXSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
+    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
     J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_KONST);
 
     if (res->beardDlSize > 0) {
@@ -420,7 +421,7 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
         RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
     }
 
-    GXSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
+    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
     J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
 
     if (res->capDlSize > 0) {
@@ -428,7 +429,7 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
         J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, 1, setting->tevOutRegID);
         J3DNativeStateSetTevKColor(setting->tevKColorID, cFavoriteColor[res->favoriteColor]);
 
-        GXLoadTexObj(&res->capTexObj, setting->texMapID);
+        J3DNativeTextureLoad(&res->capTexObj, setting->texMapID);
         RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
 
         J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
@@ -442,7 +443,7 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
         J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
     }
 
-    GXLoadTexObj(&res->faceTexObj, setting->texMapID);
+    J3DNativeTextureLoad(&res->faceTexObj, setting->texMapID);
     RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
 }
 
@@ -450,7 +451,7 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     RFLiCharModelRes* res = imodel->res;
 
-    GXSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
+    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
     J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
     J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
 
@@ -462,12 +463,12 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
     J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
 
-    GXLoadTexObj(imodel->maskTexObj[imodel->expression], setting->texMapID);
+    J3DNativeTextureLoad(imodel->maskTexObj[imodel->expression], setting->texMapID);
     RFLiDrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
 
     if (res->noselineDlSize > 0) {
         J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-        GXLoadTexObj(&res->noseTexObj, setting->texMapID);
+        J3DNativeTextureLoad(&res->noseTexObj, setting->texMapID);
         RFLiDrawShape(res->noselineVtxPos, res->noselineVtxNrm, res->noselineVtxTxc, res->noselineDl, res->noselineDlSize);
     }
 
@@ -475,7 +476,7 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
         J3DNativeStateSetTevKColor(setting->tevKColorID, cGlassColor[res->glassesColor]);
         J3DNativeStateSetCullMode(GX_CULL_NONE);
         J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_ZERO);
-        GXLoadTexObj(&res->glassesTexObj, setting->texMapID);
+        J3DNativeTextureLoad(&res->glassesTexObj, setting->texMapID);
         RFLiDrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
@@ -981,8 +982,8 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
     }
 
     memcpy(buffer, RFLiGetTexImage(tex), texSize);
-    GXInitTexObj(texObj, buffer, RFLI_LD16(tex->width), RFLI_LD16(tex->height), tex->format, tex->wrapS, tex->wrapT, FALSE);
-    GXInitTexObjLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
+    J3DNativeTextureInit(texObj, buffer, RFLI_LD16(tex->width), RFLI_LD16(tex->height), tex->format, tex->wrapS, tex->wrapT, FALSE);
+    J3DNativeTextureInitLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
     RFLiFree(tex);
 }
 
