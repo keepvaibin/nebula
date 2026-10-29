@@ -407,7 +407,6 @@ void J3DTexGenBlockPatched::reset(J3DTexGenBlock* pBlock) {
         if (pBlock->getTexMtx(i) != NULL) {
             if (mTexMtx[i] != NULL) {
                 memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-                DCStoreRange(mTexMtx[i], sizeof(*mTexMtx[i]));
             }
         }
     }
@@ -424,7 +423,6 @@ void J3DTexGenBlock4::reset(J3DTexGenBlock* pBlock) {
         if (pBlock->getTexMtx(i) != NULL) {
             if (mTexMtx[i] != NULL) {
                 memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-                DCStoreRange(mTexMtx[i], sizeof(*mTexMtx[i]));
             }
         }
     }
@@ -443,7 +441,6 @@ void J3DTexGenBlockBasic::reset(J3DTexGenBlock* pBlock) {
         if (pBlock->getTexMtx(i) != NULL) {
             if (mTexMtx[i] != NULL) {
                 memcpy(mTexMtx[i], pBlock->getTexMtx(i), sizeof(*mTexMtx[i]));
-                DCStoreRange(mTexMtx[i], sizeof(*mTexMtx[i]));
             }
         }
     }

@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaIcons.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutActor.hpp"
@@ -24,6 +25,14 @@
 // texture pack's replacements of them still apply) and ours are the same every run, so a pack can name them too
 // (GALAXY_EXPORT_ART writes one, eight times their size).
 namespace {
+    // Glyph sheets (RGB5A3) handed to the renderer after they are painted, one image each.
+    void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
+        for (s32 i = 0; i < count; i++) {
+            J3DNativeTexture::registerImage(pFirst + i * sheetBytes, GX_TF_RGB5A3, static_cast< u16 >(width),
+                                            static_cast< u16 >(height), 1);
+        }
+    }
+
     // The picture font's code of each icon, in NEBULA_BUTTON_ICONS' order (A, B, C, Z, 1, 2, Plus, Minus, HOME, Control
     // Pad); the code map we put first covers them all.
     const u16 cCodes[NEBULA_BUTTON_ICONS] = {0x30, 0x31, 0x32, 0x49, 0x35, 0x36, 0x48, 0x47, 0x46, 0x43};
@@ -1450,7 +1459,7 @@ namespace {
             pMap->mapInfo[code - cMapFirst] = f.mOriginal[code - cMapFirst];
         }
         f.mMap = pMap;
-        DCStoreRange(pBlock, sheetsBytes);
+        handOverSheets(static_cast< const u8* >(pBlock), sheetsBytes / f.mSheetBytes, f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
         pGlyph->sheetImage = pBlock;
         pGlyph->sheetNum = static_cast< u16 >(sheets);
         pInfo->pWidth = pWidth;
@@ -1473,8 +1482,8 @@ namespace {
                 encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
         }
-        DCStoreRange(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets) * sFont.mSheetBytes,
-                     static_cast< u32 >(sFont.mFamilySheets * sFont.mSheetBytes));
+        handOverSheets(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets) * sFont.mSheetBytes, sFont.mFamilySheets,
+                       sFont.mSheetBytes, sFont.mSheetWidth, sFont.mSheetHeight);
         sFont.mFamilyDrawn[family] = true;
     }
 
@@ -1498,7 +1507,8 @@ namespace {
                 encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
             sFont.mKeysDrawn = true;
-            DCStoreRange(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, static_cast< u32 >(sFont.mKeySheets * sFont.mSheetBytes));
+            handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
+                           sFont.mSheetHeight);
         }
         static const u8 cArrows[4] = {NEBULA_KEY_UP, NEBULA_KEY_DOWN, NEBULA_KEY_LEFT, NEBULA_KEY_RIGHT};
         static const u16 cNoLayout[NEBULA_KEY_LAYOUT_KEYS] = {0};
@@ -1525,7 +1535,8 @@ namespace {
         memcpy(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad));
         memcpy(sFont.mKeyNames, pShownNames, sizeof(sFont.mKeyNames));
         sFont.mKeysFollowing = true;
-        DCStoreRange(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, static_cast< u32 >(sFont.mKeySheets * sFont.mSheetBytes));
+        handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
+                       sFont.mSheetHeight);
     }
 
     // The glyph icon `icon` shows on the keyboard: its key's (a key without its own icon: the icon's named cell), the
@@ -1596,7 +1607,7 @@ namespace {
             paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place));
         }
         encodeInto(canvas, sPictures[k].mTexels, cPictureSizes[k], 0, 0);
-        DCStoreRange(sPictures[k].mTexels, sizeof(sPictures[k].mTexels));
+        J3DNativeTexture::registerImage(sPictures[k].mTexels, GX_TF_RGB5A3, cPictureSizes[k], cPictureSizes[k], 1);
     }
 
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
@@ -2016,7 +2027,7 @@ namespace {
         if (rSet.mRow < rSet.mHeight) {
             return;
         }
-        DCStoreRange(pTexels, static_cast< u32 >(rSet.mWidth * rSet.mHeight * 2));
+        J3DNativeTexture::registerImage(pTexels, GX_TF_RGB5A3, rSet.mWidth, rSet.mHeight, 1);
         nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
         rMap.SetImage(pTexels);
         rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));

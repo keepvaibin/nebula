@@ -219,3 +219,7 @@ void J3DNativeTextureInitLOD(GXTexObj* pObj, GXTexFilter minFilter, GXTexFilter 
 void J3DNativeTextureLoad(const GXTexObj* pObj, GXTexMapID map) {
     J3DNativeTexture::load(pObj, map);
 }
+
+void J3DNativeTextureRegisterImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels) {
+    J3DNativeTexture::registerImage(pImage, format, width, height, levels);
+}

@@ -284,27 +284,22 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
 
         if (*eyeTex[i] == NULL) {
             *eyeTex[i] = RFLiLoadTexture(RFLiPartsTex_Eye, infos[i].eye.type, *eyeBuf[i]);
-            DCStoreRange(*eyeBuf[i], eyeSize);
         }
 
         if (*mouthTex[i] == NULL) {
             *mouthTex[i] = RFLiLoadTexture(RFLiPartsTex_Mouth, infos[i].mouth.type, *mouthBuf[i]);
-            DCStoreRange(*mouthBuf[i], mouthSize);
         }
 
         if (eyebrowNormalTex == NULL) {
             eyebrowNormalTex = RFLiLoadTexture(RFLiPartsTex_Eyebrow, infos[i].eyebrow.type, eyebrowNormal);
-            DCStoreRange(eyebrowNormal, eyebrowSize);
         }
 
         if (mustacheNormalTex == NULL) {
             mustacheNormalTex = RFLiLoadTexture(RFLiPartsTex_Mustache, infos[i].beard.mustache, mustacheNormal);
-            DCStoreRange(mustacheNormal, mustacheSize);
         }
 
         if (moleNormalTex == NULL) {
             moleNormalTex = RFLiLoadTexture(RFLiPartsTex_Mole, infos[i].mole.type, moleNormal);
-            DCStoreRange(moleNormal, moleSize);
         }
 
         parts[i].eyeR.ngtobj.texture = *eyeTex[i];

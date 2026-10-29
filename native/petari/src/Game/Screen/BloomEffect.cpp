@@ -300,7 +300,6 @@ void BloomEffect::initBlurMtx(Mtx* pMtx, u32 count, f32 radius, f32 offset) cons
                    radius * JMASinRadian(offset + i * JMath::TAngleConstant_< f32 >::RADIAN_DEG360() / count), 0.0f);
     }
 
-    DCStoreRangeNoSync(pMtx, sizeof(Mtx) * count);
 }
 
 void BloomEffect::initBlur(JUTTexture* pTexture, u32 param2, f32 intensity) const {

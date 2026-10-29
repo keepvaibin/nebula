@@ -760,7 +760,6 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
     res->glassesColor = info->glass.color;
     res->favoriteColor = info->personal.color;
 
-    DCFlushRange(res, sizeof(RFLiCharModelRes));
 }
 
 void RFLiInitShapeRes(RFLiShapeRes* shape) {

@@ -64,8 +64,6 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
     mSoundBuffer[1] = new (32) s32[0x230];
     MR::zeroMemory(mSoundBuffer[0], 0x8C0);
     MR::zeroMemory(mSoundBuffer[1], 0x8C0);
-    DCFlushRange(mSoundBuffer[0], 0x8C0);
-    DCFlushRange(mSoundBuffer[1], 0x8C0);
     MR::zeroMemory(&mFileInfo, sizeof(mFileInfo));
     MR::zeroMemory(&mHeader, sizeof(mHeader));
     MR::zeroMemory(&mFrameComp, sizeof(mFrameComp));
@@ -95,8 +93,6 @@ bool THPSimplePlayerWrapper::init(s32 audio) {
     OSRestoreInterrupts(old);
     MR::zeroMemory(mSoundBuffer[0], 0x8C0);
     MR::zeroMemory(mSoundBuffer[1], 0x8C0);
-    DCFlushRange(mSoundBuffer[0], 0x8C0);
-    DCFlushRange(mSoundBuffer[1], 0x8C0);
     _2F0 = 0;
     _2F4 = 1.0f;
     _2F8 = 0.0f;

@@ -69,6 +69,7 @@ void J3DNativeTextureInit(GXTexObj* pObj, void* pImage, u16 width, u16 height, G
 void J3DNativeTextureInitLOD(GXTexObj* pObj, GXTexFilter minFilter, GXTexFilter magFilter, f32 minLod, f32 maxLod,
                              f32 lodBias, GXBool biasClamp, GXBool edgeLod, GXAnisotropy maxAniso);
 void J3DNativeTextureLoad(const GXTexObj* pObj, GXTexMapID map);
+void J3DNativeTextureRegisterImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
 #ifdef __cplusplus
 }
 #endif

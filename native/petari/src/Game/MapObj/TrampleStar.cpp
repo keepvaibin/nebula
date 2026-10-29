@@ -327,9 +327,6 @@ void TrampleStar::calcSurface(bool calcDrawBuffers) {
         }
     }
 
-    DCStoreRange(mDrawPos, mNumDrawVtxs * 4 * 3);
-    DCStoreRange(mDrawNorm, mNumDrawVtxs * 4 * 3);
-    DCStoreRange(mDrawTex, mNumDrawVtxs * 4 * 2);
 }
 
 void TrampleStar::calcLodSurface() {
@@ -351,9 +348,6 @@ void TrampleStar::calcLodSurface() {
         }
     }
 
-    DCStoreRange(mDrawPos, mNumDrawVtxs * 4 * 3);
-    DCStoreRange(mDrawNorm, mNumDrawVtxs * 4 * 3);
-    DCStoreRange(mDrawTex, mNumDrawVtxs * 4 * 2);
 }
 
 void TrampleStar::onLod() {

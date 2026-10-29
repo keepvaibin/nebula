@@ -360,15 +360,6 @@ void CShader::calc(J3DModel* pModel) {
         }
     }
 
-    switch (_24) {
-    case GX_S16:
-        DCStoreRange(pOutput, count * sizeof(TVec3s));
-        break;
-    case GX_F32:
-        DCStoreRange(pOutput, count * sizeof(TVec3f));
-        break;
-    }
-
     pModel->mVertexBuffer.setCurrentVtxPos(pOutput);
 }
 #endif

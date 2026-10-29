@@ -973,7 +973,6 @@ void MarioActor::drawModelBlur() const {
             }
         }
 
-        DCStoreRange(mBlurMatrices[_B10][idx], getModelData()->getDrawMtxNum() * sizeof(Mtx));
 
         _94[idx + ((i - 1) << 3)]->addDL(model);
         model->directDraw(nullptr);

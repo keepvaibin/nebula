@@ -1,4 +1,6 @@
 #include "RVLFaceLibInternal.h"
+#include "RFLi_Texture.h"
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <revolution/nand.h>
 #include <cstdio>
 
@@ -365,11 +367,19 @@ u32 RFLiGetTexSize(RFLiPartsTex part, u16 file) {
     return getLength_(scParts2Arc[part], file);
 }
 
+// A part texture's image handed to the renderer as it loads (its base level).
+static RFLiTexture* handOver(RFLiTexture* tex) {
+    if (tex != NULL) {
+        J3DNativeTextureRegisterImage(RFLiGetTexImage(tex), tex->format, RFLI_LD16(tex->width), RFLI_LD16(tex->height), 1);
+    }
+    return tex;
+}
+
 RFLiTexture* RFLiLoadTexture(RFLiPartsTex part, u16 file, void* dst) {
     static const u32 scParts2Arc[] = {RFLiArcID_Eye, RFLiArcID_Eyebrow,
                                       RFLiArcID_Mouth, RFLiArcID_Mustache,
                                       RFLiArcID_Mole};
-    return (RFLiTexture*)getFile_(dst, scParts2Arc[part], file);
+    return handOver((RFLiTexture*)getFile_(dst, scParts2Arc[part], file));
 }
 
 u32 RFLiGetShpTexSize(RFLiPartsShpTex part, u16 file) {
@@ -381,7 +391,7 @@ u32 RFLiGetShpTexSize(RFLiPartsShpTex part, u16 file) {
 RFLiTexture* RFLiLoadShpTexture(RFLiPartsShpTex part, u16 file, void* dst) {
     static const u32 scParts2Arc[] = {RFLiArcID_FaceTex, RFLiArcID_CapTex,
                                       RFLiArcID_NlineTex, RFLiArcID_GlassTex};
-    return (RFLiTexture*)getFile_(dst, scParts2Arc[part], file);
+    return handOver((RFLiTexture*)getFile_(dst, scParts2Arc[part], file));
 }
 
 u32 RFLiGetShapeSize(RFLiPartsShp part, u16 file) {

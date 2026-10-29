@@ -37,7 +37,6 @@ void J3DModelX::viewCalc2() {
 
     calcBBoardMtx();
     calcBumpMtx();
-    DCStoreRangeNoSync(getDrawMtxPtr(), mModelData->getDrawMtxNum() * sizeof(Mtx));
     prepareShapePackets();
 }
 
@@ -70,7 +69,6 @@ void J3DModelX::viewCalc3(u32 view, MtxPtr mtx) {
 
     calcBBoardMtx();
     calcBumpMtx();
-    DCStoreRangeNoSync(getDrawMtxPtr(), mModelData->getDrawMtxNum() * sizeof(Mtx));
     prepareShapePackets();
 }
 
@@ -78,7 +76,6 @@ void J3DModelX::viewCalcRef(u32 view, J3DModel* model) {
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx2(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer());
-    DCStoreRangeNoSync(getDrawMtxPtr(), mModelData->getDrawMtxNum() * sizeof(Mtx));
     prepareShapePackets();
 }
 
@@ -86,7 +83,6 @@ void J3DModelX::viewCalcRefPos(u32 view, J3DModel* model, const TVec3f& pos, con
     J3DMtxBuffer2* buffer = static_cast< J3DMtxBuffer2* >(mMtxBuffer);
     buffer->rotationMtx(*mExtraMtxBuffer[view + _DC]);
     buffer->calcDrawMtx3(getMtxCalcMode(), mBaseScale, mBaseTransformMtx, model->getMtxBuffer(), pos, normal);
-    DCStoreRangeNoSync(getDrawMtxPtr(), mModelData->getDrawMtxNum() * sizeof(Mtx));
     prepareShapePackets();
 }
 
@@ -97,7 +93,6 @@ void J3DMtxBuffer2::calcNrmMtx2() {
         J3DPSCalcInverseTranspose(*getDrawMtx(i), *getNrmMtx(i));
     }
 
-    DCStoreRange(getNrmMtxPtr(), count * sizeof(Mtx33));
 }
 
 void J3DMtxBuffer2::calcDrawMtx2(u32 mode, const Vec& scale, const Mtx& base, J3DMtxBuffer* buffer) {
