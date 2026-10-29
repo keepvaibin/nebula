@@ -27,8 +27,6 @@ enum class TimingPhase : std::uint8_t {
     WorkerSnapshotCopy,
     RenderTextureInvalidation,
     RenderParserLockWait,
-    RenderDisplayListInvalidation,
-    RenderDecodedVertexInvalidation,
     Count,
 };
 

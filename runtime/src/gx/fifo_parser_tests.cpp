@@ -47,85 +47,6 @@ struct TestSink final : FifoSink {
         ++draws;
     }
 
-    [[nodiscard]] bool begin_cached_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::size_t draw_count) override {
-        ++cached_draw_run_begins;
-        last_cached_draw_run_primitive = primitive;
-        last_cached_draw_run_vtxfmt = vtxfmt;
-        last_cached_draw_run_count = draw_count;
-        return enable_cached_draw_runs;
-    }
-
-    [[nodiscard]] bool on_cached_prepared_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> prepared_payload,
-        std::size_t,
-        std::size_t,
-        std::uint8_t,
-        std::size_t source_draw_count) override {
-        ++prepared_draw_run_calls;
-        last_prepared_primitive = primitive;
-        last_prepared_vtxfmt = vtxfmt;
-        last_prepared_source_draw_count = source_draw_count;
-        last_prepared_payload.assign(
-            prepared_payload.begin(), prepared_payload.end());
-        if (!enable_prepared_draw_runs) {
-            return false;
-        }
-        const auto count_hi = static_cast<std::uint16_t>(
-            prepared_payload.size() >= 1u
-                ? static_cast<std::uint8_t>(prepared_payload[0])
-                : 0u);
-        const auto count_lo = static_cast<std::uint16_t>(
-            prepared_payload.size() >= 2u
-                ? static_cast<std::uint8_t>(prepared_payload[1])
-                : 0u);
-        draws += static_cast<int>((count_hi << 8) | count_lo);
-        return true;
-    }
-
-    [[nodiscard]] bool on_cached_packet_draw_run(
-        std::uint64_t cache_token,
-        std::size_t packet_run_index,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const galaxy::gx::CachedDrawPacket> packets,
-        std::uint32_t total_vertices,
-        std::uint32_t total_indices,
-        std::span<const std::uint16_t> precomputed_indices) override {
-        ++packet_draw_run_calls;
-        last_packet_cache_token = cache_token;
-        last_packet_run_index = packet_run_index;
-        last_packet_total_vertices = total_vertices;
-        last_packet_total_indices = total_indices;
-        last_packet_precomputed_indices = precomputed_indices.size();
-        last_packet_primitive = primitive;
-        last_packet_vtxfmt = vtxfmt;
-        last_packet_source_draw_count = packets.size();
-        if (!enable_packet_draw_runs) {
-            return false;
-        }
-        for (const galaxy::gx::CachedDrawPacket& packet : packets) {
-            FifoCursor cursor;
-            cursor.data = bytes;
-            cursor.offset = packet.draw_cursor_offset;
-            cursor.base_offset = base_offset;
-            cursor.command_offset = base_offset + packet.local_opcode_offset;
-            cursor.recover_truncation = false;
-            on_draw(primitive, vtxfmt, cursor);
-        }
-        return true;
-    }
-
-    void end_cached_draw_run() override {
-        ++cached_draw_run_ends;
-    }
-
     void on_efb_copy(std::uint32_t value) override {
         ++efb_copies;
         last_copy = value;
@@ -142,28 +63,6 @@ struct TestSink final : FifoSink {
 
     int draws = 0;
     std::uint8_t last_draw_payload_first = 0u;
-    bool enable_cached_draw_runs = false;
-    int cached_draw_run_begins = 0;
-    int cached_draw_run_ends = 0;
-    bool enable_prepared_draw_runs = false;
-    int prepared_draw_run_calls = 0;
-    PrimitiveClass last_prepared_primitive = PrimitiveClass::Points;
-    std::uint8_t last_prepared_vtxfmt = 0;
-    std::size_t last_prepared_source_draw_count = 0;
-    std::vector<std::byte> last_prepared_payload;
-    bool enable_packet_draw_runs = false;
-    int packet_draw_run_calls = 0;
-    PrimitiveClass last_packet_primitive = PrimitiveClass::Points;
-    std::uint8_t last_packet_vtxfmt = 0;
-    std::size_t last_packet_source_draw_count = 0;
-    std::uint64_t last_packet_cache_token = 0;
-    std::size_t last_packet_run_index = static_cast<std::size_t>(-1);
-    std::uint32_t last_packet_total_vertices = 0;
-    std::uint32_t last_packet_total_indices = 0;
-    std::size_t last_packet_precomputed_indices = 0;
-    PrimitiveClass last_cached_draw_run_primitive = PrimitiveClass::Points;
-    std::uint8_t last_cached_draw_run_vtxfmt = 0;
-    std::size_t last_cached_draw_run_count = 0;
     int pe_finishes = 0;
     int efb_copies = 0;
     std::uint32_t last_copy = 0;

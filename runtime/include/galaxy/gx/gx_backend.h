@@ -250,45 +250,6 @@ public:
     [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;
     [[nodiscard]] XfbPresentStats xfb_present_stats() const noexcept;
 
-    struct DependencyDrawRunRangeCacheKey {
-        std::uint64_t cache_token = 0;
-        std::size_t packet_run_index = 0;
-        PrimitiveClass primitive = PrimitiveClass::Points;
-        std::uint8_t vtxfmt = 0;
-        std::uint64_t state_hash = 0;
-
-        GxState::DependencyShapeWords shape_words{};
-
-        [[nodiscard]] bool operator==(
-            const DependencyDrawRunRangeCacheKey&) const = default;
-    };
-
-    struct DependencyDrawRunRangeCacheKeyHash {
-        [[nodiscard]] std::size_t operator()(
-            const DependencyDrawRunRangeCacheKey& key) const noexcept {
-            std::uint64_t hash = 1469598103934665603ull;
-            const auto mix = [&hash](std::uint64_t value) noexcept {
-                for (unsigned byte = 0; byte < 8; ++byte) {
-                    hash ^= (value >> (byte * 8u)) & 0xFFu;
-                    hash *= 1099511628211ull;
-                }
-            };
-            mix(key.cache_token);
-            mix(static_cast<std::uint64_t>(key.packet_run_index));
-            mix(static_cast<std::uint8_t>(key.primitive));
-            mix(key.vtxfmt);
-            mix(key.state_hash);
-            return static_cast<std::size_t>(hash);
-        }
-    };
-
-    struct DependencyDrawRunRangeCacheEntry {
-        DependencyDrawRunRangeCacheKey key{};
-        std::uint64_t last_used = 0;
-        std::size_t byte_size = 0;
-        std::vector<GuestMemoryRange> ranges;
-    };
-
 private:
     friend class GxBackendMemorySnapshotTestAccess;
 
@@ -313,36 +274,17 @@ private:
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         FifoCursor& cursor) override;
+    // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
+    // only when this returns true.
     [[nodiscard]] bool begin_cached_draw_run(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
-        std::size_t draw_count) override;
-    void end_cached_draw_run() override;
-    [[nodiscard]] bool on_cached_simple_draw_run(
+        std::size_t draw_count);
+    void end_cached_draw_run();
+    void on_cached_draw_run_draw(
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets) override;
-    [[nodiscard]] bool on_cached_prepared_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> prepared_payload,
-        std::size_t base_offset,
-        std::size_t local_opcode_offset,
-        std::uint8_t opcode,
-        std::size_t source_draw_count) override;
-    [[nodiscard]] bool on_cached_packet_draw_run(
-        std::uint64_t cache_token,
-        std::size_t packet_run_index,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets,
-        std::uint32_t total_vertices,
-        std::uint32_t total_indices,
-        std::span<const std::uint16_t> precomputed_indices) override;
+        FifoCursor& cursor);
     void on_efb_copy(std::uint32_t exec_command) override;
     void on_pe_finish() override;
     void on_pe_token(std::uint16_t token, bool interrupt) override;
@@ -406,10 +348,6 @@ private:
     void ReportPipelineCoverage();
     std::size_t last_reported_shader_records_ = 0;
     std::size_t last_reported_pso_records_ = 0;
-    void on_cached_draw_run_draw(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor);
 
     struct MemorySnapshotStorage {
         std::byte* source = nullptr;
@@ -1302,8 +1240,6 @@ private:
         bool& cache_hit);
     void invalidate_dependency_range_cache(
         const std::vector<GuestWriteRange>& ranges) noexcept;
-    std::size_t invalidate_dirty_decoded_packet_run_ranges(
-        const std::vector<GuestWriteRange>& ranges) noexcept;
     GxState state_;
     FifoParser parser_;
     std::mutex parser_cache_mutex_;
@@ -1447,140 +1383,13 @@ private:
     };
     std::array<DependencyRangeCacheEntry, 64> dependency_range_cache_{};
     std::uint64_t dependency_range_cache_tick_ = 0;
-    std::unordered_map<
-        DependencyDrawRunRangeCacheKey,
-        DependencyDrawRunRangeCacheEntry,
-        DependencyDrawRunRangeCacheKeyHash>
-        dependency_draw_run_range_cache_{};
-    std::uint64_t dependency_draw_run_range_cache_tick_ = 0;
-    std::size_t dependency_draw_run_range_cache_bytes_ = 0;
 
-    struct DecodedPacketRunCacheKey {
-        std::uint64_t cache_token = 0;
-        std::size_t packet_run_index = 0;
-        PrimitiveClass primitive = PrimitiveClass::Points;
-        std::uint8_t vtxfmt = 0;
-        std::uint32_t vcd_lo = 0;
-        std::uint32_t vcd_hi = 0;
-        std::uint32_t vat_a = 0;
-        std::uint32_t vat_b = 0;
-        std::uint32_t vat_c = 0;
-        std::uint32_t matrix_index_a = 0;
-        std::uint32_t matrix_index_b = 0;
-        std::array<std::uint32_t, 24> array_base_stride{};
-
-        [[nodiscard]] bool operator==(
-            const DecodedPacketRunCacheKey&) const = default;
-    };
-
-    struct DecodedPacketRunCacheKeyHash {
-        [[nodiscard]] std::size_t operator()(
-            const DecodedPacketRunCacheKey& key) const noexcept;
-    };
-
-    struct DecodedPacketRunCacheEntry {
-        // Every indirect vertex-array byte a decode read, merged into sorted, disjoint ranges (the same byte
-        // set as the per-attribute reads) whose copies sit back to back in `bytes`.
-        struct GuestDependencySnapshots {
-            struct Range {
-                std::uint32_t guest_base = 0;
-                std::uint32_t size = 0;
-                std::size_t offset = 0;  // into `bytes`
-            };
-            std::vector<Range> ranges;
-            std::vector<std::byte> bytes;
-
-            [[nodiscard]] bool empty() const noexcept { return ranges.empty(); }
-            [[nodiscard]] std::size_t size() const noexcept { return ranges.size(); }
-            [[nodiscard]] std::span<const std::byte> range_bytes(
-                std::size_t index) const noexcept {
-                const Range& range = ranges[index];
-                return {bytes.data() + range.offset, range.size};
-            }
-            void clear() noexcept {
-                ranges.clear();
-                bytes.clear();
-            }
-        };
-
-        DecodedPacketRunCacheKey key{};
-        std::uint32_t total_indices = 0;
-        // Curved surfaces: the run's triangles with those no corner bends first (DrawCall::flat_index_count, maybe
-        // none), from its first vertex; built at its first curved draw.
-        std::vector<std::uint16_t> split_indices;
-        std::uint32_t split_flat_indices = 0;
-        bool split_built = false;
-        ImmutableUploadToken split_upload_token;
-        std::uint64_t last_used = 0;
-        std::size_t byte_size = 0;
-        std::vector<GxVertexOut> vertices;
-        ImmutableUploadToken upload_token;
-        // Block of `resident_vertices_` holding a copy of `vertices` that draws
-        // reference directly. Valid only while `resident_epoch` equals the
-        // arena epoch (0 = no block).
-        std::uint64_t resident_epoch = 0;
-        std::uint32_t resident_offset = 0;  // in vertices
-        std::uint32_t resident_units = 0;
-        std::vector<VertexDecodeGuestRange> guest_array_reads;
-        // A copy of every byte the decode read, so a missed or coalesced write notification cannot replay
-        // stale geometry. A hit compares it once per write generation (decoded_packet_run_generation_),
-        // not once per replay.
-        GuestDependencySnapshots guest_array_snapshots;
-        // The decoded_packet_run_generation_ at which guest_array_snapshots last matched guest memory.
-        std::uint64_t validated_generation = 0;
-    };
-    // Bumped once per batch of guest-write notifications, before the frame's first replay: an entry validated
-    // at the current value needs no compare. Never reset to a value an entry holds.
-    std::uint64_t decoded_packet_run_generation_ = 1;
-
-    [[nodiscard]] DecodedPacketRunCacheKey decoded_packet_run_cache_key(
-        std::uint64_t cache_token,
-        std::size_t packet_run_index,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        const VertexDescriptor& desc) const;
-    // Sorts and merges overlapping/adjacent reads (never across a gap, and
-    // never into a span that is not one contiguous host mapping), then copies
-    // each merged range. `captured_bytes` is the merged byte count, which is
-    // what the budget bounds. On failure `snapshots` is empty.
-    [[nodiscard]] static bool capture_decoded_packet_run_dependencies(
-        GuestMemory* memory,
-        const std::vector<VertexDecodeGuestRange>& dependencies,
-        std::size_t byte_budget,
-        DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
-        std::size_t& captured_bytes,
-        bool regions_disjoint_sorted = false);
-    // Returns true when the snapshots still describe live guest memory.
-    // `entry_generation` is compared against `current_generation`: when they are
-    // equal and non-zero, this entry was already validated after the most recent
-    // guest write batch and the byte compare is skipped. `new_generation`
-    // receives the non-zero generation the caller may record on success.
-    [[nodiscard]] static bool decoded_packet_run_dependencies_match(
-        GuestMemory* memory,
-        std::uint64_t entry_generation,
-        std::uint64_t current_generation,
-        const DecodedPacketRunCacheEntry::GuestDependencySnapshots& snapshots,
-        std::uint64_t& new_generation,
-        bool regions_disjoint_sorted = false) noexcept;
-    void prune_decoded_packet_run_cache();
-
-    static constexpr std::size_t kDecodedPacketRunCacheMaxBytes =
-        64u * 1024u * 1024u;
-    static constexpr std::size_t kDecodedPacketRunCacheMaxEntryBytes =
-        8u * 1024u * 1024u;
-    std::unordered_map<
-        DecodedPacketRunCacheKey,
-        DecodedPacketRunCacheEntry,
-        DecodedPacketRunCacheKeyHash>
-        decoded_packet_run_cache_{};
-    std::uint64_t decoded_packet_run_cache_tick_ = 0;
-    std::size_t decoded_packet_run_cache_bytes_ = 0;
     // GPU-resident decoded vertices (render thread only). One persistently
     // mapped UPLOAD buffer, created lazily per device; see
     // resident_vertex_arena.h for the block retirement rule.
     static constexpr std::uint32_t kResidentDecodedVertexCapacity =
         static_cast<std::uint32_t>(
-            kDecodedPacketRunCacheMaxBytes / sizeof(GxVertexOut));
+            64u * 1024u * 1024u / sizeof(GxVertexOut));
     ResidentVertexArena resident_vertices_;
     UploadBuffer resident_vertex_buffer_;
     std::byte* resident_vertex_mapped_ = nullptr;
@@ -1607,17 +1416,6 @@ private:
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;
-    // Returns the entry's block to the arena (deferred reuse). Every removal or
-    // replacement of a decoded_packet_run_cache_ entry must call this.
-    void release_decoded_entry_residency(DecodedPacketRunCacheEntry& entry) noexcept;
-    // Gives `entry` a resident block holding its vertices; false when out of space or the
-    // buffer could not be created (the ring path is used).
-    [[nodiscard]] bool make_decoded_entry_resident(DecodedPacketRunCacheEntry& entry);
-    // Builds a resident run's split (DecodedPacketRunCacheEntry::split_indices) at its first curved draw; whether it
-    // has one (its indices in range).
-    bool split_curved_run(DecodedPacketRunCacheEntry& entry, std::size_t base_offset,
-                          std::span<const CachedDrawPacket> packets, PrimitiveClass primitive,
-                          std::span<const std::uint16_t> precomputed_indices);
     // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
     // are. Empty `split` when an index is out of range.
     static std::uint32_t split_curved_triangles(std::span<const GxVertexOut> vertices,
@@ -1682,9 +1480,6 @@ private:
     std::uint64_t vs_key_vertex_source_ = 0;
     // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.
     [[nodiscard]] bool draw_positions_indexed() const noexcept;
-    // Render thread: decode scratch for runs outside the decoded cache (capacity bounded by
-    // kDecodedPacketRunCacheMaxEntryBytes).
-    std::vector<GxVertexOut> decoded_packet_vertex_scratch_;
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;
     std::uint64_t present_epoch_ = 0;
@@ -1750,7 +1545,6 @@ private:
     // it compiles.
     gpu::Pipeline* current_flat_pipeline_ = nullptr;
     bool curved_split_ = true;
-    std::vector<std::uint16_t> curved_split_scratch_;
     // RenderConfig::enhanced_lighting, sampled at each frame start; the last draw's eligibility and
     // material word (enhanced_lighting.h), kept until its keys or eligibility change.
     bool enhanced_lighting_ = false;
@@ -2081,10 +1875,6 @@ private:
     std::uint64_t frame_cached_vertex_upload_us_ = 0;
     std::uint64_t frame_draw_record_us_ = 0;
     std::uint64_t frame_efb_copy_us_ = 0;
-    std::uint64_t frame_decoded_vertex_cache_hits_ = 0;
-    std::uint64_t frame_decoded_vertex_cache_misses_ = 0;
-    std::uint64_t frame_decoded_vertex_cache_evictions_ = 0;
-    std::uint64_t frame_decoded_vertex_cache_stale_rejects_ = 0;
     // Always-counted structural counters (the timing fields above need frame_time_detail_). The memo and
     // get() routes are frame_pso_memo_hits_ and frame_pso_get_calls_.
     std::uint64_t frame_flush_calls_ = 0;
@@ -2099,7 +1889,6 @@ private:
     PrimitiveClass cached_draw_run_primitive_ = PrimitiveClass::Points;
     std::uint8_t cached_draw_run_vtxfmt_ = 0;
     DrawCall cached_draw_run_state_call_{};
-    std::vector<std::byte> cached_simple_draw_scratch_;
     FifoParserProfile frame_fifo_profile_{};
     std::atomic<std::uint64_t> stat_xfb_copies_{0};
     std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;

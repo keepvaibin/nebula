@@ -254,7 +254,6 @@ namespace galaxy::gx {
 
 struct MemorySnapshotNbtProbeResult {
     std::vector<GuestMemoryRange> ranges;
-    DecodedPacketRunVertices decoded;
     std::uint64_t snapshot_bytes = 0;
     bool dependency_cache_hit = false;
     bool sealed = false;
@@ -267,89 +266,6 @@ public:
                             const std::vector<std::byte>& expected) {
         return actual.size() == expected.size() &&
             std::equal(actual.begin(), actual.end(), expected.begin());
-    }
-
-    // Per-attribute read recording emits overlapping, out-of-order chunks for
-    // non-monotonic index streams. Capture must merge them into the exact
-    // covered byte set (no gap bytes), keep a non-contiguous host split
-    // separate, and reject exactly the writes the raw chunk list rejected.
-    static bool decoded_dependency_capture_merges_exact_byte_set() {
-        constexpr std::uint32_t kBase = 0x80100000u;
-        std::vector<std::byte> live(512u);
-        for (std::size_t i = 0; i < live.size(); ++i) {
-            live[i] = static_cast<std::byte>(i * 7u + 3u);
-        }
-        GuestMemoryRegion region{
-            kBase, static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemory memory{};
-        memory.regions = &region;
-        memory.region_count = 1u;
-        // [16,48) [32,64) [64,80) are one span; [100,104) is separate (gap of
-        // 20 bytes); a duplicate and an inner chunk collapse; zero size ignored.
-        const std::vector<VertexDecodeGuestRange> reads{
-            {kBase + 64u, 16u}, {kBase + 32u, 32u}, {kBase + 16u, 32u},
-            {kBase + 100u, 4u}, {kBase + 20u, 4u}, {kBase + 32u, 32u},
-            {kBase + 300u, 0u}};
-        GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshots snapshots;
-        std::size_t bytes = 0u;
-        std::uint64_t generation = 0u;
-        if (!GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, reads, 1024u, snapshots, bytes) ||
-            snapshots.size() != 2u || bytes != 68u ||
-            snapshots.ranges[0].guest_base != kBase + 16u ||
-            snapshots.ranges[0].size != 64u ||
-            snapshots.ranges[1].guest_base != kBase + 100u ||
-            snapshots.ranges[1].size != 4u ||
-            !bytes_equal(snapshots.range_bytes(0u),
-                std::vector<std::byte>(live.begin() + 16, live.begin() + 80)) ||
-            !bytes_equal(snapshots.range_bytes(1u),
-                std::vector<std::byte>(live.begin() + 100, live.begin() + 104))) {
-            return false;
-        }
-        // The merged budget is what is charged; one byte short fails whole.
-        GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshots tight;
-        if (GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, reads, 67u, tight, bytes) || !tight.empty() || bytes != 0u) {
-            return false;
-        }
-        // Gap bytes are not dependencies.
-        live[90] = std::byte{0xEE};
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, 0u, 3u, snapshots, generation)) {
-            return false;
-        }
-        // Every covered byte still is, including the first and last.
-        for (const std::size_t index : {std::size_t{16}, std::size_t{79},
-                                        std::size_t{100}, std::size_t{103}}) {
-            const std::byte original = live[index];
-            live[index] = static_cast<std::byte>(
-                std::to_integer<unsigned>(original) ^ 0x5Au);
-            if (GxBackend::decoded_packet_run_dependencies_match(
-                    &memory, 0u, 3u, snapshots, generation)) {
-                return false;
-            }
-            live[index] = original;
-        }
-        // Two guest-adjacent regions with distinct host storage must not be
-        // merged into one span that reads past the first host buffer.
-        std::vector<std::byte> low(64u, std::byte{0x11});
-        std::vector<std::byte> high(64u, std::byte{0x22});
-        std::array<GuestMemoryRegion, 2> split{{
-            {kBase, 64u, low.data()}, {kBase + 64u, 64u, high.data()}}};
-        memory.regions = split.data();
-        memory.region_count = 2u;
-        const std::vector<VertexDecodeGuestRange> straddle{
-            {kBase + 32u, 32u}, {kBase + 64u, 16u}};
-        if (!GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, straddle, 1024u, snapshots, bytes) ||
-            snapshots.size() != 2u || bytes != 48u ||
-            !bytes_equal(snapshots.range_bytes(1u),
-                std::vector<std::byte>(16u, std::byte{0x22}))) {
-            return false;
-        }
-        high[0] = std::byte{0x23};
-        return !GxBackend::decoded_packet_run_dependencies_match(
-            &memory, 0u, 4u, snapshots, generation);
     }
 
     static bool storage_index_preserves_linear_alias_selection() {
@@ -390,54 +306,6 @@ public:
         return true;
     }
 
-    static bool sorted_lookup_follows_owned_snapshot() {
-        constexpr std::uint32_t base = 0x80000000u;
-        std::vector<std::byte> live(4096u, std::byte{0x31});
-        GuestMemoryRegion region{base, static_cast<std::uint32_t>(live.size()), live.data()};
-        GuestMemory source{};
-        source.regions = &region; source.region_count = 1u;
-        std::vector<GuestMemoryRange> ranges;
-        for (std::uint32_t i = 0; i < 64u; ++i) ranges.push_back({base + i*64u, 32u});
-        auto backend = std::make_unique<GxBackend>();
-        GxBackend::MemorySnapshot snapshot;
-        backend->capture_memory_snapshot(&source, snapshot, ranges, true);
-        if (!snapshot.sealed || !snapshot.regions_disjoint_sorted || snapshot.regions.size()!=64u)
-            return false;
-        auto moved = std::move(snapshot);
-        if (moved.memory.regions != moved.regions.data() || !moved.regions_disjoint_sorted)
-            return false;
-        using Dependencies = GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshots;
-        Dependencies saved;
-        const std::vector<VertexDecodeGuestRange> dependencies{{base + 63u*64u + 8u, 16u}};
-        std::size_t bytes = 0u;
-        std::uint64_t generation = 0u;
-        if (!GxBackend::capture_decoded_packet_run_dependencies(
-                &moved.memory, dependencies, 16u, saved, bytes, true) || bytes!=16u ||
-            !GxBackend::decoded_packet_run_dependencies_match(
-                &moved.memory, 0u, 7u, saved, generation, true) || generation!=7u)
-            return false;
-        // Exact byte validation remains mandatory on an unvalidated generation.
-        moved.regions.back().host_base[8u] = std::byte{0xA1};
-        if (GxBackend::decoded_packet_run_dependencies_match(
-                &moved.memory, 0u, 8u, saved, generation, true)) return false;
-        moved.regions.back().host_base[8u] = std::byte{0x31};
-        std::vector<std::byte> fast(4096u, std::byte{0x72});
-        moved.memory.fast_regions[8] = {4096u, fast.data()};
-        if (GxBackend::decoded_packet_run_dependencies_match(
-                &moved.memory, 0u, 8u, saved, generation, true)) return false;
-        Dependencies fast_saved;
-        if (!GxBackend::capture_decoded_packet_run_dependencies(
-                &moved.memory, dependencies, 16u, fast_saved, bytes, true) ||
-            fast_saved.size()!=1u || !bytes_equal(fast_saved.range_bytes(0u), std::vector<std::byte>(16u,std::byte{0x72})))
-            return false;
-        moved.memory.fast_regions[8] = {};
-        // Reusing a pooled object for a live/non-strict/null view clears the
-        // previous certificate, even if its backing storage is retained.
-        backend->capture_memory_snapshot(&source, moved, {}, false);
-        if (!moved.sealed || moved.regions_disjoint_sorted) return false;
-        backend->capture_memory_snapshot(nullptr, moved, {}, true);
-        return !moved.sealed && !moved.regions_disjoint_sorted && moved.regions.empty();
-    }
     static bool texture_dependency_memos_follow_sampled_maps() {
         GxState state;
         detail::BroadDrawDependencyMemo memo;
@@ -1098,205 +966,9 @@ public:
                 });
     }
 
-    static bool decoded_vertex_dependencies_are_byte_exact() {
-        constexpr std::uint32_t kBase = 0x00004000u;
-        std::vector<std::byte> live(32u);
-        for (std::size_t i = 0; i < live.size(); ++i) {
-            live[i] = static_cast<std::byte>(i);
-        }
-        GuestMemoryRegion region{
-            kBase,
-            static_cast<std::uint32_t>(live.size()),
-            live.data(),
-        };
-        GuestMemory memory{};
-        memory.region_count = 1u;
-        memory.regions = &region;
-        const std::vector<VertexDecodeGuestRange> dependencies{
-            {kBase + 4u, 4u},
-            {kBase + 16u, 3u},
-        };
-        GxBackend::DecodedPacketRunCacheEntry::GuestDependencySnapshots
-            snapshots;
-        std::size_t captured_bytes = 0u;
-        // Generation 0 is the "never validated" sentinel, so a fresh snapshot set is always compared
-        // at least once. The checks below drive the current generation explicitly, covering a key
-        // whose snapshots were recorded before this guest write batch.
-        constexpr std::uint64_t kUnvalidatedGeneration = 0u;
-        constexpr std::uint64_t kCurrentGeneration = 7u;
-        constexpr std::uint64_t kOtherGeneration = 9u;
-        std::uint64_t matched_generation = 0u;
-        if (!GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, dependencies, 7u, snapshots, captured_bytes) ||
-            captured_bytes != 7u || snapshots.size() != 2u ||
-            !GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation) ||
-            matched_generation != kCurrentGeneration) {
-            return false;
-        }
-
-        // Writes outside recorded indexed-array reads cannot invalidate the
-        // decoded result. A write inside either range must reject it even when
-        // no dirty-page notification was delivered.
-        live[0] = std::byte{0xFE};
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        const std::byte original = live[17];
-        live[17] = std::byte{0xA5};
-        if (GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        live[17] = original;
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        // An entry validated for the current generation is trusted without reading guest memory; the
-        // write below has no new generation, like a write after the frame's snapshot.
-        live[17] = std::byte{0x5A};
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, matched_generation, kCurrentGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        // Under another generation the byte compare runs and catches the write.
-        if (GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kCurrentGeneration, kOtherGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        live[17] = original;
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kCurrentGeneration, kOtherGeneration, snapshots,
-                matched_generation)) {
-            return false;
-        }
-        matched_generation = 0u;
-
-        // A descriptor with no backing storage must not become a non-null
-        // pointer through address-offset arithmetic. It also cannot shadow
-        // a later actual owner of the same guest interval.
-        std::array<GuestMemoryRegion, 2> nullable_regions{{
-            {kBase, static_cast<std::uint32_t>(live.size()), nullptr}, region}};
-        memory.regions = nullable_regions.data();
-        memory.region_count = 2u;
-        // Drive the full byte compare (generation 0) rather than the per-frame
-        // short-circuit, so an unbacked descriptor is still exercised.
-        if (!GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation) ||
-            !GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, dependencies, 7u, snapshots, captured_bytes) ||
-            captured_bytes != 7u || snapshots.size() != 2u ||
-            !bytes_equal(snapshots.range_bytes(0u), std::vector<std::byte>(live.begin() + 4u, live.begin() + 8u)) ||
-            !bytes_equal(snapshots.range_bytes(1u), std::vector<std::byte>(live.begin() + 16u, live.begin() + 19u))) return false;
-        memory.region_count = 1u; // only the unbacked descriptor remains
-        if (GxBackend::decoded_packet_run_dependencies_match(
-                &memory, kUnvalidatedGeneration, kCurrentGeneration, snapshots,
-                matched_generation)) return false;
-        captured_bytes = 99u;
-        if (GxBackend::capture_decoded_packet_run_dependencies(
-                &memory, dependencies, 7u, snapshots, captured_bytes) ||
-            !snapshots.empty() || captured_bytes != 0u) return false;
-        memory.regions = &region; memory.region_count = 1u;
-
-        // Reject the entire capture when its byte budget is insufficient.
-        captured_bytes = 99u;
-        return !GxBackend::capture_decoded_packet_run_dependencies(
-                   &memory, dependencies, 6u, snapshots, captured_bytes) &&
-            snapshots.empty() && captured_bytes == 0u;
-    }
-
-    static bool decoded_vertex_keys_track_only_consumed_state() {
-        auto backend = std::make_unique<GxBackend>();
-        auto& state = backend->state_;
-        state.load_cp(cp::kVcdLo, 1u << 9u); // direct position, no matrix index
-        state.load_cp(cp::kVatABase, 1u | (4u << 1u)); // F32 XYZ
-        std::vector<std::byte> bytes;
-        append_be_u16(bytes, 1u);
-        for (const std::uint32_t bits : {0x3f800000u, 0x40000000u, 0x40400000u})
-            append_be_u32(bytes, bits);
-        CachedDrawPacket packet{};
-        packet.vertex_count = 1u;
-        packet.draw_payload_size = 12u;
-        const auto key = [&] {
-            return backend->decoded_packet_run_cache_key(
-                1u, 0u, PrimitiveClass::Points, 0u, state.vertex_desc(0u));
-        };
-        VertexLoader loader;
-        const auto decode = [&](GuestMemory* memory = nullptr) {
-            const auto desc = state.vertex_desc(0u);
-            return loader.decode_cached_packet_run_vertices_with_layout(
-                bytes, 0u, std::span<const CachedDrawPacket>(&packet, 1u),
-                PrimitiveClass::Points, state, desc,
-                VertexLoader::source_vertex_size(desc), memory);
-        };
-        const auto equal_vertices = [](const auto& a, const auto& b) {
-            return a.vertices.size() == b.vertices.size() &&
-                std::memcmp(a.vertices.data(), b.vertices.data(),
-                    a.vertices.size() * sizeof(GxVertexOut)) == 0;
-        };
-        const auto initial_key = key();
-        const auto initial = decode();
-        state.load_cp(cp::kMatrixIndexA, 0x123400u); // low six bits unchanged
-        state.load_cp(cp::kMatrixIndexB, 0x567890u);
-        for (unsigned attr = 0u; attr < 12u; ++attr) {
-            state.load_cp(static_cast<std::uint8_t>(cp::kArrayBaseBase + attr), 0x1000u + attr * 32u);
-            state.load_cp(static_cast<std::uint8_t>(cp::kArrayStrideBase + attr), 16u + attr);
-        }
-        if (!(key() == initial_key) || !equal_vertices(decode(), initial)) return false;
-        state.load_cp(cp::kMatrixIndexA, 3u);
-        if (key() == initial_key || equal_vertices(decode(), initial)) return false;
-
-        // A packet-owned PNMTXIDX supersedes the default CP position index.
-        state.load_cp(cp::kVcdLo, (1u << 9u) | 1u);
-        bytes.insert(bytes.begin() + 2u, std::byte{6u});
-        packet.draw_payload_size = 13u;
-        const auto packet_key = key();
-        const auto packet_owned = decode();
-        state.load_cp(cp::kMatrixIndexA, 12u);
-        if (!(key() == packet_key) || !equal_vertices(decode(), packet_owned)) return false;
-
-        // Indexed position base and stride really do change the decoded data.
-        state.load_cp(cp::kVcdLo, 2u << 9u); // Index8 position
-        state.load_cp(cp::kArrayBaseBase, 0x1000u);
-        state.load_cp(cp::kArrayStrideBase, 12u);
-        std::array<std::byte, 32> arrays{};
-        const std::array<std::uint32_t, 8> values{
-            0x3f800000u, 0x40000000u, 0x40400000u, 0u,
-            0x40800000u, 0x40a00000u, 0x40c00000u, 0u};
-        for (unsigned i = 0u; i < values.size(); ++i)
-            for (unsigned byte = 0u; byte < 4u; ++byte)
-                arrays[i * 4u + byte] = static_cast<std::byte>(values[i] >> (24u - byte * 8u));
-        GuestMemoryRegion region{0x1000u, static_cast<std::uint32_t>(arrays.size()), arrays.data()};
-        GuestMemory memory{};
-        memory.regions = &region;
-        memory.region_count = 1u;
-        bytes = {std::byte{0u}, std::byte{1u}, std::byte{0u}};
-        packet.draw_payload_size = 1u;
-        const auto indexed_key = key();
-        const auto indexed = decode(&memory);
-        state.load_cp(cp::kArrayBaseBase, 0x1010u);
-        if (key() == indexed_key || equal_vertices(decode(&memory), indexed)) return false;
-        state.load_cp(cp::kArrayBaseBase, 0x1000u);
-        bytes[2] = std::byte{1u};
-        const auto stride_key = key();
-        const auto stride = decode(&memory);
-        state.load_cp(cp::kArrayStrideBase, 16u);
-        return !(key() == stride_key) && !equal_vertices(decode(&memory), stride);
-    }
-
-    static MemorySnapshotNbtProbeResult collect_capture_and_decode(
+    static MemorySnapshotNbtProbeResult collect_and_capture(
         const NbtFixture& fixture,
-        GuestMemory& memory,
-        std::span<std::byte> live_bytes) {
+        GuestMemory& memory) {
         auto backend = std::make_unique<GxBackend>();
         MemorySnapshotNbtProbeResult result;
         backend->collect_memory_dependency_ranges(
@@ -1323,29 +995,6 @@ public:
                     return !storage.used || storage.source == nullptr;
                 });
 
-        // Prove delayed parsing owns its bytes. If any vertex component
-        // still aliases live guest memory, the decoded NBT values become zero.
-        std::fill(live_bytes.begin(), live_bytes.end(), std::byte{0});
-
-        CachedDrawPacket packet{};
-        packet.opcode = std::to_integer<std::uint8_t>(
-            fixture.fifo[fixture.draw_opcode_offset]);
-        packet.vertex_count = 1u;
-        packet.local_opcode_offset = fixture.draw_opcode_offset;
-        packet.draw_cursor_offset = fixture.draw_opcode_offset + 1u;
-        packet.draw_payload_size = 1u;
-
-        const VertexDescriptor desc = backend->dependency_state_.vertex_desc(0u);
-        VertexLoader loader;
-        result.decoded = loader.decode_cached_packet_run_vertices_with_layout(
-            fixture.fifo,
-            0u,
-            std::span<const CachedDrawPacket>(&packet, 1u),
-            PrimitiveClass::Points,
-            backend->dependency_state_,
-            desc,
-            VertexLoader::source_vertex_size(desc),
-            &snapshot.memory);
         return result;
     }
 };
@@ -1358,9 +1007,6 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         storage_index_preserves_linear_alias_selection(),
         "snapshot storage preserves exact aliases, first-free slots, growth, small reuse, and moves")) return 1;
-    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        decoded_dependency_capture_merges_exact_byte_set(),
-        "decoded-vertex dependency capture merges overlapping reads into the exact byte set")) return 1;
 
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         dependency_cache_rejects_fifo_fingerprint_collision(),
@@ -1400,9 +1046,6 @@ int main() {
     if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
         snapshot_range_merge_preserves_exact_owned_bytes(),
         "range merge preserves sorted disjoint snapshot ownership across overlaps, zeros and u32 ends")) return 1;
-    if (!expect(galaxy::gx::GxBackendMemorySnapshotTestAccess::
-        sorted_lookup_follows_owned_snapshot(),
-        "sorted lookup certifies exact owned output, survives moves, rejects byte changes and resets on view reuse")) return 1;
 
     const NbtFixture fixture = make_shared_index_nbt_fixture();
     std::vector<std::byte> live_bytes(kRequiredArrayBytes);
@@ -1444,23 +1087,14 @@ int main() {
              "texture dependency memo reused newly sampled maps or invalidated uniform-only changes") && ok;
     ok = expect(
              galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 decoded_vertex_keys_track_only_consumed_state(),
-             "decoded vertex key lost a consumed input or retained unrelated CPU state") && ok;
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
                  full_capture_reuse_detaches_live_memory(memory, live_bytes),
              "full pooled snapshot retained or reused a live-memory alias") &&
-        ok;
-    ok = expect(
-             galaxy::gx::GxBackendMemorySnapshotTestAccess::
-                 decoded_vertex_dependencies_are_byte_exact(),
-             "decoded vertex cache accepted stale or partial guest dependencies") &&
         ok;
 
     galaxy::gx::MemorySnapshotNbtProbeResult result;
     try {
         result = galaxy::gx::GxBackendMemorySnapshotTestAccess::
-            collect_capture_and_decode(fixture, memory, live_bytes);
+            collect_and_capture(fixture, memory);
     } catch (const std::exception& error) {
         std::cerr << "FAIL: valid compact NBT snapshot threw: "
                   << error.what() << '\n';
@@ -1483,47 +1117,6 @@ int main() {
                 "strict compact snapshot was not sealed") && ok;
     ok = expect(result.external_aliases_detached,
                 "strict compact snapshot retained a live-memory alias") && ok;
-    ok = expect(result.decoded.vertices.size() == 1u,
-                "snapshot decode did not produce one vertex") && ok;
-    if (result.decoded.vertices.size() == 1u) {
-        const galaxy::gx::GxVertexOut& vertex = result.decoded.vertices[0];
-        ok = expect_vec3(vertex.normal, {1.0f, 2.0f, 3.0f},
-                         "snapshot normal did not survive live-memory mutation") && ok;
-        ok = expect_vec3(vertex.tangent, {4.0f, 5.0f, 6.0f},
-                         "snapshot tangent did not survive live-memory mutation") && ok;
-        ok = expect_vec3(vertex.binormal, {7.0f, 8.0f, 9.0f},
-                         "snapshot binormal did not survive live-memory mutation") && ok;
-    }
-    ok = expect(result.decoded.guest_array_reads.size() == 1u,
-                "vertex decoder did not report one NBT array read") && ok;
-    if (result.decoded.guest_array_reads.size() == 1u) {
-        const galaxy::gx::VertexDecodeGuestRange& read =
-            result.decoded.guest_array_reads[0];
-        ok = expect(read.guest_base == kArrayBase + kLastElementOffset,
-                    "vertex decoder reported the wrong NBT read base") && ok;
-        ok = expect(read.size == kNbtElementSize,
-                    "vertex decoder did not request the complete N/T/B element") && ok;
-    }
-
-    // A snapshot that is genuinely too short must not alias the original
-    // source as a fallback. The native vertex loader must hard-fail its exact
-    // 36-byte read instead of decoding partial NBT data.
-    std::vector<std::byte> short_live_bytes(
-        kRequiredArrayBytes - 24u,
-        std::byte{0x5A});
-    region.size = static_cast<std::uint32_t>(short_live_bytes.size());
-    region.host_base = short_live_bytes.data();
-    bool short_range_hard_failed = false;
-    try {
-        (void)galaxy::gx::GxBackendMemorySnapshotTestAccess::
-            collect_capture_and_decode(fixture, memory, short_live_bytes);
-    } catch (const galaxy::gx::GxFatalError& error) {
-        short_range_hard_failed =
-            std::string(error.what()).find("is not mapped") != std::string::npos;
-    }
-    ok = expect(short_range_hard_failed,
-                "short strict snapshot did not hard-fail the complete NBT read") && ok;
-
     if (!ok) {
         return 1;
     }

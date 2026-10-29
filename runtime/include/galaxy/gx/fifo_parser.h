@@ -141,36 +141,6 @@ struct FifoCursor {
     }
 };
 
-struct CachedDrawPacket {
-    std::uint8_t opcode = 0;
-    std::uint16_t vertex_count = 0;
-    std::size_t local_opcode_offset = 0;
-    std::size_t draw_cursor_offset = 0;
-    std::size_t draw_payload_size = 0;
-};
-
-struct CachedPreparedDrawRun {
-    PrimitiveClass primitive = PrimitiveClass::Points;
-    std::uint8_t vtxfmt = 0;
-    std::uint8_t opcode = 0;
-    std::uint16_t total_vertices = 0;
-    std::size_t local_opcode_offset = 0;
-    std::size_t source_draw_count = 0;
-    std::size_t payload_offset = 0;
-    std::size_t payload_size = 0;
-};
-
-struct CachedDrawPacketRun {
-    PrimitiveClass primitive = PrimitiveClass::Points;
-    std::uint8_t vtxfmt = 0;
-    std::size_t packet_offset = 0;
-    std::size_t packet_count = 0;
-    std::uint32_t total_vertices = 0;
-    std::uint32_t total_indices = 0;
-    std::size_t index_offset = 0;
-    std::size_t index_count = 0;
-};
-
 // Parser callbacks for everything but register loads, which go straight to the GxState passed
 // to run(). Implemented by GxBackend.
 struct FifoSink {
@@ -200,83 +170,6 @@ struct FifoSink {
         PrimitiveClass primitive,
         std::uint8_t vtxfmt,
         FifoCursor& cursor) = 0;
-
-    // Brackets a cached run of `draw_count` draws with no state command between them, so the
-    // sink can resolve draw state once; the parser still replays and checks each packet.
-    // end_cached_draw_run follows only when this returns true.
-    [[nodiscard]] virtual bool begin_cached_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::size_t draw_count) {
-        (void)primitive;
-        (void)vtxfmt;
-        (void)draw_count;
-        return false;
-    }
-    virtual void end_cached_draw_run() {}
-
-    // Fast path for a cached run of draws with one primitive and vertex format whose packets can
-    // be concatenated without changing the primitives drawn. Returning false makes the parser
-    // replay the packets one by one.
-    [[nodiscard]] virtual bool on_cached_simple_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets) {
-        (void)primitive;
-        (void)vtxfmt;
-        (void)bytes;
-        (void)base_offset;
-        (void)packets;
-        return false;
-    }
-
-    // The same run with its payload built once when the list is cached: a u16 total vertex
-    // count followed by the concatenated vertex data.
-    [[nodiscard]] virtual bool on_cached_prepared_draw_run(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> prepared_payload,
-        std::size_t base_offset,
-        std::size_t local_opcode_offset,
-        std::uint8_t opcode,
-        std::size_t source_draw_count) {
-        (void)primitive;
-        (void)vtxfmt;
-        (void)prepared_payload;
-        (void)base_offset;
-        (void)local_opcode_offset;
-        (void)opcode;
-        (void)source_draw_count;
-        return false;
-    }
-
-    // Fast path for a cached run kept as separate packets (strips, fans): the sink draws every
-    // packet in order.
-    [[nodiscard]] virtual bool on_cached_packet_draw_run(
-        std::uint64_t cache_token,
-        std::size_t packet_run_index,
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        std::span<const std::byte> bytes,
-        std::size_t base_offset,
-        std::span<const CachedDrawPacket> packets,
-        std::uint32_t total_vertices,
-        std::uint32_t total_indices,
-        std::span<const std::uint16_t> precomputed_indices) {
-        (void)cache_token;
-        (void)packet_run_index;
-        (void)primitive;
-        (void)vtxfmt;
-        (void)bytes;
-        (void)base_offset;
-        (void)packets;
-        (void)total_vertices;
-        (void)total_indices;
-        (void)precomputed_indices;
-        return false;
-    }
 
     // BP 0x52 PE_COPY_EXECUTE write; `exec_command` is the 24-bit value.
     // Combine with GxState::efb_copy(exec_command) for the full snapshot.
