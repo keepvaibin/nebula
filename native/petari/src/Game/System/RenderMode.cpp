@@ -304,44 +304,10 @@ const GXRenderModeObj GXEurgb60HzProg[] = {
 };
 
 namespace MR {
+    // The native output's mode: a 60 Hz NTSC frame in the shape of the display's aspect (what the game has always
+    // taken natively: no PAL television, no progressive switch).
     const GXRenderModeObj* getSuitableRenderMode() {
-        const GXRenderModeObj* result = nullptr;
-        bool is16Per9 = isAspectRatioFlag16Per9();
-
-        if (VIGetDTVStatus() == 1 && isProgressiveModeOn()) {
-            switch (VIGetTvFormat()) {
-            case VI_NTSC:
-            case VI_MPAL:
-                result = &GXNtscProg[is16Per9];
-                break;
-            case VI_PAL:
-            case VI_EURGB60:
-                result = &GXEurgb60HzProg[is16Per9];
-                break;
-            }
-        } else {
-            switch (VIGetTvFormat()) {
-            case VI_NTSC:
-            case VI_MPAL:
-                return &GXNtscIntDf[is16Per9];
-            case VI_PAL:
-                if (!isEuRgb60ModeOn()) {
-                    return &GXPalIntDf[is16Per9];
-                }
-            case VI_EURGB60:
-                return &GXEurgb60HzIntDf[is16Per9];
-            }
-        }
-
-        return result;
-    }
-
-    bool isProgressiveModeOn() {
-        return SCGetProgressiveMode() == SC_PROGRESSIVE_MODE_ON;
-    }
-
-    bool isEuRgb60ModeOn() {
-        return SCGetEuRgb60Mode() == SC_EURGB60_MODE_ON;
+        return &GXNtscIntDf[isAspectRatioFlag16Per9()];
     }
 
     bool isAspectRatioFlag16Per9() {
@@ -354,15 +320,5 @@ namespace MR {
 };  // namespace MR
 
 u32 RenderModeObj::getViWidthMax() {
-    switch (VIGetTvFormat()) {
-    case VI_PAL:
-        return VI_MAX_WIDTH_PAL;
-    case VI_MPAL:
-        return VI_MAX_WIDTH_MPAL;
-    case VI_EURGB60:
-        return VI_MAX_WIDTH_EURGB60;
-    case VI_NTSC:
-    default:
-        return VI_MAX_WIDTH_NTSC;
-    }
+    return VI_MAX_WIDTH_NTSC;
 }

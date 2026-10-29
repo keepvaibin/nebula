@@ -179,8 +179,9 @@ namespace MR {
         nw4r::lyt::Layout::mspAllocator = &MR::NewDeleteAllocator::sAllocator;
     }
 
+    // The output is 60 Hz: no PAL television to suggest PAL60 for.
     bool isDisplayEncouragePal60Window() {
-        return VIGetTvFormat() == VI_PAL;
+        return false;
     }
 
     JMapIdInfo* getPlayerRestartIdInfo() {
