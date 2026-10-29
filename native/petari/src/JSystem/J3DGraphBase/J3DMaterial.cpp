@@ -185,30 +185,14 @@ u32 J3DMaterial::countDLSize() {
            ~0x1f;
 }
 
-void J3DMaterial::makeDisplayList_private(J3DDisplayListObj* pDLObj) {
-    pDLObj->beginDL();
-    mTevBlock->load();
-    mIndBlock->load();
-    mPEBlock->load();
-    J3DGDSetGenMode(mTexGenBlock->getTexGenNum(), mColorBlock->getColorChanNum(), mTevBlock->getTevStageNum(), mIndBlock->getIndTexStageNum(),
-                    (GXCullMode)(u8)mColorBlock->getCullMode());
-    mTexGenBlock->load();
-    mColorBlock->load();
-    J3DGDSetNumChans(mColorBlock->getColorChanNum());
-    J3DGDSetNumTexGens(mTexGenBlock->getTexGenNum());
-    pDLObj->endDL();
-}
-
 void J3DMaterial::makeDisplayList() {
     if (!j3dSys.getMatPacket()->isLocked()) {
         j3dSys.getMatPacket()->mDiffFlag = mDiffFlag;
-        makeDisplayList_private(j3dSys.getMatPacket()->getDisplayListObj());
         J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getDisplayListObj());
     }
 }
 
 void J3DMaterial::makeSharedDisplayList() {
-    makeDisplayList_private(mSharedDLObj);
     J3DNativeMaterial::capture(this, j3dSys.getTexture(), mSharedDLObj);
 }
 
@@ -222,7 +206,6 @@ void J3DMaterial::load() {
 void J3DMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(2)) {
-        mSharedDLObj->callDL();
         J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
         loadNBTScale(*mTexGenBlock->getNBTScale());
     }
@@ -230,29 +213,12 @@ void J3DMaterial::loadSharedDL() {
 
 void J3DMaterial::patch() {
     j3dSys.getMatPacket()->mDiffFlag = mDiffFlag;
-    j3dSys.getMatPacket()->beginPatch();
-    mTevBlock->patch();
-    mColorBlock->patch();
-    mTexGenBlock->patch();
-    j3dSys.getMatPacket()->endPatch();
     J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture, j3dSys.getMatPacket()->getDisplayListObj());
 }
 
 void J3DMaterial::diff(u32 diffFlags) {
+    // An instance's animated values, into its shape packet's differed snapshot (the parts `diffFlags` names).
     if (j3dSys.getMatPacket()->isEnabled_Diff()) {
-        j3dSys.getMatPacket()->beginDiff();
-
-        mTevBlock->diff(diffFlags);
-        mIndBlock->diff(diffFlags);
-        mPEBlock->diff(diffFlags);
-        if (diffFlags & J3DDiffFlag_KonstColor) {
-            J3DGDSetGenMode_3Param(mTexGenBlock->getTexGenNum(), mTevBlock->getTevStageNum(), mIndBlock->getIndTexStageNum());
-            J3DGDSetNumTexGens(mTexGenBlock->getTexGenNum());
-        }
-        mTexGenBlock->diff(diffFlags);
-        mColorBlock->diff(diffFlags);
-
-        j3dSys.getMatPacket()->endDiff();
         J3DNativeMaterial::capture(this, j3dSys.getMatPacket()->mpTexture,
                                    j3dSys.getMatPacket()->mpInitShapePacket->getDisplayListObj(), diffFlags);
     }
@@ -369,9 +335,9 @@ void J3DPatchedMaterial::load() {
 
 void J3DPatchedMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
-    if (!j3dSys.checkFlag(0x02))
-        mSharedDLObj->callDL();
+    if (!j3dSys.checkFlag(0x02)) {
         J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
+    }
 }
 
 void J3DPatchedMaterial::reset() {
@@ -399,9 +365,9 @@ void J3DLockedMaterial::load() {
 
 void J3DLockedMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
-    if (!j3dSys.checkFlag(0x02))
-        mSharedDLObj->callDL();
+    if (!j3dSys.checkFlag(0x02)) {
         J3DNativeMaterial::send(this, j3dSys.getTexture(), mSharedDLObj);
+    }
 }
 
 void J3DLockedMaterial::patch() {

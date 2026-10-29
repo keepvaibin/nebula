@@ -453,13 +453,10 @@ namespace MR {
             J3DMatPacket* pMatPacket = pModel->getMatPacket(pMaterial->mIndex);
             J3DShapePacket* pShapePacket = pModel->getShapePacket(pMaterial->mShape->mIndex);
             j3dSys.setMatPacket(pMatPacket);
-            pMatPacket->callDL();
             J3DNativeMaterial::send(pMatPacket->getMaterial(), pMatPacket->mpTexture, pMatPacket->getDisplayListObj());
             pShapePacket->getShape()->loadPreDrawSetting();
 
-            if (pShapePacket->isValidDisplayListObj()) {
-                pShapePacket->callDL();
-            }
+            J3DNativeMaterial::sendDiffered(pShapePacket->getDisplayListObj());
 
             pShapePacket->drawFast();
         }

@@ -40,7 +40,6 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 }
 
 void DrawBufferShapeDrawer::draw() const {
-    mMatPacket->mpDisplayListObj->callDL();
     J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture, mMatPacket->mpDisplayListObj);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
@@ -58,7 +57,6 @@ void DrawBufferShapeDrawer::draw() const {
 
         if ((packet->mpShape->mFlags & 1) == 0) {
             if (packet->mpDisplayListObj != nullptr) {
-                packet->mpDisplayListObj->callDL();
                 J3DNativeMaterial::sendDiffered(packet->mpDisplayListObj);
             }
             packet->drawFast();

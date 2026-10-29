@@ -173,7 +173,6 @@ bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
 
 void J3DMatPacket::draw() {
     mpMaterial->load();
-    callDL();
     J3DNativeMaterial::send(mpMaterial, mpTexture, mpDisplayListObj);
 
     J3DShapePacket* packet = getShapePacket();
@@ -181,7 +180,6 @@ void J3DMatPacket::draw() {
 
     while (packet != NULL) {
         if (packet->getDisplayListObj() != NULL) {
-            packet->getDisplayListObj()->callDL();
             J3DNativeMaterial::sendDiffered(packet->getDisplayListObj());
         }
 
@@ -335,7 +333,6 @@ void J3DShapePacket::draw() {
         }
 
         if (mpDisplayListObj != NULL) {
-            mpDisplayListObj->callDL();
             J3DNativeMaterial::sendDiffered(mpDisplayListObj);
         }
 

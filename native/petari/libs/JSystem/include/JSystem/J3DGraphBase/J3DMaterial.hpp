@@ -45,7 +45,6 @@ public:
     static u32 calcSizePEBlock(u32, u32);
     void initialize();
     u32 countDLSize();
-    void makeDisplayList_private(J3DDisplayListObj*);
     void setCurrentMtx();
     void calcCurrentMtx();
     void copy(J3DMaterial*);
