@@ -62,6 +62,8 @@ enum {
     NEBULA_MATERIAL_LOADS_SWAP_TABLE = 1u << 5,
     NEBULA_MATERIAL_LOADS_AMBIENT = 1u << 6,
     NEBULA_MATERIAL_LOADS_LIGHTS = 1u << 7,
+    NEBULA_MATERIAL_LOADS_TEV = 1u << 8,       /* textures, stage orders, stages, indirect stages */
+    NEBULA_MATERIAL_LOADS_CHANNELS = 1u << 9,  /* channel controls and material colours */
 };
 
 typedef struct NebulaMaterialTevStage {
@@ -91,7 +93,8 @@ typedef struct NebulaMaterialLight {
 typedef struct NebulaMaterial {
     uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
     uint8_t dither, z_compare_location;
-    uint8_t loads; /* NEBULA_MATERIAL_LOADS_*: the parts the material sets (the others keep what was set before) */
+    uint8_t reserved;
+    uint16_t loads; /* NEBULA_MATERIAL_LOADS_*: the parts the material sets (the others keep what was set before) */
     NebulaMaterialTevStage tev[16];
     int16_t tev_color[4][4];
     uint8_t konst_color[4][4];

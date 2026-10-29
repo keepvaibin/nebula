@@ -72,10 +72,15 @@ namespace J3DNativeMaterial {
         pOut->ind_stages = pInd->getIndTexStageNum();
         pOut->cull = pColor->getCullMode();
 
+        // The null TEV block writes no textures, orders or stages (its stage count still sets the mode).
+        const bool tev = pTev->getTevOrder(0) != NULL;
+        if (tev) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_TEV;
+        }
         // Textures first: their sizes fill the coordinate scale table the stages then read.
         u16 sizes[16];
         memset(sizes, 0, sizeof(sizes));
-        for (u32 map = 0; map < 8; map++) {
+        for (u32 map = 0; tev && map < 8; map++) {
             const u16 texNo = pTev->getTexNo(map);
             if (texNo != 0xFFFF) {
                 texture(map, texNo, pOut, sizes);
@@ -83,7 +88,7 @@ namespace J3DNativeMaterial {
                 J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
             }
         }
-        for (u32 i = 0; i < pOut->tev_stages; i++) {
+        for (u32 i = 0; tev && i < pOut->tev_stages; i++) {
             NebulaMaterialTevStage& rOut = pOut->tev[i];
             const J3DTevOrderInfo& rOrder = pTev->getTevOrder(i)->getTevOrderInfo();
             rOut.tex_coord = rOrder.mTexCoord;
@@ -119,7 +124,7 @@ namespace J3DNativeMaterial {
             rOut.ind_alpha = rInd.mAlphaSel;
         }
         // Orders are written in pairs: an odd count's last stage pairs with the next entry the block holds.
-        if ((pOut->tev_stages & 1) != 0 && pOut->tev_stages < 16 && pTev->getType() != 'TVB1') {
+        if (tev && (pOut->tev_stages & 1) != 0 && pOut->tev_stages < 16 && pTev->getType() != 'TVB1') {
             const J3DTevOrderInfo& rOrder = pTev->getTevOrder(pOut->tev_stages)->getTevOrderInfo();
             pOut->tev[pOut->tev_stages].tex_coord = rOrder.mTexCoord;
             pOut->tev[pOut->tev_stages].tex_map = rOrder.mTexMap;
@@ -192,7 +197,11 @@ namespace J3DNativeMaterial {
             pOut->tex_gen[i].matrix = static_cast< u8 >(rCoord.getTexMtxReg());
         }
 
-        for (u32 i = 0; i < 4; i++) {
+        // The null colour block writes no channels or colours.
+        if (pColor->getColorChan(0) != NULL) {
+            pOut->loads |= NEBULA_MATERIAL_LOADS_CHANNELS;
+        }
+        for (u32 i = 0; i < 4 && pColor->getColorChan(0) != NULL; i++) {
             const J3DColorChan& rChan = *pColor->getColorChan(i);
             pOut->channel[i].enable = rChan.getEnable();
             pOut->channel[i].material_source = rChan.getMatSrc();
