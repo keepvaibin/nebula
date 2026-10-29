@@ -13,7 +13,6 @@
 #include <JSystem/J3DGraphBase/J3DShapeMtx.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/gd.h>
 
 class J3DMtxBuffer2 : public J3DMtxBuffer {
 public:
@@ -205,7 +204,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
 
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
-            GXCallDisplayList(mDisplayLists[i], mDisplayListSizes[i]);
+            mStateLists[i].send();
         }
     }
 
@@ -213,8 +212,8 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _1B4 = _1B8;
         _1B8 = nullptr;
     }
-    if (_1B4 && _1BC) {
-        GXCallDisplayList(_1B4, _1BC);
+    if (_1B4) {
+        _1B4->send();
     }
 
     u32 index = _1C0;
@@ -222,8 +221,8 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _1C4[index] = _1C8[index];
         _1C8[index] = nullptr;
     }
-    if (_1C4[index] && _1CC[index]) {
-        GXCallDisplayList(_1C4[index], _1CC[index]);
+    if (_1C4[index]) {
+        _1C4[index]->send();
     }
     if (_120) {
         _120(_128, _1C0);
@@ -271,18 +270,12 @@ void J3DModelX::simpleDrawShape(J3DMaterial* material) {
     getShapePacket(material->getShape()->getIndex())->drawFast();
 }
 
-void J3DModelX::storeDisplayList(GDLObj* obj, u32 index) {
-    GDPadCurr32();
-    u32 size = (GDGetGDLObjOffset(obj) + 31) & ~31;
-    mDisplayLists[index] = new (32) u8[size];
-    MR::copyMemory(mDisplayLists[index], obj->start, size);
-    DCStoreRange(mDisplayLists[index], size);
-    mDisplayListSizes[index] = GDGetGDLObjOffset(obj);
-    GDInitGDLObj(obj, obj->start, obj->length);
+void J3DModelX::storeStateList(J3DStateList& rBuilder, u32 index) {
+    mStateLists[index].copy(rBuilder);
+    rBuilder.clear();
 }
 
 J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(data, flags, bufferFlags) {
-    MR::ProhibitSchedulerAndInterrupts guard(false);
     _DC = 0;
     _DD = 0;
     _120 = nullptr;
@@ -292,155 +285,153 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1E4 = 0;
     _1E5 = 0;
 
-    GDLObj obj;
-    u8 buffer[512] ATTRIBUTE_ALIGN(32);
-    GDInitGDLObj(&obj, buffer, sizeof(buffer));
-    GDSetCurrent(&obj);
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
 
-    GDSetCullMode(GX_CULL_FRONT);
-    storeDisplayList(&obj, 0);
+    list.setCullMode(GX_CULL_FRONT);
+    storeStateList(list, 0);
 
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    GDSetGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    GDSetTevDirect(GX_TEVSTAGE0);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
-    GDSetDstAlpha(GX_TRUE, 0xFF);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    list.setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
+    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
+    list.setTevDirect(GX_TEVSTAGE0);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
+    list.setDstAlpha(GX_TRUE, 0xFF);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
                              GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 1);
+    storeStateList(list, 1);
 
-    GDSetCullMode(GX_CULL_FRONT);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    GDSetGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
+    list.setCullMode(GX_CULL_FRONT);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
+    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
                              GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 2);
+    storeStateList(list, 2);
 
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    GDSetGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    GDSetTevDirect(GX_TEVSTAGE0);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
-    GDSetDstAlpha(GX_TRUE, 0x90);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
+    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
+    list.setTevDirect(GX_TEVSTAGE0);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
+    list.setDstAlpha(GX_TRUE, 0x90);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
                              GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 3);
+    storeStateList(list, 3);
 
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GDSetGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
-    GDSetTevDirect(GX_TEVSTAGE0);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
+    list.setTevDirect(GX_TEVSTAGE0);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
     static GXColor highlightColor = {255, 255, 0, 255};
-    GDSetTevColor(GX_TEVREG0, highlightColor);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG0, highlightColor);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 4);
+    storeStateList(list, 4);
 
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    GDSetGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
-    GDSetBlendModeEtc(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_FALSE, GX_FALSE, GX_FALSE);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
+    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
+    list.setBlendModeEtc(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_FALSE, GX_FALSE, GX_FALSE);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GDSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    storeDisplayList(&obj, 5);
+    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
+    storeStateList(list, 5);
 
-    GDSetTexLookupMode(GX_TEXMAP0, GX_REPEAT, GX_REPEAT, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
-    GDSetTexImgAttr(GX_TEXMAP0, MR::getScreenWidth(), JUTVideo::getManager()->getEfbHeight(), GX_TF_RGB565);
-    GDSetTexImgPtr(GX_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
-    GDSetTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_NRM, GX_TRUE, GX_IDENTITY);
-    storeDisplayList(&obj, 6);
+    list.setTexLookupMode(GX_TEXMAP0, GX_REPEAT, GX_REPEAT, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
+    list.setTexImgAttr(GX_TEXMAP0, MR::getScreenWidth(), JUTVideo::getManager()->getEfbHeight(), GX_TF_RGB565);
+    list.setTexImgPtr(GX_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
+    list.setTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_NRM, GX_TRUE, GX_IDENTITY);
+    storeStateList(list, 6);
 
     GXColor ambientColor = {0, 0, 0, 0};
     GXColor materialColor = {0, 0, 0, 255};
-    GDSetChanAmbColor(GX_ALPHA0, ambientColor);
-    GDSetChanMatColor(GX_ALPHA0, materialColor);
-    GDSetBlendModeEtc(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
+    list.setChanAmbColor(GX_ALPHA0, ambientColor);
+    list.setChanMatColor(GX_ALPHA0, materialColor);
+    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_RASA, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
                              GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 7);
+    storeStateList(list, 7);
 
-    GDSetCullMode(GX_CULL_FRONT);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    list.setCullMode(GX_CULL_FRONT);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
     GXColor subtractColor = {0, 0, 0, 252};
-    GDSetTevColor(GX_TEVREG0, subtractColor);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG0, subtractColor);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 8);
+    storeStateList(list, 8);
 
-    GDSetCullMode(GX_CULL_BACK);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    list.setCullMode(GX_CULL_BACK);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
     GXColor addColor = {0, 0, 0, 4};
-    GDSetTevColor(GX_TEVREG0, addColor);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG0, addColor);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 9);
+    storeStateList(list, 9);
 
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GDSetDstAlpha(GX_TRUE, 0);
-    storeDisplayList(&obj, 10);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    list.setDstAlpha(GX_TRUE, 0);
+    storeStateList(list, 10);
 
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    GDSetGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    GDSetAlphaCompare(GX_GREATER, 0x20, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
-    GDSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    storeDisplayList(&obj, 11);
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
+    list.setAlphaCompare(GX_GREATER, 0x20, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
+    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+    storeStateList(list, 11);
 
-    GDSetZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GDSetGenMode2(1, 0, 1, 0, GX_CULL_BACK);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP, GX_TRUE, GX_FALSE, GX_FALSE);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ONE, GX_CC_C0, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    list.setGenMode2(1, 0, 1, 0, GX_CULL_BACK);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP, GX_TRUE, GX_FALSE, GX_FALSE);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ONE, GX_CC_C0, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GDSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    storeDisplayList(&obj, 12);
+    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+    storeStateList(list, 12);
 
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    GDSetZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    GDSetGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    GDSetTevDirect(GX_TEVSTAGE0);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_SRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
+    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
+    list.setTevDirect(GX_TEVSTAGE0);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_SRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
     static GXColor tintColor = {35, 25, 25, 5};
-    GDSetTevColor(GX_TEVREG0, tintColor);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG0, tintColor);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    storeDisplayList(&obj, 13);
+    storeStateList(list, 13);
 
-    GDSetDstAlpha(GX_TRUE, 0x40);
-    storeDisplayList(&obj, 14);
+    list.setDstAlpha(GX_TRUE, 0x40);
+    storeStateList(list, 14);
 
-    GDSetBlendModeEtc(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    storeDisplayList(&obj, 15);
+    list.setBlendModeEtc(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
+    storeStateList(list, 15);
 
     _1E0 = -1;
     _1DC = 0x32323232;
@@ -450,16 +441,13 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1D0 = 0;
     _1B4 = nullptr;
     _1B8 = nullptr;
-    _1BC = 0;
 
     u32 count = mModelData->getMaterialNum();
-    _1C4 = new u8*[count];
-    _1C8 = new u8*[count];
-    _1CC = new u16[count];
+    _1C4 = new const J3DStateList*[count];
+    _1C8 = new const J3DStateList*[count];
     for (u32 i = 0; i < count; i++) {
         _1C4[i] = nullptr;
         _1C8[i] = nullptr;
-        _1CC[i] = 0;
     }
     _DC = 0;
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <JSystem/J3DGraphBase/J3DStateList.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Player/Mario.hpp"
 #include "Game/Player/MatrixControl.hpp"
@@ -577,8 +578,8 @@ public:
     /* 0x08C */ u8 _8C;
     /* 0x090 */ DLchanger* mDLchanger;
     /* 0x094 */ DLchanger* _94[0x40];
-    /* 0x194 */ u8* mDL[2];
-    /* 0x19C */ u32 mDLSize;
+    // The lighting state lists (one being drawn, one being written).
+    J3DStateList mDL[2];
     /* 0x1A0 */ u8 mCurrDL;
     /* 0x1A1 */ u8 _1A1;
     /* 0x1A4 */ f32 _1A4;

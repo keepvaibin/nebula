@@ -35,15 +35,10 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
-#include <revolution/gd/GDBase.h>
 
 namespace MR {
     void showMaterial(J3DModel*, const char*);
 };  // namespace MR
-
-extern "C" {
-void GDSetTexImgPtr(GXTexMapID, void*);
-}
 
 class JetTurtleShadow : public LiveActor {
 public:
@@ -108,11 +103,11 @@ void MarioActor::initDrawAndModel() {
 
     initFace();
 
-    mDL[0] = new (0x20) u8[0x100];
-    mDL[1] = new (0x20) u8[0x100];
+    mDL[0].reserve(16);
+    mDL[1].reserve(16);
     mCurrDL = 0;
 
-    mDLchanger = new DLchanger(2, 0x100);
+    mDLchanger = new DLchanger(2, 16);
     _1A4 = 0.0f;
 
     swapTextureInit();
@@ -499,9 +494,9 @@ void MarioActor::drawMarioModel() const {
             MR::showJoint(model, "Face0");
         } else {
             if (mCurrModel == 4) {
-                model->setDynamicDL(nullptr, 0);
+                model->setDynamicDL(nullptr);
             } else {
-                model->setDynamicDL(mDL[mCurrDL], mDLSize);
+                model->setDynamicDL(&mDL[mCurrDL]);
             }
         }
 
@@ -525,7 +520,7 @@ void MarioActor::drawMarioModel() const {
 
     if (!MR::isHiddenModel(_A5C)) {
         J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
-        cool->setDynamicDL(mDL[mCurrDL], mDLSize);
+        cool->setDynamicDL(&mDL[mCurrDL]);
         cool->directDraw(nullptr);
     }
 
@@ -548,7 +543,7 @@ void MarioActor::drawTracedBody(J3DModelX* pModel) const {
         return;
     }
     const J3DModelX::Flags flags = pModel->mFlags;
-    pModel->setDynamicDL(mCurrModel == 4 ? nullptr : mDL[mCurrDL], mDLSize);
+    pModel->setDynamicDL(mCurrModel == 4 ? nullptr : &mDL[mCurrDL]);
     MR::showJoint(pModel, "HandR0");
     MR::showJoint(pModel, "HandL0");
     MR::showJoint(pModel, "Face0");
@@ -557,7 +552,7 @@ void MarioActor::drawTracedBody(J3DModelX* pModel) const {
     pModel->directDraw(nullptr);
     if (_1A1 && !MR::isHiddenModel(_A5C)) {
         J3DModelX* cool = static_cast< J3DModelX* >(MR::getJ3DModel(_A5C));
-        cool->setDynamicDL(mDL[mCurrDL], mDLSize);
+        cool->setDynamicDL(&mDL[mCurrDL]);
         cool->directDraw(nullptr);
     }
     MotionSignal::traceOnly(false);
@@ -855,7 +850,7 @@ void MarioActor::drawIndirectModel() const {
 
             mDLchanger->addDL(model);
         } else {
-            model->setDynamicDL(mDL[mCurrDL], mDLSize);
+            model->setDynamicDL(&mDL[mCurrDL]);
         }
 
         MR::showJoint(model, "Face0");
@@ -986,26 +981,9 @@ void MarioActor::drawModelBlur() const {
 }
 
 void MarioActor::createTextureDL(DLholder* pHolder, u16 texMapID, u16 texIndex) {
-    MR::ProhibitSchedulerAndInterrupts prohibit(false);
-
-    u8 tempDL[0x200] ATTRIBUTE_ALIGN(32);
-    GDLObj obj;
-    GDInitGDLObj(&obj, tempDL, sizeof(tempDL));
-    __GDCurrentDL = &obj;
-
     ResTIMG* texture = _B64[texIndex];
-    GDSetTexImgPtr(static_cast< GXTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
-
-    GDPadCurr32();
-
-    const u32 dlSize = static_cast< u32 >(obj.ptr - obj.start);
-    const u32 alignedSize = (dlSize + 0x1F) & ~0x1F;
-
-    pHolder->mSize = dlSize;
-    pHolder->mDL = new (0x20) u8[alignedSize];
-
-    MR::copyMemory(pHolder->mDL, tempDL, alignedSize);
-    DCStoreRange(pHolder->mDL, alignedSize);
+    pHolder->mList.reserve(1);
+    pHolder->mList.setTexImgPtr(static_cast< GXTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
 }
 
 void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
@@ -1033,16 +1011,10 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
 
     const DLholder* holder = _B6C;
     const u8 modelIdx = mCurrModel;
-    u8* dl = holder[texNo].mDL;
-    u16 dlSize = holder[texNo].mSize;
+    const J3DStateList* dl = holder[texNo].mList.isEmpty() ? nullptr : &holder[texNo].mList;
     J3DModelX* model = mModels[modelIdx];
 
-    if (dl == nullptr) {
-        dlSize = 0;
-    }
-
     model->_1C8[materialNo] = dl;
-    model->_1CC[materialNo] = dlSize;
 }
 
 void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex) {
@@ -1095,14 +1067,9 @@ void J3DModelX::swapDrawBuffer(u32 drawBuffer) {
 
 void DLchanger::addDL(J3DModelX* pModel) {
     DLholder* buffer = &mBuffers[mCurrentBuffer];
-    pModel->setDynamicDL(buffer->mDL, buffer->mSize);
+    pModel->setDynamicDL(&buffer->mList);
 }
 
-void J3DModelX::setDynamicDL(u8* pDL, u32 dlSize) {
-    if (pDL == nullptr) {
-        dlSize = 0;
-    }
-
-    _1B8 = pDL;
-    _1BC = dlSize;
+void J3DModelX::setDynamicDL(const J3DStateList* pList) {
+    _1B8 = pList;
 }

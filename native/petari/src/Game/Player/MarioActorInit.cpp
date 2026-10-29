@@ -7,9 +7,6 @@ void MarioActor::initMember() {
         _94[i] = 0;
     }
 
-    mDL[0] = nullptr;
-    mDL[1] = nullptr;
-    mDLSize = 0;
     mCurrDL = 0;
     _1A1 = 0;
     _1A4 = 0.0f;

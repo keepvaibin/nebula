@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 38u
+#define NEBULA_GAME_API_VERSION 39u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -43,6 +43,42 @@ typedef struct NebulaShapeMatrix {
     uint16_t model_matrix;
     float values[12];
 } NebulaShapeMatrix;
+
+/* One drawing-state change the game makes outside a material (state): `kind` names the GX function whose
+   arguments `a` holds in its order (enumerations and bytes), `size` its sizes, `f` its float arguments and `image`
+   a texture's identity (the game's address of its image). */
+enum {
+    NEBULA_STATE_BLEND_ETC = 1,     /* type, source, destination, logic op, colour update, alpha update, dither */
+    NEBULA_STATE_BLEND,             /* type, source, destination, logic op (updates and dither kept) */
+    NEBULA_STATE_Z_MODE,            /* compare, function, update */
+    NEBULA_STATE_ALPHA_COMPARE,     /* comparison 0, reference 0, op, comparison 1, reference 1 */
+    NEBULA_STATE_DST_ALPHA,         /* enable, alpha */
+    NEBULA_STATE_CULL,              /* mode */
+    NEBULA_STATE_GEN_MODE,          /* texgens, channels, TEV stages */
+    NEBULA_STATE_GEN_MODE2,         /* texgens, channels, TEV stages, indirect stages, cull mode */
+    NEBULA_STATE_CHANNEL,           /* channel, enable, ambient source, material source, light mask, diffuse, attenuation */
+    NEBULA_STATE_TEV_COLOR_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output */
+    NEBULA_STATE_TEV_ALPHA_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output, raster swap, texture swap */
+    NEBULA_STATE_TEV_DIRECT,        /* stage */
+    NEBULA_STATE_TEV_ORDER,         /* even stage, coord 0, map 0, channel 0, coord 1, map 1, channel 1 */
+    NEBULA_STATE_TEV_COLOR,         /* register, r, g, b, a */
+    NEBULA_STATE_MATERIAL_COLOR,    /* channel, r, g, b, a */
+    NEBULA_STATE_AMBIENT_COLOR,     /* channel, r, g, b, a */
+    NEBULA_STATE_TEX_COORD_GEN,     /* coord, type, source, normalize, post-transform matrix id */
+    NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t, min filter, mag filter, bias clamp, edge LOD, anisotropy;
+                                       f: min LOD, max LOD, LOD bias */
+    NEBULA_STATE_TEX_IMAGE_ATTR,    /* map, format; size: width, height */
+    NEBULA_STATE_TEX_IMAGE,         /* map; image */
+    NEBULA_STATE_FOG,               /* type, r, g, b, a; f: start, end, near, far */
+};
+
+typedef struct NebulaStateOp {
+    uint8_t kind;
+    uint8_t a[13];
+    uint16_t size[2];
+    float f[4];
+    uint64_t image;
+} NebulaStateOp;
 
 /* A texture coordinate a shape draw generates differently from its material (shape_draw): GXSetTexCoordGen's values
    (type, source, normalize, post-transform matrix id). */
@@ -765,6 +801,9 @@ typedef struct NebulaHostServices {
     /* The material the next shape draws use (NebulaMaterial), after every command the game wrote before it (`stream`
        as shape_draw takes it). */
     void (*material)(void* user, const void* stream, const NebulaMaterial* material);
+    /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order), after every
+       command written before `stream` (as shape_draw takes it). */
+    void (*state)(void* user, const void* stream, const NebulaStateOp* ops, uint32_t count);
 } NebulaHostServices;
 
 enum {

@@ -12706,6 +12706,9 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Material:
         apply_record_material(*record.material);
         return;
+    case shapes::Record::Kind::State:
+        state::apply(record.state, state_);
+        return;
     }
 }
 

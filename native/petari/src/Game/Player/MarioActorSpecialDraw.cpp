@@ -14,7 +14,6 @@
 #include <JSystem/JGeometry/TBox.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
-#include <revolution/gd.h>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXFrameBuf.h>
 #include <revolution/gx/GXPixel.h>
@@ -268,76 +267,49 @@ void MarioActor::resetFog() {
 }
 
 void MarioActor::updateAlphaDL(u8 alpha) {
-    u8 buffer[256] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts lock(false);
-    GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-    __GDCurrentDL = &displayList;
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
     GXColor color = {0, 0, 0, 255};
     color.a = alpha;
-    GDSetTevColor(GX_TEVREG2, color);
-    GDSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    GDSetGenMode2(1, 0, 1, 0, GX_CULL_BACK);
-    GDSetChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
-    GDSetAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG2, color);
+    list.setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
+    list.setGenMode2(1, 0, 1, 0, GX_CULL_BACK);
+    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
+    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GDSetTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GDSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    GDPadCurr32();
-    u32 size = (displayList.ptr - displayList.start + 31) & ~31;
-    DLholder* holder = mDLchanger->swap();
-    holder->mSize = displayList.ptr - displayList.start;
-    MR::copyMemory(holder->mDL, buffer, size);
-    DCStoreRange(holder->mDL, size);
+    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+    mDLchanger->swap()->mList.copy(list);
 }
 
 void MarioActor::updateSimpleAlphaDL(u8 alpha) {
-    u8 buffer[256] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts lock(false);
-    GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-    __GDCurrentDL = &displayList;
-    GDSetDstAlpha(GX_TRUE, alpha);
-    GDPadCurr32();
-    u32 size = (displayList.ptr - displayList.start + 31) & ~31;
-    DLholder* holder = mDLchanger->swap();
-    holder->mSize = displayList.ptr - displayList.start;
-    MR::copyMemory(holder->mDL, buffer, size);
-    DCStoreRange(holder->mDL, size);
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
+    list.setDstAlpha(GX_TRUE, alpha);
+    mDLchanger->swap()->mList.copy(list);
 }
 
 void MarioActor::updateReflectAlphaDL(u8 alpha) {
-    u8 buffer[256] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts lock(false);
-    GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-    __GDCurrentDL = &displayList;
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
     GXColor color = {0, 0, 0, 255};
     color.a = alpha;
-    GDSetTevColor(GX_TEVREG2, color);
-    GDSetTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
+    list.setTevColor(GX_TEVREG2, color);
+    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
                              GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GDPadCurr32();
-    u32 size = (displayList.ptr - displayList.start + 31) & ~31;
-    DLholder* holder = mDLchanger->swap();
-    holder->mSize = displayList.ptr - displayList.start;
-    MR::copyMemory(holder->mDL, buffer, size);
-    DCStoreRange(holder->mDL, size);
+    mDLchanger->swap()->mList.copy(list);
 }
 
 void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
-    u8 buffer[512] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts lock(false);
-    GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-    __GDCurrentDL = &displayList;
+    NebulaStateOp storage[16];
+    J3DStateList list(storage, 16);
     GXColor ambientColor = rAmbient.mGXColor;
-    GDSetChanAmbColor(GX_COLOR0A0, ambientColor);
+    list.setChanAmbColor(GX_COLOR0A0, ambientColor);
     GXColor materialColor = rMaterial.mGXColor;
-    GDSetChanMatColor(GX_COLOR0A0, materialColor);
-    GDSetChanCtrl(GX_COLOR1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
+    list.setChanMatColor(GX_COLOR0A0, materialColor);
+    list.setChanCtrl(GX_COLOR1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
 
     if (!MR::isNearZero(strength)) {
         f32 nearZ = MR::getNearZ();
@@ -346,29 +318,20 @@ void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, 
         f32 start;
         f32 end;
         MR::calcFogStartEnd(mPosition, strength, &start, &end);
-        GDSetFog(GX_FOG_LIN, start, end, nearZ, farZ, color);
+        list.setFog(GX_FOG_LIN, start, end, nearZ, farZ, color);
     }
 
-    GDPadCurr32();
-    u32 length = displayList.ptr - displayList.start;
     mCurrDL = 1 - mCurrDL;
-    mDLSize = length;
-    u32 size = (length + 31) & ~31;
-    MR::copyMemory(mDL[mCurrDL], buffer, size);
-    DCStoreRange(mDL[mCurrDL], size);
+    mDL[mCurrDL].copy(list);
 }
 
 void MarioActor::createRainbowDL() {
-    DLholder* holder;
-    u8 buffer[256] ATTRIBUTE_ALIGN(32);
-    GDLObj displayList;
-    MR::ProhibitSchedulerAndInterrupts lock(false);
+    NebulaStateOp storage[1];
+    J3DStateList list(storage, 1);
 
     for (u32 alpha = 0; alpha < 8; alpha++) {
         for (u32 index = 0; index < 8; index++) {
-            _94[alpha * 8 + index] = new DLchanger(1, 32);
-            GDInitGDLObj(&displayList, buffer, sizeof(buffer));
-            __GDCurrentDL = &displayList;
+            _94[alpha * 8 + index] = new DLchanger(1, 1);
             GXColor color = {0, 0, 0, 0};
 
             if (index & 1) {
@@ -390,15 +353,10 @@ void MarioActor::createRainbowDL() {
             }
 
             color.a = 16 + (alpha + 1) * 24;
-            GDSetTevColor(GX_TEVREG0, color);
-            GDPadCurr32();
-            u32 length = displayList.ptr - displayList.start;
-            u32 size = (length + 31) & ~31;
+            list.setTevColor(GX_TEVREG0, color);
             DLchanger* changer = _94[alpha * 8 + index];
-            holder = &changer->mBuffers[changer->mCurrentBuffer];
-            holder->mSize = length;
-            MR::copyMemory(holder->mDL, buffer, size);
-            DCStoreRange(holder->mDL, size);
+            changer->mBuffers[changer->mCurrentBuffer].mList.copy(list);
+            list.clear();
         }
     }
 }

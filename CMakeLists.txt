@@ -487,6 +487,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/curved_surfaces.cpp
     runtime/src/gx/native_shapes.cpp
     runtime/src/gx/native_material.cpp
+    runtime/src/gx/native_state.cpp
     runtime/src/gx/shader_keys.cpp
     runtime/src/gx/efb_copy.cpp
     runtime/src/gx/line_point_raster.cpp
@@ -719,6 +720,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/curved_surfaces.cpp
         runtime/src/gx/native_shapes.cpp
         runtime/src/gx/native_material.cpp
+        runtime/src/gx/native_state.cpp
         runtime/src/gx/shader_keys.cpp
         runtime/src/gx/efb_copy.cpp
         runtime/src/gx/line_point_raster.cpp

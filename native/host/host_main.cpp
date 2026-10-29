@@ -2173,6 +2173,27 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
 
 // The material the next shape draws use (record_offset's place); texture identities become the physical addresses
 // the texture cache names images by.
+void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t count) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    static_assert(sizeof(NebulaStateOp) == sizeof(galaxy::gx::state::Op), "the renderer's copy of NebulaStateOp");
+    if (ops == nullptr || count == 0u) {
+        return;
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::State;
+    record.offset = record_offset(stream);
+    record.state.resize(count);
+    std::memcpy(record.state.data(), ops, sizeof(NebulaStateOp) * count);
+    for (galaxy::gx::state::Op& op : record.state) {
+        op.image = op.image != 0u ? physical_of(op.image) : 0u;
+    }
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)stream, (void)ops, (void)count;
+#endif
+}
+
 void svc_material(void*, const void* stream, const NebulaMaterial* material) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -3750,6 +3771,7 @@ int main(int argc, char** argv) {
     services.shape_geometry = svc_shape_geometry;
     services.shape_draw = svc_shape_draw;
     services.material = svc_material;
+    services.state = svc_state;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
