@@ -26,7 +26,7 @@ namespace {
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace J3DNativeTexture {
-    u32 imageSize(GXTexFmt format, u16 width, u16 height, u8 levels) {
+    u32 imageSize(u8 format, u16 width, u16 height, u8 levels) {
         // A tile is 32 bytes (RGBA8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel.
         u32 shiftX = 2, shiftY = 2;
         switch (format) {
@@ -56,7 +56,7 @@ namespace J3DNativeTexture {
         return size;
     }
 
-    void registerImage(const void* pImage, GXTexFmt format, u16 width, u16 height, u8 levels) {
+    void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels) {
         if (pImage == nullptr || width == 0 || height == 0) {
             return;
         }
@@ -65,10 +65,25 @@ namespace J3DNativeTexture {
         image.size = imageSize(format, width, height, levels);
         image.width = width;
         image.height = height;
-        image.format = static_cast< u8 >(format);
+        image.format = format;
         image.levels = levels;
         const NebulaHostServices* pHost = nebula_host();
         pHost->texture_image(pHost->user, __NebulaGXWriter.ptr, &image);
+    }
+
+    void registerPalette(const void* pPalette, u16 entries) {
+        if (pPalette == nullptr || entries == 0) {
+            return;
+        }
+        NebulaTextureImage palette;
+        palette.bytes = pPalette;
+        palette.size = static_cast< u32 >(entries) * 2;
+        palette.width = entries;
+        palette.height = 1;
+        palette.format = 0xFF;  // not an image
+        palette.levels = 1;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->texture_image(pHost->user, __NebulaGXWriter.ptr, &palette);
     }
 
     void init(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,
@@ -174,6 +189,7 @@ namespace J3DNativeTexture {
     void initTlut(GXTlutObj* pObj, void* pLut, GXTlutFmt format, u16 entries) {
         J3DNativeTlutObj& rTlut = *reinterpret_cast< J3DNativeTlutObj* >(pObj);
         memcpy(rTlut.mLut, &pLut, sizeof(pLut));
+        registerPalette(pLut, entries);
         rTlut.mFormat = static_cast< u8 >(format);
         rTlut.mEntries = entries;
     }

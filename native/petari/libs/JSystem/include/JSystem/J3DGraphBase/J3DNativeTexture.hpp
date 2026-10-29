@@ -50,10 +50,12 @@ namespace J3DNativeTexture {
                    f32* pLodBias, GXBool* pBiasClamp, GXBool* pEdgeLod, GXAnisotropy* pMaxAniso);
     u32 getTlut(const GXTexObj* pObj);
     // An image's bytes handed to the renderer (nebula_game_api.h texture_image): where it is loaded or rewritten.
-    // `levels`: its mipmap images (1 without mipmaps).
-    void registerImage(const void* pImage, GXTexFmt format, u16 width, u16 height, u8 levels);
+    // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps).
+    void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
+    // A palette's colours handed to the renderer (`entries` 16-bit colours).
+    void registerPalette(const void* pPalette, u16 entries);
     // The bytes of an image of that format and size with that many levels, as GX lays them out (32-byte tiles).
-    u32 imageSize(GXTexFmt format, u16 width, u16 height, u8 levels);
+    u32 imageSize(u8 format, u16 width, u16 height, u8 levels);
     // Palettes: GXInitTlutObj, and GXLoadTlut into one of GX's 20 palette places.
     void initTlut(GXTlutObj* pObj, void* pLut, GXTlutFmt format, u16 entries);
     void loadTlut(const GXTlutObj* pObj, u32 tlutName);

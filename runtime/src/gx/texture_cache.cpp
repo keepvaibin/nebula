@@ -1638,8 +1638,9 @@ bool TextureCache::load_tlut(
             "[TextureCache] load_tlut: dest slot overflows TLUT bank");
     }
 
-    const std::byte* src_ptr =
-        resolve_guest_tex(memory, src_addr, transfer);
+    // A palette the game handed over (texture_image) loads from its copy.
+    const std::byte* handed_over = registered_bytes(src_addr, transfer);
+    const std::byte* src_ptr = handed_over != nullptr ? handed_over : resolve_guest_tex(memory, src_addr, transfer);
     // An identical reload changes no palette.
     if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
         return false;
