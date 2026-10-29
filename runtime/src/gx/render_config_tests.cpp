@@ -360,14 +360,8 @@ int main() {
 
     const galaxy::gx::GxTimingConfig& timing = galaxy::gx::get_gx_timing_config();
     passed &= expect(
-        timing.render_queue_depth == 2 &&
-            !timing.vi_render_fifo_wait &&
-            timing.pe_events_gpu_fence &&
-            !timing.render_live_memory_wait &&
-            !timing.render_memory_snapshot &&
-            timing.render_live_memory_reads &&
-            timing.pe_events_at_consumption,
-        "GX timing is the shipped profile: queue depth 2, live memory reads, PE events at submission");
+        timing.render_queue_depth == 2,
+        "GX timing is the shipped profile: queue depth 2");
 
     galaxy::gx::RenderConfig config{};
     config.msaa_samples = 8;

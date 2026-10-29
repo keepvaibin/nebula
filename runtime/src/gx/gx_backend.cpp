@@ -1090,7 +1090,6 @@ bool GxBackend::initialize(int w, int h) {
     render_chunks_in_flight_ = 0;
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
-    render_cpu_reads_in_flight_ = 0;
     pending_pointer_depth_capture_ = {};
     render_thread_ = std::thread(&GxBackend::render_thread_main, this);
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
@@ -6586,8 +6585,6 @@ void GxBackend::render_thread_main() {
                         std::chrono::duration_cast<std::chrono::nanoseconds>(
                             std::chrono::steady_clock::now().time_since_epoch()).count());
                     ++render_chunks_in_flight_;
-                    ++render_cpu_reads_in_flight_;
-                    chunk.cpu_reads_pending = true;
                 }
                 have_chunk = true;
             }
@@ -6668,11 +6665,6 @@ void GxBackend::render_thread_main() {
                         --present_chunks_in_flight_;
                     }
                 } else if (render_chunks_in_flight_ != 0u) {
-                    if (chunk.cpu_reads_pending &&
-                        render_cpu_reads_in_flight_ != 0u) {
-                        --render_cpu_reads_in_flight_;
-                        chunk.cpu_reads_pending = false;
-                    }
                     --render_chunks_in_flight_;
                 }
             }
@@ -6939,21 +6931,6 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
             request->cv.notify_one();
         }
     }
-}
-
-void GxBackend::mark_frame_cpu_reads_done(FrameChunk& chunk) {
-    if (!chunk.cpu_reads_pending) {
-        return;
-    }
-    galaxy::timeline::record(galaxy::timeline::Event::RenderReadsDone, 0u);
-    {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        if (render_cpu_reads_in_flight_ != 0u) {
-            --render_cpu_reads_in_flight_;
-        }
-        chunk.cpu_reads_pending = false;
-    }
-    queue_space_cv_.notify_all();
 }
 
 void GxBackend::present_vi_black(bool in_frame) {
@@ -7489,7 +7466,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     const std::uint64_t post_parse_flush_us = frame_timing_enabled
         ? elapsed_us(post_parse_flush_start, post_parse_flush_end)
         : 0u;
-    mark_frame_cpu_reads_done(chunk);
 
     // The chunk with a game frame's end presents its picture (present_on_copy_enabled); a present between frames
     // shows the newest. Not while the output is black, the settings overlay draws over every present, or presents are paced elsewhere

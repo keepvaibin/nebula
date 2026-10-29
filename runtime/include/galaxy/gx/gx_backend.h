@@ -373,7 +373,6 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        bool cpu_reads_pending = false;
         bool efb_peek_only = false;
         EfbPeekRequest* efb_peek_request = nullptr;
         std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
@@ -433,7 +432,6 @@ private:
     // while the simulation thread keeps peeking.
     void poll_async_peek_fields();
     void submit_async_peek_fields_if_requested();
-    void mark_frame_cpu_reads_done(FrameChunk& chunk);
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_xfb_on_thread(
         bool black,
@@ -1246,7 +1244,6 @@ private:
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
     std::size_t utility_chunks_in_flight_ = 0;
-    std::size_t render_cpu_reads_in_flight_ = 0;
     // Sim-thread only: dirty guest ranges observed on retraces with no FIFO.
     // They do not need a full render chunk, but the next real render must
     // invalidate texture/display-list caches before parsing.

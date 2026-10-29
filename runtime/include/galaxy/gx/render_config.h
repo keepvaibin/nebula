@@ -222,19 +222,6 @@ struct GxTimingConfig {
     // Non-present render chunks the game thread may have outstanding before render_frame() waits for the render
     // thread.
     unsigned render_queue_depth = 2;
-    bool vi_render_fifo_wait = false;
-    bool pe_events_gpu_fence = true;
-    bool render_live_memory_wait = false;
-    bool render_memory_snapshot = false;
-    // Neither the live-read barrier nor a snapshot: the render thread reads guest RAM directly while the game runs
-    // ahead (the hardware's GP model, Dolphin's dual-core model). PE completion stays on GPU fences, so the game's own
-    // GXDrawDone discipline bounds how far ahead it writes.
-    bool render_live_memory_reads = true;
-    // With pe_events_gpu_fence, a capture's PE finish/token events are delivered once its command list is submitted
-    // (every guest-memory read of the capture, texture decodes included, is complete by then) instead of at the GPU
-    // fence. Nothing the GPU produces is read back through guest memory (EFB copies stay GPU resources; peeks use
-    // asynchronous fields), so GPU execution time does not serialize the game's GXDrawDone.
-    bool pe_events_at_consumption = true;
 };
 
 struct RenderFeatureStatus {
