@@ -462,7 +462,6 @@ void RFLiSetup2DCameraAndParam(void) {
     J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDither(FALSE);
-    GXInvalidateVtxCache();
     J3DNativeStateSetNumChans(1);
     J3DNativeStateSetChanCtrl(GX_COLOR0A0, FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, 2);
     J3DNativeStateSetNumTexGens(1);
