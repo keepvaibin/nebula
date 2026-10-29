@@ -612,12 +612,17 @@ namespace J3DNativeState {
                                                          0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
+    // The frame GXInit assumed (its NTSC 480-line mode): 640x480, no antialiasing, the deflicker filter.
+    const u16 cDefaultWidth = 640;
+    const u16 cDefaultHeight = 480;
+    static const u8 sDefaultSamples[12][2] = {{6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6},
+                                              {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}};
+    static const u8 sDefaultVerticalFilter[7] = {8, 8, 10, 12, 10, 8, 8};
 
     void initDefaults() {
         const GXColor clear = {64, 64, 64, 255};
         const GXColor black = {0, 0, 0, 0};
         const GXColor white = {255, 255, 255, 255};
-        const GXRenderModeObj& rMode = GXNtsc480IntDf;
 
         setCopyClear(clear, 0xFFFFFF);
         for (u32 i = 0; i < 8; i++) {
@@ -638,13 +643,13 @@ namespace J3DNativeState {
         setCurrentMtx(GX_PNMTX0);
         J3DNativeShape::sendTexture(identity, GX_IDENTITY, GX_MTX3x4);
         J3DNativeShape::sendTexture(identity, GX_PTIDENTITY, GX_MTX3x4);
-        J3DNativeView::setViewport(0.0f, 0.0f, rMode.fbWidth, rMode.xfbHeight, 0.0f, 1.0f);
+        J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 
         setCoPlanar(GX_FALSE);
         setCullMode(GX_CULL_BACK);
         setClipMode(GX_CLIP_ENABLE);
-        J3DNativeView::setScissor(0, 0, rMode.fbWidth, rMode.efbHeight);
+        J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
         J3DNativeView::setScissorBoxOffset(0, 0);
         setNumChans(0);
         setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -700,11 +705,11 @@ namespace J3DNativeState {
         setDither(GX_TRUE);
         setDstAlpha(GX_FALSE, 0);
         setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
-        setDispCopySrc(0, 0, rMode.fbWidth, rMode.efbHeight);
-        setDispCopyDst(rMode.fbWidth, rMode.efbHeight);
-        setDispCopyYScale(static_cast< f32 >(rMode.xfbHeight) / static_cast< f32 >(rMode.efbHeight));
+        setDispCopySrc(0, 0, cDefaultWidth, cDefaultHeight);
+        setDispCopyDst(cDefaultWidth, cDefaultHeight);
+        setDispCopyYScale(1.0f);
         setCopyClamp(static_cast< GXFBClamp >(GX_CLAMP_TOP | GX_CLAMP_BOTTOM));
-        setCopyFilter(rMode.aa, rMode.sample_pattern, GX_TRUE, rMode.vfilter);
+        setCopyFilter(GX_FALSE, sDefaultSamples, GX_TRUE, sDefaultVerticalFilter);
         setDispCopyGamma(GX_GM_1_0);
         setDispCopyFrame2Field(GX_COPY_PROGRESSIVE);
     }

@@ -103,8 +103,8 @@ static inline uint8_t* __NebulaGXCmdXFWords(uint16_t addr, unsigned count) {
     return p + 5;
 }
 
-/* Nonzero while host markers go into the stream: the renderer wants them (frame interpolation, motion vectors, ray
-   tracing; asked at each scene's begin) and the writer is in the main ring, not a display list. */
+/* Nonzero while the renderer reads draw identities (frame interpolation, motion vectors, ray tracing; asked at each
+   scene's begin). */
 extern uint8_t __NebulaGXMarkers;
 
 const struct NebulaHostServices* nebula_host(void);
@@ -122,11 +122,8 @@ static inline void __NebulaGXHostMarker(uint8_t kind, uint16_t aux, uint32_t a, 
     }
 }
 
-/* Nonzero while the writer is in the main ring (not a display list). */
-extern uint8_t __NebulaGXLinked;
-
 /* The game's bloom through the renderer (NEBULA_OPTION_BLOOM; galaxy/motion_signals.h kMarkerBloom, its phases and
-   values): a host marker whatever the draw identities, in the main ring only. */
+   values): a host marker whatever the draw identities. */
 enum {
     NEBULA_GX_MARKER_BLOOM = 15,
     NEBULA_GX_BLOOM_KEEP = 1,
@@ -136,22 +133,18 @@ enum {
 };
 
 static inline void __NebulaGXBloomMarker(uint16_t phase, uint32_t a, uint32_t b) {
-    if (__NebulaGXLinked != 0) {
-        __NebulaGXMarker(NEBULA_GX_MARKER_BLOOM, phase, a, b);
-    }
+    __NebulaGXMarker(NEBULA_GX_MARKER_BLOOM, phase, a, b);
 }
 
 /* The next draw is an EFB clear quad (MainLoopFramework::clearEfb, MR::clearZBuffer): one quad filling its viewport
    in a constant colour, writing its Z texture's depth (`z`, 24 bits) with the compare always. The renderer clears that
    depth and draws the colour without the Z texture where the draw is the one it expects; else the quad draws as
    written. With its colour (__NebulaGXClearQuadColourMarker: the TEV's only stage outputs C0 and A0, `rgba`) the
-   renderer clears the colour too. In the main ring only. */
+   renderer clears the colour too. */
 enum { NEBULA_GX_MARKER_CLEAR_QUAD = 16 };
 
 static inline void __NebulaGXClearQuadMarkerWith(uint32_t z, uint16_t has_colour, uint32_t rgba) {
-    if (__NebulaGXLinked != 0) {
-        __NebulaGXMarker(NEBULA_GX_MARKER_CLEAR_QUAD, has_colour, z, rgba);
-    }
+    __NebulaGXMarker(NEBULA_GX_MARKER_CLEAR_QUAD, has_colour, z, rgba);
 }
 
 static inline void __NebulaGXClearQuadMarker(uint32_t z) {

@@ -95,7 +95,7 @@ void BloomEffect::preDraw() const {
 #ifdef TARGET_PC
     // The renderer keeps the scene in the EFB's own format: the console's copy below is 8 bits, which cuts the ray
     // tracer's HDR scene at 1.
-    sBloomRoute = __NebulaGXLinked != 0 ? __NebulaOption(NEBULA_OPTION_BLOOM) : 0;
+    sBloomRoute = __NebulaOption(NEBULA_OPTION_BLOOM);
     if (sBloomRoute != 0) {
         __NebulaGXBloomMarker(NEBULA_GX_BLOOM_KEEP, 0, 0);
     } else

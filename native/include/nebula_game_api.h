@@ -733,27 +733,13 @@ typedef struct NebulaHostServices {
        its own diagnostics and ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
 
-    /* GX: the game's command stream (the console's main FIFO), in order, as spans of the module's command ring. A
-       span is contiguous, ends where the game flushed (GXFlush, a draw sync, a draw done: a command boundary; an
-       empty one where the game starts writing into the ring) and
-       stays valid and unchanged until the host releases it (nebula_game_gx_release), so the renderer parses it in
-       place. When the ring is full the game waits for releases, as the console's CPU waits on a full GP FIFO. */
-    void (*gx_submit)(void* user, const uint8_t* bytes, size_t size);
-    /* A PE event at the end of the stream so far: a draw-sync token (finish = 0) or a draw done (finish = 1). The
-       renderer answers it with nebula_game_gx_event when its parse reaches that point. */
-    void (*gx_pe_marker)(void* user, int finish, uint16_t token);
-    /* An EFB pixel (type 0: colour, 1: depth), as GXPeekARGB/GXPeekZ read it; `token` is the draw-sync token
-       whose callback peeks (0: none), the stream position the console's GPU was stopped at. */
-    uint32_t (*gx_peek_efb)(void* user, uint16_t x, uint16_t y, uint32_t type, uint16_t token);
     /* A scene bound (NEBULA_SCENE_*) at the end of the stream so far; the 3D scene's begin carries 16 floats: the
        camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or
        four zeros without a player. The others NULL. */
     void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);
-    /* A JPA stripe particle whose two strip vertices are written next, `span_offset` bytes into the span the game
-       has not submitted yet (galaxy/motion_signals.h): age << 16 | lifetime, strip 0 JPADrawStripe, 1-2 the passes
-       of JPADrawStripeX. */
-    void (*gx_stripe_particle)(void* user, size_t span_offset, uint32_t particle, uint32_t age_lifetime,
-                               uint8_t strip);
+    /* A JPA stripe particle whose two strip vertices are drawn next (galaxy/motion_signals.h): age << 16 |
+       lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
+    void (*gx_stripe_particle)(void* user, uint32_t particle, uint32_t age_lifetime, uint8_t strip);
 
     /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
     const uint8_t* (*disc_fst)(void* user, size_t* size);
@@ -987,12 +973,6 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 NEBULA_GAME_API void nebula_game_run(void);
 /* The game's memory regions for the renderer (valid once nebula_game_run has started the game). */
 NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max);
-/* The renderer reached a PE draw-sync token (finish = 0) or a draw done (finish = 1). */
-NEBULA_GAME_API void nebula_game_gx_event(int finish, uint16_t token);
-/* The host is done with the next `size` bytes of the command stream (spans are released in order, whole or in part):
-   the ring may reuse them. The host must release without waiting on further progress of the game, which may itself be
-   waiting for room. */
-NEBULA_GAME_API void nebula_game_gx_release(size_t size);
 /* A disc read finished: `result` is the bytes read, or -1 on a read error. */
 NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */

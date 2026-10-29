@@ -307,8 +307,6 @@ struct Module {
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
-    decltype(&nebula_game_gx_event) gx_event;
-    decltype(&nebula_game_gx_release) gx_release;
     decltype(&nebula_game_memory_regions) memory_regions;
     decltype(&nebula_game_wpad_connect) wpad_connect;
     decltype(&nebula_game_wpad_report) wpad_report;
@@ -320,10 +318,8 @@ Module gModule;
 
 // The GX command ring's size (sdk/gx/gx_fifo.c), mapped twice in a row: a span past the first mapping's end
 // continues in the second.
-constexpr size_t kGxRingSize = 16u << 20;
 
 // Progress counters for the host's log.
-std::atomic<uint64_t> gGxBytes{0};
 std::atomic<uint32_t> gDiscReads{0};
 std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
@@ -444,8 +440,6 @@ void load_module(const fs::path& path) {
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
-    gModule.gx_event = reinterpret_cast<decltype(gModule.gx_event)>(find_symbol(module, "nebula_game_gx_event"));
-    gModule.gx_release = reinterpret_cast<decltype(gModule.gx_release)>(find_symbol(module, "nebula_game_gx_release"));
     gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
     gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
     gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
@@ -1444,23 +1438,11 @@ using galaxy::GxServices;
 GuestMemory gMemory{};
 std::vector<GuestMemoryRegion> gRegions;
 GxServices gNative{};
-const uint8_t* gPending = nullptr;
-size_t gPendingSize = 0;
-// The end of the last span the game submitted: its GX writer continues there (or a ring's length before it).
-const uint8_t* gSpanEnd = nullptr;
 std::deque<galaxy::gx::FramePeCompletionToken> gTokens;
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
 void native_log(void*, GxLogLevel, const char* text) {
     log_line("renderer:", text);
-}
-
-void native_pe_finish(void*) {
-    gModule.gx_event(1, 0);
-}
-
-void native_pe_token(void*, uint16_t token, bool) {
-    gModule.gx_event(0, token);
 }
 
 galaxy::host::NativeGameAudio* gAudio = nullptr;
@@ -1481,8 +1463,6 @@ void setup_renderer_memory() {
     gMemory.regions = gRegions.data();
     gMemory.region_count = static_cast<uint32_t>(gRegions.size());
     gNative.log = native_log;
-    gNative.gx_pe_finish = native_pe_finish;
-    gNative.gx_pe_token = native_pe_token;
 }
 
 std::once_flag gMemoryOnce;
@@ -1510,16 +1490,10 @@ void take_finished_tokens() {
 }
 
 void submit_frame_unchecked(bool present, bool black) {
-    const size_t size = gPendingSize;
-    const auto token = galaxy::gx::render_frame(reinterpret_cast<const std::byte*>(gPending), size, &gMemory, &gNative,
-                                                present, black);
+    const auto token = galaxy::gx::render_frame(nullptr, 0, &gMemory, &gNative, present, black);
     if (token) {
         gTokens.push_back(token);
         gSubmissions.fetch_add(1, std::memory_order_relaxed);
-    }
-    if (size != 0) {
-        gPendingSize = 0;
-        gModule.gx_release(size);
     }
     take_finished_tokens();
 }
@@ -1541,33 +1515,6 @@ void submit_frame(bool present, bool black) {
     }
 }
 #endif
-
-void svc_gx_submit(void*, const uint8_t* bytes, size_t size) {
-    gGxBytes.fetch_add(size, std::memory_order_relaxed);
-#if defined(NEBULA_HOST_RENDERER)
-    ensure_guest_memory();
-    if (gPendingSize == 0) {
-        gPending = bytes;
-    } else if (bytes != gPending + gPendingSize && bytes + kGxRingSize != gPending + gPendingSize) {
-        die("a GX span does not continue the last (%p after %p + %zu)", (const void*)bytes, (const void*)gPending, gPendingSize);
-    }
-    gPendingSize += size;
-    gSpanEnd = bytes + size;
-#else
-    (void)bytes;
-    gModule.gx_release(size);
-#endif
-}
-
-void svc_gx_pe_marker(void*, int finish, uint16_t token) {
-#if defined(NEBULA_HOST_RENDERER)
-    (void)finish;
-    (void)token;
-    submit_frame(false, false);
-#else
-    gModule.gx_event(finish, token);
-#endif
-}
 
 // The stage the game reports before each 3D scene (game_stage); the scene's begin marker carries it.
 std::string gSceneStage;
@@ -1883,7 +1830,7 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
         galaxy::gx::FifoMarker::SceneBegin, galaxy::gx::FifoMarker::SceneEnd,
         galaxy::gx::FifoMarker::Scene2DBegin, galaxy::gx::FifoMarker::Scene2DEnd};
     if (marker < std::size(kMarkers)) {
-        galaxy::gx::attach_fifo_marker(kMarkers[marker], gPendingSize);
+        galaxy::gx::attach_fifo_marker(kMarkers[marker], 0);
     }
 #else
     (void)marker;
@@ -1891,41 +1838,13 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
 #endif
 }
 
-void svc_gx_stripe_particle(void*, size_t span_offset, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
+void svc_gx_stripe_particle(void*, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
 #if defined(NEBULA_HOST_RENDERER)
-    galaxy::gx::attach_stripe_particle(gPendingSize + span_offset, particle, age_lifetime, strip);
+    galaxy::gx::attach_stripe_particle(0, particle, age_lifetime, strip);
 #else
-    (void)span_offset;
     (void)particle;
     (void)age_lifetime;
     (void)strip;
-#endif
-}
-
-uint32_t svc_gx_peek_efb(void*, uint16_t x, uint16_t y, uint32_t type, uint16_t token) {
-#if defined(NEBULA_HOST_RENDERER)
-    const auto kind = type == 0 ? galaxy::gx::EfbPeekKind::Color : galaxy::gx::EfbPeekKind::Depth;
-    uint32_t value = 0;
-    const bool published = galaxy::gx::peek_efb_published(x, y, kind, token, value);
-    if (!published) {
-        submit_frame(false, false);
-        (void)galaxy::gx::peek_efb(x, y, kind, value);
-    }
-    // GALAXY_TRACE_PEEK: every peek, its token, pixel, answer and whether a published field gave it.
-    static const bool trace = std::getenv("GALAXY_TRACE_PEEK") != nullptr;
-    if (trace) {
-        char text[96];
-        std::snprintf(text, sizeof(text), "%s token=%u %u,%u %s 0x%08X", type == 0 ? "argb" : "z", token, x, y,
-                      published ? "field" : "now", value);
-        log_line("peek:", text);
-    }
-    return value;
-#else
-    (void)x;
-    (void)y;
-    (void)type;
-    (void)token;
-    return 0;
 #endif
 }
 
@@ -2115,19 +2034,10 @@ void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// Where a record the game makes now runs: after every command it wrote before it (its writer's place past the
-// submitted spans), and after the arrays and groups it registered before it (which join the stream here).
+// Where a record the game makes now runs: in the order the game makes it, after the arrays and groups it registered
+// before it (which join the stream here). There is no command stream to place it in, so every offset is 0.
 std::size_t record_offset(const void* stream) {
-    const auto* writer = static_cast<const uint8_t*>(stream);
-    std::size_t ahead = 0;
-    if (gSpanEnd != nullptr) {
-        ahead = writer >= gSpanEnd ? static_cast<std::size_t>(writer - gSpanEnd)
-                                   : static_cast<std::size_t>(writer + kGxRingSize - gSpanEnd);
-        if (ahead >= kGxRingSize) {
-            die("a record outside the GX command ring (%p after %p)", stream, (const void*)gSpanEnd);
-        }
-    }
-    const std::size_t offset = gPendingSize + ahead;
+    (void)stream;
     if (gShapePendingAny.load(std::memory_order_acquire)) {
         std::vector<galaxy::gx::shapes::Record> pending;
         {
@@ -2136,11 +2046,11 @@ std::size_t record_offset(const void* stream) {
             gShapePendingAny.store(false, std::memory_order_relaxed);
         }
         for (galaxy::gx::shapes::Record& record : pending) {
-            record.offset = offset;
+            record.offset = 0;
             galaxy::gx::attach_shape_record(std::move(record));
         }
     }
-    return offset;
+    return 0;
 }
 
 // The physical address of game memory at `key` (a host address), as the renderer's texture cache names it.
@@ -2395,21 +2305,10 @@ void svc_marker(void*, const void* stream, uint32_t kind, uint32_t aux, uint32_t
 #endif
 }
 
-// The game's frame end: everything it wrote is already handed over (a span ends at each flush), so the renderer
-// takes the frame as it stands.
+// The game's frame end: the renderer takes the frame's records.
 void svc_frame_end(void*, const void* stream) {
 #if defined(NEBULA_HOST_RENDERER)
-    if (record_offset(stream) != gPendingSize) {
-        // Its first bytes name the command that was written without a flush.
-        char bytes[3 * 16 + 1] = {};
-        const auto* first = gSpanEnd != nullptr ? gSpanEnd : static_cast<const uint8_t*>(stream);
-        const std::size_t count = std::min<std::size_t>(16u, record_offset(stream) - gPendingSize);
-        for (std::size_t i = 0; i < count; ++i) {
-            std::snprintf(bytes + 3 * i, 4, "%02X ", first[i]);
-        }
-        die("the game ended a frame with GX bytes it never handed over (%zu: %s)", record_offset(stream) - gPendingSize,
-            bytes);
-    }
+    (void)stream;
     submit_frame(false, false);
 #else
     (void)stream;
@@ -4013,9 +3912,6 @@ int main(int argc, char** argv) {
     services.size = sizeof(services);
     services.log = svc_log;
     services.fatal = svc_fatal;
-    services.gx_submit = svc_gx_submit;
-    services.gx_pe_marker = svc_gx_pe_marker;
-    services.gx_peek_efb = svc_gx_peek_efb;
     services.gx_scene_marker = svc_gx_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.code_patch = svc_code_patch;
@@ -4220,8 +4116,8 @@ int main(int argc, char** argv) {
         const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
         if (retraces != reported) {
             char text[384];
-            std::snprintf(text, sizeof(text), "retrace %u, gx %.2f MB, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
-                          retraces, gGxBytes.load(std::memory_order_relaxed) / 1048576.0,
+            std::snprintf(text, sizeof(text), "retrace %u, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
+                          retraces,
                           gDiscReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
                           gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)

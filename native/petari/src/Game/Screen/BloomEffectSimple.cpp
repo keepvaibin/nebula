@@ -55,7 +55,7 @@ void BloomEffectSimple::draw() const {
     }
 
 #ifdef TARGET_PC
-    const u32 route = __NebulaGXLinked != 0 ? __NebulaOption(NEBULA_OPTION_BLOOM) : 0;
+    const u32 route = __NebulaOption(NEBULA_OPTION_BLOOM);
     if (route == 2) {
         // The chain below, drawn by the renderer at the internal resolution (galaxy/gx/game_bloom.h): the threshold,
         // the channel, the ring's tap weight (blurTexture's), the intensity and the ring's vertical radius per unit;
