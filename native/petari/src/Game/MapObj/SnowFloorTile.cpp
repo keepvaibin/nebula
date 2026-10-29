@@ -1,4 +1,5 @@
 #include "Game/MapObj/SnowFloorTile.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
@@ -440,15 +441,14 @@ void SnowFloorTile::drawLayer(s32 layer) const {
 
     for (u32 i = 0; i < ::sStripCount; i++) {
         TVec3f center(mPosition + mUp * (5.0f + ::sLayerHeight * layer));
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         TDDraw::sendPoint(center + p0);
-        GXTexCoord2f32(0.0f, 0.0f);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
         TDDraw::sendPoint(center + p1);
-        GXTexCoord2f32(1.0f, 0.0f);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
         TDDraw::sendPoint(center + p2);
-        GXTexCoord2f32(1.0f, 1.0f);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
         TDDraw::sendPoint(center + p3);
-        GXTexCoord2f32(0.0f, 1.0f);
-        GXEnd();
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
     }
 }

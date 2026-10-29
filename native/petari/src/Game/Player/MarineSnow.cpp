@@ -1,4 +1,5 @@
 #include "Game/Player/MarineSnow.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -141,22 +142,20 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 }
 
                 for (u16 point = firstParticle; point < lastParticle; point += particleStride) {
-                    GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+                    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
                     {
                         TDDraw::sendPoint(mParticlePositions[point] - diagonalDown);
-                        GXTexCoord2f32(0.0f, 0.0f);
+                        J3DNativeDraw::texCoord(0.0f, 0.0f);
 
                         TDDraw::sendPoint(mParticlePositions[point] + diagonalUp);
-                        GXTexCoord2f32(1.0f, 0.0f);
+                        J3DNativeDraw::texCoord(1.0f, 0.0f);
 
                         TDDraw::sendPoint(mParticlePositions[point] + diagonalDown);
-                        GXTexCoord2f32(1.0f, 1.0f);
+                        J3DNativeDraw::texCoord(1.0f, 1.0f);
 
                         TDDraw::sendPoint(mParticlePositions[point] - diagonalUp);
-                        GXTexCoord2f32(0.0f, 1.0f);
+                        J3DNativeDraw::texCoord(0.0f, 1.0f);
                     }
-
-                    GXEnd();
                 }
             }
         }

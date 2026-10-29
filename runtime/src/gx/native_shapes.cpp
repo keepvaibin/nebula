@@ -18,6 +18,46 @@ const float* entry(const Array* array, ArrayKind kind, std::uint32_t index, std:
 
 }  // namespace
 
+void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out) {
+    out.clear();
+    auto add = [&](std::uint32_t i) { out.push_back(static_cast<std::uint16_t>(i)); };
+    switch (primitive & 0xF8u) {
+    case 0x80u:  // quads
+    case 0x88u:
+        for (std::uint32_t i = 0; i + 3u < count; i += 4u) {
+            add(i), add(i + 1u), add(i + 2u);
+            add(i), add(i + 2u), add(i + 3u);
+        }
+        break;
+    case 0x90u:  // triangles
+        for (std::uint32_t i = 0; i < count / 3u * 3u; ++i) add(i);
+        break;
+    case 0x98u:  // strip
+        for (std::uint32_t i = 0; i + 2u < count; ++i) {
+            if ((i & 1u) == 0u) {
+                add(i), add(i + 1u), add(i + 2u);
+            } else {
+                add(i + 1u), add(i), add(i + 2u);
+            }
+        }
+        break;
+    case 0xA0u:  // fan
+        for (std::uint32_t i = 1u; i + 1u < count; ++i) add(0u), add(i), add(i + 1u);
+        break;
+    case 0xA8u:  // lines
+        for (std::uint32_t i = 0; i + 1u < count; i += 2u) add(i), add(i + 1u);
+        break;
+    case 0xB0u:  // line strip
+        for (std::uint32_t i = 0; i + 1u < count; ++i) add(i), add(i + 1u);
+        break;
+    case 0xB8u:  // points
+        for (std::uint32_t i = 0; i < count; ++i) add(i);
+        break;
+    default:
+        break;
+    }
+}
+
 bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
             const curved::Model* curved, std::vector<GxVertexOut>& out) {
     const std::uint32_t a = geometry.attributes;

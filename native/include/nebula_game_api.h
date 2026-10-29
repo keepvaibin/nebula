@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 39u
+#define NEBULA_GAME_API_VERSION 40u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -79,6 +79,24 @@ typedef struct NebulaStateOp {
     float f[4];
     uint64_t image;
 } NebulaStateOp;
+
+/* Vertices the game sends as it draws (immediate): `count` of them grouped as `primitive` (GXBegin's: quads,
+   triangles, strips, fans, lines, line strips, points), each with the values `attributes` names (NEBULA_SHAPE_NORMAL,
+   _COLOR0, _COLOR1, _TEXCOORD0 << n, _POSITION_MATRIX): 3 floats of position and of normal, an R << 24 | G << 16 |
+   B << 8 | A word per colour, 2 floats per texture coordinate, a GX matrix id per position matrix. Without a position
+   matrix the vertices take the current one. */
+typedef struct NebulaImmediate {
+    uint8_t primitive;
+    uint8_t reserved[3];
+    uint32_t attributes;
+    uint32_t count;
+    uint32_t reserved2;
+    const float* position;
+    const float* normal;
+    const uint32_t* color[2];
+    const float* texcoord[8];
+    const uint8_t* position_matrix;
+} NebulaImmediate;
 
 /* A texture coordinate a shape draw generates differently from its material (shape_draw): GXSetTexCoordGen's values
    (type, source, normalize, post-transform matrix id). */
@@ -806,6 +824,8 @@ typedef struct NebulaHostServices {
     /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order), after every
        command written before `stream` (as shape_draw takes it). */
     void (*state)(void* user, const void* stream, const NebulaStateOp* ops, uint32_t count);
+    /* Vertices drawn as the game sends them (NebulaImmediate), after every command written before `stream`. */
+    void (*immediate)(void* user, const void* stream, const NebulaImmediate* draw);
 } NebulaHostServices;
 
 enum {

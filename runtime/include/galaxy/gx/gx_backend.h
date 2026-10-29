@@ -1655,6 +1655,8 @@ private:
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
+    // Vertices the game sent as it drew them, through the frame's rings.
+    void draw_record_immediate(const shapes::Immediate& immediate);
     // A material record into the drawing state (native_material.h).
     void apply_record_material(const material::Material& m);
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
@@ -1673,6 +1675,9 @@ private:
         const curved::Model* curved = nullptr;
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
+    // draw_record_immediate's vertices and indices before they go to the rings.
+    std::vector<GxVertexOut> immediate_vertices_;
+    std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
     std::uint64_t vs_key_vertex_source_ = 0;
     // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.

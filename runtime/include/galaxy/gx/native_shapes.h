@@ -84,9 +84,22 @@ struct Matrix {
     std::array<float, 12> values{};
 };
 
+// Vertices the game sent as it drew them (nebula_game_api.h NebulaImmediate): `geometry` has one corner per vertex,
+// in order, reading `arrays` (its values) entry by entry; `primitive` is GX's opcode (its top five bits).
+struct Immediate {
+    std::uint8_t primitive = 0;
+    Geometry geometry;
+    std::array<Array, 12> arrays;
+};
+
+// The indices a primitive of `count` vertices draws with, as the renderer has always split GX's primitives (`primitive`
+// is GX's opcode, its top five bits): quads as (0 1 2)(0 2 3), strips with their odd triangles turned, fans around
+// vertex 0, line strips as line lists, triangles, lines and points as they are.
+void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
+
 // Records of the game's stream, in the order it made them (gx_backend.h attach_shape_record).
 struct Record {
-    enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State };
+    enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State, Immediate };
     std::size_t offset = 0;  // bytes into the submitted GX stream: it runs after every command before it
     std::uint64_t serial = 0;  // its place among the records (and so among markers at the same offset)
     Kind kind = Kind::Draw;
@@ -96,6 +109,7 @@ struct Record {
     std::shared_ptr<const Geometry> geometry;
     std::shared_ptr<const material::Material> material;
     std::vector<state::Op> state;  // drawing-state changes outside materials, in order
+    std::shared_ptr<const Immediate> immediate;
     // A draw's matrices, and the matrices its corners take when they carry none (position, texture coordinates 0-7)
     // when the game set them since its last draw.
     std::vector<Matrix> matrices;

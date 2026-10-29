@@ -1,4 +1,5 @@
 #include "Game/MapObj/SpinDriverPathDrawer.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/MapObj/SpinDriverShootPath.hpp"
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
@@ -342,7 +343,7 @@ void SpinDriverPathDrawer::draw() const {
         f32 prevVal = _9C[i - 1];
         f32 val = _9C[i];
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 6);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev98, 0.0f, prevVal);
         sendPoint(curr90 - curr98, 0.0f, val);
@@ -351,7 +352,7 @@ void SpinDriverPathDrawer::draw() const {
         sendPoint(prev90 + prev98, 1.0f, prevVal);
         sendPoint(curr90 + curr98, 1.0f, val);
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 6);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 6, NEBULA_SHAPE_TEXCOORD0);
 
         sendPoint(prev90 - prev94, 0.0f, prevVal);
         sendPoint(curr90 - curr94, 0.0f, val);
@@ -363,9 +364,6 @@ void SpinDriverPathDrawer::draw() const {
 }
 
 void SpinDriverPathDrawer::sendPoint(const TVec3f& rA1, f32 a2, f32 a3) const {
-    GXWGFifo.f32 = rA1.x;
-    GXWGFifo.f32 = rA1.y;
-    GXWGFifo.f32 = rA1.z;
-    GXWGFifo.f32 = a2;
-    GXWGFifo.f32 = a3;
+    J3DNativeDraw::position(rA1.x, rA1.y, rA1.z);
+    J3DNativeDraw::texCoord(a2, a3);
 }

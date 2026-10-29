@@ -1,4 +1,5 @@
 #include "Game/Util/DirectDraw.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -162,24 +163,22 @@ namespace TDDraw {
     }
 
     void sendPoint(const TVec3f& rPoint, u32 color) NO_INLINE {
-        GXPosition3f32(rPoint.x, rPoint.y, rPoint.z);
-        GXColor1u32(color);
+        J3DNativeDraw::position(rPoint.x, rPoint.y, rPoint.z);
+        J3DNativeDraw::color(color);
     }
 
     void sendPoint(const TVec3f& rVec) NO_INLINE {
-        GXPosition3f32(rVec.x, rVec.y, rVec.z);
+        J3DNativeDraw::position(rVec.x, rVec.y, rVec.z);
     }
 
     void drawLine(const TVec3f& rStart, const TVec3f& rEnd, u32 color) {
-        GXBegin(GX_LINES, GX_VTXFMT0, 2);
+        J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_COLOR0);
         {
-            GXPosition3f32(rStart.x, rStart.y, rStart.z);
-            GXColor1u32(color);
-            GXPosition3f32(rEnd.x, rEnd.y, rEnd.z);
-            GXColor1u32(color);
+            J3DNativeDraw::position(rStart.x, rStart.y, rStart.z);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rEnd.x, rEnd.y, rEnd.z);
+            J3DNativeDraw::color(color);
         }
-
-        GXEnd();
     }
 
     void drawCircle(const TVec3f& rCenter, const TVec3f& rNormal, f32 radius, u32 color, u32 segments) {
@@ -200,32 +199,28 @@ namespace TDDraw {
         Mtx rotation;
         PSMTXRotAxisRad(rotation, rNormal, 6.2831855f / segments);
 
-        GXBegin(GX_LINESTRIP, GX_VTXFMT0, segments + 1);
+        J3DNativeDraw::begin(GX_LINESTRIP, segments + 1, NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f point(rCenter + axis * radius);
-            GXPosition3f32(point.x, point.y, point.z);
-            GXColor1u32(color);
+            J3DNativeDraw::position(point.x, point.y, point.z);
+            J3DNativeDraw::color(color);
             PSMTXMultVec(rotation, axis, axis);
         }
-
-        GXEnd();
     }
 
     void drawFillCircle(const TVec3f& rCenter, f32 radius, u32 centerColor, u32 edgeColor, u32 segments) {
         TVec3f point;
         point.z = rCenter.z;
-        GXBegin(GX_TRIANGLEFAN, GX_VTXFMT0, segments + 2);
-        GXPosition3f32(rCenter.x, rCenter.y, rCenter.z);
-        GXColor1u32(centerColor);
+        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
+        J3DNativeDraw::color(centerColor);
 
         for (u32 i = 0; i <= segments; i++) {
             point.x = rCenter.x - radius * MR::cos(2.0f * ((static_cast< f32 >(i) / segments) * JGeometry::TUtil< f32 >::PI()));
             point.y = rCenter.y + radius * MR::sin(2.0f * ((static_cast< f32 >(i) / segments) * JGeometry::TUtil< f32 >::PI()));
-            GXPosition3f32(point.x, point.y, point.z);
-            GXColor1u32(edgeColor);
+            J3DNativeDraw::position(point.x, point.y, point.z);
+            J3DNativeDraw::color(edgeColor);
         }
-
-        GXEnd();
     }
 
     void drawFillCircle(const TVec3f& rCenter, const TVec3f& rNormal, f32 radius, u32 color, u32 segments) {
@@ -240,20 +235,18 @@ namespace TDDraw {
         Mtx rotation;
         PSMTXRotAxisRad(rotation, rNormal, (6.2831855f / segments));
 
-        GXBegin(GX_TRIANGLEFAN, GX_VTXFMT0, segments + 2);
+        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
-            GXPosition3f32(rCenter.x, rCenter.y, rCenter.z);
-            GXColor1u32(color);
+            J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
+            J3DNativeDraw::color(color);
 
             for (u32 i = 0; i <= segments; i++) {
                 TVec3f point(rCenter + axis * radius);
                 PSMTXMultVec(rotation, axis, axis);
-                GXPosition3f32(point.x, point.y, point.z);
-                GXColor1u32(color);
+                J3DNativeDraw::position(point.x, point.y, point.z);
+                J3DNativeDraw::color(color);
             }
         }
-
-        GXEnd();
     }
 
     void drawFillFan(const TVec3f& rCenter, const TVec3f& rNormal, const TVec3f& rAxis, u32 color, f32 startAngle, f32 endAngle, u32 segments) {
@@ -264,21 +257,19 @@ namespace TDDraw {
         TVec3f axis;
         PSMTXMultVec(startRotation, rAxis, axis);
 
-        GXBegin(GX_TRIANGLEFAN, GX_VTXFMT0, segments + 2);
+        J3DNativeDraw::begin(GX_TRIANGLEFAN, segments + 2, NEBULA_SHAPE_COLOR0);
         {
-            GXPosition3f32(rCenter.x, rCenter.y, rCenter.z);
-            GXColor1u32(color);
+            J3DNativeDraw::position(rCenter.x, rCenter.y, rCenter.z);
+            J3DNativeDraw::color(color);
 
             for (u32 i = 0; i <= segments; i++) {
                 TVec3f point(axis);
                 point += rCenter;
-                GXPosition3f32(point.x, point.y, point.z);
-                GXColor1u32(color);
+                J3DNativeDraw::position(point.x, point.y, point.z);
+                J3DNativeDraw::color(color);
                 PSMTXMultVec(stepRotation, axis, axis);
             }
         }
-
-        GXEnd();
     }
 
     void drawCylinder(const TVec3f& rBase, const TVec3f& rHeight, f32 radius, u32 baseColor, u32 topColor, u32 segments) {
@@ -300,18 +291,16 @@ namespace TDDraw {
         Mtx rotation;
         PSMTXRotAxisRad(rotation, rHeight, (TWO_PI / segments));
 
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 2 * (segments + 1));
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * (segments + 1), NEBULA_SHAPE_COLOR0);
         for (u32 i = 0; i <= segments; i++) {
             TVec3f basePoint(rBase + axis * radius);
             TVec3f topPoint(top + axis * radius);
-            GXPosition3f32(basePoint.x, basePoint.y, basePoint.z);
-            GXColor1u32(baseColor);
-            GXPosition3f32(topPoint.x, topPoint.y, topPoint.z);
-            GXColor1u32(topColor);
+            J3DNativeDraw::position(basePoint.x, basePoint.y, basePoint.z);
+            J3DNativeDraw::color(baseColor);
+            J3DNativeDraw::position(topPoint.x, topPoint.y, topPoint.z);
+            J3DNativeDraw::color(topColor);
             PSMTXMultVec(rotation, axis, axis);
         }
-
-        GXEnd();
     }
 
     void drawSpherePart(const TPos3f& rMtx, f32 radius, f32 startAzimuth, f32 endAzimuth, f32 startPolar, f32 endPolar, u32 color,
@@ -335,7 +324,7 @@ namespace TDDraw {
             azimuthCos = MR::cos(azimuth);
             TVec3f radial((side * azimuthCos + up * azimuthSin) * radius);
 
-            GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 2 * (polarSegments + 1));
+            J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * (polarSegments + 1), NEBULA_SHAPE_COLOR0);
             for (u32 j = 0; j <= polarSegments; j++) {
                 f32 polar = (startPolar + (static_cast< f32 >(j) / polarSegments) * (endPolar - startPolar));
                 f32 polarSin = MR::sin(polar);
@@ -347,13 +336,12 @@ namespace TDDraw {
                 point *= polarSin;
                 previousPoint += ringCenter;
                 point += ringCenter;
-                GXPosition3f32(previousPoint.x, previousPoint.y, previousPoint.z);
-                GXColor1u32(color);
-                GXPosition3f32(point.x, point.y, point.z);
-                GXColor1u32(color);
+                J3DNativeDraw::position(previousPoint.x, previousPoint.y, previousPoint.z);
+                J3DNativeDraw::color(color);
+                J3DNativeDraw::position(point.x, point.y, point.z);
+                J3DNativeDraw::color(color);
             }
 
-            GXEnd();
 
             previousRadial = radial;
         }
@@ -375,19 +363,17 @@ namespace TDDraw {
     void drawTexture(const TVec2f& rPosition, JUTTexture* pTexture, const TVec2f& rSize) {
         pTexture->load(GX_TEXMAP0);
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
-            GXPosition3f32(rPosition.x, rPosition.y, 0.0f);
-            GXTexCoord2f32(0.0f, 0.0f);
-            GXPosition3f32(rPosition.x + rSize.x, rPosition.y, 0.0f);
-            GXTexCoord2f32(1.0f, 0.0f);
-            GXPosition3f32(rPosition.x + rSize.x, rPosition.y + rSize.y, 0.0f);
-            GXTexCoord2f32(1.0f, 1.0f);
-            GXPosition3f32(rPosition.x, rPosition.y + rSize.y, 0.0f);
-            GXTexCoord2f32(0.0f, 1.0f);
+            J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 0.0f);
+            J3DNativeDraw::position(rPosition.x + rSize.x, rPosition.y, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 0.0f);
+            J3DNativeDraw::position(rPosition.x + rSize.x, rPosition.y + rSize.y, 0.0f);
+            J3DNativeDraw::texCoord(1.0f, 1.0f);
+            J3DNativeDraw::position(rPosition.x, rPosition.y + rSize.y, 0.0f);
+            J3DNativeDraw::texCoord(0.0f, 1.0f);
         }
-
-        GXEnd();
     }
 
     void drawTexture3D(const TVec3f& rCenter, const TVec3f& rNormal, const TVec3f& rUp, f32 width, f32 height, JUTTexture* pTexture, bool flipX,
@@ -416,48 +402,43 @@ namespace TDDraw {
         f32 rightTex = flipX ? 0.0f : 1.0f;
         f32 top = flipY ? 1.0f : 0.0f;
         f32 bottom = flipY ? 0.0f : 1.0f;
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-        GXPosition3f32(p0.x, p0.y, p0.z);
-        GXTexCoord2f32(left, top);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(p0.x, p0.y, p0.z);
+        J3DNativeDraw::texCoord(left, top);
         sendPoint(p1);
-        GXTexCoord2f32(rightTex, top);
+        J3DNativeDraw::texCoord(rightTex, top);
         sendPoint(p2);
-        GXTexCoord2f32(rightTex, bottom);
+        J3DNativeDraw::texCoord(rightTex, bottom);
         sendPoint(p3);
-        GXTexCoord2f32(left, bottom);
-        GXEnd();
+        J3DNativeDraw::texCoord(left, bottom);
     }
 
     void drawFillBox(const TVec3f& rMin, const TVec3f& rMax, u32 color) {
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
-            GXPosition3f32(rMin.x, rMin.y, rMin.z);
-            GXColor1u32(color);
-            GXPosition3f32(rMax.x, rMin.y, rMin.z);
-            GXColor1u32(color);
-            GXPosition3f32(rMax.x, rMax.y, rMax.z);
-            GXColor1u32(color);
-            GXPosition3f32(rMin.x, rMax.y, rMax.z);
-            GXColor1u32(color);
+            J3DNativeDraw::position(rMin.x, rMin.y, rMin.z);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMax.x, rMin.y, rMin.z);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMax.x, rMax.y, rMax.z);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMin.x, rMax.y, rMax.z);
+            J3DNativeDraw::color(color);
         }
-
-        GXEnd();
     }
 
     void drawFillBox(const TVec2f& rMin, const TVec2f& rMax, u32 color) {
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         {
-            GXPosition3f32(rMin.x, rMin.y, 0.0f);
-            GXColor1u32(color);
-            GXPosition3f32(rMax.x, rMin.y, 0.0f);
-            GXColor1u32(color);
-            GXPosition3f32(rMax.x, rMax.y, 0.0f);
-            GXColor1u32(color);
-            GXPosition3f32(rMin.x, rMax.y, 0.0f);
-            GXColor1u32(color);
+            J3DNativeDraw::position(rMin.x, rMin.y, 0.0f);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMax.x, rMin.y, 0.0f);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMax.x, rMax.y, 0.0f);
+            J3DNativeDraw::color(color);
+            J3DNativeDraw::position(rMin.x, rMax.y, 0.0f);
+            J3DNativeDraw::color(color);
         }
-
-        GXEnd();
     }
 
     void drawFillBox3D(const TVec3f& rCenter, const TVec3f& rHeight, const TVec3f& rSide, const TVec3f& rFront, u32 color) {
@@ -471,50 +452,44 @@ namespace TDDraw {
         p6 = p2 + rHeight;
         p7 = p3 + rHeight;
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-        GXPosition3f32(p0.x, p0.y, p0.z);
-        GXColor1u32(color);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(p0.x, p0.y, p0.z);
+        J3DNativeDraw::color(color);
         sendPoint(p1, color);
         sendPoint(p2, color);
         sendPoint(p3, color);
-        GXEnd();
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p7, color);
         sendPoint(p4, color);
-        GXPosition3f32(p0.x, p0.y, p0.z);
-        GXColor1u32(color);
+        J3DNativeDraw::position(p0.x, p0.y, p0.z);
+        J3DNativeDraw::color(color);
         sendPoint(p3, color);
-        GXEnd();
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p2, color);
         sendPoint(p1, color);
         sendPoint(p5, color);
-        GXEnd();
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
-        GXPosition3f32(p0.x, p0.y, p0.z);
-        GXColor1u32(color);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(p0.x, p0.y, p0.z);
+        J3DNativeDraw::color(color);
         sendPoint(p4, color);
         sendPoint(p5, color);
         sendPoint(p1, color);
-        GXEnd();
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p7, color);
         sendPoint(p3, color);
         sendPoint(p2, color);
-        GXEnd();
 
-        GXBegin(GX_QUADS, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
         sendPoint(p6, color);
         sendPoint(p5, color);
         sendPoint(p4, color);
         sendPoint(p7, color);
-        GXEnd();
     }
 
     void cameraInit3D() {

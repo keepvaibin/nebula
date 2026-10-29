@@ -2173,6 +2173,71 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
 
 // The material the next shape draws use (record_offset's place); texture identities become the physical addresses
 // the texture cache names images by.
+void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    if (draw == nullptr || draw->count == 0u || draw->position == nullptr) {
+        return;
+    }
+    const uint32_t n = draw->count;
+    auto imm = std::make_shared<shapes::Immediate>();
+    imm->primitive = draw->primitive;
+    shapes::Geometry& g = imm->geometry;
+    // Its values are its own: geometry the game builds as it draws.
+    g.attributes = (draw->attributes & ~static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) |
+                    (draw->position_matrix != nullptr ? static_cast<uint32_t>(NEBULA_SHAPE_POSITION_MATRIX) : 0u)) |
+                   NEBULA_SHAPE_OWN_POSITIONS;
+    auto floats = [&](unsigned slot, shapes::ArrayKind kind, const float* values, uint32_t per) {
+        shapes::Array& a = imm->arrays[slot];
+        a.kind = kind;
+        a.count = n;
+        a.floats.assign(values, values + static_cast<size_t>(n) * per);
+        g.arrays[slot] = slot + 1u;
+    };
+    floats(0u, shapes::ArrayKind::Position, draw->position, 3u);
+    if ((draw->attributes & NEBULA_SHAPE_NORMAL) != 0u && draw->normal != nullptr) {
+        floats(1u, shapes::ArrayKind::Normal, draw->normal, 3u);
+    } else {
+        g.attributes &= ~static_cast<uint32_t>(NEBULA_SHAPE_NORMAL);
+    }
+    for (unsigned c = 0; c < 2u; ++c) {
+        const uint32_t bit = c == 0u ? NEBULA_SHAPE_COLOR0 : NEBULA_SHAPE_COLOR1;
+        if ((draw->attributes & bit) != 0u && draw->color[c] != nullptr) {
+            shapes::Array& a = imm->arrays[2u + c];
+            a.kind = shapes::ArrayKind::Color;
+            a.count = n;
+            a.colors.assign(draw->color[c], draw->color[c] + n);
+            g.arrays[2u + c] = 3u + c;
+        } else {
+            g.attributes &= ~bit;
+        }
+    }
+    for (unsigned t = 0; t < 8u; ++t) {
+        const uint32_t bit = static_cast<uint32_t>(NEBULA_SHAPE_TEXCOORD0) << t;
+        if ((draw->attributes & bit) != 0u && draw->texcoord[t] != nullptr) {
+            floats(4u + t, shapes::ArrayKind::TexCoord, draw->texcoord[t], 2u);
+        } else {
+            g.attributes &= ~bit;
+        }
+    }
+    g.corners.resize(n);
+    for (uint32_t i = 0; i < n; ++i) {
+        shapes::Corner& c = g.corners[i];
+        const auto e = static_cast<uint16_t>(i);
+        c.position = c.normal = c.color[0] = c.color[1] = e;
+        c.texcoord.fill(e);
+        c.position_matrix = draw->position_matrix != nullptr ? draw->position_matrix[i] : 0u;
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Immediate;
+    record.offset = record_offset(stream);
+    record.immediate = std::move(imm);
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)stream, (void)draw;
+#endif
+}
+
 void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -3772,6 +3837,7 @@ int main(int argc, char** argv) {
     services.shape_draw = svc_shape_draw;
     services.material = svc_material;
     services.state = svc_state;
+    services.immediate = svc_immediate;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

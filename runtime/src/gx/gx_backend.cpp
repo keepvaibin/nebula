@@ -12709,6 +12709,9 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::State:
         state::apply(record.state, state_);
         return;
+    case shapes::Record::Kind::Immediate:
+        draw_record_immediate(*record.immediate);
+        return;
     }
 }
 
@@ -12945,6 +12948,94 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;
     pending_draw_batch_.resident = true;
+    pending_draw_batch_.sealed = true;
+}
+
+void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
+    display_copy_on_output_ = false;
+    const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
+    const shapes::Geometry& geometry = immediate.geometry;
+    const auto count = static_cast<std::uint32_t>(geometry.corners.size());
+    shapes::primitive_indices(immediate.primitive, count, immediate_indices_);
+    if (immediate_indices_.empty() || count > 0x10000u) {
+        return;
+    }
+    shapes::DrawArrays arrays{};
+    for (unsigned i = 0; i < 12u; ++i) {
+        arrays[i] = geometry.arrays[i] != 0u ? &immediate.arrays[i] : nullptr;
+    }
+    RecordVertexInputs inputs;
+    inputs.matrix_bits = (geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u;
+    inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
+    inputs.own_positions = true;
+    struct RecordScope {
+        GxBackend* backend = nullptr;
+        bool run = false;
+        ~RecordScope() {
+            if (run) {
+                backend->end_cached_draw_run();
+            }
+            backend->record_inputs_ = nullptr;
+        }
+    };
+    record_inputs_ = &inputs;
+    RecordScope scope{this};
+    if (!begin_cached_draw_run(primitive, 0u, 1u)) {
+        return;
+    }
+    scope.run = true;
+    if (cached_draw_run_scissor_reject_) {
+        ++frame_scissor_skips_;
+        return;
+    }
+    if (cached_draw_run_no_pso_) {
+        ++stat_draws_no_pso_;
+        ++frame_draws_no_pso_;
+        return;
+    }
+    flush_pending_draw_batch();
+    cached_draw_run_batch_compatible_known_ = false;
+    // Vertices without a position matrix of their own take the current one (as GX's direct vertices did).
+    const auto position_matrix = static_cast<std::uint8_t>(state_.cp(cp::kMatrixIndexA) & 0x3Fu);
+    if (!shapes::expand(geometry, arrays, position_matrix, nullptr, immediate_vertices_)) {
+        return;
+    }
+    const UploadRing::Allocation vb =
+        renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(GxVertexOut), 16u);
+    std::memcpy(vb.cpu, immediate_vertices_.data(), static_cast<std::size_t>(count) * sizeof(GxVertexOut));
+    const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
+    const UploadRing::Allocation ib = renderer_.index_ring().allocate(
+        static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
+    std::memcpy(ib.cpu, immediate_indices_.data(), static_cast<std::size_t>(index_count) * sizeof(std::uint16_t));
+    ++stat_draws_issued_;
+    ++frame_draws_issued_;
+    const gpu::VertexView vbv =
+        gpu::vertex_view(renderer_.vertex_ring().gpu_base() + vb.offset,
+                         count * static_cast<std::uint32_t>(sizeof(GxVertexOut)),
+                         static_cast<std::uint32_t>(sizeof(GxVertexOut)));
+    const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
+    const gpu::IndexView ibv = gpu::index_view(
+        renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
+        index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
+    DrawCall call = cached_draw_run_state_call_;
+    call.vertex_view = vbv;
+    call.index_view = ibv;
+    call.index_count = index_count;
+    pending_draw_batch_.active = true;
+    pending_draw_batch_.call = call;
+    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
+    pending_draw_batch_.hidden = rt_hidden_draw();
+    pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
+    pending_draw_batch_.debake_model = debake_sample_key_;
+    pending_draw_batch_.indexed = true;
+    pending_draw_batch_.base_vertex = static_cast<std::uint32_t>(vb.offset / sizeof(GxVertexOut));
+    pending_draw_batch_.vertex_count = count;
+    pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(GxVertexOut);
+    pending_draw_batch_.first_index = first_index;
+    pending_draw_batch_.index_count = index_count;
+    pending_draw_batch_.draw_count = 1u;
+    pending_draw_batch_.resident = false;
     pending_draw_batch_.sealed = true;
 }
 

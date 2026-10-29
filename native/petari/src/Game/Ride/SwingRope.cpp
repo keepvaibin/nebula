@@ -1,4 +1,5 @@
 #include "Game/Ride/SwingRope.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/SledRopePoint.hpp"
@@ -702,25 +703,24 @@ void SwingRope::updateHangLowerPointPos(s32 index) {
 
 namespace {
     void sendPoint(const TVec3f& pos, const TVec3f& side, const TVec3f& front, f32 x, f32 y, u32 color, f32 texX, f32 texY) {
-        GXPosition3f32(pos.x + side.x * x + front.x * y, pos.y + side.y * x + front.y * y, pos.z + side.z * x + front.z * y);
-        GXColor1u32(color);
-        GXTexCoord2f32(texX, texY);
+        J3DNativeDraw::position(pos.x + side.x * x + front.x * y, pos.y + side.y * x + front.y * y, pos.z + side.z * x + front.z * y);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::texCoord(texX, texY);
     }
 
     void drawPolygon(const TVec3f& posA, const TVec3f& posB, const TVec3f& side, const TVec3f& front, f32 x1, f32 y1, f32 x2, f32 y2, u32 color1,
                      u32 color2, f32 texY1, f32 texY2) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, 4);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             sendPoint(posA, side, front, x1, y1, color1, 0.0f, texY1);
             sendPoint(posA, side, front, x2, y2, color2, 1.0f, texY1);
             sendPoint(posB, side, front, x1, y1, color1, 0.0f, texY2);
             sendPoint(posB, side, front, x2, y2, color2, 1.0f, texY2);
         }
-        GXEnd();
     }
 
     void drawLine(const SwingRope* pRope, u32 color1, u32 color2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (pRope->mNumPoints + 1) * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             const TVec3f& front = pRope->mPoints[0]->getFront();
             const TVec3f& side = pRope->mPoints[0]->getSide();
@@ -740,11 +740,10 @@ namespace {
                 sendPoint(pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
             }
         }
-        GXEnd();
     }
 
     void drawLineAtHanging(const SwingRope* pRope, u32 color1, u32 color2, f32 texY1, f32 texY2, f32 x1, f32 y1, f32 x2, f32 y2) {
-        GXBegin(GX_TRIANGLESTRIP, GX_VTXFMT0, (pRope->mNumPoints + 1) * 2);
+        J3DNativeDraw::begin(GX_TRIANGLESTRIP, (pRope->mNumPoints + 1) * 2, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
         {
             const TVec3f& front = pRope->mPoints[0]->getFront();
             const TVec3f& side = pRope->mPoints[0]->getSide();
@@ -764,7 +763,6 @@ namespace {
                 sendPoint(pos, side, front, x2, y2, color2, 1.0f, ::sTexRate * (idx + 1));
             }
         }
-        GXEnd();
     }
 };  // namespace
 
