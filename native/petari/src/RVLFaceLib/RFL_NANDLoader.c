@@ -391,7 +391,8 @@ u32 RFLiGetShpTexSize(RFLiPartsShpTex part, u16 file) {
 RFLiTexture* RFLiLoadShpTexture(RFLiPartsShpTex part, u16 file, void* dst) {
     static const u32 scParts2Arc[] = {RFLiArcID_FaceTex, RFLiArcID_CapTex,
                                       RFLiArcID_NlineTex, RFLiArcID_GlassTex};
-    return handOver((RFLiTexture*)getFile_(dst, scParts2Arc[part], file));
+    // RFLiInitTexRes copies the image into the model and hands that copy over; this buffer is freed.
+    return (RFLiTexture*)getFile_(dst, scParts2Arc[part], file);
 }
 
 u32 RFLiGetShapeSize(RFLiPartsShp part, u16 file) {

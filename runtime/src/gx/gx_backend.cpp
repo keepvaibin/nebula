@@ -11551,6 +11551,12 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TextureImage:
         flush_pending_draw_batch();
         texture_cache_.register_image(static_cast<std::uint32_t>(record.key), record.image);
+        // New bytes at that address: bindings made from what was there before are out of date too (a buffer the game
+        // reuses for its next image, as the Mii library's part textures).
+        if (record.image != nullptr) {
+            invalidate_texture_binding_cache_range(static_cast<std::uint32_t>(record.key),
+                                                   static_cast<std::uint32_t>(record.image->size()));
+        }
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;
         return;

@@ -985,6 +985,8 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
     }
 
     memcpy(buffer, RFLiGetTexImage(tex), texSize);
+    // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
+    J3DNativeTextureRegisterImage(buffer, tex->format, RFLI_LD16(tex->width), RFLI_LD16(tex->height), 1);
     J3DNativeTextureInit(texObj, buffer, RFLI_LD16(tex->width), RFLI_LD16(tex->height), tex->format, tex->wrapS, tex->wrapT, FALSE);
     J3DNativeTextureInitLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
     RFLiFree(tex);
