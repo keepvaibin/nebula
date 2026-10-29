@@ -2087,34 +2087,54 @@ void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 #endif
 }
 
-// A group drawn: after every command the game wrote before it (its writer's place past the submitted spans), and
-// after the arrays and groups it registered before it.
-void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color,
-                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current) {
 #if defined(NEBULA_HOST_RENDERER)
-    namespace shapes = galaxy::gx::shapes;
+// Where a record the game makes now runs: after every command it wrote before it (its writer's place past the
+// submitted spans), and after the arrays and groups it registered before it (which join the stream here).
+std::size_t record_offset(const void* stream) {
     const auto* writer = static_cast<const uint8_t*>(stream);
     std::size_t ahead = 0;
     if (gSpanEnd != nullptr) {
         ahead = writer >= gSpanEnd ? static_cast<std::size_t>(writer - gSpanEnd)
                                    : static_cast<std::size_t>(writer + kGxRingSize - gSpanEnd);
         if (ahead >= kGxRingSize) {
-            die("a shape draw outside the GX command ring (%p after %p)", stream, (const void*)gSpanEnd);
+            die("a record outside the GX command ring (%p after %p)", stream, (const void*)gSpanEnd);
         }
     }
     const std::size_t offset = gPendingSize + ahead;
     if (gShapePendingAny.load(std::memory_order_acquire)) {
-        std::vector<shapes::Record> pending;
+        std::vector<galaxy::gx::shapes::Record> pending;
         {
             std::lock_guard guard(gShapeLock);
             pending.swap(gShapePending);
             gShapePendingAny.store(false, std::memory_order_relaxed);
         }
-        for (shapes::Record& record : pending) {
+        for (galaxy::gx::shapes::Record& record : pending) {
             record.offset = offset;
             galaxy::gx::attach_shape_record(std::move(record));
         }
     }
+    return offset;
+}
+
+// The physical address of game memory at `key` (a host address), as the renderer's texture cache names it.
+uint64_t physical_of(uint64_t key) {
+    ensure_guest_memory();
+    for (const galaxy::GuestMemoryRegion& region : gRegions) {
+        const auto host = reinterpret_cast<uint64_t>(region.host_base);
+        if (key >= host && key - host < region.size && (region.guest_base & 0xC0000000u) == 0u) {
+            return region.guest_base + (key - host);
+        }
+    }
+    return 0;
+}
+#endif
+
+// A group drawn (record_offset's place).
+void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color,
+                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    const std::size_t offset = record_offset(stream);
     shapes::Record record;
     record.kind = shapes::Record::Kind::Draw;
     record.offset = offset;
@@ -2143,6 +2163,31 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
 #else
     (void)shape, (void)stream, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
         (void)current;
+#endif
+}
+
+// The material the next shape draws use (record_offset's place); texture identities become the physical addresses
+// the texture cache names images by.
+void svc_material(void*, const void* stream, const NebulaMaterial* material) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::gx::shapes;
+    static_assert(sizeof(NebulaMaterial) == sizeof(galaxy::gx::material::Material), "the renderer's copy of NebulaMaterial");
+    if (material == nullptr) {
+        return;
+    }
+    auto copy = std::make_shared<galaxy::gx::material::Material>();
+    std::memcpy(copy.get(), material, sizeof(NebulaMaterial));
+    for (galaxy::gx::material::Texture& texture : copy->texture) {
+        texture.image = texture.image != 0u ? physical_of(texture.image) : 0u;
+        texture.palette = texture.palette != 0u ? physical_of(texture.palette) : 0u;
+    }
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::Material;
+    record.offset = record_offset(stream);
+    record.material = std::move(copy);
+    galaxy::gx::attach_shape_record(std::move(record));
+#else
+    (void)stream, (void)material;
 #endif
 }
 
@@ -3699,6 +3744,7 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_draw = svc_shape_draw;
+    services.material = svc_material;
     services.gx_stripe_particle = svc_gx_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

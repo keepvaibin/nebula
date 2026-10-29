@@ -4,7 +4,11 @@
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
 #include <nebula_game_api.h>
+#include <nebula_gx_fifo.h>
+#include <revolution/gx/GXRegs.h>
 #include <string.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     u64 keyOf(const void* p) {
@@ -19,8 +23,8 @@ namespace {
     }
 
     // Map `map`'s texture as J3D's loadTexNo sets it up (the image and palette inside the texture's resource).
-    void texture(u32 map, u16 texNo, NebulaMaterial* pOut, u16* pSizes) {
-        ResTIMG* pImg = j3dSys.getTexture()->getResTIMG(texNo);
+    void texture(J3DTexture* pTexture, u32 map, u16 texNo, NebulaMaterial* pOut, u16* pSizes) {
+        ResTIMG* pImg = pTexture->getResTIMG(texNo);
         NebulaMaterialTexture& rOut = pOut->texture[map];
         rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
         rOut.width = pImg->mWidth;
@@ -58,7 +62,7 @@ namespace {
 }  // namespace
 
 namespace J3DNativeMaterial {
-    void build(J3DMaterial* pMaterial, NebulaMaterial* pOut) {
+    void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterial* pOut) {
         memset(pOut, 0, sizeof(*pOut));
         J3DTevBlock* pTev = pMaterial->mTevBlock;
         J3DIndBlock* pInd = pMaterial->mIndBlock;
@@ -83,7 +87,7 @@ namespace J3DNativeMaterial {
         for (u32 map = 0; tev && map < 8; map++) {
             const u16 texNo = pTev->getTexNo(map);
             if (texNo != 0xFFFF) {
-                texture(map, texNo, pOut, sizes);
+                texture(pTexture, map, texNo, pOut, sizes);
                 J3DSys::sTexCoordScaleTable[map].field_0x00 = sizes[map * 2];
                 J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
             }
@@ -303,5 +307,16 @@ namespace J3DNativeMaterial {
         pOut->z_mode.update = rZ.getUpdateEnable();
         pOut->z_compare_location = pPE->getZCompLoc();
         pOut->dither = pPE->getDither();
+    }
+
+    void send(J3DMaterial* pMaterial, J3DTexture* pTexture) {
+        static NebulaMaterial sMaterial;
+        build(pMaterial, pTexture, &sMaterial);
+        // The drawing state the game set through GX's functions, written before the record (as a GX call would).
+        if (gx->dirtyState) {
+            __GXSetDirtyState();
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->material(pHost->user, __NebulaGXWriter.ptr, &sMaterial);
     }
 };  // namespace J3DNativeMaterial

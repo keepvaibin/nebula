@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/native_material.h"
 
+#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
 
 #include <bit>
@@ -23,8 +24,14 @@ constexpr std::uint8_t kTexDisable = 0x00;  // map bit 0x100 cannot be set in a 
 
 struct Writer {
     GxState& state;
-    void bp(std::uint32_t word) { state.load_bp(word); }
-    void bp(std::uint8_t id, std::uint32_t value) { state.load_bp(static_cast<std::uint32_t>(id) << 24u | (value & 0xFFFFFFu)); }
+    FifoSink* actions;
+    void bp(std::uint32_t word) {
+        state.load_bp(word);
+        if (actions != nullptr && word >> 24u == 0x65u) {
+            actions->on_tlut_load();  // the palette copy the TLUT destination write starts
+        }
+    }
+    void bp(std::uint8_t id, std::uint32_t value) { bp(static_cast<std::uint32_t>(id) << 24u | (value & 0xFFFFFFu)); }
     void xf(std::uint16_t address, std::uint32_t value) { state.load_xf(address, &value, 1u); }
     void xf(std::uint16_t address, const std::uint32_t* values, std::uint16_t count) {
         state.load_xf(address, values, count);
@@ -99,11 +106,12 @@ void tev(Writer& w, const Material& m) {
         }
     }
     if ((m.loads & kLoadsTevColor) != 0u) {
+        // The material's three colours are registers 1-3 (register 0 is the previous stage's output).
         for (unsigned r = 0; r < 3u; ++r) {
             const auto c = [&](unsigned k) { return static_cast<std::uint32_t>(m.tev_color[r][k]) & 0x7FFu; };
-            w.bp(static_cast<std::uint8_t>(0xE0u + 2u * r), c(0) | c(3) << 12u);
+            w.bp(static_cast<std::uint8_t>(0xE2u + 2u * r), c(0) | c(3) << 12u);
             for (unsigned n = 0; n < 3u; ++n) {
-                w.bp(static_cast<std::uint8_t>(0xE1u + 2u * r), c(2) | c(1) << 12u);
+                w.bp(static_cast<std::uint8_t>(0xE3u + 2u * r), c(2) | c(1) << 12u);
             }
         }
     }
@@ -307,8 +315,8 @@ void colour(Writer& w, const Material& m) {
 
 }  // namespace
 
-void apply(const Material& m, GxState& state) {
-    Writer w{state};
+void apply(const Material& m, GxState& state, FifoSink* actions) {
+    Writer w{state, actions};
     if ((m.loads & kLoadsTev) != 0u) {
         tev(w, m);
     }

@@ -1,4 +1,5 @@
 #include "Game/Util/DrawUtil.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/Scene/GameSceneFunction.hpp"
 #include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/Util/CameraUtil.hpp"
@@ -453,6 +454,7 @@ namespace MR {
             J3DShapePacket* pShapePacket = pModel->getShapePacket(pMaterial->mShape->mIndex);
             j3dSys.setMatPacket(pMatPacket);
             pMatPacket->callDL();
+            J3DNativeMaterial::send(pMatPacket->getMaterial(), pMatPacket->mpTexture);
             pShapePacket->getShape()->loadPreDrawSetting();
 
             if (pShapePacket->isValidDisplayListObj()) {

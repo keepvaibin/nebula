@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 36u
+#define NEBULA_GAME_API_VERSION 37u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -746,6 +746,9 @@ typedef struct NebulaHostServices {
     void (*shape_draw)(void* user, uint64_t shape, const void* stream, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
                        const NebulaShapeCurrent* current);
+    /* The material the next shape draws use (NebulaMaterial), after every command the game wrote before it (`stream`
+       as shape_draw takes it). */
+    void (*material)(void* user, const void* stream, const NebulaMaterial* material);
 } NebulaHostServices;
 
 enum {

@@ -1655,6 +1655,10 @@ private:
     // Render thread: a record at its place in the stream (an array or group registered, or a group drawn).
     void on_shape_record(const shapes::Record& record);
     void draw_record_shape(const shapes::Record& record);
+    // A material record into the drawing state (native_material.h).
+    void apply_record_material(const material::Material& m);
+    std::uint64_t material_checks_ = 0;
+    std::uint64_t material_check_mismatches_ = 0;
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
     void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.

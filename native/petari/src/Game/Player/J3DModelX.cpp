@@ -1,4 +1,5 @@
 #include "Game/Player/J3DModelX.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/DirectDraw.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -187,6 +188,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     J3DShapePacket* packet = model ? model->getShapePacket(material->getShape()->getIndex()) : getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
     matPacket->callDL();
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture);
 
     if (fog) {
         TVec3f pos;
@@ -259,6 +261,7 @@ bool J3DModelX::simpleDrawSetup(J3DMaterial* material) {
     J3DShapePacket* packet = getShapePacket(material->getShape()->getIndex());
     j3dSys.setMatPacket(matPacket);
     matPacket->callDL();
+    J3DNativeMaterial::send(matPacket->getMaterial(), matPacket->mpTexture);
     packet->getShape()->loadPreDrawSetting();
     if (packet->getDisplayListObj()) {
         packet->getDisplayListObj()->callDL();

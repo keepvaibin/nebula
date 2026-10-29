@@ -1,6 +1,7 @@
 #define J3D_TEV_STAGE_MUTABLE_DEFAULTS
 
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 
 J3DColorBlock* J3DMaterial::createColorBlock(u32 flags) {
@@ -220,6 +221,7 @@ void J3DMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(2)) {
         mSharedDLObj->callDL();
+        J3DNativeMaterial::send(this, j3dSys.getTexture());
         loadNBTScale(*mTexGenBlock->getNBTScale());
     }
 }
@@ -364,6 +366,7 @@ void J3DPatchedMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(0x02))
         mSharedDLObj->callDL();
+        J3DNativeMaterial::send(this, j3dSys.getTexture());
 }
 
 void J3DPatchedMaterial::reset() {
@@ -393,6 +396,7 @@ void J3DLockedMaterial::loadSharedDL() {
     j3dSys.setMaterialMode(mMaterialMode);
     if (!j3dSys.checkFlag(0x02))
         mSharedDLObj->callDL();
+        J3DNativeMaterial::send(this, j3dSys.getTexture());
 }
 
 void J3DLockedMaterial::patch() {

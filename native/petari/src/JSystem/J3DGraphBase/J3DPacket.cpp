@@ -1,4 +1,5 @@
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #endif
@@ -171,6 +172,7 @@ bool J3DMatPacket::isSame(J3DMatPacket* pOther) const {
 void J3DMatPacket::draw() {
     mpMaterial->load();
     callDL();
+    J3DNativeMaterial::send(mpMaterial, mpTexture);
 
     J3DShapePacket* packet = getShapePacket();
     packet->getShape()->loadPreDrawSetting();

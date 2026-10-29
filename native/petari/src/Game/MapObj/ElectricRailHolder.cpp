@@ -1,4 +1,5 @@
 #include "Game/MapObj/ElectricRailHolder.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/ModelObj.hpp"
 #include "Game/MapObj/ElectricRailMoving.hpp"
@@ -79,6 +80,7 @@ void ElectricRailHolder::draw() const {
 
         J3DMatPacket* pPacket = pItem->mMatPacket;
         pItem->mMatPacket->callDL();
+        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture);
 
         if (pPacket->mpShapePacket->mpDisplayListObj != nullptr) {
             pPacket->mpShapePacket->mpDisplayListObj->callDL();

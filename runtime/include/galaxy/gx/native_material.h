@@ -6,6 +6,7 @@
 #include <cstdint>
 
 namespace galaxy::gx {
+struct FifoSink;
 class GxState;
 }
 
@@ -73,7 +74,8 @@ struct Material {
 };
 
 // Sets `state` as J3D's material display list did (J3DMaterial::makeDisplayList_private's order: TEV block,
-// indirect block, pixel block, mode, texgens, colour block, channel and texgen counts).
-void apply(const Material& material, GxState& state);
+// indirect block, pixel block, mode, texgens, colour block, channel and texgen counts); `actions` (or null) takes
+// what the writes start, as the parser's sink would (a palette's copy).
+void apply(const Material& material, GxState& state, FifoSink* actions = nullptr);
 
 }  // namespace galaxy::gx::material

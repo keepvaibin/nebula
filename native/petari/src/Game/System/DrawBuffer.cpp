@@ -1,4 +1,5 @@
 #include "Game/System/DrawBuffer.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/LiveActor/ActorLightCtrl.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -40,6 +41,7 @@ void DrawBufferShapeDrawer::swap(DrawBufferShapeDrawer* pOther) {
 
 void DrawBufferShapeDrawer::draw() const {
     mMatPacket->mpDisplayListObj->callDL();
+    J3DNativeMaterial::send(mMatPacket->getMaterial(), mMatPacket->mpTexture);
 
     J3DShapePacket* firstPacket = mPackets[0]->mShapePacket;
     firstPacket->mpShape->loadPreDrawSetting();

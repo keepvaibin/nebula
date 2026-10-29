@@ -12703,6 +12703,56 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;
+    case shapes::Record::Kind::Material:
+        apply_record_material(*record.material);
+        return;
+    }
+}
+
+void GxBackend::apply_record_material(const material::Material& m) {
+    // GALAXY_TEST_MATERIAL_CHECK=1 (the game still calls the material display lists): the record applied to a copy of
+    // the state those lists set, every register that differs logged.
+    static const bool check = read_env_u64("GALAXY_TEST_MATERIAL_CHECK", 0u) != 0u;
+    if (!check) {
+        material::apply(m, state_, this);
+        return;
+    }
+    GxState copy = state_;
+    material::apply(m, copy, nullptr);
+    static std::uint64_t reported = 0u;
+    ++material_checks_;
+    bool differs = false;
+    const auto report = [&](const char* kind, unsigned address, std::uint32_t list, std::uint32_t record) {
+        differs = true;
+        if (reported < 400u) {
+            ++reported;
+            std::fprintf(stderr, "[material-check] %s %03X list=%08X record=%08X stages=%u loads=%03X\n", kind, address,
+                         list, record, m.tev_stages, m.loads);
+        }
+    };
+    for (unsigned r = 0; r < 256u; ++r) {
+        // A final odd stage's partner in its order register is read by no stage (lists from model files and lists J3D
+        // builds give it different channels).
+        const std::uint32_t ignore = (m.tev_stages & 1u) != 0u && r == 0x28u + m.tev_stages / 2u ? 0x3FF000u : 0u;
+        if ((copy.bp(static_cast<std::uint8_t>(r)) & ~ignore) != (state_.bp(static_cast<std::uint8_t>(r)) & ~ignore)) {
+            report("bp", r, state_.bp(static_cast<std::uint8_t>(r)), copy.bp(static_cast<std::uint8_t>(r)));
+        }
+    }
+    for (unsigned a = 0x1000u; a < 0x1058u; ++a) {
+        if (copy.xf(static_cast<std::uint16_t>(a)) != state_.xf(static_cast<std::uint16_t>(a))) {
+            report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));
+        }
+    }
+    for (unsigned a = 0x600u; a < 0x680u; ++a) {
+        if (copy.xf(static_cast<std::uint16_t>(a)) != state_.xf(static_cast<std::uint16_t>(a))) {
+            report("xf", a, state_.xf(static_cast<std::uint16_t>(a)), copy.xf(static_cast<std::uint16_t>(a)));
+        }
+    }
+    material_check_mismatches_ += differs ? 1u : 0u;
+    if ((material_checks_ & 0xFFFFu) == 0u) {
+        std::fprintf(stderr, "[material-check] %llu materials, %llu differ\n",
+                     static_cast<unsigned long long>(material_checks_),
+                     static_cast<unsigned long long>(material_check_mismatches_));
     }
 }
 
