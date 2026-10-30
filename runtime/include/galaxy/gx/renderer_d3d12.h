@@ -42,7 +42,7 @@
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/ui_canvas.h"
 #include "galaxy/gx/window_owner.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 
 #include <array>
 #include <bit>

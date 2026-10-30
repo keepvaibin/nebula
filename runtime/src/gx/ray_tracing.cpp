@@ -9,7 +9,7 @@
 #include "galaxy/gx/gx_bitfields.h"
 
 #include <bit>
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 
 #include "rt_capture_cs.h"
 #include "rt_sky_light_map_cs.h"

@@ -7,7 +7,7 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/gpu_types.h"
 #include "galaxy/gx/render_config.h"
-#include "galaxy/gx_d3d12.h"  // EfbPeekKind
+#include "galaxy/renderer_api.h"  // EfbPeekKind
 
 #include <array>
 #include <cstddef>

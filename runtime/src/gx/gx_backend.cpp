@@ -1,5 +1,5 @@
 // GxBackend: decodes the game's GX command stream and drives the renderer.
-// gx_shim.cpp exposes it through the galaxy::gx API in gx_d3d12.h.
+// renderer_api.cpp exposes it through the galaxy::gx API in renderer_api.h.
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN

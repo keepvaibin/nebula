@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game window and input on SDL3 platforms (sdl_host.h, host_window.h and the window functions of gx_d3d12.h):
+// The game window and input on SDL3 platforms (sdl_host.h, host_window.h and the window functions of renderer_api.h):
 // the SDL window and its Vulkan surface; its events (size, focus, quit, the finger and the mouse as the pointer, keys,
 // gamepads); on Android the activity's touch controls and HOME Menu through JNI.
 
@@ -9,7 +9,7 @@
 #include "galaxy/gx/host_window.h"
 #include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/render_config.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_host.h"
 #include "galaxy/runtime_settings.h"
@@ -818,7 +818,7 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
 
 }  // namespace galaxy::gx::host_window
 
-// The window functions the host and the backend call (gx_d3d12.h).
+// The window functions the host and the backend call (renderer_api.h).
 
 namespace galaxy::gx {
 

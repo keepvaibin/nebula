@@ -1,6 +1,6 @@
-// Implements the galaxy::gx public API (gx_d3d12.h) over a single GxBackend.
+// Implements the galaxy::gx public API (renderer_api.h) over a single GxBackend.
 
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 
 #include <atomic>
 

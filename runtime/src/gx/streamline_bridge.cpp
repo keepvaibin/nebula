@@ -3,7 +3,7 @@
 #include "galaxy/gx/streamline_bridge.h"
 
 #include "galaxy/gx/temporal_upscaler.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>

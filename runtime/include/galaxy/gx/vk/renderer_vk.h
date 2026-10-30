@@ -33,7 +33,7 @@
 #include "galaxy/gx/vk/vk_context.h"
 #include "galaxy/gx/host_window.h"
 #include "galaxy/gx/window_owner.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 
 #include <array>
 #include <atomic>

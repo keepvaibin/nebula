@@ -1,4 +1,4 @@
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 #include "galaxy/gx/host_window_win32.h"
 #include "galaxy/gx/render_config.h"
 #include "galaxy/gx/temporal_upscaler.h"

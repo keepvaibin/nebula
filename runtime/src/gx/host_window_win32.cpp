@@ -12,7 +12,7 @@
 #include "galaxy/gx/renderer_common.h"
 #include "galaxy/gx/streamline_bridge.h"
 #include "galaxy/gx/texture_pack.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/mod_import.h"
 #include "galaxy/mods.h"

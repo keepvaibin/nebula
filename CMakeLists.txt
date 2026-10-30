@@ -465,7 +465,7 @@ add_custom_command(OUTPUT "${galaxy_rt_manifest}"
 list(APPEND galaxy_rt_headers "${galaxy_rt_manifest}")
 
 add_library(galaxy_gx STATIC
-    runtime/src/gx/gx_shim.cpp
+    runtime/src/gx/renderer_api.cpp
     runtime/src/gx/render_config.cpp
     runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/vblank_clock_win32.cpp
@@ -699,7 +699,7 @@ if(NEBULA_VULKAN)
 
     # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
     add_library(galaxy_gx_vk STATIC
-        runtime/src/gx/gx_shim.cpp
+        runtime/src/gx/renderer_api.cpp
             runtime/src/gx/render_config.cpp
         runtime/src/gx/host_window_win32.cpp
         runtime/src/gx/vblank_clock_win32.cpp

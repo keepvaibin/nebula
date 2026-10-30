@@ -1,7 +1,7 @@
 #pragma once
 
 // GxBackend: owns the GX pipeline's subsystems and runs the per-frame loop behind the galaxy::gx
-// API (gx_d3d12.h, through gx_shim.cpp).
+// API (renderer_api.h, through renderer_api.cpp).
 //
 // The simulation thread calls render_frame() once per VI retrace; it copies the frame's FIFO bytes
 // into a bounded queue and returns. The render thread consumes the chunks in order:
@@ -53,7 +53,7 @@
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
 #include "galaxy/gx/gx_vertex.h"
-#include "galaxy/gx_d3d12.h"
+#include "galaxy/renderer_api.h"
 #include "galaxy/guest_memory.h"
 #include "galaxy/frame_telemetry.h"
 
