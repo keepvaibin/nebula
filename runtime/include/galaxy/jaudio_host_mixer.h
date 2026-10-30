@@ -69,20 +69,20 @@ class JAudioHostMixer {
 public:
     JAudioHostMixer();
 
-    // 0x81: msgs[0] low half = channel count; tables are console addresses.
-    void setup(std::uint32_t command, std::uint32_t channel_table,
+    // The game's channel table and filter tables (guest addresses), once (JASDsp's setup).
+    void setup(std::uint32_t channel_count, std::uint32_t channel_table,
                std::uint32_t resampler_table, std::uint32_t adpcm_table,
                std::uint32_t fx_table, const JAudioGuestMemory& memory);
-    // 0x8E: DsetVARAM(JKRHeap::getAltAramStartAdr()).
+    // Where the sound data in auxiliary memory starts (JKRHeap::getAltAramStartAdr()).
     void set_varam(std::uint32_t address) noexcept;
-    // 0x82: DsyncFrame2ch/4ch. aux planes are non-zero only for 4-channel
-    // output, which RMGE01 does not use; such frames mix the stereo fold.
-    void sync_frame(std::uint32_t command, std::uint32_t left,
-                    std::uint32_t right, std::uint32_t aux_a,
+    // An audio frame. aux planes are non-zero only for 4-channel output,
+    // which the game does not use; such frames mix the stereo fold.
+    void sync_frame(std::uint32_t subframes, std::uint32_t mixer_level,
+                    std::uint32_t left, std::uint32_t right, std::uint32_t aux_a,
                     std::uint32_t aux_b, const JAudioGuestMemory& memory);
-    // Count-0 command. Returns true when this release completed a subframe;
-    // the caller then posts the game's AUDIOMSG_DSP.
-    bool release_halt(std::uint32_t message, const JAudioGuestMemory& memory);
+    // A channel group ready (`map`: its channels' active bits). Returns true when
+    // this release completed a subframe; the caller then posts the game's AUDIOMSG_DSP.
+    bool release_halt(std::uint32_t group, std::uint32_t map, const JAudioGuestMemory& memory);
     void note_ignored_command() noexcept { ++stats_.ignored_commands; }
     // Volume categories. The host passes the category gains once per audio frame (`master` is applied at the
     // output, not here). A channel's category is decided once per sound, at the sound's first render, when the game
@@ -171,7 +171,7 @@ private:
     std::uint32_t channel_count_{};
     std::uint32_t fx_table_{};
     std::uint32_t varam_{};
-    std::uint32_t frame_command_{};
+    std::uint32_t mixer_level_{};
     std::uint32_t left_plane_{};
     std::uint32_t right_plane_{};
     std::uint32_t subframes_{};

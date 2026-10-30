@@ -2980,12 +2980,56 @@ void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
 // The JAudio DSP program, run on the host: it mixes each subframe when the CPU releases its last channel group
 // (JASDSPChannel::updateAll's releaseHalt(3), a one-word command). Headless, the subframe completes unmixed.
-int svc_audio_dsp(void*, const uint32_t* words, uint32_t count) {
+#if defined(NEBULA_HOST_RENDERER)
+// A pointer into the game's memory as the guest address the mixer reads by (0 outside it).
+uint32_t guest_address_of(const void* pointer) {
+    const auto* p = static_cast<const std::byte*>(pointer);
+    for (uint32_t i = 0; pointer != nullptr && i < gMemory.region_count; ++i) {
+        const galaxy::GuestMemoryRegion& region = gMemory.regions[i];
+        if (p >= region.host_base && p < region.host_base + region.size) {
+            return region.guest_base + static_cast<uint32_t>(p - region.host_base);
+        }
+    }
+    return 0;
+}
+#endif
+
+void svc_jaudio_setup(void*, uint32_t channels, const void* records, const void* resample_filter,
+                      const void* adpcm_filter, const void* fx_lines) {
 #if defined(NEBULA_HOST_RENDERER)
     ensure_guest_memory();
-    const int subframe = gAudio->dsp_command(words, count, gMemory) ? 1 : 0;
+    gAudio->setup(channels, guest_address_of(records), guest_address_of(resample_filter), guest_address_of(adpcm_filter),
+                  guest_address_of(fx_lines), gMemory);
 #else
-    const int subframe = count == 0 && (words[0] >> 16) == 3;
+    (void)channels, (void)records, (void)resample_filter, (void)adpcm_filter, (void)fx_lines;
+#endif
+}
+
+void svc_jaudio_aux_base(void*, const void* base) {
+#if defined(NEBULA_HOST_RENDERER)
+    ensure_guest_memory();
+    gAudio->set_aux_base(guest_address_of(base));
+#else
+    (void)base;
+#endif
+}
+
+void svc_jaudio_frame(void*, uint32_t subframes, uint32_t mixer_level, void* left, void* right) {
+#if defined(NEBULA_HOST_RENDERER)
+    ensure_guest_memory();
+    gAudio->frame(subframes, mixer_level, guest_address_of(left), guest_address_of(right), gMemory);
+#else
+    (void)subframes, (void)mixer_level, (void)left, (void)right;
+#endif
+}
+
+int svc_jaudio_mix(void*, uint32_t group, uint32_t active) {
+#if defined(NEBULA_HOST_RENDERER)
+    ensure_guest_memory();
+    const int subframe = gAudio->mix(group, active, gMemory) ? 1 : 0;
+#else
+    (void)active;
+    const int subframe = group == 3u;
 #endif
     gDspFrames.fetch_add(subframe, std::memory_order_relaxed);
     return subframe;
@@ -3846,7 +3890,10 @@ int main(int argc, char** argv) {
     services.sc_get = svc_sc_get;
     services.wpad_control = svc_wpad_control;
     services.wpad_speaker_data = svc_wpad_speaker_data;
-    services.audio_dsp = svc_audio_dsp;
+    services.jaudio_setup = svc_jaudio_setup;
+    services.jaudio_aux_base = svc_jaudio_aux_base;
+    services.jaudio_frame = svc_jaudio_frame;
+    services.jaudio_mix = svc_jaudio_mix;
     services.ai_dma = svc_ai_dma;
     services.ai_control = svc_ai_control;
     services.hbm = svc_hbm;

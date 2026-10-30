@@ -85,20 +85,20 @@ std::uint32_t record(std::uint32_t channel) { return kChannels + channel * 0x180
 void start(JAudioHostMixer& mixer, Guest& guest) {
     build_tables(guest);
     auto memory = guest.memory();
-    mixer.setup(0x81000040u, kChannels, kResampler, kAdpcm, kFx, memory);
+    mixer.setup(0x40u, kChannels, kResampler, kAdpcm, kFx, memory);
     mixer.set_varam(0x00000000u);
 }
 
 void frame(JAudioHostMixer& mixer, Guest& guest, std::uint32_t level = 0x4000u) {
-    mixer.sync_frame(0x82070000u | level, kLeft, kRight, 0u, 0u, guest.memory());
+    mixer.sync_frame(0x07u, level, kLeft, kRight, 0u, 0u, guest.memory());
 }
 
 bool subframe(JAudioHostMixer& mixer, Guest& guest, std::uint16_t map0) {
     auto memory = guest.memory();
-    mixer.release_halt((0u << 16u) | map0, memory);
-    mixer.release_halt(1u << 16u, memory);
-    mixer.release_halt(2u << 16u, memory);
-    return mixer.release_halt(3u << 16u, memory);
+    mixer.release_halt(0u, map0, memory);
+    mixer.release_halt(1u, 0u, memory);
+    mixer.release_halt(2u, 0u, memory);
+    return mixer.release_halt(3u, 0u, memory);
 }
 
 void pcm16_channel(Guest& guest, std::uint32_t channel, std::int16_t value,

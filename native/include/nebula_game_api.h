@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 53u
+#define NEBULA_GAME_API_VERSION 54u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -789,11 +789,18 @@ typedef struct NebulaHostServices {
     void (*wpad_control)(void* user, uint32_t chan, uint32_t what, uint32_t value);
     void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
 
-    /* Audio. The JAudio DSP program: `count` command words as the game mails them to the DSP (count 0: one word,
-       the release of a halted subframe), run at once on the simulation thread; returns 1 when the words completed a
-       subframe (the DSP's AUDIOMSG_DSP mail). Addresses in the words are physical; the channel records and buffers
-       the program reads are in host byte order, the wave data big-endian. */
-    int (*audio_dsp)(void* user, const uint32_t* words, uint32_t count);
+    /* JAudio's mixer (on the console a DSP program; the host runs it). Pointers are into the game's memory.
+       jaudio_setup hands over the channel records (`channels` of them, in the program's layout), the resampling and
+       ADPCM filter tables and the four FX lines, once. */
+    void (*jaudio_setup)(void* user, uint32_t channels, const void* channel_records, const void* resample_filter,
+                         const void* adpcm_filter, const void* fx_lines);
+    /* Where the game's sound data in its auxiliary memory starts: the channels' wave addresses count from it. */
+    void (*jaudio_aux_base)(void* user, const void* base);
+    /* An audio frame: `subframes` subframes mix into the left and right output planes at `mixer_level` (4096 = 1). */
+    void (*jaudio_frame)(void* user, uint32_t subframes, uint32_t mixer_level, void* left, void* right);
+    /* Channel group `group` (0-3) is ready; `active` holds its 16 channels' active bits, the first channel in bit 15.
+       Group 3 mixes the frame's next subframe: returns 1 when it did. */
+    int (*jaudio_mix)(void* user, uint32_t group, uint32_t active);
     /* The AI's next DMA block: `size` bytes of interleaved 16-bit stereo (host order) at physical `start`, latched to
        play after the current block; the host calls nebula_game_ai_interrupt when it takes it. */
     void (*ai_dma)(void* user, uint32_t start, uint32_t size);

@@ -33,7 +33,7 @@ volatile int JASAudioThread::snIntCount;
 
 void* JASAudioThread::run() {
     JASDriver::initAI(DMACallback);
-    JASDsp::boot(DSPCallback);
+    JASDsp::boot();
     JASDsp::initBuffer();
     JASDSPChannel::initAll();
 
@@ -83,31 +83,8 @@ void JASAudioThread::DMACallback() {
     }
 }
 
-#ifdef TARGET_PC
-// Natively the host's DSP program finishes a subframe inside DSPSendCommands2 (dsptask.cpp), which posts the message
-// the DSP's 0xF355FF00 mail produced here.
+// The host's mixer finishes a subframe inside JASDsp::releaseHalt, which posts the message the DSP's 0xF355FF00 mail
+// produced on the console.
 void JASAudioThread_postDSPMessage() {
     JASAudioThread::getInstance()->sendMessage((void*)AUDIOMSG_DSP);
 }
-
-void JASAudioThread::DSPCallback(void*) {
-    JASAudioThread_postDSPMessage();
-}
-#else
-void JASAudioThread::DSPCallback(void*) {
-    JASAudioThread* pAudioThread = getInstance();
-    while (DSPCheckMailFromDSP() == 0) {
-    }
-
-    u32 mail = DSPReadMailFromDSP();
-    if (mail >> 0x10 != 0xF355) {
-    } else {
-        if ((mail & 0xFF00) == 0xFF00) {
-            if (!pAudioThread->sendMessage((void*)AUDIOMSG_DSP)) {
-            }
-        } else {
-            JASDsp::finishWork(mail);
-        }
-    }
-}
-#endif

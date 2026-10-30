@@ -3,11 +3,20 @@
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
-#include "JSystem/JAudio2/dspproc.hpp"
-#include "JSystem/JAudio2/dsptask.hpp"
-#include "JSystem/JAudio2/osdsp_task.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include <revolution/os.h>
+
+#include <nebula_game_api.h>
+
+// The mixer is the host's (on the console a DSP program the game mailed command words): JASDsp hands it the channel
+// records, each frame's output planes and each channel group's readiness through typed calls (jaudio_*).
+extern "C" const NebulaHostServices* nebula_host(void);
+void JASAudioThread_postDSPMessage();
+
+namespace {
+    // The mixer's output level, 4096 = 1 (DSP_MIXERLEVEL; 4 before the game first sets it).
+    u16 sMixerLevel = 0x4000;
+}  // namespace
 
 JASDsp::TChannel* JASDsp::CH_BUF;
 
@@ -21,31 +30,32 @@ u16 ATTRIBUTE_ALIGN(32) JASDsp::SEND_TABLE[] = {
 
 u32 JASWaveInfo::one = 1;
 
-void JASDsp::boot(void (*param_0)(void*)) {
+void JASDsp::boot() {
     static bool sDspInit = true;
     if (sDspInit) {
-        DspBoot(param_0);
-        DsetVARAM(JKRHeap::getAltAramStartAdr());
+        const NebulaHostServices* const host = nebula_host();
+        host->jaudio_aux_base(host->user, reinterpret_cast< const void* >(JKRHeap::getAltAramStartAdr()));
         sDspInit = false;
     }
 }
 
-void JASDsp::releaseHalt(u32 param_0) {
-    DSPReleaseHalt2(param_0);
+// Group 3's release mixes a subframe; the audio thread then runs the next (AUDIOMSG_DSP, the DSP's mail).
+void JASDsp::releaseHalt(u32 group) {
+    const NebulaHostServices* const host = nebula_host();
+    if (host->jaudio_mix(host->user, group, DSP_CreateMap2(group))) {
+        JASAudioThread_postDSPMessage();
+    }
 }
 
-void JASDsp::finishWork(u16 param_0) {
-    DspFinishWork(param_0);
-}
-
-void JASDsp::syncFrame(u32 param_0, uintptr_t param_1, uintptr_t param_2) {
-    DsyncFrame2(param_0, param_1, param_2);
+void JASDsp::syncFrame(u32 subframes, uintptr_t left, uintptr_t right) {
+    const NebulaHostServices* const host = nebula_host();
+    host->jaudio_frame(host->user, subframes, sMixerLevel, reinterpret_cast< void* >(left), reinterpret_cast< void* >(right));
 }
 
 void JASDsp::setDSPMixerLevel(f32 dsp_level) {
     sDSPVolume = dsp_level;
     dsp_level *= 4.0f;
-    DsetMixerLevel(dsp_level);
+    sMixerLevel = static_cast< u16 >(static_cast< s32 >(4096.0f * dsp_level));
 }
 
 f32 JASDsp::getDSPMixerLevel() {
@@ -198,7 +208,8 @@ void JASDsp::initBuffer() {
     for (u8 i = 0; i < 4; i++) {
         setFXLine(i, NULL, NULL);
     }
-    DsetupTable(0x40, uintptr_t(CH_BUF), uintptr_t(&DSPRES_FILTER), uintptr_t(&DSPADPCM_FILTER), uintptr_t(FX_BUF));
+    const NebulaHostServices* const host = nebula_host();
+    host->jaudio_setup(host->user, 0x40, CH_BUF, &DSPRES_FILTER, &DSPADPCM_FILTER, FX_BUF);
     flushBuffer();
 }
 

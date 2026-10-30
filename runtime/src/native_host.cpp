@@ -4575,36 +4575,28 @@ std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t 
 }
 }  // namespace
 
-bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemory& memory) {
+void NativeGameAudio::setup(std::uint32_t channels, std::uint32_t channel_table, std::uint32_t resampler_table,
+                            std::uint32_t adpcm_table, std::uint32_t fx_table, const GuestMemory& memory) {
     const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
-    JAudioHostMixer& mixer = state_->mixer;
-    const auto word = [&](std::uint32_t index) { return index < count ? words[index] : 0u; };
-    if (count == 0u) {
-        return mixer.release_halt(words[0], guest);
-    }
-    switch (words[0] >> 24u) {
-    case 0x81u:
-        if (count >= 5u) {
-            mixer.setup(words[0], word(1u), word(2u), word(3u), word(4u), guest);
-        } else {
-            mixer.note_ignored_command();
-        }
-        break;
-    case 0x8Eu:
-        mixer.set_varam(word(1u));
-        break;
-    case 0x82u: {
-        // The volume categories, once an audio frame; the master volume applies at the output.
-        const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
-        mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-        mixer.sync_frame(words[0], word(1u), word(2u), word(3u), word(4u), guest);
-        break;
-    }
-    default:
-        mixer.note_ignored_command();
-        break;
-    }
-    return false;
+    state_->mixer.setup(channels, channel_table, resampler_table, adpcm_table, fx_table, guest);
+}
+
+void NativeGameAudio::set_aux_base(std::uint32_t address) {
+    state_->mixer.set_varam(address);
+}
+
+void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, std::uint32_t left,
+                            std::uint32_t right, const GuestMemory& memory) {
+    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
+    // The volume categories, once an audio frame; the master volume applies at the output.
+    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+    state_->mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    state_->mixer.sync_frame(subframes, mixer_level, left, right, 0u, 0u, guest);
+}
+
+bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active, const GuestMemory& memory) {
+    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
+    return state_->mixer.release_halt(group, active, guest);
 }
 
 void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {

@@ -16,7 +16,6 @@ struct JASAudioThread : public JKRThread, public JASGlobalInstance< JASAudioThre
     void stop();
     virtual void* run();
     static void DMACallback();
-    static void DSPCallback(void*);
 
     static JASAudioThread* getThreadPointer() {
         return getInstance();

@@ -1,6 +1,5 @@
-/* Audio natively (in place of the SDK's AI, DSP and ARAM-alternative libraries).
-   - DSP: JAudio2's command words (DSPSendCommands2, dsptask.cpp) go to the host's implementation of the JAudio DSP
-     program, which mixes at once into the game's output planes (audio_dsp).
+/* Audio natively (in place of the SDK's AI and ARAM-alternative libraries; the mixer is the host's, which JASDsp
+   drives itself).
    - AI: the audio interface's DMA engine. AIInitDMA latches the next block (its physical address and length); the
      host's output plays the blocks and, as the console's AI does when a block's DMA ends, calls
      nebula_game_ai_interrupt, delivered as the AI interrupt that runs the game's DMA callback.
@@ -17,10 +16,6 @@
 #include "nebula_sdk.h"
 
 const NebulaHostServices* nebula_host(void);
-
-int __NebulaDSPCommands(const u32* words, u32 count) {
-    return nebula_host()->audio_dsp(nebula_host()->user, words, count);
-}
 
 static AIDCallback sDMACallback;
 static BOOL sAIInitialized;

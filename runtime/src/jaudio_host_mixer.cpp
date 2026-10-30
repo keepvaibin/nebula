@@ -97,13 +97,13 @@ void put32(std::byte* p, std::uint32_t offset, std::uint32_t value) noexcept {
 
 JAudioHostMixer::JAudioHostMixer() = default;
 
-void JAudioHostMixer::setup(std::uint32_t command, std::uint32_t channel_table,
+void JAudioHostMixer::setup(std::uint32_t channel_count, std::uint32_t channel_table,
                             std::uint32_t resampler_table,
                             std::uint32_t adpcm_table, std::uint32_t fx_table,
                             const JAudioGuestMemory& memory) {
     ++stats_.setups;
     channel_table_ = channel_table;
-    channel_count_ = std::min<std::uint32_t>(command & 0xFFFFu, 64u);
+    channel_count_ = std::min<std::uint32_t>(channel_count, 64u);
     fx_table_ = fx_table;
     // The DSP copies DSPRES_FILTER (640 words) and DSPADPCM_FILTER (32 words)
     // into its data memory once, at setup.
@@ -170,15 +170,15 @@ void JAudioHostMixer::classify_channel(std::uint32_t index, const std::byte* rec
     }
 }
 
-void JAudioHostMixer::sync_frame(std::uint32_t command, std::uint32_t left,
-                                 std::uint32_t right, std::uint32_t aux_a,
+void JAudioHostMixer::sync_frame(std::uint32_t subframes, std::uint32_t mixer_level,
+                                 std::uint32_t left, std::uint32_t right, std::uint32_t aux_a,
                                  std::uint32_t aux_b,
                                  const JAudioGuestMemory& memory) {
     ++stats_.frames;
-    frame_command_ = command;
+    mixer_level_ = mixer_level & 0xFFFFu;
     left_plane_ = left;
     right_plane_ = right;
-    subframes_ = (command >> 16u) & 0xFFu;
+    subframes_ = subframes & 0xFFu;
     next_subframe_ = 0u;
     frame_active_ = configured() && subframes_ != 0u;
     maps_ = {};
@@ -207,10 +207,9 @@ void JAudioHostMixer::sync_frame(std::uint32_t command, std::uint32_t left,
     }
 }
 
-bool JAudioHostMixer::release_halt(std::uint32_t message,
+bool JAudioHostMixer::release_halt(std::uint32_t group, std::uint32_t map,
                                    const JAudioGuestMemory& memory) {
-    const std::uint32_t group = (message >> 16u) & 0xFFFFu;
-    maps_[group & 3u] = static_cast<std::uint16_t>(message & 0xFFFFu);
+    maps_[group & 3u] = static_cast<std::uint16_t>(map & 0xFFFFu);
     if (group != 3u) {
         return false;
     }
@@ -1112,7 +1111,7 @@ void JAudioHostMixer::write_output(std::uint32_t bus, std::uint32_t plane,
         ++stats_.unresolved_reads;
         return;
     }
-    const std::int64_t level = frame_command_ & 0xFFFFu;
+    const std::int64_t level = mixer_level_;
     for (std::uint32_t i = 0; i < kSamples; ++i) {
         const std::int16_t sample = sat16((dram_[bus + i] * level) >> 12);
         put16(dst, i * 2u, static_cast<std::uint16_t>(sample));

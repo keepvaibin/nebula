@@ -143,9 +143,14 @@ public:
     NativeGameAudio(const NativeGameAudio&) = delete;
     NativeGameAudio& operator=(const NativeGameAudio&) = delete;
 
-    // The command words the game mails to the DSP (count 0: one word, a halted subframe's release), with physical
-    // addresses resolved in `memory`. True when the words completed a subframe (the DSP's AUDIOMSG_DSP mail).
-    bool dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemory& memory);
+    // The game's JAudio mixer calls (nebula_game_api.h jaudio_*), with guest addresses resolved in `memory`.
+    // mix returns true when it completed a subframe (the game then posts its AUDIOMSG_DSP).
+    void setup(std::uint32_t channels, std::uint32_t channel_table, std::uint32_t resampler_table,
+               std::uint32_t adpcm_table, std::uint32_t fx_table, const GuestMemory& memory);
+    void set_aux_base(std::uint32_t address);
+    void frame(std::uint32_t subframes, std::uint32_t mixer_level, std::uint32_t left, std::uint32_t right,
+               const GuestMemory& memory);
+    bool mix(std::uint32_t group, std::uint32_t active, const GuestMemory& memory);
     // One AI block: 16-bit samples, right then left, big-endian, as the console's DMA engine reads them. Call from one
     // thread; the first call opens the device.
     bool play(std::span<const std::byte> block, std::uint32_t sample_rate);
