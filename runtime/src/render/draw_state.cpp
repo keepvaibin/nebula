@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstring>
 #include <iterator>
-#include <sstream>
 
 namespace galaxy::render {
 namespace {
@@ -994,34 +993,6 @@ std::uint32_t coord_s_word(const NativeDrawState& s, unsigned c) {
            static_cast<std::uint32_t>(k.point_offset) << 19u;
 }
 
-std::uint32_t coord_t_word(const NativeDrawState& s, unsigned c) {
-    const auto& k = s.coord[c & 7u];
-    return static_cast<std::uint32_t>(k.size_minus_one[1]) | static_cast<std::uint32_t>(k.bias[1]) << 16u |
-           static_cast<std::uint32_t>(k.wrap[1]) << 17u;
-}
-
-std::uint32_t tex_mode0_word(const TextureMap& t) {
-    const TexMode& m = t.mode;
-    return static_cast<std::uint32_t>(m.wrap_s) | static_cast<std::uint32_t>(m.wrap_t) << 2u |
-           static_cast<std::uint32_t>(m.mag_filter) << 4u | static_cast<std::uint32_t>(m.min_filter) << 5u |
-           static_cast<std::uint32_t>(!t.edge_lod) << 8u |
-           static_cast<std::uint32_t>(static_cast<std::uint8_t>(m.lod_bias_x32)) << 9u |
-           static_cast<std::uint32_t>(m.max_aniso) << 19u | static_cast<std::uint32_t>(t.bias_clamp) << 21u;
-}
-
-std::uint32_t tex_mode1_word(const TextureMap& t) {
-    return static_cast<std::uint32_t>(t.mode.min_lod_x16) | static_cast<std::uint32_t>(t.mode.max_lod_x16) << 8u;
-}
-
-std::uint32_t tex_image0_word(const TextureMap& t) {
-    return static_cast<std::uint32_t>(t.image.width - 1u) | static_cast<std::uint32_t>(t.image.height - 1u) << 10u |
-           static_cast<std::uint32_t>(t.image.format) << 20u;
-}
-
-std::uint32_t tlut_word(const TextureMap& t) {
-    return static_cast<std::uint32_t>(t.tlut.tmem_offset) | static_cast<std::uint32_t>(t.tlut.format) << 10u;
-}
-
 namespace {
 
 // GXCopyTex's block counts: a format's tile is 2^row_shift texels wide.
@@ -1110,134 +1081,6 @@ std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k) {
     const std::uint8_t* c = state.konst[k & 3u];
     return static_cast<std::uint32_t>(c[0]) << 24u | static_cast<std::uint32_t>(c[1]) << 16u |
            static_cast<std::uint32_t>(c[2]) << 8u | c[3];
-}
-
-std::string draw_state_differences(const NativeDrawState& s, const NativeDrawState& e) {
-    std::ostringstream out;
-    const auto field = [&](const char* name, unsigned have, unsigned want) {
-        if (have != want) {
-            out << ' ' << name << '=' << have << "/" << want;
-        }
-    };
-    for (unsigned i = 0; i < 16u; ++i) {
-        const TevStageConfig& a = s.tev[i];
-        const TevStageConfig& b = e.tev[i];
-        const unsigned have[] = {
-            static_cast<unsigned>(a.color_a), static_cast<unsigned>(a.color_b), static_cast<unsigned>(a.color_c),
-            static_cast<unsigned>(a.color_d), static_cast<unsigned>(a.color_bias), a.color_sub, a.color_clamp,
-            static_cast<unsigned>(a.color_scale), a.color_dest, static_cast<unsigned>(a.alpha_a),
-            static_cast<unsigned>(a.alpha_b), static_cast<unsigned>(a.alpha_c), static_cast<unsigned>(a.alpha_d),
-            static_cast<unsigned>(a.alpha_bias), a.alpha_sub, a.alpha_clamp, static_cast<unsigned>(a.alpha_scale),
-            a.alpha_dest, a.ras_swap, a.tex_swap, a.order.texmap, a.order.texcoord, a.order.tex_enable,
-            a.order.ras_channel, a.kcsel, a.kasel, ind_cmd_word(s.ind[i])};
-        const unsigned want[] = {
-            static_cast<unsigned>(b.color_a), static_cast<unsigned>(b.color_b), static_cast<unsigned>(b.color_c),
-            static_cast<unsigned>(b.color_d), static_cast<unsigned>(b.color_bias), b.color_sub, b.color_clamp,
-            static_cast<unsigned>(b.color_scale), b.color_dest, static_cast<unsigned>(b.alpha_a),
-            static_cast<unsigned>(b.alpha_b), static_cast<unsigned>(b.alpha_c), static_cast<unsigned>(b.alpha_d),
-            static_cast<unsigned>(b.alpha_bias), b.alpha_sub, b.alpha_clamp, static_cast<unsigned>(b.alpha_scale),
-            b.alpha_dest, b.ras_swap, b.tex_swap, b.order.texmap, b.order.texcoord, b.order.tex_enable,
-            b.order.ras_channel, b.kcsel, b.kasel, ind_cmd_word(e.ind[i])};
-        static constexpr const char* kNames[] = {
-            "ca", "cb", "cc", "cd", "cbias", "csub", "cclamp", "cscale", "cdest", "aa", "ab", "ac", "ad", "abias",
-            "asub", "aclamp", "ascale", "adest", "rasswap", "texswap", "texmap", "texcoord", "texen", "ras", "kcsel",
-            "kasel", "indcmd"};
-        for (unsigned k = 0; k < std::size(have); ++k) {
-            if (have[k] != want[k]) {
-                out << " tev" << i << '.' << kNames[k] << '=' << have[k] << '/' << want[k];
-            }
-        }
-    }
-    for (unsigned t = 0; t < 4u; ++t) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            field("swap", s.swap[t][c], e.swap[t][c]);
-        }
-    }
-    field("fogtype", static_cast<unsigned>(s.fog_type), static_cast<unsigned>(e.fog_type));
-    field("ztexop", s.z_texture.op, e.z_texture.op);
-    field("ztextype", s.z_texture.type, e.z_texture.type);
-    field("ztexbias", s.z_texture.bias, e.z_texture.bias);
-    field("indref", ind_ref_word(s), ind_ref_word(e));
-    field("indscale0", ind_scale_word(s, 0u), ind_scale_word(e, 0u));
-    field("indscale1", ind_scale_word(s, 1u), ind_scale_word(e, 1u));
-    for (unsigned i = 0; i < 3u; ++i) {
-        for (unsigned row = 0; row < 2u; ++row) {
-            for (unsigned c = 0; c < 3u; ++c) {
-                field("indmtx", static_cast<unsigned>(s.ind_matrix[i].m[row][c] & 0x7FF),
-                      static_cast<unsigned>(e.ind_matrix[i].m[row][c] & 0x7FF));
-            }
-        }
-        field("indmtxscale", static_cast<unsigned>(s.ind_matrix[i].scale & 63), static_cast<unsigned>(e.ind_matrix[i].scale & 63));
-    }
-    for (unsigned r = 0; r < 4u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            field("tevcolor", static_cast<unsigned>(s.tev_color[r][c] & 0x7FF), static_cast<unsigned>(e.tev_color[r][c] & 0x7FF));
-            field("konst", s.konst[r][c], e.konst[r][c]);
-        }
-    }
-    field("foga", std::bit_cast<std::uint32_t>(s.fog.a), std::bit_cast<std::uint32_t>(e.fog.a));
-    field("fogc", std::bit_cast<std::uint32_t>(s.fog.c), std::bit_cast<std::uint32_t>(e.fog.c));
-    field("fogbm", s.fog.b_magnitude, e.fog.b_magnitude);
-    field("fogbs", s.fog.b_shift, e.fog.b_shift);
-    field("fogproj", s.fog.projection, e.fog.projection);
-    for (unsigned i = 0; i < 4u; ++i) {
-        field("channel", channel_word(s.channel[i]), channel_word(e.channel[i]));
-    }
-    for (unsigned i = 0; i < 2u; ++i) {
-        field("matcolor", rgba_word(s.material_color[i]), rgba_word(e.material_color[i]));
-        field("ambcolor", rgba_word(s.ambient_color[i]), rgba_word(e.ambient_color[i]));
-    }
-    for (unsigned i = 0; i < 8u; ++i) {
-        field("texgen", texgen_word(s.texgen[i]), texgen_word(e.texgen[i]));
-        field("posttexgen", post_texgen_word(s.post_texgen[i]), post_texgen_word(e.post_texgen[i]));
-        field("coords", coord_s_word(s, i), coord_s_word(e, i));
-        field("coordt", coord_t_word(s, i), coord_t_word(e, i));
-    }
-    for (unsigned i = 0; i < 6u; ++i) {
-        field("projection", std::bit_cast<std::uint32_t>(s.projection[i]), std::bit_cast<std::uint32_t>(e.projection[i]));
-        field("viewport", std::bit_cast<std::uint32_t>(s.viewport[i]), std::bit_cast<std::uint32_t>(e.viewport[i]));
-    }
-    field("projtype", s.projection_type, e.projection_type);
-    field("mtxa", matrix_index_a(s), matrix_index_a(e));
-    field("mtxb", matrix_index_b(s), matrix_index_b(e));
-    field("linepoint", line_point_word(s), line_point_word(e));
-    field("scissorx0", static_cast<unsigned>(s.scissor.x0), static_cast<unsigned>(e.scissor.x0));
-    field("scissory0", static_cast<unsigned>(s.scissor.y0), static_cast<unsigned>(e.scissor.y0));
-    field("scissorx1", static_cast<unsigned>(s.scissor.x1), static_cast<unsigned>(e.scissor.x1));
-    field("scissory1", static_cast<unsigned>(s.scissor.y1), static_cast<unsigned>(e.scissor.y1));
-    field("scissoroffx", static_cast<unsigned>(s.scissor_offset.x), static_cast<unsigned>(e.scissor_offset.x));
-    field("scissoroffy", static_cast<unsigned>(s.scissor_offset.y), static_cast<unsigned>(e.scissor_offset.y));
-    for (unsigned c = 0; c < 3u; ++c) {
-        field("fogcolor", s.fog.color[c], e.fog.color[c]);
-    }
-    field("texgens", s.gen.num_texgens, e.gen.num_texgens);
-    field("chans", s.gen.num_color_chans, e.gen.num_color_chans);
-    field("tevs", s.gen.num_tev_stages, e.gen.num_tev_stages);
-    field("cull", static_cast<unsigned>(s.gen.cull), static_cast<unsigned>(e.gen.cull));
-    field("inds", s.gen.num_ind_stages, e.gen.num_ind_stages);
-    field("ztest", s.z.test_enable, e.z.test_enable);
-    field("zfunc", static_cast<unsigned>(s.z.func), static_cast<unsigned>(e.z.func));
-    field("zupdate", s.z.update_enable, e.z.update_enable);
-    field("blend", s.blend.blend_enable, e.blend.blend_enable);
-    field("logic", s.blend.logic_op_enable, e.blend.logic_op_enable);
-    field("dither", s.blend.dither, e.blend.dither);
-    field("cupdate", s.blend.color_update, e.blend.color_update);
-    field("aupdate", s.blend.alpha_update, e.blend.alpha_update);
-    field("dst", static_cast<unsigned>(s.blend.dst_factor), static_cast<unsigned>(e.blend.dst_factor));
-    field("src", static_cast<unsigned>(s.blend.src_factor), static_cast<unsigned>(e.blend.src_factor));
-    field("sub", s.blend.subtract, e.blend.subtract);
-    field("logicmode", s.blend.logic_mode, e.blend.logic_mode);
-    field("dstalpha", s.blend.const_alpha_enable, e.blend.const_alpha_enable);
-    field("dstalphavalue", s.blend.const_alpha, e.blend.const_alpha);
-    field("pixfmt", s.pe.pixel_format, e.pe.pixel_format);
-    field("zfmt", s.pe.z_format, e.pe.z_format);
-    field("earlyz", s.pe.early_z, e.pe.early_z);
-    field("ref0", s.alpha.ref0, e.alpha.ref0);
-    field("ref1", s.alpha.ref1, e.alpha.ref1);
-    field("comp0", static_cast<unsigned>(s.alpha.comp0), static_cast<unsigned>(e.alpha.comp0));
-    field("comp1", static_cast<unsigned>(s.alpha.comp1), static_cast<unsigned>(e.alpha.comp1));
-    field("alogic", static_cast<unsigned>(s.alpha.logic), static_cast<unsigned>(e.alpha.logic));
-    return out.str();
 }
 
 }  // namespace galaxy::render

@@ -7,7 +7,6 @@
 #include "galaxy/render/native_material.h"
 #include "galaxy/render/native_state.h"
 
-#include <string>
 
 namespace galaxy::render {
 
@@ -147,15 +146,8 @@ public:
 [[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t line_point_word(const NativeDrawState& state);
-// Coordinate `c`'s s (with the line and point offsets) and t scale words.
+// Coordinate `c`'s s scale word (with the line and point offsets).
 [[nodiscard]] std::uint32_t coord_s_word(const NativeDrawState& state, unsigned c);
-[[nodiscard]] std::uint32_t coord_t_word(const NativeDrawState& state, unsigned c);
-
-// A texture map's packed forms (the check mode's comparison with the register file).
-[[nodiscard]] std::uint32_t tex_mode0_word(const TextureMap& map);
-[[nodiscard]] std::uint32_t tex_mode1_word(const TextureMap& map);
-[[nodiscard]] std::uint32_t tex_image0_word(const TextureMap& map);
-[[nodiscard]] std::uint32_t tlut_word(const TextureMap& map);
 
 // Map `map`'s palette address (0 without a palette format or a loaded place).
 [[nodiscard]] std::uint64_t palette_address(const NativeDrawState& state, unsigned map);
@@ -167,8 +159,5 @@ public:
 
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);
-
-// The fields where `state` differs from `expected` (empty when equal), for the check mode.
-[[nodiscard]] std::string draw_state_differences(const NativeDrawState& state, const NativeDrawState& expected);
 
 }  // namespace galaxy::render
