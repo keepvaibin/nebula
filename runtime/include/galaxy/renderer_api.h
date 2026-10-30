@@ -177,7 +177,7 @@ std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms
 void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip);
 // Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted FIFO.
-void attach_shape_record(shapes::Record record);
+void attach_shape_record(shapes::Record&& record);
 // Simulation thread: the THP movie frame the game draws (movie_replacement.h); every later submission carries it
 // until the movie closes (frame -1).
 void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,

@@ -84,6 +84,34 @@ inline void apply_uber_ps_key(const PixelShaderKey& key, PixelConstants& out) no
     out.uber_ps_header[3] = 0u;
 }
 
+// apply_uber_ps_key's fields for the last key packed: draws in a row mostly share their key, and packing reads every
+// stage.
+struct UberPsKeyMemo {
+    PixelShaderKey key{};
+    std::uint32_t stage_config[kMaxTevStages][4]{};
+    std::uint32_t ind_cmd[4][4]{};
+    std::uint32_t ind_misc[4]{};
+    std::uint32_t header[4]{};
+    bool valid = false;
+
+    void apply(const PixelShaderKey& next, PixelConstants& out) noexcept {
+        if (!valid || !(next == key)) {
+            apply_uber_ps_key(next, out);
+            std::memcpy(stage_config, out.stage_config, sizeof(stage_config));
+            std::memcpy(ind_cmd, out.ind_cmd, sizeof(ind_cmd));
+            std::memcpy(ind_misc, out.ind_misc, sizeof(ind_misc));
+            std::memcpy(header, out.uber_ps_header, sizeof(header));
+            key = next;
+            valid = true;
+            return;
+        }
+        std::memcpy(out.stage_config, stage_config, sizeof(stage_config));
+        std::memcpy(out.ind_cmd, ind_cmd, sizeof(ind_cmd));
+        std::memcpy(out.ind_misc, ind_misc, sizeof(ind_misc));
+        std::memcpy(out.uber_ps_header, header, sizeof(header));
+    }
+};
+
 // VertexConstants' uber tail is written straight into upload memory, so this
 // takes the destination of each field rather than a whole struct.
 inline void apply_uber_vs_key(const VertexShaderKey& key, VertexConstants& out) noexcept {

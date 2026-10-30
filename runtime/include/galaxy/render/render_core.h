@@ -51,6 +51,7 @@
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/uber_constants.h"
+#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/vs_constants.h"
 #include "galaxy/render/render_vertex.h"
 #include "galaxy/renderer_api.h"
@@ -193,7 +194,7 @@ public:
     }
     // Simulation thread: a native shape record (native_shapes.h) the next submission carries, run when its parser
     // reaches the record's offset.
-    void attach_shape_record(shapes::Record record) {
+    void attach_shape_record(shapes::Record&& record) {
         record.serial = producer_shape_record_serial_++;
         producer_shape_records_.push_back(std::move(record));
     }
@@ -1319,6 +1320,7 @@ private:
 
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     PixelShaderKey ps_key_{};
+    UberPsKeyMemo uber_ps_memo_;
     VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};

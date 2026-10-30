@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 namespace galaxy::render::curved {
@@ -125,5 +126,7 @@ struct Record {
     // A host marker (Marker, its kind at `key`): aux, a, b.
     std::array<std::uint32_t, 3> marker{};
 };
+// Vectors of records move them when they grow (a throwing move would copy them).
+static_assert(std::is_nothrow_move_constructible_v<Record>);
 
 }  // namespace galaxy::render::shapes

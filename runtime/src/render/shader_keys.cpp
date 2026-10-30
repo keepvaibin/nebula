@@ -38,9 +38,8 @@ namespace {
 
 PixelShaderKey build_pixel_shader_key(
     const NativeDrawState& state, unsigned efb_scale, bool true_color) {
+    // Value-initialized: hash() and operator== read the used stages and the header, and unused fields must be zero.
     PixelShaderKey key{};
-    // hash() and operator== read every byte, so unused stages and fields must be zero.
-    std::memset(&key, 0, sizeof(key));
 
     const GenMode gm = state.gen;
     key.num_tev_stages = gm.num_tev_stages;     // 1-16

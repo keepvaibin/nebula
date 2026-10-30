@@ -2076,6 +2076,15 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (producer_shape_records_.empty()) {
         return;
     }
+    // The chunk takes the vector whole rather than moving each record, and the next chunk's records get room for as
+    // many (growing from empty moved every record again at each doubling).
+    const std::size_t count = producer_shape_records_.size();
+    if (chunk.shape_records.empty()) {
+        chunk.shape_records.swap(producer_shape_records_);
+        producer_shape_records_.reserve(count);
+        return;
+    }
+    chunk.shape_records.reserve(chunk.shape_records.size() + count);
     for (shapes::Record& record : producer_shape_records_) {
         chunk.shape_records.push_back(std::move(record));
     }
@@ -8664,7 +8673,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                              rt_identity_seen_);
             }
         }
-        apply_uber_ps_key(ps_key_, ps_c);
+        uber_ps_memo_.apply(ps_key_, ps_c);
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
             ps_c.uber_ps_header[3] = enhanced_ps_flags_ | enhanced_material_bits;
         }

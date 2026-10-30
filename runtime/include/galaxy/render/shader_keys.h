@@ -243,15 +243,21 @@ struct PixelShaderKey {
     std::uint32_t ind_reserved;     // enhanced lighting material, else zero
     KeyStage stages[16];            // zeroed past num_tev_stages
 
+    // The bytes a key's identity is in: the header and its stages (the rest is zero), a whole number of words.
+    [[nodiscard]] std::size_t used_bytes() const noexcept {
+        const std::size_t stages_used = num_tev_stages < 16u ? num_tev_stages : 16u;
+        return (32u + sizeof(KeyStage) * stages_used + 7u) & ~std::size_t{7};
+    }
     [[nodiscard]] bool operator==(const PixelShaderKey& other) const noexcept {
-        return key_bytes_equal(this, &other, sizeof(*this));
+        return num_tev_stages == other.num_tev_stages && key_bytes_equal(this, &other, used_bytes());
     }
     [[nodiscard]] std::uint64_t hash() const {
-        return hash_key_words(this, sizeof(*this));
+        return hash_key_words(this, used_bytes());
     }
 };
 static_assert(sizeof(PixelShaderKey) == 12 + 4 * sizeof(KeyIndirectOrder) + 4 + 16 * sizeof(KeyStage));
 static_assert(sizeof(PixelShaderKey) % 8u == 0u);
+static_assert(offsetof(PixelShaderKey, stages) == 32u);  // used_bytes()
 static_assert(std::has_unique_object_representations_v<PixelShaderKey>);
 
 // A texture coordinate generator, typed. Fields its type does not read are zero (build_vertex_shader_key).
