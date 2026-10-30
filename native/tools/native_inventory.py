@@ -171,9 +171,9 @@ AREAS = [
      "The game's disc access helpers: files from the cooked asset store."),
     (r"^native/petari/", "petari-other", "KEEP", "Petari metadata."),
     (r"^native/", "native-build", "KEEP", "Module build and benches."),
-    (r"^runtime/src/gx/vk/|^runtime/include/galaxy/gx/vk/", "renderer-vulkan", "CONVERT",
+    (r"^runtime/src/render/vk/|^runtime/include/galaxy/render/vk/", "renderer-vulkan", "CONVERT",
      "Vulkan backend: draw from native records; descriptor indexing, push constants, dynamic rendering."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:fifo_parser|gx_state|gx_shim|renderer_api|gx_bitfields|gx_headers|"
+    (r"^runtime/(?:src|include/galaxy)/render/(?:fifo_parser|gx_state|gx_shim|renderer_api|gx_bitfields|gx_headers|"
      r"vertex_loader|draw_state|matrix_memory|"
      r"memory_snapshot|snapshot_region|sorted_dirty|frame_completion|xf_lighting|line_point_raster|efb_copy|"
      r"efb_conversion|xfb_present|shader_keys|shader_gen|uber_|rt_tev|sampler_key|texture_cache|"
@@ -181,25 +181,25 @@ AREAS = [
      "GX translation: command parsing, register state, GX vertex/texture decoding, EFB/XFB copies, TEV/XF shader "
      "emulation, guest-memory change detection. Replace with the native record renderer; reuse parts that are "
      "native already (upload ring, placed allocator, texture backend) after removing GX shapes from them."),
-    (r"^runtime/(?:src|include/galaxy)/(?:gx/gx_backend|gx/render_core|gx/native_shapes|gx_d3d12|renderer_api)",
+    (r"^runtime/(?:src|include/galaxy)/(?:render/render_core|render/native_shapes|renderer_api)",
      "renderer-core", "CONVERT",
      "Backend between the game and the GPU: becomes the native record consumer (native shapes stay)."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:renderer_d3d12|renderer_common|pipeline_cache|render_config|"
+    (r"^runtime/(?:src|include/galaxy)/render/(?:renderer_d3d12|renderer_common|pipeline_cache|render_config|"
      r"display_modes|window_owner|vblank_clock)", "renderer-d3d12", "CONVERT",
      "D3D12 backend and infrastructure: bindless, root constants, one frame graph, native targets."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:ray_tracing|rt_)", "feature-rt", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/render/(?:ray_tracing|rt_)", "feature-rt", "CONVERT",
      "Ray tracing: rebuild on native shapes/materials/lights/instances (phase 4)."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:frame_interpolation|interp_gpu|transform_history|temporal_upscaler|"
+    (r"^runtime/(?:src|include/galaxy)/render/(?:frame_interpolation|interp_gpu|transform_history|temporal_upscaler|"
      r"streamline_bridge)", "feature-temporal", "CONVERT",
      "Interpolation, upscalers, frame generation: exact per-object motion from native data (phase 2)."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:post_process|game_bloom|ambient_occlusion|enhanced_lighting|"
+    (r"^runtime/(?:src|include/galaxy)/render/(?:post_process|game_bloom|ambient_occlusion|enhanced_lighting|"
      r"curved_surfaces|game_lights|game_objects|galaxy_select)", "feature-graphics", "CONVERT",
      "Graphics features: on native targets and native data (phase 2)."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:texture_pack|movie_replacement|game_asset_extract)", "feature-packs", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/render/(?:texture_pack|movie_replacement|game_asset_extract)", "feature-packs", "CONVERT",
      "Texture packs and HD movies: names from the cooker (Dolphin hashes of original data), native textures/video."),
-    (r"^runtime/(?:src|include/galaxy)/gx/host_window_win32", "host-ui-win32", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/render/host_window_win32", "host-ui-win32", "CONVERT",
      "Window, settings and achievements overlay: move the UI model to shared code for every host."),
-    (r"^runtime/(?:src|include/galaxy)/gx/", "renderer-other", "CONVERT", "Renderer: native records."),
+    (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
     (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video|guest_memory|"

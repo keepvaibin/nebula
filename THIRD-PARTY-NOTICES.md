@@ -145,7 +145,7 @@ no license file; it declares `MIT OR Apache-2.0`.
 
 ## Vulkan renderer libraries
 
-The Vulkan renderer (`runtime/src/gx/vk`, every platform but Windows' D3D12 build) links these,
+The Vulkan renderer (`runtime/src/render/vk`, every platform but Windows' D3D12 build) links these,
 unmodified, compiled from source:
 
 - glslang 16.6.0, <https://github.com/KhronosGroup/glslang>: BSD-3-Clause for its core, with

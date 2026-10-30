@@ -5,10 +5,10 @@
 
 #include "sdl_host.h"
 
-#include "galaxy/gx/display_modes.h"
-#include "galaxy/gx/host_window.h"
-#include "galaxy/gx/vk/vk_context.h"
-#include "galaxy/gx/render_config.h"
+#include "galaxy/render/display_modes.h"
+#include "galaxy/render/host_window.h"
+#include "galaxy/render/vk/vk_context.h"
+#include "galaxy/render/render_config.h"
 #include "galaxy/renderer_api.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_host.h"
@@ -415,7 +415,7 @@ void pump_events(int timeout_ms) noexcept {
     static std::int64_t wait_cpu = 0;
     static std::uint32_t waits = 0;
     static auto report_time = std::chrono::steady_clock::now();
-    const std::int64_t wait_start = galaxy::gx::vk::thread_cpu_ns();
+    const std::int64_t wait_start = galaxy::render::vk::thread_cpu_ns();
 #if defined(__ANDROID__)
     // SDL's timed event wait polls without sleeping on Android, keeping a core busy: the events are pumped here and
     // the thread sleeps between pumps.
@@ -429,10 +429,10 @@ void pump_events(int timeout_ms) noexcept {
 #else
     bool any = SDL_WaitEventTimeout(&event, timeout_ms);
 #endif
-    wait_cpu += galaxy::gx::vk::thread_cpu_ns() - wait_start;
+    wait_cpu += galaxy::render::vk::thread_cpu_ns() - wait_start;
     ++waits;
     if (const auto now = std::chrono::steady_clock::now(); now - report_time >= std::chrono::seconds(10)) {
-        const std::int64_t cpu = galaxy::gx::vk::thread_cpu_ns();
+        const std::int64_t cpu = galaxy::render::vk::thread_cpu_ns();
         const double seconds = std::chrono::duration<double>(now - report_time).count();
         if (report_cpu != 0) {
             std::fprintf(stderr, "[host-events] %u waits; main thread %.1f ms/s, %.1f ms/s of it in the event wait\n",
@@ -450,11 +450,11 @@ void pump_events(int timeout_ms) noexcept {
         switch (event.type) {
         case SDL_EVENT_QUIT:
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED:
-            galaxy::gx::host_window::quit_request.store(true, std::memory_order_release);
+            galaxy::render::host_window::quit_request.store(true, std::memory_order_release);
             break;
         case SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED:
             update_window_size();
-            galaxy::gx::host_window::pending_resize_extent.store(
+            galaxy::render::host_window::pending_resize_extent.store(
                 (static_cast<std::uint64_t>(g_input.window_width) << 32u) |
                     static_cast<std::uint32_t>(g_input.window_height),
                 std::memory_order_release);
@@ -485,7 +485,7 @@ void pump_events(int timeout_ms) noexcept {
         case SDL_EVENT_MOUSE_WHEEL: {
             // In 120ths of a notch, positive away from the player (Windows' WHEEL_DELTA), as the game takes it.
             const float notches = event.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -event.wheel.y : event.wheel.y;
-            galaxy::gx::host_window::pointer_wheel.fetch_add(static_cast<std::int32_t>(std::lround(notches * 120.0f)),
+            galaxy::render::host_window::pointer_wheel.fetch_add(static_cast<std::int32_t>(std::lround(notches * 120.0f)),
                                                              std::memory_order_relaxed);
             break;
         }
@@ -651,9 +651,9 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSetV
 // The activity's SurfaceView is going (surfaceDestroyed, before SDL lets the window go): returns once no present uses
 // it (host_window.h). Two seconds at most, so a stalled render thread cannot hold the UI thread.
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceWithdrawn(JNIEnv*, jclass) {
-    galaxy::gx::host_window::surface_withdrawn.store(true, std::memory_order_release);
-    if (galaxy::gx::host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
-        galaxy::gx::host_window::surface_use.unlock();
+    galaxy::render::host_window::surface_withdrawn.store(true, std::memory_order_release);
+    if (galaxy::render::host_window::surface_use.try_lock_for(std::chrono::seconds(2))) {
+        galaxy::render::host_window::surface_use.unlock();
     } else {
         std::fprintf(stderr, "[window] the renderer kept the surface past 2 s\n");
     }
@@ -661,13 +661,13 @@ extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurf
 
 // A new surface is ready (after SDL took it in surfaceChanged): the renderer makes its own for it.
 extern "C" JNIEXPORT void JNICALL Java_dev_nebula_galaxy_GameActivity_nativeSurfaceReturned(JNIEnv*, jclass) {
-    galaxy::gx::host_window::surface_withdrawn.store(false, std::memory_order_release);
+    galaxy::render::host_window::surface_withdrawn.store(false, std::memory_order_release);
 }
 #endif
 
 // The renderer's window (host_window.h).
 
-namespace galaxy::gx::host_window {
+namespace galaxy::render::host_window {
 
 unsigned backbuffer_width = 0;
 unsigned backbuffer_height = 0;
@@ -816,11 +816,11 @@ VkSurfaceKHR create_vulkan_surface(VkInstance instance, NativeWindow window) {
     return surface;
 }
 
-}  // namespace galaxy::gx::host_window
+}  // namespace galaxy::render::host_window
 
 // The window functions the host and the backend call (renderer_api.h).
 
-namespace galaxy::gx {
+namespace galaxy::render {
 
 void set_native_settings_content_root(const std::string& utf8_path) {
     host_window::native_settings_content_root = utf8_path;
@@ -902,7 +902,7 @@ std::int32_t take_pointer_wheel() noexcept {
     return host_window::pointer_wheel.exchange(0, std::memory_order_relaxed);
 }
 
-}  // namespace galaxy::gx
+}  // namespace galaxy::render
 
 namespace galaxy::host {
 

@@ -3,7 +3,7 @@
 The GX backend (`galaxy::gx`, the `galaxy_gx` static library) turns the GX command stream that
 the game writes into Direct3D 12 work. It implements what Super Mario Galaxy uses, not the whole
 GX hardware, and is not derived from Dolphin's video backend. Headers are in
-`runtime/include/galaxy/gx/`, sources in `runtime/src/gx/`.
+`runtime/include/galaxy/render/`, sources in `runtime/src/render/`.
 
 ## Design decisions
 

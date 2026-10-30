@@ -30,10 +30,10 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 | Project | License | Adapted for | Nebula files |
 |---|---|---|---|
 | [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/native_thp_video.cpp`, `runtime/include/galaxy/native_thp_video.h` |
-| Aurora | MIT | GX blend and pipeline state canonicalization | `runtime/src/gx/shader_keys.cpp` |
-| Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/gx/texture_sampling.h`, `runtime/src/gx/render_core.cpp` |
-| Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/gx/texture_cache.cpp` |
-| Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/gx/render_config.cpp`, `runtime/src/gx/renderer_d3d12.cpp` |
+| Aurora | MIT | GX blend and pipeline state canonicalization | `runtime/src/render/shader_keys.cpp` |
+| Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/render/texture_sampling.h`, `runtime/src/render/render_core.cpp` |
+| Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/render/texture_cache.cpp` |
+| Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/render/render_config.cpp`, `runtime/src/render/renderer_d3d12.cpp` |
 | [Dusklight](https://github.com/TwilitRealm/dusklight) | CC0 1.0 | Button press and trigger state per game frame | `runtime/include/galaxy/synthetic_kpad_buttons.h` |
 | Dusklight | CC0 1.0 | Layout fitting and pointer focus handling | `runtime/include/galaxy/content_viewport.h`, `runtime/include/galaxy/native_input.h`, `runtime/include/galaxy/host_pointer_events.h` |
 | Dusklight | CC0 1.0 | Widescreen camera and HUD scaling policy | `runtime/include/galaxy/experimental_ultrawide_aspect.h` |

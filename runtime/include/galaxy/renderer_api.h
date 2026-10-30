@@ -3,9 +3,9 @@
 // The renderer API the host calls (D3D12 or Vulkan behind one RenderCore): window, GX FIFO submission and
 // presentation, the game's scene and light reports, and the native settings overlay.
 
-#include "galaxy/gx/native_shapes.h"
-#include "galaxy/gx/render_config.h"
-#include "galaxy/gx/pointer_response.h"
+#include "galaxy/render/native_shapes.h"
+#include "galaxy/render/render_config.h"
+#include "galaxy/render/pointer_response.h"
 #include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"
 #include "galaxy/guest_memory.h"
@@ -18,7 +18,7 @@
 #include <span>
 #include <vector>
 
-namespace galaxy::gx {
+namespace galaxy::render {
 
 struct HostPointerState {
     bool window_focused = false;
@@ -107,7 +107,7 @@ void attach_scene_view(const float view[12], const float* up = nullptr, const ch
 // tracer lights the scene, unless GALAXY_RT_OFFSCREEN_CASTERS=0).
 [[nodiscard]] bool rt_shadow_casters_wanted() noexcept;
 // Simulation thread: how the game's bloom goes through the renderer (NEBULA_OPTION_BLOOM: 0 not at all, 1 its scene
-// kept, 2 drawn by it; galaxy/gx/game_bloom.h).
+// kept, 2 drawn by it; galaxy/render/game_bloom.h).
 [[nodiscard]] unsigned bloom_route() noexcept;
 // Simulation thread (BrightSun::control): the world direction towards the game's visible sun and
 // the distance of its model from the camera. The ray tracer lights the scene from it while updates
@@ -386,4 +386,4 @@ void native_settings_input(NativeSettingsInput input, int arg);
 [[nodiscard]] std::uint64_t xfb_copy_count() noexcept;
 [[nodiscard]] XfbPresentStats xfb_present_stats() noexcept;
 
-}  // namespace galaxy::gx
+}  // namespace galaxy::render

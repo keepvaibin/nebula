@@ -3,7 +3,7 @@
 // device (PipelineCacheVk::build_shader_seed). The Android app ships it as platform/android/vk_seed_shaders.bin, built
 // from the same keys as vk_seed_keys.bin and by this build's shader generator (a generator change needs a new seed).
 
-#include "galaxy/gx/vk/pipeline_cache_vk.h"
+#include "galaxy/render/vk/pipeline_cache_vk.h"
 
 #include <algorithm>
 #include <chrono>
@@ -18,7 +18,7 @@ int main(int argc, char** argv) {
     }
     const auto start = std::chrono::steady_clock::now();
     std::string error;
-    const std::size_t written = galaxy::gx::PipelineCacheVk::build_shader_seed(
+    const std::size_t written = galaxy::render::PipelineCacheVk::build_shader_seed(
         argv[1], argv[2], std::max(1u, std::thread::hardware_concurrency()), error);
     if (written == 0u) {
         std::fprintf(stderr, "vk_shader_seed: %s\n", error.c_str());

@@ -2643,7 +2643,7 @@ galaxy::input::NativeMousePointerProjection project_client_mouse_pointer(
     int client_y,
     int client_width,
     int client_height) {
-    const auto actual = galaxy::gx::current_host_client_extent();
+    const auto actual = galaxy::render::current_host_client_extent();
     if (actual.width > 1 && actual.height > 1 &&
         (actual.width != client_width ||
          actual.height != client_height)) {

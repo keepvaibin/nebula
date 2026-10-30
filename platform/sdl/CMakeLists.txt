@@ -47,13 +47,13 @@ target_link_libraries(nebula_vulkan_deps INTERFACE glslang SPIRV glslang-default
 set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
 set(galaxy_uber_embed_body "")
 foreach(stage vs ps)
-    set(hlsl "${nebula_root}/runtime/src/gx/uber_${stage}.hlsl")
+    set(hlsl "${nebula_root}/runtime/src/render/uber_${stage}.hlsl")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${hlsl}")
     file(READ "${hlsl}" hex HEX)
     string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
     string(APPEND galaxy_uber_embed_body "extern const char galaxy_uber_${stage}_hlsl[] = {${hex}0x00};\n")
 endforeach()
-file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}" CONTENT "namespace galaxy::gx {\n${galaxy_uber_embed_body}}\n" @ONLY)
+file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}" CONTENT "namespace galaxy::render {\n${galaxy_uber_embed_body}}\n" @ONLY)
 
 # The post-processing passes' sources (post_process_vk.cpp compiles them on the device).
 include("${nebula_root}/cmake/post_shader_sources.cmake")
@@ -174,5 +174,5 @@ target_include_directories(main PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 target_link_libraries(main PRIVATE galaxy_gx_vk SDL3::SDL3)
 
 # The vector kernels against their references on this platform's CPU (NEON on AArch64).
-add_executable(nebula_simd_kernel_tests "${nebula_root}/runtime/src/gx/simd_kernel_tests.cpp")
+add_executable(nebula_simd_kernel_tests "${nebula_root}/runtime/src/render/simd_kernel_tests.cpp")
 target_link_libraries(nebula_simd_kernel_tests PRIVATE galaxy_gx_vk)

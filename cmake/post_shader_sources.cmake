@@ -4,8 +4,8 @@
 function(galaxy_embed_post_sources output root)
     set(body "")
     foreach(entry
-            "post_process_hlsl=runtime/src/gx/post_process.hlsl"
-            "game_bloom_hlsl=runtime/src/gx/game_bloom.hlsl"
+            "post_process_hlsl=runtime/src/render/post_process.hlsl"
+            "game_bloom_hlsl=runtime/src/render/game_bloom.hlsl"
             "smaa_hlsl=third_party/smaa/SMAA.hlsl"
             "ffx_a_h=third_party/fidelityfx-fsr1/ffx_a.h"
             "ffx_fsr1_h=third_party/fidelityfx-fsr1/ffx_fsr1.h")
@@ -17,5 +17,5 @@ function(galaxy_embed_post_sources output root)
         string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," hex "${hex}")
         string(APPEND body "extern const unsigned char galaxy_post_${name}[] = {${hex}0x00};\n")
     endforeach()
-    file(CONFIGURE OUTPUT "${output}" CONTENT "namespace galaxy::gx {\n${body}}\n" @ONLY)
+    file(CONFIGURE OUTPUT "${output}" CONTENT "namespace galaxy::render {\n${body}}\n" @ONLY)
 endfunction()

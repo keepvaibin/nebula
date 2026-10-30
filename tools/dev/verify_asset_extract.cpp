@@ -1,6 +1,6 @@
 // Checks game_asset_extract.cpp against a game dump: loads three textures of
 // FileSelect.arc, prints their sizes and writes each as a PPM to generated\diagnostics.
-#include "galaxy/gx/game_asset_extract.h"
+#include "galaxy/render/game_asset_extract.h"
 
 #include <cstdio>
 #include <fstream>
@@ -15,7 +15,7 @@ int main(int argc, char** argv) {
     const char* names[] = {
         "myfileselwinframe.tpl", "mybuttonatypeside.tpl", "my2picon.tpl"};
     for (const char* name : names) {
-        const auto tex = galaxy::gx::load_game_texture(
+        const auto tex = galaxy::render::load_game_texture(
             root, "files\\LayoutData\\FileSelect.arc", name);
         if (!tex.has_value()) {
             std::cout << name << ": FAILED to load\n";

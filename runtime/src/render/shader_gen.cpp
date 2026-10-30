@@ -1,0 +1,3262 @@
+// ShaderGenerator: HLSL source for PixelShaderKey and VertexShaderKey.
+//
+// Generated shaders use the uber pipelines' constant buffer layout (uber_constants.h) and root
+// signature, so promoting a draw from the uber pipeline to a specialized PSO is a pipeline swap.
+// Regular and compare-mode TEV stages operate on the 8-bit integer lattice; fog and the alpha test
+// round from the same lattice. The TEV loop is emitted fully unrolled.
+//
+// Behaviour references (clean-room, behaviour only):
+//   texgen, post-matrix, q==0:  Dolphin VertexShaderGen.cpp
+//   lighting:                   Dolphin LightingShaderGen.cpp, XFMemory.h
+//   TEV compare, swap, fog:     Dolphin PixelShaderGen.cpp, BPMemory.h
+
+#include "galaxy/render/shader_gen.h"
+
+#include "galaxy/render/enhanced_lighting.h"
+#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/render_config.h"
+#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/gx_vertex.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <sstream>
+#include <string>
+
+namespace galaxy::render {
+
+namespace {
+
+// Append to an ostringstream using a printf-style format; text without arguments as it is.
+#if defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4996)  // suppress snprintf security warning
+#endif
+template <typename... Args>
+static void emit(std::ostringstream& s, const char* fmt, Args&&... args) {
+    if constexpr (sizeof...(Args) == 0) {
+        s << fmt;
+    } else {
+        char buf[4096];
+        std::snprintf(buf, sizeof(buf), fmt, std::forward<Args>(args)...);
+        s << buf;
+    }
+}
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
+
+// TevColorArg as an HLSL int3 expression.
+static const char* color_arg_rgb(TevColorArg arg) {
+    switch (arg) {
+    case TevColorArg::CPrev:    return "tev_prev_i.rgb";
+    case TevColorArg::APrev:    return "tev_prev_i.aaa";
+    case TevColorArg::C0:       return "tev_c_i[0].rgb";
+    case TevColorArg::A0:       return "tev_c_i[0].aaa";
+    case TevColorArg::C1:       return "tev_c_i[1].rgb";
+    case TevColorArg::A1:       return "tev_c_i[1].aaa";
+    case TevColorArg::C2:       return "tev_c_i[2].rgb";
+    case TevColorArg::A2:       return "tev_c_i[2].aaa";
+    case TevColorArg::TexColor: return "tex_color_i.rgb";
+    case TevColorArg::TexAlpha: return "tex_color_i.aaa";
+    case TevColorArg::RasColor: return "ras_color_i.rgb";
+    case TevColorArg::RasAlpha: return "ras_color_i.aaa";
+    case TevColorArg::One:      return "int3(255,255,255)";
+    case TevColorArg::Half:     return "int3(128,128,128)";
+    case TevColorArg::Konst:    return "konst_i.rgb";
+    case TevColorArg::Zero:     return "int3(0,0,0)";
+    }
+    return "int3(0,0,0)";
+}
+
+// TevAlphaArg as an HLSL int expression.
+static const char* alpha_arg(TevAlphaArg arg) {
+    switch (arg) {
+    case TevAlphaArg::APrev:    return "tev_prev_i.a";
+    case TevAlphaArg::A0:       return "tev_c_i[0].a";
+    case TevAlphaArg::A1:       return "tev_c_i[1].a";
+    case TevAlphaArg::A2:       return "tev_c_i[2].a";
+    case TevAlphaArg::TexAlpha: return "tex_color_i.a";
+    case TevAlphaArg::RasAlpha: return "ras_color_i.a";
+    case TevAlphaArg::Konst:    return "konst_i.a";
+    case TevAlphaArg::Zero:     return "0";
+    }
+    return "0";
+}
+
+static const char* tev_bias_i(TevBias bias) {
+    switch (bias) {
+    case TevBias::Zero:    return "0";
+    case TevBias::AddHalf: return "128";
+    case TevBias::SubHalf: return "-128";
+    case TevBias::Compare: break;
+    }
+    return "0";
+}
+
+static const char* tev_scale_left(TevScale scale) {
+    switch (scale) {
+    case TevScale::X1:   return "";
+    case TevScale::X2:   return " << 1";
+    case TevScale::X4:   return " << 2";
+    case TevScale::Half: return "";
+    }
+    return "";
+}
+
+static const char* tev_scale_right(TevScale scale) {
+    return scale == TevScale::Half ? " >> 1" : "";
+}
+
+static const char* tev_lerp_round_bias(bool subtract) {
+    return subtract ? "127" : "128";
+}
+
+static const char* tev_dest_name(unsigned dest) {
+    switch (dest) {
+    case 0: return "tev_prev_i";
+    case 1: return "tev_c_i[0]";
+    case 2: return "tev_c_i[1]";
+    case 3: return "tev_c_i[2]";
+    }
+    return "tev_prev_i";
+}
+
+// Swap-table swizzle. `codes` packs four 2-bit channel selects (r=0, g=1, b=2,
+// a=3) for r, g, b, a in ascending bit pairs. Returns ".rgba"-style, or "" for identity.
+static std::string swap_suffix(std::uint32_t codes) {
+    static const char kCh[4] = {'r', 'g', 'b', 'a'};
+    const unsigned c0 = (codes >> 0) & 3u;
+    const unsigned c1 = (codes >> 2) & 3u;
+    const unsigned c2 = (codes >> 4) & 3u;
+    const unsigned c3 = (codes >> 6) & 3u;
+    if (c0 == 0u && c1 == 1u && c2 == 2u && c3 == 3u) {
+        return std::string();
+    }
+    char buf[6] = {'.', kCh[c0], kCh[c1], kCh[c2], kCh[c3]};
+    return std::string(buf, 5);
+}
+
+static std::uint32_t indirect_cmd(
+    const PixelShaderKey& key,
+    unsigned tev_stage) {
+    return key.ind_cmd[tev_stage / 4u][tev_stage & 3u];
+}
+
+static bool indirect_cmd_active(std::uint32_t cmd) {
+    return cmd != 0u;
+}
+
+static unsigned indirect_order_texmap(
+    const PixelShaderKey& key,
+    unsigned ind_stage) {
+    return (key.ind_ref >> (ind_stage * 6u)) & 0x7u;
+}
+
+static unsigned indirect_order_texcoord(
+    const PixelShaderKey& key,
+    unsigned ind_stage) {
+    return (key.ind_ref >> (ind_stage * 6u + 3u)) & 0x7u;
+}
+
+static unsigned indirect_scale_shift(
+    const PixelShaderKey& key,
+    unsigned ind_stage,
+    bool t_coord) {
+    const std::uint32_t raw = key.ind_scale[ind_stage / 2u];
+    const unsigned pair_shift = (ind_stage & 1u) ? 8u : 0u;
+    return (raw >> (pair_shift + (t_coord ? 4u : 0u))) & 0xFu;
+}
+
+static unsigned indirect_wrap_mask(std::uint32_t wrap) {
+    switch (wrap) {
+    case 1: return (256u << 7u) - 1u;
+    case 2: return (128u << 7u) - 1u;
+    case 3: return (64u << 7u) - 1u;
+    case 4: return (32u << 7u) - 1u;
+    case 5: return (16u << 7u) - 1u;
+    default: return 0u;
+    }
+}
+
+// Emits an alpha compare's pass condition; `ref_val` is the HLSL expression of the reference.
+static void emit_alpha_test(
+    std::ostringstream& s,
+    CompareFunc comp,
+    const char* sample,
+    const char* ref_val) {
+    switch (comp) {
+    case CompareFunc::Never:
+        emit(s, "false");
+        break;
+    case CompareFunc::Less:
+        emit(s, "(%s < %s)", sample, ref_val);
+        break;
+    case CompareFunc::Equal:
+        emit(s, "(%s == %s)", sample, ref_val);
+        break;
+    case CompareFunc::LEqual:
+        emit(s, "(%s <= %s)", sample, ref_val);
+        break;
+    case CompareFunc::Greater:
+        emit(s, "(%s > %s)", sample, ref_val);
+        break;
+    case CompareFunc::NEqual:
+        emit(s, "(%s != %s)", sample, ref_val);
+        break;
+    case CompareFunc::GEqual:
+        emit(s, "(%s >= %s)", sample, ref_val);
+        break;
+    case CompareFunc::Always:
+        emit(s, "true");
+        break;
+    }
+}
+
+enum class AlphaTestStaticResult : std::uint8_t {
+    Undetermined,
+    Pass,
+    Fail,
+};
+
+[[nodiscard]] static AlphaTestStaticResult alpha_test_static_result(
+    CompareFunc comp0,
+    CompareFunc comp1,
+    AlphaTestLogic logic) {
+    switch (logic) {
+    case AlphaTestLogic::And:
+        if (comp0 == CompareFunc::Always && comp1 == CompareFunc::Always) {
+            return AlphaTestStaticResult::Pass;
+        }
+        if (comp0 == CompareFunc::Never || comp1 == CompareFunc::Never) {
+            return AlphaTestStaticResult::Fail;
+        }
+        break;
+    case AlphaTestLogic::Or:
+        if (comp0 == CompareFunc::Always || comp1 == CompareFunc::Always) {
+            return AlphaTestStaticResult::Pass;
+        }
+        if (comp0 == CompareFunc::Never && comp1 == CompareFunc::Never) {
+            return AlphaTestStaticResult::Fail;
+        }
+        break;
+    case AlphaTestLogic::Xor:
+        if ((comp0 == CompareFunc::Always && comp1 == CompareFunc::Never) ||
+            (comp0 == CompareFunc::Never && comp1 == CompareFunc::Always)) {
+            return AlphaTestStaticResult::Pass;
+        }
+        if ((comp0 == CompareFunc::Always && comp1 == CompareFunc::Always) ||
+            (comp0 == CompareFunc::Never && comp1 == CompareFunc::Never)) {
+            return AlphaTestStaticResult::Fail;
+        }
+        break;
+    case AlphaTestLogic::Xnor:
+        if ((comp0 == CompareFunc::Always && comp1 == CompareFunc::Never) ||
+            (comp0 == CompareFunc::Never && comp1 == CompareFunc::Always)) {
+            return AlphaTestStaticResult::Fail;
+        }
+        if ((comp0 == CompareFunc::Always && comp1 == CompareFunc::Always) ||
+            (comp0 == CompareFunc::Never && comp1 == CompareFunc::Never)) {
+            return AlphaTestStaticResult::Pass;
+        }
+        break;
+    }
+    return AlphaTestStaticResult::Undetermined;
+}
+
+// Names for describe().
+static const char* fog_type_name(FogType t) {
+    switch (t) {
+    case FogType::Off:     return "off";
+    case FogType::Linear:  return "linear";
+    case FogType::Exp:     return "exp";
+    case FogType::Exp2:    return "exp2";
+    case FogType::RevExp:  return "rev_exp";
+    case FogType::RevExp2: return "rev_exp2";
+    }
+    return "unknown";
+}
+
+static const char* compare_func_name(CompareFunc f) {
+    switch (f) {
+    case CompareFunc::Never:   return "NEVER";
+    case CompareFunc::Less:    return "LT";
+    case CompareFunc::Equal:   return "EQ";
+    case CompareFunc::LEqual:  return "LE";
+    case CompareFunc::Greater: return "GT";
+    case CompareFunc::NEqual:  return "NE";
+    case CompareFunc::GEqual:  return "GE";
+    case CompareFunc::Always:  return "ALWAYS";
+    }
+    return "?";
+}
+
+static constexpr const char* kVsConstantsDef = R"HLSL(
+cbuffer VertexConstants : register(b0) {
+    float4x4 projection;
+    // C++ packs texgen_config as uint32_t[8][2] (tight, 64 bytes).  HLSL pads
+    // each array element to 16 bytes, so uint2[8] would occupy 128 bytes and
+    // shift every field after it — num_texgens/flags/mtx_palette_base then
+    // read PAST the 256-byte allocation (garbage palette base => degenerate
+    // positions, the boot96-98 invisible-frame root cause).  uint4[4] keeps
+    // the tight 64-byte footprint; element i of the C++ array is
+    // texgen_config[i/2].xy or .zw.
+    uint4    texgen_config[4];
+    float4   chan_ambient[2];
+    float4   chan_material[2];
+    uint     num_texgens;
+    uint     num_chans;
+    uint     flags;
+    uint     mtx_palette_base;
+    uint     matrix_index_a;
+    uint     matrix_index_b;
+    uint     sky_up;
+    uint     sky_up_known;
+    float4   inline_pos_matrix[3];
+    float4   inline_tex_matrices[24];
+    float4   inline_post_matrices[24];
+};
+StructuredBuffer<float4> mtx_palette : register(t0, space1);
+)HLSL";
+
+static constexpr const char* kPsConstantsDef = R"HLSL(
+cbuffer PixelConstants : register(b1) {
+    uint4    stage_config[16];
+    float4   tev_regs[4];
+    float4   konst[4];
+    float4   alpha_refs;
+    float4   fog_params[2];
+    // xy = texture image width/height, zw = GX texcoord S/T scale.
+    float4   tex_dims[8];
+    float4   ztex_params;
+    uint4    ind_cmd[4];
+    int4     ind_mtx[6];
+    uint4    ind_misc;
+};
+Texture2D    tex[8] : register(t0);
+SamplerState samp[8] : register(s0);
+)HLSL";
+
+// Motion-vector variant: VertexConstants continues past the matrices to the
+// motion fields in the struct's tail padding (uber_constants.h, c73-c79).
+static constexpr const char* kVsMotionConstantMembers = R"HLSL(    float4   motion_skip_[8];
+    // A..D, then E, F, type (0 perspective) of the draw's previous projection.
+    float4   motion_prev_proj[2];
+    // Previous position matrix (inline draws), or the camera delta that maps
+    // a current eye-space position to its previous one.
+    float4   motion_prev_pos[3];
+    // xy: this draw's projection jitter (NDC); zw: half viewport, pixels.
+    float4   motion_params;
+    // x: 0 previous palette rows at y, 1 motion_prev_pos * current eye.
+    uint4    motion_ctrl;
+)HLSL";
+
+// Interpolants of the motion variant, after every other member: unjittered current and previous clip
+// x, y, w. z carries the pixel scale.
+static constexpr const char* kMotionInterpolants =
+    "    float4   mv_cur    : TEXCOORD12;\n"
+    "    float4   mv_prev   : TEXCOORD13;\n";
+
+// Curved surfaces (kVsKeyCurved): the vertex's curve data in (RenderVertex::curve), and to the hull and domain shaders
+// the eye-space position, the displacement normal turned as normals are (w the clip jitter the draw adds, x and y),
+// and the crease normal (turned, packed), the place with its first crease neighbour and the second neighbour.
+static constexpr const char* kCurvedInput = "    uint3    curve    : BEND;\n";
+static constexpr const char* kCurvedInterpolants =
+    "    float4   curve_pos : TEXCOORD14;\n"
+    "    float4   curve_nrm : TEXCOORD15;\n"
+    "    uint4    curve_data : TEXCOORD16;\n";
+
+// Curved surfaces' packed normals (curved_surfaces.h's pack_normal): octahedral, two 16-bit halves, zero for none.
+static constexpr const char* kCurveCodec = R"HLSL(
+float3 curve_unpack(uint packed) {
+    if (packed == 0u) {
+        return float3(0.0, 0.0, 0.0);
+    }
+    const float2 p = (float2(float(packed >> 16u), float(packed & 0xFFFFu)) - 32768.0) / 32767.0;
+    float3 n = float3(p, 1.0 - abs(p.x) - abs(p.y));
+    if (n.z < 0.0) {
+        n.xy = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    }
+    return normalize(n);
+}
+uint curve_pack(float3 n) {
+    const float sum = abs(n.x) + abs(n.y) + abs(n.z);
+    if (!(sum > 0.0)) {
+        return 0u;
+    }
+    float2 p = n.xy / sum;
+    if (n.z < 0.0) {
+        p = (1.0 - abs(p.yx)) * float2(p.x >= 0.0 ? 1.0 : -1.0, p.y >= 0.0 ? 1.0 : -1.0);
+    }
+    const uint2 h = uint2(round(clamp(p, -1.0, 1.0) * 32767.0) + 32768.0);
+    return (h.x << 16u) | h.y;
+}
+)HLSL";
+
+// The normal corner `a` bends the edge to corner `b` by (curved_surfaces.h): its place's crease normal when `b` is one
+// of its crease neighbours, else its corner's displacement normal. Both triangles holding an edge pick alike.
+static constexpr const char* kCurveEdgeNormal = R"HLSL(
+float3 curve_edge_normal(VSOut a, VSOut b) {
+    const uint place = b.curve_data.y & 0xFFFFu;
+    if (place != 0xFFFFu && (place == (a.curve_data.y >> 16u) || place == (a.curve_data.z & 0xFFFFu))) {
+        return curve_unpack(a.curve_data.x);
+    }
+    return a.curve_nrm.xyz;
+}
+)HLSL";
+
+// Interpolated redraw: a sub-frame blends a CPU-written vertex buffer with the
+// matching draw's vertices of the frame before (RenderVertex, 144-byte stride;
+// the renderer binds them at t1, space1 and the blend at b2). The uber vertex
+// shader carries the same code.
+static constexpr const char* kVertexBlendDef = R"HLSL(
+cbuffer VertexBlend : register(b2) {
+    uint  vb_mode;   // 0: the draw's own vertices only
+    uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
+    uint  vb_slot;   // the pair's verdict
+    uint  vb_last;   // the last vertex of the earlier draw
+    uint  vb_base;   // its first vertex's byte offset in vb_prev (0 where the view starts there)
+};
+ByteAddressBuffer vb_prev : register(t1, space1);
+// Per pair: vertices, positions unchanged, largest move, extent (the GPU
+// check of the pairing, renderer_d3d12.cpp kBlendValidateCs). Element 8192:
+// the presented frame's t, the t of the frame presented before it and its
+// jitter (render pixels); element 8193 stays zero.
+StructuredBuffer<uint4> vb_verdict : register(t2, space1);
+static float vb_t;
+static float vb_t_prev;
+static float2 vb_jitter;
+// The vertex's object-space position in the frame presented before (motion vectors).
+static float3 vb_pos_prev;
+// A colour that turns visible or invisible (its alpha, the low byte, leaves or reaches zero) shows the new colour,
+// and a channel that jumps by more than half its range its new value, as a coordinate step does: blended, a pane
+// invisible in one frame and shading in the next lets the scene behind it flash between them (closing the pause menu
+// at 240 fps). uber_vs.hlsl has the same.
+uint vb_color(uint a, uint b) {
+    if (((a & 0xFFu) == 0u) != ((b & 0xFFu) == 0u)) {
+        return b;
+    }
+    uint c = 0u;
+    [unroll] for (uint s = 0u; s < 32u; s += 8u) {
+        const float x = float((a >> s) & 0xFFu);
+        const float y = float((b >> s) & 0xFFu);
+        c |= uint(abs(y - x) > 128.0 ? y : round(lerp(x, y, vb_t))) << s;
+    }
+    return c;
+}
+// A whole-texture jump is a wrap; a step of more than an eighth (an atlas
+// frame) shows the new coordinate.
+float vb_coord(float a, float b) {
+    const float d = b - a;
+    const float w = abs(d) > 0.5 ? a + round(d) : a;
+    return abs(b - w) > 0.125 ? b : lerp(w, b, vb_t);
+}
+void vertex_blend(inout VSIn v, uint id) {
+    // Root views have no bounds: every read stays inside its buffer even if
+    // a compiler moves it above the checks.
+    const uint4 frame = vb_verdict[min(vb_frame, 8193u)];
+    vb_t = asfloat(frame.x);
+    vb_t_prev = asfloat(frame.y);
+    vb_jitter = asfloat(frame.zw);
+    vb_pos_prev = v.pos;
+    if (vb_mode == 0u) {
+        return;
+    }
+    // The same geometry one frame earlier: positions unchanged, all moved by
+    // at most a quarter of its extent, or any by at most 2% (a reordered or
+    // different vertex set shows this frame's vertices).
+    const uint4 verdict = vb_verdict[min(vb_slot, 8191u)];
+    const float worst = asfloat(verdict.z);
+    const float extent = asfloat(verdict.w);
+    if (verdict.y != verdict.x && !(verdict.y == 0u && worst <= 0.25 * extent) &&
+        !(worst <= 0.02 * extent)) {
+        return;
+    }
+    const uint at = vb_base + min(id, vb_last) * 144u;
+    const float3 earlier = asfloat(vb_prev.Load3(at));
+    vb_pos_prev = lerp(earlier, v.pos, vb_t_prev);
+    if (vb_t >= 1.0) {
+        return;  // the game frame's own vertices
+    }
+    v.pos = lerp(earlier, v.pos, vb_t);
+    const float3 n = lerp(asfloat(vb_prev.Load3(at + 12u)), v.nrm, vb_t);
+    const float nn = dot(n, n);
+    if (nn > 0.0) {
+        v.nrm = n * sqrt(dot(v.nrm, v.nrm) / nn);
+    }
+    const uint2 c = vb_prev.Load2(at + 48u);
+    v.color0 = vb_color(c.x, v.color0);
+    v.color1 = vb_color(c.y, v.color1);
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        const float2 uv = asfloat(vb_prev.Load2(at + 56u + 8u * i));
+        v.uv[i] = float2(vb_coord(uv.x, v.uv[i].x), vb_coord(uv.y, v.uv[i].y));
+    }
+}
+)HLSL";
+
+// Physical ray tracing's de-baked vertex colours (kVsFeatureDebake).
+static constexpr const char* kVsDebakeDef = R"HLSL(
+// Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
+// lit facing (debake_peak: its light at the player's up, RenderCore::flush_draw_state) over the light at this vertex's
+// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; RenderCore::fit_debake_light), 1/4 to 4.
+// No normal: 1.
+float3 nebula_debake_gain(float3 nrm) {
+    const float len2 = dot(nrm, nrm);
+    if (!(len2 > 0.25)) {
+        return float3(1.0, 1.0, 1.0);
+    }
+    const float3 n = nrm * rsqrt(len2);
+    const float y[9] = {0.282095, 0.488603 * n.y, 0.488603 * n.z, 0.488603 * n.x, 1.092548 * n.x * n.y,
+                        1.092548 * n.y * n.z, 0.315392 * (3.0 * n.z * n.z - 1.0), 1.092548 * n.x * n.z,
+                        0.546274 * (n.x * n.x - n.y * n.y)};
+    float3 light = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint i = 0u; i < 9u; ++i) {
+        light.r += debake_sh[i >> 2u][i & 3u] * y[i];
+        light.g += debake_sh[(9u + i) >> 2u][(9u + i) & 3u] * y[i];
+        light.b += debake_sh[(18u + i) >> 2u][(18u + i) & 3u] * y[i];
+    }
+    const float3 peak = max(debake_peak.rgb, 1e-3);
+    return clamp(peak / max(light, peak * 0.25), 0.25, 4.0);
+}
+
+// A vertex colour with its baked light removed: its hue at full brightness (black stays black).
+float3 nebula_debake(float3 c) {
+    const float m = max(c.r, max(c.g, c.b));
+    return m > (1.0 / 255.0) ? c / m : c;
+}
+
+)HLSL";
+
+static std::string insert_before_close(const char* text, const char* members, bool last) {
+    std::string out(text);
+    const std::size_t at = last ? out.rfind("};") : out.find("};");
+    out.insert(at, members);
+    return out;
+}
+
+// VS struct declarations (fixed 144-byte RenderVertex input layout).
+// Interpolators carry float3 texcoords (S, T, Q). Projective texgens divide by Q in the PS.
+static constexpr const char* kVsStructs = R"HLSL(
+struct VSIn {
+    float3   pos      : POSITION;
+    float3   nrm      : NORMAL;
+    float3   tangent  : TANGENT;
+    float3   binormal : BINORMAL;
+    uint     color0   : COLOR0;
+    uint     color1   : COLOR1;
+    float2   uv[8]    : TEXCOORD;
+    uint4    mtx_idx  : BLENDINDICES;
+};
+struct VSOut {
+    float4   pos      : SV_Position;
+    float4   col0     : COLOR0;
+    float4   col1     : COLOR1;
+    float3   uv[8]    : TEXCOORD;
+};
+)HLSL";
+
+// Per-pixel lighting variant: eye-space position and normal plus the raw
+// vertex colors (material/ambient sources) follow the texcoords.
+static constexpr const char* kVsStructsPpl = R"HLSL(
+struct VSIn {
+    float3   pos      : POSITION;
+    float3   nrm      : NORMAL;
+    float3   tangent  : TANGENT;
+    float3   binormal : BINORMAL;
+    uint     color0   : COLOR0;
+    uint     color1   : COLOR1;
+    float2   uv[8]    : TEXCOORD;
+    uint4    mtx_idx  : BLENDINDICES;
+};
+struct VSOut {
+    float4   pos       : SV_Position;
+    float4   col0      : COLOR0;
+    float4   col1      : COLOR1;
+    float3   uv[8]     : TEXCOORD;
+    float3   ppl_pos   : TEXCOORD8;
+    float3   ppl_nrm   : TEXCOORD9;
+    float4   ppl_vcol0 : TEXCOORD10;
+    float4   ppl_vcol1 : TEXCOORD11;
+};
+)HLSL";
+
+static constexpr const char* kPsStructs = R"HLSL(
+struct PSIn {
+    float4   pos      : SV_Position;
+    float4   col0     : COLOR0;
+    float4   col1     : COLOR1;
+    float3   uv[8]    : TEXCOORD;
+};
+)HLSL";
+
+static constexpr const char* kPsStructsPpl = R"HLSL(
+struct PSIn {
+    float4   pos       : SV_Position;
+    float4   col0      : COLOR0;
+    float4   col1      : COLOR1;
+    float3   uv[8]     : TEXCOORD;
+    float3   ppl_pos   : TEXCOORD8;
+    float3   ppl_nrm   : TEXCOORD9;
+    float4   ppl_vcol0 : TEXCOORD10;
+    float4   ppl_vcol1 : TEXCOORD11;
+};
+)HLSL";
+
+// Per-pixel lighting: the lit parts of the two GX color channels, evaluated
+// with the vertex stage's light formulas (emit_light) on the interpolated
+// eye-space position and renormalized normal. The channel control words,
+// material/ambient registers and XF lights come from the vertex constants
+// (root CBV b0, visible to every stage) and the matrix palette (t0, space1).
+// ppl_finite_attn (kPsKeyPplFiniteLightAttn) precedes it: see emit_light.
+static constexpr const char* kPplLighting = R"HLSL(
+cbuffer PplConstants : register(b0) {
+    float4 ppl_chan_ambient[2]  : packoffset(c8);
+    float4 ppl_chan_material[2] : packoffset(c10);
+    uint   ppl_num_chans        : packoffset(c12.y);
+    uint   ppl_flags            : packoffset(c12.z);
+    uint   ppl_mtx_palette_base : packoffset(c12.w);
+    uint   ppl_sky_up           : packoffset(c13.z);
+    uint   ppl_sky_up_known     : packoffset(c13.w);
+    uint4  ppl_channel          : packoffset(c72);
+};
+StructuredBuffer<float4> mtx_palette : register(t0, space1);
+
+void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
+                   inout int3 lacc_i, inout int lacc_a_i) {
+    const uint e = 0x180u + 4u * n;
+    uint  lcw  = asuint(mtx_palette[ppl_mtx_palette_base + e].w);
+    float4 le1 = mtx_palette[ppl_mtx_palette_base + e + 1u];
+    float4 le2 = mtx_palette[ppl_mtx_palette_base + e + 2u];
+    float4 le3 = mtx_palette[ppl_mtx_palette_base + e + 3u];
+    float3 lpos  = float3(le2.z, le2.w, le3.x);
+    float3 ldvec = float3(le3.y, le3.z, le3.w);
+    float3 cosA  = le1.xyz;
+    float3 distA = float3(le1.w, le2.x, le2.y);
+    const uint atten_func = (ctrl >> 9u) & 3u;
+    const uint diffuse_func = (ctrl >> 7u) & 3u;
+    float3 ldir;
+    float attn;
+    if (atten_func == 1u) {
+        float3 ldelta = lpos - wpos;
+        float ldd = dot(ldelta, ldelta);
+        ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
+        attn = (dot(nrm, ldir) >= 0.0) ? max(0.0, dot(nrm, ldvec)) : 0.0;
+        if (ppl_finite_attn) {
+            attn = min(attn, 1.0e18);
+        }
+        float3 distAttn = distA;
+        if (diffuse_func != 0u) {
+            float dad = dot(distA, distA);
+            distAttn = (dad > 0.0) ? distA * rsqrt(dad) : distA;
+        }
+        float denom = dot(distAttn, float3(1.0, attn, attn*attn));
+        attn = (denom != 0.0)
+             ? max(0.0, dot(cosA, float3(1.0, attn, attn*attn))) / denom
+             : 0.0;
+    } else if (atten_func == 3u) {
+        float3 ldelta = lpos - wpos;
+        float dist2 = dot(ldelta, ldelta);
+        float dist  = sqrt(dist2);
+        ldir = (dist > 0.0) ? ldelta / dist : nrm;
+        attn = max(0.0, dot(ldir, ldvec));
+        if (ppl_finite_attn) {
+            attn = min(attn, 1.0e18);
+            dist = min(dist, 1.0e18);
+            dist2 = min(dist2, 1.0e36);
+        }
+        float denom = dot(distA, float3(1.0, dist, dist2));
+        attn = (denom != 0.0)
+             ? max(0.0, cosA.x + cosA.y*attn + cosA.z*attn*attn) / denom
+             : 0.0;
+    } else {
+        float3 ldelta = lpos - wpos;
+        float ldd = dot(ldelta, ldelta);
+        ldir = (ldd > 0.0) ? ldelta * rsqrt(ldd) : nrm;
+        attn = 1.0;
+    }
+    if (alpha_part) {
+        float lcol = float(lcw & 255u);
+        if (diffuse_func == 1u) {
+            lacc_a_i += int(round(attn * dot(ldir, nrm) * lcol));
+        } else if (diffuse_func == 2u) {
+            lacc_a_i += int(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+        } else {
+            lacc_a_i += int(round(attn * lcol));
+        }
+    } else {
+        float3 lcol = float3(
+            float((lcw >> 24) & 255u),
+            float((lcw >> 16) & 255u),
+            float((lcw >>  8) & 255u));
+        if (diffuse_func == 1u) {
+            lacc_i += int3(round(attn * dot(ldir, nrm) * lcol));
+        } else if (diffuse_func == 2u) {
+            lacc_i += int3(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+        } else {
+            lacc_i += int3(round(attn * lcol));
+        }
+    }
+}
+
+void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
+               float4 vtx_col0, float4 vtx_col1) {
+    const float3 nrm = dot(nrm_in, nrm_in) > 0.0 ? normalize(nrm_in) : nrm_in;
+    [unroll] for (uint ch = 0u; ch < 2u; ++ch) {
+        if (ch >= ppl_num_chans) {
+            continue;
+        }
+        const float4 vtx = ch == 0u ? vtx_col0 : vtx_col1;
+        const uint cc = ppl_channel[ch];
+        const uint ca = ppl_channel[2u + ch];
+        float4 result = ch == 0u ? col0 : col1;
+        // A specular channel (attenuation function 1) keeps the vertex stage's colour: per pixel its highlight
+        // peaks above the per-vertex values the game's TEV stages were sized for, and a stage that overflows
+        // wraps (Mario's skin and gloves turned cyan and magenta). Channels that overflow by design (a Luma's
+        // blue wraps to its yellow) keep their wrap.
+        if (((cc >> 1u) & 1u) != 0u && ((cc >> 9u) & 3u) != 1u) {
+            int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
+            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
+            int unused_a = 0;
+            const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, cc, false, wpos, nrm, lacc_i, unused_a);
+                }
+            }
+            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
+            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
+        }
+        if (((ca >> 1u) & 1u) != 0u && ((ca >> 9u) & 3u) != 1u) {
+            int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
+            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
+            int3 unused_c = int3(0,0,0);
+            const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
+            [loop] for (uint n = 0u; n < 8u; ++n) {
+                if (((mask >> n) & 1u) != 0u) {
+                    ppl_add_light(n, ca, true, wpos, nrm, unused_c, lacc_a_i);
+                }
+            }
+            lacc_a_i = clamp(lacc_a_i, 0, 255);
+            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
+        }
+        if (ch == 0u) {
+            col0 = result;
+        } else {
+            col1 = result;
+        }
+    }
+}
+)HLSL";
+
+// Enhanced lighting (enhanced_lighting.h), after kPplLighting and the kEnh* tuning constants. The
+// lit colour channel 0 (generate_ps, one block per light of the key) adds its lights in linear
+// light, each along its authored falloff (kEnhRamp blends in the linear ramp between the channel's
+// ambient and ambient-plus-light colours), under a soft shoulder; the ambient is a sky hemisphere
+// about the player's up whose reflection takes its share from the diffuse light. The key light's
+// highlight: dielectric, or tinted by the surface colour on environment-mapped (metal) draws. Other
+// channels keep the vertex stage's GX colours.
+static constexpr const char* kEnhancedLighting = R"HLSL(
+float3 enh_lin(float3 c) { return pow(max(c, 0.0), 2.2); }
+float3 enh_srgb(float3 c) { return pow(max(c, 0.0), 1.0 / 2.2); }
+
+// Identity up to the knee, then an exponential shoulder towards 1.
+float3 enh_shoulder(float3 x) {
+    const float3 over = kEnhKnee + (1.0 - kEnhKnee) * (1.0 - exp((kEnhKnee - x) / (1.0 - kEnhKnee)));
+    return x > kEnhKnee ? over : x;
+}
+
+float enh_ggx(float NoH, float a2) {
+    const float d = NoH * NoH * (a2 - 1.0) + 1.0;
+    return a2 / (3.14159265 * d * d);
+}
+
+float enh_vis(float NoL, float NoV, float a) {
+    return 0.5 / max(NoL * (NoV * (1.0 - a) + a) + NoV * (NoL * (1.0 - a) + a), 1e-4);
+}
+
+// Light n at P: direction towards it, the GX spot attenuation (function 3) or none, colour. The
+// attenuation operands stay finite (kVsKeyFiniteLightAttn): a light the game left without a
+// direction keeps its light.
+void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
+    const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
+    const uint lcw = asuint(mtx_palette[e].w);
+    const float4 le1 = mtx_palette[e + 1u];
+    const float4 le2 = mtx_palette[e + 2u];
+    const float4 le3 = mtx_palette[e + 3u];
+    const float3 ldelta = float3(le2.z, le2.w, le3.x) - P;
+    const float dist2 = dot(ldelta, ldelta);
+    const float dist = sqrt(dist2);
+    ldir = dist > 0.0 ? ldelta / dist : float3(0.0, 0.0, 1.0);
+    attn = 1.0;
+    if (spot) {
+        const float c = min(max(0.0, dot(ldir, le3.yzw)), 1.0e18);
+        const float denom = dot(float3(le1.w, le2.x, le2.y), float3(1.0, min(dist, 1.0e18), min(dist2, 1.0e36)));
+        attn = denom != 0.0 ? max(0.0, le1.x + le1.y * c + le1.z * c * c) / denom : 0.0;
+    }
+    lcol = float3((lcw >> 24) & 255u, (lcw >> 16) & 255u, (lcw >> 8) & 255u) / 255.0;
+}
+
+// The player's up in eye space (VertexConstants::sky_up: octahedral, x and y in snorm16 halves),
+// else the view's up.
+float3 enh_up() {
+    if (ppl_sky_up_known == 0u) {
+        return float3(0.0, 1.0, 0.0);
+    }
+    const float2 f = float2(int2(int(ppl_sky_up << 16u), int(ppl_sky_up)) >> 16) / 32767.0;
+    float3 n = float3(f, 1.0 - abs(f.x) - abs(f.y));
+    const float t = saturate(-n.z);
+    n.xy += float2(n.x >= 0.0 ? -t : t, n.y >= 0.0 ? -t : t);
+    return normalize(n);
+}
+
+struct EnhShade {
+    bool   valid;      // the draw has a normal
+    float3 N;          // as GX lights it (two-sided surfaces keep it from behind)
+    float3 Nv;         // facing the viewer: the reflections' normal
+    float3 V;
+    float  NoV;
+    float  a2_filter;  // the lobes' widening for the normal's change across the pixel
+    float  env_gain;   // environment lookups: Fresnel gain
+    float3 spec;       // dielectric highlight and sky reflection, linear, added after the TEV
+    float3 metal;      // metal lobe, linear, times the surface's Fresnel after the TEV
+    float  metal_fw;   // its Schlick weight
+};
+
+EnhShade enh_begin(float3 P, float3 n) {
+    EnhShade e = (EnhShade)0;
+    e.valid = dot(n, n) > 0.0;
+    e.N = e.valid ? normalize(n) : float3(0.0, 0.0, 0.0);
+    e.V = dot(P, P) > 0.0 ? normalize(-P) : float3(0.0, 0.0, 1.0);
+    e.Nv = dot(e.N, e.V) < 0.0 ? -e.N : e.N;
+    e.NoV = e.valid ? min(abs(dot(e.N, e.V)), 1.0) : 1.0;
+    const float g = 1.0 - e.NoV;
+    e.env_gain = e.valid ? kEnhEnvBase + kEnhEnvGraze * (g * g) * (g * g) * g : 1.0;
+    // Tokuyoshi and Kaplanyan 2019: alpha^2 grows by the normal's variance over the pixel's
+    // footprint (filter variance 0.25), at most 0.18.
+    const float3 dx = ddx(e.N);
+    const float3 dy = ddy(e.N);
+    e.a2_filter = e.valid ? min(0.5 * (dot(dx, dx) + dot(dy, dy)), 0.18) : 0.0;
+    return e;
+}
+
+// The material table's lobe for this draw (uber header bits 20-30), else the tuning's for the draw's
+// class (`metal`: environment-mapped). The table decides metal too: an environment map is also how the
+// game paints the gloss of shells, plastics and paint.
+void enh_table(bool metal, out float rough, out bool is_metal) {
+    const uint w = uber_ps_header.w;
+    rough = metal ? kEnhMetalRough : kEnhSheenRough;
+    is_metal = metal;
+    if ((w & 0x40000000u) != 0u) {
+        rough = max(float((w >> 20) & 63u) / 63.0, 0.05);
+        is_metal = float((w >> 26) & 15u) / 15.0 >= 0.5;
+    }
+}
+
+// A light's highlight. `radiance` is its colour in linear light: GX's diffuse term is the colour times
+// N.L, so the colour is the light's irradiance over pi and the lobe takes kEnhSheen = pi.
+void enh_highlight(inout EnhShade e, float3 ldir, float3 radiance, bool env_metal) {
+    const float NoL = saturate(dot(e.Nv, ldir));
+    if (NoL <= 0.0) {
+        return;
+    }
+    float rough;
+    bool metal;
+    enh_table(env_metal, rough, metal);
+    const float a2 = min(rough * rough * rough * rough + e.a2_filter, 1.0);
+    const float a = sqrt(a2);
+    const float3 H = normalize(ldir + e.V);
+    const float NoH = saturate(dot(e.Nv, H));
+    const float fw = pow(1.0 - saturate(dot(e.V, H)), 5.0);
+    const float lobe = NoL * enh_ggx(NoH, a2) * enh_vis(NoL, e.NoV, a);
+    if (metal) {
+        e.metal = radiance * (lobe * kEnhMetal);
+        e.metal_fw = fw;
+    } else {
+        e.spec += radiance * (lobe * kEnhSheen * (0.04 + 0.96 * fw));
+    }
+}
+
+// The ambient's sky term: a hemisphere about the up direction (mean 1 over the sphere); 1 while the
+// ray tracer lights the scene (`sky_light` false).
+float enh_sky(EnhShade e, bool sky_light) {
+    return e.valid && sky_light ? 1.0 + kEnhHemi * dot(e.N, enh_up()) : 1.0;
+}
+
+// The sky's reflection off a dielectric (F0 0.04) at the surface's roughness, along the reflected
+// view direction: Karis' analytic fit of the split-sum environment BRDF ("Physically Based Shading
+// on Mobile", 2014). Adds it to the highlights; returns the diffuse light's share (what is not
+// reflected). Metals reflect through their environment maps.
+float enh_sky_reflection(inout EnhShade e, float3 sky) {
+    float rough;
+    bool metal;
+    enh_table(false, rough, metal);
+    if (!e.valid || metal) {
+        return 1.0;
+    }
+    const float4 r = rough * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
+    const float a004 = min(r.x * r.x, exp2(-9.28 * e.NoV)) * r.x + r.y;
+    const float2 ab = float2(-1.04, 1.04) * a004 + r.zw;
+    const float reflected = saturate(0.04 * ab.x + ab.y) * kEnhSky;
+    const float3 R = reflect(-e.V, e.Nv);
+    e.spec += sky * (reflected * (1.0 + kEnhHemi * dot(R, enh_up())));
+    return 1.0 - reflected;
+}
+
+// Unlit environment-mapped draws: the highlight of light 0, the last actor key light the game
+// loaded (loadActorLightInfo), when it has a colour.
+void enh_key_highlight(inout EnhShade e, float3 P) {
+    if (!e.valid) {
+        return;
+    }
+    float3 ldir;
+    float attn;
+    float3 lcol;
+    enh_light(0u, false, P, ldir, attn, lcol);
+    if (any(lcol > 0.0)) {
+        enh_highlight(e, ldir, enh_lin(lcol), true);
+    }
+}
+
+// The highlights added to the TEV result in linear light. A metal's F0 is its own colour raised to
+// a peak of at least kEnhMetalF0, so metals baked dull still reflect their light in their own hue.
+// `view`: the highlights alone (diagnostics).
+float3 enh_finish(float3 frag, EnhShade e, bool view) {
+    const float3 c = enh_lin(frag);
+    const float peak = max(max(c.r, c.g), max(c.b, 1e-4));
+    const float3 f0 = saturate(c * (max(peak, kEnhMetalF0) / peak));
+    const float3 h = e.spec + e.metal * (f0 + (1.0 - f0) * e.metal_fw);
+    return enh_srgb(view ? h : c + h);
+}
+)HLSL";
+
+// D3D12 exposes only fixed one-pixel line/point rasterization. These geometry
+// shaders implement GX BP 0x22 exactly by expanding to solid quads. Constants
+// are in physical pixels, so widths scale with the EFB while the clip-space
+// result remains correct for every valid XF viewport.
+static constexpr char kLineGeometryShader[] = R"HLSL(
+cbuffer LinePointConstants : register(b0) {
+    float4 line_point_raster : packoffset(c65);
+    uint4  line_point_tex_offsets : packoffset(c66);
+};
+struct VSOut {
+    float4 pos : SV_Position;
+    float4 col0 : COLOR0;
+    float4 col1 : COLOR1;
+    float3 uv[8] : TEXCOORD;
+};
+void apply_line_texcoord_offset(inout VSOut vertex) {
+    uint mask = line_point_tex_offsets.x;
+    uint divisor = line_point_tex_offsets.z;
+    if (divisor == 0u) {
+        return;
+    }
+    float tex_offset = 1.0 / float(divisor);
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        if ((mask & (1u << i)) != 0u) {
+            vertex.uv[i].x += tex_offset;
+        }
+    }
+}
+[maxvertexcount(4)]
+void main(line VSOut input_vertices[2], inout TriangleStream<VSOut> output) {
+    VSOut start = input_vertices[0];
+    VSOut end = input_vertices[1];
+    float2 delta = abs(end.pos.xy / end.pos.w - start.pos.xy / start.pos.w);
+    bool is_tall = line_point_raster.y * delta.y >
+        line_point_raster.x * delta.x;
+    float2 offset = is_tall
+        ? float2(line_point_raster.z / line_point_raster.x, 0.0)
+        : float2(0.0, -line_point_raster.z / line_point_raster.y);
+
+    VSOut vertex = start;
+    vertex.pos.xy -= offset * vertex.pos.w;
+    output.Append(vertex);
+    vertex = start;
+    vertex.pos.xy += offset * vertex.pos.w;
+    apply_line_texcoord_offset(vertex);
+    output.Append(vertex);
+    vertex = end;
+    vertex.pos.xy -= offset * vertex.pos.w;
+    output.Append(vertex);
+    vertex = end;
+    vertex.pos.xy += offset * vertex.pos.w;
+    apply_line_texcoord_offset(vertex);
+    output.Append(vertex);
+    output.RestartStrip();
+}
+)HLSL";
+
+static constexpr char kPointGeometryShader[] = R"HLSL(
+cbuffer LinePointConstants : register(b0) {
+    float4 line_point_raster : packoffset(c65);
+    uint4  line_point_tex_offsets : packoffset(c66);
+};
+struct VSOut {
+    float4 pos : SV_Position;
+    float4 col0 : COLOR0;
+    float4 col1 : COLOR1;
+    float3 uv[8] : TEXCOORD;
+};
+void emit_point_vertex(
+    VSOut center,
+    float2 signs,
+    bool is_right,
+    bool is_bottom,
+    inout TriangleStream<VSOut> output) {
+    float2 offset = signs * line_point_raster.ww /
+        line_point_raster.xy;
+    center.pos.xy += offset * center.pos.w;
+    uint divisor = line_point_tex_offsets.w;
+    if (divisor != 0u) {
+        float tex_offset = 1.0 / float(divisor);
+        uint mask = line_point_tex_offsets.y;
+        [unroll] for (uint i = 0u; i < 8u; ++i) {
+            if ((mask & (1u << i)) != 0u) {
+                center.uv[i].xy += float2(
+                    is_right ? tex_offset : 0.0,
+                    is_bottom ? tex_offset : 0.0);
+            }
+        }
+    }
+    output.Append(center);
+}
+[maxvertexcount(4)]
+void main(point VSOut input_vertices[1], inout TriangleStream<VSOut> output) {
+    VSOut center = input_vertices[0];
+    emit_point_vertex(center, float2(-1.0,  1.0), false, false, output);
+    emit_point_vertex(center, float2( 1.0,  1.0), true,  false, output);
+    emit_point_vertex(center, float2(-1.0, -1.0), false, true,  output);
+    emit_point_vertex(center, float2( 1.0, -1.0), true,  true,  output);
+    output.RestartStrip();
+}
+)HLSL";
+
+// Emits one light's contribution to the channel accumulator.
+//   - `n`      light index 0-7. XF light objects sit at palette element 0x180 + 4n:
+//              elem+0.w = RGBA8 colour (raw bits), elem+1 = {a0,a1,a2,k0},
+//              elem+2 = {k1,k2,pos.x,pos.y}, elem+3 = {pos.z,dir.x,dir.y,dir.z} (XFMemory.h Light).
+//   - `ctrl`   the channel control (attenuation and diffuse functions).
+//   - `alpha`  accumulate the light's alpha into `lacc_a` instead of its rgb into `lacc`.
+//   - `finite` kVsKeyFiniteLightAttn: the attenuation operands (cosine, distance) stay at most
+//              1e18 (squares 1e36), so a zero coefficient nulls an out-of-range cosine as on the
+//              hardware. SMG's loadLightDiffuse never sets the light direction, and a stale
+//              direction such as 6e36 otherwise turns 0 * cos^2 into NaN and drops the light.
+// Attenuation and diffuse forms follow Dolphin LightingShaderGen.cpp.
+static void emit_light(
+    std::ostringstream& s,
+    unsigned n,
+    const XfChannelCtrl& ctrl,
+    bool alpha,
+    bool finite) {
+    emit(s, "        {  // light %u\n", n);
+    const unsigned e = 0x180u + 4u * n;
+    emit(s,
+        "            uint  lcw  = asuint(mtx_palette[mtx_palette_base + %uu].w);\n"
+        "            float4 le1 = mtx_palette[mtx_palette_base + %uu];\n"
+        "            float4 le2 = mtx_palette[mtx_palette_base + %uu];\n"
+        "            float4 le3 = mtx_palette[mtx_palette_base + %uu];\n",
+        e, e + 1u, e + 2u, e + 3u);
+    s << "            float3 lpos  = float3(le2.z, le2.w, le3.x);\n";
+    s << "            float3 ldvec = float3(le3.y, le3.z, le3.w);\n";
+    s << "            float3 cosA  = le1.xyz;\n";
+    s << "            float3 distA = float3(le1.w, le2.x, le2.y);\n";
+    if (alpha) {
+        s << "            float lcol = float(lcw & 255u);\n";
+    } else {
+        s << "            float3 lcol = float3(\n"
+             "                float((lcw >> 24) & 255u),\n"
+             "                float((lcw >> 16) & 255u),\n"
+             "                float((lcw >>  8) & 255u));\n";
+    }
+
+    // Attenuation (XF chan ctrl bits 9-10; Dolphin AttenuationFunc:
+    // 0=None, 1=Spec, 2=Dir, 3=Spot). Every normalize and divide is guarded:
+    // a light at the vertex, a zero distA or a zero denominator yields 0 or
+    // the fallback, never NaN or INF in the vertex colours (the hardware's
+    // fixed-point math has no NaN).
+    switch (ctrl.atten_func) {
+    case 1u:  // Spec
+        s << "            float3 ldelta = lpos - wpos.xyz;\n";
+        s << "            float ldd = dot(ldelta, ldelta);\n";
+        s << "            float3 ldir = (ldd > 0.0)"
+             " ? ldelta * rsqrt(ldd) : nrm;\n";
+        s << "            float attn = (dot(nrm, ldir) >= 0.0)"
+             " ? max(0.0, dot(nrm, ldvec)) : 0.0;\n";
+        if (finite) {
+            s << "            attn = min(attn, 1.0e18);\n";
+        }
+        // Dolphin: distAttn is normalized unless diffusefunc == None.
+        if (ctrl.diffuse_func == 0u) {
+            s << "            float3 distAttn = distA;\n";
+        } else {
+            s << "            float dad = dot(distA, distA);\n";
+            s << "            float3 distAttn = (dad > 0.0)"
+                 " ? distA * rsqrt(dad) : distA;\n";
+        }
+        s << "            float denom = dot(distAttn, float3(1.0, attn,"
+             " attn*attn));\n";
+        s << "            attn = (denom != 0.0)\n"
+             "                 ? max(0.0, dot(cosA, float3(1.0, attn,"
+             " attn*attn))) / denom\n"
+             "                 : 0.0;\n";
+        break;
+    case 3u:  // Spot
+        s << "            float3 ldelta = lpos - wpos.xyz;\n";
+        s << "            float dist2 = dot(ldelta, ldelta);\n";
+        s << "            float dist  = sqrt(dist2);\n";
+        s << "            float3 ldir = (dist > 0.0)"
+             " ? ldelta / dist : nrm;\n";
+        s << "            float attn = max(0.0, dot(ldir, ldvec));\n";
+        if (finite) {
+            s << "            attn = min(attn, 1.0e18);\n";
+            s << "            dist = min(dist, 1.0e18);\n";
+            s << "            dist2 = min(dist2, 1.0e36);\n";
+        }
+        s << "            float denom = dot(distA, float3(1.0, dist,"
+             " dist2));\n";
+        s << "            attn = (denom != 0.0)\n"
+             "                 ? max(0.0, cosA.x + cosA.y*attn +"
+             " cosA.z*attn*attn) / denom\n"
+             "                 : 0.0;\n";
+        break;
+    default:  // 0 = None, 2 = Dir
+        // Test the length before normalizing. After normalize(), a zero vector is already NaN and the
+        // fallback never fires.
+        s << "            float3 ldelta = lpos - wpos.xyz;\n";
+        s << "            float ldd = dot(ldelta, ldelta);\n";
+        s << "            float3 ldir = (ldd > 0.0)"
+             " ? ldelta * rsqrt(ldd) : nrm;\n";
+        s << "            float attn = 1.0;\n";
+        break;
+    }
+
+    // Diffuse function (0=none, 1=signed, 2=clamped).
+    const char* acc = alpha ? "lacc_a_i" : "lacc_i";
+    switch (ctrl.diffuse_func) {
+    case 1u:  // Sign
+        emit(s,
+             "            %s += int%s(round(attn * dot(ldir, nrm) * lcol));\n",
+             acc, alpha ? "" : "3");
+        break;
+    case 2u:  // Clamp
+        emit(s,
+             "            %s += int%s(round(attn * max(0.0,"
+             " dot(ldir, nrm)) * lcol));\n",
+             acc, alpha ? "" : "3");
+        break;
+    default:  // None
+        emit(s, "            %s += int%s(round(attn * lcol));\n",
+             acc, alpha ? "" : "3");
+        break;
+    }
+    s << "        }\n";
+}
+
+}  // anonymous namespace
+
+std::string_view ShaderGenerator::line_geometry_shader_source() noexcept {
+    return std::string_view{
+        kLineGeometryShader, sizeof(kLineGeometryShader) - 1u};
+}
+
+std::string_view ShaderGenerator::point_geometry_shader_source() noexcept {
+    return std::string_view{
+        kPointGeometryShader, sizeof(kPointGeometryShader) - 1u};
+}
+
+// Curved surfaces' patch stages. The hull shader passes the vertices through and gives each edge as many segments as
+// keep every segment's arc within a quarter pixel of its chord: an arc of angle a over chord c bulges c tan(a/4) / 2,
+// about c a / 8, so n segments bulge c a / (8 n^2) and n = sqrt(c a / 2) pixels, a twice the chord's tilt from the
+// tangent plane at the end that tilts it most. An edge's count depends only on its two vertices, so the two
+// triangles sharing it split it alike (no cracks). The domain shader blends the three vertices at the point, then
+// moves it half way to the blend of its projections onto the corners' tangent planes (Phong tessellation's shape
+// factor, here one half: a sampled circle's edge midpoint then moves c sin(a) / 8 against the circle's
+// c tan(a/4) / 2, onto the circle within 3 % for a 16-gon and 11 % for a hexagon, where three quarters overshoots it
+// by 46 and 33 %). The move is a sum over the triangle's edges, each end projecting by the normal it bends that edge
+// by (curve_edge_normal), so an edge two triangles share moves alike in both. The move goes into the clip position
+// (with the draw's jitter), the per-pixel lighting position and the motion vectors. Fractional odd steps let a count
+// change smoothly as the camera moves.
+static constexpr const char* kCurvePatch = R"HLSL(
+struct CurvePatch {
+    float edges[3] : SV_TessFactor;
+    float inside   : SV_InsideTessFactor;
+};
+)HLSL";
+
+// An edge's segments squared, before the clamp to 1-16: its chord on screen (pixels) times its turn, halved. `a` and
+// `b` are its ends' clip positions, `qa` and `qb` their eye positions, `na` and `nb` the normals each end bends it by.
+// Zero for an edge that stays straight. The hull shader and the sort (curve_sort_source) both use it.
+static constexpr const char* kCurveValue = R"HLSL(
+float curve_value(float4 a, float4 b, float3 qa, float3 qb, float3 na, float3 nb, float2 half_viewport) {
+    const float3 edge = qb - qa;
+    const float edge_length = length(edge);
+    if (a.w <= 0.0 || b.w <= 0.0 || !(edge_length > 0.0)) {
+        return 0.0;
+    }
+    const float3 along = edge / edge_length;
+    const float tilt = max(abs(dot(along, na)), abs(dot(along, nb)));
+    if (!(tilt > 0.0)) {
+        return 0.0;
+    }
+    const float angle = 2.0 * asin(min(tilt, 1.0));
+    const float chord = length((a.xy / a.w - b.xy / b.w) * half_viewport);
+    return chord * angle * 0.5;
+}
+)HLSL";
+
+static constexpr const char* kCurvedHull = R"HLSL(
+float curve_segments(VSOut a, VSOut b) {
+    return clamp(sqrt(curve_value(a.pos, b.pos, a.curve_pos.xyz, b.curve_pos.xyz, curve_edge_normal(a, b),
+                                  curve_edge_normal(b, a), 0.5 * line_point_raster.xy)), 1.0, 16.0);
+}
+
+// Whether the patch lies wholly past one of the view's side planes or behind the eye, however far its curve bulges:
+// the domain shader moves a point at most three quarters of its distance to the farthest corner, so the eye-space
+// sphere about the corners' centre through the farthest corner, widened by 0.75 of the longest edge, bounds it.
+bool curve_outside(InputPatch<VSOut, 3> p) {
+    const float3 q0 = p[0].curve_pos.xyz;
+    const float3 q1 = p[1].curve_pos.xyz;
+    const float3 q2 = p[2].curve_pos.xyz;
+    const float3 centre = (q0 + q1 + q2) / 3.0;
+    const float edge = sqrt(max(dot(q1 - q0, q1 - q0), max(dot(q2 - q1, q2 - q1), dot(q0 - q2, q0 - q2))));
+    const float radius = sqrt(max(dot(q0 - centre, q0 - centre),
+                                  max(dot(q1 - centre, q1 - centre), dot(q2 - centre, q2 - centre)))) +
+                         0.75 * edge;
+    const float4 planes[5] = {projection[3] - projection[0], projection[3] + projection[0],
+                              projection[3] - projection[1], projection[3] + projection[1], projection[3]};
+    [unroll] for (uint i = 0u; i < 5u; ++i) {
+        if (dot(planes[i].xyz, centre) + planes[i].w + radius * length(planes[i].xyz) < 0.0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+CurvePatch curve_patch(InputPatch<VSOut, 3> p) {
+    CurvePatch c;
+    if (curve_outside(p)) {
+        c.edges[0] = 0.0;
+        c.edges[1] = 0.0;
+        c.edges[2] = 0.0;
+        c.inside = 0.0;
+        return c;
+    }
+    c.edges[0] = curve_segments(p[1], p[2]);
+    c.edges[1] = curve_segments(p[2], p[0]);
+    c.edges[2] = curve_segments(p[0], p[1]);
+    c.inside = max(c.edges[0], max(c.edges[1], c.edges[2]));
+    return c;
+}
+
+[domain("tri")]
+[partitioning("fractional_odd")]
+[outputtopology("triangle_cw")]
+[outputcontrolpoints(3)]
+[patchconstantfunc("curve_patch")]
+[maxtessfactor(16.0)]
+VSOut main(InputPatch<VSOut, 3> p, uint i : SV_OutputControlPointID) {
+    return p[i];
+}
+)HLSL";
+
+static constexpr const char* kCurvedDomain = R"HLSL(
+[domain("tri")]
+DSOut main(CurvePatch c, float3 b : SV_DomainLocation, const OutputPatch<VSOut, 3> p) {
+    DSOut o;
+    o.pos = b.x * p[0].pos + b.y * p[1].pos + b.z * p[2].pos;
+    o.col0 = b.x * p[0].col0 + b.y * p[1].col0 + b.z * p[2].col0;
+    o.col1 = b.x * p[0].col1 + b.y * p[1].col1 + b.z * p[2].col1;
+CURVE_EXTRA_BLEND
+    // Phong's move, edge by edge: -alpha times the sum over edges (i, k) of b_i b_k ((e.n_ik) n_ik - (e.n_ki) n_ki),
+    // e the edge from i to k and n_ik the normal i bends it by.
+    float3 move = float3(0.0, 0.0, 0.0);
+    [unroll] for (uint i = 0u; i < 3u; ++i) {
+        const uint k = (i + 1u) % 3u;
+        const float3 e = p[k].curve_pos.xyz - p[i].curve_pos.xyz;
+        const float3 ni = curve_edge_normal(p[i], p[k]);
+        const float3 nk = curve_edge_normal(p[k], p[i]);
+        move -= b[i] * b[k] * (dot(e, ni) * ni - dot(e, nk) * nk);
+    }
+    const float3 d = 0.5 * move;
+    const float4 dc = mul(projection, float4(d, 0.0));
+    const float2 jitter = float2(p[0].curve_pos.w, p[0].curve_nrm.w);
+    o.pos += float4(dc.xy + jitter * dc.w, dc.z, dc.w);
+CURVE_EXTRA_MOVE
+    return o;
+}
+)HLSL";
+
+// Each draw's (CurveDraw) triangles kept whole where every edge's curve_value is under kCurveFlat (the hull shader
+// gives such an edge one segment and the domain shader moves nothing), with margin for the two stages' rounding; an
+// edge with an end near the eye plane stays a patch. Three passes (classify, offsets, scatter) keep each list in the
+// draw's order. A split draw's flat triangles come first and draw from its own indices: the sort takes the rest. A
+// draw's output: two DrawIndexedArguments (whole, patches), then the whole triangles' 32-bit indices, then the
+// patches'. The positions, displacement and crease normals and their pick per edge are the curved vertex shader's and
+// curve_edge_normal's.
+static constexpr const char* kCurveSort = R"HLSL(
+struct CurveDraw {
+    uint vertices;   // byte offset of the draw's first vertex
+    uint indices;    // byte offset of its 16-bit indices
+    uint triangles;
+    uint constants;  // byte offset of its vertex constants
+    uint palette;    // byte offset of its matrix palette
+    uint flags;      // bit 0: position matrices from the palette
+    uint output;     // byte offset of its output
+    uint scratch;    // byte offset of its blocks' masks of whole triangles, then their offsets
+};
+#ifndef NEBULA_VULKAN
+#define VK_BINDING(n)
+#else
+#define VK_BINDING(n) [[vk::binding(n, 0)]]
+#endif
+VK_BINDING(0) StructuredBuffer<CurveDraw> draws : register(t0);
+VK_BINDING(5) StructuredBuffer<uint2> blocks : register(t5);  // a group's draw and first triangle
+VK_BINDING(1) ByteAddressBuffer vertex_data : register(t1);
+VK_BINDING(2) ByteAddressBuffer index_data : register(t2);
+VK_BINDING(3) ByteAddressBuffer constant_data : register(t3);
+VK_BINDING(4) ByteAddressBuffer palette_data : register(t4);
+VK_BINDING(6) RWByteAddressBuffer sorted : register(u0);
+
+static const float kCurveFlat = 0.8;
+static const float kNearEye = 0.01;
+
+struct Corner {
+    float4 clip;
+    float3 eye;
+    float3 bend;
+    float3 crease;
+    uint place;
+    uint first_neighbour;
+    uint second_neighbour;
+};
+
+float3 turned(float3x3 cofactor, uint packed) {
+    const float3 n = mul(cofactor, curve_unpack(packed));
+    return dot(n, n) > 0.0 ? normalize(n) : n;
+}
+
+// A group's draw: its projection (rows 0-3), the inline position matrix (4-6), the half viewport (7.xy) and, for
+// palette draws, the 64 position-matrix rows from its palette base (8-71), loaded once per group.
+groupshared float4 draw_rows[72];
+
+void load_draw_rows(CurveDraw d, uint tid) {
+    if (tid < 4u) {
+        draw_rows[tid] = asfloat(constant_data.Load4(d.constants + 16u * tid));
+    } else if (tid < 7u) {
+        draw_rows[tid] = asfloat(constant_data.Load4(d.constants + CB_INLINE_POS + 16u * (tid - 4u)));
+    } else if (tid == 7u) {
+        draw_rows[7] = float4(0.5 * asfloat(constant_data.Load2(d.constants + CB_RASTER)), 0.0, 0.0);
+    }
+    if ((d.flags & 1u) != 0u) {
+        const uint base = constant_data.Load(d.constants + CB_PALETTE_BASE);
+        draw_rows[8u + tid] = asfloat(palette_data.Load4(d.palette + 16u * (base + tid)));
+    }
+    GroupMemoryBarrierWithGroupSync();
+}
+
+Corner corner(CurveDraw d, uint vertex) {
+    const uint at = d.vertices + vertex * VERTEX_STRIDE;
+    const float3 pos = asfloat(vertex_data.Load3(at));
+    const uint pn_row = min(vertex_data.Load(at + VERTEX_MTX) & 0x3Fu, 61u);
+    const uint third = vertex_data.Load(at + VERTEX_MTX + 8u);
+    const uint3 curve = vertex_data.Load3(at + VERTEX_CURVE);
+    const uint first_row = (d.flags & 1u) != 0u ? 8u + pn_row : 4u;
+    float4 rows[3];
+    rows[0] = draw_rows[first_row];
+    rows[1] = draw_rows[first_row + 1u];
+    rows[2] = draw_rows[first_row + 2u];
+    const float4 p = float4(pos, 1.0);
+    const float4 wpos = float4(dot(rows[0], p), dot(rows[1], p), dot(rows[2], p), 1.0);
+    const float3x3 cofactor = float3x3(cross(rows[1].xyz, rows[2].xyz), cross(rows[2].xyz, rows[0].xyz),
+                                       cross(rows[0].xyz, rows[1].xyz));
+    const float4x4 projection = float4x4(draw_rows[0], draw_rows[1], draw_rows[2], draw_rows[3]);
+    Corner c;
+    c.clip = mul(projection, wpos);
+    c.eye = wpos.xyz;
+    c.bend = turned(cofactor, curve.x);
+    c.crease = turned(cofactor, curve.y);
+    c.place = curve.z & 0xFFFFu;
+    c.first_neighbour = curve.z >> 16u;
+    c.second_neighbour = third >> 16u;
+    return c;
+}
+
+float3 edge_normal(Corner a, Corner b) {
+    if (b.place != 0xFFFFu && (b.place == a.first_neighbour || b.place == a.second_neighbour)) {
+        return a.crease;
+    }
+    return a.bend;
+}
+
+bool edge_whole(Corner a, Corner b, float2 half_viewport) {
+    if (abs(a.clip.w) < kNearEye || abs(b.clip.w) < kNearEye) {
+        return false;
+    }
+    return curve_value(a.clip, b.clip, a.eye, b.eye, edge_normal(a, b), edge_normal(b, a), half_viewport) < kCurveFlat;
+}
+
+uint index_at(uint at) {
+    const uint word = index_data.Load(at & ~3u);
+    return (at & 2u) != 0u ? word >> 16u : word & 0xFFFFu;
+}
+
+groupshared uint block_mask[2];
+groupshared uint scan[64];
+
+// Pass one, a thread a triangle (a group a block of 64 of one draw): its bit in the block's mask of whole triangles.
+[numthreads(64, 1, 1)]
+void classify(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const uint2 job = blocks[group.x];
+    const CurveDraw d = draws[job.x];
+    const uint t = job.y + tid;
+    if (tid < 2u) {
+        block_mask[tid] = 0u;
+    }
+    load_draw_rows(d, tid);
+    if (t < d.triangles) {
+        const float2 half_viewport = draw_rows[7].xy;
+        const uint at = d.indices + t * 6u;
+        const Corner c0 = corner(d, index_at(at));
+        const Corner c1 = corner(d, index_at(at + 2u));
+        const Corner c2 = corner(d, index_at(at + 4u));
+        if (edge_whole(c1, c2, half_viewport) && edge_whole(c2, c0, half_viewport) &&
+            edge_whole(c0, c1, half_viewport)) {
+            InterlockedOr(block_mask[tid >> 5u], 1u << (tid & 31u));
+        }
+    }
+    GroupMemoryBarrierWithGroupSync();
+    if (tid < 2u) {
+        sorted.Store(d.scratch + 8u * (job.y / 64u) + 4u * tid, block_mask[tid]);
+    }
+}
+
+// Pass two, a group a draw: the whole triangles before each block; the lists' draw arguments.
+[numthreads(64, 1, 1)]
+void offsets(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const CurveDraw d = draws[group.x];
+    const uint block_count = (d.triangles + 63u) / 64u;
+    const uint before = d.scratch + 8u * block_count;
+    uint total = 0u;
+    for (uint first = 0u; first < block_count; first += 64u) {
+        const uint b = first + tid;
+        const uint2 mask = b < block_count ? sorted.Load2(d.scratch + 8u * b) : uint2(0u, 0u);
+        const uint count = countbits(mask.x) + countbits(mask.y);
+        scan[tid] = count;
+        GroupMemoryBarrierWithGroupSync();
+        [unroll] for (uint offset = 1u; offset < 64u; offset <<= 1u) {
+            const uint earlier = tid >= offset ? scan[tid - offset] : 0u;
+            GroupMemoryBarrierWithGroupSync();
+            scan[tid] += earlier;
+            GroupMemoryBarrierWithGroupSync();
+        }
+        if (b < block_count) {
+            sorted.Store(before + 4u * b, total + scan[tid] - count);
+        }
+        total += scan[63];
+        GroupMemoryBarrierWithGroupSync();
+    }
+    if (tid == 0u) {
+        sorted.Store4(d.output, uint4(total * 3u, 1u, 0u, 0u));
+        sorted.Store4(d.output + 16u, uint4(0u, (d.triangles - total) * 3u, 1u, 0u));
+        sorted.Store2(d.output + 32u, uint2(0u, 0u));
+    }
+}
+
+// Pass three, a thread a triangle: to its list, at the whole triangles (or patches) before it in the draw.
+[numthreads(64, 1, 1)]
+void scatter(uint3 group : SV_GroupID, uint tid : SV_GroupIndex) {
+    const uint2 job = blocks[group.x];
+    const CurveDraw d = draws[job.x];
+    const uint t = job.y + tid;
+    if (t >= d.triangles) {
+        return;
+    }
+    const uint block = job.y / 64u;
+    const uint2 mask = sorted.Load2(d.scratch + 8u * block);
+    const uint below = tid < 32u ? countbits(mask.x & ((1u << tid) - 1u))
+                                 : countbits(mask.x) + countbits(mask.y & ((1u << (tid - 32u)) - 1u));
+    const bool whole = ((tid < 32u ? mask.x >> tid : mask.y >> (tid - 32u)) & 1u) != 0u;
+    const uint block_count = (d.triangles + 63u) / 64u;
+    const uint wholes_before = sorted.Load(d.scratch + 8u * block_count + 4u * block) + below;
+    const uint at = d.indices + t * 6u;
+    const uint3 v = uint3(index_at(at), index_at(at + 2u), index_at(at + 4u));
+    const uint whole_out = d.output + 40u;
+    const uint slot = whole ? whole_out + 12u * wholes_before : whole_out + 12u * (d.triangles + t - wholes_before);
+    sorted.Store3(slot, v);
+}
+)HLSL";
+
+std::string ShaderGenerator::curve_sort_source() {
+    char defines[256];
+    std::snprintf(defines, sizeof(defines),
+                  "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
+                  "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n",
+                  sizeof(RenderVertex), offsetof(RenderVertex, mtx_indices), offsetof(RenderVertex, curve),
+                  offsetof(VertexConstants, mtx_palette_base), offsetof(VertexConstants, inline_pos_matrix),
+                  offsetof(VertexConstants, line_point_raster));
+    return std::string("// Curved surfaces' triangles sorted (ShaderGenerator::curve_sort_source).\n") + defines +
+           kCurveCodec + kCurveValue + kCurveSort;
+}
+
+// The patch stages' texture coordinates: eight members at the array's semantics (TEXCOORD0-7), not the array. Split
+// in those stages, the array's elements went to SPIR-V over the array's length, not the patch's vertices (glslang:
+// `p.uv[k]` a float3[8], the other members float3[3]).
+static std::string texcoord_members(std::string text) {
+    const std::size_t at = text.find("uv[8]");
+    const std::size_t start = text.rfind('\n', at) + 1u;
+    const std::size_t end = text.find('\n', at) + 1u;
+    std::string members;
+    for (unsigned i = 0; i < 8u; ++i) {
+        members += "    float3   uv" + std::to_string(i) + "      : TEXCOORD" + std::to_string(i) + ";\n";
+    }
+    return text.replace(start, end - start, members);
+}
+
+std::string ShaderGenerator::curved_stage_source(unsigned variant, bool domain) {
+    const bool ppl = (variant & 1u) != 0u;
+    const bool motion = (variant & 2u) != 0u;
+    std::string s = domain ? "// Curved surfaces: domain shader (ShaderGenerator::curved_stage_source).\n"
+                           : "// Curved surfaces: hull shader (ShaderGenerator::curved_stage_source).\n";
+    // The vertex constants to the motion fields, line_point_raster (c65) in the motion variant's skipped rows.
+    std::string members = "    float4   line_point_raster;\n";
+    if (motion) {
+        members += "    float4   curve_skip_[7];\n"
+                   "    float4   motion_prev_proj[2];\n"
+                   "    float4   motion_prev_pos[3];\n"
+                   "    float4   motion_params;\n";
+    }
+    s += insert_before_close(kVsConstantsDef, members.c_str(), false);
+    // VSOut: what the curved vertex shader writes; DSOut: the same less the curve's, as the pixel shader reads it.
+    std::string vs_out = ppl ? kVsStructsPpl : kVsStructs;
+    vs_out = texcoord_members(vs_out.substr(vs_out.find("struct VSOut")));
+    if (motion) {
+        vs_out = insert_before_close(vs_out.c_str(), kMotionInterpolants, true);
+    }
+    std::string ds_out = vs_out;
+    ds_out.replace(ds_out.find("VSOut"), 5u, "DSOut");
+    vs_out = insert_before_close(vs_out.c_str(), kCurvedInterpolants, true);
+    s += vs_out + ds_out + kCurvePatch + kCurveCodec + kCurveEdgeNormal;
+    if (!domain) {
+        return s + kCurveValue + kCurvedHull;
+    }
+    std::string stages = kCurvedDomain;
+    std::string blend;
+    std::string move;
+    for (unsigned i = 0; i < 8u; ++i) {
+        const std::string uv = "uv" + std::to_string(i);
+        blend += "    o." + uv + " = b.x * p[0]." + uv + " + b.y * p[1]." + uv + " + b.z * p[2]." + uv + ";\n";
+    }
+    if (ppl) {
+        blend += "    o.ppl_pos = b.x * p[0].ppl_pos + b.y * p[1].ppl_pos + b.z * p[2].ppl_pos;\n"
+                 "    o.ppl_nrm = b.x * p[0].ppl_nrm + b.y * p[1].ppl_nrm + b.z * p[2].ppl_nrm;\n"
+                 "    o.ppl_vcol0 = b.x * p[0].ppl_vcol0 + b.y * p[1].ppl_vcol0 + b.z * p[2].ppl_vcol0;\n"
+                 "    o.ppl_vcol1 = b.x * p[0].ppl_vcol1 + b.y * p[1].ppl_vcol1 + b.z * p[2].ppl_vcol1;\n";
+        move += "    o.ppl_pos += d;\n";
+    }
+    if (motion) {
+        blend += "    o.mv_cur = b.x * p[0].mv_cur + b.y * p[1].mv_cur + b.z * p[2].mv_cur;\n"
+                 "    o.mv_prev = b.x * p[0].mv_prev + b.y * p[1].mv_prev + b.z * p[2].mv_prev;\n";
+        // The unjittered clip move; the previous frame's position takes the same eye-space move (a few units, against
+        // a frame's turn of the camera).
+        move += "    o.mv_cur += float4(dc.xy - motion_params.xy * dc.w, 0.0, dc.w);\n"
+                "    const float4 pp0 = motion_prev_proj[0];\n"
+                "    o.mv_prev.xy += motion_prev_proj[1].z == 0.0\n"
+                "        ? float2(pp0.x * d.x + pp0.y * d.z, pp0.z * d.y + pp0.w * d.z)\n"
+                "        : float2(pp0.x * d.x, pp0.z * d.y);\n"
+                "    o.mv_prev.w += motion_prev_proj[1].z == 0.0 ? -d.z : 0.0;\n";
+    }
+    stages.replace(stages.find("CURVE_EXTRA_BLEND\n"), 18u, blend);
+    stages.replace(stages.find("CURVE_EXTRA_MOVE\n"), 17u, move);
+    return s + stages;
+}
+
+std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
+    std::ostringstream s;
+
+    const std::string key_desc = ShaderGenerator::describe(key);
+    s << "// Specialized VS: " << key_desc << "\n";
+    s << "// Generated by Nebula ShaderGenerator\n\n";
+
+    const bool ppl = (key.flags & kVsKeyPerPixelLighting) != 0u;
+    const bool enhanced = (key.flags & kVsKeyEnhancedLighting) != 0u;
+    const bool ppl_outputs = ppl || enhanced;
+    const bool motion = (key.flags & kVsKeyMotion) != 0u;
+    const bool curved = (key.flags & kVsKeyCurved) != 0u;
+    // Physical ray tracing's facing fit (flags bit 6) at the struct's end (c80, uber_constants.h).
+    static constexpr const char* kVsDebakeMembers = "    float4   debake_sh[7];\n    float4   debake_peak;\n";
+    std::string structs = ppl_outputs ? kVsStructsPpl : kVsStructs;
+    if (motion) {
+        s << insert_before_close(kVsConstantsDef, (std::string(kVsMotionConstantMembers) + kVsDebakeMembers).c_str(),
+                                 false);
+        structs = insert_before_close(structs.c_str(), kMotionInterpolants, true);
+    } else {
+        s << insert_before_close(kVsConstantsDef,
+                                 (std::string("    float4   debake_skip_[15];\n") + kVsDebakeMembers).c_str(), false);
+    }
+    if (curved) {
+        structs = insert_before_close(structs.c_str(), kCurvedInput, false);
+        structs = insert_before_close(structs.c_str(), kCurvedInterpolants, true);
+    }
+    s << structs;
+    if (curved) {
+        s << kCurveCodec;
+    }
+    const bool blend = (key.features & kVsFeatureVertexBlend) != 0u;
+    const bool debake = (key.features & kVsFeatureDebake) != 0u;
+    if (blend) {
+        s << kVertexBlendDef;
+    }
+
+    const bool dual_tex = (key.flags & 0x04u) != 0u;
+
+    // Whether any active channel lights (the key builder zeroes channel controls
+    // beyond num_chans).
+    bool lighting_used = false;
+    for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
+        if (decode_xf_channel_ctrl(key.channel[ch]).lighting_enable ||
+            decode_xf_channel_ctrl(key.channel[2 + ch]).lighting_enable) {
+            lighting_used = true;
+        }
+    }
+    bool emboss_used = false;
+    for (unsigned i = 0; i < key.num_texgens && i < kMaxTexGens; ++i) {
+        if (decode_xf_texgen(key.texgen[i]).type == TexGenType::EmbossMap) {
+            emboss_used = true;
+        }
+    }
+
+    if (lighting_used || emboss_used) {
+        // Word-granular palette fetch: normal-matrix rows (XF 0x400 + 3 words
+        // per row) are not float4-aligned, so they cannot be read as whole
+        // palette elements.  Dynamic vector subscripting is legal SM5.
+        s << R"HLSL(
+float xfw(uint w) {
+    float4 v = mtx_palette[mtx_palette_base + (w >> 2u)];
+    return v[w & 3u];
+}
+)HLSL";
+    }
+    const bool finite_attn = (key.flags & kVsKeyFiniteLightAttn) != 0u;
+
+    if (debake) {
+        s << kVsDebakeDef;
+    }
+
+    if (blend) {
+        s << "VSOut main(VSIn v, uint vertex_id : SV_VertexID) {\n";
+        s << "    vertex_blend(v, vertex_id);\n";
+    } else {
+        // A game frame's values (kVertexBlendDef's with the frame's zero element): no jitter of a presented frame, the
+        // position before the vertex's own.
+        s << "VSOut main(VSIn v) {\n";
+        if (motion) {
+            s << "    const float2 vb_jitter = float2(0.0, 0.0);\n"
+                 "    const float3 vb_pos_prev = v.pos;\n";
+        }
+    }
+
+    // The position/normal matrix's XF row (PNMTX0=0, PNMTX1=3, ...; a matrix occupies rows n..n+2): the vertex's
+    // PNMATIDX (BLENDINDICES) where the stream carries one, else the draw's CP MatrixIndexA, the value the loader
+    // would put in each vertex (so a vertex's bytes do not depend on the draw). Clamped to the 64-row
+    // position-matrix region so a bad index cannot read past the palette snapshot: the matrix palette is a root SRV,
+    // and hardware does not clamp out-of-bounds reads, which can page-fault the GPU.
+    s << ((key.flags & 0x01u) != 0u ? "    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);\n"
+                                    : "    uint pn_row = min(matrix_index_a & 0x3Fu, 61u);\n");
+    s << "    float3 pos_in = v.pos;\n";
+    if ((key.flags & 0x01u) != 0u) {
+        s << "    uint pnmtx_row = pn_row + mtx_palette_base;\n";
+        s << "    float4 wpos = float4(\n";
+        s << "        dot(mtx_palette[pnmtx_row+0u], float4(pos_in, 1.0)),\n";
+        s << "        dot(mtx_palette[pnmtx_row+1u], float4(pos_in, 1.0)),\n";
+        s << "        dot(mtx_palette[pnmtx_row+2u], float4(pos_in, 1.0)),\n";
+        s << "        1.0);\n\n";
+    } else {
+        s << "    float4 wpos = float4(\n";
+        s << "        dot(inline_pos_matrix[0], float4(pos_in, 1.0)),\n";
+        s << "        dot(inline_pos_matrix[1], float4(pos_in, 1.0)),\n";
+        s << "        dot(inline_pos_matrix[2], float4(pos_in, 1.0)),\n";
+        s << "        1.0);\n\n";
+    }
+
+    s << "    VSOut o = (VSOut)0;\n";
+    s << "    o.pos = mul(projection, wpos);\n\n";
+    if (motion) {
+        // Sub-frames take the presented frame's jitter here (perspective
+        // draws); game frames carry theirs in the projection (motion_params.xy).
+        s << "    const float2 jitter_ndc = projection[3][3] == 0.0 && motion_params.z != 0.0 &&\n"
+             "        motion_params.w != 0.0 ? vb_jitter / motion_params.zw : float2(0.0, 0.0);\n"
+             "    o.pos.xy += jitter_ndc * o.pos.w;\n";
+        s << "    float3 prev_eye;\n";
+        if ((key.flags & 0x01u) != 0u) {
+            s << "    if (motion_ctrl.x == 0u) {\n"
+                 "        uint prow = pn_row + motion_ctrl.y;\n"
+                 "        prev_eye = float3(dot(mtx_palette[prow+0u], float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mtx_palette[prow+1u], float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mtx_palette[prow+2u], float4(vb_pos_prev, 1.0)));\n"
+                 "    } else {\n"
+                 "        prev_eye = float3(dot(motion_prev_pos[0], wpos),\n"
+                 "                          dot(motion_prev_pos[1], wpos),\n"
+                 "                          dot(motion_prev_pos[2], wpos));\n"
+                 "    }\n";
+        } else {
+            s << "    prev_eye = float3(dot(motion_prev_pos[0], float4(vb_pos_prev, 1.0)),\n"
+                 "                      dot(motion_prev_pos[1], float4(vb_pos_prev, 1.0)),\n"
+                 "                      dot(motion_prev_pos[2], float4(vb_pos_prev, 1.0)));\n";
+        }
+        s << "    float4 pp0 = motion_prev_proj[0];\n"
+             "    float3 prev_clip = (motion_prev_proj[1].z == 0.0)\n"
+             "        ? float3(pp0.x * prev_eye.x + pp0.y * prev_eye.z,\n"
+             "                 pp0.z * prev_eye.y + pp0.w * prev_eye.z, -prev_eye.z)\n"
+             "        : float3(pp0.x * prev_eye.x + pp0.y, pp0.z * prev_eye.y + pp0.w, 1.0);\n"
+             "    o.mv_cur = float4(o.pos.xy - (motion_params.xy + jitter_ndc) * o.pos.w,"
+             " motion_params.z, o.pos.w);\n"
+             "    o.mv_prev = float4(prev_clip.xy, motion_params.w, prev_clip.z);\n\n";
+    }
+
+    // Unpack RGBA8 vertex colors (zero when the VCD carries no color attr).
+    s << "    float4 vtx_col0 = float4(\n";
+    s << "        float((v.color0 >> 24u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color0 >> 16u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color0 >>  8u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color0       ) & 0xFFu) / 255.0);\n";
+    s << "    float4 vtx_col1 = float4(\n";
+    s << "        float((v.color1 >> 24u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color1 >> 16u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color1 >>  8u) & 0xFFu) / 255.0,\n";
+    s << "        float((v.color1       ) & 0xFFu) / 255.0);\n";
+    if (debake) {
+        // Physical ray tracing (flags bits 2-3): an unlit channel's vertex colour is the art's baked light.
+        // Bit 6: by the model's facing fit (nebula_debake_gain); else each colour over its brightest channel.
+        s << "    if ((flags & 64u) != 0u) {\n"
+             "        const float3 debake_gain = nebula_debake_gain(v.nrm);\n"
+             "        if ((flags & 4u) != 0u) vtx_col0.rgb = saturate(vtx_col0.rgb * debake_gain);\n"
+             "        if ((flags & 8u) != 0u) vtx_col1.rgb = saturate(vtx_col1.rgb * debake_gain);\n"
+             "    } else {\n";
+        s << "    if ((flags & 4u) != 0u) vtx_col0.rgb = nebula_debake(vtx_col0.rgb) * (float((flags >> 8u) & 0xFFu) / 255.0);\n";
+        s << "    if ((flags & 8u) != 0u) vtx_col1.rgb = nebula_debake(vtx_col1.rgb) * (float((flags >> 16u) & 0xFFu) / 255.0);\n";
+        s << "    }\n";
+    }
+    s << "\n";
+
+    if (lighting_used) {
+        // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words
+        // 0x400 + 3*(posidx & 31) (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
+        // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
+        // Its nine words lie in three float4s of the palette, from word (nrm_base & 3) of the first.
+        s << "    uint nrm_base = 0x400u + 3u * (pn_row & 31u);\n";
+        s << "    const uint nrm_q = mtx_palette_base + (nrm_base >> 2u);\n"
+             "    const float4 nq0 = mtx_palette[nrm_q];\n"
+             "    const float4 nq1 = mtx_palette[nrm_q + 1u];\n"
+             "    const float4 nq2 = mtx_palette[nrm_q + 2u];\n"
+             "    const uint nrm_o = nrm_base & 3u;\n"
+             "    const float3 nrm_r0 = nrm_o == 0u ? nq0.xyz : nrm_o == 1u ? nq0.yzw\n"
+             "                        : nrm_o == 2u ? float3(nq0.zw, nq1.x) : float3(nq0.w, nq1.xy);\n"
+             "    const float3 nrm_r1 = nrm_o == 0u ? float3(nq0.w, nq1.xy) : nrm_o == 1u ? nq1.xyz\n"
+             "                        : nrm_o == 2u ? nq1.yzw : float3(nq1.zw, nq2.x);\n"
+             "    const float3 nrm_r2 = nrm_o == 0u ? float3(nq1.zw, nq2.x) : nrm_o == 1u ? float3(nq1.w, nq2.xy)\n"
+             "                        : nrm_o == 2u ? nq2.xyz : nq2.yzw;\n";
+        s << "    float3 nrm_t = float3(dot(nrm_r0, v.nrm), dot(nrm_r1, v.nrm), dot(nrm_r2, v.nrm));\n";
+        s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
+             " ? normalize(nrm_t) : nrm_t;\n\n";
+    } else if (enhanced) {
+        // Unlit draws may leave the normal matrices unloaded: the position
+        // matrix turns the normal (exact for rotation and uniform scale).
+        const bool palette = (key.flags & 0x01u) != 0u;
+        for (unsigned r = 0; r < 3u; ++r) {
+            emit(s, "    const float3 nrm_row%u = %s%u%s.xyz;\n", r,
+                 palette ? "mtx_palette[pnmtx_row+" : "inline_pos_matrix[", r,
+                 palette ? "u]" : "]");
+        }
+        s << "    float3 nrm_t = float3(dot(nrm_row0, v.nrm), dot(nrm_row1, v.nrm),"
+             " dot(nrm_row2, v.nrm));\n";
+        s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
+             " ? normalize(nrm_t) : nrm_t;\n\n";
+    }
+
+    // GX colour channels: the rasterized colour comes from the channel controls. matsource selects the
+    // material register or vertex colour. With lighting enabled, the per-light sum replaces the ambient-only
+    // approximation (Dolphin LightingShaderGen). Results are quantized to the 8-bit lattice, since GX
+    // accumulates channels in 8-bit registers.
+    for (unsigned ch = 0; ch < 2; ++ch) {
+        const char* vtx = (ch == 0) ? "vtx_col0" : "vtx_col1";
+        const char* out = (ch == 0) ? "o.col0" : "o.col1";
+        if (ch >= key.num_chans) {
+            emit(s, "    %s = %s;\n", out, vtx);
+            continue;
+        }
+        const XfChannelCtrl cc = decode_xf_channel_ctrl(key.channel[ch]);
+        const XfChannelCtrl ca = decode_xf_channel_ctrl(key.channel[2 + ch]);
+
+        emit(s, "    {  // channel %u (matsrc=%u light=%u amask=0x%02X)\n",
+             ch,
+             cc.material_from_vertex ? 1u : 0u,
+             cc.lighting_enable ? 1u : 0u,
+             ca.light_mask);
+
+        // Color part.
+        emit(s, "        int3 mat_c_i = int3(round(%s.rgb * 255.0));\n",
+             cc.material_from_vertex ? vtx
+                                     : (ch == 0 ? "chan_material[0]"
+                                                : "chan_material[1]"));
+        if (cc.lighting_enable) {
+            emit(s, "        int3 lacc_i = int3(round(%s.rgb * 255.0));\n",
+                 cc.ambient_from_vertex ? vtx
+                                        : (ch == 0 ? "chan_ambient[0]"
+                                                   : "chan_ambient[1]"));
+            for (unsigned n = 0; n < 8; ++n) {
+                if ((cc.light_mask >> n) & 1u) {
+                    emit_light(s, n, cc, /*alpha=*/false, finite_attn);
+                }
+            }
+            s << "        lacc_i = clamp(lacc_i, int3(0,0,0),"
+                 " int3(255,255,255));\n";
+            emit(s,
+                "        %s.rgb = float3((mat_c_i * (lacc_i +"
+                " (lacc_i >> 7))) >> 8) / 255.0;\n", out);
+        } else {
+            emit(s, "        %s.rgb = float3(mat_c_i) / 255.0;\n", out);
+        }
+
+        // Alpha part (separate channel control register).
+        emit(s, "        int mat_a_i = int(round(%s * 255.0));\n",
+             ca.material_from_vertex
+                 ? ((ch == 0) ? "vtx_col0.a" : "vtx_col1.a")
+                 : (ch == 0 ? "chan_material[0].a" : "chan_material[1].a"));
+        if (ca.lighting_enable) {
+            emit(s, "        int lacc_a_i = int(round(%s * 255.0));\n",
+                 ca.ambient_from_vertex
+                     ? ((ch == 0) ? "vtx_col0.a" : "vtx_col1.a")
+                     : (ch == 0 ? "chan_ambient[0].a"
+                                : "chan_ambient[1].a"));
+            for (unsigned n = 0; n < 8; ++n) {
+                if ((ca.light_mask >> n) & 1u) {
+                    emit_light(s, n, ca, /*alpha=*/true, finite_attn);
+                }
+            }
+            s << "        lacc_a_i = clamp(lacc_a_i, 0, 255);\n";
+            emit(s,
+                "        %s.a = float((mat_a_i * (lacc_a_i +"
+                " (lacc_a_i >> 7))) >> 8) / 255.0;\n", out);
+        } else {
+            emit(s, "        %s.a = float(mat_a_i) / 255.0;\n", out);
+        }
+        s << "    }\n";
+    }
+    s << "\n";
+
+    if (ppl_outputs) {
+        s << "    o.ppl_pos = wpos.xyz;\n";
+        s << "    o.ppl_nrm = nrm;\n";
+        s << "    o.ppl_vcol0 = vtx_col0;\n";
+        s << "    o.ppl_vcol1 = vtx_col1;\n\n";
+    }
+
+    // Texgens, per Dolphin VertexShaderGen: input-row selection (raw
+    // pos / raw normal / tex0-7), 2x4 or 3x4 texture-matrix multiply
+    // (per-vertex index or CP MatrixIndexA/B default), optional normalize and
+    // post-transform (dual-tex) matrix, q==0 clamp. The PS divides by Q.
+    const unsigned ntg = key.num_texgens;
+    emit(s, "    // %u active texgen(s)\n", ntg);
+
+    for (unsigned i = 0; i < ntg && i < kMaxTexGens; ++i) {
+        const XfTexGen tg = decode_xf_texgen(key.texgen[i]);
+
+        emit(s, "    {  // texgen[%u]: type=%u src=%u stq=%u abc1=%u\n",
+             i,
+             static_cast<unsigned>(tg.type),
+             static_cast<unsigned>(tg.source_row),
+             tg.generate_stq ? 1u : 0u,
+             tg.input_form_abc1 ? 1u : 0u);
+
+        switch (tg.type) {
+        case TexGenType::Color0:
+            // Dolphin: texture coord = (lit color 0).xy, q = 1.
+            emit(s, "        o.uv[%u] = float3(o.col0.rg, 1.0);\n", i);
+            break;
+        case TexGenType::Color1:
+            emit(s, "        o.uv[%u] = float3(o.col1.rg, 1.0);\n", i);
+            break;
+        case TexGenType::EmbossMap: {
+            // Both vertex decode routes supply zero for absent NBT vectors.
+            // Keep transformed basis scale: it controls emboss magnitude.
+            s << "        uint emboss_base = 0x400u + 3u * (pn_row & 31u);\n";
+            s << "        float3x3 emboss_matrix = float3x3(\n"
+                 "            xfw(emboss_base), xfw(emboss_base+1u), xfw(emboss_base+2u),\n"
+                 "            xfw(emboss_base+3u), xfw(emboss_base+4u), xfw(emboss_base+5u),\n"
+                 "            xfw(emboss_base+6u), xfw(emboss_base+7u), xfw(emboss_base+8u));\n";
+            s << "        float3 emboss_tangent = mul(emboss_matrix, v.tangent);\n"
+                 "        float3 emboss_binormal = mul(emboss_matrix, v.binormal);\n";
+            const unsigned light = 0x180u + 4u * tg.emboss_light;
+            emit(s,
+                 "        float4 emboss_l2 = mtx_palette[mtx_palette_base + %uu];\n"
+                 "        float4 emboss_l3 = mtx_palette[mtx_palette_base + %uu];\n",
+                 light + 2u, light + 3u);
+            s << "        float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;\n"
+                 "        float emboss_dist2 = dot(emboss_delta, emboss_delta);\n"
+                 "        float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);\n";
+            emit(s,
+                 "        o.uv[%u] = o.uv[%u] + float3(dot(emboss_ldir, emboss_tangent), dot(emboss_ldir, emboss_binormal), 0.0);\n",
+                 i, tg.emboss_source);
+            break;
+        }
+        case TexGenType::Regular:
+        default: {
+            // 1. Input row (Dolphin SourceRow: 0 Geom, 1 Normal, 2 Colors,
+            //    3/4 BinormalT/B, 5..12 Tex0..Tex7).  Geom and Normal use
+            //    the RAW (untransformed) attributes.
+            s << "        float4 coord = float4(0.0, 0.0, 1.0, 1.0);\n";
+            if (tg.source_row == 0u) {
+                s << "        coord.xyz = v.pos;\n";
+            } else if (tg.source_row == 1u) {
+                s << "        coord.xyz = v.nrm;\n";
+            } else if (tg.source_row == 3u) {
+                s << "        coord.xyz = v.tangent;\n";
+            } else if (tg.source_row == 4u) {
+                s << "        coord.xyz = v.binormal;\n";
+            } else if (tg.source_row >= 5u && tg.source_row <= 12u) {
+                emit(s, "        coord = float4(v.uv[%u], 1.0, 1.0);\n",
+                     tg.source_row - 5u);
+            }
+            // Color source rows keep the (0,0,1,1) default; colors are only
+            // valid for Color0/1 texgen types.
+
+            // 2. Input form AB11 forces the implicit third component to 1
+            //    (Dolphin: if (inputform == AB11) coord.z = 1.0).
+            if (!tg.input_form_abc1) {
+                s << "        coord.z = 1.0;\n";
+            }
+
+            // 3. Texture matrix row index: per-vertex when the VCD carries
+            //    it (loader packs gens 0-7 across mtx_idx.xy/z),
+            //    else the CP MatrixIndexA/B default.  Rows are clamped to
+            //    the 64-row matrix region (rows n..n+2 must stay inside).
+            const bool per_vertex =
+                ((key.texmtx_idx_mask >> i) & 1u) != 0u && i < 8u;
+            if (per_vertex) {
+                const char* component = i < 3u ? "x" : i < 7u ? "y" : "z";
+                const unsigned shift = i < 3u
+                    ? 8u + 8u * i
+                    : i < 7u ? 8u * (i - 3u) : 0u;
+                emit(s,
+                    "        uint tm = min((v.mtx_idx.%s >> %uu) & 0xFFu,"
+                    " 61u) + mtx_palette_base;\n",
+                    component,
+                    shift);
+            }
+
+            // 4. 2x4 (ST) or 3x4 (STQ) multiply.
+            if (per_vertex) {
+                if (tg.generate_stq) {
+                    s << "        float3 res = float3(\n"
+                         "            dot(coord, mtx_palette[tm+0u]),\n"
+                         "            dot(coord, mtx_palette[tm+1u]),\n"
+                         "            dot(coord, mtx_palette[tm+2u]));\n";
+                } else {
+                    s << "        float3 res = float3(\n"
+                         "            dot(coord, mtx_palette[tm+0u]),\n"
+                         "            dot(coord, mtx_palette[tm+1u]),\n"
+                         "            1.0);\n";
+                }
+            } else {
+                const unsigned inline_base = i * 3u;
+                if (tg.generate_stq) {
+                    emit(s,
+                        "        float3 res = float3(\n"
+                        "            dot(coord, inline_tex_matrices[%u]),\n"
+                        "            dot(coord, inline_tex_matrices[%u]),\n"
+                        "            dot(coord, inline_tex_matrices[%u]));\n",
+                        inline_base, inline_base + 1u, inline_base + 2u);
+                } else {
+                    emit(s,
+                        "        float3 res = float3(\n"
+                        "            dot(coord, inline_tex_matrices[%u]),\n"
+                        "            dot(coord, inline_tex_matrices[%u]),\n"
+                        "            1.0);\n",
+                        inline_base, inline_base + 1u);
+                }
+            }
+
+            // 5. Post-transform (dual-tex) matrix: XF 0x500 region =
+            //    palette elements 0x140+n; optional pre-normalize.
+            if (dual_tex) {
+                const XfPostTexGen pt =
+                    decode_xf_post_texgen(key.post_texgen[i]);
+                if (pt.normalize) {
+                    // Guarded: normalize(0) is NaN, and a degenerate texgen
+                    // input (zero normal/position) must not poison the UV.
+                    s << "        res = (dot(res, res) > 0.0)"
+                         " ? normalize(res) : res;\n";
+                }
+                const unsigned post_base = i * 3u;
+                emit(s,
+                    "        float4 P0 = inline_post_matrices[%u];\n"
+                    "        float4 P1 = inline_post_matrices[%u];\n"
+                    "        float4 P2 = inline_post_matrices[%u];\n",
+                    post_base, post_base + 1u, post_base + 2u);
+                s << "        res = float3(dot(P0.xyz, res) + P0.w,\n"
+                     "                     dot(P1.xyz, res) + P1.w,\n"
+                     "                     dot(P2.xyz, res) + P2.w);\n";
+            }
+
+            // 6. q==0 special case (hardware quirk Dolphin reproduces).
+            s << "        if (res.z == 0.0)"
+                 " res.xy = clamp(res.xy * 0.5, -1.0, 1.0);\n";
+            emit(s, "        o.uv[%u] = res;\n", i);
+            break;
+        }
+        }
+        s << "    }\n";
+    }
+    if (curved) {
+        // The displacement normal turned as normals are, by the position matrix's cofactors (right under any scale;
+        // its sign does not matter to Phong's planes).
+        const bool palette = (key.flags & 0x01u) != 0u;
+        for (unsigned r = 0; r < 3u; ++r) {
+            emit(s, "    const float3 curve_r%u = %s%u%s.xyz;\n", r,
+                 palette ? "mtx_palette[pn_row + mtx_palette_base + " : "inline_pos_matrix[", r,
+                 palette ? "u]" : "]");
+        }
+        s << "    const float3x3 curve_cofactor = float3x3(cross(curve_r1, curve_r2), cross(curve_r2, curve_r0),\n"
+             "                                             cross(curve_r0, curve_r1));\n"
+             "    float3 curve_n = mul(curve_cofactor, curve_unpack(v.curve.x));\n"
+             "    float3 curve_c = mul(curve_cofactor, curve_unpack(v.curve.y));\n"
+             "    curve_n = dot(curve_n, curve_n) > 0.0 ? normalize(curve_n) : curve_n;\n"
+             "    curve_c = dot(curve_c, curve_c) > 0.0 ? normalize(curve_c) : curve_c;\n";
+        emit(s, "    o.curve_pos = float4(wpos.xyz, %s);\n", motion ? "jitter_ndc.x" : "0.0");
+        emit(s, "    o.curve_nrm = float4(curve_n, %s);\n", motion ? "jitter_ndc.y" : "0.0");
+        s << "    o.curve_data = uint4(curve_pack(curve_c), v.curve.z, v.mtx_idx.z >> 16u, 0u);\n";
+    }
+    s << "\n    return o;\n}\n";
+
+    return s.str();
+}
+
+std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
+    std::ostringstream s;
+
+    const std::string key_desc = ShaderGenerator::describe(key);
+    s << "// Specialized PS: " << key_desc << "\n";
+    s << "// Generated by Nebula ShaderGenerator\n\n";
+
+    const bool ppl = (key.reserved & kPsKeyPerPixelLighting) != 0u;
+    const bool enhanced = (key.reserved & kPsKeyEnhancedLighting) != 0u;
+    // Ray tracing's branches only in the keys of a ray-traced scene: the tint, and an enhanced key's header bits 16, 17
+    // and 31.
+    const bool rt_scene = (key.reserved & kPsKeyRtPaths) != 0u;
+    const bool rt_paths = enhanced && rt_scene;
+    const bool ppl_inputs = ppl || enhanced;
+    const bool motion = (key.reserved & kPsKeyMotion) != 0u;
+    const bool reactive = !motion && (key.reserved & kPsKeyReactive) != 0u;
+    // The effects layer (kPsKeyLayer, a reactive draw): its colour also to targets 2 and 3.
+    const bool layer = reactive && (key.reserved & kPsKeyLayer) != 0u;
+    const char* const layer_fields = layer ? "float4 layer : SV_Target2; float4 trans : SV_Target3; " : "";
+    const std::uint32_t enh_env = enhanced ? key.ind_reserved & kEnhancedEnvCoordMask : 0u;
+    const bool enh_lit = enhanced && (key.ind_reserved & kEnhancedLit) != 0u;
+    const bool scalar_masks = options_.scalar_byte_masks;
+    if (enhanced || options_.tev_zero_from_constant) {
+        // The uber header's last word: zero for the TEV zero inputs (tev_zero_from_constant); enhanced, the split
+        // column and the ray tracer's state.
+        s << insert_before_close(kPsConstantsDef, "    uint4    uber_ps_header;\n", false);
+    } else {
+        s << kPsConstantsDef;
+    }
+    // A clear ice or crystal draw's tint under physical light (RenderCore: ztex_params.w between -1 and 0 the share it
+    // loses; rt_materials.h kRtIceTintKept): a colour of its art (8-bit sRGB over 255) with that share of its chroma
+    // taken, its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that
+    // are textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); RenderCore clears its registers.
+    if (rt_scene) {
+        s << "float3 gx_tint_cleared(float3 c, float share) {\n"
+             "    float3 l = saturate(c);\n"
+             "    l = l <= 0.04045 ? l / 12.92 : pow((l + 0.055) / 1.055, 2.4);\n"
+             "    l = lerp(l, dot(l, float3(0.2126, 0.7152, 0.0722)).xxx, share);\n"
+             "    return l <= 0.0031308 ? l * 12.92 : 1.055 * pow(l, 1.0 / 2.4) - 0.055;\n"
+             "}\n";
+    }
+    if (scalar_masks) {
+        s << "int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }\n"
+             "int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }\n"
+             "int2 gx_bit0(int2 v) { return int2(v.x & 1, v.y & 1); }\n";
+    }
+    // `int3(expr) & 255` per component, in the form the options ask for.
+    const auto u8 = [&](const char* expr) {
+        return scalar_masks ? "gx_u8(int3(" + std::string(expr) + "))"
+                            : "int3(" + std::string(expr) + ") & int3(255,255,255)";
+    };
+    if (motion) {
+        s << insert_before_close(ppl_inputs ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
+    } else {
+        s << (ppl_inputs ? kPsStructsPpl : kPsStructs);
+    }
+    if (ppl) {
+        const bool finite = (key.reserved & kPsKeyPplFiniteLightAttn) != 0u;
+        emit(s, "static const bool ppl_finite_attn = %s;\n", finite ? "true" : "false");
+        s << kPplLighting;
+    } else if (enhanced) {
+        // Its constants and the palette, without the per-pixel GX functions.
+        const std::string_view ppl_decl(kPplLighting);
+        s << ppl_decl.substr(0, ppl_decl.find("void ppl_add_light"));
+    }
+    if (enhanced) {
+        const EnhancedLightingTuning& t = enhanced_lighting_tuning();
+        emit(s,
+             "static const float kEnhRamp = %.9g;\n"
+             "static const float kEnhHemi = %.9g;\n"
+             "static const float kEnhSky = %.9g;\n"
+             "static const float kEnhKnee = %.9g;\n"
+             "static const float kEnhSheen = %.9g;\n"
+             "static const float kEnhSheenRough = %.9g;\n"
+             "static const float kEnhMetal = %.9g;\n"
+             "static const float kEnhMetalRough = %.9g;\n"
+             "static const float kEnhMetalF0 = %.9g;\n"
+             "static const float kEnhEnvBase = %.9g;\n"
+             "static const float kEnhEnvGraze = %.9g;\n",
+             t.ramp, t.hemi, t.sky, t.knee, t.sheen, t.sheen_rough, t.metal, t.metal_rough, t.metal_f0, t.env_base,
+             t.env_graze);
+        s << kEnhancedLighting;
+        // TEV inputs: GX wraps them to 8 bits (an unclamped stage above 255 wraps, as the hardware does); under
+        // ray-traced lighting (header bit 17) they clamp instead, as the de-lit colour channel and the sphere
+        // map's mean can lift a stage the game kept at 255 just past it.
+        if (rt_paths) {
+            s << "int3 tev_in3(int3 x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n"
+                 "int tev_in1(int x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n";
+        } else {
+            s << "int3 tev_in3(int3 x) { return x & 255; }\n"
+                 "int tev_in1(int x) { return x & 255; }\n";
+        }
+    }
+
+    // Z-texturing (flags bit 1): the fragment depth is replaced by (or offset
+    // with) a value sampled from the last TEV stage's texture, so the PS must
+    // export SV_Depth. SMG's clearEfb idiom: fullscreen quad + Z24X8 texture
+    // of 0xFFFFFF + GX_ZT_REPLACE clears colour and depth (far) in one draw.
+    const bool ztex_on = (key.flags & 0x02u) != 0u;
+    const bool early_depth = (key.flags & 0x01u) == 0u;
+    const bool export_depth = ztex_on && !early_depth;
+    const unsigned ztex_op = (key.flags >> 3) & 0x3u;
+    const unsigned ztex_fmt = (key.flags >> 5) & 0x3u;
+    // Dual-source dst-alpha (flags bit 7): SV_Target0 carries the constant alpha written to the EFB.
+    // SV_Target1 carries the TEV alpha that the blender reads back as SRC1_ALPHA (Dolphin PixelShaderGen
+    // ocol0/ocol1). Both targets feed blend slot 0, so no second render target is bound.
+    const bool dual_src = (key.flags & 0x80u) != 0u;
+    // Motion writers are opaque and never dual-source. Render target 1 takes the pixel's motion, current
+    // to previous, in render pixels.
+    if (motion && export_depth) {
+        s << "struct PSOutZ { float4 color : SV_Target0; "
+             "float2 motion : SV_Target1; float depth : SV_Depth; };\n";
+        s << "PSOutZ main(PSIn pin) {\n";
+    } else if (motion) {
+        s << "struct PSOutM { float4 color : SV_Target0; "
+             "float2 motion : SV_Target1; };\n";
+        if (early_depth) s << "[earlydepthstencil]\n";
+        s << "PSOutM main(PSIn pin) {\n";
+    } else if (reactive && export_depth) {
+        s << "struct PSOutZ { float4 color : SV_Target0; "
+             "float reactive : SV_Target1; " << layer_fields << "float depth : SV_Depth; };\n";
+        s << "PSOutZ main(PSIn pin) {\n";
+    } else if (reactive) {
+        // Blended draws without dual-source alpha (that would take target 1).
+        s << "struct PSOutR { float4 color : SV_Target0; "
+             "float reactive : SV_Target1; " << layer_fields << "};\n";
+        if (early_depth) s << "[earlydepthstencil]\n";
+        s << "PSOutR main(PSIn pin) {\n";
+    } else if (export_depth && dual_src) {
+        s << "struct PSOutZ { float4 color : SV_Target0; "
+             "float4 color1 : SV_Target1; float depth : SV_Depth; };\n";
+        s << "PSOutZ main(PSIn pin) {\n";
+    } else if (export_depth) {
+        s << "struct PSOutZ { float4 color : SV_Target0; "
+             "float depth : SV_Depth; };\n";
+        s << "PSOutZ main(PSIn pin) {\n";
+    } else if (dual_src) {
+        s << "struct PSOut { float4 color : SV_Target0; "
+             "float4 color1 : SV_Target1; };\n";
+        if (early_depth) s << "[earlydepthstencil]\n";
+        s << "PSOut main(PSIn pin) {\n";
+    } else {
+        if (early_depth) s << "[earlydepthstencil]\n";
+        s << "float4 main(PSIn pin) : SV_Target0 {\n";
+    }
+
+    // TEV working registers: PREV, REG0, REG1, REG2.
+    // Dolphin keeps these as int4s. A/B/C inputs are masked to 8-bit, D stays
+    // signed/raw, and unclamped outputs stay in the -1024..1023 range.
+    s << "    int4 tev_prev_i = int4(round(tev_regs[0] * 255.0));\n";
+    s << "    int4 tev_c_i[3];\n";
+    s << "    tev_c_i[0] = int4(round(tev_regs[1] * 255.0));\n";
+    s << "    tev_c_i[1] = int4(round(tev_regs[2] * 255.0));\n";
+    s << "    tev_c_i[2] = int4(round(tev_regs[3] * 255.0));\n";
+    // Per-stage working variables, declared once (stages assign them).
+    if (ppl) {
+        s << "    ppl_apply(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_nrm,"
+             " pin.ppl_vcol0, pin.ppl_vcol1);\n";
+    }
+    if (enhanced) {
+        // Left of the split column the game's own (per-vertex) lighting.
+        s << "    const bool enh_on = pin.pos.x >= float(uber_ps_header.w & 0xFFFFu);\n";
+        s << "    EnhShade enh = enh_begin(pin.ppl_pos, pin.ppl_nrm);\n";
+        if (enh_lit) {
+            // Colour channel 0 (ind_reserved bits 10-22): its lights in key order, the first one's
+            // highlight.
+            const std::uint32_t m = key.ind_reserved;
+            const unsigned lights = (m >> kEnhancedLightShift) & 0xFFu;
+            const unsigned dfn = (m >> kEnhancedDiffuseShift) & 3u;
+            const bool spot = (m & kEnhancedSpot) != 0u;
+            emit(s, "    if (enh_on) {\n        const float3 enh_mat = %s.rgb;\n",
+                 (m & kEnhancedMaterialVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_material[0]");
+            emit(s, "        const float3 enh_amb = %s.rgb;\n",
+                 (m & kEnhancedAmbientVertex) != 0u ? "pin.ppl_vcol0" : "ppl_chan_ambient[0]");
+            // Under ray-traced lighting (header bit 17) the channel is the game's own light averaged over
+            // direction: its ambient plus each light at the mean facing of a lit surface (0.55; lights
+            // without a facing term whole), clamped as GX's channel. The art's level and tint stay; the
+            // direction of its camera-following lights leaves, and the tracer's sun gives the direction.
+            if (rt_paths) {
+                s << "        if ((uber_ps_header.w & 0x20000u) != 0u) {\n"
+                     "            float3 enh_avg = enh_amb;\n";
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((lights & (1u << n)) == 0u) continue;
+                    emit(s,
+                         "            {\n"
+                         "                float3 ldir;\n"
+                         "                float attn;\n"
+                         "                float3 lcol;\n"
+                         "                enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                         "                enh_avg += lcol * (attn * %s);\n"
+                         "            }\n",
+                         n, spot ? "true" : "false", dfn != 0u ? "0.55" : "1.0");
+                }
+                // In the game's own light units (header bit 31) the channel is its full light, the ambient and every
+                // light at N.L 1, clamped as GX's channel: the traced light (sky, sun, bounces) multiplies it.
+                s << "            if ((uber_ps_header.w & 0x80000000u) != 0u) {\n"
+                     "                enh_avg = enh_amb;\n";
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((lights & (1u << n)) == 0u) continue;
+                    emit(s,
+                         "                {\n"
+                         "                    float3 ldir;\n"
+                         "                    float attn;\n"
+                         "                    float3 lcol;\n"
+                         "                    enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n"
+                         "                    enh_avg += lcol * attn;\n"
+                         "                }\n",
+                         n, spot ? "true" : "false");
+                }
+                // Lit by the game's player light rig (flags bit 7, RenderCore::rt_player_rig_draw): its level, not its
+                // hue (a rig such as the prologue's cyan night rig would tint the player); the traced light gives the
+                // colour.
+                s << "                if ((ppl_flags & 128u) != 0u) {\n"
+                     "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
+                     "                }\n";
+                // De-baked (VertexConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's
+                // full light, in the full light's hue, since the ambient register or the vertices often hold the
+                // object's own colour.
+                s << "                if ((ppl_flags & 16u) != 0u) {\n"
+                     "                    const float enh_peak = max(enh_avg.r, max(enh_avg.g, enh_avg.b));\n"
+                     "                    enh_avg = (enh_peak > 1e-4 ? enh_avg / enh_peak : float3(1.0, 1.0, 1.0)) *\n"
+                     "                              (float((ppl_flags >> 8u) & 0xFFu) / 255.0);\n"
+                     "                }\n"
+                     "            }\n"
+                     "            pin.col0.rgb = enh_mat * saturate(enh_avg);\n"
+                     "        } else {\n";
+            } else {
+                s << "        {\n";
+            }
+            s << "        const float3 enh_amb_lin = enh_lin(enh_amb);\n"
+                 "        float3 enh_acc = enh_amb_lin * enh_sky(enh, "
+              << (rt_paths ? "(uber_ps_header.w & 0x20000u) == 0u" : "true") << ");\n";
+            bool first = true;
+            for (unsigned n = 0; n < 8u; ++n) {
+                if ((lights & (1u << n)) == 0u) continue;
+                emit(s,
+                     "        {\n"
+                     "            float3 ldir;\n"
+                     "            float attn;\n"
+                     "            float3 lcol;\n"
+                     "            enh_light(%uu, %s, pin.ppl_pos, ldir, attn, lcol);\n",
+                     n, spot ? "true" : "false");
+                s << (dfn == 1u   ? "            const float x = attn * dot(enh.N, ldir);\n"
+                      : dfn == 2u ? "            const float x = attn * max(dot(enh.N, ldir), 0.0);\n"
+                                  : "            const float x = attn;\n");
+                s << "            enh_acc += lerp(enh_lin(enh_amb + lcol * x) - enh_amb_lin,\n"
+                     "                            (enh_lin(enh_amb + lcol) - enh_amb_lin) * x, kEnhRamp);\n";
+                if (first && dfn != 0u) {
+                    emit(s, "            if (enh.valid) enh_highlight(enh, ldir, enh_lin(lcol) * attn, %s);\n",
+                         enh_env != 0u ? "true" : "false");
+                }
+                s << "        }\n";
+                first = false;
+            }
+            s << "        enh_acc *= enh_sky_reflection(enh, enh_amb_lin);\n"
+                 "        pin.col0.rgb = enh_mat * enh_srgb(enh_shoulder(max(enh_acc, 0.0)));\n"
+                 "        }\n"
+                 "    }\n";
+        } else {
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)" : "    if (enh_on)")
+              << " enh_key_highlight(enh, pin.ppl_pos);\n";
+        }
+    }
+    // A clear ice or crystal draw's tint (gx_tint_cleared): its rasterized colours here, its textures' texels per stage.
+    if (rt_scene) {
+        s << "    const bool tinted = ztex_params.w < 0.0 && ztex_params.w > -1.0;\n"
+             "    const uint tinted_maps = tinted ? (asuint(alpha_refs.z) >> 8u) & 0xFFu : 0u;\n"
+             "    if (tinted) {\n"
+             "        pin.col0.rgb = gx_tint_cleared(pin.col0.rgb, -ztex_params.w);\n"
+             "        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);\n"
+             "    }\n";
+    }
+    s << "    int4 tex_color_i = int4(0,0,0,0);\n";
+    s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
+    s << "    int4 ras_color_i = int4(0,0,0,0);\n";
+    s << "    int4 konst_i = int4(0,0,0,0);\n";
+    s << "    int alphabump_i = 0;\n";
+    s << "    int2 tevcoord_i = int2(0,0);\n";
+    s << "    int3 ind_tex_i[4] = {"
+         "int3(0,0,0), int3(0,0,0), int3(0,0,0), int3(0,0,0)};\n\n";
+
+    if (key.num_ind_stages != 0u) {
+        emit(s, "    // %u indirect texture stage(s)\n",
+             key.num_ind_stages);
+        for (unsigned ind = 0; ind < key.num_ind_stages && ind < 4u; ++ind) {
+            const unsigned texmap = indirect_order_texmap(key, ind);
+            const unsigned texcoord_raw = indirect_order_texcoord(key, ind);
+            const unsigned texcoord =
+                texcoord_raw < key.num_texgens ? texcoord_raw : 0u;
+            const unsigned scale_s =
+                indirect_scale_shift(key, ind, false);
+            const unsigned scale_t =
+                indirect_scale_shift(key, ind, true);
+            if (key.num_texgens != 0u) {
+                emit(s,
+                    "    {\n"
+                    "        float3 ind_tq = pin.uv[%u];\n"
+                    "        float2 ind_uv = (ind_tq.z == 0.0)"
+                    " ? ind_tq.xy : ind_tq.xy / ind_tq.z;\n"
+                    "        int2 ind_fix = int2(round(ind_uv * tex_dims[%u].zw * 128.0));\n"
+                    "        ind_fix = int2(ind_fix.x >> %u, ind_fix.y >> %u);\n"
+                    "        float2 ind_tuv = (float2(ind_fix) / 128.0) / tex_dims[%u].xy;\n"
+                    "        float4 ind_sample = tex[%u].Sample(samp[%u], ind_tuv);\n"
+                    "        ind_tex_i[%u] = int3(round(saturate(ind_sample.abg) * 255.0));\n"
+                    "    }\n",
+                    texcoord,
+                    texcoord,
+                    scale_s,
+                    scale_t,
+                    texmap,
+                    texmap,
+                    texmap,
+                    ind);
+            } else {
+                emit(s,
+                    "    {\n"
+                    "        float4 ind_sample = tex[%u].Sample(samp[%u], float2(0.0, 0.0));\n"
+                    "        ind_tex_i[%u] = int3(round(saturate(ind_sample.abg) * 255.0));\n"
+                    "    }\n",
+                    texmap,
+                    texmap,
+                    ind);
+            }
+        }
+        s << '\n';
+    }
+
+    // Unroll TEV stages.
+    const unsigned n_stages = key.num_tev_stages;
+    emit(s, "    // %u TEV stage(s)\n", n_stages);
+
+    for (unsigned st = 0; st < n_stages; ++st) {
+        const TevStagePacked& packed = key.stages[st];
+
+        // Decode the packed fields back to individual enums for code generation.
+        const auto color_d = static_cast<TevColorArg>((packed.color_env      ) & 0xFu);
+        const auto color_c = static_cast<TevColorArg>((packed.color_env >>  4) & 0xFu);
+        const auto color_b = static_cast<TevColorArg>((packed.color_env >>  8) & 0xFu);
+        const auto color_a = static_cast<TevColorArg>((packed.color_env >> 12) & 0xFu);
+        const auto color_bias  = static_cast<TevBias> ((packed.color_env >> 16) & 0x3u);
+        const bool color_sub   = ((packed.color_env >> 18) & 1u) != 0u;
+        const bool color_clamp = ((packed.color_env >> 19) & 1u) != 0u;
+        const auto color_scale = static_cast<TevScale>((packed.color_env >> 20) & 0x3u);
+        const unsigned color_dest = (packed.color_env >> 22) & 0x3u;
+
+        const auto alpha_d = static_cast<TevAlphaArg>((packed.alpha_env >>  4) & 0x7u);
+        const auto alpha_c = static_cast<TevAlphaArg>((packed.alpha_env >>  7) & 0x7u);
+        const auto alpha_b = static_cast<TevAlphaArg>((packed.alpha_env >> 10) & 0x7u);
+        const auto alpha_a = static_cast<TevAlphaArg>((packed.alpha_env >> 13) & 0x7u);
+        const auto alpha_bias  = static_cast<TevBias> ((packed.alpha_env >> 16) & 0x3u);
+        const bool alpha_sub   = ((packed.alpha_env >> 18) & 1u) != 0u;
+        const bool alpha_clamp = ((packed.alpha_env >> 19) & 1u) != 0u;
+        const auto alpha_scale = static_cast<TevScale>((packed.alpha_env >> 20) & 0x3u);
+        const unsigned alpha_dest = (packed.alpha_env >> 22) & 0x3u;
+
+        const unsigned texmap    = (packed.order     ) & 0x7u;
+        const unsigned texcoord_raw = (packed.order >> 3) & 0x7u;
+        const unsigned texcoord =
+            (key.num_texgens != 0u && texcoord_raw < key.num_texgens)
+                ? texcoord_raw
+                : 0u;
+        const bool     tex_en    = ((packed.order >> 6) & 1u) != 0u;
+        const unsigned ras_chan  = (packed.order >> 7) & 0x7u;
+
+        const std::uint8_t kcsel = static_cast<std::uint8_t>((packed.ksel     ) & 0x1Fu);
+        const std::uint8_t kasel = static_cast<std::uint8_t>((packed.ksel >> 5) & 0x1Fu);
+        // Resolved swap-table swizzles baked by build_pixel_shader_key
+        // (ras bits 10-17, tex bits 18-25; 2 bits per channel r/g/b/a).
+        const std::string ras_swz = swap_suffix((packed.ksel >> 10) & 0xFFu);
+        const std::string tex_swz = swap_suffix((packed.ksel >> 18) & 0xFFu);
+
+        emit(s, "\n    // ---- TEV stage %u ----\n", st);
+        const std::uint32_t ind_raw = indirect_cmd(key, st);
+        const bool has_indirect_cmd =
+            key.num_ind_stages != 0u && indirect_cmd_active(ind_raw);
+        const unsigned ind_bt = ind_raw & 0x3u;
+        const unsigned ind_fmt = (ind_raw >> 2u) & 0x3u;
+        const unsigned ind_bias = (ind_raw >> 4u) & 0x7u;
+        const unsigned ind_bs = (ind_raw >> 7u) & 0x3u;
+        const unsigned ind_mtx = (ind_raw >> 9u) & 0x3u;
+        const unsigned ind_mtx_id = (ind_raw >> 11u) & 0x3u;
+        const unsigned ind_wrap_s = (ind_raw >> 13u) & 0x7u;
+        const unsigned ind_wrap_t = (ind_raw >> 16u) & 0x7u;
+        const bool ind_add_prev = ((ind_raw >> 20u) & 1u) != 0u;
+        const bool has_indirect_sample =
+            has_indirect_cmd && ind_bt < key.num_ind_stages && ind_bt < 4u;
+        bool later_indirect_addprev = false;
+        for (unsigned future = st + 1u; future < n_stages; ++future) {
+            const std::uint32_t future_ind_raw = indirect_cmd(key, future);
+            if (key.num_ind_stages != 0u &&
+                indirect_cmd_active(future_ind_raw) &&
+                ((future_ind_raw >> 20u) & 1u) != 0u) {
+                later_indirect_addprev = true;
+                break;
+            }
+        }
+        const bool indirect_coord_needed = has_indirect_cmd || later_indirect_addprev;
+        if (has_indirect_sample && ind_bs != 0u) {
+            static constexpr unsigned kAlphaShift[4] = {0u, 5u, 4u, 3u};
+            static constexpr const char* kAlphaComponent[4] = {
+                "x", "x", "y", "z"};
+            emit(s,
+                "    alphabump_i = (ind_tex_i[%u].%s << %u) & 248;\n",
+                ind_bt,
+                kAlphaComponent[ind_bs],
+                kAlphaShift[ind_fmt]);
+        }
+
+        // Apply the TEV indirect coordinate op before any texture lookup. Disabled texture stages still update
+        // this state when a later add-prev stage can observe it.
+        if (indirect_coord_needed) {
+            static constexpr unsigned kFmtShift[4] = {0u, 3u, 4u, 5u};
+            const int bias_add = ind_fmt == 0u ? -128 : 1;
+            const unsigned wrap_s_mask = indirect_wrap_mask(ind_wrap_s);
+            const unsigned wrap_t_mask = indirect_wrap_mask(ind_wrap_t);
+            emit(s,
+                "    {\n"
+                "        int2 stage_tevcoord = int2(0, 0);\n");
+            if (key.num_texgens != 0u) {
+                emit(s,
+                    "        float3 tq = pin.uv[%u];\n"
+                    "        float2 tuv = (tq.z == 0.0) ? tq.xy : tq.xy / tq.z;\n"
+                    "        stage_tevcoord = int2(round(tuv * tex_dims[%u].zw * 128.0));\n",
+                    texcoord,
+                    texcoord);
+            }
+            s << "        int2 wrappedcoord = stage_tevcoord;\n";
+            if (has_indirect_sample) {
+                emit(s, "        int3 iindtevcrd = ind_tex_i[%u] >> %u;\n",
+                     ind_bt,
+                     kFmtShift[ind_fmt]);
+                if ((ind_bias & 0x1u) != 0u) {
+                    emit(s, "        iindtevcrd.x += %d;\n", bias_add);
+                }
+                if ((ind_bias & 0x2u) != 0u) {
+                    emit(s, "        iindtevcrd.y += %d;\n", bias_add);
+                }
+                if ((ind_bias & 0x4u) != 0u) {
+                    emit(s, "        iindtevcrd.z += %d;\n", bias_add);
+                }
+                if (ind_mtx != 0u && ind_mtx <= 3u) {
+                    const unsigned row = (ind_mtx - 1u) * 2u;
+                    if (ind_mtx_id == 0u) {
+                        emit(s,
+                            "        int2 indtevtrans = int2(\n"
+                            "            (ind_mtx[%u].x * iindtevcrd.x + ind_mtx[%u].y * iindtevcrd.y + ind_mtx[%u].z * iindtevcrd.z) >> 3,\n"
+                            "            (ind_mtx[%u].x * iindtevcrd.x + ind_mtx[%u].y * iindtevcrd.y + ind_mtx[%u].z * iindtevcrd.z) >> 3);\n",
+                            row, row, row,
+                            row + 1u, row + 1u, row + 1u);
+                    } else if (ind_mtx_id == 1u) {
+                        s << "        int2 indtevtrans = "
+                             "(stage_tevcoord * iindtevcrd.xx) >> 8;\n";
+                    } else if (ind_mtx_id == 2u) {
+                        s << "        int2 indtevtrans = "
+                             "(stage_tevcoord * iindtevcrd.yy) >> 8;\n";
+                    } else {
+                        s << "        int2 indtevtrans = int2(0, 0);\n";
+                    }
+                    emit(s,
+                        "        if (ind_mtx[%u].w >= 0) {\n"
+                        "            indtevtrans = indtevtrans >> ind_mtx[%u].w;\n"
+                        "        } else {\n"
+                        "            indtevtrans = indtevtrans << (-ind_mtx[%u].w);\n"
+                        "        }\n",
+                        row, row, row);
+                } else {
+                    s << "        int2 indtevtrans = int2(0, 0);\n";
+                }
+            } else {
+                s << "        int2 indtevtrans = int2(0, 0);\n";
+            }
+            if (ind_wrap_s == 0u) {
+                s << "        wrappedcoord.x = stage_tevcoord.x;\n";
+            } else if (ind_wrap_s >= 6u) {
+                s << "        wrappedcoord.x = 0;\n";
+            } else {
+                emit(s, "        wrappedcoord.x = stage_tevcoord.x & %u;\n",
+                     wrap_s_mask);
+            }
+            if (ind_wrap_t == 0u) {
+                s << "        wrappedcoord.y = stage_tevcoord.y;\n";
+            } else if (ind_wrap_t >= 6u) {
+                s << "        wrappedcoord.y = 0;\n";
+            } else {
+                emit(s, "        wrappedcoord.y = stage_tevcoord.y & %u;\n",
+                     wrap_t_mask);
+            }
+            if (ind_add_prev) {
+                s << "        tevcoord_i += wrappedcoord + indtevtrans;\n";
+            } else {
+                s << "        tevcoord_i = wrappedcoord + indtevtrans;\n";
+            }
+            s << "        tevcoord_i = (tevcoord_i << 8) >> 8;\n"
+                 "    }\n";
+        }
+
+        if (tex_en && key.num_texgens != 0u) {
+            if (has_indirect_cmd) {
+                emit(s,
+                    "    {\n"
+                    "        float2 ind_tuv = (float2(tevcoord_i) / 128.0) / tex_dims[%u].xy;\n"
+                    "        float4 tex_sample = tex[%u].Sample(samp[%u], ind_tuv);\n"
+                    "        last_raw_tex_i = int4(round(saturate(tex_sample) * 255.0));\n"
+                    "        tex_color_i = last_raw_tex_i%s;\n"
+                    "    }\n",
+                    texmap,
+                    texmap,
+                    texmap,
+                    tex_swz.c_str());
+            } else {
+                emit(s,
+                    "    {\n"
+                    "        float3 tq = pin.uv[%u];\n"
+                    "        float2 tuv = (tq.z == 0.0) ? tq.xy : tq.xy / tq.z;\n"
+                    "        int2 tex_fix = int2(round(tuv * tex_dims[%u].zw * 128.0));\n"
+                    "        float2 tex_tuv = (float2(tex_fix) / 128.0) / tex_dims[%u].xy;\n"
+                    "        float4 tex_sample = tex[%u].Sample(samp[%u], tex_tuv);\n"
+                    "        last_raw_tex_i = int4(round(saturate(tex_sample) * 255.0));\n"
+                    "        tex_color_i = last_raw_tex_i%s;\n"
+                    "    }\n",
+                    texcoord,
+                    texcoord,
+                    texmap,
+                    texmap,
+                    texmap,
+                    tex_swz.c_str());
+            }
+            if (rt_scene) {
+                emit(s,
+                     "    if (((tinted_maps >> %uu) & 1u) != 0u) {\n"
+                     "        tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, "
+                     "-ztex_params.w) * 255.0));\n"
+                     "    }\n",
+                     texmap);
+            }
+            if (!has_indirect_cmd && ((enh_env >> texcoord) & 1u) != 0u) {
+                // Under ray tracing the game's painted reflection (metals, crystals, sheen) stays as drawn
+                // and the traced reflection screens over it; replacing the map by its mean would flatten
+                // chrome. Enhanced lighting alone scales it.
+                s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n" : "    if (enh_on) {\n")
+                  << "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
+                     "    }\n";
+            }
+        } else if (key.num_texgens != 0u) {
+            // GX supplies white when this TEV stage disables its texture
+            // lookup but the pipeline has texture coordinates. This lets a
+            // later stage use TEXC/TEXA as a neutral multiplier.
+            s << "    tex_color_i = int4(255,255,255,255);\n";
+        } else {
+            // With no texgens at all, GX instead supplies black.
+            s << "    tex_color_i = int4(0,0,0,0);\n";
+        }
+
+        // Rasterized color source (with the stage's ras swap swizzle).
+        // libogc maps GX_COLORZERO/ALPHA_BUMP/ALPHA_BUMPN to BP channels
+        // 7/5/6 respectively; channels other than color0/1 and bump read zero.
+        if (ras_chan == 0u) {
+            emit(s, "    ras_color_i = int4(round(saturate(pin.col0%s) * 255.0));\n",
+                 ras_swz.c_str());
+        } else if (ras_chan == 1u) {
+            emit(s, "    ras_color_i = int4(round(saturate(pin.col1%s) * 255.0));\n",
+                 ras_swz.c_str());
+        } else if (ras_chan == 5u) {
+            emit(s,
+                "    ras_color_i = int4(alphabump_i, alphabump_i, alphabump_i, alphabump_i)%s;\n",
+                ras_swz.c_str());
+        } else if (ras_chan == 6u) {
+            emit(s,
+                "    { int abn = alphabump_i | (alphabump_i >> 5); "
+                "ras_color_i = int4(abn, abn, abn, abn)%s; }\n",
+                ras_swz.c_str());
+        } else {
+            s << "    ras_color_i = int4(0,0,0,0);\n";
+        }
+
+        // GX selector numbering: 0-7 fixed fractions, 8-11 invalid,
+        // color 12-15 K0-K3.rgb, and 16-31 component replication.
+        // Alpha treats 8-15 as invalid and uses the same component groups.
+        auto emit_konst_rgb = [&](std::uint8_t kc) {
+            static constexpr unsigned fixed[8] = {
+                255u, 223u, 191u, 159u, 128u, 96u, 64u, 32u};
+            if (kc <= 7u) {
+                emit(s, "int3(%u,%u,%u)", fixed[kc], fixed[kc], fixed[kc]);
+                return;
+            }
+            if (kc <= 11u) {
+                s << "int3(0,0,0)";
+                return;
+            }
+            if (kc <= 15u) {
+                emit(s, "int3(round(saturate(konst[%u].rgb) * 255.0))",
+                     kc - 12u);
+                return;
+            }
+            static constexpr const char* component[4] = {
+                "rrr", "ggg", "bbb", "aaa"};
+            const unsigned group = (kc - 16u) / 4u;
+            const unsigned index = (kc - 16u) % 4u;
+            emit(s, "int3(round(saturate(konst[%u].%s) * 255.0))",
+                 index, component[group]);
+        };
+        auto emit_konst_a = [&](std::uint8_t ka) {
+            static constexpr unsigned fixed[8] = {
+                255u, 223u, 191u, 159u, 128u, 96u, 64u, 32u};
+            if (ka <= 7u) {
+                emit(s, "%u", fixed[ka]);
+                return;
+            }
+            if (ka <= 15u) {
+                s << "0";
+                return;
+            }
+            static constexpr const char* component[4] = {
+                "r", "g", "b", "a"};
+            const unsigned group = (ka - 16u) / 4u;
+            const unsigned index = (ka - 16u) % 4u;
+            emit(s, "int(round(saturate(konst[%u].%s) * 255.0))",
+                 index, component[group]);
+        };
+
+        s << "    konst_i = int4("; emit_konst_rgb(kcsel);
+        s << ", "; emit_konst_a(kasel); s << ");\n";
+
+        // TEV color combiner.
+        const char* ca = color_arg_rgb(color_a);
+        const char* cb = color_arg_rgb(color_b);
+        if (options_.tev_zero_from_constant) {
+            static constexpr const char* kConstantZero = "int3(uber_ps_header.www)";
+            if (color_a == TevColorArg::Zero) {
+                ca = kConstantZero;
+            }
+            if (color_b == TevColorArg::Zero) {
+                cb = kConstantZero;
+            }
+        }
+        const char* cc = color_arg_rgb(color_c);
+        const char* cd = color_arg_rgb(color_d);
+        const char* dest_c = tev_dest_name(color_dest);
+        // Color and alpha combiners observe the same stage-entry registers.
+        // The alpha R8/GR16/BGR24 comparisons reuse COLOR A/B selectors.
+        if (alpha_bias == TevBias::Compare && alpha_scale != TevScale::Half) {
+            if (enhanced) {
+                emit(s, "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n", st, ca);
+            } else {
+                emit(s, "    int3 alpha_compare_a_%u = %s;\n", st, u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n", st, cb);
+            } else {
+                emit(s, "    int3 alpha_compare_b_%u = %s;\n", st, u8(cb).c_str());
+            }
+        }
+
+        if (color_bias == TevBias::Compare) {
+            // Compare mode: dest = clamp(d + ((a OP b) ? c : 0), 0, 255)
+            // with operand width from the SCALE field and op from the SUB
+            // bit (Dolphin PixelShaderGen WriteTevRegular comparison path).
+            // Computed on int(round(x*255)) so the comparisons are exact;
+            // the result is already on the 8-bit lattice.
+            const auto kind =
+                static_cast<TevCompareKind>(static_cast<unsigned>(color_scale));
+            const bool is_eq = color_sub;  // SUB bit: 0 = GT, 1 = EQ
+            s << "    {\n";
+            if (enhanced) {
+                emit(s, "        int3 ca_i = tev_in3(int3(%s));\n", ca);
+            } else {
+                emit(s, "        int3 ca_i = %s;\n", u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 cb_i = tev_in3(int3(%s));\n", cb);
+            } else {
+                emit(s, "        int3 cb_i = %s;\n", u8(cb).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 cc_i = tev_in3(int3(%s));\n", cc);
+            } else {
+                emit(s, "        int3 cc_i = %s;\n", u8(cc).c_str());
+            }
+            emit(s, "        int3 cd_i = int3(%s);\n", cd);
+            switch (kind) {
+            case TevCompareKind::R8:
+                emit(s,
+                    "        int3 cmp_i = (ca_i.x %s cb_i.x)"
+                    " ? cc_i : int3(0,0,0);\n",
+                    is_eq ? "==" : ">");
+                break;
+            case TevCompareKind::GR16:
+                s << "        int av = ca_i.x + (ca_i.y << 8);\n";
+                s << "        int bv = cb_i.x + (cb_i.y << 8);\n";
+                emit(s,
+                    "        int3 cmp_i = (av %s bv) ? cc_i : int3(0,0,0);\n",
+                    is_eq ? "==" : ">");
+                break;
+            case TevCompareKind::BGR24:
+                s << "        int av = ca_i.x + (ca_i.y << 8)"
+                     " + (ca_i.z << 16);\n";
+                s << "        int bv = cb_i.x + (cb_i.y << 8)"
+                     " + (cb_i.z << 16);\n";
+                emit(s,
+                    "        int3 cmp_i = (av %s bv) ? cc_i : int3(0,0,0);\n",
+                    is_eq ? "==" : ">");
+                break;
+            case TevCompareKind::RGB8:
+            default:
+                if (is_eq) {
+                    s << "        int3 cmp_i = (int3(1,1,1) -"
+                         " sign(abs(ca_i - cb_i))) * cc_i;\n";
+                } else {
+                    s << "        int3 cmp_i = max(sign(ca_i - cb_i),"
+                         " int3(0,0,0)) * cc_i;\n";
+                }
+                break;
+            }
+            emit(s,
+                "        int3 outv = cd_i + cmp_i;\n");
+            if (color_clamp) {
+                s << "        outv = clamp(outv, int3(0,0,0), int3(255,255,255));\n";
+            } else {
+                s << "        outv = clamp(outv, int3(-1024,-1024,-1024), int3(1023,1023,1023));\n";
+            }
+            emit(s, "        %s.rgb = outv;\n", dest_c);
+            s << "    }\n";
+        } else {
+            // GX regular TEV is integer math on the 8-bit lattice:
+            // d (+/-) lerp(a,b,c), where c=255 promotes to 256 before the
+            // final >>8.  Keeping the stage in int space preserves dark eye
+            // and UI-detail materials that float lerp over-brightens.
+            s << "    {\n";
+            if (enhanced) {
+                emit(s, "        int3 ai = tev_in3(int3(%s));\n", ca);
+            } else {
+                emit(s, "        int3 ai = %s;\n", u8(ca).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 bi = tev_in3(int3(%s));\n", cb);
+            } else {
+                emit(s, "        int3 bi = %s;\n", u8(cb).c_str());
+            }
+            if (enhanced) {
+                emit(s, "        int3 ci = tev_in3(int3(%s));\n", cc);
+            } else {
+                emit(s, "        int3 ci = %s;\n", u8(cc).c_str());
+            }
+            emit(s, "        int3 di = int3(%s);\n", cd);
+            emit(s, "        int3 lhs = (di + int3(%s,%s,%s))%s;\n",
+                 tev_bias_i(color_bias), tev_bias_i(color_bias),
+                 tev_bias_i(color_bias), tev_scale_left(color_scale));
+            s << "        int3 mixv = (ai << 8) + (bi - ai) * (ci + (ci >> 7));\n";
+            emit(s, "        mixv = mixv%s;\n", tev_scale_left(color_scale));
+            if (color_scale != TevScale::Half) {
+                emit(s, "        mixv = (mixv + int3(%s,%s,%s)) >> 8;\n",
+                     tev_lerp_round_bias(color_sub),
+                     tev_lerp_round_bias(color_sub),
+                     tev_lerp_round_bias(color_sub));
+            } else {
+                s << "        mixv = mixv >> 8;\n";
+            }
+            emit(s, "        int3 outv = (lhs %c mixv)%s;\n",
+                 color_sub ? '-' : '+', tev_scale_right(color_scale));
+            if (color_clamp) {
+                s << "        outv = clamp(outv, int3(0,0,0), int3(255,255,255));\n";
+            } else {
+                s << "        outv = clamp(outv, int3(-1024,-1024,-1024), int3(1023,1023,1023));\n";
+            }
+            emit(s, "        %s.rgb = outv;\n", dest_c);
+            s << "    }\n";
+        }
+        s << "\n";
+
+        // TEV alpha combiner.
+        const char* aa = alpha_arg(alpha_a);
+        const char* ab = alpha_arg(alpha_b);
+        const char* ac = alpha_arg(alpha_c);
+        const char* ad = alpha_arg(alpha_d);
+        const char* dest_a = tev_dest_name(alpha_dest);
+
+        if (alpha_bias == TevBias::Compare) {
+            // Alpha compare: kinds 0-2 (R8/GR16/BGR24) compare the COLOR
+            // selects of the stage (Dolphin's tevin registers are int4s
+            // whose rgb comes from the color select); kind 3 (A8) compares
+            // the alpha selects.  Result: d + (cond ? c : 0), exact ints.
+            const auto kind =
+                static_cast<TevCompareKind>(static_cast<unsigned>(alpha_scale));
+            const bool is_eq = alpha_sub;
+            s << "    {\n";
+            if (kind == TevCompareKind::RGB8) {  // value 3 = A8 for alpha
+                emit(s, enhanced ? "        int aa_i = tev_in1(%s);\n" : "        int aa_i = (%s) & 255;\n", aa);
+                emit(s, enhanced ? "        int ab_i = tev_in1(%s);\n" : "        int ab_i = (%s) & 255;\n", ab);
+                emit(s, "        bool acmp = (aa_i %s ab_i);\n",
+                     is_eq ? "==" : ">");
+            } else {
+                emit(s, "        int3 ca_i = alpha_compare_a_%u;\n", st);
+                emit(s, "        int3 cb_i = alpha_compare_b_%u;\n", st);
+                if (kind == TevCompareKind::R8) {
+                    emit(s, "        bool acmp = (ca_i.x %s cb_i.x);\n",
+                         is_eq ? "==" : ">");
+                } else if (kind == TevCompareKind::GR16) {
+                    s << "        int av = ca_i.x + (ca_i.y << 8);\n";
+                    s << "        int bv = cb_i.x + (cb_i.y << 8);\n";
+                    emit(s, "        bool acmp = (av %s bv);\n",
+                         is_eq ? "==" : ">");
+                } else {  // BGR24
+                    s << "        int av = ca_i.x + (ca_i.y << 8)"
+                         " + (ca_i.z << 16);\n";
+                    s << "        int bv = cb_i.x + (cb_i.y << 8)"
+                         " + (cb_i.z << 16);\n";
+                    emit(s, "        bool acmp = (av %s bv);\n",
+                         is_eq ? "==" : ">");
+                }
+            }
+            emit(s, enhanced ? "        int ac_i = tev_in1(%s);\n" : "        int ac_i = (%s) & 255;\n", ac);
+            emit(s, "        int ad_i = %s;\n", ad);
+            s << "        int outv = ad_i + (acmp ? ac_i : 0);\n";
+            if (alpha_clamp) {
+                s << "        outv = clamp(outv, 0, 255);\n";
+            } else {
+                s << "        outv = clamp(outv, -1024, 1023);\n";
+            }
+            emit(s, "        %s.a = outv;\n", dest_a);
+            s << "    }\n";
+        } else {
+            s << "    {\n";
+            emit(s, enhanced ? "        int ai = tev_in1(%s);\n" : "        int ai = (%s) & 255;\n", aa);
+            emit(s, enhanced ? "        int bi = tev_in1(%s);\n" : "        int bi = (%s) & 255;\n", ab);
+            emit(s, enhanced ? "        int ci = tev_in1(%s);\n" : "        int ci = (%s) & 255;\n", ac);
+            emit(s, "        int di = %s;\n", ad);
+            emit(s, "        int lhs = (di + %s)%s;\n",
+                 tev_bias_i(alpha_bias), tev_scale_left(alpha_scale));
+            s << "        int mixv = (ai << 8) + (bi - ai) * (ci + (ci >> 7));\n";
+            emit(s, "        mixv = mixv%s;\n", tev_scale_left(alpha_scale));
+            if (alpha_scale != TevScale::Half) {
+                emit(s, "        mixv = (mixv + %s) >> 8;\n",
+                     tev_lerp_round_bias(alpha_sub));
+            } else {
+                s << "        mixv = mixv >> 8;\n";
+            }
+            emit(s, "        int outv = (lhs %c mixv)%s;\n",
+                 alpha_sub ? '-' : '+', tev_scale_right(alpha_scale));
+            if (alpha_clamp) {
+                s << "        outv = clamp(outv, 0, 255);\n";
+            } else {
+                s << "        outv = clamp(outv, -1024, 1023);\n";
+            }
+            emit(s, "        %s.a = outv;\n", dest_a);
+            s << "    }\n";
+        }
+    }
+
+    // The last TEV stage is what reaches the PE, regardless of which TEV
+    // register that stage wrote.  Dolphin mirrors the hardware by copying the
+    // last stage's non-PREV destination into PREV before alpha/fog/output.
+    // Materials that end on REG0-2 (notably multi-pass highlight/indirect
+    // effects) otherwise render as stale PREV.
+    if (n_stages != 0u) {
+        const TevStagePacked& last = key.stages[n_stages - 1u];
+        const unsigned last_color_dest = (last.color_env >> 22) & 0x3u;
+        const unsigned last_alpha_dest = (last.alpha_env >> 22) & 0x3u;
+        if (last_color_dest != 0u) {
+            emit(s, "    tev_prev_i.rgb = %s.rgb;\n",
+                 tev_dest_name(last_color_dest));
+        }
+        if (last_alpha_dest != 0u) {
+            emit(s, "    tev_prev_i.a = %s.a;\n",
+                 tev_dest_name(last_alpha_dest));
+        }
+    }
+
+    // The PE consumes the final TEV result on the 8-bit lattice. Unclamped TEV stages can hold wider signed
+    // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
+    // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs, so a
+    // channel lifted just past 255 does not wrap.
+    if (rt_paths) {
+        s << "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
+             " : (tev_prev_i & int4(255,255,255,255));\n";
+    } else if (enhanced) {
+        s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
+    } else {
+        s << (scalar_masks ? "\n    int4 frag_i = gx_u8(tev_prev_i);\n"
+                           : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
+    }
+    s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
+    if (enhanced) {
+        if ((key.ind_reserved & kEnhancedReflective) != 0u) {
+            // The ray tracer's reflections own this class's highlights while they run.
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x30000u) == 0u)\n" : "    if (enh_on)\n")
+              << "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+        } else {
+            s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u)\n" : "    if (enh_on)\n")
+              << "        frag.rgb = enh_finish(frag.rgb, enh, (uber_ps_header.w & 0x40000u) != 0u);\n\n";
+        }
+        if (enh_lit) {
+            // Diagnostics: colour channel 0 itself, the game's left of the split.
+            s << "    if ((uber_ps_header.w & 0x80000u) != 0u) frag.rgb = saturate(pin.col0.rgb);\n\n";
+        }
+    }
+
+    // Alpha test.
+    const auto comp0 = static_cast<CompareFunc>(key.alpha_comp0);
+    const auto comp1 = static_cast<CompareFunc>(key.alpha_comp1);
+    const auto logic = static_cast<AlphaTestLogic>(key.alpha_logic);
+
+    // Dolphin evaluates the alpha test on the final 8-bit TEV integer (`prev.a`), not on normalized floats.
+    // Keeping refs and samples on that lattice avoids threshold errors on cutout-heavy materials.
+    const AlphaTestStaticResult alpha_static =
+        alpha_test_static_result(comp0, comp1, logic);
+
+    if (alpha_static == AlphaTestStaticResult::Fail) {
+        s << "    discard;\n";
+    } else if (alpha_static != AlphaTestStaticResult::Pass) {
+        s << "    // Alpha test\n";
+        s << "    uint a_sample = uint(frag_i.a);\n";
+        s << "    uint a_ref0 = uint(round(saturate(alpha_refs.x) * 255.0));\n";
+        s << "    uint a_ref1 = uint(round(saturate(alpha_refs.y) * 255.0));\n";
+        s << "    bool test0 = ";
+        emit_alpha_test(s, comp0, "a_sample", "a_ref0");
+        s << ";\n";
+        s << "    bool test1 = ";
+        emit_alpha_test(s, comp1, "a_sample", "a_ref1");
+        s << ";\n";
+        s << "    bool alpha_pass = ";
+        switch (logic) {
+        case AlphaTestLogic::And:  s << "test0 && test1"; break;
+        case AlphaTestLogic::Or:   s << "test0 || test1"; break;
+        case AlphaTestLogic::Xor:  s << "test0 != test1"; break;
+        case AlphaTestLogic::Xnor: s << "test0 == test1"; break;
+        }
+        s << ";\n";
+        s << "    if (!alpha_pass) discard;\n\n";
+    }
+
+    // Hardware tests in Dolphin show alpha value 1 passes alpha test but
+    // behaves like 0 for blending/writes. Low-alpha UI masks rely on this.
+    s << "    uint tev_alpha_i = uint(frag_i.a);\n";
+    s << "    if (tev_alpha_i == 1u) frag.a = 0.0;\n\n";
+
+    // RGBA6 colour precision (bit 4 set: 8-bit colour, no dither).
+    const bool rgba6 = (key.output_flags & 0x7u) == 1u && (key.output_flags & 0x10u) == 0u;
+    const bool dither = (key.output_flags & 0x08u) != 0u;
+    if (rgba6 && dither) {
+        const unsigned efb_scale =
+            std::min<unsigned>(key.efb_scale_minus_one,
+                               kMaxEfbScale - 1u) + 1u;
+        s << "    // Flipper RGBA6 2x2 Bayer dither, applied before fog.\n";
+        s << "    int3 dither_rgb = int3(round(saturate(frag.rgb) * 255.0));\n";
+        if (key.efb_scale_minus_one == 0xffu) {
+            // Pixel centres N+0.5 stay inside their logical pixel after the
+            // float multiply at every supported scale and extent. The integer
+            // scale branches below keep their output, so cached DXBC stays valid.
+            s << (scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy * ztex_params.y));\n"
+                               : "    int2 dither_xy = int2(pin.pos.xy * ztex_params.y) & 1;\n");
+        } else if (efb_scale == 1u) {
+            // Keep the native-resolution shader byte-for-byte equivalent.
+            s << (scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy));\n"
+                               : "    int2 dither_xy = int2(pin.pos.xy) & 1;\n");
+        } else {
+            emit(s,
+                scalar_masks ? "    int2 dither_xy = gx_bit0(int2(pin.pos.xy) / %u);\n"
+                             : "    int2 dither_xy = (int2(pin.pos.xy) / %u) & 1;\n",
+                efb_scale);
+        }
+        s << "    dither_rgb = (dither_rgb - (dither_rgb >> 6))"
+             " + (dither_xy.x ^ dither_xy.y) * 2 + dither_xy.y;\n";
+        s << "    frag.rgb = float3(dither_rgb) / 255.0;\n\n";
+    }
+
+    // Z-texture arithmetic is unsigned 24-bit hardware arithmetic. Disabled
+    // later stages and TEV swaps cannot change the last raw texture sample.
+    if (ztex_on || key.fog_type != static_cast<std::uint8_t>(FogType::Off)) {
+        s << "    uint zcoord_i = uint(clamp((1.0 - pin.pos.z) * 16777216.0, 0.0, 16777215.0));\n";
+    }
+    if (ztex_on) {
+        switch (ztex_fmt) {
+        case 0:
+            s << "    uint ztex_i = uint(last_raw_tex_i.a & 255);\n";
+            break;
+        case 1:
+            s << "    uint ztex_i = uint((last_raw_tex_i.a & 255) * 256 + (last_raw_tex_i.r & 255));\n";
+            break;
+        default:
+            s << "    uint ztex_i = uint((last_raw_tex_i.r & 255) * 65536 + (last_raw_tex_i.g & 255) * 256 + (last_raw_tex_i.b & 255));\n";
+            break;
+        }
+        s << "    uint zbias_i = uint(round(ztex_params.x * 16777216.0));\n";
+        if (ztex_op == 1u) {
+            s << "    zcoord_i = (zcoord_i + ztex_i + zbias_i) & 0xFFFFFFu;\n";
+        } else {
+            s << "    zcoord_i = (ztex_i + zbias_i) & 0xFFFFFFu;\n";
+        }
+    }
+
+    // Fog (type is baked, params are uniforms).
+    //   fog_params[0] = (A_float, b_magnitude, b_shift, C_float)
+    //   fog_params[1] = (color.r, color.g, color.b, 1.0 = orthographic)
+    // The depth source is the rasterized z, not the TEV output. The depth buffer is reversed
+    // (depth = 1 - z24/2^24, see fill_projection), so the GX 24-bit z is (1 - SV_Position.z) * 2^24. This
+    // matches the reversed-depth path in Dolphin PixelShaderGen (zCoord/fog block), using the equations from
+    // PixelShaderManager::SetFogParamChanged.
+    const auto fog_type = static_cast<FogType>(key.fog_type);
+    if (fog_type != FogType::Off) {
+        s << "    // Fog\n";
+        s << "    uint fog_zc = zcoord_i;\n";
+        s << "    float fog_ze;\n";
+        s << "    if (fog_params[1].w == 0.0) {  // perspective\n";
+        s << "        fog_ze = (fog_params[0].x * 16777216.0)\n";
+        s << "               / float(max(1u, uint(fog_params[0].y)"
+             " - (fog_zc >> uint(fog_params[0].z))));\n";
+        s << "    } else {                       // orthographic\n";
+        s << "        fog_ze = fog_params[0].x * float(fog_zc)"
+             " / 16777216.0;\n";
+        s << "    }\n";
+        s << "    float fog_f = saturate(fog_ze - fog_params[0].w);\n";
+        switch (fog_type) {
+        case FogType::Exp:
+            s << "    fog_f = 1.0 - exp2(-8.0 * fog_f);\n";
+            break;
+        case FogType::Exp2:
+            s << "    fog_f = 1.0 - exp2(-8.0 * fog_f * fog_f);\n";
+            break;
+        case FogType::RevExp:
+            s << "    fog_f = exp2(-8.0 * (1.0 - fog_f));\n";
+            break;
+        case FogType::RevExp2:
+            s << "    fog_f = 1.0 - fog_f;\n";
+            s << "    fog_f = exp2(-8.0 * fog_f * fog_f);\n";
+            break;
+        case FogType::Linear:
+        default:
+            break;  // linear: fog_f as-is
+        }
+        // Integer blend like hardware: (c*(256-ifog) + fogc*ifog) >> 8.
+        s << "    int fog_i = int(round(fog_f * 256.0));\n";
+        s << "    int3 fog_rgb_i = int3(round(frag.rgb * 255.0));\n";
+        s << "    int3 fog_color_i = int3(round(saturate(fog_params[1].rgb) * 255.0));\n";
+        s << "    frag.rgb = float3((fog_rgb_i * (256 - fog_i)"
+             " + fog_color_i * fog_i) >> 8) / 255.0;\n\n";
+    }
+
+    // Convert the 8-bit TEV result to the EFB precision. Alpha is always
+    // 6-bit; RGBA6 also quantizes RGB to 6-bit unless it keeps 8-bit colour.
+    // Dual-source blending consumes the original 8-bit TEV alpha through
+    // SV_Target1.
+    if (dual_src) {
+        s << "    float tev_alpha = saturate(frag.a);\n";
+    }
+    s << "    uint4 efb_color = uint4(round(saturate(frag) * 255.0));\n";
+    if (rgba6) {
+        s << "    frag.rgb = float3(efb_color.rgb >> 2) / 63.0;\n";
+    } else {
+        s << "    frag.rgb = float3(efb_color.rgb) / 255.0;\n";
+    }
+    // Under ray-traced light the scene draws into the HDR scene EFB (sRGB-encoded past 1), and these two act in linear
+    // light after the TEV's own 8-bit result: a light source's glow (additive, output_flags bit 5) shines at its radiance
+    // times the camera's exposure (ztex_params.z); a lit translucent (bit 6) takes the light of the surface behind it
+    // (texture 7: the lighting per sample, exposed), unclamped. An opaque draw after the trace (bit 7, such as
+    // Rosalina or Freezeflame's ice) takes no emitter's light.
+    if ((key.output_flags & 0x60u) != 0u) {
+        s << "    float3 lin = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);\n";
+        if ((key.output_flags & 0x20u) != 0u) {
+            s << "    lin *= ztex_params.z;\n";
+        }
+        // The light texture is read only for a positive scale: 0 (a light source or a clear surface) takes none,
+        // and a negative scale carries the table's colour for a light source shown in it.
+        if ((key.output_flags & 0x40u) != 0u) {
+            s << "    if (ztex_params.w > 0.0) {\n";
+            s << "        uint lit_w, lit_h;\n";
+            s << "        tex[7].GetDimensions(lit_w, lit_h);\n";
+            // The light texture's thirds (rt_lighting.hlsl LightTexturePS): water and glass (tex_dims[7].w 2) the
+            // surface behind's light, falling water (1-1.5) its own, the rest (the effects) the open air's over water.
+            s << "        const uint lit_third = lit_w / 3u;\n"
+                 "        int2 lit_at = min(int2(pin.pos.xy * ztex_params.w), int2(lit_third, lit_h) - 1);\n"
+                 "        lit_at.x += int(lit_third * (tex_dims[7].w >= 1.5 ? 0u : tex_dims[7].w >= 1.0 ? 2u : 1u));\n";
+            s << ((key.output_flags & 0x80u) != 0u
+                      ? "        lin *= min(max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0), 1.15);\n"
+                      : "        lin *= max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n");
+            // Falling water (tex_dims[7].w 1 + 0.4 x its aeration, map 7 being the light texture here; xyz the art's
+            // clear water colour, sRGB, white where the table names none): its painted colour lies between that colour
+            // and white, white water (a foam of bubbles and drops, drawn as painted) by how far towards white
+            // (rt_engine.hlsl fall_foam); the rest is clear water, which passes what lies behind it but for the white
+            // its bubbles scatter, its aeration, under the same light. rt_engine.hlsl fall_water does the same for the
+            // game's opaque sheets.
+            s << "        if (abs(tex_dims[7].w - 1.0) < 0.5) {\n"
+                 "            const float3 fall_c = frag.rgb <= 0.04045 ? frag.rgb / 12.92 : pow((frag.rgb + 0.055) / 1.055, 2.4);\n"
+                 "            const float3 fall_s = saturate(tex_dims[7].xyz);\n"
+                 "            const float3 fall_h = fall_s <= 0.04045 ? fall_s / 12.92 : pow((fall_s + 0.055) / 1.055, 2.4);\n"
+                 "            const float3 fall_d = 1.0 - fall_h;\n"
+                 "            const float fall_hi = max(fall_c.r, max(fall_c.g, fall_c.b));\n"
+                 "            const float fall_foam = dot(fall_d, fall_d) > 1e-3 ? saturate(dot(fall_c - fall_h, fall_d) / dot(fall_d, fall_d))\n"
+                 "                                  : (fall_hi > 1e-6 ? min(fall_c.r, min(fall_c.g, fall_c.b)) / fall_hi : 1.0);\n"
+                 "            const float fall_haze = saturate((tex_dims[7].w - 1.0) / 0.4);\n"
+                 "            const float3 fall_l = max(tex[7].Load(int3(lit_at, 0)).rgb, 0.0);\n"
+                 "            const float fall_keep = fall_foam + (1.0 - fall_foam) * fall_haze;\n"
+                 "            if (fall_keep > 1e-4) {\n"
+                 "                lin = (fall_foam * lin + (1.0 - fall_foam) * fall_haze * fall_l) / fall_keep;\n"
+                 "            }\n"
+                 "            efb_color.a = uint(round(float(efb_color.a) * fall_keep));\n";
+            if (dual_src) {
+                s << "            tev_alpha *= fall_keep;\n";
+            }
+            s << "        }\n";
+            s << "    }\n";
+        }
+        // At most -1 a light source shown in the table's colour (`recolour`); between -1 and 0 a clear ice or crystal
+        // draw's tint, cleared from its colour inputs before the TEV (main's start).
+        s << "    if (ztex_params.w <= -1.0) {\n"
+             "        const uint code = uint(-ztex_params.w) - 1u;\n"
+             "        const float3 c = float3(code & 255u, (code >> 8u) & 255u, (code >> 16u) & 255u) / 255.0;\n"
+             "        const float3 hue = c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4);\n"
+             "        const float peak = max(hue.r, max(hue.g, hue.b));\n"
+             "        lin = peak > 1e-4 ? max(lin.r, max(lin.g, lin.b)) * hue / peak : lin;\n"
+             "    }\n";
+        s << "    frag.rgb = lin <= 0.0031308 ? lin * 12.92 : 1.055 * pow(lin, 1.0 / 2.4) - 0.055;\n";
+    }
+    if (key.flags & 0x04u) {
+        s << "    uint dst_alpha6 = uint(round(saturate(alpha_refs.w)"
+             " * 255.0)) >> 2;\n";
+        s << "    frag.a = float(dst_alpha6) / 63.0;\n";
+    } else if (reactive) {
+        // A blended draw writing the reactive mask blends single-source at the TEV's 8-bit alpha (on an RGBA6 EFB
+        // in place of dual-source blending: RenderCore's motion keys).
+        s << "    frag.a = float(efb_color.a) / 255.0;\n";
+    } else {
+        s << "    frag.a = float(efb_color.a >> 2) / 63.0;\n";
+    }
+    s << "\n";
+
+    if (motion) {
+        s << "    float2 motion_px = float2(0.0, 0.0);\n"
+             "    if (pin.mv_cur.w > 0.0 && pin.mv_prev.w > 0.0) {\n"
+             "        motion_px = (pin.mv_prev.xy / pin.mv_prev.w -"
+             " pin.mv_cur.xy / pin.mv_cur.w) * float2(pin.mv_cur.z, pin.mv_prev.z);\n"
+             "    }\n";
+    }
+    if (motion && export_depth) {
+        s << "    PSOutZ zout;\n";
+        s << "    zout.color = frag;\n";
+        s << "    zout.motion = motion_px;\n";
+        s << "    zout.depth = 1.0 - float(zcoord_i) / 16777216.0;\n";
+        s << "    return zout;\n}\n";
+    } else if (motion) {
+        s << "    PSOutM mout;\n";
+        s << "    mout.color = frag;\n";
+        s << "    mout.motion = motion_px;\n";
+        s << "    return mout;\n}\n";
+    } else if (reactive && export_depth) {
+        s << "    PSOutZ zout;\n";
+        s << "    zout.color = frag;\n";
+        s << ((key.output_flags & 0x40u) != 0u
+                  ? "    zout.reactive = tex_dims[7].w > 1.5 ? 0.0 : min(saturate(frag.a), 0.9);\n"
+                  : "    zout.reactive = min(saturate(frag.a), 0.9);\n");
+        if (layer) {
+            s << "    zout.layer = frag;\n"
+                 "    zout.trans = frag;\n";
+        }
+        s << "    zout.depth = 1.0 - float(zcoord_i) / 16777216.0;\n";
+        s << "    return zout;\n}\n";
+    } else if (reactive) {
+        s << "    PSOutR rout;\n";
+        s << "    rout.color = frag;\n";
+        // A ray-traced scene's water and glass (lit translucent kind 2) cover nothing: the water's and clear
+        // surfaces' composites take the mask as what the frame's effects cover in front of them. Falling water (kind
+        // 1) covers with its white water (its alpha the white share).
+        s << ((key.output_flags & 0x40u) != 0u
+                  ? "    rout.reactive = tex_dims[7].w > 1.5 ? 0.0 : min(saturate(frag.a), 0.9);\n"
+                  : "    rout.reactive = min(saturate(frag.a), 0.9);\n");
+        if (layer) {
+            s << "    rout.layer = frag;\n"
+                 "    rout.trans = frag;\n";
+        }
+        s << "    return rout;\n}\n";
+    } else if (export_depth) {
+        s << "    PSOutZ zout;\n";
+        s << "    zout.color = frag;\n";
+        if (dual_src) {
+            s << "    zout.color1 = float4(0.0, 0.0, 0.0, tev_alpha);\n";
+        }
+        s << "    zout.depth = 1.0 - float(zcoord_i) / 16777216.0;\n";
+        s << "    return zout;\n}\n";
+    } else if (dual_src) {
+        s << "    PSOut o;\n";
+        s << "    o.color = frag;\n";
+        s << "    o.color1 = float4(0.0, 0.0, 0.0, tev_alpha);\n";
+        s << "    return o;\n}\n";
+    } else {
+        s << "    return frag;\n}\n";
+    }
+
+    return s.str();
+}
+
+std::string ShaderGenerator::describe(const PixelShaderKey& key) {
+    char buf[256];
+    const char* fog = fog_type_name(static_cast<FogType>(key.fog_type));
+    const char* ac0 = compare_func_name(static_cast<CompareFunc>(key.alpha_comp0));
+    const char* ac1 = compare_func_name(static_cast<CompareFunc>(key.alpha_comp1));
+    const char* al  = [](AlphaTestLogic l) -> const char* {
+        switch (l) {
+        case AlphaTestLogic::And:  return "AND";
+        case AlphaTestLogic::Or:   return "OR";
+        case AlphaTestLogic::Xor:  return "XOR";
+        case AlphaTestLogic::Xnor: return "XNOR";
+        }
+        return "?";
+    }(static_cast<AlphaTestLogic>(key.alpha_logic));
+
+    std::snprintf(buf, sizeof(buf),
+        "PS:tev=%u tex=%u chans=%u ind=%u fog=%s alpha=%s/%s/%s flags=0x%02x",
+        static_cast<unsigned>(key.num_tev_stages),
+        static_cast<unsigned>(key.num_texgens),
+        static_cast<unsigned>(key.num_chans),
+        static_cast<unsigned>(key.num_ind_stages),
+        fog, ac0, ac1, al,
+        static_cast<unsigned>(key.flags));
+    return buf;
+}
+
+std::string ShaderGenerator::describe(const VertexShaderKey& key) {
+    char buf[128];
+    std::snprintf(buf, sizeof(buf),
+        "VS:tg=%u chans=%u flags=0x%02x tmidx=0x%02x features=0x%x",
+        static_cast<unsigned>(key.num_texgens),
+        static_cast<unsigned>(key.num_chans),
+        static_cast<unsigned>(key.flags),
+        static_cast<unsigned>(key.texmtx_idx_mask),
+        static_cast<unsigned>(key.features));
+    return buf;
+}
+
+}  // namespace galaxy::render
