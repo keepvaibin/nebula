@@ -57,7 +57,7 @@ enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 // multiply and add (TEV and konst registers, material and vertex colours: Freezeflame's rink filters what shows through
 // it by (0, 40, 65), its sheen by (55, 77, 92)); their textures are grey and what shows through them (the screen
 // capture the ice refracts, its reflection) keeps its own colours. Those colours keep that share of their chroma, their
-// luminance kept: GxBackend clears the registers in a draw's constants, the pixel shaders its rasterized colours
+// luminance kept: RenderCore clears the registers in a draw's constants, the pixel shaders its rasterized colours
 // (ztex_params.w = kept - 1).
 inline constexpr float kRtIceTintKept = 0.225f;
 inline constexpr float kRtCrystalTintKept = 0.075f;

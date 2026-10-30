@@ -518,7 +518,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/frame_interpolation.cpp
     runtime/src/gx/interp_gpu.cpp
     runtime/src/gx/display_modes.cpp
-    runtime/src/gx/gx_backend.cpp
+    runtime/src/gx/render_core.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
     runtime/src/gx/game_asset_extract.cpp
@@ -724,7 +724,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/post_process_settings.cpp
         runtime/src/gx/transform_history.cpp
         runtime/src/gx/display_modes.cpp
-            runtime/src/gx/gx_backend.cpp
+            runtime/src/gx/render_core.cpp
         runtime/src/gx/game_lights.cpp
         runtime/src/gx/game_objects.cpp
     runtime/src/gx/rt_tev_eval.cpp

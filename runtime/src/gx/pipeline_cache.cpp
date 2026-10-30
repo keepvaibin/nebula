@@ -338,7 +338,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_gx_pso_desc_impl(
     pd.RasterizerState.DepthClipEnable = TRUE;
 
     // Depth is reversed-Z relative to the GX z24 values (near=1, far=0; the projection negation
-    // in gx_backend.cpp fill_projection), so GX LESS maps to D3D GREATER, GX LEQUAL to
+    // in render_core.cpp fill_projection), so GX LESS maps to D3D GREATER, GX LEQUAL to
     // GREATER_EQUAL, and so on, as in Dolphin's D3D backends.
     static constexpr D3D12_COMPARISON_FUNC kGxDepthFunc[8] = {
         D3D12_COMPARISON_FUNC_NEVER,           // GX_NEVER

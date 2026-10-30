@@ -209,8 +209,8 @@ void vertex_blend(inout VSIn v, uint id) {
 }
 
 // Physical ray tracing (flags bit 6): the gain of a de-baked vertex colour, the model's baked light at its most lit
-// facing (debake_peak, its light at the player's up; GxBackend::flush_draw_state) over the light at the object-space
-// normal `nrm` (nine spherical harmonics per channel in debake_sh; GxBackend::fit_debake_light), clamped to 1/4..4.
+// facing (debake_peak, its light at the player's up; RenderCore::flush_draw_state) over the light at the object-space
+// normal `nrm` (nine spherical harmonics per channel in debake_sh; RenderCore::fit_debake_light), clamped to 1/4..4.
 // Without a normal the gain is 1.
 float3 nebula_debake_gain(float3 nrm) {
     const float len2 = dot(nrm, nrm);

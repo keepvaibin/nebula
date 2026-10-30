@@ -176,17 +176,17 @@ public:
     // GALAXY_RT_AB=1 (test runs): every other present shows the game's own picture (no traced
     // lighting, reflections or finish); the traced frames carry a mark in the EFB's top-left corner.
     [[nodiscard]] bool ab_original() const noexcept { return ab_original_; }
-    // GxBackend at a scene's start: whether the present it becomes shows the game's own picture.
+    // RenderCore at a scene's start: whether the present it becomes shows the game's own picture.
     void set_ab_original(bool original) noexcept { ab_original_ = ab_ && original; }
     // The present the scene being drawn will be shown in (the snapshots' numbering).
     void set_presents(std::uint64_t presents) noexcept { presents_ = presents; }
     // The traced sun's world direction (towards it: GALAXY_RT_SUN, else the game's visible sun)
     // and the distance of the game's sun model (0: none); false without a sun.
     [[nodiscard]] bool sun_direction(std::array<float, 3>& world, float* distance = nullptr) const noexcept;
-    // While held (GxBackend: the sun arrived since the last camera cut) the game's sun keeps its last
+    // While held (RenderCore: the sun arrived since the last camera cut) the game's sun keeps its last
     // direction however old it is; otherwise it expires after 2 s.
     void hold_sun(bool held) noexcept { sun_held_ = held; }
-    // The open scene's key light while the game shows no sun (GxBackend: the world-fixed light its
+    // The open scene's key light while the game shows no sun (RenderCore: the world-fixed light its
     // lit draws take): world direction towards it, colour (0-1), strength (0-1, as it fades in and out)
     // and whether the sky shows it. It lights the scene as the sun does; one the sky does not show has
     // soft shadows (no disc: GALAXY_RT_KEY_SIZE degrees).
@@ -199,7 +199,7 @@ public:
     // direction towards it and its strength (0-1); false at night, in space, or with
     // GALAXY_RT_SKY_KEY=0.
     [[nodiscard]] bool sky_key(std::array<float, 3>& world, float& strength) const noexcept;
-    // A new sky (GxBackend: a stage loaded): the sky map starts over.
+    // A new sky (RenderCore: a stage loaded): the sky map starts over.
     void reset_sky() noexcept;
     // The loaded stage's row of the sun table (rt_materials.h; null: none): its colour, strength,
     // disc and shafts apply to the sun the scene is lit by.

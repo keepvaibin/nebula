@@ -129,7 +129,7 @@ private:
     std::size_t peak_bytes_per_frame_ = 0;
 };
 
-// A mapped upload buffer that lives until it is released (GxBackend's resident decoded vertices).
+// A mapped upload buffer that lives until it is released (RenderCore's resident decoded vertices).
 using UploadBuffer = gpu::UploadMemory;
 
 }  // namespace galaxy::gx

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// Frame interpolation's renderer-facing records (RendererD3D12 replays them; gx_backend fills them for either
+// Frame interpolation's renderer-facing records (RendererD3D12 replays them; render_core fills them for either
 // renderer).
 
 #include "galaxy/gx/interp_gpu.h"

@@ -884,7 +884,7 @@ gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned 
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
-// The GX sampler a packed key describes (layout: pack_sampler_key in gx_backend.cpp; the D3D12 renderer's
+// The GX sampler a packed key describes (layout: pack_sampler_key in render_core.cpp; the D3D12 renderer's
 // build_sampler_desc_from_key).
 VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
     const std::uint64_t cache_key = (static_cast<std::uint64_t>(key) << 32u) | sampler_config_key(cfg);

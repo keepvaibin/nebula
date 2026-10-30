@@ -126,7 +126,7 @@ struct alignas(256) GxVsConstants {
     float motion_params[4];
     std::uint32_t motion_ctrl[4];
     // Physical ray tracing (flags bit 6): the model's light baked into its vertex colours as a function of the
-    // surface's facing (GxBackend::fit_debake_light): nine spherical-harmonic coefficients of the object-space normal
+    // surface's facing (RenderCore::fit_debake_light): nine spherical-harmonic coefficients of the object-space normal
     // per channel (r 0-8, g 9-17, b 18-26), and its value at the most lit sampled facing (rgb). A de-baked channel's
     // vertex colour is raised by that over its own facing's value: the light's fall-off and colour leave it, its
     // paint and occlusion stay.

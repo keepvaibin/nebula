@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The GPU API types GxBackend names, chosen when the backend is built (docs/VULKAN.md): D3D12 on Windows, Vulkan
+// The GPU API types RenderCore names, chosen when the backend is built (docs/VULKAN.md): D3D12 on Windows, Vulkan
 // (NEBULA_GPU_VULKAN) elsewhere and in the Windows Vulkan test build. Compile-time, so draws make no virtual calls.
 
 #include <cstddef>
@@ -13,7 +13,7 @@
 
 namespace galaxy::gx::gpu {
 
-// Handles keep D3D12's field names where the shared code reads them, so one GxBackend compiles for both.
+// Handles keep D3D12's field names where the shared code reads them, so one RenderCore compiles for both.
 using Device = VkDevice_T;
 using Pipeline = VkPipeline_T;
 using Resource = VkBuffer_T;
@@ -185,7 +185,7 @@ inline constexpr Topology kTopologyTrianglePatches = D3D_PRIMITIVE_TOPOLOGY_3_CO
 
 namespace galaxy::gx::gpu {
 
-// A persistently mapped buffer the CPU writes and the GPU reads: the upload rings and GxBackend's resident vertices.
+// A persistently mapped buffer the CPU writes and the GPU reads: the upload rings and RenderCore's resident vertices.
 struct UploadMemory {
     BufferRef buffer;
     std::byte* cpu = nullptr;

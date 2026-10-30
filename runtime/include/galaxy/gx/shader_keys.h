@@ -3,7 +3,7 @@
 // Canonical, hashable shader and pipeline keys.
 //
 // Every field that cannot affect code generation (disabled TEV stages, unused texgens, don't-care
-// blend fields) is zeroed, so leftover register state does not fragment the caches. GxBackend
+// blend fields) is zeroed, so leftover register state does not fragment the caches. RenderCore
 // builds keys with the build_* functions; only tests construct them directly.
 
 #include "galaxy/gx/draw_state.h"
@@ -86,7 +86,7 @@ inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
 // alpha (max-blended, capped at 0.9) to an R8 render target 1.
 inline constexpr std::uint8_t kPsKeyReactive = 0x04u;
 inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
-// A blend under constant destination alpha 0 drawn single-source (a reactive draw: GxBackend's motion keys): the
+// A blend under constant destination alpha 0 drawn single-source (a reactive draw: RenderCore's motion keys): the
 // alpha channel's own blend writes the 0 (factors zero), the colour blends at the TEV alpha.
 inline constexpr std::uint32_t kRenderStateZeroAlpha = 1u << 24u;
 // The effects layer (ray-traced scenes, from the game's effects to the water's composite; RendererD3D12's layer
@@ -263,7 +263,7 @@ static_assert(sizeof(RenderStateKey) == 16);
 static_assert(std::has_unique_object_representations_v<RenderStateKey>);
 
 // The render state an uber stand-in draws with: a curved surface's patches as the plain triangles they are (the uber
-// vertex shader writes no curve outputs; GxBackend::draw_topology draws a stand-in's triangles as a list).
+// vertex shader writes no curve outputs; RenderCore::draw_topology draws a stand-in's triangles as a list).
 [[nodiscard]] constexpr RenderStateKey flat_render_state(RenderStateKey rs) noexcept {
     if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
         rs.primitive_topology = 3u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
@@ -308,7 +308,7 @@ struct PsoKeyHasher {
     }
 };
 
-// A PsoKey with its hash computed once. `key` must not change afterwards; GxBackend replaces the
+// A PsoKey with its hash computed once. `key` must not change afterwards; RenderCore replaces the
 // whole object instead.
 struct MemoizedPsoKey {
     PsoKey key{};

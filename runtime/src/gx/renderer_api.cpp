@@ -1,16 +1,16 @@
-// Implements the galaxy::gx public API (renderer_api.h) over a single GxBackend.
+// Implements the galaxy::gx public API (renderer_api.h) over a single RenderCore.
 
 #include "galaxy/renderer_api.h"
 
 #include <atomic>
 
-#include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/render_core.h"
 
 namespace galaxy::gx {
 
 namespace {
-GxBackend& backend() {
-    static GxBackend instance;
+RenderCore& backend() {
+    static RenderCore instance;
     return instance;
 }
 }  // namespace

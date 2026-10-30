@@ -2,7 +2,7 @@
 #pragma once
 
 // The ray tracer's per-draw records and flags (ray_tracing.h's SceneRayTracer uses them on D3D12), without any
-// graphics API: gx_backend fills them for either renderer.
+// graphics API: render_core fills them for either renderer.
 
 #include <array>
 #include <cstdint>
@@ -176,7 +176,7 @@ struct RtDrawInfo {
     // Its material table entry (rt_materials.h; 0: none).
     std::uint16_t rt_material = 0;
     // Its identity from frame to frame (the object, model shape, emitter or particle drawing it, its J3D material and
-    // its draws since them; GxBackend::rt_light_key), which keeps a light it emits the same light from one traced
+    // its draws since them; RenderCore::rt_light_key), which keeps a light it emits the same light from one traced
     // frame to the next (SceneRayTracer's light remap).
     std::uint32_t light_key = 0;
     // Its material texture: high quality's reflections sample it where they hit the draw off screen; its map (0-7,
@@ -186,7 +186,7 @@ struct RtDrawInfo {
     // Its addressing (GX TexWrap: 0 clamp, 1 repeat, 2 mirror): s (bits 0-1), t (bits 2-3).
     std::uint32_t texture_wrap = 5u;
     // A water draw whose texture the game moves by an indirect texture (its waves): that wave map and how its texels
-    // become slopes (GxBackend after fill_rt_tev; rt_reflections.hlsl water_wave): flags (bit 0 waves, bits 1-3 the s t
+    // become slopes (RenderCore after fill_rt_tev; rt_reflections.hlsl water_wave): flags (bit 0 waves, bits 1-3 the s t
     // u bias, bits 4-5 the format), the map's coordinate scale (slot 0 to its 0-1 coordinates), the indirect matrix's
     // direction part (s from x, s from y, t from x, t from y), the water texture's coordinate scale (slot 1).
     RtTextureSource wave{};
@@ -196,7 +196,7 @@ struct RtDrawInfo {
     RtTextureSource alpha{};
     std::uint32_t alpha_from = 0u;
     // The texture generators (0-7) of its two texture slots (0xFF: the vertices' first coordinates): the material
-    // texture's stage's, then the next one its stages read (GxBackend::fill_rt_tev).
+    // texture's stage's, then the next one its stages read (RenderCore::fill_rt_tev).
     std::uint32_t texgen = 0xFFu;
     std::uint32_t texgen2 = 0xFFu;
     // Its TEV program for ray hits, and the textures its maps hold.

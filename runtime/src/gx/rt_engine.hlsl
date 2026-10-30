@@ -4318,7 +4318,7 @@ void EngineClearCS(uint3 id : SV_DispatchThreadID)
 
 // The waterfall mist (the table's `mist` effects: the spray clouds at the falls' feet). The game draws its spray as
 // painted cloud sprites; under the engine each sprite is a puff of water drops instead, a Gaussian cloud in the
-// sprite's place, of its size and optical depth (GxBackend::note_rt_mist), which MistCompositePS (rt_lighting.hlsl)
+// sprite's place, of its size and optical depth (RenderCore::note_rt_mist), which MistCompositePS (rt_lighting.hlsl)
 // integrates along the camera's rays. Each puff's light, once a frame (g_engine_info.y puffs): the share of the sun it
 // sees (kMistSunRays shadow rays from points spread over it, fixed so a still puff's light is still; through the scene's
 // clear solids, the traced falls: water, not rock), the mist's optical

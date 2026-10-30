@@ -31,7 +31,7 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 |---|---|---|---|
 | [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/native_thp_video.cpp`, `runtime/include/galaxy/native_thp_video.h` |
 | Aurora | MIT | GX blend and pipeline state canonicalization | `runtime/src/gx/shader_keys.cpp` |
-| Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/gx/texture_sampling.h`, `runtime/src/gx/gx_backend.cpp` |
+| Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/gx/texture_sampling.h`, `runtime/src/gx/render_core.cpp` |
 | Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/gx/texture_cache.cpp` |
 | Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/gx/render_config.cpp`, `runtime/src/gx/renderer_d3d12.cpp` |
 | [Dusklight](https://github.com/TwilitRealm/dusklight) | CC0 1.0 | Button press and trigger state per game frame | `runtime/include/galaxy/synthetic_kpad_buttons.h` |

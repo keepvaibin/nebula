@@ -84,7 +84,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/gx/post_process_settings.cpp
     ${rt}/gx/transform_history.cpp
     ${rt}/gx/fifo_parser.cpp
-    ${rt}/gx/gx_backend.cpp
+    ${rt}/gx/render_core.cpp
     ${rt}/gx/game_lights.cpp
     ${rt}/gx/game_objects.cpp
     ${rt}/gx/rt_tev_eval.cpp

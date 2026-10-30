@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// GX pipelines on Vulkan (docs/VULKAN.md), with the interface GxBackend uses on PipelineCache.
+// GX pipelines on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on PipelineCache.
 //
 // A pipeline is its key's specialised shaders (ShaderGenerator's HLSL, compiled by glslang) with its render state. A
 // key seen for the first time draws with the uber pipeline of its render state while a worker builds the specialised

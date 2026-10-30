@@ -18,7 +18,7 @@ namespace galaxy::gx {
                                                const std::array<int, 4>& texel, const std::array<int, 4>& ras0,
                                                const std::array<int, 4>& ras1) noexcept;
 
-// De-baking (GxBackend::debake_channels): the light level (0-255) at which colour channel `channel` makes the program
+// De-baking (RenderCore::debake_channels): the light level (0-255) at which colour channel `channel` makes the program
 // show a mid-grey texture as itself (its luminance 128), the other channel as recorded. Unlit (`lit` false): the level
 // of its grey vertex colour, the baked light; lit: the level of the light on its material (its vertex colour's hue,
 // white, or its register). 255 where the program never brightens past it; 0 where it never darkens to it.

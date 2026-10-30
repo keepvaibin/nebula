@@ -1,4 +1,4 @@
-// GxBackend: decodes the game's GX command stream and drives the renderer.
+// RenderCore: decodes the game's GX command stream and drives the renderer.
 // renderer_api.cpp exposes it through the galaxy::gx API in renderer_api.h.
 
 #if defined(_WIN32)
@@ -23,7 +23,7 @@
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
 
-#include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/render_core.h"
 #include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
@@ -369,7 +369,7 @@ bool dependency_ranges_overlap(
         return 4u;
     default:
         throw std::runtime_error(
-            "[GxBackend] dependency scan: unknown component format");
+            "[RenderCore] dependency scan: unknown component format");
     }
 }
 
@@ -386,7 +386,7 @@ bool dependency_ranges_overlap(
         return 4u;
     default:
         throw std::runtime_error(
-            "[GxBackend] dependency scan: unknown color format");
+            "[RenderCore] dependency scan: unknown color format");
     }
 }
 
@@ -411,7 +411,7 @@ bool dependency_ranges_overlap(
     if (component_size >
         std::numeric_limits<std::size_t>::max() / 3u) {
         throw std::runtime_error(
-            "[GxBackend] dependency scan: normal vector size overflows");
+            "[RenderCore] dependency scan: normal vector size overflows");
     }
     return component_size * 3u;
 }
@@ -422,7 +422,7 @@ bool dependency_ranges_overlap(
     if (attr.count != 0u &&
         normal_size > std::numeric_limits<std::size_t>::max() / 3u) {
         throw std::runtime_error(
-            "[GxBackend] dependency scan: NBT element size overflows");
+            "[RenderCore] dependency scan: NBT element size overflows");
     }
     return attr.count != 0u ? normal_size * 3u : normal_size;
 }
@@ -471,7 +471,7 @@ bool dependency_ranges_overlap(
         return blocks(width, 8u) * blocks(height, 8u) * 32u;
     default:
         throw std::runtime_error(
-            "[GxBackend] dependency scan: unknown texture format");
+            "[RenderCore] dependency scan: unknown texture format");
     }
 }
 
@@ -536,7 +536,7 @@ bool dependency_ranges_overlap(
     }
     if (total > std::numeric_limits<std::uint32_t>::max()) {
         throw std::runtime_error(
-            "[GxBackend] dependency scan: texture source is too large");
+            "[RenderCore] dependency scan: texture source is too large");
     }
     return static_cast<std::uint32_t>(total);
 }
@@ -560,7 +560,7 @@ void record_indexed_array_access(
         static_cast<std::uint64_t>(address) + size;
     if (end > 0x1'0000'0000ull) {
         throw std::runtime_error(
-            "[GxBackend] dependency scan: indexed array range overflows");
+            "[RenderCore] dependency scan: indexed array range overflows");
     }
     if (!range.used) {
         range.used = true;
@@ -581,7 +581,7 @@ std::int64_t vblanks_per_slot(double refresh, double rate) {
     return slot;
 }
 
-// Adds its lifetime to the game thread's time blocked on the render thread (GxBackend::game_wait_qpc_).
+// Adds its lifetime to the game thread's time blocked on the render thread (RenderCore::game_wait_qpc_).
 struct GameWaitTimer {
     std::atomic<std::uint64_t>& total;
     const std::int64_t start = galaxy::qpc_now();
@@ -843,7 +843,7 @@ static_assert(
 
 }  // anonymous namespace
 
-void GxBackend::reset_fifo_session_state() {
+void RenderCore::reset_fifo_session_state() {
     // While no producer or render thread runs.
     matrices_ = MatrixMemory{};
     draw_state_ = NativeDrawState{};
@@ -910,7 +910,7 @@ void GxBackend::reset_fifo_session_state() {
     last_presented_slot_.store(0u, std::memory_order_relaxed);
 }
 
-bool GxBackend::initialize(int w, int h) {
+bool RenderCore::initialize(int w, int h) {
     if (initialized_) {
         return true;
     }
@@ -923,25 +923,25 @@ bool GxBackend::initialize(int w, int h) {
 
     boot_step("begins");
     if (!renderer_.initialize(w, h, cfg.efb_scale)) {
-        std::cerr << "[GxBackend] RendererD3D12::initialize failed\n";
+        std::cerr << "[RenderCore] RendererD3D12::initialize failed\n";
         return false;
     }
     boot_step("device rest");
 
     if (!efb_copies_.initialize(renderer_.device(), cfg.efb_scale)) {
-        std::cerr << "[GxBackend] EfbCopyManager::initialize failed\n";
+        std::cerr << "[RenderCore] EfbCopyManager::initialize failed\n";
         renderer_.shutdown();
         return false;
     }
 
     if (!texture_cache_.initialize(renderer_.device())) {
-        std::cerr << "[GxBackend] TextureCache::initialize failed\n";
+        std::cerr << "[RenderCore] TextureCache::initialize failed\n";
         efb_copies_.shutdown();
         renderer_.shutdown();
         return false;
     }
     if (!texture_cache_.preallocate_upload_arenas(kFramesInFlight)) {
-        std::cerr << "[GxBackend] TextureCache upload preallocation failed\n";
+        std::cerr << "[RenderCore] TextureCache upload preallocation failed\n";
         texture_cache_.shutdown();
         efb_copies_.shutdown();
         renderer_.shutdown();
@@ -966,7 +966,7 @@ bool GxBackend::initialize(int w, int h) {
             renderer_.root_signature(),
             cache_dir,
             worker_count)) {
-        std::cerr << "[GxBackend] PipelineCache::initialize failed\n";
+        std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
         efb_copies_.shutdown();
         renderer_.shutdown();
@@ -980,7 +980,7 @@ bool GxBackend::initialize(int w, int h) {
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
     pending_pointer_depth_capture_ = {};
-    render_thread_ = std::thread(&GxBackend::render_thread_main, this);
+    render_thread_ = std::thread(&RenderCore::render_thread_main, this);
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
@@ -998,21 +998,21 @@ bool GxBackend::initialize(int w, int h) {
     return true;
 }
 
-void GxBackend::pump_messages() {
+void RenderCore::pump_messages() {
     if (initialized_) {
         renderer_.pump_messages();
     }
 }
 
-bool GxBackend::quit_requested() const noexcept {
+bool RenderCore::quit_requested() const noexcept {
     return initialized_ && renderer_.quit_requested();
 }
 
-std::uint64_t GxBackend::xfb_copy_count() const noexcept {
+std::uint64_t RenderCore::xfb_copy_count() const noexcept {
     return stat_xfb_copies_.load(std::memory_order_relaxed);
 }
 
-XfbPresentStats GxBackend::xfb_present_stats() const noexcept {
+XfbPresentStats RenderCore::xfb_present_stats() const noexcept {
     const std::uint64_t last_stamp =
         last_presented_xfb_stamp_.load(std::memory_order_relaxed);
     const std::uint64_t last_serial =
@@ -1039,7 +1039,7 @@ XfbPresentStats GxBackend::xfb_present_stats() const noexcept {
     };
 }
 
-void GxBackend::record_monotonic_cadence_sample(
+void RenderCore::record_monotonic_cadence_sample(
     MonotonicCadenceAccumulator& accumulator) noexcept {
     const auto signed_now_ns =
         std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -1103,7 +1103,7 @@ void GxBackend::record_monotonic_cadence_sample(
     }
 }
 
-void GxBackend::reset_monotonic_cadence(
+void RenderCore::reset_monotonic_cadence(
     MonotonicCadenceAccumulator& accumulator) noexcept {
     accumulator.monitor_bins.fill(0u);
     accumulator.monitor_intervals=accumulator.monitor_total_ns=accumulator.monitor_max_ns=0u;
@@ -1121,7 +1121,7 @@ void GxBackend::reset_monotonic_cadence(
     accumulator.published_last_sample_ns.store(0, std::memory_order_relaxed);
 }
 
-void GxBackend::report_frame_tail_window() noexcept {
+void RenderCore::report_frame_tail_window() noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_FRAME_TAILS",0u)!=0u;
     if(!enabled) return;
     const auto now=xfb_first_serial_present_cadence_.last_sample_ns;
@@ -1158,7 +1158,7 @@ void GxBackend::report_frame_tail_window() noexcept {
     } catch (...) { /* Optional monitoring must not unwind rendering. */ }
 }
 
-void GxBackend::record_pointer_response(const XfbTexture& texture) noexcept {
+void RenderCore::record_pointer_response(const XfbTexture& texture) noexcept {
     static const bool enabled=read_env_u64("GALAXY_MONITOR_POINTER_LATENCY",0u)!=0u;
     if (!enabled) return;
     const auto& stamp=texture.pointer_response;
@@ -1213,12 +1213,12 @@ void GxBackend::record_pointer_response(const XfbTexture& texture) noexcept {
     } catch (...) { /* observational text must not unwind rendering */ }
 }
 
-bool GxBackend::subframes_shown() const {
+bool RenderCore::subframes_shown() const {
     // The renderer's mode, not the chunk's copy of it: a present between chunks follows a change at once.
     return renderer_.interpolation_mode() && std::min({interp_frames_, interp_cadence_cap_, interp_gpu_cap_}) > 0u;
 }
 
-void GxBackend::record_presented_xfb_copy(
+void RenderCore::record_presented_xfb_copy(
     const XfbTexture& texture) noexcept {
     galaxy::timeline::record(galaxy::timeline::Event::XfbPresented, texture.slot,
                          texture.copy_serial);
@@ -1269,7 +1269,7 @@ void GxBackend::record_presented_xfb_copy(
     }
 }
 
-void GxBackend::record_skipped_duplicate_xfb_present(
+void RenderCore::record_skipped_duplicate_xfb_present(
     const XfbTexture& texture) noexcept {
     if (texture.copy_serial !=
         last_presented_xfb_serial_.load(std::memory_order_relaxed)) {
@@ -1302,7 +1302,7 @@ void GxBackend::record_skipped_duplicate_xfb_present(
     }
 }
 
-bool GxBackend::ensure_resident_vertex_buffer() {
+bool RenderCore::ensure_resident_vertex_buffer() {
     gpu::Device* const device = renderer_.device();
     if (device == nullptr) {
         return false;
@@ -1336,7 +1336,7 @@ bool GxBackend::ensure_resident_vertex_buffer() {
     return true;
 }
 
-void GxBackend::release_resident_vertex_buffer() noexcept {
+void RenderCore::release_resident_vertex_buffer() noexcept {
     // The GPU no longer reads the buffer (session reset before renderer initialization, or shutdown
     // after drain_gpu()). The arena reset bumps its epoch, invalidating every entry's block.
     resident_vertex_buffer_ = {};
@@ -1350,7 +1350,7 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
 
 // Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
 // while the queue is full.
-void GxBackend::render_frame(
+void RenderCore::render_frame(
     const GxServices* services,
     bool present_swap_chain,
     bool black)
@@ -1498,7 +1498,7 @@ void GxBackend::render_frame(
     galaxy::timeline::record(galaxy::timeline::Event::SubmitEnd, 0u, 0u);
 }
 
-void GxBackend::wait_for_render_idle() {
+void RenderCore::wait_for_render_idle() {
     if (!initialized_) {
         return;
     }
@@ -1525,7 +1525,7 @@ void GxBackend::wait_for_render_idle() {
 // A perspective draw in the temporal scene: the clip-space offset that moves
 // the image by the scene jitter in render pixels at this draw's viewport.
 // The first such draw also supplies the camera planes and field of view.
-void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+void RenderCore::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
                                    float jitter_ndc[2]) {
     jitter_ndc[0] = 0.0f;
     jitter_ndc[1] = 0.0f;
@@ -1569,7 +1569,7 @@ void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& uplo
 // One VS constant upload inside a temporal scene. Palettes are addressed
 // from the matrix ring base (the draw's root SRV), so every upload carries
 // its snapshot's offset; the transform record and the motion fields follow.
-void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload) {
+void RenderCore::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload) {
     float jitter_ndc[2]{};
     if (temporal_scene_) {
         apply_scene_jitter(cpu, upload, jitter_ndc);
@@ -1744,7 +1744,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     }
 }
 
-std::uint32_t GxBackend::note_identity_occurrence(std::uint64_t key) {
+std::uint32_t RenderCore::note_identity_occurrence(std::uint64_t key) {
     if (identity_occurrences_.size() < 2u * (identity_occurrences_used_ + 1u)) {
         // Grow and rehash this scene's entries; older scenes' entries drop out.
         std::vector<IdentityOccurrence> old;
@@ -1780,7 +1780,7 @@ std::uint32_t GxBackend::note_identity_occurrence(std::uint64_t key) {
     }
 }
 
-void GxBackend::begin_identity_scene() {
+void RenderCore::begin_identity_scene() {
     identity_scene_ = identity_scene_markers_ != 0u;
     identity_scene_markers_ = 0u;
     ++identity_scene_index_;
@@ -1795,7 +1795,7 @@ void GxBackend::begin_identity_scene() {
     matrices_.reset_load_signature();
 }
 
-std::uint64_t GxBackend::record_identity() noexcept {
+std::uint64_t RenderCore::record_identity() noexcept {
     if (!identity_scene_) {
         return 0u;
     }
@@ -1807,13 +1807,13 @@ std::uint64_t GxBackend::record_identity() noexcept {
     return key != 0u ? key : 1u;
 }
 
-std::uint32_t GxBackend::rt_light_key() noexcept {
+std::uint32_t RenderCore::rt_light_key() noexcept {
     const std::uint64_t key = mix64(mix64(rt_light_object_, rt_light_material_), rt_light_draws_++);
     const auto folded = static_cast<std::uint32_t>(key ^ (key >> 32u));
     return folded != 0u ? folded : 1u;
 }
 
-void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
+void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                                std::uint32_t b) {
     if (kind == motion::kMarkerClearQuad) {
         clear_quad_pending_ = true;
@@ -1933,7 +1933,7 @@ void GxBackend::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32
     set_identity_marker(kind, aux, a, static_cast<std::uint32_t>(tag));
 }
 
-void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag) {
+void RenderCore::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag) {
     std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
     key = combine64(key, note_identity_occurrence(key));
     identity_marker_ = key;
@@ -1941,7 +1941,7 @@ void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::u
     matrices_.reset_load_signature();
 }
 
-void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b) {
+void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b) {
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
@@ -2054,7 +2054,7 @@ void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint
 }
 
 // GameScene::draw2D's entry (FifoMarker::Scene2DBegin).
-void GxBackend::on_scene_2d_begin() {
+void RenderCore::on_scene_2d_begin() {
     if (scene_phase_) {
         // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
         // the scene ends here.
@@ -2063,7 +2063,7 @@ void GxBackend::on_scene_2d_begin() {
     ++window_2d_scenes_;
 }
 
-void GxBackend::take_attached_stripe_particles(FrameChunk& chunk) {
+void RenderCore::take_attached_stripe_particles(FrameChunk& chunk) {
     if (producer_stripe_particles_.empty()) {
         return;
     }
@@ -2072,7 +2072,7 @@ void GxBackend::take_attached_stripe_particles(FrameChunk& chunk) {
     producer_stripe_particles_.clear();
 }
 
-void GxBackend::take_attached_shape_records(FrameChunk& chunk) {
+void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (producer_shape_records_.empty()) {
         return;
     }
@@ -2082,11 +2082,11 @@ void GxBackend::take_attached_shape_records(FrameChunk& chunk) {
     producer_shape_records_.clear();
 }
 
-void GxBackend::note_stripe_particles(const FrameChunk& chunk) {
+void RenderCore::note_stripe_particles(const FrameChunk& chunk) {
     motion_stripe_marks_ += chunk.stripe_particles.size();
 }
 
-void GxBackend::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
+void RenderCore::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
     chunk.fifo_marker_count = 0;
     chunk.fifo_marker_view_mask = 0;
     chunk.fifo_marker_sky_up_mask = 0;
@@ -2113,7 +2113,7 @@ void GxBackend::take_attached_fifo_markers(FrameChunk& chunk) noexcept {
 
 // A fresh InterpScene for the frame being recorded (its mirror pass or its 3D
 // scene, whichever comes first).
-void GxBackend::open_interp_scene() {
+void RenderCore::open_interp_scene() {
     note_interp_log_completion();
     interp_scene_ = (interp_scene_ + 1u) % 4u;
     if (interp_shown_scene_ == static_cast<std::int32_t>(interp_scene_)) {
@@ -2138,7 +2138,7 @@ void GxBackend::open_interp_scene() {
 // The matches of a layer that ended index the previous frame's same layer:
 // they become indices of the scene before, whose layer that is when the two
 // are consecutive.
-void GxBackend::end_record_layer(unsigned layer) {
+void RenderCore::end_record_layer(unsigned layer) {
     InterpScene& scene = interp_scenes_[interp_scene_];
     InterpScene::LayerRange& range = scene.layers[layer];
     range.count = scene.constants.size() - range.first;
@@ -2157,7 +2157,7 @@ void GxBackend::end_record_layer(unsigned layer) {
 
 // A side layer of an interpolated frame: the screen layer after its 3D scene
 // (to the display copy) or the mirror pass before it.
-void GxBackend::begin_side_layer(unsigned layer) {
+void RenderCore::begin_side_layer(unsigned layer) {
     if (!interp_recording_ || history_scene_) {
         return;
     }
@@ -2202,7 +2202,7 @@ void GxBackend::begin_side_layer(unsigned layer) {
     ps_record_restart_ = true;
 }
 
-void GxBackend::end_side_layer() {
+void RenderCore::end_side_layer() {
     if (side_layer_ == 0u) {
         return;
     }
@@ -2222,7 +2222,7 @@ void GxBackend::end_side_layer() {
 // A frame of a run that draws no 3D scene, from its first draw: an InterpScene whose whole picture is its screen
 // layer (no camera), matched with the frame before's by the layouts' identities, and a renderer log that counts as
 // the frame's scene.
-void GxBackend::begin_screen_frame() {
+void RenderCore::begin_screen_frame() {
     flush_pending_draw_batch();
     open_interp_scene();
     renderer_.note_replay_screen_frame();
@@ -2234,14 +2234,14 @@ void GxBackend::begin_screen_frame() {
 
 // The screen-only record of a frame that drew a 3D scene after all: dropped (no sequence plays from it; the scene's
 // record follows it in the ring).
-void GxBackend::cancel_screen_frame() {
+void RenderCore::cancel_screen_frame() {
     end_side_layer();
     interp_scenes_[interp_scene_].valid = false;
     renderer_.cancel_replay_screen_frame();
     screen_frame_open_ = false;
 }
 
-bool GxBackend::rt_geometry_draw() const noexcept {
+bool RenderCore::rt_geometry_draw() const noexcept {
     if (!(rt_state_eligible_ || rt_card_draw() || rt_alpha_draw()) || !scene_phase_ || side_layer_ != kSceneLayer ||
         !renderer_.rt_scene_open()) {
         return false;
@@ -2254,14 +2254,14 @@ bool GxBackend::rt_geometry_draw() const noexcept {
 }
 
 // Late geometry: opaque draws after the screen capture (indirect-textured models), after the trace.
-bool GxBackend::rt_late_draw() const noexcept {
+bool RenderCore::rt_late_draw() const noexcept {
     static_assert(static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect) == kRtLatePhase);
     // Alpha-tested and card draws of this phase are traced too, as in the other phases (rt_alpha_draw).
     return (rt_state_eligible_ || rt_alpha_draw() || rt_card_draw()) && scene_phase_ && side_layer_ == kSceneLayer &&
            renderer_.rt_late_open() && rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect);
 }
 
-unsigned GxBackend::rt_texgen_of_map(unsigned map) const noexcept {
+unsigned RenderCore::rt_texgen_of_map(unsigned map) const noexcept {
     for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
         const std::uint32_t order = ps_key_.stages[s].order;   // texmap 0-2, texcoord 3-5, enable 6
         if ((order & (1u << 6u)) != 0u && (order & 7u) == map) {
@@ -2272,7 +2272,7 @@ unsigned GxBackend::rt_texgen_of_map(unsigned map) const noexcept {
     return 0xFFu;
 }
 
-void GxBackend::begin_rt_sky_batch(RtDrawInfo& info) {
+void RenderCore::begin_rt_sky_batch(RtDrawInfo& info) {
     info = RtDrawInfo{};
     info.surface = kRtDrawSky;
     info.phase = rt_phase_;
@@ -2307,7 +2307,7 @@ void GxBackend::begin_rt_sky_batch(RtDrawInfo& info) {
     fill_rt_tev(info, 1.0f);
 }
 
-std::uint32_t GxBackend::debake_channels() const {
+std::uint32_t RenderCore::debake_channels() const {
     static const bool enabled = read_env_u64("GALAXY_RT_DEBAKE", 1u) != 0u;
     using motion::ScenePhase;
     if (!enabled || (enhanced_ps_flags_ & kEnhancedRtPhysical) == 0u || rt_sky_buffer_ || !scene_phase_ ||
@@ -2344,7 +2344,7 @@ std::uint32_t GxBackend::debake_channels() const {
     return channels;
 }
 
-void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float facing) const {
+void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float facing) const {
     tev = RtTevMaterial{};
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
@@ -2508,7 +2508,7 @@ void debake_sh9(const float* n, float* y) {
 // fit of nine spherical harmonics of the vertex normal to the colour (Ramamoorthi & Hanrahan 2001: a distant light's
 // irradiance lies almost wholly in these bands), solved by Cholesky with a small ridge (1e-3 of the mean diagonal).
 // What the facing does not explain stays: paint, occlusion.
-void GxBackend::fit_debake_light(DebakeModel& model) {
+void RenderCore::fit_debake_light(DebakeModel& model) {
     model.fitted = false;
     if (model.samples.size() < 32u) {
         return;
@@ -2595,7 +2595,7 @@ void GxBackend::fit_debake_light(DebakeModel& model) {
     model.fitted = true;
 }
 
-std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
+std::uint32_t RenderCore::apply_debake_model(std::uint32_t channels) {
     debake_model_level_ = 0u;
     debake_fit_active_ = false;
     if ((channels & 3u) == 0u) {
@@ -2702,7 +2702,7 @@ std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
     return channels;
 }
 
-void GxBackend::sample_debake_model(std::uint64_t key, const DrawCall& call) {
+void RenderCore::sample_debake_model(std::uint64_t key, const DrawCall& call) {
     const auto found = debake_models_.find(key);
     if (found == debake_models_.end() || found->second.decided) {
         return;
@@ -2747,7 +2747,7 @@ void GxBackend::sample_debake_model(std::uint64_t key, const DrawCall& call) {
     model.vertices += count;
 }
 
-std::uint32_t GxBackend::debake_state() {
+std::uint32_t RenderCore::debake_state() {
     const std::uint32_t channels = apply_debake_model(debake_channels());
     if (channels == 0u) {
         return 0u;
@@ -2797,7 +2797,7 @@ std::uint32_t GxBackend::debake_state() {
     return model_level(state);
 }
 
-void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
+void RenderCore::fill_rt_tev(RtDrawInfo& info, float facing) {
     RtTevMaterial& tev = info.tev;
     build_rt_tev(tev, info.tev_stages.data(), facing);
     const unsigned stages = tev.header & 0x1Fu;
@@ -2905,7 +2905,7 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
     }
 }
 
-RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
+RtTextureSource RenderCore::rt_texture_source(unsigned map) const noexcept {
     const TextureHandle& handle = current_texture_handles_[map];
     if (handle.resource == nullptr) {
         return {};
@@ -2923,7 +2923,7 @@ RtTextureSource GxBackend::rt_texture_source(unsigned map) const noexcept {
 // An alpha-tested draw of the material table's foliage (grass tufts, flower carpets): traced as a card,
 // whole (kRtDrawCard: the lighting counts its hits where the raster drew it). GALAXY_RT_CARDS=0 leaves
 // cards out of the traced scene.
-bool GxBackend::rt_card_draw() const noexcept {
+bool RenderCore::rt_card_draw() const noexcept {
     static const bool enabled = read_env_u64("GALAXY_RT_CARDS", 1u) != 0u;
     if (!enabled || !rt_card_eligible_ || current_rt_material_ == 0u) {
         return false;
@@ -2934,7 +2934,7 @@ bool GxBackend::rt_card_draw() const noexcept {
 
 // An alpha-tested opaque draw outside the foliage table: most such tests cut little or nothing, so it is traced
 // whole and the rays test its texture's alpha (kRtDrawAlphaTest). GALAXY_RT_ALPHA_GEOMETRY=0 leaves them out.
-bool GxBackend::rt_alpha_draw() const noexcept {
+bool RenderCore::rt_alpha_draw() const noexcept {
     static const bool enabled = read_env_u64("GALAXY_RT_ALPHA_GEOMETRY", 1u) != 0u;
     if (!enabled || !rt_card_eligible_ || rt_card_draw()) {
         return false;
@@ -2947,7 +2947,7 @@ bool GxBackend::rt_alpha_draw() const noexcept {
 }
 
 // Glows: additive draws of the translucent phases, after the trace and before the scene's end.
-bool GxBackend::rt_glow_draw() const noexcept {
+bool RenderCore::rt_glow_draw() const noexcept {
     if (!rt_glow_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
         return false;
     }
@@ -2959,7 +2959,7 @@ bool GxBackend::rt_glow_draw() const noexcept {
 
 // Light sprites: alpha-blended draws of the translucent phases whose texture the material table names as a
 // light: captured with the glows, their light found from what they add to the picture.
-bool GxBackend::rt_sprite_light_draw() const noexcept {
+bool RenderCore::rt_sprite_light_draw() const noexcept {
     if (!rt_sprite_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_glow_open()) {
         return false;
     }
@@ -2976,7 +2976,7 @@ bool GxBackend::rt_sprite_light_draw() const noexcept {
 // Water: alpha-blended draws of the translucent phases (seas, pools, lakes) before the image
 // effects; begin_rt_batch keeps those of the water class (indirect-textured) and the clear ones
 // (crystals, glass: environment-mapped or named).
-bool GxBackend::rt_water_draw() const noexcept {
+bool RenderCore::rt_water_draw() const noexcept {
     if (!rt_water_wanted_ || !rt_water_eligible_ || !scene_phase_ || side_layer_ != kSceneLayer ||
         !renderer_.rt_water_open()) {
         return false;
@@ -2996,7 +2996,7 @@ bool GxBackend::rt_water_draw() const noexcept {
 // phases with a material the table names water (particles have their own rows), alpha blended, or added from below
 // while the camera is in the water. Water as the models' surfaces are (rt_water_draw needs indexed positions to keep
 // particles out).
-bool GxBackend::rt_ocean_water_draw() const noexcept {
+bool RenderCore::rt_ocean_water_draw() const noexcept {
     if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
         draw_positions_indexed() ||
         draw_state_.projection_type != 0u) {
@@ -3023,7 +3023,7 @@ bool GxBackend::rt_ocean_water_draw() const noexcept {
 // (environment, indirect and mask maps, shared by many models) decide only a draw that maps nothing
 // else the table names. Falling water decides whatever comes before it: Beach Bowl's and the Twin Falls'
 // waterfalls map a ripple map and an indirect warp ahead of their fall texture.
-std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
+std::uint16_t RenderCore::rt_material_of(std::uint32_t map_mask,
                                         const std::array<TextureHandle, kMaxTextureMaps>& handles,
                                         unsigned& map) noexcept {
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
@@ -3071,7 +3071,7 @@ std::uint16_t GxBackend::rt_material_of(std::uint32_t map_mask,
     return metal_helper != 0u ? metal_helper : lookup;
 }
 
-void GxBackend::begin_rt_stage() {
+void RenderCore::begin_rt_stage() {
     renderer_.rt_reset_sky();
     rt_fake_shadow_cache_.clear();
     rt_world_held_ = {};
@@ -3079,7 +3079,7 @@ void GxBackend::begin_rt_stage() {
 }
 
 // The loaded stage (as the game reports it) and its row of the sun table.
-void GxBackend::note_rt_stage() {
+void RenderCore::note_rt_stage() {
     char name[sizeof(SceneStage)]{};
     if (scene_stage_known_) {
         std::memcpy(name, scene_stage_.data(), sizeof(name));
@@ -3108,7 +3108,7 @@ void GxBackend::note_rt_stage() {
 // The game's own shadow drawers (blob and volume shadows: 影描画[...], 板状シャドウボリューム描画): under
 // traced lighting every object casts its true shadow, so these are not drawn. Their names are read
 // once per object (cached until the next stage).
-bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
+bool RenderCore::rt_fake_shadow_object(std::uint32_t object) {
     if (object == 0u) {
         return false;
     }
@@ -3135,7 +3135,7 @@ bool GxBackend::rt_fake_shadow_object(std::uint32_t object) {
     return shadow;
 }
 
-bool GxBackend::rt_traced_clear_draw() const noexcept {
+bool RenderCore::rt_traced_clear_draw() const noexcept {
     // Glass joins the water window (its draws after the trace); a clear solid is the scene's own geometry, unseen
     // (drawn before the trace: the crystal cages).
     const RtMaterial* const clear = rt_material(current_rt_material_);
@@ -3143,12 +3143,12 @@ bool GxBackend::rt_traced_clear_draw() const noexcept {
            renderer_.rt_engine_clear() && (clear->solid ? renderer_.rt_scene_open() : renderer_.rt_water_open());
 }
 
-bool GxBackend::rt_traced_solid_draw() const noexcept {
+bool RenderCore::rt_traced_solid_draw() const noexcept {
     const RtMaterial* const clear = rt_material(current_rt_material_);
     return clear != nullptr && clear->solid && rt_traced_clear_draw();
 }
 
-bool GxBackend::rt_hidden_draw() const noexcept {
+bool RenderCore::rt_hidden_draw() const noexcept {
     // A trace-only draw is never drawn (rt_trace_only_: the game draws it only for the ray tracer).
     if (rt_trace_only_) {
         return true;
@@ -3230,7 +3230,7 @@ bool GxBackend::rt_hidden_draw() const noexcept {
 
 // The current object's name as the game reports it (game_object_name), Shift-JIS bytes with blanks as '_'. Returns a
 // key for the name (0 for none).
-std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
+std::uint32_t RenderCore::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
     if (rt_object_ == 0u) {
         return 0u;
@@ -3249,7 +3249,7 @@ std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
 
 // The census line of the current scene draw: its object's name, class, blend and the texture its
 // environment stage (else stage 0) reads.
-void GxBackend::note_rt_material() {
+void RenderCore::note_rt_material() {
     RtSurface surface = classify_rt_surface(vs_key_, ps_key_);
     RtMaterialNote note{};
     char name[48]{};
@@ -3285,7 +3285,7 @@ void GxBackend::note_rt_material() {
 // layer: the water's composite goes over it as over the game's water before the effects. Its keys were set before its
 // textures named its material (flush_draw_state), so once its batch knows it is water its call takes the same pipeline
 // without the layer.
-void GxBackend::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt) {
+void RenderCore::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt) {
     if (call.aux_target != 3u || !rt || (info.surface & kRtDrawWater) == 0u) {
         return;
     }
@@ -3302,7 +3302,7 @@ void GxBackend::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool
     call.aux_target = pipeline_cache_.last_get_used_uber() ? 0u : 2u;
 }
 
-bool GxBackend::rt_mist_draw() const noexcept {
+bool RenderCore::rt_mist_draw() const noexcept {
     if (current_rt_material_ == 0u || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_mist_open()) {
         return false;
     }
@@ -3319,7 +3319,7 @@ bool GxBackend::rt_mist_draw() const noexcept {
 // side squared, as much as the sprite's texture (its mean alpha times the side squared): the cloud textures (mean
 // alpha 0.52) depth 2, the steam's (0.26) 0.8, the droplets' dots (0.14) 0.4. The corners are the draw's vertices in
 // the frame's vertex ring, else JPA's centred quad (JPAResource jpa_pos: +-25 units).
-void GxBackend::note_rt_mist(const DrawCall& call) {
+void RenderCore::note_rt_mist(const DrawCall& call) {
     const std::uint32_t base = static_cast<std::uint32_t>(draw_state_.position_matrix) * 4u;
     float m[3][4];
     for (unsigned r = 0; r < 3u; ++r) {
@@ -3372,7 +3372,7 @@ void GxBackend::note_rt_mist(const DrawCall& call) {
     }
 }
 
-bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
+bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // A spray sprite under the engine's mist: its puff, never traced or drawn (rt_hidden_draw).
     if (rt_mist_draw()) {
         note_rt_mist(call);
@@ -3896,7 +3896,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
 
 // The recording scene's projection as the ray tracer took its view (scene_depth_view, before the jitter): its
 // sub-frames rebuild their own from it and the scene before's.
-void GxBackend::note_interp_rt_projection() {
+void RenderCore::note_interp_rt_projection() {
     if (!interp_recording_ || side_layer_ != kSceneLayer ||
         draw_state_.projection_type != 0u) {
         return;
@@ -3915,7 +3915,7 @@ void GxBackend::note_interp_rt_projection() {
     scene.rt_projection_known = true;
 }
 
-RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
+RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
     const auto projection = [this](unsigned i) {
         return draw_state_.projection[i];
     };
@@ -3946,7 +3946,7 @@ RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
 
 // The first perspective scene draw with depth since the scene began or the game last cleared its depth
 // (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
-void GxBackend::note_scene_ao_view(const DrawCall& call) {
+void RenderCore::note_scene_ao_view(const DrawCall& call) {
     if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
         draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
@@ -3967,7 +3967,7 @@ void GxBackend::note_scene_ao_view(const DrawCall& call) {
     }
 }
 
-void GxBackend::apply_scene_ao() {
+void RenderCore::apply_scene_ao() {
     if (ao_scene_applied_ || side_layer_ != kSceneLayer) {
         return;
     }
@@ -3986,7 +3986,7 @@ void GxBackend::apply_scene_ao() {
 // scenes when a key comes or goes, over a few when it changes; without a key or the scene camera they stay the
 // game's); =2 does that and keys the ray tracer in odd scenes only, for frame-to-frame comparison. Off by default:
 // the characters keep the game's lights, with the traced shadows, occlusion and lights on top.
-void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
+void RenderCore::aim_rt_scene_lights(const std::array<float, 12>* view) {
     static const std::uint64_t mode = read_env_u64("GALAXY_RT_ACTOR_LIGHTS", 0u);
     const std::array<RtWorldKey, 8> candidates = rt_world_keys_;
     const std::uint32_t candidate_count = rt_world_key_count_;
@@ -4205,7 +4205,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
 // A draw lit by the game's player light rig: its channel 0 ambient and lights 0 and 1 hold the rig's colours. The
 // rig's hue is the game's character grading (the prologue's night: a cyan key, a blue fill and a blue ambient on
 // Mario); under physical light the traced light gives the colour, the rig its level only (shader_gen, fill_rt_tev).
-bool GxBackend::rt_player_rig_draw() const noexcept {
+bool RenderCore::rt_player_rig_draw() const noexcept {
     if (!rt_player_rig_known_ || draw_state_.gen.num_color_chans == 0u) {
         return false;
     }
@@ -4221,7 +4221,7 @@ bool GxBackend::rt_player_rig_draw() const noexcept {
 
 // The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
 // positions their load gave them.
-std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
+std::uint32_t RenderCore::rt_aimed_lights() const noexcept {
     if (!rt_light_aim_.valid || !scene_phase_ || side_layer_ != kSceneLayer) {
         return 0u;
     }
@@ -4238,7 +4238,7 @@ std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
 
 // Moves the flushed draw's lights in a palette snapshot (write-only: the upload is write-combined
 // memory).
-void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
+void RenderCore::write_rt_lights(std::uint32_t* palette) noexcept {
     if (!rt_light_aim_.valid) {
         return;
     }
@@ -4254,7 +4254,7 @@ void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
 // A lit scene draw's world-fixed GX light 0 (loaded by an ActorLightInfo or coin without the
 // follow-camera flag, still holding that load's position, far enough to be a direction): a key
 // light candidate, by its world direction from the camera and its colour.
-void GxBackend::note_rt_world_key() noexcept {
+void RenderCore::note_rt_world_key() noexcept {
     if ((rt_known_lights_ & ~rt_follow_lights_ & 1u) == 0u || !scene_phase_ || side_layer_ != kSceneLayer) {
         return;
     }
@@ -4306,7 +4306,7 @@ void GxBackend::note_rt_world_key() noexcept {
 
 // SceneFunction phases run opaque first (0, 1, the shadows 6 and 7, then 2 and 4), then the
 // translucent lists (3, 5), indirect (8) and image effects (9).
-void GxBackend::note_rt_phase(std::uint8_t phase) {
+void RenderCore::note_rt_phase(std::uint8_t phase) {
     if (!scene_phase_) {
         return;
     }
@@ -4325,7 +4325,7 @@ void GxBackend::note_rt_phase(std::uint8_t phase) {
 }
 
 // The water drawn since the trace reflects, before the image effects (or at the scene's end).
-void GxBackend::trace_rt_water() {
+void RenderCore::trace_rt_water() {
     if (renderer_.rt_log_seq()) {
         std::fprintf(stderr, "[rt-seq] backend water request open=%d phase=%u\n", renderer_.rt_water_open() ? 1 : 0,
                      static_cast<unsigned>(rt_phase_));
@@ -4337,7 +4337,7 @@ void GxBackend::trace_rt_water() {
     renderer_.rt_trace_water();
 }
 
-void GxBackend::trace_rt_scene() {
+void RenderCore::trace_rt_scene() {
     if (rt_scene_traced_) {
         return;
     }
@@ -4346,7 +4346,7 @@ void GxBackend::trace_rt_scene() {
     renderer_.rt_trace_scene();
 }
 
-void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
+void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
                                bool sky_up_known, const SceneStage* stage) {
     flush_pending_draw_batch();
     if (marker == FifoMarker::SceneBegin) {
@@ -4551,7 +4551,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
     }
 }
 
-void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk) {
+void RenderCore::take_attached_pointer_depth_capture(FrameChunk& chunk) {
     if (!producer_pointer_depth_capture_) return;
     chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
     chunk.pointer_depth_in_frame = true;
@@ -4559,7 +4559,7 @@ void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk) {
 }
 
 // Render thread, inside the frame's parse: the field joins this command list.
-void GxBackend::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
+void RenderCore::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
     auto capture = std::move(chunk.pointer_depth_capture);
     chunk.pointer_depth_capture.reset();
     chunk.pointer_depth_in_frame = false;
@@ -4582,7 +4582,7 @@ void GxBackend::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
     pending_pointer_depth_capture_ = {std::move(capture), 0u, start};
 }
 
-void GxBackend::adopt_pointer_depth_fence_if_needed() {
+void RenderCore::adopt_pointer_depth_fence_if_needed() {
     if (pending_pointer_depth_capture_.capture &&
         pending_pointer_depth_capture_.fence_value == 0u) {
         pending_pointer_depth_capture_.fence_value = renderer_.pointer_depth_capture_fence();
@@ -4591,7 +4591,7 @@ void GxBackend::adopt_pointer_depth_fence_if_needed() {
 
 // A display copy completed a game frame's log: its scene (the one recording
 // when the copy landed) is the one to interpolate when its present arrives.
-void GxBackend::note_interp_log_completion() {
+void RenderCore::note_interp_log_completion() {
     const std::uint64_t serial = renderer_.replay_serial();
     if (serial == interp_seen_serial_) {
         return;
@@ -4607,7 +4607,7 @@ void GxBackend::note_interp_log_completion() {
     interp_log_slot_ = renderer_.replay_picture_slot();
 }
 
-void GxBackend::run_pending_interp_start() {
+void RenderCore::run_pending_interp_start() {
     if (!interp_start_pending_) {
         return;
     }
@@ -4622,7 +4622,7 @@ void GxBackend::run_pending_interp_start() {
     }
 }
 
-void GxBackend::start_interp_sequence(std::uint32_t picture_slot) {
+void RenderCore::start_interp_sequence(std::uint32_t picture_slot) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     const std::int64_t now = galaxy::qpc_now();
     if (!renderer_.start_replay_playback()) {
@@ -4728,7 +4728,7 @@ void GxBackend::start_interp_sequence(std::uint32_t picture_slot) {
 // anything), the sub-frames start from the scene shown last, records matched
 // through the skipped scenes. Vertex blending needs consecutive logs
 // (prepare_vertex_blend) and stays off for such a sequence.
-void GxBackend::select_interp_before() {
+void RenderCore::select_interp_before() {
     const unsigned scene = interp_sequence_.scene;
     interp_sequence_.before = (scene + 3u) % 4u;
     interp_sequence_.chained = false;
@@ -4766,7 +4766,7 @@ void GxBackend::select_interp_before() {
 // replays the whole frame, so a game frame costs about (k + 1) sub-frame times. k drops at once
 // when over budget and rises to the next higher present rate that fits after 10 s under it; with
 // none left, one is tried again every 20 s. A capped sequence runs the slot clock at 60 * (k + 1).
-unsigned GxBackend::interp_gpu_governor(double& rate) {
+unsigned RenderCore::interp_gpu_governor(double& rate) {
     constexpr double budget_ms = 15.0;
     const unsigned configured = interp_stopping_ ? 0u : interp_frames_;
     if (configured == 0u) {
@@ -4830,7 +4830,7 @@ unsigned GxBackend::interp_gpu_governor(double& rate) {
 // rate for a second, kept only if the misses halve. A try of the next higher rate is undone at its first miss of the
 // sub-frames'. Tries and probes follow a clean interval that doubles after each failed one (2 s to 64 s: a scene's
 // first frames back the render thread up for a second or two) and halves after a try that held.
-void GxBackend::restart_interp_governors() {
+void RenderCore::restart_interp_governors() {
     const std::int64_t now = galaxy::qpc_now();
     const std::int64_t frequency = galaxy::qpc_frequency();
     interp_gpu_cap_ = 7u;
@@ -4849,7 +4849,7 @@ void GxBackend::restart_interp_governors() {
     interp_cadence_probe_after_qpc_ = now;
 }
 
-void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
+void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
@@ -4986,7 +4986,7 @@ void GxBackend::note_game_frame_cadence(std::int64_t now_qpc) {
 
 // The present rate with `subframes` sub-frames per game frame (start_interp_sequence): with all of them the target,
 // else 60 a second for the frame and each sub-frame; with VSync on timed vblanks, a whole number of vblanks a slot.
-double GxBackend::interp_rate_with(unsigned subframes) const {
+double RenderCore::interp_rate_with(unsigned subframes) const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     if (subframes == 0u) {
         return 60.0;
@@ -5006,7 +5006,7 @@ double GxBackend::interp_rate_with(unsigned subframes) const {
 
 // The most sub-frames below `subframes` that present at a lower rate (on a 240 Hz display two show 120 Hz, as one
 // does): 0 when none.
-unsigned GxBackend::interp_step_down(unsigned subframes) const {
+unsigned RenderCore::interp_step_down(unsigned subframes) const {
     const unsigned from = std::min(subframes, interp_frames_);
     const double rate = interp_rate_with(from);
     for (unsigned k = from; k > 0u; --k) {
@@ -5018,7 +5018,7 @@ unsigned GxBackend::interp_step_down(unsigned subframes) const {
 }
 
 // The fewest sub-frames above `subframes` that present at a higher rate: all of them when none.
-unsigned GxBackend::interp_step_up(unsigned subframes) const {
+unsigned RenderCore::interp_step_up(unsigned subframes) const {
     const double rate = interp_rate_with(std::min(subframes, interp_frames_));
     for (unsigned k = subframes + 1u; k < interp_frames_; ++k) {
         if (interp_rate_with(k) > rate + 0.5) {
@@ -5031,7 +5031,7 @@ unsigned GxBackend::interp_step_up(unsigned subframes) const {
 // The next frame's sequence replaces this one before its real frame (at
 // rates that are not multiples of 60 that is the normal end: the next
 // frame's sub-frames continue from t = 0, its predecessor's image).
-void GxBackend::supersede_interp_sequence() {
+void RenderCore::supersede_interp_sequence() {
     if (!interp_sequence_.active) {
         return;
     }
@@ -5039,7 +5039,7 @@ void GxBackend::supersede_interp_sequence() {
     ++interp_superseded_;
 }
 
-std::string GxBackend::interp_snapshot_path(const char* suffix) const {
+std::string RenderCore::interp_snapshot_path(const char* suffix) const {
     static const std::string directory = [] {
         char value[MAX_PATH]{};
         std::size_t length = 0;
@@ -5056,19 +5056,19 @@ std::string GxBackend::interp_snapshot_path(const char* suffix) const {
 }
 
 // t of the next slot in the playing sequence (see advance_interp_sequence).
-double GxBackend::interp_slot_t() const {
+double RenderCore::interp_slot_t() const {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     return static_cast<double>(interp_slot_due_qpc_ - interp_sequence_.frame_qpc) * 60.0 /
                static_cast<double>(frequency) + interp_sequence_.lead;
 }
 
-bool GxBackend::overlay_idle_presents() const noexcept {
+bool RenderCore::overlay_idle_presents() const noexcept {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     return (native_settings_overlay_visible() || home_menu_visible()) && !interp_sequence_.active &&
            interp_slot_period_qpc_ > 0 && interp_slot_period_qpc_ * 61 < frequency;
 }
 
-std::int64_t GxBackend::interp_remaining_us() const {
+std::int64_t RenderCore::interp_remaining_us() const {
     const std::int64_t now = galaxy::qpc_now();
     static const std::int64_t frequency = galaxy::qpc_frequency();
     return (interp_slot_due_qpc_ - now) * 1'000'000 / frequency;
@@ -5079,7 +5079,7 @@ std::int64_t GxBackend::interp_remaining_us() const {
 #endif
 
 // Render thread: a short wait to a present slot, finer than the scheduler tick.
-void GxBackend::interp_sleep_us(std::int64_t us) {
+void RenderCore::interp_sleep_us(std::int64_t us) {
 #if defined(_WIN32)
     struct Timer {
         HANDLE handle = CreateWaitableTimerExW(
@@ -5099,7 +5099,7 @@ void GxBackend::interp_sleep_us(std::int64_t us) {
     std::this_thread::sleep_for(std::chrono::microseconds(us));
 }
 
-void GxBackend::advance_interp_sequence(bool flush) {
+void RenderCore::advance_interp_sequence(bool flush) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
     flush = flush || interp_sequence_.flush_requested;
     while (interp_sequence_.active) {
@@ -5191,7 +5191,7 @@ void GxBackend::advance_interp_sequence(bool flush) {
 // interval, one of them never shown on its own; 2 or more at one present a vblank: a refresh shown twice), and the
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
-void GxBackend::note_present_vblank(std::int64_t slot) {
+void RenderCore::note_present_vblank(std::int64_t slot) {
     static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
@@ -5220,7 +5220,7 @@ void GxBackend::note_present_vblank(std::int64_t slot) {
 // The line: the slot's time and the present's (QPC ticks), the game frame shown (the played log's serial; t
 // between the frame before, 0, and it, 1), whether it was the game's own frame, and the sequence's camera: whether
 // it cut (by the game's flag or the thresholds), how far it moved and turned, and whether it chained past skipped logs.
-void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
+void RenderCore::note_interp_timeline(std::int64_t slot, double t, bool real) {
     static std::FILE* const file = [] {
         char path[MAX_PATH]{};
         std::size_t length = 0u;
@@ -5244,7 +5244,7 @@ void GxBackend::note_interp_timeline(std::int64_t slot, double t, bool real) {
 }
 
 // A game frame presented while interpolating, without sub-frames: why.
-void GxBackend::note_interp_real_present() {
+void RenderCore::note_interp_real_present() {
     const std::int64_t now = galaxy::qpc_now();
     note_game_frame_cadence(now);
     interp_shown_scene_ = -1;                  // a frame no sequence knows
@@ -5258,7 +5258,7 @@ void GxBackend::note_interp_real_present() {
     report_interp_stats();
 }
 
-void GxBackend::report_interp_stats() {
+void RenderCore::report_interp_stats() {
     static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
     if (!trace) {
         return;
@@ -5454,7 +5454,7 @@ void GxBackend::report_interp_stats() {
 // from its matched previous record (frame_interpolation.h): position and
 // normal matrices in world space under the camera at t, texture matrices,
 // lights and projection; then the latest frame's operations replayed.
-bool GxBackend::render_interp_subframe(float t) {
+bool RenderCore::render_interp_subframe(float t) {
     const InterpScene& scene = interp_scenes_[interp_sequence_.scene];
     const InterpScene& before_scene = interp_scenes_[interp_sequence_.before];
     // Matched records of the scene before (through skipped scenes: select_interp_before).
@@ -5712,7 +5712,7 @@ bool GxBackend::render_interp_subframe(float t) {
 // The playing sequence's evaluation program (interp_gpu.h): an output block
 // per moving record, palette pair and pixel record, the ops that move them,
 // and the replay recorded once over them.
-bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
+bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
                                         bool before_valid) {
     constexpr std::size_t kWords = kMatrixPaletteWords;
     const std::size_t count = scene.constants.size();
@@ -5839,7 +5839,7 @@ bool GxBackend::prepare_interp_sequence(const InterpScene& scene, const InterpSc
     return renderer_.begin_replay_sequence(sequence);
 }
 
-bool GxBackend::skip_for_present_rate() {
+bool RenderCore::skip_for_present_rate() {
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, renderer_.display_refresh_hz());
     if (rate >= 59.0) {
@@ -5858,7 +5858,7 @@ bool GxBackend::skip_for_present_rate() {
     return false;
 }
 
-void GxBackend::present_cached_xfb(
+void RenderCore::present_cached_xfb(
     bool black,
     bool present_swap_chain) {
     if (!initialized_ || !present_swap_chain) {
@@ -5901,7 +5901,7 @@ void GxBackend::present_cached_xfb(
 
 // Consumer loop (render thread): frames execute in submission order; queued
 // frames are drained before a stop so the last presents land.
-void GxBackend::render_thread_main() {
+void RenderCore::render_thread_main() {
     galaxy::host::name_current_thread(L"Nebula GX Render");
     galaxy::host::perf_hint_add_current_thread();
 #if defined(_WIN32)
@@ -6216,7 +6216,7 @@ void GxBackend::render_thread_main() {
     }
 }
 
-std::uint32_t GxBackend::readback_serial(std::uint16_t token) const noexcept {
+std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
     const std::uint32_t key = async_peek_key(EfbPeekKind::Color, token);
     for (const AsyncPeekFieldState& state : async_peek_) {
         if (state.key.load(std::memory_order_acquire) == key) {
@@ -6226,7 +6226,7 @@ std::uint32_t GxBackend::readback_serial(std::uint16_t token) const noexcept {
     return 0u;
 }
 
-std::size_t GxBackend::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
+std::size_t RenderCore::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
     const std::uint32_t key = async_peek_key(kind, token);
     std::size_t oldest = 0;
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
@@ -6244,7 +6244,7 @@ std::size_t GxBackend::async_peek_channel(EfbPeekKind kind, std::uint16_t token)
     return oldest;
 }
 
-bool GxBackend::read_async_peek_field(
+bool RenderCore::read_async_peek_field(
     AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
     const std::uint64_t published = state.published.load(std::memory_order_acquire);
     if ((published & 0xFFFFFFFFu) == 0u ||
@@ -6266,7 +6266,7 @@ bool GxBackend::read_async_peek_field(
     return true;
 }
 
-bool GxBackend::peek_efb_published(
+bool RenderCore::peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
     EfbPeekKind kind,
@@ -6296,7 +6296,7 @@ bool GxBackend::peek_efb_published(
         read_async_peek_field(*latest, x, y, kind, value);
 }
 
-void GxBackend::poll_async_peek_fields() {
+void RenderCore::poll_async_peek_fields() {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
         if (!renderer_.async_peek_field_pending(index)) {
             continue;
@@ -6319,7 +6319,7 @@ void GxBackend::poll_async_peek_fields() {
     }
 }
 
-void GxBackend::submit_async_peek_fields_if_requested() {
+void RenderCore::submit_async_peek_fields_if_requested() {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
         AsyncPeekFieldState& state = async_peek_[index];
         if (!state.requested.load(std::memory_order_acquire)) {
@@ -6355,7 +6355,7 @@ void GxBackend::submit_async_peek_fields_if_requested() {
     }
 }
 
-void GxBackend::poll_completed_pointer_depth_capture() {
+void RenderCore::poll_completed_pointer_depth_capture() {
     if (!pending_pointer_depth_capture_.capture) {
         return;
     }
@@ -6382,7 +6382,7 @@ void GxBackend::poll_completed_pointer_depth_capture() {
     queue_space_cv_.notify_all();
 }
 
-void GxBackend::drain_pending_pointer_depth_capture() {
+void RenderCore::drain_pending_pointer_depth_capture() {
     adopt_pointer_depth_fence_if_needed();
     if (pending_pointer_depth_capture_.capture) {
         // Scalar game peeks and a second field share the utility allocator and
@@ -6396,7 +6396,7 @@ void GxBackend::drain_pending_pointer_depth_capture() {
     }
 }
 
-void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
+void RenderCore::execute_efb_peek_on_thread(FrameChunk& chunk) {
     drain_pending_pointer_depth_capture();
     if (chunk.pointer_depth_capture) {
         auto& capture=*chunk.pointer_depth_capture;
@@ -6443,7 +6443,7 @@ void GxBackend::execute_efb_peek_on_thread(FrameChunk& chunk) {
     }
 }
 
-void GxBackend::present_vi_black(bool in_frame) {
+void RenderCore::present_vi_black(bool in_frame) {
     const XfbTexture* layout = efb_copies_.latest();
     if (layout == nullptr || (vi_black_shown_ && !native_settings_overlay_visible())) {
         return;
@@ -6467,11 +6467,11 @@ void GxBackend::present_vi_black(bool in_frame) {
     last_presented_xfb_serial_.store(~std::uint64_t{0}, std::memory_order_relaxed);
 }
 
-void GxBackend::present_latest_frame_on_thread() {
+void RenderCore::present_latest_frame_on_thread() {
     present_cached_xfb_on_thread(false, true, false);
 }
 
-void GxBackend::present_cached_xfb_on_thread(
+void RenderCore::present_cached_xfb_on_thread(
     bool black,
     bool sleep_if_missing,
     bool count_game_xfb_present,
@@ -6560,7 +6560,7 @@ void GxBackend::present_cached_xfb_on_thread(
     renderer_.debug_log_backbuffer_readback();
 }
 
-void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
+void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     render_pointer_response_=chunk.pointer_response;
     render_movie_content_=chunk.prerecorded_movie;
     render_safety_surround_=chunk.safety_surround;
@@ -7055,7 +7055,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     struct SubmissionContext {
-        GxBackend* backend;
+        RenderCore* backend;
         FrameChunk* chunk;
     } submission_context{this, &chunk};
     // Every staging byte the command list copies from must be written.
@@ -7290,7 +7290,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
 
 // Pipeline-cache coverage, printed only when the on-disk coverage changes. While
 // shader-records-on-disk keeps up with shader-records, the remaining misses are new configurations.
-void GxBackend::ReportPipelineCoverage() {
+void RenderCore::ReportPipelineCoverage() {
     const PipelineCache::CompileStats stats = pipeline_cache_.compile_stats();
     if (stats.shader_records_on_disk == last_reported_shader_records_ &&
         stats.pso_keys_on_disk == last_reported_pso_records_) {
@@ -7309,7 +7309,7 @@ void GxBackend::ReportPipelineCoverage() {
               << " blobs-from-cache=" << stats.blobs_from_cache << '\n';
 }
 
-GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
+RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
     std::uint8_t map_mask) const {
     TextureBindingKey key{};
     key.map_mask = map_mask;
@@ -7326,7 +7326,7 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
     return key;
 }
 
-GxBackend::TextureHandleKey GxBackend::texture_handle_key(
+RenderCore::TextureHandleKey RenderCore::texture_handle_key(
     const TexImage& image,
     const TexMode& mode,
     std::uint64_t palette_address, TlutFormat palette_format) const {
@@ -7357,7 +7357,7 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
     };
 }
 
-std::array<std::uint32_t, kMaxTextureMaps> GxBackend::capture_sampler_keys(
+std::array<std::uint32_t, kMaxTextureMaps> RenderCore::capture_sampler_keys(
     std::uint8_t map_mask,
     const std::array<TextureHandle, kMaxTextureMaps>& handles) const {
     std::array<std::uint32_t, kMaxTextureMaps> keys{};
@@ -7377,7 +7377,7 @@ std::array<std::uint32_t, kMaxTextureMaps> GxBackend::capture_sampler_keys(
     return keys;
 }
 
-void GxBackend::clear_frame_texture_binding_table_cache() {
+void RenderCore::clear_frame_texture_binding_table_cache() {
     frame_texture_tables_.clear();
     frame_texture_binding_tables_.clear();
     frame_texture_handle_cache_.clear();
@@ -7386,14 +7386,14 @@ void GxBackend::clear_frame_texture_binding_table_cache() {
     current_texture_binding_key_valid_ = false;
 }
 
-void GxBackend::clear_texture_binding_table_cache() {
+void RenderCore::clear_texture_binding_table_cache() {
     clear_frame_texture_binding_table_cache();
     // frame_texture_binding_tables_ own CPU descriptors valid for the current frame only;
     // texture_handle_cache_ is the cache that persists across frames.
     dirty_texture_aliases_.clear();
 }
 
-void GxBackend::invalidate_texture_handle_cache_dependency(
+void RenderCore::invalidate_texture_handle_cache_dependency(
     const TextureBindingDependency& dependency) {
     const auto ranges_overlap =
         [](std::uint64_t a_begin,
@@ -7425,7 +7425,7 @@ void GxBackend::invalidate_texture_handle_cache_dependency(
     erase_matching(frame_texture_handle_cache_);
 }
 
-void GxBackend::invalidate_texture_binding_cache_range(
+void RenderCore::invalidate_texture_binding_cache_range(
     std::uint64_t address,
     std::uint32_t size) {
     if (size == 0u) {
@@ -7475,7 +7475,7 @@ void GxBackend::invalidate_texture_binding_cache_range(
     erase_matching_tables(frame_texture_binding_tables_);
 }
 
-void GxBackend::mark_texture_binding_alias_dirty(
+void RenderCore::mark_texture_binding_alias_dirty(
     const EfbCopyParams& params) {
     const std::uint16_t alias_width = static_cast<std::uint16_t>(
         params.half_scale
@@ -7496,7 +7496,7 @@ void GxBackend::mark_texture_binding_alias_dirty(
     invalidate_texture_handle_cache_dependency(dirty.dependency);
 }
 
-void GxBackend::prune_dirty_texture_binding_tables() {
+void RenderCore::prune_dirty_texture_binding_tables() {
     if (dirty_texture_aliases_.empty()) {
         return;
     }
@@ -7540,7 +7540,7 @@ void GxBackend::prune_dirty_texture_binding_tables() {
     dirty_texture_aliases_.clear();
 }
 
-bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
+bool RenderCore::curved_draw(std::uint8_t vtxfmt) const {
     if (!curved_surfaces_ || !scene_phase_ || side_layer_ != kSceneLayer ||
         draw_state_.projection_type != 0u) {
         return false;
@@ -7551,7 +7551,7 @@ bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
     return record_inputs_ != nullptr && record_inputs_->curved != nullptr && record_inputs_->curved->bends;
 }
 
-bool GxBackend::draw_positions_indexed() const noexcept {
+bool RenderCore::draw_positions_indexed() const noexcept {
     if (record_inputs_ != nullptr) {
         return !record_inputs_->own_positions;
     }
@@ -7577,7 +7577,7 @@ void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs,
 
 }  // namespace
 
-std::uint32_t GxBackend::split_curved_triangles(std::span<const GxVertexOut> vertices,
+std::uint32_t RenderCore::split_curved_triangles(std::span<const GxVertexOut> vertices,
                                                 std::span<const std::uint16_t> triangles,
                                                 std::vector<std::uint16_t>& split) {
     // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment and
@@ -7614,7 +7614,7 @@ std::uint32_t GxBackend::split_curved_triangles(std::span<const GxVertexOut> ver
     return static_cast<std::uint32_t>(flat_indices);
 }
 
-gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
+gpu::Pipeline* RenderCore::resolve_flat_pipeline(const PsoKey& curved_key) {
     // A triangle a factor-one patch outputs unchanged draws the same pixels in a triangle list, but in another place
     // in the draw's order: only where that order cannot show. Opaque: no blending or logic op, a depth test that
     // passes by nearness, written. Or a sum: both factors one, added or subtracted (the shadow volumes' alpha), into a
@@ -7651,7 +7651,7 @@ gpu::Pipeline* GxBackend::resolve_flat_pipeline(const PsoKey& curved_key) {
     return pipeline;
 }
 
-gpu::Pipeline* GxBackend::flush_draw_state(
+gpu::Pipeline* RenderCore::flush_draw_state(
     gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
     const bool time_detail = frame_time_detail_;
     // Always counted: the denominator of every *_us field.
@@ -8701,7 +8701,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     return current_pipeline_;
 }
 
-bool GxBackend::draw_calls_batch_compatible(
+bool RenderCore::draw_calls_batch_compatible(
     const DrawCall& lhs,
     const DrawCall& rhs,
     bool lhs_indexed,
@@ -8733,7 +8733,7 @@ bool GxBackend::draw_calls_batch_compatible(
                sizeof(lhs.xf_viewport)) == 0;
 }
 
-void GxBackend::flush_pending_draw_batch() {
+void RenderCore::flush_pending_draw_batch() {
     if (!pending_draw_batch_.active) {
         return;
     }
@@ -8771,14 +8771,14 @@ void GxBackend::flush_pending_draw_batch() {
     pending_draw_batch_ = {};
 }
 
-bool GxBackend::begin_cached_draw_run(
+bool RenderCore::begin_cached_draw_run(
     PrimitiveClass primitive,
     std::uint8_t vtxfmt,
     std::size_t draw_count) {
     (void)draw_count;
     if (cached_draw_run_active_) {
         throw std::runtime_error(
-            "GxBackend: nested cached display-list draw run");
+            "RenderCore: nested cached display-list draw run");
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
@@ -8849,7 +8849,7 @@ bool GxBackend::begin_cached_draw_run(
     return true;
 }
 
-void GxBackend::end_cached_draw_run() {
+void RenderCore::end_cached_draw_run() {
     cached_draw_run_active_ = false;
     cached_draw_run_scissor_reject_ = false;
     cached_draw_run_primitive_indexed_ = false;
@@ -8860,7 +8860,7 @@ void GxBackend::end_cached_draw_run() {
     cached_draw_run_state_call_ = {};
 }
 
-void GxBackend::on_shape_record(const shapes::Record& record) {
+void RenderCore::on_shape_record(const shapes::Record& record) {
     switch (record.kind) {
     case shapes::Record::Kind::Array:
         shape_arrays_[record.key] = ShapeArrayEntry{record.array, ++shape_array_versions_};
@@ -8934,20 +8934,20 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     }
 }
 
-void GxBackend::apply_record_material(const material::Material& m) {
+void RenderCore::apply_record_material(const material::Material& m) {
     material::load_matrices(m, matrices_);
     // The material wrote its coordinate scales.
     scales_from_textures_ = false;
 }
 
-void GxBackend::release_record_shape(RecordShape& shape) noexcept {
+void RenderCore::release_record_shape(RecordShape& shape) noexcept {
     if (shape.resident_epoch != 0u && shape.resident_epoch == resident_vertices_.epoch()) {
         resident_vertices_.release(shape.resident_offset, shape.resident_units);
     }
     shape.resident_epoch = 0u;
 }
 
-void GxBackend::apply_record_matrices(const shapes::Record& record) {
+void RenderCore::apply_record_matrices(const shapes::Record& record) {
     for (const shapes::Matrix& m : record.matrices) {
         std::uint16_t base = static_cast<std::uint16_t>(4u * m.id);
         std::uint16_t count = 12u;
@@ -9002,7 +9002,7 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
     }
 }
 
-void GxBackend::draw_record_shape(const shapes::Record& record) {
+void RenderCore::draw_record_shape(const shapes::Record& record) {
     apply_record_matrices(record);
     if (record.key == 0u) {
         return;  // state only (the matrices, current matrices and texgens set before a material record)
@@ -9093,7 +9093,7 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
     inputs.colors = keys[2] ^ (keys[3] * 0x9E3779B97F4A7C15ull);
     inputs.curved = shape.curved.get();
     struct RecordScope {
-        GxBackend* backend = nullptr;
+        RenderCore* backend = nullptr;
         bool run = false;
         ~RecordScope() {
             if (run) {
@@ -9178,7 +9178,7 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.sealed = true;
 }
 
-void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
+void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     display_copy_on_output_ = false;
     const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
     const shapes::Geometry& geometry = immediate.geometry;
@@ -9196,7 +9196,7 @@ void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
     inputs.colored = (geometry.attributes & shapes::kColor0) != 0u;
     inputs.own_positions = true;
     struct RecordScope {
-        GxBackend* backend = nullptr;
+        RenderCore* backend = nullptr;
         bool run = false;
         ~RecordScope() {
             if (run) {
@@ -9294,7 +9294,7 @@ void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void GxBackend::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format) {
+void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format) {
     flush_pending_draw_batch();
     if (params.copy_to_xfb) {
         galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
@@ -9419,7 +9419,7 @@ void GxBackend::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_form
     }
 }
 
-void GxBackend::record_async_peek_fields_at_token(std::uint16_t token) {
+void RenderCore::record_async_peek_fields_at_token(std::uint16_t token) {
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
         AsyncPeekFieldState& state = async_peek_[index];
         const std::uint32_t key = state.key.load(std::memory_order_acquire);
@@ -9446,7 +9446,7 @@ void GxBackend::record_async_peek_fields_at_token(std::uint16_t token) {
     }
 }
 
-void GxBackend::on_invalidate_textures() {
+void RenderCore::on_invalidate_textures() {
     flush_pending_draw_batch();
     texture_cache_.invalidate_all();
     texture_handle_cache_.clear();
@@ -9455,7 +9455,7 @@ void GxBackend::on_invalidate_textures() {
     current_texture_binding_key_valid_ = false;
 }
 
-void GxBackend::load_light(const state::Op& op) {
+void RenderCore::load_light(const state::Op& op) {
     // Sixteen words a light from 0x600: three reserved, the colour, the angle and distance terms (a0-a2, k0-k2), then
     // the position and direction (GXLoadLightObjImm).
     const auto base = static_cast<std::uint16_t>(0x600u + 16u * (op.a[0] & 7u));
@@ -9474,7 +9474,7 @@ void GxBackend::load_light(const state::Op& op) {
     }
 }
 
-void GxBackend::on_palettes_changed() {
+void RenderCore::on_palettes_changed() {
     // Bindings made before the palette places changed name the earlier palettes.
     flush_pending_draw_batch();
     texture_handle_cache_.clear();
@@ -9483,7 +9483,7 @@ void GxBackend::on_palettes_changed() {
     current_texture_binding_key_valid_ = false;
 }
 
-void GxBackend::on_invalidate_vertex_cache() {
+void RenderCore::on_invalidate_vertex_cache() {
     flush_pending_draw_batch();
     // GXInvalidateVtxCache invalidates the hardware vertex cache, not guest array memory. Decoded
     // vertices are already invalidated by guest writes and checked byte for byte before each hit.

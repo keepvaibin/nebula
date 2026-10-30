@@ -414,7 +414,7 @@ public:
     [[nodiscard]] std::uint32_t replay_picture_slot() const noexcept { return replay_picture_slot_; }
     // A 3D scene began inside the log being recorded (one is replayable).
     void note_replay_scene() noexcept { ++replay_scene_count_; }
-    // The log being recorded is a frame that draws no 3D scene, recorded as its screen layer alone (GxBackend::
+    // The log being recorded is a frame that draws no 3D scene, recorded as its screen layer alone (RenderCore::
     // begin_screen_frame): replayable without a scene; dropped again when a scene begins in it after all.
     void note_replay_screen_frame() noexcept { replay_screen_frame_ = true; }
     void cancel_replay_screen_frame() noexcept { replay_screen_frame_ = false; }
@@ -480,7 +480,7 @@ public:
             resident_copies_.clear();
         }
     }
-    // The resident decoded vertices (GxBackend): written through the returned mapping, an upload copy; the GPU reads
+    // The resident decoded vertices (RenderCore): written through the returned mapping, an upload copy; the GPU reads
     // them from local memory at the returned address (GPU reads of upload memory measured 2.7x slower on an AMD
     // APU), each range once copy_resident_vertices has queued it: the copies run before the command list being
     // recorded. Where local memory cannot be had the GPU reads the upload copy.
@@ -640,7 +640,7 @@ public:
         const std::uint8_t*& rgba);
     // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
     // color for GXPeekARGB) for the simulation thread, one per channel
-    // (GxBackend binds a channel to a peek kind and draw-sync token), each on
+    // (RenderCore binds a channel to a peek kind and draw-sync token), each on
     // private resources so they never contend with the pointer field above or
     // with each other. Returns the fence value, or 0 when that channel is in
     // flight.
@@ -733,7 +733,7 @@ public:
 
     // Returns (building on first use) an 8-slot s0-s7 sampler table for the
     // given packed per-map sampler keys (see pack_sampler_key in
-    // gx_backend.cpp). Tables are exact-key cached within this frame and remain
+    // render_core.cpp). Tables are exact-key cached within this frame and remain
     // GPU-valid until its slot fence. Never retain a handle across begin_frame.
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE sampler_table_for(
         const std::uint32_t keys[8]);
@@ -1870,7 +1870,7 @@ private:
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator;
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList> command_list;
         Microsoft::WRL::ComPtr<ID3D12Resource> target;
-        // One mapped readback per published slot of GxBackend's field ring.
+        // One mapped readback per published slot of RenderCore's field ring.
         std::array<Microsoft::WRL::ComPtr<ID3D12Resource>, kAsyncPeekFieldSlots> readbacks;
         std::array<const std::uint8_t*, kAsyncPeekFieldSlots> rgba{};
         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
@@ -1896,7 +1896,7 @@ private:
 
 };
 
-// The renderer GxBackend builds against (renderer_vk.h defines it for Vulkan).
+// The renderer RenderCore builds against (renderer_vk.h defines it for Vulkan).
 using Renderer = RendererD3D12;
 
 }  // namespace galaxy::gx

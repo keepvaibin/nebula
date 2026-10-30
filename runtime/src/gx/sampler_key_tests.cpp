@@ -1,6 +1,6 @@
 // Sampler key packing, sampler descriptors, sampler table caches, and game texture and copy footprints.
 
-#include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/render_core.h"
 
 #include <cmath>
 #include <cstdint>

@@ -92,7 +92,7 @@ inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDr
 }
 
 // Fills GxVsConstants for the current drawing state (matrix rows from MatrixMemory).
-// `palette_snapshot_index` is the index of this frame's XF matrix upload in the matrix ring (written by GxBackend).
+// `palette_snapshot_index` is the index of this frame's XF matrix upload in the matrix ring (written by RenderCore).
 inline void fill_vs_constants(
     const MatrixMemory& state,
     const NativeDrawState& draw,
@@ -211,7 +211,7 @@ struct VsConstantsCpuCache {
     // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
-    // GxVsConstants::flags above bits 0-1: the ray tracer's de-bake controls (GxBackend), kept across fills.
+    // GxVsConstants::flags above bits 0-1: the ray tracer's de-bake controls (RenderCore), kept across fills.
     std::uint32_t debake = 0u;
     // GxVsConstants::debake_sh, debake_peak (flags bit 6).
     float debake_sh[7][4]{};

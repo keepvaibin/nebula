@@ -498,8 +498,8 @@ void vertex_blend(inout VSIn v, uint id) {
 // Physical ray tracing's de-baked vertex colours (kVsFeatureDebake).
 static constexpr const char* kVsDebakeDef = R"HLSL(
 // Physical ray tracing (flags bit 6): what a de-baked vertex colour is raised by: the model's baked light at its most
-// lit facing (debake_peak: its light at the player's up, GxBackend::flush_draw_state) over the light at this vertex's
-// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; GxBackend::fit_debake_light), 1/4 to 4.
+// lit facing (debake_peak: its light at the player's up, RenderCore::flush_draw_state) over the light at this vertex's
+// object-space normal `nrm` (nine spherical harmonics a channel, debake_sh; RenderCore::fit_debake_light), 1/4 to 4.
 // No normal: 1.
 float3 nebula_debake_gain(float3 nrm) {
     const float len2 = dot(nrm, nrm);
@@ -2061,10 +2061,10 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     } else {
         s << kPsConstantsDef;
     }
-    // A clear ice or crystal draw's tint under physical light (GxBackend: ztex_params.w between -1 and 0 the share it
+    // A clear ice or crystal draw's tint under physical light (RenderCore: ztex_params.w between -1 and 0 the share it
     // loses; rt_materials.h kRtIceTintKept): a colour of its art (8-bit sRGB over 255) with that share of its chroma
     // taken, its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that
-    // are textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); GxBackend clears its registers.
+    // are textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); RenderCore clears its registers.
     if (rt_scene) {
         s << "float3 gx_tint_cleared(float3 c, float share) {\n"
              "    float3 l = saturate(c);\n"
@@ -2241,7 +2241,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                          "                }\n",
                          n, spot ? "true" : "false");
                 }
-                // Lit by the game's player light rig (flags bit 7, GxBackend::rt_player_rig_draw): its level, not its
+                // Lit by the game's player light rig (flags bit 7, RenderCore::rt_player_rig_draw): its level, not its
                 // hue (a rig such as the prologue's cyan night rig would tint the player); the traced light gives the
                 // colour.
                 s << "                if ((ppl_flags & 128u) != 0u) {\n"
@@ -3150,7 +3150,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    frag.a = float(dst_alpha6) / 63.0;\n";
     } else if (reactive) {
         // A blended draw writing the reactive mask blends single-source at the TEV's 8-bit alpha (on an RGBA6 EFB
-        // in place of dual-source blending: GxBackend's motion keys).
+        // in place of dual-source blending: RenderCore's motion keys).
         s << "    frag.a = float(efb_color.a) / 255.0;\n";
     } else {
         s << "    frag.a = float(efb_color.a >> 2) / 63.0;\n";

@@ -8,7 +8,7 @@ lack is the GX renderer, which is D3D12, and the host's window, audio and input,
 | Part | Lines | D3D12/Win32 | Notes |
 |---|---|---|---|
 | fifo_parser, gx_state, shader_gen, vertex_loader, shader_keys | ~7,800 | none | API-neutral: parse the FIFO, track GX state, generate HLSL |
-| gx_backend | 12,700 | 53 sites | records draws itself (PSO, descriptor tables, vertex/index views), rings, threads, events |
+| render_core | 12,700 | 53 sites | records draws itself (PSO, descriptor tables, vertex/index views), rings, threads, events |
 | renderer_d3d12 | 11,000 | throughout | EFB targets, copies, peeks, present, telemetry, capture/replay, temporal, RT hooks |
 | pipeline_cache | 3,300 | 170 | FXC, PSO library, uber/specialised hybrid |
 | texture_cache, efb_copy, post_process, placed_texture_allocator | ~4,500 | ~290 | |

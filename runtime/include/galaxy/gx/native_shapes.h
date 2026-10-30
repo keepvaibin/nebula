@@ -97,7 +97,7 @@ struct Immediate {
 // vertex 0, line strips as line lists, triangles, lines and points as they are.
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
-// The game's records, in the order it made them (gx_backend.h attach_shape_record).
+// The game's records, in the order it made them (render_core.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State, Immediate, TextureImage, Readback, Marker };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)

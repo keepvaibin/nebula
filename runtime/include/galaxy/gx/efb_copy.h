@@ -3,7 +3,7 @@
 // EfbCopyManager: the frame pictures (one each time the game ends a frame) and the EFB copies' textures.
 //
 // Each frame end takes the next of a few pictures in turn (a ring the renderer owns, so a picture still being shown
-// is not drawn over); GxBackend presents the newest, latest().
+// is not drawn over); RenderCore presents the newest, latest().
 //
 // A picture is never converted to YUV or written to game memory.
 

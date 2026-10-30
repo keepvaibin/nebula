@@ -7,7 +7,7 @@
 //     thread touches the published lookup map.
 //   - Worker threads compile specialized shaders and build PSOs, then push the
 //     finished pipeline onto the lock-free MPSC PsoCompletionQueue.
-//   - GxBackend calls drain_completions() from RendererD3D12::begin_frame(),
+//   - RenderCore calls drain_completions() from RendererD3D12::begin_frame(),
 //     before any command-list recording, so a PSO pointer never changes while a
 //     list is recording.
 //

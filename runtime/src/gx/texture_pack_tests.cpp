@@ -9,7 +9,7 @@
 #define NOMINMAX
 #endif
 
-#include "galaxy/gx/gx_backend.h"
+#include "galaxy/gx/render_core.h"
 #include "galaxy/gx/rt_materials.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/texture_pack.h"

@@ -29,7 +29,7 @@ namespace galaxy::gx {
 // 175000 units from the camera.
 inline constexpr float kActorLightDistance = 1.0e7f;
 // A world-fixed light this far from the camera (eye units) or farther counts as a directional key light
-// (GxBackend::note_rt_world_key).
+// (RenderCore::note_rt_world_key).
 inline constexpr float kActorLightFar = 20000.0f;
 // XF words of one light: colour 3, position 10-12.
 inline constexpr unsigned kXfLightWords = 16u;

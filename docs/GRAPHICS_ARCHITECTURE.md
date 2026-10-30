@@ -87,7 +87,7 @@ FIFO bytes --> FifoParser --(FifoSink callbacks)--> GxBackend
 | `texture_cache.h` | Texture format decoding, palettes, EFB copy aliases, invalidation |
 | `efb_copy.h` | XFB registry and copy geometry |
 | `renderer_d3d12.h` | Device, swap chain, EFB targets, upload rings, draw submission |
-| `gx_backend.h` | `GxBackend`, which implements `FifoSink` |
+| `render_core.h` | `GxBackend`, which implements `FifoSink` |
 
 The register, parser, vertex and shader headers include no Windows or Direct3D headers, so their
 tests run as plain programs and replay `.gxdump` captures.

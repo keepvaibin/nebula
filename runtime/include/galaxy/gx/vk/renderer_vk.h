@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The GX renderer on Vulkan (docs/VULKAN.md), with the interface GxBackend uses on RendererD3D12.
+// The GX renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
 //
 // The EFB is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
 // one render pass; an EFB copy, peek or present ends that pass, and the next EFB operation begins it again. Between
@@ -295,7 +295,7 @@ public:
     [[nodiscard]] bool record_pointer_depth_capture_in_frame();
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept { return pointer_depth_fence_; }
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(const std::uint8_t*& rgba);
-    // Asynchronous EFB fields, one per channel (GxBackend binds a channel to a peek kind and draw-sync token).
+    // Asynchronous EFB fields, one per channel (RenderCore binds a channel to a peek kind and draw-sync token).
     [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, EfbPeekKind kind, std::size_t slot);
     // The same capture recorded in the open frame where the stream is now (a draw-sync token); fenced at end_frame.
     [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, EfbPeekKind kind, std::size_t slot);

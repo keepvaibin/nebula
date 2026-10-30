@@ -2241,7 +2241,7 @@ bool water_faces(uint tri, float2 b, float3 dir)
 // Translucent water's own waves: per water triangle its texture coordinates (72 bytes as g_tri_uv: slot 0 the wave map's,
 // slot 1 the water texture's), per water draw (48 bytes) the wave map's view, flags (bit 0 waves), its coordinate scale,
 // the indirect matrix's direction part (s from x, s from y, t from x, t from y), the water texture's coordinate scale
-// (SceneRayTracer's water records, GxBackend's wave capture).
+// (SceneRayTracer's water records, RenderCore's wave capture).
 ByteAddressBuffer g_water_uv : register(t18);
 ByteAddressBuffer g_water_waves : register(t19);
 

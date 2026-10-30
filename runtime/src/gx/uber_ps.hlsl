@@ -48,10 +48,10 @@ int4 gx_u8(int4 v) { return v & int4(255,255,255,255); }
 int2 gx_bit0(int2 v) { return v & 1; }
 #endif
 
-// A clear ice or crystal draw's tint under physical light (GxBackend: ztex_params.w between -1 and 0 the share it loses;
+// A clear ice or crystal draw's tint under physical light (RenderCore: ztex_params.w between -1 and 0 the share it loses;
 // rt_materials.h kRtIceTintKept): a colour of its art (an 8-bit sRGB value over 255) with that share of its chroma taken,
 // its luminance kept (linear light, Rec. 709). Its rasterized colours take it, and the texels of its maps that are
-// textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); GxBackend clears its registers.
+// textures (alpha_refs.z bits 8-15; not the screen captures it shows through it); RenderCore clears its registers.
 float3 gx_tint_cleared(float3 c, float share)
 {
     float3 l = saturate(c);

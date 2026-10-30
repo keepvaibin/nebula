@@ -1305,7 +1305,7 @@ void RendererD3D12::reset_sampler_frame() {
     default_sampler_valid_[sampler_slot_] = true;
 }
 
-// Packed sampler key layout (must match pack_sampler_key in gx_backend.cpp):
+// Packed sampler key layout (must match pack_sampler_key in render_core.cpp):
 //   bits 0-1  wrap_s (GX TexWrap)        bits 2-3  wrap_t
 //   bit  4    mag linear                 bits 5-7  min filter (TexMinFilter)
 //   bits 8-15  lod_bias  (s8, 1/32 LOD units)
@@ -6826,7 +6826,7 @@ void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34&
     transition_blend_verdicts(D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     // The ray-traced lighting of the replayed frame follows this sub-frame's camera, and the composites rebuild its
     // points with the view its depth is drawn with: its projection at t with this frame's jitter in it, as
-    // GxBackend::scene_depth_view gives a traced frame's (the draws add the jitter in clip space, x + jx w: the
+    // RenderCore::scene_depth_view gives a traced frame's (the draws add the jitter in clip space, x + jx w: the
     // projection's B becomes B - jx, D becomes D - jy).
     RtView own_view{};
     const bool own_known = time.projection_known && time.viewport_width > 0.0f && time.viewport_height > 0.0f;

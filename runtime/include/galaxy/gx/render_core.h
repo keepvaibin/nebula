@@ -1,6 +1,6 @@
 #pragma once
 
-// GxBackend: owns the GX pipeline's subsystems and runs the per-frame loop behind the galaxy::gx
+// RenderCore: owns the GX pipeline's subsystems and runs the per-frame loop behind the galaxy::gx
 // API (renderer_api.h, through renderer_api.cpp).
 //
 // The simulation thread calls render_frame() once per VI retrace; it copies the frame's FIFO bytes
@@ -107,9 +107,9 @@ inline constexpr std::uint64_t kMix64Prime = 1099511628211ull;
     return (hash ^ value) * kMix64Prime;
 }
 
-class GxBackend final {
+class RenderCore final {
 public:
-    GxBackend() = default;
+    RenderCore() = default;
 
     bool initialize(int width, int height);
     [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
@@ -238,7 +238,6 @@ public:
     [[nodiscard]] XfbPresentStats xfb_present_stats() const noexcept;
 
 private:
-    friend class GxBackendMemorySnapshotTestAccess;
 
     // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
     // only when this returns true.
@@ -822,9 +821,9 @@ private:
         // next scene is a hard cut.
         std::uint32_t camera_epoch = 0;
         bool camera_epoch_known = false;
-        // Record ranges of the frame's layers (GxBackend::kSceneLayer,
+        // Record ranges of the frame's layers (RenderCore::kSceneLayer,
         // kScreenLayer, kMirrorLayer). Every prev_index is in the scene
-        // before's index space (GxBackend::end_record_layer).
+        // before's index space (RenderCore::end_record_layer).
         struct LayerRange {
             std::size_t first = 0;
             std::size_t count = 0;

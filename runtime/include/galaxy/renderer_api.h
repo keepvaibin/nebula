@@ -1,6 +1,6 @@
 #pragma once
 
-// The renderer API the host calls (D3D12 or Vulkan behind one GxBackend): window, GX FIFO submission and
+// The renderer API the host calls (D3D12 or Vulkan behind one RenderCore): window, GX FIFO submission and
 // presentation, the game's scene and light reports, and the native settings overlay.
 
 #include "galaxy/gx/native_shapes.h"
@@ -189,7 +189,7 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 void set_safety_scene_surround(float intensity) noexcept;
 
 // A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
-// token (GxBackend::peek_efb_published).
+// token (RenderCore::peek_efb_published).
 [[nodiscard]] bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,
@@ -197,7 +197,7 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t token,
     std::uint32_t& value);
 
-// How many captures of readback channel `token`'s colour have finished (GxBackend::readback_serial).
+// How many captures of readback channel `token`'s colour have finished (RenderCore::readback_serial).
 [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) noexcept;
 
 
