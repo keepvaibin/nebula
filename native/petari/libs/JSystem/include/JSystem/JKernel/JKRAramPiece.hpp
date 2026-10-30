@@ -2,7 +2,9 @@
 
 #include "JSystem/JSupport/JSUList.hpp"
 #include "Game/System/NebulaKernel.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include <revolution/aralt.h>
 
 class JKRDecompCommand;

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class JKRDvdFile;
 class JKRHeap;

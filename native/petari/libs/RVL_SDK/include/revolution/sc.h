@@ -2,7 +2,7 @@
 #define SC_H
 
 #include "revolution/bte.h"
-#include "revolution/nand.h"
+#include "revolution/types.h"
 #include "revolution/os.h"
 
 #ifdef __cplusplus
@@ -123,30 +123,6 @@ typedef enum {
     SC_ITEM_ID_WWW_RESTRICTION,
     SC_ITEM_ID_MAX_PLUS1
 } SCItemID;
-
-typedef struct {
-    OSThreadQueue threadQueue;
-    NANDFileInfo nandFileInfo;
-    NANDCommandBlock nandCommandBlock;
-
-    union {
-        u8 nandType;
-        NANDStatus nandStatus;
-    } u;
-
-    u8 nandStep;
-    u8 nandNeedClose;
-    u8 reloadFileCount;
-    SCReloadConfFileCallback reloadCallback;
-    s32 reloadResult;
-    const char* reloadFileName[2];
-    u8* reloadBufp[2];
-    u32 reloadSizeExpected[2];
-    u32 reloadedSize[2];
-    SCFlushCallback flushCallback;
-    u32 flushResult;
-    u32 flushSize;
-} SCControl;
 
 s32 SCReloadConfFileAsync(u8*, u32, SCReloadConfFileCallback);
 

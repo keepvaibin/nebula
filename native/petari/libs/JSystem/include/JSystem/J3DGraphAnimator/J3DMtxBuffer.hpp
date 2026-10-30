@@ -3,7 +3,9 @@
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class J3DJointTree;
 

@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerTarget.hpp"
+#include <revolution/wpad.h>
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"

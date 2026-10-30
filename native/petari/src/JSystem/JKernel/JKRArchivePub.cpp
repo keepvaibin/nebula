@@ -5,7 +5,9 @@
 #include "JSystem/JKernel/JKRFileFinder.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include "Game/System/NebulaDisc.hpp"
 
 JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {

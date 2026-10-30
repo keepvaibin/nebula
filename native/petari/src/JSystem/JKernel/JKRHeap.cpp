@@ -2,7 +2,6 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JUtility/JUTException.hpp"
-#include <revolution/os/OSBootInfo.h>
 
 JKRHeap* JKRHeap::sSystemHeap;
 JKRHeap* JKRHeap::sCurrentHeap;

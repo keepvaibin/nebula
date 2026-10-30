@@ -1,7 +1,9 @@
 #pragma once
 
 #include <JSystem/JMath/random.hpp>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 namespace JMath {
     struct TRandom_fast_;

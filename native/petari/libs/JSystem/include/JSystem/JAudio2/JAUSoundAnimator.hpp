@@ -3,7 +3,9 @@
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JGeometry.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class JASSoundParams;
 class JAISoundHandles;

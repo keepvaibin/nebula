@@ -2,7 +2,9 @@
 
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class J3DModel;
 class J3DModelData;

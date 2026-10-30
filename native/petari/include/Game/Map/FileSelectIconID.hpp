@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 /// @brief The identifier of a File Selection Screen icon.
 class FileSelectIconID {

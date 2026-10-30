@@ -4,7 +4,9 @@
 #include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 typedef void (*JKRErrorHandler)(void*, u32, int);
 void JKRDefaultMemoryErrorRoutine(void*, u32, int);

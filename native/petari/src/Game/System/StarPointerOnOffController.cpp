@@ -1,4 +1,5 @@
 #include "Game/System/StarPointerOnOffController.hpp"
+#include <revolution/wpad.h>
 #ifdef TARGET_PC
 #include <nebula_game_api.h>
 #endif

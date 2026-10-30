@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 // Drawing-state changes the game makes as it draws, each sent at once as a state record in its place in the stream
 // (nebula_game_api.h state). Each takes the arguments of the GX function it is named after and sets the whole

@@ -3,7 +3,9 @@
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/JGeometry/TBox.hpp>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class J3DModel;
 class J3DMaterial;

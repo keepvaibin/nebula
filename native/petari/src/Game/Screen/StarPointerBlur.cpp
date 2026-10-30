@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerBlur.hpp"
+#include <revolution/wpad.h>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>

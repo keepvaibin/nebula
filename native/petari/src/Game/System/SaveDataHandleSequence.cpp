@@ -1,4 +1,5 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
+#include <revolution/nand.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"

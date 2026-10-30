@@ -1,6 +1,8 @@
 #include "JSystem/JKernel/JKRFileLoader.hpp"
 #include "Game/System/NebulaKernel.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 JKRFileLoader* JKRFileLoader::sCurrentVolume;
 JSUList< JKRFileLoader > JKRFileLoader::sVolumeList = JSUList< JKRFileLoader >();

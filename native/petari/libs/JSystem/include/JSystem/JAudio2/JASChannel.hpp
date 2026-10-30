@@ -6,7 +6,9 @@
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 struct JASDSPChannel;
 

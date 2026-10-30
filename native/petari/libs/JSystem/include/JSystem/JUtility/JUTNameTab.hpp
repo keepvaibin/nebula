@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 struct ResNTAB {
     /* 0x0 */ NEBULA_BE(u16) mEntryNum;

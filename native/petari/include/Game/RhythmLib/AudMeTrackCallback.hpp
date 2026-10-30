@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 typedef s32 (*AudCallbackFunc)(s32, s32, void*);
 

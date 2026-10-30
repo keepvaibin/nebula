@@ -2,7 +2,9 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class DotCamReader {
 public:

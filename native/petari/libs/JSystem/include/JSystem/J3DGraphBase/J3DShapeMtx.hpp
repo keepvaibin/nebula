@@ -1,7 +1,9 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 inline J3DShapeMtx::~J3DShapeMtx() {
 }

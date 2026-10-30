@@ -10,7 +10,9 @@
 #include <JSystem/J3DGraphLoader/J3DModelLoader.hpp>
 #include <cstdio>
 #include <cstring>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"

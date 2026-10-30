@@ -32,7 +32,9 @@
 #include <JSystem/JKernel/JKRAram.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #ifdef TARGET_PC
 #include "Game/Screen/NebulaMenuFocus.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"

@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Game/Effect/MultiEmitterParticleCallBack.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class SpinPullParticleCallBack : public MultiEmitterParticleCallBack {
 public:

@@ -3,7 +3,9 @@
 #include "JSystem/JGadget/linklist.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JUtility/TColor.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class JUTConsole;
 

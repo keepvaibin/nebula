@@ -1,4 +1,5 @@
 #include "Game/System/NANDManager.hpp"
+#include <revolution/nand.h>
 #include <cstdio>
 
 #include <nebula_game_api.h>

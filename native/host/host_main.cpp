@@ -2586,8 +2586,9 @@ uint32_t svc_option(void*, uint32_t what) {
     }
 }
 
-static_assert(galaxy::saves::kDone == NEBULA_SAVE_DONE && galaxy::saves::kNoFile == NEBULA_SAVE_NO_FILE &&
-                  galaxy::saves::kTooLarge == NEBULA_SAVE_TOO_LARGE && galaxy::saves::kFailed == NEBULA_SAVE_FAILED,
+static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves::kNoFile} == NEBULA_SAVE_NO_FILE &&
+                  int{galaxy::saves::kTooLarge} == NEBULA_SAVE_TOO_LARGE &&
+                  int{galaxy::saves::kFailed} == NEBULA_SAVE_FAILED,
               "save results are the game's");
 
 // A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder

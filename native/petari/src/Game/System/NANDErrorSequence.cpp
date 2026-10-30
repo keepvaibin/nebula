@@ -1,6 +1,7 @@
 #include "Game/System/NANDErrorSequence.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include <revolution/os.h>
+#include <revolution/nand.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/GameSystemFunction.hpp"

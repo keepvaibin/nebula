@@ -1,4 +1,6 @@
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>

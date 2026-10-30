@@ -5,7 +5,9 @@
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include <revolution/mtx.h>
 
 class ActorLightCtrl;

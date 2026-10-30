@@ -1,7 +1,9 @@
 #pragma once
 
 #include "nw4r/ut/Rect.h"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 namespace nw4r {
     namespace ut {

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 // The projection the game draws with: its values kept here (the game reads them back) and each change sent as a
 // state record (nebula_game_api.h NEBULA_STATE_PROJECTION). The values are GX's (GXSetProjectionv's layout: the type,

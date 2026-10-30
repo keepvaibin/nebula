@@ -1,7 +1,9 @@
 #pragma once
 
 #include <nebula_game_api.h>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 // A light as the game sets it up (GXLightObj's values: the GXInitLight* functions' results).
 struct J3DNativeLight {

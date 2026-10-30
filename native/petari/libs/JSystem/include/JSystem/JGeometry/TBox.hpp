@@ -1,7 +1,9 @@
 #pragma once
 
 #include "JSystem/JGeometry/TVec.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 namespace JGeometry {
     template < class T >

@@ -3,7 +3,9 @@
 #include "Game/LiveActor/LiveActorGroup.hpp"
 #include "Game/Util/CollisionPartsFilter.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class ClipArea;
 

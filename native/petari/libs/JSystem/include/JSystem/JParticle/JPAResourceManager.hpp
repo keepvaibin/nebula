@@ -2,7 +2,9 @@
 
 #include "Inline.hpp"
 #include "JSystem/JParticle/JPATexture.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class JKRHeap;
 class JPAResource;

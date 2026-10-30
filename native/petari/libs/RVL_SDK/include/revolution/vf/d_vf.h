@@ -1,7 +1,9 @@
 #ifndef D_VF_H
 #define D_VF_H
 
-#include "revolution.h"
+#include "revolution/gx.h"
+#include "revolution/mtx.h"
+#include "revolution/os.h"
 
 typedef void* VFFile;
 

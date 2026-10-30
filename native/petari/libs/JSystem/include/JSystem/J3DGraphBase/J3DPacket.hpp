@@ -3,7 +3,9 @@
 #include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include <stdint.h>
 
 class J3DMatPacket;

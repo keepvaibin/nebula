@@ -2,7 +2,9 @@
 #include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRAramPiece.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 JKRDecomp* JKRDecomp::sDecompObject;
 void* JKRDecomp::sMessageBuffer[8];

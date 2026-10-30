@@ -3,7 +3,9 @@
 #include "Game/Map/HitInfo.hpp"
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Array.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 class CollisionZone;
 class CollisionParts;

@@ -1,6 +1,8 @@
 #pragma once
 
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 enum J3DSysDrawBuf {
     /* 0x0 */ J3DSysDrawBuf_Opa,

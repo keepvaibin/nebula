@@ -2,7 +2,9 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 void PunchingKinoko_FORCE_EMIT_SCALE() {
     TVec3f vec;

@@ -8,7 +8,9 @@
 #include "JSystem/JKernel/JKRExpHeap.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
 #include <cstring>
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 #include "Game/Util/RenderSignals.hpp"
 
 static u8* firstSrcData();

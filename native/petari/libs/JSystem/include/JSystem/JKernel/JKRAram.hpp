@@ -4,7 +4,9 @@
 #include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
-#include <revolution.h>
+#include <revolution/gx.h>
+#include <revolution/mtx.h>
+#include <revolution/os.h>
 
 #ifdef TARGET_PC
 #include "JSystem/JKernel/JKRDecomp.hpp"

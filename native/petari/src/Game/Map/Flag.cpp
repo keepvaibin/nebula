@@ -1,4 +1,5 @@
 #include "Game/Map/Flag.hpp"
+#include <revolution/kpad.h>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
