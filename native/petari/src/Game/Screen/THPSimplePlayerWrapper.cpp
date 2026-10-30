@@ -10,6 +10,9 @@
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/NebulaDisc.hpp"
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
@@ -88,10 +91,6 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
 }
 
 bool THPSimplePlayerWrapper::init(s32 audio) {
-    if (!THPInit()) {
-        return false;
-    }
-
     s32 old = OSDisableInterrupts();
     mSoundBufferIndex = 0;
     initAudio();
@@ -307,11 +306,7 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
                 for (s32 i = 0; i < mFrameComp.numComponents; i++) {
                     switch (mFrameComp.frameComp[i]) {
                     case 0:
-#ifdef TARGET_PC
                         if (!videoDecode(ptr, *compSize)) {
-#else
-                        if (!videoDecode(ptr)) {
-#endif
                             return 1;
                         }
                         break;
@@ -340,11 +335,7 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
             for (s32 i = 0; i < mFrameComp.numComponents; i++) {
                 switch (mFrameComp.frameComp[i]) {
                 case 0:
-#ifdef TARGET_PC
                     if (!videoDecode(ptr, *compSize)) {
-#else
-                    if (!videoDecode(ptr)) {
-#endif
                         return 1;
                     }
                     break;
@@ -431,13 +422,10 @@ s32 THPSimplePlayerWrapper::getTotalFrame() const {
 }
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-#ifdef TARGET_PC
+// The host decodes the frame's JPEG data into the texture set's Y, U and V planes (thp_video_decode).
 bool THPSimplePlayerWrapper::videoDecode(u8* pFile, u32 size) {
-    if (__NebulaTHPVideoDecode(pFile, size, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture)) {
-#else
-bool THPSimplePlayerWrapper::videoDecode(u8* pFile) {
-    if (THPVideoDecode(pFile, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, mTHPWork)) {
-#endif
+    const NebulaHostServices* const host = nebula_host();
+    if (host->thp_video_decode(host->user, pFile, size, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture)) {
         return false;
     }
 
@@ -445,14 +433,10 @@ bool THPSimplePlayerWrapper::videoDecode(u8* pFile) {
     return true;
 }
 #else
-#ifdef TARGET_PC
 bool THPSimplePlayerWrapper::videoDecode(u8* pFile, u32 size) {
-    if (__NebulaTHPVideoDecode(pFile, size, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
+    const NebulaHostServices* const host = nebula_host();
+    if (host->thp_video_decode(host->user, pFile, size, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
                                mTextureSet[_310].vtexture)) {
-#else
-bool THPSimplePlayerWrapper::videoDecode(u8* pFile) {
-    if (THPVideoDecode(pFile, mTextureSet[_310].ytexture, mTextureSet[_310].utexture, mTextureSet[_310].vtexture, mTHPWork)) {
-#endif
         return false;
     }
 
