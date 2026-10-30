@@ -33,35 +33,35 @@ int failures = 0;
 // The constant-buffer members the shaders read, at the byte offsets the C++ structs write them (uber_constants.h).
 const std::map<std::string, std::size_t>& constant_offsets() {
     static const std::map<std::string, std::size_t> offsets = {
-        {"projection", offsetof(GxVsConstants, projection)},
-        {"texgen_config", offsetof(GxVsConstants, texgen_config)},
-        {"chan_ambient", offsetof(GxVsConstants, chan_ambient)},
-        {"chan_material", offsetof(GxVsConstants, chan_material)},
-        {"num_texgens", offsetof(GxVsConstants, num_texgens)},
-        {"num_chans", offsetof(GxVsConstants, num_chans)},
-        {"mtx_palette_base", offsetof(GxVsConstants, mtx_palette_base)},
-        {"matrix_index_a", offsetof(GxVsConstants, matrix_index_a)},
-        {"matrix_index_b", offsetof(GxVsConstants, matrix_index_b)},
-        {"inline_pos_matrix", offsetof(GxVsConstants, inline_pos_matrix)},
-        {"inline_tex_matrices", offsetof(GxVsConstants, inline_tex_matrices)},
-        {"inline_post_matrices", offsetof(GxVsConstants, inline_post_matrices)},
-        {"line_point_raster", offsetof(GxVsConstants, line_point_raster)},
-        {"line_point_tex_offsets", offsetof(GxVsConstants, line_point_tex_offsets)},
-        {"uber_vs_header", offsetof(GxVsConstants, uber_vs_header)},
-        {"uber_texgen", offsetof(GxVsConstants, uber_texgen)},
-        {"uber_post_texgen", offsetof(GxVsConstants, uber_post_texgen)},
-        {"uber_channel", offsetof(GxVsConstants, uber_channel)},
-        {"stage_config", offsetof(GxPsConstants, stage_config)},
-        {"tev_regs", offsetof(GxPsConstants, tev_regs)},
-        {"konst", offsetof(GxPsConstants, konst)},
-        {"alpha_refs", offsetof(GxPsConstants, alpha_refs)},
-        {"fog_params", offsetof(GxPsConstants, fog_params)},
-        {"tex_dims", offsetof(GxPsConstants, tex_dims)},
-        {"ztex_params", offsetof(GxPsConstants, ztex_params)},
-        {"ind_cmd", offsetof(GxPsConstants, ind_cmd)},
-        {"ind_mtx", offsetof(GxPsConstants, ind_mtx)},
-        {"ind_misc", offsetof(GxPsConstants, ind_misc)},
-        {"uber_ps_header", offsetof(GxPsConstants, uber_ps_header)},
+        {"projection", offsetof(VertexConstants, projection)},
+        {"texgen_config", offsetof(VertexConstants, texgen_config)},
+        {"chan_ambient", offsetof(VertexConstants, chan_ambient)},
+        {"chan_material", offsetof(VertexConstants, chan_material)},
+        {"num_texgens", offsetof(VertexConstants, num_texgens)},
+        {"num_chans", offsetof(VertexConstants, num_chans)},
+        {"mtx_palette_base", offsetof(VertexConstants, mtx_palette_base)},
+        {"matrix_index_a", offsetof(VertexConstants, matrix_index_a)},
+        {"matrix_index_b", offsetof(VertexConstants, matrix_index_b)},
+        {"inline_pos_matrix", offsetof(VertexConstants, inline_pos_matrix)},
+        {"inline_tex_matrices", offsetof(VertexConstants, inline_tex_matrices)},
+        {"inline_post_matrices", offsetof(VertexConstants, inline_post_matrices)},
+        {"line_point_raster", offsetof(VertexConstants, line_point_raster)},
+        {"line_point_tex_offsets", offsetof(VertexConstants, line_point_tex_offsets)},
+        {"uber_vs_header", offsetof(VertexConstants, uber_vs_header)},
+        {"uber_texgen", offsetof(VertexConstants, uber_texgen)},
+        {"uber_post_texgen", offsetof(VertexConstants, uber_post_texgen)},
+        {"uber_channel", offsetof(VertexConstants, uber_channel)},
+        {"stage_config", offsetof(PixelConstants, stage_config)},
+        {"tev_regs", offsetof(PixelConstants, tev_regs)},
+        {"konst", offsetof(PixelConstants, konst)},
+        {"alpha_refs", offsetof(PixelConstants, alpha_refs)},
+        {"fog_params", offsetof(PixelConstants, fog_params)},
+        {"tex_dims", offsetof(PixelConstants, tex_dims)},
+        {"ztex_params", offsetof(PixelConstants, ztex_params)},
+        {"ind_cmd", offsetof(PixelConstants, ind_cmd)},
+        {"ind_mtx", offsetof(PixelConstants, ind_mtx)},
+        {"ind_misc", offsetof(PixelConstants, ind_misc)},
+        {"uber_ps_header", offsetof(PixelConstants, uber_ps_header)},
     };
     return offsets;
 }
@@ -316,8 +316,8 @@ void expect(const char* what, std::string_view hlsl, ShaderStage stage, std::spa
     for (std::size_t at = 5; at < spirv.size() && (spirv[at] >> 16u) != 0u; at += spirv[at] >> 16u) {
         uniform_block |= (spirv[at] & 0xffffu) == kOpVariable && spirv[at + 3] == kStorageUniform;
     }
-    const bool declares = hlsl.find("cbuffer GxVsConstants") != std::string_view::npos ||
-        hlsl.find("cbuffer GxPsConstants") != std::string_view::npos;
+    const bool declares = hlsl.find("cbuffer VertexConstants") != std::string_view::npos ||
+        hlsl.find("cbuffer PixelConstants") != std::string_view::npos;
     if (declares && uniform_block && matched == 0u) {
         problems += "no constant-buffer member names to check; ";
     }

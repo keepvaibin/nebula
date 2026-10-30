@@ -72,7 +72,7 @@ using DrawArrays = std::array<const Array*, 12>;
 // none; `curved` (or null) the curve data of the model whose positions it reads (curved_surfaces.h). False when an
 // array it reads is missing, of another kind, or shorter than a corner's entry.
 [[nodiscard]] bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
-                          const curved::Model* curved, std::vector<GxVertexOut>& out);
+                          const curved::Model* curved, std::vector<RenderVertex>& out);
 
 // A matrix a draw reads, by GX's matrix id (as nebula_game_api.h's NebulaShapeMatrix): rows of four (a normal
 // matrix's of three, a 2x4 texture matrix's two); `model_matrix` the model's draw matrix it is (index + 1), else 0.

@@ -309,7 +309,7 @@ std::uint32_t input_location_mask(const std::vector<std::uint32_t>& spirv) {
     return mask;
 }
 
-// GxVertexOut (gx_vertex.h) as the shaders' VSIn, at its semantics' locations (compile_hlsl): the eight texture
+// RenderVertex (gx_vertex.h) as the shaders' VSIn, at its semantics' locations (compile_hlsl): the eight texture
 // coordinates one each.
 constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},    {1, 0, VK_FORMAT_R32G32B32_SFLOAT, 12},
@@ -321,7 +321,7 @@ constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {12, 0, VK_FORMAT_R32G32_SFLOAT, 104},    {13, 0, VK_FORMAT_R32G32_SFLOAT, 112},
     {14, 0, VK_FORMAT_R32G32B32_UINT, 120},    {15, 0, VK_FORMAT_R32G32B32_UINT, 132},
 };
-static_assert(sizeof(GxVertexOut) == 144u);
+static_assert(sizeof(RenderVertex) == 144u);
 
 template <typename T>
 bool read_pod(std::ifstream& in, T& value) {
@@ -361,7 +361,7 @@ std::size_t PipelineCacheVk::UberKeyHasher::operator()(const UberKey& key) const
     return static_cast<std::size_t>(combine64(pso.hash(), key.variant));
 }
 
-bool PipelineCacheVk::initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
+bool PipelineCacheVk::initialize(VkDevice device, const vk::RenderLayout* layout, const std::filesystem::path& cache_dir,
                                  unsigned worker_count) {
     device_ = device;
     layout_ = layout;
@@ -535,7 +535,7 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     }
     add_stage(VK_SHADER_STAGE_FRAGMENT_BIT, ps);
 
-    VkVertexInputBindingDescription binding{0, static_cast<std::uint32_t>(sizeof(GxVertexOut)),
+    VkVertexInputBindingDescription binding{0, static_cast<std::uint32_t>(sizeof(RenderVertex)),
                                             VK_VERTEX_INPUT_RATE_VERTEX};
     VkPipelineVertexInputStateCreateInfo vertex_input{VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO};
     vertex_input.vertexBindingDescriptionCount = 1;

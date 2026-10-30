@@ -59,7 +59,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 }
 
 bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
-            const curved::Model* curved, std::vector<GxVertexOut>& out) {
+            const curved::Model* curved, std::vector<RenderVertex>& out) {
     const std::uint32_t a = geometry.attributes;
     const bool nbt = (a & kNbt) != 0u;
     // Curve data belongs to a model's plain normals (bump-mapped shapes carry tangents where it would go).
@@ -67,7 +67,7 @@ bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t pos
     out.resize(geometry.corners.size());
     for (std::size_t i = 0; i < geometry.corners.size(); ++i) {
         const Corner& c = geometry.corners[i];
-        GxVertexOut v;
+        RenderVertex v;
         std::memset(&v, 0, sizeof(v));
         const std::uint8_t pn = (a & kPositionMatrix) != 0u ? c.position_matrix : position_matrix;
         std::uint8_t tex[8]{};

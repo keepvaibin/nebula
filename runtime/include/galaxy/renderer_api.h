@@ -85,7 +85,7 @@ void set_native_settings_content_root(const std::string& utf8_path);
 // capture with them) and optionally presents: the newest picture (the last frame end), or black when `black`.
 // Nothing attached: at most a present.
 void render_frame(
-    const GxServices* services,
+    const RenderServices* services,
     bool present_swap_chain = true,
     bool black = false);
 

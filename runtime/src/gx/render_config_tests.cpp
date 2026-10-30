@@ -358,7 +358,7 @@ int main() {
         "default Release config keeps a 60 Hz cap for non-realtime-VI launches "
         "and the flip-discard swap chain");
 
-    const galaxy::gx::GxTimingConfig& timing = galaxy::gx::get_gx_timing_config();
+    const galaxy::gx::RenderTimingConfig& timing = galaxy::gx::get_gx_timing_config();
     passed &= expect(
         timing.render_queue_depth == 2,
         "GX timing is the shipped profile: queue depth 2");

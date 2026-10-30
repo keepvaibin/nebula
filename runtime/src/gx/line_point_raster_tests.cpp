@@ -247,7 +247,7 @@ public:
             rtv_heap->GetCPUDescriptorHandleForHeapStart();
         device_->CreateRenderTargetView(target.Get(), nullptr, rtv);
 
-        galaxy::gx::GxVsConstants constants{};
+        galaxy::gx::VertexConstants constants{};
         constants.line_point_raster[0] = params.viewport_width_pixels;
         constants.line_point_raster[1] = params.viewport_height_pixels;
         constants.line_point_raster[2] = params.line_width_pixels;
@@ -279,7 +279,7 @@ public:
         std::memcpy(mapped_constants, &constants, sizeof(constants));
         constant_buffer->Unmap(0u, nullptr);
 
-        std::array<galaxy::gx::GxVertexOut, 2> vertices{};
+        std::array<galaxy::gx::RenderVertex, 2> vertices{};
         UINT vertex_count = 1u;
         if (raster_case == RasterCase::HorizontalLine) {
             vertices[0].position[0] = -0.5f;
@@ -314,7 +314,7 @@ public:
         const D3D12_VERTEX_BUFFER_VIEW vertex_view{
             vertex_buffer->GetGPUVirtualAddress(),
             vertex_bytes,
-            static_cast<UINT>(sizeof(galaxy::gx::GxVertexOut)),
+            static_cast<UINT>(sizeof(galaxy::gx::RenderVertex)),
         };
 
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};

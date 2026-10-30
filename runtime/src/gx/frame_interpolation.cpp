@@ -379,7 +379,7 @@ bool texgen_spatial(std::uint32_t texgen) noexcept {
     return type == 0u && (source == 0u || source == 1u || source == 3u || source == 4u);
 }
 
-bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept {
+bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept {
     if (std::memcmp(a.stage_config, b.stage_config, sizeof(a.stage_config)) != 0 ||
         std::memcmp(a.uber_ps_header, b.uber_ps_header, sizeof(a.uber_ps_header)) != 0 ||
         std::memcmp(a.ind_cmd, b.ind_cmd, sizeof(a.ind_cmd)) != 0 ||
@@ -396,7 +396,7 @@ bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept {
            std::memcmp(a.ind_mtx, b.ind_mtx, sizeof(a.ind_mtx)) != 0;
 }
 
-void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPsConstants& out) noexcept {
+void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept {
     out = b;
     if (t >= 1.0f) {
         return;
@@ -432,7 +432,7 @@ void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPs
         }
     }
 }
-bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept {
+bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept {
     return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
            std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
 }
@@ -513,7 +513,7 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         out[13u + i] = float_word(d[i]);
     }
 }
-void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept {
+void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept {
     if (t >= 1.0f) {
         return;
     }
@@ -526,7 +526,7 @@ void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t,
         }
     }
 }
-std::uint8_t used_lights(const GxVsConstants& constants) noexcept {
+std::uint8_t used_lights(const VertexConstants& constants) noexcept {
     std::uint32_t mask = 0u;
     const std::uint32_t channels = std::min<std::uint32_t>(constants.uber_vs_header[1], 2u);
     for (std::uint32_t ch = 0; ch < channels; ++ch) {

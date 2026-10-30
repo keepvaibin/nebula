@@ -1005,8 +1005,8 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
         replay_constant_sets_.push_back({{b0, b1, earlier}, set});
     }
     const VkDescriptorBufferInfo infos[5] = {
-        {b0, 0, sizeof(GxVsConstants)},
-        {b1, 0, sizeof(GxPsConstants)},
+        {b0, 0, sizeof(VertexConstants)},
+        {b1, 0, sizeof(PixelConstants)},
         {palette, palette_offset, palette_range},
         {earlier, 0, VK_WHOLE_SIZE},
         {blend_verdicts_->buffer, 0, VK_WHOLE_SIZE},

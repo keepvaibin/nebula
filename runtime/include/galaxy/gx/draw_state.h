@@ -1,8 +1,7 @@
 #pragma once
 
 // The drawing state the game's records set, as typed values: the material record's and the state ops' (requirement
-// E-02: the renderer reads no register words). It is built beside the register file (GxState) while the readers move
-// to it one group at a time; a check mode compares the two at every draw.
+// E-02: the renderer reads no register words), with what each change invalidates.
 
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/native_material.h"

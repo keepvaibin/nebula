@@ -403,7 +403,7 @@ void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, const
     }
 }
 
-void Program::channel_colours(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b) {
+void Program::channel_colours(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
     const auto block = [&](std::uint32_t at, const float (*x)[4], const float (*y)[4]) {
         float from[8], to[8];
         bool moves = false;
@@ -421,7 +421,7 @@ void Program::channel_colours(std::uint32_t dst, const GxVsConstants& a, const G
     block(kVsMaterial, a.chan_material, b.chan_material);
 }
 
-void Program::projection(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b) {
+void Program::projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
     float from[16], to[16];
     const float* x = &a.projection[0][0];
     const float* y = &b.projection[0][0];
@@ -432,10 +432,10 @@ void Program::projection(std::uint32_t dst, const GxVsConstants& a, const GxVsCo
     if (std::memcmp(from, to, sizeof(from)) != 0) lerp(dst + kVsProjection, from, to, 16u);
 }
 
-void Program::projection_params(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b) {
+void Program::projection_params(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
     // fill_vs_projection: A and C on the diagonal, B and D in column 2
     // (perspective) or 3 (orthographic).
-    const auto params = [](const GxVsConstants& c, float out[4]) {
+    const auto params = [](const VertexConstants& c, float out[4]) {
         const unsigned column = c.projection[3][3] != 0.0f ? 3u : 2u;
         out[0] = c.projection[0][0];
         out[1] = c.projection[0][column];
@@ -451,7 +451,7 @@ void Program::projection_params(std::uint32_t dst, const GxVsConstants& a, const
     if (std::memcmp(from, to, sizeof(from)) != 0) lerp(dst + kVsMotionPrevProj, from, to, 4u);
 }
 
-void Program::ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsConstants& b) {
+void Program::ps_colours(std::uint32_t dst, const PixelConstants& a, const PixelConstants& b) {
     const auto range = [&](std::uint32_t at, const float* x, const float* y, unsigned count) {
         float from[16], to[16];
         bool moves = false;

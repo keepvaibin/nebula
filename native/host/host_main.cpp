@@ -1422,15 +1422,15 @@ void svc_fatal(void*, const char* text) {
 // runs on the simulation thread, where the game makes these calls.
 using galaxy::GuestMemoryRegion;
 using galaxy::GuestMemory;
-using galaxy::GxLogLevel;
-using galaxy::GxServices;
+using galaxy::RenderLogLevel;
+using galaxy::RenderServices;
 
 GuestMemory gMemory{};
 std::vector<GuestMemoryRegion> gRegions;
-GxServices gNative{};
+RenderServices gNative{};
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
-void native_log(void*, GxLogLevel, const char* text) {
+void native_log(void*, RenderLogLevel, const char* text) {
     log_line("renderer:", text);
 }
 

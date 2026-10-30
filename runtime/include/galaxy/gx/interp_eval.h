@@ -297,7 +297,7 @@ struct InterpEvalFrame {
 static_assert(sizeof(InterpEvalFrame) == 37u * 4u);
 
 // Blend-pair check: one group per pair compares the positions of the two
-// draws vertex by vertex (GxVertexOut, 144-byte stride; position first).
+// draws vertex by vertex (RenderVertex, 144-byte stride; position first).
 inline constexpr char kBlendValidateCs[] = R"HLSL(
 #ifndef NEBULA_VULKAN
 #define VK_BINDING(n)
@@ -379,7 +379,7 @@ void main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
 }
 )HLSL";
 
-// Earlier stripe vertices, one 144-byte GxVertexOut per output vertex, from the
+// Earlier stripe vertices, one 144-byte RenderVertex per output vertex, from the
 // ring or the resident buffer at the source's byte offset; dispatched at the
 // start of a sequence's first sub-frame, before its draws.
 inline constexpr char kStripeGatherCs[] = R"HLSL(

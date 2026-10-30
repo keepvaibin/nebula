@@ -24,7 +24,7 @@ std::string startup_failure() {
 }
 
 void render_frame(
-    const GxServices* services,
+    const RenderServices* services,
     bool present_swap_chain,
     bool black) {
     backend().render_frame(

@@ -58,7 +58,7 @@ static const uint kVertexFlatCorner = 0x8000u;
 static const uint kVsFlags = 200u;
 static const uint kVsPaletteBase = 204u;
 static const uint kVsInlinePosMatrix = 224u;
-// GxVsConstants (uber_constants.h): the texture generators' matrices and post matrices, and the vertex key's flags
+// VertexConstants (uber_constants.h): the texture generators' matrices and post matrices, and the vertex key's flags
 // (bit 2: dual texture transforms), per-vertex texture matrices, texture generators and post generators.
 static const uint kVsInlineTexMatrices = 272u;
 static const uint kVsInlinePostMatrices = 656u;
@@ -66,7 +66,7 @@ static const uint kVsKeyFlags = 1080u;
 static const uint kVsKeyTexMatrixMask = 1084u;
 static const uint kVsKeyTexGen = 1088u;
 static const uint kVsKeyPostTexGen = 1120u;
-static const uint kVsDebakeSh = 1280u;     // GxVsConstants::debake_sh (flags bit 6)
+static const uint kVsDebakeSh = 1280u;     // VertexConstants::debake_sh (flags bit 6)
 static const uint kVsDebakePeak = 1392u;
 
 uint load_index(uint index_offset, uint i, bool wide)
@@ -135,7 +135,7 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     return float3(dot(r0, p), dot(r1, p), dot(r2, p));
 }
 
-// A vertex's first texture coordinates and colour 0 (GxVertexOut).
+// A vertex's first texture coordinates and colour 0 (RenderVertex).
 void vertex_uv(uint4 draw, uint vertex, out float2 uv, out uint colour)
 {
     const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;

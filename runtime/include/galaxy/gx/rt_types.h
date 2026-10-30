@@ -23,7 +23,7 @@ struct RtDraw {
     std::uint32_t palette_offset = 0;
 };
 static_assert(sizeof(RtDraw) == 32u);
-// Decoded vertex stride (GxVertexOut: position at 0, matrix indices at 120).
+// Decoded vertex stride (RenderVertex: position at 0, matrix indices at 120).
 inline constexpr std::uint32_t kRtVertexStride = 144u;
 // RtDraw.flags: these bits; surface classes in bits 8-15; the draw's index in its scene in bits
 // 16-31 (SceneRayTracer::add_draw).

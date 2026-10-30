@@ -218,7 +218,7 @@ inline std::vector<std::pair<unsigned, unsigned>> aspect_window_sizes(
 }
 
 // The GX backend's timing policy (get_gx_timing_config), the same for every subsystem.
-struct GxTimingConfig {
+struct RenderTimingConfig {
     // Non-present render chunks the game thread may have outstanding before render_frame() waits for the render
     // thread.
     unsigned render_queue_depth = 2;
@@ -300,9 +300,9 @@ void stage_next_start_efb_scale(unsigned efb_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();
 void set_render_feature_caps(const RenderFeatureCaps& caps);
 
-// Both return GxTimingConfig{}; runtime code uses get_gx_timing_config().
-[[nodiscard]] GxTimingConfig resolve_gx_timing_config_from_environment();
-[[nodiscard]] const GxTimingConfig& get_gx_timing_config();
+// Both return RenderTimingConfig{}; runtime code uses get_gx_timing_config().
+[[nodiscard]] RenderTimingConfig resolve_gx_timing_config_from_environment();
+[[nodiscard]] const RenderTimingConfig& get_gx_timing_config();
 
 // Reads config.ini (in the data folder, or GALAXY_RENDER_CONFIG_PATH) if present, then the GALAXY_<KEY> overrides;
 // missing keys keep their defaults. Called once by the host before initialize().

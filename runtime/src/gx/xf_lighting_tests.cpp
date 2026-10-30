@@ -191,12 +191,12 @@ public:
         check_hr(device_->CreateGraphicsPipelineState(&pso_desc, IID_PPV_ARGS(&pso)), "CreateGraphicsPipelineState");
 
         // Per case: constants (1280 bytes, 256-aligned), one palette snapshot and one vertex.
-        std::vector<GxVsConstants> constants(count);
+        std::vector<VertexConstants> constants(count);
         std::vector<std::array<float, 4>> palette(static_cast<std::size_t>(count) * kPaletteElements);
-        std::vector<GxVertexOut> vertices(count);
+        std::vector<RenderVertex> vertices(count);
         for (UINT i = 0; i < count; ++i) {
             const Case& c = cases[i];
-            GxVsConstants& k = constants[i];
+            VertexConstants& k = constants[i];
             std::memset(&k, 0, sizeof(k));
             // clip = (0, 0, 0.5, 1) for any eye position; the viewport picks the pixel.
             k.projection[2][3] = 0.5f;
@@ -226,7 +226,7 @@ public:
                     w[13u + j] = l.direction[j];
                 }
             }
-            GxVertexOut& v = vertices[i];
+            RenderVertex& v = vertices[i];
             std::memset(&v, 0, sizeof(v));
             std::memcpy(v.position, c.eye_position, sizeof(v.position));
             std::memcpy(v.normal, c.normal, sizeof(v.normal));
@@ -250,9 +250,9 @@ public:
             buffer->Unmap(0u, nullptr);
             return buffer;
         };
-        const auto constant_buffer = make_upload(constants.data(), constants.size() * sizeof(GxVsConstants), "constants");
+        const auto constant_buffer = make_upload(constants.data(), constants.size() * sizeof(VertexConstants), "constants");
         const auto palette_buffer = make_upload(palette.data(), palette.size() * sizeof(palette[0]), "palette");
-        const auto vertex_buffer = make_upload(vertices.data(), vertices.size() * sizeof(GxVertexOut), "vertices");
+        const auto vertex_buffer = make_upload(vertices.data(), vertices.size() * sizeof(RenderVertex), "vertices");
         const auto blend_buffer = make_upload(blend_constants.data(), sizeof(blend_constants), "blend");
         const auto verdict_buffer = make_upload(verdicts.data(), verdicts.size() * sizeof(verdicts[0]), "verdicts");
 
@@ -304,8 +304,8 @@ public:
         list->SetGraphicsRootShaderResourceView(4u, verdict_buffer->GetGPUVirtualAddress());
         list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         const D3D12_VERTEX_BUFFER_VIEW view{vertex_buffer->GetGPUVirtualAddress(),
-                                            static_cast<UINT>(vertices.size() * sizeof(GxVertexOut)),
-                                            static_cast<UINT>(sizeof(GxVertexOut))};
+                                            static_cast<UINT>(vertices.size() * sizeof(RenderVertex)),
+                                            static_cast<UINT>(sizeof(RenderVertex))};
         list->IASetVertexBuffers(0u, 1u, &view);
         for (UINT i = 0; i < count; ++i) {
             const D3D12_VIEWPORT viewport{static_cast<float>(i), 0.0f, 1.0f, 1.0f, 0.0f, 1.0f};
@@ -313,7 +313,7 @@ public:
             list->RSSetViewports(1u, &viewport);
             list->RSSetScissorRects(1u, &scissor);
             list->SetGraphicsRootConstantBufferView(
-                0u, constant_buffer->GetGPUVirtualAddress() + static_cast<UINT64>(i) * sizeof(GxVsConstants));
+                0u, constant_buffer->GetGPUVirtualAddress() + static_cast<UINT64>(i) * sizeof(VertexConstants));
             list->DrawInstanced(1u, 1u, i, 0u);
         }
         D3D12_RESOURCE_BARRIER barrier{};

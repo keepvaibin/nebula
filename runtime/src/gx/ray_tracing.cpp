@@ -454,7 +454,7 @@ enum RootParameter : UINT {
     kRootCount,
 };
 
-constexpr std::uint32_t kVsConstantsBytes = 1536u;   // sizeof(GxVsConstants)
+constexpr std::uint32_t kVsConstantsBytes = 1536u;   // sizeof(VertexConstants)
 constexpr std::uint32_t kPaletteMatrixBytes = 48u;
 constexpr UINT kTimestampsPerSlot = 4u;
 constexpr UINT64 kReadbackSlotBytes = 128u;

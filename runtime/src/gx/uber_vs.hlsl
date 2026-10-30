@@ -1,10 +1,10 @@
 // Uber vertex shader: the runtime form of ShaderGenerator::generate_vs. Every
 // decision the specialized generator bakes from VertexShaderKey is read here
-// from the key copy at the tail of GxVsConstants (uber_vs_*), with the same
+// from the key copy at the tail of VertexConstants (uber_vs_*), with the same
 // arithmetic in the same order, so a draw renders the same while its
 // specialized pipeline compiles in the background.
 
-cbuffer GxVsConstants : register(b0) {
+cbuffer VertexConstants : register(b0) {
     float4x4 projection;
     uint4    texgen_config[4];
     float4   chan_ambient[2];
@@ -150,7 +150,7 @@ void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, flo
 }
 
 // Interpolated redraw vertex blending (shader_gen.cpp kVertexBlendDef).
-cbuffer GxVertexBlend : register(b2) {
+cbuffer VertexBlend : register(b2) {
     uint  vb_mode;   // 0: the draw's own vertices only
     uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
     uint  vb_slot;   // the pair's verdict

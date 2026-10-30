@@ -57,7 +57,7 @@ int main() {
         case 11: frame=true;break;
         }
         const std::uint32_t dirty=(state.consume_changed()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);
-        GxVsConstants reference{};fill_vs_constants(state,draw,0u,scale,reference);
+        VertexConstants reference{};fill_vs_constants(state,draw,0u,scale,reference);
         const auto& got=cache.update(state,draw,dirty,scale,frame);
         ok &= std::memcmp(&got,&reference,sizeof(got))==0;
         if(kind==5u)ok &= ((got.flags&2u)!=0u)==draw.channel[0].lighting_enable;

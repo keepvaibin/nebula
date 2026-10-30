@@ -644,17 +644,17 @@ int main() {
                     errors ? static_cast<const char*>(errors->GetBufferPointer()) : "");
                 continue;
             }
-            // The motion fields must land where GxVsConstants puts them.
+            // The motion fields must land where VertexConstants puts them.
             Microsoft::WRL::ComPtr<ID3D12ShaderReflection> reflection;
             if (SUCCEEDED(D3DReflect(code->GetBufferPointer(), code->GetBufferSize(),
                                      IID_PPV_ARGS(&reflection)))) {
                 ID3D12ShaderReflectionConstantBuffer* cb =
-                    reflection->GetConstantBufferByName("GxVsConstants");
+                    reflection->GetConstantBufferByName("VertexConstants");
                 D3D12_SHADER_VARIABLE_DESC proj{}, ctrl{};
                 if (FAILED(cb->GetVariableByName("motion_prev_proj")->GetDesc(&proj)) ||
                     FAILED(cb->GetVariableByName("motion_ctrl")->GetDesc(&ctrl)) ||
-                    proj.StartOffset != offsetof(GxVsConstants, motion_prev_proj) ||
-                    ctrl.StartOffset != offsetof(GxVsConstants, motion_ctrl)) {
+                    proj.StartOffset != offsetof(VertexConstants, motion_prev_proj) ||
+                    ctrl.StartOffset != offsetof(VertexConstants, motion_ctrl)) {
                     ++g_failures;
                     std::printf("FAILED: %s motion constant offsets %u %u\n", label,
                                 proj.StartOffset, ctrl.StartOffset);

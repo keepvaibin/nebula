@@ -56,7 +56,7 @@ struct TextureHandle;
 namespace vk {
 
 // What PipelineCacheVk builds GX pipelines against (RendererVk::root_signature()).
-struct GxLayout {
+struct RenderLayout {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     std::array<VkDescriptorSetLayout, 3> sets{};
     VkRenderPass efb_pass = VK_NULL_HANDLE;
@@ -326,7 +326,7 @@ public:
     }
     // The pipelines' EFB variant (shader_keys.h RenderStateKey::samples_log2): no HDR scene EFB here.
     [[nodiscard]] std::uint8_t efb_variant() const noexcept { return efb_samples_log2(); }
-    [[nodiscard]] const vk::GxLayout* root_signature() const noexcept { return &gx_layout_; }
+    [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &gx_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }
     // The display's vblanks (host_window::vblank_grid): the latest and the interval, on galaxy::qpc_now()'s clock.
     [[nodiscard]] bool vblank_grid(std::int64_t& vblank, std::int64_t& period) const noexcept;
@@ -485,7 +485,7 @@ private:
     std::uint64_t last_submitted_ = 0;
 
     // Layouts and passes.
-    vk::GxLayout gx_layout_{};
+    vk::RenderLayout gx_layout_{};
     VkDescriptorSetLayout utility_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear clamp)
     VkDescriptorSetLayout conversion_set_layout_ = VK_NULL_HANDLE;  // t0, s0 (linear), s1 (point)
     VkPipelineLayout utility_layout_ = VK_NULL_HANDLE;      // utility set + 64 bytes of push constants

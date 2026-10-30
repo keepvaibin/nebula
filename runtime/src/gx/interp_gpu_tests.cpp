@@ -197,7 +197,7 @@ void test_texture_matrices() {
 }
 
 void test_colours() {
-    GxPsConstants a{}, b{};
+    PixelConstants a{}, b{};
     for (unsigned r = 0; r < 4u; ++r) {
         for (unsigned c = 0; c < 4u; ++c) {
             a.tev_regs[r][c] = uniform(-1.0f, 1.0f);
@@ -215,18 +215,18 @@ void test_colours() {
     Program program;
     program.ps_colours(0u, a, b);
     for (float t : {0.25f, 0.5f, 0.8f}) {
-        GxPsConstants got = b;
+        PixelConstants got = b;
         evaluate(program, affine_identity(), t, reinterpret_cast<std::uint32_t*>(&got));
-        GxPsConstants want{};
+        PixelConstants want{};
         ps_colours_at(a, b, t, want);
         check(std::memcmp(&got.ind_mtx, &want.ind_mtx, sizeof(want.ind_mtx)) == 0, "indirect matrices match");
         const auto* g = reinterpret_cast<const std::uint32_t*>(&got);
         const auto* w = reinterpret_cast<const std::uint32_t*>(&want);
         bool same = true;
-        for (unsigned i = 0; i < sizeof(GxPsConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
+        for (unsigned i = 0; i < sizeof(PixelConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
         check(same, "pixel colour ops match ps_colours_at");
     }
-    GxVsConstants va{}, vb{};
+    VertexConstants va{}, vb{};
     for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
         for (unsigned c = 0; c < 4u; ++c) {
             va.chan_ambient[ch][c] = uniform(0.0f, 1.0f);
@@ -242,9 +242,9 @@ void test_colours() {
     Program vs;
     vs.channel_colours(0u, va, vb);
     vs.projection(0u, va, vb);
-    GxVsConstants got = vb;
+    VertexConstants got = vb;
     evaluate(vs, affine_identity(), 0.4f, reinterpret_cast<std::uint32_t*>(&got));
-    GxVsConstants want = vb;
+    VertexConstants want = vb;
     channel_colours_at(va, vb, 0.4f, want);
     for (unsigned i = 0; i < 16u; ++i) {
         (&want.projection[0][0])[i] = (&va.projection[0][0])[i] + ((&vb.projection[0][0])[i] - (&va.projection[0][0])[i]) * 0.4f;
@@ -252,15 +252,15 @@ void test_colours() {
     const auto* g = reinterpret_cast<const std::uint32_t*>(&got);
     const auto* w = reinterpret_cast<const std::uint32_t*>(&want);
     bool same = true;
-    for (unsigned i = 0; i < sizeof(GxVsConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
+    for (unsigned i = 0; i < sizeof(VertexConstants) / 4u; ++i) same = same && near_word(g[i], w[i]);
     check(same, "channel colour and projection ops match");
 }
 
 void test_layout() {
     Layout layout{3u, 2u, 4u};
-    check(layout.palette_base() == 3u * sizeof(GxVsConstants), "palettes follow the VS blocks");
+    check(layout.palette_base() == 3u * sizeof(VertexConstants), "palettes follow the VS blocks");
     check(layout.ps_base() % 256u == 0u && layout.palette_offset(1u) % 256u == 0u, "blocks stay 256-byte aligned");
-    check(layout.bytes() == layout.ps_base() + 4u * sizeof(GxPsConstants), "layout size");
+    check(layout.bytes() == layout.ps_base() + 4u * sizeof(PixelConstants), "layout size");
     Layout motion{3u, 2u, 4u, 2u};
     check(motion.prev_palette_offset(0u) == motion.palette_offset(2u) &&
               motion.ps_base() == motion.prev_palette_offset(1u) + kPrevPaletteBytes &&
@@ -280,9 +280,9 @@ void test_previous_frame() {
         const Affine34 wb = nudge(wa, 0.1f);
         EyeMotion eye;
         eye_motion(&wa, affine_multiply(vb, wb), camera, false, eye);
-        GxVsConstants pa{}, pb{};
+        VertexConstants pa{}, pb{};
         const bool orthographic = round % 4 == 0;
-        for (GxVsConstants* c : {&pa, &pb}) {
+        for (VertexConstants* c : {&pa, &pb}) {
             const float k = c == &pa ? 1.0f : uniform(0.9f, 1.1f);
             c->projection[0][0] = 1.2f * k;
             c->projection[1][1] = 1.6f * k;
@@ -345,7 +345,7 @@ void test_previous_frame_across_pairs() {
         const float yaw = uniform(-1.0f, 1.0f), yaw_rate = uniform(-0.05f, 0.05f);
         const float cx = uniform(-50.0f, 50.0f), cvx = uniform(-15.0f, 15.0f), cvz = uniform(-15.0f, 15.0f);
         Affine34 views[3], objects[3];
-        GxVsConstants projections[3]{};
+        VertexConstants projections[3]{};
         // Uniform scale: a spin then keeps the polar decomposition's stretch, so the turn is all the motion.
         const float scale = uniform(0.5f, 2.0f);
         const Affine34 object = rotation(uniform(-3.0f, 3.0f), uniform(-1.4f, 1.4f), uniform(-3.0f, 3.0f), scale, scale,

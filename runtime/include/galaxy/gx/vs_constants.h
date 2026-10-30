@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// GxVsConstants filled from the drawing state on the CPU, and a cache of the last fill. Every changed draw still gets a
+// VertexConstants filled from the drawing state on the CPU, and a cache of the last fill. Every changed draw still gets a
 // complete constant-ring allocation; nothing here touches GPU upload memory.
 #include "galaxy/gx/draw_state.h"
 #include "galaxy/gx/matrix_memory.h"
@@ -53,7 +53,7 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     }
 }
 
-inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDrawState& draw, GxVsConstants& out) {
+inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDrawState& draw, VertexConstants& out) {
     const auto copy_matrix = [&state](
                                  unsigned row,
                                  float destination[3][4]) {
@@ -91,14 +91,14 @@ inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDr
 
 }
 
-// Fills GxVsConstants for the current drawing state (matrix rows from MatrixMemory).
+// Fills VertexConstants for the current drawing state (matrix rows from MatrixMemory).
 // `palette_snapshot_index` is the index of this frame's XF matrix upload in the matrix ring (written by RenderCore).
 inline void fill_vs_constants(
     const MatrixMemory& state,
     const NativeDrawState& draw,
     std::uint32_t palette_snapshot_index,
     unsigned efb_scale,
-    GxVsConstants& out) {
+    VertexConstants& out) {
     std::memset(&out, 0, sizeof(out));
 
     fill_vs_projection(draw, out.projection);
@@ -169,7 +169,7 @@ inline void fill_vs_constants(
 }
 
 // A unit vector as a point of the octahedral map, x and y as snorm16 in the low and high halves
-// (GxVsConstants::sky_up; the enhanced pixel shader's enh_up decodes it).
+// (VertexConstants::sky_up; the enhanced pixel shader's enh_up decodes it).
 [[nodiscard]] inline std::uint32_t encode_octahedral(const float v[3]) noexcept {
     const float sum = std::fabs(v[0]) + std::fabs(v[1]) + std::fabs(v[2]);
     if (!(sum > 0.0f)) {
@@ -205,19 +205,19 @@ inline void decode_octahedral(std::uint32_t word, float out[3]) noexcept {
 }
 
 struct VsConstantsCpuCache {
-    GxVsConstants constants{};
+    VertexConstants constants{};
     unsigned efb_scale = 0u;
     bool valid = false;
-    // The scene's sky up (GxVsConstants::sky_up, sky_up_known), kept across fills.
+    // The scene's sky up (VertexConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
-    // GxVsConstants::flags above bits 0-1: the ray tracer's de-bake controls (RenderCore), kept across fills.
+    // VertexConstants::flags above bits 0-1: the ray tracer's de-bake controls (RenderCore), kept across fills.
     std::uint32_t debake = 0u;
-    // GxVsConstants::debake_sh, debake_peak (flags bit 6).
+    // VertexConstants::debake_sh, debake_peak (flags bit 6).
     float debake_sh[7][4]{};
     float debake_peak[4]{};
 
-    const GxVsConstants& update(const MatrixMemory& state, const NativeDrawState& draw, std::uint32_t dirty,
+    const VertexConstants& update(const MatrixMemory& state, const NativeDrawState& draw, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
         // When only XF matrices changed, refresh the inline matrices and keep the rest of the last full fill;
         // any other change, dirty frame bindings or a new scale refill everything.

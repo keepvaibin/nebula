@@ -293,7 +293,7 @@ static const char* compare_func_name(CompareFunc f) {
 }
 
 static constexpr const char* kVsConstantsDef = R"HLSL(
-cbuffer GxVsConstants : register(b0) {
+cbuffer VertexConstants : register(b0) {
     float4x4 projection;
     // C++ packs texgen_config as uint32_t[8][2] (tight, 64 bytes).  HLSL pads
     // each array element to 16 bytes, so uint2[8] would occupy 128 bytes and
@@ -321,7 +321,7 @@ StructuredBuffer<float4> mtx_palette : register(t0, space1);
 )HLSL";
 
 static constexpr const char* kPsConstantsDef = R"HLSL(
-cbuffer GxPsConstants : register(b1) {
+cbuffer PixelConstants : register(b1) {
     uint4    stage_config[16];
     float4   tev_regs[4];
     float4   konst[4];
@@ -338,7 +338,7 @@ Texture2D    tex[8] : register(t0);
 SamplerState samp[8] : register(s0);
 )HLSL";
 
-// Motion-vector variant: GxVsConstants continues past the matrices to the
+// Motion-vector variant: VertexConstants continues past the matrices to the
 // motion fields in the struct's tail padding (uber_constants.h, c73-c79).
 static constexpr const char* kVsMotionConstantMembers = R"HLSL(    float4   motion_skip_[8];
     // A..D, then E, F, type (0 perspective) of the draw's previous projection.
@@ -358,7 +358,7 @@ static constexpr const char* kMotionInterpolants =
     "    float4   mv_cur    : TEXCOORD12;\n"
     "    float4   mv_prev   : TEXCOORD13;\n";
 
-// Curved surfaces (kVsKeyCurved): the vertex's curve data in (GxVertexOut::curve), and to the hull and domain shaders
+// Curved surfaces (kVsKeyCurved): the vertex's curve data in (RenderVertex::curve), and to the hull and domain shaders
 // the eye-space position, the displacement normal turned as normals are (w the clip jitter the draw adds, x and y),
 // and the crease normal (turned, packed), the place with its first crease neighbour and the second neighbour.
 static constexpr const char* kCurvedInput = "    uint3    curve    : BEND;\n";
@@ -407,11 +407,11 @@ float3 curve_edge_normal(VSOut a, VSOut b) {
 )HLSL";
 
 // Interpolated redraw: a sub-frame blends a CPU-written vertex buffer with the
-// matching draw's vertices of the frame before (GxVertexOut, 144-byte stride;
+// matching draw's vertices of the frame before (RenderVertex, 144-byte stride;
 // the renderer binds them at t1, space1 and the blend at b2). The uber vertex
 // shader carries the same code.
 static constexpr const char* kVertexBlendDef = R"HLSL(
-cbuffer GxVertexBlend : register(b2) {
+cbuffer VertexBlend : register(b2) {
     uint  vb_mode;   // 0: the draw's own vertices only
     uint  vb_frame;  // element of the presented frame's values (a zero element in game frames)
     uint  vb_slot;   // the pair's verdict
@@ -535,7 +535,7 @@ static std::string insert_before_close(const char* text, const char* members, bo
     return out;
 }
 
-// VS struct declarations (fixed 144-byte GxVertexOut input layout).
+// VS struct declarations (fixed 144-byte RenderVertex input layout).
 // Interpolators carry float3 texcoords (S, T, Q). Projective texgens divide by Q in the PS.
 static constexpr const char* kVsStructs = R"HLSL(
 struct VSIn {
@@ -610,7 +610,7 @@ struct PSIn {
 // (root CBV b0, visible to every stage) and the matrix palette (t0, space1).
 // ppl_finite_attn (kPsKeyPplFiniteLightAttn) precedes it: see emit_light.
 static constexpr const char* kPplLighting = R"HLSL(
-cbuffer GxPplConstants : register(b0) {
+cbuffer PplConstants : register(b0) {
     float4 ppl_chan_ambient[2]  : packoffset(c8);
     float4 ppl_chan_material[2] : packoffset(c10);
     uint   ppl_num_chans        : packoffset(c12.y);
@@ -797,7 +797,7 @@ void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out
     lcol = float3((lcw >> 24) & 255u, (lcw >> 16) & 255u, (lcw >> 8) & 255u) / 255.0;
 }
 
-// The player's up in eye space (GxVsConstants::sky_up: octahedral, x and y in snorm16 halves),
+// The player's up in eye space (VertexConstants::sky_up: octahedral, x and y in snorm16 halves),
 // else the view's up.
 float3 enh_up() {
     if (ppl_sky_up_known == 0u) {
@@ -935,7 +935,7 @@ float3 enh_finish(float3 frag, EnhShade e, bool view) {
 // are in physical pixels, so widths scale with the EFB while the clip-space
 // result remains correct for every valid XF viewport.
 static constexpr char kLineGeometryShader[] = R"HLSL(
-cbuffer GxLinePointConstants : register(b0) {
+cbuffer LinePointConstants : register(b0) {
     float4 line_point_raster : packoffset(c65);
     uint4  line_point_tex_offsets : packoffset(c66);
 };
@@ -988,7 +988,7 @@ void main(line VSOut input_vertices[2], inout TriangleStream<VSOut> output) {
 )HLSL";
 
 static constexpr char kPointGeometryShader[] = R"HLSL(
-cbuffer GxLinePointConstants : register(b0) {
+cbuffer LinePointConstants : register(b0) {
     float4 line_point_raster : packoffset(c65);
     uint4  line_point_tex_offsets : packoffset(c66);
 };
@@ -1492,9 +1492,9 @@ std::string ShaderGenerator::curve_sort_source() {
     std::snprintf(defines, sizeof(defines),
                   "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
                   "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n",
-                  sizeof(GxVertexOut), offsetof(GxVertexOut, mtx_indices), offsetof(GxVertexOut, curve),
-                  offsetof(GxVsConstants, mtx_palette_base), offsetof(GxVsConstants, inline_pos_matrix),
-                  offsetof(GxVsConstants, line_point_raster));
+                  sizeof(RenderVertex), offsetof(RenderVertex, mtx_indices), offsetof(RenderVertex, curve),
+                  offsetof(VertexConstants, mtx_palette_base), offsetof(VertexConstants, inline_pos_matrix),
+                  offsetof(VertexConstants, line_point_raster));
     return std::string("// Curved surfaces' triangles sorted (ShaderGenerator::curve_sort_source).\n") + defines +
            kCurveCodec + kCurveValue + kCurveSort;
 }
@@ -2247,7 +2247,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 s << "                if ((ppl_flags & 128u) != 0u) {\n"
                      "                    enh_avg = dot(enh_avg, float3(0.2126, 0.7152, 0.0722)).xxx;\n"
                      "                }\n";
-                // De-baked (GxVsConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's
+                // De-baked (VertexConstants flags bit 4): lit at its program's neutral light (bits 8-15), not the art's
                 // full light, in the full light's hue, since the ambient register or the vertices often hold the
                 // object's own colour.
                 s << "                if ((ppl_flags & 16u) != 0u) {\n"

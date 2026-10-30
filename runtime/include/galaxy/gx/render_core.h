@@ -114,7 +114,7 @@ public:
     bool initialize(int width, int height);
     [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
     void render_frame(
-        const GxServices* services,
+        const RenderServices* services,
         bool present_swap_chain = true,
         bool black = false);
     void present_cached_xfb(
@@ -260,7 +260,7 @@ private:
     void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b);
 
     // Consumes state_'s dirty bits: rebuilds the shader and render-state keys, writes
-    // GxVsConstants/GxPsConstants into the constant ring, snapshots the XF matrix palette into the
+    // VertexConstants/PixelConstants into the constant ring, snapshots the XF matrix palette into the
     // matrix ring and refreshes the texture tables of the sampled maps. Returns the draw's pipeline,
     // or nullptr when none is ready (the draw is skipped).
     gpu::Pipeline* flush_draw_state(
@@ -336,7 +336,7 @@ private:
         bool prerecorded_movie{};
         float safety_surround{};
         MovieFrameMark movie_frame{};
-        const GxServices* services = nullptr;
+        const RenderServices* services = nullptr;
         std::uint64_t producer_wait_ns = 0;
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
@@ -355,7 +355,7 @@ private:
         // mask marks marker i's view valid.
         std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
         std::uint8_t fifo_marker_view_mask = 0;
-        // The player's up per SceneBegin marker (GxVsConstants::sky_up); bit i of the mask marks it known.
+        // The player's up per SceneBegin marker (VertexConstants::sky_up); bit i of the mask marks it known.
         std::array<std::uint32_t, kFifoMarkersPerChunk> fifo_marker_sky_up{};
         std::uint8_t fifo_marker_sky_up_mask = 0;
         // The stage per SceneBegin marker (empty when the game did not say).
@@ -370,7 +370,7 @@ private:
         std::uint64_t fence_value = 0;
         std::uint64_t diagnostic_fence_bound_ns = 0;
         std::uint64_t diagnostic_fence_observed_ns = 0;
-        const GxServices* services = nullptr;
+        const RenderServices* services = nullptr;
     };
 
     // Starts one fresh GX command-stream session. Every parser, state and tail mirror resets
@@ -671,7 +671,7 @@ private:
     std::uint32_t debake_models_stage_ = 0u;
     std::uint64_t debake_sample_key_ = 0u;   // the current state's undecided model: its batches are sampled
     std::uint8_t debake_model_level_ = 0u;   // the current state's baked model's level (0: the program's neutral)
-    // The current state's model's facing fit (GxVsConstants::debake_sh, debake_peak): the shaders de-bake by it.
+    // The current state's model's facing fit (VertexConstants::debake_sh, debake_peak): the shaders de-bake by it.
     bool debake_fit_active_ = false;
     float debake_fit_sh_[7][4]{};
     float debake_fit_peak_[4]{};
@@ -796,14 +796,14 @@ private:
     // one recording, the one being interpolated (its log completed), and its
     // predecessor (previous palettes and texture matrices).
     struct InterpScene {
-        std::vector<GxVsConstants> constants;   // per record, as uploaded
+        std::vector<VertexConstants> constants;   // per record, as uploaded
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
         std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
         std::size_t palette_count = 0;
         // Pixel-stage constants per upload in the scene (draws carry the index).
-        std::vector<GxPsConstants> ps_constants;
+        std::vector<PixelConstants> ps_constants;
         Affine34 camera{};
         // The game camera (world to eye) of the scene.
         Affine34 view{};
@@ -1109,7 +1109,7 @@ private:
     EfbCopyManager efb_copies_;
     Renderer renderer_;
 
-    const GxServices* frame_services_ = nullptr;
+    const RenderServices* frame_services_ = nullptr;
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may
     // run a small bounded number of frames ahead, then blocks on queue_space_cv_. This is the
@@ -1145,17 +1145,17 @@ private:
     void take_attached_pointer_depth_capture(FrameChunk& chunk);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk) noexcept;
-    // `sky_up`: the scene's GxVsConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
+    // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
     // A stage was loaded (another sky and other lights): the tracer's stage state starts over.
     void begin_rt_stage();
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
-    void write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload);
+    void write_scene_vs_constants(const VertexConstants& cpu, VertexConstants& upload);
     // Writes the jittered projection of a perspective draw into `upload`;
     // `jitter_ndc` receives the offset (zero for orthographic draws).
-    void apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+    void apply_scene_jitter(const VertexConstants& cpu, VertexConstants& upload,
                             float jitter_ndc[2]);
     void adopt_pointer_depth_fence_if_needed();
     // Asynchronous EFB fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
@@ -1203,7 +1203,7 @@ private:
     // resident_vertex_arena.h for the block retirement rule.
     static constexpr std::uint32_t kResidentDecodedVertexCapacity =
         static_cast<std::uint32_t>(
-            64u * 1024u * 1024u / sizeof(GxVertexOut));
+            64u * 1024u * 1024u / sizeof(RenderVertex));
     ResidentVertexArena resident_vertices_;
     UploadBuffer resident_vertex_buffer_;
     std::byte* resident_vertex_mapped_ = nullptr;
@@ -1229,7 +1229,7 @@ private:
     void release_resident_vertex_buffer() noexcept;
     // `triangles` (indices into `vertices`) with those no corner bends first, into `split`; how many indices those
     // are. Empty `split` when an index is out of range.
-    static std::uint32_t split_curved_triangles(std::span<const GxVertexOut> vertices,
+    static std::uint32_t split_curved_triangles(std::span<const RenderVertex> vertices,
                                                 std::span<const std::uint16_t> triangles,
                                                 std::vector<std::uint16_t>& split);
 
@@ -1248,7 +1248,7 @@ private:
         std::uint8_t position_matrix = 0;
         std::shared_ptr<const curved::Model> curved;
         bool expanded = false;
-        std::vector<GxVertexOut> vertices;
+        std::vector<RenderVertex> vertices;
         ImmutableUploadToken index_upload_token;
         std::uint64_t resident_epoch = 0;
         std::uint32_t resident_offset = 0;
@@ -1285,7 +1285,7 @@ private:
     };
     const RecordVertexInputs* record_inputs_ = nullptr;
     // draw_record_immediate's vertices and indices before they go to the rings.
-    std::vector<GxVertexOut> immediate_vertices_;
+    std::vector<RenderVertex> immediate_vertices_;
     std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
     std::uint64_t vs_key_vertex_source_ = 0;

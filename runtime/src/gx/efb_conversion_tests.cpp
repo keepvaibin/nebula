@@ -52,14 +52,14 @@ struct Pixel {
 
 #pragma warning(push)
 #pragma warning(disable : 4324)
-struct GxPixelCase {
+struct PixelCase {
     galaxy::gx::PixelShaderKey shader{};
     galaxy::gx::RenderStateKey state{};
-    galaxy::gx::GxPsConstants constants{};
+    galaxy::gx::PixelConstants constants{};
     Pixel texture{18u, 52u, 86u, 120u};
 };
 #pragma warning(pop)
-struct GxPixelResult { Pixel color{}; float depth = 0.0f; };
+struct PixelResult { Pixel color{}; float depth = 0.0f; };
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -1066,16 +1066,16 @@ V main(uint id : SV_VertexID) {
         }
     }
 
-    GxPixelResult run_gx(const GxPixelCase& input) {
+    PixelResult run_gx(const PixelCase& input) {
         const std::vector<std::uint8_t> bytes{
             input.texture.r, input.texture.g, input.texture.b, input.texture.a};
-        GxPixelResult result;
+        PixelResult result;
         result.color = run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes,
             1u, 1u, 1u, {}, &input, &result.depth).front();
         return result;
     }
 
-    std::vector<Pixel> run_gx_grid(const GxPixelCase& input, UINT size) {
+    std::vector<Pixel> run_gx_grid(const PixelCase& input, UINT size) {
         const std::vector<std::uint8_t> bytes{
             input.texture.r, input.texture.g, input.texture.b, input.texture.a};
         return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes,
@@ -2076,7 +2076,7 @@ private:
         UINT source_height,
         UINT dest_size,
         const galaxy::gx::EfbConversionShaderConstants& constants,
-        const GxPixelCase* gx = nullptr, float* depth_result = nullptr,
+        const PixelCase* gx = nullptr, float* depth_result = nullptr,
         bool persistent_source = false, const D3D12_BOX* identity_box = nullptr,
         const D3D12_BOX* source_upload_box = nullptr) {
         const D3D12_HEAP_PROPERTIES default_heap =
@@ -2533,8 +2533,8 @@ PSIn main(uint id : SV_VertexID) {
     UINT64 fence_value_ = 0u;
 };
 
-GxPixelCase gx_pixel_fixture() {
-    GxPixelCase input;
+PixelCase gx_pixel_fixture() {
+    PixelCase input;
     input.shader.num_tev_stages = 1u;
     input.shader.num_texgens = 1u;
     input.shader.num_chans = 1u;

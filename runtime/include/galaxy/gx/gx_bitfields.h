@@ -287,7 +287,7 @@ struct TevOrder {
                                     // 6=normalized alpha bump, 7=zero.
 };
 
-// One TEV stage, the unit of shader keying, assembled by GxState from four BP registers.
+// One TEV stage, the unit of shader keying.
 struct TevStageConfig {
     // Color env (BP 0xC0 + 2*stage).
     TevColorArg color_a, color_b, color_c, color_d;

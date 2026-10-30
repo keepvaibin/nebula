@@ -14,7 +14,7 @@ namespace galaxy::gx {
 // vertex carries (curved_surfaces.h's Model): its corner's displacement normal and its place's
 // crease normal (both packed, zero for none) and its place with the first crease neighbour
 // (place | neighbour << 16); the second crease neighbour rides in mtx_indices[2]'s high half.
-struct GxVertexOut {
+struct RenderVertex {
     float position[3];
     float normal[3];
     float tangent[3];
@@ -25,13 +25,13 @@ struct GxVertexOut {
     std::uint32_t mtx_indices[3];   // x: pn/tex0-2, y: tex3-6, z: tex7
     std::uint32_t curve[3];
 };
-static_assert(sizeof(GxVertexOut) == 144, "fixed 144-byte vertex stride");
+static_assert(sizeof(RenderVertex) == 144, "fixed 144-byte vertex stride");
 // mtx_indices[2] bit 15: the corner is a flat solid's normal shaded soft (curved_surfaces.h PlaceBend::flat); ray
 // tracing shades its face flat (ray_tracing.hlsl kVertexFlatCorner). Bits 0-7 hold texture matrix 7's index, bits
 // 16-31 the second crease neighbour.
 inline constexpr std::uint32_t kVertexFlatCorner = 0x8000u;
-static_assert(offsetof(GxVertexOut, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
-static_assert(sizeof(GxVertexOut) % 16u == 0u,
+static_assert(offsetof(RenderVertex, mtx_indices) + 8u == 128u, "ray_tracing.hlsl reads mtx_indices[2] at byte 128");
+static_assert(sizeof(RenderVertex) % 16u == 0u,
               "vertex upload batching requires 16-byte stride alignment");
 
 }  // namespace galaxy::gx

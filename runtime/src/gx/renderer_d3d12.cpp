@@ -1085,8 +1085,8 @@ HRESULT create_gx_root_signature(
     *root_signature = nullptr;
 
     // GX root signature:
-    //   [0] Root CBV b0,space0  VS+GS - GxVsConstants
-    //   [1] Root CBV b1,space0  PS - GxPsConstants
+    //   [0] Root CBV b0,space0  VS+GS - VertexConstants
+    //   [1] Root CBV b1,space0  PS - PixelConstants
     //   [2] Descriptor table   SRV t0..t7,space0  PS - textures
     //   [3] Descriptor table   Sampler s0..s7       PS
     //   [4] Root SRV  t0,space1 VS - matrix palette
@@ -2399,7 +2399,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
         for (unsigned i = 0; i < kFramesInFlight; ++i)
             d3d_check(device_->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&allocators_[i])), "CreateCommandAllocator");
         d3d_check(device_->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, allocators_[0].Get(), nullptr, IID_PPV_ARGS(&command_list_)), "CreateCommandList");
-        command_list_->SetName(L"GxFrameList");
+        command_list_->SetName(L"FrameList");
         d3d_check(command_list_->Close(), "CommandList Close init");
 
         d3d_check(device_->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence_)), "CreateFence");
@@ -5441,7 +5441,7 @@ void RendererD3D12::rt_note_draw(const DrawCall& call, const RtDrawInfo& info) {
             draw.flags |= kRtDrawWideIndices;
         }
     }
-    if (!offset_in(call.vs_constants, sizeof(GxVsConstants), constant_ring_.gpu_base(), constant_ring_.total_bytes(),
+    if (!offset_in(call.vs_constants, sizeof(VertexConstants), constant_ring_.gpu_base(), constant_ring_.total_bytes(),
                    draw.constants_offset)) {
         return;
     }
@@ -9444,7 +9444,7 @@ bool RendererD3D12::ensure_peek_resources() {
             IID_PPV_ARGS(&peek_command_list_)),
         "GXPeek command list");
     d3d_check(peek_command_list_->Close(), "GXPeek command list close");
-    peek_command_list_->SetName(L"GxPeekList");
+    peek_command_list_->SetName(L"PeekList");
 
     D3D12_HEAP_PROPERTIES default_heap{};
     default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
@@ -9698,7 +9698,7 @@ bool RendererD3D12::ensure_async_peek_field_resources(
         "async peek field command list");
     d3d_check(field.command_list->Close(), "async peek field list close");
     field.command_list->SetName(
-        is_depth ? L"GxAsyncDepthFieldList" : L"GxAsyncColorFieldList");
+        is_depth ? L"AsyncDepthFieldList" : L"AsyncColorFieldList");
 
     D3D12_HEAP_PROPERTIES default_heap{};
     default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;

@@ -84,8 +84,8 @@ static_assert(sizeof(Copy) == 16u);
 
 inline constexpr std::uint32_t kPaletteWords = kXfPaletteWords;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
-inline constexpr std::uint32_t kVsBytes = sizeof(GxVsConstants);
-inline constexpr std::uint32_t kPsBytes = sizeof(GxPsConstants);
+inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
+inline constexpr std::uint32_t kPsBytes = sizeof(PixelConstants);
 // The rows a motion vector reads from a palette at the frame presented before
 // (position and texture matrices, rows 0-63).
 inline constexpr std::uint32_t kPrevPaletteWords = 256u;
@@ -94,21 +94,21 @@ static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 
               kPrevPaletteBytes % 256u == 0u);
 
 // Word offsets inside the blocks.
-inline constexpr std::uint32_t kVsProjection = offsetof(GxVsConstants, projection) / 4u;
-inline constexpr std::uint32_t kVsAmbient = offsetof(GxVsConstants, chan_ambient) / 4u;
-inline constexpr std::uint32_t kVsMaterial = offsetof(GxVsConstants, chan_material) / 4u;
-inline constexpr std::uint32_t kVsPaletteBase = offsetof(GxVsConstants, mtx_palette_base) / 4u;
-inline constexpr std::uint32_t kVsPosition = offsetof(GxVsConstants, inline_pos_matrix) / 4u;
-inline constexpr std::uint32_t kVsTex = offsetof(GxVsConstants, inline_tex_matrices) / 4u;
-inline constexpr std::uint32_t kVsPost = offsetof(GxVsConstants, inline_post_matrices) / 4u;
-inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(GxVsConstants, motion_prev_proj) / 4u;
-inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(GxVsConstants, motion_prev_pos) / 4u;
-inline constexpr std::uint32_t kVsMotionCtrl = offsetof(GxVsConstants, motion_ctrl) / 4u;
-inline constexpr std::uint32_t kPsTevRegs = offsetof(GxPsConstants, tev_regs) / 4u;
-inline constexpr std::uint32_t kPsKonst = offsetof(GxPsConstants, konst) / 4u;
-inline constexpr std::uint32_t kPsAlphaRefs = offsetof(GxPsConstants, alpha_refs) / 4u;
-inline constexpr std::uint32_t kPsFog = offsetof(GxPsConstants, fog_params) / 4u;
-inline constexpr std::uint32_t kPsIndMtx = offsetof(GxPsConstants, ind_mtx) / 4u;
+inline constexpr std::uint32_t kVsProjection = offsetof(VertexConstants, projection) / 4u;
+inline constexpr std::uint32_t kVsAmbient = offsetof(VertexConstants, chan_ambient) / 4u;
+inline constexpr std::uint32_t kVsMaterial = offsetof(VertexConstants, chan_material) / 4u;
+inline constexpr std::uint32_t kVsPaletteBase = offsetof(VertexConstants, mtx_palette_base) / 4u;
+inline constexpr std::uint32_t kVsPosition = offsetof(VertexConstants, inline_pos_matrix) / 4u;
+inline constexpr std::uint32_t kVsTex = offsetof(VertexConstants, inline_tex_matrices) / 4u;
+inline constexpr std::uint32_t kVsPost = offsetof(VertexConstants, inline_post_matrices) / 4u;
+inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(VertexConstants, motion_prev_proj) / 4u;
+inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(VertexConstants, motion_prev_pos) / 4u;
+inline constexpr std::uint32_t kVsMotionCtrl = offsetof(VertexConstants, motion_ctrl) / 4u;
+inline constexpr std::uint32_t kPsTevRegs = offsetof(PixelConstants, tev_regs) / 4u;
+inline constexpr std::uint32_t kPsKonst = offsetof(PixelConstants, konst) / 4u;
+inline constexpr std::uint32_t kPsAlphaRefs = offsetof(PixelConstants, alpha_refs) / 4u;
+inline constexpr std::uint32_t kPsFog = offsetof(PixelConstants, fog_params) / 4u;
+inline constexpr std::uint32_t kPsIndMtx = offsetof(PixelConstants, ind_mtx) / 4u;
 
 // Output buffer: VS blocks, palettes, the palettes' rows at the frame presented
 // before (motion vectors), then PS blocks (each 256-byte aligned).
@@ -163,13 +163,13 @@ public:
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
     // Channel colours of a VS block (dst: the block's first word) as channel_colours_at.
-    void channel_colours(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
+    void channel_colours(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Projection of a VS block as the sub-frame lerp of render_interp_subframe.
-    void projection(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
+    void projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Its GX parameters A..D (motion_prev_proj) the same way.
-    void projection_params(std::uint32_t dst, const GxVsConstants& a, const GxVsConstants& b);
+    void projection_params(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Pixel-stage colours of a PS block (dst: its first word) as ps_colours_at.
-    void ps_colours(std::uint32_t dst, const GxPsConstants& a, const GxPsConstants& b);
+    void ps_colours(std::uint32_t dst, const PixelConstants& a, const PixelConstants& b);
 
     std::vector<Op> ops;
     std::vector<std::uint32_t> payload;

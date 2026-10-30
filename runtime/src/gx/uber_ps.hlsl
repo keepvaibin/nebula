@@ -1,5 +1,5 @@
 // Uber pixel shader: the runtime form of ShaderGenerator::generate_ps. The
-// PixelShaderKey of the draw is read from GxPsConstants (stage_config holds
+// PixelShaderKey of the draw is read from PixelConstants (stage_config holds
 // the key's packed stages, ind_cmd/ind_misc its indirect state and
 // uber_ps_header its scalar fields) and interpreted with the same integer TEV
 // arithmetic the specialized generator emits. The output signature is fixed
@@ -16,7 +16,7 @@
 #define UBER_EARLY_DEPTH 1
 #endif
 
-cbuffer GxPsConstants : register(b1) {
+cbuffer PixelConstants : register(b1) {
     uint4    stage_config[16];
     float4   tev_regs[4];
     float4   konst[4];

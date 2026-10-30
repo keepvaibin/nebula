@@ -391,7 +391,7 @@ void test_sky_sun() {
 }
 
 void test_colours() {
-    GxPsConstants a{}, b{}, out{};
+    PixelConstants a{}, b{}, out{};
     a.tev_regs[0][0] = 0.0f;
     b.tev_regs[0][0] = 1.0f;
     a.konst[1][3] = 0.2f;
@@ -408,10 +408,10 @@ void test_colours() {
     check(out.ind_mtx[0][0] == 150, "indirect matrix rows lerp");
     ps_colours_at(a, b, 1.0f, out);
     check(std::memcmp(&out, &b, sizeof(out)) == 0, "t=1 is b exactly");
-    GxPsConstants c = b;
+    PixelConstants c = b;
     c.stage_config[0][0] = 1u;
     check(!ps_colours_move(a, c), "another TEV program is a discrete change");
-    GxVsConstants va{}, vb{}, vout{};
+    VertexConstants va{}, vb{}, vout{};
     vb.chan_material[0][0] = 1.0f;
     check(channel_colours_move(va, vb), "a material colour change interpolates");
     vout = vb;

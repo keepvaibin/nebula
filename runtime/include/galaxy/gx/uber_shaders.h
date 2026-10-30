@@ -53,9 +53,9 @@ inline constexpr unsigned kUberPsVariants = 9u;
     return (variant >= 4u && variant < 6u) || variant == 8u;
 }
 
-// The fields of GxPsConstants that specialized shaders bake from the key and
+// The fields of PixelConstants that specialized shaders bake from the key and
 // never read: stage_config, ind_cmd, ind_misc and uber_ps_header.
-inline void apply_uber_ps_key(const PixelShaderKey& key, GxPsConstants& out) noexcept {
+inline void apply_uber_ps_key(const PixelShaderKey& key, PixelConstants& out) noexcept {
     static_assert(sizeof(key.stages) == sizeof(out.stage_config));
     static_assert(sizeof(key.ind_cmd) == sizeof(out.ind_cmd));
     std::memcpy(out.stage_config, key.stages, sizeof(out.stage_config));
@@ -80,9 +80,9 @@ inline void apply_uber_ps_key(const PixelShaderKey& key, GxPsConstants& out) noe
     out.uber_ps_header[3] = 0u;
 }
 
-// GxVsConstants' uber tail is written straight into upload memory, so this
+// VertexConstants' uber tail is written straight into upload memory, so this
 // takes the destination of each field rather than a whole struct.
-inline void apply_uber_vs_key(const VertexShaderKey& key, GxVsConstants& out) noexcept {
+inline void apply_uber_vs_key(const VertexShaderKey& key, VertexConstants& out) noexcept {
     out.uber_vs_header[0] = key.num_texgens;
     out.uber_vs_header[1] = key.num_chans;
     out.uber_vs_header[2] = key.flags;

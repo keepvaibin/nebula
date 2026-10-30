@@ -26,7 +26,7 @@ inline constexpr unsigned kMaxColorChannels = 2;
 #endif
 
 // Pixel-stage constants (root CBV b1).
-struct alignas(256) GxPsConstants {
+struct alignas(256) PixelConstants {
     // TevStagePacked words, read only by the uber pixel shader.
     std::uint32_t stage_config[kMaxTevStages][4];
     // TEV color registers PREV, REG0-2 as signed values divided by 255.
@@ -59,22 +59,22 @@ struct alignas(256) GxPsConstants {
     std::uint32_t uber_ps_header[4];
 };
 
-static_assert(offsetof(GxPsConstants, stage_config) == 0);
-static_assert(offsetof(GxPsConstants, tev_regs) == 256);
-static_assert(offsetof(GxPsConstants, konst) == 320);
-static_assert(offsetof(GxPsConstants, alpha_refs) == 384);
-static_assert(offsetof(GxPsConstants, fog_params) == 400);
-static_assert(offsetof(GxPsConstants, tex_dims) == 432);
-static_assert(offsetof(GxPsConstants, ztex_params) == 560);
-static_assert(offsetof(GxPsConstants, ind_cmd) == 576);
-static_assert(offsetof(GxPsConstants, ind_mtx) == 640);
-static_assert(offsetof(GxPsConstants, ind_misc) == 736);
-static_assert(offsetof(GxPsConstants, uber_ps_header) == 752);
-static_assert(sizeof(GxPsConstants) == 768);
+static_assert(offsetof(PixelConstants, stage_config) == 0);
+static_assert(offsetof(PixelConstants, tev_regs) == 256);
+static_assert(offsetof(PixelConstants, konst) == 320);
+static_assert(offsetof(PixelConstants, alpha_refs) == 384);
+static_assert(offsetof(PixelConstants, fog_params) == 400);
+static_assert(offsetof(PixelConstants, tex_dims) == 432);
+static_assert(offsetof(PixelConstants, ztex_params) == 560);
+static_assert(offsetof(PixelConstants, ind_cmd) == 576);
+static_assert(offsetof(PixelConstants, ind_mtx) == 640);
+static_assert(offsetof(PixelConstants, ind_misc) == 736);
+static_assert(offsetof(PixelConstants, uber_ps_header) == 752);
+static_assert(sizeof(PixelConstants) == 768);
 
 // Vertex-stage constants (root CBV b0). The XF matrix palette is a structured buffer (root SRV) instead: it is
 // large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
-struct alignas(256) GxVsConstants {
+struct alignas(256) VertexConstants {
     float projection[4][4];
     // Raw texgen and post-texgen config words, read by the uber vertex shader.
     std::uint32_t texgen_config[kMaxTexGens][2];
@@ -134,26 +134,26 @@ struct alignas(256) GxVsConstants {
     float debake_peak[4];
 };
 
-static_assert(offsetof(GxVsConstants, projection) == 0);
-static_assert(offsetof(GxVsConstants, texgen_config) == 64);
-static_assert(offsetof(GxVsConstants, chan_ambient) == 128);
-static_assert(offsetof(GxVsConstants, chan_material) == 160);
-static_assert(offsetof(GxVsConstants, num_texgens) == 192);
-static_assert(offsetof(GxVsConstants, matrix_index_a) == 208);
-static_assert(offsetof(GxVsConstants, inline_pos_matrix) == 224);
-static_assert(offsetof(GxVsConstants, inline_tex_matrices) == 272);
-static_assert(offsetof(GxVsConstants, inline_post_matrices) == 656);
-static_assert(offsetof(GxVsConstants, line_point_raster) == 1040);
-static_assert(offsetof(GxVsConstants, line_point_tex_offsets) == 1056);
-static_assert(offsetof(GxVsConstants, uber_vs_header) == 1072);
-static_assert(offsetof(GxVsConstants, uber_texgen) == 1088);
-static_assert(offsetof(GxVsConstants, uber_post_texgen) == 1120);
-static_assert(offsetof(GxVsConstants, uber_channel) == 1152);
-static_assert(offsetof(GxVsConstants, motion_prev_proj) == 1168);
-static_assert(offsetof(GxVsConstants, motion_ctrl) == 1264);
-static_assert(offsetof(GxVsConstants, debake_sh) == 1280);
-static_assert(offsetof(GxVsConstants, debake_peak) == 1392);
-static_assert(sizeof(GxVsConstants) == 1536);
+static_assert(offsetof(VertexConstants, projection) == 0);
+static_assert(offsetof(VertexConstants, texgen_config) == 64);
+static_assert(offsetof(VertexConstants, chan_ambient) == 128);
+static_assert(offsetof(VertexConstants, chan_material) == 160);
+static_assert(offsetof(VertexConstants, num_texgens) == 192);
+static_assert(offsetof(VertexConstants, matrix_index_a) == 208);
+static_assert(offsetof(VertexConstants, inline_pos_matrix) == 224);
+static_assert(offsetof(VertexConstants, inline_tex_matrices) == 272);
+static_assert(offsetof(VertexConstants, inline_post_matrices) == 656);
+static_assert(offsetof(VertexConstants, line_point_raster) == 1040);
+static_assert(offsetof(VertexConstants, line_point_tex_offsets) == 1056);
+static_assert(offsetof(VertexConstants, uber_vs_header) == 1072);
+static_assert(offsetof(VertexConstants, uber_texgen) == 1088);
+static_assert(offsetof(VertexConstants, uber_post_texgen) == 1120);
+static_assert(offsetof(VertexConstants, uber_channel) == 1152);
+static_assert(offsetof(VertexConstants, motion_prev_proj) == 1168);
+static_assert(offsetof(VertexConstants, motion_ctrl) == 1264);
+static_assert(offsetof(VertexConstants, debake_sh) == 1280);
+static_assert(offsetof(VertexConstants, debake_peak) == 1392);
+static_assert(sizeof(VertexConstants) == 1536);
 
 #if defined(_MSC_VER)
 #pragma warning(pop)

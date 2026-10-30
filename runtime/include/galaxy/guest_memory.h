@@ -44,7 +44,7 @@ struct GuestMemory {
     GuestMemoryFastRegion fast_regions[16]{};
 };
 
-enum class GxLogLevel : std::uint32_t {
+enum class RenderLogLevel : std::uint32_t {
     Trace = 0,
     Info = 1,
     Warning = 2,
@@ -53,9 +53,9 @@ enum class GxLogLevel : std::uint32_t {
 
 // The host's side of the GX layer: its log and the pixel engine's completion events (GXSetDrawDone's finish
 // interrupt and GXSetDrawSync's token), raised by the renderer when the GPU reaches them.
-struct GxServices {
+struct RenderServices {
     void* user{};
-    void (*log)(void* user, GxLogLevel level, const char* message){};
+    void (*log)(void* user, RenderLogLevel level, const char* message){};
     void (*gx_pe_finish)(void* user){};
     void (*gx_pe_token)(void* user, std::uint16_t token, bool interrupt){};
 };

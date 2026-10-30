@@ -87,7 +87,7 @@ struct Surface {
 [[nodiscard]] std::uint32_t pack_normal(const Vec3& n) noexcept;
 [[nodiscard]] Vec3 unpack_normal(std::uint32_t packed) noexcept;
 
-// A registered model: per position what its vertices carry (GxVertexOut::curve): the place with its
+// A registered model: per position what its vertices carry (RenderVertex::curve): the place with its
 // first crease neighbour (place | neighbour << 16), the second crease neighbour (kNoPlace where none), the crease
 // normal (packed), and the bends by normal index (packed).
 struct Model {

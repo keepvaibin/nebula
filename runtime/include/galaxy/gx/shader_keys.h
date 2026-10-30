@@ -115,14 +115,14 @@ inline constexpr std::uint8_t kPsKeyEnhancedLighting = 0x10u;
 inline constexpr std::uint8_t kPsKeyRtPaths = 0x40u;
 // Curved surfaces (RenderConfig::curved_surfaces, curved_surfaces.h): a perspective scene triangle draw of a model the
 // game registered. The vertex stage also passes the eye-space position, displacement and crease normals and the
-// places that pick one per edge (GxVertexOut::curve);
+// places that pick one per edge (RenderVertex::curve);
 // the pipeline adds the Phong tessellation stages and draws three-point patches: RenderStateKey::primitive_topology
 // is kTopologyPatch with the vertex output's variant in its high bits, which picks the hull and domain shaders
 // (ShaderGenerator::curved_stage_source).
 inline constexpr std::uint8_t kVsKeyCurved = 0x80u;
 // VertexShaderKey::features: code a vertex shader carries only for the frames that run it. Interpolated redraws blend
 // each vertex with the matching draw's of the frame before (kVertexBlendDef): the vertex shaders of a frame recorded for
-// them. Physical ray tracing de-bakes vertex colours (GxVsConstants::flags bits 2, 3 and 6): the vertex shaders of its
+// them. Physical ray tracing de-bakes vertex colours (VertexConstants::flags bits 2, 3 and 6): the vertex shaders of its
 // frames.
 inline constexpr std::uint32_t kVsFeatureVertexBlend = 0x1u;
 inline constexpr std::uint32_t kVsFeatureDebake = 0x2u;

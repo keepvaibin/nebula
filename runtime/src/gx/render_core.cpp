@@ -24,7 +24,6 @@
 #include "galaxy/perf_hint.h"
 
 #include "galaxy/gx/render_core.h"
-#include "galaxy/gx/dependency_draw_memo.h"
 #include "galaxy/gx/dependency_range_memo.h"
 #include "galaxy/gx/fifo_cache_fingerprint.h"
 #include "galaxy/gx/rt_tev_eval.h"
@@ -701,7 +700,7 @@ struct ScopedFlushTiming {
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
 
-void fill_ps_constants(const NativeDrawState& draw, GxPsConstants& out, bool derive_scales) {
+void fill_ps_constants(const NativeDrawState& draw, PixelConstants& out, bool derive_scales) {
     std::memset(&out, 0, sizeof(out));
 
     const GenMode gm = draw.gen;
@@ -836,10 +835,10 @@ void gx_topology_for_primitive(
 // One contiguous range keeps the upload a single memcpy and lets the vertex shader fetch matrices
 // and lights from one structured buffer.
 inline constexpr std::size_t kMatrixPaletteWords = 0x0680u;  // 0x0000-0x067F
-// The upload copies the chunks GxState marks written, so both must cover the same words.
+// The upload copies the chunks MatrixMemory marks written, so both must cover the same words.
 static_assert(
     kMatrixPaletteWords == galaxy::gx::MatrixMemory::kPaletteWords,
-    "backend palette bound must match the tracked GxState palette range");
+    "the uploaded palette must match the tracked MatrixMemory palette range");
 
 }  // anonymous namespace
 
@@ -1317,7 +1316,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     release_resident_vertex_buffer();
     resident_vertex_device_ = device;
     UploadBuffer buffer = renderer_.create_resident_vertices(
-        static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut),
+        static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex),
         "GX resident decoded vertices");
     if (!buffer) {
         // Not fatal: every hit keeps using the per-frame ring upload.
@@ -1332,7 +1331,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
     renderer_.set_resident_vertices(resident_vertex_gpu_,
                                     static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) *
-                                        sizeof(GxVertexOut));
+                                        sizeof(RenderVertex));
     return true;
 }
 
@@ -1351,7 +1350,7 @@ void RenderCore::release_resident_vertex_buffer() noexcept {
 // Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
 // while the queue is full.
 void RenderCore::render_frame(
-    const GxServices* services,
+    const RenderServices* services,
     bool present_swap_chain,
     bool black)
 {
@@ -1399,7 +1398,7 @@ void RenderCore::render_frame(
     chunk.services = services;
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
-    const GxTimingConfig& timing = get_gx_timing_config();
+    const RenderTimingConfig& timing = get_gx_timing_config();
 
     std::uint64_t producer_wait_ns = 0;
     std::uint64_t diagnostic_queue_wait_ns = 0;
@@ -1525,7 +1524,7 @@ void RenderCore::wait_for_render_idle() {
 // A perspective draw in the temporal scene: the clip-space offset that moves
 // the image by the scene jitter in render pixels at this draw's viewport.
 // The first such draw also supplies the camera planes and field of view.
-void RenderCore::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upload,
+void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants& upload,
                                    float jitter_ndc[2]) {
     jitter_ndc[0] = 0.0f;
     jitter_ndc[1] = 0.0f;
@@ -1569,7 +1568,7 @@ void RenderCore::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& upl
 // One VS constant upload inside a temporal scene. Palettes are addressed
 // from the matrix ring base (the draw's root SRV), so every upload carries
 // its snapshot's offset; the transform record and the motion fields follow.
-void RenderCore::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants& upload) {
+void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexConstants& upload) {
     float jitter_ndc[2]{};
     if (temporal_scene_) {
         apply_scene_jitter(cpu, upload, jitter_ndc);
@@ -1594,13 +1593,13 @@ void RenderCore::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstant
         const std::uint64_t base = combine64(
             identity_marker_, static_cast<std::uint32_t>(matrices_.write_count() - identity_matrix_base_));
         if (identity_scene_ && base == identity_last_base_ && r < scene.constants.size()) {
-            GxVsConstants probe = cpu;
+            VertexConstants probe = cpu;
             probe.mtx_palette_base = scene.constants[r].mtx_palette_base;
             apply_uber_vs_key(vs_key_, probe);
             // Derived from the fields compared (write_scene_vs_constants).
             std::memcpy(probe.motion_prev_proj, scene.constants[r].motion_prev_proj,
-                        offsetof(GxVsConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
-                            offsetof(GxVsConstants, motion_prev_proj));
+                        offsetof(VertexConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
+                            offsetof(VertexConstants, motion_prev_proj));
             const std::int32_t shadow = scene.palette[r];
             const bool palette_continues =
                 shadow < 0
@@ -1724,7 +1723,7 @@ void RenderCore::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstant
     if (interp_recording_ && replays_upscaled) [[unlikely]] {
         // The sequence's base copies carry them: the CPU image too (evaluation check).
         // Written from the values above: `upload` is write-combined memory.
-        GxVsConstants& image = interp_scenes_[interp_scene_].constants.back();
+        VertexConstants& image = interp_scenes_[interp_scene_].constants.back();
         for (unsigned i = 0; i < 4u; ++i) {
             image.motion_prev_proj[0][i] = proj[i];
         }
@@ -2714,7 +2713,7 @@ void RenderCore::sample_debake_model(std::uint64_t key, const DrawCall& call) {
     const std::uint32_t bytes = call.vertex_view.SizeInBytes;
     const std::byte* vertices = nullptr;
     const std::uint64_t resident_bytes =
-        static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) * sizeof(GxVertexOut);
+        static_cast<std::uint64_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex);
     if (resident_vertex_mapped_ != nullptr && va >= resident_vertex_gpu_ && va + bytes <= resident_vertex_gpu_ + resident_bytes) {
         vertices = resident_vertex_mapped_ + (va - resident_vertex_gpu_);
     } else {
@@ -2723,16 +2722,16 @@ void RenderCore::sample_debake_model(std::uint64_t key, const DrawCall& call) {
     if (vertices == nullptr) {
         return;
     }
-    const std::uint32_t count = bytes / static_cast<std::uint32_t>(sizeof(GxVertexOut));
+    const std::uint32_t count = bytes / static_cast<std::uint32_t>(sizeof(RenderVertex));
     const std::uint32_t step = std::max(count / 2048u, 1u);
     for (std::uint32_t v = 0u; v < count && model.colours.size() < kDebakeModelColours; v += step) {
         std::uint32_t colour = 0u;
-        std::memcpy(&colour, vertices + static_cast<std::size_t>(v) * sizeof(GxVertexOut) + offsetof(GxVertexOut, color0),
+        std::memcpy(&colour, vertices + static_cast<std::size_t>(v) * sizeof(RenderVertex) + offsetof(RenderVertex, color0),
                     sizeof(colour));
         model.colours.insert(colour >> 8u);   // RGB (R in the high byte)
         if (model.samples.size() < kDebakeModelSamples) {
             float normal[3];
-            std::memcpy(normal, vertices + static_cast<std::size_t>(v) * sizeof(GxVertexOut) + offsetof(GxVertexOut, normal),
+            std::memcpy(normal, vertices + static_cast<std::size_t>(v) * sizeof(RenderVertex) + offsetof(RenderVertex, normal),
                         sizeof(normal));
             const float length2 = normal[0] * normal[0] + normal[1] * normal[1] + normal[2] * normal[2];
             if (std::isfinite(length2) && length2 > 0.25f) {
@@ -3332,12 +3331,12 @@ void RenderCore::note_rt_mist(const DrawCall& call) {
                                                  {25.0f, -25.0f, 0.0f},
                                                  {-25.0f, -25.0f, 0.0f}}};
     std::size_t count = 4u;
-    const std::uint32_t vertices = call.vertex_view.SizeInBytes / static_cast<std::uint32_t>(sizeof(GxVertexOut));
+    const std::uint32_t vertices = call.vertex_view.SizeInBytes / static_cast<std::uint32_t>(sizeof(RenderVertex));
     if (const std::byte* cpu = renderer_.vertex_ring().cpu_at(call.vertex_view.BufferLocation);
         cpu != nullptr && vertices >= 3u && vertices <= corners.size()) {
         for (std::uint32_t i = 0; i < vertices; ++i) {
-            GxVertexOut v;
-            std::memcpy(&v, cpu + static_cast<std::size_t>(i) * sizeof(GxVertexOut), sizeof(v));
+            RenderVertex v;
+            std::memcpy(&v, cpu + static_cast<std::size_t>(i) * sizeof(RenderVertex), sizeof(v));
             corners[i] = {v.position[0], v.position[1], v.position[2]};
         }
         count = vertices;
@@ -5521,8 +5520,8 @@ bool RenderCore::render_interp_subframe(float t) {
             const std::int32_t m = prev_index[r];
             const bool prev_data = before_valid && m >= 0 &&
                 static_cast<std::size_t>(m) < before_scene.constants.size();
-            const GxVsConstants& now = scene.constants[r];
-            const GxVsConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
+            const VertexConstants& now = scene.constants[r];
+            const VertexConstants* before = prev_data ? &before_scene.constants[static_cast<std::size_t>(m)] : nullptr;
             // The screen layer moves in screen space, whatever its projection,
             // and the scene camera's cuts do not apply to it.
             const unsigned layer = scene.in_layer(kScreenLayer, r) ? kScreenLayer
@@ -5751,8 +5750,8 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
         const InterpRecordMotion& moving = interp_moving_[s];
         interp_vs_slot_[moving.record] = static_cast<std::int32_t>(s);
         const std::uint32_t base = layout.vs_offset(static_cast<std::uint32_t>(s)) / 4u;
-        const GxVsConstants& recorded = scene.constants[moving.record];
-        const GxVsConstants* before = moving.prev >= 0
+        const VertexConstants& recorded = scene.constants[moving.record];
+        const VertexConstants* before = moving.prev >= 0
             ? &before_scene.constants[static_cast<std::size_t>(moving.prev)] : nullptr;
         // The inline matrix's ends: the frame before's and this one's.
         const float* const position_a = before != nullptr ? &before->inline_pos_matrix[0][0] : nullptr;
@@ -6634,7 +6633,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     frame_curved_split_draws_ = 0;
     frame_clear_quads_ = 0;
     pending_draw_batch_ = {};
-    const GxServices* services = chunk.services;
+    const RenderServices* services = chunk.services;
 
     // begin_frame() drains PSO completions and rewinds ring segments.
     {
@@ -7252,7 +7251,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
                   << " resident-vtx-used-bytes="
                   << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
-                         sizeof(GxVertexOut)
+                         sizeof(RenderVertex)
                   << " decoded-tex-resident-bytes="
                   << texture_cache_.decoded_map_stats().resident_bytes
                   << " decoded-tex-budget-bytes="
@@ -7577,14 +7576,14 @@ void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs,
 
 }  // namespace
 
-std::uint32_t RenderCore::split_curved_triangles(std::span<const GxVertexOut> vertices,
+std::uint32_t RenderCore::split_curved_triangles(std::span<const RenderVertex> vertices,
                                                 std::span<const std::uint16_t> triangles,
                                                 std::vector<std::uint16_t>& split) {
     // A triangle is flat when no corner has a displacement or crease normal: every edge then keeps one segment and
     // moves nothing, in this triangle and in its neighbours.
     const auto flat = [&](std::size_t t) {
         for (std::size_t k = 0; k < 3u; ++k) {
-            const GxVertexOut& v = vertices[triangles[t + k]];
+            const RenderVertex& v = vertices[triangles[t + k]];
             if ((v.curve[0] | v.curve[1]) != 0u) {
                 return false;
             }
@@ -8353,15 +8352,15 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        const GxVsConstants& vs_c = cpu_vs_constants_.update(
+        const VertexConstants& vs_c = cpu_vs_constants_.update(
             matrices_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
-            renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
+            renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
         if (history_scene_) [[unlikely]] {
-            write_scene_vs_constants(vs_c, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
+            write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
-        apply_uber_vs_key(vs_key_, *reinterpret_cast<GxVsConstants*>(vs_alloc.cpu));
+        apply_uber_vs_key(vs_key_, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
         if (time_detail) {
@@ -8575,7 +8574,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        GxPsConstants ps_c{};
+        PixelConstants ps_c{};
         fill_ps_constants(draw_state_, ps_c, scales_from_textures_);
         if (tint_cleared > 0.0f) {
             for (auto& reg : ps_c.tev_regs) {
@@ -8675,7 +8674,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
 
         UploadRing::Allocation ps_alloc =
-            renderer_.constant_ring().allocate(sizeof(GxPsConstants), 256u);
+            renderer_.constant_ring().allocate(sizeof(PixelConstants), 256u);
         std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
         current_ps_constants_ = ps_alloc.gpu;
         if (interp_recording_ && history_scene_) [[unlikely]] {
@@ -9075,10 +9074,10 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             return;
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
-        std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(GxVertexOut),
-                    shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(GxVertexOut));
-        renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(GxVertexOut),
-                                         static_cast<std::uint64_t>(units) * sizeof(GxVertexOut));
+        std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(RenderVertex),
+                    shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(RenderVertex));
+        renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
+                                         static_cast<std::uint64_t>(units) * sizeof(RenderVertex));
         shape.resident_epoch = resident_vertices_.epoch();
         shape.resident_offset = *offset;
         shape.resident_units = units;
@@ -9133,15 +9132,15 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         split ? shape.split_upload_token : shape.index_upload_token);
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
     const auto index_count = static_cast<std::uint32_t>(indices.size());
-    const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(GxVertexOut);
+    const std::size_t vertex_byte_offset = static_cast<std::size_t>(shape.resident_offset) * sizeof(RenderVertex);
     ++stat_draws_issued_;
     ++frame_draws_issued_;
     ++frame_resident_vertex_hits_;
-    frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(GxVertexOut);
+    frame_resident_vertex_bytes_ += static_cast<std::uint64_t>(units) * sizeof(RenderVertex);
 
     const gpu::VertexView vbv = gpu::vertex_view(resident_vertex_gpu_ + vertex_byte_offset,
-                                                 units * static_cast<std::uint32_t>(sizeof(GxVertexOut)),
-                                                 static_cast<std::uint32_t>(sizeof(GxVertexOut)));
+                                                 units * static_cast<std::uint32_t>(sizeof(RenderVertex)),
+                                                 static_cast<std::uint32_t>(sizeof(RenderVertex)));
     const gpu::IndexView ibv = gpu::index_view(
         renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
@@ -9170,7 +9169,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
-    pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(GxVertexOut);
+    pending_draw_batch_.vertex_byte_end = vertex_byte_offset + static_cast<std::size_t>(units) * sizeof(RenderVertex);
     pending_draw_batch_.first_index = first_index;
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;
@@ -9236,13 +9235,13 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     }
     cached_draw_run_batch_compatible_known_ = false;
     const UploadRing::Allocation vb =
-        renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(GxVertexOut), 16u);
-    std::memcpy(vb.cpu, immediate_vertices_.data(), static_cast<std::size_t>(count) * sizeof(GxVertexOut));
+        renderer_.vertex_ring().allocate(static_cast<std::size_t>(count) * sizeof(RenderVertex), 16u);
+    std::memcpy(vb.cpu, immediate_vertices_.data(), static_cast<std::size_t>(count) * sizeof(RenderVertex));
     const auto index_count = static_cast<std::uint32_t>(immediate_indices_.size());
     const UploadRing::Allocation ib = renderer_.index_ring().allocate(
         static_cast<std::size_t>(index_count) * sizeof(std::uint16_t), sizeof(std::uint16_t));
     const auto first_index = static_cast<std::uint32_t>(ib.offset / sizeof(std::uint16_t));
-    const auto base_vertex = static_cast<std::uint32_t>(vb.offset / sizeof(GxVertexOut));
+    const auto base_vertex = static_cast<std::uint32_t>(vb.offset / sizeof(RenderVertex));
     if (append && (vb.offset != pending_draw_batch_.vertex_byte_end ||
                    first_index != pending_draw_batch_.first_index + pending_draw_batch_.index_count)) {
         flush_pending_draw_batch();
@@ -9257,18 +9256,18 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     ++frame_draws_issued_;
     if (append) {
         pending_draw_batch_.call.index_count += index_count;
-        pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
+        pending_draw_batch_.call.vertex_view.SizeInBytes += count * static_cast<std::uint32_t>(sizeof(RenderVertex));
         pending_draw_batch_.call.index_view.SizeInBytes += index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
         pending_draw_batch_.vertex_count += count;
-        pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(GxVertexOut);
+        pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertex);
         pending_draw_batch_.index_count += index_count;
         ++pending_draw_batch_.draw_count;
         return;
     }
     const gpu::VertexView vbv =
         gpu::vertex_view(renderer_.vertex_ring().gpu_base() + vb.offset,
-                         count * static_cast<std::uint32_t>(sizeof(GxVertexOut)),
-                         static_cast<std::uint32_t>(sizeof(GxVertexOut)));
+                         count * static_cast<std::uint32_t>(sizeof(RenderVertex)),
+                         static_cast<std::uint32_t>(sizeof(RenderVertex)));
     const gpu::IndexView ibv = gpu::index_view(
         renderer_.index_ring().gpu_base() + static_cast<std::size_t>(first_index) * sizeof(std::uint16_t),
         index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
@@ -9286,7 +9285,7 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = base_vertex;
     pending_draw_batch_.vertex_count = count;
-    pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(GxVertexOut);
+    pending_draw_batch_.vertex_byte_end = vb.offset + static_cast<std::size_t>(count) * sizeof(RenderVertex);
     pending_draw_batch_.first_index = first_index;
     pending_draw_batch_.index_count = index_count;
     pending_draw_batch_.draw_count = 1u;

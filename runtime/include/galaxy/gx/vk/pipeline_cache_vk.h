@@ -42,7 +42,7 @@ namespace galaxy::gx {
 class PipelineCacheVk {
 public:
 
-    bool initialize(VkDevice device, const vk::GxLayout* layout, const std::filesystem::path& cache_dir,
+    bool initialize(VkDevice device, const vk::RenderLayout* layout, const std::filesystem::path& cache_dir,
                     unsigned worker_count);
 
     // The SPIR-V of every module the keys of a vk_keys.bin can use on any Vulkan device, in vk_shaders.bin's form, as
@@ -160,7 +160,7 @@ private:
     void save_disk() noexcept;
 
     VkDevice device_ = VK_NULL_HANDLE;
-    const vk::GxLayout* layout_ = nullptr;
+    const vk::RenderLayout* layout_ = nullptr;
     std::filesystem::path cache_dir_;
     VkPipelineCache driver_cache_ = VK_NULL_HANDLE;
     ShaderGenOptions generator_defaults_;  // this device's (DeviceQuirks), before the fallbacks' changes

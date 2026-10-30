@@ -178,7 +178,7 @@ INTENSITY. Interpolated frames replay both (`ReplayKind::Bloom`).
 
 Enhanced lighting (`enhanced_lighting.h`, `shader_gen.cpp` `kEnhancedLighting`) shades lit and
 environment-mapped draws per pixel from the game's GX lights: authored falloff summed in linear
-light, a sky hemisphere about the player's up (`GxVsConstants::sky_up`, from the 3D scene marker),
+light, a sky hemisphere about the player's up (`VertexConstants::sky_up`, from the 3D scene marker),
 the sky's Fresnel reflection, GGX highlights with specular antialiasing; the material table
 decides metal. Ambient occlusion (`ambient_occlusion.{h,cpp,hlsl}`) runs GTAO on the EFB depth
 when the first translucent phase begins and multiplies the opaque scene's colour; in-between
@@ -201,7 +201,7 @@ them with Phong tessellation (Boubekeur and Alexa 2008).
   and told from later contents of that memory by a 64-word fingerprint.
 - **Draws**: a perspective scene draw with indexed positions, no NBT, from a registered model, is
   drawn as patches (`kVsKeyCurved`; `primitive_topology` type 4 with the vertex output variant
-  in bits 4-5). The vertex loader writes each vertex's displacement normal (`GxVertexOut::bend`);
+  in bits 4-5). The vertex loader writes each vertex's displacement normal (`RenderVertex::bend`);
   the vertex shader turns it into eye space (the cofactor of the position matrix).
 - **Hull stage**: a patch wholly outside the view's side planes or behind the eye, at the most
   its curve can bulge, gets no triangles; otherwise each edge is cut into

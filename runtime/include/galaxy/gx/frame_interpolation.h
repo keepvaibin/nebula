@@ -127,7 +127,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
                     std::uint16_t normal_mask = kAllPaletteSlots, std::uint8_t light_mask = 0xFFu) noexcept;
 // The GX lights a draw with these VS constants evaluates: the light masks of
 // its lit colour and alpha channels and the lights of its emboss texgens.
-[[nodiscard]] std::uint8_t used_lights(const GxVsConstants& constants) noexcept;
+[[nodiscard]] std::uint8_t used_lights(const VertexConstants& constants) noexcept;
 
 // Writes the palette at t: b's words with every changed part interpolated.
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
@@ -138,12 +138,12 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
 // shift is unchanged) and indirect matrices (rows of equal scale). Only when
 // the TEV program, texture setup and indirect commands are the same; any
 // other difference is a discrete change and shows b.
-[[nodiscard]] bool ps_colours_move(const GxPsConstants& a, const GxPsConstants& b) noexcept;
-void ps_colours_at(const GxPsConstants& a, const GxPsConstants& b, float t, GxPsConstants& out) noexcept;
+[[nodiscard]] bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept;
+void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept;
 // Channel ambient and material colours (vertex stage).
-[[nodiscard]] bool channel_colours_move(const GxVsConstants& a, const GxVsConstants& b) noexcept;
+[[nodiscard]] bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept;
 
-void channel_colours_at(const GxVsConstants& a, const GxVsConstants& b, float t, GxVsConstants& out) noexcept;
+void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept;
 // One GX light (16 XF words) at t: color and attenuation lerped; position and
 // direction interpolated in world space when `split` (else in eye space). A
 // null `a` (no previous snapshot) is b's light held still in the world.

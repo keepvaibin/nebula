@@ -58,10 +58,10 @@ int main() {
     arrays[1] = &normals;
     arrays[2] = &colors;
     arrays[5] = &uvs;
-    std::vector<GxVertexOut> out;
+    std::vector<RenderVertex> out;
     passed &= expect(expand(g, arrays, 0u, nullptr, out) && out.size() == 1u, "a group expands");
     if (out.size() == 1u) {
-        const GxVertexOut& v = out[0];
+        const RenderVertex& v = out[0];
         passed &= expect(v.position[0] == 3.0f && v.position[1] == 3.5f && v.position[2] == 4.0f,
                          "positions come from the corner's entry");
         passed &= expect(v.normal[0] == 1.5f && v.tangent[0] == 0.0f, "normals from theirs, no tangent");
