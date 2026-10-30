@@ -24,12 +24,10 @@ std::string startup_failure() {
 }
 
 void render_frame(
-    GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
     bool black) {
     backend().render_frame(
-        memory,
         services,
         present_swap_chain,
         black);

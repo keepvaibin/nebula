@@ -1480,7 +1480,7 @@ const std::byte* guest_bytes(uint32_t address, uint32_t size) {
 
 
 void submit_frame_unchecked(bool present, bool black) {
-    galaxy::gx::render_frame(&gMemory, &gNative, present, black);
+    galaxy::gx::render_frame(&gNative, present, black);
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 

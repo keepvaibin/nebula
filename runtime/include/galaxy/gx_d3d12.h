@@ -83,9 +83,8 @@ void set_native_settings_content_root(const std::string& utf8_path);
 
 // Renders the game's frame from the records it attached (and the scene markers, stripe particles and pointer
 // capture with them) and optionally presents: the newest picture (the last frame end), or black when `black`.
-// `memory` resolves the game objects the ray tracer reads. Nothing attached: at most a present.
+// Nothing attached: at most a present.
 void render_frame(
-    GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain = true,
     bool black = false);

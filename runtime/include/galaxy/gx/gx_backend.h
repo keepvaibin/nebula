@@ -114,7 +114,6 @@ public:
     bool initialize(int width, int height);
     [[nodiscard]] std::string startup_failure() const { return renderer_.startup_failure(); }
     void render_frame(
-        GuestMemory* memory,
         const GxServices* services,
         bool present_swap_chain = true,
         bool black = false);
@@ -343,7 +342,6 @@ private:
         bool prerecorded_movie{};
         float safety_surround{};
         MovieFrameMark movie_frame{};
-        GuestMemory* memory = nullptr;
         const GxServices* services = nullptr;
         std::uint64_t producer_wait_ns = 0;
         bool black = false;  // the output shows black (no picture)
@@ -1117,8 +1115,6 @@ private:
     EfbCopyManager efb_copies_;
     Renderer renderer_;
 
-    // Valid only inside render_frame_on_thread (parser callbacks need them).
-    GuestMemory* frame_memory_ = nullptr;
     const GxServices* frame_services_ = nullptr;
 
     // Frame queue: the sim thread is the producer, the render thread the consumer. The producer may

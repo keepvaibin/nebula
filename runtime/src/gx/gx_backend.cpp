@@ -718,36 +718,6 @@ struct ScopedFlushTiming {
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
 
-[[nodiscard]] const std::byte* resolve_guest_const_bytes(
-    GuestMemory* memory,
-    std::uint32_t guest_addr,
-    std::uint32_t size) {
-    if (memory == nullptr || size == 0u) {
-        return nullptr;
-    }
-    if (std::byte* fast = resolve_guest_fast(memory, guest_addr, size);
-        fast != nullptr) {
-        return fast;
-    }
-    if (memory->regions == nullptr) {
-        return nullptr;
-    }
-    const std::uint64_t end =
-        static_cast<std::uint64_t>(guest_addr) + size;
-    for (std::uint32_t i = 0; i < memory->region_count; ++i) {
-        const GuestMemoryRegion& r = memory->regions[i];
-        if (r.host_base == nullptr) {
-            continue;
-        }
-        const std::uint64_t region_end =
-            static_cast<std::uint64_t>(r.guest_base) + r.size;
-        if (guest_addr >= r.guest_base && end <= region_end) {
-            return r.host_base + (guest_addr - r.guest_base);
-        }
-    }
-    return nullptr;
-}
-
 void fill_ps_constants(const NativeDrawState& draw, GxPsConstants& out, bool derive_scales) {
     std::memset(&out, 0, sizeof(out));
 
@@ -898,7 +868,6 @@ void GxBackend::reset_fifo_session_state() {
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
 
-    frame_memory_ = nullptr;
     frame_services_ = nullptr;
     pending_draw_batch_ = {};
     cached_draw_run_active_ = false;
@@ -1399,7 +1368,6 @@ void GxBackend::release_resident_vertex_buffer() noexcept {
 // Producer (simulation thread): copies the frame and hands it to the render thread. Blocks only
 // while the queue is full.
 void GxBackend::render_frame(
-    GuestMemory* memory,
     const GxServices* services,
     bool present_swap_chain,
     bool black)
@@ -1446,7 +1414,6 @@ void GxBackend::render_frame(
     chunk.safety_surround=producer_safety_surround_;
     chunk.movie_frame=producer_movie_frame_;
     chunk.services = services;
-    chunk.memory   = memory;
     chunk.present_swap_chain = present_swap_chain;
     chunk.black = black;
     const GxTimingConfig& timing = get_gx_timing_config();
@@ -3128,34 +3095,11 @@ void GxBackend::begin_rt_stage() {
     note_rt_stage();
 }
 
-// The loaded stage and its row of the sun table: the game's own report, else guest memory as the original program
-// lays it out (GameSystem's scene controller holds the name inline at +0x20).
+// The loaded stage (as the game reports it) and its row of the sun table.
 void GxBackend::note_rt_stage() {
-    constexpr std::uint32_t kGameSystemPointer = 0x806A1228u;
-    const auto word = [this](std::uint32_t address, std::uint32_t& out) {
-        const std::byte* p = frame_memory_ != nullptr ? resolve_guest_const_bytes(frame_memory_, address, 4u) : nullptr;
-        if (p == nullptr) {
-            return false;
-        }
-        std::memcpy(&out, p, 4u);
-        out = byte_swap_u32(out);
-        return true;
-    };
-    std::uint32_t system = 0u;
-    std::uint32_t controller = 0u;
     char name[sizeof(SceneStage)]{};
     if (scene_stage_known_) {
         std::memcpy(name, scene_stage_.data(), sizeof(name));
-    } else if (word(kGameSystemPointer, system) && system >= 0x80000000u && word(system + 0x24u, controller) &&
-               controller >= 0x80000000u) {
-        for (std::uint32_t i = 0; i + 1u < sizeof(name); ++i) {
-            const std::byte* c = resolve_guest_const_bytes(frame_memory_, controller + 0x20u + i, 1u);
-            const auto v = c != nullptr ? std::to_integer<unsigned char>(*c) : 0u;
-            if (v <= 0x20u || v >= 0x7Fu) {
-                break;
-            }
-            name[i] = static_cast<char>(v);
-        }
     }
     rt_materials_set_stage(name);
     {
@@ -3301,8 +3245,8 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     return material != nullptr && material->hide;
 }
 
-// The current object's name, Shift-JIS bytes with blanks as '_': as the game reported it (game_object_name), else
-// NameObj::mName (+4) in guest memory. Returns a key for the name (0 for none).
+// The current object's name as the game reports it (game_object_name), Shift-JIS bytes with blanks as '_'. Returns a
+// key for the name (0 for none).
 std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
     if (rt_object_ == 0u) {
@@ -3317,28 +3261,7 @@ std::uint32_t GxBackend::rt_object_name(char* out, std::size_t size) {
         }
         return rt_object_;
     }
-    if (frame_memory_ == nullptr) {
-        return 0u;
-    }
-    const std::byte* field = resolve_guest_const_bytes(frame_memory_, rt_object_ + 4u, 4u);
-    if (field == nullptr) {
-        return 0u;
-    }
-    std::uint32_t pointer = 0u;
-    std::memcpy(&pointer, field, 4u);
-    pointer = byte_swap_u32(pointer);
-    std::size_t n = 0u;
-    for (std::uint32_t i = 0; pointer != 0u && i < 32u && n + 4u < size; ++i) {
-        const std::byte* c = resolve_guest_const_bytes(frame_memory_, pointer + i, 1u);
-        if (c == nullptr || *c == std::byte{0}) {
-            break;
-        }
-        const auto v = std::to_integer<unsigned char>(*c);
-        // Shift-JIS bytes as they are (the census decodes them); blanks and controls as '_'.
-        out[n++] = v > 0x20u && v != 0x7Fu ? static_cast<char>(v) : '_';
-    }
-    out[n] = 0;
-    return pointer;
+    return 0u;
 }
 
 // The census line of the current scene draw: its object's name, class, blend and the texture its
@@ -6772,7 +6695,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     frame_curved_split_draws_ = 0;
     frame_clear_quads_ = 0;
     pending_draw_batch_ = {};
-    GuestMemory* memory = chunk.memory;
     const GxServices* services = chunk.services;
 
     // begin_frame() drains PSO completions and rewinds ring segments.
@@ -7005,7 +6927,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
     if (!chunk.shape_records.empty() || chunk.fifo_marker_count != 0u ||
         !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
-        frame_memory_   = memory;
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
@@ -7061,12 +6982,10 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         } catch (...) {
             texture_cache_.set_async_decode_allowed(false);
             texture_cache_.finish_pending_decodes_noexcept();
-            frame_memory_ = nullptr;
             frame_services_ = nullptr;
             throw;
         }
         texture_cache_.set_async_decode_allowed(false);
-        frame_memory_   = nullptr;
         frame_services_ = nullptr;
     }
     if (cadence_diagnostics_ != nullptr) {
