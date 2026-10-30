@@ -218,30 +218,11 @@ struct GenMode {
     bool z_freeze;
 };
 
-[[nodiscard]] constexpr GenMode decode_gen_mode(std::uint32_t v) {
-    return GenMode{
-        static_cast<std::uint8_t>(bits(v, 0, 4)),
-        static_cast<std::uint8_t>(bits(v, 4, 3)),
-        static_cast<std::uint8_t>(bits(v, 10, 4) + 1u),
-        static_cast<CullMode>(bits(v, 14, 2)),
-        static_cast<std::uint8_t>(bits(v, 16, 3)),
-        bit(v, 19),
-    };
-}
-
 struct ZMode {
     bool test_enable;
     CompareFunc func;
     bool update_enable;
 };
-
-[[nodiscard]] constexpr ZMode decode_z_mode(std::uint32_t v) {
-    return ZMode{
-        bit(v, 0),
-        static_cast<CompareFunc>(bits(v, 1, 3)),
-        bit(v, 4),
-    };
-}
 
 struct BlendMode {
     bool blend_enable;
@@ -256,24 +237,6 @@ struct BlendMode {
     bool const_alpha_enable;        // PE_CMODE1
     std::uint8_t const_alpha;
 };
-
-[[nodiscard]] constexpr BlendMode decode_blend(
-    std::uint32_t cmode0,
-    std::uint32_t cmode1) {
-    return BlendMode{
-        bit(cmode0, 0),
-        bit(cmode0, 1),
-        bit(cmode0, 2),
-        bit(cmode0, 3),
-        bit(cmode0, 4),
-        static_cast<BlendFactor>(bits(cmode0, 5, 3)),
-        static_cast<BlendFactor>(bits(cmode0, 8, 3)),
-        bit(cmode0, 11),
-        static_cast<std::uint8_t>(bits(cmode0, 12, 4)),
-        bit(cmode1, 8),
-        static_cast<std::uint8_t>(bits(cmode1, 0, 8)),
-    };
-}
 
 // GX logic op 3: the source unchanged.
 inline constexpr std::uint8_t kLogicCopy = 3u;
@@ -315,14 +278,6 @@ struct PeControl {
     bool early_z;                   // zcomploc: Z test before texture
 };
 
-[[nodiscard]] constexpr PeControl decode_pe_control(std::uint32_t v) {
-    return PeControl{
-        static_cast<std::uint8_t>(bits(v, 0, 3)),
-        static_cast<std::uint8_t>(bits(v, 3, 3)),
-        bit(v, 6),
-    };
-}
-
 // One TREF register holds the order for two stages; `half` selects which.
 struct TevOrder {
     std::uint8_t texmap;            // 0-7
@@ -331,18 +286,6 @@ struct TevOrder {
     std::uint8_t ras_channel;       // BP-mapped: 0/1 color, 5=alpha bump,
                                     // 6=normalized alpha bump, 7=zero.
 };
-
-[[nodiscard]] constexpr TevOrder decode_tev_order(
-    std::uint32_t v,
-    unsigned half) {
-    const std::uint32_t h = (half != 0) ? bits(v, 12, 12) : bits(v, 0, 12);
-    return TevOrder{
-        static_cast<std::uint8_t>(bits(h, 0, 3)),
-        static_cast<std::uint8_t>(bits(h, 3, 3)),
-        bit(h, 6),
-        static_cast<std::uint8_t>(bits(h, 7, 3)),
-    };
-}
 
 // One TEV stage, the unit of shader keying, assembled by GxState from four BP registers.
 struct TevStageConfig {
@@ -370,62 +313,6 @@ struct TevStageConfig {
 
 };
 
-[[nodiscard]] constexpr TevStageConfig assemble_tev_stage(
-    std::uint32_t color_env,
-    std::uint32_t alpha_env,
-    std::uint32_t tref_value,
-    unsigned tref_half,
-    std::uint8_t kcsel,
-    std::uint8_t kasel) {
-    return TevStageConfig{
-        static_cast<TevColorArg>(bits(color_env, 12, 4)),
-        static_cast<TevColorArg>(bits(color_env, 8, 4)),
-        static_cast<TevColorArg>(bits(color_env, 4, 4)),
-        static_cast<TevColorArg>(bits(color_env, 0, 4)),
-        static_cast<TevBias>(bits(color_env, 16, 2)),
-        bit(color_env, 18),
-        bit(color_env, 19),
-        static_cast<TevScale>(bits(color_env, 20, 2)),
-        static_cast<std::uint8_t>(bits(color_env, 22, 2)),
-        static_cast<TevAlphaArg>(bits(alpha_env, 13, 3)),
-        static_cast<TevAlphaArg>(bits(alpha_env, 10, 3)),
-        static_cast<TevAlphaArg>(bits(alpha_env, 7, 3)),
-        static_cast<TevAlphaArg>(bits(alpha_env, 4, 3)),
-        static_cast<TevBias>(bits(alpha_env, 16, 2)),
-        bit(alpha_env, 18),
-        bit(alpha_env, 19),
-        static_cast<TevScale>(bits(alpha_env, 20, 2)),
-        static_cast<std::uint8_t>(bits(alpha_env, 22, 2)),
-        static_cast<std::uint8_t>(bits(alpha_env, 0, 2)),
-        static_cast<std::uint8_t>(bits(alpha_env, 2, 2)),
-        decode_tev_order(tref_value, tref_half),
-        kcsel,
-        kasel,
-    };
-}
-
-// One KSEL register carries the konst selects for two stages plus one row of
-// the channel swap tables.
-struct TevKSel {
-    std::uint8_t swap_red;          // swap table entry (2 bits)
-    std::uint8_t swap_green;
-    std::uint8_t kcsel_even;        // stage 2n
-    std::uint8_t kasel_even;
-    std::uint8_t kcsel_odd;         // stage 2n+1
-    std::uint8_t kasel_odd;
-};
-
-[[nodiscard]] constexpr TevKSel decode_tev_ksel(std::uint32_t v) {
-    return TevKSel{
-        static_cast<std::uint8_t>(bits(v, 0, 2)),
-        static_cast<std::uint8_t>(bits(v, 2, 2)),
-        static_cast<std::uint8_t>(bits(v, 4, 5)),
-        static_cast<std::uint8_t>(bits(v, 9, 5)),
-        static_cast<std::uint8_t>(bits(v, 14, 5)),
-        static_cast<std::uint8_t>(bits(v, 19, 5)),
-    };
-}
-
 struct AlphaCompare {
     std::uint8_t ref0;
     std::uint8_t ref1;
@@ -433,59 +320,6 @@ struct AlphaCompare {
     CompareFunc comp1;
     AlphaTestLogic logic;
 };
-
-[[nodiscard]] constexpr AlphaCompare decode_alpha_compare(std::uint32_t v) {
-    return AlphaCompare{
-        static_cast<std::uint8_t>(bits(v, 0, 8)),
-        static_cast<std::uint8_t>(bits(v, 8, 8)),
-        static_cast<CompareFunc>(bits(v, 16, 3)),
-        static_cast<CompareFunc>(bits(v, 19, 3)),
-        static_cast<AlphaTestLogic>(bits(v, 22, 2)),
-    };
-}
-
-// Fog parameters are kept mostly raw: the packed-float a/b/c fields are
-// converted to host floats by the constant-buffer fill, not here.
-struct FogParams {
-    std::uint32_t a_raw;            // BP 0xEE
-    std::uint32_t b_magnitude_raw;  // BP 0xEF
-    std::uint32_t b_shift_raw;      // BP 0xF0
-    std::uint32_t c_raw;            // BP 0xF1 low bits
-    FogType type;                   // BP 0xF1 bits 21-23
-    bool projection;                // BP 0xF1 bit 20: 0 = perspective,
-                                    // 1 = orthographic (Dolphin BPMemory.h
-                                    // FogParam3::proj, FogProjection enum)
-    std::uint32_t color_rgb;        // BP 0xF2 bits 0-23
-};
-
-// GX fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats:
-// mantissa bits 0-10, exponent bits 11-18, sign bit 19. Reassembled into an
-// IEEE-754 single as (sign<<31)|(exp<<23)|(mant<<12). See Dolphin BPMemory.h,
-// FogParam0::FloatValue and FogParam3::GetC.
-[[nodiscard]] constexpr std::uint32_t fog_param_float_bits(
-    std::uint32_t raw20) {
-    const std::uint32_t mant = bits(raw20, 0, 11);
-    const std::uint32_t exp  = bits(raw20, 11, 8);
-    const std::uint32_t sign = bits(raw20, 19, 1);
-    return (sign << 31) | (exp << 23) | (mant << 12);
-}
-
-[[nodiscard]] constexpr FogParams decode_fog(
-    std::uint32_t p0,
-    std::uint32_t p1,
-    std::uint32_t p2,
-    std::uint32_t p3,
-    std::uint32_t color) {
-    return FogParams{
-        p0,
-        p1,
-        p2,
-        bits(p3, 0, 20),
-        static_cast<FogType>(bits(p3, 21, 3)),
-        bit(p3, 20),
-        bits(color, 0, 24),
-    };
-}
 
 struct TexImage {
     std::uint16_t width;            // texels (register stores size-1)
@@ -545,13 +379,6 @@ struct TlutRef {
 
     [[nodiscard]] bool operator==(const TlutRef&) const = default;
 };
-
-[[nodiscard]] constexpr TlutRef decode_tlut_ref(std::uint32_t v) {
-    return TlutRef{
-        static_cast<std::uint16_t>(bits(v, 0, 10)),
-        static_cast<TlutFormat>(bits(v, 10, 2)),
-    };
-}
 
 struct ScissorRect {
     std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space
@@ -660,42 +487,6 @@ struct EfbCopyParams {
         return static_cast<std::uint32_t>(vfilter[5]) + vfilter[6];
     }
 };
-
-[[nodiscard]] constexpr EfbCopyParams decode_efb_copy(
-    std::uint32_t src_top_left,
-    std::uint32_t src_size,
-    std::uint32_t dest_addr,
-    std::uint32_t dest_stride,
-    std::uint32_t y_scale,
-    std::uint32_t clear_ar,
-    std::uint32_t clear_gb,
-    std::uint32_t clear_z,
-    std::uint32_t exec) {
-    return EfbCopyParams{
-        static_cast<std::uint16_t>(bits(src_top_left, 0, 10)),
-        static_cast<std::uint16_t>(bits(src_top_left, 10, 10)),
-        static_cast<std::uint16_t>(bits(src_size, 0, 10) + 1u),
-        static_cast<std::uint16_t>(bits(src_size, 10, 10) + 1u),
-        bits(dest_addr, 0, 24) << 5,
-        bits(dest_stride, 0, 10) << 5,
-        bits(y_scale, 0, 9),
-        static_cast<std::uint8_t>((bits(exec, 3, 1) << 3) | bits(exec, 4, 3)),
-        static_cast<std::uint8_t>(bits(exec, 7, 2)),
-        bit(exec, 0),
-        bit(exec, 1),
-        bit(exec, 2),
-        bit(exec, 9),
-        bit(exec, 10),
-        bit(exec, 11),
-        static_cast<std::uint8_t>(bits(exec, 12, 2)),
-        bit(exec, 14),
-        bit(exec, 15) && bit(exec, 16),
-        {static_cast<std::uint8_t>(clear_ar), static_cast<std::uint8_t>(clear_gb >> 8u),
-         static_cast<std::uint8_t>(clear_gb), static_cast<std::uint8_t>(clear_ar >> 8u)},
-        clear_z & 0xFFFFFFu,
-        {},  // Filters are latched separately by GxState.
-    };
-}
 
 struct XfTexGen {
     bool generate_stq;              // false = ST output

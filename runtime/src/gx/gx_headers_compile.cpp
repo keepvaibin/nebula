@@ -1,5 +1,5 @@
-// Builds the core galaxy/gx headers in one unit under /W4 /WX /permissive- and checks the constexpr register
-// decoders at compile time.
+// Builds the core galaxy/gx headers in one unit under /W4 /WX /permissive- and checks constexpr helpers at compile
+// time.
 
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/gx/fifo_parser.h"
@@ -19,46 +19,29 @@
 namespace galaxy::gx {
 namespace {
 
-// GEN_MODE with 2 texgens, 1 color chan, 8 TEV stages (count-1 = 7),
-// back-face culling, no indirect stages.
-constexpr auto kGenMode = decode_gen_mode(
-    (7u << 10) | (2u << 14) | (1u << 4) | 2u);
-static_assert(kGenMode.num_tev_stages == 8);
-static_assert(kGenMode.num_texgens == 2);
-static_assert(kGenMode.num_color_chans == 1);
-static_assert(kGenMode.cull == CullMode::Back);
-static_assert(kGenMode.num_ind_stages == 0);
-
-// ZMODE: test on, LEQUAL, update on.
-constexpr auto kZMode = decode_z_mode(0x17u);
-static_assert(kZMode.test_enable);
-static_assert(kZMode.func == CompareFunc::LEqual);
-static_assert(kZMode.update_enable);
-
-// CMODE0: blend on, color/alpha update, src = SrcAlpha, dst = InvSrcAlpha.
-constexpr auto kBlend = decode_blend(
-    1u | (1u << 3) | (1u << 4) | (5u << 5) | (4u << 8), 0u);
-static_assert(kBlend.blend_enable);
-static_assert(kBlend.src_factor == BlendFactor::SrcAlpha);
-static_assert(kBlend.dst_factor == BlendFactor::InvSrcAlpha);
-static_assert(!kBlend.subtract);
+// Blends as typed values: enable, logic op, dither, colour and alpha update, destination and source factors, subtract,
+// logic mode, constant alpha.
+constexpr BlendMode blend_of(bool blend, bool logic, BlendFactor dst, BlendFactor src, bool subtract, std::uint8_t mode) {
+    return BlendMode{blend, logic, false, true, false, dst, src, subtract, mode, false, 0u};
+}
+constexpr auto kBlend = blend_of(true, false, BlendFactor::InvSrcAlpha, BlendFactor::SrcAlpha, false, 0u);
 
 // effective_blend: an alpha blend stays a blend; BLEND ONE ZERO and logic COPY write the source (no blend, no logic op);
 // DSTALPHA / INVDSTALPHA write the source only where the EFB has no alpha; a subtract of ONE ZERO still subtracts.
 static_assert(effective_blend(kBlend, true).blend_enable);
 static_assert(effective_blend(kBlend, false).blend_enable);
-constexpr auto kBlendOneZero = decode_blend(1u | (1u << 3) | (0u << 5) | (1u << 8), 0u);
+constexpr auto kBlendOneZero = blend_of(true, false, BlendFactor::Zero, BlendFactor::One, false, 0u);
 static_assert(kBlendOneZero.blend_enable && !effective_blend(kBlendOneZero, true).blend_enable);
 static_assert(!effective_blend(kBlendOneZero, false).logic_op_enable);
 static_assert(effective_blend(kBlendOneZero, true).color_update);
-constexpr auto kBlendDstAlpha = decode_blend(1u | (1u << 3) | (7u << 5) | (6u << 8), 0u);
+constexpr auto kBlendDstAlpha = blend_of(true, false, BlendFactor::InvDstAlpha, BlendFactor::DstAlpha, false, 0u);
 static_assert(!effective_blend(kBlendDstAlpha, false).blend_enable);
 static_assert(effective_blend(kBlendDstAlpha, true).blend_enable);
-constexpr auto kSubtractOneZero = decode_blend(1u | (1u << 3) | (0u << 5) | (1u << 8) | (1u << 11), 0u);
+constexpr auto kSubtractOneZero = blend_of(true, false, BlendFactor::Zero, BlendFactor::One, true, 0u);
 static_assert(effective_blend(kSubtractOneZero, true).blend_enable && effective_blend(kSubtractOneZero, true).subtract);
-constexpr auto kLogicCopyMode = decode_blend((1u << 1) | (1u << 3) | (3u << 12), 0u);
+constexpr auto kLogicCopyMode = blend_of(false, true, BlendFactor::Zero, BlendFactor::Zero, false, 3u);
 static_assert(!effective_blend(kLogicCopyMode, true).logic_op_enable);
-constexpr auto kLogicXor = decode_blend((1u << 1) | (1u << 3) | (6u << 12), 0u);
+constexpr auto kLogicXor = blend_of(false, true, BlendFactor::Zero, BlendFactor::Zero, false, 6u);
 static_assert(effective_blend(kLogicXor, true).logic_op_enable);
 
 // TEX_SETIMAGE0/3: 640x480 RGB565 at physical 0x01000000.
@@ -68,18 +51,6 @@ static_assert(kTexImage.width == 640);
 static_assert(kTexImage.height == 480);
 static_assert(kTexImage.format == TexFormat::RGB565);
 static_assert(kTexImage.guest_addr == 0x01000000u);
-
-constexpr auto kEfbCopyNoAutoConv = decode_efb_copy(
-    0u, 0u, 0u, 0u, 256u, 0u, 0u, 0u, 1u << 15);
-static_assert(!kEfbCopyNoAutoConv.intensity);
-
-constexpr auto kEfbCopyIntensity = decode_efb_copy(
-    0u, 0u, 0u, 0u, 256u, 0u, 0u, 0u, (1u << 15) | (1u << 16));
-static_assert(kEfbCopyIntensity.intensity);
-
-constexpr auto kEfbCopyFormatSwizzle = decode_efb_copy(
-    0u, 0u, 0u, 0u, 256u, 0u, 0u, 0u, 1u << 3);
-static_assert(kEfbCopyFormatSwizzle.target_format == 8u);
 
 constexpr EfbCopyParams make_efb_copy_filter(
     std::uint32_t w0,
