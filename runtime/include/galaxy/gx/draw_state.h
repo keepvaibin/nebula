@@ -29,6 +29,16 @@ struct IndirectStage {
     bool lod, prev;
 };
 
+// What a change invalidates (the backend's caches): shader keys, pipeline state, texture bindings, vertex shader
+// keys, matrix memory, constants.
+inline constexpr std::uint32_t kStateDirtyTev = 1u << 0;
+inline constexpr std::uint32_t kStateDirtyRenderState = 1u << 1;
+inline constexpr std::uint32_t kStateDirtyTex = 1u << 2;
+inline constexpr std::uint32_t kStateDirtyVertexShader = 1u << 3;
+inline constexpr std::uint32_t kStateDirtyMatrices = 1u << 4;
+inline constexpr std::uint32_t kStateDirtyPixelConstants = 1u << 6;
+inline constexpr std::uint32_t kStateDirtyVertexConstants = 1u << 7;
+
 struct NativeDrawState {
     // Fixed-function state: the counts and cull of the generation mode, depth, blend (as the game set it; the
     // pixel engine's effective blend is effective_blend's), the pixel format and the alpha compare.
@@ -102,10 +112,23 @@ struct NativeDrawState {
     ScissorRect scissor{-342, -342, -342, -342};
     ScissorOffset scissor_offset{};
 
+    // What changed since the last consume_dirty (kStateDirty*; all at the start).
+    std::uint32_t dirty = ~0u;
+
     // A state op (galaxy/gx/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
     void apply(const material::Material& material);
+    [[nodiscard]] std::uint32_t consume_dirty() noexcept {
+        const std::uint32_t d = dirty;
+        dirty = 0u;
+        return d;
+    }
+
+private:
+    void set_op(const state::Op& op);
+    void set_material(const material::Material& material);
+public:
 };
 
 // The indirect state in the pixel shader's packed form (its key and constants): a stage's command, the four stages'

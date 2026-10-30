@@ -5,6 +5,8 @@
 #include "galaxy/gx/draw_state.h"
 
 #include <bit>
+#include <cstddef>
+#include <cstring>
 #include <iterator>
 #include <sstream>
 
@@ -202,7 +204,138 @@ IndirectStage material_indirect(const material::TevStage& s) {
 
 }  // namespace
 
+namespace {
+
+// Field groups and what a change in each invalidates (at least what the register file's dirty bits did).
+struct Group {
+    std::size_t offset, size;
+    std::uint32_t dirty;
+};
+#define NEBULA_GROUP(field, flags) Group{offsetof(NativeDrawState, field), sizeof(NativeDrawState::field), flags}
+enum : unsigned {
+    kGen, kZ, kBlend, kPe, kAlpha, kTev, kSwap, kFogType, kZTexture, kInd, kIndOrder, kIndMatrix, kTevColor, kKonst,
+    kFog, kChannel, kMaterialColor, kAmbientColor, kTexgen, kPostTexgen, kProjection, kProjectionType, kViewport,
+    kPositionMatrix, kTextureMatrix, kLinePoint, kCoord, kTexture, kGroupCount
+};
+const Group kGroups[kGroupCount] = {
+    NEBULA_GROUP(gen, kStateDirtyTev | kStateDirtyVertexShader | kStateDirtyRenderState | kStateDirtyVertexConstants),
+    NEBULA_GROUP(z, kStateDirtyRenderState),
+    NEBULA_GROUP(blend, kStateDirtyRenderState | kStateDirtyTev | kStateDirtyPixelConstants),
+    NEBULA_GROUP(pe, kStateDirtyRenderState | kStateDirtyTev),
+    NEBULA_GROUP(alpha, kStateDirtyTev | kStateDirtyPixelConstants),
+    NEBULA_GROUP(tev, kStateDirtyTev),
+    NEBULA_GROUP(swap, kStateDirtyTev),
+    NEBULA_GROUP(fog_type, kStateDirtyTev | kStateDirtyPixelConstants),
+    NEBULA_GROUP(z_texture, kStateDirtyTev | kStateDirtyPixelConstants),
+    NEBULA_GROUP(ind, kStateDirtyTev),
+    NEBULA_GROUP(ind_order, kStateDirtyTev),
+    NEBULA_GROUP(ind_matrix, kStateDirtyPixelConstants),
+    NEBULA_GROUP(tev_color, kStateDirtyPixelConstants),
+    NEBULA_GROUP(konst, kStateDirtyPixelConstants),
+    NEBULA_GROUP(fog, kStateDirtyPixelConstants),
+    NEBULA_GROUP(channel, kStateDirtyVertexShader | kStateDirtyVertexConstants),
+    NEBULA_GROUP(material_color, kStateDirtyVertexConstants),
+    NEBULA_GROUP(ambient_color, kStateDirtyVertexConstants),
+    NEBULA_GROUP(texgen, kStateDirtyVertexShader | kStateDirtyVertexConstants),
+    NEBULA_GROUP(post_texgen, kStateDirtyVertexShader | kStateDirtyVertexConstants),
+    NEBULA_GROUP(projection, kStateDirtyVertexConstants),
+    NEBULA_GROUP(projection_type, kStateDirtyVertexConstants),
+    NEBULA_GROUP(viewport, kStateDirtyVertexConstants),
+    NEBULA_GROUP(position_matrix, kStateDirtyVertexConstants),
+    NEBULA_GROUP(texture_matrix, kStateDirtyVertexConstants),
+    NEBULA_GROUP(line_point, kStateDirtyVertexConstants),
+    NEBULA_GROUP(coord, kStateDirtyPixelConstants | kStateDirtyVertexConstants),
+    NEBULA_GROUP(texture, kStateDirtyTex | kStateDirtyPixelConstants),
+};
+#undef NEBULA_GROUP
+
+constexpr std::uint32_t bit(unsigned group) {
+    return 1u << group;
+}
+
+// The groups an op can change (the scissor, copy settings and palettes have their own paths).
+std::uint32_t op_groups(std::uint8_t kind) {
+    switch (kind) {
+    case state::kBlendEtc: case state::kBlend: case state::kDstAlpha: case state::kColorUpdate:
+    case state::kAlphaUpdate: case state::kDither:
+        return bit(kBlend);
+    case state::kZMode: return bit(kZ);
+    case state::kAlphaCompare: return bit(kAlpha);
+    case state::kCull: case state::kGenMode: case state::kGenMode2: case state::kNumTexGens: case state::kNumChans:
+    case state::kNumTevStages: case state::kNumIndStages: case state::kCoPlanar:
+        return bit(kGen);
+    case state::kChannel: return bit(kChannel);
+    case state::kTevColorCalc: case state::kTevAlphaCalc: case state::kTevColorIn: case state::kTevAlphaIn:
+    case state::kTevColorOp: case state::kTevAlphaOp: case state::kTevKColorSel: case state::kTevKAlphaSel:
+    case state::kTevSwapMode: case state::kTevOrder: case state::kTevStageOrder:
+        return bit(kTev);
+    case state::kTevDirect: case state::kTevIndirect: return bit(kInd);
+    case state::kIndTexScale: case state::kIndTexOrder: return bit(kIndOrder);
+    case state::kIndTexMatrix: return bit(kIndMatrix);
+    case state::kTevColor: case state::kTevColorS10: return bit(kTevColor);
+    case state::kTevKColor: return bit(kKonst);
+    case state::kTevSwapTable: return bit(kSwap);
+    case state::kMaterialColor: return bit(kMaterialColor);
+    case state::kAmbientColor: return bit(kAmbientColor);
+    case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
+    case state::kTexLookup: case state::kTexImageAttr: case state::kTexImage: case state::kTexTlut:
+        return bit(kTexture);
+    case state::kFog: return bit(kFog) | bit(kFogType) | bit(kGen);
+    case state::kProjection: return bit(kProjection) | bit(kProjectionType);
+    case state::kViewport: return bit(kViewport);
+    case state::kZCompLoc: case state::kPixelFormat: return bit(kPe);
+    case state::kCurrentMatrix: return bit(kPositionMatrix);
+    case state::kLineWidth: case state::kPointSize: return bit(kLinePoint);
+    case state::kZTexture: return bit(kZTexture);
+    case state::kTexOffsets: return bit(kCoord);
+    default: return 0u;
+    }
+}
+
+// Runs `change` and marks the dirty bits of the groups in `groups` whose bytes it changed.
+template <typename Change>
+void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
+    alignas(NativeDrawState) std::byte before[sizeof(NativeDrawState)];
+    const auto* self = reinterpret_cast<const std::byte*>(&s);
+    for (std::uint32_t g = groups; g != 0u; g &= g - 1u) {
+        const Group& group = kGroups[std::countr_zero(g)];
+        std::memcpy(before + group.offset, self + group.offset, group.size);
+    }
+    const std::uint32_t palettes = s.palette_revision;
+    change();
+    for (std::uint32_t g = groups; g != 0u; g &= g - 1u) {
+        const Group& group = kGroups[std::countr_zero(g)];
+        if (std::memcmp(before + group.offset, self + group.offset, group.size) != 0) {
+            s.dirty |= group.dirty;
+        }
+    }
+    if (s.palette_revision != palettes) {
+        s.dirty |= kStateDirtyTex;
+    }
+}
+
+}  // namespace
+
 void NativeDrawState::apply(const state::Op& op) {
+    std::uint32_t groups = op_groups(op.kind);
+    if (op.kind == state::kFogRange || op.kind == state::kFogRangeTable) {
+        dirty |= kStateDirtyPixelConstants;  // range adjustment: not kept, its constants still refresh
+    } else if (op.kind == state::kInvalidateTextures || op.kind == state::kTlutLoad) {
+        dirty |= kStateDirtyTex;  // the texture bindings are captured again
+    }
+    tracked(*this, groups, [&] { set_op(op); });
+}
+
+void NativeDrawState::apply(const material::Material& m) {
+    constexpr std::uint32_t kMaterialGroups = bit(kGen) | bit(kZ) | bit(kBlend) | bit(kPe) | bit(kAlpha) | bit(kTev) |
+                                              bit(kSwap) | bit(kFogType) | bit(kInd) | bit(kIndOrder) |
+                                              bit(kIndMatrix) | bit(kTevColor) | bit(kKonst) | bit(kFog) |
+                                              bit(kChannel) | bit(kMaterialColor) | bit(kAmbientColor) |
+                                              bit(kTexgen) | bit(kPostTexgen) | bit(kCoord) | bit(kTexture);
+    tracked(*this, kMaterialGroups, [&] { set_material(m); });
+}
+
+void NativeDrawState::set_op(const state::Op& op) {
     const std::uint8_t* a = op.a;
     switch (op.kind) {
     case state::kBlendEtc:
@@ -530,7 +663,7 @@ void NativeDrawState::apply(const state::Op& op) {
     }
 }
 
-void NativeDrawState::apply(const material::Material& m) {
+void NativeDrawState::set_material(const material::Material& m) {
     const bool dither = (m.loads & material::kLoadsDither) != 0u;
     const auto blend_and_z = [&] {
         set_blend(blend, m.blend.type, m.blend.source, m.blend.destination, m.blend.logic_op);

@@ -898,6 +898,7 @@ void GxBackend::reset_fifo_session_state() {
     // While no producer or render thread runs.
     state_ = GxState{};
     state_.mark_all_dirty();
+    draw_state_ = NativeDrawState{};
 
     pending_async_dirty_ranges_.clear();
     // Runs before the renderer initializes, so nothing still reads the buffer.
@@ -8103,7 +8104,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         static_cast<std::uint8_t>(primitive_topology_type);
     const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
-    const std::uint32_t dirty = state_.consume_dirty();
+    // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
+    const std::uint32_t gx_dirty = state_.consume_dirty();
+    const std::uint32_t dirty = gx_dirty == ~0u ? ~0u : draw_state_.consume_dirty() | (gx_dirty & GxState::kDirtyXfMatrices);
+    check_dirty(gx_dirty, dirty);
     // Matrix words do not affect the shader/render keys, but they invalidate both upload snapshots.
     // Propagate this before considering reuse: a prior draw may have cleared the flags before
     // LOAD_XF/LOAD_INDX changed the bank.
@@ -9442,9 +9446,13 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
                                 static_cast<std::uint32_t>(c[8]) << 18u;
         state_.load_cp(cp::kMatrixIndexA, a);
         state_.load_cp(cp::kMatrixIndexB, b);
+        const std::uint32_t before_a = matrix_index_a(draw_state_), before_b = matrix_index_b(draw_state_);
         draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] & 63u);
         for (unsigned i = 0; i < 8u; ++i) {
             draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(c[1u + i] & 63u);
+        }
+        if (matrix_index_a(draw_state_) != before_a || matrix_index_b(draw_state_) != before_b) {
+            draw_state_.dirty |= kStateDirtyVertexConstants;
         }
         const std::uint32_t words[2] = {a, b};
         state_.load_xf(0x1018u, words, 2u);
@@ -9454,8 +9462,32 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
         state_.load_xf(static_cast<std::uint16_t>(0x1040u + g[0]), &gen, 1u);
         state_.load_xf(static_cast<std::uint16_t>(0x1050u + g[0]), &post, 1u);
+        const std::uint32_t before = texgen_word(draw_state_.texgen[g[0] & 7u]);
+        const std::uint32_t before_post = post_texgen_word(draw_state_.post_texgen[g[0] & 7u]);
         draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
         draw_state_.post_texgen[g[0] & 7u] = decode_xf_post_texgen(post);
+        if (texgen_word(draw_state_.texgen[g[0] & 7u]) != before ||
+            post_texgen_word(draw_state_.post_texgen[g[0] & 7u]) != before_post) {
+            draw_state_.dirty |= kStateDirtyVertexShader | kStateDirtyVertexConstants;
+        }
+    }
+}
+
+void GxBackend::check_dirty(std::uint32_t gx_dirty, std::uint32_t dirty) {
+    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
+    if (!enabled) {
+        return;
+    }
+    static std::uint64_t flushes = 0, missed = 0;
+    ++flushes;
+    const std::uint32_t lost = gx_dirty & ~dirty & 0xFFu & ~GxState::kDirtyVcd;
+    if (lost != 0u && ++missed <= 40u) {
+        std::fprintf(stderr, "[draw-state] frame %llu dirty: register file %02x, typed %02x, missed %02x" "\n",
+                     static_cast<unsigned long long>(frame_index_), gx_dirty & 0xFFu, dirty & 0xFFu, lost);
+    }
+    if (flushes % 200000u == 0u) {
+        std::fprintf(stderr, "[draw-state] dirty %llu flushes, %llu missed" "\n", static_cast<unsigned long long>(flushes),
+                     static_cast<unsigned long long>(missed));
     }
 }
 

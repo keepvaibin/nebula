@@ -1138,6 +1138,8 @@ private:
     void check_draw_state();
     // The same for a copy: its typed parameters against the register file's.
     void check_copy(const EfbCopyParams& params);
+    // And the typed dirty flags: none the register file raised may be missing (matrix memory aside).
+    void check_dirty(std::uint32_t gx_dirty, std::uint32_t dirty);
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;
