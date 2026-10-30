@@ -157,34 +157,6 @@ int64_t nebula_time_base(void) {
 #endif
 }
 
-static int64_t game_time(void);
-
-/* The time base counts from the local calendar time at boot (ticks since 2000-01-01), as the console's does: the
-   system sets it from the clock at boot, so OSGetTime is the date (the game stamps saves with it). */
-static int64_t sCalendarBase;
-
-static void calendar_init(void) {
-    const time_t now = time(NULL);
-    struct tm local;
-#if defined(_WIN32)
-    localtime_s(&local, &now);
-    const time_t fields = _mkgmtime(&local);
-#else
-    localtime_r(&now, &local);
-    const time_t fields = timegm(&local);
-#endif
-    const int64_t unixTo2000 = 946684800;
-    sCalendarBase = ((int64_t)fields - unixTo2000) * OS_TIMER_CLOCK;
-}
-
-OSTime OSGetTime(void) {
-    return game_time() + sCalendarBase;
-}
-
-OSTick OSGetTick(void) {
-    return (OSTick)(game_time() + sCalendarBase);
-}
-
 /* The simulation thread's sleep for want of work and a host thread's wake of it (the kernel decides when). */
 #if defined(_WIN32)
 static HANDLE sWake;
@@ -225,9 +197,9 @@ void nebula_sleep_for_work(void) {
 static _Atomic int64_t sTimerDeadline = INT64_MAX; /* in time-base ticks since boot */
 static _Atomic int64_t sClockArmed = INT64_MAX; /* the deadline the clock thread is sleeping toward */
 
-/* The game's own clock reads (OSGetTime, OSGetTick; on the simulation thread) also catch a passed deadline, at no
-   extra clock read: the alarm is then due at the next point interrupts are enabled instead of when the host timer
-   wakes the clock thread. */
+/* The kernel's own clock reads (nebula_time, on the simulation thread) also catch a passed deadline, at no extra
+   clock read: the alarm is then due at the next scheduling point instead of when the host timer wakes the timer
+   thread. */
 static int64_t game_time(void) {
     const int64_t now = nebula_time_base();
     int64_t deadline = atomic_load_explicit(&sTimerDeadline, memory_order_relaxed);
@@ -364,18 +336,17 @@ static void clock_rearm(void) {
 }
 #endif
 
-/* The kernel's time (OSGetTime's): alarms are set in it. */
+/* The kernel's time, ticks since boot (dates are the host's, NebulaCalendar): alarms are set in it. */
 int64_t nebula_time(void) {
-    return OSGetTime();
+    return game_time();
 }
 
 /* The timer thread is woken only when the new deadline is earlier than the one it sleeps toward; for a later one it
    wakes at the old deadline, sees the new one and sleeps again. A timer event already raised stays raised; the
    kernel re-arms when it finds nothing due. */
 void nebula_timer_arm(int64_t deadline) {
-    const int64_t base = deadline - sCalendarBase;
-    atomic_store(&sTimerDeadline, base);
-    if (base < atomic_load(&sClockArmed)) {
+    atomic_store(&sTimerDeadline, deadline);
+    if (deadline < atomic_load(&sClockArmed)) {
         clock_rearm();
     }
 }
@@ -519,7 +490,6 @@ void nebula_os_boot(void (*gameMain)(void)) {
     sWake = CreateEventW(NULL, FALSE, FALSE, NULL);
 #endif
     time_init();
-    calendar_init();
     clock_start();
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
