@@ -32,7 +32,7 @@
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/draw_state.h"
 #include "galaxy/gx/fifo_parser.h"
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/matrix_memory.h"
 #include "galaxy/gx/movie_replacement.h"
 #include "galaxy/gx/native_shapes.h"
 #if defined(NEBULA_GPU_VULKAN)
@@ -264,6 +264,8 @@ private:
     void on_invalidate_vertex_cache();
     // A palette place took another address (NativeDrawState::palette_revision).
     void on_palettes_changed();
+    // A light op's words (GXLoadLightObjImm's), into matrix memory.
+    void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                         std::uint32_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
@@ -1127,19 +1129,14 @@ private:
         MonotonicCadenceAccumulator& accumulator) noexcept;
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
-    GxState state_;
-    // The same state as typed values (draw_state.h), which the readers move to group by group.
+    // The matrices and lights the game loads (E-05 replaces it with a per-frame arena).
+    MatrixMemory matrices_;
+    // The drawing state the game's records set, as typed values (draw_state.h).
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
     [[nodiscard]] BlendMode draw_blend() const {
         return effective_blend(draw_state_.blend, draw_state_.pe.pixel_format == 1u);
     }
-    // GALAXY_CHECK_DRAW_STATE=1: compares draw_state_ with the register file's decode at every record draw.
-    void check_draw_state();
-    // The same for a copy: its typed parameters against the register file's.
-    void check_copy(const EfbCopyParams& params);
-    // And the typed dirty flags: none the register file raised may be missing (matrix memory aside).
-    void check_dirty(std::uint32_t gx_dirty, std::uint32_t dirty);
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;
@@ -1455,15 +1452,15 @@ private:
     bool inline_matrices_stale_ = true;
     // The 32-word chunks of the XF matrix palette already snapshot into this frame slot's matrix ring
     // (cleared on the slot rewind and on session reset). When nothing moved, flush_draw_state reuses
-    // current_matrix_palette_; a new allocation still copies the whole palette (GxState::xf_palette_dirty()).
+    // current_matrix_palette_; a new allocation still copies the whole palette (MatrixMemory::palette_dirty()).
     static constexpr std::uint64_t xf_palette_chunk_mask =
         (std::uint64_t{1}
-         << GxState::kMatrixPaletteChunkCount) - 1u;
+         << MatrixMemory::kPaletteChunkCount) - 1u;
     static_assert(
-        GxState::kMatrixPaletteChunkCount < 64u,
+        MatrixMemory::kPaletteChunkCount < 64u,
         "palette dirty bitmap is one 64-bit word");
     static_assert(
-        GxState::kMatrixPaletteWords % GxState::kMatrixPaletteChunkWords == 0u,
+        MatrixMemory::kPaletteWords % MatrixMemory::kPaletteChunkWords == 0u,
         "palette chunks must tile the palette exactly");
     std::uint64_t xf_palette_valid_ = 0u;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on

@@ -6,7 +6,7 @@
 #include <cstdint>
 
 namespace galaxy::gx {
-class GxState;
+class MatrixMemory;
 }
 
 namespace galaxy::gx::material {
@@ -77,9 +77,8 @@ struct Material {
 // GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
 [[nodiscard]] std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source);
 
-// Sets `state` as J3D's material display list did (J3DMaterial::makeDisplayList_private's order: TEV block,
-// indirect block, pixel block, mode, texgens, colour block, channel and texgen counts); `tlut_load` (or null) is
-// called with `context` where a palette's copy starts.
-void apply(const Material& material, GxState& state, void (*tlut_load)(void*) = nullptr, void* context = nullptr);
+// Loads the material's texture matrices and lights as J3D's material display list did (the whole material, or the
+// parts its change flags name); the rest of the material is typed drawing state (draw_state.h).
+void load_matrices(const Material& material, MatrixMemory& memory);
 
 }  // namespace galaxy::gx::material

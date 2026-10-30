@@ -9,7 +9,7 @@
 #include <cstring>
 using namespace galaxy::gx;
 int main() {
-    GxState state;
+    MatrixMemory state;
     NativeDrawState draw;
     VsConstantsCpuCache cache;
     bool ok = true;
@@ -19,55 +19,52 @@ int main() {
     std::array<std::uint32_t,12> words{};
     for (unsigned i = 0; i < 8192u; ++i) {
         bool frame = false;
+        bool typed = false;  // a typed field changed: the backend's dirty flags then name vertex constants
         const unsigned kind=i%12u;
         for (auto& word:words)word=0x3F800000u | (next()&0x007FFFFFu);
         switch(kind) {
-        case 0: state.load_xf(static_cast<std::uint16_t>((next()%61u)*4u),words.data(),12u);break;
-        case 1: state.load_xf(static_cast<std::uint16_t>(xf::kPostMatricesBase+(next()%61u)*4u),words.data(),12u);break;
-        case 2: state.load_xf(static_cast<std::uint16_t>(xf::kLightsBase+next()%128u),words.data(),1u);break;
+        case 0: state.load(static_cast<std::uint16_t>((next()%61u)*4u),words.data(),12u);break;
+        case 1: state.load(static_cast<std::uint16_t>(xf::kPostMatricesBase+(next()%61u)*4u),words.data(),12u);break;
+        case 2: state.load(static_cast<std::uint16_t>(xf::kLightsBase+next()%128u),words.data(),1u);break;
         case 3: {
-            const std::uint32_t a=next()&0x3FFFFFFFu;state.load_cp(cp::kMatrixIndexA,a);
+            const std::uint32_t a=next()&0x3FFFFFFFu;
             draw.position_matrix=static_cast<std::uint8_t>(a&0x3Fu);
             for(unsigned t=0;t<4u;++t)draw.texture_matrix[t]=static_cast<std::uint8_t>((a>>(6u+6u*t))&0x3Fu);
+            typed=true;
             break;
         }
         case 4: {
-            const std::uint32_t b=next()&0x00FFFFFFu;state.load_cp(cp::kMatrixIndexB,b);
+            const std::uint32_t b=next()&0x00FFFFFFu;
             for(unsigned t=0;t<4u;++t)draw.texture_matrix[4u+t]=static_cast<std::uint8_t>((b>>(6u*t))&0x3Fu);
+            typed=true;
             break;
         }
-        case 5: state.load_cp(cp::kVcdLo,state.cp(cp::kVcdLo)^1u);break;
-        case 6: state.load_xf(xf::kProjectionBase,words.data(),6u);
-            for(unsigned t=0;t<6u;++t)draw.projection[t]=std::bit_cast<float>(words[t]);
-            break;
-        case 7: words[0]=next();state.load_xf(xf::kAmbientColorBase,words.data(),1u);
+        case 5: draw.channel[0].lighting_enable=!draw.channel[0].lighting_enable;draw.gen.num_color_chans=1u;typed=true;break;
+        case 6: for(unsigned t=0;t<6u;++t)draw.projection[t]=std::bit_cast<float>(words[t]);typed=true;break;
+        case 7: words[0]=next();
             for(unsigned c=0;c<4u;++c)draw.ambient_color[0][c]=static_cast<std::uint8_t>(words[0]>>(24u-8u*c));
+            typed=true;
             break;
-        case 8: {
-            words[0]=next()&0x3Fu;const unsigned g=next()%8u;
-            state.load_xf(static_cast<std::uint16_t>(xf::kPostTexGenBase+g),words.data(),1u);
-            draw.post_texgen[g]=decode_xf_post_texgen(words[0]);
-            break;
-        }
+        case 8: draw.post_texgen[next()%8u]=decode_xf_post_texgen(next()&0x3Fu);typed=true;break;
         case 9: {
-            const std::uint32_t w=next()&0x3FFFFFu;state.load_bp((std::uint32_t(bp::kSuLpSize)<<24u)|w);
+            const std::uint32_t w=next()&0x3FFFFFu;
             draw.line_point={static_cast<std::uint8_t>(w),static_cast<std::uint8_t>(w>>8u),
                              static_cast<std::uint8_t>((w>>16u)&7u),static_cast<std::uint8_t>((w>>19u)&7u)};
+            typed=true;
             break;
         }
         case 10: scale=1u+next()%16u;break;
         case 11: frame=true;break;
         }
-        const auto dirty=state.consume_dirty();
+        const std::uint32_t dirty=(state.consume_changed()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);
         GxVsConstants reference{};fill_vs_constants(state,draw,0u,scale,reference);
         const auto& got=cache.update(state,draw,dirty,scale,frame);
         ok &= std::memcmp(&got,&reference,sizeof(got))==0;
-        if(kind==5u)ok &= (dirty&GxState::kDirtyVsConstants)!=0u &&
-            ((got.flags&1u)!=0u)==((state.cp(cp::kVcdLo)&1u)!=0u);
+        if(kind==5u)ok &= ((got.flags&2u)!=0u)==draw.channel[0].lighting_enable;
         if(!ok){std::printf("FAILED VS image at %u kind %u dirty %x\n",i,kind,dirty);return 1;}
         if((i%64u)==0u) {cache={};}
     }
-    std::printf("PASS 8192 complete VS images: matrices, lights, indices, VCD, projection, colors, post texgen, raster, scale, frame/reset\n");
+    std::printf("PASS 8192 complete VS images: matrices, lights, indices, lighting, projection, colors, post texgen, raster, scale, frame/reset\n");
     // The sky up's octahedral word, decoded as the enhanced pixel shader's enh_up does: within 0.0002 rad
     // over the sphere, the poles and the octahedron's folds included; the cache carries it into every image.
     {

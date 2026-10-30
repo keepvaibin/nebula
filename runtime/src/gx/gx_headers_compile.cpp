@@ -5,7 +5,7 @@
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/gx_bitfields.h"
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/matrix_memory.h"
 #include "galaxy/gx/pipeline_cache.h"
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/resident_vertex_arena.h"

@@ -1,12 +1,12 @@
 #pragma once
 
-// GX FIFO command parser: dispatches the big-endian command stream to GxState and a FifoSink.
+// GX command constants and the stream cursor's errors.
 //
 // An unknown opcode, a truncated payload or an unmapped guest pointer throws GxFatalError after
 // the FIFO is written to a .gxdump file. Hardware no-op opcodes are accepted only where listed.
 
 #include "galaxy/gx/gx_bitfields.h"
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/guest_memory.h"
 
 #include <cstddef>

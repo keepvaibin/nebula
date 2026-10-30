@@ -24,7 +24,6 @@ namespace galaxy::gx {
     return std::memcmp(left, right, size) == 0;
 }
 
-class GxState;
 
 // 64-bit FNV-1a. The shader key hashes and shader checksums in the on-disk shader and PSO
 // caches use it, so changing it invalidates those caches.

@@ -6,10 +6,6 @@
 #include <cstdint>
 #include <span>
 
-namespace galaxy::gx {
-class GxState;
-}
-
 namespace galaxy::gx::state {
 
 enum Kind : std::uint8_t {
@@ -91,22 +87,5 @@ struct Op {
     std::uint64_t image;  // host-side: the image's physical address
 };
 
-// The register writes the GX functions the ops name make, in order (BP words, XF address and value).
-struct Writes {
-    virtual void bp(std::uint32_t word) = 0;
-    virtual void xf(std::uint16_t address, std::uint32_t value) = 0;
-    virtual void cp(std::uint8_t reg, std::uint32_t value) = 0;
-    // The BP, XF and CP registers' current values (the ops that change part of one, and copies).
-    virtual std::uint32_t bp_read(std::uint8_t reg) = 0;
-    virtual std::uint32_t xf_read(std::uint16_t address) = 0;
-    virtual std::uint32_t cp_read(std::uint8_t reg) = 0;
-
-protected:
-    ~Writes() = default;
-};
-void encode(std::span<const Op> ops, Writes& out);
-
-// Sets `state` as the GX functions the ops name would, in order.
-void apply(std::span<const Op> ops, GxState& state);
 
 }  // namespace galaxy::gx::state

@@ -10,7 +10,7 @@
 #include <wrl/client.h>
 #pragma warning(pop)
 
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/draw_state.h"
 #include "galaxy/gx/line_point_raster.h"
 #include "galaxy/gx/pipeline_cache.h"
 #include "galaxy/gx/renderer_d3d12.h"
@@ -734,25 +734,23 @@ int main() {
             2.0f * static_cast<float>(galaxy::gx::kMaxEfbScale),
             "point size scale clamps to the supported maximum");
 
-        galaxy::gx::GxState state;
+        galaxy::gx::NativeDrawState state;
         (void)state.consume_dirty();
-        state.load_bp(
-            (static_cast<std::uint32_t>(galaxy::gx::bp::kSuLpSize) << 24u) |
-            (6u | (12u << 8u)));
+        galaxy::gx::state::Op line{};
+        line.kind = galaxy::gx::state::kLineWidth;
+        line.a[0] = 6u;
+        state.apply(line);
         passed &= expect(
-            (state.consume_dirty() & galaxy::gx::GxState::kDirtyVsConstants) != 0u,
-            "BP 0x22 refreshes line/point GPU constants");
-        const std::array<std::uint32_t, 2> viewport_words{
-            std::bit_cast<std::uint32_t>(32.0f),
-            std::bit_cast<std::uint32_t>(-32.0f),
-        };
-        state.load_xf(
-            galaxy::gx::xf::kViewportBase,
-            viewport_words.data(),
-            static_cast<std::uint16_t>(viewport_words.size()));
+            (state.consume_dirty() & galaxy::gx::kStateDirtyVertexConstants) != 0u,
+            "a line width refreshes line/point GPU constants");
+        galaxy::gx::state::Op viewport{};
+        viewport.kind = galaxy::gx::state::kViewport;
+        viewport.f[0] = 32.0f;
+        viewport.f[1] = -32.0f;
+        state.apply(viewport);
         passed &= expect(
-            (state.consume_dirty() & galaxy::gx::GxState::kDirtyVsConstants) != 0u,
-            "XF viewport width/height refresh line/point GPU constants");
+            (state.consume_dirty() & galaxy::gx::kStateDirtyVertexConstants) != 0u,
+            "a viewport's width and height refresh line/point GPU constants");
 
         WarpRasterHarness harness;
         passed &= expect(

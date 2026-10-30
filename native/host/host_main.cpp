@@ -42,7 +42,6 @@
 #endif
 #include "galaxy/runtime_settings.h"
 #include "galaxy/gx/curved_surfaces.h"
-#include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/native_shapes.h"
 #include "galaxy/gx/galaxy_select.h"
 #include "galaxy/gx/render_config.h"

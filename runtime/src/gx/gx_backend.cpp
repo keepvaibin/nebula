@@ -336,10 +336,6 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     return (frame_index + 1u) % period == 0u;
 }
 
-std::uint64_t dependency_shape_state_hash(const GxState& state) noexcept {
-    return state.dependency_shape_hash();
-}
-
 std::uint32_t normalize_dependency_guest_addr(
     std::uint32_t address) noexcept {
     if (address >= 0x80000000u && address < 0x81800000u) {
@@ -889,15 +885,14 @@ void gx_topology_for_primitive(
 inline constexpr std::size_t kMatrixPaletteWords = 0x0680u;  // 0x0000-0x067F
 // The upload copies the chunks GxState marks written, so both must cover the same words.
 static_assert(
-    kMatrixPaletteWords == galaxy::gx::GxState::kMatrixPaletteWords,
+    kMatrixPaletteWords == galaxy::gx::MatrixMemory::kPaletteWords,
     "backend palette bound must match the tracked GxState palette range");
 
 }  // anonymous namespace
 
 void GxBackend::reset_fifo_session_state() {
     // While no producer or render thread runs.
-    state_ = GxState{};
-    state_.mark_all_dirty();
+    matrices_ = MatrixMemory{};
     draw_state_ = NativeDrawState{};
 
     pending_async_dirty_ranges_.clear();
@@ -1856,7 +1851,7 @@ void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& uplo
         return;
     }
     const auto xf_float = [this](unsigned offset) {
-        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
+        return std::bit_cast<float>(matrices_.word(static_cast<std::uint16_t>(offset)));
     };
     const float scale = static_cast<float>(renderer_.efb_scale());
     const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
@@ -1905,7 +1900,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     temporal_vs_palette_va_ = current_matrix_palette_;
 
     const auto xf_float = [this](unsigned offset) {
-        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
+        return std::bit_cast<float>(matrices_.word(static_cast<std::uint16_t>(offset)));
     };
     if (std::exchange(scene_chunk_restart_, false) && interp_recording_ && !motion_scene_ &&
         current_replay_record_ >= 0) [[unlikely]] {
@@ -1915,7 +1910,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         InterpScene& scene = interp_scenes_[interp_scene_];
         const auto r = static_cast<std::size_t>(current_replay_record_);
         const std::uint64_t base = combine64(
-            identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+            identity_marker_, static_cast<std::uint32_t>(matrices_.write_count() - identity_matrix_base_));
         if (identity_scene_ && base == identity_last_base_ && r < scene.constants.size()) {
             GxVsConstants probe = cpu;
             probe.mtx_palette_base = scene.constants[r].mtx_palette_base;
@@ -1953,7 +1948,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
             : 0u);
     record.identity = record_identity();
     record.layout = current_vs_hash_;
-    record.load_signature = state_.matrix_load_signature();
+    record.load_signature = matrices_.load_signature();
     record.category = identity_category_;
     record.continuity = identity_continuity_;
     record.particle = identity_continuity_particle_;
@@ -2109,13 +2104,13 @@ void GxBackend::begin_identity_scene() {
     ++identity_scene_index_;
     identity_occurrences_used_ = 0u;
     identity_marker_ = mix64(0x5343454E45ull);
-    identity_matrix_base_ = state_.matrix_write_count();
+    identity_matrix_base_ = matrices_.write_count();
     identity_last_base_ = 0u;
     identity_sub_index_ = 0u;
     identity_continuity_ = 0u;
     identity_continuity_particle_ = false;
     identity_category_ = motion::kNoCategory;
-    state_.reset_matrix_load_signature();
+    matrices_.reset_load_signature();
 }
 
 std::uint64_t GxBackend::record_identity() noexcept {
@@ -2123,7 +2118,7 @@ std::uint64_t GxBackend::record_identity() noexcept {
         return 0u;
     }
     const std::uint64_t base = combine64(
-        identity_marker_, static_cast<std::uint32_t>(state_.matrix_write_count() - identity_matrix_base_));
+        identity_marker_, static_cast<std::uint32_t>(matrices_.write_count() - identity_matrix_base_));
     identity_sub_index_ = base == identity_last_base_ ? identity_sub_index_ + 1u : 0u;
     identity_last_base_ = base;
     const std::uint64_t key = combine64(base, identity_sub_index_);
@@ -2260,8 +2255,8 @@ void GxBackend::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::u
     std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
     key = combine64(key, note_identity_occurrence(key));
     identity_marker_ = key;
-    identity_matrix_base_ = state_.matrix_write_count();
-    state_.reset_matrix_load_signature();
+    identity_matrix_base_ = matrices_.write_count();
+    matrices_.reset_load_signature();
 }
 
 void GxBackend::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b) {
@@ -2510,14 +2505,14 @@ void GxBackend::begin_side_layer(unsigned layer) {
     layer_identity_markers_[layer] = 0u;
     identity_occurrences_used_ = 0u;
     identity_marker_ = mix64(0x5343524545ull);
-    identity_matrix_base_ = state_.matrix_write_count();
+    identity_matrix_base_ = matrices_.write_count();
     identity_last_base_ = 0u;
     identity_sub_index_ = 0u;
     identity_continuity_ = 0u;
     identity_continuity_particle_ = false;
     identity_category_ = motion::kNoCategory;
-    state_.reset_matrix_load_signature();
-    state_.set_matrix_load_tracking(true);
+    matrices_.reset_load_signature();
+    matrices_.set_load_tracking(true);
     matrix_palette_stale_ = true;
     current_palette_shadow_ = -1;
     current_replay_record_ = -1;
@@ -2539,7 +2534,7 @@ void GxBackend::end_side_layer() {
     frame_bindings_dirty_ = true;
     current_replay_record_ = -1;
     current_ps_record_ = -1;
-    state_.set_matrix_load_tracking(false);
+    matrices_.set_load_tracking(false);
 }
 
 // A frame of a run that draws no 3D scene, from its first draw: an InterpScene whose whole picture is its screen
@@ -2734,7 +2729,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
                 sum = static_cast<float>((ambient >> shift) & 0xFFu) / 255.0f;
                 for (unsigned n = 0; n < 8u; ++n) {
                     if ((ctrl.light_mask & (1u << n)) != 0u) {
-                        const std::uint32_t lc = state_.xf(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + 3u));
+                        const std::uint32_t lc = matrices_.word(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + 3u));
                         sum += facing * static_cast<float>((lc >> shift) & 0xFFu) / 255.0f;
                     }
                 }
@@ -3558,7 +3553,7 @@ bool GxBackend::rt_hidden_draw() const noexcept {
     if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
         const std::uint32_t base = static_cast<std::uint32_t>(draw_state_.position_matrix) * 4u;
         const auto m = [this, base](unsigned row, unsigned column) {
-            return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + row * 4u + column)));
+            return std::bit_cast<float>(matrices_.word(static_cast<std::uint16_t>(base + row * 4u + column)));
         };
         const float det = m(0, 0) * (m(1, 1) * m(2, 2) - m(1, 2) * m(2, 1)) -
                           m(0, 1) * (m(1, 0) * m(2, 2) - m(1, 2) * m(2, 0)) +
@@ -3691,7 +3686,7 @@ void GxBackend::note_rt_mist(const DrawCall& call) {
     float m[3][4];
     for (unsigned r = 0; r < 3u; ++r) {
         for (unsigned c = 0; c < 4u; ++c) {
-            m[r][c] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + r * 4u + c)));
+            m[r][c] = std::bit_cast<float>(matrices_.word(static_cast<std::uint16_t>(base + r * 4u + c)));
         }
     }
     std::array<std::array<float, 3>, 6> corners{{{-25.0f, 25.0f, 0.0f},
@@ -4180,7 +4175,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 continue;
             }
             const auto word = [&](unsigned k) {
-                return state_.xf(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + k));
+                return matrices_.word(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + k));
             };
             info.light_index[found] = n;
             for (unsigned k = 0; k < 6u; ++k) {
@@ -4580,7 +4575,7 @@ bool GxBackend::rt_player_rig_draw() const noexcept {
     if (!color.lighting_enable || (color.light_mask & 3u) != 3u) {
         return false;
     }
-    const auto rgb = [this](std::uint16_t address) { return state_.xf(address) & 0xFFFFFF00u; };
+    const auto rgb = [this](std::uint16_t address) { return matrices_.word(address) & 0xFFFFFF00u; };
     return (rgba_word(draw_state_.ambient_color[0]) & 0xFFFFFF00u) == rt_player_rig_[0] &&
            rgb(static_cast<std::uint16_t>(xf::kLightsBase + 3u)) == rt_player_rig_[1] &&
            rgb(static_cast<std::uint16_t>(xf::kLightsBase + 16u + 3u)) == rt_player_rig_[2];
@@ -4594,7 +4589,7 @@ std::uint32_t GxBackend::rt_aimed_lights() const noexcept {
     }
     std::uint32_t lights = 0u;
     for (unsigned n = 0; n < 2u; ++n) {
-        const std::uint32_t* words = state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition;
+        const std::uint32_t* words = matrices_.raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition;
         if ((rt_follow_lights_ & (1u << n)) != 0u &&
             std::memcmp(words, rt_light_words_[n].data(), sizeof(rt_light_words_[n])) == 0) {
             lights |= 1u << n;
@@ -4610,7 +4605,7 @@ void GxBackend::write_rt_lights(std::uint32_t* palette) noexcept {
         return;
     }
     const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-    aim_actor_lights(palette, state_.xf_raw(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
+    aim_actor_lights(palette, matrices_.raw(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
                      static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_);
     if (start != 0u) [[unlikely]] {
         rt_light_cycles_ += trace_cycles() - start;
@@ -4629,7 +4624,7 @@ void GxBackend::note_rt_world_key() noexcept {
     if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
         return;
     }
-    const std::uint32_t* light = state_.xf_raw() + xf::kLightsBase;
+    const std::uint32_t* light = matrices_.raw() + xf::kLightsBase;
     if (std::memcmp(light + kXfLightPosition, rt_light_words_[0].data(), sizeof(rt_light_words_[0])) != 0) {
         return;
     }
@@ -4841,7 +4836,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             transform_history_.begin_scene(renderer_.matrix_segment_serial(),
                                            view != nullptr ? &camera : nullptr);
             begin_identity_scene();
-            state_.set_matrix_load_tracking(true);
+            matrices_.set_load_tracking(true);
             if (interp_recording_) {
                 InterpScene& scene = interp_scenes_[interp_scene_];
                 scene.camera = transform_history_.camera_delta();
@@ -4850,7 +4845,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
             }
         } else {
             transform_history_.reset();
-            state_.set_matrix_load_tracking(false);
+            matrices_.set_load_tracking(false);
         }
     } else {
         if (history_scene_) {
@@ -4878,7 +4873,7 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
         history_scene_ = false;
         current_replay_record_ = -1;
         current_ps_record_ = -1;
-        state_.set_matrix_load_tracking(false);
+        matrices_.set_load_tracking(false);
     }
     // Projections take (or drop) the scene jitter, and scene draws switch
     // palette addressing, from the next draw on.
@@ -8105,19 +8100,18 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
-    const std::uint32_t gx_dirty = state_.consume_dirty();
-    const std::uint32_t dirty = gx_dirty == ~0u ? ~0u : draw_state_.consume_dirty() | (gx_dirty & GxState::kDirtyXfMatrices);
-    check_dirty(gx_dirty, dirty);
+    const std::uint32_t dirty =
+        draw_state_.consume_dirty() | (matrices_.consume_changed() ? kStateDirtyMatrices : 0u);
     // Matrix words do not affect the shader/render keys, but they invalidate both upload snapshots.
     // Propagate this before considering reuse: a prior draw may have cleared the flags before
     // LOAD_XF/LOAD_INDX changed the bank.
-    const bool mtx_dirty = (dirty & GxState::kDirtyXfMatrices) != 0;
+    const bool mtx_dirty = (dirty & kStateDirtyMatrices) != 0;
     if (mtx_dirty) {
         matrix_palette_stale_ = true;
         inline_matrices_stale_ = true;
     }
     constexpr std::uint32_t kDirtySatisfiedByCachedUploads =
-        GxState::kDirtyXfMatrices;
+        kStateDirtyMatrices;
     const bool dirty_needs_body =
         (dirty & ~kDirtySatisfiedByCachedUploads) != 0u;
     // The draw's vertex inputs: a native shape record's, else none (an immediate draw's vertices carry no matrix
@@ -8157,12 +8151,12 @@ gpu::Pipeline* GxBackend::flush_draw_state(
 
     // Rebuild canonical keys only for their dirty inputs; hash only changed
     // keys. Uniform updates still upload their constants below.
-    const bool tev_dirty  = (dirty & GxState::kDirtyTev)         != 0;
-    const bool rs_dirty   = (dirty & GxState::kDirtyRenderState)  != 0;
-    const bool xf_dirty   = (dirty & GxState::kDirtyXfShader)    != 0;
-    const bool vcd_dirty  = (dirty & GxState::kDirtyVcd)         != 0;
-    const bool tev_c_dirty = (dirty & GxState::kDirtyTevConstants) != 0;
-    const bool vs_c_dirty = (dirty & GxState::kDirtyVsConstants) != 0;
+    const bool tev_dirty  = (dirty & kStateDirtyTev)         != 0;
+    const bool rs_dirty   = (dirty & kStateDirtyRenderState)  != 0;
+    const bool xf_dirty   = (dirty & kStateDirtyVertexShader)    != 0;
+    const bool vcd_dirty  = dirty == ~0u;  // the vertex inputs' layout: only after a reset
+    const bool tev_c_dirty = (dirty & kStateDirtyPixelConstants) != 0;
+    const bool vs_c_dirty = (dirty & kStateDirtyVertexConstants) != 0;
 
     // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
     // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
@@ -8177,7 +8171,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     const bool texture_binding_key_fresh =
         current_texture_binding_key_valid_ &&
         dirty != ~0u &&
-        (dirty & GxState::kDirtyTex) == 0u &&
+        (dirty & kStateDirtyTex) == 0u &&
         !texture_bindings_dirty_ &&
         texture_map_mask == current_texture_binding_key_mask_;
     TextureBindingKey texture_binding_key = texture_binding_key_fresh
@@ -8284,7 +8278,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             float model_up[3]{};
             for (unsigned c = 0; c < 3u; ++c) {
                 for (unsigned r = 0; r < 3u; ++r) {
-                    model_up[c] += std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>((row + r) * 4u + c))) * up[r];
+                    model_up[c] += std::bit_cast<float>(matrices_.word(static_cast<std::uint16_t>((row + r) * 4u + c))) * up[r];
                 }
             }
             const float length = std::sqrt(model_up[0] * model_up[0] + model_up[1] * model_up[1] + model_up[2] * model_up[2]);
@@ -8683,7 +8677,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         for (unsigned n = 0; n < 2u; ++n) {
             if ((rt_light_pending_ & (1u << n)) != 0u) {
                 std::memcpy(rt_light_words_[n].data(),
-                            state_.xf_raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition,
+                            matrices_.raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition,
                             sizeof(rt_light_words_[n]));
             }
         }
@@ -8706,7 +8700,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
         if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
             ++traced;
-            const std::uint32_t* l = state_.xf_raw() + xf::kLightsBase;
+            const std::uint32_t* l = matrices_.raw() + xf::kLightsBase;
             std::fprintf(stderr,
                          "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
                          "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
@@ -8734,7 +8728,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         // Dirty chunks decide whether the existing allocation is reusable. A new allocation takes the
         // whole palette: it inherits nothing, and patching an earlier one would change recorded draws.
         const std::uint64_t palette_todo =
-            (state_.xf_palette_dirty() | ~xf_palette_valid_) &
+            (matrices_.palette_dirty() | ~xf_palette_valid_) &
             xf_palette_chunk_mask;
         if (palette_todo != 0u) {
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
@@ -8744,9 +8738,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             // then the normal, post-transform and light words.
             constexpr std::size_t kMatrixWords = 0x100u;
             constexpr std::size_t kNormalBase = 0x400u;
-            std::memcpy(mtx_alloc.cpu, state_.xf_raw(), kMatrixWords * sizeof(std::uint32_t));
+            std::memcpy(mtx_alloc.cpu, matrices_.raw(), kMatrixWords * sizeof(std::uint32_t));
             std::memcpy(mtx_alloc.cpu + kNormalBase * sizeof(std::uint32_t),
-                        state_.xf_raw() + kNormalBase, (kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t));
+                        matrices_.raw() + kNormalBase, (kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t));
             if (snapshot_start != 0u) [[unlikely]] {
                 rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
                 ++rt_snapshot_count_;
@@ -8764,7 +8758,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                     scene.palettes.resize((scene.palette_count + 1u) * words);
                 }
                 std::memcpy(scene.palettes.data() + scene.palette_count * words,
-                            state_.xf_raw(), palette_bytes);
+                            matrices_.raw(), palette_bytes);
                 if (rt_draw_lights_ != 0u) {
                     write_rt_lights(scene.palettes.data() + scene.palette_count * words);
                 }
@@ -8773,7 +8767,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             // Every palette chunk was copied to this allocation, so mark the
             // complete image valid without computing a redundant dirty span.
             xf_palette_valid_ = xf_palette_chunk_mask;
-            state_.clear_xf_palette_dirty(0u, GxState::kMatrixPaletteChunkCount - 1u);
+            matrices_.clear_palette_dirty(0u, MatrixMemory::kPaletteChunkCount - 1u);
             frame_matrix_upload_bytes_ += (kMatrixWords + kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t);
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
@@ -8796,7 +8790,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const GxVsConstants& vs_c = cpu_vs_constants_.update(
-            state_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
+            matrices_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
@@ -9327,24 +9321,6 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
         return;
     }
     case shapes::Record::Kind::State: {
-        // As the stream parser applies the same writes: a copy, a texture invalidation or a TLUT load acts at once.
-        struct Events final : state::Writes {
-            GxBackend& backend;
-            explicit Events(GxBackend& b) : backend(b) {}
-            void bp(std::uint32_t word) override {
-                backend.state_.load_bp(word);
-                const auto reg = static_cast<std::uint8_t>(word >> 24u);
-                const std::uint32_t value = backend.state_.bp(reg);
-                if (reg == 0x66u && value == 0u) {
-                    backend.on_invalidate_textures();
-                }
-            }
-            void xf(std::uint16_t address, std::uint32_t value) override { backend.state_.load_xf(address, &value, 1u); }
-            void cp(std::uint8_t reg, std::uint32_t value) override { backend.state_.load_cp(reg, value); }
-            std::uint32_t bp_read(std::uint8_t reg) override { return backend.state_.bp(reg); }
-            std::uint32_t xf_read(std::uint16_t address) override { return backend.state_.xf(address); }
-            std::uint32_t cp_read(std::uint8_t reg) override { return backend.state_.cp(reg); }
-        } events(*this);
         // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
         for (const state::Op& op : record.state) {
             if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
@@ -9354,11 +9330,10 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
             }
         }
         for (const state::Op& op : record.state) {
-            state::encode(std::span<const state::Op>(&op, 1u), events);
             if (op.kind == state::kCopy) {
-                const EfbCopyParams params = efb_copy_params(draw_state_, op);
-                check_copy(params);
-                on_efb_copy(params, copy_pixel_format(draw_state_, op));
+                on_efb_copy(efb_copy_params(draw_state_, op), copy_pixel_format(draw_state_, op));
+            } else if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
+                load_light(op);
             }
             const std::uint32_t palettes = draw_state_.palette_revision;
             draw_state_.apply(op);
@@ -9396,7 +9371,7 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
 }
 
 void GxBackend::apply_record_material(const material::Material& m) {
-    material::apply(m, state_);
+    material::load_matrices(m, matrices_);
     // The material wrote its coordinate scales.
     scales_from_textures_ = false;
 }
@@ -9433,19 +9408,13 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         if (m.model_matrix != 0u) {
             // A model's draw matrix by its index, named as its indexed load named it (array 0 positions, 1 normals).
             const std::uint32_t array = m.kind == shapes::MatrixKind::Normal ? 1u : 0u;
-            state_.load_xf_indexed(base, words.data(), count, array << 16u | (m.model_matrix - 1u));
+            matrices_.load(base, words.data(), count, array << 16u | (m.model_matrix - 1u));
         } else {
-            state_.load_xf(base, words.data(), count);
+            matrices_.load(base, words.data(), count);
         }
     }
     if (record.has_current) {
         const auto& c = record.current;
-        const std::uint32_t a = c[0] | static_cast<std::uint32_t>(c[1]) << 6u | static_cast<std::uint32_t>(c[2]) << 12u |
-                                static_cast<std::uint32_t>(c[3]) << 18u | static_cast<std::uint32_t>(c[4]) << 24u;
-        const std::uint32_t b = c[5] | static_cast<std::uint32_t>(c[6]) << 6u | static_cast<std::uint32_t>(c[7]) << 12u |
-                                static_cast<std::uint32_t>(c[8]) << 18u;
-        state_.load_cp(cp::kMatrixIndexA, a);
-        state_.load_cp(cp::kMatrixIndexB, b);
         const std::uint32_t before_a = matrix_index_a(draw_state_), before_b = matrix_index_b(draw_state_);
         draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] & 63u);
         for (unsigned i = 0; i < 8u; ++i) {
@@ -9454,14 +9423,10 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         if (matrix_index_a(draw_state_) != before_a || matrix_index_b(draw_state_) != before_b) {
             draw_state_.dirty |= kStateDirtyVertexConstants;
         }
-        const std::uint32_t words[2] = {a, b};
-        state_.load_xf(0x1018u, words, 2u);
     }
     for (const auto& g : record.texgens) {
         const std::uint32_t gen = material::tex_gen_word(g[1], g[2]);
         const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
-        state_.load_xf(static_cast<std::uint16_t>(0x1040u + g[0]), &gen, 1u);
-        state_.load_xf(static_cast<std::uint16_t>(0x1050u + g[0]), &post, 1u);
         const std::uint32_t before = texgen_word(draw_state_.texgen[g[0] & 7u]);
         const std::uint32_t before_post = post_texgen_word(draw_state_.post_texgen[g[0] & 7u]);
         draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
@@ -9473,222 +9438,7 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
     }
 }
 
-void GxBackend::check_dirty(std::uint32_t gx_dirty, std::uint32_t dirty) {
-    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
-    if (!enabled) {
-        return;
-    }
-    static std::uint64_t flushes = 0, missed = 0;
-    ++flushes;
-    const std::uint32_t lost = gx_dirty & ~dirty & 0xFFu & ~GxState::kDirtyVcd;
-    if (lost != 0u && ++missed <= 40u) {
-        std::fprintf(stderr, "[draw-state] frame %llu dirty: register file %02x, typed %02x, missed %02x" "\n",
-                     static_cast<unsigned long long>(frame_index_), gx_dirty & 0xFFu, dirty & 0xFFu, lost);
-    }
-    if (flushes % 200000u == 0u) {
-        std::fprintf(stderr, "[draw-state] dirty %llu flushes, %llu missed" "\n", static_cast<unsigned long long>(flushes),
-                     static_cast<unsigned long long>(missed));
-    }
-}
-
-void GxBackend::check_copy(const EfbCopyParams& p) {
-    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
-    if (!enabled) {
-        return;
-    }
-    const EfbCopyParams e = state_.efb_copy(state_.bp(bp::kCopyExecute));
-    const unsigned have[] = {p.src_x, p.src_y, p.src_width, p.src_height, p.dest_addr, p.dest_stride, p.y_scale,
-                             p.target_format, p.gamma, p.clamp_top, p.clamp_bottom, p.yuv, p.half_scale, p.scale_y,
-                             p.clear, p.frame_to_field, p.copy_to_xfb, p.intensity, rgba_word(p.clear_color), p.clear_z,
-                             p.filter_upper(), p.filter_middle(), p.filter_lower()};
-    const unsigned want[] = {e.src_x, e.src_y, e.src_width, e.src_height, e.dest_addr, e.dest_stride, e.y_scale,
-                             e.target_format, e.gamma, e.clamp_top, e.clamp_bottom, e.yuv, e.half_scale, e.scale_y,
-                             e.clear, e.frame_to_field, e.copy_to_xfb, e.intensity, rgba_word(e.clear_color), e.clear_z,
-                             e.filter_upper(), e.filter_middle(), e.filter_lower()};
-    static std::uint64_t copies = 0, mismatches = 0;
-    ++copies;
-    for (unsigned i = 0; i < std::size(have); ++i) {
-        if (have[i] != want[i]) {
-            if (++mismatches <= 40u) {
-                std::fprintf(stderr, "[draw-state] frame %llu copy field %u: %u/%u\n",
-                             static_cast<unsigned long long>(frame_index_), i, have[i], want[i]);
-            }
-            break;
-        }
-    }
-    if (copies % 2000u == 0u) {
-        std::fprintf(stderr, "[draw-state] copies %llu, %llu mismatches\n", static_cast<unsigned long long>(copies),
-                     static_cast<unsigned long long>(mismatches));
-    }
-}
-
-void GxBackend::check_draw_state() {
-    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
-    if (!enabled) {
-        return;
-    }
-    NativeDrawState expected;
-    expected.gen = state_.gen_mode();
-    expected.z = state_.z_mode();
-    expected.blend = decode_blend(state_.bp(bp::kBlendMode), state_.bp(bp::kConstAlpha));
-    expected.pe = state_.pe_control();
-    expected.alpha = state_.alpha_compare();
-    for (unsigned s = 0; s < 16u; ++s) {
-        expected.tev[s] = state_.tev_stage(s);
-        const std::uint32_t c = state_.bp(static_cast<std::uint8_t>(bp::kIndCmdBase + s));
-        expected.ind[s] = IndirectStage{
-            static_cast<std::uint8_t>(c & 3u),          static_cast<std::uint8_t>((c >> 2u) & 3u),
-            static_cast<std::uint8_t>((c >> 4u) & 7u),  static_cast<std::uint8_t>((c >> 7u) & 3u),
-            static_cast<std::uint8_t>((c >> 9u) & 15u), static_cast<std::uint8_t>((c >> 13u) & 7u),
-            static_cast<std::uint8_t>((c >> 16u) & 7u), ((c >> 19u) & 1u) != 0u, ((c >> 20u) & 1u) != 0u};
-    }
-    for (unsigned t = 0; t < 4u; ++t) {
-        const TevKSel even = state_.tev_ksel(2u * t);
-        const TevKSel odd = state_.tev_ksel(2u * t + 1u);
-        expected.swap[t][0] = even.swap_red;
-        expected.swap[t][1] = even.swap_green;
-        expected.swap[t][2] = odd.swap_red;
-        expected.swap[t][3] = odd.swap_green;
-    }
-    expected.fog_type = state_.fog().type;
-    const std::uint32_t ztex = state_.bp(bp::kTevZEnv1);
-    expected.z_texture.op = static_cast<std::uint8_t>((ztex >> 2u) & 3u);
-    expected.z_texture.type = static_cast<std::uint8_t>(ztex & 3u);
-    expected.z_texture.bias = state_.bp(bp::kTevZEnv0) & 0xFFFFFFu;
-    const auto sign11 = [](std::uint32_t v) {
-        v &= 0x7FFu;
-        return static_cast<std::int16_t>((v & 0x400u) != 0u ? static_cast<std::int32_t>(v) - 0x800 : static_cast<std::int32_t>(v));
-    };
-    for (unsigned m = 0; m < 3u; ++m) {
-        std::uint32_t words[3];
-        std::uint32_t scale = 0u;
-        for (unsigned w = 0; w < 3u; ++w) {
-            words[w] = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + w));
-            scale |= ((words[w] >> 22u) & 3u) << (2u * w);
-            expected.ind_matrix[m].m[0][w] = sign11(words[w]);
-            expected.ind_matrix[m].m[1][w] = sign11(words[w] >> 11u);
-        }
-        expected.ind_matrix[m].scale = static_cast<std::int8_t>(static_cast<int>(scale) - 17);
-    }
-    const auto regs = state_.tev_register_values();
-    const auto konst = state_.tev_konst_colors();
-    for (unsigned r = 0; r < 4u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            expected.tev_color[r][c] = static_cast<std::int16_t>(regs[r][c]);
-            expected.konst[r][c] = static_cast<std::uint8_t>(konst[r] >> (24u - 8u * c));
-        }
-    }
-    {
-        const FogParams fp = state_.fog();
-        expected.fog.a = std::bit_cast<float>(fog_param_float_bits(fp.a_raw & 0xFFFFFu));
-        expected.fog.c = std::bit_cast<float>(fog_param_float_bits(fp.c_raw));
-        expected.fog.b_magnitude = fp.b_magnitude_raw & 0xFFFFFFu;
-        expected.fog.b_shift = fp.b_shift_raw & 0xFFFFFFu;
-        expected.fog.projection = fp.projection;
-        expected.fog.color[0] = static_cast<std::uint8_t>(fp.color_rgb >> 16u);
-        expected.fog.color[1] = static_cast<std::uint8_t>(fp.color_rgb >> 8u);
-        expected.fog.color[2] = static_cast<std::uint8_t>(fp.color_rgb);
-    }
-    {
-        std::string words;
-        const auto word = [&](const char* name, unsigned index, std::uint32_t have, std::uint32_t want) {
-            if (have != want) {
-                char line[96];
-                std::snprintf(line, sizeof(line), " %s%u=%08x/%08x", name, index, have, want);
-                words += line;
-            }
-        };
-        for (unsigned i = 0; i < 4u; ++i) {
-            word("channel", i, channel_word(draw_state_.channel[i]), state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + i)));
-        }
-        for (unsigned i = 0; i < 2u; ++i) {
-            word("matcolor", i, rgba_word(draw_state_.material_color[i]), state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + i)));
-            word("ambcolor", i, rgba_word(draw_state_.ambient_color[i]), state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + i)));
-        }
-        for (unsigned i = 0; i < 8u; ++i) {
-            word("texgen", i, texgen_word(draw_state_.texgen[i]), state_.xf(static_cast<std::uint16_t>(xf::kTexGenBase + i)));
-            word("posttexgen", i, post_texgen_word(draw_state_.post_texgen[i]), state_.xf(static_cast<std::uint16_t>(xf::kPostTexGenBase + i)));
-            word("coords", i, coord_s_word(draw_state_, i), state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + 2u * i)));
-            word("coordt", i, coord_t_word(draw_state_, i) & 0x3FFFFu,
-                 state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + 2u * i + 1u)) & 0x3FFFFu);
-        }
-        for (unsigned i = 0; i < 6u; ++i) {
-            word("projection", i, std::bit_cast<std::uint32_t>(draw_state_.projection[i]),
-                 state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
-            word("viewport", i, std::bit_cast<std::uint32_t>(draw_state_.viewport[i]),
-                 state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
-        }
-        word("projtype", 0u, draw_state_.projection_type, state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)));
-        word("mtxa", 0u, matrix_index_a(draw_state_), state_.cp(cp::kMatrixIndexA));
-        word("mtxb", 0u, matrix_index_b(draw_state_), state_.cp(cp::kMatrixIndexB));
-        word("mtxaxf", 0u, matrix_index_a(draw_state_), state_.xf(0x1018u));
-        word("mtxbxf", 0u, matrix_index_b(draw_state_), state_.xf(0x1019u));
-        word("linepoint", 0u, line_point_word(draw_state_), state_.bp(bp::kSuLpSize));
-        for (unsigned m = 0; m < 8u; ++m) {
-            const unsigned bank = m >= 4u ? bp::kTexHighBankOffset : 0u;
-            const auto reg = [&](std::uint8_t base) { return state_.bp(static_cast<std::uint8_t>(base + bank + (m & 3u))); };
-            const TextureMap& t = draw_state_.texture[m];
-            word("texmode0_", m, tex_mode0_word(t), reg(bp::kTexMode0Base) & 0x3FFFFFu);
-            word("texmode1_", m, tex_mode1_word(t), reg(bp::kTexMode1Base) & 0xFFFFu);
-            word("teximage0_", m, tex_image0_word(t), reg(bp::kTexImage0Base));
-            word("teximage3_", m, t.image.guest_addr >> 5u, reg(bp::kTexImage3Base));
-            word("textlut_", m, tlut_word(t), reg(bp::kTexTlutBase) & 0xFFFu);
-        }
-        static std::uint64_t word_draws = 0, word_mismatches = 0;
-        ++word_draws;
-        if (!words.empty() && ++word_mismatches <= 40u) {
-            std::fprintf(stderr, "[draw-state] frame %llu words:%s\n", static_cast<unsigned long long>(frame_index_),
-                         words.c_str());
-        }
-        if (word_draws % 200000u == 0u) {
-            std::fprintf(stderr, "[draw-state] words %llu draws, %llu mismatches\n",
-                         static_cast<unsigned long long>(word_draws), static_cast<unsigned long long>(word_mismatches));
-        }
-    }
-    for (unsigned i = 0; i < 4u; ++i) {
-        expected.channel[i] = state_.channel_ctrl(i);
-    }
-    for (unsigned i = 0; i < 8u; ++i) {
-        expected.texgen[i] = state_.tex_gen(i);
-        expected.post_texgen[i] = state_.post_tex_gen(i);
-    }
-    // The remaining vertex fields are compared as words above.
-    std::memcpy(expected.material_color, draw_state_.material_color, sizeof(expected.material_color));
-    std::memcpy(expected.ambient_color, draw_state_.ambient_color, sizeof(expected.ambient_color));
-    std::memcpy(expected.coord, draw_state_.coord, sizeof(expected.coord));
-    std::memcpy(expected.projection, draw_state_.projection, sizeof(expected.projection));
-    std::memcpy(expected.viewport, draw_state_.viewport, sizeof(expected.viewport));
-    expected.projection_type = draw_state_.projection_type;
-    expected.position_matrix = draw_state_.position_matrix;
-    std::memcpy(expected.texture_matrix, draw_state_.texture_matrix, sizeof(expected.texture_matrix));
-    expected.line_point = draw_state_.line_point;
-    std::memcpy(expected.texture, draw_state_.texture, sizeof(expected.texture));
-    expected.scissor = state_.scissor();
-    expected.scissor_offset = decode_scissor_offset(state_.bp(bp::kScissorOffset));
-    const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
-    for (unsigned i = 0; i < 4u; ++i) {
-        const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);
-        expected.ind_order[i] = {static_cast<std::uint8_t>((ind_ref >> (6u * i)) & 7u),
-                                 static_cast<std::uint8_t>((ind_ref >> (6u * i + 3u)) & 7u),
-                                 static_cast<std::uint8_t>(scale & 15u), static_cast<std::uint8_t>((scale >> 4u) & 15u)};
-    }
-    const std::string differences = draw_state_differences(draw_state_, expected);
-    static std::uint64_t draws = 0, mismatches = 0;
-    ++draws;
-    if (!differences.empty()) {
-        if (++mismatches <= 40u) {
-            std::fprintf(stderr, "[draw-state] frame %llu draw %llu:%s\n", static_cast<unsigned long long>(frame_index_),
-                         static_cast<unsigned long long>(draws), differences.c_str());
-        }
-    }
-    if (draws % 200000u == 0u) {
-        std::fprintf(stderr, "[draw-state] %llu draws, %llu mismatches\n", static_cast<unsigned long long>(draws),
-                     static_cast<unsigned long long>(mismatches));
-    }
-}
-
 void GxBackend::draw_record_shape(const shapes::Record& record) {
-    check_draw_state();
     apply_record_matrices(record);
     if (record.key == 0u) {
         return;  // state only (the matrices, current matrices and texgens set before a material record)
@@ -9865,7 +9615,6 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
 }
 
 void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
-    check_draw_state();
     display_copy_on_output_ = false;
     const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
     const shapes::Geometry& geometry = immediate.geometry;
@@ -10140,6 +9889,25 @@ void GxBackend::on_invalidate_textures() {
     clear_texture_binding_table_cache();
     texture_bindings_dirty_ = true;
     current_texture_binding_key_valid_ = false;
+}
+
+void GxBackend::load_light(const state::Op& op) {
+    // Sixteen words a light from 0x600: three reserved, the colour, the angle and distance terms (a0-a2, k0-k2), then
+    // the position and direction (GXLoadLightObjImm).
+    const auto base = static_cast<std::uint16_t>(0x600u + 16u * (op.a[0] & 7u));
+    std::uint32_t words[6];
+    for (unsigned i = 0; i < 6u; ++i) {
+        words[i] = std::bit_cast<std::uint32_t>(op.f[i]);
+    }
+    if (op.kind == state::kLightAttenuation) {
+        const std::uint32_t head[4] = {0u, 0u, 0u,
+                                       static_cast<std::uint32_t>(op.a[1]) << 24u | static_cast<std::uint32_t>(op.a[2]) << 16u |
+                                           static_cast<std::uint32_t>(op.a[3]) << 8u | op.a[4]};
+        matrices_.load(base, head, 4u);
+        matrices_.load(static_cast<std::uint16_t>(base + 4u), words, 6u);
+    } else {
+        matrices_.load(static_cast<std::uint16_t>(base + 10u), words, 6u);
+    }
 }
 
 void GxBackend::on_palettes_changed() {

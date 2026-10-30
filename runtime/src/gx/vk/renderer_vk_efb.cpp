@@ -11,7 +11,7 @@
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/matrix_memory.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/uber_constants.h"
 
@@ -1279,7 +1279,7 @@ void RendererVk::draw(const DrawCall& call) {
         // The palette's range follows its addressing: palettes indexed from the buffer's base (an interpolating or
         // temporal frame's: mtx_palette_base counts from the ring's start) reach the buffer's end; a replay's
         // evaluated palettes, from their base in the output; otherwise the draw's own palette.
-        constexpr VkDeviceSize kPaletteBytes = GxState::kMatrixPaletteWords * sizeof(std::uint32_t);
+        constexpr VkDeviceSize kPaletteBytes = MatrixMemory::kPaletteWords * sizeof(std::uint32_t);
         std::array<std::uint32_t, 3> dynamic = offsets;
         VkDescriptorSet set = VK_NULL_HANDLE;
         if (replaying_ && interp_output_ && buffers[2] == interp_output_->buffer) {

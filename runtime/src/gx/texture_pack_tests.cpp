@@ -545,10 +545,6 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     constexpr std::uint32_t kAddress = 0x80100000u;
     std::vector<std::byte> guest(4096u);
     for (std::size_t i = 0; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
-    galaxy::GuestMemoryRegion region{kAddress, static_cast<std::uint32_t>(guest.size()), guest.data()};
-    galaxy::GuestMemory memory{};
-    memory.regions = &region;
-    memory.region_count = 1u;
     TexImage image{};
     image.guest_addr = kAddress;
     image.width = 32u;
@@ -572,6 +568,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     const auto owner = std::make_unique<TextureCache>();
     TextureCache& cache = *owner;
     expect(cache.initialize(gpu.device.Get()), "cache initializes");
+    cache.register_image(kAddress, std::make_shared<const std::vector<std::byte>>(guest));
     unsigned frame = 0;
     const auto next_frame = [&] {
         gpu.run();
@@ -591,13 +588,13 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
         if (cache.texture_pack_stats().names == 0u) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     expect(cache.texture_pack_stats().names == 1u, "cache publishes the pack index");
-    const TextureHandle original = cache.get(image, mode, TlutRef{}, &memory);
+    const TextureHandle original = cache.get(image, mode, 0u, TlutFormat{});
     expect(original.resource != nullptr && original.resource->GetDesc().Width == 32u && original.lod_shift_x16 == 0u,
            "the original shows while its replacement loads");
     TextureHandle replaced{};
     for (int i = 0; i < 400; ++i) {
         next_frame();
-        replaced = cache.get(image, mode, TlutRef{}, &memory);
+        replaced = cache.get(image, mode, 0u, TlutFormat{});
         if (replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
@@ -606,7 +603,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
            "the replacement takes the original's place (guest size kept, 3x shift)");
     cache.invalidate_all();
     next_frame();
-    const TextureHandle bound = cache.get(image, mode, TlutRef{}, &memory);
+    const TextureHandle bound = cache.get(image, mode, 0u, TlutFormat{});
     expect(bound.resource == replaced.resource, "a resident replacement binds again without a decode");
     next_frame();
     expect(gpu.device->GetDeviceRemovedReason() == S_OK, "device alive with the replacement");
@@ -616,7 +613,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     settings.dump = true;
     cache.configure_texture_packs(settings);
     next_frame();
-    const TextureHandle back = cache.get(image, mode, TlutRef{}, &memory);
+    const TextureHandle back = cache.get(image, mode, 0u, TlutFormat{});
     expect(back.resource != nullptr && back.resource->GetDesc().Width == 32u, "packs off: the original again");
     const std::filesystem::path dumped =
         settings.dumps / TexturePacks::kGameId / (texture_pack_name(name) + ".png");

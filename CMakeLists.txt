@@ -467,7 +467,6 @@ list(APPEND galaxy_rt_headers "${galaxy_rt_manifest}")
 add_library(galaxy_gx STATIC
     runtime/src/gx/gx_shim.cpp
     runtime/src/gx/gx_headers_compile.cpp
-    runtime/src/gx/gx_state.cpp
     runtime/src/gx/render_config.cpp
     runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/vblank_clock_win32.cpp
@@ -486,7 +485,7 @@ add_library(galaxy_gx STATIC
     runtime/src/gx/native_shapes.cpp
     runtime/src/gx/native_material.cpp
     runtime/src/gx/draw_state.cpp
-    runtime/src/gx/native_state.cpp
+    runtime/src/gx/matrix_memory.cpp
     runtime/src/gx/shader_keys.cpp
     runtime/src/gx/efb_copy.cpp
     runtime/src/gx/line_point_raster.cpp
@@ -702,7 +701,6 @@ if(NEBULA_VULKAN)
     # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
     add_library(galaxy_gx_vk STATIC
         runtime/src/gx/gx_shim.cpp
-        runtime/src/gx/gx_state.cpp
             runtime/src/gx/render_config.cpp
         runtime/src/gx/host_window_win32.cpp
         runtime/src/gx/vblank_clock_win32.cpp
@@ -717,7 +715,7 @@ if(NEBULA_VULKAN)
         runtime/src/gx/native_shapes.cpp
         runtime/src/gx/native_material.cpp
         runtime/src/gx/draw_state.cpp
-        runtime/src/gx/native_state.cpp
+        runtime/src/gx/matrix_memory.cpp
         runtime/src/gx/shader_keys.cpp
         runtime/src/gx/efb_copy.cpp
         runtime/src/gx/line_point_raster.cpp

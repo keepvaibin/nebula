@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// GxVsConstants filled from GxState on the CPU, and a cache of the last fill. Every changed draw still gets a
+// GxVsConstants filled from the drawing state on the CPU, and a cache of the last fill. Every changed draw still gets a
 // complete constant-ring allocation; nothing here touches GPU upload memory.
 #include "galaxy/gx/draw_state.h"
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/matrix_memory.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/line_point_raster.h"
 #include <algorithm>
@@ -53,7 +53,7 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     }
 }
 
-inline void refresh_vs_inline_matrices(const GxState& state, const NativeDrawState& draw, GxVsConstants& out) {
+inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDrawState& draw, GxVsConstants& out) {
     const auto copy_matrix = [&state](
                                  unsigned row,
                                  float destination[3][4]) {
@@ -61,7 +61,7 @@ inline void refresh_vs_inline_matrices(const GxState& state, const NativeDrawSta
         for (unsigned r = 0; r < 3; ++r) {
             for (unsigned c = 0; c < 4; ++c) {
                 destination[r][c] = std::bit_cast<float>(
-                    state.xf(static_cast<std::uint16_t>(
+                    state.word(static_cast<std::uint16_t>(
                         (row + r) * 4u + c)));
             }
         }
@@ -81,7 +81,7 @@ inline void refresh_vs_inline_matrices(const GxState& state, const NativeDrawSta
         for (unsigned r = 0; r < 3; ++r) {
             for (unsigned c = 0; c < 4; ++c) {
                 out.inline_post_matrices[i][r][c] =
-                    std::bit_cast<float>(state.xf(
+                    std::bit_cast<float>(state.word(
                         static_cast<std::uint16_t>(
                             xf::kPostMatricesBase +
                             (((post_row + r) & 0x3Fu) * 4u) + c)));
@@ -91,10 +91,10 @@ inline void refresh_vs_inline_matrices(const GxState& state, const NativeDrawSta
 
 }
 
-// Fills GxVsConstants for the current drawing state (matrix rows still from GxState's XF memory).
+// Fills GxVsConstants for the current drawing state (matrix rows from MatrixMemory).
 // `palette_snapshot_index` is the index of this frame's XF matrix upload in the matrix ring (written by GxBackend).
 inline void fill_vs_constants(
-    const GxState& state,
+    const MatrixMemory& state,
     const NativeDrawState& draw,
     std::uint32_t palette_snapshot_index,
     unsigned efb_scale,
@@ -107,9 +107,6 @@ inline void fill_vs_constants(
     out.num_texgens = gm.num_texgens;
     out.num_chans   = gm.num_color_chans;
 
-    // Per-vertex position matrix index flag: VCD_LO bit 0.
-    const std::uint32_t vcd_lo = state.cp(cp::kVcdLo);
-    const bool per_vertex_posmtx = (vcd_lo & 1u) != 0;
 
     // Lighting: any channel has lighting_enable.
     bool lighting = false;
@@ -119,8 +116,9 @@ inline void fill_vs_constants(
             break;
         }
     }
-    out.flags  = (per_vertex_posmtx ? 1u : 0u)
-               | (lighting           ? 2u : 0u);
+    // Bit 0 (a per-vertex position matrix index) stays clear: the vertex shader key carries the vertices' matrix
+    // indices (VertexShaderKey::flags).
+    out.flags  = lighting ? 2u : 0u;
 
     // Texgen config words (each coordinate's generation and post-transform, texgen_word and post_texgen_word).
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
@@ -219,12 +217,12 @@ struct VsConstantsCpuCache {
     float debake_sh[7][4]{};
     float debake_peak[4]{};
 
-    const GxVsConstants& update(const GxState& state, const NativeDrawState& draw, std::uint32_t dirty,
+    const GxVsConstants& update(const MatrixMemory& state, const NativeDrawState& draw, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
         // When only XF matrices changed, refresh the inline matrices and keep the rest of the last full fill;
         // any other change, dirty frame bindings or a new scale refill everything.
         if (valid && !frame_bindings_dirty && efb_scale == current_scale &&
-            dirty == GxState::kDirtyXfMatrices) {
+            dirty == kStateDirtyMatrices) {
             refresh_vs_inline_matrices(state, draw, constants);
         } else {
             fill_vs_constants(state, draw, 0u, current_scale, constants);

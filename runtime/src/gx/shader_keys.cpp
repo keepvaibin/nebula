@@ -1,8 +1,8 @@
-// Builds canonical shader and pipeline keys from GxState (see shader_keys.h).
+// Builds canonical shader and pipeline keys from the typed drawing state (see shader_keys.h).
 
 #include "galaxy/gx/shader_keys.h"
 
-#include "galaxy/gx/gx_state.h"
+#include "galaxy/gx/draw_state.h"
 #include "galaxy/gx/uber_constants.h"
 
 #include <algorithm>
