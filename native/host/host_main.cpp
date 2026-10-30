@@ -2312,22 +2312,47 @@ void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #endif
 }
 
-void svc_material(void*, const NebulaMaterial* material) {
+void svc_material_program(void*, uint64_t key, const NebulaMaterialProgram* program) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
-    static_assert(sizeof(NebulaMaterial) == sizeof(galaxy::render::material::Material), "the renderer's copy of NebulaMaterial");
-    if (material == nullptr) {
+    static_assert(sizeof(NebulaMaterialProgram) == sizeof(galaxy::render::material::Program),
+                  "the renderer's copy of NebulaMaterialProgram");
+    if (program == nullptr) {
         return;
     }
-    auto copy = std::make_shared<galaxy::render::material::Material>();
-    std::memcpy(copy.get(), material, sizeof(NebulaMaterial));
+    auto copy = std::make_shared<galaxy::render::material::Program>();
+    std::memcpy(copy.get(), program, sizeof(NebulaMaterialProgram));
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::MaterialProgram;
+    record.key = key;
+    attach_pending_records();
+    record.program = std::move(copy);
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)key;
+    (void)program;
+#endif
+}
+
+void svc_material(void*, uint64_t key, const NebulaMaterialValues* values) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    static_assert(sizeof(NebulaMaterialValues) == sizeof(galaxy::render::material::Values),
+                  "the renderer's copy of NebulaMaterialValues");
+    if (values == nullptr) {
+        return;
+    }
+    auto copy = std::make_shared<galaxy::render::material::Values>();
+    std::memcpy(copy.get(), values, sizeof(NebulaMaterialValues));
     shapes::Record record;
     record.kind = shapes::Record::Kind::Material;
+    record.key = key;
     attach_pending_records();
     record.material = std::move(copy);
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)material;
+    (void)key;
+    (void)values;
 #endif
 }
 
@@ -3866,6 +3891,7 @@ int main(int argc, char** argv) {
     services.shape_array = svc_shape_array;
     services.shape_geometry = svc_shape_geometry;
     services.shape_draw = svc_shape_draw;
+    services.material_program = svc_material_program;
     services.material = svc_material;
     services.state = svc_state;
     services.immediate = svc_immediate;

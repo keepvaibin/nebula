@@ -13,6 +13,12 @@
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
+// A display list's material: its program and its values (nebula_game_api.h).
+struct NebulaMaterialParts {
+    NebulaMaterialProgram program;
+    NebulaMaterialValues values;
+};
+
 namespace {
     u64 keyOf(const void* p) {
         return static_cast< u64 >(reinterpret_cast< uintptr_t >(p));
@@ -26,7 +32,7 @@ namespace {
     }
 
     // Map `map`'s texture as J3D's loadTexNo sets it up (the image and palette inside the texture's resource).
-    void texture(J3DTexture* pTexture, u32 map, u16 texNo, NebulaMaterial* pOut, u16* pSizes) {
+    void texture(J3DTexture* pTexture, u32 map, u16 texNo, NebulaMaterialValues* pOut, u16* pSizes) {
         ResTIMG* pImg = pTexture->getResTIMG(texNo);
         NebulaMaterialTexture& rOut = pOut->texture[map];
         rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
@@ -55,7 +61,7 @@ namespace {
     }
 
     // A texture coordinate's scale entry as loadTexCoordScale writes it from its map's table entry.
-    void coordScale(NebulaMaterial* pOut, u32 coord, u32 map) {
+    void coordScale(NebulaMaterialValues* pOut, u32 coord, u32 map) {
         const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
         pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
         pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
@@ -65,8 +71,10 @@ namespace {
 }  // namespace
 
 namespace J3DNativeMaterial {
-    void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterial* pOut) {
-        memset(pOut, 0, sizeof(*pOut));
+    void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pParts) {
+        memset(pParts, 0, sizeof(*pParts));
+        NebulaMaterialProgram* pOut = &pParts->program;
+        NebulaMaterialValues* pVal = &pParts->values;
         J3DTevBlock* pTev = pMaterial->mTevBlock;
         J3DIndBlock* pInd = pMaterial->mIndBlock;
         J3DTexGenBlock* pTexGen = pMaterial->mTexGenBlock;
@@ -90,7 +98,7 @@ namespace J3DNativeMaterial {
         for (u32 map = 0; tev && map < 8; map++) {
             const u16 texNo = pTev->getTexNo(map);
             if (texNo != 0xFFFF) {
-                texture(pTexture, map, texNo, pOut, sizes);
+                texture(pTexture, map, texNo, pVal, sizes);
                 J3DSys::sTexCoordScaleTable[map].field_0x00 = sizes[map * 2];
                 J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
             }
@@ -101,7 +109,7 @@ namespace J3DNativeMaterial {
             rOut.tex_coord = rOrder.mTexCoord;
             rOut.tex_map = rOrder.mTexMap;
             rOut.channel = rOrder.mColorChan;
-            coordScale(pOut, rOrder.mTexCoord, rOrder.mTexMap);
+            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
             const J3DTevStage& rStage = *pTev->getTevStage(i);
             for (u32 k = 0; k < 4; k++) {
                 rOut.color_in[k] = rStage.mColorIn[k];
@@ -136,7 +144,7 @@ namespace J3DNativeMaterial {
             pOut->tev[pOut->tev_stages].tex_coord = rOrder.mTexCoord;
             pOut->tev[pOut->tev_stages].tex_map = rOrder.mTexMap;
             pOut->tev[pOut->tev_stages].channel = rOrder.mColorChan;
-            coordScale(pOut, rOrder.mTexCoord, rOrder.mTexMap);
+            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
         }
         // Konst selectors for all 16 stages, as the blocks write them: their own entries repeated (two in J3DTevBlock2,
         // four in J3DTevBlock4, sixteen in J3DTevBlock16).
@@ -158,16 +166,16 @@ namespace J3DNativeMaterial {
             pOut->loads |= NEBULA_MATERIAL_LOADS_TEV_COLOR;
             for (u32 i = 0; i < 3; i++) {
                 const J3DGXColorS10& rColor = *pTev->getTevColor(i);
-                pOut->tev_color[i][0] = rColor.r;
-                pOut->tev_color[i][1] = rColor.g;
-                pOut->tev_color[i][2] = rColor.b;
-                pOut->tev_color[i][3] = rColor.a;
+                pVal->tev_color[i][0] = rColor.r;
+                pVal->tev_color[i][1] = rColor.g;
+                pVal->tev_color[i][2] = rColor.b;
+                pVal->tev_color[i][3] = rColor.a;
             }
         }
         if (pTev->getTevKColor(0) != NULL) {
             pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_COLOR;
             for (u32 i = 0; i < 4; i++) {
-                copyColor(pOut->konst_color[i], *pTev->getTevKColor(i));
+                copyColor(pVal->konst_color[i], *pTev->getTevKColor(i));
             }
         }
         if (konst != 0) {
@@ -192,12 +200,12 @@ namespace J3DNativeMaterial {
             pOut->ind_order[i].map = pOrder->getMap();
             pOut->ind_order[i].scale_s = pScale->getScaleS();
             pOut->ind_order[i].scale_t = pScale->getScaleT();
-            coordScale(pOut, pOrder->getCoord(), pOrder->getMap());
+            coordScale(pVal, pOrder->getCoord(), pOrder->getMap());
         }
         for (u32 i = 0; i < pOut->ind_stages && i < 3; i++) {
             const J3DIndTexMtx& rMtx = *pInd->getIndTexMtx(i);
-            memcpy(pOut->ind_matrix[i].m, rMtx.field_0x0, sizeof(pOut->ind_matrix[i].m));
-            pOut->ind_matrix[i].scale = static_cast< s8 >(rMtx.field_0x18);
+            memcpy(pVal->ind_matrix[i].m, rMtx.field_0x0, sizeof(pVal->ind_matrix[i].m));
+            pVal->ind_matrix[i].scale = static_cast< s8 >(rMtx.field_0x18);
         }
 
         for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
@@ -225,7 +233,7 @@ namespace J3DNativeMaterial {
             pOut->texture_matrix[i].listed = i < pOut->tex_gens && pTexGen->getTexCoord(i)->getTexGenMtx() != GX_IDENTITY;
             pOut->texture_matrix[i].id = static_cast< u8 >(post ? i * 3 + 0x40 : i * 3 + 30);
             pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GX_MTX2x4 ? 3 : 2;
-            memcpy(pOut->texture_matrix[i].m, pMtx->getMtx(), sizeof(pOut->texture_matrix[i].m));
+            memcpy(pVal->texture_matrix[i], pMtx->getMtx(), sizeof(pVal->texture_matrix[i]));
         }
         for (u32 i = 0; i < 4 && pColor->getColorChan(0) != NULL; i++) {
             const J3DColorChan& rChan = *pColor->getColorChan(i);
@@ -238,11 +246,11 @@ namespace J3DNativeMaterial {
         }
         for (u32 i = 0; i < 2; i++) {
             if (pColor->getMatColor(i) != NULL) {
-                copyColor(pOut->material_color[i], *pColor->getMatColor(i));
+                copyColor(pVal->material_color[i], *pColor->getMatColor(i));
             }
             if (pColor->getAmbColor(i) != NULL) {
                 pOut->loads |= NEBULA_MATERIAL_LOADS_AMBIENT;
-                copyColor(pOut->ambient_color[i], *pColor->getAmbColor(i));
+                copyColor(pVal->ambient_color[i], *pColor->getAmbColor(i));
             }
         }
         // Lights only from the blocks that load them (J3DColorBlockLightOn).
@@ -252,9 +260,9 @@ namespace J3DNativeMaterial {
             if (pLight == NULL) {
                 continue;
             }
-            pOut->light_mask |= 1 << i;
+            pVal->light_mask |= 1 << i;
             const J3DLightInfo& rInfo = pLight->mInfo;
-            NebulaMaterialLight& rOut = pOut->light[i];
+            NebulaMaterialLight& rOut = pVal->light[i];
             rOut.position[0] = rInfo.mLightPosition.x;
             rOut.position[1] = rInfo.mLightPosition.y;
             rOut.position[2] = rInfo.mLightPosition.z;
@@ -276,10 +284,10 @@ namespace J3DNativeMaterial {
             const bool edge = peType == 'PEED';
             const bool xlu = peType == 'PEXL';
             pOut->alpha_compare.comp0 = edge ? GX_GEQUAL : GX_ALWAYS;
-            pOut->alpha_compare.ref0 = edge ? 0x80 : 0;
+            pVal->alpha_ref[0] = edge ? 0x80 : 0;
             pOut->alpha_compare.op = GX_AOP_AND;
             pOut->alpha_compare.comp1 = edge ? GX_LEQUAL : GX_ALWAYS;
-            pOut->alpha_compare.ref1 = edge ? 0xFF : 0;
+            pVal->alpha_ref[1] = edge ? 0xFF : 0;
             pOut->blend.type = xlu ? GX_BM_BLEND : GX_BM_NONE;
             pOut->blend.source = xlu ? GX_BL_SRCALPHA : GX_BL_ONE;
             pOut->blend.destination = xlu ? GX_BL_INVSRCALPHA : GX_BL_ZERO;
@@ -297,21 +305,21 @@ namespace J3DNativeMaterial {
             pOut->fog.type = rFog.mType;
             pOut->fog.adjust_enable = rFog.mAdjEnable;
             pOut->fog.adjust_center = rFog.mCenter;
-            pOut->fog.start = rFog.mStartZ;
-            pOut->fog.end = rFog.mEndZ;
-            pOut->fog.near_z = rFog.mNearZ;
-            pOut->fog.far_z = rFog.mFarZ;
-            copyColor(pOut->fog.color, rFog.mColor);
+            pVal->fog.start = rFog.mStartZ;
+            pVal->fog.end = rFog.mEndZ;
+            pVal->fog.near_z = rFog.mNearZ;
+            pVal->fog.far_z = rFog.mFarZ;
+            copyColor(pVal->fog.color, rFog.mColor);
             for (u32 i = 0; i < 10; i++) {
                 pOut->fog.adjust[i] = rFog.mFogAdjTable.r[i];
             }
         }
         const J3DAlphaComp& rAlpha = *pPE->getAlphaComp();
         pOut->alpha_compare.comp0 = rAlpha.getComp0();
-        pOut->alpha_compare.ref0 = rAlpha.getRef0();
+        pVal->alpha_ref[0] = rAlpha.getRef0();
         pOut->alpha_compare.op = rAlpha.getOp();
         pOut->alpha_compare.comp1 = rAlpha.getComp1();
-        pOut->alpha_compare.ref1 = rAlpha.getRef1();
+        pVal->alpha_ref[1] = rAlpha.getRef1();
         const J3DBlend& rBlend = *pPE->getBlend();
         pOut->blend.type = rBlend.mType;
         pOut->blend.source = rBlend.mSrcFactor;
@@ -325,29 +333,40 @@ namespace J3DNativeMaterial {
         pOut->dither = pPE->getDither();
     }
 
-    NebulaMaterial* create() {
-        return new (0x20) NebulaMaterial;
+    NebulaMaterialParts* create() {
+        return new (0x20) NebulaMaterialParts;
     }
 
     void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags) {
         if (pList != NULL && pList->mpNebulaMaterial != NULL) {
-            build(pMaterial, pTexture, pList->mpNebulaMaterial);
-            pList->mpNebulaMaterial->diff_flags = diffFlags;
-            pList->mpNebulaMaterial->origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
+            NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
+            static NebulaMaterialProgram sRegistered;
+            sRegistered = rParts.program;
+            build(pMaterial, pTexture, &rParts);
+            rParts.program.diff_flags = diffFlags;
+            rParts.program.origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
+            // The program the host has for this list: sent when the list's first capture makes it, or when a patch
+            // changes it (an animated material's captures change only its values).
+            if (!pList->mNebulaCaptured || memcmp(&sRegistered, &rParts.program, sizeof(sRegistered)) != 0) {
+                const NebulaHostServices* pHost = nebula_host();
+                pHost->material_program(pHost->user, keyOf(pList), &rParts.program);
+            }
             pList->mNebulaCaptured = true;
         }
     }
 
     void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
-        static NebulaMaterial sMaterial;
-        const NebulaMaterial* pSnapshot = pList != NULL && pList->mNebulaCaptured ? pList->mpNebulaMaterial : NULL;
-        if (pSnapshot == NULL) {
-            build(pMaterial, pTexture, &sMaterial);
-            pSnapshot = &sMaterial;
-        }
+        static NebulaMaterialParts sParts;
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, pSnapshot);
+        if (pList != NULL && pList->mNebulaCaptured) {
+            pHost->material(pHost->user, keyOf(pList), &pList->mpNebulaMaterial->values);
+            return;
+        }
+        // A list from the model file, which has no snapshot: its material built now, its program with it.
+        build(pMaterial, pTexture, &sParts);
+        pHost->material_program(pHost->user, keyOf(&sParts), &sParts.program);
+        pHost->material(pHost->user, keyOf(&sParts), &sParts.values);
     }
 
     void sendDiffered(J3DDisplayListObj* pList) {
@@ -356,6 +375,6 @@ namespace J3DNativeMaterial {
         }
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, pList->mpNebulaMaterial);
+        pHost->material(pHost->user, keyOf(pList), &pList->mpNebulaMaterial->values);
     }
 };  // namespace J3DNativeMaterial

@@ -11,7 +11,7 @@ namespace {
 
 // J3D's texture matrices (J3DTexMtx::load): the listed ones for a whole material, every present one for a change
 // list.
-void texture_matrices(const Material& m, MatrixMemory& memory, bool differed_list) {
+void texture_matrices(const Program& m, const Values& v, MatrixMemory& memory, bool differed_list) {
     for (unsigned i = 0; i < 8u; ++i) {
         const auto& t = m.texture_matrix[i];
         if (!t.present || (!differed_list && !t.listed)) {
@@ -20,7 +20,7 @@ void texture_matrices(const Material& m, MatrixMemory& memory, bool differed_lis
         std::uint32_t words[12];
         const unsigned count = t.rows == 2u ? 8u : 12u;
         for (unsigned k = 0; k < count; ++k) {
-            words[k] = std::bit_cast<std::uint32_t>(t.m[k]);
+            words[k] = std::bit_cast<std::uint32_t>(v.texture_matrix[i][k]);
         }
         const auto base = static_cast<std::uint16_t>(t.id >= 64u ? 0x500u + 4u * (t.id - 64u) : 4u * t.id);
         memory.load(base, words, static_cast<std::uint16_t>(count));
@@ -29,12 +29,12 @@ void texture_matrices(const Material& m, MatrixMemory& memory, bool differed_lis
 
 // J3D's lights (diffLight): sixteen words a light from 0x600 (colour at 3, angle and distance terms at 4-9,
 // position at 10-12, direction at 13-15).
-void lights(const Material& m, MatrixMemory& memory) {
+void lights(const Program& m, const Values& v, MatrixMemory& memory) {
     for (unsigned i = 0; (m.loads & kLoadsLights) != 0u && i < 8u; ++i) {
-        if ((m.light_mask & (1u << i)) == 0u) {
+        if ((v.light_mask & (1u << i)) == 0u) {
             continue;
         }
-        const Light& l = m.light[i];
+        const Light& l = v.light[i];
         const auto base = static_cast<std::uint16_t>(0x600u + 16u * i);
         const std::uint32_t pos[3] = {std::bit_cast<std::uint32_t>(l.position[0]), std::bit_cast<std::uint32_t>(l.position[1]),
                                       std::bit_cast<std::uint32_t>(l.position[2])};
@@ -77,20 +77,20 @@ std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source) {
     return proj << 1u | form << 2u | tg << 4u | row << 7u | emboss_row << 12u | emboss_lit << 15u;
 }
 
-void load_matrices(const Material& m, MatrixMemory& memory) {
+void load_matrices(const Program& m, const Values& v, MatrixMemory& memory) {
     const std::uint32_t f = m.diff_flags;
     if (f != 0u) {
         if (((f >> 8u) & 15u) != 0u) {  // TexGenNum: diffTexMtx
-            texture_matrices(m, memory, true);
+            texture_matrices(m, v, memory, true);
         }
         if ((f & 0x2u) != 0u || ((f >> 4u) & 15u) != 0u) {  // ColorChan or LightObjNum: diffLight
-            lights(m, memory);
+            lights(m, v, memory);
         }
         return;
     }
-    texture_matrices(m, memory, false);
+    texture_matrices(m, v, memory, false);
     if ((m.loads & kLoadsChannels) != 0u) {
-        lights(m, memory);
+        lights(m, v, memory);
     }
 }
 

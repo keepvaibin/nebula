@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 47u
+#define NEBULA_GAME_API_VERSION 48u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -182,8 +182,12 @@ typedef struct NebulaShapeCurrent {
     uint8_t texture[8];
 } NebulaShapeCurrent;
 
-/* A J3D material as the next shape draws use it (material in NebulaHostServices): every value as GX's functions take
-   it, no register words. Colours are RGBA bytes; TEV colours signed 10-bit values in int16_t. */
+/* A J3D material in two parts, every value as GX's functions take it, no register words. Its program
+   (NebulaMaterialProgram: what its shaders and fixed-function state follow from) is the same for every draw of the
+   display list it belongs to: the game sends it when it builds or patches the list (material_program in
+   NebulaHostServices), and the host compiles its pipelines then. Each draw names the program and carries the
+   material's values (NebulaMaterialValues: colours, matrices, lights, textures, fog range; material). Colours are
+   RGBA bytes; TEV colours signed 10-bit values in int16_t. */
 enum {
     NEBULA_MATERIAL_LOADS_FOG = 1u << 0,
     NEBULA_MATERIAL_LOADS_DITHER = 1u << 1,
@@ -222,37 +226,44 @@ typedef struct NebulaMaterialLight {
     uint8_t color[4];
 } NebulaMaterialLight;
 
-typedef struct NebulaMaterial {
+typedef struct NebulaMaterialProgram {
     uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
     uint8_t dither, z_compare_location;
     uint8_t origin; /* where the game captured it: 1 a packet's list, 2 a differed list, 3 a shared list, 0 at the draw */
     uint16_t loads; /* NEBULA_MATERIAL_LOADS_*: the parts the material sets (the others keep what was set before) */
-    NebulaMaterialTevStage tev[16];
-    int16_t tev_color[4][4];
-    uint8_t konst_color[4][4];
-    uint8_t swap_table[4][4];
-    struct { uint8_t coord, map, scale_s, scale_t; } ind_order[4];
-    struct { float m[2][3]; int8_t scale; uint8_t reserved[3]; } ind_matrix[3];
-    struct { uint8_t type, source, matrix, normalize, post_matrix, reserved[3]; } tex_gen[8];
-    struct { uint16_t scale_s, scale_t; uint8_t bias_s, bias_t, wrap_s, wrap_t; } tex_coord_scale[8];
-    NebulaMaterialTexture texture[8];
-    struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
-    uint8_t material_color[2][4], ambient_color[2][4];
-    uint8_t light_mask;           /* the lights below that are set */
-    NebulaMaterialLight light[8];
-    struct { uint8_t type, adjust_enable; uint16_t adjust_center; float start, end, near_z, far_z; uint8_t color[4];
-             uint16_t adjust[10]; } fog;
-    struct { uint8_t comp0, ref0, op, comp1, ref1, reserved[3]; } alpha_compare;
-    struct { uint8_t type, source, destination, logic_op; } blend;
-    struct { uint8_t enable, func, update, reserved; } z_mode;
+    uint8_t reserved[2];
     /* 0: the material as its list sets it. Else an instance's differed list: only the parts these J3D diff flags name
        (J3DDiffFlag_*: counts of textures, stages, texgens and lights, TEV and konst registers, fog, blend, ...). */
     uint32_t diff_flags;
+    NebulaMaterialTevStage tev[16];
+    uint8_t swap_table[4][4];
+    struct { uint8_t coord, map, scale_s, scale_t; } ind_order[4];
+    struct { uint8_t type, source, matrix, normalize, post_matrix, reserved[3]; } tex_gen[8];
+    struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
+    struct { uint8_t type, adjust_enable; uint16_t adjust_center; uint16_t adjust[10]; } fog;
+    struct { uint8_t comp0, op, comp1, reserved; } alpha_compare;
+    struct { uint8_t type, source, destination, logic_op; } blend;
+    struct { uint8_t enable, func, update, reserved; } z_mode;
     /* Texgen i's texture matrix (J3DTexMtx), when the material has one: `id` GX's matrix id (a post-transform one from
        64), `rows` 2 or 3, `listed` whether the material's list loads it (its texgen's matrix is not the identity; a
-       differed list loads every one). */
-    struct { uint8_t present, listed, id, rows; float m[12]; } texture_matrix[8];
-} NebulaMaterial;
+       differed list loads every one). Its values are NebulaMaterialValues::texture_matrix[i]. */
+    struct { uint8_t present, listed, id, rows; } texture_matrix[8];
+} NebulaMaterialProgram;
+
+typedef struct NebulaMaterialValues {
+    int16_t tev_color[4][4];
+    uint8_t konst_color[4][4];
+    uint8_t material_color[2][4], ambient_color[2][4];
+    uint8_t light_mask; /* the lights below that are set */
+    uint8_t alpha_ref[2];
+    uint8_t reserved;
+    struct { float m[2][3]; int8_t scale; uint8_t reserved[3]; } ind_matrix[3];
+    struct { uint16_t scale_s, scale_t; uint8_t bias_s, bias_t, wrap_s, wrap_t; } tex_coord_scale[8];
+    NebulaMaterialTexture texture[8];
+    NebulaMaterialLight light[8];
+    struct { float start, end, near_z, far_z; uint8_t color[4]; } fog;
+    float texture_matrix[8][12];
+} NebulaMaterialValues;
 
 /* A model's vertex array as values (shape_array): `count` entries of `kind`, each `key` (the game's address of the
    array it converts; an array made there later replaces it) naming it. Positions and normals are 3 floats, a bump-mapped model's normals 9 (normal, tangent,
@@ -893,8 +904,12 @@ typedef struct NebulaHostServices {
     void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
                        const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count);
-    /* The material the next shape draws use (NebulaMaterial). */
-    void (*material)(void* user, const NebulaMaterial* material);
+    /* A material program (NebulaMaterialProgram), registered or replaced under `program` (the display list's
+       identity); the host copies it and prepares its pipelines. */
+    void (*material_program)(void* user, uint64_t program, const NebulaMaterialProgram* material);
+    /* The material the next shape draws use: program `program` (material_program) with `values`; the host copies
+       them. */
+    void (*material)(void* user, uint64_t program, const NebulaMaterialValues* values);
     /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order). */
     void (*state)(void* user, const NebulaStateOp* ops, uint32_t count);
     /* Vertices drawn as the game sends them (NebulaImmediate). */

@@ -1267,7 +1267,7 @@ private:
     // Vertices the game sent as it drew them, through the frame's rings.
     void draw_record_immediate(const shapes::Immediate& immediate);
     // A material record into the drawing state (native_material.h).
-    void apply_record_material(const material::Material& m);
+    void apply_record_material(const material::Program& program, const material::Values& values);
     // A draw record's matrices and current matrices, into the matrix state its draw reads.
     void apply_record_matrices(const shapes::Record& record);
     // Gives back a group's resident block.
@@ -1322,6 +1322,8 @@ private:
     VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
+    // The game's material programs by key (their display lists), as registered.
+    std::unordered_map<std::uint64_t, std::shared_ptr<const material::Program>> material_programs_;
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.

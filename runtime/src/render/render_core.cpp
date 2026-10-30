@@ -8875,10 +8875,17 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;
+    case shapes::Record::Kind::MaterialProgram:
+        material_programs_[record.key] = record.program;
+        return;
     case shapes::Record::Kind::Material: {
-        apply_record_material(*record.material);
+        const auto program = material_programs_.find(record.key);
+        if (program == material_programs_.end()) {
+            return;  // the game registers every program before its first use
+        }
+        apply_record_material(*program->second, *record.material);
         const std::uint32_t palettes = draw_state_.palette_revision;
-        draw_state_.apply(*record.material);
+        draw_state_.apply(*program->second, *record.material);
         if (draw_state_.palette_revision != palettes) {
             on_palettes_changed();
         }
@@ -8934,8 +8941,8 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     }
 }
 
-void RenderCore::apply_record_material(const material::Material& m) {
-    material::load_matrices(m, matrices_);
+void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
+    material::load_matrices(program, values, matrices_);
     // The material wrote its coordinate scales.
     scales_from_textures_ = false;
 }

@@ -325,13 +325,13 @@ void NativeDrawState::apply(const state::Op& op) {
     tracked(*this, groups, [&] { set_op(op); });
 }
 
-void NativeDrawState::apply(const material::Material& m) {
+void NativeDrawState::apply(const material::Program& m, const material::Values& v) {
     constexpr std::uint32_t kMaterialGroups = bit(kGen) | bit(kZ) | bit(kBlend) | bit(kPe) | bit(kAlpha) | bit(kTev) |
                                               bit(kSwap) | bit(kFogType) | bit(kInd) | bit(kIndOrder) |
                                               bit(kIndMatrix) | bit(kTevColor) | bit(kKonst) | bit(kFog) |
                                               bit(kChannel) | bit(kMaterialColor) | bit(kAmbientColor) |
                                               bit(kTexgen) | bit(kPostTexgen) | bit(kCoord) | bit(kTexture);
-    tracked(*this, kMaterialGroups, [&] { set_material(m); });
+    tracked(*this, kMaterialGroups, [&] { set_material(m, v); });
 }
 
 void NativeDrawState::set_op(const state::Op& op) {
@@ -662,7 +662,7 @@ void NativeDrawState::set_op(const state::Op& op) {
     }
 }
 
-void NativeDrawState::set_material(const material::Material& m) {
+void NativeDrawState::set_material(const material::Program& m, const material::Values& v) {
     const bool dither = (m.loads & material::kLoadsDither) != 0u;
     const auto blend_and_z = [&] {
         set_blend(blend, m.blend.type, m.blend.source, m.blend.destination, m.blend.logic_op);
@@ -685,14 +685,14 @@ void NativeDrawState::set_material(const material::Material& m) {
         if ((m.loads & material::kLoadsTevColor) != 0u) {
             for (unsigned r = 0; r < 3u; ++r) {
                 for (unsigned c = 0; c < 4u; ++c) {
-                    tev_color[r + 1u][c] = sign11(static_cast<std::uint32_t>(m.tev_color[r][c]));
+                    tev_color[r + 1u][c] = sign11(static_cast<std::uint32_t>(v.tev_color[r][c]));
                 }
             }
         }
         if ((m.loads & material::kLoadsKonstColor) != 0u) {
             for (unsigned r = 0; r < 4u; ++r) {
                 for (unsigned c = 0; c < 4u; ++c) {
-                    konst[r][c] = m.konst_color[r][c];
+                    konst[r][c] = v.konst_color[r][c];
                 }
             }
         }
@@ -701,7 +701,7 @@ void NativeDrawState::set_material(const material::Material& m) {
     const auto material_fog = [&] {
         float a_f, c;
         std::uint32_t b_m, b_expn;
-        perspective_fog(m.fog.start, m.fog.end, m.fog.near_z, m.fog.far_z, a_f, b_m, b_expn, c);
+        perspective_fog(v.fog.start, v.fog.end, v.fog.near_z, v.fog.far_z, a_f, b_m, b_expn, c);
         fog.a = fog_float(a_f);
         fog.b_magnitude = b_m & 0xFFFFFFu;
         fog.b_shift = b_expn & 0xFFFFFFu;
@@ -709,12 +709,12 @@ void NativeDrawState::set_material(const material::Material& m) {
         fog.projection = false;
         fog_type = static_cast<FogType>(m.fog.type & 7u);
         for (unsigned i = 0; i < 3u; ++i) {
-            fog.color[i] = m.fog.color[i];
+            fog.color[i] = v.fog.color[i];
         }
     };
     // J3D's coordinate scale (J3DTexCoordScaleInfo): the s word keeps the line and point offsets.
     const auto coord_scale = [&](unsigned c) {
-        const auto& s = m.tex_coord_scale[c & 7u];
+        const auto& s = v.tex_coord_scale[c & 7u];
         auto& out = coord[c & 7u];
         const std::uint32_t sw = (static_cast<std::uint32_t>(s.scale_s - 1u) | static_cast<std::uint32_t>(s.bias_s) << 16u) & 0x3FFFFu;
         const std::uint32_t tw = static_cast<std::uint32_t>(s.scale_t - 1u) | static_cast<std::uint32_t>(s.bias_t) << 16u;
@@ -728,7 +728,7 @@ void NativeDrawState::set_material(const material::Material& m) {
     // J3D's texture (J3DTexture::loadGX, its palette into the map's own TMEM place).
     const auto textures = [&] {
         for (unsigned map = 0; map < 8u; ++map) {
-            const material::Texture& t = m.texture[map];
+            const material::Texture& t = v.texture[map];
             if (t.image == 0u) {
                 continue;
             }
@@ -765,7 +765,7 @@ void NativeDrawState::set_material(const material::Material& m) {
     const auto material_colours = [&] {
         for (unsigned i = 0; i < 2u; ++i) {
             for (unsigned c = 0; c < 4u; ++c) {
-                material_color[i][c] = m.material_color[i][c];
+                material_color[i][c] = v.material_color[i][c];
             }
         }
     };
@@ -851,7 +851,7 @@ void NativeDrawState::set_material(const material::Material& m) {
     }
     if ((m.loads & material::kLoadsIndirect) != 0u) {
         for (unsigned i = 0; i < m.ind_stages && i < 3u; ++i) {
-            const auto& mt = m.ind_matrix[i];
+            const auto& mt = v.ind_matrix[i];
             for (unsigned w = 0; w < 3u; ++w) {
                 for (unsigned row = 0; row < 2u; ++row) {
                     ind_matrix[i].m[row][w] =
@@ -886,17 +886,17 @@ void NativeDrawState::set_material(const material::Material& m) {
         if ((m.loads & material::kLoadsAmbient) != 0u) {
             for (unsigned i = 0; i < 2u; ++i) {
                 for (unsigned c = 0; c < 4u; ++c) {
-                    ambient_color[i][c] = m.ambient_color[i][c];
+                    ambient_color[i][c] = v.ambient_color[i][c];
                 }
             }
         }
         channels();
     }
     alpha.comp0 = static_cast<CompareFunc>(m.alpha_compare.comp0 & 7u);
-    alpha.ref0 = m.alpha_compare.ref0;
+    alpha.ref0 = v.alpha_ref[0];
     alpha.logic = static_cast<AlphaTestLogic>(m.alpha_compare.op & 3u);
     alpha.comp1 = static_cast<CompareFunc>(m.alpha_compare.comp1 & 7u);
-    alpha.ref1 = m.alpha_compare.ref1;
+    alpha.ref1 = v.alpha_ref[1];
     blend_and_z();
     pe.early_z = (m.z_compare_location & 1u) != 0u;
     gen.num_texgens = static_cast<std::uint8_t>(m.tex_gens & 15u);

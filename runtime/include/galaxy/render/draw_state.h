@@ -116,7 +116,7 @@ struct NativeDrawState {
     // A state op (galaxy/render/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
-    void apply(const material::Material& material);
+    void apply(const material::Program& program, const material::Values& values);
     [[nodiscard]] std::uint32_t consume_dirty() noexcept {
         const std::uint32_t d = dirty;
         dirty = 0u;
@@ -125,7 +125,7 @@ struct NativeDrawState {
 
 private:
     void set_op(const state::Op& op);
-    void set_material(const material::Material& material);
+    void set_material(const material::Program& program, const material::Values& values);
 public:
 };
 

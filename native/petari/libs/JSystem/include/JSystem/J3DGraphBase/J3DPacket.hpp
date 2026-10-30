@@ -86,7 +86,7 @@ public:
 
     J3DError newDisplayList();
 
-    struct NebulaMaterial* mpNebulaMaterial;
+    struct NebulaMaterialParts* mpNebulaMaterial;
     bool mNebulaCaptured;
     u32 mNebulaDiffFlags;
 };
