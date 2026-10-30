@@ -546,7 +546,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     std::vector<std::byte> guest(4096u);
     for (std::size_t i = 0; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
     TexImage image{};
-    image.guest_addr = kAddress;
+    image.address = kAddress;
     image.width = 32u;
     image.height = 32u;
     image.format = TexFormat::RGBA8;

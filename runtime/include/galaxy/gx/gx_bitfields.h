@@ -325,7 +325,7 @@ struct TexImage {
     std::uint16_t width;            // texels (register stores size-1)
     std::uint16_t height;
     TexFormat format;
-    std::uint32_t guest_addr;       // physical byte address (reg value << 5)
+    std::uint64_t address;       // physical byte address (reg value << 5)
 
     [[nodiscard]] bool operator==(const TexImage&) const = default;
 };
@@ -455,7 +455,7 @@ struct EfbScissor {
 struct EfbCopyParams {
     std::uint16_t src_x, src_y;
     std::uint16_t src_width, src_height;
-    std::uint32_t dest_addr;        // physical bytes (reg << 5)
+    std::uint64_t dest_addr;        // the destination's address
     std::uint32_t dest_stride;      // bytes (reg << 5)
     std::uint32_t y_scale;          // 8.8 fixed-point inverse scale (256: 1.0)
     std::uint8_t target_format;     // copy pixel format
@@ -690,7 +690,7 @@ constexpr auto kTexImage = decode_tex_image(
 static_assert(kTexImage.width == 640);
 static_assert(kTexImage.height == 480);
 static_assert(kTexImage.format == TexFormat::RGB565);
-static_assert(kTexImage.guest_addr == 0x01000000u);
+static_assert(kTexImage.address == 0x01000000u);
 
 constexpr EfbCopyParams make_efb_copy_filter(
     std::uint32_t w0,

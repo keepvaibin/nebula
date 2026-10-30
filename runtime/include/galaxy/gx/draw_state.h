@@ -97,7 +97,7 @@ struct NativeDrawState {
 
     // Palettes (GXLoadTlut and J3D's textures): each 512-byte place's source address (0: never loaded), and a
     // revision that changes whenever a place's address does.
-    std::uint32_t palette_place[1024]{};
+    std::uint64_t palette_place[1024]{};
     std::uint32_t palette_revision = 0u;
 
     // Copy settings: the clear colour (RGBA) and depth, the vertical filter's taps, the display copy's Y scale (8.8).
@@ -159,7 +159,7 @@ public:
 [[nodiscard]] std::uint32_t tlut_word(const TextureMap& map);
 
 // Map `map`'s palette address (0 without a palette format or a loaded place).
-[[nodiscard]] std::uint32_t palette_address(const NativeDrawState& state, unsigned map);
+[[nodiscard]] std::uint64_t palette_address(const NativeDrawState& state, unsigned map);
 
 // A copy op's parameters (GXCopyDisp, GXCopyTex) with the copy settings, and the pixel format the copy reads (Z24
 // for a depth-format texture copy, as GXCopyTex switches it).

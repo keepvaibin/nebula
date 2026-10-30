@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 45u
+#define NEBULA_GAME_API_VERSION 46u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -786,10 +786,10 @@ typedef struct NebulaHostServices {
        reads them; 0 on success, as THPVideoDecode returns. */
     int32_t (*thp_video_decode)(void* user, const void* frame, uint32_t size, void* y, void* u, void* v);
 
-    /* The game wrote [physical, physical + size) for the GPU: the console's cache flushes (DCFlushRange,
-       DCStoreRange) and DMA copies. The renderer drops what it holds of that memory. Called on the simulation
+    /* The game wrote [address, address + size) for the GPU: the console's cache flushes (DCFlushRange,
+       DCStoreRange) and DMA copies. An image handed over there must be handed over again. Called on the simulation
        thread; the host's own writes to game memory (disc reads) need no call. */
-    void (*gpu_coherent)(void* user, uint32_t physical, uint32_t size);
+    void (*gpu_coherent)(void* user, const void* address, uint32_t size);
 
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
     void (*game_context)(void* user, uint32_t what, int32_t value);

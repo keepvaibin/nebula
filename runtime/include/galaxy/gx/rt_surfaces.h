@@ -58,7 +58,7 @@ struct RtMaterialNote {
     std::uint32_t channel = 0;       // colour channel 0 control (XF)
     std::uint32_t combiner = 0;      // the environment map stage's colour combiner (0: none)
     std::uint32_t blend = 0;         // 0 opaque, 1 alpha, 2 additive, 3 other
-    std::uint32_t texture = 0;       // the environment map (else map 0): guest address
+    std::uint64_t texture = 0;       // the environment map (else map 0): its address
     std::uint32_t texture_size = 0;  // width | height << 16
     std::uint32_t texture_format = 0;
     std::uint32_t phase = 0;

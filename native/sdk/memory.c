@@ -177,20 +177,15 @@ void nebula_memory_guard(void* p, size_t size) {
 }
 
 /* Data cache maintenance. Natively no cache needs flushing, but the game flushes every range it writes for the GPU
-   (display lists, vertex and texture data) before the GPU reads it, as the console requires: each flush tells the
-   renderer to drop what it holds of that memory. Invalidation has nothing to do; DCZeroRange zeroes whole 32-byte
-   blocks as the console's dcbz does. */
+   (display lists, vertex and texture data) before the GPU reads it, as the console requires: an image handed over
+   in a flushed range is handed over again. Invalidation has nothing to do; DCZeroRange zeroes whole 32-byte blocks
+   as the console's dcbz does. */
 void nebula_gpu_coherent(const void* addr, uint32_t nBytes) {
     const NebulaHostServices* host = nebula_host();
     if (nBytes == 0 || host == NULL || host->gpu_coherent == NULL) {
         return;
     }
-    const uintptr_t a = (uintptr_t)addr;
-    if (a - (uintptr_t)sArena < kReserveSize) {
-        host->gpu_coherent(host->user, (uint32_t)(a - (uintptr_t)sArena), nBytes);
-    } else if (a - sImageBase < sImageSize) {
-        host->gpu_coherent(host->user, kImageWindow + (uint32_t)(a - sImageBase), nBytes);
-    }
+    host->gpu_coherent(host->user, addr, nBytes);
 }
 void DCFlushRange(void* addr, u32 nBytes) {
     nebula_gpu_coherent(addr, nBytes);

@@ -132,7 +132,7 @@ struct TextureHandle {
 class TextureCache {
 public:
     struct GuestRange {
-        std::uint32_t guest_addr = 0;
+        std::uint64_t address = 0;
         std::uint32_t size = 0;
     };
 
@@ -146,15 +146,15 @@ public:
     [[nodiscard]] TextureHandle get(
         const TexImage& image,
         const TexMode& mode,
-        std::uint32_t palette_address,
+        std::uint64_t palette_address,
         TlutFormat palette_format);
     // Render thread only: marks a cached handle used (LRU) without reading guest memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
-    // Aliases an EFB copy-to-texture at `guest_addr`, retiring every overlapping decoded entry and older copy.
+    // Aliases an EFB copy-to-texture at `address`, retiring every overlapping decoded entry and older copy.
     [[nodiscard]] bool register_efb_copy(
-        std::uint32_t guest_addr,
+        std::uint64_t address,
         const EfbCopyParams& params,
         gpu::TextureRef texture);
 
@@ -162,16 +162,16 @@ public:
     // content lives on the GPU, not in guest memory.
     void invalidate_all();
 
-    // An image's bytes the game handed over (texture_image): textures at `guest_addr` decode from this copy from now
+    // An image's bytes the game handed over (texture_image): textures at `address` decode from this copy from now
     // on; entries decoded from earlier bytes there are retired.
-    void register_image(std::uint32_t guest_addr, std::shared_ptr<const std::vector<std::byte>> bytes);
+    void register_image(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> bytes);
     // Forgets the handed-over images overlapping the ranges (memory the game rewrote without handing it over).
     void drop_registered_images(std::span<const GuestRange> ranges);
     // Images and palettes sampled without having been handed over (each logged).
     [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
 
     std::size_t invalidate_guest_range(
-        std::uint32_t guest_addr,
+        std::uint64_t address,
         std::uint32_t size);
     std::size_t invalidate_guest_ranges(
         std::span<const GuestRange> sorted_coalesced_ranges);
@@ -267,16 +267,16 @@ public:
 private:
     // Handed-over images by address, and copies replaced while a decode may still read them (released at the next
     // finish_pending_decodes).
-    std::map<std::uint32_t, std::shared_ptr<const std::vector<std::byte>>> registered_images_;
+    std::map<std::uint64_t, std::shared_ptr<const std::vector<std::byte>>> registered_images_;
     std::vector<std::shared_ptr<const std::vector<std::byte>>> replaced_images_;
     std::uint64_t missing_images_ = 0;
-    [[nodiscard]] const std::byte* registered_bytes(std::uint32_t guest_addr, std::uint32_t size) const;
+    [[nodiscard]] const std::byte* registered_bytes(std::uint64_t address, std::uint32_t size) const;
 
     struct Key {
-        std::uint32_t guest_addr;
+        std::uint64_t address;
+        std::uint64_t palette_address;  // palettized formats; else 0
         std::uint16_t width;
         std::uint16_t height;
-        std::uint32_t palette_address;  // palettized formats; else 0
         std::uint8_t format;
         std::uint8_t tlut_format;
         std::uint8_t levels;        // decoded mip chain length (1 = no mips)
@@ -298,7 +298,7 @@ private:
         bool pack_waiting = false;
     };
     struct EfbAliasKey {
-        std::uint32_t guest_addr;
+        std::uint64_t address;
         std::uint16_t width;
         std::uint16_t height;
         std::uint8_t format;

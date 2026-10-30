@@ -72,11 +72,11 @@ const TextureCache::GuestRange* first_overlapping_dirty_range(
         target_begin,
         [](const TextureCache::GuestRange& range,
            std::uint64_t value) noexcept {
-            return static_cast<std::uint64_t>(range.guest_addr) +
+            return static_cast<std::uint64_t>(range.address) +
                        static_cast<std::uint64_t>(range.size) <=
                    value;
         });
-    for (; it != ranges.end() && it->guest_addr < target_end; ++it) {
+    for (; it != ranges.end() && it->address < target_end; ++it) {
         if (it->size != 0u) return &*it;
     }
     return nullptr;
@@ -1161,13 +1161,13 @@ void TextureCache::finish_pending_decodes() {
     replaced_images_.clear();
 }
 
-void TextureCache::register_image(std::uint32_t guest_addr, std::shared_ptr<const std::vector<std::byte>> bytes) {
+void TextureCache::register_image(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> bytes) {
     if (bytes == nullptr || bytes->empty()) {
         return;
     }
     const auto size = static_cast<std::uint32_t>(bytes->size());
-    (void)invalidate_guest_range(guest_addr, size);
-    auto& slot = registered_images_[guest_addr];
+    (void)invalidate_guest_range(address, size);
+    auto& slot = registered_images_[address];
     if (slot != nullptr) {
         replaced_images_.push_back(std::move(slot));
     }
@@ -1176,8 +1176,8 @@ void TextureCache::register_image(std::uint32_t guest_addr, std::shared_ptr<cons
 
 void TextureCache::drop_registered_images(std::span<const GuestRange> ranges) {
     for (const GuestRange& range : ranges) {
-        const std::uint64_t begin = range.guest_addr, end = begin + range.size;
-        auto it = registered_images_.lower_bound(static_cast<std::uint32_t>(std::min<std::uint64_t>(end, 0xFFFFFFFFull)));
+        const std::uint64_t begin = range.address, end = begin + range.size;
+        auto it = registered_images_.lower_bound(end);
         while (it != registered_images_.begin()) {
             --it;
             if (it->first + it->second->size() <= begin) {
@@ -1185,7 +1185,7 @@ void TextureCache::drop_registered_images(std::span<const GuestRange> ranges) {
             }
             static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
             if (log_drops) {
-                std::fprintf(stderr, "[texture] handed-over image dropped: %08X (%zu bytes) by a write at %08llX+%llu\n", it->first,
+                std::fprintf(stderr, "[texture] handed-over image dropped: %llX (%zu bytes) by a write at %08llX+%llu\n", static_cast<unsigned long long>(it->first),
                              it->second->size(), static_cast<unsigned long long>(begin),
                              static_cast<unsigned long long>(end - begin));
             }
@@ -1195,14 +1195,14 @@ void TextureCache::drop_registered_images(std::span<const GuestRange> ranges) {
     }
 }
 
-const std::byte* TextureCache::registered_bytes(std::uint32_t guest_addr, std::uint32_t size) const {
+const std::byte* TextureCache::registered_bytes(std::uint64_t address, std::uint32_t size) const {
     // The image whose bytes start at or before the address and cover the whole range.
-    auto it = registered_images_.upper_bound(guest_addr);
+    auto it = registered_images_.upper_bound(address);
     if (it == registered_images_.begin()) {
         return nullptr;
     }
     --it;
-    const std::uint64_t offset = guest_addr - it->first;
+    const std::uint64_t offset = address - it->first;
     if (offset + size > it->second->size()) {
         return nullptr;
     }
@@ -1612,7 +1612,7 @@ std::uint32_t TextureCache::allocate_srv_index() {
 
 
 bool TextureCache::register_efb_copy(
-    std::uint32_t guest_addr,
+    std::uint64_t address,
     const EfbCopyParams& params,
     gpu::TextureRef texture) {
     // Validate before evicting a still-owned alias or consuming an SRV slot.
@@ -1620,7 +1620,7 @@ bool TextureCache::register_efb_copy(
         throw std::runtime_error("[TextureCache] invalid EFB alias resource");
     }
     const std::uint32_t guest_byte_size = efb_copy_guest_byte_size(params);
-    if (static_cast<std::uint64_t>(guest_addr) + guest_byte_size > (1ull << 32u)) {
+    if (address + guest_byte_size < address) {
         throw std::runtime_error("[TextureCache] EFB alias address overflow");
     }
     std::uint32_t resource_width = 0, resource_height = 0;
@@ -1636,7 +1636,7 @@ bool TextureCache::register_efb_copy(
             ? std::max<std::uint16_t>(1u, params.src_height / 2u)
             : params.src_height);
     const EfbAliasKey alias_key{
-        guest_addr,
+        address,
         alias_width,
         alias_height,
         efb_copy_alias_texture_format(params.target_format),
@@ -1655,16 +1655,16 @@ bool TextureCache::register_efb_copy(
         return a_begin < b_end && b_begin < a_end;
     };
 
-    const std::uint64_t new_begin = guest_addr;
+    const std::uint64_t new_begin = address;
     const std::uint64_t new_end =
         new_begin + guest_byte_size;
 
     // Evict every decoded entry and older alias overlapping the copy, not only the same address: the game reuses
     // capture buffers for glass and blur effects.
     bool evicted_overlap = false;
-    for (auto it = decoded_guest_envelope_.may_overlap(guest_addr, guest_byte_size)
+    for (auto it = decoded_guest_envelope_.may_overlap(address, guest_byte_size)
              ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
-        const std::uint64_t entry_begin = it->first.guest_addr;
+        const std::uint64_t entry_begin = it->first.address;
         const std::uint64_t entry_end =
             entry_begin + it->second.handle.guest_byte_size;
         if (overlaps(new_begin, new_end, entry_begin, entry_end)) {
@@ -1676,9 +1676,9 @@ bool TextureCache::register_efb_copy(
             ++it;
         }
     }
-    for (auto it = alias_guest_envelope_.may_overlap(guest_addr, guest_byte_size)
+    for (auto it = alias_guest_envelope_.may_overlap(address, guest_byte_size)
              ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
-        const std::uint64_t alias_begin = it->first.guest_addr;
+        const std::uint64_t alias_begin = it->first.address;
         const std::uint64_t alias_end =
             alias_begin + it->second.handle.guest_byte_size;
         const bool is_current_same_resource =
@@ -1696,7 +1696,7 @@ bool TextureCache::register_efb_copy(
 
     // Removal never shrinks the envelope; an empty map resets it.
     if (efb_aliases_.empty()) alias_guest_envelope_.clear();
-    alias_guest_envelope_.include(guest_addr, guest_byte_size);
+    alias_guest_envelope_.include(address, guest_byte_size);
     if (current_alias_same_resource) {
         const bool footprint_changed =
             current_alias_it->second.handle.guest_byte_size != guest_byte_size;
@@ -1757,9 +1757,9 @@ std::uint32_t palette_byte_size(TexFormat format) {
 }  // namespace
 
 std::size_t TextureCache::invalidate_guest_range(
-    std::uint32_t guest_addr,
+    std::uint64_t address,
     std::uint32_t size) {
-    const GuestRange range{guest_addr, size};
+    const GuestRange range{address, size};
     return invalidate_guest_ranges(std::span<const GuestRange>(&range, 1u));
 }
 std::size_t TextureCache::invalidate_guest_ranges(
@@ -1772,7 +1772,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
     std::size_t evicted = 0;
     for (auto it = decoded_guest_envelope_.may_overlap(sorted_coalesced_ranges)
              ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
-        const std::uint64_t tex_begin = it->first.guest_addr;
+        const std::uint64_t tex_begin = it->first.address;
         const std::uint64_t tex_end = tex_begin + it->second.handle.guest_byte_size;
         const std::uint64_t palette_begin = it->first.palette_address;
         const std::uint64_t palette_end = palette_begin + palette_byte_size(static_cast<TexFormat>(it->first.format));
@@ -1789,7 +1789,7 @@ std::size_t TextureCache::invalidate_guest_ranges(
     }
     for (auto it = alias_guest_envelope_.may_overlap(sorted_coalesced_ranges)
              ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
-        const std::uint64_t alias_begin = it->first.guest_addr;
+        const std::uint64_t alias_begin = it->first.address;
         const std::uint64_t alias_end =
             alias_begin + it->second.handle.guest_byte_size;
         if (first_overlapping_dirty_range(sorted_coalesced_ranges, alias_begin, alias_end) != nullptr) {
@@ -1967,7 +1967,7 @@ void TextureCache::apply_texture_packs() {
             decoded_lru_track(key);
             ++pack_swapped_;
             if (trace_texture_packs_enabled()) {
-                std::cerr << "[texture-pack] swap addr=" << std::hex << key.guest_addr << std::dec << ' '
+                std::cerr << "[texture-pack] swap addr=" << std::hex << key.address << std::dec << ' '
                           << file.filename().string() << '\n';
             }
         }
@@ -2074,12 +2074,12 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
 TextureHandle TextureCache::get(
     const TexImage& image,
     const TexMode& mode,
-    std::uint32_t palette_address,
+    std::uint64_t palette_address,
     TlutFormat palette_format) {
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {
-            if (image.guest_addr == movie_addr_[p] && image.width == movie_guest_width_[p] &&
+            if (image.address == movie_addr_[p] && image.width == movie_guest_width_[p] &&
                 image.height == movie_guest_height_[p]) {
                 return movie_handles_[p];
             }
@@ -2113,7 +2113,7 @@ TextureHandle TextureCache::get(
     }
     // Authored levels come from the image the game handed over: a sampler asking for more than it holds gets those.
     if (guest_levels > 1u) {
-        const auto handed = registered_images_.find(image.guest_addr);
+        const auto handed = registered_images_.find(image.address);
         if (handed != registered_images_.end()) {
             const unsigned wanted = guest_levels;
             while (guest_levels > 1u &&
@@ -2123,8 +2123,8 @@ TextureHandle TextureCache::get(
             levels = guest_levels;
             static const bool log_clamp = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
             if (log_clamp && guest_levels != wanted) {
-                std::fprintf(stderr, "[texture] levels limited to the handed-over image: %08X %ux%u format %u %u of %u\n",
-                             image.guest_addr, image.width, image.height, static_cast<unsigned>(image.format),
+                std::fprintf(stderr, "[texture] levels limited to the handed-over image: %llX %ux%u format %u %u of %u\n",
+                             image.address, image.width, image.height, static_cast<unsigned>(image.format),
                              guest_levels, wanted);
             }
         }
@@ -2134,7 +2134,7 @@ TextureHandle TextureCache::get(
         : std::chrono::steady_clock::time_point{};
 
     Key key{};
-    key.guest_addr  = image.guest_addr;
+    key.address  = image.address;
     key.width       = image.width;
     key.height      = image.height;
     key.format      = static_cast<std::uint8_t>(image.format);
@@ -2148,8 +2148,8 @@ TextureHandle TextureCache::get(
     key.generated_mips = generated_mips ? 1u : 0u;
     const std::uint32_t total_guest_size =
         texture_guest_byte_size(image.format, image.width, image.height, guest_levels);
-    if (static_cast<std::uint64_t>(image.guest_addr) + total_guest_size > (1ull << 32u)) {
-        throw std::runtime_error("[TextureCache] guest texture address overflow");
+    if (image.address + total_guest_size < image.address) {
+        throw std::runtime_error("[TextureCache] texture address overflow");
     }
     const auto key_end = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -2159,7 +2159,7 @@ TextureHandle TextureCache::get(
     // smaller texture at the same address.
     {
         const EfbAliasKey alias_key{
-            image.guest_addr,
+            image.address,
             image.width,
             image.height,
             static_cast<std::uint8_t>(image.format),
@@ -2204,17 +2204,17 @@ TextureHandle TextureCache::get(
             palette_address != 0u ? registered_bytes(palette_address, required_palette_bytes) : nullptr;
         if (handed_palette == nullptr) {
             ++missing_images_;
-            std::fprintf(stderr, "[texture] palette not handed over: %08X (%u bytes)\n", palette_address,
+            std::fprintf(stderr, "[texture] palette not handed over: %llX (%u bytes)\n", static_cast<unsigned long long>(palette_address),
                          required_palette_bytes);
         }
         palette_bytes = reinterpret_cast<const std::uint8_t*>(
             handed_palette != nullptr ? handed_palette : missing_image_bytes(required_palette_bytes));
     }
 
-    const std::byte* handed_over = registered_bytes(image.guest_addr, total_guest_size);
+    const std::byte* handed_over = registered_bytes(image.address, total_guest_size);
     if (handed_over == nullptr) {
         ++missing_images_;
-        std::fprintf(stderr, "[texture] image not handed over: %08X %ux%u format %u (%u bytes)\n", image.guest_addr,
+        std::fprintf(stderr, "[texture] image not handed over: %llX %ux%u format %u (%u bytes)\n", static_cast<unsigned long long>(image.address),
                      image.width, image.height, static_cast<unsigned>(image.format), total_guest_size);
     }
     const auto* src = reinterpret_cast<const std::uint8_t*>(
@@ -2226,7 +2226,7 @@ TextureHandle TextureCache::get(
         pack = texture_pack_hash(
             src, texture_guest_byte_size(image.format, image.width, image.height, 1u));
         rt_material = rt_material_index(pack);
-        note_rt_texture(image.guest_addr, pack, image.width, image.height, static_cast<std::uint32_t>(image.format));
+        note_rt_texture(image.address, pack, image.width, image.height, static_cast<std::uint32_t>(image.format));
     }
     // Texture packs: the naming convention's hashes of the base level (and of the palette range it uses). A resident
     // replacement binds without a decode; else the original decodes and waits for it.
@@ -2256,7 +2256,7 @@ TextureHandle TextureCache::get(
                 entry.handle.pack = pack;
                 const TextureHandle handle = entry.handle;
                 if (entries_.empty()) decoded_guest_envelope_.clear();
-                decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
+                decoded_guest_envelope_.include(image.address, total_guest_size);
                 if (key.palette_address != 0u) {
                     decoded_guest_envelope_.include(key.palette_address, required_palette_bytes);
                 }
@@ -2264,7 +2264,7 @@ TextureHandle TextureCache::get(
                 decoded_lru_track(key);
                 ++pack_bound_;
                 if (trace_texture_packs_enabled()) {
-                    std::cerr << "[texture-pack] bind addr=" << std::hex << image.guest_addr << std::dec << ' '
+                    std::cerr << "[texture-pack] bind addr=" << std::hex << image.address << std::dec << ' '
                               << packs_.file(pack_slot).filename().string() << '\n';
                 }
                 return handle;
@@ -2283,7 +2283,7 @@ TextureHandle TextureCache::get(
             elapsed_us(get_start, miss_start);
         if (pre_miss_us >= trace_gx_stall_threshold_us()) {
             std::cerr << "[gx-texture-premiss] addr=0x" << std::hex
-                      << image.guest_addr << std::dec
+                      << image.address << std::dec
                       << " size=" << total_guest_size
                       << " config-us="
                       << elapsed_us(get_start, config_end)
@@ -2460,7 +2460,7 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
     if (entries_.empty()) decoded_guest_envelope_.clear();
-    decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
+    decoded_guest_envelope_.include(image.address, total_guest_size);
     if (key.palette_address != 0u) {
         decoded_guest_envelope_.include(key.palette_address, required_palette_bytes);
     }
@@ -2479,7 +2479,7 @@ TextureHandle TextureCache::get(
             elapsed_us(upload_record_end, emplace_end);
         if (post_record_us >= trace_gx_stall_threshold_us()) {
             std::cerr << "[gx-texture-postrecord] addr=0x" << std::hex
-                      << image.guest_addr << std::dec
+                      << image.address << std::dec
                       << " entry-us="
                       << elapsed_us(entry_build_start, entry_build_end)
                       << " texdump-us="
@@ -2493,7 +2493,7 @@ TextureHandle TextureCache::get(
     if (trace_stalls &&
         total_us >= trace_gx_stall_threshold_us()) {
         std::cerr << "[gx-texture-miss] addr=0x" << std::hex
-                  << image.guest_addr << std::dec
+                  << image.address << std::dec
                   << " fmt=" << static_cast<unsigned>(image.format)
                   << " size=" << w << 'x' << h
                   << " levels=" << levels

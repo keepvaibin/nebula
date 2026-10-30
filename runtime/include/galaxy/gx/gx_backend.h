@@ -1417,19 +1417,19 @@ private:
         // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path
         // takes map 7.
         std::array<TextureMap, kMaxTextureMaps> maps{};
-        std::array<std::uint32_t, kMaxTextureMaps> palettes{};  // palette_address of each map
+        std::array<std::uint64_t, kMaxTextureMaps> palettes{};  // palette_address of each map
         std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
 
         [[nodiscard]] bool operator==(const TextureBindingKey& other) const noexcept = default;
     };
     struct TextureHandleKey {
-        std::uint32_t guest_addr = 0;
+        std::uint64_t address = 0;
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
         std::uint8_t tlut_format = 0;
-        std::uint32_t palette_address = 0;
+        std::uint64_t palette_address = 0;
         std::uint8_t levels = 1;
         std::uint8_t generated_mips = 0;
 
@@ -1441,7 +1441,7 @@ private:
     [[nodiscard]] TextureHandleKey texture_handle_key(
         const TexImage& image,
         const TexMode& mode,
-        std::uint32_t palette_address, TlutFormat palette_format) const;
+        std::uint64_t palette_address, TlutFormat palette_format) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
@@ -1457,7 +1457,7 @@ private:
     std::uint8_t current_texture_binding_key_mask_ = 0;
 
     struct TextureBindingDependency {
-        std::uint32_t guest_addr = 0;
+        std::uint64_t address = 0;
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
@@ -1470,7 +1470,7 @@ private:
     void invalidate_texture_handle_cache_dependency(
         const TextureBindingDependency& dependency);
     void invalidate_texture_binding_cache_range(
-        std::uint32_t guest_addr,
+        std::uint64_t address,
         std::uint32_t size);
     struct DirtyTextureAlias {
         TextureBindingDependency dependency{};
@@ -1523,7 +1523,7 @@ private:
                     hash *= 1099511628211ull;
                 }
             };
-            mix(key.guest_addr);
+            mix(key.address);
             mix(key.width);
             mix(key.height);
             mix(key.format);
@@ -1539,12 +1539,12 @@ private:
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
-            for (const std::uint32_t palette : key.palettes) {
+            for (const std::uint64_t palette : key.palettes) {
                 hash = mix64(hash, palette);
             }
             for (const TextureMap& t : key.maps) {
                 const TexMode& m = t.mode;
-                hash = mix64(hash, t.image.guest_addr);
+                hash = mix64(hash, t.image.address);
                 hash = mix64(hash, static_cast<std::uint64_t>(t.image.width) | static_cast<std::uint64_t>(t.image.height) << 16u |
                                        static_cast<std::uint64_t>(t.image.format) << 32u |
                                        static_cast<std::uint64_t>(t.tlut.tmem_offset) << 40u |

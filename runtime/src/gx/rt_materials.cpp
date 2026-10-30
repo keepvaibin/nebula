@@ -576,14 +576,14 @@ struct TextureName {
     std::uint64_t pack;
     std::uint32_t width, height, format;
 };
-std::unordered_map<std::uint32_t, TextureName> g_texture_names;
-std::unordered_map<std::uint32_t, bool> g_glows_logged;
+std::unordered_map<std::uint64_t, TextureName> g_texture_names;
+std::unordered_map<std::uint64_t, bool> g_glows_logged;
 }  // namespace
 
-void note_rt_texture(std::uint32_t guest_addr, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
+void note_rt_texture(std::uint64_t address, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
                      std::uint32_t format) {
     if (log_glows() && g_texture_names.size() < 65536u) {
-        g_texture_names[guest_addr] = {pack, width, height, format};
+        g_texture_names[address] = {pack, width, height, format};
     }
 }
 
@@ -594,27 +594,27 @@ bool rt_log_glows() noexcept {
 namespace {
 
 // Once per texture and kind (the key: its 32-byte-aligned guest address, bit 0 the kind).
-void note_unnamed(const char* kind, std::uint32_t guest_addr, std::uint32_t key) {
+void note_unnamed(const char* kind, std::uint64_t address, std::uint64_t key) {
     if (!log_glows() || !g_glows_logged.emplace(key, true).second) {
         return;
     }
-    const auto it = g_texture_names.find(guest_addr);
+    const auto it = g_texture_names.find(address);
     if (it == g_texture_names.end()) {
-        std::fprintf(stderr, "[rt-%s] unnamed addr=%08X (not hashed)\n", kind, guest_addr);
+        std::fprintf(stderr, "[rt-%s] unnamed addr=%llX (not hashed)\n", kind, static_cast<unsigned long long>(address));
         return;
     }
-    std::fprintf(stderr, "[rt-%s] unnamed addr=%08X tex1_%ux%u_%016llx_%u\n", kind, guest_addr, it->second.width,
+    std::fprintf(stderr, "[rt-%s] unnamed addr=%llX tex1_%ux%u_%016llx_%u\n", kind, static_cast<unsigned long long>(address), it->second.width,
                  it->second.height, static_cast<unsigned long long>(it->second.pack), it->second.format);
 }
 
 }  // namespace
 
-void note_rt_unnamed_glow(std::uint32_t guest_addr) {
-    note_unnamed("glow", guest_addr, guest_addr);
+void note_rt_unnamed_glow(std::uint64_t address) {
+    note_unnamed("glow", address, address);
 }
 
-void note_rt_unnamed_surface(std::uint32_t guest_addr) {
-    note_unnamed("surface", guest_addr, guest_addr | 1u);
+void note_rt_unnamed_surface(std::uint64_t address) {
+    note_unnamed("surface", address, address | 1u);
 }
 
 std::uint16_t rt_stage_untextured_material() noexcept {

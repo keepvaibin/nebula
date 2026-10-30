@@ -452,10 +452,10 @@ void load_module(const fs::path& path) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-void svc_gpu_coherent(void*, uint32_t physical, uint32_t size);
+void svc_gpu_coherent(void*, const void* address, uint32_t size);
 
 #if defined(NEBULA_HOST_RENDERER)
-// The images handed to the renderer (texture_image), by physical address: one handed over again unchanged needs no
+// The images handed to the renderer (texture_image), by address: one handed over again unchanged needs no
 // new record. Any write over one forgets it, as the renderer drops its copy then: the game handing the same bytes over
 // after reloading a file must reach the renderer again.
 std::mutex gHandedLock;
@@ -474,20 +474,13 @@ void forget_handed(uint64_t physical, uint32_t size) {
 }
 #endif
 
-// Host writes into game memory (disc DMA): the renderer drops what it holds of it. `dst` is in one of the game's
-// regions.
+// Host writes into game memory (disc DMA): images handed over there must be handed over again.
 void mark_written(const void* dst, uint32_t size) {
-    NebulaGameMemoryRegion regions[8];
-    const int count = gModule.memory_regions(regions, 8);
-    const auto* p = static_cast<const uint8_t*>(dst);
-    for (int i = 0; i < count; i++) {
-        if (p >= regions[i].host && p < regions[i].host + regions[i].size) {
 #if defined(NEBULA_HOST_RENDERER)
-            forget_handed(regions[i].physical + (uint32_t)(p - regions[i].host), size);
+    forget_handed(reinterpret_cast<uint64_t>(dst), size);
+#else
+    (void)dst, (void)size;
 #endif
-            return;
-        }
-    }
 }
 #endif
 
@@ -2031,17 +2024,6 @@ void attach_pending_records() {
     }
 }
 
-// The physical address of game memory at `key` (a host address), as the renderer's texture cache names it.
-uint64_t physical_of(uint64_t key) {
-    ensure_guest_memory();
-    for (const galaxy::GuestMemoryRegion& region : gRegions) {
-        const auto host = reinterpret_cast<uint64_t>(region.host_base);
-        if (key >= host && key - host < region.size && (region.guest_base & 0xC0000000u) == 0u) {
-            return region.guest_base + (key - host);
-        }
-    }
-    return 0;
-}
 #endif
 
 // A group drawn.
@@ -2085,8 +2067,7 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
 #endif
 }
 
-// The material the next shape draws use; texture identities become the physical addresses
-// the texture cache names images by.
+// An image the game hands over, named by its address in the game's memory.
 void svc_texture_image(void*, const NebulaTextureImage* image) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
@@ -2094,7 +2075,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
         return;
     }
     const auto* first = static_cast<const std::byte*>(image->bytes);
-    const uint64_t address = physical_of(reinterpret_cast<uint64_t>(image->bytes));
+    const uint64_t address = reinterpret_cast<uint64_t>(image->bytes);
     // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
     // images over too, so the record joins the stream ahead of the next one, as shape registrations do.
     std::shared_ptr<const std::vector<std::byte>> copy;
@@ -2324,9 +2305,6 @@ void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
     attach_pending_records();
     record.state.resize(count);
     std::memcpy(record.state.data(), ops, sizeof(NebulaStateOp) * count);
-    for (galaxy::gx::state::Op& op : record.state) {
-        op.image = op.image != 0u ? physical_of(op.image) : 0u;
-    }
     galaxy::gx::attach_shape_record(std::move(record));
 #else
     (void)ops, (void)count;
@@ -2342,10 +2320,6 @@ void svc_material(void*, const NebulaMaterial* material) {
     }
     auto copy = std::make_shared<galaxy::gx::material::Material>();
     std::memcpy(copy.get(), material, sizeof(NebulaMaterial));
-    for (galaxy::gx::material::Texture& texture : copy->texture) {
-        texture.image = texture.image != 0u ? physical_of(texture.image) : 0u;
-        texture.palette = texture.palette != 0u ? physical_of(texture.palette) : 0u;
-    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Material;
     attach_pending_records();
@@ -2440,11 +2414,11 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
     }
 }
 
-void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
+void svc_gpu_coherent(void*, const void* address, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
-    forget_handed(physical, size);
+    forget_handed(reinterpret_cast<uint64_t>(address), size);
 #else
-    (void)physical;
+    (void)address;
     (void)size;
 #endif
 }
@@ -3380,17 +3354,6 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// The physical address of a host pointer into the game's memory (0 outside it).
-uint32_t physical_of(const void* pointer) {
-    const auto* p = static_cast<const std::byte*>(pointer);
-    for (const galaxy::GuestMemoryRegion& region : gRegions) {
-        if (region.guest_base < 0x80000000u && p >= region.host_base && p < region.host_base + region.size) {
-            return region.guest_base + static_cast<uint32_t>(p - region.host_base);
-        }
-    }
-    return 0;
-}
-
 // A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; the decoder writes its planes
 // in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
 int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {

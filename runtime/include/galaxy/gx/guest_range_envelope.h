@@ -16,7 +16,7 @@ class ConservativeGuestRangeEnvelope {
 public:
     void clear() noexcept { bands_ = {}; }
 
-    void include(std::uint32_t address, std::uint32_t size) noexcept {
+    void include(std::uint64_t address, std::uint32_t size) noexcept {
         const std::uint64_t begin = address;
         const std::uint64_t end = begin + size;
         constexpr std::uint64_t limits[] = {
@@ -33,7 +33,7 @@ public:
     }
 
     [[nodiscard]] bool may_overlap(
-        std::uint32_t address, std::uint32_t size) const noexcept {
+        std::uint64_t address, std::uint32_t size) const noexcept {
         if (size == 0u) return false;
         const std::uint64_t begin = address;
         const std::uint64_t end = begin + size;
@@ -44,7 +44,7 @@ public:
     }
 
     // `ranges` must be sorted and non-overlapping, as for the cache's exact overlap search;
-    // Range has guest_addr and size.
+    // Range has address and size.
     template <class Range>
     [[nodiscard]] bool may_overlap(std::span<const Range> ranges) const noexcept {
         if (ranges.empty()) return false;
@@ -52,9 +52,9 @@ public:
             if (band.begin >= band.end) continue;
             auto it = std::lower_bound(ranges.begin(), ranges.end(), band.begin,
                 [](const Range& range, std::uint64_t begin) {
-                    return static_cast<std::uint64_t>(range.guest_addr) + range.size <= begin;
+                    return static_cast<std::uint64_t>(range.address) + range.size <= begin;
                 });
-            for (; it != ranges.end() && it->guest_addr < band.end; ++it) {
+            for (; it != ranges.end() && it->address < band.end; ++it) {
                 if (it->size != 0u) return true;
             }
         }

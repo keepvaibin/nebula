@@ -336,33 +336,16 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     return (frame_index + 1u) % period == 0u;
 }
 
-std::uint32_t normalize_dependency_guest_addr(
-    std::uint32_t address) noexcept {
-    if (address >= 0x80000000u && address < 0x81800000u) {
-        return address - 0x80000000u;
-    }
-    if (address >= 0xC0000000u && address < 0xC1800000u) {
-        return address - 0xC0000000u;
-    }
-    if (address >= 0x90000000u && address < 0x94000000u) {
-        return 0x10000000u + (address - 0x90000000u);
-    }
-    if (address >= 0xD0000000u && address < 0xD4000000u) {
-        return 0x10000000u + (address - 0xD0000000u);
-    }
-    return address;
-}
-
 bool dependency_ranges_overlap(
-    std::uint32_t lhs_addr,
+    std::uint64_t lhs_addr,
     std::uint32_t lhs_size,
-    std::uint32_t rhs_addr,
+    std::uint64_t rhs_addr,
     std::uint32_t rhs_size) noexcept {
     if (lhs_size == 0u || rhs_size == 0u) {
         return false;
     }
-    const std::uint64_t lhs_begin = normalize_dependency_guest_addr(lhs_addr);
-    const std::uint64_t rhs_begin = normalize_dependency_guest_addr(rhs_addr);
+    const std::uint64_t lhs_begin = lhs_addr;
+    const std::uint64_t rhs_begin = rhs_addr;
     const std::uint64_t lhs_end = lhs_begin + lhs_size;
     const std::uint64_t rhs_end = rhs_begin + rhs_size;
     return lhs_begin < rhs_end && rhs_begin < lhs_end;
@@ -3288,7 +3271,7 @@ void GxBackend::note_rt_material() {
                                                          : 3u;
     const unsigned map = ps_key_.stages[stage].order & 7u;
     const TexImage& image = draw_state_.texture[map].image;
-    note.texture = image.guest_addr;
+    note.texture = image.address;
     note.texture_size = static_cast<std::uint32_t>(image.width) | static_cast<std::uint32_t>(image.height) << 16u;
     note.texture_format = static_cast<std::uint32_t>(image.format);
     note.phase = rt_phase_;
@@ -3614,7 +3597,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
                       (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
-        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].order & 7u].image.guest_addr);
+        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].order & 7u].image.address);
     }
     bool water =
         translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw() || ocean);
@@ -3706,7 +3689,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.light_key = rt_light_key();
     // (An untextured draw's map register holds an earlier draw's texture: not logged.)
     if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
-        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].order & 7u].image.guest_addr);
+        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].order & 7u].image.address);
     }
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
@@ -6838,8 +6821,8 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         if (texture_cache_.set_movie_override(render_movie_frame_, movie_replacements_.frame(render_movie_frame_))) {
             const std::uint32_t planes[3] = {render_movie_frame_.y, render_movie_frame_.u, render_movie_frame_.v};
             const auto stale = [&](const auto& item) {
-                return item.first.guest_addr == planes[0] || item.first.guest_addr == planes[1] ||
-                       item.first.guest_addr == planes[2] || texture_cache_.movie_handle(item.second.srv_index);
+                return item.first.address == planes[0] || item.first.address == planes[1] ||
+                       item.first.address == planes[2] || texture_cache_.movie_handle(item.second.srv_index);
             };
             std::erase_if(texture_handle_cache_, stale);
             std::erase_if(frame_texture_handle_cache_, stale);
@@ -7346,7 +7329,7 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
 GxBackend::TextureHandleKey GxBackend::texture_handle_key(
     const TexImage& image,
     const TexMode& mode,
-    std::uint32_t palette_address, TlutFormat palette_format) const {
+    std::uint64_t palette_address, TlutFormat palette_format) const {
     unsigned levels = 1u;
     bool generated_mips = false;
     const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
@@ -7363,7 +7346,7 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
     const bool palettized = image.format == TexFormat::C4 ||
         image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
     return TextureHandleKey{
-        image.guest_addr,
+        image.address,
         image.width,
         image.height,
         static_cast<std::uint8_t>(image.format),
@@ -7428,9 +7411,9 @@ void GxBackend::invalidate_texture_handle_cache_dependency(
             const TextureHandleKey& key = it->first;
             const std::uint64_t key_size = it->second.guest_byte_size;
             if (ranges_overlap(
-                    dependency.guest_addr,
+                    dependency.address,
                     dep_size,
-                    key.guest_addr,
+                    key.address,
                     key_size)) {
                 it = cache.erase(it);
             } else {
@@ -7443,7 +7426,7 @@ void GxBackend::invalidate_texture_handle_cache_dependency(
 }
 
 void GxBackend::invalidate_texture_binding_cache_range(
-    std::uint32_t guest_addr,
+    std::uint64_t address,
     std::uint32_t size) {
     if (size == 0u) {
         return;
@@ -7453,9 +7436,9 @@ void GxBackend::invalidate_texture_binding_cache_range(
         for (auto it = cache.begin(); it != cache.end();) {
             const TextureHandleKey& key = it->first;
             if (dependency_ranges_overlap(
-                    guest_addr,
+                    address,
                     size,
-                    key.guest_addr,
+                    key.address,
                     it->second.guest_byte_size)) {
                 it = cache.erase(it);
             } else {
@@ -7471,9 +7454,9 @@ void GxBackend::invalidate_texture_binding_cache_range(
                 const TextureBindingDependency& dependency =
                     tables.dependencies[i];
                 if (dependency_ranges_overlap(
-                        guest_addr,
+                        address,
                         size,
-                        dependency.guest_addr,
+                        dependency.address,
                         dependency.guest_byte_size)) {
                     overlaps = true;
                     break;
@@ -7503,7 +7486,7 @@ void GxBackend::mark_texture_binding_alias_dirty(
             ? std::max<std::uint16_t>(1u, params.src_height / 2u)
             : params.src_height);
     DirtyTextureAlias dirty{};
-    dirty.dependency.guest_addr = params.dest_addr;
+    dirty.dependency.address = params.dest_addr;
     dirty.dependency.width = alias_width;
     dirty.dependency.height = alias_height;
     dirty.dependency.format =
@@ -7524,10 +7507,10 @@ void GxBackend::prune_dirty_texture_binding_tables() {
         const std::uint64_t a_size = a.guest_byte_size;
         const std::uint64_t b_size = b.guest_byte_size;
         return a_size != 0u && b_size != 0u &&
-            static_cast<std::uint64_t>(a.guest_addr) <
-                static_cast<std::uint64_t>(b.guest_addr) + b_size &&
-            static_cast<std::uint64_t>(b.guest_addr) <
-                static_cast<std::uint64_t>(a.guest_addr) + a_size;
+            static_cast<std::uint64_t>(a.address) <
+                static_cast<std::uint64_t>(b.address) + b_size &&
+            static_cast<std::uint64_t>(b.address) <
+                static_cast<std::uint64_t>(a.address) + a_size;
     };
     const auto prune_cache = [this, &dependencies_overlap](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
@@ -8441,7 +8424,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                         const TexImage img = draw_state_.texture[m].image;
                         const TexMode mode = draw_state_.texture[m].mode;
                         const TlutFormat palette_format = draw_state_.texture[m].tlut.format;
-                        const std::uint32_t palette = palette_address(draw_state_, m);
+                        const std::uint64_t palette = palette_address(draw_state_, m);
                         const TextureHandleKey handle_key =
                             texture_handle_key(img, mode, palette, palette_format);
                         if (const auto handle_it =
@@ -8475,7 +8458,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                         binding_tables.dependencies[
                             binding_tables.dependency_count++] =
                             TextureBindingDependency{
-                                img.guest_addr,
+                                img.address,
                                 img.width,
                                 img.height,
                                 static_cast<std::uint8_t>(img.format),
@@ -8926,11 +8909,11 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     }
     case shapes::Record::Kind::TextureImage:
         flush_pending_draw_batch();
-        texture_cache_.register_image(static_cast<std::uint32_t>(record.key), record.image);
+        texture_cache_.register_image(record.key, record.image);
         // New bytes at that address: bindings made from what was there before are out of date too (a buffer the game
         // reuses for its next image, as the Mii library's part textures).
         if (record.image != nullptr) {
-            invalidate_texture_binding_cache_range(static_cast<std::uint32_t>(record.key),
+            invalidate_texture_binding_cache_range(record.key,
                                                    static_cast<std::uint32_t>(record.image->size()));
         }
         texture_bindings_dirty_ = true;

@@ -9212,16 +9212,16 @@ bool RendererD3D12::copy_efb_to_texture(
     // different copy formats and each needs its own converted texture.
     const std::uint64_t dest_key =
         static_cast<std::uint64_t>(params.dest_addr) |
-        (static_cast<std::uint64_t>(params.target_format) << 32) |
-        (is_depth_copy ? (1ull << 40) : 0ull) |
+        (static_cast<std::uint64_t>(params.target_format) << 48) |  // addresses stay below 2^48
+        (is_depth_copy ? (1ull << 56) : 0ull) |
         // One guest address alternates between early scaled masks and the
         // final native bloom composite. Cache both resources to avoid
         // reallocating on every pass/frame; the latest alias still wins.
-        (native_bloom ? (1ull << 41) : 0ull) |
+        (native_bloom ? (1ull << 57) : 0ull) |
         // Interpolation: consecutive game frames copy into different
         // textures, so a sub-frame replaying one frame's copies never
         // overwrites what the next frame's chunks already copied.
-        (ring_mode_ == RingMode::Interp ? (replay_serial_ & 1ull) << 42 : 0ull);
+        (ring_mode_ == RingMode::Interp ? (replay_serial_ & 1ull) << 58 : 0ull);
 
     // The destination map is bounded in bytes (efb_copy_dests_): the 192 MiB default holds about ten
     // full-extent copies at 4x, and most copies are much smaller masks and bloom workspaces. Least

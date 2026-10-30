@@ -1550,8 +1550,8 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
     }
     // Keyed by address, format and source: one address alternates between formats and copies of each.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.dest_addr) |
-        (static_cast<std::uint64_t>(params.target_format) << 32u) | (is_depth_copy ? (1ull << 40u) : 0ull) |
-        (native ? (1ull << 41u) : 0ull);
+        (static_cast<std::uint64_t>(params.target_format) << 48u) | (is_depth_copy ? (1ull << 56u) : 0ull) |
+        (native ? (1ull << 57u) : 0ull);  // addresses stay below 2^48
     EfbCopyDest& dest = efb_copy_dests_[dest_key];
     dest.last_used = ++efb_copy_dests_tick_;
     if (!dest.texture || dest.width != w || dest.height != h) {

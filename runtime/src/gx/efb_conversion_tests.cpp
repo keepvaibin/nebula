@@ -1605,7 +1605,7 @@ V main(uint id : SV_VertexID) {
         for (unsigned i = 0u; i < kTextures; ++i) bytes[i * stride] = static_cast<std::byte>(i);
         hand_over(cache, address, bytes.data(), bytes.size());
         TexImage image{};
-        image.guest_addr = address;
+        image.address = address;
         image.width = image.height = 1024u;
         image.format = TexFormat::CMPR;
         TexMode mode{};
@@ -1623,7 +1623,7 @@ V main(uint id : SV_VertexID) {
             "ordinary texture hit does not charge allocation twice");
         TextureHandle last{};
         for (unsigned i = 1u; i < kTextures; ++i) {
-            image.guest_addr = address + i * stride;
+            image.address = address + i * stride;
             last = cache.get(image, mode, 0u, TlutFormat{});
         }
         const auto stats = cache.decoded_map_stats();
@@ -1643,7 +1643,7 @@ V main(uint id : SV_VertexID) {
         cache.begin_frame(1u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "another frame slot cannot reclaim a budget-evicted descriptor");
-        image.guest_addr = address + 16384u;
+        image.address = address + 16384u;
         image.width = image.height = 128u;
         image.format = TexFormat::I4;
         mode.min_filter = TexMinFilter::NearMipNear;
@@ -1717,7 +1717,7 @@ V main(uint id : SV_VertexID) {
             std::uint32_t offset = 0u;
             for (const Case& test : cases) {
                 TexImage image{};
-                image.guest_addr = address + offset;
+                image.address = address + offset;
                 image.width = test.width;
                 image.height = test.height;
                 image.format = test.format;
@@ -1853,7 +1853,7 @@ V main(uint id : SV_VertexID) {
         std::array<std::byte, 512> bytes{};
         hand_over(cache, address, bytes.data(), bytes.size());
         TexImage image{};
-        image.guest_addr = address;
+        image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGB565;
         TexMode mode{};
@@ -1869,14 +1869,14 @@ V main(uint id : SV_VertexID) {
             cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
-        image.guest_addr = address + 128u;
+        image.address = address + 128u;
         const auto same_frame = cache.get(image, mode, 0u, TlutFormat{});
         passed &= expect(same_frame.srv_index != first.srv_index &&
             !cache.srv_index_retired(same_frame.srv_index) &&
             first.resource->GetDesc().Width == 8u,
             "retired resource and CPU descriptor survive later lookups in the same frame");
         cache.begin_frame(1u, kFramesInFlight);
-        image.guest_addr = address + 256u;
+        image.address = address + 256u;
         const auto other_slot = cache.get(image, mode, 0u, TlutFormat{});
         passed &= expect(other_slot.srv_index != first.srv_index &&
             cache.srv_index_retired(first.srv_index) &&
@@ -1886,7 +1886,7 @@ V main(uint id : SV_VertexID) {
         cache.begin_frame(0u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "reclaimed slot retains its retired identity until allocation");
-        image.guest_addr = address + 384u;
+        image.address = address + 384u;
         const auto reclaimed = cache.get(image, mode, 0u, TlutFormat{});
         passed &= expect(reclaimed.srv_index == first.srv_index &&
             !cache.srv_index_retired(reclaimed.srv_index) &&
@@ -1917,7 +1917,7 @@ V main(uint id : SV_VertexID) {
         hand_over(cache, address, bytes.data(), 1536u);
         hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
         TexImage image{};
-        image.guest_addr = address;
+        image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGB565;
         TexMode mode{};
@@ -1930,7 +1930,7 @@ V main(uint id : SV_VertexID) {
 
         for (auto format : {TexFormat::I4, TexFormat::I8, TexFormat::IA4, TexFormat::IA8,
                             TexFormat::RGB565, TexFormat::RGB5A3, TexFormat::RGBA8, TexFormat::CMPR}) {
-            auto direct_image = image; direct_image.guest_addr = address + 768u;
+            auto direct_image = image; direct_image.address = address + 768u;
             direct_image.format = format;
             const auto original = cache.get(direct_image, mode, 0u, TlutFormat{});
             for (auto palette_format : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3})
@@ -1941,7 +1941,7 @@ V main(uint id : SV_VertexID) {
                     "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
             }
         }
-        auto indexed_image = image; indexed_image.guest_addr = address + 512u;
+        auto indexed_image = image; indexed_image.address = address + 512u;
         indexed_image.format = TexFormat::C4;
         TexMode indexed_mode{}; indexed_mode.min_filter = TexMinFilter::Near;
         // Palettes by address: A and B, each handed over on its own.
@@ -1973,7 +1973,7 @@ V main(uint id : SV_VertexID) {
         const auto original_config = get_render_config();
         auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
         set_render_config(mip_config);
-        auto enhanced_image = image; enhanced_image.guest_addr = address + 1280u;
+        auto enhanced_image = image; enhanced_image.address = address + 1280u;
         enhanced_image.width = 64u; enhanced_image.height = 4u;
         TexMode enhanced_mode{};
         enhanced_mode.wrap_s = TexWrap::Repeat;
