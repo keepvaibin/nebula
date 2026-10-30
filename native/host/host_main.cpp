@@ -18,12 +18,12 @@
 #include "galaxy/atomic_file.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/discord_presence.h"
+#include "galaxy/mii_formats.h"
+#include "galaxy/mii_import.h"
 #include "galaxy/mods.h"
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
-#include "galaxy/mii_formats.h"
-#include "galaxy/mii_import.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/guest_memory.h"
 #include "galaxy/native_host.h"
@@ -3753,10 +3753,10 @@ int main(int argc, char** argv) {
 
     open_pak(pak);
     boot_mark("disc opened");
-    galaxy::gx::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
     load_module(module);
     boot_mark("game module loaded");
 #if defined(NEBULA_HOST_RENDERER)
+    galaxy::gx::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
     {
         // Mii import: the files in the import folder (next to the settings: any console's Mii files, mii_formats.h)
         // join the database before the game reads it; the settings import more while it runs.
