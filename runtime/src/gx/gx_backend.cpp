@@ -81,7 +81,7 @@ std::uint32_t pack_sampler_key(
         static_cast<std::uint32_t>(mode.min_lod_x16) & 0xFFu;
     std::uint32_t max_lod =
         static_cast<std::uint32_t>(mode.max_lod_x16) & 0xFFu;
-    const bool guest_mips = (min_filter & 0x3u) != 0u;
+    const bool source_mips = (min_filter & 0x3u) != 0u;
     bool full_chain = false;
     if (generated_mips && mip_levels > 1u &&
         min_filter == static_cast<std::uint32_t>(TexMinFilter::Linear) &&
@@ -95,7 +95,7 @@ std::uint32_t pack_sampler_key(
     }
     std::uint32_t lod_bias =
         static_cast<std::uint32_t>(static_cast<std::uint8_t>(mode.lod_bias_x32)) & 0xFFu;
-    if (arbitrary && guest_mips) {
+    if (arbitrary && source_mips) {
         const int bias = static_cast<int>(static_cast<std::int8_t>(mode.lod_bias_x32)) +
                          static_cast<int>(efb_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
@@ -103,7 +103,7 @@ std::uint32_t pack_sampler_key(
         max_lod = 0xFFu;
         min_filter = (min_filter & 0x4u) | 0x3u;
     } else if (lod_shift_x16 != 0u) {
-        if (guest_mips) {
+        if (source_mips) {
             min_lod = min_lod == 0u ? 0u : std::min<std::uint32_t>(0xFFu, min_lod + lod_shift_x16);
             max_lod = std::min<std::uint32_t>(0xFFu, max_lod + lod_shift_x16);
         } else if (!full_chain) {
@@ -513,22 +513,22 @@ bool dependency_ranges_overlap(
     return get_render_config().enhanced_mipmaps;
 }
 
-[[nodiscard]] std::uint32_t snapshot_texture_guest_size(
+[[nodiscard]] std::uint32_t snapshot_texture_source_size(
     const TexImage& image,
     const TexMode& mode) {
-    unsigned guest_levels = 1u;
+    unsigned source_levels = 1u;
     const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
     const unsigned full_chain =
         snapshot_full_mip_chain_levels(image.width, image.height);
     if (mip_mode != 0u) {
         const unsigned wanted =
             1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
-        guest_levels = std::min(wanted, full_chain);
+        source_levels = std::min(wanted, full_chain);
     }
     // Host-generated mips read only guest level 0, so no setting changes the footprint.
 
     std::uint64_t total = 0;
-    for (unsigned level = 0; level < guest_levels; ++level) {
+    for (unsigned level = 0; level < source_levels; ++level) {
         total += snapshot_tex_data_size(
             image.format,
             std::max<std::uint32_t>(1u, image.width >> level),
@@ -6819,7 +6819,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             }
         }
         if (texture_cache_.set_movie_override(render_movie_frame_, movie_replacements_.frame(render_movie_frame_))) {
-            const std::uint32_t planes[3] = {render_movie_frame_.y, render_movie_frame_.u, render_movie_frame_.v};
+            const std::uint64_t planes[3] = {render_movie_frame_.y, render_movie_frame_.u, render_movie_frame_.v};
             const auto stale = [&](const auto& item) {
                 return item.first.address == planes[0] || item.first.address == planes[1] ||
                        item.first.address == planes[2] || texture_cache_.movie_handle(item.second.srv_index);
@@ -7404,12 +7404,12 @@ void GxBackend::invalidate_texture_handle_cache_dependency(
             a_begin < b_begin + b_size &&
             b_begin < a_begin + a_size;
     };
-    const std::uint64_t dep_size = dependency.guest_byte_size;
+    const std::uint64_t dep_size = dependency.source_bytes;
     const auto erase_matching =
         [&dependency, &ranges_overlap, dep_size](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
             const TextureHandleKey& key = it->first;
-            const std::uint64_t key_size = it->second.guest_byte_size;
+            const std::uint64_t key_size = it->second.source_bytes;
             if (ranges_overlap(
                     dependency.address,
                     dep_size,
@@ -7439,7 +7439,7 @@ void GxBackend::invalidate_texture_binding_cache_range(
                     address,
                     size,
                     key.address,
-                    it->second.guest_byte_size)) {
+                    it->second.source_bytes)) {
                 it = cache.erase(it);
             } else {
                 ++it;
@@ -7457,7 +7457,7 @@ void GxBackend::invalidate_texture_binding_cache_range(
                         address,
                         size,
                         dependency.address,
-                        dependency.guest_byte_size)) {
+                        dependency.source_bytes)) {
                     overlaps = true;
                     break;
                 }
@@ -7491,7 +7491,7 @@ void GxBackend::mark_texture_binding_alias_dirty(
     dirty.dependency.height = alias_height;
     dirty.dependency.format =
         efb_copy_alias_texture_format(params.target_format);
-    dirty.dependency.guest_byte_size = efb_copy_guest_byte_size(params);
+    dirty.dependency.source_bytes = efb_copy_source_bytes(params);
     dirty_texture_aliases_.push_back(dirty);
     invalidate_texture_handle_cache_dependency(dirty.dependency);
 }
@@ -7504,8 +7504,8 @@ void GxBackend::prune_dirty_texture_binding_tables() {
         [](
             const TextureBindingDependency& a,
             const TextureBindingDependency& b) {
-        const std::uint64_t a_size = a.guest_byte_size;
-        const std::uint64_t b_size = b.guest_byte_size;
+        const std::uint64_t a_size = a.source_bytes;
+        const std::uint64_t b_size = b.source_bytes;
         return a_size != 0u && b_size != 0u &&
             static_cast<std::uint64_t>(a.address) <
                 static_cast<std::uint64_t>(b.address) + b_size &&
@@ -8462,7 +8462,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                                 img.width,
                                 img.height,
                                 static_cast<std::uint8_t>(img.format),
-                                texture_handles[m].guest_byte_size,
+                                texture_handles[m].source_bytes,
                             };
                     }
                     const TextureHandle& th = texture_handles[m];
@@ -9363,9 +9363,9 @@ void GxBackend::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_form
         // The copy overwrites its destination: an image handed over there (memory the game freed and reused, as
         // the Mii library's face masks reuse its part textures' buffers) no longer describes those bytes. The
         // extent is the destination's tile rows (4 lines each, the shortest tile) over the source height.
-        const TextureCache::GuestRange copied{
+        const TextureCache::MemoryRange copied{
             params.dest_addr, params.dest_stride * ((static_cast<std::uint32_t>(params.src_height) + 3u) / 4u)};
-        texture_cache_.drop_registered_images(std::span<const TextureCache::GuestRange>(&copied, 1u));
+        texture_cache_.drop_registered_images(std::span<const TextureCache::MemoryRange>(&copied, 1u));
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = pixel_format == 3u;
@@ -9378,7 +9378,7 @@ void GxBackend::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_form
             : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
         if (alias_updated) {
             ++frame_efb_alias_updates_;
-            // One guest address can alternate between format-keyed GPU resources, and the game need not
+            // One address can alternate between format-keyed GPU resources, and the game need not
             // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table
             // that referenced this alias. A reused texture is updated in place; its SRV stays valid.
             mark_texture_binding_alias_dirty(params);

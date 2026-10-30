@@ -1781,10 +1781,11 @@ int svc_code_patch(void*, uint32_t id, uint32_t* value) {
     return 1;
 }
 
-void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u, uint32_t v,
+void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, const void* y, const void* u, const void* v,
                      uint32_t width, uint32_t height) {
 #if defined(NEBULA_HOST_RENDERER)
-    galaxy::gx::attach_movie_frame(name, frame, frame_rate, y, u, v, width, height);
+    galaxy::gx::attach_movie_frame(name, frame, frame_rate, reinterpret_cast<uint64_t>(y), reinterpret_cast<uint64_t>(u),
+                                   reinterpret_cast<uint64_t>(v), width, height);
 #else
     (void)name, (void)frame, (void)frame_rate, (void)y, (void)u, (void)v, (void)width, (void)height;
 #endif

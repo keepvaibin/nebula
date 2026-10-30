@@ -78,7 +78,7 @@ struct XfbSerialAccountingEvent {
     std::uint32_t y_scale_raw,
     bool scale_y);
 
-// EFB-copy textures are at the internal resolution; guest addresses, strides and VI selection stay in Wii units.
+// EFB-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
 struct ScaledEfbCopyExtent {
     std::uint16_t width = 0;
     std::uint16_t height = 0;

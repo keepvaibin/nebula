@@ -50,7 +50,7 @@ struct RtSurface {
 // combination of object name, class, blend and environment texture.
 struct RtMaterialNote {
     const char* name = "";           // the drawing NameObj's name ("" unknown)
-    std::uint32_t object = 0;        // its guest address
+    std::uint32_t object = 0;        // its address
     RtSurface surface{};
     std::uint32_t stages = 0;
     std::uint32_t texgens = 0;

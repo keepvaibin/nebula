@@ -20,7 +20,7 @@
 namespace galaxy::gx {
 
 // Scene inputs for one temporal upscale, recorded into `list` at the end of
-// the guest's 3D scene. Every resource is in its steady renderer state
+// the game's 3D scene. Every resource is in its steady renderer state
 // (color and output RENDER_TARGET, depth DEPTH_WRITE, motion RENDER_TARGET)
 // and is left in it. Sizes are the regions used, from each texture's origin.
 struct TemporalUpscaleInputs {

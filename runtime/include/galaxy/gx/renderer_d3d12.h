@@ -239,7 +239,7 @@ public:
     // Binds EFB RTV+DSV and applies the viewport from the XF viewport regs.
     void bind_efb(const float xf_viewport[6]);
 
-    // HUD split: from the end of the guest's 3D scene to the display copy the
+    // HUD split: from the end of the game's 3D scene to the display copy the
     // EFB is a second target at the window's integer scale, so the 2D layer
     // renders at display resolution over the resampled scene. The two target
     // sets share layout and resource states and are swapped as a whole, so
@@ -272,7 +272,7 @@ public:
     [[nodiscard]] bool temporal_mode() const;
     // The 3D image's scale over the Wii's 640 x 456 as it is shown: the temporal upscaler's output, else the EFB's.
     [[nodiscard]] unsigned scene_display_scale() const;
-    // At the start of the guest's 3D scene: whether the temporal path runs for
+    // At the start of the game's 3D scene: whether the temporal path runs for
     // it and, if so, the scene's sub-pixel jitter in render pixels (applied to
     // perspective projections).
     [[nodiscard]] bool scene_temporal_begin(float& jitter_x, float& jitter_y);

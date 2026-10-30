@@ -233,7 +233,7 @@ inline constexpr std::uint64_t kRtEffectHash = 0xFFFFFFFFFFFFFFFEull;
 // The loaded stage's material for its untextured surfaces (0: the stage has no `untextured` row).
 [[nodiscard]] std::uint16_t rt_stage_untextured_material() noexcept;
 [[nodiscard]] const RtMaterial* rt_material(std::uint16_t index) noexcept;
-// GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by guest address, and
+// GALAXY_RT_LOG_GLOWS=1: the texture-pack name of each texture as uploaded, kept by address, and
 // printed for the glow draws ([rt-glow]) and the traced surfaces ([rt-surface]) the table does not name.
 void note_rt_texture(std::uint64_t address, std::uint64_t pack, std::uint32_t width, std::uint32_t height,
                      std::uint32_t format);

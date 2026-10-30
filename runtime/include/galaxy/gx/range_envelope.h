@@ -12,7 +12,7 @@ namespace galaxy::gx::detail {
 // MEM2, above), the envelope of every range included since clear(). Removed ranges may leave
 // it too large, which is harmless. Separate bands keep MEM1 writes from matching a cache that
 // holds only MEM2 ranges across the hole between them.
-class ConservativeGuestRangeEnvelope {
+class ConservativeRangeEnvelope {
 public:
     void clear() noexcept { bands_ = {}; }
 

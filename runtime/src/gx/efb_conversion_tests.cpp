@@ -1596,8 +1596,8 @@ V main(uint id : SV_VertexID) {
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
         cache.backend().set_upload_list(list.Get());
-        // 1024x1024 CMPR: 512 KiB of guest bytes and 4 MiB decoded, so 18 of them exceed the 64 MiB budget while
-        // their guest bytes stay far below it.
+        // 1024x1024 CMPR: 512 KiB of source bytes and 4 MiB decoded, so 18 of them exceed the 64 MiB budget while
+        // their source bytes stay far below it.
         constexpr std::uint32_t address = 0x10000000u;
         constexpr std::uint32_t stride = 512u * 1024u;
         constexpr unsigned kTextures = 18u;
@@ -1613,9 +1613,9 @@ V main(uint id : SV_VertexID) {
         const auto first = cache.get(image, mode, 0u, TlutFormat{});
         const auto desc = first.resource->GetDesc();
         const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
-        bool passed = expect(allocation > first.guest_byte_size &&
+        bool passed = expect(allocation > first.source_bytes &&
             cache.decoded_map_stats().resident_bytes == allocation &&
-            cache.decoded_entry_guest_bytes() == stride,
+            cache.decoded_entry_source_bytes() == stride,
             "compressed texture charges device allocation, preserving guest-byte metric");
         const auto again = cache.get(image, mode, 0u, TlutFormat{});
         passed &= expect(again.resource == first.resource &&
@@ -1632,13 +1632,13 @@ V main(uint id : SV_VertexID) {
             stats.resident_bytes == stats.entries * allocation &&
             stats.evicted_bytes == stats.evicted_entries * allocation &&
             stats.entries == stats.lru_entries && cache.srv_index_retired(first.srv_index),
-            "allocation budget evicts compressed entries before guest bytes reach the bound");
+            "allocation budget evicts compressed entries before source bytes reach the bound");
         passed &= expect(first.resource->GetDesc().Width == 1024u &&
             first.srv_index != last.srv_index,
             "budget eviction keeps the old resource and descriptor alive for this frame");
         cache.invalidate_all();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
-            cache.decoded_entry_guest_bytes() == 0u && cache.decoded_map_stats().lru_entries == 0u,
+            cache.decoded_entry_source_bytes() == 0u && cache.decoded_map_stats().lru_entries == 0u,
             "invalidation clears allocation and guest-byte accounting together");
         cache.begin_frame(1u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
@@ -1662,7 +1662,7 @@ V main(uint id : SV_VertexID) {
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
-            cache.decoded_entry_guest_bytes() == 0u, "shutdown resets both accounting domains");
+            cache.decoded_entry_source_bytes() == 0u, "shutdown resets both accounting domains");
         return passed;
     }
 
@@ -1865,7 +1865,7 @@ V main(uint id : SV_VertexID) {
             !cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision,
             "texture hits do not invalidate cross-frame handles");
-        passed &= expect(cache.invalidate_guest_range(address, 128u) == 1u &&
+        passed &= expect(cache.invalidate_range(address, 128u) == 1u &&
             cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
@@ -1925,7 +1925,7 @@ V main(uint id : SV_VertexID) {
         mode.max_lod_x16 = 32u;
         const auto decoded = cache.get(image, mode, 0u, TlutFormat{});
         // Independent tiled footprint: 8x8=4*32, 4x4=32, 2x2=32.
-        passed &= expect(decoded.guest_byte_size == 192u && decoded.mip_levels == 3u,
+        passed &= expect(decoded.source_bytes == 192u && decoded.mip_levels == 3u,
             "authored mip handle retains all three block-rounded source levels");
 
         for (auto format : {TexFormat::I4, TexFormat::I8, TexFormat::IA4, TexFormat::IA8,
@@ -1937,7 +1937,7 @@ V main(uint id : SV_VertexID) {
                 for (std::uint32_t palette : {0u, address + 1536u, address + 0x8000u}) {
                 const auto reused = cache.get(direct_image, mode, palette, palette_format);
                 passed &= expect(reused.resource == original.resource && reused.srv_index == original.srv_index &&
-                    reused.guest_byte_size == original.guest_byte_size && reused.mip_levels == original.mip_levels,
+                    reused.source_bytes == original.source_bytes && reused.mip_levels == original.mip_levels,
                     "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
             }
         }
@@ -1989,7 +1989,7 @@ V main(uint id : SV_VertexID) {
         set_render_config(original_config);
         passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
             enhancement.mip_levels == 7u && enhancement.generated_mips &&
-            enhancement.resource != no_enhancement.resource && enhancement.guest_byte_size == 512u,
+            enhancement.resource != no_enhancement.resource && enhancement.source_bytes == 512u,
             "eligible native mip generation still reads live options and keeps its resource separate from the base texture");
         passed &= expect(decal.mip_levels == 1u && !decal.generated_mips,
             "a clamped texture keeps its single authored level");
@@ -2004,13 +2004,13 @@ V main(uint id : SV_VertexID) {
         if (WaitForSingleObject(fence_event_, 30000u) != WAIT_OBJECT_0) {
             throw std::runtime_error("texture cache upload fence timeout");
         }
-        passed &= expect(cache.invalidate_guest_range(address + 17u, 0u) == 0u,
+        passed &= expect(cache.invalidate_range(address + 17u, 0u) == 0u,
             "zero-byte write inside decoded texture does not evict it");
         // The zero range is inside the separate direct textures at +768;
         // only the real write in the base texture's lower mip may retire one.
-        const std::array<TextureCache::GuestRange, 2> mip_dirty{{
+        const std::array<TextureCache::MemoryRange, 2> mip_dirty{{
             {address + 160u, 1u}, {address + 785u, 0u}}};
-        passed &= expect(cache.invalidate_guest_ranges(mip_dirty) == 1u,
+        passed &= expect(cache.invalidate_ranges(mip_dirty) == 1u,
             "write confined to a lower mip retires the decoded resource");
 
         const auto make_alias = [&] {
@@ -2035,27 +2035,27 @@ V main(uint id : SV_VertexID) {
         copy.dest_stride = 512u;
         auto alias = make_alias();
         passed &= expect(cache.register_efb_copy(address, copy, alias), "register strided alias");
-        passed &= expect(cache.invalidate_guest_range(address + 17u, 0u) == 0u &&
+        passed &= expect(cache.invalidate_range(address + 17u, 0u) == 0u &&
             !cache.register_efb_copy(address, copy, alias),
             "zero-byte write preserves existing alias ownership");
-        passed &= expect(cache.invalidate_guest_range(address + 512u, 1u) == 1u,
+        passed &= expect(cache.invalidate_range(address + 512u, 1u) == 1u,
             "write to strided second block-row invalidates its alias");
         passed &= expect(cache.register_efb_copy(address, copy, alias), "register alias again");
         copy.dest_stride = 128u;
         passed &= expect(cache.register_efb_copy(address, copy, alias),
             "same GPU resource with changed guest footprint requests outer cache refresh");
-        passed &= expect(cache.invalidate_guest_range(address + 512u, 1u) == 0u,
+        passed &= expect(cache.invalidate_range(address + 512u, 1u) == 0u,
             "updated packed footprint excludes prior stride gap");
         copy.dest_stride = 512u;
         passed &= expect(cache.register_efb_copy(address, copy, alias) &&
-            cache.invalidate_guest_range(address + 512u, 1u) == 1u,
+            cache.invalidate_range(address + 512u, 1u) == 1u,
             "same-resource alias extension publishes its new guest footprint");
         copy.dest_stride = 128u;
         passed &= expect(cache.register_efb_copy(address, copy, alias),
             "restore packed alias after footprint-extension eviction");
         image.format = TexFormat::RGBA8;
         mode.min_filter = TexMinFilter::Near;
-        passed &= expect(cache.get(image, mode, 0u, TlutFormat{}).guest_byte_size == 256u,
+        passed &= expect(cache.get(image, mode, 0u, TlutFormat{}).source_bytes == 256u,
             "exact alias handle publishes current packed footprint");
         bool rejected = false;
         try { (void)cache.register_efb_copy(address, copy, {}); }

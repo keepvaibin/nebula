@@ -2,7 +2,7 @@
 
 // TextureDecodePool: a small fixed worker pool for first-use texture decodes.
 //
-// A job reads guest bytes that the frame's sealed memory snapshot keeps unchanged until the frame is submitted,
+// A job reads source bytes that the frame's sealed memory snapshot keeps unchanged until the frame is submitted,
 // and a palette copy it owns. The render thread records the staging-to-texture copy at first use (keeping upload
 // order on the command list); only the fill of the staging bytes runs here. wait_all() must return before the
 // command list that reads those bytes executes; the waiting thread runs queued jobs itself.

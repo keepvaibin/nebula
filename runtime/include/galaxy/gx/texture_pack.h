@@ -4,8 +4,8 @@
 // Texture packs: higher-resolution replacements for the game's textures, found by the community naming convention
 // (a data convention, implemented from its public description):
 //   <pack>/[<GameID or its 3-letter prefix>/]**/tex1_<w>x<h>[_m]_<hash>[_<tlut hash>|_$]_<fmt>[_mip<n>|_arb].png|.dds
-// <w>x<h> and <fmt> are the guest texture's size and GX format; <hash> the guest bytes of its base level, <tlut hash>
-// the palette entries a C4/C8/C14X2 texture uses ($: any palette). A replacement is sampled with the guest texture's
+// <w>x<h> and <fmt> are the game texture's size and GX format; <hash> the source bytes of its base level, <tlut hash>
+// the palette entries a C4/C8/C14X2 texture uses ($: any palette). A replacement is sampled with the game texture's
 // normalized coordinates at any size; its sampler LOD range shifts by log2 of the scale (TextureHandle::lod_shift_x16).
 //
 // TexturePacks owns the index of every pack folder (the player's pack and the mods' textures/ folders, a later folder
@@ -109,7 +109,7 @@ struct TexturePackSettings {
     bool operator==(const TexturePackSettings&) const = default;
 };
 
-// A GPU-resident replacement: the cache binds `texture` in place of the decoded guest texture.
+// A GPU-resident replacement: the cache binds `texture` in place of the decoded game texture.
 struct TextureReplacement {
     gpu::TextureRef texture;
     std::uint32_t width = 0;
@@ -140,7 +140,7 @@ public:
 
     [[nodiscard]] bool enabled() const noexcept { return settings_.enabled && index_ != nullptr; }
     [[nodiscard]] bool dumping() const noexcept { return settings_.dump && !settings_.dumps.empty(); }
-    // The index has names for this guest size and format (hashing is needed only then).
+    // The index has names for this source size and format (hashing is needed only then).
     [[nodiscard]] bool may_match(std::uint32_t width, std::uint32_t height, TexFormat format) const noexcept;
     // The replacement slot for a texture's names, or kNone.
     [[nodiscard]] std::uint32_t find(std::uint32_t width, std::uint32_t height, TexFormat format, std::uint64_t hash,

@@ -9214,7 +9214,7 @@ bool RendererD3D12::copy_efb_to_texture(
         static_cast<std::uint64_t>(params.dest_addr) |
         (static_cast<std::uint64_t>(params.target_format) << 48) |  // addresses stay below 2^48
         (is_depth_copy ? (1ull << 56) : 0ull) |
-        // One guest address alternates between early scaled masks and the
+        // One address alternates between early scaled masks and the
         // final native bloom composite. Cache both resources to avoid
         // reallocating on every pass/frame; the latest alias still wins.
         (native_bloom ? (1ull << 57) : 0ull) |

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 46u
+#define NEBULA_GAME_API_VERSION 47u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -827,8 +827,8 @@ typedef struct NebulaHostServices {
        (the frame within the movie, its frame rate and the physical addresses of its I8 Y, U and V planes, `width` x
        `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement
        video's frame of the same time in place of the planes. Called on the simulation thread. */
-    void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, uint32_t y, uint32_t u,
-                        uint32_t v, uint32_t width, uint32_t height);
+    void (*movie_frame)(void* user, const char* name, int32_t frame, float frame_rate, const void* y, const void* u,
+                        const void* v, uint32_t width, uint32_t height);
     /* A native equivalent of a mod's code patch (NEBULA_PATCH_*): 1 with `value` set when an enabled mod carries it,
        else 0. Fixed for the session. */
     int (*code_patch)(void* user, uint32_t id, uint32_t* value);

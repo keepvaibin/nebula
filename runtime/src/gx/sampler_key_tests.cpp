@@ -1,4 +1,4 @@
-// Sampler key packing, sampler descriptors, sampler table caches, and guest texture and copy footprints.
+// Sampler key packing, sampler descriptors, sampler table caches, and game texture and copy footprints.
 
 #include "galaxy/gx/gx_backend.h"
 
@@ -284,24 +284,24 @@ int main() {
         passed &= expect(rejected, "256th distinct table in one frame is explicit exhaustion");
     }
 
-    passed &= expect(galaxy::gx::texture_guest_byte_size(
+    passed &= expect(galaxy::gx::texture_source_bytes(
         galaxy::gx::TexFormat::RGB565, 8u, 8u, 3u) == 192u,
         "full authored mip footprint includes the two minimum blocks");
-    passed &= expect(galaxy::gx::texture_guest_byte_size(
+    passed &= expect(galaxy::gx::texture_source_bytes(
         galaxy::gx::TexFormat::I4, 9u, 9u) == 128u,
         "odd I4 extent rounds both dimensions to complete 8x8 blocks");
-    passed &= expect(galaxy::gx::texture_guest_byte_size(
+    passed &= expect(galaxy::gx::texture_source_bytes(
         galaxy::gx::TexFormat::RGBA8, 8u, 8u) == 256u,
         "generated mip guest source remains base-only");
     for (const auto extent : {0u, 1025u, UINT32_MAX}) {
         bool rejected = false;
-        try { (void)galaxy::gx::texture_guest_byte_size(
+        try { (void)galaxy::gx::texture_source_bytes(
             galaxy::gx::TexFormat::RGBA8, extent, 8u); }
         catch (const std::runtime_error&) { rejected = true; }
         passed &= expect(rejected, "invalid public dimensions rejected before size arithmetic");
     }
     bool bad_levels = false;
-    try { (void)galaxy::gx::texture_guest_byte_size(
+    try { (void)galaxy::gx::texture_source_bytes(
         galaxy::gx::TexFormat::RGBA8, 8u, 8u, 33u); }
     catch (const std::runtime_error&) { bad_levels = true; }
     passed &= expect(bad_levels, "invalid mip count rejected before shifts");
@@ -309,14 +309,14 @@ int main() {
     copy.src_width = copy.src_height = 8u;
     copy.target_format = 6u; // Two 64-byte RGBA blocks per block row.
     copy.dest_stride = 512u;
-    passed &= expect(galaxy::gx::efb_copy_guest_byte_size(copy) == 640u,
+    passed &= expect(galaxy::gx::efb_copy_source_bytes(copy) == 640u,
         "strided copy span reaches last block row without trailing padding");
     copy.dest_stride = 0u;
-    passed &= expect(galaxy::gx::efb_copy_guest_byte_size(copy) == 128u,
+    passed &= expect(galaxy::gx::efb_copy_source_bytes(copy) == 128u,
         "zero stride overlapping rows have one-row bounding footprint");
     copy.dest_stride = UINT32_MAX;
     bool overflow = false;
-    try { (void)galaxy::gx::efb_copy_guest_byte_size(copy); }
+    try { (void)galaxy::gx::efb_copy_source_bytes(copy); }
     catch (const std::runtime_error&) { overflow = true; }
     passed &= expect(overflow, "public copy stride overflow is explicit");
 

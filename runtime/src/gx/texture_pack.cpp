@@ -30,7 +30,7 @@ std::uint64_t texture_pack_tlut_hash(TexFormat format, const std::uint8_t* base_
     if (!texture_format_palettized(format) || base_level == nullptr || palette == nullptr) {
         return 0u;
     }
-    const std::size_t bytes = texture_guest_byte_size(format, width, height, 1u);
+    const std::size_t bytes = texture_source_bytes(format, width, height, 1u);
     std::uint32_t lo = 0xFFFFu;
     std::uint32_t hi = 0u;
     if (format == TexFormat::C4) {
@@ -839,12 +839,12 @@ void TexturePacks::make_resident(std::uint32_t slot, TextureReplacement&& replac
         return;
     }
     s.replacement = std::move(replacement);
-    // The scale over the guest size the name gives: the samplers' LOD shift (pack_sampler_key).
-    const std::uint32_t guest_width = index_ && slot < index_->records.size() ? index_->records[slot].name.width : 0u;
+    // The scale over the source size the name gives: the samplers' LOD shift (pack_sampler_key).
+    const std::uint32_t source_width = index_ && slot < index_->records.size() ? index_->records[slot].name.width : 0u;
     s.replacement.lod_shift_x16 = 0u;
     s.replacement.arbitrary = index_ && slot < index_->records.size() && index_->records[slot].name.arbitrary;
-    if (guest_width != 0u && s.replacement.width > guest_width) {
-        const double scale = static_cast<double>(s.replacement.width) / static_cast<double>(guest_width);
+    if (source_width != 0u && s.replacement.width > source_width) {
+        const double scale = static_cast<double>(s.replacement.width) / static_cast<double>(source_width);
         s.replacement.lod_shift_x16 = static_cast<std::uint8_t>(std::clamp(std::lround(16.0 * std::log2(scale)), 0l, 128l));
     }
     s.state = SlotState::Resident;

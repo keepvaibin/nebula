@@ -82,12 +82,12 @@ struct GuestMemoryRange {
     std::uint32_t size = 0;
 };
 
-// lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the guest size. The guest's LOD
+// lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the source size. The game's LOD
 // range moves by the shift (its base level is the replacement's level `shift`), except that a guest
 // range starting at its base level starts at the replacement's (close up, the guest magnifies its
 // base level: the replacement shows its own); a guest sampler without mips uses the replacement's
-// levels down to the guest size. An arbitrary replacement (_arb) pairs its levels with the guest's
-// by index, as Dolphin does: the bias moves its LOD back to the guest's at the console's resolution
+// levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
+// by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
 // (efb_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
@@ -198,8 +198,8 @@ public:
         producer_shape_records_.push_back(std::move(record));
     }
     // Simulation thread: the movie frame later submissions carry (movie_replacement.h).
-    void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint32_t y, std::uint32_t u,
-                            std::uint32_t v, std::uint32_t width, std::uint32_t height) noexcept {
+    void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, std::uint64_t y, std::uint64_t u,
+                            std::uint64_t v, std::uint32_t width, std::uint32_t height) noexcept {
         MovieFrameMark& mark = producer_movie_frame_;
         if (frame == MovieFrameMark::kNone) {
             mark = {};
@@ -597,7 +597,7 @@ private:
     void note_rt_mist(const DrawCall& call);
     // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
     [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
-    // The current object's name (NameObj::mName) into `out`; its guest address, 0 for none.
+    // The current object's name (NameObj::mName) into `out`; its address, 0 for none.
     std::uint32_t rt_object_name(char* out, std::size_t size);
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
                                                       const std::array<TextureHandle, kMaxTextureMaps>& handles,
@@ -686,7 +686,7 @@ private:
     // vertices (bits 0-1: channel 0, 1), and lit (bits 2-3: their light at full, their vertex colour's shading).
     // GALAXY_RT_DEBAKE=0: none.
     [[nodiscard]] std::uint32_t debake_channels() const;
-    // Per object name (its guest address) the class its name gives (rt_named_class), + 1.
+    // Per object name (its address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
@@ -1462,7 +1462,7 @@ private:
         std::uint16_t height = 0;
         std::uint8_t format = 0;
         // Exact decoded mip-chain or strided EFB alias footprint.
-        std::uint32_t guest_byte_size = 0;
+        std::uint32_t source_bytes = 0;
 
         [[nodiscard]] bool operator==(
             const TextureBindingDependency&) const = default;

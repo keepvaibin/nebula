@@ -2,7 +2,7 @@
 #pragma once
 
 // Per-scene transform history: one record per transform state uploaded
-// inside the guest's 3D scene (GameScene::draw3D), matched to the previous
+// inside the game's 3D scene (GameScene::draw3D), matched to the previous
 // scene's records so every draw knows its previous-frame transform. Motion
 // vectors and the interpolated redraw read the matches.
 //

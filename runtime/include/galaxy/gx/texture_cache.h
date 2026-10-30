@@ -1,13 +1,13 @@
 #pragma once
 
-// TextureCache: decodes GX textures from guest memory into GPU textures and serves their descriptors to the
+// TextureCache: decodes GX textures from game memory into GPU textures and serves their descriptors to the
 // per-draw texture table.
 //
 // Entries are dropped only explicitly: on GXInvalidateTexAll() (FifoSink::on_invalidate_textures ->
-// invalidate_all()), on an EFB copy over an overlapping guest range (register_efb_copy), and on a guest write
-// overlapping a cached range (invalidate_guest_range), which drops decoded entries and EFB-copy aliases alike
+// invalidate_all()), on an EFB copy over an overlapping range (register_efb_copy), and on a guest write
+// overlapping a cached range (invalidate_range), which drops decoded entries and EFB-copy aliases alike
 // because later CPU-written buffers can reuse those addresses. For a texture matching an EFB-copy alias's
-// address, size and format, get() returns the GPU-side copy; its guest bytes are never decoded.
+// address, size and format, get() returns the GPU-side copy; its source bytes are never decoded.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -17,7 +17,7 @@
 #endif
 
 #include "galaxy/gx/gx_bitfields.h"
-#include "galaxy/gx/guest_range_envelope.h"
+#include "galaxy/gx/range_envelope.h"
 #include "galaxy/gx/texture_backend.h"
 #include "galaxy/gx/shader_keys.h"  // fnv1a64
 #include "galaxy/gx/texture_decode_pool.h"
@@ -97,15 +97,15 @@ void decode_c14x2_tiles(const std::uint8_t* src,
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
     std::uint8_t copy_format);
 
-// GX block-rounded guest footprint of `guest_levels` contiguous authored levels (1 for a generated chain).
+// GX block-rounded guest footprint of `source_levels` contiguous authored levels (1 for a generated chain).
 // Throws on invalid dimensions, formats or level counts.
-[[nodiscard]] std::uint32_t texture_guest_byte_size(
+[[nodiscard]] std::uint32_t texture_source_bytes(
     TexFormat format, std::uint32_t width, std::uint32_t height,
-    unsigned guest_levels = 1u);
+    unsigned source_levels = 1u);
 // Bounding span of the actual tiled block rows written by a texture copy.
 // Includes stride gaps for conservative invalidation, but does not imply that
 // a strided/subregion copy can be sampled as a packed GPU texture alias.
-[[nodiscard]] std::uint32_t efb_copy_guest_byte_size(const EfbCopyParams& params);
+[[nodiscard]] std::uint32_t efb_copy_source_bytes(const EfbCopyParams& params);
 
 // What a draw needs to bind one texture map.
 struct TextureHandle {
@@ -118,11 +118,11 @@ struct TextureHandle {
     std::uint8_t mip_levels = 1;
     bool from_efb_copy = false;
     bool generated_mips = false;
-    // A texture-pack replacement: width/height stay the guest texture's, the resource is larger by
+    // A texture-pack replacement: width/height stay the game texture's, the resource is larger by
     // 2^(lod_shift_x16 / 16) and samplers shift their LOD range by that much.
     std::uint8_t lod_shift_x16 = 0;
-    bool lod_arbitrary = false;  // its levels pair with the guest's by index (pack_sampler_key)
-    std::uint32_t guest_byte_size = 0;
+    bool lod_arbitrary = false;  // its levels pair with the game's by index (pack_sampler_key)
+    std::uint32_t source_bytes = 0;
     // The ray tracer's material table entry of its base level (rt_materials.h; 0: none), and that level's
     // texture-pack key (0: not computed, an EFB copy).
     std::uint16_t rt_material = 0;
@@ -131,7 +131,7 @@ struct TextureHandle {
 
 class TextureCache {
 public:
-    struct GuestRange {
+    struct MemoryRange {
         std::uint64_t address = 0;
         std::uint32_t size = 0;
     };
@@ -148,7 +148,7 @@ public:
         const TexMode& mode,
         std::uint64_t palette_address,
         TlutFormat palette_format);
-    // Render thread only: marks a cached handle used (LRU) without reading guest memory. Retired and EFB-alias
+    // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
@@ -159,22 +159,22 @@ public:
         gpu::TextureRef texture);
 
     // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
-    // content lives on the GPU, not in guest memory.
+    // content lives on the GPU, not in game memory.
     void invalidate_all();
 
     // An image's bytes the game handed over (texture_image): textures at `address` decode from this copy from now
     // on; entries decoded from earlier bytes there are retired.
     void register_image(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> bytes);
     // Forgets the handed-over images overlapping the ranges (memory the game rewrote without handing it over).
-    void drop_registered_images(std::span<const GuestRange> ranges);
+    void drop_registered_images(std::span<const MemoryRange> ranges);
     // Images and palettes sampled without having been handed over (each logged).
     [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
 
-    std::size_t invalidate_guest_range(
+    std::size_t invalidate_range(
         std::uint64_t address,
         std::uint32_t size);
-    std::size_t invalidate_guest_ranges(
-        std::span<const GuestRange> sorted_coalesced_ranges);
+    std::size_t invalidate_ranges(
+        std::span<const MemoryRange> sorted_coalesced_ranges);
 
     // The GPU side: views by srv_index, upload staging, textures (texture_backend.h).
     [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
@@ -191,8 +191,8 @@ public:
     }
 
     // Guest source bytes of the decoded entries (a diagnostic; the budget counts allocations).
-    [[nodiscard]] std::uint64_t decoded_entry_guest_bytes() const noexcept {
-        return decoded_guest_bytes_;
+    [[nodiscard]] std::uint64_t decoded_entry_source_bytes() const noexcept {
+        return decoded_source_bytes_;
     }
 
     // Each live decoded entry is charged its committed allocation. Retired resources awaiting their fence are not
@@ -315,7 +315,7 @@ private:
     // An entry that binds a resident replacement (no decode; charges no decoded budget and is never pooled).
     [[nodiscard]] Entry make_replacement_entry(const TextureReplacement& replacement, std::uint32_t slot,
                                                std::uint16_t width, std::uint16_t height, bool generated_mips,
-                                               std::uint32_t guest_byte_size);
+                                               std::uint32_t source_bytes);
     void wait_for_replacement(const Key& key, Entry& entry, std::uint32_t slot);
     // Decoded-map LRU: touch moves a key to the most recently used end, forget removes it; both ignore an absent key.
     void decoded_lru_touch(const Key& key);
@@ -345,18 +345,18 @@ private:
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
-    detail::ConservativeGuestRangeEnvelope decoded_guest_envelope_;
+    detail::ConservativeRangeEnvelope decoded_envelope_;
     // LRU order of entries_ for the decoded budget (front: most recently used).
     std::list<Key> decoded_lru_;
     std::unordered_map<Key, std::list<Key>::iterator, KeyHasher>
         decoded_lru_pos_;
     std::uint64_t decoded_resident_bytes_ = 0;
-    std::uint64_t decoded_guest_bytes_ = 0;
+    std::uint64_t decoded_source_bytes_ = 0;
     std::uint64_t decoded_evicted_bytes_ = 0;
     std::uint64_t decoded_evicted_entries_ = 0;
     // Full GX texture descriptor -> EFB-copy alias (checked before decode).
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
-    detail::ConservativeGuestRangeEnvelope alias_guest_envelope_;
+    detail::ConservativeRangeEnvelope alias_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
     // Interpolation: reclaimed textures held per game-frame segment.
     std::array<std::vector<Entry>, kMaxHoldSegments> held_entries_;
@@ -403,9 +403,9 @@ private:
     bool movie_active_ = false;
     std::int32_t movie_frame_ = -1;
     const void* movie_staging_seen_ = nullptr;
-    std::array<std::uint32_t, 3> movie_addr_{};
-    std::array<std::uint16_t, 3> movie_guest_width_{};
-    std::array<std::uint16_t, 3> movie_guest_height_{};
+    std::array<std::uint64_t, 3> movie_addr_{};
+    std::array<std::uint16_t, 3> movie_source_width_{};
+    std::array<std::uint16_t, 3> movie_source_height_{};
     std::array<TextureHandle, 3> movie_handles_{};
     // Upload buffers of the planes by frame slot, held until the slot comes round (the decoder then reuses them).
     std::vector<std::vector<std::shared_ptr<TextureBackend::UploadChunk>>> movie_staging_;

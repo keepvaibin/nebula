@@ -593,7 +593,7 @@ bool rt_log_glows() noexcept {
 
 namespace {
 
-// Once per texture and kind (the key: its 32-byte-aligned guest address, bit 0 the kind).
+// Once per texture and kind (the key: its 32-byte-aligned address, bit 0 the kind).
 void note_unnamed(const char* kind, std::uint64_t address, std::uint64_t key) {
     if (!log_glows() || !g_glows_logged.emplace(key, true).second) {
         return;

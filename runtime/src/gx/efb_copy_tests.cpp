@@ -199,7 +199,7 @@ int main() {
             "depth source at the same rectangle must remain scaled");
         bloom.src_x = 0u;
         passed &= expect(!galaxy::gx::is_galaxy_bloom_workspace_copy(bloom, false),
-            "early mask at reused guest address must remain scaled");
+            "early mask at reused address must remain scaled");
         bloom.src_x = 480u;
         bloom.half_scale = true;
         bloom.dest_stride = 640u;

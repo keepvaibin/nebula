@@ -249,12 +249,12 @@ void test_sampler_shift() {
     mode.min_filter = TexMinFilter::Linear;
     mode.min_lod_x16 = 0;
     mode.max_lod_x16 = 0;
-    // A 4x replacement of a mip-less texture: levels 0..2 of the replacement (the guest's base size).
+    // A 4x replacement of a mip-less texture: levels 0..2 of the replacement (the game's base size).
     const std::uint32_t key = pack_sampler_key(mode, false, 9u, 32u);
     expect(((key >> 5u) & 0x7u) == static_cast<std::uint32_t>(TexMinFilter::LinearMipLinear),
            "mip-less guest sampler gains a mip filter for a replacement");
     expect(((key >> 16u) & 0xFFu) == 0u && ((key >> 24u) & 0xFFu) == 32u, "LOD range 0..2 for a 4x replacement");
-    // Authored mips: the guest range moves by the shift.
+    // Authored mips: the range moves by the shift.
     mode.min_filter = TexMinFilter::LinearMipLinear;
     mode.min_lod_x16 = 8;
     mode.max_lod_x16 = 48;
@@ -263,17 +263,17 @@ void test_sampler_shift() {
            "authored LOD range shifts by log2(scale)");
     expect(pack_sampler_key(mode, false, 4u, 0u) == pack_sampler_key(mode, false, 4u),
            "no shift leaves the key unchanged");
-    // A guest range from its base level: close up the replacement's own base level shows.
+    // A range from its base level: close up the replacement's own base level shows.
     mode.min_lod_x16 = 0;
     const std::uint32_t from_base = pack_sampler_key(mode, false, 9u, 32u);
     expect(((from_base >> 16u) & 0xFFu) == 0u && ((from_base >> 24u) & 0xFFu) == 80u,
-           "a guest range from level 0 keeps the replacement's level 0");
+           "a range from level 0 keeps the replacement's level 0");
     // Arbitrary levels at 4x internal resolution with an 8x replacement: bias +2 - 3 = -1 LOD, whole chain, mip mode 3.
     mode.lod_bias_x32 = 0;
     const std::uint32_t arbitrary = pack_sampler_key(mode, false, 11u, 48u, true, 64u);
     expect(static_cast<std::int8_t>((arbitrary >> 8u) & 0xFFu) == -32 && ((arbitrary >> 16u) & 0xFFu) == 0u &&
                ((arbitrary >> 24u) & 0xFFu) == 0xFFu && ((arbitrary >> 5u) & 0x7u) == 7u,
-           "arbitrary levels pair with the guest's by index");
+           "arbitrary levels pair with the game's by index");
     // Near filtering stays near.
     mode.min_filter = TexMinFilter::Near;
     mode.mag_filter = TexMagFilter::Near;
@@ -349,7 +349,7 @@ bool pump_until(TexturePacks& packs, std::vector<std::pair<std::uint32_t, Textur
 void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     const std::filesystem::path game = root / "My Pack" / TexturePacks::kGameId / "sub";
     std::filesystem::create_directories(game);
-    // A 32x32 RGBA8 guest texture replaced by a 128x128 PNG.
+    // A 32x32 RGBA8 game texture replaced by a 128x128 PNG.
     std::vector<std::uint8_t> guest(32u * 32u * 4u, 0x5Au);
     TexturePackName png{};
     png.width = 32u;
@@ -368,7 +368,7 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     TexturePackName png_m = png;
     png_m.mipmapped = true;
     expect(write_png(game / (texture_pack_name(png_m) + ".png"), 64u, 64u, sevens.data()), "_m variant written");
-    // A 16x16 CMPR guest texture replaced by a 64x64 BC1 DDS with its 7 levels.
+    // A 16x16 CMPR game texture replaced by a 64x64 BC1 DDS with its 7 levels.
     TexturePackName dds{};
     dds.width = 16u;
     dds.height = 16u;
@@ -541,7 +541,7 @@ void test_priority(const std::filesystem::path& root) {
 // the name the pack uses.
 void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     std::filesystem::create_directories(root / "cache" / TexturePacks::kGameId);
-    // A 32x32 RGBA8 guest texture: 16 tiles of 64 bytes.
+    // A 32x32 RGBA8 game texture: 16 tiles of 64 bytes.
     constexpr std::uint32_t kAddress = 0x80100000u;
     std::vector<std::byte> guest(4096u);
     for (std::size_t i = 0; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
@@ -600,7 +600,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     }
     expect(replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u && replaced.width == 32u &&
                replaced.height == 32u && replaced.mip_levels == 7u && replaced.lod_shift_x16 == 25u,
-           "the replacement takes the original's place (guest size kept, 3x shift)");
+           "the replacement takes the original's place (source size kept, 3x shift)");
     cache.invalidate_all();
     next_frame();
     const TextureHandle bound = cache.get(image, mode, 0u, TlutFormat{});

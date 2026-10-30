@@ -33,9 +33,9 @@ struct MovieFrameMark {
     std::array<char, 64> name{};  // the disc path, e.g. /MovieData/PrologueA.thp
     std::int32_t frame = kNone;
     float frame_rate = 0.0f;
-    std::uint32_t y = 0;  // guest physical addresses of the I8 planes
-    std::uint32_t u = 0;
-    std::uint32_t v = 0;
+    std::uint64_t y = 0;  // the I8 planes' addresses (their images' names)
+    std::uint64_t u = 0;
+    std::uint64_t v = 0;
     std::uint16_t width = 0;  // the Y plane; U and V are half each way
     std::uint16_t height = 0;
 };
