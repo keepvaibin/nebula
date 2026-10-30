@@ -466,7 +466,6 @@ list(APPEND galaxy_rt_headers "${galaxy_rt_manifest}")
 
 add_library(galaxy_gx STATIC
     runtime/src/gx/gx_shim.cpp
-    runtime/src/gx/gx_headers_compile.cpp
     runtime/src/gx/render_config.cpp
     runtime/src/gx/host_window_win32.cpp
     runtime/src/gx/vblank_clock_win32.cpp
