@@ -16,6 +16,7 @@
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/discord_presence.h"
 #include "galaxy/mii_formats.h"
@@ -300,7 +301,6 @@ struct Module {
     decltype(&nebula_game_run) run;
     decltype(&nebula_game_disc_complete) disc_complete;
     decltype(&nebula_game_vi_retrace) vi_retrace;
-    decltype(&nebula_game_fs_complete) fs_complete;
     decltype(&nebula_game_ai_interrupt) ai_interrupt;
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_mii_valid) mii_valid;
@@ -431,7 +431,6 @@ void load_module(const fs::path& path) {
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
     gModule.disc_complete = reinterpret_cast<decltype(gModule.disc_complete)>(find_symbol(module, "nebula_game_disc_complete"));
     gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
-    gModule.fs_complete = reinterpret_cast<decltype(gModule.fs_complete)>(find_symbol(module, "nebula_game_fs_complete"));
     gModule.ai_interrupt = reinterpret_cast<decltype(gModule.ai_interrupt)>(find_symbol(module, "nebula_game_ai_interrupt"));
     gModule.audio_channel_owner = reinterpret_cast<decltype(gModule.audio_channel_owner)>(
         find_symbol(module, "nebula_game_audio_channel_owner"));
@@ -614,25 +613,10 @@ private:
 };
 
 Worker gDisc(L"Nebula Host Disc");
-Worker gFs(L"Nebula Host NAND");
+Worker gFs(L"Nebula Host Saves");
 
 // NAND: the console's absolute paths under the host's NAND root, in the Wii's layout.
 fs::path gNandRoot;
-
-struct OpenFile {
-    std::FILE* file = nullptr;
-    fs::path path;
-    fs::path temp;  // a safe open's copy, moved over `path` at the safe close
-};
-std::vector<OpenFile> gFiles(16);
-
-constexpr int32_t kNandOk = 0;
-constexpr int32_t kNandAccess = -1;
-constexpr int32_t kNandExists = -6;
-constexpr int32_t kNandInvalid = -8;
-constexpr int32_t kNandMaxFd = -10;
-constexpr int32_t kNandNoExists = -12;
-constexpr int32_t kNandNotEmpty = -13;
 
 // The game's save folder on the NAND (title/00010000/<the game's four-character code in hex>/data).
 std::string gSaveDataPath;
@@ -688,144 +672,6 @@ std::FILE* open_file(const fs::path& path, uint32_t mode) {
 #else
     return std::fopen(path.c_str(), mode == 1 ? "rb" : "r+b");
 #endif
-}
-
-int32_t fs_run(const NebulaFsRequest& r) {
-    std::error_code error;
-    fs::path path;
-    auto file_at = [](int32_t fd) -> OpenFile* {
-        return fd >= 0 && fd < (int32_t)gFiles.size() && gFiles[fd].file != nullptr ? &gFiles[fd] : nullptr;
-    };
-    switch (r.op) {
-    case NEBULA_FS_OPEN:
-    case NEBULA_FS_SAFE_OPEN: {
-        if (!nand_path(r.path, &path)) {
-            return kNandInvalid;
-        }
-        if (!fs::is_regular_file(path, error)) {
-            return kNandNoExists;
-        }
-        int32_t fd = 0;
-        while (fd < (int32_t)gFiles.size() && gFiles[fd].file != nullptr) {
-            fd++;
-        }
-        if (fd == (int32_t)gFiles.size()) {
-            return kNandMaxFd;
-        }
-        OpenFile entry;
-        entry.path = path;
-        if (r.op == NEBULA_FS_SAFE_OPEN && r.mode != 1) {
-            entry.temp = path;
-            entry.temp += L".nebula-safe";
-            fs::copy_file(path, entry.temp, fs::copy_options::overwrite_existing, error);
-            if (error) {
-                return kNandAccess;
-            }
-            entry.file = open_file(entry.temp, r.mode);
-        } else {
-            entry.file = open_file(path, r.mode);
-        }
-        if (entry.file == nullptr) {
-            return kNandAccess;
-        }
-        gFiles[fd] = std::move(entry);
-        return fd;
-    }
-    case NEBULA_FS_CLOSE:
-    case NEBULA_FS_SAFE_CLOSE: {
-        OpenFile* f = file_at(r.fd);
-        if (f == nullptr) {
-            return kNandInvalid;
-        }
-        std::fflush(f->file);
-        std::fclose(f->file);
-        f->file = nullptr;
-        if (!f->temp.empty()) {
-            move_path(f->temp, f->path, error);
-            f->temp.clear();
-            if (error) {
-                return kNandAccess;
-            }
-        }
-        return kNandOk;
-    }
-    case NEBULA_FS_READ: {
-        OpenFile* f = file_at(r.fd);
-        return f == nullptr ? kNandInvalid : (int32_t)std::fread(r.buffer, 1, r.size, f->file);
-    }
-    case NEBULA_FS_WRITE: {
-        OpenFile* f = file_at(r.fd);
-        return f == nullptr ? kNandInvalid : (int32_t)std::fwrite(r.buffer, 1, r.size, f->file);
-    }
-    case NEBULA_FS_SEEK: {
-        OpenFile* f = file_at(r.fd);
-        if (f == nullptr || std::fseek(f->file, r.offset, r.whence == 0 ? SEEK_SET : r.whence == 1 ? SEEK_CUR : SEEK_END) != 0) {
-            return kNandInvalid;
-        }
-        return (int32_t)std::ftell(f->file);
-    }
-    case NEBULA_FS_LENGTH: {
-        OpenFile* f = file_at(r.fd);
-        if (f == nullptr) {
-            return kNandInvalid;
-        }
-        const long at = std::ftell(f->file);
-        std::fseek(f->file, 0, SEEK_END);
-        const long length = std::ftell(f->file);
-        std::fseek(f->file, at, SEEK_SET);
-        return (int32_t)length;
-    }
-    case NEBULA_FS_CREATE:
-    case NEBULA_FS_CREATE_DIR: {
-        if (!nand_path(r.path, &path)) {
-            return kNandInvalid;
-        }
-        if (fs::exists(path, error)) {
-            return kNandExists;
-        }
-        if (!fs::is_directory(path.parent_path(), error)) {
-            return kNandNoExists;
-        }
-        if (r.op == NEBULA_FS_CREATE_DIR) {
-            return fs::create_directory(path, error) ? kNandOk : kNandAccess;
-        }
-#if defined(_WIN32)
-        std::FILE* f = _wfopen(path.wstring().c_str(), L"wb");
-#else
-        std::FILE* f = std::fopen(path.c_str(), "wb");
-#endif
-        if (f == nullptr) {
-            return kNandAccess;
-        }
-        std::fclose(f);
-        return kNandOk;
-    }
-    case NEBULA_FS_DELETE: {
-        if (!nand_path(r.path, &path)) {
-            return kNandInvalid;
-        }
-        if (!fs::exists(path, error)) {
-            return kNandNoExists;
-        }
-        fs::remove_all(path, error);
-        return error ? kNandAccess : kNandOk;
-    }
-    case NEBULA_FS_RENAME: {
-        fs::path to;
-        if (!nand_path(r.path, &path) || !nand_path(r.path2, &to)) {
-            return kNandInvalid;
-        }
-        if (!fs::exists(path, error)) {
-            return kNandNoExists;
-        }
-        if (fs::is_directory(to, error) && !fs::is_empty(to, error)) {
-            return kNandNotEmpty;
-        }
-        move_path(path, to, error);
-        return error ? kNandAccess : kNandOk;
-    }
-    }
-    return kNandInvalid;
 }
 
 // Audio interface pacing: the AI takes a latched block at each block's end, as the console's DMA engine does when
@@ -2732,20 +2578,43 @@ uint32_t svc_option(void*, uint32_t what) {
     }
 }
 
-void svc_fs_request(void*, const NebulaFsRequest* request, uint32_t slot) {
+static_assert(galaxy::saves::kDone == NEBULA_SAVE_DONE && galaxy::saves::kNoFile == NEBULA_SAVE_NO_FILE &&
+                  galaxy::saves::kTooLarge == NEBULA_SAVE_TOO_LARGE && galaxy::saves::kFailed == NEBULA_SAVE_FAILED,
+              "save results are the game's");
+
+// A save file operation on the save worker (the game polls the status): galaxy/save_files.h in the game's save folder
+// (gSaveDataPath under the NAND root, or a mod's save folder).
+void svc_save_request(void*, const NebulaSaveRequest* request) {
     gFsOps.fetch_add(1, std::memory_order_relaxed);
-    // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each NAND operation takes this long), so the windows that
-    // open and close around a save are exercised as on a busy disk.
+    // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each operation takes this long), so the windows that open
+    // and close around a save are exercised as on a busy disk.
     static const uint32_t test_delay_us = [] {
         const char* value = std::getenv("GALAXY_TEST_NAND_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
-    const NebulaFsRequest r = *request;
-    gFs.post([r, slot] {
+    *request->status = NEBULA_SAVE_PENDING;
+    const NebulaSaveRequest r = *request;
+    const std::string name = r.name != nullptr ? r.name : "";
+    gFs.post([r, name] {
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
-        gModule.fs_complete(slot, fs_run(r));
+        fs::path folder;
+        galaxy::saves::Result result = galaxy::saves::kFailed;
+        if (nand_path(gSaveDataPath.c_str(), &folder)) {
+            switch (r.op) {
+            case NEBULA_SAVE_READ:
+                result = galaxy::saves::read(folder, name, r.buffer, r.size, r.length);
+                break;
+            case NEBULA_SAVE_WRITE:
+                result = galaxy::saves::write(folder, name, r.buffer, r.size);
+                break;
+            case NEBULA_SAVE_DELETE:
+                result = galaxy::saves::remove(folder, name);
+                break;
+            }
+        }
+        std::atomic_ref<int32_t>(*const_cast<int32_t*>(r.status)).store(result, std::memory_order_release);
     });
 }
 
@@ -3915,7 +3784,7 @@ int main(int argc, char** argv) {
     services.disc_dol = svc_disc_dol;
     services.disc_id = svc_disc_id;
     services.vi_frame = svc_vi_frame;
-    services.fs_request = svc_fs_request;
+    services.save_request = svc_save_request;
     services.sc_get = svc_sc_get;
     services.wpad_control = svc_wpad_control;
     services.wpad_speaker_data = svc_wpad_speaker_data;

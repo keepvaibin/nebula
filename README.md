@@ -125,8 +125,8 @@ see whether it holds one.
 ## Saves
 
 Saves are kept in `%LOCALAPPDATA%\Nebula\saves`, laid out like the Wii's internal memory: each release keeps its own
-save, as on the Wii, in `title\00010000\<title>\data\GameData.bin` next to its `banner.bin` (`524d4745` North
-America; in 2.0 also `524d4750` Europe and `524d474a` Japan). Move saves with the launcher's **Advanced**
+save, as on the Wii, in `title\00010000\<title>\data\GameData.bin` (1.0.2 also writes the Wii Menu's `banner.bin` beside it;
+`524d4745` North America; in 2.0 also `524d4750` Europe and `524d474a` Japan). Move saves with the launcher's **Advanced**
 tab:
 
 - **Export saves…** writes `Nebula-Saves-<date>.zip` with everything the game reads.

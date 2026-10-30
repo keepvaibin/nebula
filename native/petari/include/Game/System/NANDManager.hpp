@@ -13,7 +13,6 @@ public:
 
     void init();
     bool isDone() const;
-    const char* setMove(const char*, const char*);
     const char* setWriteSeq(const char*, const void*, u32, u8, u8);
     const char* setReadSeq(const char*, void*, u32, u32*);
     NANDRequestInfo* setCheck(u32, u32, u32*);
@@ -28,7 +27,6 @@ public:
         const void* mWriteBuf;
     };
     /* 0x50 */ union {
-        const char* mMoveDestDir;
         u32* mReadLength;
         u32* mCheckAnswer;
     };

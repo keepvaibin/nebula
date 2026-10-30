@@ -88,6 +88,9 @@ target_include_directories(galaxy_runtime_abi INTERFACE "${CMAKE_CURRENT_SOURCE_
 add_library(galaxy_atomic_file STATIC runtime/src/atomic_file.cpp)
 target_link_libraries(galaxy_atomic_file PUBLIC galaxy_runtime_abi)
 
+add_library(galaxy_save_files STATIC runtime/src/save_files.cpp)
+target_link_libraries(galaxy_save_files PUBLIC galaxy_runtime_abi galaxy_atomic_file)
+
 add_library(galaxy_runtime_settings STATIC
     runtime/src/runtime_settings.cpp
     runtime/src/input_bindings.cpp
@@ -568,7 +571,7 @@ add_executable(NebulaNative native/host/host_main.cpp runtime/src/native_thp_vid
 target_include_directories(NebulaNative PRIVATE native/include runtime/include)
 target_compile_definitions(NebulaNative PRIVATE NEBULA_HOST_RENDERER=1 NEBULA_HOST_D3D12=1 _CRT_SECURE_NO_WARNINGS)
 target_compile_features(NebulaNative PRIVATE cxx_std_20)
-target_link_libraries(NebulaNative PRIVATE galaxy_gx)
+target_link_libraries(NebulaNative PRIVATE galaxy_gx galaxy_save_files)
 if(MSVC)
     # Symbols for crash dumps and the thread profiler; code generation is unchanged.
     target_compile_options(NebulaNative PRIVATE /Zi)
@@ -612,6 +615,7 @@ endfunction()
 
 set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
+galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
 galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
@@ -773,7 +777,7 @@ if(NEBULA_VULKAN)
     add_executable(NebulaNativeVk native/host/host_main.cpp runtime/src/native_thp_video.cpp)
     target_include_directories(NebulaNativeVk PRIVATE native/include runtime/include)
     target_compile_definitions(NebulaNativeVk PRIVATE NEBULA_HOST_RENDERER=1 _CRT_SECURE_NO_WARNINGS)
-    target_link_libraries(NebulaNativeVk PRIVATE galaxy_gx_vk)
+    target_link_libraries(NebulaNativeVk PRIVATE galaxy_gx_vk galaxy_save_files)
     if(MSVC)
         target_compile_options(NebulaNativeVk PRIVATE /Zi)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)

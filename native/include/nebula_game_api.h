@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 50u
+#define NEBULA_GAME_API_VERSION 51u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -331,22 +331,6 @@ typedef struct NebulaGameMemoryRegion {
     uint8_t* host;
 } NebulaGameMemoryRegion;
 
-/* A NAND file system operation (nand_native.c), on the console's absolute paths ("/title/00010000/524d4745/data/..."). */
-enum {
-    NEBULA_FS_OPEN = 1,     /* path, mode = NAND access type -> fd */
-    NEBULA_FS_CLOSE,        /* fd */
-    NEBULA_FS_READ,         /* fd, buffer, size -> bytes */
-    NEBULA_FS_WRITE,        /* fd, buffer, size -> bytes */
-    NEBULA_FS_SEEK,         /* fd, offset, whence (0 set, 1 current, 2 end) -> position */
-    NEBULA_FS_LENGTH,       /* fd -> length */
-    NEBULA_FS_CREATE,       /* path, mode = permission, attribute */
-    NEBULA_FS_CREATE_DIR,   /* path, mode = permission, attribute */
-    NEBULA_FS_DELETE,       /* path (a file, or a directory with what it holds) */
-    NEBULA_FS_RENAME,       /* path -> path2 */
-    NEBULA_FS_SAFE_OPEN,    /* path, mode -> fd: writes go to a copy that NEBULA_FS_SAFE_CLOSE puts in place atomically */
-    NEBULA_FS_SAFE_CLOSE,   /* fd */
-};
-
 /* System settings (SCGet*), with the SDK's values (SC_LANGUAGE_*, SC_SOUND_MODE_*, SC_ASPECT_RATIO_*...). */
 enum {
     NEBULA_SC_LANGUAGE = 1,
@@ -485,18 +469,28 @@ enum {
     NEBULA_AI_RATE,      /* value: the output rate in Hz (32000 or 48000) */
 };
 
-typedef struct NebulaFsRequest {
+/* One operation on a save file of the game's (by name, e.g. "GameData.bin"), in the player's save folder. */
+enum {
+    NEBULA_SAVE_READ = 1,  /* the whole file into buffer (capacity size); *length = its length */
+    NEBULA_SAVE_WRITE,     /* buffer (size bytes) as the whole file, replaced atomically */
+    NEBULA_SAVE_DELETE,
+};
+/* A request's status: pending until the host finishes, then done or what went wrong. */
+enum {
+    NEBULA_SAVE_PENDING = 1,
+    NEBULA_SAVE_DONE = 0,
+    NEBULA_SAVE_NO_FILE = -1,   /* read or delete of a file that is not there */
+    NEBULA_SAVE_TOO_LARGE = -2, /* read: the file is longer than the buffer */
+    NEBULA_SAVE_FAILED = -3,    /* the file system refused */
+};
+typedef struct NebulaSaveRequest {
     uint32_t op;
-    const char* path;
-    const char* path2;
-    int32_t fd;
+    const char* name;
     void* buffer;
     uint32_t size;
-    int32_t offset;
-    int32_t whence;
-    uint32_t mode;
-    uint32_t attribute;
-} NebulaFsRequest;
+    uint32_t* length;          /* read: the file's length (may be NULL) */
+    volatile int32_t* status;  /* the host sets NEBULA_SAVE_PENDING at once and the result when done */
+} NebulaSaveRequest;
 
 /* Nebula's settings menu as the host has it now (settings_view), for the game to draw in its own windows and words.
    The host keeps the settings, their pages, the draft and its apply, and takes the keyboard and controllers while the
@@ -768,9 +762,9 @@ typedef struct NebulaHostServices {
        whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
     void (*vi_frame)(void* user, uint32_t xfb, int black, uint32_t retrace);
 
-    /* NAND: starts `request` without blocking (its strings and buffer stay valid until completion); the host calls
-       nebula_game_fs_complete(slot, result) from any thread with the result above or a NAND_RESULT_* code. */
-    void (*fs_request)(void* user, const NebulaFsRequest* request, uint32_t slot);
+    /* Starts a save file operation without blocking; the request's name, buffer, length and status stay valid until
+       its status leaves NEBULA_SAVE_PENDING (the host writes it from its own thread). */
+    void (*save_request)(void* user, const NebulaSaveRequest* request);
 
     /* A system setting (NEBULA_SC_*). */
     uint32_t (*sc_get)(void* user, uint32_t item);
@@ -990,7 +984,6 @@ NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
 NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
-NEBULA_GAME_API void nebula_game_fs_complete(uint32_t slot, int32_t result);
 /* The AI took the latched DMA block (the console's AI DMA interrupt): the game prepares the next. */
 NEBULA_GAME_API void nebula_game_ai_interrupt(void);
 /* The sound playing on DSP channel `channel` (0-63) for the host's volume categories: its JAudio sound ID, with *route

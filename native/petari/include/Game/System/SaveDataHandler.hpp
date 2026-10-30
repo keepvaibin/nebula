@@ -4,7 +4,6 @@
 
 class NANDRequestInfo;
 class NANDResultCode;
-class SaveDataBannerCreator;
 class SysConfigFile;
 class UserFile;
 
@@ -29,8 +28,6 @@ public:
     void exeWait();
     void exeProcessing();
     void exeSaveProcessingGameData();
-    void exeSaveProcessingBanner();
-    void exeRemoveProcessingBanner();
     void exeRemoveProcessingGameData();
     static void resetSaveData(u8*);
     static void initializeAllFileInSaveData(u8*, const SysConfigFile*, const UserFile*);
@@ -45,5 +42,4 @@ public:
     /* 0x10 */ u32 _10;
     /* 0x14 */ u8* _14;
     /* 0x18 */ u8* _18;
-    /* 0x1C */ SaveDataBannerCreator* mBannerCreator;
 };

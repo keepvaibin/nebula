@@ -1,7 +1,6 @@
 #include "Game/System/SaveDataHandler.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/NANDManager.hpp"
-#include "Game/System/SaveDataBannerCreator.hpp"
 #include "Game/System/SaveDataFileAccessor.hpp"
 #include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
@@ -18,7 +17,6 @@ namespace {
     };
 
     const char cSaveFileName[] = "GameData.bin";
-    const char cBannerFileName[] = "banner.bin";
     const SaveFileSpec cSaveFileSpecTable[] = {{"mario", 0xF80}, {"luigi", 0xF80}, {"config", 0x60}};
     const SaveFileSpec cSaveFileSpecSystem = {"sysconf", 0x80};
 };  // namespace
@@ -27,27 +25,23 @@ namespace {
     NEW_NERVE(SaveDataHandlerWait, SaveDataHandler, Wait);
     NEW_NERVE(SaveDataHandlerProcessing, SaveDataHandler, Processing);
     NEW_NERVE(SaveDataHandlerSaveProcessingGameData, SaveDataHandler, SaveProcessingGameData);
-    NEW_NERVE(SaveDataHandlerSaveProcessingBanner, SaveDataHandler, SaveProcessingBanner);
-    NEW_NERVE(SaveDataHandlerRemoveProcessingBanner, SaveDataHandler, RemoveProcessingBanner);
     NEW_NERVE(SaveDataHandlerRemoveProcessingGameData, SaveDataHandler, RemoveProcessingGameData);
 };  // namespace
 
 SaveDataHandler::SaveDataHandler(const SysConfigFile* pSysConfigFile, const UserFile* pUserFile)
-    : NerveExecutor("SaveDataHandler"), mNANDRequestInfo(), _C(), _10(), _14(), _18(), mBannerCreator() {
+    : NerveExecutor("SaveDataHandler"), mNANDRequestInfo(), _C(), _10(), _14(), _18() {
     mNANDRequestInfo = new NANDRequestInfo();
 
     createCommunicationBuffer();
     resetSaveData(_18);
     initializeAllFileInSaveData(_18, pSysConfigFile, pUserFile);
 
-    mBannerCreator = new SaveDataBannerCreator();
 
     initNerve(GET_NERVE_ANON(SaveDataHandlerWait));
 }
 
 void SaveDataHandler::update() {
     updateNerve();
-    mBannerCreator->updateNerve();
 }
 
 void SaveDataHandler::requestCheckEnableToCreate() {
@@ -168,7 +162,7 @@ void SaveDataHandler::requestSaveSaveData() {
 }
 
 void SaveDataHandler::requestRemoveSaveData() {
-    setNerve(GET_NERVE_ANON(SaveDataHandlerRemoveProcessingBanner));
+    setNerve(GET_NERVE_ANON(SaveDataHandlerRemoveProcessingGameData));
 }
 
 u32 SaveDataHandler::getEnoughtTempBufferSize() {
@@ -203,27 +197,8 @@ void SaveDataHandler::exeSaveProcessingGameData() {
         return;
     }
 
-    if (!isErr) {
-        setNerve(GET_NERVE_ANON(SaveDataHandlerSaveProcessingBanner));
-    } else {
-        setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
-    }
-}
-
-void SaveDataHandler::exeSaveProcessingBanner() {
-    if (MR::isFirstStep(this)) {
-        mBannerCreator->execute();
-    } else if (mBannerCreator->isDone()) {
-        NANDResultCode resultCode = mBannerCreator->getResultCode();
-        mNANDRequestInfo->mResult = resultCode.getCode();
-
-        if (resultCode.isSuccess()) {
-            setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
-            return;
-        } else {
-            setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
-        }
-    }
+    // Saved or not, the sequence ends (the console wrote the System Menu's banner next; a PC has no System Menu).
+    setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
 }
 
 void SaveDataHandler::exeRemoveProcessingGameData() {
@@ -234,20 +209,6 @@ void SaveDataHandler::exeRemoveProcessingGameData() {
     }
 
     setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
-}
-
-void SaveDataHandler::exeRemoveProcessingBanner() {
-    bool isRemoved = false;
-
-    if (!tryRemoveFile(::cBannerFileName, &isRemoved)) {
-        return;
-    }
-
-    if (isRemoved) {
-        setNerve(GET_NERVE_ANON(SaveDataHandlerRemoveProcessingGameData));
-    } else {
-        setNerve(GET_NERVE_ANON(SaveDataHandlerWait));
-    }
 }
 
 void SaveDataHandler::resetSaveData(u8* pBuffer) {

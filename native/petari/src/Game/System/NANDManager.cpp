@@ -24,16 +24,6 @@ bool NANDRequestInfo::isDone() const {
     return _40 == 0;
 }
 
-const char* NANDRequestInfo::setMove(const char* pPath, const char* pDestDir) {
-    init();
-
-    mType = 0;
-    snprintf(mPath, sizeof(mPath), "%s", pPath);
-    mMoveDestDir = pDestDir;
-
-    return mPath;
-}
-
 const char* NANDRequestInfo::setWriteSeq(const char* pName, const void* pBuf, u32 fsBlock, u8 permission, u8 attr) {
     init();
 
