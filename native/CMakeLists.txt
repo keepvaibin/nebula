@@ -22,11 +22,11 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
 # The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): KPAD's processing, the
-# Wii Remote speaker's encoder (wenc.c), and the OS's time and arenas (the game's threads are NebulaKernel's).
+# Wii Remote speaker's encoder (wenc.c), and the OS's calendar conversion (the game's threads are NebulaKernel's).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
     "${petari}/src/RVL_SDK/kpad/*.c"
     "${petari}/src/RVL_SDK/wenc/wenc.c")
-foreach(unit OSTime OSArena OSAlloc)
+foreach(unit OSTime)
     list(APPEND sdk_sources "${petari}/src/RVL_SDK/os/${unit}.c")
 endforeach()
 file(GLOB_RECURSE layer_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.c")

@@ -2,6 +2,7 @@
 #ifdef TARGET_PC
 #include "Game/Screen/NebulaIcons.hpp"
 #endif
+#include "Game/System/NebulaAuxMemory.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
@@ -121,16 +122,21 @@ void HeapMemoryWatcher::destroyGameHeap() {
     createGameHeap();
 }
 
+extern "C" void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
+
 void HeapMemoryWatcher::createRootHeap() {
     JKRExpHeap* pHeap;
     void* newHi;
     uintptr_t arenaHi, arenaLo;
 
     JKRExpHeap::createRoot(1, true);
-    arenaLo = reinterpret_cast< uintptr_t >(OSGetMEM2ArenaLo());
-    arenaHi = reinterpret_cast< uintptr_t >(OSGetMEM2ArenaHi());
+    // MEM2's arena: its first 14 MB are the auxiliary memory, the rest the GDDR3 root heap.
+    void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
+    nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
+    arenaLo = reinterpret_cast< uintptr_t >(mem2Lo);
+    arenaHi = reinterpret_cast< uintptr_t >(mem2Hi);
     newHi = reinterpret_cast< void* >(arenaLo + 0xE00000);
-    OSSetMEM2ArenaHi(newHi);
+    NebulaAuxMemory::init(mem2Lo, 0xE00000);
     JKRHeap::setAltAramStartAdr(arenaLo);
     pHeap = JKRExpHeap::create(newHi, (u32)(arenaHi - reinterpret_cast< uintptr_t >(newHi)), JKRHeap::sRootHeap, true);
 

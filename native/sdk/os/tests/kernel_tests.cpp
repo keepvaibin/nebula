@@ -257,8 +257,10 @@ namespace {
     // MEM2's at 0x10000000), so what the game derives from an address's low bits has the console's value.
     void checkArena() {
         uint8_t* const base = nebula_arena_base();
-        uint8_t* const mem1 = static_cast< uint8_t* >(OSGetMEM1ArenaLo());
-        uint8_t* const mem2 = static_cast< uint8_t* >(OSGetMEM2ArenaLo());
+        void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
+        nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
+        uint8_t* const mem1 = static_cast< uint8_t* >(mem1Lo);
+        uint8_t* const mem2 = static_cast< uint8_t* >(mem2Lo);
         const uintptr_t alignment = static_cast< uintptr_t >(1) << 29;
         const bool aligned = reinterpret_cast< uintptr_t >(base) % alignment == 0;
         if (!aligned || mem1 - base != 0x00100000 || mem2 - base != 0x10000000) {

@@ -120,6 +120,11 @@ struct NebulaAlarm {
 namespace NebulaKernel {
     // The time base: 60.75 MHz ticks (OS_TIMER_CLOCK).
     int64_t time();
+    const int64_t cTicksPerSecond = 60750000;
+
+    inline int64_t ticksFromNanoseconds(int64_t ns) {
+        return ns * (cTicksPerSecond / 125000) / 8000;
+    }
 
     bool create(NebulaThread* pThread, void* (*pEntry)(void*), void* pArg, uint32_t stackSize, int32_t priority,
                 bool detached);

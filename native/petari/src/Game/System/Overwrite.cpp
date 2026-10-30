@@ -42,6 +42,7 @@
 #include <JSystem/JAudio2/JAUInitializer.hpp>
 
 #include <cstdarg>
+#include "Game/System/NebulaAuxMemory.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
 void Overwrite_FORCE_MATCH_SDATA2() {
@@ -1045,7 +1046,7 @@ void JKRAramPiece::startDMA(JKRAMCommand* pCommand) {
         return;
     }
 
-    ARStartDMA(pCommand->mTransferDirection, pCommand->mSrc, pCommand->mDst, pCommand->mDataLength);
+    NebulaAuxMemory::write(pCommand->mDst, reinterpret_cast< const void* >(pCommand->mSrc), pCommand->mDataLength);
     doneDMA(reinterpret_cast< uintptr_t >(pCommand));
 }
 
@@ -1113,8 +1114,8 @@ JASAudioThread::JASAudioThread(int priority, int, u32)
 }
 
 JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAramThreadStackSize, ::sAramThreadMsgSize, priority) {
-    u32 reserved = ARInit(mStackArray, 3);
-    u32 total = ARGetSize();
+    const u32 reserved = NebulaAuxMemory::cReserved;
+    const u32 total = NebulaAuxMemory::size();
     mAudioMemorySize = audioSize;
     if (graphSize == 0xFFFFFFFF) {
         mGraphMemorySize = total - audioSize - reserved;
@@ -1124,10 +1125,10 @@ JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAram
         mAramMemorySize = total - (audioSize + graphSize) - reserved;
     }
 
-    mAudioMemoryPtr = ARAlloc(mAudioMemorySize);
-    mGraphMemoryPtr = ARAlloc(mGraphMemorySize);
+    mAudioMemoryPtr = NebulaAuxMemory::alloc(mAudioMemorySize);
+    mGraphMemoryPtr = NebulaAuxMemory::alloc(mGraphMemorySize);
     if (mAramMemorySize != 0) {
-        mAramMemoryPtr = ARAlloc(mAramMemorySize);
+        mAramMemoryPtr = NebulaAuxMemory::alloc(mAramMemorySize);
     } else {
         mAramMemoryPtr = 0;
     }

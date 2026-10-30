@@ -20,7 +20,7 @@ case "$(uname -s)" in
     *) LIBS="-lpthread"; EXE= ;;
 esac
 OS="$N/sdk/os/os_native.c $N/sdk/os/context_switch.c $N/sdk/memory.c $N/msl/src/msl_runtime.c
-    $P/src/RVL_SDK/os/OSTime.c $P/src/RVL_SDK/os/OSArena.c"
+    $P/src/RVL_SDK/os/OSTime.c"
 # The kernel and its test are C++: the C flags but the language.
 CXXFL=$(echo "$FL" | sed 's/-std=gnu11/-std=gnu++17/; s/-Werror=implicit-function-declaration//; s/-Werror=implicit-int//;
     s/-Werror=incompatible-function-pointer-types//; s/-Werror=int-conversion//')

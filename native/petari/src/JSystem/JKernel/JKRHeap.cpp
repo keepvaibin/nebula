@@ -91,11 +91,14 @@ u32 JKRNativeHeapSize(u32 size, JKRHeap* pParent, int alignment) {
 }
 #endif
 
-bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
-    void *ramStart, *ramEnd, *arenaStart;
+extern "C" void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
 
-    void* arenaLo = OSGetArenaLo();
-    void* arenaHi = OSGetArenaHi();
+// The root heap takes the main memory the platform gives the game (MEM1's arena). The console's OS first kept a table of
+// `maxHeaps` 12-byte heap descriptors at the arena's start, which nothing here uses; the heaps still begin after it,
+// where they did, since values the game derives from addresses (J3DDrawBuffer's hash slots) depend on that.
+bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
+    void *arenaLo, *arenaHi, *mem2Lo, *mem2Hi;
+    nebula_memory_arenas(&arenaLo, &arenaHi, &mem2Lo, &mem2Hi);
 
     JUTNativeLog("original arenaLo = %p arenaHi = %p\n", arenaLo, arenaHi);
 
@@ -103,12 +106,9 @@ bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
         return false;
     }
 
-    arenaStart = OSInitAlloc(arenaLo, arenaHi, maxHeaps);
-    ramStart = (void*)(((uintptr_t)arenaStart + 31) & ~(uintptr_t)31);
-    ramEnd = (void*)((uintptr_t)arenaHi & ~(uintptr_t)31);
-
-    OSSetArenaLo(ramEnd);
-    OSSetArenaHi(ramEnd);
+    const uintptr_t heapTableEnd = reinterpret_cast< uintptr_t >(arenaLo) + static_cast< uintptr_t >(maxHeaps) * 12;
+    void* ramStart = reinterpret_cast< void* >((heapTableEnd + 31) & ~static_cast< uintptr_t >(31));
+    void* ramEnd = reinterpret_cast< void* >(reinterpret_cast< uintptr_t >(arenaHi) & ~static_cast< uintptr_t >(31));
 
     *memory = (char*)ramStart;
     *size = (u32)((uintptr_t)ramEnd - (uintptr_t)ramStart);

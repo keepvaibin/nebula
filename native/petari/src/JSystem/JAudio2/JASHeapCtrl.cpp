@@ -5,8 +5,7 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRExpHeap.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
-#include <revolution/aralt.h>
-#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/NebulaAuxMemory.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
@@ -277,8 +276,8 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
 JASHeap JASKernel::audioAramHeap;
 
 void JASKernel::setupAramHeap(u32 base, u32 size) {
-    JUTNativeLog("setupAramHeap %x, %x, %x\n", base, ARGetBaseAddress(), size);
-    base = ARGetBaseAddress();
+    JUTNativeLog("setupAramHeap %x, %x, %x\n", base, NebulaAuxMemory::cReserved, size);
+    base = NebulaAuxMemory::cReserved;
     sAramBase = base;
     // An ARAM address, not a pointer: the heap only does arithmetic on it.
     audioAramHeap.initRootHeap((void*)(uintptr_t)sAramBase, size);

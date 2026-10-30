@@ -41,7 +41,7 @@ void SpkSpeakerCtrl::setup() {
     }
 
     sSpeakerAlarm.init();
-    sSpeakerAlarm.setPeriodic(NebulaKernel::time(), OSNanosecondsToTicks(6666667), SpkSpeakerCtrl::updateSpeaker);
+    sSpeakerAlarm.setPeriodic(NebulaKernel::time(), NebulaKernel::ticksFromNanoseconds(6666667), SpkSpeakerCtrl::updateSpeaker);
 }
 
 void SpkSpeakerCtrl::connect(s32 padChannel) {

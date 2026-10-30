@@ -37,9 +37,6 @@
 #define NEBULA_ASAN_FINISH(save) ((void)0)
 #endif
 
-void OSSetMEM1ArenaLo(void*);
-void OSSetMEM1ArenaHi(void*);
-void OSSetMEM2ArenaLo(void*);
 
 /* The host's log takes whole lines (stderr before the host attaches): a report without its newline waits for the rest
    of its line. */
@@ -511,13 +508,6 @@ static void* sHostStack;
 static void boot_thread(void* arg) {
     (void)arg;
     NEBULA_ASAN_FINISH(NULL);
-    void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
-    nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
-    OSSetMEM1ArenaLo(mem1Lo);
-    OSSetMEM1ArenaHi(mem1Hi);
-    OSSetMEM2ArenaLo(mem2Lo);
-    OSSetMEM2ArenaHi(mem2Hi);
-
     nebula_kernel_init(boot_stack_top(), boot_stack_end());
     nebula_interrupts_restore(1);
     sGameMain();
