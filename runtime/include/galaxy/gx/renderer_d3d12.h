@@ -566,8 +566,7 @@ public:
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
     // (Dolphin BPStructs ClearScreen(srcRect)).
     void clear_efb(
-        std::uint32_t clear_ar,
-        std::uint32_t clear_gb,
+        std::uint32_t clear_rgba,
         std::uint32_t clear_z24,
         bool color_enable,
         bool alpha_enable,
@@ -1123,7 +1122,7 @@ private:
         std::uint8_t mode = 0;  // 0 texture, 1 display copy, 2 output-EFB resample
     };
     struct ReplayClear {
-        std::uint32_t ar = 0, gb = 0, z24 = 0;
+        std::uint32_t rgba = 0, z24 = 0;
         bool color = false, alpha = false, depth = false;
         unsigned x = 0, y = 0, w = 0, h = 0;
         std::uint8_t format = 0;

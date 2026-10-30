@@ -227,7 +227,7 @@ public:
     void wait_for_fence_value(std::uint64_t fence_value);
 
     void bind_efb(const float xf_viewport[6]);
-    void clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::uint32_t clear_z24, bool color_enable,
+    void clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24, bool color_enable,
                    bool alpha_enable, bool depth_enable, unsigned rect_x = 0, unsigned rect_y = 0, unsigned rect_w = 0,
                    unsigned rect_h = 0, std::uint8_t pixel_format = 0);
     void draw(const DrawCall& call);
@@ -674,7 +674,7 @@ private:
         float values[6]{};
     };
     struct ReplayClear {
-        std::uint32_t ar = 0, gb = 0, z24 = 0;
+        std::uint32_t rgba = 0, z24 = 0;
         bool color = false, alpha = false, depth = false;
         unsigned x = 0, y = 0, w = 0, h = 0;
         std::uint8_t format = 0;

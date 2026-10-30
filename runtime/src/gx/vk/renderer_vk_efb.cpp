@@ -344,7 +344,7 @@ void RendererVk::carry_over_efb_contents() {
     const VkCommandBuffer commands = commands_;
     if (efb_carry_clear_) {
         efb_carry_clear_ = false;
-        const EfbClearValues clear = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        const EfbClearValues clear = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
         end_efb_pass();
         begin_efb_pass(&clear);
         end_efb_pass();
@@ -475,10 +475,10 @@ void RendererVk::bind_efb(const float xf_vp[6]) {
     }
 }
 
-void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::uint32_t clear_z24,
+void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
                            bool color_enable, bool alpha_enable, bool depth_enable, unsigned rect_x, unsigned rect_y,
                            unsigned rect_w, unsigned rect_h, std::uint8_t pixel_format) {
-    const ReplayClear logged{clear_ar, clear_gb, clear_z24, color_enable, alpha_enable, depth_enable,
+    const ReplayClear logged{clear_rgba, clear_z24, color_enable, alpha_enable, depth_enable,
                              rect_x, rect_y, rect_w, rect_h, pixel_format};
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(recording_log_.clears.size())});
@@ -506,7 +506,7 @@ void RendererVk::clear_efb(std::uint32_t clear_ar, std::uint32_t clear_gb, std::
                         {static_cast<std::uint32_t>(scaled.right - scaled.left),
                          static_cast<std::uint32_t>(scaled.bottom - scaled.top)}};
     }
-    const EfbClearValues clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
+    const EfbClearValues clear = make_efb_clear_values(clear_rgba, clear_z24, pixel_format);
     // The whole EFB, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
     const bool has_alpha = (pixel_format & ~kEfbClearExact) == 1u;
     if (!efb_pass_open_ && color_enable && (alpha_enable || !has_alpha) && depth_enable && rect.offset.x == 0 &&
@@ -666,9 +666,10 @@ bool RendererVk::enter_output_efb(unsigned scale) {
     EfbCopyParams params{};
     params.src_width = static_cast<std::uint16_t>(kEfbWidth);
     params.src_height = static_cast<std::uint16_t>(kEfbHeight);
-    params.y_scale_raw = 256u;
-    params.filter0_raw = (21u << 12u) | (22u << 18u);
-    params.filter1_raw = 21u;
+    params.y_scale = 256u;
+    params.vfilter[2] = 21u;
+    params.vfilter[3] = 22u;
+    params.vfilter[4] = 21u;
     const unsigned width = kEfbWidth * scale;
     const unsigned height = kEfbHeight * scale;
     const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, width, height, efb_scale_);
@@ -682,7 +683,7 @@ bool RendererVk::enter_output_efb(unsigned scale) {
     alt_efb_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     swap_efb_sets();
     bind_efb(nullptr);
-    clear_efb(0u, 0u, 0x00FFFFFFu, false, false, true);
+    clear_efb(0u, 0x00FFFFFFu, false, false, true);
     return true;
 }
 

@@ -482,10 +482,10 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
     }};
 }
 
-EfbClearValues make_efb_clear_values(std::uint32_t ar, std::uint32_t gb,
+EfbClearValues make_efb_clear_values(std::uint32_t rgba,
     std::uint32_t z24, std::uint8_t pixel_format) noexcept {
-    std::uint32_t r = ar & 255u, g = (gb >> 8u) & 255u;
-    std::uint32_t b = gb & 255u, a = (ar >> 8u) & 255u;
+    std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
+    std::uint32_t b = (rgba >> 8u) & 255u, a = rgba & 255u;
     const auto expand6 = [](std::uint32_t v) { return (v & 0xfcu) | (v >> 6u); };
     const auto expand5 = [](std::uint32_t v) { return (v & 0xf8u) | (v >> 5u); };
     const bool exact = (pixel_format & kEfbClearExact) != 0u;

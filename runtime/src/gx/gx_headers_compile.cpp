@@ -71,14 +71,10 @@ static_assert(kTexImage.guest_addr == 0x01000000u);
 
 constexpr auto kEfbCopyNoAutoConv = decode_efb_copy(
     0u, 0u, 0u, 0u, 256u, 0u, 0u, 0u, 1u << 15);
-static_assert(kEfbCopyNoAutoConv.intensity_format);
-static_assert(!kEfbCopyNoAutoConv.auto_conv);
 static_assert(!kEfbCopyNoAutoConv.intensity);
 
 constexpr auto kEfbCopyIntensity = decode_efb_copy(
     0u, 0u, 0u, 0u, 256u, 0u, 0u, 0u, (1u << 15) | (1u << 16));
-static_assert(kEfbCopyIntensity.intensity_format);
-static_assert(kEfbCopyIntensity.auto_conv);
 static_assert(kEfbCopyIntensity.intensity);
 
 constexpr auto kEfbCopyFormatSwizzle = decode_efb_copy(
@@ -94,8 +90,10 @@ constexpr EfbCopyParams make_efb_copy_filter(
     std::uint32_t w5,
     std::uint32_t w6) {
     EfbCopyParams params{};
-    params.filter0_raw = w0 | (w1 << 6) | (w2 << 12) | (w3 << 18);
-    params.filter1_raw = w4 | (w5 << 6) | (w6 << 12);
+    const std::uint32_t taps[7] = {w0, w1, w2, w3, w4, w5, w6};
+    for (unsigned i = 0; i < 7u; ++i) {
+        params.vfilter[i] = static_cast<std::uint8_t>(taps[i] & 63u);
+    }
     return params;
 }
 

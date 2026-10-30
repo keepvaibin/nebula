@@ -179,8 +179,12 @@ public:
             bp_[bp::kCopyDestAddr], bp_[bp::kCopyDestStride],
             bp_[bp::kCopyYScale], bp_[bp::kCopyClearAR],
             bp_[bp::kCopyClearGB], bp_[bp::kCopyClearZ], exec_command);
-        p.filter0_raw = bp_[bp::kCopyFilter0];
-        p.filter1_raw = bp_[bp::kCopyFilter1];
+        for (unsigned i = 0; i < 4u; ++i) {
+            p.vfilter[i] = static_cast<std::uint8_t>((bp_[bp::kCopyFilter0] >> (6u * i)) & 63u);
+        }
+        for (unsigned i = 0; i < 3u; ++i) {
+            p.vfilter[4u + i] = static_cast<std::uint8_t>((bp_[bp::kCopyFilter1] >> (6u * i)) & 63u);
+        }
         return p;
     }
 

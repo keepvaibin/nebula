@@ -258,7 +258,8 @@ private:
         std::uint8_t vtxfmt,
         std::size_t draw_count);
     void end_cached_draw_run();
-    void on_efb_copy(std::uint32_t exec_command);
+    // A copy (EFB to texture or display) with the pixel format it reads.
+    void on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format);
     void on_invalidate_textures();
     void on_invalidate_vertex_cache();
     // A palette place took another address (NativeDrawState::palette_revision).
@@ -1135,6 +1136,8 @@ private:
     }
     // GALAXY_CHECK_DRAW_STATE=1: compares draw_state_ with the register file's decode at every record draw.
     void check_draw_state();
+    // The same for a copy: its typed parameters against the register file's.
+    void check_copy(const EfbCopyParams& params);
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;

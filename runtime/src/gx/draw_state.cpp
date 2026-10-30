@@ -442,6 +442,26 @@ void NativeDrawState::apply(const state::Op& op) {
     case state::kTexImage:
         set_texture_address(texture[a[0] & 7u], op.image);
         break;
+    case state::kCopyClear:
+        copy_setup.clear_color[0] = a[0];
+        copy_setup.clear_color[1] = a[1];
+        copy_setup.clear_color[2] = a[2];
+        copy_setup.clear_color[3] = a[3];
+        copy_setup.clear_z = static_cast<std::uint32_t>(a[4]) | static_cast<std::uint32_t>(a[5]) << 8u |
+                             static_cast<std::uint32_t>(a[6]) << 16u;
+        break;
+    case state::kCopyVfilter: {
+        // Its coefficients, or GXSetCopyFilter's pass-through ones (0 0 21 22 21 0 0) without the filter.
+        static constexpr std::uint8_t kOff[7] = {0, 0, 21, 22, 21, 0, 0};
+        const std::uint8_t* c = a[0] != 0u ? a + 1 : kOff;
+        for (unsigned i = 0; i < 7u; ++i) {
+            copy_setup.vfilter[i] = static_cast<std::uint8_t>(c[i] & 63u);
+        }
+        break;
+    }
+    case state::kCopyYScale:
+        copy_setup.y_scale = static_cast<std::uint16_t>(op.size[0] & 0x1FFu);
+        break;
     case state::kTlutLoad:
         // GXLoadTlut: 16 places' worth for the 256-entry names, 64 for the big ones.
         load_palette(*this, static_cast<std::uint32_t>(op.image >> 5u) & 0xFFFFFFu,
@@ -867,6 +887,82 @@ std::uint32_t tex_image0_word(const TextureMap& t) {
 
 std::uint32_t tlut_word(const TextureMap& t) {
     return static_cast<std::uint32_t>(t.tlut.tmem_offset) | static_cast<std::uint32_t>(t.tlut.format) << 10u;
+}
+
+namespace {
+
+// GXCopyTex's block counts: a format's tile is 2^row_shift texels wide.
+void copy_tiles(std::uint8_t format, unsigned& row_shift, unsigned& column_shift) {
+    switch (format) {
+    case 0x00: case 0x08: case 0x0E: case 0x20: case 0x30:  // I4, C4, CMPR, R4, Z4
+        row_shift = 3;
+        column_shift = 3;
+        break;
+    case 0x01: case 0x02: case 0x09: case 0x11: case 0x22: case 0x27: case 0x28: case 0x29: case 0x2A: case 0x39:
+    case 0x3A:  // I8, IA4, C8, Z8, RA4, A8, R8, G8, B8, Z8M, Z8L
+        row_shift = 3;
+        column_shift = 2;
+        break;
+    case 0x03: case 0x04: case 0x05: case 0x06: case 0x0A: case 0x13: case 0x16: case 0x23: case 0x2B: case 0x2C:
+    case 0x3C:  // IA8, RGB565, RGB5A3, RGBA8, C14X2, Z16, Z24X8, RA8, RG8, GB8, Z16L
+        row_shift = 2;
+        column_shift = 2;
+        break;
+    default:
+        row_shift = 0;
+        column_shift = 0;
+        break;
+    }
+}
+
+}  // namespace
+
+EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& op) {
+    const std::uint8_t* a = op.a;
+    const bool display = a[0] != 0u;
+    EfbCopyParams p{};
+    const auto left = static_cast<std::uint32_t>(op.f[0]), top = static_cast<std::uint32_t>(op.f[1]);
+    const auto width = static_cast<std::uint32_t>(op.f[2]), height = static_cast<std::uint32_t>(op.f[3]);
+    p.src_x = static_cast<std::uint16_t>(left & 0x3FFu);
+    p.src_y = static_cast<std::uint16_t>(top & 0x3FFu);
+    p.src_width = static_cast<std::uint16_t>(((width - 1u) & 0x3FFu) + 1u);
+    p.src_height = static_cast<std::uint16_t>(((height - 1u) & 0x3FFu) + 1u);
+    p.dest_addr = (static_cast<std::uint32_t>(op.image >> 5u) & 0xFFFFFFu) << 5u;
+    p.y_scale = state.copy_setup.y_scale;
+    p.clamp_top = (a[4] & 1u) != 0u;
+    p.clamp_bottom = (a[5] & 1u) != 0u;
+    p.clear = a[1] != 0u;
+    p.frame_to_field = static_cast<std::uint8_t>(a[6] & 3u);
+    p.copy_to_xfb = display;
+    if (display) {
+        p.dest_stride = (((op.size[0] * 2u) >> 5u) & 0x3FFu) << 5u;
+        p.gamma = static_cast<std::uint8_t>(a[8] & 3u);
+        p.scale_y = (a[7] & 1u) != 0u;
+    } else {
+        const std::uint8_t format = a[2];
+        unsigned row_shift = 0, column_shift = 0;
+        copy_tiles(format, row_shift, column_shift);
+        const std::uint32_t w = op.size[0] != 0u ? op.size[0] : 1u;
+        const std::uint32_t row_tiles = (w + (1u << row_shift) - 1u) >> row_shift;
+        const std::uint32_t blocks = format == 0x06u || format == 0x16u ? 2u : 1u;
+        p.dest_stride = ((row_tiles * blocks) & 0x3FFu) << 5u;
+        const std::uint32_t pe_format = format == 0x13u ? 0xBu : format & 0xFu;
+        p.target_format = static_cast<std::uint8_t>((((pe_format >> 3u) & 1u) << 3u) | (pe_format & 7u));
+        p.half_scale = (a[3] & 1u) != 0u;
+        p.intensity = format == 0x00u || format == 0x01u || format == 0x02u || format == 0x03u || format == 0x26u;
+    }
+    for (unsigned i = 0; i < 4u; ++i) {
+        p.clear_color[i] = state.copy_setup.clear_color[i];
+    }
+    p.clear_z = state.copy_setup.clear_z;
+    for (unsigned i = 0; i < 7u; ++i) {
+        p.vfilter[i] = state.copy_setup.vfilter[i];
+    }
+    return p;
+}
+
+std::uint8_t copy_pixel_format(const NativeDrawState& state, const state::Op& op) {
+    return op.a[0] == 0u && (op.a[2] & 0x10u) != 0u ? 3u : state.pe.pixel_format;
 }
 
 std::uint32_t palette_address(const NativeDrawState& state, unsigned map) {

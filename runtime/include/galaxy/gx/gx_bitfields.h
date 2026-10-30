@@ -630,7 +630,7 @@ struct EfbCopyParams {
     std::uint16_t src_width, src_height;
     std::uint32_t dest_addr;        // physical bytes (reg << 5)
     std::uint32_t dest_stride;      // bytes (reg << 5)
-    std::uint32_t y_scale_raw;      // 8.8 fixed-point inverse scale
+    std::uint32_t y_scale;          // 8.8 fixed-point inverse scale (256: 1.0)
     std::uint8_t target_format;     // copy pixel format
     std::uint8_t gamma;             // 0=1.0, 1=1.7, 2=2.2
     bool clamp_top, clamp_bottom;
@@ -640,14 +640,10 @@ struct EfbCopyParams {
     bool clear;                     // clear EFB rect after copy
     std::uint8_t frame_to_field;
     bool copy_to_xfb;               // true = display copy, false = texture copy
-    bool intensity_format;          // raw PE_COPY_EXECUTE bit 15
-    bool auto_conv;                 // raw PE_COPY_EXECUTE bit 16
-    bool intensity;                 // intensity conversion = bit15 && bit16
-    std::uint32_t clear_color_ar;   // latched BP 0x4F
-    std::uint32_t clear_color_gb;   // latched BP 0x50
-    std::uint32_t clear_z24;        // latched BP 0x51
-    std::uint32_t filter0_raw;      // latched BP 0x53 (copy filter w0-w3)
-    std::uint32_t filter1_raw;      // latched BP 0x54 (copy filter w4-w6)
+    bool intensity;                 // intensity conversion (I and IA texture copies)
+    std::uint8_t clear_color[4];    // red, green, blue, alpha
+    std::uint32_t clear_z;          // 24-bit depth
+    std::uint8_t vfilter[7];        // vertical filter taps (1/64 units)
 
     // 3-tap vertical copy-filter weights (prev/current/next EFB row), in
     // 1/64 units. The seven 6-bit taps collapse as {w0+w1, w2+w3+w4,
@@ -655,14 +651,13 @@ struct EfbCopyParams {
     // sample the current row, and the final pair samples the next row.
     // Therefore the standard {0,0,21,22,21,0,0} filter is (0,64,0)/64.
     [[nodiscard]] constexpr std::uint32_t filter_upper() const {
-        return bits(filter0_raw, 0, 6) + bits(filter0_raw, 6, 6);
+        return static_cast<std::uint32_t>(vfilter[0]) + vfilter[1];
     }
     [[nodiscard]] constexpr std::uint32_t filter_middle() const {
-        return bits(filter0_raw, 12, 6) + bits(filter0_raw, 18, 6) +
-               bits(filter1_raw, 0, 6);
+        return static_cast<std::uint32_t>(vfilter[2]) + vfilter[3] + vfilter[4];
     }
     [[nodiscard]] constexpr std::uint32_t filter_lower() const {
-        return bits(filter1_raw, 6, 6) + bits(filter1_raw, 12, 6);
+        return static_cast<std::uint32_t>(vfilter[5]) + vfilter[6];
     }
 };
 
@@ -694,14 +689,11 @@ struct EfbCopyParams {
         bit(exec, 11),
         static_cast<std::uint8_t>(bits(exec, 12, 2)),
         bit(exec, 14),
-        bit(exec, 15),
-        bit(exec, 16),
         bit(exec, 15) && bit(exec, 16),
-        clear_ar,
-        clear_gb,
-        clear_z,
-        0u, // Filters are latched separately by GxState.
-        0u,
+        {static_cast<std::uint8_t>(clear_ar), static_cast<std::uint8_t>(clear_gb >> 8u),
+         static_cast<std::uint8_t>(clear_gb), static_cast<std::uint8_t>(clear_ar >> 8u)},
+        clear_z & 0xFFFFFFu,
+        {},  // Filters are latched separately by GxState.
     };
 }
 

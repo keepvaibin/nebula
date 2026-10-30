@@ -54,7 +54,7 @@ bool test_scaled_xfb_resource_allocation() {
     params.src_width = 640u;
     params.src_height = 456u;
     params.dest_stride = 1280u;
-    params.y_scale_raw = 256u;
+    params.y_scale = 256u;
     params.scale_y = true;
     params.copy_to_xfb = true;
     galaxy::gx::XfbTexture* xfb = manager.acquire_xfb(params, 1u);

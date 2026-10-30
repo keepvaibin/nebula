@@ -102,7 +102,7 @@ struct EfbClearValues {
     float reversed_depth = 0.0f;
 };
 [[nodiscard]] EfbClearValues make_efb_clear_values(
-    std::uint32_t ar, std::uint32_t gb, std::uint32_t z24,
+    std::uint32_t rgba, std::uint32_t z24,
     std::uint8_t pixel_format) noexcept;
 // With an EFB pixel format (0-2), clear values as given, not quantized to the format: the 8-bit values a draw stores
 // (alpha 255 on a format without alpha).

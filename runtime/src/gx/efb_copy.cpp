@@ -292,7 +292,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     const std::uint16_t logical_h =
         compute_xfb_copy_height(
             params.src_height,
-            params.y_scale_raw,
+            params.y_scale,
             params.scale_y);
     const ScaledEfbCopyExtent extent = compute_scaled_efb_copy_extent(
         params.src_width,

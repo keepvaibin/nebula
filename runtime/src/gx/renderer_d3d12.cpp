@@ -974,7 +974,7 @@ void RendererD3D12::carry_over_efb_contents() {
     settle_owed_efb();
     if (!efb_carry_color_ || !efb_carry_depth_ || efb_msaa_.samples > 1u) {
         if (efb_msaa_.samples > 1u && efb_carry_color_) {
-            const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+            const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
             const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f};
             command_list_->ClearRenderTargetView(efb_rtv_, black, 0u, nullptr);
             command_list_->ClearDepthStencilView(efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -1064,7 +1064,7 @@ void RendererD3D12::carry_over_efb_contents() {
         command_list_->SetGraphicsRootDescriptorTable(0, depth_gpu);
         command_list_->DrawInstanced(3, 1, 0, 0);
     } else {
-        const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
         command_list_->ClearDepthStencilView(
             efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -1487,7 +1487,7 @@ bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, cons
         (params.filter_upper() == 0u && params.filter_middle() == 64u && params.filter_lower() == 0u) ||
         (params.filter_upper() == 0u && params.filter_middle() == 0u && params.filter_lower() == 0u);
     return identity_filter && (params.gamma & 3u) == 0u && !params.intensity && !params.half_scale &&
-           (!params.scale_y || params.y_scale_raw == 256u) && params.src_x == 0u && params.src_y == 0u &&
+           (!params.scale_y || params.y_scale == 256u) && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kEfbWidth && params.src_height != 0u && params.src_height <= kEfbHeight &&
            dest.width == kEfbWidth * scale && dest.height == params.src_height * scale;
 }
@@ -7139,7 +7139,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         }
         replay_playing_ = true;
         bind_efb(nullptr);
-        const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
         // The log before's vertices are gone once its segment came round (a
         // later game frame records there while this sequence still plays).
         const bool blend = sequence.vertex_blend && prev_run_valid_ &&
@@ -7186,7 +7186,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             }
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
-                clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+                clear_efb(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
                 break;
             }
             case ReplayKind::Copy: {
@@ -8497,7 +8497,7 @@ bool RendererD3D12::begin_output_efb() {
     scene_temporal_ = false;
     if (upscaled) {
         swap_efb_sets();
-        const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+        const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
         command_list_->ClearDepthStencilView(
             efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
             far_values.reversed_depth, 0u, 0u, nullptr);
@@ -8509,9 +8509,10 @@ bool RendererD3D12::begin_output_efb() {
     EfbCopyParams params{};
     params.src_width = static_cast<std::uint16_t>(kEfbWidth);
     params.src_height = static_cast<std::uint16_t>(kEfbHeight);
-    params.y_scale_raw = 256u;
-    params.filter0_raw = (21u << 12u) | (22u << 18u);
-    params.filter1_raw = 21u;
+    params.y_scale = 256u;
+    params.vfilter[2] = 21u;
+    params.vfilter[3] = 22u;
+    params.vfilter[4] = 21u;
     const unsigned w = kEfbWidth * scale;
     const unsigned h = kEfbHeight * scale;
     const EfbCopySamplingGeometry sampling =
@@ -8551,7 +8552,7 @@ bool RendererD3D12::begin_output_efb() {
             sampling.filter_row_offset);
         swap_efb_sets();
     }
-    const auto far_values = make_efb_clear_values(0u, 0u, 0x00FFFFFFu, 0u);
+    const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
     command_list_->ClearDepthStencilView(
         efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
         far_values.reversed_depth, 0u, 0u, nullptr);
@@ -8618,7 +8619,7 @@ void RendererD3D12::bind_efb(const float xf_vp[6]) {
 }
 
 void RendererD3D12::clear_efb(
-    std::uint32_t clear_ar, std::uint32_t clear_gb, std::uint32_t clear_z24,
+    std::uint32_t clear_rgba, std::uint32_t clear_z24,
     bool color_enable, bool alpha_enable, bool depth_enable,
     unsigned rect_x, unsigned rect_y, unsigned rect_w, unsigned rect_h,
     std::uint8_t pixel_format) {
@@ -8627,10 +8628,10 @@ void RendererD3D12::clear_efb(
     }
     if (replay_recording_) [[unlikely]] {
         replay_ops_.push_back({ReplayKind::Clear, static_cast<std::uint32_t>(replay_clears_.size())});
-        replay_clears_.push_back({clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
+        replay_clears_.push_back({clear_rgba, clear_z24, color_enable, alpha_enable,
                                   depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format});
     } else if (ring_mode_ == RingMode::Interp && ring_advance_pending_ && !replay_playing_) [[unlikely]] {
-        log_start_clear_ = {clear_ar, clear_gb, clear_z24, color_enable, alpha_enable,
+        log_start_clear_ = {clear_rgba, clear_z24, color_enable, alpha_enable,
                             depth_enable, rect_x, rect_y, rect_w, rect_h, pixel_format};
         log_start_clear_valid_ = true;
     }
@@ -8665,7 +8666,7 @@ void RendererD3D12::clear_efb(
         const bool rgba = color_enable && (alpha_enable || (pixel_format & ~kEfbClearExact) != 1u);
         restore_owed_efb(rgba ? &rect : nullptr);
     }
-    const auto clear = make_efb_clear_values(clear_ar, clear_gb, clear_z24, pixel_format);
+    const auto clear = make_efb_clear_values(clear_rgba, clear_z24, pixel_format);
     if (color_enable || alpha_enable) {
         if ((pixel_format & ~kEfbClearExact) != 1u) alpha_enable = true;
         const float* col = clear.color.data();

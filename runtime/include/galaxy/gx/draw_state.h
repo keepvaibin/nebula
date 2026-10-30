@@ -90,6 +90,14 @@ struct NativeDrawState {
     std::uint32_t palette_place[1024]{};
     std::uint32_t palette_revision = 0u;
 
+    // Copy settings: the clear colour (RGBA) and depth, the vertical filter's taps, the display copy's Y scale (8.8).
+    struct {
+        std::uint8_t clear_color[4];
+        std::uint32_t clear_z;
+        std::uint8_t vfilter[7];
+        std::uint16_t y_scale;
+    } copy_setup{};
+
     // The scissor box (screen pixels, corners inclusive) and offset (GXSetScissor, GXSetScissorBoxOffset).
     ScissorRect scissor{-342, -342, -342, -342};
     ScissorOffset scissor_offset{};
@@ -129,6 +137,11 @@ struct NativeDrawState {
 
 // Map `map`'s palette address (0 without a palette format or a loaded place).
 [[nodiscard]] std::uint32_t palette_address(const NativeDrawState& state, unsigned map);
+
+// A copy op's parameters (GXCopyDisp, GXCopyTex) with the copy settings, and the pixel format the copy reads (Z24
+// for a depth-format texture copy, as GXCopyTex switches it).
+[[nodiscard]] EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& copy);
+[[nodiscard]] std::uint8_t copy_pixel_format(const NativeDrawState& state, const state::Op& copy);
 
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);

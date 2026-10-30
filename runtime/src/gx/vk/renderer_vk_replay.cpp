@@ -1217,7 +1217,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         }
         case ReplayKind::Clear: {
             const ReplayClear& c = run_log_.clears[op.index];
-            clear_efb(c.ar, c.gb, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
+            clear_efb(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
             break;
         }
         case ReplayKind::SceneAa:

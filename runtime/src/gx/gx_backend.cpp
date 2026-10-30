@@ -7288,7 +7288,7 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
     if (!efb_seeded_) {
         efb_seeded_ = true;
-        renderer_.clear_efb(0u, 0u, 0x00FFFFFFu, true, true, true);
+        renderer_.clear_efb(0u, 0x00FFFFFFu, true, true, true);
     }
 
     const auto parse_start = frame_timing_enabled
@@ -9331,9 +9331,7 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
                 backend.state_.load_bp(word);
                 const auto reg = static_cast<std::uint8_t>(word >> 24u);
                 const std::uint32_t value = backend.state_.bp(reg);
-                if (reg == bp::kCopyExecute) {
-                    backend.on_efb_copy(value);
-                } else if (reg == 0x66u && value == 0u) {
+                if (reg == 0x66u && value == 0u) {
                     backend.on_invalidate_textures();
                 }
             }
@@ -9353,6 +9351,11 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
         }
         for (const state::Op& op : record.state) {
             state::encode(std::span<const state::Op>(&op, 1u), events);
+            if (op.kind == state::kCopy) {
+                const EfbCopyParams params = efb_copy_params(draw_state_, op);
+                check_copy(params);
+                on_efb_copy(params, copy_pixel_format(draw_state_, op));
+            }
             const std::uint32_t palettes = draw_state_.palette_revision;
             draw_state_.apply(op);
             if (draw_state_.palette_revision != palettes) {
@@ -9453,6 +9456,37 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         state_.load_xf(static_cast<std::uint16_t>(0x1050u + g[0]), &post, 1u);
         draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
         draw_state_.post_texgen[g[0] & 7u] = decode_xf_post_texgen(post);
+    }
+}
+
+void GxBackend::check_copy(const EfbCopyParams& p) {
+    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
+    if (!enabled) {
+        return;
+    }
+    const EfbCopyParams e = state_.efb_copy(state_.bp(bp::kCopyExecute));
+    const unsigned have[] = {p.src_x, p.src_y, p.src_width, p.src_height, p.dest_addr, p.dest_stride, p.y_scale,
+                             p.target_format, p.gamma, p.clamp_top, p.clamp_bottom, p.yuv, p.half_scale, p.scale_y,
+                             p.clear, p.frame_to_field, p.copy_to_xfb, p.intensity, rgba_word(p.clear_color), p.clear_z,
+                             p.filter_upper(), p.filter_middle(), p.filter_lower()};
+    const unsigned want[] = {e.src_x, e.src_y, e.src_width, e.src_height, e.dest_addr, e.dest_stride, e.y_scale,
+                             e.target_format, e.gamma, e.clamp_top, e.clamp_bottom, e.yuv, e.half_scale, e.scale_y,
+                             e.clear, e.frame_to_field, e.copy_to_xfb, e.intensity, rgba_word(e.clear_color), e.clear_z,
+                             e.filter_upper(), e.filter_middle(), e.filter_lower()};
+    static std::uint64_t copies = 0, mismatches = 0;
+    ++copies;
+    for (unsigned i = 0; i < std::size(have); ++i) {
+        if (have[i] != want[i]) {
+            if (++mismatches <= 40u) {
+                std::fprintf(stderr, "[draw-state] frame %llu copy field %u: %u/%u\n",
+                             static_cast<unsigned long long>(frame_index_), i, have[i], want[i]);
+            }
+            break;
+        }
+    }
+    if (copies % 2000u == 0u) {
+        std::fprintf(stderr, "[draw-state] copies %llu, %llu mismatches\n", static_cast<unsigned long long>(copies),
+                     static_cast<unsigned long long>(mismatches));
     }
 }
 
@@ -9915,9 +9949,8 @@ void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void GxBackend::on_efb_copy(std::uint32_t exec_command) {
+void GxBackend::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format) {
     flush_pending_draw_batch();
-    const EfbCopyParams params = state_.efb_copy(exec_command);
     if (params.copy_to_xfb) {
         galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
         xfb_copied_in_chunk_ = true;
@@ -9990,7 +10023,7 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
         texture_cache_.drop_registered_images(std::span<const TextureCache::GuestRange>(&copied, 1u));
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
-        const bool is_depth_copy = state_.pe_control().pixel_format == 3u;
+        const bool is_depth_copy = pixel_format == 3u;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
         // console's single EFB holds it, not the scene the output-resolution 2D layer was drawn over.
         const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
@@ -10013,18 +10046,16 @@ void GxBackend::on_efb_copy(std::uint32_t exec_command) {
     // GX clear-on-copy: the copy command's clear bit wipes the copy's source rect with the latched
     // copy-clear registers, honoring the PE write masks (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY:
     // ClearScreen(srcRect) with colorEnable = blendmode.colorupdate, alphaEnable =
-    // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest.
+    // blendmode.alphaupdate, zEnable = zmode.updateenable); later copies of the frame still read the rest. GXCopyTex's
+    // own clear settings leave those enables as they were.
     if (params.clear) {
-        const BlendMode bm = state_.blend_mode();
-        const ZMode zm = state_.z_mode();
         renderer_.clear_efb(
-            params.clear_color_ar,
-            params.clear_color_gb,
-            params.clear_z24,
-            bm.color_update, bm.alpha_update, zm.update_enable,
+            rgba_word(params.clear_color),
+            params.clear_z,
+            draw_state_.blend.color_update, draw_state_.blend.alpha_update, draw_state_.z.update_enable,
             params.src_x, params.src_y,
             params.src_width, params.src_height,
-            state_.pe_control().pixel_format);
+            pixel_format);
     }
     const std::uint64_t copy_us = time_copy
         ? elapsed_us(copy_start, std::chrono::steady_clock::now())
