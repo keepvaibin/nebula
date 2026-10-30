@@ -3642,11 +3642,10 @@ void GxBackend::note_rt_material() {
                  : blend.dst_factor == BlendFactor::One ? 2u
                                                          : 3u;
     const unsigned map = ps_key_.stages[stage].order & 7u;
-    const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
-    const std::uint32_t image0 = state_.bp(static_cast<std::uint8_t>(bp::kTexImage0Base + bank + (map & 3u)));
-    note.texture = (state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu) << 5u;
-    note.texture_size = ((image0 & 0x3FFu) + 1u) | ((((image0 >> 10u) & 0x3FFu) + 1u) << 16u);
-    note.texture_format = (image0 >> 20u) & 0xFu;
+    const TexImage& image = draw_state_.texture[map].image;
+    note.texture = image.guest_addr;
+    note.texture_size = static_cast<std::uint32_t>(image.width) | static_cast<std::uint32_t>(image.height) << 16u;
+    note.texture_format = static_cast<std::uint32_t>(image.format);
     note.phase = rt_phase_;
     note.buffer = rt_draw_buffer_;
     note.pack = rt_texture_source(map).pack;
@@ -3970,10 +3969,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
                       (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
-        const unsigned map = ps_key_.stages[0].order & 7u;
-        const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
-        note_rt_unnamed_glow((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
-                             << 5u);
+        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].order & 7u].image.guest_addr);
     }
     bool water =
         translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw() || ocean);
@@ -4065,10 +4061,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.light_key = rt_light_key();
     // (An untextured draw's map register holds an earlier draw's texture: not logged.)
     if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
-        const unsigned map = ps_key_.stages[0].order & 7u;
-        const std::uint8_t bank = map >= 4u ? bp::kTexHighBankOffset : 0u;
-        note_rt_unnamed_surface((state_.bp(static_cast<std::uint8_t>(bp::kTexImage3Base + bank + (map & 3u))) & 0xFFFFFFu)
-                                << 5u);
+        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].order & 7u].image.guest_addr);
     }
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
@@ -8675,7 +8668,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             : ((1u << vs_key_.num_texgens) - 1u);
     bool emboss_palette_required = false;
     for (unsigned texgen = 0; texgen < vs_key_.num_texgens; ++texgen) {
-        emboss_palette_required |= state_.tex_gen(texgen).type == TexGenType::EmbossMap;
+        emboss_palette_required |= draw_state_.texgen[texgen].type == TexGenType::EmbossMap;
     }
     // Enhanced lighting reads the lights in the pixel shader, unlit draws included.
     const bool palette_required =
@@ -9234,7 +9227,7 @@ bool GxBackend::begin_cached_draw_run(
     gpu::TopologyType topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
-    const EfbScissor efb_sc = state_.efb_scissor();
+    const EfbScissor efb_sc = efb_scissor(draw_state_.scissor, draw_state_.scissor_offset, 640, 528);
     const ScissorRect sc = efb_sc.rect;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
     // GX_CULL_ALL.
@@ -9570,8 +9563,8 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
                 break;
             }
         }
-        state::encode(record.state, events);
         for (const state::Op& op : record.state) {
+            state::encode(std::span<const state::Op>(&op, 1u), events);
             draw_state_.apply(op);
         }
         return;
@@ -9812,6 +9805,8 @@ void GxBackend::check_draw_state() {
     std::memcpy(expected.texture_matrix, draw_state_.texture_matrix, sizeof(expected.texture_matrix));
     expected.line_point = draw_state_.line_point;
     std::memcpy(expected.texture, draw_state_.texture, sizeof(expected.texture));
+    expected.scissor = state_.scissor();
+    expected.scissor_offset = decode_scissor_offset(state_.bp(bp::kScissorOffset));
     const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
     for (unsigned i = 0; i < 4u; ++i) {
         const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);

@@ -402,6 +402,22 @@ void NativeDrawState::apply(const state::Op& op) {
         coord[a[0] & 7u].line_offset = (a[1] & 1u) != 0u;
         coord[a[0] & 7u].point_offset = (a[2] & 1u) != 0u;
         break;
+    case state::kScissor: {
+        // GX's coordinates (342 added), 11 bits each, read back as the rasterizer holds them.
+        const auto left = static_cast<std::uint32_t>(op.f[0]);
+        const auto top = static_cast<std::uint32_t>(op.f[1]);
+        const std::uint32_t tp = top + 342u, lf = left + 342u;
+        const std::uint32_t bm = tp + static_cast<std::uint32_t>(op.f[3]) - 1u;
+        const std::uint32_t rt = lf + static_cast<std::uint32_t>(op.f[2]) - 1u;
+        scissor = decode_scissor((tp & 0x7FFu) | (lf & 0x7FFu) << 12u, (bm & 0x7FFu) | (rt & 0x7FFu) << 12u);
+        break;
+    }
+    case state::kScissorOffset: {
+        const std::uint32_t hx = static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[0]) + 342) >> 1u;
+        const std::uint32_t hy = static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[1]) + 342) >> 1u;
+        scissor_offset = decode_scissor_offset((hx & 0x3FFu) | (hy & 0x3FFu) << 10u);
+        break;
+    }
     case state::kTexLookup:
         set_texture_mode(texture[a[0] & 7u], a[1], a[2], a[4] == 1u, a[3], a[6] != 0u, op.f[2], a[7], a[5], op.f[0],
                          op.f[1]);
@@ -926,6 +942,12 @@ std::string draw_state_differences(const NativeDrawState& s, const NativeDrawSta
     field("mtxa", matrix_index_a(s), matrix_index_a(e));
     field("mtxb", matrix_index_b(s), matrix_index_b(e));
     field("linepoint", line_point_word(s), line_point_word(e));
+    field("scissorx0", static_cast<unsigned>(s.scissor.x0), static_cast<unsigned>(e.scissor.x0));
+    field("scissory0", static_cast<unsigned>(s.scissor.y0), static_cast<unsigned>(e.scissor.y0));
+    field("scissorx1", static_cast<unsigned>(s.scissor.x1), static_cast<unsigned>(e.scissor.x1));
+    field("scissory1", static_cast<unsigned>(s.scissor.y1), static_cast<unsigned>(e.scissor.y1));
+    field("scissoroffx", static_cast<unsigned>(s.scissor_offset.x), static_cast<unsigned>(e.scissor_offset.x));
+    field("scissoroffy", static_cast<unsigned>(s.scissor_offset.y), static_cast<unsigned>(e.scissor_offset.y));
     for (unsigned c = 0; c < 3u; ++c) {
         field("fogcolor", s.fog.color[c], e.fog.color[c]);
     }

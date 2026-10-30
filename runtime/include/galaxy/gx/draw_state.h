@@ -85,6 +85,10 @@ struct NativeDrawState {
 
     TextureMap texture[8]{};
 
+    // The scissor box (screen pixels, corners inclusive) and offset (GXSetScissor, GXSetScissorBoxOffset).
+    ScissorRect scissor{-342, -342, -342, -342};
+    ScissorOffset scissor_offset{};
+
     // A state op (galaxy/gx/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
