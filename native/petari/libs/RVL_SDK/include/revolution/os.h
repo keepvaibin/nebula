@@ -56,8 +56,6 @@ void* OSPhysicalToUncached(u32);
 extern "C" {
 #endif
 u32 __NebulaToPhysical(const void* addr);
-// The picture's shape the game draws for (NebulaDisplay in nebula_game_api.h), latched at each retrace.
-const struct NebulaDisplay* __NebulaDisplay(void);
 // main.dol's version of a table the game compiles in (comet schedules, event flags): `pCompiled` while they match,
 // else the DOL's, its strings read from main.dol (a mod's memory patches over main.dol's data change it).
 const void* __NebulaDolTable(u32 kind, const void* pCompiled);

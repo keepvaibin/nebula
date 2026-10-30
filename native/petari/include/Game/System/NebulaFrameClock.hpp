@@ -7,6 +7,8 @@
 
 #include <revolution/types.h>
 
+#include <nebula_game_api.h>
+
 namespace NebulaFrameClock {
     typedef void (*Hook)(u32 frame);
 
@@ -27,4 +29,8 @@ namespace NebulaFrameClock {
     bool enableDimming(bool enable);
     u32 framesUntilDimming();
     void resetIdle();
+
+    // The picture's shape the game draws for, latched at each frame from the host's output shape: the screen width,
+    // the camera's aspect and the layout canvas follow it (wide == 0: the Wii's 16:9).
+    const NebulaDisplay& display();
 }  // namespace NebulaFrameClock

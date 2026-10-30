@@ -23,8 +23,6 @@ int nebula_memory_init(void);
 uint8_t* nebula_arena_base(void);
 /* The module's own image (its code and data), for diagnostics. */
 void nebula_image_range(uintptr_t* base, uintptr_t* size);
-/* The output's shape, latched from the host after each retrace's vi_frame (vi/display_native.c). */
-void nebula_display_refresh(void);
 
 void nebula_memory_regions(NebulaMemoryRegion* out, int* count);
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
