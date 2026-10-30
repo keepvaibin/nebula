@@ -2420,8 +2420,7 @@ void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float 
                 sum = static_cast<float>((ambient >> shift) & 0xFFu) / 255.0f;
                 for (unsigned n = 0; n < 8u; ++n) {
                     if ((ctrl.light_mask & (1u << n)) != 0u) {
-                        const std::uint32_t lc = matrices_.word(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u * n + 3u));
-                        sum += facing * static_cast<float>((lc >> shift) & 0xFFu) / 255.0f;
+                        sum += facing * static_cast<float>(matrices_.light(n).color[k]) / 255.0f;
                     }
                 }
             }
@@ -3821,14 +3820,13 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             if ((mask & (1u << n)) == 0u) {
                 continue;
             }
-            const auto word = [&](unsigned k) {
-                return matrices_.word(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u * n + k));
-            };
+            const NativeLight& light = matrices_.light(n);
             info.light_index[found] = n;
-            for (unsigned k = 0; k < 6u; ++k) {
-                info.light[found][k] = std::bit_cast<float>(word(10u + k));
+            for (unsigned k = 0; k < 3u; ++k) {
+                info.light[found][k] = light.position[k];
+                info.light[found][3u + k] = light.direction[k];
             }
-            info.light_color[found] = word(3u);
+            info.light_color[found] = light_color_word(light);
             ++found;
         }
     }
@@ -4223,10 +4221,9 @@ bool RenderCore::rt_player_rig_draw() const noexcept {
     if (!color.lighting_enable || (color.light_mask & 3u) != 3u) {
         return false;
     }
-    const auto rgb = [this](std::uint16_t address) { return matrices_.word(address) & 0xFFFFFF00u; };
+    const auto rgb = [this](unsigned n) { return light_color_word(matrices_.light(n)) & 0xFFFFFF00u; };
     return (rgba_word(draw_state_.ambient_color[0]) & 0xFFFFFF00u) == rt_player_rig_[0] &&
-           rgb(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 3u)) == rt_player_rig_[1] &&
-           rgb(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u + 3u)) == rt_player_rig_[2];
+           rgb(0u) == rt_player_rig_[1] && rgb(1u) == rt_player_rig_[2];
 }
 
 // The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
@@ -4237,9 +4234,9 @@ std::uint32_t RenderCore::rt_aimed_lights() const noexcept {
     }
     std::uint32_t lights = 0u;
     for (unsigned n = 0; n < 2u; ++n) {
-        const std::uint32_t* words = matrices_.raw() + MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition;
         if ((rt_follow_lights_ & (1u << n)) != 0u &&
-            std::memcmp(words, rt_light_words_[n].data(), sizeof(rt_light_words_[n])) == 0) {
+            std::memcmp(matrices_.light(n).position, rt_light_positions_[n].data(), sizeof(rt_light_positions_[n])) ==
+                0) {
             lights |= 1u << n;
         }
     }
@@ -4253,7 +4250,7 @@ void RenderCore::write_rt_lights(std::uint32_t* palette) noexcept {
         return;
     }
     const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-    aim_actor_lights(palette, matrices_.raw(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
+    aim_actor_lights(palette, matrices_.lights(), static_cast<std::uint8_t>(rt_draw_lights_ & 0x01u),
                      static_cast<std::uint8_t>(rt_draw_lights_ & 0x02u), rt_light_aim_);
     if (start != 0u) [[unlikely]] {
         rt_light_cycles_ += trace_cycles() - start;
@@ -4272,12 +4269,10 @@ void RenderCore::note_rt_world_key() noexcept {
     if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
         return;
     }
-    const std::uint32_t* light = matrices_.raw() + MatrixMemory::kLightBase;
-    if (std::memcmp(light + kXfLightPosition, rt_light_words_[0].data(), sizeof(rt_light_words_[0])) != 0) {
+    const float* const p = matrices_.light(0u).position;
+    if (std::memcmp(p, rt_light_positions_[0].data(), sizeof(rt_light_positions_[0])) != 0) {
         return;
     }
-    const float p[3]{std::bit_cast<float>(light[kXfLightPosition]), std::bit_cast<float>(light[kXfLightPosition + 1u]),
-                     std::bit_cast<float>(light[kXfLightPosition + 2u])};
     const float distance2 = p[0] * p[0] + p[1] * p[1] + p[2] * p[2];
     if (!(distance2 > kActorLightFar * kActorLightFar) || !std::isfinite(distance2)) {
         return;
@@ -4288,7 +4283,7 @@ void RenderCore::note_rt_world_key() noexcept {
     const std::array<float, 3> direction{(v[0] * p[0] + v[4] * p[1] + v[8] * p[2]) * inverse,
                                          (v[1] * p[0] + v[5] * p[1] + v[9] * p[2]) * inverse,
                                          (v[2] * p[0] + v[6] * p[1] + v[10] * p[2]) * inverse};
-    const std::uint32_t color = light[3];
+    const std::uint32_t color = light_color_word(matrices_.light(0u));
     RtWorldKey* found = nullptr;
     for (std::uint32_t i = 0; i < rt_world_key_count_ && found == nullptr; ++i) {
         RtWorldKey& key = rt_world_keys_[i];
@@ -8250,9 +8245,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const std::uint64_t start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
         for (unsigned n = 0; n < 2u; ++n) {
             if ((rt_light_pending_ & (1u << n)) != 0u) {
-                std::memcpy(rt_light_words_[n].data(),
-                            matrices_.raw() + MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition,
-                            sizeof(rt_light_words_[n]));
+                std::memcpy(rt_light_positions_[n].data(), matrices_.light(n).position, sizeof(rt_light_positions_[n]));
             }
         }
         rt_light_pending_ = 0u;
@@ -8274,18 +8267,17 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
             ++traced;
-            const std::uint32_t* l = matrices_.raw() + MatrixMemory::kLightBase;
+            const NativeLight& l = matrices_.light(0u);
+            const NativeLight& l1 = matrices_.light(1u);
             std::fprintf(stderr,
                          "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
                          "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
                          rt_light_serial_, lights & 0xFFu, channel_word(draw_state_.channel[0]),
                          channel_word(draw_state_.channel[1]),
                          channel_word(draw_state_.channel[2]),
-                         channel_word(draw_state_.channel[3]), l[3],
-                         std::bit_cast<float>(l[4]), std::bit_cast<float>(l[5]), std::bit_cast<float>(l[6]),
-                         std::bit_cast<float>(l[7]), std::bit_cast<float>(l[8]), std::bit_cast<float>(l[9]),
-                         std::bit_cast<float>(l[10]), std::bit_cast<float>(l[11]), std::bit_cast<float>(l[12]), l[19],
-                         std::bit_cast<float>(l[26]), std::bit_cast<float>(l[27]), std::bit_cast<float>(l[28]));
+                         channel_word(draw_state_.channel[3]), light_color_word(l), l.angle[0], l.angle[1],
+                         l.angle[2], l.distance[0], l.distance[1], l.distance[2], l.position[0], l.position[1],
+                         l.position[2], light_color_word(l1), l1.position[0], l1.position[1], l1.position[2]);
         }
     } else {
         rt_draw_lights_ = 0u;
@@ -9519,21 +9511,15 @@ void RenderCore::on_invalidate_textures() {
 }
 
 void RenderCore::load_light(const state::Op& op) {
-    // Sixteen words a light from 0x600: three reserved, the colour, the angle and distance terms (a0-a2, k0-k2), then
-    // the position and direction (GXLoadLightObjImm).
-    const auto base = static_cast<std::uint16_t>(MatrixMemory::kLightBase + MatrixMemory::kLightWords * (op.a[0] & 7u));
-    std::uint32_t words[6];
-    for (unsigned i = 0; i < 6u; ++i) {
-        words[i] = std::bit_cast<std::uint32_t>(op.f[i]);
-    }
+    // Light a[0]: its colour (a[1-4]) and angle and distance terms (f[0-5]), or its position and direction (f[0-5]).
+    const unsigned n = op.a[0] & 7u;
+    const float first[3] = {op.f[0], op.f[1], op.f[2]};
+    const float second[3] = {op.f[3], op.f[4], op.f[5]};
     if (op.kind == state::kLightAttenuation) {
-        const std::uint32_t head[4] = {0u, 0u, 0u,
-                                       static_cast<std::uint32_t>(op.a[1]) << 24u | static_cast<std::uint32_t>(op.a[2]) << 16u |
-                                           static_cast<std::uint32_t>(op.a[3]) << 8u | op.a[4]};
-        matrices_.load(base, head, 4u);
-        matrices_.load(static_cast<std::uint16_t>(base + 4u), words, 6u);
+        const std::uint8_t color[4] = {op.a[1], op.a[2], op.a[3], op.a[4]};
+        matrices_.load_light_attenuation(n, color, first, second);
     } else {
-        matrices_.load(static_cast<std::uint16_t>(base + 10u), words, 6u);
+        matrices_.load_light_position(n, first, second);
     }
 }
 

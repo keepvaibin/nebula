@@ -697,7 +697,7 @@ private:
     // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
     // colour (RGBA8); whether the scene is followed (the ray tracer lights it and its camera is
     // known) and that camera; GX lights 0 and 1: those the hooked light loads left (known) and of
-    // them those following the camera, those whose loaded position words (rt_light_words_) the next
+    // them those following the camera, those whose loaded positions (rt_light_positions_) the next
     // draw takes; the moved lights of the palette snapshot in use and of the flushed draw (serial
     // << 8 | light bits).
     ActorLightAim rt_light_aim_{};
@@ -711,7 +711,7 @@ private:
     std::uint8_t rt_known_lights_ = 0;
     std::uint8_t rt_follow_lights_ = 0;
     std::uint8_t rt_light_pending_ = 0;
-    std::array<std::array<std::uint32_t, 3>, 2> rt_light_words_{};
+    std::array<std::array<float, 3>, 2> rt_light_positions_{};
     std::uint32_t rt_palette_lights_ = 0;
     std::uint32_t rt_draw_lights_ = 0;
     // The open scene's candidate key lights: the world-fixed GX light 0 of its lit draws, by world

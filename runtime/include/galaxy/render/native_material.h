@@ -4,6 +4,8 @@
 // the order J3D's material display list set it.
 #pragma once
 
+#include "galaxy/render/matrix_memory.h"
+
 #include <cstdint>
 
 namespace galaxy::render {
@@ -42,11 +44,7 @@ struct Texture {
     std::uint8_t palette_format, bias_clamp;
 };
 
-struct Light {
-    float position[3], direction[3];
-    float angle[3], distance[3];
-    std::uint8_t color[4];
-};
+using Light = NativeLight;  // NebulaLight's layout
 
 struct Program {
     std::uint8_t tev_stages, tex_gens, channels, ind_stages, cull;

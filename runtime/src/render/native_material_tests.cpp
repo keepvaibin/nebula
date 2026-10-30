@@ -5,6 +5,7 @@
 #include "galaxy/render/native_material.h"
 #include "galaxy/render/shader_keys.h"
 
+#include <bit>
 #include <cstdio>
 #include <cstring>
 #include <random>
@@ -221,11 +222,84 @@ void values_only_marks_no_program_change() {
     std::printf("ok: values-only application leaves the shader keys\n");
 }
 
+// A light's words in the light section, as the shaders read them.
+bool section_holds(const MatrixMemory& memory, unsigned n, const NativeLight& l) {
+    const auto at = [&](std::uint32_t word) {
+        return memory.word(MatrixMemory::kLightBase + MatrixMemory::kLightWords * n + word);
+    };
+    for (unsigned i = 0; i < 3u; ++i) {
+        if (at(MatrixMemory::kLightPositionWord + i) != std::bit_cast<std::uint32_t>(l.position[i]) ||
+            at(MatrixMemory::kLightDirectionWord + i) != std::bit_cast<std::uint32_t>(l.direction[i]) ||
+            at(MatrixMemory::kLightAngleWord + i) != std::bit_cast<std::uint32_t>(l.angle[i]) ||
+            at(MatrixMemory::kLightDistanceWord + i) != std::bit_cast<std::uint32_t>(l.distance[i])) {
+            return false;
+        }
+    }
+    return at(MatrixMemory::kLightColorWord) == light_color_word(l);
+}
+
+bool same_light(const NativeLight& a, const NativeLight& b) {
+    return std::memcmp(&a, &b, sizeof(NativeLight)) == 0;
+}
+
+// E-05 step 2: the lights are typed; the light section is written from them. A material's lights, then the light
+// ops' parts (colour and attenuation; position and direction), each leave the typed light and the section equal.
+void typed_lights_write_the_section() {
+    Random r;
+    bool ok = true;
+    for (unsigned trial = 0; trial < 2000u && ok; ++trial) {
+        MatrixMemory memory;
+        material::Program program{};
+        program.loads = material::kLoadsLights | material::kLoadsChannels;  // lights load with the channels
+        material::Values values{};
+        values.light_mask = static_cast<std::uint8_t>(r(256u));
+        for (unsigned n = 0; n < 8u; ++n) {
+            NativeLight& l = values.light[n];
+            for (unsigned i = 0; i < 3u; ++i) {
+                l.position[i] = r.real(-1e5f, 1e5f);
+                l.direction[i] = r.real(-1.0f, 1.0f);
+                l.angle[i] = r.real(-2.0f, 2.0f);
+                l.distance[i] = r.real(0.0f, 4.0f);
+            }
+            for (unsigned i = 0; i < 4u; ++i) {
+                l.color[i] = static_cast<std::uint8_t>(r(256u));
+            }
+        }
+        load_matrices(program, values, memory);
+        for (unsigned n = 0; n < 8u; ++n) {
+            const NativeLight expected = (values.light_mask & (1u << n)) != 0u ? values.light[n] : NativeLight{};
+            ok = ok && same_light(memory.light(n), expected) && section_holds(memory, n, expected);
+        }
+        const unsigned n = r(8u);
+        NativeLight next = memory.light(n);
+        const std::uint8_t color[4] = {static_cast<std::uint8_t>(r(256u)), static_cast<std::uint8_t>(r(256u)),
+                                       static_cast<std::uint8_t>(r(256u)), static_cast<std::uint8_t>(r(256u))};
+        const float angle[3] = {r.real(-2.0f, 2.0f), r.real(-2.0f, 2.0f), r.real(-2.0f, 2.0f)};
+        const float distance[3] = {r.real(0.0f, 4.0f), r.real(0.0f, 4.0f), r.real(0.0f, 4.0f)};
+        memory.load_light_attenuation(n, color, angle, distance);
+        std::memcpy(next.color, color, sizeof(color));
+        std::memcpy(next.angle, angle, sizeof(angle));
+        std::memcpy(next.distance, distance, sizeof(distance));
+        ok = ok && same_light(memory.light(n), next) && section_holds(memory, n, next);
+        const float position[3] = {r.real(-1e5f, 1e5f), r.real(-1e5f, 1e5f), r.real(-1e5f, 1e5f)};
+        const float direction[3] = {r.real(-1.0f, 1.0f), r.real(-1.0f, 1.0f), r.real(-1.0f, 1.0f)};
+        memory.load_light_position(n, position, direction);
+        std::memcpy(next.position, position, sizeof(position));
+        std::memcpy(next.direction, direction, sizeof(direction));
+        ok = ok && same_light(memory.light(n), next) && section_holds(memory, n, next);
+    }
+    check(ok, "typed lights and the light section agree after material and light-op loads");
+    if (ok) {
+        std::printf("ok: typed lights write the light section\n");
+    }
+}
+
 }  // namespace
 
 int main() {
     values_only_matches_whole();
     values_only_marks_no_program_change();
+    typed_lights_write_the_section();
     if (g_failures != 0) {
         std::printf("%d native material checks FAILED\n", g_failures);
         return 1;

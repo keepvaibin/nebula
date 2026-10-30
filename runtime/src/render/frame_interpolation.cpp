@@ -439,7 +439,10 @@ bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) no
 
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
               const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
-    for (unsigned i = 0; i < 16u; ++i) out[i] = b[i];
+    constexpr unsigned kColor = MatrixMemory::kLightColorWord, kAngle = MatrixMemory::kLightAngleWord,
+                       kPosition = MatrixMemory::kLightPositionWord, kDirection = MatrixMemory::kLightDirectionWord;
+    static_assert(kAngle + 6u == kPosition);  // the angle and distance terms, then position and direction
+    for (unsigned i = 0; i < MatrixMemory::kLightWords; ++i) out[i] = b[i];
     if (camera.known && camera.cut) {
         return;
     }
@@ -455,21 +458,21 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
     // Color: RGBA8 per byte.
     std::uint32_t color = 0u;
     for (unsigned shift = 0; shift < 32u; shift += 8u) {
-        const float ca = static_cast<float>((a[3] >> shift) & 0xFFu);
-        const float cb = static_cast<float>((b[3] >> shift) & 0xFFu);
+        const float ca = static_cast<float>((a[kColor] >> shift) & 0xFFu);
+        const float cb = static_cast<float>((b[kColor] >> shift) & 0xFFu);
         const float c = std::clamp(ca + (cb - ca) * t, 0.0f, 255.0f);
         color |= static_cast<std::uint32_t>(std::lround(c)) << shift;
     }
-    out[3] = color;
+    out[kColor] = color;
     // Angle and distance attenuation.
-    for (unsigned i = 4u; i < 10u; ++i) {
+    for (unsigned i = kAngle; i < kAngle + 6u; ++i) {
         const float fa = word_float(a[i]), fb = word_float(b[i]);
         if (std::isfinite(fa) && std::isfinite(fb)) out[i] = float_word(fa + (fb - fa) * t);
     }
-    const float pa[3]{word_float(a[10]), word_float(a[11]), word_float(a[12])};
-    const float pb[3]{word_float(b[10]), word_float(b[11]), word_float(b[12])};
-    const float da[3]{word_float(a[13]), word_float(a[14]), word_float(a[15])};
-    const float db[3]{word_float(b[13]), word_float(b[14]), word_float(b[15])};
+    const float pa[3]{word_float(a[kPosition]), word_float(a[kPosition + 1u]), word_float(a[kPosition + 2u])};
+    const float pb[3]{word_float(b[kPosition]), word_float(b[kPosition + 1u]), word_float(b[kPosition + 2u])};
+    const float da[3]{word_float(a[kDirection]), word_float(a[kDirection + 1u]), word_float(a[kDirection + 2u])};
+    const float db[3]{word_float(b[kDirection]), word_float(b[kDirection + 1u]), word_float(b[kDirection + 2u])};
     for (unsigned i = 0; i < 3u; ++i) {
         if (!std::isfinite(pa[i]) || !std::isfinite(pb[i]) || !std::isfinite(da[i]) ||
             !std::isfinite(db[i])) {
@@ -509,8 +512,8 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         for (float& v : d) v *= scale;
     }
     for (unsigned i = 0; i < 3u; ++i) {
-        out[10u + i] = float_word(p[i]);
-        out[13u + i] = float_word(d[i]);
+        out[kPosition + i] = float_word(p[i]);
+        out[kDirection + i] = float_word(d[i]);
     }
 }
 void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept {

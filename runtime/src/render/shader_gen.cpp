@@ -30,6 +30,11 @@ namespace galaxy::render {
 
 // The per-pixel lighting text reads the light section at float4 0xA8.
 static_assert(MatrixMemory::kLightBase / 4u == 0xA8u);
+// The light text (emit_light, ppl_add_light, enh_light, the emboss texgen; uber_vs.hlsl add_light) reads a light
+// as four float4: the colour in the first's w, the angle terms, the distance terms, position and direction after.
+static_assert(MatrixMemory::kLightColorWord == 3u && MatrixMemory::kLightAngleWord == 4u &&
+              MatrixMemory::kLightDistanceWord == 7u && MatrixMemory::kLightPositionWord == 10u &&
+              MatrixMemory::kLightDirectionWord == 13u);
 
 namespace {
 

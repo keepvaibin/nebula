@@ -272,24 +272,27 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
         a = b;
     }
     const std::uint32_t* const end_a = held ? nullptr : a;
-    if (a[3] != b[3]) {
-        color8(dst + 3u, a[3], b[3]);
+    constexpr unsigned kColor = MatrixMemory::kLightColorWord, kAngle = MatrixMemory::kLightAngleWord,
+                       kPosition = MatrixMemory::kLightPositionWord, kDirection = MatrixMemory::kLightDirectionWord;
+    static_assert(kDirection == kPosition + 3u);  // the Light op writes position then direction
+    if (a[kColor] != b[kColor]) {
+        color8(dst + kColor, a[kColor], b[kColor]);
     }
     float from[6], to[6];
     bool attenuation_moves = false;
     for (unsigned i = 0; i < 6u; ++i) {
-        const float fa = word_float(a[4u + i]), fb = word_float(b[4u + i]);
+        const float fa = word_float(a[kAngle + i]), fb = word_float(b[kAngle + i]);
         from[i] = std::isfinite(fa) && std::isfinite(fb) ? fa : fb;
         to[i] = fb;
         attenuation_moves = attenuation_moves || from[i] != to[i];
     }
     if (attenuation_moves) {
-        lerp(dst + 4u, from, to, 6u);
+        lerp(dst + kAngle, from, to, 6u);
     }
-    const float pa[3]{word_float(a[10]), word_float(a[11]), word_float(a[12])};
-    const float pb[3]{word_float(b[10]), word_float(b[11]), word_float(b[12])};
-    const float da[3]{word_float(a[13]), word_float(a[14]), word_float(a[15])};
-    const float db[3]{word_float(b[13]), word_float(b[14]), word_float(b[15])};
+    const float pa[3]{word_float(a[kPosition]), word_float(a[kPosition + 1u]), word_float(a[kPosition + 2u])};
+    const float pb[3]{word_float(b[kPosition]), word_float(b[kPosition + 1u]), word_float(b[kPosition + 2u])};
+    const float da[3]{word_float(a[kDirection]), word_float(a[kDirection + 1u]), word_float(a[kDirection + 2u])};
+    const float db[3]{word_float(b[kDirection]), word_float(b[kDirection + 1u]), word_float(b[kDirection + 2u])};
     if (!finite_all(pa, 3u) || !finite_all(pb, 3u) || !finite_all(da, 3u) || !finite_all(db, 3u)) {
         return;
     }
@@ -312,13 +315,14 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
     const std::uint32_t at = append(p, kLightWords);
     std::uint32_t flags = split ? kFlagLightSplit : 0u;
     if (split && !endpoint_cameras_) {
-        push(OpKind::Light, flags, 6u, dst + 10u, at);
+        push(OpKind::Light, flags, 6u, dst + kPosition, at);
         return;
     }
     // The ends as the frames have them: position then direction.
     const auto ends = [&](const std::uint32_t* light) {
-        const float values[6]{word_float(light[10]), word_float(light[11]), word_float(light[12]),
-                              word_float(light[13]), word_float(light[14]), word_float(light[15])};
+        const float values[6]{word_float(light[kPosition]), word_float(light[kPosition + 1u]),
+                              word_float(light[kPosition + 2u]), word_float(light[kDirection]),
+                              word_float(light[kDirection + 1u]), word_float(light[kDirection + 2u])};
         append(values, 6u);
     };
     if (end_a != nullptr) {
@@ -327,7 +331,7 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
     }
     flags |= kFlagEndB;
     ends(b);
-    push(OpKind::Light, flags, 6u, dst + 10u, at);
+    push(OpKind::Light, flags, 6u, dst + kPosition, at);
 }
 
 void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,

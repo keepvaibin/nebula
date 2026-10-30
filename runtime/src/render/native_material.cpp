@@ -28,29 +28,12 @@ void texture_matrices(const Program& m, const Values& v, MatrixMemory& memory, b
     }
 }
 
-// J3D's lights (diffLight): sixteen words a light from 0x600 (colour at 3, angle and distance terms at 4-9,
-// position at 10-12, direction at 13-15).
+// J3D's lights (diffLight): the lights the material's mask names.
 void lights(const Program& m, const Values& v, MatrixMemory& memory) {
     for (unsigned i = 0; (m.loads & kLoadsLights) != 0u && i < 8u; ++i) {
-        if ((v.light_mask & (1u << i)) == 0u) {
-            continue;
+        if ((v.light_mask & (1u << i)) != 0u) {
+            memory.load_light(i, v.light[i]);
         }
-        const Light& l = v.light[i];
-        const auto base = static_cast<std::uint16_t>(MatrixMemory::kLightBase + MatrixMemory::kLightWords * i);
-        const std::uint32_t pos[3] = {std::bit_cast<std::uint32_t>(l.position[0]), std::bit_cast<std::uint32_t>(l.position[1]),
-                                      std::bit_cast<std::uint32_t>(l.position[2])};
-        const std::uint32_t attn[6] = {std::bit_cast<std::uint32_t>(l.angle[0]), std::bit_cast<std::uint32_t>(l.angle[1]),
-                                       std::bit_cast<std::uint32_t>(l.angle[2]), std::bit_cast<std::uint32_t>(l.distance[0]),
-                                       std::bit_cast<std::uint32_t>(l.distance[1]), std::bit_cast<std::uint32_t>(l.distance[2])};
-        const std::uint32_t dir[3] = {std::bit_cast<std::uint32_t>(l.direction[0]), std::bit_cast<std::uint32_t>(l.direction[1]),
-                                      std::bit_cast<std::uint32_t>(l.direction[2])};
-        const std::uint32_t colour = static_cast<std::uint32_t>(l.color[0]) << 24u |
-                                     static_cast<std::uint32_t>(l.color[1]) << 16u |
-                                     static_cast<std::uint32_t>(l.color[2]) << 8u | l.color[3];
-        memory.load(static_cast<std::uint16_t>(base + 0x0Au), pos, 3u);
-        memory.load(static_cast<std::uint16_t>(base + 0x04u), attn, 6u);
-        memory.load(static_cast<std::uint16_t>(base + 0x03u), &colour, 1u);
-        memory.load(static_cast<std::uint16_t>(base + 0x0Du), dir, 3u);
     }
 }
 

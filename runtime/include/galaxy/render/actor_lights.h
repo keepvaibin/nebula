@@ -31,9 +31,6 @@ inline constexpr float kActorLightDistance = 1.0e7f;
 // A world-fixed light this far from the camera (eye units) or farther counts as a directional key light
 // (RenderCore::note_rt_world_key).
 inline constexpr float kActorLightFar = 20000.0f;
-// XF words of one light: colour 3, position 10-12.
-inline constexpr unsigned kXfLightWords = 16u;
-inline constexpr unsigned kXfLightPosition = 10u;
 
 // One LightLoad host marker (aux: motion::LightSite, b: follow-camera bit per LightInfo): the GX
 // lights the load writes and those of them that follow the camera.
@@ -86,18 +83,18 @@ inline constexpr float kActorLightRampScenes = 16.0f;
 }
 
 // Writes the positions of the lights in `key` (towards the aim) and `fill` (opposite) into a palette
-// snapshot (XF words 0-0x67F; written, never read). `game`: the XF words the game loaded. While the
+// snapshot's light section (written, never read). `game`: the lights the game loaded. While the
 // aim's blend is below 1 a light turns from the game's direction (normalized lerp) and its distance
 // goes from the game's to kActorLightDistance: the game's lights stand 1e5 out, so a lerp of the
 // positions would turn nearly all the way in the first scenes.
-inline void aim_actor_lights(std::uint32_t* palette, const std::uint32_t* game, std::uint8_t key, std::uint8_t fill,
-                             const ActorLightAim& aim) noexcept {
+inline void aim_actor_lights(std::uint32_t* palette, const std::array<NativeLight, 8>& game, std::uint8_t key,
+                             std::uint8_t fill, const ActorLightAim& aim) noexcept {
     for (unsigned n = 0; n < 8u; ++n) {
         const bool towards = (key & (1u << n)) != 0u;
         if (!towards && (fill & (1u << n)) == 0u) {
             continue;
         }
-        const unsigned word = MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition;
+        const unsigned word = MatrixMemory::kLightBase + MatrixMemory::kLightWords * n + MatrixMemory::kLightPositionWord;
         const float sign = towards ? 1.0f : -1.0f;
         float d[3]{aim.key[0] * sign, aim.key[1] * sign, aim.key[2] * sign};
         float distance = kActorLightDistance;
@@ -105,7 +102,7 @@ inline void aim_actor_lights(std::uint32_t* palette, const std::uint32_t* game, 
             float from[3]{};
             float from_length = 0.0f;
             for (unsigned i = 0; i < 3u; ++i) {
-                from[i] = std::bit_cast<float>(game[word + i]);
+                from[i] = game[n].position[i];
                 from_length += from[i] * from[i];
             }
             from_length = std::sqrt(from_length);
