@@ -33,6 +33,7 @@
 #include <revolution/os.h>
 #include <revolution/tpl.h>
 #include <revolution/wpad.h>
+#include "Game/System/NebulaHost.hpp"
 
 namespace NrvNebulaAchievementBoard {
     NEW_NERVE(NebulaAchievementBoardNrvAppear, NebulaAchievementBoard, Appear);
@@ -1412,7 +1413,7 @@ void NebulaAchievementBoard::open() {
     p->mPointerIn = false;
     p->mOverBack = false;
     NebulaMenuFocus::holdCurrent(&p->mRepeat);
-    (void)__NebulaPointerWheel();  // turns from before it opened scroll nothing
+    (void)NebulaHost::pointerWheel();  // turns from before it opened scroll nothing
     p->mFrame = 0;
     p->mSwitchFrame = 0;
     p->mSwitchDirection = 0;
@@ -1668,7 +1669,7 @@ void NebulaAchievementBoard::exeAppear() {
 
 void NebulaAchievementBoard::exeWait() {
     NebulaBoardParts* p = mParts;
-    const s32 wheel = __NebulaPointerWheel();
+    const s32 wheel = NebulaHost::pointerWheel();
     if (MR::isSystemWipeActive()) {
         return;  // the board takes no input while it comes out of the black
     }

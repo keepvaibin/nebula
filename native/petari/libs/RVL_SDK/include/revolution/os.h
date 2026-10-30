@@ -56,58 +56,8 @@ void* OSPhysicalToUncached(u32);
 extern "C" {
 #endif
 u32 __NebulaToPhysical(const void* addr);
-// Game state the host's controls follow (NEBULA_CONTEXT_* in nebula_game_api.h).
-void __NebulaGameContext(u32 what, s32 value);
-// Tests: what a hidden run asks of the game this scene frame (NebulaTestAction in nebula_game_api.h).
-int __NebulaTestSceneFrame(void* action);
 // The picture's shape the game draws for (NebulaDisplay in nebula_game_api.h), latched at each retrace.
 const struct NebulaDisplay* __NebulaDisplay(void);
-// The grey of the borders around the picture for the scene being drawn (0 black, 1 white).
-void __NebulaSceneSurround(f32 intensity);
-// A Nebula option (NEBULA_OPTION_* in nebula_game_api.h).
-u32 __NebulaOption(u32 what);
-// A light of the game for the renderer (NEBULA_LIGHT_* and game_light in nebula_game_api.h).
-void __NebulaGameLight(u32 kind, u32 id, const f32* values);
-// The stage being played, before each 3D scene (game_stage in nebula_game_api.h).
-void __NebulaGameStage(const char* name);
-// What the player is doing, for Discord (NebulaHostServices::presence).
-void __NebulaPresence(const u16* galaxy, const u16* star, s32 power_stars);
-// An achievement the save data meets: 1 when newly unlocked, its name in `name` (NebulaHostServices::achievement).
-s32 __NebulaAchievement(const char* id, u16* name, u32 capacity);
-s32 __NebulaAchievementDate(const char* id);
-void __NebulaStatAdd(const char* name, u64 delta);
-u64 __NebulaStatGet(const char* name);
-// Nebula's settings menu (NebulaHostServices::settings_view and settings_input).
-struct NebulaSettingsView;
-void __NebulaSettingsView(struct NebulaSettingsView* view);
-void __NebulaSettingsInput(u32 action, s32 arg);
-// The 2D layer at the window's resolution while a Nebula screen with small text shows (sharp_2d).
-void __NebulaSharp2D(u32 on);
-// The button icons the game shows now (button_icons in nebula_game_api.h).
-struct NebulaButtonIcons;
-void __NebulaButtonIcons(struct NebulaButtonIcons* icons);
-// Nebula's own pictures for GALAXY_EXPORT_ART (art_export in nebula_game_api.h); NULL asks whether one is on.
-struct NebulaArtExport;
-u32 __NebulaArtExport(const struct NebulaArtExport* art);
-// The 2D layer's scale over the Wii's 640 x 456 (layer_2d_scale in nebula_game_api.h); 0 before the first frame.
-u32 __NebulaLayer2DScale(void);
-// The mouse wheel's turn since the last call, in 120ths of a notch, up positive (pointer_wheel in nebula_game_api.h).
-s32 __NebulaPointerWheel(void);
-// The host's HOME Menu as the game draws it (NEBULA_HBM_VIEW, NEBULA_HBM_POINT, NEBULA_HBM_CHOOSE).
-// A game object's name for the renderer (object_name in nebula_game_api.h).
-void __NebulaObjectName(const void* pObject, const char* pName);
-// How far a model's traced light reaches (light_reach in nebula_game_api.h).
-f32 __NebulaLightReach(const char* pModel, f32 radius);
-// The traced sun's world direction (traced_sun in nebula_game_api.h): 1, or 0 without one.
-int __NebulaTracedSun(f32* pDirection);
-// The settings' galaxy select (galaxy_select_stage, galaxy_select_names_wanted, galaxy_select_name in
-// nebula_game_api.h): its galaxy `index` (1, or 0 past the last), whether it waits for names, a name in the game's words.
-int __NebulaGalaxySelectStage(u32 index, char* pId, u32 capacity, u32* pStars);
-int __NebulaGalaxySelectNamesWanted(void);
-void __NebulaGalaxySelectName(u32 index, u32 star, const u16* pName);
-// A native equivalent of a mod's code patch (NEBULA_PATCH_* in nebula_game_api.h): 1 with `pValue` set (when not
-// null) while an enabled mod carries it, else 0.
-int __NebulaCodePatch(u32 id, u32* pValue);
 // main.dol's version of a table the game compiles in (comet schedules, event flags): `pCompiled` while they match,
 // else the DOL's, its strings read from main.dol (a mod's memory patches over main.dol's data change it).
 const void* __NebulaDolTable(u32 kind, const void* pCompiled);

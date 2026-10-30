@@ -13,6 +13,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <revolution/os.h>
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // Glyphs of the picture font (MR::addPictureFontTag's codes).
@@ -199,7 +200,7 @@ namespace {
     // Asks the host to unlock what is met; a new one waits for its pop-up.
     void tryUnlock(bool met, const char* pId) {
         const Entry* pEntry = met ? findEntry(pId) : nullptr;
-        if (pEntry == nullptr || sQueued >= cQueueMax || __NebulaAchievement(pId, nullptr, 0) == 0) {
+        if (pEntry == nullptr || sQueued >= cQueueMax || NebulaHost::achievement(pId, nullptr, 0) == 0) {
             return;
         }
         enqueue(*pEntry);
@@ -506,7 +507,7 @@ namespace NebulaAchievements {
         case Secret:
             return false;
         case AfterHalfway:
-            return __NebulaAchievementDate("halfway") != 0;
+            return NebulaHost::achievementDate("halfway") != 0;
         default:
             return true;
         }
@@ -541,7 +542,7 @@ namespace NebulaAchievements {
     }
 
     s32 getUnlockDate(s32 index) {
-        return index >= 0 && index < cEntryNum ? __NebulaAchievementDate(cEntries[index].mId) : 0;
+        return index >= 0 && index < cEntryNum ? NebulaHost::achievementDate(cEntries[index].mId) : 0;
     }
 
     void getFileProgress(NebulaFileProgress* pProgress) {
@@ -631,7 +632,7 @@ namespace NebulaAchievements {
         sStatFlushFrames = 0;
         for (s32 i = 0; i < NebulaStat_Num; i++) {
             if (sStatWaiting[i] != 0) {
-                __NebulaStatAdd(cStatNames[i], sStatWaiting[i]);
+                NebulaHost::statAdd(cStatNames[i], sStatWaiting[i]);
                 sStatWaiting[i] = 0;
             }
         }
@@ -641,7 +642,7 @@ namespace NebulaAchievements {
         if (stat < 0 || stat >= NebulaStat_Num) {
             return 0;
         }
-        return __NebulaStatGet(cStatNames[stat]) + sStatWaiting[stat];
+        return NebulaHost::statGet(cStatNames[stat]) + sStatWaiting[stat];
     }
 };  // namespace NebulaAchievements
 #endif

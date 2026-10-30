@@ -6,6 +6,7 @@
 #include "Game/Screen/StarPointerLayout.hpp"
 #include "Game/System/NerveExecutor.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // static const f32 hDebugPrintX =
@@ -331,7 +332,7 @@ void StarPointerOnOffController::updateMode() {
             if (mode != mMode) {
                 mMode = mode;
 #ifdef TARGET_PC
-                __NebulaGameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
+                NebulaHost::gameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
 #endif
 
                 switch (mMode) {
@@ -421,7 +422,7 @@ void StarPointerOnOffController::updateMode() {
 
     mMode = -1;
 #ifdef TARGET_PC
-    __NebulaGameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
+    NebulaHost::gameContext(NEBULA_CONTEXT_STAR_POINTER_MODE, mMode);
 #endif
     setupBase();
 }

@@ -25,6 +25,7 @@
 #include <nw4r/lyt/pane.h>
 #include <revolution/os.h>
 #include "Game/Util/RenderSignals.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // Host marker kinds and flags (galaxy/motion_signals.h).
@@ -229,7 +230,7 @@ namespace MotionSignal {
     }
 
     bool traceOnlyWanted() {
-        return NebulaRender::sDrawIdentities != 0 && __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
+        return NebulaRender::sDrawIdentities != 0 && NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
     }
 
     void traceOnly(bool begin) {

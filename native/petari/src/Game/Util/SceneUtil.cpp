@@ -24,6 +24,7 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     const JMapIdInfo cInitializeStartIdInfo(0, 0);
@@ -161,7 +162,7 @@ namespace MR {
 
     bool isStageSuddenDeathDodoryu() {
 #ifdef TARGET_PC
-        if (__NebulaCodePatch(NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU, nullptr)) {
+        if (NebulaHost::codePatch(NEBULA_PATCH_NO_SUDDEN_DEATH_DODORYU, nullptr)) {
             return false;
         }
 #endif
@@ -284,7 +285,7 @@ namespace MR {
     s32 getPlacedHiddenStarScenarioNo(const char* pStageName, s32 starId) {
         GalaxyStatusAccessor accessor = makeGalaxyStatusAccessor(pStageName);
 #ifdef TARGET_PC
-        s32 scenarioNo = __NebulaCodePatch(NEBULA_PATCH_NO_HIDDEN_STAR_TABLE, nullptr)
+        s32 scenarioNo = NebulaHost::codePatch(NEBULA_PATCH_NO_HIDDEN_STAR_TABLE, nullptr)
                              ? 0
                              : getPlacedHiddenStarScenarioNoFromTable(pStageName, starId);
 #else

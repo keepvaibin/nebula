@@ -7,6 +7,7 @@
 #include <revolution/os.h>
 #endif
 #include "Game/Util.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     mActor = pActor;
@@ -72,7 +73,7 @@ bool ClippingActorInfo::isWantedForLight(s32 farClipLevel) const {
     }
     if (mLightReach < 0.0f) {
         // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
-        mLightReach = mActor->mModelManager != nullptr ? __NebulaLightReach(MR::getModelResName(mActor), _8) : 0.0f;
+        mLightReach = mActor->mModelManager != nullptr ? NebulaHost::lightReach(MR::getModelResName(mActor), _8) : 0.0f;
     }
     return judge->isShadowCasterInView(*_4, _8, farClipLevel) ||
            (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));

@@ -23,6 +23,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/J3DGraphAnimator/J3DJoint.hpp>
 #include <cstdio>
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     static const char* sStarPointerTargetJoint[] = {"Joint00", "Joint01", "Joint02", "Joint03"};
@@ -265,7 +266,7 @@ bool SkeletalFishBaby::damage(const TVec3f& rAirBubblePos, bool shakeCameraNorma
         }
 
 #ifdef TARGET_PC
-        if (!__NebulaCodePatch(NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, nullptr))
+        if (!NebulaHost::codePatch(NEBULA_PATCH_SKELETAL_FISH_BABY_NO_BUBBLE, nullptr))
 #endif
         MR::appearAirBubble(rAirBubblePos, -1);
         setNerve(GET_NERVE_ANON(SkeletalFishBabyNrvBreak));

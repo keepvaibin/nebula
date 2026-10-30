@@ -24,6 +24,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace NrvSurfRay {
     NEW_NERVE(SurfRayNrvWaitPlayer, SurfRay, WaitPlayer);
@@ -492,7 +493,7 @@ bool SurfRay::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 
         mRider = MR::getSensorHost(pSender);
 #ifdef TARGET_PC
-        __NebulaGameContext(NEBULA_CONTEXT_TILT_SECTION, 2);
+        NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 2);
 #endif
         MR::startStarPointerMode1PInvalid2PValid(this);
         MR::invalidateClipping(this);

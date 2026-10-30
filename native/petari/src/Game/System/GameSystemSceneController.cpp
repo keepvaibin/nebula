@@ -25,6 +25,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <cstdio>
+#include "Game/System/NebulaHost.hpp"
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
 #endif
@@ -252,7 +253,7 @@ void GameSystemSceneController::drawScene() {
     if (pScene != nullptr) {
 #ifdef TARGET_PC
         // Black borders around a fitted picture unless the scene says otherwise (LogoScene's strap screen).
-        __NebulaSceneSurround(0.0f);
+        NebulaHost::sceneSurround(0.0f);
 #endif
         pScene->draw();
         mPlayTimerScene->draw();

@@ -13,6 +13,7 @@
 #include <nw4r/ut/Font.h>
 #include <nw4r/ut/Rect.h>
 #include <revolution/os.h>
+#include "Game/System/NebulaHost.hpp"
 
 namespace NebulaUi {
     nw4r::ut::Color color(u32 rgba) {
@@ -496,7 +497,7 @@ namespace NebulaUi {
         static u32 sShown = 0;
         const u32 next = shown ? (sShown | screen) : (sShown & ~screen);
         if ((next != 0) != (sShown != 0)) {
-            __NebulaSharp2D(next != 0 ? 1 : 0);
+            NebulaHost::sharp2D(next != 0 ? 1 : 0);
         }
         sShown = next;
     }

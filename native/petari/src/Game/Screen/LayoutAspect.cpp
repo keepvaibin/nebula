@@ -9,6 +9,7 @@
 #include <revolution/os.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/pane.h>
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // How a pane follows a canvas wider or taller than the authored 608x456.
@@ -346,7 +347,7 @@ namespace LayoutAspect {
 
         // This layout's rules and panes, looked up once.
         if (pManager->mFitRuleCount < 0) {
-            if (__NebulaOption(NEBULA_OPTION_TEST_DUMP_LAYOUTS) != 0) {
+            if (NebulaHost::option(NEBULA_OPTION_TEST_DUMP_LAYOUTS) != 0) {
                 dumpPane(pManager->mLayoutName != nullptr ? pManager->mLayoutName : "?", pRoot, 0);
             }
             pManager->mFitRuleCount = 0;

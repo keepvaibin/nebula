@@ -15,6 +15,7 @@
 #include "Game/Player/RushEndInfo.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 void MarioActorRush_FORCE_MATCH_SDATA2() {
     (void)0.001f;
@@ -202,7 +203,7 @@ void MarioActor::endRush(const RushEndInfo* pInfo) {
     if (_924 && (!pInfo->_1C || _924->mHost == pInfo->_1C)) {
         _934 = false;
 #ifdef TARGET_PC
-        __NebulaGameContext(NEBULA_CONTEXT_TILT_SECTION, 0);
+        NebulaHost::gameContext(NEBULA_CONTEXT_TILT_SECTION, 0);
 #endif
         _935 = true;
         mMario->stopJump();

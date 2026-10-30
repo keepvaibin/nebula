@@ -48,6 +48,7 @@
 #include "Game/Screen/NebulaQuitButton.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/NebulaCalendar.hpp"
+#include "Game/System/NebulaHost.hpp"
 #endif
 
 #define USER_FILE_NUM 6
@@ -1160,7 +1161,7 @@ void FileSelector::exeFileSelectStart() {
 void FileSelector::exeFileSelect() {
     if (MR::isFirstStep(this)) {
 #ifdef TARGET_PC
-        __NebulaPresence(nullptr, nullptr, -1);  // Discord: choosing a file
+        NebulaHost::presence(nullptr, nullptr, -1);  // Discord: choosing a file
 #endif
         validateSelectAll();
         appearAllIndex();

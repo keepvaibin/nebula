@@ -2,6 +2,7 @@
 #include "Game/NameObj/NameObjRegister.hpp"
 #include "Game/Scene/SceneNameObjMovementController.hpp"
 #include "Game/Util/SingletonHolder.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 #define FLAG_MOVEMENT_OFF 1u
 #define FLAG_SUSPEND 2u
@@ -10,7 +11,7 @@
 NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
 #ifdef TARGET_PC
     mMotionEpoch = 0;
-    __NebulaObjectName(this, pName);
+    NebulaHost::objectName(this, pName);
 #endif
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
@@ -43,7 +44,7 @@ void NameObj::initWithoutIter() {
 void NameObj::setName(const char* pName) {
     mName = pName;
 #ifdef TARGET_PC
-    __NebulaObjectName(this, pName);
+    NebulaHost::objectName(this, pName);
 #endif
 }
 

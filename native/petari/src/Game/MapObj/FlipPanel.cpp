@@ -10,6 +10,7 @@
 #include "Game/MapObj/MapObjActorInitInfo.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/JMath/JMath.hpp>
+#include "Game/System/NebulaHost.hpp"
 
 void FlipPanel_FORCE_MATCH_SDATA2() {
     (void)MR::epsilon();
@@ -58,7 +59,7 @@ void FlipPanel::init(const JMapInfoIter& rIter) {
     mDelegator = MR::createJointDelegatorWithNullChildFunc(this, &FlipPanel::calcJointMove, "Panel");
 #ifdef TARGET_PC
     u32 groupSize = 0x20;
-    __NebulaCodePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
+    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_GROUP, &groupSize);
     mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, groupSize);
 #else
     mFlipPanelGroup = MR::joinToGroupArray(this, rIter, 0, 0x20);
@@ -290,7 +291,7 @@ void FlipPanelObserver::init(const JMapInfoIter& rIter) {
     MR::invalidateClipping(this);
 #ifdef TARGET_PC
     u32 groupSize = 0x20;
-    __NebulaCodePatch(NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP, &groupSize);
+    NebulaHost::codePatch(NEBULA_PATCH_FLIP_PANEL_OBSERVER_GROUP, &groupSize);
     _8C = MR::joinToGroupArray(this, rIter, 0, groupSize);
 #else
     _8C = MR::joinToGroupArray(this, rIter, 0, 0x20);

@@ -7,6 +7,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include <nebula_game_api.h>
 #include <revolution/os.h>
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     // The traced sun's direction of travel (from the sun; else the stage key light's), when ray-traced shadows want
@@ -54,13 +55,13 @@ void ClippingJudge::movement() {
 #ifdef TARGET_PC
 void ClippingJudge::updateShadowCasters() {
     sShadowCasters = false;
-    sLightSources = __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
+    sLightSources = NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
     if (!sLightSources) {
         return;
     }
     // The sun the ray tracer lights the scene from (the game's visible sun, the stage table's, else the key light).
     f32 sun[3];
-    if (__NebulaTracedSun(sun) != 0) {
+    if (NebulaHost::tracedSun(sun) != 0) {
         sShadowDirection.set(-sun[0], -sun[1], -sun[2]);
         sShadowCasters = true;
         return;

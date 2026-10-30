@@ -25,6 +25,7 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     const s32 sMessangerOneUpNum = 5;
@@ -34,7 +35,7 @@ namespace {
     s32 messengerOneUpExNum() {
 #ifdef TARGET_PC
         u32 count = ::sMessangerOneUpExNum;
-        __NebulaCodePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
+        NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_EX_ONE_UPS, &count);
         return static_cast< s32 >(count);
 #else
         return ::sMessangerOneUpExNum;
@@ -236,7 +237,7 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
                 mIsPlayerLuigi = true;
             }
 #ifdef TARGET_PC
-            if (__NebulaCodePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
+            if (NebulaHost::codePatch(NEBULA_PATCH_MESSENGER_ALWAYS_EX, nullptr)) {
                 mIsPlayerLuigi = true;
             }
 #endif

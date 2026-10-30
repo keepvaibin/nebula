@@ -48,6 +48,7 @@ namespace {
 #endif
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 
 namespace {
@@ -113,7 +114,7 @@ void LogoScene::calcAnim() {
 
 void LogoScene::draw() const {
 #ifdef TARGET_PC
-    __NebulaSceneSurround(getStrapSurround(mStrapLayout, mLogoFader));
+    NebulaHost::sceneSurround(getStrapSurround(mStrapLayout, mLogoFader));
 #endif
     MR::drawInit();
 

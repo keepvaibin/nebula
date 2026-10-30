@@ -26,6 +26,7 @@
 #include <revolution/os.h>
 #include <revolution/wpad.h>
 #include <wstring.h>
+#include "Game/System/NebulaHost.hpp"
 
 using namespace NebulaUi;
 
@@ -1601,7 +1602,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
             mHeldFrames++;
             if (mHoverArrow == mHeldArrow && mHoverRow == static_cast< s32 >(rView.selected) && mHeldFrames >= cRepeatDelay &&
                 (mHeldFrames - cRepeatDelay) % cRepeatEvery == 0) {
-                __NebulaSettingsInput(NEBULA_SETTINGS_CHANGE, mHeldArrow);
+                NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mHeldArrow);
             }
             return;
         }
@@ -1609,7 +1610,7 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
     }
     if (mPointerMode && mHoverRow >= 0 && mHoverRow != static_cast< s32 >(rView.selected)) {
         mPointerRow = mHoverRow;
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
     }
     // The list held down: moved, it is dragged (as the Wii's lists, by pointing and holding A); let go where it was
     // pressed, the row there is clicked.
@@ -1636,16 +1637,16 @@ void NebulaSettingsScreen::readPointer(const NebulaSettingsView& rView) {
         return;
     }
     if (mHoverButton != nullptr) {
-        __NebulaSettingsInput(mHoverButton->mAction, 0);
+        NebulaHost::settingsInput(mHoverButton->mAction, 0);
     } else if (mHoverTab >= 0) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_PAGE, mHoverTab);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_PAGE, mHoverTab);
     } else if (mHoverRow >= 0 && (mHoverArrow != 0 || mHoverSlider)) {
         // An arrow steps the setting at once, going round at its ends; a slider takes the step under the pointer.
         mPointerMode = true;
         mPointerRow = mHoverRow;
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mHoverRow);
         if (mHoverArrow != 0) {
-            __NebulaSettingsInput(NEBULA_SETTINGS_CHANGE, mHoverArrow * 2);
+            NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, mHoverArrow * 2);
             mHeldArrow = mHoverArrow;
             mHeldFrames = 0;
         } else {
@@ -1671,11 +1672,11 @@ void NebulaSettingsScreen::clickRow(const NebulaSettingsView& rView, s32 row) {
     mPointerMode = true;
     mPointerRow = row;
     if (hasButtons(pData) && (mHoverRowButton >= 0 || rRow.mButtonCount == 1)) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
-        __NebulaSettingsInput(NEBULA_SETTINGS_PRESS, mHoverRowButton >= 0 ? mHoverRowButton : 0);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, mHoverRowButton >= 0 ? mHoverRowButton : 0);
     } else if ((pData->flags & NEBULA_SETTINGS_ROW_CHANGES) != 0 && !hasSlider(*pData)) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
-        __NebulaSettingsInput(NEBULA_SETTINGS_CHANGE, hasArrows(*pData) ? 2 : 1);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, row);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_CHANGE, hasArrows(*pData) ? 2 : 1);
     }
 }
 
@@ -1694,10 +1695,10 @@ void NebulaSettingsScreen::dragSlider(const NebulaSettingsView& rView, f32 x) {
     const s32 step = static_cast< s32 >(clamp((x - rRow.mSliderLeft) / length, 0.0f, 1.0f) * pData->slider_steps + 0.5f);
     const bool selected = mSliderRow == static_cast< s32 >(rView.selected);
     if (!selected) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, mSliderRow);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mSliderRow);
     }
     if (!selected || step != static_cast< s32 >(pData->slider_at)) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SET_VALUE, step);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SET_VALUE, step);
     }
 }
 
@@ -1749,8 +1750,8 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
                     place--;
                 }
                 if (mDropList != mItemList[index] || place != mItemPlace[index]) {
-                    __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, mDragRow);
-                    __NebulaSettingsInput(NEBULA_SETTINGS_MOVE_MOD, (mDropList + 1) << 16 | place);
+                    NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mDragRow);
+                    NebulaHost::settingsInput(NEBULA_SETTINGS_MOVE_MOD, (mDropList + 1) << 16 | place);
                     MR::startSystemSE("SE_SY_SELECT_PAUSE_ITEM");
                 }
             }
@@ -1764,13 +1765,13 @@ void NebulaSettingsScreen::readModsPointer(const NebulaSettingsView& rView, f32 
         return;
     }
     if (mHoverModButton >= 0 && mModButtonsRow >= 0) {
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, mModButtonsRow);
-        __NebulaSettingsInput(NEBULA_SETTINGS_PRESS, mHoverModButton);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, mModButtonsRow);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_PRESS, mHoverModButton);
     } else if (hovered >= 0) {
         // Held down: dragged once it moves.
         mPointerMode = true;
         mPointerRow = hovered;
-        __NebulaSettingsInput(NEBULA_SETTINGS_SELECT_ROW, hovered);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_SELECT_ROW, hovered);
         mDragRow = hovered;
         mDragFromX = x;
         mDragFromY = y;
@@ -2450,7 +2451,7 @@ void NebulaSettingsScreen::placeJoyCon(f32 top) {
 // The Pair Joy-Con pictures at the 2D layer's density, painted for about `budgetMicros` this frame; that density in
 // pixels per menu unit.
 void NebulaSettingsScreen::paintJoyCon(u32 budgetMicros, f32* pPixelsX, f32* pPixelsY) const {
-    const u32 scale = __NebulaLayer2DScale();
+    const u32 scale = NebulaHost::layer2DScale();
     const f32 layer = scale != 0u ? static_cast< f32 >(scale) : 3.0f;
     *pPixelsX = 640.0f * layer / mWidth;
     *pPixelsY = 456.0f * layer / mHeight;
@@ -2642,11 +2643,11 @@ namespace NebulaSettingsMenu {
         if (sScreen == nullptr || !sScreen->isBuilt()) {
             return;
         }
-        __NebulaSettingsView(&sView);
+        NebulaHost::settingsView(&sView);
         // Not before a file is chosen (the logos, the title, the file select): asked for there, it closes at once.
         if (sView.open && !sScreen->isShown() &&
             (MR::isEqualSceneName("Logo") || MR::isEqualSceneName("Title") || MR::isStageFileSelect())) {
-            __NebulaSettingsInput(NEBULA_SETTINGS_CLOSE, 0);
+            NebulaHost::settingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }
         sScreen->step(sView, NebulaHomeMenu::view());
@@ -2693,7 +2694,7 @@ namespace NebulaSettingsMenu {
     }
 
     void requestOpen() {
-        __NebulaSettingsInput(NEBULA_SETTINGS_OPEN, 0);
+        NebulaHost::settingsInput(NEBULA_SETTINGS_OPEN, 0);
     }
 };  // namespace NebulaSettingsMenu
 #endif

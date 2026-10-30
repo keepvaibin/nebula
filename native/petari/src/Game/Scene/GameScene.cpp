@@ -78,6 +78,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include "Game/Util/RenderSignals.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -211,7 +212,7 @@ namespace {
         const s32 scenario = MR::getCurrentScenarioNo();
         const wchar_t* pGalaxy = MR::getGalaxyNameOnCurrentLanguage(pStage);
         const wchar_t* pStar = scenario > 0 ? MR::getScenarioNameOnCurrentLanguage(pStage, scenario) : nullptr;
-        __NebulaPresence(reinterpret_cast< const u16* >(pGalaxy), reinterpret_cast< const u16* >(pStar), MR::getPowerStarNum());
+        NebulaHost::presence(reinterpret_cast< const u16* >(pGalaxy), reinterpret_cast< const u16* >(pStar), MR::getPowerStarNum());
     }
 };  // namespace
 #endif
@@ -274,7 +275,7 @@ void GameScene::draw() const {
     // Where the camera is in water, how deep: ray tracing lights the water it looks through.
     {
         const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
-        __NebulaGameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
+        NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
     // Hidden test runs (the host's GALAXY_TEST_GALAXY_TOUR and GALAXY_TEST_TELEPORT): through the game's own calls.
     // A star taken in a test waits for play (the galaxy's opening camera and starter end in SceneAction, and would
@@ -287,19 +288,19 @@ void GameScene::draw() const {
         sPendingStar = 0;
     }
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
-    if (__NebulaGalaxySelectNamesWanted() != 0) {
+    if (NebulaHost::galaxySelectNamesWanted() != 0) {
         char id[64];
         u32 stars = 0;
-        for (u32 i = 0; __NebulaGalaxySelectStage(i, id, sizeof(id), &stars) != 0; ++i) {
-            __NebulaGalaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id)));
+        for (u32 i = 0; NebulaHost::galaxySelectStage(i, id, sizeof(id), &stars) != 0; ++i) {
+            NebulaHost::galaxySelectName(i, 0, reinterpret_cast< const u16* >(MR::getGalaxyNameOnCurrentLanguage(id)));
             for (u32 star = 1; star <= stars; ++star) {
-                __NebulaGalaxySelectName(i, star,
+                NebulaHost::galaxySelectName(i, star,
                                          reinterpret_cast< const u16* >(MR::getScenarioNameOnCurrentLanguage(id, star)));
             }
         }
     }
     NebulaTestAction action;
-    if (__NebulaTestSceneFrame(&action)) {
+    if (NebulaHost::testSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
         if (action.kind == NEBULA_TEST_CHANGE_STAGE) {
             strcpy(sStage, action.stage);
@@ -619,7 +620,7 @@ void GameScene::draw3D() const {
 
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
-    __NebulaGameStage(MR::getCurrentStageName());
+    NebulaHost::gameStage(MR::getCurrentStageName());
     NebulaRender::sceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
     MotionSignal::sceneBegin();
     GameLightSignal::frame();

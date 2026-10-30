@@ -20,6 +20,7 @@
 #include <nw4r/ut/ResFont.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
+#include "Game/System/NebulaHost.hpp"
 
 // Nebula's icons are textures of its own, never the game's: the picture font gains sheets after its own (each
 // controller family's icons, one to a cell) and a code map before its own that sends each icon's code to the glyph the
@@ -1660,14 +1661,14 @@ namespace {
                     snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
                     NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), GX_TF_RGB5A3,
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
-                    __NebulaArtExport(&art);
+                    NebulaHost::artExport(&art);
                 }
                 const u8* pTexels = sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets + sheet) * sFont.mSheetBytes;
                 pictureToRgba8(pTexels, sFont.mSheetWidth, sFont.mSheetHeight, pImage);
                 snprintf(name, sizeof(name), "%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
                 NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), GX_TF_RGB5A3,
                                        pImage, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
-                __NebulaArtExport(&art);
+                NebulaHost::artExport(&art);
             }
             // The A bubble as each icon (A's code can show any of them).
             for (s32 k = 0; k < cAtlasIcons; k++) {
@@ -1684,7 +1685,7 @@ namespace {
                     snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
                     NebulaArtExport art = {name, picture.mTexels, static_cast< u32 >(size), static_cast< u32 >(size), GX_TF_RGB5A3,
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
-                    __NebulaArtExport(&art);
+                    NebulaHost::artExport(&art);
                 }
             }
         }
@@ -1715,14 +1716,14 @@ namespace {
                 snprintf(name, sizeof(name), "Keyboard/%s", keyText);
                 NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), GX_TF_RGB5A3,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
-                __NebulaArtExport(&art);
+                NebulaHost::artExport(&art);
             }
             const u8* pTexels = sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes;
             pictureToRgba8(pTexels, sFont.mSheetWidth, sFont.mSheetHeight, pImage);
             snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
             NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), GX_TF_RGB5A3,
                                    pImage, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
-            __NebulaArtExport(&art);
+            NebulaHost::artExport(&art);
         }
         for (s32 slot = 0; slot < NEBULA_KEYS; slot++) {
             for (s32 look = 0; look < 2 && keyHasCell(slot); look++) {
@@ -1739,7 +1740,7 @@ namespace {
                 snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
                 NebulaArtExport art = {name, picture.mTexels, static_cast< u32 >(size), static_cast< u32 >(size), GX_TF_RGB5A3,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
-                __NebulaArtExport(&art);
+                NebulaHost::artExport(&art);
             }
         }
         free(pHdPixels);
@@ -2085,7 +2086,7 @@ namespace NebulaIcons {
         if (sFontState == FontUnread) {
             JUTNativeLog("NebulaIcons: the picture font is not loaded; its icons stay the Wii's\n");
             sFontState = FontUnusable;
-        } else if (sFontState == FontReady && __NebulaArtExport(nullptr) != 0) {
+        } else if (sFontState == FontReady && NebulaHost::artExport(nullptr) != 0) {
             exportArt();
         }
     }
@@ -2093,7 +2094,7 @@ namespace NebulaIcons {
     void update() {
         NebulaButtonIcons now;
         memset(&now, 0, sizeof(now));
-        __NebulaButtonIcons(&now);
+        NebulaHost::buttonIcons(&now);
         // The Wii Remote's pictures follow the remote even when the icons cannot be drawn.
         sShown.wii_remote = now.wii_remote;
         if (sFontState != FontReady || memcmp(&now, &sShown, sizeof(now)) == 0) {

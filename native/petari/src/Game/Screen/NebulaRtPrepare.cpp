@@ -12,6 +12,7 @@
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
 #include <revolution/os.h>
+#include "Game/System/NebulaHost.hpp"
 
 using namespace NebulaUi;
 
@@ -263,11 +264,11 @@ namespace NebulaRtPrepare {
     }
 
     void update() {
-        sPhase = static_cast< s32 >(__NebulaOption(NEBULA_OPTION_RT_PREPARATION));
+        sPhase = static_cast< s32 >(NebulaHost::option(NEBULA_OPTION_RT_PREPARATION));
         if (sScreen == nullptr || !sScreen->isBuilt()) {
             return;
         }
-        const f32 progress = static_cast< f32 >(__NebulaOption(NEBULA_OPTION_RT_PREPARE_PROGRESS)) / 10000.0f;
+        const f32 progress = static_cast< f32 >(NebulaHost::option(NEBULA_OPTION_RT_PREPARE_PROGRESS)) / 10000.0f;
         sScreen->step(sPhase, progress);
     }
 

@@ -21,6 +21,7 @@
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
 #include <revolution/os.h>
+#include "Game/System/NebulaHost.hpp"
 #endif
 
 namespace {
@@ -95,7 +96,7 @@ void BloomEffect::preDraw() const {
 #ifdef TARGET_PC
     // The renderer keeps the scene in the EFB's own format: the console's copy below is 8 bits, which cuts the ray
     // tracer's HDR scene at 1.
-    sBloomRoute = __NebulaOption(NEBULA_OPTION_BLOOM);
+    sBloomRoute = NebulaHost::option(NEBULA_OPTION_BLOOM);
     if (sBloomRoute != 0) {
         NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
