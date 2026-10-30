@@ -2285,7 +2285,6 @@ void svc_marker(void*, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b) {
 void svc_frame_end(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     submit_frame(false, false);
-#else
 #endif
 }
 
