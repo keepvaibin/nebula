@@ -4,7 +4,7 @@
 
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/texture_cache.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/gx_vertex.h"
 #include "galaxy/simd128.h"
 
 #include <cstddef>
@@ -149,27 +149,6 @@ std::vector<std::uint8_t> every_word_texture() {
     return source;
 }
 
-void check_rebase() {
-    std::vector<std::uint16_t> source(29);
-    for (std::size_t i = 0; i < source.size(); ++i) source[i] = static_cast<std::uint16_t>(i * 2000u);
-    std::vector<std::uint16_t> out(source.size());
-    // The largest index is 56000: a bias up to 9535 fits, one more overflows.
-    if (!galaxy::gx::detail::rebase_cached_indices(source, 9535u, out.data())) {
-        ++g_failures;
-        std::printf("FAIL rebase rejected a bias that fits\n");
-    }
-    for (std::size_t i = 0; i < source.size(); ++i) {
-        if (out[i] != source[i] + 9535u && ++g_failures <= 20) std::printf("FAIL rebase index %zu\n", i);
-    }
-    for (std::size_t at : {std::size_t{0}, std::size_t{7}, std::size_t{8}, std::size_t{28}}) {
-        std::vector<std::uint16_t> one(source.size(), 100u);
-        one[at] = 65000u;
-        if (galaxy::gx::detail::rebase_cached_indices(one, 536u, out.data()) && ++g_failures <= 20) {
-            std::printf("FAIL rebase accepted an overflow at %zu\n", at);
-        }
-    }
-}
-
 }  // namespace
 
 int main() {
@@ -188,7 +167,6 @@ int main() {
     for (const Format& f : formats) {
         for (const auto& size : sizes) check_texture(f.format, f.name, size[0], size[1]);
     }
-    check_rebase();
     std::printf("simd kernel tests (%s): %s\n", GALAXY_SIMD_NEON ? "NEON" : "SSE", g_failures == 0 ? "pass" : "FAIL");
     return g_failures == 0 ? 0 : 1;
 }

@@ -7,7 +7,7 @@
 
 #include "galaxy/gx/native_material.h"
 #include "galaxy/gx/native_state.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/gx_vertex.h"
 
 #include <array>
 #include <cstddef>

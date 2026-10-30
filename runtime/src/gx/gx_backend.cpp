@@ -902,7 +902,6 @@ void GxBackend::reset_fifo_session_state() {
     pending_async_dirty_ranges_.clear();
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
-    vertex_layout_cache_ = {};
 
     frame_memory_ = nullptr;
     frame_services_ = nullptr;
@@ -1950,8 +1949,7 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
         combine64(mix64(current_vs_hash_ & ~0ull), current_ps_hash_),
         record_inputs_ != nullptr
             ? record_inputs_->positions ^ (static_cast<std::uint64_t>(record_inputs_->matrix_bits) << 48u)
-            : (static_cast<std::uint64_t>(state_.cp(cp::kArrayBaseBase)) << 32u) ^
-                  (static_cast<std::uint64_t>(state_.cp(cp::kVcdLo)) << 16u) ^ state_.cp(cp::kVcdHi));
+            : 0u);
     record.identity = record_identity();
     record.layout = current_vs_hash_;
     record.load_signature = state_.matrix_load_signature();
@@ -2934,12 +2932,8 @@ std::uint32_t GxBackend::apply_debake_model(std::uint32_t channels) {
         }
         key = record_inputs_->colors;
     } else {
-        const VertexDescriptor desc = state_.vertex_desc(0u);
-        if (desc.color[0].vcd != VcdType::Index8 && desc.color[0].vcd != VcdType::Index16) {
-            return channels;
-        }
-        key = static_cast<std::uint64_t>(state_.array_base(2u)) |
-              (static_cast<std::uint64_t>(state_.array_base(3u)) << 32u);
+        // An immediate draw's colours are its own.
+        return channels;
     }
     if (const std::uint32_t stage = rt_materials_stage_serial(); stage != debake_models_stage_) {
         debake_models_.clear();
@@ -8001,8 +7995,8 @@ bool GxBackend::draw_positions_indexed() const noexcept {
     if (record_inputs_ != nullptr) {
         return !record_inputs_->own_positions;
     }
-    const VcdType position = state_.vertex_desc(0u).position.vcd;
-    return position == VcdType::Index8 || position == VcdType::Index16;
+    // An immediate draw's positions are its own.
+    return false;
 }
 
 namespace {
@@ -8122,10 +8116,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         GxState::kDirtyXfMatrices;
     const bool dirty_needs_body =
         (dirty & ~kDirtySatisfiedByCachedUploads) != 0u;
-    // The draw's vertex inputs: a native shape record's, else the GX vertex description's (VCD bits 0-8). Another
-    // source (a record of another model, or GX after a record) rebuilds the keys that depend on it.
-    const std::uint32_t matrix_bits =
-        record_inputs_ != nullptr ? record_inputs_->matrix_bits : (state_.cp(cp::kVcdLo) & 0x1FFu);
+    // The draw's vertex inputs: a native shape record's, else none (an immediate draw's vertices carry no matrix
+    // indices). Another source (a record of another model, or an immediate after a record) rebuilds the keys that
+    // depend on it.
+    const std::uint32_t matrix_bits = record_inputs_ != nullptr ? record_inputs_->matrix_bits : 0u;
     const std::uint64_t vertex_source =
         record_inputs_ != nullptr
             ? ((record_inputs_->positions * 0x9E3779B97F4A7C15ull) ^ record_inputs_->colors ^
@@ -9302,216 +9296,6 @@ void GxBackend::end_cached_draw_run() {
     cached_draw_run_primitive_ = PrimitiveClass::Points;
     cached_draw_run_vtxfmt_ = 0;
     cached_draw_run_state_call_ = {};
-}
-
-void GxBackend::on_cached_draw_run_draw(
-    PrimitiveClass primitive,
-    std::uint8_t vtxfmt,
-    FifoCursor& cursor) {
-    ++frame_replay_generic_draws_;
-    if (primitive != cached_draw_run_primitive_ ||
-        vtxfmt != cached_draw_run_vtxfmt_) {
-        throw GxFatalError(
-            "GxBackend: cached display-list draw run changed format",
-            cursor.command_offset,
-            0xFFu);
-    }
-
-    if (cached_draw_run_scissor_reject_) {
-        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-        const std::uint16_t vertex_count = cursor.read_u16();
-        cursor.take(
-            layout.source_size * static_cast<std::size_t>(vertex_count));
-        ++frame_scissor_skips_;
-        return;
-    }
-
-    if (cached_draw_run_no_pso_) {
-        flush_pending_draw_batch();
-        ++stat_draws_no_pso_;
-        ++frame_draws_no_pso_;
-        const bool time_detail = frame_time_detail_;
-        const auto vertex_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-        vertex_loader_.load_with_layout(
-            cursor, primitive, state_, layout.desc,
-            layout.source_size, frame_memory_, renderer_.vertex_ring(),
-            renderer_.index_ring());
-        if (time_detail) {
-            frame_vertex_load_us_ +=
-                elapsed_us(vertex_start, std::chrono::steady_clock::now());
-        }
-        return;
-    }
-
-    cursor.require(2);
-    const std::uint16_t source_vertex_count =
-        static_cast<std::uint16_t>(
-            (static_cast<std::uint16_t>(cursor.data[cursor.offset]) << 8) |
-            static_cast<std::uint16_t>(cursor.data[cursor.offset + 1]));
-
-    bool append_to_pending = false;
-    if (pending_draw_batch_.active && !pending_draw_batch_.resident) {
-        append_to_pending = cached_draw_run_batch_compatible_known_ ||
-            draw_calls_batch_compatible(
-                pending_draw_batch_.call,
-                cached_draw_run_state_call_,
-                pending_draw_batch_.indexed,
-                cached_draw_run_primitive_indexed_);
-        cached_draw_run_batch_compatible_known_ = append_to_pending;
-    }
-    if (append_to_pending && !cached_draw_run_primitive_indexed_ &&
-        primitive == PrimitiveClass::Triangles &&
-        (pending_draw_batch_.vertex_count % 3u != 0u || source_vertex_count % 3u != 0u)) {
-        append_to_pending = false;
-        cached_draw_run_batch_compatible_known_ = false;
-    }
-    if (append_to_pending && cached_draw_run_primitive_indexed_ &&
-        pending_draw_batch_.vertex_count +
-            static_cast<std::uint32_t>(source_vertex_count) >
-            std::numeric_limits<std::uint16_t>::max()) {
-        flush_pending_draw_batch();
-        append_to_pending = false;
-        cached_draw_run_batch_compatible_known_ = false;
-    }
-    if (pending_draw_batch_.active && !append_to_pending) {
-        flush_pending_draw_batch();
-        cached_draw_run_batch_compatible_known_ = false;
-    }
-
-    const bool time_detail = frame_time_detail_;
-    const auto vertex_start = time_detail
-        ? std::chrono::steady_clock::now()
-        : std::chrono::steady_clock::time_point{};
-    const VertexLayoutCacheEntry& layout = cached_vertex_layout(vtxfmt);
-    const LoadedPrimitive prim = vertex_loader_.load_with_layout(
-        cursor, primitive, state_, layout.desc, layout.source_size,
-        frame_memory_, renderer_.vertex_ring(), renderer_.index_ring(),
-        append_to_pending && cached_draw_run_primitive_indexed_
-            ? pending_draw_batch_.base_vertex
-            : 0u,
-        append_to_pending && cached_draw_run_primitive_indexed_);
-    if (time_detail) {
-        frame_vertex_load_us_ +=
-            elapsed_us(vertex_start, std::chrono::steady_clock::now());
-    }
-
-    if (prim.index_count == 0) {
-        if (pending_draw_batch_.active) {
-            flush_pending_draw_batch();
-            cached_draw_run_batch_compatible_known_ = false;
-        }
-        return;
-    }
-    ++stat_draws_issued_;
-    ++frame_draws_issued_;
-
-    if (append_to_pending) {
-        if (prim.indexed != pending_draw_batch_.indexed) {
-            throw GxFatalError(
-                "GxBackend: cached draw batch indexing changed inside a run",
-                cursor.command_offset,
-                0);
-        }
-        const std::size_t vertex_byte_end =
-            prim.vertex_byte_offset +
-            static_cast<std::size_t>(prim.vertex_count) * sizeof(GxVertexOut);
-        const bool vertex_contiguous =
-            prim.vertex_byte_offset == pending_draw_batch_.vertex_byte_end;
-        const bool index_contiguous =
-            !prim.indexed ||
-            prim.first_index ==
-                pending_draw_batch_.first_index +
-                pending_draw_batch_.index_count;
-        if (!vertex_contiguous || !index_contiguous) {
-            throw GxFatalError(
-                "GxBackend: cached draw batch upload rings were not contiguous",
-                cursor.command_offset,
-                0);
-        }
-        pending_draw_batch_.call.index_count += prim.index_count;
-        pending_draw_batch_.call.vertex_view.SizeInBytes +=
-            prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut));
-        if (prim.indexed) {
-            pending_draw_batch_.call.index_view.SizeInBytes +=
-                prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t));
-        }
-        pending_draw_batch_.vertex_count += prim.vertex_count;
-        pending_draw_batch_.vertex_byte_end = vertex_byte_end;
-        pending_draw_batch_.index_count += prim.index_count;
-        ++pending_draw_batch_.draw_count;
-        return;
-    }
-
-    const gpu::VertexView vbv = gpu::vertex_view(
-        renderer_.vertex_ring().gpu_base() + prim.vertex_byte_offset,
-        prim.vertex_count * static_cast<std::uint32_t>(sizeof(GxVertexOut)), static_cast<std::uint32_t>(sizeof(GxVertexOut)));
-
-    gpu::IndexView ibv{};
-    if (prim.indexed) {
-        ibv = gpu::index_view(
-            renderer_.index_ring().gpu_base() + static_cast<std::size_t>(prim.first_index) * sizeof(std::uint16_t),
-            prim.index_count * static_cast<std::uint32_t>(sizeof(std::uint16_t)));
-    }
-
-    DrawCall call = cached_draw_run_state_call_;
-    call.vertex_view = vbv;
-    call.index_view = ibv;
-    call.index_count = prim.index_count;
-
-    const std::size_t vertex_byte_end =
-        prim.vertex_byte_offset +
-        static_cast<std::size_t>(prim.vertex_count) * sizeof(GxVertexOut);
-    flush_pending_draw_batch();
-    pending_draw_batch_.active = true;
-    pending_draw_batch_.call = call;
-    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
-    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
-    pending_draw_batch_.hidden = rt_hidden_draw();
-    pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
-    pending_draw_batch_.debake_model = debake_sample_key_;
-    pending_draw_batch_.indexed = prim.indexed;
-    pending_draw_batch_.base_vertex = prim.base_vertex;
-    pending_draw_batch_.vertex_count = prim.vertex_count;
-    pending_draw_batch_.vertex_byte_end = vertex_byte_end;
-    pending_draw_batch_.first_index = prim.first_index;
-    pending_draw_batch_.index_count = prim.index_count;
-    pending_draw_batch_.draw_count = 1;
-    cached_draw_run_batch_compatible_known_ = true;
-}
-
-const GxBackend::VertexLayoutCacheEntry& GxBackend::cached_vertex_layout(
-    std::uint8_t vtxfmt) const {
-    const auto index = static_cast<std::uint8_t>(vtxfmt & 0x07u);
-    VertexLayoutCacheEntry& entry = vertex_layout_cache_[index];
-    const std::uint32_t vcd_lo = state_.cp(cp::kVcdLo);
-    const std::uint32_t vcd_hi = state_.cp(cp::kVcdHi);
-    const std::uint32_t vat_a =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatABase + index));
-    const std::uint32_t vat_b =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatBBase + index));
-    const std::uint32_t vat_c =
-        state_.cp(static_cast<std::uint8_t>(cp::kVatCBase + index));
-
-    if (!entry.valid ||
-        entry.vcd_lo != vcd_lo ||
-        entry.vcd_hi != vcd_hi ||
-        entry.vat_a != vat_a ||
-        entry.vat_b != vat_b ||
-        entry.vat_c != vat_c) {
-        entry.valid = true;
-        entry.vcd_lo = vcd_lo;
-        entry.vcd_hi = vcd_hi;
-        entry.vat_a = vat_a;
-        entry.vat_b = vat_b;
-        entry.vat_c = vat_c;
-        entry.desc = state_.vertex_desc(index);
-        entry.source_size = VertexLoader::source_vertex_size(entry.desc);
-    }
-
-    return entry;
 }
 
 void GxBackend::on_shape_record(const shapes::Record& record) {

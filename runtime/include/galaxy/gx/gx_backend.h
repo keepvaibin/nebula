@@ -53,7 +53,7 @@
 #include "galaxy/gx/transform_history.h"
 #include "galaxy/gx/uber_constants.h"
 #include "galaxy/gx/vs_constants.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/gx_vertex.h"
 #include "galaxy/gx_d3d12.h"
 #include "galaxy/guest_memory.h"
 #include "galaxy/frame_telemetry.h"
@@ -251,20 +251,6 @@ public:
 private:
     friend class GxBackendMemorySnapshotTestAccess;
 
-    struct VertexLayoutCacheEntry {
-        bool valid = false;
-        std::uint32_t vcd_lo = 0;
-        std::uint32_t vcd_hi = 0;
-        std::uint32_t vat_a = 0;
-        std::uint32_t vat_b = 0;
-        std::uint32_t vat_c = 0;
-        VertexDescriptor desc{};
-        std::size_t source_size = 0;
-    };
-
-    [[nodiscard]] const VertexLayoutCacheEntry& cached_vertex_layout(
-        std::uint8_t vtxfmt) const;
-
     // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
     // only when this returns true.
     [[nodiscard]] bool begin_cached_draw_run(
@@ -272,10 +258,6 @@ private:
         std::uint8_t vtxfmt,
         std::size_t draw_count);
     void end_cached_draw_run();
-    void on_cached_draw_run_draw(
-        PrimitiveClass primitive,
-        std::uint8_t vtxfmt,
-        FifoCursor& cursor);
     void on_efb_copy(std::uint32_t exec_command);
     void on_invalidate_textures();
     void on_invalidate_vertex_cache();
@@ -1153,7 +1135,6 @@ private:
     }
     // GALAXY_CHECK_DRAW_STATE=1: compares draw_state_ with the register file's decode at every record draw.
     void check_draw_state();
-    VertexLoader vertex_loader_;
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
     EfbCopyManager efb_copies_;
@@ -1493,7 +1474,6 @@ private:
     // sampled_texture_map_mask(draw_state_) reads GenMode, the TEV order, indirect-command and IND_REF registers,
     // all of which set kDirtyTev; invalidated wherever the BP register file resets.
     bool current_texture_map_mask_valid_ = false;
-    mutable std::array<VertexLayoutCacheEntry, 8> vertex_layout_cache_{};
 
     struct TextureBindingKey {
         // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path

@@ -16,7 +16,7 @@
 #include "galaxy/gx/renderer_d3d12.h"
 #include "galaxy/gx/shader_gen.h"
 #include "galaxy/gx/uber_constants.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/gx_vertex.h"
 
 #include <algorithm>
 #include <array>

@@ -14,7 +14,7 @@
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/texture_decode_pool.h"
 #include "galaxy/gx/uber_constants.h"
-#include "galaxy/gx/vertex_loader.h"
+#include "galaxy/gx/gx_vertex.h"
 
 namespace galaxy::gx {
 namespace {
