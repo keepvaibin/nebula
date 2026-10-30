@@ -47,6 +47,7 @@
 #include "Game/AudioLib/AudWrap.hpp"
 #include "Game/Screen/NebulaQuitButton.hpp"
 #include "Game/System/GameSystemFunction.hpp"
+#include "Game/System/NebulaCalendar.hpp"
 #endif
 
 #define USER_FILE_NUM 6
@@ -715,7 +716,7 @@ namespace {
 };  // namespace
 
 void FileSelector::setFileInfo(s32 id) {
-    OSCalendarTime td;
+    NebulaCalendar::Date date;
     u16 nameBuffer[RFL_NAME_LEN + 1];
     wchar_t dateBuffer[32];
     wchar_t timeBuffer[32];
@@ -726,10 +727,10 @@ void FileSelector::setFileInfo(s32 id) {
         ::copyIconMiiName(this, nameBuffer, id);
     }
 
-    OSTicksToCalendarTime(::getUserFileLastModified(this, id), &td);
+    date = NebulaCalendar::toDate(::getUserFileLastModified(this, id));
 
-    MR::makeDateString(dateBuffer, ARRAY_SIZE(dateBuffer), td.year, td.mon + 1, td.mday);
-    MR::makeTimeString(timeBuffer, ARRAY_SIZE(timeBuffer), td.hour, td.min);
+    MR::makeDateString(dateBuffer, ARRAY_SIZE(dateBuffer), date.mYear, date.mMonth, date.mDay);
+    MR::makeTimeString(timeBuffer, ARRAY_SIZE(timeBuffer), date.mHour, date.mMinute);
 
     bool isViewCompleteEnding = ::isUserFileViewCompleteEnding(this, id);
     bool isViewNormalEnding = ::isUserFileViewNormalEnding(this, id);

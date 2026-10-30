@@ -2,6 +2,7 @@
 #include "Game/RhythmLib/AudRhythmSeqParser.hpp"
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <revolution/os/OSTime.h>
+#include "Game/System/NebulaClock.hpp"
 
 AudRhythmHolder::AudRhythmHolder() : mIsPaused(), mSeqParser(), _168() {
     init();
@@ -46,7 +47,7 @@ void AudRhythmHolder::copyInfoFromParser() {
         mIsRhythmActive = true;
     }
 
-    s64 currTime = OSGetTime();
+    s64 currTime = NebulaClock::nowNs();
     for (s32 i = 0; i < 6; i++) {
         if (mIsPaused) {
             mInfos[i].mPausedTime = (currTime - mInfos[i].mLastMeasuredTime) + mInfos[i].mPausedTime;

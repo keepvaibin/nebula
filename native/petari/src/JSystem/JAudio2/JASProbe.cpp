@@ -2,20 +2,21 @@
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include <revolution/os.h>
+#include "Game/System/NebulaClock.hpp"
 
 JASProbe* JASProbe::sProbeTable[16] = {nullptr};
 
 void JASProbe::start(char const* name) {
     JASCriticalSection cs;
     mName = name;
-    mStartTime = OSGetTime();
+    mStartTime = NebulaClock::nowNs();
 }
 
 void JASProbe::stop() {
     JASCriticalSection cs;
-    u32 endTime = OSGetTime();
+    u32 endTime = NebulaClock::nowNs();
     _8 = endTime - mStartTime;
-    _8 /= OS_TIMER_CLOCK / 59.94f;
+    _8 /= 1000000000.0f / 59.94f;
     if (_10 < _8 && 100 < _1A8) {
         _10 = _8;
     }

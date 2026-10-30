@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 52u
+#define NEBULA_GAME_API_VERSION 53u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -944,6 +944,9 @@ typedef struct NebulaHostServices {
     uint32_t (*readback_serial)(void* user, uint32_t channel);
     /* Nanoseconds on a steady clock from an arbitrary start (never 0): the game's durations and pacing. */
     uint64_t (*clock_ns)(void* user);
+    /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the console's clock counted from
+       there; the game's saves store times in its unit). */
+    int64_t (*calendar_ns)(void* user);
 } NebulaHostServices;
 
 

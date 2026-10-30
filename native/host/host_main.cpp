@@ -1676,6 +1676,23 @@ uint64_t svc_clock_ns(void*) {
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
 }
 
+int64_t svc_calendar_ns(void*) {
+    const auto now = std::chrono::system_clock::now();
+    const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &seconds);
+    const std::time_t fields = _mkgmtime(&local);
+#else
+    localtime_r(&seconds, &local);
+    const std::time_t fields = timegm(&local);
+#endif
+    const int64_t unix_to_2000 = 946684800;
+    const int64_t fraction = std::chrono::duration_cast<std::chrono::nanoseconds>(now.time_since_epoch()).count() %
+        1000000000;
+    return (static_cast<int64_t>(fields) - unix_to_2000) * 1000000000 + fraction;
+}
+
 std::atomic<int32_t> gStarPointerMode{-1};
 
 void svc_button_icons(void*, NebulaButtonIcons* icons) {
@@ -3816,6 +3833,7 @@ int main(int argc, char** argv) {
     services.marker = svc_marker;
     services.readback_serial = svc_readback_serial;
     services.clock_ns = svc_clock_ns;
+    services.calendar_ns = svc_calendar_ns;
     services.stripe_particle = svc_stripe_particle;
     services.disc_find = svc_disc_find;
     services.disc_entry = svc_disc_entry;

@@ -16,6 +16,7 @@
 // #include <ai.h>
 // #include <os.h>
 #include <stdint.h>
+#include "Game/System/NebulaClock.hpp"
 
 static u8 sDspDacBufferSize = 3;
 
@@ -142,7 +143,7 @@ void JASDriver::updateDSP() {
     DSPSyncCallback();
     static u32 old_time = 0;
     static u32 history[10] = {0x000F4240};
-    u32 r28 = OSGetTick();
+    u32 r28 = NebulaClock::nowNs();  // a subframe's length, compared with the last ones'
     u32 r27 = r28 - old_time;
     old_time = r28;
     u32 subFrame = getSubFrames();

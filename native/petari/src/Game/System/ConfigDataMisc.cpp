@@ -1,6 +1,7 @@
 #include "Game/System/ConfigDataMisc.hpp"
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
 #include <JSystem/JSupport/JSUMemoryOutputStream.hpp>
+#include "Game/System/NebulaCalendar.hpp"
 
 #define FLAG_LAST_LOADED_MARIO 0x1
 #define FLAG_COMPLETE_ENDING_MARIO 0x2
@@ -43,7 +44,7 @@ OSTime ConfigDataMisc::getLastModified() const {
 }
 
 void ConfigDataMisc::updateLastModified() {
-    mLastModified = OSGetTime();
+    mLastModified = NebulaCalendar::now();
 }
 
 u32 ConfigDataMisc::makeHeaderHashCode() const {

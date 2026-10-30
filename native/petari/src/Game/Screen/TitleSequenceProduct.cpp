@@ -12,6 +12,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
+#include "Game/System/NebulaCalendar.hpp"
 
 namespace {
     static const s32 sPressABAppearFrame = 25;
@@ -60,9 +61,9 @@ TitleSequenceProduct::TitleSequenceProduct()
 void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
     if (MR::isFirstStep(this)) {
         OSTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
-        OSTime ticks = OSGetTime();
-        s32 day = OSTicksToSeconds(ticks) / (60 * 60 * 24);
-        s32 dayAnnounced = OSTicksToSeconds(timeAnnounced) / (60 * 60 * 24);
+        OSTime ticks = NebulaCalendar::now();
+        s32 day = NebulaCalendar::toSeconds(ticks) / (60 * 60 * 24);
+        s32 dayAnnounced = NebulaCalendar::toSeconds(timeAnnounced) / (60 * 60 * 24);
         dayAnnounced += 100;
 
         if (timeAnnounced == 0 || ticks < timeAnnounced || dayAnnounced < day) {

@@ -3,6 +3,7 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include <revolution/os.h>
+#include "Game/System/NebulaCalendar.hpp"
 
 namespace {
     /// @brief The maximum number of bytes that can be sent to the Wii Message Board on any given date.
@@ -12,21 +13,15 @@ namespace {
     /// @param[out] pTicks An optional pointer to initialize with the current number of ticks.
     /// @return `true` if the most recent message was sent today, `false` otherwise.
     bool isLastUpdateToday(OSTime* pTicks) {
-        OSTime ticks;
-        OSCalendarTime tdSent;
-        OSCalendarTime td;
-
-        ticks = GameDataFunction::getSysConfigFileTimeSent();
-        OSTicksToCalendarTime(ticks, &tdSent);
-
-        ticks = OSGetTime();
-        OSTicksToCalendarTime(ticks, &td);
+        const NebulaCalendar::Date sent = NebulaCalendar::toDate(GameDataFunction::getSysConfigFileTimeSent());
+        const OSTime ticks = NebulaCalendar::now();
+        const NebulaCalendar::Date today = NebulaCalendar::toDate(ticks);
 
         if (pTicks != nullptr) {
             *pTicks = ticks;
         }
 
-        return td.year == tdSent.year && td.mon == tdSent.mon && td.mday == tdSent.mday;
+        return today.mYear == sent.mYear && today.mMonth == sent.mMonth && today.mDay == sent.mDay;
     }
 };  // namespace
 
