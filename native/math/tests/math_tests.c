@@ -1,4 +1,4 @@
-/* The native MTX library against straightforward references: products, inverses, rotations and round trips over
+/* The native math library (nebula_math.c) against straightforward references: products, inverses, rotations and round trips over
    random inputs, aliasing of outputs with inputs, and the console's special cases (singular inverse, PSVECMag of
    zero, PSMTXRotTrig's axis letters). Prints the worst relative error and the cost of the hot calls. */
 #include <math.h>
@@ -71,7 +71,7 @@ int main(void) {
         PSMTXConcat(a2, b, a2);
         close_to("PSMTXConcat aliased", a2[1][2], ref[1][2], 1e-5);
 
-        if (PSMTXInverse(a, inv)) {
+        if (NebulaMtxInverse(a, inv)) {
             PSMTXConcat(a, inv, prod);
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 4; j++) {
@@ -83,7 +83,7 @@ int main(void) {
                 }
             }
             Mtx invX;
-            PSMTXInvXpose(a, invX);
+            NebulaMtxInvXpose(a, invX);
             for (int i = 0; i < 3; i++) {
                 for (int j = 0; j < 3; j++) {
                     close_to("PSMTXInvXpose", invX[i][j], inv[j][i], 1e-5);
@@ -117,13 +117,13 @@ int main(void) {
         /* rotations: orthonormal, and the quaternion round trip */
         Mtx r;
         const f32 angle = rnd() * 3.14159f;
-        PSMTXRotAxisRad(r, &v, angle);
+        NebulaMtxRotAxisRad(r, &v, angle);
         Vec col0 = {r[0][0], r[1][0], r[2][0]};
         close_to("PSMTXRotAxisRad orthonormal", PSVECMag(&col0), 1.0, 1e-5);
         Quaternion q, q2;
-        C_QUATMtx(&q, r);
+        NebulaQuatFromMtx(&q, r);
         Mtx r2;
-        PSMTXQuat(r2, &q);
+        NebulaMtxQuat(r2, &q);
         for (int i = 0; i < 3; i++) {
             for (int j = 0; j < 3; j++) {
                 close_to("C_QUATMtx/PSMTXQuat round trip", r2[i][j], r[i][j], 1e-4);
@@ -131,7 +131,7 @@ int main(void) {
         }
         PSQUATMultiply(&q, &q, &q2);
         Mtx rr, r2r;
-        PSMTXQuat(rr, &q2);
+        NebulaMtxQuat(rr, &q2);
         PSMTXConcat(r, r, r2r);
         close_to("PSQUATMultiply", rr[0][1], r2r[0][1], 1e-4);
     }
@@ -139,7 +139,7 @@ int main(void) {
     /* The console's special cases. */
     Mtx singular = {{1, 2, 3, 0}, {2, 4, 6, 0}, {0, 0, 1, 0}}, untouched;
     memset(untouched, 0x7F, sizeof(untouched));
-    if (PSMTXInverse(singular, untouched) != 0 || untouched[0][0] != untouched[2][3]) {
+    if (NebulaMtxInverse(singular, untouched) != 0 || untouched[0][0] != untouched[2][3]) {
         printf("FAIL PSMTXInverse singular\n");
         sFailures++;
     }
@@ -149,8 +149,8 @@ int main(void) {
         sFailures++;
     }
     Mtx rz, rzUpper;
-    PSMTXRotTrig(rz, 'z', 1.0f, 0.0f);
-    PSMTXRotTrig(rzUpper, 'Z', 1.0f, 0.0f);
+    NebulaMtxRotTrig(rz, 'z', 1.0f, 0.0f);
+    NebulaMtxRotTrig(rzUpper, 'Z', 1.0f, 0.0f);
     if (rz[0][1] != -1.0f || rz[1][0] != 1.0f || memcmp(rz, rzUpper, sizeof(Mtx)) != 0) {
         printf("FAIL PSMTXRotTrig z\n");
         sFailures++;

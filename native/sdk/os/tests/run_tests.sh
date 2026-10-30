@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds and runs the native layer's tests (context switch, the thread kernel on the native core, the MTX library,
+# Builds and runs the native layer's tests (context switch, the thread kernel on the native core, the math library,
 # the MSL runtime) with the game module's flags.
 #   native/sdk/os/tests/run_tests.sh <petari checkout> <output dir> [clang]
 set -e
@@ -31,9 +31,9 @@ done
 ${CC}++ $CXXFL -c "$P/src/Game/System/NebulaKernel.cpp" -o "$OUT/obj/nebula_kernel.o"
 $CC $FL "$N/sdk/os/tests/context_switch_tests.c" "$N/sdk/os/context_switch.c" -o "$OUT/context_switch_tests$EXE"
 ${CC}++ $CXXFL "$N/sdk/os/tests/kernel_tests.cpp" "$OUT"/obj/*.o $LIBS -o "$OUT/kernel_tests$EXE"
-$CC $FL "$N/sdk/mtx/tests/mtx_tests.c" "$N/sdk/mtx/mtx_native.c" "$N/math/src/nebula_math.c" -o "$OUT/mtx_tests$EXE"
+$CC $FL "$N/math/tests/math_tests.c" "$N/math/src/nebula_math.c" -o "$OUT/math_tests$EXE"
 $CC $FL "$N/msl/tests/msl_runtime_tests.c" "$N/msl/src/msl_runtime.c" -o "$OUT/msl_runtime_tests$EXE"
 "$OUT/context_switch_tests$EXE"
 "$OUT/kernel_tests$EXE"
-"$OUT/mtx_tests$EXE"
+"$OUT/math_tests$EXE"
 "$OUT/msl_runtime_tests$EXE"

@@ -43,8 +43,3 @@ NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int 
     }
     return count;
 }
-
-/* An SDK function the native layer does not implement (sdk/stubs): reaching one stops the game with its name. */
-void nebula_sdk_missing(const char* name) {
-    nebula_fatal("the game called %s, which the native SDK layer does not implement yet", name);
-}
