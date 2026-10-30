@@ -2659,14 +2659,14 @@ void GxBackend::begin_rt_sky_batch(RtDrawInfo& info) {
         break;
     }
     // Its alpha test (as alpha-tested geometry: the first GREATER or GEQUAL compare).
-    const AlphaCompare test = state_.alpha_compare();
+    const AlphaCompare test = draw_state_.alpha;
     if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
         info.alpha_from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
     } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
         info.alpha_from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
     }
     info.alpha_from = std::min(info.alpha_from, 255u);
-    const BlendMode blend = state_.blend_mode();
+    const BlendMode blend = draw_blend();
     info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
                  (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
                  (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
@@ -2698,7 +2698,7 @@ std::uint32_t GxBackend::debake_channels() const {
                          buffer == 0x06u || buffer == 0x07u || buffer == 0x1Du;
     const bool actor = !terrain;
     std::uint32_t channels = 0u;
-    const unsigned count = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
+    const unsigned count = std::min<unsigned>(draw_state_.gen.num_color_chans, 2u);
     for (unsigned c = 0; c < count; ++c) {
         const XfChannelCtrl ctrl = state_.channel_ctrl(c);
         if (!ctrl.lighting_enable && ctrl.material_from_vertex && !actor) {
@@ -2749,13 +2749,13 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
             }
         }
     }
-    const AlphaCompare test = state_.alpha_compare();
+    const AlphaCompare test = draw_state_.alpha;
     tev.alpha_test = static_cast<std::uint32_t>(test.ref0) | (static_cast<std::uint32_t>(test.ref1) << 8u) |
                      (static_cast<std::uint32_t>(test.comp0) << 16u) | (static_cast<std::uint32_t>(test.comp1) << 19u) |
                      (static_cast<std::uint32_t>(test.logic) << 22u);
     // Colour channels 0 and 1 (colour and alpha controls 0-3): the material register or the vertices' colour, lit at
     // `facing` of every light in its mask over its ambient register, clamped as GX's channel.
-    const unsigned channels = std::min<unsigned>(state_.gen_mode().num_color_chans, 2u);
+    const unsigned channels = std::min<unsigned>(draw_state_.gen.num_color_chans, 2u);
     for (unsigned c = 0; c < 2u; ++c) {
         if (c >= channels) {
             tev.channel[c * 2u] = 0u;
@@ -3386,7 +3386,7 @@ bool GxBackend::rt_ocean_water_draw() const noexcept {
         rt_phase_ != static_cast<std::uint8_t>(ScenePhase::AfterIndirect)) {
         return false;
     }
-    const BlendMode blend = state_.blend_mode();
+    const BlendMode blend = draw_blend();
     if (!blend.blend_enable || blend.logic_op_enable || blend.subtract || !blend.color_update ||
         blend.src_factor != BlendFactor::SrcAlpha ||
         (blend.dst_factor != BlendFactor::InvSrcAlpha && blend.dst_factor != BlendFactor::One)) {
@@ -3686,7 +3686,7 @@ void GxBackend::note_rt_material() {
     note.channel = state_.xf(xf::kChannelCtrlBase);
     const unsigned stage = surface.env_stage < 16u ? surface.env_stage : 0u;
     note.combiner = surface.env_stage < 16u ? ps_key_.stages[stage].color_env & 0xFFFFFFu : 0u;
-    const BlendMode blend = state_.blend_mode();
+    const BlendMode blend = draw_blend();
     note.blend = !blend.blend_enable ? 0u
                  : blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha ? 1u
                  : blend.dst_factor == BlendFactor::One ? 2u
@@ -3986,7 +3986,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
          rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
          rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::AfterIndirect))) {
         const RtMaterial* const clear = rt_material(current_rt_material_);
-        const BlendMode blend = state_.blend_mode();
+        const BlendMode blend = draw_blend();
         const bool position_indexed = draw_positions_indexed();
         clear_blended = clear != nullptr && !clear->particle && (!clear->helper || own_helper) && !clear->waterfall &&
                         clear->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) &&
@@ -4003,7 +4003,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         (rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::Xlu) ||
          rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu))) {
         const RtMaterial* const metal = rt_material(current_rt_material_);
-        const BlendMode blend = state_.blend_mode();
+        const BlendMode blend = draw_blend();
         const bool position_indexed = draw_positions_indexed();
         metal_coat = metal != nullptr && !metal->particle && (!metal->helper || own_helper) && metal->metallic >= 0.5f &&
                      metal->emission == RtEmission::None && blend.blend_enable && !blend.logic_op_enable &&
@@ -4048,7 +4048,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         if (logged.insert(current_rt_material_ | (static_cast<std::uint32_t>(rt_phase_) << 16u) |
                           (water ? 1u << 24u : 0u) | (renderer_.rt_water_open() ? 1u << 25u : 0u) |
                           (side_layer_ == kSceneLayer ? 1u << 26u : 0u)).second) {
-            const BlendMode blend = state_.blend_mode();
+            const BlendMode blend = draw_blend();
             const bool position_indexed = draw_positions_indexed();
             std::fprintf(stderr,
                          "[rt-clear] material=%u class=%u phase=%u blend=%d src=%u dst=%u indexed=%d geometry=%d "
@@ -4171,7 +4171,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         } else if (glow) {
             info.surface = kRtDrawGlow;
             // How much of its colour the picture takes (a glow light source emits that; RtDrawInfo.blend).
-            const BlendMode blend = state_.blend_mode();
+            const BlendMode blend = draw_blend();
             info.blend = (blend.blend_enable ? 1u : 0u) | (static_cast<std::uint32_t>(blend.src_factor) << 1u) |
                          (static_cast<std::uint32_t>(blend.dst_factor) << 4u) | (blend.subtract ? 0x80u : 0u) |
                          (blend.color_update ? 0x100u : 0u) | (blend.logic_op_enable ? 0x200u : 0u);
@@ -4190,7 +4190,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 info.surface |= rt_card_draw() ? kRtDrawCard : kRtDrawAlphaTest;
                 // The alpha its test passes from (GREATER ref: ref + 1, GEQUAL ref: ref, the first such compare;
                 // other tests keep it solid) and the alpha map: TEV stage 0's texture.
-                const AlphaCompare test = state_.alpha_compare();
+                const AlphaCompare test = draw_state_.alpha;
                 std::uint32_t from = 0u;
                 if (test.comp0 == CompareFunc::Greater || test.comp0 == CompareFunc::GEqual) {
                     from = test.ref0 + (test.comp0 == CompareFunc::Greater ? 1u : 0u);
@@ -4639,7 +4639,7 @@ void GxBackend::aim_rt_scene_lights(const std::array<float, 12>* view) {
 // rig's hue is the game's character grading (the prologue's night: a cyan key, a blue fill and a blue ambient on
 // Mario); under physical light the traced light gives the colour, the rig its level only (shader_gen, fill_rt_tev).
 bool GxBackend::rt_player_rig_draw() const noexcept {
-    if (!rt_player_rig_known_ || state_.gen_mode().num_color_chans == 0u) {
+    if (!rt_player_rig_known_ || draw_state_.gen.num_color_chans == 0u) {
         return false;
     }
     const XfChannelCtrl color = state_.channel_ctrl(0u);
@@ -8263,7 +8263,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
     // tracer's lighting texture is ready, with map 7 free for it.
     {
-        const BlendMode b = state_.blend_mode();
+        const BlendMode b = draw_blend();
         using motion::ScenePhase;
         const bool blended =
             b.blend_enable && !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
@@ -8312,7 +8312,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // Glows: additive scene draws shine at the ray tracer's glow exposure (output_flags bit 5).
     bool glow_changed = false;
     {
-        const BlendMode b = state_.blend_mode();
+        const BlendMode b = draw_blend();
         const bool glow = scene_phase_ && side_layer_ == kSceneLayer && b.blend_enable && !b.logic_op_enable &&
                           !b.subtract && b.color_update && b.dst_factor == BlendFactor::One &&
                           (renderer_.rt_physical() || renderer_.rt_glow_exposure() > 1.0f);
@@ -8501,7 +8501,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             (ps_key_.flags & 0x02u) == 0u;
         rt_state_eligible_ = traceable && alpha_test_keeps_all(ps_key_);
         rt_card_eligible_ = traceable && !rt_state_eligible_;
-        const BlendMode blend = state_.blend_mode();
+        const BlendMode blend = draw_blend();
         rt_glow_eligible_ =
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
@@ -8538,7 +8538,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // (kRenderStateZeroAlpha). Another constant stays dual-source.
     bool motion_key_changed = false;
     if (motion_scene_ || motion_bits_set_) [[unlikely]] {
-        const BlendMode blend_mode = state_.blend_mode();
+        const BlendMode blend_mode = draw_blend();
         const auto src_alpha_factor = [](BlendFactor f) {
             return static_cast<std::uint32_t>(f) == 4u || static_cast<std::uint32_t>(f) == 5u;
         };
@@ -8546,7 +8546,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         const bool single_source =
             blend_mode.blend_enable && !blend_mode.subtract &&
             (src_alpha_factor(blend_mode.src_factor) || src_alpha_factor(blend_mode.dst_factor)) &&
-            state_.pe_control().pixel_format == 1u && (!constant_alpha || blend_mode.const_alpha == 0u);
+            draw_state_.pe.pixel_format == 1u && (!constant_alpha || blend_mode.const_alpha == 0u);
         const std::uint32_t dual_bit = motion_scene_ && single_source ? 0u : (1u << 27);
         std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
@@ -8581,7 +8581,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
         // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
-        const auto reads_efb = [has_alpha = state_.pe_control().pixel_format == 1u](BlendFactor f, bool source) {
+        const auto reads_efb = [has_alpha = draw_state_.pe.pixel_format == 1u](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
             return (source && (v == 2u || v == 3u)) || (has_alpha && (v == 6u || v == 7u));
         };
@@ -9307,7 +9307,7 @@ bool GxBackend::begin_cached_draw_run(
     // The reject flag also covers fully culled polygons; lines and points stay visible under
     // GX_CULL_ALL.
     cached_draw_run_scissor_reject_ =
-        cull_all_suppresses_primitive(state_.gen_mode().cull, primitive) ||
+        cull_all_suppresses_primitive(draw_state_.gen.cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
         sc.x1 < 0 || sc.y1 < 0 ||
         sc.x0 >= static_cast<std::int32_t>(kEfbWidth) ||
@@ -9606,6 +9606,7 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::Material:
         apply_record_material(*record.material);
+        draw_state_.apply(*record.material);
         return;
     case shapes::Record::Kind::State: {
         // As the stream parser applies the same writes: a copy, a texture invalidation or a TLUT load acts at once.
@@ -9639,6 +9640,9 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
             }
         }
         state::encode(record.state, events);
+        for (const state::Op& op : record.state) {
+            draw_state_.apply(op);
+        }
         return;
     }
     case shapes::Record::Kind::TextureImage:
@@ -9730,7 +9734,34 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
     }
 }
 
+void GxBackend::check_draw_state() {
+    static const bool enabled = read_env_u64("GALAXY_CHECK_DRAW_STATE", 0u) != 0u;
+    if (!enabled) {
+        return;
+    }
+    NativeDrawState expected;
+    expected.gen = state_.gen_mode();
+    expected.z = state_.z_mode();
+    expected.blend = decode_blend(state_.bp(bp::kBlendMode), state_.bp(bp::kConstAlpha));
+    expected.pe = state_.pe_control();
+    expected.alpha = state_.alpha_compare();
+    const std::string differences = draw_state_differences(draw_state_, expected);
+    static std::uint64_t draws = 0, mismatches = 0;
+    ++draws;
+    if (!differences.empty()) {
+        if (++mismatches <= 40u) {
+            std::fprintf(stderr, "[draw-state] frame %llu draw %llu:%s\n", static_cast<unsigned long long>(frame_index_),
+                         static_cast<unsigned long long>(draws), differences.c_str());
+        }
+    }
+    if (draws % 200000u == 0u) {
+        std::fprintf(stderr, "[draw-state] %llu draws, %llu mismatches\n", static_cast<unsigned long long>(draws),
+                     static_cast<unsigned long long>(mismatches));
+    }
+}
+
 void GxBackend::draw_record_shape(const shapes::Record& record) {
+    check_draw_state();
     apply_record_matrices(record);
     if (record.key == 0u) {
         return;  // state only (the matrices, current matrices and texgens set before a material record)
@@ -9907,6 +9938,7 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
 }
 
 void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
+    check_draw_state();
     display_copy_on_output_ = false;
     const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
     const shapes::Geometry& geometry = immediate.geometry;

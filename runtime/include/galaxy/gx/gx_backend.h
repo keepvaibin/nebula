@@ -30,6 +30,7 @@
 #include "galaxy/gx/actor_lights.h"
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/frame_cadence_diagnostics.h"
+#include "galaxy/gx/draw_state.h"
 #include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_state.h"
 #include "galaxy/gx/movie_replacement.h"
@@ -1143,6 +1144,14 @@ private:
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     GxState state_;
+    // The same state as typed values (draw_state.h), which the readers move to group by group.
+    NativeDrawState draw_state_;
+    // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
+    [[nodiscard]] BlendMode draw_blend() const {
+        return effective_blend(draw_state_.blend, draw_state_.pe.pixel_format == 1u);
+    }
+    // GALAXY_CHECK_DRAW_STATE=1: compares draw_state_ with the register file's decode at every record draw.
+    void check_draw_state();
     VertexLoader vertex_loader_;
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
