@@ -158,6 +158,20 @@ void set_texture_size(TextureMap& t, std::uint32_t width, std::uint32_t height, 
     t.image.format = image.format;
 }
 
+// A palette transfer (BP 0x64 source, 0x65 place and size in 32-byte units, as GXLoadTlut writes them): each place
+// it fills reads from the matching part of the source.
+void load_palette(NativeDrawState& s, std::uint32_t source_word, std::uint32_t place_word) {
+    const TlutTransfer transfer = decode_wii_tlut_transfer(source_word, place_word);
+    for (std::uint32_t offset = 0; offset < transfer.byte_count; offset += 512u) {
+        const std::uint32_t place = ((transfer.destination_offset + offset) >> 9u) & 1023u;
+        const std::uint32_t address = transfer.source_address + offset;
+        if (s.palette_place[place] != address) {
+            s.palette_place[place] = address;
+            ++s.palette_revision;
+        }
+    }
+}
+
 void set_texture_address(TextureMap& t, std::uint64_t image) {
     t.image.guest_addr = static_cast<std::uint32_t>((image >> 5u) & 0xFFFFFFu) << 5u;
 }
@@ -428,6 +442,11 @@ void NativeDrawState::apply(const state::Op& op) {
     case state::kTexImage:
         set_texture_address(texture[a[0] & 7u], op.image);
         break;
+    case state::kTlutLoad:
+        // GXLoadTlut: 16 places' worth for the 256-entry names, 64 for the big ones.
+        load_palette(*this, static_cast<std::uint32_t>(op.image >> 5u) & 0xFFFFFFu,
+                     tlut_offset(a[0]) | static_cast<std::uint32_t>(a[0] < 16u ? 16u : 64u) << 10u);
+        break;
     case state::kTexTlut:
         texture[a[0] & 7u].tlut = TlutRef{tlut_offset(a[2]), static_cast<TlutFormat>(a[1] & 3u)};
         break;
@@ -568,6 +587,9 @@ void NativeDrawState::apply(const material::Material& m) {
                              t.anisotropy, t.bias_clamp, t.min_lod, t.max_lod);
             if (t.palette != 0u) {
                 const std::uint32_t tmem = (map << 13u) + 0xF0000u;
+                const std::uint32_t size = t.palette_entries > 16u ? 256u : 16u;  // GXTlutSize: entries / 16
+                load_palette(*this, static_cast<std::uint32_t>(t.palette >> 5u) & 0xFFFFFFu,
+                             ((tmem - 0x80000u) >> 9u) | (size / 16u) << 10u);
                 out.tlut = TlutRef{static_cast<std::uint16_t>(((tmem - 0x80000u) >> 9u) & 0x3FFu),
                                    static_cast<TlutFormat>(t.palette_format & 3u)};
             }
@@ -845,6 +867,14 @@ std::uint32_t tex_image0_word(const TextureMap& t) {
 
 std::uint32_t tlut_word(const TextureMap& t) {
     return static_cast<std::uint32_t>(t.tlut.tmem_offset) | static_cast<std::uint32_t>(t.tlut.format) << 10u;
+}
+
+std::uint32_t palette_address(const NativeDrawState& state, unsigned map) {
+    const TextureMap& t = state.texture[map & 7u];
+    if (t.image.format != TexFormat::C4 && t.image.format != TexFormat::C8 && t.image.format != TexFormat::C14X2) {
+        return 0u;
+    }
+    return state.palette_place[t.tlut.tmem_offset & 1023u];
 }
 
 std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k) {

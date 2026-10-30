@@ -85,6 +85,11 @@ struct NativeDrawState {
 
     TextureMap texture[8]{};
 
+    // Palettes (GXLoadTlut and J3D's textures): each 512-byte place's source address (0: never loaded), and a
+    // revision that changes whenever a place's address does.
+    std::uint32_t palette_place[1024]{};
+    std::uint32_t palette_revision = 0u;
+
     // The scissor box (screen pixels, corners inclusive) and offset (GXSetScissor, GXSetScissorBoxOffset).
     ScissorRect scissor{-342, -342, -342, -342};
     ScissorOffset scissor_offset{};
@@ -121,6 +126,9 @@ struct NativeDrawState {
 [[nodiscard]] std::uint32_t tex_mode1_word(const TextureMap& map);
 [[nodiscard]] std::uint32_t tex_image0_word(const TextureMap& map);
 [[nodiscard]] std::uint32_t tlut_word(const TextureMap& map);
+
+// Map `map`'s palette address (0 without a palette format or a loaded place).
+[[nodiscard]] std::uint32_t palette_address(const NativeDrawState& state, unsigned map);
 
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);

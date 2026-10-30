@@ -140,22 +140,17 @@ public:
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
-    // The GPU texture for the image registers, decoded on first use from the image the game handed over
-    // (register_image; one never handed over decodes from zeros). Palettized formats use the TLUT at
-    // `tlut.tmem_offset`.
+    // The GPU texture for an image, decoded on first use from the image the game handed over (register_image; one
+    // never handed over decodes from zeros). Palettized formats read their palette from the handed-over bytes at
+    // `palette_address` in `palette_format`.
     [[nodiscard]] TextureHandle get(
         const TexImage& image,
         const TexMode& mode,
-        const TlutRef& tlut);
+        std::uint32_t palette_address,
+        TlutFormat palette_format);
     // Render thread only: marks a cached handle used (LRU) without reading guest memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
-
-    // BP 0x64/0x65: copies a handed-over palette into the TLUT bank (TMEM). Returns whether bytes changed;
-    // retires only textures whose own palette bytes changed, so bindings survive identical reloads.
-    [[nodiscard]] bool load_tlut(
-        std::uint32_t src_reg,
-        std::uint32_t dest_reg);
 
     // Aliases an EFB copy-to-texture at `guest_addr`, retiring every overlapping decoded entry and older copy.
     [[nodiscard]] bool register_efb_copy(
@@ -281,12 +276,11 @@ private:
         std::uint32_t guest_addr;
         std::uint16_t width;
         std::uint16_t height;
+        std::uint32_t palette_address;  // palettized formats; else 0
         std::uint8_t format;
         std::uint8_t tlut_format;
-        std::uint16_t tlut_offset;
         std::uint8_t levels;        // decoded mip chain length (1 = no mips)
         std::uint8_t generated_mips; // lower levels generated from mip0
-        std::uint8_t pad[2];        // keep the byte-wise hash deterministic
 
         bool operator==(const Key&) const = default;
     };
@@ -442,8 +436,6 @@ private:
     std::uint64_t retirement_revision_ = 0;
 
     // All of TMEM, so every TLUT slot and the largest transfer or palette fit. Entries stay big-endian.
-    static constexpr std::size_t kTlutBankBytes = kTmemBytes;
-    std::uint8_t tlut_bank_[kTlutBankBytes]{};
 };
 
 }  // namespace galaxy::gx

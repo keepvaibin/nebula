@@ -486,8 +486,8 @@ namespace {
 }
 
 // Per-format decoders: each writes width * height RGBA8 pixels (row-major, unpadded) to `out` from the
-// texture's guest base `src`, in raster order inside each tile. CI palettes live in the cache's TMEM byte bank;
-// the caller validates the full palette extent at tlut.tmem_offset * 512 (2 bytes per entry).
+// texture's guest base `src`, in raster order inside each tile. CI palettes are the handed-over bytes at the
+// texture's palette address (2 bytes per entry).
 template <TexFormat Format>
 void decode_intensity_tiles_impl(
     const std::uint8_t* src,
@@ -1610,68 +1610,6 @@ std::uint32_t TextureCache::allocate_srv_index() {
     return next_srv_index_++;
 }
 
-bool TextureCache::load_tlut(
-    std::uint32_t src_reg,
-    std::uint32_t dest_reg) {
-    const TlutTransfer decoded = decode_wii_tlut_transfer(src_reg, dest_reg);
-    const std::uint32_t src_addr = decoded.source_address;
-    const std::uint32_t dest_byte_offset = decoded.destination_offset;
-    const std::uint32_t transfer = decoded.byte_count;
-    if (transfer == 0u) {
-        return false;
-    }
-    if (dest_byte_offset + transfer > kTlutBankBytes) {
-        throw std::runtime_error(
-            "[TextureCache] load_tlut: dest slot overflows TLUT bank");
-    }
-
-    // A palette the game handed over (texture_image) loads from its copy.
-    const std::byte* src_ptr = registered_bytes(src_addr, transfer);
-    if (src_ptr == nullptr) {
-        // Never handed over: the palette stays as it was.
-        ++missing_images_;
-        std::fprintf(stderr, "[texture] palette not handed over: %08X (%u bytes)\n", src_addr, transfer);
-        return false;
-    }
-    // An identical reload changes no palette.
-    if (std::memcmp(tlut_bank_ + dest_byte_offset, src_ptr, transfer) == 0) {
-        return false;
-    }
-    // One transfer can touch several slots, and a C14X2 palette can span many slots even when its first slot is
-    // outside the transfer, so each overlapping palette is compared before the bank is replaced. A changed transfer
-    // can leave a texture's palette unchanged (C4 uses only the first 32 bytes of a 512-byte slot).
-    const std::uint32_t transfer_end = dest_byte_offset + transfer;
-    for (auto it = entries_.begin(); it != entries_.end(); ) {
-        std::uint32_t palette_bytes = 0u;
-        switch (static_cast<TexFormat>(it->first.format)) {
-        case TexFormat::C4: palette_bytes = 16u * 2u; break;
-        case TexFormat::C8: palette_bytes = 256u * 2u; break;
-        case TexFormat::C14X2: palette_bytes = 16384u * 2u; break;
-        default: break;
-        }
-        const std::uint32_t palette_start =
-            static_cast<std::uint32_t>(it->first.tlut_offset) * 512u;
-        const bool overlaps = palette_bytes != 0u &&
-            palette_start < transfer_end &&
-            dest_byte_offset < palette_start + palette_bytes;
-        bool changed = false;
-        if (overlaps) {
-            const std::uint32_t begin = std::max(palette_start, dest_byte_offset);
-            const std::uint32_t end = std::min(palette_start + palette_bytes, transfer_end);
-            changed = std::memcmp(tlut_bank_ + begin,
-                src_ptr + (begin - dest_byte_offset), end - begin) != 0;
-        }
-        if (changed) {
-            decoded_lru_release(it->first, it->second);
-            retire(std::move(it->second));
-            it = entries_.erase(it);
-        } else {
-            ++it;
-        }
-    }
-    std::memcpy(tlut_bank_ + dest_byte_offset, src_ptr, transfer);
-    return true;
-}
 
 bool TextureCache::register_efb_copy(
     std::uint32_t guest_addr,
@@ -1811,6 +1749,13 @@ void TextureCache::invalidate_all() {
     // Retired SRV slots return to the free list after their frame-slot fence.
 }
 
+namespace {
+// A palette format's palette bytes (0 for a direct format).
+std::uint32_t palette_byte_size(TexFormat format) {
+    return format == TexFormat::C4 ? 32u : format == TexFormat::C8 ? 512u : format == TexFormat::C14X2 ? 32768u : 0u;
+}
+}  // namespace
+
 std::size_t TextureCache::invalidate_guest_range(
     std::uint32_t guest_addr,
     std::uint32_t size) {
@@ -1829,7 +1774,11 @@ std::size_t TextureCache::invalidate_guest_ranges(
              ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
         const std::uint64_t tex_begin = it->first.guest_addr;
         const std::uint64_t tex_end = tex_begin + it->second.handle.guest_byte_size;
-        if (first_overlapping_dirty_range(sorted_coalesced_ranges, tex_begin, tex_end) != nullptr) {
+        const std::uint64_t palette_begin = it->first.palette_address;
+        const std::uint64_t palette_end = palette_begin + palette_byte_size(static_cast<TexFormat>(it->first.format));
+        if (first_overlapping_dirty_range(sorted_coalesced_ranges, tex_begin, tex_end) != nullptr ||
+            (palette_begin != 0u &&
+             first_overlapping_dirty_range(sorted_coalesced_ranges, palette_begin, palette_end) != nullptr)) {
             decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
@@ -2125,7 +2074,8 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
 TextureHandle TextureCache::get(
     const TexImage& image,
     const TexMode& mode,
-    const TlutRef& tlut) {
+    std::uint32_t palette_address,
+    TlutFormat palette_format) {
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {
@@ -2188,11 +2138,11 @@ TextureHandle TextureCache::get(
     key.width       = image.width;
     key.height      = image.height;
     key.format      = static_cast<std::uint8_t>(image.format);
-    // Only indexed formats key on the TLUT: the palette registers may still name a previous texture's palette.
+    // Only indexed formats key on the palette: a map's palette may still name a previous texture's.
     if (image.format == TexFormat::C4 || image.format == TexFormat::C8 ||
         image.format == TexFormat::C14X2) {
-        key.tlut_format = static_cast<std::uint8_t>(tlut.format);
-        key.tlut_offset = tlut.tmem_offset;
+        key.tlut_format = static_cast<std::uint8_t>(palette_format);
+        key.palette_address = palette_address;
     }
     key.levels      = static_cast<std::uint8_t>(levels);
     key.generated_mips = generated_mips ? 1u : 0u;
@@ -2240,12 +2190,6 @@ TextureHandle TextureCache::get(
     const std::uint32_t w = image.width;
     const std::uint32_t h = image.height;
 
-    // TLUT slot N starts at TMEM byte N*512 (256 entries of 2 bytes). tlut.tmem_offset is in
-    // units of 256 entries.
-    const std::uint32_t tlut_byte_offset =
-        static_cast<std::uint32_t>(tlut.tmem_offset) * 512u;
-
-    // Validate the palette extent before any read: an invalid descriptor must never become a host read.
     std::uint32_t required_palette_bytes = 0u;
     switch (image.format) {
     case TexFormat::C4: required_palette_bytes = 32u; break;
@@ -2253,10 +2197,18 @@ TextureHandle TextureCache::get(
     case TexFormat::C14X2: required_palette_bytes = 32768u; break;
     default: break;
     }
-    if (required_palette_bytes != 0u &&
-        (tlut_byte_offset > kTlutBankBytes ||
-         required_palette_bytes > kTlutBankBytes - tlut_byte_offset)) {
-        throw std::runtime_error("[TextureCache] palette exceeds TMEM");
+    // The palette the game handed over (a never handed-over one reads as zeros, logged).
+    const std::uint8_t* palette_bytes = nullptr;
+    if (required_palette_bytes != 0u) {
+        const std::byte* handed_palette =
+            palette_address != 0u ? registered_bytes(palette_address, required_palette_bytes) : nullptr;
+        if (handed_palette == nullptr) {
+            ++missing_images_;
+            std::fprintf(stderr, "[texture] palette not handed over: %08X (%u bytes)\n", palette_address,
+                         required_palette_bytes);
+        }
+        palette_bytes = reinterpret_cast<const std::uint8_t*>(
+            handed_palette != nullptr ? handed_palette : missing_image_bytes(required_palette_bytes));
     }
 
     const std::byte* handed_over = registered_bytes(image.guest_addr, total_guest_size);
@@ -2291,8 +2243,7 @@ TextureHandle TextureCache::get(
                                     : texture_pack_hash(src, texture_guest_byte_size(image.format, image.width,
                                                                                      image.height, 1u));
         if (texture_format_palettized(image.format)) {
-            pack_name.tlut = texture_pack_tlut_hash(image.format, src, image.width, image.height,
-                                                    tlut_bank_ + tlut_byte_offset);
+            pack_name.tlut = texture_pack_tlut_hash(image.format, src, image.width, image.height, palette_bytes);
         }
         ++pack_hashed_;
         if (pack_lookup) {
@@ -2306,6 +2257,9 @@ TextureHandle TextureCache::get(
                 const TextureHandle handle = entry.handle;
                 if (entries_.empty()) decoded_guest_envelope_.clear();
                 decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
+                if (key.palette_address != 0u) {
+                    decoded_guest_envelope_.include(key.palette_address, required_palette_bytes);
+                }
                 entries_.emplace(key, std::move(entry));
                 decoded_lru_track(key);
                 ++pack_bound_;
@@ -2347,7 +2301,7 @@ TextureHandle TextureCache::get(
     // palette formats, which must throw here, stay synchronous.
     const bool async_decode = async_decode_allowed_ &&
         texture_decode_format_supported(image.format) &&
-        (!palettized || static_cast<unsigned>(tlut.format) <= 2u) && !pack_dump;
+        (!palettized || static_cast<unsigned>(palette_format) <= 2u) && !pack_dump;
     if (level_pixels_scratch_.size() < levels) {
         level_pixels_scratch_.resize(levels);
     }
@@ -2355,7 +2309,7 @@ TextureHandle TextureCache::get(
     if (!async_decode) {
         decode_texture_levels(
             image.format, src, w, h, guest_levels, levels, generated_mips,
-            tlut_bank_ + tlut_byte_offset, tlut.format, level_pixels);
+            palette_bytes, palette_format, level_pixels);
     }
     const auto decode_end = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -2412,15 +2366,14 @@ TextureHandle TextureCache::get(
         }
         std::vector<std::uint64_t> offsets(level_offset.begin(), level_offset.begin() + levels);
         std::vector<std::uint32_t> pitches(level_pitch.begin(), level_pitch.begin() + levels);
-        // The palette bank can be reloaded later in this frame; the job owns
-        // the exact entries this texture was keyed with.
+        // The palette can be handed over again later in this frame; the job owns the exact entries this texture was
+        // keyed with.
         std::vector<std::uint8_t> palette;
         if (palettized) {
-            palette.assign(tlut_bank_ + tlut_byte_offset,
-                           tlut_bank_ + tlut_byte_offset + required_palette_bytes);
+            palette.assign(palette_bytes, palette_bytes + required_palette_bytes);
         }
         const TexFormat format = image.format;
-        const TlutFormat tlut_format = tlut.format;
+        const TlutFormat tlut_format = palette_format;
         // The guest bytes stay unchanged until finish_pending_decodes() (caller contract).
         decode_pool_->submit(
             [format, tlut_format, guest_src = src, w, h, guest_levels, levels,
@@ -2508,6 +2461,9 @@ TextureHandle TextureCache::get(
         : std::chrono::steady_clock::time_point{};
     if (entries_.empty()) decoded_guest_envelope_.clear();
     decoded_guest_envelope_.include(image.guest_addr, total_guest_size);
+    if (key.palette_address != 0u) {
+        decoded_guest_envelope_.include(key.palette_address, required_palette_bytes);
+    }
     const auto decoded = entries_.emplace(key, std::move(entry)).first;
     decoded_lru_track(key);
     if (pack_slot != TexturePacks::kNone) {
@@ -2542,8 +2498,8 @@ TextureHandle TextureCache::get(
                   << " size=" << w << 'x' << h
                   << " levels=" << levels
                   << " native-mips=" << (generated_mips ? 1u : 0u)
-                  << " tlut=" << static_cast<unsigned>(tlut.format)
-                  << '/' << tlut.tmem_offset
+                  << " tlut=" << static_cast<unsigned>(palette_format)
+                  << '/' << std::hex << palette_address << std::dec
                   << " guest-bytes=" << total_guest_size
                   << " staging-bytes=" << staging_size
                   << " srv=" << srv_idx

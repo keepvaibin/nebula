@@ -279,7 +279,8 @@ private:
     void on_efb_copy(std::uint32_t exec_command);
     void on_invalidate_textures();
     void on_invalidate_vertex_cache();
-    void on_tlut_load();
+    // A palette place took another address (NativeDrawState::palette_revision).
+    void on_palettes_changed();
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
                         std::uint32_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
@@ -1498,6 +1499,7 @@ private:
         // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path
         // takes map 7.
         std::array<TextureMap, kMaxTextureMaps> maps{};
+        std::array<std::uint32_t, kMaxTextureMaps> palettes{};  // palette_address of each map
         std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
 
@@ -1509,7 +1511,7 @@ private:
         std::uint16_t height = 0;
         std::uint8_t format = 0;
         std::uint8_t tlut_format = 0;
-        std::uint16_t tlut_offset = 0;
+        std::uint32_t palette_address = 0;
         std::uint8_t levels = 1;
         std::uint8_t generated_mips = 0;
 
@@ -1521,7 +1523,7 @@ private:
     [[nodiscard]] TextureHandleKey texture_handle_key(
         const TexImage& image,
         const TexMode& mode,
-        const TlutRef& tlut) const;
+        std::uint32_t palette_address, TlutFormat palette_format) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
@@ -1608,7 +1610,7 @@ private:
             mix(key.height);
             mix(key.format);
             mix(key.tlut_format);
-            mix(key.tlut_offset);
+            mix(key.palette_address);
             mix(key.levels);
             mix(key.generated_mips);
             return static_cast<std::size_t>(hash);
@@ -1619,6 +1621,9 @@ private:
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
+            for (const std::uint32_t palette : key.palettes) {
+                hash = mix64(hash, palette);
+            }
             for (const TextureMap& t : key.maps) {
                 const TexMode& m = t.mode;
                 hash = mix64(hash, t.image.guest_addr);

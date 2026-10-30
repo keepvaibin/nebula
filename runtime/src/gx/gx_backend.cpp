@@ -7764,8 +7764,8 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
             continue;
         }
         key.maps[m] = draw_state_.texture[m];
-        const TexFormat format = key.maps[m].image.format;
-        if (format != TexFormat::C4 && format != TexFormat::C8 && format != TexFormat::C14X2) {
+        key.palettes[m] = palette_address(draw_state_, m);
+        if (key.palettes[m] == 0u) {
             key.maps[m].tlut = TlutRef{};
         }
     }
@@ -7775,7 +7775,7 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
 GxBackend::TextureHandleKey GxBackend::texture_handle_key(
     const TexImage& image,
     const TexMode& mode,
-    const TlutRef& tlut) const {
+    std::uint32_t palette_address, TlutFormat palette_format) const {
     unsigned levels = 1u;
     bool generated_mips = false;
     const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
@@ -7796,8 +7796,8 @@ GxBackend::TextureHandleKey GxBackend::texture_handle_key(
         image.width,
         image.height,
         static_cast<std::uint8_t>(image.format),
-        static_cast<std::uint8_t>(palettized ? tlut.format : TlutFormat{}),
-        static_cast<std::uint16_t>(palettized ? tlut.tmem_offset : 0u),
+        static_cast<std::uint8_t>(palettized ? palette_format : TlutFormat{}),
+        palettized ? palette_address : 0u,
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };
@@ -8867,9 +8867,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                     if ((texture_map_mask & (1u << m)) != 0u) {
                         const TexImage img = draw_state_.texture[m].image;
                         const TexMode mode = draw_state_.texture[m].mode;
-                        const TlutRef tlut = draw_state_.texture[m].tlut;
+                        const TlutFormat palette_format = draw_state_.texture[m].tlut.format;
+                        const std::uint32_t palette = palette_address(draw_state_, m);
                         const TextureHandleKey handle_key =
-                            texture_handle_key(img, mode, tlut);
+                            texture_handle_key(img, mode, palette, palette_format);
                         if (const auto handle_it =
                                 frame_texture_handle_cache_.find(handle_key);
                             handle_it != frame_texture_handle_cache_.end()) {
@@ -8883,7 +8884,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                                 const auto get_start = time_detail
                                     ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
-                                texture_handles[m] = texture_cache_.get(img, mode, tlut);
+                                texture_handles[m] = texture_cache_.get(img, mode, palette, palette_format);
                                 if (time_detail) {
                                     texture_get_us += elapsed_us(
                                         get_start,
@@ -9528,10 +9529,15 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;
-    case shapes::Record::Kind::Material:
+    case shapes::Record::Kind::Material: {
         apply_record_material(*record.material);
+        const std::uint32_t palettes = draw_state_.palette_revision;
         draw_state_.apply(*record.material);
+        if (draw_state_.palette_revision != palettes) {
+            on_palettes_changed();
+        }
         return;
+    }
     case shapes::Record::Kind::State: {
         // As the stream parser applies the same writes: a copy, a texture invalidation or a TLUT load acts at once.
         struct Events final : state::Writes {
@@ -9545,8 +9551,6 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
                     backend.on_efb_copy(value);
                 } else if (reg == 0x66u && value == 0u) {
                     backend.on_invalidate_textures();
-                } else if (reg == bp::kTlutDest) {
-                    backend.on_tlut_load();
                 }
             }
             void xf(std::uint16_t address, std::uint32_t value) override { backend.state_.load_xf(address, &value, 1u); }
@@ -9565,7 +9569,11 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
         }
         for (const state::Op& op : record.state) {
             state::encode(std::span<const state::Op>(&op, 1u), events);
+            const std::uint32_t palettes = draw_state_.palette_revision;
             draw_state_.apply(op);
+            if (draw_state_.palette_revision != palettes) {
+                on_palettes_changed();
+            }
         }
         return;
     }
@@ -9597,7 +9605,7 @@ void GxBackend::on_shape_record(const shapes::Record& record) {
 }
 
 void GxBackend::apply_record_material(const material::Material& m) {
-    material::apply(m, state_, [](void* backend) { static_cast<GxBackend*>(backend)->on_tlut_load(); }, this);
+    material::apply(m, state_);
     // The material wrote its coordinate scales.
     scales_from_textures_ = false;
 }
@@ -10287,18 +10295,9 @@ void GxBackend::on_invalidate_textures() {
     current_texture_binding_key_valid_ = false;
 }
 
-void GxBackend::on_tlut_load() {
-    const TlutTransfer transfer = decode_wii_tlut_transfer(
-        state_.bp(bp::kTlutSrcAddr), state_.bp(bp::kTlutDest));
-    if (transfer.byte_count == 0u) {
-        return;
-    }
+void GxBackend::on_palettes_changed() {
+    // Bindings made before the palette places changed name the earlier palettes.
     flush_pending_draw_batch();
-    // BP 0x64 (source) is latched by GxState; BP 0x65 (destination) triggers the load into TMEM, which
-    // palettized (C4/C8/C14X2) textures decode against.
-    if (!texture_cache_.load_tlut(state_.bp(bp::kTlutSrcAddr), state_.bp(bp::kTlutDest))) {
-        return;
-    }
     texture_handle_cache_.clear();
     clear_texture_binding_table_cache();
     texture_bindings_dirty_ = true;
