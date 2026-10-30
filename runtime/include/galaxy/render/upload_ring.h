@@ -95,6 +95,10 @@ public:
         return va >= gpu_base_ && va < gpu_base_ + total_bytes() ? mapped_ + (va - gpu_base_) : nullptr;
     }
     [[nodiscard]] std::size_t cursor() const { return cursor_; }
+    // Counts the rewinds (begin_frame, resegment, initialize): memory allocated before the latest one may be reused
+    // once its frame retires, so a user that keeps allocations together (the matrix arena's rows and their table)
+    // starts over when it changes.
+    [[nodiscard]] std::uint64_t epoch() const { return epoch_; }
 
     [[nodiscard]] gpu::Resource* resource() const { return gpu::raw(buffer_); }
     [[nodiscard]] gpu::Address gpu_base() const { return gpu_base_; }
@@ -112,6 +116,7 @@ private:
     std::size_t bytes_per_frame_ = 0;
     std::size_t capacity_ = 0;
     std::size_t segment_base_ = 0;
+    std::uint64_t epoch_ = 0;
     std::size_t cursor_ = 0;
     std::size_t spill_cursor_ = 0;
     // Spill bytes the current frame took.

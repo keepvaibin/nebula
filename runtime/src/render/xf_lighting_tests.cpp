@@ -13,6 +13,7 @@
 #include <wrl/client.h>
 #pragma warning(pop)
 
+#include "galaxy/render/matrix_memory.h"
 #include "galaxy/render/shader_gen.h"
 #include "galaxy/render/shader_keys.h"
 #include "galaxy/render/uber_constants.h"
@@ -83,8 +84,8 @@ D3D12_RESOURCE_DESC buffer_desc(UINT64 size) {
     return desc;
 }
 
-// The matrix palette of one draw: 0x1A0 float4 elements (XF words 0x000-0x67F).
-constexpr unsigned kPaletteElements = 0x1A0u;
+// One draw's matrices as the shaders read them (mrow): its row table, then the rows (MatrixMemory's sections).
+constexpr unsigned kPaletteElements = MatrixMemory::kRowTableRows + MatrixMemory::kRows;
 
 struct Light {
     std::uint32_t color = 0u;
@@ -213,17 +214,23 @@ public:
             }
             apply_uber_vs_key(keys[i], k);
 
-            auto* words = reinterpret_cast<std::uint32_t*>(&palette[static_cast<std::size_t>(i) * kPaletteElements]);
-            words[0x400] = words[0x404] = words[0x408] = word(1.0f);  // normal matrix 0: identity
+            auto* table = reinterpret_cast<std::uint32_t*>(&palette[static_cast<std::size_t>(i) * kPaletteElements]);
+            for (unsigned r = 0; r < MatrixMemory::kRows; ++r) {
+                table[r] = i * kPaletteElements + MatrixMemory::kRowTableRows + r;
+            }
+            auto* words = table + 4u * MatrixMemory::kRowTableRows;
+            // Normal matrix 0: identity (three aligned rows).
+            words[MatrixMemory::kNormalBase] = words[MatrixMemory::kNormalBase + 5u] =
+                words[MatrixMemory::kNormalBase + 10u] = word(1.0f);
             for (unsigned n = 0; n < 8u; ++n) {
                 const Light& l = c.lights[n];
-                std::uint32_t* w = words + 0x600u + 16u * n;
-                w[3] = l.color;
+                std::uint32_t* w = words + MatrixMemory::kLightBase + MatrixMemory::kLightWords * n;
+                w[MatrixMemory::kLightColorWord] = l.color;
                 for (unsigned j = 0; j < 3u; ++j) {
-                    w[4u + j] = word(l.cos_atten[j]);
-                    w[7u + j] = word(l.dist_atten[j]);
-                    w[10u + j] = word(l.position[j]);
-                    w[13u + j] = l.direction[j];
+                    w[MatrixMemory::kLightAngleWord + j] = word(l.cos_atten[j]);
+                    w[MatrixMemory::kLightDistanceWord + j] = word(l.dist_atten[j]);
+                    w[MatrixMemory::kLightPositionWord + j] = word(l.position[j]);
+                    w[MatrixMemory::kLightDirectionWord + j] = l.direction[j];
                 }
             }
             RenderVertex& v = vertices[i];

@@ -37,7 +37,7 @@ namespace {
 // vk_pipelines.bin: the driver's VkPipelineCache data (it checks its own header).
 constexpr std::uint32_t kShaderFileMagic = 0x53565847u;  // "GXVS"
 constexpr std::uint32_t kKeyFileMagic = 0x4b565847u;     // "GXVK"
-constexpr std::uint32_t kShaderFileVersion = 5u;
+constexpr std::uint32_t kShaderFileVersion = 6u;
 constexpr std::uint32_t kKeyFileVersion = 4u;
 constexpr std::uint32_t kMaxRecords = 65536u;
 constexpr std::uint32_t kMaxSpirvWords = 1u << 20u;

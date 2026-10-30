@@ -376,8 +376,10 @@ public:
     [[nodiscard]] unsigned matrix_history_frames() const noexcept {
         return matrix_segments_ - kFramesInFlight;
     }
+    // Counts the matrix ring's rewinds (every frame in normal mode, segment advances in temporal mode): a scene's
+    // palettes are addressable while the count has moved by at most matrix_history_frames().
     [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept {
-        return matrix_segment_serial_;
+        return matrix_ring_.epoch();
     }
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
@@ -1603,7 +1605,6 @@ private:
     // previous render frame's palettes outlive the frame that reads them.
     unsigned matrix_segments_ = kFramesInFlight;
     unsigned matrix_segment_ = 0;
-    std::uint64_t matrix_segment_serial_ = 0;
     std::array<std::uint64_t, kFramesInFlight + 2u> matrix_segment_fence_{};
     std::size_t matrix_begin_cursor_ = 0;
     bool matrix_segment_used_ = false;

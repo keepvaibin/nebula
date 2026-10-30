@@ -9,6 +9,7 @@
 #include <cstdio>
 #include <cstring>
 #include <random>
+#include <vector>
 
 namespace {
 
@@ -294,12 +295,62 @@ void typed_lights_write_the_section() {
     }
 }
 
+// E-05 step 3: the matrix arena appends only the rows a load changed. MatrixMemory's dirty rows are exactly the rows
+// whose words changed since they were last taken (a load of equal words marks none).
+void dirty_rows_name_the_changed_rows() {
+    Random r;
+    bool ok = true;
+    MatrixMemory memory;
+    memory.clear_dirty_rows();
+    std::vector<std::uint32_t> shadow(MatrixMemory::kWords, 0u);
+    for (unsigned trial = 0; trial < 5000u && ok; ++trial) {
+        const auto base = static_cast<std::uint16_t>(r(MatrixMemory::kPaletteWords));
+        const auto count = static_cast<std::uint16_t>(1u + r(16u));
+        std::uint32_t words[16];
+        for (unsigned i = 0; i < count; ++i) {
+            // Half the loads repeat what is there.
+            words[i] = r(2u) == 0u && base + i < MatrixMemory::kWords ? shadow[base + i] : r(1u << 20);
+        }
+        MatrixMemory::RowMask expected{};
+        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
+            if (shadow[base + i] != words[i] && (base + i) / 4u < MatrixMemory::kRows) {
+                const unsigned row = (base + i) / 4u;
+                expected[row / 64u] |= std::uint64_t{1} << (row % 64u);
+            }
+        }
+        bool any_change = false;  // any word of the load, a row's or past the rows
+        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
+            any_change = any_change || shadow[base + i] != words[i];
+        }
+        memory.load(base, words, count);
+        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
+            shadow[base + i] = words[i];
+        }
+        // A changed load marks the whole span it wrote (rows from its first to its last word).
+        if (any_change) {
+            for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
+                const unsigned row = (base + i) / 4u;
+                if (row < MatrixMemory::kRows) {
+                    expected[row / 64u] |= std::uint64_t{1} << (row % 64u);
+                }
+            }
+        }
+        ok = memory.dirty_rows() == expected;
+        memory.clear_dirty_rows();
+    }
+    check(ok, "dirty rows are the rows a changed load wrote, none for an unchanged one");
+    if (ok) {
+        std::printf("ok: dirty rows name the changed rows\n");
+    }
+}
+
 }  // namespace
 
 int main() {
     values_only_matches_whole();
     values_only_marks_no_program_change();
     typed_lights_write_the_section();
+    dirty_rows_name_the_changed_rows();
     if (g_failures != 0) {
         std::printf("%d native material checks FAILED\n", g_failures);
         return 1;

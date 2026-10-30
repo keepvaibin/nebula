@@ -70,7 +70,9 @@ struct Op {
 };
 static_assert(sizeof(Op) == 16u);
 
-enum class Source : std::uint32_t { Constants = 0, Matrices = 1 };
+// MatrixRows: a palette slot from a draw's row table in the matrix ring (`src` the table; the source's low byte, then
+// the row count from bit 8; `words` the slot's float4 index from the palette base, for its identity table).
+enum class Source : std::uint32_t { Constants = 0, Matrices = 1, MatrixRows = 2 };
 
 // A block copied from a ring into the output before the first evaluation of a
 // sequence.
@@ -82,13 +84,17 @@ struct Copy {
 };
 static_assert(sizeof(Copy) == 16u);
 
-inline constexpr std::uint32_t kPaletteWords = MatrixMemory::kPaletteWords;
+// A palette slot: a row table (one uint a row: the identity, the slot's own rows) then the rows, as a draw's matrices
+// are read (mrow); padded to 256 bytes.
+inline constexpr std::uint32_t kPaletteRows = MatrixMemory::kRows;
+inline constexpr std::uint32_t kPaletteWords = (kPaletteRows * 5u + 63u) & ~63u;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
 inline constexpr std::uint32_t kPsBytes = sizeof(PixelConstants);
 // The rows a motion vector reads from a palette at the frame presented before
-// (position and texture matrices, rows 0-63).
-inline constexpr std::uint32_t kPrevPaletteWords = 256u;
+// (position and texture matrices, rows 0-63), with their table.
+inline constexpr std::uint32_t kPrevPaletteRows = 64u;
+inline constexpr std::uint32_t kPrevPaletteWords = kPrevPaletteRows * 5u;
 inline constexpr std::uint32_t kPrevPaletteBytes = kPrevPaletteWords * 4u;
 static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 256u == 0u &&
               kPrevPaletteBytes % 256u == 0u);

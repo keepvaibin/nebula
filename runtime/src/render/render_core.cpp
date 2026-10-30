@@ -883,8 +883,8 @@ void RenderCore::reset_fifo_session_state() {
     matrix_palette_stale_ = true;
     current_palette_required_ = true;
     inline_matrices_stale_ = true;
-    // The ring segment is reused, so no palette chunk is valid until the next upload.
-    xf_palette_valid_ = 0u;
+    // The ring segment is reused, so no arena row is valid until the next table appends them all.
+    matrix_rows_valid_ = false;
     frame_bindings_dirty_ = true;
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
@@ -5810,17 +5810,25 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
                 interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
             }
             interp_program_.at_previous(false);
+        } else if (palette_slot >= 0) {
+            // The record reads its rows from the output's slot: its previous rows (a motion-vector draw's) are the
+            // slot's own too, not the ring table its copied constants name.
+            const std::uint32_t ctrl[2]{
+                0u, (layout.palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) / 16u};
+            interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
         }
     }
     for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
         const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
         const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
-        interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u, entry.motion,
+        interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u + interp_gpu::kPaletteRows,
+                                entry.motion,
                                 before_palette(entry.before), now_words,
                                 layer_camera(entry.layer));
         if (q < layout.prev_palette_count) {
             interp_program_.at_previous(true);
-            interp_program_.palette_positions(layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u,
+            interp_program_.palette_positions(
+                layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u + interp_gpu::kPrevPaletteRows,
                                               entry.motion, before_palette(entry.before), now_words);
             interp_program_.at_previous(false);
         }
@@ -6847,10 +6855,9 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     current_matrix_palette_ = 0;
     matrix_palette_stale_ = true;
     inline_matrices_stale_ = true;
-    // The matrix ring segment for this frame slot is reused from the previous round trip, so a
-    // palette chunk uploaded then is not at a known offset. Re-arm every chunk; the first palette
-    // upload of the frame writes the full bank again.
-    xf_palette_valid_ = 0u;
+    // The matrix ring segment for this frame slot is reused from the previous round trip, so a row
+    // appended then is not at a known offset: the frame's first table appends every row again.
+    matrix_rows_valid_ = false;
     scene_chunk_restart_ = true;
 
     // Bind EFB with default (null) viewport. The XF viewport registers
@@ -8218,11 +8225,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
-    // The XF matrix palette is snapshot only when the matrices changed (kDirtyXfMatrices); uploading it
-    // on every TEV or render-state change would exhaust the per-frame matrix ring. Other draws reuse
-    // the last snapshot's address, valid until begin_frame() rewinds the ring; the shader's palette
-    // base is 0 because the root SRV points at the snapshot. A snapshot is the whole palette
-    // (kMatrixPaletteWords * 4 = 6656 bytes), as a fresh ring allocation inherits nothing.
+    // A draw's matrices are read through its row table (the matrix arena, E-05): a new table is written only
+    // when rows changed (only those rows are appended to the matrix ring) or the draw's moved lights differ;
+    // other draws reuse the last table, valid until begin_frame() rewinds the ring. Every draw binds the ring's
+    // base and names its table by mtx_palette_base.
     const unsigned active_texgen_mask =
         vs_key_.num_texgens >= 8u
             ? 0xFFu
@@ -8257,7 +8263,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             // Counts the snapshots this adds: the palette had not moved since the last one.
             rt_light_forced_ += !matrix_palette_stale_ && current_matrix_palette_ != 0u ? 1u : 0u;
             matrix_palette_stale_ = true;
-            xf_palette_valid_ = 0u;
+            matrix_table_forced_ = true;
         }
         rt_draw_lights_ = lights;
         static unsigned traced = 0u;
@@ -8282,34 +8288,69 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     } else {
         rt_draw_lights_ = 0u;
     }
-    if (palette_required &&
-        (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
+    if (palette_required && (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // Clock reads on detail frames only; the upload counts below are always kept.
         const auto matrix_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        const std::size_t palette_bytes =
-            kMatrixPaletteWords * sizeof(std::uint32_t);
-        UploadRing::Allocation mtx_alloc{};
-        // Dirty chunks decide whether the existing allocation is reusable. A new allocation takes the
-        // whole palette: it inherits nothing, and patching an earlier one would change recorded draws.
-        const std::uint64_t palette_todo =
-            (matrices_.palette_dirty() | ~xf_palette_valid_) &
-            xf_palette_chunk_mask;
-        if (palette_todo != 0u) {
+        MatrixMemory::RowMask rows = matrices_.dirty_rows();
+        if (!matrix_rows_valid_ || renderer_.matrix_ring().epoch() != matrix_rows_epoch_) {
+            // Rows from before the ring's latest rewind may be reused with their frame: a table names only rows of
+            // its own segment.
+            rows.fill(~std::uint64_t{0});
+            matrix_rows_epoch_ = renderer_.matrix_ring().epoch();
+        }
+        bool any_row = false;
+        for (const std::uint64_t word : rows) {
+            any_row = any_row || word != 0u;
+        }
+        if (any_row || matrix_table_forced_) {
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-            mtx_alloc =
-                renderer_.matrix_ring().allocate(palette_bytes, /*alignment=*/256u);
-            std::memcpy(mtx_alloc.cpu, matrices_.raw(), kMatrixPaletteWords * sizeof(std::uint32_t));
+            // The table, the changed rows after it, then the draw's moved lights (rows of their own: the
+            // arena keeps the game's).
+            unsigned row_count = 0u;
+            for (std::uint32_t r = 0; r < MatrixMemory::kRows; ++r) {
+                row_count += (rows[r / 64u] >> (r % 64u)) & 1u;
+            }
+            const unsigned moved_lights = static_cast<unsigned>(std::popcount(rt_draw_lights_ & 0xFFu));
+            constexpr unsigned kLightRows = MatrixMemory::kLightWords / 4u;
+            const std::size_t bytes =
+                (MatrixMemory::kRowTableRows + row_count + moved_lights * kLightRows) * 16u;
+            UploadRing::Allocation mtx_alloc = renderer_.matrix_ring().allocate(bytes, /*alignment=*/256u);
+            const gpu::Address ring_base = renderer_.matrix_ring().gpu_base();
+            const auto first = static_cast<std::uint32_t>((mtx_alloc.gpu - ring_base) / 16u);
+            auto* const out = reinterpret_cast<std::uint32_t*>(mtx_alloc.cpu);
+            std::uint32_t next = first + MatrixMemory::kRowTableRows;
+            for (std::uint32_t r = 0; r < MatrixMemory::kRows; ++r) {
+                if (((rows[r / 64u] >> (r % 64u)) & 1u) != 0u) {
+                    std::memcpy(out + 4u * (next - first), matrices_.raw() + 4u * r, 16u);
+                    matrix_row_index_[r] = next++;
+                }
+            }
+            std::memcpy(out, matrix_row_index_.data(), sizeof(matrix_row_index_));
+            if (rt_draw_lights_ != 0u) [[unlikely]] {
+                // The moved lights' rows: the game's light section with the aim applied, in this table only.
+                std::array<std::uint32_t, MatrixMemory::kPaletteWords> moved;
+                std::memcpy(moved.data() + MatrixMemory::kLightBase, matrices_.raw() + MatrixMemory::kLightBase,
+                            MatrixMemory::kLightWords * 8u * sizeof(std::uint32_t));
+                write_rt_lights(moved.data());
+                for (unsigned n = 0; n < 8u; ++n) {
+                    if ((rt_draw_lights_ & (1u << n)) == 0u) {
+                        continue;
+                    }
+                    const std::uint32_t row = (MatrixMemory::kLightBase + MatrixMemory::kLightWords * n) / 4u;
+                    std::memcpy(out + 4u * (next - first), moved.data() + 4u * row, kLightRows * 16u);
+                    for (unsigned k = 0; k < kLightRows; ++k) {
+                        out[row + k] = next++;
+                    }
+                }
+                ++rt_light_uploads_;
+            }
             if (snapshot_start != 0u) [[unlikely]] {
                 rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
                 ++rt_snapshot_count_;
             }
             current_matrix_palette_ = mtx_alloc.gpu;
-            if (rt_draw_lights_ != 0u) [[unlikely]] {
-                write_rt_lights(reinterpret_cast<std::uint32_t*>(mtx_alloc.cpu));
-                ++rt_light_uploads_;
-            }
             rt_palette_lights_ = rt_draw_lights_;
             if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
@@ -8318,17 +8359,16 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     scene.palettes.resize((scene.palette_count + 1u) * words);
                 }
                 std::memcpy(scene.palettes.data() + scene.palette_count * words,
-                            matrices_.raw(), palette_bytes);
+                            matrices_.raw(), words * sizeof(std::uint32_t));
                 if (rt_draw_lights_ != 0u) {
                     write_rt_lights(scene.palettes.data() + scene.palette_count * words);
                 }
                 current_palette_shadow_ = static_cast<std::int32_t>(scene.palette_count++);
             }
-            // Every palette chunk was copied to this allocation, so mark the
-            // complete image valid without computing a redundant dirty span.
-            xf_palette_valid_ = xf_palette_chunk_mask;
-            matrices_.clear_palette_dirty(0u, MatrixMemory::kPaletteChunkCount - 1u);
-            frame_matrix_upload_bytes_ += kMatrixPaletteWords * sizeof(std::uint32_t);
+            matrix_rows_valid_ = true;
+            matrix_table_forced_ = false;
+            matrices_.clear_dirty_rows();
+            frame_matrix_upload_bytes_ += bytes;
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
         // frame's segment.
@@ -8338,14 +8378,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 elapsed_us(matrix_start, std::chrono::steady_clock::now());
         }
     }
-    draw_matrix_palette_ = history_scene_
-        ? renderer_.matrix_ring().gpu_base()
-        : current_matrix_palette_;
+    draw_matrix_palette_ = renderer_.matrix_ring().gpu_base();
 
     // Upload VS constants when scalar state or fixed inline matrices change.
     if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
-        frame_bindings_dirty_ || dirty == ~0u ||
-        (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
+        frame_bindings_dirty_ || dirty == ~0u || current_matrix_palette_ != temporal_vs_palette_va_) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -8354,6 +8391,18 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
+        // The draw's row table, counted from the ring's base (the draw binds the base). A draw without motion history
+        // (motion_ctrl mode 0 at 0: write_scene_vs_constants sets history scenes') reads its previous rows from its
+        // own table: no motion of its own.
+        auto* const uploaded = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
+        uploaded->mtx_palette_base =
+            current_matrix_palette_ != 0u
+                ? static_cast<std::uint32_t>((current_matrix_palette_ - renderer_.matrix_ring().gpu_base()) / 16u)
+                : 0u;
+        if (uploaded->motion_ctrl[0] == 0u && uploaded->motion_ctrl[1] == 0u) {
+            uploaded->motion_ctrl[1] = uploaded->mtx_palette_base;
+        }
+        temporal_vs_palette_va_ = current_matrix_palette_;
         if (history_scene_) [[unlikely]] {
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }

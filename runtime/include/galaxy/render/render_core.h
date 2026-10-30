@@ -1400,19 +1400,15 @@ private:
     // bindings while retaining stale palette debt for a later palette user.
     bool current_palette_required_ = true;
     bool inline_matrices_stale_ = true;
-    // The 32-word chunks of the XF matrix palette already snapshot into this frame slot's matrix ring
-    // (cleared on the slot rewind and on session reset). When nothing moved, flush_draw_state reuses
-    // current_matrix_palette_; a new allocation still copies the whole palette (MatrixMemory::palette_dirty()).
-    static constexpr std::uint64_t xf_palette_chunk_mask =
-        (std::uint64_t{1}
-         << MatrixMemory::kPaletteChunkCount) - 1u;
-    static_assert(
-        MatrixMemory::kPaletteChunkCount < 64u,
-        "palette dirty bitmap is one 64-bit word");
-    static_assert(
-        MatrixMemory::kPaletteWords % MatrixMemory::kPaletteChunkWords == 0u,
-        "palette chunks must tile the palette exactly");
-    std::uint64_t xf_palette_valid_ = 0u;
+    // The matrix arena (E-05): where each row the shaders read was last appended in this frame slot's matrix ring
+    // (float4 index from the ring's base). A draw's row table (current_matrix_palette_) lists them; a new table is
+    // written when rows changed (only those rows are appended) or when the draw's moved lights differ. The indices
+    // hold once the slot's first table appended every row (matrix_rows_valid_, cleared on the slot rewind and on
+    // session reset).
+    std::array<std::uint32_t, MatrixMemory::kRows> matrix_row_index_{};
+    bool matrix_rows_valid_ = false;
+    std::uint64_t matrix_rows_epoch_ = 0;  // the matrix ring's epoch() the rows were appended in
+    bool matrix_table_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when GX register state did not
     // change. EFB copies can also replace a guest-address texture alias

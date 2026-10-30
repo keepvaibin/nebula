@@ -34,6 +34,11 @@ cbuffer VertexConstants : register(b0) {
     float4   debake_peak;
 };
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
+// Row r of the draw's matrices and lights: its row table (at float4 `table`, one uint a row) names where the row
+// was appended in the matrix arena (MatrixMemory, E-05).
+float4 mrow(uint table, uint r) {
+    return mtx_palette[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
+}
 
 struct VSIn {
     float3   pos      : POSITION;
@@ -51,11 +56,6 @@ struct VSOut {
     float4   col1     : COLOR1;
     float3   uv[8]    : TEXCOORD;
 };
-
-float xfw(uint w) {
-    float4 v = mtx_palette[mtx_palette_base + (w >> 2u)];
-    return v[w & 3u];
-}
 
 uint key_texgen(uint i) {
     uint4 v = uber_texgen[i >> 2u];
@@ -75,10 +75,10 @@ uint key_post_texgen(uint i) {
 void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
                inout float3 lacc, inout float lacc_a) {
     const uint e = 0xA8u + 4u * n;  // the light section (MatrixMemory::kLightBase / 4)
-    uint  lcw  = asuint(mtx_palette[mtx_palette_base + e].w);
-    float4 le1 = mtx_palette[mtx_palette_base + e + 1u];
-    float4 le2 = mtx_palette[mtx_palette_base + e + 2u];
-    float4 le3 = mtx_palette[mtx_palette_base + e + 3u];
+    uint  lcw  = asuint(mrow(mtx_palette_base, e).w);
+    float4 le1 = mrow(mtx_palette_base, e + 1u);
+    float4 le2 = mrow(mtx_palette_base, e + 2u);
+    float4 le3 = mrow(mtx_palette_base, e + 3u);
     float3 lpos  = float3(le2.z, le2.w, le3.x);
     float3 ldvec = float3(le3.y, le3.z, le3.w);
     float3 cosA  = le1.xyz;
@@ -250,11 +250,10 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     float3 pos_in = v.pos;
     float4 wpos;
     if ((key_flags & 0x01u) != 0u) {
-        uint pnmtx_row = pn_row + mtx_palette_base;
         wpos = float4(
-            dot(mtx_palette[pnmtx_row+0u], float4(pos_in, 1.0)),
-            dot(mtx_palette[pnmtx_row+1u], float4(pos_in, 1.0)),
-            dot(mtx_palette[pnmtx_row+2u], float4(pos_in, 1.0)),
+            dot(mrow(mtx_palette_base, pn_row+0u), float4(pos_in, 1.0)),
+            dot(mrow(mtx_palette_base, pn_row+1u), float4(pos_in, 1.0)),
+            dot(mrow(mtx_palette_base, pn_row+2u), float4(pos_in, 1.0)),
             1.0);
     } else {
         wpos = float4(
@@ -299,9 +298,10 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     float3 nrm = float3(0.0, 0.0, 0.0);
     if (lighting_used) {
         // The normal section's rows (MatrixMemory::kNormalBase / 4 = 0x40) at the position matrix's row.
-        const uint nrm_q = mtx_palette_base + 0x40u + (pn_row & 31u);
-        float3 nrm_t = float3(dot(mtx_palette[nrm_q].xyz, v.nrm), dot(mtx_palette[nrm_q + 1u].xyz, v.nrm),
-                              dot(mtx_palette[nrm_q + 2u].xyz, v.nrm));
+        const uint nrm_q = 0x40u + (pn_row & 31u);
+        float3 nrm_t = float3(dot(mrow(mtx_palette_base, nrm_q).xyz, v.nrm),
+                              dot(mrow(mtx_palette_base, nrm_q + 1u).xyz, v.nrm),
+                              dot(mrow(mtx_palette_base, nrm_q + 2u).xyz, v.nrm));
         nrm = (dot(nrm_t, nrm_t) > 0.0) ? normalize(nrm_t) : nrm_t;
     }
 
@@ -371,14 +371,15 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         } else if (type == 3u) {
             res = float3(o.col1.rg, 1.0);
         } else if (type == 1u) {
-            const uint emboss_q = mtx_palette_base + 0x40u + (pn_row & 31u);
-            float3x3 emboss_matrix = float3x3(mtx_palette[emboss_q].xyz, mtx_palette[emboss_q + 1u].xyz,
-                                              mtx_palette[emboss_q + 2u].xyz);
+            const uint emboss_q = 0x40u + (pn_row & 31u);
+            float3x3 emboss_matrix = float3x3(mrow(mtx_palette_base, emboss_q).xyz,
+                                              mrow(mtx_palette_base, emboss_q + 1u).xyz,
+                                              mrow(mtx_palette_base, emboss_q + 2u).xyz);
             float3 emboss_tangent = mul(emboss_matrix, v.tangent);
             float3 emboss_binormal = mul(emboss_matrix, v.binormal);
             const uint light = 0xA8u + 4u * ((tg >> 15u) & 7u);
-            float4 emboss_l2 = mtx_palette[mtx_palette_base + light + 2u];
-            float4 emboss_l3 = mtx_palette[mtx_palette_base + light + 3u];
+            float4 emboss_l2 = mrow(mtx_palette_base, light + 2u);
+            float4 emboss_l3 = mrow(mtx_palette_base, light + 3u);
             float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;
             float emboss_dist2 = dot(emboss_delta, emboss_delta);
             float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);
@@ -436,11 +437,11 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
                     packed = v.mtx_idx.z;
                     shift = 0u;
                 }
-                uint tm = min((packed >> shift) & 0xFFu, 61u) + mtx_palette_base;
+                uint tm = min((packed >> shift) & 0xFFu, 61u);
                 res = float3(
-                    dot(coord, mtx_palette[tm+0u]),
-                    dot(coord, mtx_palette[tm+1u]),
-                    stq ? dot(coord, mtx_palette[tm+2u]) : 1.0);
+                    dot(coord, mrow(mtx_palette_base, tm+0u)),
+                    dot(coord, mrow(mtx_palette_base, tm+1u)),
+                    stq ? dot(coord, mrow(mtx_palette_base, tm+2u)) : 1.0);
             } else {
                 const uint inline_base = i * 3u;
                 res = float3(

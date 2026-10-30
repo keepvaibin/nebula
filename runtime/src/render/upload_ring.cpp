@@ -61,6 +61,7 @@ bool UploadRing::initialize(
     slot_generations_ = std::move(generations);
     segment_base_ = cursor_ = 0u;
     spill_cursor_ = spill_base();
+    ++epoch_;
     frame_spill_ = 0u;
     high_water_ = 0u;
     active_slot_ = 0u;
@@ -84,6 +85,7 @@ bool UploadRing::resegment(std::size_t bytes_per_frame, unsigned frames_in_fligh
     slot_generations_.assign(frames_in_flight, 0u);
     segment_base_ = cursor_ = 0u;
     spill_cursor_ = spill_base();
+    ++epoch_;
     frame_spill_ = 0u;
     active_slot_ = 0u;
     frame_ready_ = false;
@@ -99,6 +101,7 @@ void UploadRing::begin_frame(unsigned frame_slot) {
         throw std::runtime_error("UploadRing frame slot is out of range");
     }
     active_slot_ = frame_slot;
+    ++epoch_;
     segment_allocation_pending_ = true;
     reused_bytes_ = 0;
     copied_bytes_ = 0;

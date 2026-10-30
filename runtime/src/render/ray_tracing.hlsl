@@ -97,6 +97,13 @@ uint pack_vertex_normal(float3 n)
 
 // A vertex in eye space, and its normal by the inverse transpose of the same matrix (rows of
 // cofactors; the determinant's sign keeps mirrored matrices facing out).
+// Row `row` of a draw's matrices: its row table (float4 `table` from the draw's palette offset, one uint a row) names
+// the row's float4 in the matrix ring (mrow in the vertex shaders).
+float4 matrix_row(uint4 draw2, uint table, uint row) {
+    const uint at = g_matrix_ring.Load(min(draw2.w + table * 16u + row * 4u, g_matrix_ring_limit));
+    return asfloat(g_matrix_ring.Load4(min(draw2.w + at * 16u, g_matrix_ring_limit)));
+}
+
 float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint palette_base, out float3 normal)
 {
     const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
@@ -117,10 +124,9 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     [branch] if ((vs_flags & 1u) != 0u) {
         // Per-vertex position matrix: XF row index (PNMTX n at row 3n), clamped as in the VS.
         const uint row = min(matrix_index & 0x3Fu, 61u);
-        const uint m = min(draw2.w + (palette_base + row) * 16u, g_matrix_ring_limit);
-        r0 = asfloat(g_matrix_ring.Load4(m));
-        r1 = asfloat(g_matrix_ring.Load4(m + 16u));
-        r2 = asfloat(g_matrix_ring.Load4(m + 32u));
+        r0 = matrix_row(draw2, palette_base, row);
+        r1 = matrix_row(draw2, palette_base, row + 1u);
+        r2 = matrix_row(draw2, palette_base, row + 2u);
     } else {
         const uint c = min(draw2.z, g_constant_ring_limit) + kVsInlinePosMatrix;
         r0 = asfloat(g_constant_ring.Load4(c));
@@ -206,10 +212,10 @@ float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_ba
         const uint3 indices = resident ? g_resident.Load3(a + kVertexMatrixIndex) : g_vertex_ring.Load3(a + kVertexMatrixIndex);
         const uint packed = gen < 3u ? indices.x : gen < 7u ? indices.y : indices.z;
         const uint shift = gen < 3u ? 8u + 8u * gen : gen < 7u ? 8u * (gen - 3u) : 0u;
-        const uint m = min(draw2.w + (palette_base + min((packed >> shift) & 0xFFu, 61u)) * 16u, g_matrix_ring_limit);
-        r0 = asfloat(g_matrix_ring.Load4(m));
-        r1 = asfloat(g_matrix_ring.Load4(m + 16u));
-        r2 = asfloat(g_matrix_ring.Load4(m + 32u));
+        const uint tex_row = min((packed >> shift) & 0xFFu, 61u);
+        r0 = matrix_row(draw2, palette_base, tex_row);
+        r1 = matrix_row(draw2, palette_base, tex_row + 1u);
+        r2 = matrix_row(draw2, palette_base, tex_row + 2u);
     } else {
         const uint c = constants + kVsInlineTexMatrices + gen * 48u;
         r0 = asfloat(g_constant_ring.Load4(c));

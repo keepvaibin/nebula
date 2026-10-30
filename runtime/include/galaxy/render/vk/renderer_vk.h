@@ -260,7 +260,8 @@ public:
     void record_motion_debug_view() noexcept {}
     void reset_temporal_history() noexcept {}
     [[nodiscard]] unsigned matrix_history_frames() const noexcept { return 0u; }
-    [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept { return 0u; }
+    // The matrix ring's rewinds (renderer_d3d12.h).
+    [[nodiscard]] std::uint64_t matrix_segment_serial() const noexcept { return matrix_ring_.epoch(); }
     // A completed log waits (interpolation mode); start_replay_playback makes it the playing one.
     [[nodiscard]] bool replay_available() const noexcept { return ready_valid_; }
     void set_present_game_frame(bool) noexcept {}

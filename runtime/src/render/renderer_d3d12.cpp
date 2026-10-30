@@ -4087,7 +4087,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         // across present, peek and utility frames.
         if (matrix_segment_used_ || !matrix_segment_started_) {
             matrix_segment_ = (matrix_segment_ + 1u) % matrix_segments_;
-            ++matrix_segment_serial_;
             if (matrix_segment_fence_[matrix_segment_] != 0u) {
                 wait_for_fence_value(matrix_segment_fence_[matrix_segment_]);
             }
@@ -5735,8 +5734,10 @@ void RendererD3D12::record_hdr_end(int slot) {
         std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     }
     command_list_->ResourceBarrier(3u, barriers);
+    // The camera pass set its own root signature: setting the GX one back clears every root argument, so the next
+    // draw binds them all again (a palette, constant or table it shares with the last draw included).
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    bound_pipeline_ = nullptr;
+    invalidate_gx_bindings();
     bound_rt_aux_ = 0xFFu;
     swap_efb_with(set);
 }
@@ -6963,17 +6964,18 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
     }
     for (std::uint32_t q = 0; q < layout.palette_count && q < sequence.palette_source.size(); ++q) {
         const std::uint64_t source = static_cast<std::uint64_t>(sequence.palette_source[q]) * 16u;
-        if (source + interp_gpu::kPaletteBytes > matrices_bytes) {
+        if (source + interp_gpu::kPaletteRows * 4u > matrices_bytes) {
             replay_failure_ = 9u;
             return false;
         }
-        interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
-                                  static_cast<std::uint32_t>(source), layout.palette_offset(q),
-                                  interp_gpu::kPaletteWords});
+        const auto slot = [&](std::uint32_t offset, std::uint32_t rows) {
+            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::MatrixRows) | rows << 8u,
+                                      static_cast<std::uint32_t>(source), offset,
+                                      (offset - layout.palette_base()) / 16u});
+        };
+        slot(layout.palette_offset(q), interp_gpu::kPaletteRows);
         if (q < layout.prev_palette_count) {
-            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
-                                      static_cast<std::uint32_t>(source), layout.prev_palette_offset(q),
-                                      interp_gpu::kPrevPaletteWords});
+            slot(layout.prev_palette_offset(q), interp_gpu::kPrevPaletteRows);
         }
     }
 

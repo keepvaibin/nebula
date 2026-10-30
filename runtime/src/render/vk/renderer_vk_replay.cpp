@@ -939,17 +939,18 @@ bool RendererVk::begin_replay_sequence(const ReplaySequence& sequence) {
     }
     for (std::uint32_t q = 0; q < layout.palette_count && q < sequence.palette_source.size(); ++q) {
         const std::uint64_t source = static_cast<std::uint64_t>(sequence.palette_source[q]) * 16u;
-        if (source + interp_gpu::kPaletteBytes > matrices_bytes) {
+        if (source + interp_gpu::kPaletteRows * 4u > matrices_bytes) {
             replay_failure_ = 9u;
             return false;
         }
-        interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
-                                  static_cast<std::uint32_t>(source), layout.palette_offset(q),
-                                  interp_gpu::kPaletteWords});
+        const auto slot = [&](std::uint32_t offset, std::uint32_t rows) {
+            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::MatrixRows) | rows << 8u,
+                                      static_cast<std::uint32_t>(source), offset,
+                                      (offset - layout.palette_base()) / 16u});
+        };
+        slot(layout.palette_offset(q), interp_gpu::kPaletteRows);
         if (q < layout.prev_palette_count) {
-            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices),
-                                      static_cast<std::uint32_t>(source), layout.prev_palette_offset(q),
-                                      interp_gpu::kPrevPaletteWords});
+            slot(layout.prev_palette_offset(q), interp_gpu::kPrevPaletteRows);
         }
     }
 

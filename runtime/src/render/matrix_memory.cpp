@@ -95,12 +95,9 @@ void MatrixMemory::load(std::uint16_t base, const std::uint32_t* values, std::ui
         return;
     }
     changed_ = true;
-    const std::uint32_t first = base / kPaletteChunkWords;
-    const std::uint32_t last = (static_cast<std::uint32_t>(base) + count - 1u) / kPaletteChunkWords;
-    if (first < kPaletteChunkCount) {
-        const std::uint32_t end = last < kPaletteChunkCount ? last : kPaletteChunkCount - 1u;
-        const std::uint64_t span = end + 1u >= 64u ? ~std::uint64_t{0} : ((std::uint64_t{1} << (end + 1u)) - 1u);
-        palette_dirty_ |= span & ~((std::uint64_t{1} << first) - 1u);
+    const std::uint32_t last = (static_cast<std::uint32_t>(base) + count - 1u) / 4u;
+    for (std::uint32_t row = base / 4u; row <= last && row < kRows; ++row) {
+        dirty_rows_[row / 64u] |= std::uint64_t{1} << (row % 64u);
     }
 }
 
