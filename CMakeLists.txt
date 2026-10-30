@@ -647,7 +647,7 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 foreach(name shader_gen curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         efb_copy line_point_raster xf_lighting native_settings_overlay post_process
-        efb_conversion)
+        efb_conversion native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
 # The game's text table: every text the settings menu shows has its entry.
