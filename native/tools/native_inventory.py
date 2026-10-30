@@ -173,14 +173,16 @@ AREAS = [
     (r"^native/", "native-build", "KEEP", "Module build and benches."),
     (r"^runtime/src/gx/vk/|^runtime/include/galaxy/gx/vk/", "renderer-vulkan", "CONVERT",
      "Vulkan backend: draw from native records; descriptor indexing, push constants, dynamic rendering."),
-    (r"^runtime/(?:src|include/galaxy)/gx/(?:fifo_parser|gx_state|gx_shim|gx_bitfields|gx_headers|vertex_loader|"
+    (r"^runtime/(?:src|include/galaxy)/gx/(?:fifo_parser|gx_state|gx_shim|renderer_api|gx_bitfields|gx_headers|"
+     r"vertex_loader|draw_state|matrix_memory|"
      r"memory_snapshot|snapshot_region|sorted_dirty|frame_completion|xf_lighting|line_point_raster|efb_copy|"
      r"efb_conversion|xfb_present|shader_keys|shader_gen|uber_|rt_tev|sampler_key|texture_cache|"
      r"texture_backend|upload_ring|placed_texture|vs_constants|simd_kernel)", "renderer-translation", "REPLACE",
      "GX translation: command parsing, register state, GX vertex/texture decoding, EFB/XFB copies, TEV/XF shader "
      "emulation, guest-memory change detection. Replace with the native record renderer; reuse parts that are "
      "native already (upload ring, placed allocator, texture backend) after removing GX shapes from them."),
-    (r"^runtime/(?:src|include/galaxy)/(?:gx/gx_backend|gx/native_shapes|gx_d3d12)", "renderer-core", "CONVERT",
+    (r"^runtime/(?:src|include/galaxy)/(?:gx/gx_backend|gx/render_core|gx/native_shapes|gx_d3d12|renderer_api)",
+     "renderer-core", "CONVERT",
      "Backend between the game and the GPU: becomes the native record consumer (native shapes stay)."),
     (r"^runtime/(?:src|include/galaxy)/gx/(?:renderer_d3d12|renderer_common|pipeline_cache|render_config|"
      r"display_modes|window_owner|vblank_clock)", "renderer-d3d12", "CONVERT",
