@@ -137,10 +137,6 @@ s32 __NebulaPointerWheel(void) {
     return sHost->pointer_wheel(sHost->user);
 }
 
-s32 __NebulaHomeMenu(u32 what, u32 value) {
-    return sHost->hbm(sHost->user, what, value);
-}
-
 uint32_t __NebulaObjectId(const void* object); /* memory.c */
 
 void __NebulaObjectName(const void* object, const char* name) {

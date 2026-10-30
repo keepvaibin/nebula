@@ -94,7 +94,6 @@ u32 __NebulaLayer2DScale(void);
 // The mouse wheel's turn since the last call, in 120ths of a notch, up positive (pointer_wheel in nebula_game_api.h).
 s32 __NebulaPointerWheel(void);
 // The host's HOME Menu as the game draws it (NEBULA_HBM_VIEW, NEBULA_HBM_POINT, NEBULA_HBM_CHOOSE).
-s32 __NebulaHomeMenu(u32 what, u32 value);
 // A game object's name for the renderer (object_name in nebula_game_api.h).
 void __NebulaObjectName(const void* pObject, const char* pName);
 // How far a model's traced light reaches (light_reach in nebula_game_api.h).

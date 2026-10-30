@@ -18,6 +18,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
+#include "Game/Screen/NebulaHomeMenu.hpp"
 #include <cstdio>
 #include <cstring>
 #include <nebula_game_api.h>
@@ -1791,10 +1792,10 @@ void NebulaSettingsScreen::readHomePointer(f32 x, f32 y) {
         return;
     }
     if (mPointerMode && hovered != (mHomeView & 0xFF)) {
-        __NebulaHomeMenu(NEBULA_HBM_POINT, hovered);
+        NebulaHomeMenu::point(hovered);
     }
     if (MR::testCorePadTriggerA(WPAD_CHAN0)) {
-        __NebulaHomeMenu(NEBULA_HBM_CHOOSE, hovered);
+        NebulaHomeMenu::choose(hovered);
     }
 }
 
@@ -2648,7 +2649,7 @@ namespace NebulaSettingsMenu {
             __NebulaSettingsInput(NEBULA_SETTINGS_CLOSE, 0);
             sView.open = 0;
         }
-        sScreen->step(sView, __NebulaHomeMenu(NEBULA_HBM_VIEW, 1));
+        sScreen->step(sView, NebulaHomeMenu::view());
         // The whole game waits from the first frame of the drop to the last of the rise. Its sound fades and the music
         // stops as under the pause menu, and both come back as they were. The HOME Menu holds the game itself
         // (HomeButtonLayout).

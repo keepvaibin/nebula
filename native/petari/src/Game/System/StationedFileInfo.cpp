@@ -874,21 +874,6 @@ namespace MR {
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/HomeButton2/SpeakerSe.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/HomeButton2/home.csv",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/HomeButton2/config.txt",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT,
             "/ParticleData/Effect.arc",
         },
@@ -916,26 +901,6 @@ namespace MR {
             StationedFileInfo::HEAP_TYPE_GDDR,
             StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE_LAYOUT,
             "/LayoutData/TimeUp.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/ModuleData/HomeButtonMenuWrapperRSO.rso",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/ModuleData/product.sel",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_MOUNT_RESOURCE,
-            "/ObjectData/SaveIconBanner.arc",
-        },
-        {
-            StationedFileInfo::HEAP_TYPE_GDDR,
-            StationedFileInfo::LOAD_TYPE_FILE,
-            "/LayoutData/HomeButton.arc",
         },
         {
             StationedFileInfo::HEAP_TYPE_GDDR,
