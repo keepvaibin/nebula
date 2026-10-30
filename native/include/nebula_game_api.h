@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 55u
+#define NEBULA_GAME_API_VERSION 56u
 
 /* One of JAudio's four FX lines (JASDsp::FxBuf): a delay of `frames` subframes in `buffer` (frames * 80 samples)
    fed by its input bus, an 8-tap FIR before (flags bit 0) or after (bit 1) the sends to buses `dest_a` and `dest_b`. */
@@ -336,13 +336,6 @@ typedef struct NebulaShapeGeometry {
     const NebulaShapeCorner* corners;
     const uint16_t* indices;
 } NebulaShapeGeometry;
-
-/* A physical range of the game's memory and where it is in the host process: what the GPU's addresses resolve to. */
-typedef struct NebulaGameMemoryRegion {
-    uint32_t physical;
-    uint32_t size;
-    uint8_t* host;
-} NebulaGameMemoryRegion;
 
 /* A file or folder of the game's disc (the game partition's file table, or the mods' disc built over it). */
 typedef struct NebulaDiscEntry {
@@ -1018,8 +1011,6 @@ enum {
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 /* Runs the game on the calling thread, the simulation thread. Does not return. */
 NEBULA_GAME_API void nebula_game_run(void);
-/* The game's memory regions for the renderer (valid once nebula_game_run has started the game). */
-NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max);
 /* A disc read finished: `result` is the bytes read, or -1 on a read error. */
 NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */

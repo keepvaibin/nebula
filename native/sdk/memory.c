@@ -1,7 +1,7 @@
 /* The game's memory (docs/NATIVE_PORT.md, "Memory and the GPU's addresses"): one host reservation in the console's
    layout, MEM1 at offset 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte pointers. The
-   host sees the reservation and the game module's own image (a window in the unused span between MEM1 and MEM2) as
-   regions (nebula_memory_regions). */
+   game module's own image is a window in the unused span between MEM1 and MEM2 for object names
+   (__NebulaObjectId). */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,19 +40,6 @@ uint8_t* nebula_arena_base(void) {
 void nebula_image_range(uintptr_t* base, uintptr_t* size) {
     *base = sImageBase;
     *size = sImageSize;
-}
-
-void nebula_memory_regions(NebulaMemoryRegion* out, int* count) {
-    out[0].physical = kMem1Physical;
-    out[0].size = kMem1Size;
-    out[0].host = sArena + kMem1Physical;
-    out[1].physical = kMem2Physical;
-    out[1].size = kMem2Size;
-    out[1].host = sArena + kMem2Physical;
-    out[2].physical = kImageWindow;
-    out[2].size = (uint32_t)sImageSize;
-    out[2].host = (uint8_t*)sImageBase;
-    *count = 3;
 }
 
 static void find_image(void) {

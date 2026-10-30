@@ -11,20 +11,11 @@
 extern "C" {
 #endif
 
-/* A physical range of the game's memory and where it lives in the host process (for the GPU's address
-   resolution). */
-typedef struct NebulaMemoryRegion {
-    uint32_t physical;
-    uint32_t size;
-    uint8_t* host;
-} NebulaMemoryRegion;
-
 int nebula_memory_init(void);
 uint8_t* nebula_arena_base(void);
 /* The module's own image (its code and data), for diagnostics. */
 void nebula_image_range(uintptr_t* base, uintptr_t* size);
 
-void nebula_memory_regions(NebulaMemoryRegion* out, int* count);
 void nebula_memory_arenas(void** mem1Lo, void** mem1Hi, void** mem2Lo, void** mem2Hi);
 /* Game memory written for the GPU (the host's gpu_coherent service); ranges outside the arena and image are ignored. */
 void nebula_gpu_coherent(const void* addr, uint32_t size);

@@ -55,7 +55,7 @@
 #include "galaxy/render/vs_constants.h"
 #include "galaxy/render/render_vertex.h"
 #include "galaxy/renderer_api.h"
-#include "galaxy/guest_memory.h"
+#include "galaxy/render/render_services.h"
 #include "galaxy/frame_telemetry.h"
 
 #include <array>
@@ -77,11 +77,6 @@
 #include <vector>
 
 namespace galaxy::render {
-
-struct GuestMemoryRange {
-    std::uint32_t guest_base = 0;
-    std::uint32_t size = 0;
-};
 
 // lod_shift_x16: a texture-pack replacement 2^(shift / 16) times the source size. The game's LOD
 // range moves by the shift (its base level is the replacement's level `shift`), except that a guest

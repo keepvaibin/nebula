@@ -27,7 +27,6 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
 #include "galaxy/renderer_api.h"
-#include "galaxy/guest_memory.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_thp_video.h"
@@ -306,7 +305,6 @@ struct Module {
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
-    decltype(&nebula_game_memory_regions) memory_regions;
     decltype(&nebula_game_wpad_connect) wpad_connect;
     decltype(&nebula_game_wpad_report) wpad_report;
     decltype(&nebula_game_wpad_shake) wpad_shake;
@@ -438,7 +436,6 @@ void load_module(const fs::path& path) {
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
-    gModule.memory_regions = reinterpret_cast<decltype(gModule.memory_regions)>(find_symbol(module, "nebula_game_memory_regions"));
     gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
     gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
     gModule.wpad_shake = reinterpret_cast<decltype(gModule.wpad_shake)>(find_symbol(module, "nebula_game_wpad_shake"));
@@ -1260,19 +1257,12 @@ void svc_fatal(void*, const char* text) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// The renderer. The game's memory is the renderer's GuestMemory: the module's physical regions and the cached and
-// uncached mirrors of MEM1 and MEM2 (virtual addresses in display lists). The command stream reaches it in frames:
-// the spans since the last submission, contiguous in the ring's double mapping, go to render_frame at a PE marker
-// (draw sync, draw done) or at the retrace, which also presents; render_frame copies them, so they are released at
-// once. The renderer raises PE events through gNative's callbacks when its parse and the GPU reach them. All of this
-// runs on the simulation thread, where the game makes these calls.
-using galaxy::GuestMemoryRegion;
-using galaxy::GuestMemory;
+// The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
+// ahead, at the retrace, which also presents). All of this runs on the simulation thread, where the game makes these
+// calls.
 using galaxy::RenderLogLevel;
 using galaxy::RenderServices;
 
-GuestMemory gMemory{};
-std::vector<GuestMemoryRegion> gRegions;
 RenderServices gNative{};
 std::atomic<uint64_t> gSubmissions{0};  // render_frame calls with commands: the renderer's frame index
 
@@ -1282,31 +1272,6 @@ void native_log(void*, RenderLogLevel, const char* text) {
 
 galaxy::host::NativeGameAudio* gAudio = nullptr;
 
-void setup_renderer_memory() {
-    NebulaGameMemoryRegion regions[8];
-    const int count = gModule.memory_regions(regions, 8);
-    for (int i = 0; i < count; i++) {
-        const NebulaGameMemoryRegion& r = regions[i];
-        std::byte* const host = reinterpret_cast<std::byte*>(r.host);
-        for (const uint32_t mirror : {0x00000000u, 0x80000000u, 0xC0000000u}) {
-            gRegions.push_back({r.physical | mirror, r.size, host});
-            if ((r.physical & 0x0FFFFFFFu) == 0) {
-                gMemory.fast_regions[(r.physical | mirror) >> 28] = {r.size, host};
-            }
-        }
-    }
-    gMemory.regions = gRegions.data();
-    gMemory.region_count = static_cast<uint32_t>(gRegions.size());
-    gNative.log = native_log;
-}
-
-std::once_flag gMemoryOnce;
-
-void ensure_guest_memory() {
-    std::call_once(gMemoryOnce, setup_renderer_memory);
-}
-
-// `size` bytes at a console address, in the module's arena or image.
 void submit_frame_unchecked(bool present, bool black) {
     galaxy::render::render_frame(&gNative, present, black);
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
@@ -2442,7 +2407,7 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     if (retrace >= kBootRetraces) {
         end_boot_fast("start's retraces run out");
     }
-    if (!gRegions.empty()) {
+    {
         // While the start runs ahead, one frame a display period goes to the screen.
         bool present = true;
         if (gBootFast.load(std::memory_order_relaxed)) {
@@ -3345,7 +3310,6 @@ int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, v
                                      std::memory_order_relaxed);
         }
     } decode_time{decode_start};
-    ensure_guest_memory();
     const auto* p = static_cast<const uint8_t*>(frame);
     if (size < 4 || p[0] != 0xFF || p[1] != 0xD8) {
         return -1;
@@ -3902,6 +3866,7 @@ int main(int argc, char** argv) {
     // the whole environment block, 100 reports a second).
     galaxy::host::set_env_flag_cache_enabled(true);
     const galaxy::render::RenderConfig render_config = galaxy::render::get_render_config();
+    gNative.log = native_log;
     if (!galaxy::render::initialize(static_cast<int>(render_config.window_width),
                                 static_cast<int>(render_config.window_height))) {
         const std::string reason = galaxy::render::startup_failure();

@@ -32,14 +32,3 @@ void __NebulaMovieFrame(const char* name, s32 frame, f32 frame_rate, const void*
     sHost->movie_frame(sHost->user, name, frame, frame_rate, y, u, v, width, height);
 }
 
-NEBULA_GAME_API int nebula_game_memory_regions(NebulaGameMemoryRegion* out, int max) {
-    NebulaMemoryRegion regions[4];
-    int count = 0;
-    nebula_memory_regions(regions, &count);
-    for (int i = 0; i < count && i < max; i++) {
-        out[i].physical = regions[i].physical;
-        out[i].size = regions[i].size;
-        out[i].host = regions[i].host;
-    }
-    return count;
-}

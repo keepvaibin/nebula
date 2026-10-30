@@ -23,7 +23,6 @@
 #include "galaxy/render/texture_decode_pool.h"
 #include "galaxy/render/texture_pack.h"
 #include "galaxy/render/movie_replacement.h"
-#include "galaxy/guest_memory.h"
 
 #include <array>
 #include <bitset>

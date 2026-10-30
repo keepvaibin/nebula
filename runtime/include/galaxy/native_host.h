@@ -5,7 +5,6 @@
 #include "galaxy/controller_roster.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/host_pointer_events.h"
-#include "galaxy/guest_memory.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/synthetic_kpad_buttons.h"

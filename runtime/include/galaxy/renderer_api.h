@@ -8,7 +8,7 @@
 #include "galaxy/render/pointer_response.h"
 #include "galaxy/controller_roster.h"
 #include "galaxy/host_pointer_events.h"
-#include "galaxy/guest_memory.h"
+#include "galaxy/render/render_services.h"
 
 #include <array>
 #include <cstddef>
