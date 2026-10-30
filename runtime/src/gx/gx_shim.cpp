@@ -77,14 +77,6 @@ void attach_shape_record(shapes::Record record) {
     backend().attach_shape_record(std::move(record));
 }
 
-bool peek_efb(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint32_t& value) {
-    return backend().peek_efb(x, y, kind, value);
-}
-
 bool peek_efb_published(
     std::uint16_t x,
     std::uint16_t y,

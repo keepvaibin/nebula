@@ -188,12 +188,6 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 // screen's white backing as it fades.
 void set_safety_scene_surround(float intensity) noexcept;
 
-[[nodiscard]] bool peek_efb(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint32_t& value);
-
 // A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
 // token (GxBackend::peek_efb_published).
 [[nodiscard]] bool peek_efb_published(

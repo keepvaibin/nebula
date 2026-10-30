@@ -4606,50 +4606,6 @@ void GxBackend::adopt_pointer_depth_fence_if_needed() {
     }
 }
 
-bool GxBackend::peek_efb(
-    std::uint16_t x,
-    std::uint16_t y,
-    EfbPeekKind kind,
-    std::uint32_t& value) {
-    if (!initialized_) {
-        return false;
-    }
-
-    EfbPeekRequest request;
-    request.x = x;
-    request.y = y;
-    request.kind = kind;
-
-    {
-        std::unique_lock<std::mutex> lock(queue_mutex_);
-        if (render_thread_error_ != nullptr) {
-            std::exception_ptr error = render_thread_error_;
-            render_thread_error_ = nullptr;
-            std::rethrow_exception(error);
-        }
-        if (stop_render_thread_) {
-            return false;
-        }
-
-        FrameChunk chunk;
-        chunk.efb_peek_only = true;
-        chunk.efb_peek_request = &request;
-        frame_queue_.push_back(std::move(chunk));
-    }
-    queue_cv_.notify_one();
-
-    {
-        const GameWaitTimer game_wait{game_wait_qpc_};
-        std::unique_lock<std::mutex> lock(request.mutex);
-        request.cv.wait(lock, [&request] { return request.done; });
-    }
-    if (request.error != nullptr) {
-        std::rethrow_exception(request.error);
-    }
-    value = request.value;
-    return request.success;
-}
-
 // A display copy completed a game frame's log: its scene (the one recording
 // when the copy landed) is the one to interpolate when its present arrives.
 void GxBackend::note_interp_log_completion() {

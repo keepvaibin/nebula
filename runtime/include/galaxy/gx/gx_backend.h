@@ -218,11 +218,6 @@ public:
         mark.height = static_cast<std::uint16_t>(height);
     }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
-    [[nodiscard]] bool peek_efb(
-        std::uint16_t x,
-        std::uint16_t y,
-        EfbPeekKind kind,
-        std::uint32_t& value);
     // Simulation thread: answers a depth or color peek from an asynchronous EFB field. A peek made in
     // a draw-sync token's callback (`token` nonzero) reads the field captured where the stream
     // reached that token (the console stopped the GPU there with a breakpoint while the callback
