@@ -18,7 +18,7 @@
 // CameraDirector) and copies the target matrix unsmoothed; a set flag there
 // is a hard cut.
 //
-// Host markers (op 0xF0, kind byte): 1-4 draw identity (fifo_parser.h); 5 draw
+// Host markers (op 0xF0, kind byte): 1-4 draw identity; 5 draw
 // category or scene phase; 6 scene signals (first marker of a 3D scene); 7
 // pass; 8 light load; 9-11 the 2D layer's identity (layout pane, layout
 // actor, star pointer); 12 material.

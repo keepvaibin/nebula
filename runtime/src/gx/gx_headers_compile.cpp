@@ -2,7 +2,6 @@
 // time.
 
 #include "galaxy/gx/efb_copy.h"
-#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/gx_backend.h"
 #include "galaxy/gx/gx_bitfields.h"
 #include "galaxy/gx/matrix_memory.h"

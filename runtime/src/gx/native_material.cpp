@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "galaxy/gx/native_material.h"
 
-#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/matrix_memory.h"
 
 #include <bit>

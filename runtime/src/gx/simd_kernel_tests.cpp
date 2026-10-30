@@ -2,7 +2,6 @@
 // Tests the vector code (galaxy/simd128.h: SSE on x86, NEON on AArch64) in the texture tile decoders and cached index
 // rebasing against scalar references written from the GX formats.
 
-#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/texture_cache.h"
 #include "galaxy/gx/gx_vertex.h"
 #include "galaxy/simd128.h"

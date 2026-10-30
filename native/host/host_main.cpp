@@ -22,7 +22,6 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
-#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
 #include "galaxy/gx_d3d12.h"
@@ -1486,16 +1485,11 @@ void submit_frame_unchecked(bool present, bool black) {
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
 }
 
-// The renderer's hard failures (the GX parser's: an unknown command, a truncated payload) end the game with their
-// line and a dump. Caught here: thrown on the game's stacks they could not unwind through its frames.
+// The renderer's hard failures end the game with their line and a dump. Caught here: thrown on the game's stacks they
+// could not unwind through its frames.
 void submit_frame(bool present, bool black) {
     try {
         submit_frame_unchecked(present, black);
-    } catch (const galaxy::gx::GxFatalError& error) {
-        char text[1024];
-        std::snprintf(text, sizeof(text), "the renderer stopped: %s (opcode 0x%02X at stream offset %zu)", error.what(),
-                      static_cast<unsigned>(error.opcode()), error.fifo_offset());
-        svc_fatal(nullptr, text);
     } catch (const std::exception& error) {
         char text[1024];
         std::snprintf(text, sizeof(text), "the renderer stopped: %s", error.what());

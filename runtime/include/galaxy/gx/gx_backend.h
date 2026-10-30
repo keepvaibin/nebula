@@ -31,7 +31,6 @@
 #include "galaxy/gx/efb_copy.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/gx/draw_state.h"
-#include "galaxy/gx/fifo_parser.h"
 #include "galaxy/gx/matrix_memory.h"
 #include "galaxy/gx/movie_replacement.h"
 #include "galaxy/gx/native_shapes.h"
