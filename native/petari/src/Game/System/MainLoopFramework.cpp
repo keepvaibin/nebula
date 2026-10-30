@@ -10,7 +10,6 @@
 #include <JSystem/JUtility/JUTAssert.hpp>
 #include <JSystem/JUtility/JUTConsole.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/gx/GXRegs.h>
 #include "Game/Util/RenderSignals.hpp"
 #include <runtime.h>
 

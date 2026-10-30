@@ -2,7 +2,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/gx/GXRegs.h>
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);

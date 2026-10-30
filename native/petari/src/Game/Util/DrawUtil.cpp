@@ -25,7 +25,6 @@
 #include <revolution/gx/GXFrameBuf.h>
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXPixel.h>
-#include <revolution/gx/GXRegs.h>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
 #include <revolution/gx/GXVert.h>

@@ -6,7 +6,6 @@
 #include "JSystem/J3DGraphBase/J3DVertex.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/gx/GXRegs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

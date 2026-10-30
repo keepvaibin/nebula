@@ -38,7 +38,6 @@
 #include "Game/Screen/NebulaSettingsMenu.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
-#include <revolution/gx/GXRegs.h>
 #endif
 
 #define GX_FIFO_SIZE 0x80000

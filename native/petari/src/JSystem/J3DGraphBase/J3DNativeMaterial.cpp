@@ -8,7 +8,6 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <nebula_game_api.h>
 #include "Game/Util/RenderSignals.hpp"
-#include <revolution/gx/GXRegs.h>
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
