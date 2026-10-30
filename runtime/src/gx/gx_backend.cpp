@@ -778,24 +778,17 @@ void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsCo
     // TEV registers PREV, REG0-2 (signed 11-bit per channel); the shader converts them back to
     // integers for the TEV math.
     {
-        const auto regs = state.tev_register_values();
         for (unsigned r = 0; r < 4; ++r) {
-            out.tev_regs[r][0] = static_cast<float>(regs[r][0]) / 255.0f;
-            out.tev_regs[r][1] = static_cast<float>(regs[r][1]) / 255.0f;
-            out.tev_regs[r][2] = static_cast<float>(regs[r][2]) / 255.0f;
-            out.tev_regs[r][3] = static_cast<float>(regs[r][3]) / 255.0f;
+            for (unsigned c = 0; c < 4; ++c) {
+                out.tev_regs[r][c] = static_cast<float>(draw.tev_color[r][c]) / 255.0f;
+            }
         }
     }
 
-    // Konst colours K0-K3, RGBA8 from tev_konst_colors().
-    {
-        const auto krgba = state.tev_konst_colors();
-        for (unsigned k = 0; k < 4; ++k) {
-            const std::uint32_t v = krgba[k];
-            out.konst[k][0] = ((v >> 24) & 0xFFu) / 255.0f;
-            out.konst[k][1] = ((v >> 16) & 0xFFu) / 255.0f;
-            out.konst[k][2] = ((v >>  8) & 0xFFu) / 255.0f;
-            out.konst[k][3] = ((v       ) & 0xFFu) / 255.0f;
+    // Konst colours K0-K3.
+    for (unsigned k = 0; k < 4; ++k) {
+        for (unsigned c = 0; c < 4; ++c) {
+            out.konst[k][c] = draw.konst[k][c] / 255.0f;
         }
     }
 
@@ -817,23 +810,16 @@ void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsCo
             : 0.0f;
     }
 
-    // Fog A (BP 0xEE) and C (BP 0xF1 bits 0-19) are 20-bit packed floats, unpacked here as
-    // Dolphin's PixelShaderManager does. B magnitude (u24) and shift (u5) are exact in float; the
-    // shader reads them back with uint().
-    {
-        const FogParams fp = state.fog();
-        out.fog_params[0] =
-            std::bit_cast<float>(fog_param_float_bits(fp.a_raw & 0xFFFFFu));
-        out.fog_params[1] =
-            static_cast<float>(fp.b_magnitude_raw & 0xFFFFFFu);
-        out.fog_params[2] = static_cast<float>(fp.b_shift_raw & 0x1Fu);
-        out.fog_params[3] =
-            std::bit_cast<float>(fog_param_float_bits(fp.c_raw));
-        out.fog_params[4] = ((fp.color_rgb >> 16) & 0xFFu) / 255.0f;
-        out.fog_params[5] = ((fp.color_rgb >>  8) & 0xFFu) / 255.0f;
-        out.fog_params[6] = ((fp.color_rgb      ) & 0xFFu) / 255.0f;
-        out.fog_params[7] = fp.projection ? 1.0f : 0.0f;  // 1 = orthographic
-    }
+    // Fog A and C as the pixel engine holds them; B's magnitude (u24) and shift (u5) are exact in
+    // float, and the shader reads them back with uint().
+    out.fog_params[0] = draw.fog.a;
+    out.fog_params[1] = static_cast<float>(draw.fog.b_magnitude);
+    out.fog_params[2] = static_cast<float>(draw.fog.b_shift & 0x1Fu);
+    out.fog_params[3] = draw.fog.c;
+    out.fog_params[4] = draw.fog.color[0] / 255.0f;
+    out.fog_params[5] = draw.fog.color[1] / 255.0f;
+    out.fog_params[6] = draw.fog.color[2] / 255.0f;
+    out.fog_params[7] = draw.fog.projection ? 1.0f : 0.0f;  // 1 = orthographic
 
     // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
     // before sampling.
@@ -858,31 +844,13 @@ void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsCo
     out.ind_misc[1] = ind_scale_word(draw, 0u);
     out.ind_misc[2] = ind_scale_word(draw, 1u);
     out.ind_misc[3] = gm.num_ind_stages;
-    const auto sign11 = [](std::uint32_t value) -> std::int32_t {
-        value &= 0x7FFu;
-        return (value & 0x400u) != 0u
-            ? static_cast<std::int32_t>(value | ~0x7FFu)
-            : static_cast<std::int32_t>(value);
-    };
     for (unsigned m = 0; m < 3; ++m) {
-        const std::uint32_t a = state.bp(
-            static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u));
-        const std::uint32_t b = state.bp(
-            static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 1u));
-        const std::uint32_t c = state.bp(
-            static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 2u));
-        const std::int32_t scale =
-            static_cast<std::int32_t>(
-                bits(a, 22, 2) | (bits(b, 22, 2) << 2u) |
-                 (bits(c, 22, 2) << 4u));
-        out.ind_mtx[m * 2u][0] = sign11(a);
-        out.ind_mtx[m * 2u][1] = sign11(b);
-        out.ind_mtx[m * 2u][2] = sign11(c);
-        out.ind_mtx[m * 2u][3] = 17 - scale;
-        out.ind_mtx[m * 2u + 1u][0] = sign11(a >> 11u);
-        out.ind_mtx[m * 2u + 1u][1] = sign11(b >> 11u);
-        out.ind_mtx[m * 2u + 1u][2] = sign11(c >> 11u);
-        out.ind_mtx[m * 2u + 1u][3] = 17 - scale;
+        for (unsigned row = 0; row < 2u; ++row) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                out.ind_mtx[m * 2u + row][c] = draw.ind_matrix[m].m[row][c];
+            }
+            out.ind_mtx[m * 2u + row][3] = -draw.ind_matrix[m].scale;
+        }
     }
 }
 
@@ -2787,11 +2755,10 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         }
         tev.channel[c * 2u + 1u] = light;
     }
-    const auto konst = state_.tev_konst_colors();
     for (unsigned k = 0; k < 4u; ++k) {
-        tev.konst[k] = konst[k];
+        tev.konst[k] = konst_rgba(draw_state_, k);
     }
-    const auto regs = state_.tev_register_values();
+    const auto& regs = draw_state_.tev_color;
     const auto half = [](float v) {
         // IEEE half, round to nearest (registers are -1024..1023 over 255).
         const std::uint32_t bits = std::bit_cast<std::uint32_t>(v);
@@ -3209,23 +3176,16 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
                 slot1 = coord;
             }
         }
-        const auto sign11 = [](std::uint32_t value) {
-            value &= 0x7FFu;
-            return (value & 0x400u) != 0u ? static_cast<std::int32_t>(value | ~0x7FFu) : static_cast<std::int32_t>(value);
-        };
         const auto pack = [](std::int32_t lo, std::int32_t hi) {
             return (static_cast<std::uint32_t>(lo) & 0xFFFFu) | (static_cast<std::uint32_t>(hi) << 16u);
         };
         for (unsigned m = 0; m < 3u; ++m) {
-            const std::uint32_t a = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u));
-            const std::uint32_t b = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 1u));
-            const std::uint32_t c = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + 2u));
-            const std::int32_t shift =
-                17 - static_cast<std::int32_t>(((a >> 22u) & 3u) | (((b >> 22u) & 3u) << 2u) | (((c >> 22u) & 3u) << 4u));
-            ind.matrix[m * 4u] = pack(sign11(a), sign11(b));
-            ind.matrix[m * 4u + 1u] = pack(sign11(c), shift);
-            ind.matrix[m * 4u + 2u] = pack(sign11(a >> 11u), sign11(b >> 11u));
-            ind.matrix[m * 4u + 3u] = pack(sign11(c >> 11u), shift);
+            const auto& mt = draw_state_.ind_matrix[m];
+            const std::int32_t shift = -mt.scale;
+            ind.matrix[m * 4u] = pack(mt.m[0][0], mt.m[0][1]);
+            ind.matrix[m * 4u + 1u] = pack(mt.m[0][2], shift);
+            ind.matrix[m * 4u + 2u] = pack(mt.m[1][0], mt.m[1][1]);
+            ind.matrix[m * 4u + 3u] = pack(mt.m[1][2], shift);
         }
         for (unsigned t = 0; t < 8u; ++t) {
             ind.coord_size[t] = (coord_size(t, 0u) - 1u) | ((coord_size(t, 1u) - 1u) << 16u);
@@ -3776,7 +3736,7 @@ void GxBackend::note_rt_mist(const DrawCall& call) {
         reach2 = std::max(reach2, dx * dx + dy * dy + dz * dz);
     }
     const float sigma = 0.5f * std::sqrt(0.5f * reach2);
-    const float opacity = std::clamp(static_cast<float>(state_.tev_register_values()[1][3]) / 255.0f, 0.0f, 1.0f);
+    const float opacity = std::clamp(static_cast<float>(draw_state_.tev_color[1][3]) / 255.0f, 0.0f, 1.0f);
     const RtMaterial* const material = rt_material(current_rt_material_);
     const float depth = material != nullptr && material->intensity > 0.0f ? material->intensity : 2.0f;
     // Its brightness: the row's colour (white 1).
@@ -4139,11 +4099,13 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.ambient = state_.xf(xf::kAmbientColorBase);
     info.material = state_.xf(xf::kMaterialColorBase);
     {
-        const FogParams fog = state_.fog();
-        info.fog = {fog_param_float_bits(fog.a_raw & 0xFFFFFu),
-                    (fog.b_magnitude_raw & 0xFFFFFFu) | ((fog.b_shift_raw & 0x1Fu) << 24u) |
+        const auto& fog = draw_state_.fog;
+        info.fog = {std::bit_cast<std::uint32_t>(fog.a),
+                    fog.b_magnitude | ((fog.b_shift & 0x1Fu) << 24u) |
                         ((static_cast<std::uint32_t>(ps_key_.fog_type) & 7u) << 29u),
-                    fog_param_float_bits(fog.c_raw), (fog.color_rgb & 0xFFFFFFu) | (fog.projection ? 1u << 24u : 0u)};
+                    std::bit_cast<std::uint32_t>(fog.c),
+                    static_cast<std::uint32_t>(fog.color[0]) << 16u | static_cast<std::uint32_t>(fog.color[1]) << 8u |
+                        fog.color[2] | (fog.projection ? 1u << 24u : 0u)};
     }
     {
         const XfChannelCtrl color = state_.channel_ctrl(0u);
@@ -4273,16 +4235,10 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
             const TexImage wave_image = state_.tex_image(wave_map);
             const TexImage main_image = state_.tex_image(main_map);
-            const auto sign11 = [](std::uint32_t value) {
-                value &= 0x7FFu;
-                return static_cast<float>((value & 0x400u) != 0u ? static_cast<std::int32_t>(value | ~0x7FFu)
-                                                                  : static_cast<std::int32_t>(value));
-            };
-            const unsigned row = (matrix - 1u) * 3u;
-            const std::uint32_t a = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + row));
-            const std::uint32_t b = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + row + 1u));
+            const auto& mt = draw_state_.ind_matrix[(matrix - 1u) % 3u];
             // s = ma x + mc y (+ me z), t = mb x + md y (+ mf z): the map's x and y as a slope, z left out.
-            float m[4] = {sign11(a), sign11(b), sign11(a >> 11u), sign11(b >> 11u)};
+            float m[4] = {static_cast<float>(mt.m[0][0]), static_cast<float>(mt.m[0][1]), static_cast<float>(mt.m[1][0]),
+                          static_cast<float>(mt.m[1][1])};
             const float norm = std::sqrt(0.5f * (m[0] * m[0] + m[1] * m[1] + m[2] * m[2] + m[3] * m[3]));
             if (norm <= 0.0f) {
                 break;
@@ -9759,6 +9715,40 @@ void GxBackend::check_draw_state() {
     expected.z_texture.op = static_cast<std::uint8_t>((ztex >> 2u) & 3u);
     expected.z_texture.type = static_cast<std::uint8_t>(ztex & 3u);
     expected.z_texture.bias = state_.bp(bp::kTevZEnv0) & 0xFFFFFFu;
+    const auto sign11 = [](std::uint32_t v) {
+        v &= 0x7FFu;
+        return static_cast<std::int16_t>((v & 0x400u) != 0u ? static_cast<std::int32_t>(v) - 0x800 : static_cast<std::int32_t>(v));
+    };
+    for (unsigned m = 0; m < 3u; ++m) {
+        std::uint32_t words[3];
+        std::uint32_t scale = 0u;
+        for (unsigned w = 0; w < 3u; ++w) {
+            words[w] = state_.bp(static_cast<std::uint8_t>(bp::kIndMtxBase + m * 3u + w));
+            scale |= ((words[w] >> 22u) & 3u) << (2u * w);
+            expected.ind_matrix[m].m[0][w] = sign11(words[w]);
+            expected.ind_matrix[m].m[1][w] = sign11(words[w] >> 11u);
+        }
+        expected.ind_matrix[m].scale = static_cast<std::int8_t>(static_cast<int>(scale) - 17);
+    }
+    const auto regs = state_.tev_register_values();
+    const auto konst = state_.tev_konst_colors();
+    for (unsigned r = 0; r < 4u; ++r) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            expected.tev_color[r][c] = static_cast<std::int16_t>(regs[r][c]);
+            expected.konst[r][c] = static_cast<std::uint8_t>(konst[r] >> (24u - 8u * c));
+        }
+    }
+    {
+        const FogParams fp = state_.fog();
+        expected.fog.a = std::bit_cast<float>(fog_param_float_bits(fp.a_raw & 0xFFFFFu));
+        expected.fog.c = std::bit_cast<float>(fog_param_float_bits(fp.c_raw));
+        expected.fog.b_magnitude = fp.b_magnitude_raw & 0xFFFFFFu;
+        expected.fog.b_shift = fp.b_shift_raw & 0xFFFFFFu;
+        expected.fog.projection = fp.projection;
+        expected.fog.color[0] = static_cast<std::uint8_t>(fp.color_rgb >> 16u);
+        expected.fog.color[1] = static_cast<std::uint8_t>(fp.color_rgb >> 8u);
+        expected.fog.color[2] = static_cast<std::uint8_t>(fp.color_rgb);
+    }
     const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
     for (unsigned i = 0; i < 4u; ++i) {
         const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);

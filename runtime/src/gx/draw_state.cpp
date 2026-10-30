@@ -4,6 +4,7 @@
 
 #include "galaxy/gx/draw_state.h"
 
+#include <bit>
 #include <iterator>
 #include <sstream>
 
@@ -82,6 +83,43 @@ IndirectStage indirect_stage(std::uint8_t stage, std::uint8_t format, std::uint8
                          static_cast<std::uint8_t>(bias & 7u),   static_cast<std::uint8_t>(alpha & 3u),
                          static_cast<std::uint8_t>(matrix & 15u), static_cast<std::uint8_t>(wrap_s & 7u),
                          static_cast<std::uint8_t>(wrap_t & 7u), (lod & 1u) != 0u, (prev & 1u) != 0u};
+}
+
+std::int16_t sign11(std::uint32_t v) {
+    v &= 0x7FFu;
+    return static_cast<std::int16_t>((v & 0x400u) != 0u ? static_cast<std::int32_t>(v) - 0x800 : static_cast<std::int32_t>(v));
+}
+
+// A float as the pixel engine's 20-bit fog fields hold it (the low 12 bits cut).
+float fog_float(float v) {
+    return std::bit_cast<float>(std::bit_cast<std::uint32_t>(v) & 0xFFFFF000u);
+}
+
+// GXSetFog's A, B and C for a perspective fog (also J3D's fog block): B as a mantissa and a power of two.
+void perspective_fog(float start, float end, float near_z, float far_z, float& a_f, std::uint32_t& b_m,
+                     std::uint32_t& b_expn, float& c) {
+    float a, b;
+    if (far_z == near_z || end == start) {
+        a = 0.0f;
+        b = 0.5f;
+        c = 0.0f;
+    } else {
+        a = (far_z * near_z) / ((far_z - near_z) * (end - start));
+        b = far_z / (far_z - near_z);
+        c = start / (end - start);
+    }
+    float mant = b;
+    b_expn = 1u;
+    while (mant > 1.0) {
+        mant /= 2;
+        ++b_expn;
+    }
+    while (mant > 0 && mant < 0.5) {
+        mant *= 2;
+        --b_expn;
+    }
+    a_f = a / static_cast<float>(1u << b_expn);
+    b_m = static_cast<std::uint32_t>(mant * 8388638);
 }
 
 IndirectStage material_indirect(const material::TevStage& s) {
@@ -212,9 +250,73 @@ void NativeDrawState::apply(const state::Op& op) {
             swap[a[0] & 3u][c] = static_cast<std::uint8_t>(a[1u + c] & 3u);
         }
         break;
-    case state::kFog:
+    case state::kFog: {
+        const std::uint32_t proj = (a[0] >> 3u) & 1u;
+        const float start = op.f[0], end = op.f[1], near_z = op.f[2], far_z = op.f[3];
+        float a_f, c;
+        std::uint32_t b_expn = 0u, b_m = 0u;
+        if (proj != 0u) {
+            if (far_z == near_z || end == start) {
+                a_f = 0.0f;
+                c = 0.0f;
+            } else {
+                const float range = 1.0f / (end - start);
+                a_f = (far_z - near_z) * range;
+                c = (start - near_z) * range;
+            }
+        } else {
+            perspective_fog(start, end, near_z, far_z, a_f, b_m, b_expn, c);
+        }
+        fog.a = fog_float(a_f);
+        if (proj != 0u && a[5] != 0u) {
+            // GXSetFog leaves B's two words without their register id for a projected fog: the generation mode
+            // takes them (cleared), B keeps its value.
+            gen = GenMode{0u, 0u, 1u, CullMode::None, 0u, false};
+        } else {
+            fog.b_magnitude = b_m & 0xFFFFFFu;
+            fog.b_shift = b_expn & 0xFFFFFFu;
+        }
+        fog.c = fog_float(c);
+        fog.projection = proj != 0u;
         fog_type = static_cast<FogType>(a[0] & 7u);
+        fog.color[0] = a[1];
+        fog.color[1] = a[2];
+        fog.color[2] = a[3];
         break;
+    }
+    case state::kTevColor:
+        for (unsigned c = 0; c < 4u; ++c) {
+            tev_color[a[0] & 3u][c] = a[1u + c];
+        }
+        break;
+    case state::kTevColorS10:
+        tev_color[a[0] & 3u][0] = sign11(static_cast<std::uint32_t>(static_cast<std::int16_t>(op.size[0])));
+        tev_color[a[0] & 3u][1] = sign11(static_cast<std::uint32_t>(static_cast<std::int16_t>(op.size[1])));
+        tev_color[a[0] & 3u][2] = sign11(static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[0])));
+        tev_color[a[0] & 3u][3] = sign11(static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[1])));
+        break;
+    case state::kTevKColor:
+        for (unsigned c = 0; c < 4u; ++c) {
+            konst[a[0] & 3u][c] = a[1u + c];
+        }
+        break;
+    case state::kIndTexMatrix: {
+        // GXSetIndTexMtx: 11-bit 1.10 terms; the scale exponent kept in six bits (+17).
+        const unsigned id = a[0] >= 9u ? a[0] - 9u : a[0] >= 5u ? a[0] - 5u : a[0] >= 1u ? a[0] - 1u : 0u;
+        const auto scale = static_cast<std::int8_t>(static_cast<std::int8_t>(a[1]) + 0x11);
+        if (id >= 3u) {
+            break;
+        }
+        auto& matrix = ind_matrix[id];
+        for (unsigned w = 0; w < 3u; ++w) {
+            for (unsigned row = 0; row < 2u; ++row) {
+                matrix.m[row][w] = sign11(static_cast<std::uint32_t>(
+                    static_cast<std::int32_t>(op.f[2u * w + row] * static_cast<float>(1 << 10))));
+            }
+        }
+        matrix.scale = static_cast<std::int8_t>((static_cast<std::uint8_t>(scale) & 63u) - 17);
+        break;
+    }
     case state::kZTexture:
         // GXSetZTexture: the format as its type (Z8 0, Z16 1, otherwise 2).
         z_texture.op = static_cast<std::uint8_t>(a[0] & 3u);
@@ -260,6 +362,38 @@ void NativeDrawState::apply(const material::Material& m) {
         tev[i].ras_swap = static_cast<std::uint8_t>(s.ras_swap & 3u);
         tev[i].tex_swap = static_cast<std::uint8_t>(s.tex_swap & 3u);
     };
+    // J3D's TEV colours (registers 1-3; register 0 is the previous stage's output), then konst colours.
+    const auto tev_registers = [&] {
+        if ((m.loads & material::kLoadsTevColor) != 0u) {
+            for (unsigned r = 0; r < 3u; ++r) {
+                for (unsigned c = 0; c < 4u; ++c) {
+                    tev_color[r + 1u][c] = sign11(static_cast<std::uint32_t>(m.tev_color[r][c]));
+                }
+            }
+        }
+        if ((m.loads & material::kLoadsKonstColor) != 0u) {
+            for (unsigned r = 0; r < 4u; ++r) {
+                for (unsigned c = 0; c < 4u; ++c) {
+                    konst[r][c] = m.konst_color[r][c];
+                }
+            }
+        }
+    };
+    // J3D's fog block: always perspective.
+    const auto material_fog = [&] {
+        float a_f, c;
+        std::uint32_t b_m, b_expn;
+        perspective_fog(m.fog.start, m.fog.end, m.fog.near_z, m.fog.far_z, a_f, b_m, b_expn, c);
+        fog.a = fog_float(a_f);
+        fog.b_magnitude = b_m & 0xFFFFFFu;
+        fog.b_shift = b_expn & 0xFFFFFFu;
+        fog.c = fog_float(c);
+        fog.projection = false;
+        fog_type = static_cast<FogType>(m.fog.type & 7u);
+        for (unsigned i = 0; i < 3u; ++i) {
+            fog.color[i] = m.fog.color[i];
+        }
+    };
     const unsigned stages = m.tev_stages < 16u ? m.tev_stages : 16u;
     const std::uint32_t f = m.diff_flags;
     if (f != 0u) {
@@ -273,8 +407,11 @@ void NativeDrawState::apply(const material::Material& m) {
                 }
             }
         }
+        if ((f & 0x1000000u) != 0u) {  // TevReg: diffTevReg
+            tev_registers();
+        }
         if ((f & 0x10000000u) != 0u && (m.loads & material::kLoadsFog) != 0u) {  // Fog
-            fog_type = static_cast<FogType>(m.fog.type & 7u);
+            material_fog();
         }
         if ((f & 0x20000000u) != 0u) {  // Blend: diffBlend
             blend_and_z();
@@ -295,6 +432,7 @@ void NativeDrawState::apply(const material::Material& m) {
                           s.channel);
             }
         }
+        tev_registers();
         for (unsigned i = 0; i < stages; ++i) {
             stage_env(i);
             ind[i] = material_indirect(m.tev[i]);
@@ -312,6 +450,17 @@ void NativeDrawState::apply(const material::Material& m) {
         }
     }
     if ((m.loads & material::kLoadsIndirect) != 0u) {
+        for (unsigned i = 0; i < m.ind_stages && i < 3u; ++i) {
+            const auto& mt = m.ind_matrix[i];
+            for (unsigned w = 0; w < 3u; ++w) {
+                for (unsigned row = 0; row < 2u; ++row) {
+                    ind_matrix[i].m[row][w] =
+                        sign11(static_cast<std::uint32_t>(static_cast<std::int32_t>(mt.m[row][w] * 1024.0f)));
+                }
+            }
+            const auto scale = static_cast<std::int8_t>(mt.scale + 17);
+            ind_matrix[i].scale = static_cast<std::int8_t>((static_cast<std::uint8_t>(scale) & 63u) - 17);
+        }
         for (unsigned i = 0; i < m.ind_stages && i < 4u; i += 2u) {
             for (unsigned j = i; j < i + 2u; ++j) {
                 ind_order[j].scale_s = static_cast<std::uint8_t>(m.ind_order[j].scale_s & 15u);
@@ -324,7 +473,7 @@ void NativeDrawState::apply(const material::Material& m) {
         }
     }
     if ((m.loads & material::kLoadsFog) != 0u) {
-        fog_type = static_cast<FogType>(m.fog.type & 7u);
+        material_fog();
     }
     alpha.comp0 = static_cast<CompareFunc>(m.alpha_compare.comp0 & 7u);
     alpha.ref0 = m.alpha_compare.ref0;
@@ -381,6 +530,12 @@ std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair) {
            static_cast<std::uint32_t>(b.scale_s) << 8u | static_cast<std::uint32_t>(b.scale_t) << 12u;
 }
 
+std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k) {
+    const std::uint8_t* c = state.konst[k & 3u];
+    return static_cast<std::uint32_t>(c[0]) << 24u | static_cast<std::uint32_t>(c[1]) << 16u |
+           static_cast<std::uint32_t>(c[2]) << 8u | c[3];
+}
+
 std::string draw_state_differences(const NativeDrawState& s, const NativeDrawState& e) {
     std::ostringstream out;
     const auto field = [&](const char* name, unsigned have, unsigned want) {
@@ -429,6 +584,29 @@ std::string draw_state_differences(const NativeDrawState& s, const NativeDrawSta
     field("indref", ind_ref_word(s), ind_ref_word(e));
     field("indscale0", ind_scale_word(s, 0u), ind_scale_word(e, 0u));
     field("indscale1", ind_scale_word(s, 1u), ind_scale_word(e, 1u));
+    for (unsigned i = 0; i < 3u; ++i) {
+        for (unsigned row = 0; row < 2u; ++row) {
+            for (unsigned c = 0; c < 3u; ++c) {
+                field("indmtx", static_cast<unsigned>(s.ind_matrix[i].m[row][c] & 0x7FF),
+                      static_cast<unsigned>(e.ind_matrix[i].m[row][c] & 0x7FF));
+            }
+        }
+        field("indmtxscale", static_cast<unsigned>(s.ind_matrix[i].scale & 63), static_cast<unsigned>(e.ind_matrix[i].scale & 63));
+    }
+    for (unsigned r = 0; r < 4u; ++r) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            field("tevcolor", static_cast<unsigned>(s.tev_color[r][c] & 0x7FF), static_cast<unsigned>(e.tev_color[r][c] & 0x7FF));
+            field("konst", s.konst[r][c], e.konst[r][c]);
+        }
+    }
+    field("foga", std::bit_cast<std::uint32_t>(s.fog.a), std::bit_cast<std::uint32_t>(e.fog.a));
+    field("fogc", std::bit_cast<std::uint32_t>(s.fog.c), std::bit_cast<std::uint32_t>(e.fog.c));
+    field("fogbm", s.fog.b_magnitude, e.fog.b_magnitude);
+    field("fogbs", s.fog.b_shift, e.fog.b_shift);
+    field("fogproj", s.fog.projection, e.fog.projection);
+    for (unsigned c = 0; c < 3u; ++c) {
+        field("fogcolor", s.fog.color[c], e.fog.color[c]);
+    }
     field("texgens", s.gen.num_texgens, e.gen.num_texgens);
     field("chans", s.gen.num_color_chans, e.gen.num_color_chans);
     field("tevs", s.gen.num_tev_stages, e.gen.num_tev_stages);

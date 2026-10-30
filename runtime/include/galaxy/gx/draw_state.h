@@ -36,6 +36,16 @@ struct NativeDrawState {
     // Indirect texturing: each TEV stage's, and the four indirect stages' map, coordinate and scales.
     IndirectStage ind[16]{};
     struct { std::uint8_t map, coord, scale_s, scale_t; } ind_order[4]{};
+    // Indirect matrices (GXSetIndTexMtx): 1.10 terms by row (s, t) and column, and the scale exponent (held as
+    // exponent + 17 in six bits: an unset matrix's is -17).
+    struct { std::int16_t m[2][3]{}; std::int8_t scale = -17; } ind_matrix[3]{};
+
+    // TEV registers PREV and REG0-2 (signed 11-bit; red, green, blue, alpha) and the four konst colours.
+    std::int16_t tev_color[4][4]{};
+    std::uint8_t konst[4][4]{};
+    // Fog (GXSetFog): A and C as the pixel engine holds them (floats cut to 11 mantissa bits), B as its 24-bit
+    // mantissa and shift, the projection (true: orthographic) and the colour.
+    struct { float a, c; std::uint32_t b_magnitude, b_shift; bool projection; std::uint8_t color[3]; } fog{};
 
     // A state op (galaxy/gx/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
@@ -51,6 +61,8 @@ struct NativeDrawState {
 [[nodiscard]] std::uint32_t tev_alpha_word(const TevStageConfig& stage);
 [[nodiscard]] std::uint32_t ind_ref_word(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair);
+// Konst colour `k` as RGBA8 (red in the top byte).
+[[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);
 
 // The fields where `state` differs from `expected` (empty when equal), for the check mode.
 [[nodiscard]] std::string draw_state_differences(const NativeDrawState& state, const NativeDrawState& expected);
