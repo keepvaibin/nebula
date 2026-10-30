@@ -30,7 +30,7 @@ for bin in "$base" "$new"; do
     [ "$size" -eq 48640 ] || status=1
     NEBULA_NAND="$(cygpath -w "$nand")" run_build "$bin" "s_${tag}_${i}_load" 45 \
         GALAXY_INPUT_AUTOPRESS_SCRIPT=760:30:A+B GALAXY_PRESENT_SNAPSHOT_EVERY=1 \
-        GALAXY_PRESENT_SNAPSHOT_FIRST=4700 GALAXY_PRESENT_SNAPSHOT_LAST=4800
+        GALAXY_PRESENT_SNAPSHOT_FIRST=2300 GALAXY_PRESENT_SNAPSHOT_LAST=2400
     grep -q "presence: Choosing a file" "$RUNS/s_${tag}_${i}_load/run.log" || { echo "$tag build $i: no file select"; status=1; }
     i=$((i + 1))
 done
