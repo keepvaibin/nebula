@@ -1324,6 +1324,12 @@ private:
     std::uint64_t current_vs_hash_{};
     // The game's material programs by key (their display lists), as registered.
     std::unordered_map<std::uint64_t, std::shared_ptr<const material::Program>> material_programs_;
+    // The distinct programs by content hash (material_programs_ points into these).
+    std::unordered_map<std::uint64_t, std::vector<std::shared_ptr<const material::Program>>>
+        material_program_contents_;
+    // The program the drawing state holds whole (set by the last material, nothing set since): a draw with it applies
+    // only its values. Null after any record that sets state outside materials.
+    const material::Program* applied_program_ = nullptr;
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.

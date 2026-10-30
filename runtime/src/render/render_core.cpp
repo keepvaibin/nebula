@@ -846,6 +846,7 @@ void RenderCore::reset_fifo_session_state() {
     // While no producer or render thread runs.
     matrices_ = MatrixMemory{};
     draw_state_ = NativeDrawState{};
+    applied_program_ = nullptr;
 
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
@@ -8861,6 +8862,14 @@ void RenderCore::end_cached_draw_run() {
 }
 
 void RenderCore::on_shape_record(const shapes::Record& record) {
+    // State set outside materials (state ops, immediates, a draw's own texgens, markers, readbacks) may change what a
+    // program set: the next material applies its program whole.
+    using Kind = shapes::Record::Kind;
+    if (!(record.kind == Kind::Material || record.kind == Kind::MaterialProgram || record.kind == Kind::Array ||
+          record.kind == Kind::Geometry || record.kind == Kind::TextureImage ||
+          (record.kind == Kind::Draw && record.texgens.empty()))) {
+        applied_program_ = nullptr;
+    }
     switch (record.kind) {
     case shapes::Record::Kind::Array:
         shape_arrays_[record.key] = ShapeArrayEntry{record.array, ++shape_array_versions_};
@@ -8875,9 +8884,24 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;
-    case shapes::Record::Kind::MaterialProgram:
-        material_programs_[record.key] = record.program;
+    case shapes::Record::Kind::MaterialProgram: {
+        // One object per distinct program (instances of a model register equal ones), so a draw after another of the
+        // same program finds the drawing state already holding it.
+        const auto& bytes = *record.program;
+        const std::uint64_t content = fnv1a64(&bytes, sizeof(material::Program));
+        std::shared_ptr<const material::Program>* shared = nullptr;
+        for (auto& candidate : material_program_contents_[content]) {
+            if (std::memcmp(candidate.get(), &bytes, sizeof(material::Program)) == 0) {
+                shared = &candidate;
+                break;
+            }
+        }
+        if (shared == nullptr) {
+            shared = &material_program_contents_[content].emplace_back(record.program);
+        }
+        material_programs_[record.key] = *shared;
         return;
+    }
     case shapes::Record::Kind::Material: {
         const auto program = material_programs_.find(record.key);
         if (program == material_programs_.end()) {
@@ -8885,7 +8909,9 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         }
         apply_record_material(*program->second, *record.material);
         const std::uint32_t palettes = draw_state_.palette_revision;
-        draw_state_.apply(*program->second, *record.material);
+        const bool whole = applied_program_ != program->second.get();
+        draw_state_.apply(*program->second, *record.material, whole);
+        applied_program_ = program->second.get();
         if (draw_state_.palette_revision != palettes) {
             on_palettes_changed();
         }
