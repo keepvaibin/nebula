@@ -754,31 +754,25 @@ struct ScopedFlushTiming {
     return nullptr;
 }
 
-void fill_ps_constants(const GxState& state, GxPsConstants& out, bool derive_scales) {
+void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsConstants& out, bool derive_scales) {
     std::memset(&out, 0, sizeof(out));
 
-    const GenMode gm = state.gen_mode();
+    const GenMode gm = draw.gen;
 
-    // stage_config[s]: colour env (BP 0xC0 + 2s), alpha env (BP 0xC1 + 2s), TEV order, ksel.
+    // stage_config[s]: colour operation, alpha operation (tev_color_word, tev_alpha_word), TEV order, ksel.
     for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        out.stage_config[s][0] =
-            state.bp(static_cast<std::uint8_t>(bp::kTevColorEnvBase + s * 2u));
-        out.stage_config[s][1] =
-            state.bp(static_cast<std::uint8_t>(bp::kTevAlphaEnvBase + s * 2u));
-        const TevOrder ord = state.tev_order(s);
+        out.stage_config[s][0] = tev_color_word(draw.tev[s]);
+        out.stage_config[s][1] = tev_alpha_word(draw.tev[s]);
+        const TevOrder ord = draw.tev[s].order;
         out.stage_config[s][2] =
               (static_cast<std::uint32_t>(ord.texmap)      )
             | (static_cast<std::uint32_t>(ord.texcoord)  << 3)
             | (ord.tex_enable ? (1u << 6) : 0u)
             | (static_cast<std::uint32_t>(ord.ras_channel) << 7);
         // Ksel: kcsel(4:0) | kasel(9:5).
-        const unsigned pair = s / 2;
-        const TevKSel ks = state.tev_ksel(pair);
-        const std::uint8_t kcsel = (s & 1u) ? ks.kcsel_odd : ks.kcsel_even;
-        const std::uint8_t kasel = (s & 1u) ? ks.kasel_odd : ks.kasel_even;
         out.stage_config[s][3] =
-              static_cast<std::uint32_t>(kcsel)
-            | (static_cast<std::uint32_t>(kasel) << 5);
+              static_cast<std::uint32_t>(draw.tev[s].kcsel)
+            | (static_cast<std::uint32_t>(draw.tev[s].kasel) << 5);
     }
 
     // TEV registers PREV, REG0-2 (signed 11-bit per channel); the shader converts them back to
@@ -806,7 +800,7 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out, bool derive_sca
     }
 
     {
-        const AlphaCompare ac = state.alpha_compare();
+        const AlphaCompare ac = draw.alpha;
         out.alpha_refs[0] = ac.ref0 / 255.0f;
         out.alpha_refs[1] = ac.ref1 / 255.0f;
         // comp0 | comp1 << 3 | logic << 6, passed as the bits of a float.
@@ -817,7 +811,7 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out, bool derive_sca
         out.alpha_refs[2] = std::bit_cast<float>(packed);
 
         // Constant destination alpha (PE_CMODE1).
-        const BlendMode bm = state.blend_mode();
+        const BlendMode bm = effective_blend(draw.blend, draw.pe.pixel_format == 1u);
         out.alpha_refs[3] = bm.const_alpha_enable
             ? (bm.const_alpha / 255.0f)
             : 0.0f;
@@ -853,18 +847,16 @@ void fill_ps_constants(const GxState& state, GxPsConstants& out, bool derive_sca
     }
 
     // Z-texture bias (BP 0xF4, 24-bit z24 units), normalized to [0,1).
-    out.ztex_params[0] =
-        static_cast<float>(state.bp(bp::kTevZEnv0) & 0xFFFFFFu) / 16777216.0f;
+    out.ztex_params[0] = static_cast<float>(draw.z_texture.bias) / 16777216.0f;
 
     // Indirect TEV commands and matrices; matrix rows are {ma,mc,me,17-scale} and
     // {mb,md,mf,17-scale}, as in Dolphin's pixel constants.
     for (unsigned word = 0; word < 16; ++word) {
-        out.ind_cmd[word / 4u][word & 3u] =
-            state.bp(static_cast<std::uint8_t>(bp::kIndCmdBase + word));
+        out.ind_cmd[word / 4u][word & 3u] = ind_cmd_word(draw.ind[word]);
     }
-    out.ind_misc[0] = state.bp(bp::kIndRef);
-    out.ind_misc[1] = state.bp(bp::kRas1Ss0);
-    out.ind_misc[2] = state.bp(bp::kRas1Ss1);
+    out.ind_misc[0] = ind_ref_word(draw);
+    out.ind_misc[1] = ind_scale_word(draw, 0u);
+    out.ind_misc[2] = ind_scale_word(draw, 1u);
     out.ind_misc[3] = gm.num_ind_stages;
     const auto sign11 = [](std::uint32_t value) -> std::int32_t {
         value &= 0x7FFu;
@@ -8296,7 +8288,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         texture_bindings_dirty_ || texture_binding_changed;
 
     if (tev_dirty || !shader_key_hashes_valid_) {
-        const auto next = build_pixel_shader_key(state_, renderer_.efb_scale());
+        const auto next = build_pixel_shader_key(draw_state_, renderer_.efb_scale());
         if (!shader_key_hashes_valid_ || !(next == ps_key_)) {
             ps_key_ = next;
             current_ps_hash_ = ps_key_.hash();
@@ -9094,7 +9086,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         GxPsConstants ps_c{};
-        fill_ps_constants(state_, ps_c, scales_from_textures_);
+        fill_ps_constants(state_, draw_state_, ps_c, scales_from_textures_);
         if (tint_cleared > 0.0f) {
             for (auto& reg : ps_c.tev_regs) {
                 clear_register_tint(reg, tint_cleared);
@@ -9745,6 +9737,35 @@ void GxBackend::check_draw_state() {
     expected.blend = decode_blend(state_.bp(bp::kBlendMode), state_.bp(bp::kConstAlpha));
     expected.pe = state_.pe_control();
     expected.alpha = state_.alpha_compare();
+    for (unsigned s = 0; s < 16u; ++s) {
+        expected.tev[s] = state_.tev_stage(s);
+        const std::uint32_t c = state_.bp(static_cast<std::uint8_t>(bp::kIndCmdBase + s));
+        expected.ind[s] = IndirectStage{
+            static_cast<std::uint8_t>(c & 3u),          static_cast<std::uint8_t>((c >> 2u) & 3u),
+            static_cast<std::uint8_t>((c >> 4u) & 7u),  static_cast<std::uint8_t>((c >> 7u) & 3u),
+            static_cast<std::uint8_t>((c >> 9u) & 15u), static_cast<std::uint8_t>((c >> 13u) & 7u),
+            static_cast<std::uint8_t>((c >> 16u) & 7u), ((c >> 19u) & 1u) != 0u, ((c >> 20u) & 1u) != 0u};
+    }
+    for (unsigned t = 0; t < 4u; ++t) {
+        const TevKSel even = state_.tev_ksel(2u * t);
+        const TevKSel odd = state_.tev_ksel(2u * t + 1u);
+        expected.swap[t][0] = even.swap_red;
+        expected.swap[t][1] = even.swap_green;
+        expected.swap[t][2] = odd.swap_red;
+        expected.swap[t][3] = odd.swap_green;
+    }
+    expected.fog_type = state_.fog().type;
+    const std::uint32_t ztex = state_.bp(bp::kTevZEnv1);
+    expected.z_texture.op = static_cast<std::uint8_t>((ztex >> 2u) & 3u);
+    expected.z_texture.type = static_cast<std::uint8_t>(ztex & 3u);
+    expected.z_texture.bias = state_.bp(bp::kTevZEnv0) & 0xFFFFFFu;
+    const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
+    for (unsigned i = 0; i < 4u; ++i) {
+        const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);
+        expected.ind_order[i] = {static_cast<std::uint8_t>((ind_ref >> (6u * i)) & 7u),
+                                 static_cast<std::uint8_t>((ind_ref >> (6u * i + 3u)) & 7u),
+                                 static_cast<std::uint8_t>(scale & 15u), static_cast<std::uint8_t>((scale >> 4u) & 15u)};
+    }
     const std::string differences = draw_state_differences(draw_state_, expected);
     static std::uint64_t draws = 0, mismatches = 0;
     ++draws;

@@ -4,6 +4,7 @@
 
 #include "galaxy/gx/draw_state.h"
 
+#include <iterator>
 #include <sstream>
 
 namespace galaxy::gx {
@@ -26,6 +27,66 @@ void set_z(ZMode& z, std::uint8_t enable, std::uint8_t func, std::uint8_t update
     z.test_enable = (enable & 1u) != 0u;
     z.func = static_cast<CompareFunc>(func & 7u);
     z.update_enable = (update & 1u) != 0u;
+}
+
+// GXChannelID to the rasterized colour a TEV stage reads.
+constexpr std::uint8_t kChannelToRas[16] = {0, 1, 0, 1, 0, 1, 7, 5, 6, 0, 0, 0, 0, 0, 0, 7};
+
+// A TEV operation (GXTevOp; a compare operation's kind takes the scale's place, its bias the compare value 3).
+void set_color_op(TevStageConfig& s, std::uint8_t op, std::uint8_t bias, std::uint8_t scale, std::uint8_t clamp,
+                  std::uint8_t out) {
+    const bool compare = op > 1u;
+    s.color_bias = static_cast<TevBias>(compare ? 3u : bias & 3u);
+    s.color_sub = (op & 1u) != 0u;
+    s.color_clamp = (clamp & 1u) != 0u;
+    s.color_scale = static_cast<TevScale>(compare ? (op >> 1u) & 3u : scale & 3u);
+    s.color_dest = static_cast<std::uint8_t>(out & 3u);
+}
+
+void set_alpha_op(TevStageConfig& s, std::uint8_t op, std::uint8_t bias, std::uint8_t scale, std::uint8_t clamp,
+                  std::uint8_t out) {
+    const bool compare = op > 1u;
+    s.alpha_bias = static_cast<TevBias>(compare ? 3u : bias & 3u);
+    s.alpha_sub = (op & 1u) != 0u;
+    s.alpha_clamp = (clamp & 1u) != 0u;
+    s.alpha_scale = static_cast<TevScale>(compare ? (op >> 1u) & 3u : scale & 3u);
+    s.alpha_dest = static_cast<std::uint8_t>(out & 3u);
+}
+
+void set_color_in(TevStageConfig& s, std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d) {
+    s.color_a = static_cast<TevColorArg>(a & 15u);
+    s.color_b = static_cast<TevColorArg>(b & 15u);
+    s.color_c = static_cast<TevColorArg>(c & 15u);
+    s.color_d = static_cast<TevColorArg>(d & 15u);
+}
+
+void set_alpha_in(TevStageConfig& s, std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d) {
+    s.alpha_a = static_cast<TevAlphaArg>(a & 7u);
+    s.alpha_b = static_cast<TevAlphaArg>(b & 7u);
+    s.alpha_c = static_cast<TevAlphaArg>(c & 7u);
+    s.alpha_d = static_cast<TevAlphaArg>(d & 7u);
+}
+
+// GDSetTevOrder's mapping (J3D's and the GD op's): a null map disables the texture, its index kept.
+void set_order(TevOrder& o, std::uint8_t coord, std::uint8_t map, std::uint8_t channel) {
+    o.texmap = static_cast<std::uint8_t>(map & 7u);
+    o.texcoord = static_cast<std::uint8_t>(coord & 7u);
+    o.tex_enable = map != 0xFFu;
+    o.ras_channel = kChannelToRas[channel & 15u];
+}
+
+IndirectStage indirect_stage(std::uint8_t stage, std::uint8_t format, std::uint8_t bias, std::uint8_t alpha,
+                             std::uint8_t matrix, std::uint8_t wrap_s, std::uint8_t wrap_t, std::uint8_t lod,
+                             std::uint8_t prev) {
+    return IndirectStage{static_cast<std::uint8_t>(stage & 3u),  static_cast<std::uint8_t>(format & 3u),
+                         static_cast<std::uint8_t>(bias & 7u),   static_cast<std::uint8_t>(alpha & 3u),
+                         static_cast<std::uint8_t>(matrix & 15u), static_cast<std::uint8_t>(wrap_s & 7u),
+                         static_cast<std::uint8_t>(wrap_t & 7u), (lod & 1u) != 0u, (prev & 1u) != 0u};
+}
+
+IndirectStage material_indirect(const material::TevStage& s) {
+    return indirect_stage(s.ind_stage, s.ind_format, s.ind_bias, s.ind_alpha, s.ind_matrix, s.ind_wrap_s,
+                          s.ind_wrap_t, s.ind_lod, s.ind_prev);
 }
 
 }  // namespace
@@ -101,6 +162,81 @@ void NativeDrawState::apply(const state::Op& op) {
     case state::kNumIndStages:
         gen.num_ind_stages = static_cast<std::uint8_t>(a[0] & 7u);
         break;
+    case state::kTevColorCalc:
+        set_color_in(tev[a[0] & 15u], a[1], a[2], a[3], a[4]);
+        set_color_op(tev[a[0] & 15u], a[5], a[6], a[7], a[8], a[9]);
+        break;
+    case state::kTevAlphaCalc:
+        set_alpha_in(tev[a[0] & 15u], a[1], a[2], a[3], a[4]);
+        set_alpha_op(tev[a[0] & 15u], a[5], a[6], a[7], a[8], a[9]);
+        tev[a[0] & 15u].ras_swap = static_cast<std::uint8_t>(a[10] & 3u);
+        tev[a[0] & 15u].tex_swap = static_cast<std::uint8_t>(a[11] & 3u);
+        break;
+    case state::kTevColorIn:
+        set_color_in(tev[a[0] & 15u], a[1], a[2], a[3], a[4]);
+        break;
+    case state::kTevAlphaIn:
+        set_alpha_in(tev[a[0] & 15u], a[1], a[2], a[3], a[4]);
+        break;
+    case state::kTevColorOp:
+        set_color_op(tev[a[0] & 15u], a[1], a[2], a[3], a[4], a[5]);
+        break;
+    case state::kTevAlphaOp:
+        set_alpha_op(tev[a[0] & 15u], a[1], a[2], a[3], a[4], a[5]);
+        break;
+    case state::kTevOrder:
+        set_order(tev[a[0] & 14u].order, a[1], a[2], a[3]);
+        set_order(tev[(a[0] & 14u) + 1u].order, a[4], a[5], a[6]);
+        break;
+    case state::kTevStageOrder: {
+        // GXSetTevOrder's mapping (not GD's): a null coordinate or map reads as 0, the map enabled only when real.
+        TevOrder& o = tev[a[0] & 15u].order;
+        o.texmap = static_cast<std::uint8_t>(a[2] >= 8u ? 0u : a[2]);
+        o.texcoord = static_cast<std::uint8_t>(a[1] >= 8u ? 0u : a[1]);
+        o.tex_enable = a[2] != 0xFFu && a[4] == 0u;
+        o.ras_channel = a[3] == 0xFFu ? 7u : kChannelToRas[a[3] & 15u];
+        break;
+    }
+    case state::kTevKColorSel:
+        tev[a[0] & 15u].kcsel = static_cast<std::uint8_t>(a[1] & 31u);
+        break;
+    case state::kTevKAlphaSel:
+        tev[a[0] & 15u].kasel = static_cast<std::uint8_t>(a[1] & 31u);
+        break;
+    case state::kTevSwapMode:
+        tev[a[0] & 15u].ras_swap = static_cast<std::uint8_t>(a[1] & 3u);
+        tev[a[0] & 15u].tex_swap = static_cast<std::uint8_t>(a[2] & 3u);
+        break;
+    case state::kTevSwapTable:
+        for (unsigned c = 0; c < 4u; ++c) {
+            swap[a[0] & 3u][c] = static_cast<std::uint8_t>(a[1u + c] & 3u);
+        }
+        break;
+    case state::kFog:
+        fog_type = static_cast<FogType>(a[0] & 7u);
+        break;
+    case state::kZTexture:
+        // GXSetZTexture: the format as its type (Z8 0, Z16 1, otherwise 2).
+        z_texture.op = static_cast<std::uint8_t>(a[0] & 3u);
+        z_texture.type = static_cast<std::uint8_t>(a[1] == 0x11u ? 0u : a[1] == 0x13u ? 1u : 2u);
+        z_texture.bias = static_cast<std::uint32_t>(a[2]) | static_cast<std::uint32_t>(a[3]) << 8u |
+                         static_cast<std::uint32_t>(a[4]) << 16u;
+        break;
+    case state::kTevDirect:
+        ind[a[0] & 15u] = IndirectStage{};
+        break;
+    case state::kTevIndirect:
+        ind[a[0] & 15u] = indirect_stage(a[1], a[2], a[3], a[9], a[4], a[5], a[6], a[8], a[7]);
+        break;
+    case state::kIndTexScale:
+        ind_order[a[0] & 3u].scale_s = static_cast<std::uint8_t>(a[1] & 15u);
+        ind_order[a[0] & 3u].scale_t = static_cast<std::uint8_t>(a[2] & 15u);
+        break;
+    case state::kIndTexOrder:
+        // GXSetIndTexOrder: a null map or coordinate reads as 0.
+        ind_order[a[0] & 3u].map = static_cast<std::uint8_t>(a[2] >= 8u ? 0u : a[2]);
+        ind_order[a[0] & 3u].coord = static_cast<std::uint8_t>(a[1] >= 8u ? 0u : a[1]);
+        break;
     default:
         break;
     }
@@ -115,8 +251,31 @@ void NativeDrawState::apply(const material::Material& m) {
         }
         set_z(z, m.z_mode.enable, m.z_mode.func, m.z_mode.update);
     };
+    const auto stage_env = [&](unsigned i) {
+        const material::TevStage& s = m.tev[i];
+        set_color_in(tev[i], s.color_in[0], s.color_in[1], s.color_in[2], s.color_in[3]);
+        set_color_op(tev[i], s.color_op, s.color_bias, s.color_scale, s.color_clamp, s.color_reg);
+        set_alpha_in(tev[i], s.alpha_in[0], s.alpha_in[1], s.alpha_in[2], s.alpha_in[3]);
+        set_alpha_op(tev[i], s.alpha_op, s.alpha_bias, s.alpha_scale, s.alpha_clamp, s.alpha_reg);
+        tev[i].ras_swap = static_cast<std::uint8_t>(s.ras_swap & 3u);
+        tev[i].tex_swap = static_cast<std::uint8_t>(s.tex_swap & 3u);
+    };
+    const unsigned stages = m.tev_stages < 16u ? m.tev_stages : 16u;
     const std::uint32_t f = m.diff_flags;
     if (f != 0u) {
+        if (((f >> 20u) & 15u) != 0u) {  // TevStageNum: diffTevStage, then diffTevStageIndirect
+            for (unsigned i = 0; i < stages; ++i) {
+                stage_env(i);
+            }
+            if ((f & 0x8000000u) != 0u) {
+                for (unsigned i = 0; i < stages; ++i) {
+                    ind[i] = material_indirect(m.tev[i]);
+                }
+            }
+        }
+        if ((f & 0x10000000u) != 0u && (m.loads & material::kLoadsFog) != 0u) {  // Fog
+            fog_type = static_cast<FogType>(m.fog.type & 7u);
+        }
         if ((f & 0x20000000u) != 0u) {  // Blend: diffBlend
             blend_and_z();
         }
@@ -126,6 +285,46 @@ void NativeDrawState::apply(const material::Material& m) {
             gen.num_ind_stages = static_cast<std::uint8_t>(m.ind_stages & 7u);
         }
         return;
+    }
+    if ((m.loads & material::kLoadsTev) != 0u) {
+        for (unsigned i = 0; i < stages; i += 2u) {
+            for (unsigned j = i; j < i + 2u; ++j) {
+                // J3D's order: a null coordinate reads as 0.
+                const material::TevStage& s = m.tev[j];
+                set_order(tev[j].order, static_cast<std::uint8_t>(s.tex_coord >= 8u ? 0u : s.tex_coord), s.tex_map,
+                          s.channel);
+            }
+        }
+        for (unsigned i = 0; i < stages; ++i) {
+            stage_env(i);
+            ind[i] = material_indirect(m.tev[i]);
+        }
+        if ((m.loads & material::kLoadsKonstSelect) != 0u) {
+            for (unsigned i = 0; i < 16u; ++i) {
+                tev[i].kcsel = static_cast<std::uint8_t>(m.tev[i].konst_color & 31u);
+                tev[i].kasel = static_cast<std::uint8_t>(m.tev[i].konst_alpha & 31u);
+            }
+            for (unsigned t = 0; t < 4u; ++t) {
+                for (unsigned c = 0; c < 4u; ++c) {
+                    swap[t][c] = static_cast<std::uint8_t>(m.swap_table[t][c] & 3u);
+                }
+            }
+        }
+    }
+    if ((m.loads & material::kLoadsIndirect) != 0u) {
+        for (unsigned i = 0; i < m.ind_stages && i < 4u; i += 2u) {
+            for (unsigned j = i; j < i + 2u; ++j) {
+                ind_order[j].scale_s = static_cast<std::uint8_t>(m.ind_order[j].scale_s & 15u);
+                ind_order[j].scale_t = static_cast<std::uint8_t>(m.ind_order[j].scale_t & 15u);
+            }
+        }
+        for (unsigned i = 0; i < 4u; ++i) {
+            ind_order[i].map = static_cast<std::uint8_t>(m.ind_order[i].map & 7u);
+            ind_order[i].coord = static_cast<std::uint8_t>(m.ind_order[i].coord & 7u);
+        }
+    }
+    if ((m.loads & material::kLoadsFog) != 0u) {
+        fog_type = static_cast<FogType>(m.fog.type & 7u);
     }
     alpha.comp0 = static_cast<CompareFunc>(m.alpha_compare.comp0 & 7u);
     alpha.ref0 = m.alpha_compare.ref0;
@@ -141,6 +340,47 @@ void NativeDrawState::apply(const material::Material& m) {
     gen.num_ind_stages = static_cast<std::uint8_t>(m.ind_stages & 7u);
 }
 
+std::uint32_t ind_cmd_word(const IndirectStage& s) {
+    return static_cast<std::uint32_t>(s.stage) | static_cast<std::uint32_t>(s.format) << 2u |
+           static_cast<std::uint32_t>(s.bias) << 4u | static_cast<std::uint32_t>(s.alpha) << 7u |
+           static_cast<std::uint32_t>(s.matrix) << 9u | static_cast<std::uint32_t>(s.wrap_s) << 13u |
+           static_cast<std::uint32_t>(s.wrap_t) << 16u | static_cast<std::uint32_t>(s.lod) << 19u |
+           static_cast<std::uint32_t>(s.prev) << 20u;
+}
+
+std::uint32_t tev_color_word(const TevStageConfig& s) {
+    return static_cast<std::uint32_t>(s.color_d) | static_cast<std::uint32_t>(s.color_c) << 4u |
+           static_cast<std::uint32_t>(s.color_b) << 8u | static_cast<std::uint32_t>(s.color_a) << 12u |
+           static_cast<std::uint32_t>(s.color_bias) << 16u | static_cast<std::uint32_t>(s.color_sub) << 18u |
+           static_cast<std::uint32_t>(s.color_clamp) << 19u | static_cast<std::uint32_t>(s.color_scale) << 20u |
+           static_cast<std::uint32_t>(s.color_dest) << 22u;
+}
+
+std::uint32_t tev_alpha_word(const TevStageConfig& s) {
+    return static_cast<std::uint32_t>(s.ras_swap) | static_cast<std::uint32_t>(s.tex_swap) << 2u |
+           static_cast<std::uint32_t>(s.alpha_d) << 4u | static_cast<std::uint32_t>(s.alpha_c) << 7u |
+           static_cast<std::uint32_t>(s.alpha_b) << 10u | static_cast<std::uint32_t>(s.alpha_a) << 13u |
+           static_cast<std::uint32_t>(s.alpha_bias) << 16u | static_cast<std::uint32_t>(s.alpha_sub) << 18u |
+           static_cast<std::uint32_t>(s.alpha_clamp) << 19u | static_cast<std::uint32_t>(s.alpha_scale) << 20u |
+           static_cast<std::uint32_t>(s.alpha_dest) << 22u;
+}
+
+std::uint32_t ind_ref_word(const NativeDrawState& state) {
+    std::uint32_t word = 0u;
+    for (unsigned i = 0; i < 4u; ++i) {
+        word |= (static_cast<std::uint32_t>(state.ind_order[i].map) |
+                 static_cast<std::uint32_t>(state.ind_order[i].coord) << 3u) << (6u * i);
+    }
+    return word;
+}
+
+std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair) {
+    const auto& a = state.ind_order[2u * pair];
+    const auto& b = state.ind_order[2u * pair + 1u];
+    return static_cast<std::uint32_t>(a.scale_s) | static_cast<std::uint32_t>(a.scale_t) << 4u |
+           static_cast<std::uint32_t>(b.scale_s) << 8u | static_cast<std::uint32_t>(b.scale_t) << 12u;
+}
+
 std::string draw_state_differences(const NativeDrawState& s, const NativeDrawState& e) {
     std::ostringstream out;
     const auto field = [&](const char* name, unsigned have, unsigned want) {
@@ -148,6 +388,47 @@ std::string draw_state_differences(const NativeDrawState& s, const NativeDrawSta
             out << ' ' << name << '=' << have << "/" << want;
         }
     };
+    for (unsigned i = 0; i < 16u; ++i) {
+        const TevStageConfig& a = s.tev[i];
+        const TevStageConfig& b = e.tev[i];
+        const unsigned have[] = {
+            static_cast<unsigned>(a.color_a), static_cast<unsigned>(a.color_b), static_cast<unsigned>(a.color_c),
+            static_cast<unsigned>(a.color_d), static_cast<unsigned>(a.color_bias), a.color_sub, a.color_clamp,
+            static_cast<unsigned>(a.color_scale), a.color_dest, static_cast<unsigned>(a.alpha_a),
+            static_cast<unsigned>(a.alpha_b), static_cast<unsigned>(a.alpha_c), static_cast<unsigned>(a.alpha_d),
+            static_cast<unsigned>(a.alpha_bias), a.alpha_sub, a.alpha_clamp, static_cast<unsigned>(a.alpha_scale),
+            a.alpha_dest, a.ras_swap, a.tex_swap, a.order.texmap, a.order.texcoord, a.order.tex_enable,
+            a.order.ras_channel, a.kcsel, a.kasel, ind_cmd_word(s.ind[i])};
+        const unsigned want[] = {
+            static_cast<unsigned>(b.color_a), static_cast<unsigned>(b.color_b), static_cast<unsigned>(b.color_c),
+            static_cast<unsigned>(b.color_d), static_cast<unsigned>(b.color_bias), b.color_sub, b.color_clamp,
+            static_cast<unsigned>(b.color_scale), b.color_dest, static_cast<unsigned>(b.alpha_a),
+            static_cast<unsigned>(b.alpha_b), static_cast<unsigned>(b.alpha_c), static_cast<unsigned>(b.alpha_d),
+            static_cast<unsigned>(b.alpha_bias), b.alpha_sub, b.alpha_clamp, static_cast<unsigned>(b.alpha_scale),
+            b.alpha_dest, b.ras_swap, b.tex_swap, b.order.texmap, b.order.texcoord, b.order.tex_enable,
+            b.order.ras_channel, b.kcsel, b.kasel, ind_cmd_word(e.ind[i])};
+        static constexpr const char* kNames[] = {
+            "ca", "cb", "cc", "cd", "cbias", "csub", "cclamp", "cscale", "cdest", "aa", "ab", "ac", "ad", "abias",
+            "asub", "aclamp", "ascale", "adest", "rasswap", "texswap", "texmap", "texcoord", "texen", "ras", "kcsel",
+            "kasel", "indcmd"};
+        for (unsigned k = 0; k < std::size(have); ++k) {
+            if (have[k] != want[k]) {
+                out << " tev" << i << '.' << kNames[k] << '=' << have[k] << '/' << want[k];
+            }
+        }
+    }
+    for (unsigned t = 0; t < 4u; ++t) {
+        for (unsigned c = 0; c < 4u; ++c) {
+            field("swap", s.swap[t][c], e.swap[t][c]);
+        }
+    }
+    field("fogtype", static_cast<unsigned>(s.fog_type), static_cast<unsigned>(e.fog_type));
+    field("ztexop", s.z_texture.op, e.z_texture.op);
+    field("ztextype", s.z_texture.type, e.z_texture.type);
+    field("ztexbias", s.z_texture.bias, e.z_texture.bias);
+    field("indref", ind_ref_word(s), ind_ref_word(e));
+    field("indscale0", ind_scale_word(s, 0u), ind_scale_word(e, 0u));
+    field("indscale1", ind_scale_word(s, 1u), ind_scale_word(e, 1u));
     field("texgens", s.gen.num_texgens, e.gen.num_texgens);
     field("chans", s.gen.num_color_chans, e.gen.num_color_chans);
     field("tevs", s.gen.num_tev_stages, e.gen.num_tev_stages);

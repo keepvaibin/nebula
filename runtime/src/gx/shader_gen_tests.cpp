@@ -1282,9 +1282,9 @@ int main() {
             ++g_failures;
             std::printf("FAILED: uniform dither crosses a logical pixel boundary\n");
         }
-        GxState state;
-        state.load_bp((static_cast<std::uint32_t>(bp::kPeControl) << 24u) | 1u);
-        state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) | (1u << 2u));
+        NativeDrawState state;
+        state.pe.pixel_format = 1u;
+        state.blend.dither = true;
         const auto canonical = build_pixel_shader_key(state, 1u, false);
         bool keys_match = canonical.efb_scale_minus_one == 0xffu;
         const auto true_color = build_pixel_shader_key(state, 1u, true);
@@ -1558,10 +1558,13 @@ int main() {
             ++g_failures;
             std::printf("FAILED: post normalize dropped from shader key\n");
         }
-        const auto original_swap = build_pixel_shader_key(state, 1u);
+        NativeDrawState draw;
+        draw.gen.num_texgens = 1u;
+        const auto original_swap = build_pixel_shader_key(draw, 1u);
         // All reset swap tables resolve to the same swizzle, despite selectors.
-        state.load_bp((static_cast<std::uint32_t>(bp::kTevAlphaEnvBase) << 24u) | 0xFu);
-        if (!(original_swap == build_pixel_shader_key(state, 1u))) {
+        draw.tev[0].ras_swap = 3u;
+        draw.tev[0].tex_swap = 3u;
+        if (!(original_swap == build_pixel_shader_key(draw, 1u))) {
             ++g_failures;
             std::printf("FAILED: equivalent swap selectors fragmented shader key\n");
         }

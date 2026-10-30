@@ -340,8 +340,8 @@ struct MemoizedPsoKeyHasher {
 // stipple the picture, and at raised internal resolution the dither shows as a dot grid. Only
 // shader_gen_tests requests the dither.
 [[nodiscard]] PixelShaderKey build_pixel_shader_key(
-    const GxState& state, unsigned efb_scale, bool true_color);
-[[nodiscard]] inline PixelShaderKey build_pixel_shader_key(const GxState& state, unsigned efb_scale) {
+    const NativeDrawState& state, unsigned efb_scale, bool true_color);
+[[nodiscard]] inline PixelShaderKey build_pixel_shader_key(const NativeDrawState& state, unsigned efb_scale) {
     return build_pixel_shader_key(state, efb_scale, true);
 }
 [[nodiscard]] VertexShaderKey build_vertex_shader_key(const GxState& state);

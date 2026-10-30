@@ -37,12 +37,12 @@ namespace {
 }  // namespace
 
 PixelShaderKey build_pixel_shader_key(
-    const GxState& state, unsigned efb_scale, bool true_color) {
+    const NativeDrawState& state, unsigned efb_scale, bool true_color) {
     PixelShaderKey key{};
     // hash() and operator== read every byte, so unused stages and fields must be zero.
     std::memset(&key, 0, sizeof(key));
 
-    const GenMode gm = state.gen_mode();
+    const GenMode gm = state.gen;
     key.num_tev_stages = gm.num_tev_stages;     // 1-16
     key.num_texgens    = gm.num_texgens;
     // Colour-channel production belongs to the VS. The PS consumes its interpolants, and no pixel
@@ -50,11 +50,10 @@ PixelShaderKey build_pixel_shader_key(
     key.num_chans      = 0u;
 
     // The fog type is part of the key. The A/B/C/colour params are uniforms and stay out of it.
-    const FogParams fog = state.fog();
-    key.fog_type = static_cast<std::uint8_t>(fog.type);
+    key.fog_type = static_cast<std::uint8_t>(state.fog_type);
 
     // Alpha compare function and logic operator are key (refs are uniforms).
-    const AlphaCompare ac = state.alpha_compare();
+    const AlphaCompare ac = state.alpha;
     key.alpha_comp0 = static_cast<std::uint8_t>(ac.comp0);
     key.alpha_comp1 = static_cast<std::uint8_t>(ac.comp1);
     key.alpha_logic = static_cast<std::uint8_t>(ac.logic);
@@ -71,12 +70,11 @@ PixelShaderKey build_pixel_shader_key(
     // dst_alpha also requires alpha_update, as in Dolphin's PixelShaderGen (useDstAlpha): with EFB
     // alpha writes masked, the constant never reaches the EFB and must not replace the TEV alpha
     // the blend factors read.
-    const PeControl pe = state.pe_control();
-    const BlendMode bm = state.blend_mode();
+    const PeControl pe = state.pe;
+    const BlendMode bm = effective_blend(state.blend, pe.pixel_format == 1u);
     const bool late_ztest = !pe.early_z;
-    const std::uint32_t ztex2 = state.bp(bp::kTevZEnv1);
-    const std::uint32_t ztex_op = (ztex2 >> 2) & 0x3u;
-    const std::uint32_t ztex_fmt = ztex2 & 0x3u;
+    const std::uint32_t ztex_op = state.z_texture.op;
+    const std::uint32_t ztex_fmt = state.z_texture.type;
     const bool ztex_on = ztex_op != 0u;
     const bool dst_alpha =
         (pe.pixel_format == 1u) && bm.const_alpha_enable && bm.alpha_update;
@@ -102,8 +100,7 @@ PixelShaderKey build_pixel_shader_key(
             gm.num_ind_stages,
             4u));
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
-        const std::uint32_t cmd = state.bp(
-            static_cast<std::uint8_t>(bp::kIndCmdBase + s));
+        const std::uint32_t cmd = ind_cmd_word(state.ind[s]);
         if (cmd != 0u) {
             num_ind_stages = static_cast<std::uint8_t>(
                 std::max<unsigned>(num_ind_stages, (cmd & 0x3u) + 1u));
@@ -113,10 +110,9 @@ PixelShaderKey build_pixel_shader_key(
         static_cast<std::uint8_t>(std::min<unsigned>(num_ind_stages, 4u));
     if (key.num_ind_stages != 0u) {
         for (unsigned s = 0; s < key.num_tev_stages; ++s) {
-            key.ind_cmd[s / 4u][s & 3u] = state.bp(
-                static_cast<std::uint8_t>(bp::kIndCmdBase + s));
+            key.ind_cmd[s / 4u][s & 3u] = ind_cmd_word(state.ind[s]);
         }
-        key.ind_ref = state.bp(bp::kIndRef) &
+        key.ind_ref = ind_ref_word(state) &
             ((std::uint32_t{1} << (6u * key.num_ind_stages)) - 1u);
         for (unsigned pair = 0; pair < 2u; ++pair) {
             const unsigned first_stage = pair * 2u;
@@ -124,13 +120,12 @@ PixelShaderKey build_pixel_shader_key(
                 ? std::min<unsigned>(key.num_ind_stages - first_stage, 2u) : 0u;
             const auto mask = active == 0u ? 0u
                 : (std::uint32_t{1} << (8u * active)) - 1u;
-            key.ind_scale[pair] = state.bp(static_cast<std::uint8_t>(
-                bp::kRas1Ss0 + pair)) & mask;
+            key.ind_scale[pair] = ind_scale_word(state, pair) & mask;
         }
     }
 
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
-        const TevStageConfig cfg = state.tev_stage(s);
+        const TevStageConfig& cfg = state.tev[s];
 
         // color_env word, rebuilt from the decoded fields in the BP 0xC0+2*s bit layout.
         const std::uint32_t color_env =
@@ -165,25 +160,22 @@ PixelShaderKey build_pixel_shader_key(
             (cfg.order.tex_enable ? (1u << 6u) : 0u)                            |
             ((static_cast<std::uint32_t>(cfg.order.ras_channel)  & 0x7u) << 7u);
 
-        // ksel word: kcsel(4:0) | kasel(9:5) | resolved swap swizzles. Swap table t sits in KSEL
-        // registers 2t and 2t+1: red = reg(2t) bits 0-1, green = reg(2t) bits 2-3, blue =
-        // reg(2t+1) bits 0-1, alpha = reg(2t+1) bits 2-3. ras_swap and tex_swap select the tables;
-        // as in Dolphin's PixelShaderGen, the key holds the resolved swizzles, not the tables.
-        const TevKSel ras_even = state.tev_ksel(cfg.ras_swap * 2u);
-        const TevKSel ras_odd  = state.tev_ksel(cfg.ras_swap * 2u + 1u);
-        const TevKSel tex_even = state.tev_ksel(cfg.tex_swap * 2u);
-        const TevKSel tex_odd  = state.tev_ksel(cfg.tex_swap * 2u + 1u);
+        // ksel word: kcsel(4:0) | kasel(9:5) | resolved swap swizzles (red, green, blue, alpha two bits
+        // each: the rasterized colour's at 10, the texture's at 18). ras_swap and tex_swap select the
+        // tables; as in Dolphin's PixelShaderGen, the key holds the resolved swizzles, not the tables.
+        const std::uint8_t* ras = state.swap[cfg.ras_swap & 3u];
+        const std::uint8_t* tex = state.swap[cfg.tex_swap & 3u];
         std::uint32_t ksel =
             (static_cast<std::uint32_t>(cfg.kcsel) & 0x1Fu) |
             ((static_cast<std::uint32_t>(cfg.kasel) & 0x1Fu) << 5u) |
-            (static_cast<std::uint32_t>(ras_even.swap_red)   << 10u) |
-            (static_cast<std::uint32_t>(ras_even.swap_green) << 12u) |
-            (static_cast<std::uint32_t>(ras_odd.swap_red)    << 14u) |
-            (static_cast<std::uint32_t>(ras_odd.swap_green)  << 16u) |
-            (static_cast<std::uint32_t>(tex_even.swap_red)   << 18u) |
-            (static_cast<std::uint32_t>(tex_even.swap_green) << 20u) |
-            (static_cast<std::uint32_t>(tex_odd.swap_red)    << 22u) |
-            (static_cast<std::uint32_t>(tex_odd.swap_green)  << 24u);
+            (static_cast<std::uint32_t>(ras[0]) << 10u) |
+            (static_cast<std::uint32_t>(ras[1]) << 12u) |
+            (static_cast<std::uint32_t>(ras[2]) << 14u) |
+            (static_cast<std::uint32_t>(ras[3]) << 16u) |
+            (static_cast<std::uint32_t>(tex[0]) << 18u) |
+            (static_cast<std::uint32_t>(tex[1]) << 20u) |
+            (static_cast<std::uint32_t>(tex[2]) << 22u) |
+            (static_cast<std::uint32_t>(tex[3]) << 24u);
 
         // A stage's texture, rasterized colour and konst values matter only through its eight
         // combiner inputs. When no input selects a source, its order bits, swap table and konst
