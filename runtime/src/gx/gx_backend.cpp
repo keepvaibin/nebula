@@ -4916,10 +4916,8 @@ void GxBackend::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* v
 void GxBackend::take_attached_pointer_depth_capture(FrameChunk& chunk) {
     if (!producer_pointer_depth_capture_) return;
     chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
-    chunk.pointer_depth_capture_fifo_offset = producer_pointer_depth_capture_offset_;
     chunk.pointer_depth_in_frame = true;
     producer_pointer_depth_capture_.reset();
-    producer_pointer_depth_capture_offset_ = 0;
 }
 
 // Render thread, inside the frame's parse: the field joins this command list.
@@ -7306,20 +7304,18 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
             std::vector<StreamSplit>& splits = stream_splits_;
             splits.clear();
             if (capture_in_frame) {
-                splits.push_back({chunk.pointer_depth_capture_fifo_offset, 0u, -1, -1});
+                splits.push_back({0u, -1, -1});
             }
             for (std::uint8_t i = 0; i < chunk.fifo_marker_count; ++i) {
-                splits.push_back({chunk.fifo_markers[i].first, chunk.fifo_marker_serials[i],
-                                  static_cast<int>(chunk.fifo_markers[i].second), static_cast<int>(i)});
+                splits.push_back({chunk.fifo_marker_serials[i], static_cast<int>(chunk.fifo_markers[i]),
+                                  static_cast<int>(i)});
             }
             for (std::size_t i = 0; i < chunk.shape_records.size(); ++i) {
-                splits.push_back({chunk.shape_records[i].offset, chunk.shape_records[i].serial,
-                                  kSplitShapeRecord, static_cast<int>(i)});
+                splits.push_back({chunk.shape_records[i].serial, kSplitShapeRecord, static_cast<int>(i)});
             }
-            // At one place in the order the game made them (a marker before the records made after it).
+            // In the order the game made them (a marker before the records made after it).
             std::stable_sort(splits.begin(), splits.end(), [](const StreamSplit& a, const StreamSplit& b) {
-                return a.offset != b.offset ? a.offset < b.offset
-                     : a.serial != b.serial ? a.serial < b.serial
+                return a.serial != b.serial ? a.serial < b.serial
                                             : (a.marker == kSplitShapeRecord) < (b.marker == kSplitShapeRecord);
             });
             parse_stripes_ = interp_recording_ ? std::span<const StripeParticleMark>(chunk.stripe_particles)

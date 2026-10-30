@@ -129,12 +129,11 @@ public:
     static constexpr std::size_t kFifoMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
     using SceneStage = std::array<char, 48>;
-    // Simulation thread: the next render_frame submission handles `marker`
-    // when its parser reaches `fifo_offset` bytes into the submitted FIFO.
-    void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
+    // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
+    void attach_fifo_marker(FifoMarker marker) noexcept {
         if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
             const std::uint8_t index = producer_fifo_marker_count_++;
-            producer_fifo_markers_[index] = {fifo_offset, marker};
+            producer_fifo_markers_[index] = marker;
             producer_fifo_marker_serials_[index] = producer_shape_record_serial_;
             producer_fifo_marker_views_[index] = producer_scene_view_;
             producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
@@ -362,13 +361,10 @@ private:
         bool efb_peek_only = false;
         EfbPeekRequest* efb_peek_request = nullptr;
         std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
-        // In-frame pointer field: recorded when the parser reaches this
-        // offset of the chunk's FIFO (the scene boundary).
-        std::size_t pointer_depth_capture_fifo_offset = 0;
+        // In-frame pointer field: recorded before the chunk's records.
         bool pointer_depth_in_frame = false;
-        // Scene boundaries in this chunk's FIFO, in stream order (3D and 2D
-        // scenes of up to two frames).
-        std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> fifo_markers{};
+        // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
+        std::array<FifoMarker, kFifoMarkersPerChunk> fifo_markers{};
         // Per marker: how many shape records the game had made before it (their order at one offset).
         std::array<std::uint64_t, kFifoMarkersPerChunk> fifo_marker_serials{};
         std::uint8_t fifo_marker_count = 0;
@@ -432,14 +428,12 @@ private:
     bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
-    std::size_t producer_pointer_depth_capture_offset_ = 0;
-    std::array<std::pair<std::size_t, FifoMarker>, kFifoMarkersPerChunk> producer_fifo_markers_{};
+    std::array<FifoMarker, kFifoMarkersPerChunk> producer_fifo_markers_{};
     std::array<std::uint64_t, kFifoMarkersPerChunk> producer_fifo_marker_serials_{};
     // Shape records made so far (attach_shape_record): each record's and marker's place among them.
     std::uint64_t producer_shape_record_serial_ = 0;
     // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
     struct StreamSplit {
-        std::size_t offset;
         std::uint64_t serial;
         int marker;  // a FifoMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
         int view;    // the marker's index (its camera) or the record's, -1 none

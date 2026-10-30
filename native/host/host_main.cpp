@@ -1812,7 +1812,7 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
         galaxy::gx::FifoMarker::SceneBegin, galaxy::gx::FifoMarker::SceneEnd,
         galaxy::gx::FifoMarker::Scene2DBegin, galaxy::gx::FifoMarker::Scene2DEnd};
     if (marker < std::size(kMarkers)) {
-        galaxy::gx::attach_fifo_marker(kMarkers[marker], 0);
+        galaxy::gx::attach_fifo_marker(kMarkers[marker]);
     }
 #else
     (void)marker;
@@ -2027,7 +2027,6 @@ void attach_pending_records() {
             gShapePendingAny.store(false, std::memory_order_relaxed);
         }
         for (galaxy::gx::shapes::Record& record : pending) {
-            record.offset = 0;
             galaxy::gx::attach_shape_record(std::move(record));
         }
     }

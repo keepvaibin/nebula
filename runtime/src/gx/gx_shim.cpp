@@ -50,8 +50,8 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }
 
-void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept {
-    backend().attach_fifo_marker(marker, fifo_offset);
+void attach_fifo_marker(FifoMarker marker) noexcept {
+    backend().attach_fifo_marker(marker);
 }
 
 void attach_scene_view(const float view[12], const float* up, const char* stage) noexcept {

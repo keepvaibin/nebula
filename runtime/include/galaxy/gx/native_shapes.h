@@ -97,11 +97,10 @@ struct Immediate {
 // vertex 0, line strips as line lists, triangles, lines and points as they are.
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
-// Records of the game's stream, in the order it made them (gx_backend.h attach_shape_record).
+// The game's records, in the order it made them (gx_backend.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t { Array, Geometry, Draw, Material, State, Immediate, TextureImage, Readback, Marker };
-    std::size_t offset = 0;  // bytes into the submitted GX stream: it runs after every command before it
-    std::uint64_t serial = 0;  // its place among the records (and so among markers at the same offset)
+    std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
     std::uint64_t key = 0;   // the array's or the group's
     std::uint64_t position = 0, normal = 0, color = 0;  // a draw's arrays

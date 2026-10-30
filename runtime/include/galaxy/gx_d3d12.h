@@ -94,9 +94,8 @@ void render_frame(
 void wait_for_render_idle();
 
 
-// Simulation thread: the next render_frame submission handles `marker` when
-// its parser reaches `fifo_offset` bytes into the submitted FIFO.
-void attach_fifo_marker(FifoMarker marker, std::size_t fifo_offset) noexcept;
+// Simulation thread: the next render_frame submission handles `marker` after the records made before it.
+void attach_fifo_marker(FifoMarker marker) noexcept;
 // Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
 // world-to-eye matrix (row-major 3x4) for that scene, the player's up in the
 // world (null when unknown: the enhanced sky then takes the view's up), and
