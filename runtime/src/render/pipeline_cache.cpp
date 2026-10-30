@@ -85,19 +85,44 @@ std::FILE* shader_key_capture_file() {
     return file;
 }
 
-void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs_key) {
+// GALAXY_TEST_SHADER_SOURCE_CAPTURE=<file>, with the key capture: appends each captured key's generated HLSL ('V' or
+// 'P', the byte count as a uint32_t, the text), so two builds' generators compare over the same run.
+std::FILE* shader_source_capture_file() {
+    static std::FILE* const file = []() -> std::FILE* {
+        wchar_t path[1024]{};
+        std::size_t length = 0;
+        if (_wgetenv_s(&length, path, std::size(path), L"GALAXY_TEST_SHADER_SOURCE_CAPTURE") != 0 || length <= 1) {
+            return nullptr;
+        }
+        return _wfsopen(path, L"ab", _SH_DENYWR);
+    }();
+    return file;
+}
+
+void capture_shader_source(std::FILE* file, char kind, const std::string& source) {
+    const auto size = static_cast<std::uint32_t>(source.size());
+    std::fputc(kind, file);
+    std::fwrite(&size, sizeof(size), 1, file);
+    std::fwrite(source.data(), 1, source.size(), file);
+}
+
+void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs_key, const ShaderGenerator& generator) {
     static std::unordered_set<std::uint64_t> vs_seen;
     static std::unordered_set<std::uint64_t> ps_seen;
     std::FILE* const file = shader_key_capture_file();
+    std::FILE* const sources = shader_source_capture_file();
     if (vs_seen.insert(vs_key.hash()).second) {
         std::fputc('V', file);
         std::fwrite(&vs_key, sizeof(vs_key), 1, file);
+        if (sources != nullptr) capture_shader_source(sources, 'V', generator.generate_vs(vs_key));
     }
     if (ps_seen.insert(ps_key.hash()).second) {
         std::fputc('P', file);
         std::fwrite(&ps_key, sizeof(ps_key), 1, file);
+        if (sources != nullptr) capture_shader_source(sources, 'P', generator.generate_ps(ps_key));
     }
     std::fflush(file);
+    if (sources != nullptr) std::fflush(sources);
 }
 
 std::uint64_t elapsed_us(
@@ -762,6 +787,9 @@ ID3D12PipelineState* PipelineCache::get(
     }
     // Hashed once for the memo and both map probes (published_ and in_flight_).
     const MemoizedPsoKey memoized{key, requested_hash};
+    if (shader_key_capture_file() != nullptr) [[unlikely]] {
+        capture_shader_keys(ps_key, vs_key, generator_);
+    }
     {
         const auto it = published_.find(memoized);
         if (it != published_.end() && it->second) {
@@ -771,9 +799,6 @@ ID3D12PipelineState* PipelineCache::get(
             last_hit_owner_ = it->second;
             return it->second.Get();
         }
-    }
-    if (shader_key_capture_file() != nullptr) [[unlikely]] {
-        capture_shader_keys(ps_key, vs_key);
     }
     if (in_flight_.find(memoized) != in_flight_.end()) {
         // A worker that finished after begin_frame()'s drain left its pipeline on the completion
@@ -1179,7 +1204,7 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 65u;
+constexpr std::uint32_t kShaderCacheVersion = 66u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.

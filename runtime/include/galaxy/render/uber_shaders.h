@@ -56,13 +56,17 @@ inline constexpr unsigned kUberPsVariants = 9u;
 // The fields of PixelConstants that specialized shaders bake from the key and
 // never read: stage_config, ind_cmd, ind_misc and uber_ps_header.
 inline void apply_uber_ps_key(const PixelShaderKey& key, PixelConstants& out) noexcept {
-    static_assert(sizeof(key.stages) == sizeof(out.stage_config));
-    static_assert(sizeof(key.ind_cmd) == sizeof(out.ind_cmd));
-    std::memcpy(out.stage_config, key.stages, sizeof(out.stage_config));
-    std::memcpy(out.ind_cmd, key.ind_cmd, sizeof(out.ind_cmd));
-    out.ind_misc[0] = key.ind_ref;
-    out.ind_misc[1] = key.ind_scale[0];
-    out.ind_misc[2] = key.ind_scale[1];
+    for (unsigned s = 0; s < 16u; ++s) {
+        const KeyStage& stage = key.stages[s];
+        out.stage_config[s][0] = tev_color_bits(stage);
+        out.stage_config[s][1] = tev_alpha_bits(stage);
+        out.stage_config[s][2] = tev_order_bits(stage);
+        out.stage_config[s][3] = tev_select_bits(stage);
+        out.ind_cmd[s / 4u][s & 3u] = ind_command_bits(stage);
+    }
+    out.ind_misc[0] = ind_order_bits(key);
+    out.ind_misc[1] = ind_scale_bits(key, 0u);
+    out.ind_misc[2] = ind_scale_bits(key, 1u);
     out.ind_misc[3] = key.num_ind_stages;
     out.uber_ps_header[0] =
         static_cast<std::uint32_t>(key.num_tev_stages) |
@@ -87,12 +91,13 @@ inline void apply_uber_vs_key(const VertexShaderKey& key, VertexConstants& out) 
     out.uber_vs_header[1] = key.num_chans;
     out.uber_vs_header[2] = key.flags;
     out.uber_vs_header[3] = key.texmtx_idx_mask;
-    static_assert(sizeof(key.texgen) == sizeof(out.uber_texgen));
-    static_assert(sizeof(key.post_texgen) == sizeof(out.uber_post_texgen));
-    static_assert(sizeof(key.channel) == sizeof(out.uber_channel));
-    std::memcpy(out.uber_texgen, key.texgen, sizeof(out.uber_texgen));
-    std::memcpy(out.uber_post_texgen, key.post_texgen, sizeof(out.uber_post_texgen));
-    std::memcpy(out.uber_channel, key.channel, sizeof(out.uber_channel));
+    for (unsigned i = 0; i < 8u; ++i) {
+        out.uber_texgen[i] = texgen_bits(key.texgen[i]);
+        out.uber_post_texgen[i] = post_texgen_bits(key.texgen[i]);
+    }
+    for (unsigned c = 0; c < 4u; ++c) {
+        out.uber_channel[c] = channel_bits(key.channel[c]);
+    }
 }
 
 }  // namespace galaxy::render

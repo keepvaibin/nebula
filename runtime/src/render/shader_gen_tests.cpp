@@ -63,40 +63,36 @@ void check_compiles(
 // Raw XF channel-control word (gx_bitfields.h decode_xf_channel_ctrl):
 // matsource(0) | enable(1) | lightmask0_3(2-5) | ambsource(6) |
 // diffuse(7-8) | attn(9-10) | lightmask4_7(11-14).
-std::uint32_t chan_ctrl(
+galaxy::render::KeyChannel chan_ctrl(
     bool matsource_vtx,
     bool lighting,
     std::uint8_t light_mask,
     bool ambsource_vtx,
     unsigned diffuse,
     unsigned attn) {
-    return (matsource_vtx ? 1u : 0u) |
-           (lighting ? 2u : 0u) |
-           ((light_mask & 0xFu) << 2) |
-           (ambsource_vtx ? (1u << 6) : 0u) |
-           ((diffuse & 3u) << 7) |
-           ((attn & 3u) << 9) |
-           ((static_cast<std::uint32_t>(light_mask) >> 4) << 11);
+    galaxy::render::KeyChannel c{};
+    c.material_vertex = matsource_vtx ? 1u : 0u;
+    c.lighting = lighting ? 1u : 0u;
+    c.light_mask = light_mask;
+    c.ambient_vertex = ambsource_vtx ? 1u : 0u;
+    c.diffuse = static_cast<std::uint8_t>(diffuse & 3u);
+    c.attenuation = static_cast<std::uint8_t>(attn & 3u);
+    return c;
 }
 
-// Raw XF texgen word (decode_xf_texgen): stq(1) | abc1(2) | type(4-6) |
-// source_row(7-11) | emboss_source(12-14) | emboss_light(15-17).
-std::uint32_t texgen_word(
+galaxy::render::KeyTexGen key_texgen(
     bool stq,
     bool abc1,
     unsigned type,
     unsigned source_row,
     unsigned emboss_source = 0) {
-    return (stq ? 2u : 0u) |
-           (abc1 ? 4u : 0u) |
-           ((type & 7u) << 4) |
-           ((source_row & 0x1Fu) << 7) |
-           ((emboss_source & 7u) << 12);
-}
-
-// Raw XF post-texgen word: index(0-5) | normalize(8).
-std::uint32_t post_word(unsigned index, bool normalize) {
-    return (index & 0x3Fu) | (normalize ? (1u << 8) : 0u);
+    galaxy::render::KeyTexGen g{};
+    g.projection = stq ? 1u : 0u;
+    g.input_abc1 = abc1 ? 1u : 0u;
+    g.type = static_cast<std::uint8_t>(type & 7u);
+    g.source = static_cast<std::uint8_t>(source_row & 0x1Fu);
+    g.emboss_source = static_cast<std::uint8_t>(emboss_source & 7u);
+    return g;
 }
 
 void run_vs(const galaxy::render::VertexShaderKey& key, const char* label) {
@@ -135,21 +131,49 @@ void check_not_contains(
 }
 
 // One clamped lerp TEV stage writing PREV, textured from map/coord 0, ras chan 0.
-galaxy::render::TevStagePacked basic_stage() {
-    galaxy::render::TevStagePacked st{};
-    // color_env: a=TexColor(8) b=RasColor(10) c=Konst(14) d=CPrev(0),
-    // bias=0, op add, clamp, scale x1, dest PREV.
-    st.color_env = (0u) | (14u << 4) | (10u << 8) | (8u << 12) |
-                   (0u << 16) | (1u << 19);
-    // alpha_env: a=TexAlpha(4) b=RasAlpha(5) c=Konst(6) d=APrev(0).
-    st.alpha_env = (0u << 4) | (6u << 7) | (5u << 10) | (4u << 13) |
-                   (1u << 19);
-    // order: texmap 0, texcoord 0, tex enable, ras chan 0.
-    st.order = (1u << 6);
-    // ksel: kcsel=12 (K0 rgb), kasel=31 (K3 a); identity swizzles.
-    st.ksel = 12u | (31u << 5) |
-              (0u << 10) | (1u << 12) | (2u << 14) | (3u << 16) |
-              (0u << 18) | (1u << 20) | (2u << 22) | (3u << 24);
+galaxy::render::KeyStage basic_stage() {
+    galaxy::render::KeyStage st{};
+    // Colour: a = TexColor (8), b = RasColor (10), c = Konst (14), d = CPrev (0); add, clamp, x1, to PREV.
+    st.color_in[0] = 8u;
+    st.color_in[1] = 10u;
+    st.color_in[2] = 14u;
+    st.color_clamp = 1u;
+    // Alpha: a = TexAlpha (4), b = RasAlpha (5), c = Konst (6), d = APrev (0).
+    st.alpha_in[0] = 4u;
+    st.alpha_in[1] = 5u;
+    st.alpha_in[2] = 6u;
+    st.alpha_clamp = 1u;
+    st.tex_enable = 1u;
+    // Konst K0 rgb (12), K3 a (31); identity swizzles.
+    st.konst_color = 12u;
+    st.konst_alpha = 31u;
+    for (std::uint8_t c = 0; c < 4u; ++c) {
+        st.ras_swizzle[c] = st.tex_swizzle[c] = c;
+    }
+    return st;
+}
+
+// A stage from a game material's captured TEV words (colour and alpha operation, order: GX's field positions).
+galaxy::render::KeyStage stage_from_words(std::uint32_t color, std::uint32_t alpha, std::uint32_t order) {
+    galaxy::render::KeyStage st = basic_stage();
+    for (unsigned i = 0; i < 4u; ++i) {
+        st.color_in[3u - i] = static_cast<std::uint8_t>((color >> (4u * i)) & 0xFu);
+        st.alpha_in[3u - i] = static_cast<std::uint8_t>((alpha >> (4u + 3u * i)) & 0x7u);
+    }
+    st.color_bias = static_cast<std::uint8_t>((color >> 16u) & 3u);
+    st.color_sub = static_cast<std::uint8_t>((color >> 18u) & 1u);
+    st.color_clamp = static_cast<std::uint8_t>((color >> 19u) & 1u);
+    st.color_scale = static_cast<std::uint8_t>((color >> 20u) & 3u);
+    st.color_dest = static_cast<std::uint8_t>((color >> 22u) & 3u);
+    st.alpha_bias = static_cast<std::uint8_t>((alpha >> 16u) & 3u);
+    st.alpha_sub = static_cast<std::uint8_t>((alpha >> 18u) & 1u);
+    st.alpha_clamp = static_cast<std::uint8_t>((alpha >> 19u) & 1u);
+    st.alpha_scale = static_cast<std::uint8_t>((alpha >> 20u) & 3u);
+    st.alpha_dest = static_cast<std::uint8_t>((alpha >> 22u) & 3u);
+    st.tex_map = static_cast<std::uint8_t>(order & 7u);
+    st.tex_coord = static_cast<std::uint8_t>((order >> 3u) & 7u);
+    st.tex_enable = static_cast<std::uint8_t>((order >> 6u) & 1u);
+    st.channel = static_cast<std::uint8_t>((order >> 7u) & 7u);
     return st;
 }
 
@@ -193,14 +217,14 @@ void check_independent_pair_compilation() {
                 vk.flags = 7;
                 vk.texmtx_idx_mask = 0xFF;
                 for (unsigned i = 0; i < 8; ++i) {
-                    vk.texgen[i] = texgen_word(true, false, 0, 5 + i);
-                    vk.post_texgen[i] = post_word(3 * i, true);
+                    vk.texgen[i] = key_texgen(true, false, 0, 5 + i);
+                    vk.texgen[i].normalize = 1u;
                 }
                 vk.channel[0] = chan_ctrl(false, true, 0xFF, false, 2, 1);
                 pk.num_tev_stages = static_cast<std::uint8_t>(1 + 5 * profile);
                 for (unsigned i = 1; i < pk.num_tev_stages; ++i) {
                     pk.stages[i] = basic_stage();
-                    pk.stages[i].order |= i % 8;
+                    pk.stages[i].tex_map = static_cast<std::uint8_t>(i % 8);
                 }
                 pk.fog_type = 4;
             }
@@ -481,7 +505,7 @@ int main() {
         NativeDrawState state;
         state.gen.num_color_chans = 1u;
         const struct {
-            std::uint32_t control;
+            KeyChannel control;
             bool finite;
             const char* label;
         } cases[] = {
@@ -494,7 +518,7 @@ int main() {
             {chan_ctrl(true, false, 0x03, false, 2, 3), false, "finite_attn_key_unlit"},
         };
         for (const auto& c : cases) {
-            state.channel[0] = decode_xf_channel_ctrl(c.control);
+            state.channel[0] = channel_of(c.control);
             const bool finite = (build_vertex_shader_key(state, 0u).flags & kVsKeyFiniteLightAttn) != 0u;
             if (finite != c.finite) {
                 ++g_failures;
@@ -542,15 +566,15 @@ int main() {
         k.num_chans = 1;
         k.flags = 0x01 | 0x04;       // per-vertex posmtx + dual-tex
         k.texmtx_idx_mask = 0x01;    // gen 0 takes the per-vertex index
-        k.texgen[0] = texgen_word(false, false, 0, 5);   // ST from tex0
-        k.texgen[1] = texgen_word(true, true, 0, 0);     // STQ from geom
-        k.texgen[2] = texgen_word(false, false, 2, 2);   // color0
-        k.texgen[3] = texgen_word(true, false, 0, 1);    // STQ from normal
-        k.texgen[4] = texgen_word(false, false, 1, 5, 0); // emboss
-        k.texgen[5] = texgen_word(false, false, 0, 12);  // ST from tex7
-        k.post_texgen[0] = post_word(61, false);
-        k.post_texgen[1] = post_word(0, true);
-        k.post_texgen[3] = post_word(12, true);
+        k.texgen[0] = key_texgen(false, false, 0, 5);   // ST from tex0
+        k.texgen[1] = key_texgen(true, true, 0, 0);     // STQ from geom
+        k.texgen[2] = key_texgen(false, false, 2, 2);   // color0
+        k.texgen[3] = key_texgen(true, false, 0, 1);    // STQ from normal
+        k.texgen[4] = key_texgen(false, false, 1, 5, 0); // emboss
+        k.texgen[5] = key_texgen(false, false, 0, 12);  // ST from tex7
+        k.texgen[0].normalize = 0u;
+        k.texgen[1].normalize = 1u;
+        k.texgen[3].normalize = 1u;
         k.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);
         const ShaderGenerator gen;
         const std::string src = gen.generate_vs(k);
@@ -577,7 +601,7 @@ int main() {
         k.num_texgens = 8;
         k.num_chans = 1;
         for (unsigned i = 0; i < 8; ++i) {
-            k.texgen[i] = texgen_word((i & 1u) != 0u, false, 0, 5u + i);
+            k.texgen[i] = key_texgen((i & 1u) != 0u, false, 0, 5u + i);
         }
         k.channel[0] = chan_ctrl(false, false, 0, false, 0, 0);
         const ShaderGenerator gen;
@@ -709,8 +733,8 @@ int main() {
             std::memset(&k, 0, sizeof(k));
             k.num_chans = 1;
             k.num_texgens = 2;
-            k.texgen[0] = texgen_word(false, false, 0, 5);
-            k.texgen[1] = texgen_word(false, true, 0, 1);
+            k.texgen[0] = key_texgen(false, false, 0, 5);
+            k.texgen[1] = key_texgen(false, true, 0, 1);
             k.flags = kVsKeyEnhancedLighting;
             const bool lit = (variant & 1u) != 0u;
             if (lit) {
@@ -740,7 +764,7 @@ int main() {
             k.alpha_comp1 = 7;
             k.stages[0] = basic_stage();
             k.stages[1] = basic_stage();
-            k.stages[1].order = (1u << 3) | 1u | (1u << 6);
+            k.stages[1].tex_map = k.stages[1].tex_coord = 1u;
             const bool rt = variant >= 6u;
             k.reserved = static_cast<std::uint8_t>(kPsKeyEnhancedLighting | (rt ? kPsKeyRtPaths : 0u));
             const unsigned material = variant % 3u;
@@ -812,9 +836,9 @@ int main() {
             std::memset(&vs, 0, sizeof(vs));
             vs.num_chans = 1;
             vs.num_texgens = 2;
-            vs.texgen[0] = texgen_word(false, false, 0, 5);
-            vs.texgen[1] = texgen_word(false, true, 0, 1);
-            vs.channel[0] = 0x70Fu;  // actors: lights 0+1, clamp, spot, material from the vertex
+            vs.texgen[0] = key_texgen(false, false, 0, 5);
+            vs.texgen[1] = key_texgen(false, true, 0, 1);
+            vs.channel[0] = chan_ctrl(true, true, 0x3u, false, 2, 3);  // actors: lights 0+1, clamp, spot, material from the vertex
             PixelShaderKey ps{};
             std::memset(&ps, 0, sizeof(ps));
             ps.num_tev_stages = 1;
@@ -830,8 +854,8 @@ int main() {
             }
             ps.num_tev_stages = 2;
             ps.stages[1] = basic_stage();
-            ps.stages[1].order = (1u << 3) | 1u | (1u << 6);  // texture 1 through texgen 1 (normals)
-            vs.channel[0] = 0x1u;                              // baked vertex colour
+            ps.stages[1].tex_map = ps.stages[1].tex_coord = 1u;  // texture 1 through texgen 1 (normals)
+            vs.channel[0] = chan_ctrl(true, false, 0, false, 0, 0);  // baked vertex colour
             const std::uint32_t metal = enhanced_lighting_material(vs, ps);
             if (metal != (0x2u | kEnhancedReflective)) {
                 ++g_failures;
@@ -858,10 +882,7 @@ int main() {
         const std::uint32_t envs[3][3] = {
             {0x08F2A2u, 0x189A90u, 0x049u}, {0x08FA10u, 0x00FB70u, 0x000u}, {0x1848A0u, 0x001FF0u, 0x040u}};
         for (unsigned s = 0; s < 3u; ++s) {
-            actor.stages[s] = basic_stage();
-            actor.stages[s].color_env = envs[s][0];
-            actor.stages[s].alpha_env = envs[s][1];
-            actor.stages[s].order = envs[s][2];
+            actor.stages[s] = stage_from_words(envs[s][0], envs[s][1], envs[s][2]);
         }
         PixelShaderKey enhanced = actor;
         enhanced.reserved = kPsKeyEnhancedLighting;
@@ -919,10 +940,8 @@ int main() {
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
         k.stages[0] = basic_stage();
-        k.stages[0].color_env =
-            (k.stages[0].color_env & ~(3u << 22)) | (1u << 22);
-        k.stages[0].alpha_env =
-            (k.stages[0].alpha_env & ~(3u << 22)) | (2u << 22);
+        k.stages[0].color_dest = 1u;
+        k.stages[0].alpha_dest = 2u;
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src, "tev_prev_i.rgb = tev_c_i[0].rgb;",
@@ -942,16 +961,13 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_cmd[0][0] =
-            (0u) |        // indirect stage 0
-            (0u << 2) |   // ITF_8
-            (3u << 4) |   // bias ST
-            (1u << 7) |   // bump alpha from S
-            (1u << 9) |   // matrix 0
-            (1u << 13) |  // wrap S 256
-            (1u << 16);   // wrap T 256
-        TevStagePacked st = basic_stage();
-        st.order = (st.order & ~(7u << 7)) | (5u << 7);
+        KeyStage st = basic_stage();
+        st.channel = 5u;
+        st.ind_stage = 0u;   // indirect stage 0, ITF_8
+        st.ind_bias = 3u;    // bias S and T
+        st.ind_alpha = 1u;   // bump alpha from S
+        st.ind_matrix = 1u;  // matrix 0
+        st.ind_wrap_s = st.ind_wrap_t = 1u;  // wrap 256
         k.stages[0] = st;
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
@@ -984,12 +1000,10 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_scale[0] = 15u | (14u << 4);
-        k.ind_cmd[0][0] =
-            (0u) |        // indirect stage 0
-            (0u << 2) |   // ITF_8
-            (1u << 9);    // matrix 0, active
+        k.ind_order[0].scale_s = 15u;
+        k.ind_order[0].scale_t = 14u;
         k.stages[0] = basic_stage();
+        k.stages[0].ind_matrix = 1u;  // indirect stage 0, ITF_8, matrix 0: active
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src,
@@ -1007,15 +1021,11 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_cmd[0][0] = (0u) | (1u << 7);  // bump alpha from S
-        k.ind_cmd[0][1] = k.ind_cmd[0][0];
-        k.ind_cmd[0][2] = k.ind_cmd[0][0];
-        k.stages[0] = basic_stage();
-        k.stages[0].order = (k.stages[0].order & ~(7u << 7)) | (5u << 7);
-        k.stages[1] = basic_stage();
-        k.stages[1].order = (k.stages[1].order & ~(7u << 7)) | (6u << 7);
-        k.stages[2] = basic_stage();
-        k.stages[2].order = (k.stages[2].order & ~(7u << 7)) | (7u << 7);
+        for (unsigned i = 0; i < 3u; ++i) {
+            k.stages[i] = basic_stage();
+            k.stages[i].channel = static_cast<std::uint8_t>(5u + i);
+            k.stages[i].ind_alpha = 1u;  // bump alpha from S
+        }
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src,
@@ -1038,15 +1048,11 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_cmd[0][0] =
-            (0u) |        // indirect stage 0
-            (0u << 2) |   // ITF_8
-            (3u << 4) |   // bias ST
-            (1u << 9) |   // matrix 0
-            (2u << 13) |  // wrap S 128
-            (2u << 16);   // wrap T 128
         k.stages[0] = basic_stage();
-        k.stages[0].order &= ~(1u << 6);  // texture disabled
+        k.stages[0].tex_enable = 0u;  // texture disabled
+        k.stages[0].ind_bias = 3u;    // indirect stage 0, ITF_8, bias S and T
+        k.stages[0].ind_matrix = 1u;  // matrix 0
+        k.stages[0].ind_wrap_s = k.stages[0].ind_wrap_t = 2u;  // wrap 128
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src, "wrappedcoord.x = stage_tevcoord.x &",
@@ -1071,17 +1077,16 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_cmd[0][0] =
-            (0u) |        // indirect stage 0
-            (0u << 2) |   // ITF_8
-            (3u << 4) |   // bias ST
-            (1u << 9) |   // matrix 0
-            (1u << 13) |  // wrap S 256
-            (1u << 16);   // wrap T 256
-        k.ind_cmd[0][1] = k.ind_cmd[0][0] | (1u << 20);  // add previous
         k.stages[0] = basic_stage();
-        k.stages[0].order &= ~(1u << 6);  // texture disabled
+        k.stages[0].tex_enable = 0u;  // texture disabled
+        k.stages[0].ind_bias = 3u;    // indirect stage 0, ITF_8, bias S and T
+        k.stages[0].ind_matrix = 1u;  // matrix 0
+        k.stages[0].ind_wrap_s = k.stages[0].ind_wrap_t = 1u;  // wrap 256
         k.stages[1] = basic_stage();
+        k.stages[1].ind_bias = 3u;
+        k.stages[1].ind_matrix = 1u;
+        k.stages[1].ind_wrap_s = k.stages[1].ind_wrap_t = 1u;
+        k.stages[1].ind_prev = 1u;  // add previous
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src, "tevcoord_i = wrappedcoord + indtevtrans",
@@ -1101,13 +1106,10 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        k.ind_ref = (7u << 3);  // indirect stage 0 uses invalid texcoord 7.
-        k.ind_cmd[0][0] =
-            (0u) |        // indirect stage 0
-            (0u << 2) |   // ITF_8
-            (1u << 9);    // matrix 0
+        k.ind_order[0].coord = 7u;  // indirect stage 0 uses invalid texcoord 7.
         k.stages[0] = basic_stage();
-        k.stages[0].order = (k.stages[0].order & ~(7u << 3)) | (7u << 3);
+        k.stages[0].tex_coord = 7u;
+        k.stages[0].ind_matrix = 1u;  // indirect stage 0, ITF_8, matrix 0
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src, "float3 ind_tq = pin.uv[0];",
@@ -1133,7 +1135,10 @@ int main() {
         check_contains(src, "int(round(saturate(konst[3].a) * 255.0))",
                        "ps_konst_alpha_k3_a");
 
-        k.stages[0].ksel = 0u | (7u << 5);
+        k.stages[0].konst_color = 0u;
+        k.stages[0].konst_alpha = 7u;
+        std::memset(k.stages[0].ras_swizzle, 0, sizeof(k.stages[0].ras_swizzle));
+        std::memset(k.stages[0].tex_swizzle, 0, sizeof(k.stages[0].tex_swizzle));
         const std::string fixed_src = gen.generate_ps(k);
         check_contains(fixed_src, "konst_i = int4(int3(255,255,255), 32);",
                        "ps_konst_color_fixed_one");
@@ -1150,7 +1155,7 @@ int main() {
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
         k.stages[0] = basic_stage();
-        k.stages[0].color_env = (0u) | (14u << 4) | (15u << 8) | (15u << 12) | (1u << 19);  // a = b = Zero
+        k.stages[0].color_in[0] = k.stages[0].color_in[1] = 15u;  // a = b = Zero
         const ShaderGenerator plain;
         const std::string plain_src = plain.generate_ps(k);
         check_contains(plain_src, "int3 ai = int3(int3(0,0,0)) & int3(255,255,255);", "ps_default_vector_mask");
@@ -1321,7 +1326,7 @@ int main() {
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
         k.stages[0] = basic_stage();
-        k.stages[0].order &= ~(1u << 6);
+        k.stages[0].tex_enable = 0u;
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(
@@ -1338,7 +1343,7 @@ int main() {
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
         k.stages[0] = basic_stage();
-        k.stages[0].order &= ~(1u << 6);
+        k.stages[0].tex_enable = 0u;
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(
@@ -1358,14 +1363,11 @@ int main() {
             k.num_chans = 1;
             k.alpha_comp0 = 7;
             k.alpha_comp1 = 7;
-            TevStagePacked st = basic_stage();
-            // bias=Compare(3), op bit = eq, scale field = compare kind.
-            st.color_env = (st.color_env & ~((3u << 16) | (1u << 18) |
-                                             (3u << 20))) |
-                           (3u << 16) | (eq << 18) | (kind << 20);
-            st.alpha_env = (st.alpha_env & ~((3u << 16) | (1u << 18) |
-                                             (3u << 20))) |
-                           (3u << 16) | (eq << 18) | (kind << 20);
+            KeyStage st = basic_stage();
+            // bias = Compare (3), op bit = eq, scale field = compare kind.
+            st.color_bias = st.alpha_bias = 3u;
+            st.color_sub = st.alpha_sub = static_cast<std::uint8_t>(eq);
+            st.color_scale = st.alpha_scale = static_cast<std::uint8_t>(kind);
             k.stages[0] = st;
             char label[64];
             std::snprintf(label, sizeof(label),
@@ -1381,14 +1383,15 @@ int main() {
         k.num_chans = 2;
         k.alpha_comp0 = 7;
         k.alpha_comp1 = 7;
-        TevStagePacked st = basic_stage();
+        KeyStage st = basic_stage();
         // ras swizzle = .gggb, tex swizzle = .rrra (colorize-intensity use).
-        st.ksel = (st.ksel & 0x3FFu) |
-                  (1u << 10) | (1u << 12) | (1u << 14) | (2u << 16) |
-                  (0u << 18) | (0u << 20) | (0u << 22) | (3u << 24);
+        const std::uint8_t ras[4] = {1u, 1u, 1u, 2u};
+        const std::uint8_t tex[4] = {0u, 0u, 0u, 3u};
+        std::memcpy(st.ras_swizzle, ras, sizeof(ras));
+        std::memcpy(st.tex_swizzle, tex, sizeof(tex));
         k.stages[0] = st;
-        TevStagePacked st1 = basic_stage();
-        st1.order |= 1u << 7;  // ras chan 1
+        KeyStage st1 = basic_stage();
+        st1.channel = 1u;  // ras chan 1
         k.stages[1] = st1;
         run_ps(k, "ps_swap_tables");
     }
@@ -1580,8 +1583,9 @@ int main() {
         k.num_ind_stages = 1;
         k.alpha_comp0 = k.alpha_comp1 = 7;
         k.stages[0] = k.stages[1] = basic_stage();
-        k.stages[0].order = 0u; // disabled regular predecessor still has coords
-        k.ind_cmd[0][1] = 1u << 20u;
+        k.stages[0].tex_map = k.stages[0].tex_coord = k.stages[0].tex_enable = k.stages[0].channel = 0u;
+        // disabled regular predecessor still has coords
+        k.stages[1].ind_prev = 1u;
         const ShaderGenerator gen;
         const auto src = gen.generate_ps(k);
         const auto stage1 = src.find("// ---- TEV stage 1 ----");
@@ -1592,7 +1596,10 @@ int main() {
         check_compiles(src, "ps_5_1", "ps_regular_predecessor_addprev");
         for (unsigned width = 0; width < 3; ++width) {
             k.num_tev_stages = 1;
-            k.stages[0].alpha_env = (3u << 16u) | (width << 20u);
+            std::memset(k.stages[0].alpha_in, 0, sizeof(k.stages[0].alpha_in));
+            k.stages[0].alpha_bias = 3u;
+            k.stages[0].alpha_sub = k.stages[0].alpha_clamp = k.stages[0].alpha_dest = 0u;
+            k.stages[0].alpha_scale = static_cast<std::uint8_t>(width);
             const auto compare_src = gen.generate_ps(k);
             check_contains(compare_src, "int3 ca_i = alpha_compare_a_0;",
                            "ps_alpha_compare_uses_stage_entry_color");

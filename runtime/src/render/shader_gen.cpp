@@ -125,48 +125,17 @@ static const char* tev_dest_name(unsigned dest) {
 
 // Swap-table swizzle. `codes` packs four 2-bit channel selects (r=0, g=1, b=2,
 // a=3) for r, g, b, a in ascending bit pairs. Returns ".rgba"-style, or "" for identity.
-static std::string swap_suffix(std::uint32_t codes) {
+static std::string swap_suffix(const std::uint8_t (&swizzle)[4]) {
     static const char kCh[4] = {'r', 'g', 'b', 'a'};
-    const unsigned c0 = (codes >> 0) & 3u;
-    const unsigned c1 = (codes >> 2) & 3u;
-    const unsigned c2 = (codes >> 4) & 3u;
-    const unsigned c3 = (codes >> 6) & 3u;
+    const unsigned c0 = swizzle[0] & 3u;
+    const unsigned c1 = swizzle[1] & 3u;
+    const unsigned c2 = swizzle[2] & 3u;
+    const unsigned c3 = swizzle[3] & 3u;
     if (c0 == 0u && c1 == 1u && c2 == 2u && c3 == 3u) {
         return std::string();
     }
     char buf[6] = {'.', kCh[c0], kCh[c1], kCh[c2], kCh[c3]};
     return std::string(buf, 5);
-}
-
-static std::uint32_t indirect_cmd(
-    const PixelShaderKey& key,
-    unsigned tev_stage) {
-    return key.ind_cmd[tev_stage / 4u][tev_stage & 3u];
-}
-
-static bool indirect_cmd_active(std::uint32_t cmd) {
-    return cmd != 0u;
-}
-
-static unsigned indirect_order_texmap(
-    const PixelShaderKey& key,
-    unsigned ind_stage) {
-    return (key.ind_ref >> (ind_stage * 6u)) & 0x7u;
-}
-
-static unsigned indirect_order_texcoord(
-    const PixelShaderKey& key,
-    unsigned ind_stage) {
-    return (key.ind_ref >> (ind_stage * 6u + 3u)) & 0x7u;
-}
-
-static unsigned indirect_scale_shift(
-    const PixelShaderKey& key,
-    unsigned ind_stage,
-    bool t_coord) {
-    const std::uint32_t raw = key.ind_scale[ind_stage / 2u];
-    const unsigned pair_shift = (ind_stage & 1u) ? 8u : 0u;
-    return (raw >> (pair_shift + (t_coord ? 4u : 0u))) & 0xFu;
 }
 
 static unsigned indirect_wrap_mask(std::uint32_t wrap) {
@@ -1614,14 +1583,13 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     // beyond num_chans).
     bool lighting_used = false;
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
-        if (decode_xf_channel_ctrl(key.channel[ch]).lighting_enable ||
-            decode_xf_channel_ctrl(key.channel[2 + ch]).lighting_enable) {
+        if (key.channel[ch].lighting != 0u || key.channel[2 + ch].lighting != 0u) {
             lighting_used = true;
         }
     }
     bool emboss_used = false;
     for (unsigned i = 0; i < key.num_texgens && i < kMaxTexGens; ++i) {
-        if (decode_xf_texgen(key.texgen[i]).type == TexGenType::EmbossMap) {
+        if (static_cast<TexGenType>(key.texgen[i].type) == TexGenType::EmbossMap) {
             emboss_used = true;
         }
     }
@@ -1785,8 +1753,8 @@ float xfw(uint w) {
             emit(s, "    %s = %s;\n", out, vtx);
             continue;
         }
-        const XfChannelCtrl cc = decode_xf_channel_ctrl(key.channel[ch]);
-        const XfChannelCtrl ca = decode_xf_channel_ctrl(key.channel[2 + ch]);
+        const XfChannelCtrl cc = channel_of(key.channel[ch]);
+        const XfChannelCtrl ca = channel_of(key.channel[2 + ch]);
 
         emit(s, "    {  // channel %u (matsrc=%u light=%u amask=0x%02X)\n",
              ch,
@@ -1860,7 +1828,7 @@ float xfw(uint w) {
     emit(s, "    // %u active texgen(s)\n", ntg);
 
     for (unsigned i = 0; i < ntg && i < kMaxTexGens; ++i) {
-        const XfTexGen tg = decode_xf_texgen(key.texgen[i]);
+        const XfTexGen tg = texgen_of(key.texgen[i]);
 
         emit(s, "    {  // texgen[%u]: type=%u src=%u stq=%u abc1=%u\n",
              i,
@@ -1980,9 +1948,7 @@ float xfw(uint w) {
             // 5. Post-transform (dual-tex) matrix: XF 0x500 region =
             //    palette elements 0x140+n; optional pre-normalize.
             if (dual_tex) {
-                const XfPostTexGen pt =
-                    decode_xf_post_texgen(key.post_texgen[i]);
-                if (pt.normalize) {
+                if (key.texgen[i].normalize != 0u) {
                     // Guarded: normalize(0) is NaN, and a degenerate texgen
                     // input (zero normal/position) must not poison the UV.
                     s << "        res = (dot(res, res) > 0.0)"
@@ -2317,14 +2283,13 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         emit(s, "    // %u indirect texture stage(s)\n",
              key.num_ind_stages);
         for (unsigned ind = 0; ind < key.num_ind_stages && ind < 4u; ++ind) {
-            const unsigned texmap = indirect_order_texmap(key, ind);
-            const unsigned texcoord_raw = indirect_order_texcoord(key, ind);
+            const KeyIndirectOrder& order = key.ind_order[ind];
+            const unsigned texmap = order.map;
+            const unsigned texcoord_raw = order.coord;
             const unsigned texcoord =
                 texcoord_raw < key.num_texgens ? texcoord_raw : 0u;
-            const unsigned scale_s =
-                indirect_scale_shift(key, ind, false);
-            const unsigned scale_t =
-                indirect_scale_shift(key, ind, true);
+            const unsigned scale_s = order.scale_s;
+            const unsigned scale_t = order.scale_t;
             if (key.num_texgens != 0u) {
                 emit(s,
                     "    {\n"
@@ -2364,66 +2329,63 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     emit(s, "    // %u TEV stage(s)\n", n_stages);
 
     for (unsigned st = 0; st < n_stages; ++st) {
-        const TevStagePacked& packed = key.stages[st];
+        const KeyStage& stage = key.stages[st];
 
-        // Decode the packed fields back to individual enums for code generation.
-        const auto color_d = static_cast<TevColorArg>((packed.color_env      ) & 0xFu);
-        const auto color_c = static_cast<TevColorArg>((packed.color_env >>  4) & 0xFu);
-        const auto color_b = static_cast<TevColorArg>((packed.color_env >>  8) & 0xFu);
-        const auto color_a = static_cast<TevColorArg>((packed.color_env >> 12) & 0xFu);
-        const auto color_bias  = static_cast<TevBias> ((packed.color_env >> 16) & 0x3u);
-        const bool color_sub   = ((packed.color_env >> 18) & 1u) != 0u;
-        const bool color_clamp = ((packed.color_env >> 19) & 1u) != 0u;
-        const auto color_scale = static_cast<TevScale>((packed.color_env >> 20) & 0x3u);
-        const unsigned color_dest = (packed.color_env >> 22) & 0x3u;
+        const auto color_a = static_cast<TevColorArg>(stage.color_in[0]);
+        const auto color_b = static_cast<TevColorArg>(stage.color_in[1]);
+        const auto color_c = static_cast<TevColorArg>(stage.color_in[2]);
+        const auto color_d = static_cast<TevColorArg>(stage.color_in[3]);
+        const auto color_bias  = static_cast<TevBias>(stage.color_bias);
+        const bool color_sub   = stage.color_sub != 0u;
+        const bool color_clamp = stage.color_clamp != 0u;
+        const auto color_scale = static_cast<TevScale>(stage.color_scale);
+        const unsigned color_dest = stage.color_dest;
 
-        const auto alpha_d = static_cast<TevAlphaArg>((packed.alpha_env >>  4) & 0x7u);
-        const auto alpha_c = static_cast<TevAlphaArg>((packed.alpha_env >>  7) & 0x7u);
-        const auto alpha_b = static_cast<TevAlphaArg>((packed.alpha_env >> 10) & 0x7u);
-        const auto alpha_a = static_cast<TevAlphaArg>((packed.alpha_env >> 13) & 0x7u);
-        const auto alpha_bias  = static_cast<TevBias> ((packed.alpha_env >> 16) & 0x3u);
-        const bool alpha_sub   = ((packed.alpha_env >> 18) & 1u) != 0u;
-        const bool alpha_clamp = ((packed.alpha_env >> 19) & 1u) != 0u;
-        const auto alpha_scale = static_cast<TevScale>((packed.alpha_env >> 20) & 0x3u);
-        const unsigned alpha_dest = (packed.alpha_env >> 22) & 0x3u;
+        const auto alpha_a = static_cast<TevAlphaArg>(stage.alpha_in[0]);
+        const auto alpha_b = static_cast<TevAlphaArg>(stage.alpha_in[1]);
+        const auto alpha_c = static_cast<TevAlphaArg>(stage.alpha_in[2]);
+        const auto alpha_d = static_cast<TevAlphaArg>(stage.alpha_in[3]);
+        const auto alpha_bias  = static_cast<TevBias>(stage.alpha_bias);
+        const bool alpha_sub   = stage.alpha_sub != 0u;
+        const bool alpha_clamp = stage.alpha_clamp != 0u;
+        const auto alpha_scale = static_cast<TevScale>(stage.alpha_scale);
+        const unsigned alpha_dest = stage.alpha_dest;
 
-        const unsigned texmap    = (packed.order     ) & 0x7u;
-        const unsigned texcoord_raw = (packed.order >> 3) & 0x7u;
+        const unsigned texmap    = stage.tex_map;
+        const unsigned texcoord_raw = stage.tex_coord;
         const unsigned texcoord =
             (key.num_texgens != 0u && texcoord_raw < key.num_texgens)
                 ? texcoord_raw
                 : 0u;
-        const bool     tex_en    = ((packed.order >> 6) & 1u) != 0u;
-        const unsigned ras_chan  = (packed.order >> 7) & 0x7u;
+        const bool     tex_en    = stage.tex_enable != 0u;
+        const unsigned ras_chan  = stage.channel;
 
-        const std::uint8_t kcsel = static_cast<std::uint8_t>((packed.ksel     ) & 0x1Fu);
-        const std::uint8_t kasel = static_cast<std::uint8_t>((packed.ksel >> 5) & 0x1Fu);
-        // Resolved swap-table swizzles baked by build_pixel_shader_key
-        // (ras bits 10-17, tex bits 18-25; 2 bits per channel r/g/b/a).
-        const std::string ras_swz = swap_suffix((packed.ksel >> 10) & 0xFFu);
-        const std::string tex_swz = swap_suffix((packed.ksel >> 18) & 0xFFu);
+        const std::uint8_t kcsel = stage.konst_color;
+        const std::uint8_t kasel = stage.konst_alpha;
+        // The swap tables' swizzles, resolved by build_pixel_shader_key.
+        const std::string ras_swz = swap_suffix(stage.ras_swizzle);
+        const std::string tex_swz = swap_suffix(stage.tex_swizzle);
 
         emit(s, "\n    // ---- TEV stage %u ----\n", st);
-        const std::uint32_t ind_raw = indirect_cmd(key, st);
         const bool has_indirect_cmd =
-            key.num_ind_stages != 0u && indirect_cmd_active(ind_raw);
-        const unsigned ind_bt = ind_raw & 0x3u;
-        const unsigned ind_fmt = (ind_raw >> 2u) & 0x3u;
-        const unsigned ind_bias = (ind_raw >> 4u) & 0x7u;
-        const unsigned ind_bs = (ind_raw >> 7u) & 0x3u;
-        const unsigned ind_mtx = (ind_raw >> 9u) & 0x3u;
-        const unsigned ind_mtx_id = (ind_raw >> 11u) & 0x3u;
-        const unsigned ind_wrap_s = (ind_raw >> 13u) & 0x7u;
-        const unsigned ind_wrap_t = (ind_raw >> 16u) & 0x7u;
-        const bool ind_add_prev = ((ind_raw >> 20u) & 1u) != 0u;
+            key.num_ind_stages != 0u && indirect_active(stage);
+        const unsigned ind_bt = stage.ind_stage;
+        const unsigned ind_fmt = stage.ind_format;
+        const unsigned ind_bias = stage.ind_bias;
+        const unsigned ind_bs = stage.ind_alpha;
+        const unsigned ind_mtx = stage.ind_matrix & 0x3u;
+        const unsigned ind_mtx_id = stage.ind_matrix >> 2u;
+        const unsigned ind_wrap_s = stage.ind_wrap_s;
+        const unsigned ind_wrap_t = stage.ind_wrap_t;
+        const bool ind_add_prev = stage.ind_prev != 0u;
         const bool has_indirect_sample =
             has_indirect_cmd && ind_bt < key.num_ind_stages && ind_bt < 4u;
         bool later_indirect_addprev = false;
         for (unsigned future = st + 1u; future < n_stages; ++future) {
-            const std::uint32_t future_ind_raw = indirect_cmd(key, future);
+            const KeyStage& later = key.stages[future];
             if (key.num_ind_stages != 0u &&
-                indirect_cmd_active(future_ind_raw) &&
-                ((future_ind_raw >> 20u) & 1u) != 0u) {
+                indirect_active(later) &&
+                later.ind_prev != 0u) {
                 later_indirect_addprev = true;
                 break;
             }
@@ -2886,9 +2848,9 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
     // Materials that end on REG0-2 (notably multi-pass highlight/indirect
     // effects) otherwise render as stale PREV.
     if (n_stages != 0u) {
-        const TevStagePacked& last = key.stages[n_stages - 1u];
-        const unsigned last_color_dest = (last.color_env >> 22) & 0x3u;
-        const unsigned last_alpha_dest = (last.alpha_env >> 22) & 0x3u;
+        const KeyStage& last = key.stages[n_stages - 1u];
+        const unsigned last_color_dest = last.color_dest;
+        const unsigned last_alpha_dest = last.alpha_dest;
         if (last_color_dest != 0u) {
             emit(s, "    tev_prev_i.rgb = %s.rgb;\n",
                  tev_dest_name(last_color_dest));

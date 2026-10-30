@@ -2262,9 +2262,9 @@ bool RenderCore::rt_late_draw() const noexcept {
 
 unsigned RenderCore::rt_texgen_of_map(unsigned map) const noexcept {
     for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-        const std::uint32_t order = ps_key_.stages[s].order;   // texmap 0-2, texcoord 3-5, enable 6
-        if ((order & (1u << 6u)) != 0u && (order & 7u) == map) {
-            const unsigned coord = (order >> 3u) & 7u;
+        const KeyStage& stage = ps_key_.stages[s];
+        if (stage.tex_enable != 0u && stage.tex_map == map) {
+            const unsigned coord = stage.tex_coord;
             return coord < vs_key_.num_texgens ? coord : 0xFFu;
         }
     }
@@ -2280,11 +2280,11 @@ void RenderCore::begin_rt_sky_batch(RtDrawInfo& info) {
     info.material = rgba_word(draw_state_.material_color[0]);
     // The first TEV stage's texture (as the hits' material texture).
     for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-        const std::uint32_t order = ps_key_.stages[s].order;
-        if ((order & (1u << 6u)) == 0u) {
+        const KeyStage& stage = ps_key_.stages[s];
+        if (stage.tex_enable == 0u) {
             continue;
         }
-        const unsigned map = order & 7u;
+        const unsigned map = stage.tex_map;
         if (current_texture_table_.ptr != 0u && (current_texture_map_mask_ & (1u << map)) != 0u) {
             info.texture = rt_texture_source(map);
             info.texgen = rt_texgen_of_map(map);
@@ -2350,15 +2350,15 @@ void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float 
     tev.header = stages | (texgens << 28u);
     const auto scales = coordinate_scales(draw_state_, scales_from_textures_);
     for (unsigned s = 0; s < stages; ++s) {
-        const TevStagePacked& packed = ps_key_.stages[s];
+        const KeyStage& typed = ps_key_.stages[s];
         RtTevStage& stage = stages_out[s];
-        stage.color_env = packed.color_env;
-        stage.alpha_env = packed.alpha_env;
-        stage.order = packed.order;
-        stage.ksel = packed.ksel;
+        stage.color_env = tev_color_bits(typed);
+        stage.alpha_env = tev_alpha_bits(typed);
+        stage.order = tev_order_bits(typed);
+        stage.ksel = tev_select_bits(typed);
         // The raster's coordinate scale: the texture coordinate's GX scale over its map's size.
-        const unsigned map = packed.order & 7u;
-        const unsigned coord = (packed.order >> 3u) & 7u;
+        const unsigned map = typed.tex_map;
+        const unsigned coord = typed.tex_coord;
         const TexImage image = draw_state_.texture[map].image;
         stage.scale_s = static_cast<float>(scales[coord][0]) / static_cast<float>(std::max<unsigned>(image.width, 1u));
         stage.scale_t = static_cast<float>(scales[coord][1]) / static_cast<float>(std::max<unsigned>(image.height, 1u));
@@ -2367,15 +2367,15 @@ void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float 
         // Its indirect command (the raster's: active with indirect stages and a nonzero command), and whether the
         // program has indirect stages at all (rt_tev.hlsli carries the coordinates from stage to stage then).
         if (ps_key_.num_ind_stages != 0u) {
-            stage.pad[1] |= ((ps_key_.ind_cmd[s / 4u][s & 3u] & 0x1FFFFFu) << 8u) | (1u << 31u);
+            stage.pad[1] |= (ind_command_bits(typed) << 8u) | (1u << 31u);
         }
         // A texture whose coordinates the vertex normals generate: an environment map, the game's painted reflection
         // (pad[0] 1; header bit 7: the draw has one). Under physical light the traced reflection takes its place;
         // GALAXY_RT_PAINTED_REFLECTION=1 keeps them.
         static const bool painted = read_env_u64("GALAXY_RT_PAINTED_REFLECTION", 0u) != 0u;
         stage.pad[0] = 0u;
-        if (!painted && ((packed.order >> 6u) & 1u) != 0u && coord < texgens) {
-            const XfTexGen texgen = decode_xf_texgen(vs_key_.texgen[coord]);
+        if (!painted && typed.tex_enable != 0u && coord < texgens) {
+            const XfTexGen texgen = texgen_of(vs_key_.texgen[coord]);
             if (texgen.type == TexGenType::Regular && texgen.source_row == 1u) {
                 stage.pad[0] = 1u;
                 tev.header |= 1u << 7u;
@@ -2806,11 +2806,11 @@ void RenderCore::fill_rt_tev(RtDrawInfo& info, float facing) {
     unsigned slot0 = info.texgen < texgens ? info.texgen : 0xFFu;
     unsigned slot1 = 0xFFu;
     for (unsigned s = 0; s < stages; ++s) {
-        const std::uint32_t order = ps_key_.stages[s].order;
-        if ((order & (1u << 6u)) == 0u || texgens == 0u) {
+        const KeyStage& stage = ps_key_.stages[s];
+        if (stage.tex_enable == 0u || texgens == 0u) {
             continue;
         }
-        const unsigned coord = ((order >> 3u) & 7u) < texgens ? (order >> 3u) & 7u : 0u;
+        const unsigned coord = stage.tex_coord < texgens ? stage.tex_coord : 0u;
         if (slot0 == 0xFFu) {
             slot0 = coord;
         } else if (coord != slot0 && slot1 == 0xFFu) {
@@ -2823,15 +2823,15 @@ void RenderCore::fill_rt_tev(RtDrawInfo& info, float facing) {
     const unsigned ind_stages = std::min<unsigned>(ps_key_.num_ind_stages, 4u);
     if (ind_stages != 0u) {
         RtTevIndirect& ind = info.tev_indirect;
-        ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
+        ind.order = ind_order_bits(ps_key_) | (ind_stages << 24u);
         const auto coord_size = [this](unsigned coord, unsigned axis) {
             return coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis];
         };
         for (unsigned i = 0; i < ind_stages; ++i) {
-            const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
-            const unsigned coord_raw = (ps_key_.ind_ref >> (6u * i + 3u)) & 7u;
+            const unsigned map = ps_key_.ind_order[i].map;
+            const unsigned coord_raw = ps_key_.ind_order[i].coord;
             const unsigned coord = coord_raw < texgens ? coord_raw : 0u;
-            const std::uint32_t shifts = ps_key_.ind_scale[i / 2u] >> ((i & 1u) != 0u ? 8u : 0u);
+            const std::uint32_t shifts = ps_key_.ind_order[i].scale_s | (ps_key_.ind_order[i].scale_t << 4u);
             const TexImage image = draw_state_.texture[map].image;
             ind.scale[i * 2u] = static_cast<float>(coord_size(coord, 0u)) /
                                 (std::ldexp(1.0f, static_cast<int>(shifts & 0xFu)) *
@@ -3262,13 +3262,13 @@ void RenderCore::note_rt_material() {
     note.indirect = ps_key_.num_ind_stages;
     note.channel = channel_word(draw_state_.channel[0]);
     const unsigned stage = surface.env_stage < 16u ? surface.env_stage : 0u;
-    note.combiner = surface.env_stage < 16u ? ps_key_.stages[stage].color_env & 0xFFFFFFu : 0u;
+    note.combiner = surface.env_stage < 16u ? tev_color_bits(ps_key_.stages[stage]) : 0u;
     const BlendMode blend = draw_blend();
     note.blend = !blend.blend_enable ? 0u
                  : blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha ? 1u
                  : blend.dst_factor == BlendFactor::One ? 2u
                                                          : 3u;
-    const unsigned map = ps_key_.stages[stage].order & 7u;
+    const unsigned map = ps_key_.stages[stage].tex_map;
     const TexImage& image = draw_state_.texture[map].image;
     note.texture = image.address;
     note.texture_size = static_cast<std::uint32_t>(image.width) | static_cast<std::uint32_t>(image.height) << 16u;
@@ -3596,7 +3596,7 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     const bool glow = translucent && !lens && !clear_added && !clear_blended && !metal_coat && !traced && !ocean &&
                       (rt_glow_draw() || rt_sprite_light_draw());
     if (glow && current_rt_material_ == 0u) {
-        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].order & 7u].image.address);
+        note_rt_unnamed_glow(draw_state_.texture[ps_key_.stages[0].tex_map].image.address);
     }
     bool water =
         translucent && !lens && !glow && (clear_added || clear_blended || metal_coat || traced || rt_water_draw() || ocean);
@@ -3688,7 +3688,7 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.light_key = rt_light_key();
     // (An untextured draw's map register holds an earlier draw's texture: not logged.)
     if (current_rt_material_ == 0u && !glow && current_texture_map_mask_ != 0u && rt_log_glows()) {
-        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].order & 7u].image.address);
+        note_rt_unnamed_surface(draw_state_.texture[ps_key_.stages[0].tex_map].image.address);
     }
     // High quality's textured hits: the material texture (the scene keeps its own view of it).
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
@@ -3710,9 +3710,9 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     info.shading = {ps_key_.num_tev_stages | (static_cast<std::uint32_t>(vs_key_.num_texgens) << 8u) |
                         (static_cast<std::uint32_t>(ps_key_.num_ind_stages) << 16u) |
                         (static_cast<std::uint32_t>(surface.features) << 24u),
-                    (surface.env_stage < 16u ? ps_key_.stages[surface.env_stage].color_env & 0xFFFFFFu : 0u) |
+                    (surface.env_stage < 16u ? tev_color_bits(ps_key_.stages[surface.env_stage]) : 0u) |
                         (static_cast<std::uint32_t>(surface.env_stage) << 24u),
-                    vs_key_.channel[0], vs_key_.channel[1]};
+                    channel_bits(vs_key_.channel[0]), channel_bits(vs_key_.channel[1])};
     info.channel = channel_word(draw_state_.channel[0]);
     info.ambient = rgba_word(draw_state_.ambient_color[0]);
     info.material = rgba_word(draw_state_.material_color[0]);
@@ -3769,7 +3769,7 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 } else if (test.comp1 == CompareFunc::Greater || test.comp1 == CompareFunc::GEqual) {
                     from = test.ref1 + (test.comp1 == CompareFunc::Greater ? 1u : 0u);
                 }
-                const unsigned map = ps_key_.stages[0].order & 7u;
+                const unsigned map = ps_key_.stages[0].tex_map;
                 if (from != 0u && from <= 255u && current_texture_table_.ptr != 0u && map < kMaxTextureMaps) {
                     info.alpha = rt_texture_source(map);
                     info.alpha_from = info.alpha.resource != nullptr ? from : 0u;
@@ -3777,15 +3777,15 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 if (log_outcome) [[unlikely]] {
                     static std::unordered_set<std::uint32_t> logged_alpha;
                     if (logged_alpha.insert(current_rt_material_).second) {
-                        const std::uint32_t order = ps_key_.stages[0].order;
+                        const KeyStage& stage0 = ps_key_.stages[0];
                         std::fprintf(stderr,
                                      "[rt-alpha] material=%u card=%d comp0=%u ref0=%u comp1=%u ref1=%u logic=%u from=%u "
                                      "map=%u coord=%u enable=%d mask=%02X texgens=%u stages=%u alpha-map=%d rt-map=%u\n",
                                      static_cast<unsigned>(current_rt_material_), rt_card_draw() ? 1 : 0,
                                      static_cast<unsigned>(test.comp0), static_cast<unsigned>(test.ref0),
                                      static_cast<unsigned>(test.comp1), static_cast<unsigned>(test.ref1),
-                                     static_cast<unsigned>(test.logic), from, map, (order >> 3u) & 7u,
-                                     (order >> 6u) & 1u, static_cast<unsigned>(current_texture_map_mask_),
+                                     static_cast<unsigned>(test.logic), from, map,
+                                     static_cast<unsigned>(stage0.tex_coord), static_cast<int>(stage0.tex_enable), static_cast<unsigned>(current_texture_map_mask_),
                                      static_cast<unsigned>(vs_key_.num_texgens),
                                      static_cast<unsigned>(ps_key_.num_tev_stages), info.alpha.resource != nullptr ? 1 : 0,
                                      current_rt_map_);
@@ -3832,17 +3832,19 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         current_texture_table_.ptr != 0u) {
         const unsigned texgens = vs_key_.num_texgens;
         for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
-            const std::uint32_t cmd = ps_key_.ind_cmd[s / 4u][s & 3u];
-            const unsigned ind_stage = cmd & 3u;
-            const unsigned matrix = (cmd >> 9u) & 3u;
-            if (cmd == 0u || ind_stage >= ps_key_.num_ind_stages || matrix == 0u || ((cmd >> 11u) & 3u) != 0u) {
+            const KeyStage& typed = ps_key_.stages[s];
+            const unsigned ind_stage = typed.ind_stage;
+            const unsigned matrix = typed.ind_matrix & 3u;
+            if (!indirect_active(typed) || ind_stage >= ps_key_.num_ind_stages || matrix == 0u ||
+                (typed.ind_matrix >> 2u) != 0u) {
                 continue;
             }
-            const unsigned wave_map = (ps_key_.ind_ref >> (ind_stage * 6u)) & 7u;
-            const unsigned wave_coord_raw = (ps_key_.ind_ref >> (ind_stage * 6u + 3u)) & 7u;
+            const KeyIndirectOrder& wave_order = ps_key_.ind_order[ind_stage];
+            const unsigned wave_map = wave_order.map;
+            const unsigned wave_coord_raw = wave_order.coord;
             const unsigned wave_coord = wave_coord_raw < texgens ? wave_coord_raw : 0u;
-            const unsigned main_map = ps_key_.stages[s].order & 7u;
-            const unsigned main_coord_raw = (ps_key_.stages[s].order >> 3u) & 7u;
+            const unsigned main_map = typed.tex_map;
+            const unsigned main_coord_raw = typed.tex_coord;
             const unsigned main_coord = main_coord_raw < texgens ? main_coord_raw : 0u;
             if ((current_texture_map_mask_ & (1u << wave_map)) == 0u) {
                 break;
@@ -3850,7 +3852,6 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             const auto coord_size = [&](unsigned coord, unsigned axis) {
                 return static_cast<float>(coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis]);
             };
-            const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
             const TexImage wave_image = draw_state_.texture[wave_map].image;
             const TexImage main_image = draw_state_.texture[main_map].image;
             const auto& mt = draw_state_.ind_matrix[(matrix - 1u) % 3u];
@@ -3865,11 +3866,11 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
             if (info.wave.resource == nullptr) {
                 break;
             }
-            const std::uint32_t flags = 1u | (((cmd >> 4u) & 7u) << 1u) | (((cmd >> 2u) & 3u) << 4u);
+            const std::uint32_t flags = 1u | (std::uint32_t{typed.ind_bias} << 1u) | (std::uint32_t{typed.ind_format} << 4u);
             info.wave_params = {std::bit_cast<float>(flags),
-                                coord_size(wave_coord, 0u) / static_cast<float>(1u << (scale_word & 0xFu)) /
+                                coord_size(wave_coord, 0u) / static_cast<float>(1u << wave_order.scale_s) /
                                     static_cast<float>(std::max<unsigned>(wave_image.width, 1u)),
-                                coord_size(wave_coord, 1u) / static_cast<float>(1u << ((scale_word >> 4u) & 0xFu)) /
+                                coord_size(wave_coord, 1u) / static_cast<float>(1u << wave_order.scale_t) /
                                     static_cast<float>(std::max<unsigned>(wave_image.height, 1u)),
                                 m[0] / norm,
                                 m[1] / norm,

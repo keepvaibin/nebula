@@ -27,7 +27,7 @@ inline constexpr unsigned kMaxColorChannels = 2;
 
 // Pixel-stage constants (root CBV b1).
 struct alignas(256) PixelConstants {
-    // TevStagePacked words, read only by the uber pixel shader.
+    // Typed stages as words (tev_color_bits and the rest, shader_keys.h), read only by the uber pixel shader.
     std::uint32_t stage_config[kMaxTevStages][4];
     // TEV color registers PREV, REG0-2 as signed values divided by 255.
     float tev_regs[4][4];

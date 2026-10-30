@@ -2540,13 +2540,20 @@ PixelCase gx_pixel_fixture() {
     input.shader.num_chans = 1u;
     input.shader.alpha_comp0 = input.shader.alpha_comp1 = 7u;
     input.shader.flags = 1u; // Late testing unless a case explicitly selects early.
-    input.shader.stages[0].color_env = 10u | (15u << 4u) | (15u << 8u) |
-        (15u << 12u) | (1u << 19u); // D = raster, A/B/C = zero.
-    input.shader.stages[0].alpha_env = (5u << 4u) | (7u << 7u) |
-        (7u << 10u) | (7u << 13u) | (1u << 19u);
-    input.shader.stages[0].order = 1u << 6u;
-    input.shader.stages[0].ksel = (1u << 12u) | (2u << 14u) | (3u << 16u) |
-        (1u << 21u) | (2u << 23u) | (3u << 25u);
+    auto& stage = input.shader.stages[0];
+    // D = raster, A/B/C = zero, clamped.
+    stage.color_in[0] = stage.color_in[1] = stage.color_in[2] = 15u;
+    stage.color_in[3] = 10u;
+    stage.color_clamp = 1u;
+    stage.alpha_in[0] = stage.alpha_in[1] = stage.alpha_in[2] = 7u;
+    stage.alpha_in[3] = 5u;
+    stage.alpha_clamp = 1u;
+    stage.tex_enable = 1u;
+    // Identity raster swizzle; a texel swizzle (r, b, r, a) that the depth cases do not read.
+    const std::uint8_t ras[4] = {0u, 1u, 2u, 3u};
+    const std::uint8_t tex[4] = {0u, 2u, 0u, 3u};
+    std::memcpy(stage.ras_swizzle, ras, sizeof(ras));
+    std::memcpy(stage.tex_swizzle, tex, sizeof(tex));
     input.state.primitive_topology = 3u;
     input.state.blend_bits = (1u << 25u) | (1u << 26u);
     input.state.zmode_bits = 31u; // Enable, ALWAYS, update.
@@ -2563,13 +2570,10 @@ bool test_uniform_dither_readbacks() {
             for (bool fog : {false, true}) {
                 auto input = gx_pixel_fixture();
                 input.texture = {2u, 65u, 126u, 120u};
-                input.shader.stages[0].color_env =
-                    (input.shader.stages[0].color_env & ~15u) | 8u; // D = texture.
-                input.shader.stages[0].alpha_env =
-                    (input.shader.stages[0].alpha_env & ~(7u << 4u)) | (4u << 4u);
+                input.shader.stages[0].color_in[3] = 8u; // D = texture.
+                input.shader.stages[0].alpha_in[3] = 4u;
                 // Identity texture swap (RGBA), which this colour oracle needs and the depth fixture does not set.
-                input.shader.stages[0].ksel =
-                    (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) | (0xe4u << 18u);
+                for (std::uint8_t c = 0; c < 4u; ++c) input.shader.stages[0].tex_swizzle[c] = c;
                 input.state.pixfmt = 1u;
                 input.shader.output_flags = 1u | 8u;
                 input.shader.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
@@ -2647,12 +2651,13 @@ bool test_gx_pixel_readbacks() {
                 input = gx_pixel_fixture();
                 input.shader.flags = static_cast<std::uint8_t>(1u | 2u | (2u << 3u) | (format << 5u));
                 // A reversed TEV texture swap, which the Z texture must ignore.
-                input.shader.stages[0].ksel = (input.shader.stages[0].ksel & ((1u << 18u) - 1u)) |
-                    (3u << 19u) | (2u << 21u) | (1u << 23u);
+                const std::uint8_t reversed[4] = {2u, 1u, 3u, 0u};
+                std::memcpy(input.shader.stages[0].tex_swizzle, reversed, sizeof(reversed));
                 if (disabled_tail) {
                     input.shader.num_tev_stages = 2u;
                     input.shader.stages[1] = input.shader.stages[0];
-                    input.shader.stages[1].order = 0u;
+                    auto& tail = input.shader.stages[1];
+                    tail.tex_map = tail.tex_coord = tail.tex_enable = tail.channel = 0u;
                 }
                 const auto output = harness.run_gx(input);
                 const float expected = 1.0f - static_cast<float>(depths[format]) / 16777216.0f;

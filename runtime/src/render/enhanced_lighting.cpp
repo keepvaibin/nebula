@@ -93,22 +93,22 @@ std::uint32_t enhanced_lighting_material(const VertexShaderKey& vs, const PixelS
     const unsigned stages = std::min<unsigned>(ps.num_tev_stages, 16u);
     const unsigned texgens = std::min<unsigned>(vs.num_texgens, 8u);
     for (unsigned s = 0; s < stages; ++s) {
-        const TevStagePacked& stage = ps.stages[s];
-        const unsigned coord = (stage.order >> 3u) & 7u;
-        if (((stage.order >> 6u) & 1u) == 0u || coord >= texgens) continue;
+        const KeyStage& stage = ps.stages[s];
+        const unsigned coord = stage.tex_coord;
+        if (stage.tex_enable == 0u || coord >= texgens) continue;
         bool reads = false;
-        for (unsigned shift = 0; shift < 16u; shift += 4u) {
-            const auto input = static_cast<TevColorArg>((stage.color_env >> shift) & 0xFu);
+        for (const std::uint8_t in : stage.color_in) {
+            const auto input = static_cast<TevColorArg>(in);
             reads |= input == TevColorArg::TexColor || input == TevColorArg::TexAlpha;
         }
-        const XfTexGen texgen = decode_xf_texgen(vs.texgen[coord]);
+        const XfTexGen texgen = texgen_of(vs.texgen[coord]);
         if (reads && texgen.type == TexGenType::Regular && texgen.source_row == 1u) {
             env |= 1u << coord;
         }
     }
     // Colour channel 0 lit with a diffuse light function: its light mask, functions and colour sources.
     std::uint32_t material = env;
-    const XfChannelCtrl colour = decode_xf_channel_ctrl(vs.channel[0]);
+    const XfChannelCtrl colour = channel_of(vs.channel[0]);
     if ((surface.features & kRtSurfaceUnlit) == 0u && vs.num_chans != 0u && colour.lighting_enable &&
         colour.light_mask != 0u && colour.atten_func != 1u) {
         material |= kEnhancedLit | (static_cast<std::uint32_t>(colour.light_mask) << kEnhancedLightShift) |

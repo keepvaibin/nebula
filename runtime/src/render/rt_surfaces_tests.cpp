@@ -19,21 +19,35 @@ bool expect(bool condition, const char* message) {
 }
 
 // XF texgen: regular type, `row` the source (0 position, 1 normal, 5 + n texcoord n).
-constexpr std::uint32_t texgen(std::uint32_t row) { return row << 7u; }
+galaxy::render::KeyTexGen texgen(std::uint8_t row) {
+    galaxy::render::KeyTexGen g{};
+    g.source = row;
+    return g;
+}
 // XF channel control: lighting with light 0, `attenuation` 1 specular, 3 spot.
-constexpr std::uint32_t lit_channel(std::uint32_t attenuation) {
-    return (1u << 1u) | (1u << 2u) | (2u << 7u) | (attenuation << 9u);
+// Lit by light 0, clamped diffuse, with the given attenuation function.
+constexpr galaxy::render::KeyChannel lit_channel(std::uint8_t attenuation) {
+    return galaxy::render::KeyChannel{0u, 1u, 1u, 0u, 2u, attenuation, {}};
 }
 // Baked vertex colour: material from the vertex, no lighting.
-constexpr std::uint32_t kVertexColour = 1u;
+constexpr galaxy::render::KeyChannel kVertexColour{1u, 0u, 0u, 0u, 0u, 0u, {}};
 // TEV colour combiner d + lerp(a, b, c) from TevColorArg values.
-constexpr std::uint32_t combiner(std::uint32_t a, std::uint32_t b, std::uint32_t c, std::uint32_t d) {
-    return d | (c << 4u) | (b << 8u) | (a << 12u);
+struct Combiner {
+    std::uint8_t a, b, c, d;
+};
+constexpr Combiner combiner(std::uint8_t a, std::uint8_t b, std::uint8_t c, std::uint8_t d) { return {a, b, c, d}; }
+void set_combiner(galaxy::render::KeyStage& stage, Combiner in) {
+    stage.color_in[0] = in.a;
+    stage.color_in[1] = in.b;
+    stage.color_in[2] = in.c;
+    stage.color_in[3] = in.d;
 }
-constexpr std::uint32_t order(std::uint32_t texcoord, bool texture, std::uint32_t ras) {
-    return (texcoord << 3u) | (texture ? 1u << 6u : 0u) | (ras << 7u);
+void set_order(galaxy::render::KeyStage& stage, std::uint8_t texcoord, bool texture, std::uint8_t ras) {
+    stage.tex_coord = texcoord;
+    stage.tex_enable = texture ? 1u : 0u;
+    stage.channel = ras;
 }
-constexpr std::uint32_t kCPrev = 0u, kC0 = 2u, kTexC = 8u, kRasC = 10u, kOne = 12u, kKonst = 14u, kZero = 15u;
+constexpr std::uint8_t kCPrev = 0u, kC0 = 2u, kTexC = 8u, kRasC = 10u, kOne = 12u, kKonst = 14u, kZero = 15u;
 
 struct Keys {
     VertexShaderKey vs{};
@@ -49,18 +63,18 @@ Keys base() {
     k.vs.channel[0] = lit_channel(3u);
     k.vs.channel[2] = lit_channel(3u);
     k.ps.num_tev_stages = 1u;
-    k.ps.stages[0].order = order(0u, true, 0u);
-    k.ps.stages[0].color_env = combiner(kZero, kTexC, kRasC, kZero);
+    set_order(k.ps.stages[0], 0u, true, 0u);
+    set_combiner(k.ps.stages[0], combiner(kZero, kTexC, kRasC, kZero));
     return k;
 }
 
 // Stage 1 looks up texture 1 through texgen 1 from normals with `combine`.
-Keys environment(std::uint32_t combine) {
+Keys environment(Combiner combine) {
     Keys k = base();
     k.vs.texgen[1] = texgen(1u);
     k.ps.num_tev_stages = 2u;
-    k.ps.stages[1].order = order(1u, true, 0u);
-    k.ps.stages[1].color_env = combine;
+    set_order(k.ps.stages[1], 1u, true, 0u);
+    set_combiner(k.ps.stages[1], combine);
     return k;
 }
 
@@ -111,8 +125,8 @@ int main() {
         Keys k = base();
         k.vs.channel[1] = lit_channel(1u);
         k.ps.num_tev_stages = 2u;
-        k.ps.stages[1].order = order(0u, false, 1u);
-        k.ps.stages[1].color_env = combiner(kZero, kZero, kZero, kRasC);
+        set_order(k.ps.stages[1], 0u, false, 1u);
+        set_combiner(k.ps.stages[1], combiner(kZero, kZero, kZero, kRasC));
         const auto s = classify_rt_surface(k.vs, k.ps);
         passed &= expect(s.surface_class == RtSurfaceClass::Glossy &&
                              (s.features & galaxy::render::kRtSurfaceSpecular) != 0u,
@@ -137,7 +151,7 @@ int main() {
     }
     {
         Keys k = base();
-        k.ps.stages[0].color_env = combiner(kZero, kZero, kZero, kOne);
+        set_combiner(k.ps.stages[0], combiner(kZero, kZero, kZero, kOne));
         const auto s = classify_rt_surface(k.vs, k.ps);
         passed &= expect(s.surface_class == RtSurfaceClass::Unlit, "constant colour is unlit");
     }
@@ -145,7 +159,7 @@ int main() {
         // Water: an environment map distorted by an indirect stage.
         Keys k = environment(combiner(kZero, kTexC, kCPrev, kZero));
         k.ps.num_ind_stages = 1u;
-        k.ps.ind_cmd[0][1] = 1u << 9u;
+        k.ps.stages[1].ind_matrix = 1u;
         const auto s = classify_rt_surface(k.vs, k.ps);
         passed &= expect(s.surface_class == RtSurfaceClass::Water &&
                              (s.features & galaxy::render::kRtSurfaceIndirect) != 0u,

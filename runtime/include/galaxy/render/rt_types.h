@@ -84,7 +84,7 @@ inline constexpr std::uint32_t kRtTexGen2Shift = 28u;
 // each), colour 0 and colour 1 (3 x RGBA8 each).
 inline constexpr std::uint32_t kRtTriUvStride = 72u;
 
-// A draw's TEV program for ray hits (rt_tev.hlsli): its stages as the uber pixel shader reads them (TevStagePacked)
+// A draw's TEV program for ray hits (rt_tev.hlsli): its stages as the uber pixel shader reads them (tev_color_bits and the rest, shader_keys.h)
 // with each stage's coordinate scale (the texture coordinate's GX scale over its map's size), and one record. A stage's
 // pad[0]: 1 on an environment map's stage; pad[1]: its map's addressing (GX wrap s | wrap t << 2).
 inline constexpr unsigned kRtTevMaxStages = 16u;

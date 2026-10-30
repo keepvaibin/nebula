@@ -21,9 +21,8 @@ constexpr unsigned kRasColor = static_cast<unsigned>(TevColorArg::RasColor);
 constexpr unsigned kRasAlpha = static_cast<unsigned>(TevColorArg::RasAlpha);
 constexpr unsigned kZero = static_cast<unsigned>(TevColorArg::Zero);
 
-bool lit(std::uint32_t channel) {
-    const XfChannelCtrl ctrl = decode_xf_channel_ctrl(channel);
-    return ctrl.lighting_enable && ctrl.light_mask != 0u;
+bool lit(const KeyChannel& channel) {
+    return channel.lighting != 0u && channel.light_mask != 0u;
 }
 
 bool texture_input(unsigned input) {
@@ -39,20 +38,20 @@ RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& p
     const unsigned stages = std::min<unsigned>(ps.num_tev_stages, 16u);
     const unsigned texgens = std::min<unsigned>(vs.num_texgens, 8u);
     for (unsigned s = 0; s < stages; ++s) {
-        const TevStagePacked& stage = ps.stages[s];
+        const KeyStage& stage = ps.stages[s];
         // Colour combiner: d + lerp(a, b, c).
-        const unsigned d = stage.color_env & 0xFu;
-        const unsigned c = (stage.color_env >> 4u) & 0xFu;
-        const unsigned b = (stage.color_env >> 8u) & 0xFu;
-        const unsigned a = (stage.color_env >> 12u) & 0xFu;
+        const unsigned a = stage.color_in[0];
+        const unsigned b = stage.color_in[1];
+        const unsigned c = stage.color_in[2];
+        const unsigned d = stage.color_in[3];
         const unsigned inputs[4] = {d, c, b, a};
         const auto reads = [&](unsigned x) {
             return std::find(std::begin(inputs), std::end(inputs), x) != std::end(inputs);
         };
-        const bool texture = ((stage.order >> 6u) & 1u) != 0u && (reads(kTexColor) || reads(kTexAlpha));
-        const unsigned coord = (stage.order >> 3u) & 7u;
+        const bool texture = stage.tex_enable != 0u && (reads(kTexColor) || reads(kTexAlpha));
+        const unsigned coord = stage.tex_coord;
         if (texture && coord < texgens) {
-            const XfTexGen texgen = decode_xf_texgen(vs.texgen[coord]);
+            const XfTexGen texgen = texgen_of(vs.texgen[coord]);
             if (texgen.type == TexGenType::Regular && texgen.source_row == 1u) {
                 // Added: d is the lookup, or d is another colour plus the lookup times a factor.
                 const bool added = texture_input(d) ||
@@ -65,7 +64,7 @@ RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& p
                 features |= kRtSurfaceProjected;
             }
         }
-        const unsigned ras = (stage.order >> 7u) & 7u;
+        const unsigned ras = stage.channel;
         if (ras < 2u && ras < vs.num_chans) {
             const bool reads_colour = reads(kRasColor);
             const bool reads_alpha = reads(kRasAlpha);
@@ -74,12 +73,12 @@ RtSurface classify_rt_surface(const VertexShaderKey& vs, const PixelShaderKey& p
             }
             for (const unsigned channel : {ras, 2u + ras}) {
                 if ((channel == ras ? reads_colour : reads_alpha) && lit(vs.channel[channel]) &&
-                    decode_xf_channel_ctrl(vs.channel[channel]).atten_func == 1u) {
+                    vs.channel[channel].attenuation == 1u) {
                     features |= kRtSurfaceSpecular;
                 }
             }
         }
-        if (ps.num_ind_stages != 0u && ps.ind_cmd[s / 4u][s & 3u] != 0u) {
+        if (ps.num_ind_stages != 0u && indirect_active(stage)) {
             features |= kRtSurfaceIndirect;
         }
     }

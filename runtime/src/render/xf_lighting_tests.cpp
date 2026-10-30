@@ -364,8 +364,19 @@ VertexShaderKey key_for(const Case& c, bool finite) {
     std::memset(&key, 0, sizeof(key));
     key.num_chans = 1u;
     key.flags = static_cast<std::uint8_t>(0x02u | (finite ? kVsKeyFiniteLightAttn : 0u));
-    key.channel[0] = c.color_ctrl;
-    key.channel[2] = c.alpha_ctrl;
+    const auto typed = [](std::uint32_t control) {
+        const XfChannelCtrl ctrl = decode_xf_channel_ctrl(control);
+        KeyChannel channel{};
+        channel.material_vertex = ctrl.material_from_vertex ? 1u : 0u;
+        channel.lighting = ctrl.lighting_enable ? 1u : 0u;
+        channel.light_mask = ctrl.light_mask;
+        channel.ambient_vertex = ctrl.ambient_from_vertex ? 1u : 0u;
+        channel.diffuse = ctrl.diffuse_func;
+        channel.attenuation = ctrl.atten_func;
+        return channel;
+    };
+    key.channel[0] = typed(c.color_ctrl);
+    key.channel[2] = typed(c.alpha_ctrl);
     return key;
 }
 

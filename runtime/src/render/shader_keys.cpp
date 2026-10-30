@@ -95,129 +95,105 @@ PixelShaderKey build_pixel_shader_key(
     key.efb_scale_minus_one = static_cast<std::uint8_t>(
         (key.output_flags & 0x08u) != 0u ? 0xffu : 0u);
 
-    std::uint8_t num_ind_stages =
-        static_cast<std::uint8_t>(std::min<std::uint8_t>(
-            gm.num_ind_stages,
-            4u));
+    const auto indirect = [](const IndirectStage& ind) {
+        return (ind.stage | ind.format | ind.bias | ind.alpha | ind.matrix | ind.wrap_s | ind.wrap_t |
+                static_cast<unsigned>(ind.lod) | static_cast<unsigned>(ind.prev)) != 0u;
+    };
+    unsigned num_ind_stages = std::min<unsigned>(gm.num_ind_stages, 4u);
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
-        const std::uint32_t cmd = ind_cmd_word(state.ind[s]);
-        if (cmd != 0u) {
-            num_ind_stages = static_cast<std::uint8_t>(
-                std::max<unsigned>(num_ind_stages, (cmd & 0x3u) + 1u));
+        if (indirect(state.ind[s])) {
+            num_ind_stages = std::max<unsigned>(num_ind_stages, (state.ind[s].stage & 0x3u) + 1u);
         }
     }
-    key.num_ind_stages =
-        static_cast<std::uint8_t>(std::min<unsigned>(num_ind_stages, 4u));
-    if (key.num_ind_stages != 0u) {
-        for (unsigned s = 0; s < key.num_tev_stages; ++s) {
-            key.ind_cmd[s / 4u][s & 3u] = ind_cmd_word(state.ind[s]);
-        }
-        key.ind_ref = ind_ref_word(state) &
-            ((std::uint32_t{1} << (6u * key.num_ind_stages)) - 1u);
-        for (unsigned pair = 0; pair < 2u; ++pair) {
-            const unsigned first_stage = pair * 2u;
-            const unsigned active = key.num_ind_stages > first_stage
-                ? std::min<unsigned>(key.num_ind_stages - first_stage, 2u) : 0u;
-            const auto mask = active == 0u ? 0u
-                : (std::uint32_t{1} << (8u * active)) - 1u;
-            key.ind_scale[pair] = ind_scale_word(state, pair) & mask;
-        }
+    key.num_ind_stages = static_cast<std::uint8_t>(std::min<unsigned>(num_ind_stages, 4u));
+    for (unsigned i = 0; i < key.num_ind_stages; ++i) {
+        const auto& order = state.ind_order[i];
+        key.ind_order[i] = KeyIndirectOrder{static_cast<std::uint8_t>(order.map & 0x7u),
+            static_cast<std::uint8_t>(order.coord & 0x7u), static_cast<std::uint8_t>(order.scale_s & 0xFu),
+            static_cast<std::uint8_t>(order.scale_t & 0xFu)};
     }
 
     for (unsigned s = 0; s < key.num_tev_stages; ++s) {
         const TevStageConfig& cfg = state.tev[s];
-
-        // color_env word, rebuilt from the decoded fields in the BP 0xC0+2*s bit layout.
-        const std::uint32_t color_env =
-            (static_cast<std::uint32_t>(cfg.color_d)             & 0xFu)        |
-            ((static_cast<std::uint32_t>(cfg.color_c)            & 0xFu) << 4u) |
-            ((static_cast<std::uint32_t>(cfg.color_b)            & 0xFu) << 8u) |
-            ((static_cast<std::uint32_t>(cfg.color_a)            & 0xFu) << 12u)|
-            ((static_cast<std::uint32_t>(cfg.color_bias)         & 0x3u) << 16u)|
-            (cfg.color_sub ? (1u << 18u) : 0u)                                  |
-            (cfg.color_clamp ? (1u << 19u) : 0u)                                |
-            ((static_cast<std::uint32_t>(cfg.color_scale)        & 0x3u) << 20u)|
-            ((static_cast<std::uint32_t>(cfg.color_dest)         & 0x3u) << 22u);
-
-        // Swap selectors are stored as resolved swizzles in ksel, so their raw low four bits do not
-        // distinguish shader code.
-        const std::uint32_t alpha_env =
-            ((static_cast<std::uint32_t>(cfg.alpha_d)            & 0x7u) << 4u) |
-            ((static_cast<std::uint32_t>(cfg.alpha_c)            & 0x7u) << 7u) |
-            ((static_cast<std::uint32_t>(cfg.alpha_b)            & 0x7u) << 10u)|
-            ((static_cast<std::uint32_t>(cfg.alpha_a)            & 0x7u) << 13u)|
-            ((static_cast<std::uint32_t>(cfg.alpha_bias)         & 0x3u) << 16u)|
-            (cfg.alpha_sub ? (1u << 18u) : 0u)                                  |
-            (cfg.alpha_clamp ? (1u << 19u) : 0u)                                |
-            ((static_cast<std::uint32_t>(cfg.alpha_scale)        & 0x3u) << 20u)|
-            ((static_cast<std::uint32_t>(cfg.alpha_dest)         & 0x3u) << 22u);
-
-        // order word: TevOrder low 12 bits, repacked.
-        //   texmap(2:0), texcoord(5:3), tex_enable(6), ras_channel(9:7)
-        const std::uint32_t order =
-            (static_cast<std::uint32_t>(cfg.order.texmap)        & 0x7u)        |
-            ((static_cast<std::uint32_t>(cfg.order.texcoord)     & 0x7u) << 3u) |
-            (cfg.order.tex_enable ? (1u << 6u) : 0u)                            |
-            ((static_cast<std::uint32_t>(cfg.order.ras_channel)  & 0x7u) << 7u);
-
-        // ksel word: kcsel(4:0) | kasel(9:5) | resolved swap swizzles (red, green, blue, alpha two bits
-        // each: the rasterized colour's at 10, the texture's at 18). ras_swap and tex_swap select the
-        // tables; as in Dolphin's PixelShaderGen, the key holds the resolved swizzles, not the tables.
-        const std::uint8_t* ras = state.swap[cfg.ras_swap & 3u];
-        const std::uint8_t* tex = state.swap[cfg.tex_swap & 3u];
-        std::uint32_t ksel =
-            (static_cast<std::uint32_t>(cfg.kcsel) & 0x1Fu) |
-            ((static_cast<std::uint32_t>(cfg.kasel) & 0x1Fu) << 5u) |
-            (static_cast<std::uint32_t>(ras[0]) << 10u) |
-            (static_cast<std::uint32_t>(ras[1]) << 12u) |
-            (static_cast<std::uint32_t>(ras[2]) << 14u) |
-            (static_cast<std::uint32_t>(ras[3]) << 16u) |
-            (static_cast<std::uint32_t>(tex[0]) << 18u) |
-            (static_cast<std::uint32_t>(tex[1]) << 20u) |
-            (static_cast<std::uint32_t>(tex[2]) << 22u) |
-            (static_cast<std::uint32_t>(tex[3]) << 24u);
+        KeyStage& stage = key.stages[s];
+        const auto u8 = [](auto value, unsigned mask) {
+            return static_cast<std::uint8_t>(static_cast<unsigned>(value) & mask);
+        };
+        stage.color_in[0] = u8(cfg.color_a, 0xFu);
+        stage.color_in[1] = u8(cfg.color_b, 0xFu);
+        stage.color_in[2] = u8(cfg.color_c, 0xFu);
+        stage.color_in[3] = u8(cfg.color_d, 0xFu);
+        stage.color_bias = u8(cfg.color_bias, 0x3u);
+        stage.color_sub = u8(cfg.color_sub, 0x1u);
+        stage.color_clamp = u8(cfg.color_clamp, 0x1u);
+        stage.color_scale = u8(cfg.color_scale, 0x3u);
+        stage.color_dest = u8(cfg.color_dest, 0x3u);
+        stage.alpha_in[0] = u8(cfg.alpha_a, 0x7u);
+        stage.alpha_in[1] = u8(cfg.alpha_b, 0x7u);
+        stage.alpha_in[2] = u8(cfg.alpha_c, 0x7u);
+        stage.alpha_in[3] = u8(cfg.alpha_d, 0x7u);
+        stage.alpha_bias = u8(cfg.alpha_bias, 0x3u);
+        stage.alpha_sub = u8(cfg.alpha_sub, 0x1u);
+        stage.alpha_clamp = u8(cfg.alpha_clamp, 0x1u);
+        stage.alpha_scale = u8(cfg.alpha_scale, 0x3u);
+        stage.alpha_dest = u8(cfg.alpha_dest, 0x3u);
+        stage.tex_map = u8(cfg.order.texmap, 0x7u);
+        stage.tex_coord = u8(cfg.order.texcoord, 0x7u);
+        stage.tex_enable = u8(cfg.order.tex_enable, 0x1u);
+        stage.channel = u8(cfg.order.ras_channel, 0x7u);
+        stage.konst_color = u8(cfg.kcsel, 0x1Fu);
+        stage.konst_alpha = u8(cfg.kasel, 0x1Fu);
+        // ras_swap and tex_swap select swap tables; as in Dolphin's PixelShaderGen, the key holds the resolved
+        // swizzles, not the tables.
+        for (unsigned c = 0; c < 4u; ++c) {
+            stage.ras_swizzle[c] = u8(state.swap[cfg.ras_swap & 3u][c], 0x3u);
+            stage.tex_swizzle[c] = u8(state.swap[cfg.tex_swap & 3u][c], 0x3u);
+        }
+        if (key.num_ind_stages != 0u) {
+            const IndirectStage& ind = state.ind[s];
+            stage.ind_stage = u8(ind.stage, 0x3u);
+            stage.ind_format = u8(ind.format, 0x3u);
+            stage.ind_bias = u8(ind.bias, 0x7u);
+            stage.ind_alpha = u8(ind.alpha, 0x3u);
+            stage.ind_matrix = u8(ind.matrix, 0xFu);
+            stage.ind_wrap_s = u8(ind.wrap_s, 0x7u);
+            stage.ind_wrap_t = u8(ind.wrap_t, 0x7u);
+            stage.ind_lod = u8(ind.lod, 0x1u);
+            stage.ind_prev = u8(ind.prev, 0x1u);
+        }
 
         // A stage's texture, rasterized colour and konst values matter only through its eight
-        // combiner inputs. When no input selects a source, its order bits, swap table and konst
+        // combiner inputs. When no input selects a source, its order, swizzles and konst
         // selector cannot change the output and are cleared. The texture order is kept when a Z
         // texture (which reads the last sampled texel) or an indirect stage is active.
-        const TevColorArg color_inputs[4] = {
-            cfg.color_a, cfg.color_b, cfg.color_c, cfg.color_d};
-        const TevAlphaArg alpha_inputs[4] = {
-            cfg.alpha_a, cfg.alpha_b, cfg.alpha_c, cfg.alpha_d};
         bool uses_tex = false;
         bool uses_ras = false;
         bool uses_konst_color = false;
         bool uses_konst_alpha = false;
-        for (const TevColorArg input : color_inputs) {
-            uses_tex |= input == TevColorArg::TexColor ||
-                input == TevColorArg::TexAlpha;
-            uses_ras |= input == TevColorArg::RasColor ||
-                input == TevColorArg::RasAlpha;
+        for (const TevColorArg input : {cfg.color_a, cfg.color_b, cfg.color_c, cfg.color_d}) {
+            uses_tex |= input == TevColorArg::TexColor || input == TevColorArg::TexAlpha;
+            uses_ras |= input == TevColorArg::RasColor || input == TevColorArg::RasAlpha;
             uses_konst_color |= input == TevColorArg::Konst;
         }
-        for (const TevAlphaArg input : alpha_inputs) {
+        for (const TevAlphaArg input : {cfg.alpha_a, cfg.alpha_b, cfg.alpha_c, cfg.alpha_d}) {
             uses_tex |= input == TevAlphaArg::TexAlpha;
             uses_ras |= input == TevAlphaArg::RasAlpha;
             uses_konst_alpha |= input == TevAlphaArg::Konst;
         }
-        std::uint32_t canonical_order = order;
         if (!uses_tex && !ztex_on && key.num_ind_stages == 0u) {
-            canonical_order &= ~0x7Fu;          // texmap, texcoord, tex_enable
-            ksel &= ~(0xFFu << 18u);            // tex swap swizzles
+            stage.tex_map = stage.tex_coord = stage.tex_enable = 0u;
+            std::memset(stage.tex_swizzle, 0, sizeof(stage.tex_swizzle));
         }
         if (!uses_ras) {
-            canonical_order &= ~(0x7u << 7u);   // ras channel
-            ksel &= ~(0xFFu << 10u);            // ras swap swizzles
+            stage.channel = 0u;
+            std::memset(stage.ras_swizzle, 0, sizeof(stage.ras_swizzle));
         }
         if (!uses_konst_color) {
-            ksel &= ~0x1Fu;
+            stage.konst_color = 0u;
         }
         if (!uses_konst_alpha) {
-            ksel &= ~(0x1Fu << 5u);
+            stage.konst_alpha = 0u;
         }
-
-        key.stages[s] = TevStagePacked{color_env, alpha_env, canonical_order, ksel};
     }
 
     return key;
@@ -265,55 +241,60 @@ VertexShaderKey build_vertex_shader_key(const NativeDrawState& state, std::uint3
     // Dual transforms and matrix-index inputs are unused by color/emboss
     // texgens. Unknown type encodings use the generator's regular fallback.
     bool matrix_texgen_active = false;
-    // Encode only the active texgen and post-texgen words; unused slots stay 0.
+    // Only the active generators; fields a generator's type does not read are leftover state and stay zero, so they
+    // cannot duplicate a shader. Colour generators read only their type, emboss maps their source and light, regular
+    // generators their projection, input form and source row (and the post-transform's normalize).
     for (unsigned i = 0; i < key.num_texgens && i < kMaxTexGens; ++i) {
-        key.texgen[i] = texgen_word(state.texgen[i]);
-        // Fields the generator ignores for a texgen type are leftover register
-        // state; keep them out of the key so they cannot duplicate a shader.
-        // Color texgens read only their type; regular texgens never read the
-        // emboss source/light; emboss reads only its source and light.
-        switch (decode_xf_texgen(key.texgen[i]).type) {
+        const XfTexGen& g = state.texgen[i];
+        KeyTexGen& out = key.texgen[i];
+        out.type = static_cast<std::uint8_t>(static_cast<unsigned>(g.type) & 0x7u);
+        switch (g.type) {
         case TexGenType::Color0:
         case TexGenType::Color1:
-            key.texgen[i] &= 0x7u << 4u;
             key.texmtx_idx_mask &= static_cast<std::uint8_t>(~(1u << i));
             break;
         case TexGenType::EmbossMap:
-            key.texgen[i] &= (0x7u << 4u) | (0x3Fu << 12u);
+            out.emboss_source = static_cast<std::uint8_t>(g.emboss_source & 0x7u);
+            out.emboss_light = static_cast<std::uint8_t>(g.emboss_light & 0x7u);
             key.texmtx_idx_mask &= static_cast<std::uint8_t>(~(1u << i));
             break;
         case TexGenType::Regular:
         default:
-            // Projection, input form, type and source row are the only fields
-            // read by this path. Bits 0/3 and all high bits are reserved.
-            key.texgen[i] &= (1u << 1u) | (1u << 2u) |
-                (0x7u << 4u) | (0x1Fu << 7u);
+            out.projection = g.generate_stq ? 1u : 0u;
+            out.input_abc1 = g.input_form_abc1 ? 1u : 0u;
+            out.source = static_cast<std::uint8_t>(g.source_row & 0x1Fu);
             matrix_texgen_active = true;
             break;
         }
-        // Matrix rows are supplied through inline uniforms from raw XF state.
-        // Only normalize changes HLSL, and only for regular dual texgens.
-        if (dual_tex && decode_xf_texgen(key.texgen[i]).type == TexGenType::Regular) {
-            key.post_texgen[i] = post_texgen_word(state.post_texgen[i]) & (1u << 8u);
+        if (dual_tex && g.type == TexGenType::Regular) {
+            out.normalize = state.post_texgen[i].normalize ? 1u : 0u;
         }
     }
 
     if (!matrix_texgen_active) key.flags &= static_cast<std::uint8_t>(~0x04u);
 
-    // Channel control registers are grouped by component (color0, color1, alpha0, alpha1), not
-    // interleaved. The key keeps that layout so shader generation can pair colour N with alpha N.
-    // An unlit channel reads only its material source (bit 0). The ambient source, light mask and
-    // diffuse/attenuation functions are leftover state and must stay out of the key.
-    const auto canonical_channel = [](std::uint32_t control) {
-        return (control & 0x2u) != 0u ? (control & 0x7FFFu) : (control & 0x1u);
+    // Channels are grouped by component (colour 0, colour 1, alpha 0, alpha 1), so shader generation pairs colour N
+    // with alpha N. An unlit channel reads only its material source: its ambient source, lights and functions are
+    // leftover state and stay out of the key.
+    const auto canonical_channel = [](const XfChannelCtrl& c) {
+        KeyChannel out{};
+        out.material_vertex = c.material_from_vertex ? 1u : 0u;
+        if (c.lighting_enable) {
+            out.lighting = 1u;
+            out.light_mask = c.light_mask;
+            out.ambient_vertex = c.ambient_from_vertex ? 1u : 0u;
+            out.diffuse = static_cast<std::uint8_t>(c.diffuse_func & 0x3u);
+            out.attenuation = static_cast<std::uint8_t>(c.atten_func & 0x3u);
+        }
+        return out;
     };
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
-        key.channel[ch] = canonical_channel(channel_word(state.channel[ch]));
-        key.channel[2u + ch] = canonical_channel(channel_word(state.channel[2u + ch]));
+        key.channel[ch] = canonical_channel(state.channel[ch]);
+        key.channel[2u + ch] = canonical_channel(state.channel[2u + ch]);
     }
-    // A lit channel (bit 1) with attenuation (bit 9: specular or spotlight) and lights (bits 2-5, 11-14).
-    for (const std::uint32_t control : key.channel) {
-        if ((control & 0x202u) == 0x202u && (control & 0x783Cu) != 0u) {
+    // A lit channel with attenuation (specular or spotlight: the function's low bit) and lights.
+    for (const KeyChannel& channel : key.channel) {
+        if (channel.lighting != 0u && (channel.attenuation & 1u) != 0u && channel.light_mask != 0u) {
             key.flags |= kVsKeyFiniteLightAttn;
         }
     }
