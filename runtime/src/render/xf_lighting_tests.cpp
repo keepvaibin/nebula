@@ -17,7 +17,7 @@
 #include "galaxy/render/shader_keys.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/uber_shaders.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 
 #include <algorithm>
 #include <array>

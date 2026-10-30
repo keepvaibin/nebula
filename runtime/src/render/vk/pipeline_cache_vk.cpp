@@ -8,7 +8,7 @@
 #include "galaxy/windows_power.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 #include "galaxy/render/vk/vk_context.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 
 #include <algorithm>
 #include <bit>
@@ -309,7 +309,7 @@ std::uint32_t input_location_mask(const std::vector<std::uint32_t>& spirv) {
     return mask;
 }
 
-// RenderVertex (gx_vertex.h) as the shaders' VSIn, at its semantics' locations (compile_hlsl): the eight texture
+// RenderVertex (render_vertex.h) as the shaders' VSIn, at its semantics' locations (compile_hlsl): the eight texture
 // coordinates one each.
 constexpr VkVertexInputAttributeDescription kVertexAttributes[] = {
     {0, 0, VK_FORMAT_R32G32B32_SFLOAT, 0},    {1, 0, VK_FORMAT_R32G32B32_SFLOAT, 12},

@@ -3,7 +3,7 @@
 // rebasing against scalar references written from the GX formats.
 
 #include "galaxy/render/texture_cache.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 #include "galaxy/simd128.h"
 
 #include <cstddef>

@@ -16,7 +16,7 @@
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 
 #include <algorithm>
 #include <cstdio>

@@ -133,7 +133,7 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// Input layout for the fixed 144-byte RenderVertex stream (gx_vertex.h).
+// Input layout for the fixed 144-byte RenderVertex stream (render_vertex.h).
 constexpr D3D12_INPUT_ELEMENT_DESC kGxInputLayout[] = {
     {"POSITION",     0, DXGI_FORMAT_R32G32B32_FLOAT, 0,  0, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
     {"NORMAL",       0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 12, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},

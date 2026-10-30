@@ -52,7 +52,7 @@
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/vs_constants.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 #include "galaxy/renderer_api.h"
 #include "galaxy/guest_memory.h"
 #include "galaxy/frame_telemetry.h"

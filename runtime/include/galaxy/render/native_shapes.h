@@ -7,7 +7,7 @@
 
 #include "galaxy/render/native_material.h"
 #include "galaxy/render/native_state.h"
-#include "galaxy/render/gx_vertex.h"
+#include "galaxy/render/render_vertex.h"
 
 #include <array>
 #include <cstddef>
