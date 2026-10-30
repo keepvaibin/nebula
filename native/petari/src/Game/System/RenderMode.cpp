@@ -1,7 +1,7 @@
 #include "Game/System/RenderMode.hpp"
 #include <revolution/gx.h>
-#include <revolution/sc.h>
 #include <revolution/vi.h>
+#include "Game/System/NebulaSystemSettings.hpp"
 
 const GXRenderModeObj GXNtscIntDf[] = {
     {
@@ -311,7 +311,7 @@ namespace MR {
     }
 
     bool isAspectRatioFlag16Per9() {
-        return SCGetAspectRatio() == SC_ASPECT_RATIO_16x9;
+        return NebulaSystemSettings::isWidescreen();
     }
 };  // namespace MR
 

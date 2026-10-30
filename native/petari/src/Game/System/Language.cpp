@@ -7,6 +7,7 @@
 #include <revolution/sc.h>
 #ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
+#include "Game/System/NebulaSystemSettings.hpp"
 #endif
 
 #ifdef TARGET_PC
@@ -133,7 +134,7 @@ namespace {
 
 namespace MR {
     u32 getDecidedLanguageFromIPL() {
-        s32 language = SCGetLanguage();
+        s32 language = NebulaSystemSettings::language();
         s32 i;
 
         if (language < 0) {

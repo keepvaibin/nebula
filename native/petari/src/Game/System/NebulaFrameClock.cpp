@@ -1,9 +1,9 @@
 #include "Game/System/NebulaFrameClock.hpp"
 
 #include <revolution/os.h>
-#include <revolution/sc.h>
 
 #include <nebula_game_api.h>
+#include "Game/System/NebulaSystemSettings.hpp"
 
 extern "C" {
 const NebulaHostServices* nebula_host(void);
@@ -105,7 +105,7 @@ namespace NebulaFrameClock {
 
     bool enableDimming(bool enable) {
         const bool previous = sDimming;
-        sDimming = enable && SCGetScreenSaverMode() != 0;
+        sDimming = enable && NebulaSystemSettings::screenSaver();
         return previous;
     }
 

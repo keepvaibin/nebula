@@ -8,6 +8,7 @@
 #ifdef TARGET_PC
 #include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
+#include "Game/System/NebulaSystemSettings.hpp"
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
@@ -768,7 +769,7 @@ bool THPSimplePlayerWrapper::tryFinishDvdOpen() {
 }
 
 void THPSimplePlayerWrapper::initAudio() {
-    if (!SCGetSoundMode()) {
+    if (NebulaSystemSettings::soundMode() == NebulaSystemSettings::SoundModeMono) {
         _30C = 1;
     } else {
         _30C = 0;

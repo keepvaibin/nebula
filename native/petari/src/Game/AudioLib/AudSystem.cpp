@@ -37,9 +37,9 @@
 #include <JSystem/JKernel/JKRArchive.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
-#include <revolution/sc.h>
 #include <revolution/vi/vifuncs.h>
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaSystemSettings.hpp"
 
 const char sAudioResFile[] = "/AudioRes/SMR.szs";
 const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq.arc";
@@ -404,14 +404,14 @@ bool AudSystem::isSubmitSeByVolumeSetting(JAISoundID soundID) {
 }
 
 void AudSystem::updateOutputMode() {
-    switch (SCGetSoundMode()) {
-    case 0:
+    switch (NebulaSystemSettings::soundMode()) {
+    case NebulaSystemSettings::SoundModeMono:
         JASDriver::setOutputMode(0);  // neither? (TODO)
         break;
-    case 1:
+    case NebulaSystemSettings::SoundModeStereo:
         JASDriver::setOutputMode(1);  // only pan
         break;
-    case 2:
+    case NebulaSystemSettings::SoundModeSurround:
         JASDriver::setOutputMode(2);  // pan and effect
         break;
     }

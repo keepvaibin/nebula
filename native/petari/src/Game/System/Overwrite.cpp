@@ -41,7 +41,7 @@
 #include <JSystem/JAudio2/JAUInitializer.hpp>
 
 #include <cstdarg>
-#include <revolution/sc.h>
+#include "Game/System/NebulaSystemSettings.hpp"
 
 void Overwrite_FORCE_MATCH_SDATA2() {
     (void)-2607.5945f;
@@ -1086,14 +1086,14 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
         JASWaveArcLoader::setCurrentDir(waveArcDir_);
     }
 
-    switch (SCGetSoundMode()) {
-    case 0:
+    switch (NebulaSystemSettings::soundMode()) {
+    case NebulaSystemSettings::SoundModeMono:
         JASDriver::setOutputMode(0);
         break;
-    case 1:
+    case NebulaSystemSettings::SoundModeStereo:
         JASDriver::setOutputMode(1);
         break;
-    case 2:
+    case NebulaSystemSettings::SoundModeSurround:
         JASDriver::setOutputMode(2);
         break;
     }
