@@ -6,6 +6,8 @@
 #include <va_list.h>
 #include "Game/System/NebulaFrameClock.hpp"
 
+extern "C" __attribute__((noreturn)) void nebula_fatal(const char* format, ...);
+
 namespace nw4r {
     namespace db {
         static ConsoleHandle sAssertionConsole = NULL;
@@ -108,7 +110,7 @@ namespace nw4r {
             }
 
             if (halt) {
-                PPCHalt();
+                nebula_fatal("%s:%d: NW4R panic", file, line);
             }
         }
 
@@ -117,7 +119,6 @@ namespace nw4r {
             va_start(vlist, fmt);
             nw4r::db::VPanic(file, line, fmt, vlist, true);
             va_end(vlist);
-            PPCHalt();
         }
 
     };  // namespace db

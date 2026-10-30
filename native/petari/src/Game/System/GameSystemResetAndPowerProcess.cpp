@@ -12,10 +12,12 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
-#include "Game/Util/TriggerChecker.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
+#include <nebula_game_api.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     static const s32 sFadeinoutFrame = 30;
@@ -33,7 +35,6 @@ namespace NrvGameSystemResetAndPowerProcess {
 
 void GameSystemResetAndPowerProcess::init(const JMapInfoIter& rIter) {
     initNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
-    OSSetPowerCallback(GameSystemResetAndPowerProcess::handleOSPowerCallback);
     appear();
 }
 
@@ -93,12 +94,9 @@ void GameSystemResetAndPowerProcess::notifyCheckDiskResult(bool param1) {
     }
 }
 
+// The console's power and reset buttons started a reset from here. A PC has neither: resets come from the HOME Menu
+// (requestReset, requestGoWiiMenu).
 void GameSystemResetAndPowerProcess::exePolling() {
-    if (tryAcceptPowerOff()) {
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitResetPermitted));
-    } else if (mResetTriggerChecker->getOnTrigger()) {
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitResetPermitted));
-    }
 }
 
 void GameSystemResetAndPowerProcess::exeWaitResetPermitted() {
@@ -186,20 +184,14 @@ void GameSystemResetAndPowerProcess::exeFadein() {
         GameSystemFunction::restoreFromResetSaveDataHandleSequence();
     }
 
-    if (tryAcceptPowerOff()) {
+    if (MR::isFirstStep(this)) {
+        mFadeinoutControl->setDirToOneResetFrame();
+    }
+
+    if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
         GameSystemFunction::restartControllerLeaveWatcher();
         GameSystemFunction::restartSceneController();
-        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessWaitResetPermitted));
-    } else {
-        if (MR::isFirstStep(this)) {
-            mFadeinoutControl->setDirToOneResetFrame();
-        }
-
-        if (mFadeinoutControl->mFrame == mFadeinoutControl->mMaxFrame) {
-            GameSystemFunction::restartControllerLeaveWatcher();
-            GameSystemFunction::restartSceneController();
-            setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
-        }
+        setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessPolling));
     }
 }
 
@@ -212,35 +204,13 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
 
-    switch (mResetOperation) {
-    case ResetOperation_Restart:
-        OSRestart(0);
-        break;
-    case ResetOperation_ReturnToMenu:
-        OSReturnToMenu();
-        break;
-    case ResetOperation_RebootSystem:
-        OSRebootSystem();
-        break;
-    case ResetOperation_ShutdownSystem:
-        OSShutdownSystem();
-        break;
-    }
+    // The host starts the game again, or closes it for "leave the game" (the Wii Menu); it does not return.
+    const NebulaHostServices* const host = nebula_host();
+    host->power(host->user, mResetOperation == ResetOperation_ReturnToMenu ? NEBULA_POWER_MENU : NEBULA_POWER_RESTART);
 }
 
 bool GameSystemResetAndPowerProcess::tryPermitReset() NO_INLINE {
     return !isActive();
-}
-
-bool GameSystemResetAndPowerProcess::tryAcceptPowerOff() {
-    if (!mIsValidPowerOff) {
-        return false;
-    }
-
-    mIsValidPowerOff = false;
-    mResetOperation = ResetOperation_ShutdownSystem;
-
-    return true;
 }
 
 bool GameSystemResetAndPowerProcess::isResetAcceptAudio() const {
@@ -252,19 +222,12 @@ bool GameSystemResetAndPowerProcess::isResetAcceptAudio() const {
 }
 
 void GameSystemResetAndPowerProcess::control() {
-    mResetTriggerChecker->update(OSGetResetButtonState() != FALSE);
     mFadeinoutControl->update();
 }
 
-void GameSystemResetAndPowerProcess::handleOSPowerCallback() {
-    SingletonHolder< GameSystemResetAndPowerProcess >::get()->mIsValidPowerOff = true;
-}
-
 GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()
-    : LayoutActor("\203\212\203\132\203\142\203\147\201\105\223\144\214\271" /* リセット・電源 */, false), mResetTriggerChecker(), mFadeinoutControl(), mResetOperation(ResetOperation_Restart), _5C(true),
-      mIsValidPowerOff(), _5E() {
-    mResetTriggerChecker = new TriggerChecker();
-
+    : LayoutActor("\203\212\203\132\203\142\203\147\201\105\223\144\214\271" /* リセット・電源 */, false), mFadeinoutControl(), mResetOperation(ResetOperation_Restart), _5C(true),
+      _5E() {
     mFadeinoutControl = new ValueControl(::sFadeinoutFrame);
     mFadeinoutControl->setOne();
 }

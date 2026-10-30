@@ -176,41 +176,11 @@ void nebula_memory_guard(void* p, size_t size) {
 #endif
 }
 
-/* Data cache maintenance. Natively no cache needs flushing, but the game flushes every range it writes for the GPU
-   (display lists, vertex and texture data) before the GPU reads it, as the console requires: an image handed over
-   in a flushed range is handed over again. Invalidation has nothing to do; DCZeroRange zeroes whole 32-byte blocks
-   as the console's dcbz does. */
+/* The game rewrote memory an image may have been handed over from (NebulaRender::memoryRewritten, DMA copies). */
 void nebula_gpu_coherent(const void* addr, uint32_t nBytes) {
     const NebulaHostServices* host = nebula_host();
     if (nBytes == 0 || host == NULL || host->gpu_coherent == NULL) {
         return;
     }
     host->gpu_coherent(host->user, addr, nBytes);
-}
-void DCFlushRange(void* addr, u32 nBytes) {
-    nebula_gpu_coherent(addr, nBytes);
-}
-void DCStoreRange(void* addr, u32 nBytes) {
-    nebula_gpu_coherent(addr, nBytes);
-}
-void DCStoreRangeNoSync(void* addr, u32 nBytes) {
-    nebula_gpu_coherent(addr, nBytes);
-}
-void DCInvalidateRange(void* addr, u32 nBytes) {
-    (void)addr;
-    (void)nBytes;
-}
-void DCZeroRange(void* addr, u32 nBytes) {
-    const uintptr_t start = (uintptr_t)addr & ~(uintptr_t)31;
-    const uintptr_t end = ((uintptr_t)addr + nBytes + 31) & ~(uintptr_t)31;
-    if (nBytes != 0) {
-        memset((void*)start, 0, end - start);
-        nebula_gpu_coherent((const void*)start, (uint32_t)(end - start));
-    }
-}
-void LCEnable(void) {
-}
-void LCDisable(void) {
-}
-void PPCSync(void) {
 }

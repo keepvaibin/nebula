@@ -563,10 +563,6 @@ void PPCMtmsr(u32 msr) {
     OSRestoreInterrupts((msr & 0x8000u) != 0);
 }
 
-void PPCHalt(void) {
-    nebula_fatal("PPCHalt");
-}
-
 __OSExceptionHandler __OSSetExceptionHandler(__OSException exception, __OSExceptionHandler handler) {
     const __OSExceptionHandler previous = sExceptionHandlers[exception];
     sExceptionHandlers[exception] = handler;
@@ -837,18 +833,6 @@ void OSRegisterShutdownFunction(OSShutdownFunctionInfo* info) {
     sShutdownFunctions = info;
 }
 
-static OSPowerCallback sPowerCallback;
-
-OSPowerCallback OSSetPowerCallback(OSPowerCallback callback) {
-    const OSPowerCallback previous = sPowerCallback;
-    sPowerCallback = callback;
-    return previous;
-}
-
-BOOL OSGetResetButtonState(void) {
-    return FALSE;
-}
-
 void OSRegisterVersion(const char* id) {
     (void)id;
 }
@@ -858,30 +842,6 @@ void OSProtectRange(u32 channel, void* addr, u32 nBytes, u32 control) {
     (void)addr;
     (void)nBytes;
     (void)control;
-}
-
-/* Power: the host ends or restarts the game (the module never returns from these). */
-static void power(u32 what) {
-    const NebulaHostServices* host = nebula_host();
-    host->power(host->user, what);
-    exit(0);
-}
-
-void OSShutdownSystem(void) {
-    power(NEBULA_POWER_SHUTDOWN);
-}
-
-void OSRestart(u32 resetCode) {
-    (void)resetCode;
-    power(NEBULA_POWER_RESTART);
-}
-
-void OSReturnToMenu(void) {
-    power(NEBULA_POWER_MENU);
-}
-
-void OSRebootSystem(void) {
-    power(NEBULA_POWER_REBOOT);
 }
 
 BOOL __DVDTestAlarm(const OSAlarm* alarm) {

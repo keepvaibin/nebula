@@ -7,6 +7,7 @@
 #include <cstring>
 #include <stdint.h>
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/Util/RenderSignals.hpp"
 
 
 JSUList< JKRDMCommand > JKRDvdRipper::sDvdAsyncList = JSUList< JKRDMCommand >();
@@ -421,7 +422,7 @@ static int JKRDecompressFromDVD(JKRDvdFile* dvdFile, void* dst, u32 fileSize, u3
     if (refBuf) {
         JKRFree(refBuf);
     }
-    DCStoreRangeNoSync(dst, *tsPtr);
+    NebulaRender::memoryRewritten(dst, *tsPtr);
     OSUnlockMutex(&decompMutex);
     return result;
 }

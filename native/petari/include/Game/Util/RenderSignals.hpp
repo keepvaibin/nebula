@@ -15,6 +15,13 @@ namespace NebulaRender {
     // each scene's begin (sceneMarker).
     extern uint8_t sDrawIdentities;
 
+    // The game rewrote [p, p + size) (a decompressed archive over memory that may have held an image): an image handed
+    // over there must be handed over again.
+    inline void memoryRewritten(const void* p, uint32_t size) {
+        const NebulaHostServices* const host = nebula_host();
+        host->gpu_coherent(host->user, p, size);
+    }
+
     // A host marker, whatever the draw identities.
     inline void marker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
         const NebulaHostServices* const host = nebula_host();

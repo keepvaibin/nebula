@@ -4,6 +4,7 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaDisc.hpp"
+#include "Game/Util/RenderSignals.hpp"
 
 namespace {
     OSMutex sDecompMutex;
@@ -164,7 +165,7 @@ bool FileRipper::decompressFromDVD(NebulaDisc::File* fileInfo, void* dest, u32 r
         result = false;
     }
 
-    DCStoreRangeNoSync(dest, destSize);
+    NebulaRender::memoryRewritten(dest, destSize);
     OSUnlockMutex(&::sDecompMutex);
 
     return result;

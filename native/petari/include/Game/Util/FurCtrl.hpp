@@ -2,6 +2,7 @@
 
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/FurParam.hpp"
+#include "Game/Util/RenderSignals.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <cstring>
@@ -36,7 +37,7 @@ public:
             for (s32 j = 0; j < 2; j++) {
                 s32 componentBytes = componentSize * getVertexBuffer()->getVertexData()->getVtxNum();
                 memcpy(mVertexBuffer.mTransformedVtxPosArray[j], getVertexBuffer()->getVertexData()->getVtxPosArray(), componentBytes * 3);
-                DCStoreRange(mVertexBuffer.mTransformedVtxPosArray[j], componentSize * (getVertexBuffer()->getVertexData()->getVtxNum() * 3));
+                NebulaRender::memoryRewritten(mVertexBuffer.mTransformedVtxPosArray[j], componentSize * (getVertexBuffer()->getVertexData()->getVtxNum() * 3));
             }
         }
     }

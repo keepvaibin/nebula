@@ -8,6 +8,7 @@
 #include "JSystem/JUtility/JUTException.hpp"
 #include <cstring>
 #include <revolution.h>
+#include "Game/Util/RenderSignals.hpp"
 
 static u8* firstSrcData();
 static u8* nextSrcData(u8* param_0);
@@ -441,7 +442,7 @@ int JKRDecompressFromAramToMainRam(u32 src, void* dst, u32 srcLength, u32 dstLen
         JKRFree(refBuf);
     }
 
-    DCStoreRangeNoSync(dst, *tsPtr);
+    NebulaRender::memoryRewritten(dst, *tsPtr);
     OSUnlockMutex(&decompMutex);
 
     return 0;
