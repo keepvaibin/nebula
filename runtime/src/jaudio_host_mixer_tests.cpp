@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <vector>
 
 namespace {
@@ -52,9 +53,20 @@ struct Guest {
     [[nodiscard]] std::int16_t gets16(std::uint32_t address) {
         return static_cast<std::int16_t>(get16(address));
     }
-    [[nodiscard]] std::uint32_t get32(std::uint32_t address) {
-        return (get16(address) << 16u) | get16(address + 2u);
+    // The game's records (channels, FX lines) are in host byte order.
+    template <typename T>
+    void rput(std::uint32_t address, T value) { std::memcpy(resolve(this, address, sizeof(T)), &value, sizeof(T)); }
+    template <typename T>
+    [[nodiscard]] T rget(std::uint32_t address) {
+        T value;
+        std::memcpy(&value, resolve(this, address, sizeof(T)), sizeof(T));
+        return value;
     }
+    void rput16(std::uint32_t address, std::uint32_t value) { rput(address, static_cast<std::uint16_t>(value)); }
+    void rput32(std::uint32_t address, std::uint32_t value) { rput(address, value); }
+    [[nodiscard]] std::uint32_t rget16(std::uint32_t address) { return rget<std::uint16_t>(address); }
+    [[nodiscard]] std::int16_t rgets16(std::uint32_t address) { return rget<std::int16_t>(address); }
+    [[nodiscard]] std::uint32_t rget32(std::uint32_t address) { return rget<std::uint32_t>(address); }
 };
 
 constexpr std::uint32_t kChannels = 0x80010000u;
@@ -90,7 +102,7 @@ void start(JAudioHostMixer& mixer, Guest& guest) {
 }
 
 void frame(JAudioHostMixer& mixer, Guest& guest, std::uint32_t level = 0x4000u) {
-    mixer.sync_frame(0x07u, level, kLeft, kRight, 0u, 0u, guest.memory());
+    mixer.sync_frame(0x07u, level, kLeft, kRight, guest.memory());
 }
 
 bool subframe(JAudioHostMixer& mixer, Guest& guest, std::uint16_t map0) {
@@ -104,13 +116,13 @@ bool subframe(JAudioHostMixer& mixer, Guest& guest, std::uint16_t map0) {
 void pcm16_channel(Guest& guest, std::uint32_t channel, std::int16_t value,
                    std::uint32_t samples) {
     const std::uint32_t r = record(channel);
-    guest.put16(r + 0x000u, 1u);           // active
-    guest.put16(r + 0x004u, 0x1000u);      // pitch 1.0
-    guest.put16(r + 0x008u, 1u);           // reset
-    guest.put16(r + 0x064u, 1u);           // samples per block
-    guest.put16(r + 0x100u, 0x10u);        // PCM16
-    guest.put32(r + 0x114u, samples);      // end
-    guest.put32(r + 0x118u, kWave);        // source
+    guest.rput16(r + 0x000u, 1u);           // active
+    guest.rput16(r + 0x004u, 0x1000u);      // pitch 1.0
+    guest.rput16(r + 0x008u, 1u);           // reset
+    guest.rput16(r + 0x064u, 1u);           // samples per block
+    guest.rput16(r + 0x100u, 0x10u);        // PCM16
+    guest.rput32(r + 0x114u, samples);      // end
+    guest.rput32(r + 0x118u, kWave);        // source
     for (std::uint32_t i = 0; i < samples; ++i) {
         guest.put16(0x80000000u + kWave + i * 2u, static_cast<std::uint16_t>(value));
     }
@@ -122,22 +134,22 @@ void test_gain_chain() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x010u, 0x0D00u);  // bus 0 -> L
-    guest.put16(r + 0x012u, 0x4000u);  // target
-    guest.put16(r + 0x014u, 0x4000u);  // current
+    guest.rput16(r + 0x010u, 0x0D00u);  // bus 0 -> L
+    guest.rput16(r + 0x012u, 0x4000u);  // target
+    guest.rput16(r + 0x014u, 0x4000u);  // current
     frame(mixer, guest);
     expect(subframe(mixer, guest, 0x8000u), "group 3 completes the subframe");
     // Steady state: bus = 0x4000 * 0x4000 >> 16 = 0x1000; output = bus *
     // 0x4000 / 4096 = 0x4000.
     expect(guest.gets16(kLeft + 79u * 2u) == 0x4000, "level chain", guest.gets16(kLeft + 79u * 2u));
     expect(guest.gets16(kRight + 79u * 2u) == 0, "right untouched", guest.gets16(kRight + 79u * 2u));
-    expect(guest.get16(r + 0x008u) == 0u, "reset flag cleared");
-    expect(guest.get32(r + 0x074u) == 4096u - 80u, "PCM samples left", guest.get32(r + 0x074u));
-    expect(guest.get32(r + 0x070u) == kWave + 160u, "PCM next address", guest.get32(r + 0x070u));
+    expect(guest.rget16(r + 0x008u) == 0u, "reset flag cleared");
+    expect(guest.rget32(r + 0x074u) == 4096u - 80u, "PCM samples left", guest.rget32(r + 0x074u));
+    expect(guest.rget32(r + 0x070u) == kWave + 160u, "PCM next address", guest.rget32(r + 0x070u));
     // Not in the map: untouched.
-    guest.put16(r + 0x014u, 0x1234u);
+    guest.rput16(r + 0x014u, 0x1234u);
     subframe(mixer, guest, 0x0000u);
-    expect(guest.get16(r + 0x014u) == 0x1234u, "unmapped channel skipped");
+    expect(guest.rget16(r + 0x014u) == 0x1234u, "unmapped channel skipped");
 }
 
 void test_ramp() {
@@ -146,12 +158,12 @@ void test_ramp() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x010u, 0x0D60u);  // bus 0 -> R
-    guest.put16(r + 0x012u, 0x2000u);  // target
-    guest.put16(r + 0x014u, 0x0000u);  // current
+    guest.rput16(r + 0x010u, 0x0D60u);  // bus 0 -> R
+    guest.rput16(r + 0x012u, 0x2000u);  // target
+    guest.rput16(r + 0x014u, 0x0000u);  // current
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.get16(r + 0x014u) == 0x2000u, "current reaches target", guest.get16(r + 0x014u));
+    expect(guest.rget16(r + 0x014u) == 0x2000u, "current reaches target", guest.rget16(r + 0x014u));
     // From sample 65 on the gain is the target: 0x4000*0x2000>>16 * 4 = 0x2000.
     expect(guest.gets16(kRight + 70u * 2u) == 0x2000, "ramp end level", guest.gets16(kRight + 70u * 2u));
     const std::int16_t mid = guest.gets16(kRight + 33u * 2u);
@@ -163,12 +175,12 @@ void test_adpcm_bookkeeping() {
     JAudioHostMixer mixer;
     start(mixer, guest);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x000u, 1u);
-    guest.put16(r + 0x004u, 0x1000u);
-    guest.put16(r + 0x008u, 1u);
-    guest.put16(r + 0x100u, 9u);
-    guest.put32(r + 0x114u, 160u);    // 10 blocks
-    guest.put32(r + 0x118u, kWave);
+    guest.rput16(r + 0x000u, 1u);
+    guest.rput16(r + 0x004u, 0x1000u);
+    guest.rput16(r + 0x008u, 1u);
+    guest.rput16(r + 0x100u, 9u);
+    guest.rput32(r + 0x114u, 160u);    // 10 blocks
+    guest.rput32(r + 0x118u, kWave);
     // Each block: scale 0, coefficient pair 1, every nibble +1: a ramp.
     for (std::uint32_t b = 0; b < 10u; ++b) {
         guest.put8(0x80000000u + kWave + b * 9u, 0x01u);
@@ -179,19 +191,19 @@ void test_adpcm_bookkeeping() {
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // 80 samples decoded = 5 blocks exactly: nothing left over.
-    expect(guest.get16(r + 0x064u) == 0u, "no leftover", guest.get16(r + 0x064u));
-    expect(guest.get32(r + 0x074u) == 80u, "samples left", guest.get32(r + 0x074u));
-    expect(guest.get32(r + 0x070u) == kWave + 45u, "next block", guest.get32(r + 0x070u));
-    expect(guest.gets16(r + 0x0CEu) == 80, "predictor s1", guest.gets16(r + 0x0CEu));
-    expect(guest.gets16(r + 0x07Eu) == 80, "resampler history tail", guest.gets16(r + 0x07Eu));
+    expect(guest.rget16(r + 0x064u) == 0u, "no leftover", guest.rget16(r + 0x064u));
+    expect(guest.rget32(r + 0x074u) == 80u, "samples left", guest.rget32(r + 0x074u));
+    expect(guest.rget32(r + 0x070u) == kWave + 45u, "next block", guest.rget32(r + 0x070u));
+    expect(guest.rgets16(r + 0x0CEu) == 80, "predictor s1", guest.rgets16(r + 0x0CEu));
+    expect(guest.rgets16(r + 0x07Eu) == 80, "resampler history tail", guest.rgets16(r + 0x07Eu));
     // Pitch 1.5: 120 samples needed; only 80 remain and there is no loop.
-    guest.put16(r + 0x004u, 0x1800u);
+    guest.rput16(r + 0x004u, 0x1800u);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.get16(r + 0x002u) == 1u, "finished at end without loop");
+    expect(guest.rget16(r + 0x002u) == 1u, "finished at end without loop");
     // Finished channels are not rendered again.
-    guest.put16(r + 0x060u, 0x0ABCu);
+    guest.rput16(r + 0x060u, 0x0ABCu);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.get16(r + 0x060u) == 0x0ABCu, "finished channel skipped");
+    expect(guest.rget16(r + 0x060u) == 0x0ABCu, "finished channel skipped");
 }
 
 void test_adpcm_loop() {
@@ -199,14 +211,14 @@ void test_adpcm_loop() {
     JAudioHostMixer mixer;
     start(mixer, guest);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x000u, 1u);
-    guest.put16(r + 0x004u, 0x1000u);
-    guest.put16(r + 0x008u, 1u);
-    guest.put16(r + 0x100u, 9u);
-    guest.put16(r + 0x102u, 1u);       // loop
-    guest.put32(r + 0x110u, 20u);      // loop start (block 1, skip 4)
-    guest.put32(r + 0x114u, 48u);      // end (3 blocks)
-    guest.put32(r + 0x118u, kWave);
+    guest.rput16(r + 0x000u, 1u);
+    guest.rput16(r + 0x004u, 0x1000u);
+    guest.rput16(r + 0x008u, 1u);
+    guest.rput16(r + 0x100u, 9u);
+    guest.rput16(r + 0x102u, 1u);       // loop
+    guest.rput32(r + 0x110u, 20u);      // loop start (block 1, skip 4)
+    guest.rput32(r + 0x114u, 48u);      // end (3 blocks)
+    guest.rput32(r + 0x118u, kWave);
     for (std::uint32_t b = 0; b < 3u; ++b) {
         guest.put8(0x80000000u + kWave + b * 9u, 0x01u);
         for (std::uint32_t k = 1; k < 9u; ++k) {
@@ -215,8 +227,8 @@ void test_adpcm_loop() {
     }
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.get16(r + 0x002u) == 0u, "looping channel keeps playing");
-    const std::uint32_t left = guest.get32(r + 0x074u) + guest.get16(r + 0x064u);
+    expect(guest.rget16(r + 0x002u) == 0u, "looping channel keeps playing");
+    const std::uint32_t left = guest.rget32(r + 0x074u) + guest.rget16(r + 0x064u);
     expect(left <= 28u, "stream position inside loop", left);
 }
 
@@ -226,17 +238,17 @@ void test_fx_delay() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x010u, 0x0DC0u);  // bus 0 -> FX line 0 input
-    guest.put16(r + 0x012u, 0x4000u);
-    guest.put16(r + 0x014u, 0x4000u);
+    guest.rput16(r + 0x010u, 0x0DC0u);  // bus 0 -> FX line 0 input
+    guest.rput16(r + 0x012u, 0x4000u);
+    guest.rput16(r + 0x014u, 0x4000u);
     // FX line 0: two subframes of delay, output to L at full volume.
-    guest.put16(kFx + 0x00u, 1u);
-    guest.put16(kFx + 0x02u, 2u);
-    guest.put32(kFx + 0x04u, kFxBuffer);
-    guest.put16(kFx + 0x08u, 0x0D00u);
-    guest.put16(kFx + 0x0Au, 0x7FFFu);
+    guest.rput16(kFx + 0x00u, 1u);
+    guest.rput16(kFx + 0x02u, 2u);
+    guest.rput32(kFx + 0x04u, kFxBuffer);
+    guest.rput16(kFx + 0x08u, 0x0D00u);
+    guest.rput16(kFx + 0x0Au, 0x7FFFu);
     // Identity FIR: x[n + 7] (newest tap).
-    guest.put16(kFx + 0x10u + 7u * 2u, 0x7FFFu);
+    guest.rput16(kFx + 0x10u + 7u * 2u, 0x7FFFu);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     expect(guest.gets16(kLeft + 40u * 2u) == 0, "no echo before the delay", guest.gets16(kLeft + 40u * 2u));
@@ -254,10 +266,10 @@ void test_auto_mixer_pan() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x058u, 1u);        // auto mixer
-    guest.put16(r + 0x050u, 0x0000u);   // pan fully left, front
-    guest.put16(r + 0x054u, 0x7FFFu);
-    guest.put16(r + 0x056u, 0x7FFFu);
+    guest.rput16(r + 0x058u, 1u);        // auto mixer
+    guest.rput16(r + 0x050u, 0x0000u);   // pan fully left, front
+    guest.rput16(r + 0x054u, 0x7FFFu);
+    guest.rput16(r + 0x056u, 0x7FFFu);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     expect(guest.gets16(kLeft + 79u * 2u) > 0x1000, "left gets the signal", guest.gets16(kLeft + 79u * 2u));
@@ -271,17 +283,17 @@ void test_fir_delay() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x010u, 0x0D00u);
-    guest.put16(r + 0x012u, 0x4000u);
-    guest.put16(r + 0x014u, 0x4000u);
-    guest.put16(r + 0x108u, 4u);                   // 4 taps
-    guest.put16(r + 0x120u + 3u * 2u, 0x7FFFu);    // c[3]: newest input
+    guest.rput16(r + 0x010u, 0x0D00u);
+    guest.rput16(r + 0x012u, 0x4000u);
+    guest.rput16(r + 0x014u, 0x4000u);
+    guest.rput16(r + 0x108u, 4u);                   // 4 taps
+    guest.rput16(r + 0x120u + 3u * 2u, 0x7FFFu);    // c[3]: newest input
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // Resampler warm-up gives zeros for outputs 0..2; the FIR shifts that by one.
     expect(guest.gets16(kLeft + 3u * 2u) == 0, "fir delays by one sample", guest.gets16(kLeft + 3u * 2u));
     expect(guest.gets16(kLeft + 4u * 2u) == 0x4000, "fir passes the signal", guest.gets16(kLeft + 4u * 2u));
-    expect(guest.gets16(r + 0x080u + 3u * 2u) == 0x4000, "fir history saved", guest.gets16(r + 0x080u + 3u * 2u));
+    expect(guest.rgets16(r + 0x080u + 3u * 2u) == 0x4000, "fir history saved", guest.rgets16(r + 0x080u + 3u * 2u));
     expect(mixer.stats().fir_renders == 1u, "fir counted");
 }
 
@@ -292,21 +304,21 @@ void test_iir_average() {
     start(mixer, guest);
     pcm16_channel(guest, 0, 0x4000, 4096);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x010u, 0x0D00u);
-    guest.put16(r + 0x012u, 0x4000u);
-    guest.put16(r + 0x014u, 0x4000u);
-    guest.put16(r + 0x108u, 0x20u);
-    guest.put16(r + 0x148u, 0x4000u);
-    guest.put16(r + 0x14Au, 0x4000u);
+    guest.rput16(r + 0x010u, 0x0D00u);
+    guest.rput16(r + 0x012u, 0x4000u);
+    guest.rput16(r + 0x014u, 0x4000u);
+    guest.rput16(r + 0x108u, 0x20u);
+    guest.rput16(r + 0x148u, 0x4000u);
+    guest.rput16(r + 0x14Au, 0x4000u);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // Input: 0,0,0,0x4000... -> y: 0,0,0,0x2000,0x4000... -> output y[n-1].
     expect(guest.gets16(kLeft + 4u * 2u) == 0x2000, "iir half step", guest.gets16(kLeft + 4u * 2u));
     expect(guest.gets16(kLeft + 5u * 2u) == 0x4000, "iir settles", guest.gets16(kLeft + 5u * 2u));
-    expect(guest.gets16(r + 0x0A8u) == 0x4000, "iir state x[-1]", guest.gets16(r + 0x0A8u));
+    expect(guest.rgets16(r + 0x0A8u) == 0x4000, "iir state x[-1]", guest.rgets16(r + 0x0A8u));
     // Identity coefficients bypass the filter.
-    guest.put16(r + 0x148u, 0x7FFFu);
-    guest.put16(r + 0x14Au, 0u);
+    guest.rput16(r + 0x148u, 0x7FFFu);
+    guest.rput16(r + 0x14Au, 0u);
     subframe(mixer, guest, 0x8000u);
     expect(mixer.stats().iir_renders == 1u, "identity iir bypassed", static_cast<long long>(mixer.stats().iir_renders));
 }
@@ -316,12 +328,12 @@ void test_square_oscillator() {
     JAudioHostMixer mixer;
     start(mixer, guest);
     const std::uint32_t r = record(0);
-    guest.put16(r + 0x000u, 1u);
-    guest.put16(r + 0x004u, 0x1000u);   // phase += 0x800 per sample
-    guest.put16(r + 0x100u, 0u);        // oscillator type 0: square
-    guest.put16(r + 0x010u, 0x0D00u);
-    guest.put16(r + 0x012u, 0x4000u);
-    guest.put16(r + 0x014u, 0x4000u);
+    guest.rput16(r + 0x000u, 1u);
+    guest.rput16(r + 0x004u, 0x1000u);   // phase += 0x800 per sample
+    guest.rput16(r + 0x100u, 0u);        // oscillator type 0: square
+    guest.rput16(r + 0x010u, 0x0D00u);
+    guest.rput16(r + 0x012u, 0x4000u);
+    guest.rput16(r + 0x014u, 0x4000u);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // 0x8000 / 0x800 = 16 samples per half period.
@@ -329,7 +341,7 @@ void test_square_oscillator() {
     const std::int16_t low = guest.gets16(kLeft + 16u * 2u);
     expect(high > 0 && low < 0 && high == -low, "square wave halves", high);
     expect(guest.gets16(kLeft + 15u * 2u) == high, "square holds for 16 samples");
-    expect(guest.get16(r + 0x060u) == ((80u * 0x800u) & 0xFFFFu), "oscillator phase saved", guest.get16(r + 0x060u));
+    expect(guest.rget16(r + 0x060u) == ((80u * 0x800u) & 0xFFFFu), "oscillator phase saved", guest.rget16(r + 0x060u));
 }
 
 // Volume categories: a sound's category is decided at its first render, so
@@ -337,32 +349,30 @@ void test_square_oscillator() {
 // the channel takes its own category at once, without a ramp from the previous
 // owner.
 void test_bus_categories() {
-    using galaxy::audio::kJasDspChannelsPointer;
     Guest guest;
     JAudioHostMixer mixer;
     start(mixer, guest);
-    // DSP channel 0 belongs to a JAISe whose sound ID is a PLAYER_VOICE cue;
+    // The game's owner resolver: DSP channel 0 belongs to a sound effect whose ID is a PLAYER_VOICE cue (section 0);
     // channel 1 has no owner and plays PCM16 (music by format).
-    constexpr std::uint32_t kDspChannels = 0x80100000u;
-    constexpr std::uint32_t kJasChannel = 0x80101000u;
-    constexpr std::uint32_t kTrack = 0x80102000u;
-    constexpr std::uint32_t kStream = 0x80104000u;
-    guest.put32(kJasDspChannelsPointer, kDspChannels);
-    guest.put32(kDspChannels + 0x14u, kJasChannel);
-    guest.put32(kJasChannel + 0x08u, kDspChannels);
-    guest.put32(kJasChannel + 0x10u, kTrack + 0x180u);  // TChannelMgr in the track
-    guest.put32(kTrack + 0x180u + 0x4Cu, kTrack);
-    guest.put32(kTrack - 0xC8u, kTrack - 0xC8u);        // JAISe JSULink
-    guest.put32(kTrack - 0xC8u + 0x28u, 0x00010005u);   // section 0, PLAYER_VOICE
+    static std::uint32_t s_route[2];
+    static std::uint32_t s_sound[2];
+    s_route[0] = 1u;  // JAudioOwnerRoute::Se
+    s_sound[0] = 0x00010005u;
+    s_route[1] = 0u;
+    s_sound[1] = 0u;
+    mixer.set_owner_resolver(+[](std::uint32_t index, std::uint32_t* route) -> std::uint32_t {
+        *route = index < 2u ? s_route[index] : 0u;
+        return index < 2u ? s_sound[index] : 0u;
+    });
     mixer.set_bus_gains({1.0f, 0.0f, 0.5f, 1.0f, 1.0f, 1.0f});
     pcm16_channel(guest, 0, 0x4000, 4096);
     pcm16_channel(guest, 1, 0x4000, 4096);
-    guest.put16(record(0) + 0x010u, 0x0D00u);  // voice channel -> L
-    guest.put16(record(0) + 0x012u, 0x4000u);
-    guest.put16(record(0) + 0x014u, 0x4000u);
-    guest.put16(record(1) + 0x010u, 0x0D60u);  // music channel -> R
-    guest.put16(record(1) + 0x012u, 0x4000u);
-    guest.put16(record(1) + 0x014u, 0x4000u);
+    guest.rput16(record(0) + 0x010u, 0x0D00u);  // voice channel -> L
+    guest.rput16(record(0) + 0x012u, 0x4000u);
+    guest.rput16(record(0) + 0x014u, 0x4000u);
+    guest.rput16(record(1) + 0x010u, 0x0D60u);  // music channel -> R
+    guest.rput16(record(1) + 0x012u, 0x4000u);
+    guest.rput16(record(1) + 0x014u, 0x4000u);
     frame(mixer, guest);
     subframe(mixer, guest, 0xC000u);
     // The first three samples come from the reset resampler history.
@@ -394,12 +404,10 @@ void test_bus_categories() {
     }
     expect(rising == 0, "mute ramp is monotonic", rising);
 
-    // A new sound on channel 0: a music stream (JASAramStream lists the
-    // channel; its JAIStream holds a section-2 ID). Music is at unity.
-    guest.put32(kJasChannel + 0x10u, kStream);
-    guest.put32(kStream + 0x90u, kJasChannel);
-    guest.put32(kStream - 0xA8u + 0x18u, 0x02000001u);
-    guest.put16(record(0) + 0x008u, 1u);  // playStart
+    // A new sound on channel 0: a music stream (a section-2 ID). Music is at unity.
+    s_route[0] = 3u;  // JAudioOwnerRoute::Stream
+    s_sound[0] = 0x02000001u;
+    guest.rput16(record(0) + 0x008u, 1u);  // playStart
     mixer.set_bus_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
     expect(guest.gets16(kLeft + 400u * 2u) == 0x4000, "new sound at its own gain at once", guest.gets16(kLeft + 400u * 2u));

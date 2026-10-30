@@ -51,9 +51,7 @@ struct JAudioHostMixerStats {
     std::uint64_t fx_line_subframes{};
     std::uint64_t unresolved_reads{};
     std::uint64_t unsupported_oscillators{};
-    std::uint64_t ignored_commands{};
     std::uint64_t stray_releases{};
-    std::uint64_t four_channel_frames{};
     std::uint64_t category_decisions{};
     std::uint64_t category_owner_misses{};
     std::uint64_t mix_ns{};
@@ -75,15 +73,12 @@ public:
                std::uint32_t fx_table, const JAudioGuestMemory& memory);
     // Where the sound data in auxiliary memory starts (JKRHeap::getAltAramStartAdr()).
     void set_varam(std::uint32_t address) noexcept;
-    // An audio frame. aux planes are non-zero only for 4-channel output,
-    // which the game does not use; such frames mix the stereo fold.
+    // An audio frame: its subframes mix into the stereo output planes.
     void sync_frame(std::uint32_t subframes, std::uint32_t mixer_level,
-                    std::uint32_t left, std::uint32_t right, std::uint32_t aux_a,
-                    std::uint32_t aux_b, const JAudioGuestMemory& memory);
+                    std::uint32_t left, std::uint32_t right, const JAudioGuestMemory& memory);
     // A channel group ready (`map`: its channels' active bits). Returns true when
     // this release completed a subframe; the caller then posts the game's AUDIOMSG_DSP.
     bool release_halt(std::uint32_t group, std::uint32_t map, const JAudioGuestMemory& memory);
-    void note_ignored_command() noexcept { ++stats_.ignored_commands; }
     // Volume categories. The host passes the category gains once per audio frame (`master` is applied at the
     // output, not here). A channel's category is decided once per sound, at the sound's first render, when the game
     // has linked the channel to its owner (TChannel +0x008 is set by playStart and cleared after that render). The
@@ -116,8 +111,7 @@ private:
     };
 
     void mix_subframe(const JAudioGuestMemory& memory);
-    void classify_channel(std::uint32_t index, const std::byte* record, bool starting,
-                          const JAudioGuestMemory& memory);
+    void classify_channel(std::uint32_t index, const std::byte* record, bool starting);
     void render_channel(std::byte* record, std::uint32_t index,
                         const JAudioGuestMemory& memory);
     std::uint32_t render_source(std::byte* record, std::int16_t* out,

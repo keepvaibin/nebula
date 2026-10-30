@@ -4591,7 +4591,7 @@ void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, 
     // The volume categories, once an audio frame; the master volume applies at the output.
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     state_->mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-    state_->mixer.sync_frame(subframes, mixer_level, left, right, 0u, 0u, guest);
+    state_->mixer.sync_frame(subframes, mixer_level, left, right, guest);
 }
 
 bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active, const GuestMemory& memory) {
@@ -4630,7 +4630,7 @@ std::string NativeGameAudio::stats_line() const {
          << " streams=" << s.stream_renders << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
          << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
-         << " unsupported-osc=" << s.unsupported_oscillators << " ignored=" << s.ignored_commands
+         << " unsupported-osc=" << s.unsupported_oscillators
          << " stray=" << s.stray_releases << " categories=" << s.category_decisions
          << " owner-misses=" << s.category_owner_misses << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
          << " mix-ms=" << s.mix_ns / 1000000u;

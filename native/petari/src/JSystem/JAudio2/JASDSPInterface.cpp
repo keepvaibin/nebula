@@ -66,7 +66,7 @@ JASDsp::TChannel* JASDsp::getDSPHandle(int param_0) {
     return CH_BUF + param_0;
 }
 
-void JASDsp::setFilterTable(NEBULA_BE(s16)* param_0, s16* param_1, u32 param_2) {
+void JASDsp::setFilterTable(s16* param_0, s16* param_1, u32 param_2) {
     for (int i = 0; i < param_2; i++) {
         *param_0++ = *param_1++;
     }
@@ -223,7 +223,7 @@ int JASDsp::setFXLine(u8 param_0, s16* buffer, JASDsp::FxlineConfig_* param_2) {
         puVar3->_E = param_2->_8;
         puVar3->_C = SEND_TABLE[param_2->_6];
         puVar3->_2 = param_2->_C;
-        setFilterTable((NEBULA_BE(s16)*)puVar3->_10, param_2->_10, 8);
+        setFilterTable((s16*)puVar3->_10, param_2->_10, 8);
     }
 #ifdef TARGET_PC
 #define FX_LINE_ADDR(b) ((b) != NULL ? (u32)OSCachedToPhysical(b) : 0u)
@@ -366,14 +366,14 @@ void JASDsp::TChannel::setPitch(u16 pitch) {
 }
 
 void JASDsp::TChannel::setMixerInitVolume(u8 param_0, s16 param_1) {
-    NEBULA_BE(u16)* tmp = _10[param_0];
+    u16* tmp = _10[param_0];
     tmp[2] = param_1;
     tmp[1] = param_1;
     tmp[3] = 0;
 }
 
 void JASDsp::TChannel::setMixerVolume(u8 param_0, s16 param_1) {
-    NEBULA_BE(u16)* tmp;
+    u16* tmp;
     if (mForcedStop == 0) {
         tmp = _10[param_0];
         tmp[1] = param_1;
@@ -429,7 +429,7 @@ void JASDsp::TChannel::setDistFilter(s16 param_0) {
 }
 
 void JASDsp::TChannel::setBusConnect(u8 param_0, u8 param_1) {
-    NEBULA_BE(u16)* tmp = _10[param_0];
+    u16* tmp = _10[param_0];
     static u16 const connect_table[12] = {
         0x0000, 0x0D00, 0x0D60, 0x0DC0, 0x0E20, 0x0E80, 0x0EE0, 0x0CA0, 0x0F40, 0x0FA0, 0x0B00, 0x09A0,
     };
