@@ -134,24 +134,23 @@ static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 // Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
 // TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
 // sampled with it - indirect stages, then TEV stages, the last one winning - as GX re-derived them then.
-std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state, bool derive) {
+std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state, const NativeDrawState& draw,
+                                                              bool derive) {
     std::array<std::array<std::uint32_t, 2>, 8> scales{};
     for (unsigned c = 0; c < 8u; ++c) {
-        scales[c] = {(state.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + c * 2u)) & 0xFFFFu) + 1u,
-                     (state.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + c * 2u + 1u)) & 0xFFFFu) + 1u};
+        scales[c] = {draw.coord[c].size_minus_one[0] + 1u, draw.coord[c].size_minus_one[1] + 1u};
     }
     if (!derive) {
         return scales;
     }
-    const GenMode gm = state.gen_mode();
-    const std::uint32_t ind_ref = state.bp(bp::kIndRef);
+    const GenMode gm = draw.gen;
     for (unsigned i = 0; i < gm.num_ind_stages && i < 4u; ++i) {
-        const TexImage image = state.tex_image((ind_ref >> (6u * i)) & 7u);
-        scales[(ind_ref >> (6u * i + 3u)) & 7u] = {std::max<std::uint32_t>(image.width, 1u),
+        const TexImage image = state.tex_image(draw.ind_order[i].map);
+        scales[draw.ind_order[i].coord] = {std::max<std::uint32_t>(image.width, 1u),
                                                    std::max<std::uint32_t>(image.height, 1u)};
     }
     for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        const TevOrder order = state.tev_order(s);
+        const TevOrder order = draw.tev[s].order;
         if (order.tex_enable) {
             const TexImage image = state.tex_image(order.texmap);
             scales[order.texcoord & 7u] = {std::max<std::uint32_t>(image.width, 1u),
@@ -823,7 +822,7 @@ void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsCo
 
     // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
     // before sampling.
-    const auto scales = coordinate_scales(state, derive_scales);
+    const auto scales = coordinate_scales(state, draw, derive_scales);
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
         const TexImage img = state.tex_image(m);
         out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
@@ -1854,15 +1853,15 @@ void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& uplo
                                    float jitter_ndc[2]) {
     jitter_ndc[0] = 0.0f;
     jitter_ndc[1] = 0.0f;
-    if (state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+    if (draw_state_.projection_type != 0u) {
         return;
     }
     const auto xf_float = [this](unsigned offset) {
         return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(offset)));
     };
     const float scale = static_cast<float>(renderer_.efb_scale());
-    const float width = 2.0f * std::fabs(xf_float(xf::kViewportBase)) * scale;
-    const float height = 2.0f * std::fabs(xf_float(xf::kViewportBase + 1u)) * scale;
+    const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
+    const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
     if (!(width > 0.0f) || !(height > 0.0f)) {
         return;
     }
@@ -1878,9 +1877,9 @@ void GxBackend::apply_scene_jitter(const GxVsConstants& cpu, GxVsConstants& uplo
     if (!scene_camera_captured_) {
         scene_camera_captured_ = true;
         // GX perspective: clip z = E z + F, w = -z; NDC z -1 at near, 0 at far.
-        const float c = xf_float(xf::kProjectionBase + 2u);
-        const float e = xf_float(xf::kProjectionBase + 4u);
-        const float f = xf_float(xf::kProjectionBase + 5u);
+        const float c = draw_state_.projection[2];
+        const float e = draw_state_.projection[4];
+        const float f = draw_state_.projection[5];
         const float near_plane = f / (e - 1.0f);
         const float far_plane = f / e;
         const float fov_y = c != 0.0f ? 2.0f * std::atan(1.0f / std::fabs(c)) : 1.0f;
@@ -1972,10 +1971,10 @@ void GxBackend::write_scene_vs_constants(const GxVsConstants& cpu, GxVsConstants
     record.translation[1] = record.position[7];
     record.translation[2] = record.position[11];
     for (unsigned i = 0; i < 6u; ++i) {
-        record.projection[i] = xf_float(xf::kProjectionBase + i);
+        record.projection[i] = draw_state_.projection[i];
     }
     record.projection[6] =
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ? 1.0f : 0.0f;
+        draw_state_.projection_type != 0u ? 1.0f : 0.0f;
     TransformHistory& history = side_layer_ == kScreenLayer ? screen_history_
         : side_layer_ == kMirrorLayer                         ? mirror_history_
                                                               : transform_history_;
@@ -2602,9 +2601,9 @@ void GxBackend::begin_rt_sky_batch(RtDrawInfo& info) {
     info = RtDrawInfo{};
     info.surface = kRtDrawSky;
     info.phase = rt_phase_;
-    info.channel = state_.xf(xf::kChannelCtrlBase);
-    info.ambient = state_.xf(xf::kAmbientColorBase);
-    info.material = state_.xf(xf::kMaterialColorBase);
+    info.channel = channel_word(draw_state_.channel[0]);
+    info.ambient = rgba_word(draw_state_.ambient_color[0]);
+    info.material = rgba_word(draw_state_.material_color[0]);
     // The first TEV stage's texture (as the hits' material texture).
     for (unsigned s = 0; s < ps_key_.num_tev_stages && s < 16u; ++s) {
         const std::uint32_t order = ps_key_.stages[s].order;
@@ -2637,7 +2636,7 @@ std::uint32_t GxBackend::debake_channels() const {
     static const bool enabled = read_env_u64("GALAXY_RT_DEBAKE", 1u) != 0u;
     using motion::ScenePhase;
     if (!enabled || (enhanced_ps_flags_ & kEnhancedRtPhysical) == 0u || rt_sky_buffer_ || !scene_phase_ ||
-        side_layer_ != kSceneLayer || state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u ||
+        side_layer_ != kSceneLayer || draw_state_.projection_type != 0u ||
         !(rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
           rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
@@ -2660,7 +2659,7 @@ std::uint32_t GxBackend::debake_channels() const {
     std::uint32_t channels = 0u;
     const unsigned count = std::min<unsigned>(draw_state_.gen.num_color_chans, 2u);
     for (unsigned c = 0; c < count; ++c) {
-        const XfChannelCtrl ctrl = state_.channel_ctrl(c);
+        const XfChannelCtrl ctrl = draw_state_.channel[c];
         if (!ctrl.lighting_enable && ctrl.material_from_vertex && !actor) {
             channels |= 1u << c;
         } else if (ctrl.lighting_enable && lit_enabled && !(actor && ctrl.material_from_vertex)) {
@@ -2675,7 +2674,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
     tev.header = stages | (texgens << 28u);
-    const auto scales = coordinate_scales(state_, scales_from_textures_);
+    const auto scales = coordinate_scales(state_, draw_state_, scales_from_textures_);
     for (unsigned s = 0; s < stages; ++s) {
         const TevStagePacked& packed = ps_key_.stages[s];
         RtTevStage& stage = stages_out[s];
@@ -2722,12 +2721,12 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
             tev.channel[c * 2u + 1u] = 0xFFFFFFFFu;
             continue;
         }
-        const XfChannelCtrl color = state_.channel_ctrl(c);
-        const XfChannelCtrl alpha = state_.channel_ctrl(2u + c);
-        tev.channel[c * 2u] = state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + c));
+        const XfChannelCtrl color = draw_state_.channel[c];
+        const XfChannelCtrl alpha = draw_state_.channel[2u + c];
+        tev.channel[c * 2u] = rgba_word(draw_state_.material_color[c]);
         tev.header |= (color.material_from_vertex ? 1u : 0u) << (24u + 2u * c);
         tev.header |= (alpha.material_from_vertex ? 1u : 0u) << (25u + 2u * c);
-        const std::uint32_t ambient = state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + c));
+        const std::uint32_t ambient = rgba_word(draw_state_.ambient_color[c]);
         float sums[4]{};
         for (unsigned k = 0; k < 4u; ++k) {
             const XfChannelCtrl& ctrl = k < 3u ? color : alpha;
@@ -3156,7 +3155,7 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         RtTevIndirect& ind = info.tev_indirect;
         ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
         const auto coord_size = [this](unsigned coord, unsigned axis) {
-            return coordinate_scales(state_, scales_from_textures_)[coord & 7u][axis];
+            return coordinate_scales(state_, draw_state_, scales_from_textures_)[coord & 7u][axis];
         };
         for (unsigned i = 0; i < ind_stages; ++i) {
             const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
@@ -3329,7 +3328,7 @@ bool GxBackend::rt_water_draw() const noexcept {
 bool GxBackend::rt_ocean_water_draw() const noexcept {
     if (!rt_water_wanted_ || !scene_phase_ || side_layer_ != kSceneLayer || !renderer_.rt_water_open() ||
         draw_positions_indexed() ||
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        draw_state_.projection_type != 0u) {
         return false;
     }
     using motion::ScenePhase;
@@ -3563,7 +3562,7 @@ bool GxBackend::rt_hidden_draw() const noexcept {
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ListXlu) ||
                               rt_phase_ == static_cast<std::uint8_t>(motion::ScenePhase::ImageEffect);
     if (!keep_mirrors && mirror_phase && renderer_.rt_reflections_active()) {
-        const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
+        const std::uint32_t base = static_cast<std::uint32_t>(draw_state_.position_matrix) * 4u;
         const auto m = [this, base](unsigned row, unsigned column) {
             return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(base + row * 4u + column)));
         };
@@ -3635,7 +3634,7 @@ void GxBackend::note_rt_material() {
     note.stages = ps_key_.num_tev_stages;
     note.texgens = vs_key_.num_texgens;
     note.indirect = ps_key_.num_ind_stages;
-    note.channel = state_.xf(xf::kChannelCtrlBase);
+    note.channel = channel_word(draw_state_.channel[0]);
     const unsigned stage = surface.env_stage < 16u ? surface.env_stage : 0u;
     note.combiner = surface.env_stage < 16u ? ps_key_.stages[stage].color_env & 0xFFFFFFu : 0u;
     const BlendMode blend = draw_blend();
@@ -3695,7 +3694,7 @@ bool GxBackend::rt_mist_draw() const noexcept {
 // alpha 0.52) depth 2, the steam's (0.26) 0.8, the droplets' dots (0.14) 0.4. The corners are the draw's vertices in
 // the frame's vertex ring, else JPA's centred quad (JPAResource jpa_pos: +-25 units).
 void GxBackend::note_rt_mist(const DrawCall& call) {
-    const std::uint32_t base = (state_.cp(cp::kMatrixIndexA) & 0x3Fu) * 4u;
+    const std::uint32_t base = static_cast<std::uint32_t>(draw_state_.position_matrix) * 4u;
     float m[3][4];
     for (unsigned r = 0; r < 3u; ++r) {
         for (unsigned c = 0; c < 4u; ++c) {
@@ -3766,7 +3765,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     if (rt_material_census() && scene_phase_ && side_layer_ == kSceneLayer &&
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) [[unlikely]] {
+        draw_state_.projection_type == 0u) [[unlikely]] {
         note_rt_material();
     }
     // GALAXY_RT_UNTRACED=1: once per table material, phase, outcome and reason, what became of a perspective
@@ -3775,7 +3774,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     // bits, colour and depth writes, cull-all, z texture, the alpha test, eligible, scene open).
     static const bool untraced_log = read_env_u64("GALAXY_RT_UNTRACED", 0u) != 0u;
     const bool log_outcome = untraced_log && scene_phase_ && side_layer_ == kSceneLayer && current_rt_material_ != 0u &&
-                             state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+                             draw_state_.projection_type == 0u;
     const auto outcome = [&](const char* what) {
         if (!log_outcome) [[likely]] {
             return;
@@ -3819,7 +3818,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         return false;
     }
     const bool sky = rt_sky_buffer_ && scene_phase_ && side_layer_ == kSceneLayer && renderer_.rt_sky_open() &&
-                     state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u && !rt_hidden_draw();
+                     draw_state_.projection_type == 0u && !rt_hidden_draw();
     if (!scene_phase_ || !(sky || renderer_.rt_scene_open() || renderer_.rt_glow_open() || renderer_.rt_water_open() ||
                            renderer_.rt_late_open())) {
         outcome("closed");
@@ -4020,7 +4019,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         return false;
     }
     const auto projection = [this](unsigned i) {
-        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+        return draw_state_.projection[i];
     };
     for (unsigned i = 0; i < 6u; ++i) {
         info.projection[i] = projection(i);
@@ -4095,9 +4094,9 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                     (surface.env_stage < 16u ? ps_key_.stages[surface.env_stage].color_env & 0xFFFFFFu : 0u) |
                         (static_cast<std::uint32_t>(surface.env_stage) << 24u),
                     vs_key_.channel[0], vs_key_.channel[1]};
-    info.channel = state_.xf(xf::kChannelCtrlBase);
-    info.ambient = state_.xf(xf::kAmbientColorBase);
-    info.material = state_.xf(xf::kMaterialColorBase);
+    info.channel = channel_word(draw_state_.channel[0]);
+    info.ambient = rgba_word(draw_state_.ambient_color[0]);
+    info.material = rgba_word(draw_state_.material_color[0]);
     {
         const auto& fog = draw_state_.fog;
         info.fog = {std::bit_cast<std::uint32_t>(fog.a),
@@ -4108,7 +4107,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                         fog.color[2] | (fog.projection ? 1u << 24u : 0u)};
     }
     {
-        const XfChannelCtrl color = state_.channel_ctrl(0u);
+        const XfChannelCtrl color = draw_state_.channel[0u];
         info.surface = color.lighting_enable && color.light_mask != 0u ? kRtDrawLit : 0u;
         info.surface |= color.lighting_enable && (color.light_mask & 0x10u) != 0u ? kRtDrawPointLit : 0u;
         // The lighting reads its ambient register and light 0 colour (RtDrawInfo).
@@ -4187,7 +4186,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
         }
     }
     {
-        const std::uint8_t mask = state_.channel_ctrl(0u).light_mask;
+        const std::uint8_t mask = draw_state_.channel[0u].light_mask;
         unsigned found = 0u;
         for (unsigned n = 0; n < 8u && found < 2u; ++n) {
             if ((mask & (1u << n)) == 0u) {
@@ -4230,7 +4229,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 break;
             }
             const auto coord_size = [&](unsigned coord, unsigned axis) {
-                return static_cast<float>(coordinate_scales(state_, scales_from_textures_)[coord & 7u][axis]);
+                return static_cast<float>(coordinate_scales(state_, draw_state_, scales_from_textures_)[coord & 7u][axis]);
             };
             const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
             const TexImage wave_image = state_.tex_image(wave_map);
@@ -4279,7 +4278,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
 // sub-frames rebuild their own from it and the scene before's.
 void GxBackend::note_interp_rt_projection() {
     if (!interp_recording_ || side_layer_ != kSceneLayer ||
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        draw_state_.projection_type != 0u) {
         return;
     }
     InterpScene& scene = interp_scenes_[interp_scene_];
@@ -4287,18 +4286,18 @@ void GxBackend::note_interp_rt_projection() {
         return;
     }
     for (unsigned i = 0; i < 6u; ++i) {
-        scene.rt_projection[i] = std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+        scene.rt_projection[i] = draw_state_.projection[i];
     }
     const float scale = static_cast<float>(renderer_.efb_scale());
-    scene.rt_viewport[0] = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
+    scene.rt_viewport[0] = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
     scene.rt_viewport[1] =
-        2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
+        2.0f * std::fabs(draw_state_.viewport[1]) * scale;
     scene.rt_projection_known = true;
 }
 
 RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
     const auto projection = [this](unsigned i) {
-        return std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+        return draw_state_.projection[i];
     };
     // fill_vs_projection: D3D clip z = -(z E + F) (1 - 1e-7).
     constexpr float kFarEps = 1.0f - 1e-7f;
@@ -4307,10 +4306,10 @@ RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
     // The scene's depth is drawn with the temporal upscaler's jitter (apply_scene_jitter: clip x + jx w, so the
     // projection's x offset B becomes B - jx; y likewise). Passes rebuild every sample's position from that depth, so
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
-    if (temporal_scene_ && state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u) {
+    if (temporal_scene_ && draw_state_.projection_type == 0u) {
         const float scale = static_cast<float>(renderer_.efb_scale());
-        const float width = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase)))) * scale;
-        const float height = 2.0f * std::fabs(std::bit_cast<float>(state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + 1u)))) * scale;
+        const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
+        const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
@@ -4329,7 +4328,7 @@ RtView GxBackend::scene_depth_view(const ScaledGxViewport& viewport) const {
 // (MR::clearZBuffer draws through a flattened viewport after the sky and air layers, which may project otherwise).
 void GxBackend::note_scene_ao_view(const DrawCall& call) {
     if (ao_scene_applied_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u || !call.has_viewport) {
+        draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
     }
     const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
@@ -4590,12 +4589,12 @@ bool GxBackend::rt_player_rig_draw() const noexcept {
     if (!rt_player_rig_known_ || draw_state_.gen.num_color_chans == 0u) {
         return false;
     }
-    const XfChannelCtrl color = state_.channel_ctrl(0u);
+    const XfChannelCtrl color = draw_state_.channel[0u];
     if (!color.lighting_enable || (color.light_mask & 3u) != 3u) {
         return false;
     }
     const auto rgb = [this](std::uint16_t address) { return state_.xf(address) & 0xFFFFFF00u; };
-    return rgb(xf::kAmbientColorBase) == rt_player_rig_[0] &&
+    return (rgba_word(draw_state_.ambient_color[0]) & 0xFFFFFF00u) == rt_player_rig_[0] &&
            rgb(static_cast<std::uint16_t>(xf::kLightsBase + 3u)) == rt_player_rig_[1] &&
            rgb(static_cast<std::uint16_t>(xf::kLightsBase + 16u + 3u)) == rt_player_rig_[2];
 }
@@ -4639,7 +4638,7 @@ void GxBackend::note_rt_world_key() noexcept {
     if ((rt_known_lights_ & ~rt_follow_lights_ & 1u) == 0u || !scene_phase_ || side_layer_ != kSceneLayer) {
         return;
     }
-    const XfChannelCtrl channel = state_.channel_ctrl(0u);
+    const XfChannelCtrl channel = draw_state_.channel[0u];
     if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
         return;
     }
@@ -4677,7 +4676,7 @@ void GxBackend::note_rt_world_key() noexcept {
     }
     ++found->draws;
     if (!channel.ambient_from_vertex) {
-        const std::uint32_t a = state_.xf(xf::kAmbientColorBase);
+        const std::uint32_t a = rgba_word(draw_state_.ambient_color[0]);
         found->ambient[0] += static_cast<float>(a >> 24u) / 255.0f;
         found->ambient[1] += static_cast<float>((a >> 16u) & 0xFFu) / 255.0f;
         found->ambient[2] += static_cast<float>((a >> 8u) & 0xFFu) / 255.0f;
@@ -8011,7 +8010,7 @@ void GxBackend::prune_dirty_texture_binding_tables() {
 
 bool GxBackend::curved_draw(std::uint8_t vtxfmt) const {
     if (!curved_surfaces_ || !scene_phase_ || side_layer_ != kSceneLayer ||
-        state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) != 0u) {
+        draw_state_.projection_type != 0u) {
         return false;
     }
     (void)vtxfmt;
@@ -8192,7 +8191,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
     // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
     if (!current_texture_map_mask_valid_ || tev_dirty) {
-        current_texture_map_mask_ = sampled_texture_map_mask(state_);
+        current_texture_map_mask_ = sampled_texture_map_mask(draw_state_);
         current_texture_map_mask_valid_ = true;
     }
     const std::uint8_t texture_map_mask = current_texture_map_mask_;
@@ -8251,7 +8250,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         }
     }
     if (xf_dirty || vcd_dirty || vertex_source_changed || !shader_key_hashes_valid_) {
-        const auto next = build_vertex_shader_key(state_, matrix_bits);
+        const auto next = build_vertex_shader_key(draw_state_, matrix_bits);
         if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
             vs_key_ = next;
             current_vs_hash_ = vs_key_.hash();
@@ -8305,7 +8304,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             // its most lit facing's, at least a quarter of it.
             float up[3];
             decode_octahedral(cpu_vs_constants_.sky_up, up);
-            const unsigned row = std::min(state_.cp(cp::kMatrixIndexA) & 0x3Fu, 61u);
+            const unsigned row = std::min<unsigned>(draw_state_.position_matrix, 61u);
             float model_up[3]{};
             for (unsigned c = 0; c < 3u; ++c) {
                 for (unsigned r = 0; r < 3u; ++r) {
@@ -8375,7 +8374,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                            (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
                           triangles &&
                           scene_phase_ && side_layer_ == kSceneLayer &&
-                          state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+                          draw_state_.projection_type == 0u;
         if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
             enhanced_gate_ = gate;
             enhanced_material_ = gate ? enhanced_lighting_material(vs_key_, ps_key_) : 0u;
@@ -8445,7 +8444,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
             (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
+            draw_state_.projection_type == 0u &&
             (ps_key_.flags & 0x02u) == 0u;
         rt_state_eligible_ = traceable && alpha_test_keeps_all(ps_key_);
         rt_card_eligible_ = traceable && !rt_state_eligible_;
@@ -8454,7 +8453,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+            draw_state_.projection_type == 0u;
         // Water and clear materials are models (indexed positions); particles (steam, smoke, haze with
         // indirect warps) are direct-vertex sprites and never water.
         const bool position_indexed = draw_positions_indexed();
@@ -8463,13 +8462,13 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             !blend.logic_op_enable && !blend.subtract && blend.color_update &&
             blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u;
+            draw_state_.projection_type == 0u;
         rt_water_eligible_ =
             topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
             !blend.logic_op_enable && !blend.subtract && blend.color_update &&
             blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
             render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)) == 0u &&
+            draw_state_.projection_type == 0u &&
             position_indexed;
     }
     // Motion writers: opaque triangles with color writes in a temporal scene
@@ -8735,10 +8734,10 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             std::fprintf(stderr,
                          "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
                          "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
-                         rt_light_serial_, lights & 0xFFu, state_.xf(xf::kChannelCtrlBase),
-                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 1u)),
-                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u)),
-                         state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + 3u)), l[3],
+                         rt_light_serial_, lights & 0xFFu, channel_word(draw_state_.channel[0]),
+                         channel_word(draw_state_.channel[1]),
+                         channel_word(draw_state_.channel[2]),
+                         channel_word(draw_state_.channel[3]), l[3],
                          std::bit_cast<float>(l[4]), std::bit_cast<float>(l[5]), std::bit_cast<float>(l[6]),
                          std::bit_cast<float>(l[7]), std::bit_cast<float>(l[8]), std::bit_cast<float>(l[9]),
                          std::bit_cast<float>(l[10]), std::bit_cast<float>(l[11]), std::bit_cast<float>(l[12]), l[19],
@@ -8821,7 +8820,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const GxVsConstants& vs_c = cpu_vs_constants_.update(
-            state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
+            state_, draw_state_, dirty, renderer_.efb_scale(), frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(GxVsConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
@@ -9304,8 +9303,7 @@ bool GxBackend::begin_cached_draw_run(
     cached_draw_run_state_call_.topology       = draw_topology(topology);
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
-        cached_draw_run_state_call_.xf_viewport[i] = std::bit_cast<float>(
-            state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
+        cached_draw_run_state_call_.xf_viewport[i] = draw_state_.viewport[i];
     }
     // Viewport origin in EFB pixels: screen position minus the scissor offset.
     cached_draw_run_state_call_.xf_viewport[3] -= static_cast<float>(efb_sc.offset.x);
@@ -9671,6 +9669,10 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
                                 static_cast<std::uint32_t>(c[8]) << 18u;
         state_.load_cp(cp::kMatrixIndexA, a);
         state_.load_cp(cp::kMatrixIndexB, b);
+        draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] & 63u);
+        for (unsigned i = 0; i < 8u; ++i) {
+            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(c[1u + i] & 63u);
+        }
         const std::uint32_t words[2] = {a, b};
         state_.load_xf(0x1018u, words, 2u);
     }
@@ -9679,6 +9681,8 @@ void GxBackend::apply_record_matrices(const shapes::Record& record) {
         const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
         state_.load_xf(static_cast<std::uint16_t>(0x1040u + g[0]), &gen, 1u);
         state_.load_xf(static_cast<std::uint16_t>(0x1050u + g[0]), &post, 1u);
+        draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
+        draw_state_.post_texgen[g[0] & 7u] = decode_xf_post_texgen(post);
     }
 }
 
@@ -9749,6 +9753,69 @@ void GxBackend::check_draw_state() {
         expected.fog.color[1] = static_cast<std::uint8_t>(fp.color_rgb >> 8u);
         expected.fog.color[2] = static_cast<std::uint8_t>(fp.color_rgb);
     }
+    {
+        std::string words;
+        const auto word = [&](const char* name, unsigned index, std::uint32_t have, std::uint32_t want) {
+            if (have != want) {
+                char line[96];
+                std::snprintf(line, sizeof(line), " %s%u=%08x/%08x", name, index, have, want);
+                words += line;
+            }
+        };
+        for (unsigned i = 0; i < 4u; ++i) {
+            word("channel", i, channel_word(draw_state_.channel[i]), state_.xf(static_cast<std::uint16_t>(xf::kChannelCtrlBase + i)));
+        }
+        for (unsigned i = 0; i < 2u; ++i) {
+            word("matcolor", i, rgba_word(draw_state_.material_color[i]), state_.xf(static_cast<std::uint16_t>(xf::kMaterialColorBase + i)));
+            word("ambcolor", i, rgba_word(draw_state_.ambient_color[i]), state_.xf(static_cast<std::uint16_t>(xf::kAmbientColorBase + i)));
+        }
+        for (unsigned i = 0; i < 8u; ++i) {
+            word("texgen", i, texgen_word(draw_state_.texgen[i]), state_.xf(static_cast<std::uint16_t>(xf::kTexGenBase + i)));
+            word("posttexgen", i, post_texgen_word(draw_state_.post_texgen[i]), state_.xf(static_cast<std::uint16_t>(xf::kPostTexGenBase + i)));
+            word("coords", i, coord_s_word(draw_state_, i), state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + 2u * i)));
+            word("coordt", i, coord_t_word(draw_state_, i) & 0x3FFFFu,
+                 state_.bp(static_cast<std::uint8_t>(bp::kTexCoordSizeBase + 2u * i + 1u)) & 0x3FFFFu);
+        }
+        for (unsigned i = 0; i < 6u; ++i) {
+            word("projection", i, std::bit_cast<std::uint32_t>(draw_state_.projection[i]),
+                 state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + i)));
+            word("viewport", i, std::bit_cast<std::uint32_t>(draw_state_.viewport[i]),
+                 state_.xf(static_cast<std::uint16_t>(xf::kViewportBase + i)));
+        }
+        word("projtype", 0u, draw_state_.projection_type, state_.xf(static_cast<std::uint16_t>(xf::kProjectionBase + 6u)));
+        word("mtxa", 0u, matrix_index_a(draw_state_), state_.cp(cp::kMatrixIndexA));
+        word("mtxb", 0u, matrix_index_b(draw_state_), state_.cp(cp::kMatrixIndexB));
+        word("mtxaxf", 0u, matrix_index_a(draw_state_), state_.xf(0x1018u));
+        word("mtxbxf", 0u, matrix_index_b(draw_state_), state_.xf(0x1019u));
+        word("linepoint", 0u, line_point_word(draw_state_), state_.bp(bp::kSuLpSize));
+        static std::uint64_t word_draws = 0, word_mismatches = 0;
+        ++word_draws;
+        if (!words.empty() && ++word_mismatches <= 40u) {
+            std::fprintf(stderr, "[draw-state] frame %llu words:%s\n", static_cast<unsigned long long>(frame_index_),
+                         words.c_str());
+        }
+        if (word_draws % 200000u == 0u) {
+            std::fprintf(stderr, "[draw-state] words %llu draws, %llu mismatches\n",
+                         static_cast<unsigned long long>(word_draws), static_cast<unsigned long long>(word_mismatches));
+        }
+    }
+    for (unsigned i = 0; i < 4u; ++i) {
+        expected.channel[i] = state_.channel_ctrl(i);
+    }
+    for (unsigned i = 0; i < 8u; ++i) {
+        expected.texgen[i] = state_.tex_gen(i);
+        expected.post_texgen[i] = state_.post_tex_gen(i);
+    }
+    // The remaining vertex fields are compared as words above.
+    std::memcpy(expected.material_color, draw_state_.material_color, sizeof(expected.material_color));
+    std::memcpy(expected.ambient_color, draw_state_.ambient_color, sizeof(expected.ambient_color));
+    std::memcpy(expected.coord, draw_state_.coord, sizeof(expected.coord));
+    std::memcpy(expected.projection, draw_state_.projection, sizeof(expected.projection));
+    std::memcpy(expected.viewport, draw_state_.viewport, sizeof(expected.viewport));
+    expected.projection_type = draw_state_.projection_type;
+    expected.position_matrix = draw_state_.position_matrix;
+    std::memcpy(expected.texture_matrix, draw_state_.texture_matrix, sizeof(expected.texture_matrix));
+    expected.line_point = draw_state_.line_point;
     const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
     for (unsigned i = 0; i < 4u; ++i) {
         const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);
@@ -9811,7 +9878,7 @@ void GxBackend::draw_record_shape(const shapes::Record& record) {
     }
     // Corners without a position matrix of their own take the one J3DCurrentMtx::load set.
     const auto position_matrix = static_cast<std::uint8_t>(
-        (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : state_.cp(cp::kMatrixIndexA) & 0x3Fu);
+        (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : draw_state_.position_matrix);
     if (!shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix) {
         // The model's analysis for its curved surfaces (its first draw waits for it).
         shape.curved = curved::find_model(keys[0]);
@@ -9992,7 +10059,7 @@ void GxBackend::draw_record_immediate(const shapes::Immediate& immediate) {
         return;
     }
     // Vertices without a position matrix of their own take the current one (as GX's direct vertices did).
-    const auto position_matrix = static_cast<std::uint8_t>(state_.cp(cp::kMatrixIndexA) & 0x3Fu);
+    const std::uint8_t position_matrix = draw_state_.position_matrix;
     if (!shapes::expand(geometry, arrays, position_matrix, nullptr, immediate_vertices_)) {
         return;
     }

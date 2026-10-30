@@ -304,30 +304,29 @@ int main() {
     }
 
     {
-        GxState state;
-        const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
-            state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
-        };
-        write_bp(bp::kTevOrderBase, 1u | (1u << 6u));
-        write_bp(bp::kGenMode, (1u << 16u) | 1u);
-        write_bp(bp::kIndRef, 5u);
+        NativeDrawState state;
+        state.tev[0].order = TevOrder{1u, 0u, true, 0u};
+        state.gen.num_texgens = 1u;
+        state.gen.num_ind_stages = 1u;
+        state.ind_order[0].map = 5u;
         if (sampled_texture_map_mask(state) !=
             static_cast<std::uint8_t>((1u << 1u) | (1u << 5u))) {
             ++g_failures;
             std::printf("FAILED: indirect texmap included in sampled bindings\n");
         }
-        write_bp(bp::kGenMode, 1u << 16u);
+        state.gen.num_texgens = 0u;
         if (sampled_texture_map_mask(state) != static_cast<std::uint8_t>(1u << 5u)) {
             ++g_failures;
             std::printf("FAILED: no-texgen draw bound unused direct map\n");
         }
-        write_bp(bp::kGenMode, (1u << 16u) | 1u);
+        state.gen.num_texgens = 1u;
 
         // Shader key generation extends the indirect-stage count when a TEV
         // command references a stage beyond the GenMode count. The binding
         // and snapshot mask must cover exactly those emitted samples too.
-        write_bp(bp::kIndRef, 5u | (6u << 6u) | (7u << 12u));
-        write_bp(bp::kIndCmdBase, 2u);
+        state.ind_order[1].map = 6u;
+        state.ind_order[2].map = 7u;
+        state.ind[0].stage = 2u;
         if (sampled_texture_map_mask(state) !=
             static_cast<std::uint8_t>(
                 (1u << 1u) | (1u << 5u) | (1u << 6u) | (1u << 7u))) {
@@ -337,13 +336,14 @@ int main() {
     }
 
     {
-        GxState state;
-        const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
-            state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
-        };
+        NativeDrawState state;
         constexpr auto map_bit = static_cast<std::uint8_t>(1u << 6u);
-        write_bp(bp::kGenMode, 1u);
-        write_bp(bp::kTevOrderBase, 6u | (1u << 6u));
+        state.gen.num_texgens = 1u;
+        state.tev[0].order = TevOrder{6u, 0u, true, 0u};
+        TevColorArg* const colors[4] = {&state.tev[0].color_d, &state.tev[0].color_c, &state.tev[0].color_b,
+                                        &state.tev[0].color_a};
+        TevAlphaArg* const alphas[4] = {&state.tev[0].alpha_d, &state.tev[0].alpha_c, &state.tev[0].alpha_b,
+                                        &state.tev[0].alpha_a};
         if (sampled_texture_map_mask(state) != 0u) {
             ++g_failures;
             std::printf("FAILED: dead texture stage bound leftover map\n");
@@ -352,7 +352,10 @@ int main() {
         // Other operands remain nontexture register inputs.
         for (unsigned input = 0; input < 4u; ++input) {
             for (unsigned value = 0; value < 16u; ++value) {
-                write_bp(bp::kTevColorEnvBase, value << (input * 4u));
+                for (TevColorArg* c : colors) {
+                    *c = TevColorArg{};
+                }
+                *colors[input] = static_cast<TevColorArg>(value);
                 const auto expected = static_cast<std::uint8_t>(
                     value == 8u || value == 9u ? map_bit : 0u);
                 if (sampled_texture_map_mask(state) != expected) {
@@ -361,10 +364,15 @@ int main() {
                 }
             }
         }
-        write_bp(bp::kTevColorEnvBase, 0u);
+        for (TevColorArg* c : colors) {
+            *c = TevColorArg{};
+        }
         for (unsigned input = 0; input < 4u; ++input) {
             for (unsigned value = 0; value < 8u; ++value) {
-                write_bp(bp::kTevAlphaEnvBase, value << (4u + input * 3u));
+                for (TevAlphaArg* a : alphas) {
+                    *a = TevAlphaArg{};
+                }
+                *alphas[input] = static_cast<TevAlphaArg>(value);
                 const auto expected = static_cast<std::uint8_t>(value == 4u ? map_bit : 0u);
                 if (sampled_texture_map_mask(state) != expected) {
                     ++g_failures;
@@ -372,26 +380,26 @@ int main() {
                 }
             }
         }
-        write_bp(bp::kTevAlphaEnvBase, 0u);
-        write_bp(bp::kTevZEnv1, 4u);
+        for (TevAlphaArg* a : alphas) {
+            *a = TevAlphaArg{};
+        }
+        state.z_texture.op = 1u;
         if (sampled_texture_map_mask(state) != map_bit) {
             ++g_failures;
             std::printf("FAILED: z-texture retains raw sample without TEX operands\n");
         }
-        write_bp(bp::kGenMode, 0u);
+        state.gen.num_texgens = 0u;
         if (sampled_texture_map_mask(state) != 0u) {
             ++g_failures;
             std::printf("FAILED: no texgens cannot supply z-texture raw sample\n");
         }
         for (unsigned stage = 0; stage < kMaxTevStages; ++stage) {
-            GxState staged;
-            staged.load_bp((static_cast<std::uint32_t>(bp::kGenMode) << 24u) |
-                           (stage << 10u) | 1u);
+            NativeDrawState staged;
+            staged.gen.num_texgens = 1u;
+            staged.gen.num_tev_stages = static_cast<std::uint8_t>(stage + 1u);
             const unsigned map = stage & 7u;
-            staged.load_bp((static_cast<std::uint32_t>(bp::kTevOrderBase + stage / 2u) << 24u) |
-                           ((map | (1u << 6u)) << ((stage & 1u) * 12u)));
-            staged.load_bp((static_cast<std::uint32_t>(bp::kTevColorEnvBase + 2u * stage) << 24u) |
-                           8u);
+            staged.tev[stage].order = TevOrder{static_cast<std::uint8_t>(map), 0u, true, 0u};
+            staged.tev[stage].color_d = TevColorArg::TexColor;
             if (sampled_texture_map_mask(staged) != static_cast<std::uint8_t>(1u << map)) {
                 ++g_failures;
                 std::printf("FAILED: live texture stage/map coverage\n");
@@ -470,8 +478,8 @@ int main() {
 
     {   // Finite light attenuation: the key bit marks lit channels with specular or spotlight
         // attenuation and at least one light; only those keys change source.
-        GxState state;
-        state.load_bp(1u << 4u);  // one colour channel
+        NativeDrawState state;
+        state.gen.num_color_chans = 1u;
         const struct {
             std::uint32_t control;
             bool finite;
@@ -486,8 +494,8 @@ int main() {
             {chan_ctrl(true, false, 0x03, false, 2, 3), false, "finite_attn_key_unlit"},
         };
         for (const auto& c : cases) {
-            state.load_xf(xf::kChannelCtrlBase, &c.control, 1u);
-            const bool finite = (build_vertex_shader_key(state).flags & kVsKeyFiniteLightAttn) != 0u;
+            state.channel[0] = decode_xf_channel_ctrl(c.control);
+            const bool finite = (build_vertex_shader_key(state, 0u).flags & kVsKeyFiniteLightAttn) != 0u;
             if (finite != c.finite) {
                 ++g_failures;
                 std::printf("FAILED: %s\n", c.label);
@@ -1538,23 +1546,19 @@ int main() {
         }
     }
     {
-        GxState state;
-        state.load_bp(1u); // one regular texgen
-        const std::uint32_t regular = 5u << 7u;
-        state.load_xf(xf::kTexGenBase, &regular, 1u);
+        NativeDrawState state;
+        state.gen.num_texgens = 1u;  // one regular texgen
+        state.texgen[0] = decode_xf_texgen(5u << 7u);
         // Post-transform texture matrices are always on (natively there is no revision bit).
-        const std::uint32_t post = 29u | (1u << 8u);
-        state.load_xf(xf::kPostTexGenBase, &post, 1u);
-        const auto enabled = build_vertex_shader_key(state);
-        const std::uint32_t other_post = 7u | (1u << 8u);
-        state.load_xf(xf::kPostTexGenBase, &other_post, 1u);
-        if (!(enabled == build_vertex_shader_key(state))) {
+        state.post_texgen[0] = decode_xf_post_texgen(29u | (1u << 8u));
+        const auto enabled = build_vertex_shader_key(state, 0u);
+        state.post_texgen[0] = decode_xf_post_texgen(7u | (1u << 8u));
+        if (!(enabled == build_vertex_shader_key(state, 0u))) {
             ++g_failures;
             std::printf("FAILED: uniform post matrix index fragmented shader key\n");
         }
-        const std::uint32_t unnormalized = 7u;
-        state.load_xf(xf::kPostTexGenBase, &unnormalized, 1u);
-        if (enabled == build_vertex_shader_key(state)) {
+        state.post_texgen[0] = decode_xf_post_texgen(7u);
+        if (enabled == build_vertex_shader_key(state, 0u)) {
             ++g_failures;
             std::printf("FAILED: post normalize dropped from shader key\n");
         }

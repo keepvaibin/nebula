@@ -47,6 +47,31 @@ struct NativeDrawState {
     // mantissa and shift, the projection (true: orthographic) and the colour.
     struct { float a, c; std::uint32_t b_magnitude, b_shift; bool projection; std::uint8_t color[3]; } fog{};
 
+    // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
+    // colours (RGBA) of channels 0 and 1.
+    XfChannelCtrl channel[4]{};
+    std::uint8_t material_color[2][4]{};
+    std::uint8_t ambient_color[2][4]{};
+    // Texture coordinate generation and each coordinate's post-transform matrix.
+    XfTexGen texgen[8]{};
+    XfPostTexGen post_texgen[8]{};
+    // The projection's six terms and type (0 perspective), the viewport (half width, half height, depth range,
+    // centre x, centre y, far).
+    float projection[6]{};
+    std::uint8_t projection_type = 0u;
+    float viewport[6]{};
+    // The current matrices: the position/normal matrix row and each texture coordinate's.
+    std::uint8_t position_matrix = 0u;
+    std::uint8_t texture_matrix[8]{};
+    // Lines and points: width and size (sixths of a pixel), their texture coordinate offsets.
+    struct { std::uint8_t line_width, point_size, line_offset, point_offset; } line_point{};
+    // Each coordinate's rasterizer scale (s, t: the scale minus one, bias, cylindrical wrap) and its line and point
+    // offset enables.
+    struct {
+        std::uint16_t size_minus_one[2];
+        bool bias[2], wrap[2], line_offset, point_offset;
+    } coord[8]{};
+
     // A state op (galaxy/gx/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
@@ -61,6 +86,19 @@ struct NativeDrawState {
 [[nodiscard]] std::uint32_t tev_alpha_word(const TevStageConfig& stage);
 [[nodiscard]] std::uint32_t ind_ref_word(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair);
+// The shaders' packed forms of the vertex state (their constants and keys).
+[[nodiscard]] std::uint32_t channel_word(const XfChannelCtrl& channel);
+[[nodiscard]] std::uint32_t texgen_word(const XfTexGen& texgen);
+[[nodiscard]] std::uint32_t post_texgen_word(const XfPostTexGen& post);
+[[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
+// The matrix indices as two words (position and coordinates 0-3; coordinates 4-7), six bits each.
+[[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
+[[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
+[[nodiscard]] std::uint32_t line_point_word(const NativeDrawState& state);
+// Coordinate `c`'s s (with the line and point offsets) and t scale words.
+[[nodiscard]] std::uint32_t coord_s_word(const NativeDrawState& state, unsigned c);
+[[nodiscard]] std::uint32_t coord_t_word(const NativeDrawState& state, unsigned c);
+
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);
 

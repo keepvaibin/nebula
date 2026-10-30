@@ -223,15 +223,11 @@ PixelShaderKey build_pixel_shader_key(
     return key;
 }
 
-VertexShaderKey build_vertex_shader_key(const GxState& state) {
-    return build_vertex_shader_key(state, state.cp(cp::kVcdLo));
-}
-
-VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matrix_bits) {
+VertexShaderKey build_vertex_shader_key(const NativeDrawState& state, std::uint32_t matrix_bits) {
     VertexShaderKey key{};
     std::memset(&key, 0, sizeof(key));
 
-    const GenMode gm = state.gen_mode();
+    const GenMode gm = state.gen;
     key.num_texgens = gm.num_texgens;
     key.num_chans   = gm.num_color_chans;
 
@@ -243,8 +239,8 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
 
     bool lighting_active = false;
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
-        if (state.channel_ctrl(ch).lighting_enable ||
-            state.channel_ctrl(2u + ch).lighting_enable) {
+        if (state.channel[ch].lighting_enable ||
+            state.channel[2u + ch].lighting_enable) {
             lighting_active = true;
             break;
         }
@@ -271,8 +267,7 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
     bool matrix_texgen_active = false;
     // Encode only the active texgen and post-texgen words; unused slots stay 0.
     for (unsigned i = 0; i < key.num_texgens && i < kMaxTexGens; ++i) {
-        key.texgen[i] = state.xf(
-            static_cast<std::uint16_t>(xf::kTexGenBase + i));
+        key.texgen[i] = texgen_word(state.texgen[i]);
         // Fields the generator ignores for a texgen type are leftover register
         // state; keep them out of the key so they cannot duplicate a shader.
         // Color texgens read only their type; regular texgens never read the
@@ -299,8 +294,7 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
         // Matrix rows are supplied through inline uniforms from raw XF state.
         // Only normalize changes HLSL, and only for regular dual texgens.
         if (dual_tex && decode_xf_texgen(key.texgen[i]).type == TexGenType::Regular) {
-            key.post_texgen[i] = state.xf(
-                static_cast<std::uint16_t>(xf::kPostTexGenBase + i)) & (1u << 8u);
+            key.post_texgen[i] = post_texgen_word(state.post_texgen[i]) & (1u << 8u);
         }
     }
 
@@ -314,10 +308,8 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
         return (control & 0x2u) != 0u ? (control & 0x7FFFu) : (control & 0x1u);
     };
     for (unsigned ch = 0; ch < key.num_chans && ch < 2u; ++ch) {
-        key.channel[ch] = canonical_channel(state.xf(
-            static_cast<std::uint16_t>(xf::kChannelCtrlBase + ch)));
-        key.channel[2u + ch] = canonical_channel(state.xf(
-            static_cast<std::uint16_t>(xf::kChannelCtrlBase + 2u + ch)));
+        key.channel[ch] = canonical_channel(channel_word(state.channel[ch]));
+        key.channel[2u + ch] = canonical_channel(channel_word(state.channel[2u + ch]));
     }
     // A lit channel (bit 1) with attenuation (bit 9: specular or spotlight) and lights (bits 2-5, 11-14).
     for (const std::uint32_t control : key.channel) {

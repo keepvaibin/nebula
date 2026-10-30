@@ -122,6 +122,25 @@ void perspective_fog(float start, float end, float near_z, float far_z, float& a
     b_m = static_cast<std::uint32_t>(mant * 8388638);
 }
 
+// GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel control's diffuse function only with an attenuation).
+XfChannelCtrl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
+                           std::uint8_t ambient_source, std::uint8_t diffuse, std::uint8_t attenuation) {
+    const std::uint32_t word = static_cast<std::uint32_t>(material_source) | static_cast<std::uint32_t>(enable) << 1u |
+                               static_cast<std::uint32_t>(light_mask & 15u) << 2u |
+                               static_cast<std::uint32_t>(ambient_source) << 6u |
+                               (attenuation == 0u ? 0u : static_cast<std::uint32_t>(diffuse)) << 7u |
+                               static_cast<std::uint32_t>(attenuation != 2u) << 9u |
+                               static_cast<std::uint32_t>(attenuation != 0u) << 10u |
+                               static_cast<std::uint32_t>(light_mask >> 4u) << 11u;
+    return decode_xf_channel_ctrl(word);
+}
+
+void set_rgba(std::uint8_t* out, std::uint32_t word) {
+    for (unsigned i = 0; i < 4u; ++i) {
+        out[i] = static_cast<std::uint8_t>(word >> (24u - 8u * i));
+    }
+}
+
 IndirectStage material_indirect(const material::TevStage& s) {
     return indirect_stage(s.ind_stage, s.ind_format, s.ind_bias, s.ind_alpha, s.ind_matrix, s.ind_wrap_s,
                           s.ind_wrap_t, s.ind_lod, s.ind_prev);
@@ -284,6 +303,65 @@ void NativeDrawState::apply(const state::Op& op) {
         fog.color[2] = a[3];
         break;
     }
+    case state::kChannel: {
+        const XfChannelCtrl channel_ctrl = make_channel(a[3], a[1], a[4], a[2], a[5], a[6]);
+        channel[a[0] & 3u] = channel_ctrl;
+        if (a[0] == 4u || a[0] == 5u) {  // GX_COLOR0A0, GX_COLOR1A1: the alpha channel too
+            channel[a[0] - 2u] = channel_ctrl;
+        }
+        break;
+    }
+    case state::kMaterialColor:
+    case state::kAmbientColor: {
+        std::uint8_t* colour = op.kind == state::kMaterialColor ? material_color[a[0] & 1u] : ambient_color[a[0] & 1u];
+        // GXSetChan*Color: GX_COLOR0/1 keep the alpha, GX_ALPHA0/1 keep the colour.
+        const bool keep = a[5] != 0u && a[0] < 4u;
+        for (unsigned c = 0; c < 4u; ++c) {
+            if (!keep || (a[0] < 2u) == (c < 3u)) {
+                colour[c] = a[1u + c];
+            }
+        }
+        break;
+    }
+    case state::kTexCoordGen: {
+        std::uint32_t word = material::tex_gen_word(a[1], a[2]);
+        if (a[5] != 0u && (a[1] < 2u || a[1] > 9u)) {
+            word &= ~(0x7u << 12u);  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
+        }
+        texgen[a[0] & 7u] = decode_xf_texgen(word);
+        post_texgen[a[0] & 7u] = decode_xf_post_texgen(
+            static_cast<std::uint32_t>(static_cast<std::int32_t>(a[4]) - 64) | static_cast<std::uint32_t>(a[3]) << 8u);
+        if (a[5] != 0u) {
+            texture_matrix[a[0] & 7u] = static_cast<std::uint8_t>(a[6] & 63u);
+        }
+        break;
+    }
+    case state::kProjection:
+        for (unsigned i = 0; i < 6u; ++i) {
+            projection[i] = op.f[i];
+        }
+        projection_type = a[0];
+        break;
+    case state::kViewport:
+        for (unsigned i = 0; i < 6u; ++i) {
+            viewport[i] = op.f[i];
+        }
+        break;
+    case state::kCurrentMatrix:
+        position_matrix = static_cast<std::uint8_t>(a[0] & 63u);
+        break;
+    case state::kLineWidth:
+        line_point.line_width = a[0];
+        line_point.line_offset = static_cast<std::uint8_t>(a[1] & 7u);
+        break;
+    case state::kPointSize:
+        line_point.point_size = a[0];
+        line_point.point_offset = static_cast<std::uint8_t>(a[1] & 7u);
+        break;
+    case state::kTexOffsets:
+        coord[a[0] & 7u].line_offset = (a[1] & 1u) != 0u;
+        coord[a[0] & 7u].point_offset = (a[2] & 1u) != 0u;
+        break;
     case state::kTevColor:
         for (unsigned c = 0; c < 4u; ++c) {
             tev_color[a[0] & 3u][c] = a[1u + c];
@@ -394,9 +472,59 @@ void NativeDrawState::apply(const material::Material& m) {
             fog.color[i] = m.fog.color[i];
         }
     };
+    // J3D's coordinate scale (J3DTexCoordScaleInfo): the s word keeps the line and point offsets.
+    const auto coord_scale = [&](unsigned c) {
+        const auto& s = m.tex_coord_scale[c & 7u];
+        auto& out = coord[c & 7u];
+        const std::uint32_t sw = (static_cast<std::uint32_t>(s.scale_s - 1u) | static_cast<std::uint32_t>(s.bias_s) << 16u) & 0x3FFFFu;
+        const std::uint32_t tw = static_cast<std::uint32_t>(s.scale_t - 1u) | static_cast<std::uint32_t>(s.bias_t) << 16u;
+        out.size_minus_one[0] = static_cast<std::uint16_t>(sw);
+        out.bias[0] = ((sw >> 16u) & 1u) != 0u;
+        out.wrap[0] = ((sw >> 17u) & 1u) != 0u;
+        out.size_minus_one[1] = static_cast<std::uint16_t>(tw);
+        out.bias[1] = ((tw >> 16u) & 1u) != 0u;
+        out.wrap[1] = ((tw >> 17u) & 1u) != 0u;
+    };
+    const auto tex_gens = [&] {
+        for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
+            texgen[i] = decode_xf_texgen(material::tex_gen_word(m.tex_gen[i].type, m.tex_gen[i].source));
+            post_texgen[i] = decode_xf_post_texgen(m.tex_gen[i].post_matrix);
+        }
+    };
+    // Channel controls (J3D orders colour 0, alpha 0, colour 1, alpha 1).
+    const auto channels = [&] {
+        static constexpr unsigned kOrder[4] = {0u, 2u, 1u, 3u};
+        for (unsigned i = 0; i < 4u; ++i) {
+            const auto& c = m.channel[kOrder[i]];
+            channel[i] = make_channel(c.material_source, c.enable, c.light_mask, c.ambient_source, c.diffuse,
+                                      c.attenuation);
+        }
+    };
+    const auto material_colours = [&] {
+        for (unsigned i = 0; i < 2u; ++i) {
+            for (unsigned c = 0; c < 4u; ++c) {
+                material_color[i][c] = m.material_color[i][c];
+            }
+        }
+    };
     const unsigned stages = m.tev_stages < 16u ? m.tev_stages : 16u;
     const std::uint32_t f = m.diff_flags;
     if (f != 0u) {
+        if ((f & 0x4000000u) != 0u) {  // TexCoordScale
+            for (unsigned i = 0; i < m.tev_stages; i += 2u) {
+                coord_scale(m.tev[i].tex_coord);
+                coord_scale(m.tev[i + 1u].tex_coord);
+            }
+        }
+        if (((f >> 8u) & 15u) != 0u && (f & 0x1000u) != 0u) {  // TexGenNum: diffTexGen
+            tex_gens();
+        }
+        if ((f & 0x1u) != 0u) {  // MatColor
+            material_colours();
+        }
+        if ((f & 0x2u) != 0u || ((f >> 4u) & 15u) != 0u) {  // ColorChan or LightObjNum: diffLight
+            channels();
+        }
         if (((f >> 20u) & 15u) != 0u) {  // TevStageNum: diffTevStage, then diffTevStageIndirect
             for (unsigned i = 0; i < stages; ++i) {
                 stage_env(i);
@@ -430,6 +558,12 @@ void NativeDrawState::apply(const material::Material& m) {
                 const material::TevStage& s = m.tev[j];
                 set_order(tev[j].order, static_cast<std::uint8_t>(s.tex_coord >= 8u ? 0u : s.tex_coord), s.tex_map,
                           s.channel);
+            }
+        }
+        for (unsigned i = 0; i < m.tev_stages; i += 2u) {
+            coord_scale(m.tev[i].tex_coord);
+            if (i + 1u < m.tev_stages || m.tev[i + 1u].tex_map != 0xFFu) {
+                coord_scale(m.tev[i + 1u].tex_coord);
             }
         }
         tev_registers();
@@ -468,12 +602,29 @@ void NativeDrawState::apply(const material::Material& m) {
             }
         }
         for (unsigned i = 0; i < 4u; ++i) {
+            coord_scale(m.ind_order[i].coord);
+        }
+        for (unsigned i = 0; i < 4u; ++i) {
             ind_order[i].map = static_cast<std::uint8_t>(m.ind_order[i].map & 7u);
             ind_order[i].coord = static_cast<std::uint8_t>(m.ind_order[i].coord & 7u);
         }
     }
     if ((m.loads & material::kLoadsFog) != 0u) {
         material_fog();
+    }
+    if (m.tex_gens != 0u) {
+        tex_gens();
+    }
+    if ((m.loads & material::kLoadsChannels) != 0u) {
+        material_colours();
+        if ((m.loads & material::kLoadsAmbient) != 0u) {
+            for (unsigned i = 0; i < 2u; ++i) {
+                for (unsigned c = 0; c < 4u; ++c) {
+                    ambient_color[i][c] = m.ambient_color[i][c];
+                }
+            }
+        }
+        channels();
     }
     alpha.comp0 = static_cast<CompareFunc>(m.alpha_compare.comp0 & 7u);
     alpha.ref0 = m.alpha_compare.ref0;
@@ -528,6 +679,58 @@ std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair) {
     const auto& b = state.ind_order[2u * pair + 1u];
     return static_cast<std::uint32_t>(a.scale_s) | static_cast<std::uint32_t>(a.scale_t) << 4u |
            static_cast<std::uint32_t>(b.scale_s) << 8u | static_cast<std::uint32_t>(b.scale_t) << 12u;
+}
+
+std::uint32_t channel_word(const XfChannelCtrl& c) {
+    return static_cast<std::uint32_t>(c.material_from_vertex) | static_cast<std::uint32_t>(c.lighting_enable) << 1u |
+           static_cast<std::uint32_t>(c.light_mask & 15u) << 2u | static_cast<std::uint32_t>(c.ambient_from_vertex) << 6u |
+           static_cast<std::uint32_t>(c.diffuse_func) << 7u | static_cast<std::uint32_t>(c.atten_func) << 9u |
+           static_cast<std::uint32_t>(c.light_mask >> 4u) << 11u;
+}
+
+std::uint32_t texgen_word(const XfTexGen& g) {
+    return static_cast<std::uint32_t>(g.generate_stq) << 1u | static_cast<std::uint32_t>(g.input_form_abc1) << 2u |
+           static_cast<std::uint32_t>(g.type) << 4u | static_cast<std::uint32_t>(g.source_row) << 7u |
+           static_cast<std::uint32_t>(g.emboss_source) << 12u | static_cast<std::uint32_t>(g.emboss_light) << 15u;
+}
+
+std::uint32_t post_texgen_word(const XfPostTexGen& p) {
+    return static_cast<std::uint32_t>(p.matrix_index) | static_cast<std::uint32_t>(p.normalize) << 8u;
+}
+
+std::uint32_t rgba_word(const std::uint8_t* c) {
+    return static_cast<std::uint32_t>(c[0]) << 24u | static_cast<std::uint32_t>(c[1]) << 16u |
+           static_cast<std::uint32_t>(c[2]) << 8u | c[3];
+}
+
+std::uint32_t matrix_index_a(const NativeDrawState& s) {
+    return static_cast<std::uint32_t>(s.position_matrix) | static_cast<std::uint32_t>(s.texture_matrix[0]) << 6u |
+           static_cast<std::uint32_t>(s.texture_matrix[1]) << 12u | static_cast<std::uint32_t>(s.texture_matrix[2]) << 18u |
+           static_cast<std::uint32_t>(s.texture_matrix[3]) << 24u;
+}
+
+std::uint32_t matrix_index_b(const NativeDrawState& s) {
+    return static_cast<std::uint32_t>(s.texture_matrix[4]) | static_cast<std::uint32_t>(s.texture_matrix[5]) << 6u |
+           static_cast<std::uint32_t>(s.texture_matrix[6]) << 12u | static_cast<std::uint32_t>(s.texture_matrix[7]) << 18u;
+}
+
+std::uint32_t line_point_word(const NativeDrawState& s) {
+    return static_cast<std::uint32_t>(s.line_point.line_width) | static_cast<std::uint32_t>(s.line_point.point_size) << 8u |
+           static_cast<std::uint32_t>(s.line_point.line_offset) << 16u |
+           static_cast<std::uint32_t>(s.line_point.point_offset) << 19u;
+}
+
+std::uint32_t coord_s_word(const NativeDrawState& s, unsigned c) {
+    const auto& k = s.coord[c & 7u];
+    return static_cast<std::uint32_t>(k.size_minus_one[0]) | static_cast<std::uint32_t>(k.bias[0]) << 16u |
+           static_cast<std::uint32_t>(k.wrap[0]) << 17u | static_cast<std::uint32_t>(k.line_offset) << 18u |
+           static_cast<std::uint32_t>(k.point_offset) << 19u;
+}
+
+std::uint32_t coord_t_word(const NativeDrawState& s, unsigned c) {
+    const auto& k = s.coord[c & 7u];
+    return static_cast<std::uint32_t>(k.size_minus_one[1]) | static_cast<std::uint32_t>(k.bias[1]) << 16u |
+           static_cast<std::uint32_t>(k.wrap[1]) << 17u;
 }
 
 std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k) {
@@ -604,6 +807,27 @@ std::string draw_state_differences(const NativeDrawState& s, const NativeDrawSta
     field("fogbm", s.fog.b_magnitude, e.fog.b_magnitude);
     field("fogbs", s.fog.b_shift, e.fog.b_shift);
     field("fogproj", s.fog.projection, e.fog.projection);
+    for (unsigned i = 0; i < 4u; ++i) {
+        field("channel", channel_word(s.channel[i]), channel_word(e.channel[i]));
+    }
+    for (unsigned i = 0; i < 2u; ++i) {
+        field("matcolor", rgba_word(s.material_color[i]), rgba_word(e.material_color[i]));
+        field("ambcolor", rgba_word(s.ambient_color[i]), rgba_word(e.ambient_color[i]));
+    }
+    for (unsigned i = 0; i < 8u; ++i) {
+        field("texgen", texgen_word(s.texgen[i]), texgen_word(e.texgen[i]));
+        field("posttexgen", post_texgen_word(s.post_texgen[i]), post_texgen_word(e.post_texgen[i]));
+        field("coords", coord_s_word(s, i), coord_s_word(e, i));
+        field("coordt", coord_t_word(s, i), coord_t_word(e, i));
+    }
+    for (unsigned i = 0; i < 6u; ++i) {
+        field("projection", std::bit_cast<std::uint32_t>(s.projection[i]), std::bit_cast<std::uint32_t>(e.projection[i]));
+        field("viewport", std::bit_cast<std::uint32_t>(s.viewport[i]), std::bit_cast<std::uint32_t>(e.viewport[i]));
+    }
+    field("projtype", s.projection_type, e.projection_type);
+    field("mtxa", matrix_index_a(s), matrix_index_a(e));
+    field("mtxb", matrix_index_b(s), matrix_index_b(e));
+    field("linepoint", line_point_word(s), line_point_word(e));
     for (unsigned c = 0; c < 3u; ++c) {
         field("fogcolor", s.fog.color[c], e.fog.color[c]);
     }
