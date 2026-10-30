@@ -106,7 +106,23 @@ inline constexpr unsigned kNormalBase = MatrixMemory::kNormalBase;
 inline constexpr unsigned kPostBase = MatrixMemory::kPostBase;
 inline constexpr unsigned kLightBase = MatrixMemory::kLightBase;
 
-// One XF palette snapshot pair (a may be null: no previous snapshot).
+// A palette read by rows: its table (MatrixMemory::kRows row indices) into its rows (4 words a row), as a frame's
+// matrix arena holds it. Empty: no palette. A palette held as words reads through the identity table.
+struct RowView {
+    const std::uint32_t* table = nullptr;
+    const std::uint32_t* rows = nullptr;
+    RowView() noexcept = default;
+    RowView(const std::uint32_t* table_in, const std::uint32_t* rows_in) noexcept : table(table_in), rows(rows_in) {}
+    RowView(const std::uint32_t* words) noexcept;  // NOLINT(google-explicit-constructor): words are a view too
+    [[nodiscard]] bool empty() const noexcept { return rows == nullptr; }
+    [[nodiscard]] const std::uint32_t* row(unsigned r) const noexcept { return rows + 4u * table[r]; }
+    // `count` rows from row `first` as words (4 * count into out).
+    void gather(unsigned first, unsigned count, std::uint32_t* out) const noexcept;
+};
+// Whether rows first .. first + count - 1 hold the same words in a and b.
+[[nodiscard]] bool same_rows(RowView a, RowView b, unsigned first, unsigned count) noexcept;
+
+// One XF palette snapshot pair (a may be empty: no previous snapshot).
 struct PaletteMotion {
     std::array<EyeMotion, 10> position{};
     std::array<NormalMotion, 10> normal{};
@@ -123,7 +139,7 @@ struct PaletteMotion {
 // `normal_mask` (bit k: slot k) and the lights in `light_mask` (bit n: GX
 // light n) are interpolated: the parts its draws can read.
 inline constexpr std::uint16_t kAllPaletteSlots = 0x3FFu;
-void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
+void palette_motion(RowView a, RowView b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out, std::uint16_t position_mask = kAllPaletteSlots,
                     std::uint16_t normal_mask = kAllPaletteSlots, std::uint8_t light_mask = 0xFFu) noexcept;
 // The GX lights a draw with these VS constants evaluates: the light masks of
@@ -131,7 +147,7 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
 [[nodiscard]] std::uint8_t used_lights(const VertexConstants& constants) noexcept;
 
 // Writes the palette at t: b's words with every changed part interpolated.
-void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
+void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
 // Pixel-stage colours of one draw state between two frames: TEV registers,

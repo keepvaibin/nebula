@@ -1607,14 +1607,14 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
                     ? !current_palette_required_
                     : current_palette_shadow_ >= 0 &&
                           (current_palette_shadow_ == shadow ||
-                           std::memcmp(scene.palettes.data() + static_cast<std::size_t>(shadow) * kMatrixPaletteWords,
-                                       scene.palettes.data() +
-                                           static_cast<std::size_t>(current_palette_shadow_) * kMatrixPaletteWords,
-                                       kMatrixPaletteWords * sizeof(std::uint32_t)) == 0);
+                           same_rows(scene.palette_view(static_cast<std::size_t>(shadow)),
+                                     scene.palette_view(static_cast<std::size_t>(current_palette_shadow_)), 0u,
+                                     MatrixMemory::kRows));
             if (palette_continues && std::memcmp(&probe, &scene.constants[r], sizeof(probe)) == 0) {
                 if (shadow >= 0 && current_palette_shadow_ != shadow &&
                     static_cast<std::size_t>(current_palette_shadow_) + 1u == scene.palette_count) {
-                    --scene.palette_count;  // the duplicate snapshot
+                    --scene.palette_count;  // the duplicate snapshot (its rows stay: the game's indices may name them)
+                    scene.palette_tables.resize(scene.palette_count * MatrixMemory::kRows);
                 }
                 current_palette_shadow_ = shadow;
                 ++interp_chunk_continues_;
@@ -5476,7 +5476,6 @@ bool RenderCore::render_interp_subframe(float t) {
     }
     const auto build_start = std::chrono::steady_clock::now();
     const std::size_t count = scene.constants.size();
-    constexpr std::size_t kWords = kMatrixPaletteWords;
     static_assert(kMatrixPaletteWords == MatrixMemory::kPaletteWords);
     // The scene before is the frame presented before this one: a log in between that was not recorded (shown as it
     // was: two 3D scenes, or the first of a run of frames without one) leaves it older, and sub-frames from it would
@@ -5484,10 +5483,11 @@ bool RenderCore::render_interp_subframe(float t) {
     const bool before_valid = before_scene.valid &&
                               (interp_sequence_.chained || before_scene.serial == 0u || scene.serial == 0u ||
                                before_scene.serial + 1u == scene.serial);
-    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+    // The shadow's palette before, or none.
+    const auto before_palette = [&](std::int32_t shadow) -> RowView {
         return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
-            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
-            : nullptr;
+            ? before_scene.palette_view(static_cast<std::size_t>(shadow))
+            : RowView{};
     };
     if (!interp_sequence_.classified) {
         // Once per sequence: the camera between the two scenes, then every
@@ -5566,8 +5566,7 @@ bool RenderCore::render_interp_subframe(float t) {
             if (shadow >= 0 && static_cast<std::size_t>(shadow) < scene.palette_count) {
                 const std::int32_t before_shadow =
                     prev_data ? before_scene.palette[static_cast<std::size_t>(m)] : -1;
-                const std::uint32_t* before_words = before_palette(before_shadow);
-                const std::int32_t pair_before = before_words != nullptr ? before_shadow : -1;
+                const std::int32_t pair_before = !before_palette(before_shadow).empty() ? before_shadow : -1;
                 std::int32_t index = interp_palette_first_[static_cast<std::size_t>(shadow)];
                 while (index >= 0 &&
                        interp_palette_motions_[static_cast<std::size_t>(index)].before != pair_before) {
@@ -5606,9 +5605,8 @@ bool RenderCore::render_interp_subframe(float t) {
         const auto palettes_start = std::chrono::steady_clock::now();
         // Each palette pair once, with the slots its records read.
         for (InterpPaletteMotion& entry : interp_palette_motions_) {
-            const std::uint32_t* now_words =
-                scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
-            palette_motion(before_palette(entry.before), now_words, layer_camera(entry.layer),
+            palette_motion(before_palette(entry.before), scene.palette_view(static_cast<std::size_t>(entry.shadow)),
+                           layer_camera(entry.layer),
                            entry.orthographic,
                            entry.motion, entry.position_mask, entry.normal_mask, entry.light_mask);
             interp_snapped_ += entry.motion.snapped;
@@ -5720,12 +5718,12 @@ bool RenderCore::render_interp_subframe(float t) {
 // and the replay recorded once over them.
 bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene,
                                         bool before_valid) {
-    constexpr std::size_t kWords = kMatrixPaletteWords;
     const std::size_t count = scene.constants.size();
-    const auto before_palette = [&](std::int32_t shadow) -> const std::uint32_t* {
+    // The shadow's palette before, or none.
+    const auto before_palette = [&](std::int32_t shadow) -> RowView {
         return before_valid && shadow >= 0 && static_cast<std::size_t>(shadow) < before_scene.palette_count
-            ? before_scene.palettes.data() + static_cast<std::size_t>(shadow) * kWords
-            : nullptr;
+            ? before_scene.palette_view(static_cast<std::size_t>(shadow))
+            : RowView{};
     };
     interp_program_.clear();
     interp_program_.set_endpoint_cameras(camera_at(interp_camera_, 0.0f), camera_at(interp_camera_, 1.0f));
@@ -5817,16 +5815,15 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     }
     for (std::size_t q = 0; q < interp_palette_entry_.size(); ++q) {
         const InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(interp_palette_entry_[q])];
-        const std::uint32_t* now_words = scene.palettes.data() + static_cast<std::size_t>(entry.shadow) * kWords;
+        const RowView now_rows = scene.palette_view(static_cast<std::size_t>(entry.shadow));
+        const RowView before_rows = before_palette(entry.before);
         interp_program_.palette(layout.palette_offset(static_cast<std::uint32_t>(q)) / 4u + interp_gpu::kPaletteRows,
-                                entry.motion,
-                                before_palette(entry.before), now_words,
-                                layer_camera(entry.layer));
+                                entry.motion, before_rows, now_rows, layer_camera(entry.layer));
         if (q < layout.prev_palette_count) {
             interp_program_.at_previous(true);
             interp_program_.palette_positions(
                 layout.prev_palette_offset(static_cast<std::uint32_t>(q)) / 4u + interp_gpu::kPrevPaletteRows,
-                                              entry.motion, before_palette(entry.before), now_words);
+                                              entry.motion, before_rows, now_rows);
             interp_program_.at_previous(false);
         }
     }
@@ -8301,6 +8298,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         for (const std::uint64_t word : rows) {
             any_row = any_row || word != 0u;
         }
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            scene_rows_pending_[i] |= rows[i];
+        }
         if (any_row || matrix_table_forced_) {
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             // The table, the changed rows after it, then the draw's moved lights (rows of their own: the
@@ -8351,15 +8351,38 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             rt_palette_lights_ = rt_draw_lights_;
             if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
-                const std::size_t words = kMatrixPaletteWords;
-                if (scene.palettes.size() < (scene.palette_count + 1u) * words) {
-                    scene.palettes.resize((scene.palette_count + 1u) * words);
+                // The rows that changed since the scene's last shadow (all of them for its first) join the scene's
+                // rows; the shadow's table names each row's current one.
+                const bool first_shadow = scene.palette_count == 0u;
+                for (std::uint32_t r = 0; r < MatrixMemory::kRows; ++r) {
+                    if (first_shadow || ((scene_rows_pending_[r / 64u] >> (r % 64u)) & 1u) != 0u) {
+                        scene_row_index_[r] = static_cast<std::uint32_t>(scene.palette_rows.size() / 4u);
+                        scene.palette_rows.insert(scene.palette_rows.end(), matrices_.raw() + 4u * r,
+                                                  matrices_.raw() + 4u * r + 4u);
+                    }
                 }
-                std::memcpy(scene.palettes.data() + scene.palette_count * words,
-                            matrices_.raw(), words * sizeof(std::uint32_t));
+                scene.palette_tables.insert(scene.palette_tables.end(), scene_row_index_.begin(),
+                                            scene_row_index_.end());
                 if (rt_draw_lights_ != 0u) {
-                    write_rt_lights(scene.palettes.data() + scene.palette_count * words);
+                    // The moved lights' rows: this shadow's own, the game's stay for the next.
+                    std::array<std::uint32_t, MatrixMemory::kPaletteWords> moved;
+                    std::memcpy(moved.data() + MatrixMemory::kLightBase, matrices_.raw() + MatrixMemory::kLightBase,
+                                MatrixMemory::kLightWords * 8u * sizeof(std::uint32_t));
+                    write_rt_lights(moved.data());
+                    std::uint32_t* const table = scene.palette_tables.data() + scene.palette_count * MatrixMemory::kRows;
+                    for (unsigned n = 0; n < 8u; ++n) {
+                        if ((rt_draw_lights_ & (1u << n)) == 0u) {
+                            continue;
+                        }
+                        const std::uint32_t row = (MatrixMemory::kLightBase + MatrixMemory::kLightWords * n) / 4u;
+                        for (unsigned k = 0; k < kLightRows; ++k) {
+                            table[row + k] = static_cast<std::uint32_t>(scene.palette_rows.size() / 4u);
+                            scene.palette_rows.insert(scene.palette_rows.end(), moved.data() + 4u * (row + k),
+                                                      moved.data() + 4u * (row + k) + 4u);
+                        }
+                    }
                 }
+                scene_rows_pending_ = {};
                 current_palette_shadow_ = static_cast<std::int32_t>(scene.palette_count++);
             }
             matrix_rows_valid_ = true;

@@ -549,23 +549,56 @@ std::uint8_t used_lights(const VertexConstants& constants) noexcept {
     return static_cast<std::uint8_t>(mask);
 }
 
-void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
+namespace {
+// Row numbers of the palette's parts (XF words / 4).
+constexpr unsigned kNormalRow = kNormalBase / 4u;
+constexpr unsigned kTexRow = 30u;
+constexpr unsigned kPostRow = kPostBase / 4u;
+constexpr unsigned kLightRow = kLightBase / 4u;
+
+constexpr std::array<std::uint32_t, MatrixMemory::kRows> identity_table() noexcept {
+    std::array<std::uint32_t, MatrixMemory::kRows> table{};
+    for (std::uint32_t r = 0; r < MatrixMemory::kRows; ++r) table[r] = r;
+    return table;
+}
+constexpr std::array<std::uint32_t, MatrixMemory::kRows> kIdentityTable = identity_table();
+}  // namespace
+
+RowView::RowView(const std::uint32_t* words) noexcept
+    : table(words != nullptr ? kIdentityTable.data() : nullptr), rows(words) {}
+
+void RowView::gather(unsigned first, unsigned count, std::uint32_t* out) const noexcept {
+    for (unsigned r = 0; r < count; ++r) std::memcpy(out + 4u * r, row(first + r), 16u);
+}
+
+bool same_rows(RowView a, RowView b, unsigned first, unsigned count) noexcept {
+    for (unsigned r = first; r < first + count; ++r) {
+        const std::uint32_t* x = a.row(r);
+        const std::uint32_t* y = b.row(r);
+        if (x != y && std::memcmp(x, y, 16u) != 0) return false;
+    }
+    return true;
+}
+
+void palette_motion(RowView a, RowView b, const CameraMotion& camera,
                     bool orthographic, PaletteMotion& out, std::uint16_t position_mask,
                     std::uint16_t normal_mask, std::uint8_t light_mask) noexcept {
     out = PaletteMotion{};
     out.split = camera.known && !camera.cut && !orthographic;
     const bool camera_moves = camera.known && !camera.cut && !equal_words(camera.a, camera.b);
+    std::uint32_t wa[12], wb[12];
     for (unsigned k = 0; k < 10u; ++k) {
         if ((position_mask & (1u << k)) == 0u) continue;
-        const std::uint32_t* wb = b + k * 12u;
-        const bool differs = a != nullptr && std::memcmp(a + k * 12u, wb, 12u * 4u) != 0;
+        const bool differs = !a.empty() && !same_rows(a, b, 3u * k, 3u);
         if (!differs && !(camera_moves && !orthographic)) continue;
+        b.gather(3u * k, 3u, wb);
         const Affine34 mb = load_matrix(wb);
         if (!finite(mb)) continue;
         Affine34 ma{};
         const Affine34* pa = nullptr;
-        if (a != nullptr) {
-            ma = load_matrix(a + k * 12u);
+        if (!a.empty()) {
+            a.gather(3u * k, 3u, wa);
+            ma = load_matrix(wa);
             if (finite(ma)) pa = &ma;
         }
         eye_motion(pa, mb, camera, orthographic, out.position[k]);
@@ -581,35 +614,33 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         if ((normal_mask & (1u << k)) == 0u) continue;
         // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
         if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
-        const std::uint32_t* wb = b + kNormalBase + k * 12u;
-        const bool differs =
-            a != nullptr && std::memcmp(a + kNormalBase + k * 12u, wb, 12u * 4u) != 0;
+        const bool differs = !a.empty() && !same_rows(a, b, kNormalRow + 3u * k, 3u);
         if (!differs && !(camera_moves && !orthographic)) continue;
+        b.gather(kNormalRow + 3u * k, 3u, wb);
         const Affine34 nb = load_normal(wb);
         if (!finite(nb)) continue;
         Affine34 na{};
         const Affine34* pa = nullptr;
-        if (a != nullptr) {
-            na = load_normal(a + kNormalBase + k * 12u);
+        if (!a.empty()) {
+            a.gather(kNormalRow + 3u * k, 3u, wa);
+            na = load_normal(wa);
             if (finite(na)) pa = &na;
         }
         normal_motion(pa, nb, normal_camera, out.normal[k]);
         out.normal_changed[k] = 1u;
         out.any_changed = true;
     }
-    if (a == nullptr && camera_moves && !orthographic && light_mask != 0u) {
+    if (a.empty() && camera_moves && !orthographic && light_mask != 0u) {
         // Lights without a previous snapshot stay where they are in the world.
         out.light_changed = light_mask;
         out.any_changed = true;
     }
-    if (a != nullptr) {
-        out.tex_changed = std::memcmp(a + 120u, b + 120u, (256u - 120u) * 4u) != 0;
-        out.post_changed =
-            std::memcmp(a + kPostBase, b + kPostBase, (kLightBase - kPostBase) * 4u) != 0;
+    if (!a.empty()) {
+        out.tex_changed = !same_rows(a, b, kTexRow, (256u - 120u) / 4u);
+        out.post_changed = !same_rows(a, b, kPostRow, (kLightBase - kPostBase) / 4u);
         for (unsigned light = 0; light < 8u; ++light) {
-            const unsigned base = kLightBase + light * 16u;
             if ((light_mask & (1u << light)) != 0u &&
-                ((camera_moves && !orthographic) || std::memcmp(a + base, b + base, 16u * 4u) != 0)) {
+                ((camera_moves && !orthographic) || !same_rows(a, b, kLightRow + 4u * light, 4u))) {
                 out.light_changed |= static_cast<std::uint8_t>(1u << light);
             }
         }
@@ -618,10 +649,10 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
     }
 }
 
-void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
+void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept {
-    std::memcpy(out, b, kPaletteWords * 4u);
+    b.gather(0u, MatrixMemory::kRows, out);
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
             store_matrix(eye_at(m.position[k], camera, camera_t, t), out + k * 12u);
@@ -630,11 +661,12 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
             store_normal(normal_at(m.normal[k], camera, camera_t, t), out + kNormalBase + k * 12u);
         }
     }
-    if (a == nullptr) {
+    std::uint32_t la[16], lb[16];
+    if (a.empty()) {
         for (unsigned light = 0; light < 8u; ++light) {
             if ((m.light_changed & (1u << light)) != 0u) {
-                const unsigned base = kLightBase + light * 16u;
-                light_at(nullptr, b + base, camera, camera_t, t, m.split, out + base);
+                b.gather(kLightRow + 4u * light, 4u, lb);
+                light_at(nullptr, lb, camera, camera_t, t, m.split, out + kLightBase + light * 16u);
             }
         }
         return;
@@ -642,31 +674,35 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
     // Texture matrices TEXMTX0-9 (rows 30-59) and post matrices 0-19 by
     // block. The texgen source of an indexed matrix is not known here: a
     // block whose rotation or scale changes is taken as spatial.
-    const auto blocks = [&](unsigned first, unsigned count) {
+    const auto blocks = [&](unsigned first_row, unsigned count) {
+        std::uint32_t xa[12], xb[12];
         for (unsigned k = 0; k < count; ++k) {
-            const unsigned base = first + 12u * k;
-            if (std::memcmp(a + base, b + base, 12u * 4u) == 0) continue;
+            const unsigned row = first_row + 3u * k;
+            if (same_rows(a, b, row, 3u)) continue;
+            a.gather(row, 3u, xa);
+            b.gather(row, 3u, xb);
             float fa[12], fb[12], fo[12];
             bool spatial = false;
             for (unsigned i = 0; i < 12u; ++i) {
-                fa[i] = word_float(a[base + i]);
-                fb[i] = word_float(b[base + i]);
+                fa[i] = word_float(xa[i]);
+                fb[i] = word_float(xb[i]);
                 spatial = spatial || ((i & 3u) != 3u && fa[i] != fb[i]);
             }
             tex_matrix_at(fa, fb, spatial, t, fo);
-            for (unsigned i = 0; i < 12u; ++i) out[base + i] = float_word(fo[i]);
+            for (unsigned i = 0; i < 12u; ++i) out[4u * row + i] = float_word(fo[i]);
         }
     };
     if (m.tex_changed) {
-        blocks(120u, 10u);
+        blocks(kTexRow, 10u);
     }
     if (m.post_changed) {
-        blocks(kPostBase, 20u);
+        blocks(kPostRow, 20u);
     }
     for (unsigned light = 0; light < 8u; ++light) {
         if ((m.light_changed & (1u << light)) != 0u) {
-            const unsigned base = kLightBase + light * 16u;
-            light_at(a + base, b + base, camera, camera_t, t, m.split, out + base);
+            a.gather(kLightRow + 4u * light, 4u, la);
+            b.gather(kLightRow + 4u * light, 4u, lb);
+            light_at(la, lb, camera, camera_t, t, m.split, out + kLightBase + light * 16u);
         }
     }
 }

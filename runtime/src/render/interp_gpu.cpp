@@ -334,77 +334,91 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
     push(OpKind::Light, flags, 6u, dst + kPosition, at);
 }
 
-void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
-                      const std::uint32_t* b, const CameraMotion& camera) {
+void Program::palette(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b,
+                      const CameraMotion& camera) {
+    std::uint32_t wa[16], wb[16];
+    const auto floats = [](const std::uint32_t* words, unsigned count, float* out) {
+        for (unsigned i = 0; i < count; ++i) out[i] = word_float(words[i]);
+    };
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
             float end_a[12], end_b[12];
-            for (unsigned i = 0; i < 12u; ++i) {
-                end_a[i] = a != nullptr ? word_float(a[k * 12u + i]) : 0.0f;
-                end_b[i] = word_float(b[k * 12u + i]);
+            b.gather(3u * k, 3u, wb);
+            floats(wb, 12u, end_b);
+            if (!a.empty()) {
+                a.gather(3u * k, 3u, wa);
+                floats(wa, 12u, end_a);
             }
-            eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
+            eye(dst + k * 12u, m.position[k], !a.empty() ? end_a : nullptr, end_b);
         }
         if (m.normal_changed[k] != 0u) {
             // Nine values, x y z of three rows (the eval writes value i to row i / 3, column i % 3).
             float end_a[9], end_b[9];
+            const unsigned row = kNormalBase / 4u + 3u * k;
+            b.gather(row, 3u, wb);
+            if (!a.empty()) a.gather(row, 3u, wa);
             for (unsigned i = 0; i < 9u; ++i) {
-                const unsigned word = kNormalBase + k * 12u + (i / 3u) * 4u + i % 3u;
-                end_a[i] = a != nullptr ? word_float(a[word]) : 0.0f;
-                end_b[i] = word_float(b[word]);
+                const unsigned word = (i / 3u) * 4u + i % 3u;
+                end_a[i] = !a.empty() ? word_float(wa[word]) : 0.0f;
+                end_b[i] = word_float(wb[word]);
             }
-            normal(dst + kNormalBase + k * 12u, m.normal[k], a != nullptr ? end_a : nullptr, end_b);
+            normal(dst + kNormalBase + k * 12u, m.normal[k], !a.empty() ? end_a : nullptr, end_b);
         }
     }
-    if (a == nullptr) {
+    if (a.empty()) {
         for (unsigned l = 0; l < 8u; ++l) {
             if ((m.light_changed & (1u << l)) != 0u) {
-                const unsigned base = kLightBase + l * 16u;
-                light(dst + base, nullptr, b + base, camera, m.split);
+                b.gather(kLightBase / 4u + 4u * l, 4u, wb);
+                light(dst + kLightBase + l * 16u, nullptr, wb, camera, m.split);
             }
         }
         return;
     }
     // Texture matrices TEXMTX0-9 (rows 30-59) and post matrices by block; a
     // block whose rotation or scale changes is taken as spatial.
-    const auto blocks = [&](unsigned first, unsigned count) {
+    const auto blocks = [&](unsigned first_row, unsigned count) {
         for (unsigned k = 0; k < count; ++k) {
-            const unsigned base = first + 12u * k;
-            if (std::memcmp(a + base, b + base, 12u * 4u) == 0) continue;
+            const unsigned row = first_row + 3u * k;
+            if (same_rows(a, b, row, 3u)) continue;
+            a.gather(row, 3u, wa);
+            b.gather(row, 3u, wb);
             float fa[12], fb[12];
             bool spatial = false;
             for (unsigned i = 0; i < 12u; ++i) {
-                fa[i] = word_float(a[base + i]);
-                fb[i] = word_float(b[base + i]);
+                fa[i] = word_float(wa[i]);
+                fb[i] = word_float(wb[i]);
                 spatial = spatial || ((i & 3u) != 3u && fa[i] != fb[i]);
             }
-            tex_matrix(dst + base, fa, fb, spatial);
+            tex_matrix(dst + 4u * row, fa, fb, spatial);
         }
     };
     if (m.tex_changed) {
-        blocks(120u, 10u);
+        blocks(30u, 10u);
     }
     if (m.post_changed) {
-        blocks(kPostBase, 20u);
+        blocks(kPostBase / 4u, 20u);
     }
     for (unsigned l = 0; l < 8u; ++l) {
         if ((m.light_changed & (1u << l)) != 0u) {
-            const unsigned base = kLightBase + l * 16u;
-            light(dst + base, a + base, b + base, camera, m.split);
+            a.gather(kLightBase / 4u + 4u * l, 4u, wa);
+            b.gather(kLightBase / 4u + 4u * l, 4u, wb);
+            light(dst + kLightBase + l * 16u, wa, wb, camera, m.split);
         }
     }
 }
 
-void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
-                                const std::uint32_t* b) {
+void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b) {
+    std::uint32_t wa[12], wb[12];
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
             float end_a[12], end_b[12];
+            b.gather(3u * k, 3u, wb);
+            if (!a.empty()) a.gather(3u * k, 3u, wa);
             for (unsigned i = 0; i < 12u; ++i) {
-                end_a[i] = a != nullptr ? word_float(a[k * 12u + i]) : 0.0f;
-                end_b[i] = word_float(b[k * 12u + i]);
+                end_a[i] = !a.empty() ? word_float(wa[i]) : 0.0f;
+                end_b[i] = word_float(wb[i]);
             }
-            eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
+            eye(dst + k * 12u, m.position[k], !a.empty() ? end_a : nullptr, end_b);
         }
     }
 }

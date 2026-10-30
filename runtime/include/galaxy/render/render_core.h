@@ -796,8 +796,15 @@ private:
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
-        std::vector<std::uint32_t> palettes;    // kMatrixPaletteWords per shadow
+        // The palettes (shadows) as rows: per shadow a table of MatrixMemory::kRows indices into `palette_rows` (4
+        // words a row). A shadow appends only the rows that changed since the one before it; the rest it shares.
+        std::vector<std::uint32_t> palette_tables;
+        std::vector<std::uint32_t> palette_rows;
         std::size_t palette_count = 0;
+        // Shadow `shadow`'s palette (valid until the scene appends rows).
+        [[nodiscard]] RowView palette_view(std::size_t shadow) const noexcept {
+            return {palette_tables.data() + shadow * MatrixMemory::kRows, palette_rows.data()};
+        }
         // Pixel-stage constants per upload in the scene (draws carry the index).
         std::vector<PixelConstants> ps_constants;
         Affine34 camera{};
@@ -831,7 +838,8 @@ private:
         }
         void clear() noexcept {
             constants.clear(); prev_index.clear();
-            palette.clear(); per_vertex.clear(); palette_count = 0; valid = false; serial = 0;
+            palette.clear(); per_vertex.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
+            valid = false; serial = 0;
             ps_constants.clear();
             category.clear(); camera_epoch_known = false;
             rt_projection_known = false;
@@ -1401,6 +1409,11 @@ private:
     // hold once the slot's first table appended every row (matrix_rows_valid_, cleared on the slot rewind and on
     // session reset).
     std::array<std::uint32_t, MatrixMemory::kRows> matrix_row_index_{};
+    // The recording scene's index (InterpScene::palette_rows) of each game row's current value; its first shadow
+    // appends every row.
+    std::array<std::uint32_t, MatrixMemory::kRows> scene_row_index_{};
+    // Rows changed since the recording scene's last shadow (uploads between shadows clear the matrices' own mask).
+    MatrixMemory::RowMask scene_rows_pending_{};
     bool matrix_rows_valid_ = false;
     std::uint64_t matrix_rows_epoch_ = 0;  // the matrix ring's epoch() the rows were appended in
     bool matrix_table_forced_ = true;

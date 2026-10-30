@@ -160,11 +160,9 @@ public:
     // One texture matrix (3 rows of 4) as tex_matrix_at for 0 < t < 1.
     void tex_matrix(std::uint32_t dst, const float* a, const float* b, bool spatial);
     // The changed parts of one palette as palette_at (dst: the block's first word).
-    void palette(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
-                 const CameraMotion& camera);
+    void palette(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b, const CameraMotion& camera);
     // Only its changed position matrices.
-    void palette_positions(std::uint32_t dst, const PaletteMotion& m, const std::uint32_t* a,
-                           const std::uint32_t* b);
+    void palette_positions(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b);
     // One GX light (16 words at dst) as light_at; a may be null.
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
