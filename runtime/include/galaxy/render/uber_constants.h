@@ -151,6 +151,8 @@ static_assert(offsetof(VertexConstants, uber_post_texgen) == 1120);
 static_assert(offsetof(VertexConstants, uber_channel) == 1152);
 static_assert(offsetof(VertexConstants, motion_prev_proj) == 1168);
 static_assert(offsetof(VertexConstants, motion_ctrl) == 1264);
+// motion_ctrl[1] in mode 0 for the draw's own row table (its previous rows are its rows).
+inline constexpr std::uint32_t kMotionOwnRows = 0xFFFFFFFFu;
 static_assert(offsetof(VertexConstants, debake_sh) == 1280);
 static_assert(offsetof(VertexConstants, debake_peak) == 1392);
 static_assert(sizeof(VertexConstants) == 1536);

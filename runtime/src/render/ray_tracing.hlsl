@@ -101,7 +101,7 @@ uint pack_vertex_normal(float3 n)
 // the row's float4 in the matrix ring (mrow in the vertex shaders).
 float4 matrix_row(uint4 draw2, uint table, uint row) {
     const uint at = g_matrix_ring.Load(min(draw2.w + table * 16u + row * 4u, g_matrix_ring_limit));
-    return asfloat(g_matrix_ring.Load4(min(draw2.w + at * 16u, g_matrix_ring_limit)));
+    return asfloat(g_matrix_ring.Load4(min(at * 16u, g_matrix_ring_limit)));
 }
 
 float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint palette_base, out float3 normal)

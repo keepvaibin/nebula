@@ -306,9 +306,10 @@ bool RendererVk::create_layouts() {
             {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
             {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
             {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, gx_stages, nullptr},  // the rows the row table names
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
-        info.bindingCount = 5;
+        info.bindingCount = 6;
         info.pBindings = bindings;
         vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[0]), "set 0 layout");
     }

@@ -124,7 +124,7 @@ public:
 
         // The generated vertex shaders' bindings: b0 constants, t0/space1 matrix palette, b2 vertex
         // blend, t1/space1 previous vertices, t2/space1 blend verdicts.
-        D3D12_ROOT_PARAMETER params[5]{};
+        D3D12_ROOT_PARAMETER params[6]{};
         params[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_CBV;
         params[0].Descriptor = {0u, 0u};
         params[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
@@ -135,9 +135,11 @@ public:
         params[3].Descriptor = {1u, 1u};
         params[4].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
         params[4].Descriptor = {2u, 1u};
+        params[5].ParameterType = D3D12_ROOT_PARAMETER_TYPE_SRV;
+        params[5].Descriptor = {3u, 1u};
         for (auto& p : params) p.ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
         D3D12_ROOT_SIGNATURE_DESC root_desc{};
-        root_desc.NumParameters = 5u;
+        root_desc.NumParameters = 6u;
         root_desc.pParameters = params;
         root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
         ComPtr<ID3DBlob> blob;
@@ -309,6 +311,7 @@ public:
         list->SetGraphicsRootConstantBufferView(2u, blend_buffer->GetGPUVirtualAddress());
         list->SetGraphicsRootShaderResourceView(3u, vertex_buffer->GetGPUVirtualAddress());
         list->SetGraphicsRootShaderResourceView(4u, verdict_buffer->GetGPUVirtualAddress());
+        list->SetGraphicsRootShaderResourceView(5u, palette_buffer->GetGPUVirtualAddress());
         list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_POINTLIST);
         const D3D12_VERTEX_BUFFER_VIEW view{vertex_buffer->GetGPUVirtualAddress(),
                                             static_cast<UINT>(vertices.size() * sizeof(RenderVertex)),

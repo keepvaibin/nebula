@@ -207,7 +207,8 @@ struct DrawCall {
     gpu::Address ps_constants = 0;   // root CBV b1
     gpu::Table texture_table{};      // t0-t7
     gpu::Table sampler_table{};      // s0-s7
-    gpu::Address matrix_palette = 0; // root SRV t0,space1
+    gpu::Address matrix_palette = 0; // root SRV t0,space1: the draw's row table
+    gpu::Address matrix_rows = 0;    // root SRV t3,space1: the rows its table names (the matrix ring, a replay's output)
     gpu::VertexView vertex_view{};
     gpu::IndexView index_view{};
     std::uint32_t index_count = 0;

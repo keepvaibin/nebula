@@ -135,6 +135,8 @@ inline void fill_vs_constants(
     }
 
     out.mtx_palette_base = palette_snapshot_index;
+    // Previous rows: the draw's own (no motion of its own) unless a motion scene names another table.
+    out.motion_ctrl[1] = kMotionOwnRows;
 
     // Default matrix indices (CP MatrixIndexA/B). The VS resolves them per texgen when the
     // vertex stream has no per-vertex index. Dolphin resolves the same registers on the CPU

@@ -27,6 +27,7 @@ constexpr RegisterBinding kGxDrawBindings[] = {
     {"t0, space1", 0, 2},
     {"t1, space1", 0, 3},  // vertex blending: the earlier draw's vertices
     {"t2, space1", 0, 4},  // vertex blending: verdicts and the presented frame's values
+    {"t3, space1", 0, 5},  // the rows the draw's row table names
     {"b2", 0, 0, true},    // vertex blending: the draw's (push constants)
     {"t0", 1, 0},
     {"s0", 2, 0},

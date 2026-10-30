@@ -33,11 +33,12 @@ cbuffer VertexConstants : register(b0) {
     float4   debake_sh[7];
     float4   debake_peak;
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);
-// Row r of the draw's matrices and lights: its row table (at float4 `table`, one uint a row) names where the row
-// was appended in the matrix arena (MatrixMemory, E-05).
+StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
+StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
+// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
+// names the row's float4 among the rows.
 float4 mrow(uint table, uint r) {
-    return mtx_palette[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
+    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
 }
 
 struct VSIn {

@@ -1108,7 +1108,7 @@ HRESULT create_gx_root_signature(
     samp_range.RegisterSpace      = 0;
     samp_range.OffsetInDescriptorsFromTableStart = 0;
 
-    D3D12_ROOT_PARAMETER params[8]{};
+    D3D12_ROOT_PARAMETER params[9]{};
     params[0].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[0].Descriptor.ShaderRegister = 0;
     params[0].Descriptor.RegisterSpace  = 0;
@@ -1152,8 +1152,14 @@ HRESULT create_gx_root_signature(
     params[7].Descriptor.RegisterSpace  = 1;
     params[7].ShaderVisibility          = D3D12_SHADER_VISIBILITY_VERTEX;
 
+    // The rows the draw's row table (t0, space1) names: the matrix ring, or a replay's output.
+    params[8].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_SRV;
+    params[8].Descriptor.ShaderRegister = 3;
+    params[8].Descriptor.RegisterSpace  = 1;
+    params[8].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
+
     D3D12_ROOT_SIGNATURE_DESC rsd{};
-    rsd.NumParameters = 8;
+    rsd.NumParameters = 9;
     rsd.pParameters   = params;
     // Curved surfaces' hull and domain shaders read the vertex constants (b0).
     rsd.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -3386,6 +3392,7 @@ void RendererD3D12::invalidate_gx_bindings() {
     bound_texture_table_ = {};
     bound_sampler_table_ = {};
     bound_matrix_palette_ = 0;
+    bound_matrix_rows_ = 0;
     bound_vertex_blend_valid_ = false;
     bound_topology_ = D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
     bound_vertex_view_ = {};
@@ -7161,7 +7168,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                         call.vs_constants = output + layout.vs_offset(static_cast<std::uint32_t>(slot));
                     }
                     if (record < sequence.record_palette_slot.size() && sequence.record_palette_slot[record] >= 0) {
-                        call.matrix_palette = output + layout.palette_base();
+                        call.matrix_palette = output + layout.palette_offset(
+                                                           static_cast<std::uint32_t>(sequence.record_palette_slot[record]));
+                        call.matrix_rows = output + layout.palette_base();
                     }
                 }
                 if (call.ps_record >= 0 && static_cast<std::size_t>(call.ps_record) < sequence.ps_slot.size()) {
@@ -8748,6 +8757,10 @@ void RendererD3D12::draw(const DrawCall& call) {
         call.matrix_palette != bound_matrix_palette_) {
         command_list_->SetGraphicsRootShaderResourceView(4, call.matrix_palette);
         bound_matrix_palette_ = call.matrix_palette;
+    }
+    if (call.matrix_rows && call.matrix_rows != bound_matrix_rows_) {
+        command_list_->SetGraphicsRootShaderResourceView(8, call.matrix_rows);
+        bound_matrix_rows_ = call.matrix_rows;
     }
     if (!bound_vertex_blend_valid_ || call.blend_vertices != bound_blend_vertices_ ||
         call.blend_slot != bound_blend_slot_) {

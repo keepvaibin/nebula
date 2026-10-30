@@ -1691,6 +1691,7 @@ private:
     D3D12_GPU_DESCRIPTOR_HANDLE bound_texture_table_{};
     D3D12_GPU_DESCRIPTOR_HANDLE bound_sampler_table_{};
     D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_palette_ = 0;
+    D3D12_GPU_VIRTUAL_ADDRESS bound_matrix_rows_ = 0;
     D3D12_GPU_VIRTUAL_ADDRESS bound_blend_vertices_ = 0;
     std::uint32_t bound_blend_slot_ = 0;
     bool bound_vertex_blend_valid_ = false;

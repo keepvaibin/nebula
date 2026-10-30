@@ -296,11 +296,16 @@ cbuffer VertexConstants : register(b0) {
     float4   inline_tex_matrices[24];
     float4   inline_post_matrices[24];
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);
-// Row r of a draw's matrices and lights: its row table (at float4 `table`, one uint a row) names where the row
-// was appended in the matrix arena (MatrixMemory, E-05).
+StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
+StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
+// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
+// names the row's float4 among the rows.
 float4 mrow(uint table, uint r) {
-    return mtx_palette[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
+    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
+}
+// Row r through another table among the rows (a motion scene's previous frame), or kMotionOwnRows: the draw's own.
+float4 mrow_prev(uint table, uint r) {
+    return table == 0xFFFFFFFFu ? mrow(mtx_palette_base, r) : mtx_rows[asuint(mtx_rows[table + (r >> 2u)][r & 3u])];
 }
 )HLSL";
 
@@ -604,11 +609,12 @@ cbuffer PplConstants : register(b0) {
     uint   ppl_sky_up_known     : packoffset(c13.w);
     uint4  ppl_channel          : packoffset(c72);
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);
-// Row r of a draw's matrices and lights: its row table (at float4 `table`, one uint a row) names where the row
-// was appended in the matrix arena (MatrixMemory, E-05).
+StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
+StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
+// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
+// names the row's float4 among the rows.
 float4 mrow(uint table, uint r) {
-    return mtx_palette[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
+    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
 }
 
 void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
@@ -1330,8 +1336,10 @@ void load_draw_rows(CurveDraw d, uint tid) {
         draw_rows[7] = float4(0.5 * asfloat(constant_data.Load2(d.constants + CB_RASTER)), 0.0, 0.0);
     }
     if ((d.flags & 1u) != 0u) {
+        // The position rows through the draw's row table (d.palette: its byte offset in the matrix ring).
         const uint base = constant_data.Load(d.constants + CB_PALETTE_BASE);
-        draw_rows[8u + tid] = asfloat(palette_data.Load4(d.palette + 16u * (base + tid)));
+        const uint at = palette_data.Load(d.palette + 16u * base + 4u * tid);
+        draw_rows[8u + tid] = asfloat(palette_data.Load4(16u * at));
     }
     GroupMemoryBarrierWithGroupSync();
 }
@@ -1651,9 +1659,9 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << "    float3 prev_eye;\n";
         if ((key.flags & 0x01u) != 0u) {
             s << "    if (motion_ctrl.x == 0u) {\n"
-                 "        prev_eye = float3(dot(mrow(motion_ctrl.y, pn_row+0u), float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mrow(motion_ctrl.y, pn_row+1u), float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mrow(motion_ctrl.y, pn_row+2u), float4(vb_pos_prev, 1.0)));\n"
+                 "        prev_eye = float3(dot(mrow_prev(motion_ctrl.y, pn_row+0u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mrow_prev(motion_ctrl.y, pn_row+1u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(mrow_prev(motion_ctrl.y, pn_row+2u), float4(vb_pos_prev, 1.0)));\n"
                  "    } else {\n"
                  "        prev_eye = float3(dot(motion_prev_pos[0], wpos),\n"
                  "                          dot(motion_prev_pos[1], wpos),\n"

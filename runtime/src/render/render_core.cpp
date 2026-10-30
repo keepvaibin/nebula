@@ -1578,7 +1578,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     const std::uint32_t palette_offset = current_matrix_palette_ != 0u
         ? static_cast<std::uint32_t>((current_matrix_palette_ - ring_base) / 16u)
         : kNoPaletteOffset;
-    upload.mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
+    upload.mtx_palette_base = 0u;  // the draw binds its row table (palette_offset: where it is in the ring)
     temporal_vs_palette_va_ = current_matrix_palette_;
 
     const auto xf_float = [this](unsigned offset) {
@@ -1659,7 +1659,8 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         InterpScene& scene = interp_scenes_[interp_scene_];
         current_replay_record_ = static_cast<std::int32_t>(scene.constants.size());
         scene.constants.push_back(cpu);
-        // Not read back from `upload`: the ring is write-combined memory.
+        // Not read back from `upload`: the ring is write-combined memory. The image keeps the record's row table
+        // (its offset in the ring) where the upload has 0: the sequence's palette source.
         scene.constants.back().mtx_palette_base = palette_offset != kNoPaletteOffset ? palette_offset : 0u;
         // Uber pipelines read the key from the constants: a sub-frame's copy
         // needs it as the frame's upload has it.
@@ -5788,10 +5789,7 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             const std::int32_t q = interp_palette_slot_[static_cast<std::size_t>(moving.palette)];
             if (q >= 0) {
                 palette_slot = q;
-                interp_record_palette_slot_[moving.record] = q;
-                const std::uint32_t word =
-                    (layout.palette_offset(static_cast<std::uint32_t>(q)) - layout.palette_base()) / 16u;
-                interp_program_.store(base + interp_gpu::kVsPaletteBase, &word, 1u);
+                interp_record_palette_slot_[moving.record] = q;  // the replay binds the slot's table
             }
         }
         if (motion) {
@@ -5813,8 +5811,7 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
         } else if (palette_slot >= 0) {
             // The record reads its rows from the output's slot: its previous rows (a motion-vector draw's) are the
             // slot's own too, not the ring table its copied constants name.
-            const std::uint32_t ctrl[2]{
-                0u, (layout.palette_offset(static_cast<std::uint32_t>(palette_slot)) - layout.palette_base()) / 16u};
+            const std::uint32_t ctrl[2]{0u, kMotionOwnRows};
             interp_program_.store(base + interp_gpu::kVsMotionCtrl, ctrl, 2u);
         }
     }
@@ -8378,11 +8375,12 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 elapsed_us(matrix_start, std::chrono::steady_clock::now());
         }
     }
-    draw_matrix_palette_ = renderer_.matrix_ring().gpu_base();
+    draw_matrix_palette_ = current_matrix_palette_;
 
     // Upload VS constants when scalar state or fixed inline matrices change.
     if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
-        frame_bindings_dirty_ || dirty == ~0u || current_matrix_palette_ != temporal_vs_palette_va_) {
+        frame_bindings_dirty_ || dirty == ~0u ||
+        (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -8391,18 +8389,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));
-        // The draw's row table, counted from the ring's base (the draw binds the base). A draw without motion history
-        // (motion_ctrl mode 0 at 0: write_scene_vs_constants sets history scenes') reads its previous rows from its
-        // own table: no motion of its own.
-        auto* const uploaded = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
-        uploaded->mtx_palette_base =
-            current_matrix_palette_ != 0u
-                ? static_cast<std::uint32_t>((current_matrix_palette_ - renderer_.matrix_ring().gpu_base()) / 16u)
-                : 0u;
-        if (uploaded->motion_ctrl[0] == 0u && uploaded->motion_ctrl[1] == 0u) {
-            uploaded->motion_ctrl[1] = uploaded->mtx_palette_base;
-        }
-        temporal_vs_palette_va_ = current_matrix_palette_;
         if (history_scene_) [[unlikely]] {
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
@@ -8877,6 +8863,7 @@ bool RenderCore::begin_cached_draw_run(
             ? current_sampler_table_
             : renderer_.default_sampler_table();
     cached_draw_run_state_call_.matrix_palette = draw_matrix_palette_;
+    cached_draw_run_state_call_.matrix_rows = renderer_.matrix_ring().gpu_base();
     cached_draw_run_state_call_.aux_target     = current_pipeline_aux_;
     cached_draw_run_state_call_.replay_record  = current_replay_record_;
     cached_draw_run_state_call_.ps_record      = current_ps_record_;

@@ -1192,7 +1192,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                     call.vs_constants = output + layout.vs_offset(static_cast<std::uint32_t>(slot));
                 }
                 if (record < sequence.record_palette_slot.size() && sequence.record_palette_slot[record] >= 0) {
-                    call.matrix_palette = output + layout.palette_base();
+                    call.matrix_palette =
+                        output + layout.palette_offset(static_cast<std::uint32_t>(sequence.record_palette_slot[record]));
+                    call.matrix_rows = output + layout.palette_base();
                 }
             }
             if (call.ps_record >= 0 && static_cast<std::size_t>(call.ps_record) < sequence.ps_slot.size()) {
