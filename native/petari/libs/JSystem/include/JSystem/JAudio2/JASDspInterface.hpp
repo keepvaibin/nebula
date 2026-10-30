@@ -23,11 +23,7 @@ namespace JASDsp {
     typedef struct {
         u16 _0;
         u16 _2;
-#ifdef TARGET_PC
-        u32 _4;  // the delay line's physical address: the DSP's view of the console's pointer
-#else
         s16* _4;
-#endif
         u16 _8;
         s16 _A;
         u16 _C;
@@ -125,12 +121,8 @@ namespace JASDsp {
     int setFXLine(u8, s16*, JASDsp::FxlineConfig_*);
     BOOL changeFXLineParam(u8, u8, uintptr_t);
 
-    extern u8 const DSPADPCM_FILTER[64];
-#ifdef TARGET_PC
-    extern u8 const DSPRES_FILTER[1280];  // the console's bytes of its 320 words (DSP data)
-#else
-    extern u32 const DSPRES_FILTER[320];
-#endif
+    extern s16 const DSPADPCM_FILTER[32];
+    extern s16 const DSPRES_FILTER[640];
     extern u16 SEND_TABLE[];
     extern TChannel* CH_BUF;
     extern FxBuf* FX_BUF;

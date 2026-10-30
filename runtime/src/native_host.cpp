@@ -4555,48 +4555,25 @@ struct NativeGameAudio::State {
 NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
 NativeGameAudio::~NativeGameAudio() = default;
 
-namespace {
-// An address's bytes in the native game's regions (the arena's physical, cached and uncached views, and the module
-// image).
-std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t size) {
-    const auto& memory = *static_cast<const GuestMemory*>(user);
-    const GuestMemoryFastRegion& fast = memory.fast_regions[address >> 28u];
-    const std::uint32_t offset = address & 0x0FFF'FFFFu;
-    if (fast.host_base != nullptr && offset <= fast.size && size <= fast.size - offset) {
-        return fast.host_base + offset;
-    }
-    for (std::uint32_t i = 0; i < memory.region_count; ++i) {
-        const GuestMemoryRegion& region = memory.regions[i];
-        if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
-            return region.host_base + (address - region.guest_base);
-        }
-    }
-    return nullptr;
-}
-}  // namespace
-
-void NativeGameAudio::setup(std::uint32_t channels, std::uint32_t channel_table, std::uint32_t resampler_table,
-                            std::uint32_t adpcm_table, std::uint32_t fx_table, const GuestMemory& memory) {
-    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
-    state_->mixer.setup(channels, channel_table, resampler_table, adpcm_table, fx_table, guest);
+void NativeGameAudio::setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
+                            const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
+    state_->mixer.setup(channels, static_cast<std::byte*>(channel_records), resample_filter, adpcm_filter, fx_lines);
 }
 
-void NativeGameAudio::set_aux_base(std::uint32_t address) {
-    state_->mixer.set_varam(address);
+void NativeGameAudio::set_aux(const void* base, std::uint32_t size) {
+    state_->mixer.set_aux(static_cast<const std::byte*>(base), size);
 }
 
-void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, std::uint32_t left,
-                            std::uint32_t right, const GuestMemory& memory) {
-    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
+void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left,
+                            std::int16_t* right) {
     // The volume categories, once an audio frame; the master volume applies at the output.
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     state_->mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-    state_->mixer.sync_frame(subframes, mixer_level, left, right, guest);
+    state_->mixer.sync_frame(subframes, mixer_level, left, right);
 }
 
-bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active, const GuestMemory& memory) {
-    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
-    return state_->mixer.release_halt(group, active, guest);
+bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active) {
+    return state_->mixer.release_halt(group, active);
 }
 
 void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
@@ -4627,12 +4604,12 @@ std::string NativeGameAudio::stats_line() const {
     std::ostringstream line;
     line << "setups=" << s.setups << " frames=" << s.frames << " subframes=" << s.subframes
          << " channel-renders=" << s.channel_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
-         << " streams=" << s.stream_renders << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
+         << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
          << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
          << " unsupported-osc=" << s.unsupported_oscillators
          << " stray=" << s.stray_releases << " categories=" << s.category_decisions
-         << " owner-misses=" << s.category_owner_misses << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
+         << " owner-misses=" << s.category_owner_misses
          << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }

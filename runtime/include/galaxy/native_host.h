@@ -27,6 +27,8 @@
 #include <unordered_map>
 #include <vector>
 
+struct NebulaJAudioFxLine;  // nebula_game_api.h
+
 namespace galaxy::host {
 
 // Once enabled, environment variables the input report reads are cached by literal name. The host enables it after
@@ -133,9 +135,8 @@ void native_game_wiimote_calibration(
 // A valid, empty Mii database (RFL_DB.dat) for a NAND that has none.
 [[nodiscard]] std::vector<std::byte> native_game_empty_mii_database();
 
-// The game's sound: the JAudio DSP program run on the host (JAudioHostMixer) over the game's DSP memory, which the
-// game keeps in the console's byte order, and the audio interface's blocks played on the output device (XAudio2,
-// master volume, WAV dump).
+// The game's sound: the JAudio DSP program run on the host (JAudioHostMixer) over the game's channel records, and the
+// audio interface's blocks played on the output device (XAudio2, master volume, WAV dump).
 class NativeGameAudio {
 public:
     NativeGameAudio();
@@ -143,16 +144,15 @@ public:
     NativeGameAudio(const NativeGameAudio&) = delete;
     NativeGameAudio& operator=(const NativeGameAudio&) = delete;
 
-    // The game's JAudio mixer calls (nebula_game_api.h jaudio_*), with guest addresses resolved in `memory`.
-    // mix returns true when it completed a subframe (the game then posts its AUDIOMSG_DSP).
-    void setup(std::uint32_t channels, std::uint32_t channel_table, std::uint32_t resampler_table,
-               std::uint32_t adpcm_table, std::uint32_t fx_table, const GuestMemory& memory);
-    void set_aux_base(std::uint32_t address);
-    void frame(std::uint32_t subframes, std::uint32_t mixer_level, std::uint32_t left, std::uint32_t right,
-               const GuestMemory& memory);
-    bool mix(std::uint32_t group, std::uint32_t active, const GuestMemory& memory);
-    // One AI block: 16-bit samples, right then left, big-endian, as the console's DMA engine reads them. Call from one
-    // thread; the first call opens the device.
+    // The game's JAudio mixer calls (nebula_game_api.h jaudio_*). mix returns true when it completed a subframe (the
+    // game then posts its AUDIOMSG_DSP).
+    void setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
+               const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
+    void set_aux(const void* base, std::uint32_t size);
+    void frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left, std::int16_t* right);
+    bool mix(std::uint32_t group, std::uint32_t active);
+    // One AI block: 16-bit (right, left) pairs in host byte order. Call from one thread; the first call opens the
+    // device.
     bool play(std::span<const std::byte> block, std::uint32_t sample_rate);
     // Blocks submitted and not yet played (the sink's pending queue and the device's).
     [[nodiscard]] unsigned queued_blocks() const;

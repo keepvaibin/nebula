@@ -1,7 +1,7 @@
 /* Audio natively (in place of the SDK's AI and ARAM-alternative libraries; the mixer is the host's, which JASDsp
    drives itself).
-   - AI: the audio interface's DMA engine. AIInitDMA latches the next block (its physical address and length); the
-     host's output plays the blocks and, as the console's AI does when a block's DMA ends, calls
+   - AI: the audio interface's DMA engine. AIInitDMA latches the next block (its samples and length); the host's
+     output plays the blocks and, as the console's AI does when a block's DMA ends, calls
      nebula_game_ai_interrupt, delivered as the AI interrupt that runs the game's DMA callback.
    - AR: the Wii's "dummy ARAM" in MEM2 (aralt.c's semantics): ARAM addresses are offsets from the MEM2 arena,
      transfers are copies, and the callback follows each one. */
@@ -50,20 +50,8 @@ AIDCallback AIRegisterDMACallback(AIDCallback callback) {
     return previous;
 }
 
-static u32 sDMAStart, sDMALength;
-
 void AIInitDMA(uintptr_t start, u32 length) {
-    sDMAStart = OSCachedToPhysical((const void*)start);
-    sDMALength = length;
-    nebula_host()->ai_dma(nebula_host()->user, sDMAStart, length);
-}
-
-u32 AIGetDMAStartAddr(void) {
-    return sDMAStart;
-}
-
-u32 AIGetDMALength(void) {
-    return sDMALength;
+    nebula_host()->ai_dma(nebula_host()->user, (const void*)start, length);
 }
 
 void AIStartDMA(void) {

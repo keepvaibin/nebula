@@ -38,8 +38,7 @@ constexpr std::array<std::uint32_t, 8> kAutoMixerBus{
     return static_cast<std::int16_t>(be16(p, offset));
 }
 
-// The game's records (channels, FX lines) and the output planes are in host byte order; sample data and delay lines
-// keep the console's big-endian order.
+// The game's channel records are in host byte order; wave data keeps the disc's big-endian samples.
 template <typename T>
 [[nodiscard]] T record_load(const std::byte* p, std::uint32_t offset) noexcept {
     T value;
@@ -79,10 +78,6 @@ void put16(std::byte* p, std::uint32_t offset, std::uint32_t value) noexcept {
     return sat16((static_cast<std::int64_t>(a) * b * 2) >> 16);
 }
 
-[[nodiscard]] std::uint32_t mram_address(std::uint32_t address) noexcept {
-    return address | 0x80000000u;
-}
-
 // 40-bit accumulator helpers for the oscillator table generator, which
 // depends on the accumulator's full width and on 16-bit-mode middle writes.
 [[nodiscard]] std::int64_t wrap40(std::int64_t value) noexcept {
@@ -109,34 +104,22 @@ void put16(std::byte* p, std::uint32_t offset, std::uint32_t value) noexcept {
 
 JAudioHostMixer::JAudioHostMixer() = default;
 
-void JAudioHostMixer::setup(std::uint32_t channel_count, std::uint32_t channel_table,
-                            std::uint32_t resampler_table,
-                            std::uint32_t adpcm_table, std::uint32_t fx_table,
-                            const JAudioGuestMemory& memory) {
+void JAudioHostMixer::setup(std::uint32_t channel_count, std::byte* channel_records,
+                            const std::int16_t* resample_filter, const std::int16_t* adpcm_filter,
+                            const NebulaJAudioFxLine* fx_lines) {
     ++stats_.setups;
-    channel_table_ = channel_table;
+    channels_ = channel_records;
     channel_count_ = std::min<std::uint32_t>(channel_count, 64u);
-    fx_table_ = fx_table;
+    fx_lines_ = fx_lines;
     // The DSP copies DSPRES_FILTER (640 words) and DSPADPCM_FILTER (32 words)
     // into its data memory once, at setup.
-    if (const std::byte* table = memory.at(resampler_table, 0x280u * 2u)) {
-        for (std::uint32_t i = 0; i < 0x280u; ++i) {
-            dram_[i] = sbe16(table, i * 2u);
-        }
-    } else {
-        ++stats_.unresolved_reads;
-    }
-    if (const std::byte* table = memory.at(adpcm_table, 0x20u * 2u)) {
-        for (std::uint32_t i = 0; i < 0x20u; ++i) {
-            dram_[0x300u + i] = sbe16(table, i * 2u);
-        }
-    } else {
-        ++stats_.unresolved_reads;
-    }
+    std::copy_n(resample_filter, 0x280u, dram_.data());
+    std::copy_n(adpcm_filter, 0x20u, dram_.data() + 0x300u);
 }
 
-void JAudioHostMixer::set_varam(std::uint32_t address) noexcept {
-    varam_ = address & 0x7FFF'FFFFu;
+void JAudioHostMixer::set_aux(const std::byte* base, std::uint32_t size) noexcept {
+    aux_ = base;
+    aux_size_ = size;
 }
 
 void JAudioHostMixer::set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept {
@@ -171,8 +154,7 @@ void JAudioHostMixer::classify_channel(std::uint32_t index, const std::byte* rec
 }
 
 void JAudioHostMixer::sync_frame(std::uint32_t subframes, std::uint32_t mixer_level,
-                                 std::uint32_t left, std::uint32_t right,
-                                 const JAudioGuestMemory& memory) {
+                                 std::int16_t* left, std::int16_t* right) {
     ++stats_.frames;
     mixer_level_ = mixer_level & 0xFFFFu;
     left_plane_ = left;
@@ -183,28 +165,23 @@ void JAudioHostMixer::sync_frame(std::uint32_t subframes, std::uint32_t mixer_le
     maps_ = {};
     // FX_BUF is read once per frame.
     for (std::size_t line = 0; line < fx_.size(); ++line) {
-        const std::byte* raw = fx_table_ != 0u
-            ? memory.at(fx_table_ + static_cast<std::uint32_t>(line) * 0x20u, 0x20u)
-            : nullptr;
         FxLine fx{};
-        if (raw != nullptr) {
-            fx.flags = r16(raw, 0x00u);
-            fx.frames = r16(raw, 0x02u);
-            fx.buffer = r32(raw, 0x04u);
-            fx.dest_a = r16(raw, 0x08u);
-            fx.volume_a = rs16(raw, 0x0Au);
-            fx.dest_b = r16(raw, 0x0Cu);
-            fx.volume_b = rs16(raw, 0x0Eu);
-            for (std::uint32_t k = 0; k < 8u; ++k) {
-                fx.coefficients[k] = rs16(raw, 0x10u + k * 2u);
-            }
+        if (fx_lines_ != nullptr) {
+            const NebulaJAudioFxLine& raw = fx_lines_[line];
+            fx.flags = raw.flags;
+            fx.frames = raw.frames;
+            fx.buffer = raw.buffer;
+            fx.dest_a = raw.dest_a;
+            fx.volume_a = raw.volume_a;
+            fx.dest_b = raw.dest_b;
+            fx.volume_b = raw.volume_b;
+            std::copy_n(raw.coefficients, 8u, fx.coefficients.begin());
         }
         fx_[line] = fx;
     }
 }
 
-bool JAudioHostMixer::release_halt(std::uint32_t group, std::uint32_t map,
-                                   const JAudioGuestMemory& memory) {
+bool JAudioHostMixer::release_halt(std::uint32_t group, std::uint32_t map) {
     maps_[group & 3u] = static_cast<std::uint16_t>(map & 0xFFFFu);
     if (group != 3u) {
         return false;
@@ -214,7 +191,7 @@ bool JAudioHostMixer::release_halt(std::uint32_t group, std::uint32_t map,
         return false;
     }
     const auto begin = std::chrono::steady_clock::now();
-    mix_subframe(memory);
+    mix_subframe();
     stats_.mix_ns += static_cast<std::uint64_t>(
         std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::steady_clock::now() - begin).count());
@@ -225,7 +202,7 @@ bool JAudioHostMixer::release_halt(std::uint32_t group, std::uint32_t map,
     return true;
 }
 
-void JAudioHostMixer::mix_subframe(const JAudioGuestMemory& memory) {
+void JAudioHostMixer::mix_subframe() {
     ++stats_.subframes;
     std::int16_t* d = dram_.data();
     const auto clear = [d](std::uint32_t address, std::uint32_t count) {
@@ -266,7 +243,7 @@ void JAudioHostMixer::mix_subframe(const JAudioGuestMemory& memory) {
     // FX lines (0x01C2): delayed signal into each line's bus, optional
     // 8-tap FIR, sends to their destination buses.
     for (std::size_t line = 0; line < fx_.size(); ++line) {
-        fx_line_read(line, memory);
+        fx_line_read(line);
     }
     // Surround effect sends of the previous subframe (0x01F0).
     add_scaled_dram(0x0E80u, kSendSurroundLeft, kSamples, 0x7FFF);
@@ -278,38 +255,32 @@ void JAudioHostMixer::mix_subframe(const JAudioGuestMemory& memory) {
 
     evolve_oscillator_tables();
 
-    std::byte* channels = memory.at(channel_table_, channel_count_ * kRecordBytes);
-    if (channels == nullptr) {
-        ++stats_.unresolved_reads;
-    } else {
-        for (std::uint32_t channel = 0; channel < channel_count_; ++channel) {
-            const std::uint16_t map = maps_[(channel >> 4u) & 3u];
-            if (((map << (channel & 15u)) & 0x8000u) == 0u) {
-                continue;
-            }
-            render_channel(channels + channel * kRecordBytes, channel, memory);
+    for (std::uint32_t channel = 0; channel < channel_count_; ++channel) {
+        const std::uint16_t map = maps_[(channel >> 4u) & 3u];
+        if (((map << (channel & 15u)) & 0x8000u) == 0u) {
+            continue;
         }
+        render_channel(channels_ + channel * kRecordBytes, channel);
     }
 
     // Output (0x042D..0x045C): center at -3 dB into both sides, mixer level,
     // inverted-right bus.
     add_scaled_dram(kBusLeft, kBusCenter, kSamples, 0x5A82);
     add_scaled_dram(kBusRight, kBusCenter, kSamples, 0x5A82);
-    write_output(kBusLeft, left_plane_, memory);
+    write_output(kBusLeft, left_plane_);
     add_scaled_dram(kBusRight, kBusRightInverted, kSamples, static_cast<std::int16_t>(0x8000));
-    write_output(kBusRight, right_plane_, memory);
+    write_output(kBusRight, right_plane_);
 
     // Second half of the delayed right surround send (0x023F), then the FX
     // delay-line writes.
     add_scaled_dram(0x0EA8u, kSendSurroundRight, 40u, static_cast<std::int16_t>(0xB820));
     add_scaled_dram(0x0F08u, kSendSurroundRight, 40u, 0x7FFF);
     for (std::size_t line = 0; line < fx_.size(); ++line) {
-        fx_line_write(line, memory);
+        fx_line_write(line);
     }
 }
 
-void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index,
-                                     const JAudioGuestMemory& memory) {
+void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index) {
     if (r16(record, 0x000u) == 0u || r16(record, 0x002u) != 0u) {
         return;
     }
@@ -319,7 +290,7 @@ void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index,
     if (paused) {
         std::fill_n(out, kSamples, rs16(record, 0x066u));
     } else {
-        render_source(record, out, memory);
+        render_source(record, out);
     }
     apply_fir(record, out);
     apply_iir(record, out);
@@ -350,8 +321,7 @@ void JAudioHostMixer::render_channel(std::byte* record, std::uint32_t index,
     }
 }
 
-std::uint32_t JAudioHostMixer::render_source(std::byte* record, std::int16_t* out,
-                                             const JAudioGuestMemory& memory) {
+std::uint32_t JAudioHostMixer::render_source(std::byte* record, std::int16_t* out) {
     const std::uint16_t format = r16(record, 0x100u);
     const std::uint32_t needed =
         (static_cast<std::uint32_t>(r16(record, 0x004u)) * kSamples +
@@ -366,24 +336,14 @@ std::uint32_t JAudioHostMixer::render_source(std::byte* record, std::int16_t* ou
     case 9u:
     case 5u:
         load_history();
-        decode_adpcm(record, history + 4, needed, memory);
+        decode_adpcm(record, history + 4, needed);
         resample(record, history, out);
         break;
     case 8u:
     case 0x10u:
         ++stats_.pcm_renders;
         load_history();
-        read_pcm(record, history + 4, needed, format == 8u ? 1u : 2u, memory);
-        resample(record, history, out);
-        break;
-    case 0x20u:
-        ++stats_.stream_renders;
-        read_mram_stream(record, out, kSamples, memory);
-        break;
-    case 0x21u:
-        ++stats_.stream_renders;
-        load_history();
-        read_mram_stream(record, history + 4, needed, memory);
+        read_pcm(record, history + 4, needed, format == 8u ? 1u : 2u);
         resample(record, history, out);
         break;
     default:
@@ -432,8 +392,7 @@ void JAudioHostMixer::resample(std::byte* record, std::int16_t* x, std::int16_t*
 //   0x070 next block address, VARAM-relative
 //   0x074 samples left before the end (or loop end)
 void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
-                                   std::uint32_t count,
-                                   const JAudioGuestMemory& memory) {
+                                   std::uint32_t count) {
     if (r16(record, 0x008u) != 0u) {
         w16(record, 0x0F6u, r16(record, 0x0F6u) + 1u);
         w16(record, 0x064u, 0u);
@@ -465,7 +424,7 @@ void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
         if (left < count) {
             if (left != 0u) {
                 count -= left;
-                decode_adpcm_blocks(record, out, (left + 15u) >> 4u, memory);
+                decode_adpcm_blocks(record, out, (left + 15u) >> 4u);
                 out += left;
             }
             if (r16(record, 0x102u) == 0u || loops >= 8u) {
@@ -480,7 +439,7 @@ void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
             w16(record, 0x0CEu, r16(record, 0x104u));
             w16(record, 0x0CCu, r16(record, 0x106u));
             std::array<std::int16_t, 16> block{};
-            decode_adpcm_blocks(record, block.data(), 1u, memory);
+            decode_adpcm_blocks(record, block.data(), 1u);
             for (std::uint32_t k = 0; k < 16u; ++k) {
                 w16(record, 0x0B0u + k * 2u, static_cast<std::uint16_t>(block[k]));
             }
@@ -507,7 +466,7 @@ void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
             w32(record, 0x074u, 0u);
         }
         w16(record, 0x064u, remaining);
-        decode_adpcm_blocks(record, out, blocks, memory);
+        decode_adpcm_blocks(record, out, blocks);
         if (remaining != 0u) {
             const std::int16_t* last = out + samples - 16u;
             for (std::uint32_t k = 0; k < 16u; ++k) {
@@ -529,15 +488,14 @@ void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
 }
 
 void JAudioHostMixer::decode_adpcm_blocks(std::byte* record, std::int16_t* out,
-                                          std::uint32_t blocks,
-                                          const JAudioGuestMemory& memory) {
+                                          std::uint32_t blocks) {
     const std::uint32_t block_bytes = r16(record, 0x100u);
     std::int32_t s1 = rs16(record, 0x0CEu);
     std::int32_t s2 = rs16(record, 0x0CCu);
     std::uint32_t address = r32(record, 0x070u);
     for (std::uint32_t b = 0; b < blocks; ++b, out += 16) {
         ++stats_.adpcm_blocks;
-        const std::byte* block = resolve_wave(address, block_bytes, memory);
+        const std::byte* block = resolve_wave(address, block_bytes);
         address += block_bytes;
         if (block == nullptr) {
             ++stats_.unresolved_reads;
@@ -577,8 +535,7 @@ void JAudioHostMixer::decode_adpcm_blocks(std::byte* record, std::int16_t* out,
 // 0x0AC1 (PCM8) / 0x0B3E (PCM16): _68 sample position, _70 next byte
 // address, _74 samples left, 0x00A loop pending.
 void JAudioHostMixer::read_pcm(std::byte* record, std::int16_t* out,
-                               std::uint32_t count, std::uint32_t bytes_per_sample,
-                               const JAudioGuestMemory& memory) {
+                               std::uint32_t count, std::uint32_t bytes_per_sample) {
     const auto restart = [&] {
         const std::uint32_t position = r32(record, 0x068u);
         w32(record, 0x074u, r32(record, 0x114u) - position);
@@ -594,7 +551,7 @@ void JAudioHostMixer::read_pcm(std::byte* record, std::int16_t* out,
             return;
         }
         const std::byte* data =
-            resolve_wave(r32(record, 0x070u), samples * bytes_per_sample, memory);
+            resolve_wave(r32(record, 0x070u), samples * bytes_per_sample);
         if (data == nullptr) {
             ++stats_.unresolved_reads;
             std::fill_n(out, samples, std::int16_t{0});
@@ -642,56 +599,6 @@ void JAudioHostMixer::read_pcm(std::byte* record, std::int16_t* out,
         }
         w32(record, 0x070u, r32(record, 0x070u) + count * bytes_per_sample);
         return;
-    }
-}
-
-// 0x0BC8: PCM16 ring in main memory. The position is the high word of _68,
-// the ring length the high word of _114; _110 is the ring's restart address.
-void JAudioHostMixer::read_mram_stream(std::byte* record, std::int16_t* out,
-                                       std::uint32_t count,
-                                       const JAudioGuestMemory& memory) {
-    const auto fetch = [&](std::int16_t* dst, std::uint32_t samples) {
-        if (samples == 0u) {
-            return;
-        }
-        const std::uint32_t position = r16(record, 0x068u);
-        const std::byte* data = memory.at(
-            mram_address(r32(record, 0x118u) + position * 2u), samples * 2u);
-        if (data == nullptr) {
-            ++stats_.unresolved_reads;
-            std::fill_n(dst, samples, std::int16_t{0});
-        } else {
-            for (std::uint32_t k = 0; k < samples; ++k) {
-                dst[k] = sbe16(data, k * 2u);
-            }
-        }
-        w16(record, 0x068u, position + samples);
-    };
-    const std::uint32_t left = r32(record, 0x074u);
-    if (left <= count) {
-        const std::uint32_t available = left & 0xFFFFu;
-        fetch(out, available);
-        const std::int16_t last = out[static_cast<std::int32_t>(available) - 1];
-        std::fill(out + available, out + count, last);
-        w16(record, 0x002u, 1u);
-        w16(record, 0x076u, 0u);
-        return;
-    }
-    w32(record, 0x074u, left - count);
-    const std::int32_t ring_left =
-        static_cast<std::int32_t>(r16(record, 0x114u)) -
-        static_cast<std::int32_t>(r16(record, 0x068u));
-    w16(record, 0x06Cu, static_cast<std::uint32_t>(ring_left) & 0xFFFFu);
-    if (ring_left - static_cast<std::int32_t>(count) >= 0) {
-        fetch(out, count);
-        return;
-    }
-    const std::uint32_t first = static_cast<std::uint32_t>(ring_left) & 0xFFFFu;
-    fetch(out, std::min(first, count));
-    w16(record, 0x068u, 0u);
-    w32(record, 0x118u, r32(record, 0x110u));
-    if (first < count) {
-        fetch(out + first, count - first);
     }
 }
 
@@ -1041,7 +948,7 @@ void JAudioHostMixer::evolve_oscillator_tables() {
     }
 }
 
-void JAudioHostMixer::fx_line_read(std::size_t line, const JAudioGuestMemory& memory) {
+void JAudioHostMixer::fx_line_read(std::size_t line) {
     FxLine& fx = fx_[line];
     if (fx.flags == 0u || fx.frames == 0u) {
         return;
@@ -1051,16 +958,10 @@ void JAudioHostMixer::fx_line_read(std::size_t line, const JAudioGuestMemory& me
         fx_index_[line] = 0;
     }
     const std::uint32_t base = kFxBus[line];
-    const std::byte* delayed = memory.at(
-        mram_address(fx.buffer + fx_index_[line] * kSamples * 2u), kSamples * 2u);
-    if (delayed == nullptr) {
+    if (fx.buffer == nullptr) {
         ++stats_.unresolved_reads;
     } else {
-        std::array<std::int16_t, kSamples> samples{};
-        for (std::uint32_t i = 0; i < kSamples; ++i) {
-            samples[i] = sbe16(delayed, i * 2u);
-        }
-        add_scaled(base + 8u, samples.data(), kSamples, 0x7FFF);
+        add_scaled(base + 8u, fx.buffer + fx_index_[line] * kSamples, kSamples, 0x7FFF);
     }
     if ((fx.flags & 1u) != 0u) {
         fir8_in_place(base, fx.coefficients);
@@ -1076,47 +977,37 @@ void JAudioHostMixer::fx_line_read(std::size_t line, const JAudioGuestMemory& me
     }
 }
 
-void JAudioHostMixer::fx_line_write(std::size_t line, const JAudioGuestMemory& memory) {
+void JAudioHostMixer::fx_line_write(std::size_t line) {
     const FxLine& fx = fx_[line];
     if (fx.flags == 0u || fx.frames == 0u) {
         return;
     }
     const std::uint32_t index = fx_index_[line];
     fx_index_[line] = static_cast<std::uint16_t>(index + 1u >= fx.frames ? 0u : index + 1u);
-    std::byte* slot = memory.at(
-        mram_address(fx.buffer + index * kSamples * 2u), kSamples * 2u);
-    if (slot == nullptr) {
+    if (fx.buffer == nullptr) {
         ++stats_.unresolved_reads;
         return;
     }
-    const std::uint32_t base = kFxBus[line];
-    for (std::uint32_t i = 0; i < kSamples; ++i) {
-        put16(slot, i * 2u, static_cast<std::uint16_t>(dram_[base + i]));
-    }
+    std::copy_n(dram_.data() + kFxBus[line], kSamples, fx.buffer + index * kSamples);
 }
 
 // 0x0DB1: sample * mixer level / 4096, saturated.
-void JAudioHostMixer::write_output(std::uint32_t bus, std::uint32_t plane,
-                                   const JAudioGuestMemory& memory) {
-    if (plane == 0u) {
+void JAudioHostMixer::write_output(std::uint32_t bus, std::int16_t* plane) {
+    if (plane == nullptr) {
         return;
     }
-    std::byte* dst = memory.at(
-        mram_address(plane + next_subframe_ * kSamples * 2u), kSamples * 2u);
-    if (dst == nullptr) {
-        ++stats_.unresolved_reads;
-        return;
-    }
+    std::int16_t* dst = plane + next_subframe_ * kSamples;
     const std::int64_t level = mixer_level_;
     for (std::uint32_t i = 0; i < kSamples; ++i) {
-        const std::int16_t sample = sat16((dram_[bus + i] * level) >> 12);
-        w16(dst, i * 2u, static_cast<std::uint16_t>(sample));
+        dst[i] = sat16((dram_[bus + i] * level) >> 12);
     }
 }
 
-std::byte* JAudioHostMixer::resolve_wave(std::uint32_t offset, std::uint32_t size,
-                                         const JAudioGuestMemory& memory) {
-    return memory.at(mram_address(varam_ + offset), size);
+const std::byte* JAudioHostMixer::resolve_wave(std::uint32_t offset, std::uint32_t size) const {
+    if (aux_ == nullptr || offset > aux_size_ || size > aux_size_ - offset) {
+        return nullptr;
+    }
+    return aux_ + offset;
 }
 
 }  // namespace galaxy::host

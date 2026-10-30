@@ -8,7 +8,6 @@
 
 namespace {
 
-using galaxy::host::JAudioGuestMemory;
 using galaxy::host::JAudioHostMixer;
 
 int g_failures = 0;
@@ -33,7 +32,8 @@ struct Guest {
         }
         return guest.bytes.data() + offset;
     }
-    [[nodiscard]] JAudioGuestMemory memory() { return {this, &Guest::resolve}; }
+    [[nodiscard]] std::byte* ptr(std::uint32_t address) { return resolve(this, address, 1u); }
+    [[nodiscard]] std::int16_t* samples(std::uint32_t address) { return reinterpret_cast<std::int16_t*>(ptr(address)); }
     void put16(std::uint32_t address, std::uint32_t value) {
         std::byte* p = resolve(this, address, 2u);
         p[0] = static_cast<std::byte>((value >> 8u) & 0xFFu);
@@ -50,7 +50,7 @@ struct Guest {
         const std::byte* p = resolve(this, address, 2u);
         return (static_cast<std::uint32_t>(p[0]) << 8u) | static_cast<std::uint32_t>(p[1]);
     }
-    // The game's records (channels, FX lines) are in host byte order.
+    // The game's records, tables and output planes are in host byte order; wave data is big-endian.
     template <typename T>
     void rput(std::uint32_t address, T value) { std::memcpy(resolve(this, address, sizeof(T)), &value, sizeof(T)); }
     template <typename T>
@@ -80,34 +80,33 @@ constexpr std::uint32_t kFxBuffer = 0x80060000u;
 // linearly.
 void build_tables(Guest& guest) {
     for (std::uint32_t row = 0; row < 64u; ++row) {
-        guest.put16(kResampler + (row * 4u + 1u) * 2u, 0x7FFF);
+        guest.rput16(kResampler + (row * 4u + 1u) * 2u, 0x7FFF);
     }
     for (std::uint32_t i = 0; i < 128u; ++i) {
-        guest.put16(kResampler + (0x200u + i) * 2u, i * 0x102u);
+        guest.rput16(kResampler + (0x200u + i) * 2u, i * 0x102u);
     }
     // ADPCM coefficient pair 1 = {0x0800, 0}: s = n<<scale + s1.
-    guest.put16(kAdpcm + 2u * 2u, 0x0800);
+    guest.rput16(kAdpcm + 2u * 2u, 0x0800);
 }
 
 std::uint32_t record(std::uint32_t channel) { return kChannels + channel * 0x180u; }
 
 void start(JAudioHostMixer& mixer, Guest& guest) {
     build_tables(guest);
-    auto memory = guest.memory();
-    mixer.setup(0x40u, kChannels, kResampler, kAdpcm, kFx, memory);
-    mixer.set_varam(0x00000000u);
+    mixer.setup(0x40u, guest.ptr(kChannels), guest.samples(kResampler), guest.samples(kAdpcm),
+                reinterpret_cast<NebulaJAudioFxLine*>(guest.ptr(kFx)));
+    mixer.set_aux(guest.ptr(0x80000000u), static_cast<std::uint32_t>(guest.bytes.size()));
 }
 
 void frame(JAudioHostMixer& mixer, Guest& guest, std::uint32_t level = 0x4000u) {
-    mixer.sync_frame(0x07u, level, kLeft, kRight, guest.memory());
+    mixer.sync_frame(0x07u, level, guest.samples(kLeft), guest.samples(kRight));
 }
 
-bool subframe(JAudioHostMixer& mixer, Guest& guest, std::uint16_t map0) {
-    auto memory = guest.memory();
-    mixer.release_halt(0u, map0, memory);
-    mixer.release_halt(1u, 0u, memory);
-    mixer.release_halt(2u, 0u, memory);
-    return mixer.release_halt(3u, 0u, memory);
+bool subframe(JAudioHostMixer& mixer, Guest&, std::uint16_t map0) {
+    mixer.release_halt(0u, map0);
+    mixer.release_halt(1u, 0u);
+    mixer.release_halt(2u, 0u);
+    return mixer.release_halt(3u, 0u);
 }
 
 void pcm16_channel(Guest& guest, std::uint32_t channel, std::int16_t value,
@@ -239,13 +238,14 @@ void test_fx_delay() {
     guest.rput16(r + 0x012u, 0x4000u);
     guest.rput16(r + 0x014u, 0x4000u);
     // FX line 0: two subframes of delay, output to L at full volume.
-    guest.rput16(kFx + 0x00u, 1u);
-    guest.rput16(kFx + 0x02u, 2u);
-    guest.rput32(kFx + 0x04u, kFxBuffer);
-    guest.rput16(kFx + 0x08u, 0x0D00u);
-    guest.rput16(kFx + 0x0Au, 0x7FFFu);
+    auto& fx = *reinterpret_cast<NebulaJAudioFxLine*>(guest.ptr(kFx));
+    fx.flags = 1u;
+    fx.frames = 2u;
+    fx.buffer = guest.samples(kFxBuffer);
+    fx.dest_a = 0x0D00u;
+    fx.volume_a = 0x7FFF;
     // Identity FIR: x[n + 7] (newest tap).
-    guest.rput16(kFx + 0x10u + 7u * 2u, 0x7FFFu);
+    fx.coefficients[7] = 0x7FFF;
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     expect(guest.rgets16(kLeft + 40u * 2u) == 0, "no echo before the delay", guest.rgets16(kLeft + 40u * 2u));

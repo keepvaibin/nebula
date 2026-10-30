@@ -6,17 +6,19 @@
 
 #include "galaxy/native_audio_bus.h"
 
+#include <nebula_game_api.h>
+
 namespace galaxy::host {
 
 // The game's JAudio DSP program, run on the host. The game's audio thread, JASDriver and the JASChannel updates run
-// as usual; the command words it mails to the DSP (NativeGameAudio::dsp_command) arrive here as function arguments:
+// as usual; JASDsp drives the mixer through typed calls (nebula_game_api.h jaudio_*):
 //
-//   0x81 setup table   CH_BUF, DSPRES_FILTER, DSPADPCM_FILTER, FX_BUF
-//   0x8E VARAM         base of the wave memory the channel addresses use
-//   0x82 sync frame    subframe count, mixer level, L and R output planes
-//   count 0            release halt: group<<16 | active map; group 3 ends
-//                      the channel update for one subframe, which is mixed
-//                      immediately and acknowledged with AUDIOMSG_DSP.
+//   setup          the channel records, the filter tables and the FX lines, once
+//   set_aux        the auxiliary memory the channels' wave offsets count from
+//   sync_frame     subframe count, mixer level, L and R output planes
+//   release_halt   a channel group ready (its active map); group 3 ends the
+//                  channel update for one subframe, which is mixed
+//                  immediately and acknowledged with AUDIOMSG_DSP.
 //
 // What a subframe computes is defined by the game's own DSP program (the
 // JAudio ucode, 0x1F00 bytes at 0x805D8460), restated as host integer code:
@@ -26,16 +28,8 @@ namespace galaxy::host {
 // resampler, the FIR and IIR filters, six ramped bus sends with per-bus
 // delay, the auto mixer's quarter-sine pan law, four FX feedback delay lines,
 // the surround fold-down to stereo and the output gain (mixer level / 4096).
-struct JAudioGuestMemory {
-    void* user{};
-    // Host pointer to `size` contiguous bytes of game memory at virtual `address`.
-    std::byte* (*resolve)(void* user, std::uint32_t address, std::uint32_t size){};
-
-    [[nodiscard]] std::byte* at(std::uint32_t address, std::uint32_t size) const {
-        return resolve != nullptr ? resolve(user, address, size) : nullptr;
-    }
-};
-
+// Records, tables, delay lines and output planes are in host byte order; wave
+// data keeps the disc's big-endian samples.
 struct JAudioHostMixerStats {
     std::uint64_t setups{};
     std::uint64_t frames{};
@@ -43,7 +37,6 @@ struct JAudioHostMixerStats {
     std::uint64_t channel_renders{};
     std::uint64_t adpcm_blocks{};
     std::uint64_t pcm_renders{};
-    std::uint64_t stream_renders{};
     std::uint64_t oscillator_renders{};
     std::uint64_t fir_renders{};
     std::uint64_t iir_renders{};
@@ -67,18 +60,16 @@ class JAudioHostMixer {
 public:
     JAudioHostMixer();
 
-    // The game's channel table and filter tables (guest addresses), once (JASDsp's setup).
-    void setup(std::uint32_t channel_count, std::uint32_t channel_table,
-               std::uint32_t resampler_table, std::uint32_t adpcm_table,
-               std::uint32_t fx_table, const JAudioGuestMemory& memory);
-    // Where the sound data in auxiliary memory starts (JKRHeap::getAltAramStartAdr()).
-    void set_varam(std::uint32_t address) noexcept;
+    // The game's channel records, filter tables (640 and 32 words) and FX lines, once (JASDsp's setup).
+    void setup(std::uint32_t channel_count, std::byte* channel_records, const std::int16_t* resample_filter,
+               const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
+    // The sound data in auxiliary memory (JKRHeap::getAltAramStartAdr()): wave offsets below `size`.
+    void set_aux(const std::byte* base, std::uint32_t size) noexcept;
     // An audio frame: its subframes mix into the stereo output planes.
-    void sync_frame(std::uint32_t subframes, std::uint32_t mixer_level,
-                    std::uint32_t left, std::uint32_t right, const JAudioGuestMemory& memory);
+    void sync_frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left, std::int16_t* right);
     // A channel group ready (`map`: its channels' active bits). Returns true when
     // this release completed a subframe; the caller then posts the game's AUDIOMSG_DSP.
-    bool release_halt(std::uint32_t group, std::uint32_t map, const JAudioGuestMemory& memory);
+    bool release_halt(std::uint32_t group, std::uint32_t map);
     // Volume categories. The host passes the category gains once per audio frame (`master` is applied at the
     // output, not here). A channel's category is decided once per sound, at the sound's first render, when the game
     // has linked the channel to its owner (TChannel +0x008 is set by playStart and cleared after that render). The
@@ -86,15 +77,14 @@ public:
     // Until the first call, every gain is 1.
     void set_bus_gains(const galaxy::audio::NativeAudioBusGains& gains) noexcept;
     // The game names the sound on a channel itself (its sound ID; route 1 effect, 2 sequence, 3 stream, 0 none);
-    // without a resolver the owner is read from the game's JAudio structures (resolve_jaudio_channel_owner).
+    // without one the sample format decides.
     using OwnerResolver = std::uint32_t (*)(std::uint32_t channel, std::uint32_t* route);
     void set_owner_resolver(OwnerResolver resolver) noexcept { owner_resolver_ = resolver; }
 
     [[nodiscard]] const JAudioChannelCategory& channel_category(std::uint32_t channel) const noexcept {
         return categories_[channel < categories_.size() ? channel : 0u];
     }
-    [[nodiscard]] bool configured() const noexcept { return channel_table_ != 0u; }
-    [[nodiscard]] std::uint32_t varam() const noexcept { return varam_; }
+    [[nodiscard]] bool configured() const noexcept { return channels_ != nullptr; }
     [[nodiscard]] const JAudioHostMixerStats& stats() const noexcept { return stats_; }
 
 private:
@@ -102,7 +92,7 @@ private:
     struct FxLine {
         std::uint16_t flags{};
         std::uint16_t frames{};
-        std::uint32_t buffer{};
+        std::int16_t* buffer{};
         std::uint16_t dest_a{};
         std::int16_t volume_a{};
         std::uint16_t dest_b{};
@@ -110,24 +100,17 @@ private:
         std::array<std::int16_t, 8> coefficients{};
     };
 
-    void mix_subframe(const JAudioGuestMemory& memory);
+    void mix_subframe();
     void classify_channel(std::uint32_t index, const std::byte* record, bool starting);
-    void render_channel(std::byte* record, std::uint32_t index,
-                        const JAudioGuestMemory& memory);
-    std::uint32_t render_source(std::byte* record, std::int16_t* out,
-                                const JAudioGuestMemory& memory);
+    void render_channel(std::byte* record, std::uint32_t index);
+    std::uint32_t render_source(std::byte* record, std::int16_t* out);
     void resample(std::byte* record, std::int16_t* history_and_source,
                   std::int16_t* out);
-    void decode_adpcm(std::byte* record, std::int16_t* out, std::uint32_t count,
-                      const JAudioGuestMemory& memory);
+    void decode_adpcm(std::byte* record, std::int16_t* out, std::uint32_t count);
     void decode_adpcm_blocks(std::byte* record, std::int16_t* out,
-                             std::uint32_t blocks,
-                             const JAudioGuestMemory& memory);
+                             std::uint32_t blocks);
     void read_pcm(std::byte* record, std::int16_t* out, std::uint32_t count,
-                  std::uint32_t bytes_per_sample,
-                  const JAudioGuestMemory& memory);
-    void read_mram_stream(std::byte* record, std::int16_t* out,
-                          std::uint32_t count, const JAudioGuestMemory& memory);
+                  std::uint32_t bytes_per_sample);
     void render_oscillator(std::byte* record, std::int16_t* out,
                            std::uint16_t type);
     void apply_fir(std::byte* record, std::int16_t* samples);
@@ -143,12 +126,10 @@ private:
     void fir8_in_place(std::uint32_t base,
                        const std::array<std::int16_t, 8>& coefficients);
     void evolve_oscillator_tables();
-    void fx_line_read(std::size_t line, const JAudioGuestMemory& memory);
-    void fx_line_write(std::size_t line, const JAudioGuestMemory& memory);
-    void write_output(std::uint32_t bus, std::uint32_t plane,
-                      const JAudioGuestMemory& memory);
-    std::byte* resolve_wave(std::uint32_t offset, std::uint32_t size,
-                            const JAudioGuestMemory& memory);
+    void fx_line_read(std::size_t line);
+    void fx_line_write(std::size_t line);
+    void write_output(std::uint32_t bus, std::int16_t* plane);
+    [[nodiscard]] const std::byte* resolve_wave(std::uint32_t offset, std::uint32_t size) const;
 
     // DSP data memory image: [0x000, 0x280) DSPRES_FILTER (resampler taps,
     // oscillator wave tables, pan table), [0x300, 0x320) ADPCM coefficients,
@@ -161,13 +142,14 @@ private:
     std::array<std::int16_t, 4 + 2048> source_{};
     std::array<std::int16_t, 64 + 80 + 32> channel_out_{};
 
-    std::uint32_t channel_table_{};
+    std::byte* channels_{};
     std::uint32_t channel_count_{};
-    std::uint32_t fx_table_{};
-    std::uint32_t varam_{};
+    const NebulaJAudioFxLine* fx_lines_{};
+    const std::byte* aux_{};
+    std::uint32_t aux_size_{};
     std::uint32_t mixer_level_{};
-    std::uint32_t left_plane_{};
-    std::uint32_t right_plane_{};
+    std::int16_t* left_plane_{};
+    std::int16_t* right_plane_{};
     std::uint32_t subframes_{};
     std::uint32_t next_subframe_{};
     bool frame_active_{};

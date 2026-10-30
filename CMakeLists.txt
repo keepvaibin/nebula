@@ -127,7 +127,8 @@ galaxy_host_options(galaxy_native_input)
 
 # The game's audio commands mixed on the host (jaudio_host_mixer.h).
 add_library(galaxy_jaudio_mixer STATIC runtime/src/jaudio_host_mixer.cpp)
-target_include_directories(galaxy_jaudio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include")
+target_include_directories(galaxy_jaudio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
+                           "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
 galaxy_host_options(galaxy_jaudio_mixer)
 
 add_library(galaxy_native_host STATIC

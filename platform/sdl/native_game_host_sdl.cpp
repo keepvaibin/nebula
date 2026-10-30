@@ -265,7 +265,7 @@ void install_native_keyboard_capture_provider(NativeKeyboardCaptureProvider) noe
 void install_native_settings_pad_hooks(NativeSettingsVisibleProvider, NativeSettingsKeySink) noexcept {}
 void set_env_flag_cache_enabled(bool) noexcept {}
 
-// Sound: the JAudio DSP program on the game's command words, its blocks through an SDL audio stream.
+// Sound: the JAudio DSP program on the game's channel records, its blocks through an SDL audio stream.
 struct NativeGameAudio::State {
     JAudioHostMixer mixer;
     SDL_AudioStream* stream = nullptr;
@@ -282,55 +282,25 @@ NativeGameAudio::~NativeGameAudio() {
     }
 }
 
-namespace {
-// An address's bytes in the native game's regions.
-std::byte* native_game_resolve(void* user, std::uint32_t address, std::uint32_t size) {
-    const auto& memory = *static_cast<const GuestMemory*>(user);
-    const GuestMemoryFastRegion& fast = memory.fast_regions[address >> 28u];
-    const std::uint32_t offset = address & 0x0FFF'FFFFu;
-    if (fast.host_base != nullptr && offset <= fast.size && size <= fast.size - offset) {
-        return fast.host_base + offset;
-    }
-    for (std::uint32_t i = 0; i < memory.region_count; ++i) {
-        const GuestMemoryRegion& region = memory.regions[i];
-        if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
-            return region.host_base + (address - region.guest_base);
-        }
-    }
-    return nullptr;
+void NativeGameAudio::setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
+                            const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
+    state_->mixer.setup(channels, static_cast<std::byte*>(channel_records), resample_filter, adpcm_filter, fx_lines);
 }
-}  // namespace
 
-bool NativeGameAudio::dsp_command(const std::uint32_t* words, std::uint32_t count, const GuestMemory& memory) {
-    const JAudioGuestMemory guest{const_cast<GuestMemory*>(&memory), &native_game_resolve};
-    JAudioHostMixer& mixer = state_->mixer;
-    const auto word = [&](std::uint32_t index) { return index < count ? words[index] : 0u; };
-    if (count == 0u) {
-        return mixer.release_halt(words[0], guest);
-    }
-    switch (words[0] >> 24u) {
-    case 0x81u:
-        if (count >= 5u) {
-            mixer.setup(words[0], word(1u), word(2u), word(3u), word(4u), guest);
-        } else {
-            mixer.note_ignored_command();
-        }
-        break;
-    case 0x8Eu:
-        mixer.set_varam(word(1u));
-        break;
-    case 0x82u: {
-        // The volume categories, once an audio frame (master applies to the stream's output).
-        const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
-        mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-        mixer.sync_frame(words[0], word(1u), word(2u), word(3u), word(4u), guest);
-        break;
-    }
-    default:
-        mixer.note_ignored_command();
-        break;
-    }
-    return false;
+void NativeGameAudio::set_aux(const void* base, std::uint32_t size) {
+    state_->mixer.set_aux(static_cast<const std::byte*>(base), size);
+}
+
+void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left,
+                            std::int16_t* right) {
+    // The volume categories, once an audio frame (master applies to the stream's output).
+    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+    state_->mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    state_->mixer.sync_frame(subframes, mixer_level, left, right);
+}
+
+bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active) {
+    return state_->mixer.release_halt(group, active);
 }
 
 void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
@@ -353,15 +323,12 @@ bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sampl
         }
         s.rate = sample_rate;
     }
-    // The AI's frames: right then left, big-endian; the stream's: left then right, native order.
+    // The AI's frames: right then left; the stream's: left then right.
     const std::size_t count = block.size() / 4u;
     s.frames.resize(count * 2u);
-    const auto* bytes = reinterpret_cast<const std::uint8_t*>(block.data());
+    std::memcpy(s.frames.data(), block.data(), count * 4u);
     for (std::size_t i = 0; i < count; ++i) {
-        const auto right = static_cast<std::int16_t>((bytes[i * 4u] << 8) | bytes[i * 4u + 1u]);
-        const auto left = static_cast<std::int16_t>((bytes[i * 4u + 2u] << 8) | bytes[i * 4u + 3u]);
-        s.frames[i * 2u] = left;
-        s.frames[i * 2u + 1u] = right;
+        std::swap(s.frames[i * 2u], s.frames[i * 2u + 1u]);
     }
     s.block_bytes = count * 4u;
     return SDL_PutAudioStreamData(s.stream, s.frames.data(), static_cast<int>(count * 4u));
@@ -397,12 +364,10 @@ std::string NativeGameAudio::stats_line() const {
     std::ostringstream line;
     line << "setups=" << s.setups << " frames=" << s.frames << " subframes=" << s.subframes
          << " channel-renders=" << s.channel_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
-         << " streams=" << s.stream_renders << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
+         << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
          << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
-         << " unsupported-osc=" << s.unsupported_oscillators << " ignored=" << s.ignored_commands
-         << " stray=" << s.stray_releases << " varam=0x" << std::hex << state_->mixer.varam() << std::dec
-         << " mix-ms=" << s.mix_ns / 1000000u;
+         << " unsupported-osc=" << s.unsupported_oscillators << " stray=" << s.stray_releases << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }
 

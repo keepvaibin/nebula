@@ -680,12 +680,11 @@ std::FILE* open_file(const fs::path& path, uint32_t mode) {
 std::mutex gAiLock;
 std::condition_variable gAiWake;
 uint32_t gAiLatchedSize = 0;
-uint32_t gAiLatchedStart = 0;
+const void* gAiLatchedStart = nullptr;
 uint32_t gAiRate = 32000;
 bool gAiRunning = false;
 
 #if defined(NEBULA_HOST_RENDERER)
-const std::byte* guest_bytes(uint32_t address, uint32_t size);
 extern galaxy::host::NativeGameAudio* gAudio;
 #endif
 
@@ -740,7 +739,7 @@ void ai_thread() {
             scheduled = false;
         }
         uint32_t size = 0;
-        uint32_t start = 0;
+        const void* start = nullptr;
         uint32_t rate = 32000;
         {
             std::unique_lock<std::mutex> lock(gAiLock);
@@ -760,8 +759,8 @@ void ai_thread() {
         double period_ns = static_cast<double>((uint64_t)size / 4 * 1000000000ull) / rate;
 #if defined(NEBULA_HOST_RENDERER)
         bool played = false;
-        if (const std::byte* samples = guest_bytes(start, size)) {
-            played = gAudio->play(std::span<const std::byte>(samples, size), rate);
+        if (start != nullptr) {
+            played = gAudio->play(std::span<const std::byte>(static_cast<const std::byte*>(start), size), rate);
         }
         if (played && gAudio->output_available()) {
             const int error = static_cast<int>(gAudio->queued_blocks()) - static_cast<int>(gAudio->target_blocks());
@@ -1308,17 +1307,6 @@ void ensure_guest_memory() {
 }
 
 // `size` bytes at a console address, in the module's arena or image.
-const std::byte* guest_bytes(uint32_t address, uint32_t size) {
-    ensure_guest_memory();
-    for (const galaxy::GuestMemoryRegion& region : gRegions) {
-        if (address - region.guest_base < region.size && size <= region.size - (address - region.guest_base)) {
-            return region.host_base + (address - region.guest_base);
-        }
-    }
-    return nullptr;
-}
-
-
 void submit_frame_unchecked(bool present, bool black) {
     galaxy::render::render_frame(&gNative, present, black);
     gSubmissions.fetch_add(1, std::memory_order_relaxed);
@@ -2982,42 +2970,28 @@ void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 // (JASDSPChannel::updateAll's releaseHalt(3), a one-word command). Headless, the subframe completes unmixed.
 #if defined(NEBULA_HOST_RENDERER)
 // A pointer into the game's memory as the guest address the mixer reads by (0 outside it).
-uint32_t guest_address_of(const void* pointer) {
-    const auto* p = static_cast<const std::byte*>(pointer);
-    for (uint32_t i = 0; pointer != nullptr && i < gMemory.region_count; ++i) {
-        const galaxy::GuestMemoryRegion& region = gMemory.regions[i];
-        if (p >= region.host_base && p < region.host_base + region.size) {
-            return region.guest_base + static_cast<uint32_t>(p - region.host_base);
-        }
-    }
-    return 0;
-}
 #endif
 
-void svc_jaudio_setup(void*, uint32_t channels, const void* records, const void* resample_filter,
-                      const void* adpcm_filter, const void* fx_lines) {
+void svc_jaudio_setup(void*, uint32_t channels, void* records, const int16_t* resample_filter,
+                      const int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
 #if defined(NEBULA_HOST_RENDERER)
-    ensure_guest_memory();
-    gAudio->setup(channels, guest_address_of(records), guest_address_of(resample_filter), guest_address_of(adpcm_filter),
-                  guest_address_of(fx_lines), gMemory);
+    gAudio->setup(channels, records, resample_filter, adpcm_filter, fx_lines);
 #else
     (void)channels, (void)records, (void)resample_filter, (void)adpcm_filter, (void)fx_lines;
 #endif
 }
 
-void svc_jaudio_aux_base(void*, const void* base) {
+void svc_jaudio_aux(void*, const void* base, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
-    ensure_guest_memory();
-    gAudio->set_aux_base(guest_address_of(base));
+    gAudio->set_aux(base, size);
 #else
-    (void)base;
+    (void)base, (void)size;
 #endif
 }
 
-void svc_jaudio_frame(void*, uint32_t subframes, uint32_t mixer_level, void* left, void* right) {
+void svc_jaudio_frame(void*, uint32_t subframes, uint32_t mixer_level, int16_t* left, int16_t* right) {
 #if defined(NEBULA_HOST_RENDERER)
-    ensure_guest_memory();
-    gAudio->frame(subframes, mixer_level, guest_address_of(left), guest_address_of(right), gMemory);
+    gAudio->frame(subframes, mixer_level, left, right);
 #else
     (void)subframes, (void)mixer_level, (void)left, (void)right;
 #endif
@@ -3025,8 +2999,7 @@ void svc_jaudio_frame(void*, uint32_t subframes, uint32_t mixer_level, void* lef
 
 int svc_jaudio_mix(void*, uint32_t group, uint32_t active) {
 #if defined(NEBULA_HOST_RENDERER)
-    ensure_guest_memory();
-    const int subframe = gAudio->mix(group, active, gMemory) ? 1 : 0;
+    const int subframe = gAudio->mix(group, active) ? 1 : 0;
 #else
     (void)active;
     const int subframe = group == 3u;
@@ -3035,9 +3008,9 @@ int svc_jaudio_mix(void*, uint32_t group, uint32_t active) {
     return subframe;
 }
 
-void svc_ai_dma(void*, uint32_t start, uint32_t size) {
+void svc_ai_dma(void*, const void* samples, uint32_t size) {
     std::lock_guard<std::mutex> lock(gAiLock);
-    gAiLatchedStart = start;
+    gAiLatchedStart = samples;
     gAiLatchedSize = size;
     gAiWake.notify_one();
 }
@@ -3891,7 +3864,7 @@ int main(int argc, char** argv) {
     services.wpad_control = svc_wpad_control;
     services.wpad_speaker_data = svc_wpad_speaker_data;
     services.jaudio_setup = svc_jaudio_setup;
-    services.jaudio_aux_base = svc_jaudio_aux_base;
+    services.jaudio_aux = svc_jaudio_aux;
     services.jaudio_frame = svc_jaudio_frame;
     services.jaudio_mix = svc_jaudio_mix;
     services.ai_dma = svc_ai_dma;
