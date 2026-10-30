@@ -485,8 +485,8 @@ public:
     NativeAudioSink(const NativeAudioSink&) = delete;
     NativeAudioSink& operator=(const NativeAudioSink&) = delete;
 
-    // One AI block in the console's layout (big-endian right, left). Always called from the same thread.
-    bool submit_pcm16_be_stereo(std::span<const std::byte> source, std::uint32_t sample_rate) {
+    // One AI block: 16-bit (right, left) pairs in host byte order. Always called from the same thread.
+    bool submit_pcm16_stereo(std::span<const std::byte> source, std::uint32_t sample_rate) {
         if (source.empty()) {
             return true;
         }
@@ -517,7 +517,7 @@ public:
             // No device: the block is dropped unheard, but still reaches a requested WAV dump.
             if (get_env_path(L"GALAXY_AUDIO_WAV_DUMP").has_value()) {
                 std::vector<std::byte> pcm_le(source.size());
-                if (!native_audio_convert_wii_ai_pcm16(source, pcm_le)) {
+                if (!native_audio_convert_ai_pcm16(source, pcm_le)) {
                     log_drop("offline audio WAV diagnostic failed");
                     return false;
                 }
@@ -532,7 +532,7 @@ public:
         auto buffer = std::make_unique<SubmittedBuffer>();
         buffer->sample_rate = sample_rate;
         buffer->bytes.resize(source.size());
-        if (!native_audio_convert_wii_ai_pcm16(
+        if (!native_audio_convert_ai_pcm16(
                 source, std::span<std::byte>(buffer->bytes))) {
             log_drop("invalid Wii AI PCM channel conversion");
             return false;
@@ -584,7 +584,7 @@ private:
             return false;
         }
         std::vector<std::byte> pcm_le(source.size());
-        if (!native_audio_convert_wii_ai_pcm16(source, std::span<std::byte>(pcm_le))) {
+        if (!native_audio_convert_ai_pcm16(source, std::span<std::byte>(pcm_le))) {
             log_drop("invalid Wii AI PCM channel conversion");
             return false;
         }
@@ -654,7 +654,7 @@ private:
         }
         {
             std::unique_lock<std::mutex> lock(pending_mutex_);
-            // The device can be lost between the offline check in submit_pcm16_be_stereo and here. The worker then
+            // The device can be lost between the offline check in submit_pcm16_stereo and here. The worker then
             // stops draining, so this block is dropped instead of waiting for room.
             if (endpoint_recovery_pending_.load(std::memory_order_acquire)) {
                 lock.unlock();
@@ -4604,7 +4604,7 @@ void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, st
 }
 
 bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sample_rate) {
-    return state_->sink.submit_pcm16_be_stereo(block, sample_rate);
+    return state_->sink.submit_pcm16_stereo(block, sample_rate);
 }
 
 unsigned NativeGameAudio::queued_blocks() const {

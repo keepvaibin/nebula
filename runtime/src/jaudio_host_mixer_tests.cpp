@@ -50,9 +50,6 @@ struct Guest {
         const std::byte* p = resolve(this, address, 2u);
         return (static_cast<std::uint32_t>(p[0]) << 8u) | static_cast<std::uint32_t>(p[1]);
     }
-    [[nodiscard]] std::int16_t gets16(std::uint32_t address) {
-        return static_cast<std::int16_t>(get16(address));
-    }
     // The game's records (channels, FX lines) are in host byte order.
     template <typename T>
     void rput(std::uint32_t address, T value) { std::memcpy(resolve(this, address, sizeof(T)), &value, sizeof(T)); }
@@ -141,8 +138,8 @@ void test_gain_chain() {
     expect(subframe(mixer, guest, 0x8000u), "group 3 completes the subframe");
     // Steady state: bus = 0x4000 * 0x4000 >> 16 = 0x1000; output = bus *
     // 0x4000 / 4096 = 0x4000.
-    expect(guest.gets16(kLeft + 79u * 2u) == 0x4000, "level chain", guest.gets16(kLeft + 79u * 2u));
-    expect(guest.gets16(kRight + 79u * 2u) == 0, "right untouched", guest.gets16(kRight + 79u * 2u));
+    expect(guest.rgets16(kLeft + 79u * 2u) == 0x4000, "level chain", guest.rgets16(kLeft + 79u * 2u));
+    expect(guest.rgets16(kRight + 79u * 2u) == 0, "right untouched", guest.rgets16(kRight + 79u * 2u));
     expect(guest.rget16(r + 0x008u) == 0u, "reset flag cleared");
     expect(guest.rget32(r + 0x074u) == 4096u - 80u, "PCM samples left", guest.rget32(r + 0x074u));
     expect(guest.rget32(r + 0x070u) == kWave + 160u, "PCM next address", guest.rget32(r + 0x070u));
@@ -165,8 +162,8 @@ void test_ramp() {
     subframe(mixer, guest, 0x8000u);
     expect(guest.rget16(r + 0x014u) == 0x2000u, "current reaches target", guest.rget16(r + 0x014u));
     // From sample 65 on the gain is the target: 0x4000*0x2000>>16 * 4 = 0x2000.
-    expect(guest.gets16(kRight + 70u * 2u) == 0x2000, "ramp end level", guest.gets16(kRight + 70u * 2u));
-    const std::int16_t mid = guest.gets16(kRight + 33u * 2u);
+    expect(guest.rgets16(kRight + 70u * 2u) == 0x2000, "ramp end level", guest.rgets16(kRight + 70u * 2u));
+    const std::int16_t mid = guest.rgets16(kRight + 33u * 2u);
     expect(mid > 0 && mid < 0x2000, "ramp midpoint", mid);
 }
 
@@ -251,11 +248,11 @@ void test_fx_delay() {
     guest.rput16(kFx + 0x10u + 7u * 2u, 0x7FFFu);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.gets16(kLeft + 40u * 2u) == 0, "no echo before the delay", guest.gets16(kLeft + 40u * 2u));
+    expect(guest.rgets16(kLeft + 40u * 2u) == 0, "no echo before the delay", guest.rgets16(kLeft + 40u * 2u));
     subframe(mixer, guest, 0x8000u);
-    expect(guest.gets16(kLeft + 80u * 2u + 40u * 2u) == 0, "no echo after one subframe", guest.gets16(kLeft + 80u * 2u + 40u * 2u));
+    expect(guest.rgets16(kLeft + 80u * 2u + 40u * 2u) == 0, "no echo after one subframe", guest.rgets16(kLeft + 80u * 2u + 40u * 2u));
     subframe(mixer, guest, 0x8000u);
-    const std::int16_t echo = guest.gets16(kLeft + 160u * 2u + 40u * 2u);
+    const std::int16_t echo = guest.rgets16(kLeft + 160u * 2u + 40u * 2u);
     expect(echo > 0x3000, "echo after two subframes", echo);
     expect(mixer.stats().fx_line_subframes == 3u, "fx line ran each subframe");
 }
@@ -272,8 +269,8 @@ void test_auto_mixer_pan() {
     guest.rput16(r + 0x056u, 0x7FFFu);
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
-    expect(guest.gets16(kLeft + 79u * 2u) > 0x1000, "left gets the signal", guest.gets16(kLeft + 79u * 2u));
-    expect(guest.gets16(kRight + 79u * 2u) == 0, "right is silent", guest.gets16(kRight + 79u * 2u));
+    expect(guest.rgets16(kLeft + 79u * 2u) > 0x1000, "left gets the signal", guest.rgets16(kLeft + 79u * 2u));
+    expect(guest.rgets16(kRight + 79u * 2u) == 0, "right is silent", guest.rgets16(kRight + 79u * 2u));
 }
 
 // A FIR whose only tap is the newest of T delays the signal by one sample.
@@ -291,8 +288,8 @@ void test_fir_delay() {
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // Resampler warm-up gives zeros for outputs 0..2; the FIR shifts that by one.
-    expect(guest.gets16(kLeft + 3u * 2u) == 0, "fir delays by one sample", guest.gets16(kLeft + 3u * 2u));
-    expect(guest.gets16(kLeft + 4u * 2u) == 0x4000, "fir passes the signal", guest.gets16(kLeft + 4u * 2u));
+    expect(guest.rgets16(kLeft + 3u * 2u) == 0, "fir delays by one sample", guest.rgets16(kLeft + 3u * 2u));
+    expect(guest.rgets16(kLeft + 4u * 2u) == 0x4000, "fir passes the signal", guest.rgets16(kLeft + 4u * 2u));
     expect(guest.rgets16(r + 0x080u + 3u * 2u) == 0x4000, "fir history saved", guest.rgets16(r + 0x080u + 3u * 2u));
     expect(mixer.stats().fir_renders == 1u, "fir counted");
 }
@@ -313,8 +310,8 @@ void test_iir_average() {
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // Input: 0,0,0,0x4000... -> y: 0,0,0,0x2000,0x4000... -> output y[n-1].
-    expect(guest.gets16(kLeft + 4u * 2u) == 0x2000, "iir half step", guest.gets16(kLeft + 4u * 2u));
-    expect(guest.gets16(kLeft + 5u * 2u) == 0x4000, "iir settles", guest.gets16(kLeft + 5u * 2u));
+    expect(guest.rgets16(kLeft + 4u * 2u) == 0x2000, "iir half step", guest.rgets16(kLeft + 4u * 2u));
+    expect(guest.rgets16(kLeft + 5u * 2u) == 0x4000, "iir settles", guest.rgets16(kLeft + 5u * 2u));
     expect(guest.rgets16(r + 0x0A8u) == 0x4000, "iir state x[-1]", guest.rgets16(r + 0x0A8u));
     // Identity coefficients bypass the filter.
     guest.rput16(r + 0x148u, 0x7FFFu);
@@ -337,10 +334,10 @@ void test_square_oscillator() {
     frame(mixer, guest);
     subframe(mixer, guest, 0x8000u);
     // 0x8000 / 0x800 = 16 samples per half period.
-    const std::int16_t high = guest.gets16(kLeft + 0u);
-    const std::int16_t low = guest.gets16(kLeft + 16u * 2u);
+    const std::int16_t high = guest.rgets16(kLeft + 0u);
+    const std::int16_t low = guest.rgets16(kLeft + 16u * 2u);
     expect(high > 0 && low < 0 && high == -low, "square wave halves", high);
-    expect(guest.gets16(kLeft + 15u * 2u) == high, "square holds for 16 samples");
+    expect(guest.rgets16(kLeft + 15u * 2u) == high, "square holds for 16 samples");
     expect(guest.rget16(r + 0x060u) == ((80u * 0x800u) & 0xFFFFu), "oscillator phase saved", guest.rget16(r + 0x060u));
 }
 
@@ -376,11 +373,11 @@ void test_bus_categories() {
     frame(mixer, guest);
     subframe(mixer, guest, 0xC000u);
     // The first three samples come from the reset resampler history.
-    expect(guest.gets16(kLeft + 3u * 2u) == 0x2000, "voice at half from its first sample", guest.gets16(kLeft + 3u * 2u));
-    expect(guest.gets16(kLeft + 79u * 2u) == 0x2000, "voice at half", guest.gets16(kLeft + 79u * 2u));
+    expect(guest.rgets16(kLeft + 3u * 2u) == 0x2000, "voice at half from its first sample", guest.rgets16(kLeft + 3u * 2u));
+    expect(guest.rgets16(kLeft + 79u * 2u) == 0x2000, "voice at half", guest.rgets16(kLeft + 79u * 2u));
     int loud = 0;
     for (std::uint32_t k = 0; k < 80u; ++k) {
-        loud += guest.gets16(kRight + k * 2u) != 0 ? 1 : 0;
+        loud += guest.rgets16(kRight + k * 2u) != 0 ? 1 : 0;
     }
     expect(loud == 0, "muted music silent from its first sample", loud);
     expect(mixer.channel_category(0u).decision.bus == galaxy::audio::NativeAudioBus::Voice, "owner category");
@@ -390,17 +387,17 @@ void test_bus_categories() {
 
     mixer.set_bus_gains({1.0f, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
-    const std::int16_t first = guest.gets16(kLeft + 80u * 2u);
+    const std::int16_t first = guest.rgets16(kLeft + 80u * 2u);
     expect(first > 0x1F00 && first < 0x2000, "mute ramps from the previous gain", first);
-    const std::int16_t quarter = guest.gets16(kLeft + 159u * 2u);
+    const std::int16_t quarter = guest.rgets16(kLeft + 159u * 2u);
     expect(quarter > 0x1700 && quarter < 0x1900, "mute is a quarter done after one subframe", quarter);
     for (int k = 0; k < 3; ++k) {
         subframe(mixer, guest, 0xC000u);
     }
-    expect(guest.gets16(kLeft + 399u * 2u) == 0, "mute reached within the ramp", guest.gets16(kLeft + 399u * 2u));
+    expect(guest.rgets16(kLeft + 399u * 2u) == 0, "mute reached within the ramp", guest.rgets16(kLeft + 399u * 2u));
     int rising = 0;
     for (std::uint32_t k = 81u; k < 400u; ++k) {
-        rising += guest.gets16(kLeft + k * 2u) > guest.gets16(kLeft + (k - 1u) * 2u) ? 1 : 0;
+        rising += guest.rgets16(kLeft + k * 2u) > guest.rgets16(kLeft + (k - 1u) * 2u) ? 1 : 0;
     }
     expect(rising == 0, "mute ramp is monotonic", rising);
 
@@ -410,9 +407,9 @@ void test_bus_categories() {
     guest.rput16(record(0) + 0x008u, 1u);  // playStart
     mixer.set_bus_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     subframe(mixer, guest, 0xC000u);
-    expect(guest.gets16(kLeft + 400u * 2u) == 0x4000, "new sound at its own gain at once", guest.gets16(kLeft + 400u * 2u));
+    expect(guest.rgets16(kLeft + 400u * 2u) == 0x4000, "new sound at its own gain at once", guest.rgets16(kLeft + 400u * 2u));
     expect(mixer.channel_category(0u).owner.route == galaxy::audio::JAudioOwnerRoute::Stream, "stream owner");
-    const std::int16_t unmuting = guest.gets16(kRight + 479u * 2u);
+    const std::int16_t unmuting = guest.rgets16(kRight + 479u * 2u);
     expect(unmuting > 0x0E00 && unmuting < 0x1200, "unmuted music ramps up over the ramp", unmuting);
 }
 

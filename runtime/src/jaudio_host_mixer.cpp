@@ -38,8 +38,8 @@ constexpr std::array<std::uint32_t, 8> kAutoMixerBus{
     return static_cast<std::int16_t>(be16(p, offset));
 }
 
-// The game's records (channels, FX lines) are in host byte order; sample data, delay lines and output planes keep the
-// console's big-endian order.
+// The game's records (channels, FX lines) and the output planes are in host byte order; sample data and delay lines
+// keep the console's big-endian order.
 template <typename T>
 [[nodiscard]] T record_load(const std::byte* p, std::uint32_t offset) noexcept {
     T value;
@@ -1110,7 +1110,7 @@ void JAudioHostMixer::write_output(std::uint32_t bus, std::uint32_t plane,
     const std::int64_t level = mixer_level_;
     for (std::uint32_t i = 0; i < kSamples; ++i) {
         const std::int16_t sample = sat16((dram_[bus + i] * level) >> 12);
-        put16(dst, i * 2u, static_cast<std::uint16_t>(sample));
+        w16(dst, i * 2u, static_cast<std::uint16_t>(sample));
     }
 }
 
