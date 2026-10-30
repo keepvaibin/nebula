@@ -13,6 +13,7 @@
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
 #include <revolution/os.h>
+#include "Game/System/NebulaClock.hpp"
 #endif
 
 namespace {
@@ -21,9 +22,9 @@ namespace {
         {MR::setTextBoxGameMessageRecursive},
     };
 #ifdef TARGET_PC
-    // The dim a closing or closed system window still shows, and when it last did (OSGetTime); the hand-overs so far.
+    // The dim a closing or closed system window still shows, and when it last did (NebulaClock); the hand-overs so far.
     f32 sDimLeft = 0.0f;
-    OSTime sDimLeftTime = 0;
+    s64 sDimLeftTime = 0;
     u32 sDimEpoch = 0;
     // A closed window's dim holds this many frames for the next window (the pause menu's question opens 9 frames
     // after the save's last window closes), then lifts over 10, as the windows' own end animations do.
@@ -139,7 +140,7 @@ void SysInfoWindow::appear() {
 #ifdef TARGET_PC
     // The dim a window closing or just closed left takes this one's place until its own is as deep.
     mDimFloor = 0.0f;
-    if (sDimLeft > 0.0f && OSTicksToMilliseconds(OSGetTime() - sDimLeftTime) < cDimHandOverMs) {
+    if (sDimLeft > 0.0f && (NebulaClock::nowNs() - sDimLeftTime) / 1000000 < cDimHandOverMs) {
         mDimFloor = sDimLeft;
     }
     mDimEpoch = ++sDimEpoch;
@@ -345,7 +346,7 @@ void SysInfoWindow::updateDim() {
     }
     if (mDim > 0.0f) {
         sDimLeft = mDim;
-        sDimLeftTime = OSGetTime();
+        sDimLeftTime = NebulaClock::nowNs();
     }
 }
 
@@ -424,7 +425,7 @@ void SysInfoWindow::exeDisappear() {
         mDimHanding = (mDimHandOver & answer) != 0 && mDimEpoch == sDimEpoch;
         if (mDimHanding && mDim > 0.0f) {
             sDimLeft = mDim;
-            sDimLeftTime = OSGetTime();
+            sDimLeftTime = NebulaClock::nowNs();
         }
 #endif
     }

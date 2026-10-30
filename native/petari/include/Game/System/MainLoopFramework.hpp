@@ -31,11 +31,8 @@ public:
     void endRender();
     void endFrame();
     void waitBlanking(int);
-    void setTickRateFromFrame(u16);
     void clearEfb(GXColor);
     void clearEfb(int, int, int, int, GXColor);
-    void calcCombinationRatio();
-    static u32 frameToTick(f32);
     static void setForOSResetSystem();
 
     /* 0x00 */ Color8 mClearColor;
@@ -43,15 +40,11 @@ public:
     /* 0x08 */ u16 mDispCopyGamma;
     /* 0x0A */ u16 mCopyClamp;
     /* 0x10 */ u16 mRetraceCount;
-    /* 0x14 */ u32 mTickDuration;
     /* 0x18 */ bool mUseAlpha;
     /* 0x19 */ bool mUseVFilter;
     u8 _1A;
     u8 _1B;
     /* 0x1C */ f32 mCombinationRatio;
-    /* 0x20 */ OSTick mTick;
-    /* 0x24 */ s32 mLastFrameTime;
-    /* 0x28 */ s32 mLastVideoTickDelta;
     /* 0x2C */ s32 mRenderInterval;
     /* 0x30 */ s32 mRenderCounter;
     /* 0x34 */ u8 mDoRenderFrame;

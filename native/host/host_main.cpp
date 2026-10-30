@@ -1823,6 +1823,12 @@ void svc_stripe_particle(void*, uint32_t particle, uint32_t age_lifetime, uint8_
 #endif
 }
 
+// The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
+uint64_t svc_clock_ns(void*) {
+    static const Clock::time_point start = Clock::now();
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
+}
+
 std::atomic<int32_t> gStarPointerMode{-1};
 
 void svc_button_icons(void*, NebulaButtonIcons* icons) {
@@ -3902,6 +3908,7 @@ int main(int argc, char** argv) {
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;
     services.readback_serial = svc_readback_serial;
+    services.clock_ns = svc_clock_ns;
     services.stripe_particle = svc_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 49u
+#define NEBULA_GAME_API_VERSION 50u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -932,6 +932,8 @@ typedef struct NebulaHostServices {
     /* How many captures of `channel`'s colour have finished since the game first read it (0: none): a capture made
        when the count was n is readable once it passes n. */
     uint32_t (*readback_serial)(void* user, uint32_t channel);
+    /* Nanoseconds on a steady clock from an arbitrary start (never 0): the game's durations and pacing. */
+    uint64_t (*clock_ns)(void* user);
 } NebulaHostServices;
 
 

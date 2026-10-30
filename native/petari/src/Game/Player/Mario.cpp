@@ -1695,7 +1695,6 @@ void Mario::writeBackPhyisicalVector() {
 }
 
 void Mario::update() {
-    OSGetTime();
     updateAndClearStrideParameter();
     checkKeyLock();
 
@@ -1733,7 +1732,6 @@ void Mario::update() {
         _1C._5 = true;
     }
 
-    OSGetTime();
 
     f32 f1 = 80.0f;
 
@@ -1743,9 +1741,7 @@ void Mario::update() {
 
     checkAllWall(mActor->_2A0, f1);
 
-    OSGetTime();
     updateGroundInfo();
-    OSGetTime();
 
     if (getMovementStates()._1 && !(mMovementStates.jumping && !mMovementStates._B)) {
         if (damageFloorCheck()) {
@@ -1775,13 +1771,11 @@ void Mario::update() {
 
     mDrawStates._10 = false;
 
-    OSGetTime();
 
     if (checkPressDamage()) {
         return;
     }
 
-    OSGetTime();
 
     if (checkSliderMode()) {
         startSlider();

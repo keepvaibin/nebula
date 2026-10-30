@@ -50,12 +50,6 @@ public:
     static JUTVideo* getManager() {
         return sManager;
     }
-    static OSTick getVideoInterval() {
-        return sVideoInterval;
-    }
-    static OSTick getVideoLastTick() {
-        return sVideoLastTick;
-    }
 
     GXRenderModeObj* getRenderMode() const {
         return mRenderObj;
@@ -63,8 +57,6 @@ public:
 
 private:
     static JUTVideo* sManager;
-    static OSTick sVideoLastTick;
-    static OSTick sVideoInterval;
 
 private:
     /* 0x04 */ _GXRenderModeObj* mRenderObj;

@@ -145,10 +145,8 @@ u32 __NebulaObjectId(const void* pObject);
 #endif
 
 #ifdef TARGET_PC
-#define OSRoundUp32B(x) (((uintptr_t)(x) + 32 - 1) & ~(uintptr_t)(32 - 1))
 #define OSRoundDown32B(x) (((uintptr_t)(x)) & ~(uintptr_t)(32 - 1))
 #else
-#define OSRoundUp32B(x) (((u32)(x) + 32 - 1) & ~(32 - 1))
 #define OSRoundDown32B(x) (((u32)(x)) & ~(32 - 1))
 #endif
 #define OSDiffTick(tick1, tick0) ((s32)(tick1) - (s32)(tick0))

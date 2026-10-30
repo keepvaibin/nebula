@@ -173,13 +173,13 @@ typedef struct DVDPartitionParams DVDPartitionParams;
 
 struct DVDPartitionParams {
     ESTicket ticket;
-    u8 padding0[OSRoundUp32B(sizeof(ESTicket)) - sizeof(ESTicket)];
+    u8 padding0[((sizeof(ESTicket) + 31) & ~31) - sizeof(ESTicket)];
     ESTicketView ticketView;
-    u8 padding1[OSRoundUp32B(sizeof(ESTicketView)) - sizeof(ESTicketView)];
+    u8 padding1[((sizeof(ESTicketView) + 31) & ~31) - sizeof(ESTicketView)];
     u32 numTmdBytes;
     u8 padding2[28];
     ESTitleMeta tmd;
-    u8 padding3[OSRoundUp32B(sizeof(ESTitleMeta)) - sizeof(ESTitleMeta)];
+    u8 padding3[((sizeof(ESTitleMeta) + 31) & ~31) - sizeof(ESTitleMeta)];
     u32 numCertBytes;
     u8 padding4[28];
     u8 certificates[4096];

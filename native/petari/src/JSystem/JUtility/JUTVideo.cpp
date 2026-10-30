@@ -4,9 +4,6 @@
 
 JUTVideo* JUTVideo::sManager;
 
-OSTick JUTVideo::sVideoLastTick;
-
-OSTick JUTVideo::sVideoInterval;
 
 
 JUTVideo* JUTVideo::createManager(_GXRenderModeObj const* param_0) {
@@ -34,8 +31,6 @@ JUTVideo::JUTVideo(GXRenderModeObj const* param_0) {
     mRetraceCount = NebulaFrameClock::count();
     field_0x10 = 1;
     field_0x18 = 0;
-    sVideoLastTick = OSGetTick();
-    sVideoInterval = 670000;
     mPreRetraceCallback = NebulaFrameClock::setPreHook(preRetraceProc);
     mPostRetraceCallback = NebulaFrameClock::setPostHook(postRetraceProc);
     mPreCallback = nullptr;
@@ -52,10 +47,6 @@ void JUTVideo::preRetraceProc(u32 retrace_count) {
     if (sManager->mPreCallback) {
         (*sManager->mPreCallback)(retrace_count);
     }
-
-    OSTick tick = OSGetTick();
-    sVideoInterval = tick - sVideoLastTick;
-    sVideoLastTick = tick;
 
     // The picture shown is the renderer's newest; black for the first retraces.
     if (sManager->mSetBlack == 1) {

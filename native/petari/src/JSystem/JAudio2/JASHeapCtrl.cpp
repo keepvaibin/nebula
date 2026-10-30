@@ -6,6 +6,7 @@
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include <revolution/aralt.h>
 #include <revolution/os/OSMutex.h>
+#include "Game/System/NebulaClock.hpp"
 
 JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
     OSInitMutex(&mMutex);
@@ -13,7 +14,7 @@ JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mB
 
 void JASHeap::initRootHeap(void* pBase, u32 size) {
     OSLockMutex(&mMutex);
-    mBase = (u8*)OSRoundUp32B(pBase);
+    mBase = (u8*)NebulaAlignUp32(pBase);
     mHeap = nullptr;
     mSize = size - (u32)(mBase - static_cast< u8* >(pBase));
     OSUnlockMutex(&mMutex);
@@ -29,7 +30,7 @@ bool JASHeap::alloc(JASHeap* pParent, u32 size) {
         return false;
     }
 
-    size = OSRoundUp32B(size);
+    size = NebulaAlignUp32(size);
     u32 curOffset = pParent->getCurOffset();
     u32 tailOffset = pParent->getTailOffset();
     if (curOffset + size <= tailOffset) {

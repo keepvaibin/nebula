@@ -7,6 +7,7 @@
 #include <cstring>
 #ifdef TARGET_PC
 #include <revolution/os.h>
+#include "Game/System/NebulaClock.hpp"
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
@@ -156,19 +157,19 @@ u32 THPSimplePlayerWrapper::calcNeedMemory() {
     }
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-    u32 size = OSRoundUp32B(mHeader.bufSize) * 20;
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize);
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+    u32 size = NebulaAlignUp32(mHeader.bufSize) * 20;
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize);
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 4);
 #else
-    u32 size = OSRoundUp32B(mHeader.bufSize) * 20;
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize * 2);
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
-    size += OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
+    u32 size = NebulaAlignUp32(mHeader.bufSize) * 20;
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize * 2);
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
+    size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
 #endif
 
     if (mAudioExist) {
-        size += (OSRoundUp32B(mHeader.audioMaxSamples * 4) * 20);
+        size += (NebulaAlignUp32(mHeader.audioMaxSamples * 4) * 20);
     }
 
     size += 0x1000;
@@ -182,8 +183,8 @@ bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
             return false;
         }
 
-        u32 ysize = OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize);
-        u32 uvsize = OSRoundUp32B(mVideoInfo.xSize * mVideoInfo.ySize / 4);
+        u32 ysize = NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize);
+        u32 uvsize = NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 4);
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         mTextureSet.ytexture = pBuffer;
@@ -209,7 +210,7 @@ bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
 
         for (s32 i = 0; i < 20; i++) {
             mReadBuffer[i].ptr = pBuffer;
-            pBuffer += OSRoundUp32B(mHeader.bufSize);
+            pBuffer += NebulaAlignUp32(mHeader.bufSize);
             mReadBuffer[i].isValid = 0;
         }
 
@@ -218,7 +219,7 @@ bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
                 mAudioBuffer[i].buffer = (s16*)pBuffer;
                 mAudioBuffer[i].curPtr = (s16*)pBuffer;
                 mAudioBuffer[i].validSample = 0;
-                pBuffer += OSRoundUp32B(mHeader.audioMaxSamples * 4);
+                pBuffer += NebulaAlignUp32(mHeader.audioMaxSamples * 4);
             }
         }
 

@@ -25,6 +25,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
 #include <revolution/os.h>
+#include "Game/System/NebulaClock.hpp"
 
 namespace {
     enum State {
@@ -80,8 +81,8 @@ namespace {
     s32 sSteps = 0;
     s32 sFadeFrames = 0;
     s32 sFrameSteps = 0;
-    OSTick sFrameStart = 0;
-    OSTime sSkipStart = 0;
+    s64 sFrameStart = 0;  // NebulaClock
+    s64 sSkipStart = 0;
 
     bool isGameSceneRunning() {
         GameSystem* pSystem = SingletonHolder< GameSystem >::get();
@@ -302,7 +303,7 @@ namespace NebulaCutsceneSkip {
             sStallSteps = 0;
             sMovieSkip = MR::isActiveMoviePlayer();
             sSkipDemo = !sMovieSkip;
-            sSkipStart = OSGetTime();
+            sSkipStart = NebulaClock::nowNs();
             silenceSe(true);
             report("skipping");
             break;
@@ -315,7 +316,7 @@ namespace NebulaCutsceneSkip {
                 pEnd = "the scene ended";
             } else if (GameSequenceFunction::isActiveSaveDataHandleSequence()) {
                 pEnd = "a save";
-            } else if (OSTicksToMicroseconds(OSGetTime() - sSkipStart) >= cSkipMaxMicros) {
+            } else if ((NebulaClock::nowNs() - sSkipStart) / 1000 >= cSkipMaxMicros) {
                 pEnd = "time";
             } else if (sSkipDemo && isStalled()) {
                 pEnd = "waits on the player";
@@ -352,10 +353,10 @@ namespace NebulaCutsceneSkip {
             return false;
         }
         if (sFrameSteps == 0) {
-            sFrameStart = OSGetTick();
+            sFrameStart = NebulaClock::nowNs();
         }
         if (sFrameSteps >= cStepsPerFrameMax ||
-            OSTicksToMicroseconds(OSDiffTick(OSGetTick(), sFrameStart)) >= cStepBudgetMicros) {
+            (NebulaClock::nowNs() - sFrameStart) / 1000 >= cStepBudgetMicros) {
             sFrameSteps = 0;
             return false;
         }

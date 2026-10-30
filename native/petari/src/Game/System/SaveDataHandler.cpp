@@ -9,6 +9,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <cstdio>
+#include "Game/System/NebulaClock.hpp"
 
 namespace {
     struct SaveFileSpec {
@@ -70,7 +71,7 @@ bool SaveDataHandler::requestVerifyAfterLoadGameDataFile() {
 
     SaveDataFileHeader* pFileHeader = reinterpret_cast< SaveDataFileHeader* >(_14);
 
-    if (_C != OSRoundUp32B(pFileHeader->mFileSize)) {
+    if (_C != NebulaAlignUp32(pFileHeader->mFileSize)) {
         return false;
     }
 
@@ -156,11 +157,11 @@ void SaveDataHandler::requestSaveSaveData() {
 
     MR::copyMemory(_14, _18, fileAccessorA.getHeader()->mFileSize);
     MR::fillMemory(_14 + fileAccessorA.getHeader()->mFileSize, 0,
-                   OSRoundUp32B(fileAccessorA.getHeader()->mFileSize) - fileAccessorA.getHeader()->mFileSize);
+                   NebulaAlignUp32(fileAccessorA.getHeader()->mFileSize) - fileAccessorA.getHeader()->mFileSize);
     fileAccessorB.getHeader()->mCheckSum = MR::calcCheckSum(_14 + sizeof(u32), reinterpret_cast< SaveDataFileHeader* >(_14)->mFileSize - sizeof(u32));
 
     SaveDataFileHeader* pHeader = fileAccessorB.getHeader();
-    mNANDRequestInfo->setWriteSeq(::cSaveFileName, _14, OSRoundUp32B(pHeader->mFileSize), 60, 0);
+    mNANDRequestInfo->setWriteSeq(::cSaveFileName, _14, NebulaAlignUp32(pHeader->mFileSize), 60, 0);
     MR::addRequestToNANDManager(mNANDRequestInfo);
 
     setNerve(GET_NERVE_ANON(SaveDataHandlerSaveProcessingGameData));
@@ -290,7 +291,7 @@ void SaveDataHandler::resetSaveData(u8* pBuffer) {
 
     pFile->mHeader.mFileSize = offset + ::cSaveFileSpecSystem.mBufferSize;
 
-    u32 padding = OSRoundUp32B(offset + ::cSaveFileSpecSystem.mBufferSize) - pFile->mHeader.mFileSize;
+    u32 padding = NebulaAlignUp32(offset + ::cSaveFileSpecSystem.mBufferSize) - pFile->mHeader.mFileSize;
     u8* pPadding = pBuffer + pFile->mHeader.mFileSize;
     for (u32 i = 0; i < padding; i++) {
         pPadding[i] = 0;

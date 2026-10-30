@@ -33,7 +33,7 @@ u32 clearZTexData[] ATTRIBUTE_ALIGN(32) = {0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0
 #endif
 
 namespace {
-    void waitForTick(u32, u16);
+    void waitForFrames(u16);
 
 };  // namespace
 
@@ -43,13 +43,9 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mDispCopyGamma = GX_GM_1_0;
     mCopyClamp = GX_CLAMP_TOP | GX_CLAMP_BOTTOM;
     mRetraceCount = 1;
-    mTickDuration = 0;
     mUseAlpha = useAlpha;
     mUseVFilter = true;
     mCombinationRatio = 0.0f;
-    mTick = OSGetTick();
-    mLastFrameTime = 0;
-    mLastVideoTickDelta = 0;
     J3DNativeTexture::registerImage(clearZTexData, GX_TF_Z24X8, 4, 4, 1);
     J3DNativeTexture::init(&clear_z_tobj, clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
     J3DNativeTexture::initLOD(&clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
@@ -124,17 +120,11 @@ void MainLoopFramework::endGX() {
 }
 
 void MainLoopFramework::waitForRetrace() {
-    ::waitForTick(mTickDuration, mRetraceCount);
+    ::waitForFrames(mRetraceCount);
     JUTVideo::getManager()->waitRetraceIfNeed();
 }
 
 void MainLoopFramework::beginRender() {
-    OSTick currentTick = OSGetTick();
-    mLastFrameTime = currentTick - mTick;
-    mTick = currentTick;
-
-    mLastVideoTickDelta = currentTick - JUTVideo::getVideoLastTick();
-
     if ((mDoRenderFrame = ++mRenderCounter >= mRenderInterval)) {
         mRenderCounter = 0;
     }
@@ -153,7 +143,6 @@ void MainLoopFramework::endRender() {
         prepareCopyDisp();
         J3DNativeState::showFrame();
     }
-    calcCombinationRatio();
 }
 
 void MainLoopFramework::endFrame() {
@@ -162,14 +151,10 @@ void MainLoopFramework::endFrame() {
 
 void MainLoopFramework::waitBlanking(int tickCount) {
     while (tickCount-- > 0) {
-        ::waitForTick(mTickDuration, mRetraceCount);
+        ::waitForFrames(mRetraceCount);
     }
 }
 
-void MainLoopFramework::setTickRateFromFrame(u16 frame) {
-    mTickDuration = frameToTick(frame);
-    mRetraceCount = 0;
-}
 
 void MainLoopFramework::clearEfb(GXColor color) {
     u16 fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
@@ -240,28 +225,6 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     }
 }
 
-void MainLoopFramework::calcCombinationRatio() {
-    s32 videoInterval = JUTVideo::getVideoInterval();
-    s32 var1 = videoInterval;
-    while (var1 < 2 * mLastFrameTime) {
-        var1 += videoInterval;
-    }
-    s32 var2 = var1 - 2 * mLastFrameTime - mLastVideoTickDelta;
-    if (var2 < 0) {
-        var2 += videoInterval;
-    }
-
-    mCombinationRatio = (f32)var2 / (u32)mLastFrameTime;
-    if (mCombinationRatio > 1.0f) {
-        mCombinationRatio = 1.0f;
-    }
-}
-
-u32 MainLoopFramework::frameToTick(f32 frame) {
-    s32 tick = (s32)((OS_BUS_CLOCK / 4) * frame / 59.94) - 100;
-    return (tick < 0) ? 0 : tick;
-}
-
 void MainLoopFramework::setForOSResetSystem() {
     JUTVideo::destroyManager();
     NebulaFrameClock::show(false);
@@ -273,49 +236,25 @@ void MainLoopFramework::setForOSResetSystem() {
 }
 
 namespace {
-    void waitForTick(u32 tickDuration, u16 retraceCount) {
-        if (tickDuration) {
-            static s64 nextTime;
-            static s8 timeInitialized;
-            if (!timeInitialized) {
-                nextTime = OSGetTime();
-                timeInitialized = 1;
-            }
-            s64 currentTime = OSGetTime();
-            while (currentTime < nextTime) {
-                OSSleepTicks(nextTime - currentTime);
-                currentTime = OSGetTime();
-            }
-            nextTime = currentTime + tickDuration;
-        } else {
-            static u32 nextCount;
-            static s8 countInitialized;
-            if (!countInitialized) {
-                nextCount = NebulaFrameClock::count();
-                countInitialized = 1;
-            }
-
-            u32 count = retraceCount ? retraceCount : 1;
-            u32 dummy = 0;
-
-            u32 msg;
-            do {
-#ifdef TARGET_PC
-                // An OSMessage is pointer-sized natively: receive into one, keep the retrace count it carries.
-                OSMessage message;
-                if (!OSReceiveMessage(JUTVideo::getManager()->getMessageQueue(), &message, OS_MESSAGE_BLOCK)) {
-                    msg = dummy;
-                } else {
-                    msg = (u32)(uintptr_t)message;
-                }
-#else
-                if (!OSReceiveMessage(JUTVideo::getManager()->getMessageQueue(), (OSMessage*)&msg, OS_MESSAGE_BLOCK)) {
-                    msg = dummy;
-                }
-#endif
-            } while ((s32)(msg - nextCount) < 0);
-            nextCount = msg + count;
+    // Waits until `frames` host frames (at least one) have passed since the last wait ended: the frame counts arrive
+    // through JUTVideo's queue, posted after each frame is shown.
+    void waitForFrames(u16 frames) {
+        static u32 nextCount;
+        static s8 countInitialized;
+        if (!countInitialized) {
+            nextCount = NebulaFrameClock::count();
+            countInitialized = 1;
         }
+
+        u32 frame;
+        do {
+            // An OSMessage is pointer-sized natively: receive into one, keep the frame count it carries.
+            OSMessage message;
+            frame = OSReceiveMessage(JUTVideo::getManager()->getMessageQueue(), &message, OS_MESSAGE_BLOCK)
+                        ? (u32)(uintptr_t)message
+                        : 0;
+        } while ((s32)(frame - nextCount) < 0);
+        nextCount = frame + (frames != 0 ? frames : 1);
     }
 
 };  // namespace

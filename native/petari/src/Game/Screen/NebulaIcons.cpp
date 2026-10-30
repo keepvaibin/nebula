@@ -19,6 +19,7 @@
 #include <nw4r/lyt/material.h>
 #include <nw4r/ut/ResFont.h>
 #include <revolution/os.h>
+#include "Game/System/NebulaClock.hpp"
 
 // Nebula's icons are textures of its own, never the game's: the picture font gains sheets after its own (each
 // controller family's icons, one to a cell) and a code map before its own that sends each icon's code to the glyph the
@@ -1763,7 +1764,7 @@ namespace {
     const s32 cJcBand = 16;  // rows painted at once (whole 4 x 4 tiles)
     const s32 cJcPictures = 2 * NebulaIcons::JoyConLooks;
     const s32 cJcOrder[NebulaIcons::JoyConLooks] = {NebulaIcons::JoyConShown, NebulaIcons::JoyConAway, NebulaIcons::JoyConHeld};
-    const OSTime cJcRetireMs = 250;  // a set no longer shown keeps its memory this long (frames still drawing it)
+    const s64 cJcRetireMs = 250;  // a set no longer shown keeps its memory this long (frames still drawing it)
     const s32 cJcSteady = 3;         // a density asked for this many frames running before a set is painted for it
 
     // One density's pictures, every half in every look (painted in cJcOrder, both halves of a look in turn), in the
@@ -1777,9 +1778,9 @@ namespace {
         f32 mPixelsY;
         s32 mNext;  // the picture being painted (cJcPictures: all are)
         s32 mRow;   // its rows painted
-        OSTime mSpent;
+        s64 mSpent;  // nanoseconds
         s32 mCalls;
-        OSTime mRetired;  // when the screen stopped showing it (0: it never showed)
+        s64 mRetired;  // when the screen stopped showing it (NebulaClock; 0: it never showed)
     };
     JoyConSet sJoyConSets[2];
     s32 sJoyConShown = -1;  // the set whose pictures the screen shows, or -1
@@ -2158,28 +2159,28 @@ namespace NebulaIcons {
         }
         const s32 index = sJoyConShown == 0 ? 1 : 0;
         JoyConSet& rSet = sJoyConSets[index];
-        const OSTime start = OSGetTime();
+        const s64 start = NebulaClock::nowNs();
         if (!asked(rSet)) {
             // A density settles over a few frames (the 2D layer's scale follows the window); a set the screen showed is
             // still being drawn for a few frames after it stops.
-            if (sJoyConAsked < cJcSteady || (rSet.mRetired != 0 && OSTicksToMilliseconds(start - rSet.mRetired) < cJcRetireMs)) {
+            if (sJoyConAsked < cJcSteady || (rSet.mRetired != 0 && (start - rSet.mRetired) / 1000000 < cJcRetireMs)) {
                 return true;
             }
             startJoyConSet(index);
         }
         do {
             paintJoyConBand(rSet);
-        } while (rSet.mNext < cJcPictures && OSTicksToMicroseconds(OSGetTime() - start) < budgetMicros);
-        rSet.mSpent += OSGetTime() - start;
+        } while (rSet.mNext < cJcPictures && (NebulaClock::nowNs() - start) / 1000 < budgetMicros);
+        rSet.mSpent += NebulaClock::nowNs() - start;
         rSet.mCalls++;
         if (rSet.mNext < cJcPictures) {
             return true;
         }
         JUTNativeLog("NebulaIcons: Joy-Con pictures %d x %d painted in %d us over %d frames\n", static_cast< int >(rSet.mWidth),
-                 static_cast< int >(rSet.mHeight), static_cast< int >(OSTicksToMicroseconds(rSet.mSpent)),
+                 static_cast< int >(rSet.mHeight), static_cast< int >(rSet.mSpent / 1000),
                  static_cast< int >(rSet.mCalls));
         if (sJoyConShown >= 0) {
-            sJoyConSets[sJoyConShown].mRetired = OSGetTime();
+            sJoyConSets[sJoyConShown].mRetired = NebulaClock::nowNs();
         }
         sJoyConShown = index;
         return false;
