@@ -749,7 +749,7 @@ int main() {
             char label[64];
             std::snprintf(label, sizeof(label), "vs_enhanced_variant%u", variant);
             check_contains(src, "o.ppl_nrm = nrm;", label);
-            check_contains(src, lit ? "uint nrm_base" : "nrm_row0", label);
+            check_contains(src, lit ? "const uint nrm_q" : "nrm_row0", label);
             check_compiles(src, "vs_5_1", label);
         }
         // Pixel stage: lit dielectric, lit environment-mapped, unlit environment-mapped (the ray

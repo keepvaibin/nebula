@@ -74,7 +74,7 @@ uint key_post_texgen(uint i) {
 // one against a light direction the game never initialized.
 void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
                inout float3 lacc, inout float lacc_a) {
-    const uint e = 0x180u + 4u * n;
+    const uint e = 0xA8u + 4u * n;  // the light section (MatrixMemory::kLightBase / 4)
     uint  lcw  = asuint(mtx_palette[mtx_palette_base + e].w);
     float4 le1 = mtx_palette[mtx_palette_base + e + 1u];
     float4 le2 = mtx_palette[mtx_palette_base + e + 2u];
@@ -298,11 +298,10 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     }
     float3 nrm = float3(0.0, 0.0, 0.0);
     if (lighting_used) {
-        uint nrm_base = 0x400u + 3u * (pn_row & 31u);
-        float3 nrm_t = float3(
-            dot(float3(xfw(nrm_base+0u), xfw(nrm_base+1u), xfw(nrm_base+2u)), v.nrm),
-            dot(float3(xfw(nrm_base+3u), xfw(nrm_base+4u), xfw(nrm_base+5u)), v.nrm),
-            dot(float3(xfw(nrm_base+6u), xfw(nrm_base+7u), xfw(nrm_base+8u)), v.nrm));
+        // The normal section's rows (MatrixMemory::kNormalBase / 4 = 0x40) at the position matrix's row.
+        const uint nrm_q = mtx_palette_base + 0x40u + (pn_row & 31u);
+        float3 nrm_t = float3(dot(mtx_palette[nrm_q].xyz, v.nrm), dot(mtx_palette[nrm_q + 1u].xyz, v.nrm),
+                              dot(mtx_palette[nrm_q + 2u].xyz, v.nrm));
         nrm = (dot(nrm_t, nrm_t) > 0.0) ? normalize(nrm_t) : nrm_t;
     }
 
@@ -372,14 +371,12 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         } else if (type == 3u) {
             res = float3(o.col1.rg, 1.0);
         } else if (type == 1u) {
-            uint emboss_base = 0x400u + 3u * (pn_row & 31u);
-            float3x3 emboss_matrix = float3x3(
-                xfw(emboss_base), xfw(emboss_base+1u), xfw(emboss_base+2u),
-                xfw(emboss_base+3u), xfw(emboss_base+4u), xfw(emboss_base+5u),
-                xfw(emboss_base+6u), xfw(emboss_base+7u), xfw(emboss_base+8u));
+            const uint emboss_q = mtx_palette_base + 0x40u + (pn_row & 31u);
+            float3x3 emboss_matrix = float3x3(mtx_palette[emboss_q].xyz, mtx_palette[emboss_q + 1u].xyz,
+                                              mtx_palette[emboss_q + 2u].xyz);
             float3 emboss_tangent = mul(emboss_matrix, v.tangent);
             float3 emboss_binormal = mul(emboss_matrix, v.binormal);
-            const uint light = 0x180u + 4u * ((tg >> 15u) & 7u);
+            const uint light = 0xA8u + 4u * ((tg >> 15u) & 7u);
             float4 emboss_l2 = mtx_palette[mtx_palette_base + light + 2u];
             float4 emboss_l3 = mtx_palette[mtx_palette_base + light + 3u];
             float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;

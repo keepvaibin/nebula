@@ -1,9 +1,10 @@
 #pragma once
 
 // The matrices and lights the game loads (shape records' matrices, materials' texture matrices and lights, light
-// ops), kept as the vertex shader's palette reads them: 0x000-0x0FF position and texture matrices (64 rows of four
-// words), 0x400-0x45F normal matrices, 0x500-0x5FF post-transform matrices, 0x600-0x67F eight lights of 16 words
-// (requirement E-05 replaces this with a per-frame arena).
+// ops), in the sections the shaders read as float4 rows (requirement E-05 replaces the snapshot with a per-frame
+// arena): position and texture matrices (64 rows: a matrix id is its first row), normal matrices (row = the
+// position matrix's row; three rows each, x y z and an unused w), post-transform matrices (64 rows: ids 64-127) and
+// eight lights of 16 words (colour at 3, angle and distance terms at 4-9, position at 10-12, direction at 13-15).
 
 #include <array>
 #include <cstdint>
@@ -12,12 +13,18 @@ namespace galaxy::render {
 
 class MatrixMemory {
 public:
-    static constexpr std::uint32_t kWords = 0x1000u;
-    // The palette the vertex shader reads: words 0x000-0x67F, uploaded in 32-word chunks (a whole number of the
-    // float4s the shader indexes, so no chunk boundary splits one).
-    static constexpr std::uint32_t kPaletteWords = 0x0680u;
+    static constexpr std::uint32_t kWords = 0x400u;
+    // Sections in words, each a whole number of 32-word upload chunks from its start.
+    static constexpr std::uint32_t kMatrixBase = 0x000u;
+    static constexpr std::uint32_t kNormalBase = 0x100u;  // 36 rows (position rows 0-33)
+    static constexpr std::uint32_t kPostBase = 0x1A0u;    // 64 rows
+    static constexpr std::uint32_t kLightBase = 0x2A0u;   // 8 lights x 16 words
+    static constexpr std::uint32_t kLightWords = 16u;
+    // The palette the vertex shader reads, uploaded in 32-word chunks (a whole number of the float4s the shader
+    // indexes, so no chunk boundary splits one).
+    static constexpr std::uint32_t kPaletteWords = 0x0340u;  // a whole number of 256-byte blocks
     static constexpr std::uint32_t kPaletteChunkWords = 32u;
-    static constexpr std::uint32_t kPaletteChunkCount = kPaletteWords / kPaletteChunkWords;  // 52
+    static constexpr std::uint32_t kPaletteChunkCount = kPaletteWords / kPaletteChunkWords;  // 26
     static constexpr std::uint64_t kLoadSignatureSeed = 0x6D6C6F6164736967ull;
 
     // `count` words from `base`; `source` names an indexed load's array slot and element (slot << 16 | element) in

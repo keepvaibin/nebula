@@ -82,7 +82,7 @@ struct Copy {
 };
 static_assert(sizeof(Copy) == 16u);
 
-inline constexpr std::uint32_t kPaletteWords = kXfPaletteWords;
+inline constexpr std::uint32_t kPaletteWords = MatrixMemory::kPaletteWords;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
 inline constexpr std::uint32_t kPsBytes = sizeof(PixelConstants);

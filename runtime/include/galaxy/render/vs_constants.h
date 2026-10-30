@@ -83,7 +83,7 @@ inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDr
                 out.inline_post_matrices[i][r][c] =
                     std::bit_cast<float>(state.word(
                         static_cast<std::uint16_t>(
-                            xf::kPostMatricesBase +
+                            MatrixMemory::kPostBase +
                             (((post_row + r) & 0x3Fu) * 4u) + c)));
             }
         }

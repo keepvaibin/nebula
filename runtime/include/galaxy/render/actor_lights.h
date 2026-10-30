@@ -97,7 +97,7 @@ inline void aim_actor_lights(std::uint32_t* palette, const std::uint32_t* game, 
         if (!towards && (fill & (1u << n)) == 0u) {
             continue;
         }
-        const unsigned word = kXfLightBase + kXfLightWords * n + kXfLightPosition;
+        const unsigned word = MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition;
         const float sign = towards ? 1.0f : -1.0f;
         float d[3]{aim.key[0] * sign, aim.key[1] * sign, aim.key[2] * sign};
         float distance = kActorLightDistance;

@@ -342,18 +342,20 @@ void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint
             eye(dst + k * 12u, m.position[k], a != nullptr ? end_a : nullptr, end_b);
         }
         if (m.normal_changed[k] != 0u) {
+            // Nine values, x y z of three rows (the eval writes value i to row i / 3, column i % 3).
             float end_a[9], end_b[9];
             for (unsigned i = 0; i < 9u; ++i) {
-                end_a[i] = a != nullptr ? word_float(a[kXfNormalBase + k * 9u + i]) : 0.0f;
-                end_b[i] = word_float(b[kXfNormalBase + k * 9u + i]);
+                const unsigned word = kNormalBase + k * 12u + (i / 3u) * 4u + i % 3u;
+                end_a[i] = a != nullptr ? word_float(a[word]) : 0.0f;
+                end_b[i] = word_float(b[word]);
             }
-            normal(dst + kXfNormalBase + k * 9u, m.normal[k], a != nullptr ? end_a : nullptr, end_b);
+            normal(dst + kNormalBase + k * 12u, m.normal[k], a != nullptr ? end_a : nullptr, end_b);
         }
     }
     if (a == nullptr) {
         for (unsigned l = 0; l < 8u; ++l) {
             if ((m.light_changed & (1u << l)) != 0u) {
-                const unsigned base = kXfLightBase + l * 16u;
+                const unsigned base = kLightBase + l * 16u;
                 light(dst + base, nullptr, b + base, camera, m.split);
             }
         }
@@ -379,11 +381,11 @@ void Program::palette(std::uint32_t dst, const PaletteMotion& m, const std::uint
         blocks(120u, 10u);
     }
     if (m.post_changed) {
-        blocks(kXfPostBase, 20u);
+        blocks(kPostBase, 20u);
     }
     for (unsigned l = 0; l < 8u; ++l) {
         if ((m.light_changed & (1u << l)) != 0u) {
-            const unsigned base = kXfLightBase + l * 16u;
+            const unsigned base = kLightBase + l * 16u;
             light(dst + base, a + base, b + base, camera, m.split);
         }
     }
@@ -521,7 +523,8 @@ void evaluate(const Program& program, const FrameTimes& times, std::uint32_t* ou
             const std::uint32_t* const end_b = end_a + (has_a ? count : 0u);
             for (unsigned i = 0; i < count; ++i) {
                 const unsigned e = kind == OpKind::Normal ? (i / 3u) * 4u + i % 3u : i;
-                dst[i] = float_word(endpoint_exact(m[e], t, has_a, has_a ? word_float(end_a[i]) : 0.0f, m0[e],
+                // A normal matrix's rows are aligned: value i at row i / 3, column i % 3, as in the palette.
+                dst[e] = float_word(endpoint_exact(m[e], t, has_a, has_a ? word_float(end_a[i]) : 0.0f, m0[e],
                                                    has_b, has_b ? word_float(end_b[i]) : 0.0f, m1[e]));
             }
             break;

@@ -834,7 +834,7 @@ void gx_topology_for_primitive(
 //                  cos-atten 4-6, dist-atten 7-9, pos 10-12, dir 13-15)
 // One contiguous range keeps the upload a single memcpy and lets the vertex shader fetch matrices
 // and lights from one structured buffer.
-inline constexpr std::size_t kMatrixPaletteWords = 0x0680u;  // 0x0000-0x067F
+inline constexpr std::size_t kMatrixPaletteWords = MatrixMemory::kPaletteWords;
 // The upload copies the chunks MatrixMemory marks written, so both must cover the same words.
 static_assert(
     kMatrixPaletteWords == galaxy::render::MatrixMemory::kPaletteWords,
@@ -2411,7 +2411,7 @@ void RenderCore::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float 
                 sum = static_cast<float>((ambient >> shift) & 0xFFu) / 255.0f;
                 for (unsigned n = 0; n < 8u; ++n) {
                     if ((ctrl.light_mask & (1u << n)) != 0u) {
-                        const std::uint32_t lc = matrices_.word(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + 3u));
+                        const std::uint32_t lc = matrices_.word(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u * n + 3u));
                         sum += facing * static_cast<float>((lc >> shift) & 0xFFu) / 255.0f;
                     }
                 }
@@ -3813,7 +3813,7 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 continue;
             }
             const auto word = [&](unsigned k) {
-                return matrices_.word(static_cast<std::uint16_t>(xf::kLightsBase + 16u * n + k));
+                return matrices_.word(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u * n + k));
             };
             info.light_index[found] = n;
             for (unsigned k = 0; k < 6u; ++k) {
@@ -4216,8 +4216,8 @@ bool RenderCore::rt_player_rig_draw() const noexcept {
     }
     const auto rgb = [this](std::uint16_t address) { return matrices_.word(address) & 0xFFFFFF00u; };
     return (rgba_word(draw_state_.ambient_color[0]) & 0xFFFFFF00u) == rt_player_rig_[0] &&
-           rgb(static_cast<std::uint16_t>(xf::kLightsBase + 3u)) == rt_player_rig_[1] &&
-           rgb(static_cast<std::uint16_t>(xf::kLightsBase + 16u + 3u)) == rt_player_rig_[2];
+           rgb(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 3u)) == rt_player_rig_[1] &&
+           rgb(static_cast<std::uint16_t>(MatrixMemory::kLightBase + 16u + 3u)) == rt_player_rig_[2];
 }
 
 // The lights a lit scene draw has moved: its follow-camera lights 0 and 1 that still hold the
@@ -4228,7 +4228,7 @@ std::uint32_t RenderCore::rt_aimed_lights() const noexcept {
     }
     std::uint32_t lights = 0u;
     for (unsigned n = 0; n < 2u; ++n) {
-        const std::uint32_t* words = matrices_.raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition;
+        const std::uint32_t* words = matrices_.raw() + MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition;
         if ((rt_follow_lights_ & (1u << n)) != 0u &&
             std::memcmp(words, rt_light_words_[n].data(), sizeof(rt_light_words_[n])) == 0) {
             lights |= 1u << n;
@@ -4263,7 +4263,7 @@ void RenderCore::note_rt_world_key() noexcept {
     if (!channel.lighting_enable || (channel.light_mask & 1u) == 0u) {
         return;
     }
-    const std::uint32_t* light = matrices_.raw() + xf::kLightsBase;
+    const std::uint32_t* light = matrices_.raw() + MatrixMemory::kLightBase;
     if (std::memcmp(light + kXfLightPosition, rt_light_words_[0].data(), sizeof(rt_light_words_[0])) != 0) {
         return;
     }
@@ -5472,7 +5472,7 @@ bool RenderCore::render_interp_subframe(float t) {
     const auto build_start = std::chrono::steady_clock::now();
     const std::size_t count = scene.constants.size();
     constexpr std::size_t kWords = kMatrixPaletteWords;
-    static_assert(kMatrixPaletteWords == kXfPaletteWords);
+    static_assert(kMatrixPaletteWords == MatrixMemory::kPaletteWords);
     // The scene before is the frame presented before this one: a log in between that was not recorded (shown as it
     // was: two 3D scenes, or the first of a run of frames without one) leaves it older, and sub-frames from it would
     // step back behind the frame shown last. A chained sequence maps its records through the skipped scenes.
@@ -8242,7 +8242,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         for (unsigned n = 0; n < 2u; ++n) {
             if ((rt_light_pending_ & (1u << n)) != 0u) {
                 std::memcpy(rt_light_words_[n].data(),
-                            matrices_.raw() + xf::kLightsBase + kXfLightWords * n + kXfLightPosition,
+                            matrices_.raw() + MatrixMemory::kLightBase + kXfLightWords * n + kXfLightPosition,
                             sizeof(rt_light_words_[n]));
             }
         }
@@ -8265,7 +8265,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         if (start != 0u && (lights & 0xFFu) != 0u && traced < 24u) [[unlikely]] {
             ++traced;
-            const std::uint32_t* l = matrices_.raw() + xf::kLightsBase;
+            const std::uint32_t* l = matrices_.raw() + MatrixMemory::kLightBase;
             std::fprintf(stderr,
                          "[rt-actor-light] draw scene=%u lights=%u channels=%08x %08x %08x %08x "
                          "light0=%08x attn=(%g %g %g / %g %g %g) pos=(%g %g %g) light1=%08x pos=(%g %g %g)\n",
@@ -8299,13 +8299,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             mtx_alloc =
                 renderer_.matrix_ring().allocate(palette_bytes, /*alignment=*/256u);
-            // XF memory has nothing at 0x100-0x3FF, which no reader addresses: the position and texture matrices,
-            // then the normal, post-transform and light words.
-            constexpr std::size_t kMatrixWords = 0x100u;
-            constexpr std::size_t kNormalBase = 0x400u;
-            std::memcpy(mtx_alloc.cpu, matrices_.raw(), kMatrixWords * sizeof(std::uint32_t));
-            std::memcpy(mtx_alloc.cpu + kNormalBase * sizeof(std::uint32_t),
-                        matrices_.raw() + kNormalBase, (kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t));
+            std::memcpy(mtx_alloc.cpu, matrices_.raw(), kMatrixPaletteWords * sizeof(std::uint32_t));
             if (snapshot_start != 0u) [[unlikely]] {
                 rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
                 ++rt_snapshot_count_;
@@ -8333,7 +8327,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             // complete image valid without computing a redundant dirty span.
             xf_palette_valid_ = xf_palette_chunk_mask;
             matrices_.clear_palette_dirty(0u, MatrixMemory::kPaletteChunkCount - 1u);
-            frame_matrix_upload_bytes_ += (kMatrixWords + kMatrixPaletteWords - kNormalBase) * sizeof(std::uint32_t);
+            frame_matrix_upload_bytes_ += kMatrixPaletteWords * sizeof(std::uint32_t);
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
         // frame's segment.
@@ -8898,8 +8892,12 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         }
         if (shared == nullptr) {
             shared = &material_program_contents_[content].emplace_back(record.program);
+            ++material_census_.distinct;
         }
-        material_programs_[record.key] = *shared;
+        ++material_census_.registrations;
+        auto& registered = material_programs_[record.key];
+        material_census_.changed += registered != nullptr && registered != *shared ? 1u : 0u;
+        registered = *shared;
         return;
     }
     case shapes::Record::Kind::Material: {
@@ -8912,6 +8910,21 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         const bool whole = applied_program_ != program->second.get();
         draw_state_.apply(*program->second, *record.material, whole);
         applied_program_ = program->second.get();
+        static const bool census = read_env_u64("GALAXY_TEST_MATERIAL_CENSUS", 0u) != 0u;
+        if (census) [[unlikely]] {
+            MaterialCensus& c = material_census_;
+            c.values_only += whole ? 0u : 1u;
+            if ((++c.applications & 0xFFFFu) == 0u) {
+                std::fprintf(stderr,
+                             "[material-census] applications=%llu values-only=%llu registrations=%llu "
+                             "distinct-programs=%llu keys-registered=%zu program-changes=%llu\n",
+                             static_cast<unsigned long long>(c.applications),
+                             static_cast<unsigned long long>(c.values_only),
+                             static_cast<unsigned long long>(c.registrations),
+                             static_cast<unsigned long long>(c.distinct), material_programs_.size(),
+                             static_cast<unsigned long long>(c.changed));
+            }
+        }
         if (draw_state_.palette_revision != palettes) {
             on_palettes_changed();
         }
@@ -8986,21 +8999,29 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
         std::uint16_t count = 12u;
         switch (m.kind) {
         case shapes::MatrixKind::Normal:
-            base = static_cast<std::uint16_t>(0x400u + 3u * m.id);
+            base = static_cast<std::uint16_t>(MatrixMemory::kNormalBase + 4u * m.id);
             count = 9u;
             break;
         case shapes::MatrixKind::Texture2x4:
             count = 8u;
             break;
         case shapes::MatrixKind::PostTexture:
-            base = static_cast<std::uint16_t>(0x500u + 4u * (m.id - 64u));
+            base = static_cast<std::uint16_t>(MatrixMemory::kPostBase + 4u * (m.id - 64u));
             break;
         default:
             break;
         }
         std::array<std::uint32_t, 12> words{};
-        for (unsigned i = 0; i < count; ++i) {
-            words[i] = std::bit_cast<std::uint32_t>(m.values[i]);
+        if (m.kind == shapes::MatrixKind::Normal) {
+            // Three rows of x y z, each an aligned float4 (w 0).
+            for (unsigned i = 0; i < 9u; ++i) {
+                words[(i / 3u) * 4u + i % 3u] = std::bit_cast<std::uint32_t>(m.values[i]);
+            }
+            count = 12u;
+        } else {
+            for (unsigned i = 0; i < count; ++i) {
+                words[i] = std::bit_cast<std::uint32_t>(m.values[i]);
+            }
         }
         if (m.model_matrix != 0u) {
             // A model's draw matrix by its index, named as its indexed load named it (array 0 positions, 1 normals).
@@ -9491,7 +9512,7 @@ void RenderCore::on_invalidate_textures() {
 void RenderCore::load_light(const state::Op& op) {
     // Sixteen words a light from 0x600: three reserved, the colour, the angle and distance terms (a0-a2, k0-k2), then
     // the position and direction (GXLoadLightObjImm).
-    const auto base = static_cast<std::uint16_t>(0x600u + 16u * (op.a[0] & 7u));
+    const auto base = static_cast<std::uint16_t>(MatrixMemory::kLightBase + MatrixMemory::kLightWords * (op.a[0] & 7u));
     std::uint32_t words[6];
     for (unsigned i = 0; i < 6u; ++i) {
         words[i] = std::bit_cast<std::uint32_t>(op.f[i]);

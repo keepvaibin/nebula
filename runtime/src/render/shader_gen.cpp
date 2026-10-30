@@ -15,6 +15,7 @@
 
 #include "galaxy/render/enhanced_lighting.h"
 #include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/matrix_memory.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/render_vertex.h"
@@ -26,6 +27,9 @@
 #include <string>
 
 namespace galaxy::render {
+
+// The per-pixel lighting text reads the light section at float4 0xA8.
+static_assert(MatrixMemory::kLightBase / 4u == 0xA8u);
 
 namespace {
 
@@ -594,7 +598,7 @@ StructuredBuffer<float4> mtx_palette : register(t0, space1);
 
 void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
                    inout float3 lacc, inout float lacc_a) {
-    const uint e = 0x180u + 4u * n;
+    const uint e = 0xA8u + 4u * n;
     uint  lcw  = asuint(mtx_palette[ppl_mtx_palette_base + e].w);
     float4 le1 = mtx_palette[ppl_mtx_palette_base + e + 1u];
     float4 le2 = mtx_palette[ppl_mtx_palette_base + e + 2u];
@@ -747,7 +751,7 @@ float enh_vis(float NoL, float NoV, float a) {
 // attenuation operands stay finite (kVsKeyFiniteLightAttn): a light the game left without a
 // direction keeps its light.
 void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
-    const uint e = ppl_mtx_palette_base + 0x180u + 4u * n;
+    const uint e = ppl_mtx_palette_base + 0xA8u + 4u * n;
     const uint lcw = asuint(mtx_palette[e].w);
     const float4 le1 = mtx_palette[e + 1u];
     const float4 le2 = mtx_palette[e + 2u];
@@ -1018,7 +1022,7 @@ static void emit_light(
     bool alpha,
     bool finite) {
     emit(s, "        {  // light %u\n", n);
-    const unsigned e = 0x180u + 4u * n;
+    const unsigned e = MatrixMemory::kLightBase / 4u + 4u * n;
     emit(s,
         "            uint  lcw  = asuint(mtx_palette[mtx_palette_base + %uu].w);\n"
         "            float4 le1 = mtx_palette[mtx_palette_base + %uu];\n"
@@ -1701,22 +1705,13 @@ float xfw(uint w) {
     s << "\n";
 
     if (lighting_used) {
-        // Lighting-space normal: transform by the normal (inverse-transpose) matrix, 3-float rows at XF words
-        // 0x400 + 3*(posidx & 31) (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
+        // Lighting-space normal: transform by the normal (inverse-transpose) matrix, three rows at the normal
+        // section's row pn_row & 31 (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
         // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
-        // Its nine words lie in three float4s of the palette, from word (nrm_base & 3) of the first.
-        s << "    uint nrm_base = 0x400u + 3u * (pn_row & 31u);\n";
-        s << "    const uint nrm_q = mtx_palette_base + (nrm_base >> 2u);\n"
-             "    const float4 nq0 = mtx_palette[nrm_q];\n"
-             "    const float4 nq1 = mtx_palette[nrm_q + 1u];\n"
-             "    const float4 nq2 = mtx_palette[nrm_q + 2u];\n"
-             "    const uint nrm_o = nrm_base & 3u;\n"
-             "    const float3 nrm_r0 = nrm_o == 0u ? nq0.xyz : nrm_o == 1u ? nq0.yzw\n"
-             "                        : nrm_o == 2u ? float3(nq0.zw, nq1.x) : float3(nq0.w, nq1.xy);\n"
-             "    const float3 nrm_r1 = nrm_o == 0u ? float3(nq0.w, nq1.xy) : nrm_o == 1u ? nq1.xyz\n"
-             "                        : nrm_o == 2u ? nq1.yzw : float3(nq1.zw, nq2.x);\n"
-             "    const float3 nrm_r2 = nrm_o == 0u ? float3(nq1.zw, nq2.x) : nrm_o == 1u ? float3(nq1.w, nq2.xy)\n"
-             "                        : nrm_o == 2u ? nq2.xyz : nq2.yzw;\n";
+        emit(s, "    const uint nrm_q = mtx_palette_base + %uu + (pn_row & 31u);\n", MatrixMemory::kNormalBase / 4u);
+        s << "    const float3 nrm_r0 = mtx_palette[nrm_q].xyz;\n"
+             "    const float3 nrm_r1 = mtx_palette[nrm_q + 1u].xyz;\n"
+             "    const float3 nrm_r2 = mtx_palette[nrm_q + 2u].xyz;\n";
         s << "    float3 nrm_t = float3(dot(nrm_r0, v.nrm), dot(nrm_r1, v.nrm), dot(nrm_r2, v.nrm));\n";
         s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
              " ? normalize(nrm_t) : nrm_t;\n\n";
@@ -1834,14 +1829,12 @@ float xfw(uint w) {
         case TexGenType::EmbossMap: {
             // Both vertex decode routes supply zero for absent NBT vectors.
             // Keep transformed basis scale: it controls emboss magnitude.
-            s << "        uint emboss_base = 0x400u + 3u * (pn_row & 31u);\n";
-            s << "        float3x3 emboss_matrix = float3x3(\n"
-                 "            xfw(emboss_base), xfw(emboss_base+1u), xfw(emboss_base+2u),\n"
-                 "            xfw(emboss_base+3u), xfw(emboss_base+4u), xfw(emboss_base+5u),\n"
-                 "            xfw(emboss_base+6u), xfw(emboss_base+7u), xfw(emboss_base+8u));\n";
+            emit(s, "        uint emboss_q = mtx_palette_base + %uu + (pn_row & 31u);\n", MatrixMemory::kNormalBase / 4u);
+            s << "        float3x3 emboss_matrix = float3x3(mtx_palette[emboss_q].xyz, mtx_palette[emboss_q + 1u].xyz,\n"
+                 "                                          mtx_palette[emboss_q + 2u].xyz);\n";
             s << "        float3 emboss_tangent = mul(emboss_matrix, v.tangent);\n"
                  "        float3 emboss_binormal = mul(emboss_matrix, v.binormal);\n";
-            const unsigned light = 0x180u + 4u * tg.emboss_light;
+            const unsigned light = MatrixMemory::kLightBase / 4u + 4u * tg.emboss_light;
             emit(s,
                  "        float4 emboss_l2 = mtx_palette[mtx_palette_base + %uu];\n"
                  "        float4 emboss_l3 = mtx_palette[mtx_palette_base + %uu];\n",

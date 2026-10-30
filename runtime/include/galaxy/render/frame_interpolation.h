@@ -17,6 +17,7 @@
 //
 // No Windows/D3D12 includes (unit-tested offline).
 
+#include "galaxy/render/matrix_memory.h"
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/uber_constants.h"
 
@@ -100,10 +101,10 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
 // normal or a binormal.
 [[nodiscard]] bool texgen_spatial(std::uint32_t texgen) noexcept;
 
-inline constexpr unsigned kXfPaletteWords = 0x680u;
-inline constexpr unsigned kXfNormalBase = 0x400u;
-inline constexpr unsigned kXfPostBase = 0x500u;
-inline constexpr unsigned kXfLightBase = 0x600u;
+inline constexpr unsigned kPaletteWords = MatrixMemory::kPaletteWords;
+inline constexpr unsigned kNormalBase = MatrixMemory::kNormalBase;
+inline constexpr unsigned kPostBase = MatrixMemory::kPostBase;
+inline constexpr unsigned kLightBase = MatrixMemory::kLightBase;
 
 // One XF palette snapshot pair (a may be null: no previous snapshot).
 struct PaletteMotion {

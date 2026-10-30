@@ -1330,6 +1330,11 @@ private:
     // The program the drawing state holds whole (set by the last material, nothing set since): a draw with it applies
     // only its values. Null after any record that sets state outside materials.
     const material::Program* applied_program_ = nullptr;
+    // GALAXY_TEST_MATERIAL_CENSUS=1: programs registered (and re-registered with other content), distinct programs,
+    // material applications whole and values only, logged every 65,536 applications.
+    struct MaterialCensus {
+        std::uint64_t registrations = 0, changed = 0, distinct = 0, applications = 0, values_only = 0;
+    } material_census_;
     std::uint64_t current_ps_hash_{};
     bool shader_key_hashes_valid_ = false;
     // RenderConfig::per_pixel_lighting, sampled at each frame start.

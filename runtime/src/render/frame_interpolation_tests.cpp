@@ -202,7 +202,7 @@ void test_light_and_palette() {
     check(near(std::bit_cast<float>(out[10]), pb[0], 1e-4f) && near(std::bit_cast<float>(out[11]), pb[1], 1e-4f) &&
               near(std::bit_cast<float>(out[12]), pb[2], 1e-4f), "an unsplit light at t=1 is b");
 
-    std::vector<std::uint32_t> pal_a(kXfPaletteWords, 0u), pal_b(kXfPaletteWords, 0u), pal_out(kXfPaletteWords);
+    std::vector<std::uint32_t> pal_a(kPaletteWords, 0u), pal_b(kPaletteWords, 0u), pal_out(kPaletteWords);
     const Affine34 world = rotation_y(0.2f, 10.0f, 0.0f, -400.0f);
     const Affine34 ma = affine_multiply(va, world), mb = affine_multiply(vb, world);
     for (unsigned i = 0; i < 12u; ++i) {
@@ -219,7 +219,7 @@ void test_light_and_palette() {
 }
 
 std::array<float, 3> light_position(const std::vector<std::uint32_t>& palette, unsigned light) {
-    const std::uint32_t* p = palette.data() + kXfLightBase + kXfLightWords * light + kXfLightPosition;
+    const std::uint32_t* p = palette.data() + kLightBase + kXfLightWords * light + kXfLightPosition;
     return {std::bit_cast<float>(p[0]), std::bit_cast<float>(p[1]), std::bit_cast<float>(p[2])};
 }
 
@@ -245,14 +245,14 @@ void test_actor_lights() {
           "point light and player loads move no follow-camera light");
 
     // The game's follow-camera key and fill (eye space) under a turning, moving camera.
-    std::vector<std::uint32_t> pal_a(kXfPaletteWords, 0u), pal_b(kXfPaletteWords, 0u), out(kXfPaletteWords);
+    std::vector<std::uint32_t> pal_a(kPaletteWords, 0u), pal_b(kPaletteWords, 0u), out(kPaletteWords);
     const float key[3]{75000.0f, 100000.0f, 76400.0f}, fill[3]{-100000.0f, -93017.6f, -24902.3f};
     for (std::vector<std::uint32_t>* p : {&pal_a, &pal_b}) {
-        (*p)[kXfLightBase + 3u] = 0xA49F8900u;
-        (*p)[kXfLightBase + kXfLightWords + 3u] = 0x565F9100u;
+        (*p)[kLightBase + 3u] = 0xA49F8900u;
+        (*p)[kLightBase + kXfLightWords + 3u] = 0x565F9100u;
         for (unsigned i = 0; i < 3u; ++i) {
-            (*p)[kXfLightBase + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(key[i]);
-            (*p)[kXfLightBase + kXfLightWords + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(fill[i]);
+            (*p)[kLightBase + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(key[i]);
+            (*p)[kLightBase + kXfLightWords + kXfLightPosition + i] = std::bit_cast<std::uint32_t>(fill[i]);
         }
     }
     const std::array<float, 3> sun{0.0f, 0.6f, -0.8f};
@@ -263,7 +263,7 @@ void test_actor_lights() {
     const std::vector<std::uint32_t> game = pal_a;
     aim_actor_lights(pal_a.data(), game.data(), 0x01u, 0x02u, aim_a);
     aim_actor_lights(pal_b.data(), game.data(), 0x01u, 0x02u, aim_b);
-    check(pal_a[kXfLightBase + 3u] == 0xA49F8900u && pal_a[kXfLightBase + kXfLightWords + 3u] == 0x565F9100u,
+    check(pal_a[kLightBase + 3u] == 0xA49F8900u && pal_a[kLightBase + kXfLightWords + 3u] == 0x565F9100u,
           "moved lights keep the game's colours");
     const std::array<float, 3> to_sun = eye_direction(va, sun);
     const std::array<float, 3> away{-to_sun[0], -to_sun[1], -to_sun[2]};

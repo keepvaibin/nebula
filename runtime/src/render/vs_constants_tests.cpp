@@ -24,8 +24,8 @@ int main() {
         for (auto& word:words)word=0x3F800000u | (next()&0x007FFFFFu);
         switch(kind) {
         case 0: state.load(static_cast<std::uint16_t>((next()%61u)*4u),words.data(),12u);break;
-        case 1: state.load(static_cast<std::uint16_t>(xf::kPostMatricesBase+(next()%61u)*4u),words.data(),12u);break;
-        case 2: state.load(static_cast<std::uint16_t>(xf::kLightsBase+next()%128u),words.data(),1u);break;
+        case 1: state.load(static_cast<std::uint16_t>(MatrixMemory::kPostBase+(next()%61u)*4u),words.data(),12u);break;
+        case 2: state.load(static_cast<std::uint16_t>(MatrixMemory::kLightBase+next()%128u),words.data(),1u);break;
         case 3: {
             const std::uint32_t a=next()&0x3FFFFFFFu;
             draw.position_matrix=static_cast<std::uint8_t>(a&0x3Fu);

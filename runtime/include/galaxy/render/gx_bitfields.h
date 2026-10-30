@@ -116,10 +116,6 @@ inline constexpr std::uint8_t kArrayStrideBase = 0xB0;
 
 // XF (transform unit) memory (LOAD_XF_REG: count, base, values).
 namespace xf {
-inline constexpr std::uint16_t kPosMatricesBase = 0x0000;  // 0x000-0x0FF
-inline constexpr std::uint16_t kNormalMatricesBase = 0x0400;
-inline constexpr std::uint16_t kPostMatricesBase = 0x0500;
-inline constexpr std::uint16_t kLightsBase = 0x0600;
 // XFMEM_ERROR..XFMEM_UNKNOWN_1007 (0x1000-0x1007) and XFMEM_VTXSPECS (0x1008): status and
 // diagnostic registers with no effect on rendering (Dolphin's XFRegWritten ignores
 // 0x1000-0x1007; 0x1008 only feeds a CP/XF consistency check).

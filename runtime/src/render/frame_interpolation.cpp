@@ -110,7 +110,7 @@ Affine34 load_normal(const std::uint32_t* words) noexcept {
     Affine34 m{};
     for (unsigned row = 0; row < 3u; ++row) {
         for (unsigned col = 0; col < 3u; ++col) {
-            m[row * 4u + col] = word_float(words[row * 3u + col]);
+            m[row * 4u + col] = word_float(words[row * 4u + col]);
         }
     }
     return m;
@@ -119,7 +119,7 @@ Affine34 load_normal(const std::uint32_t* words) noexcept {
 void store_normal(const Affine34& m, std::uint32_t* words) noexcept {
     for (unsigned row = 0; row < 3u; ++row) {
         for (unsigned col = 0; col < 3u; ++col) {
-            words[row * 3u + col] = float_word(m[row * 4u + col]);
+            words[row * 4u + col] = float_word(m[row * 4u + col]);
         }
     }
 }
@@ -578,16 +578,16 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
         if ((normal_mask & (1u << k)) == 0u) continue;
         // A position matrix snapped to b or taking b's rotation (a flip) takes b's normals with it.
         if (out.position_changed[k] != 0u && (out.position[k].snapped || out.position[k].flipped)) continue;
-        const std::uint32_t* wb = b + kXfNormalBase + k * 9u;
+        const std::uint32_t* wb = b + kNormalBase + k * 12u;
         const bool differs =
-            a != nullptr && std::memcmp(a + kXfNormalBase + k * 9u, wb, 9u * 4u) != 0;
+            a != nullptr && std::memcmp(a + kNormalBase + k * 12u, wb, 12u * 4u) != 0;
         if (!differs && !(camera_moves && !orthographic)) continue;
         const Affine34 nb = load_normal(wb);
         if (!finite(nb)) continue;
         Affine34 na{};
         const Affine34* pa = nullptr;
         if (a != nullptr) {
-            na = load_normal(a + kXfNormalBase + k * 9u);
+            na = load_normal(a + kNormalBase + k * 12u);
             if (finite(na)) pa = &na;
         }
         normal_motion(pa, nb, normal_camera, out.normal[k]);
@@ -602,9 +602,9 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
     if (a != nullptr) {
         out.tex_changed = std::memcmp(a + 120u, b + 120u, (256u - 120u) * 4u) != 0;
         out.post_changed =
-            std::memcmp(a + kXfPostBase, b + kXfPostBase, (kXfLightBase - kXfPostBase) * 4u) != 0;
+            std::memcmp(a + kPostBase, b + kPostBase, (kLightBase - kPostBase) * 4u) != 0;
         for (unsigned light = 0; light < 8u; ++light) {
-            const unsigned base = kXfLightBase + light * 16u;
+            const unsigned base = kLightBase + light * 16u;
             if ((light_mask & (1u << light)) != 0u &&
                 ((camera_moves && !orthographic) || std::memcmp(a + base, b + base, 16u * 4u) != 0)) {
                 out.light_changed |= static_cast<std::uint8_t>(1u << light);
@@ -618,19 +618,19 @@ void palette_motion(const std::uint32_t* a, const std::uint32_t* b, const Camera
 void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint32_t* b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept {
-    std::memcpy(out, b, kXfPaletteWords * 4u);
+    std::memcpy(out, b, kPaletteWords * 4u);
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
             store_matrix(eye_at(m.position[k], camera, camera_t, t), out + k * 12u);
         }
         if (m.normal_changed[k] != 0u) {
-            store_normal(normal_at(m.normal[k], camera, camera_t, t), out + kXfNormalBase + k * 9u);
+            store_normal(normal_at(m.normal[k], camera, camera_t, t), out + kNormalBase + k * 12u);
         }
     }
     if (a == nullptr) {
         for (unsigned light = 0; light < 8u; ++light) {
             if ((m.light_changed & (1u << light)) != 0u) {
-                const unsigned base = kXfLightBase + light * 16u;
+                const unsigned base = kLightBase + light * 16u;
                 light_at(nullptr, b + base, camera, camera_t, t, m.split, out + base);
             }
         }
@@ -658,11 +658,11 @@ void palette_at(const PaletteMotion& m, const std::uint32_t* a, const std::uint3
         blocks(120u, 10u);
     }
     if (m.post_changed) {
-        blocks(kXfPostBase, 20u);
+        blocks(kPostBase, 20u);
     }
     for (unsigned light = 0; light < 8u; ++light) {
         if ((m.light_changed & (1u << light)) != 0u) {
-            const unsigned base = kXfLightBase + light * 16u;
+            const unsigned base = kLightBase + light * 16u;
             light_at(a + base, b + base, camera, camera_t, t, m.split, out + base);
         }
     }

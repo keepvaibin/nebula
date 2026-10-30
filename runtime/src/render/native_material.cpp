@@ -22,7 +22,8 @@ void texture_matrices(const Program& m, const Values& v, MatrixMemory& memory, b
         for (unsigned k = 0; k < count; ++k) {
             words[k] = std::bit_cast<std::uint32_t>(v.texture_matrix[i][k]);
         }
-        const auto base = static_cast<std::uint16_t>(t.id >= 64u ? 0x500u + 4u * (t.id - 64u) : 4u * t.id);
+        const auto base = static_cast<std::uint16_t>(t.id >= 64u ? MatrixMemory::kPostBase + 4u * (t.id - 64u)
+                                                                : MatrixMemory::kMatrixBase + 4u * t.id);
         memory.load(base, words, static_cast<std::uint16_t>(count));
     }
 }
@@ -35,7 +36,7 @@ void lights(const Program& m, const Values& v, MatrixMemory& memory) {
             continue;
         }
         const Light& l = v.light[i];
-        const auto base = static_cast<std::uint16_t>(0x600u + 16u * i);
+        const auto base = static_cast<std::uint16_t>(MatrixMemory::kLightBase + MatrixMemory::kLightWords * i);
         const std::uint32_t pos[3] = {std::bit_cast<std::uint32_t>(l.position[0]), std::bit_cast<std::uint32_t>(l.position[1]),
                                       std::bit_cast<std::uint32_t>(l.position[2])};
         const std::uint32_t attn[6] = {std::bit_cast<std::uint32_t>(l.angle[0]), std::bit_cast<std::uint32_t>(l.angle[1]),

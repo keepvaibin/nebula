@@ -230,7 +230,8 @@ void eval_main(uint3 id : SV_DispatchThreadID) {
             const uint k = i % columns;
             const float v = endpoint_exact(m.r[r][k], at, has_a, has_a ? value(end_a + i) : 0.0, m0.r[r][k], has_b,
                                            has_b ? value(end_b + i) : 0.0, m1.r[r][k]);
-            put(dst + i, asuint(v));
+            // A normal matrix's rows are aligned float4s: value i at row r, column k.
+            put(dst + (kind == 0u ? i : r * 4u + k), asuint(v));
         }
     } else if (kind <= 3u) {
         for (uint i = 0u; i < n; ++i) {

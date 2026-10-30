@@ -87,7 +87,7 @@ void test_transforms() {
         program.normal(12u, normal);
         for (float t : {0.25f, 0.5f, 0.75f}) {
             const Affine34 camera_t = camera_at(camera, t);
-            std::uint32_t out[21]{};
+            std::uint32_t out[24]{};
             evaluate(program, camera_t, t, out);
             const Affine34 want = eye_at(eye, camera, camera_t, t);
             const Affine34 want_n = normal_at(normal, camera, camera_t, t);
@@ -95,7 +95,7 @@ void test_transforms() {
             for (unsigned i = 0; i < 12u; ++i) same = same && near_word(out[i], std::bit_cast<std::uint32_t>(want[i]));
             for (unsigned r = 0; r < 3u; ++r) {
                 for (unsigned c = 0; c < 3u; ++c) {
-                    same = same && near_word(out[12u + r * 3u + c], std::bit_cast<std::uint32_t>(want_n[r * 4u + c]));
+                    same = same && near_word(out[12u + r * 4u + c], std::bit_cast<std::uint32_t>(want_n[r * 4u + c]));
                 }
             }
             check(same, "affine and normal ops match eye_at and normal_at");
@@ -104,20 +104,20 @@ void test_transforms() {
 }
 
 void random_palette(std::vector<std::uint32_t>& words, const Affine34& view_matrix, float scale) {
-    words.assign(kXfPaletteWords, 0u);
+    words.assign(MatrixMemory::kPaletteWords, 0u);
     for (unsigned k = 0; k < 10u; ++k) {
         const Affine34 m = affine_multiply(view_matrix, random_object());
         for (unsigned i = 0; i < 12u; ++i) words[k * 12u + i] = std::bit_cast<std::uint32_t>(m[i]);
         for (unsigned r = 0; r < 3u; ++r) {
             for (unsigned c = 0; c < 3u; ++c) {
-                words[kXfNormalBase + k * 9u + r * 3u + c] = std::bit_cast<std::uint32_t>(m[r * 4u + c] / scale);
+                words[kNormalBase + k * 12u + r * 4u + c] = std::bit_cast<std::uint32_t>(m[r * 4u + c] / scale);
             }
         }
     }
     for (unsigned w = 120u; w < 256u; ++w) words[w] = std::bit_cast<std::uint32_t>(uniform(-2.0f, 2.0f));
-    for (unsigned w = kXfPostBase; w < kXfLightBase; ++w) words[w] = std::bit_cast<std::uint32_t>(uniform(-2.0f, 2.0f));
+    for (unsigned w = kPostBase; w < kLightBase; ++w) words[w] = std::bit_cast<std::uint32_t>(uniform(-2.0f, 2.0f));
     for (unsigned l = 0; l < 8u; ++l) {
-        std::uint32_t* light = words.data() + kXfLightBase + l * 16u;
+        std::uint32_t* light = words.data() + kLightBase + l * 16u;
         light[3] = static_cast<std::uint32_t>(rng());
         for (unsigned i = 4u; i < 10u; ++i) light[i] = std::bit_cast<std::uint32_t>(uniform(-1.0f, 1.0f));
         for (unsigned i = 10u; i < 13u; ++i) light[i] = std::bit_cast<std::uint32_t>(uniform(-1000.0f, 1000.0f));
@@ -147,7 +147,7 @@ void test_palettes() {
         }
         for (unsigned w = 120u; w < 256u; w += 7u) b[w] = std::bit_cast<std::uint32_t>(std::bit_cast<float>(b[w]) + uniform(-0.1f, 0.1f));
         for (unsigned l = 0; l < 8u; l += 2u) {
-            std::uint32_t* light = b.data() + kXfLightBase + l * 16u;
+            std::uint32_t* light = b.data() + kLightBase + l * 16u;
             light[3] ^= 0x10203040u;
             light[11] = std::bit_cast<std::uint32_t>(std::bit_cast<float>(light[11]) + 10.0f);
         }
@@ -161,11 +161,11 @@ void test_palettes() {
             const Affine34 camera_t = camera_at(camera, t);
             std::vector<std::uint32_t> got = b;
             evaluate(program, camera_t, t, got.data());
-            std::vector<std::uint32_t> want(kXfPaletteWords);
+            std::vector<std::uint32_t> want(MatrixMemory::kPaletteWords);
             palette_at(motion, no_before ? nullptr : a.data(), b.data(), camera, camera_t, t, want.data());
             bool same = true;
-            for (unsigned w = 0; w < kXfPaletteWords; ++w) {
-                const bool colour = w >= kXfLightBase && ((w - kXfLightBase) & 15u) == 3u;
+            for (unsigned w = 0; w < MatrixMemory::kPaletteWords; ++w) {
+                const bool colour = w >= kLightBase && ((w - kLightBase) & 15u) == 3u;
                 const bool ok = colour ? got[w] == want[w] : near_word(got[w], want[w], 1e-4f);
                 same = same && ok;
             }
@@ -443,23 +443,27 @@ void test_endpoints() {
         const auto words = [](const float* v, unsigned n, std::uint32_t* out) {
             for (unsigned i = 0; i < n; ++i) out[i] = std::bit_cast<std::uint32_t>(v[i]);
         };
-        std::uint32_t want_a[21], want_b[21];
+        // The normal matrix's rows are aligned float4s after the position matrix (w untouched, zero).
+        const auto normal_words = [](const float* v, std::uint32_t* out) {
+            for (unsigned i = 0; i < 9u; ++i) out[(i / 3u) * 4u + i % 3u] = std::bit_cast<std::uint32_t>(v[i]);
+        };
+        std::uint32_t want_a[24]{}, want_b[24]{};
         words(ma.data(), 12u, want_a);
-        words(na, 9u, want_a + 12);
+        normal_words(na, want_a + 12);
         words(mb.data(), 12u, want_b);
-        words(nb, 9u, want_b + 12);
-        std::uint32_t out[21]{};
+        normal_words(nb, want_b + 12);
+        std::uint32_t out[24]{};
         evaluate(program, camera_at(camera, 0.0f), 0.0f, out);
         const bool exact_a = eye.snapped || eye.flipped || std::memcmp(out, want_a, sizeof(out)) == 0;
         check(exact_a, "an endpoint-exact op gives the frame before at t = 0");
         evaluate(program, camera_at(camera, 1.0f), 1.0f, out);
         check(std::memcmp(out, want_b, sizeof(out)) == 0, "an endpoint-exact op gives this frame at t = 1");
         for (float t : {0.25f, 0.5f, 0.75f}) {
-            std::uint32_t got[21]{}, base[21]{};
+            std::uint32_t got[24]{}, base[24]{};
             evaluate(program, camera_at(camera, t), t, got);
             evaluate(plain, camera_at(camera, t), t, base);
             bool close = true;
-            for (unsigned i = 0; i < 21u; ++i) close = close && near_word(got[i], base[i], 2e-4f);
+            for (unsigned i = 0; i < 24u; ++i) close = close && near_word(got[i], base[i], 2e-4f);
             check(close, "endpoint terms stay within float error between the frames");
         }
     }
