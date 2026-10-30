@@ -67,7 +67,6 @@ void main(void) {
     OSInitMutex(&MR::MutexHolder< 1 >::sMutex);
     OSInitMutex(&MR::MutexHolder< 2 >::sMutex);
     nw4r::lyt::LytInit();
-    MR::setLayoutDefaultAllocator();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();
     FileRipper::setup(0x20000, MR::getStationedHeapNapa());

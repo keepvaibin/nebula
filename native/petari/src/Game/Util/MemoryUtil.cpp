@@ -19,26 +19,6 @@ namespace MR {
         OSUnlockMutex(&MR::MutexHolder< 1 >::sMutex);
     }
 
-    void* NewDeleteAllocator::alloc(MEMAllocator* pAllocator, u32 size) {
-        return new u8[size];
-    }
-
-    void NewDeleteAllocator::free(MEMAllocator* pAllocator, void* pPtr) {
-        delete static_cast< u8* >(pPtr);
-    }
-
-    MEMAllocatorFunc NewDeleteAllocator::sAllocatorFunc = {
-        NewDeleteAllocator::alloc,
-        NewDeleteAllocator::free,
-    };
-    MEMAllocator NewDeleteAllocator::sAllocator = {&sAllocatorFunc};
-
-    MEMAllocator* getHomeButtonLayoutAllocator() {
-        JKRHeapAllocator< 0 >::sHeap = SingletonHolder< HeapMemoryWatcher >::get()->mHomeButtonLayoutHeap;
-
-        return &JKRHeapAllocator< 0 >::sAllocator;
-    }
-
     JKRHeap* getCurrentHeap() {
         return JKRHeap::sCurrentHeap;
     }

@@ -21,11 +21,10 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
-# The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): the MEM heaps, KPAD's processing, the
+# The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): KPAD's processing, the
 # Wii Remote speaker's encoder (wenc.c), and the OS's scheduler, alarms, synchronisation and arenas on the native OS
 # core (sdk/os/os_native.c).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
-    "${petari}/src/RVL_SDK/mem/*.c"
     "${petari}/src/RVL_SDK/kpad/*.c"
     "${petari}/src/RVL_SDK/wenc/wenc.c")
 foreach(unit OSThread OSMutex OSMessage OSAlarm OSTime OSArena OSAlloc)

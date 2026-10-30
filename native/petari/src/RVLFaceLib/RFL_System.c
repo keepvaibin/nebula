@@ -1,7 +1,6 @@
 #include "RVLFaceLibInternal.h"
 #include <revolution/os.h>
 #include <cstdio>
-#include <revolution/mem.h>
 #include <revolution/types.h>
 
 #define RFL_SYSTEM_HEAP_SIZE 0x24800
@@ -33,10 +32,6 @@ u32 RFLGetWorkSize(BOOL deluxeTex) {
     return deluxeTex ? RFL_DELUXE_WORK_SIZE + sizeof(RFLiManager) : RFL_WORK_SIZE + sizeof(RFLiManager);
 }
 
-u32 MEMGetAllocatableSizeForExpHeap(MEMiHeapHead* heap) {
-    return MEMGetAllocatableSizeForExpHeapEx(heap, 4);
-}
-
 RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL useDeluxTex) {
     RFLErrcode errcode;
     u32 wholesize;
@@ -58,17 +53,17 @@ RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL 
 
         {
             u32 size = useDeluxTex ? RFL_DELUXE_WORK_SIZE - sizeof(RFLiManager) : RFL_WORK_SIZE - sizeof(RFLiManager);
-            RFLiGetManager()->rootHeap = MEMCreateExpHeapEx(RFLiGetManager()->workBuffer, size, 1);
+            RFLiGetManager()->rootHeap = NebulaMiiHeapCreate(RFLiGetManager()->workBuffer, size);
         }
         {
             u32 size = RFL_SYSTEM_HEAP_SIZE;
-            void* buffer = MEMAllocFromExpHeapEx(RFLiGetManager()->rootHeap, size, 32);
-            RFLiGetManager()->systemHeap = MEMCreateExpHeapEx(buffer, size, 1);
+            void* buffer = NebulaMiiHeapAlloc(RFLiGetManager()->rootHeap, size, 32);
+            RFLiGetManager()->systemHeap = NebulaMiiHeapCreate(buffer, size);
         }
         {
-            u32 size = MEMGetAllocatableSizeForExpHeap(RFLiGetManager()->rootHeap);
-            void* buffer = MEMAllocFromExpHeapEx(RFLiGetManager()->rootHeap, size, 8);
-            RFLiGetManager()->tmpHeap = MEMCreateExpHeapEx(buffer, size, 1);
+            u32 size = NebulaMiiHeapLargestFree(RFLiGetManager()->rootHeap);
+            void* buffer = NebulaMiiHeapAlloc(RFLiGetManager()->rootHeap, size, 8);
+            RFLiGetManager()->tmpHeap = NebulaMiiHeapCreate(buffer, size);
         }
 
         RFLiGetManager()->lastErrCode = RFLErrcode_Success;
@@ -122,9 +117,9 @@ void RFLExit(void) {
         RFLFreeCachedResource();
     }
 
-    MEMDestroyExpHeap(RFLiGetManager()->tmpHeap);
-    MEMDestroyExpHeap(RFLiGetManager()->systemHeap);
-    MEMDestroyExpHeap(RFLiGetManager()->rootHeap);
+    NebulaMiiHeapDestroy(RFLiGetManager()->tmpHeap);
+    NebulaMiiHeapDestroy(RFLiGetManager()->systemHeap);
+    NebulaMiiHeapDestroy(RFLiGetManager()->rootHeap);
 
     sRFLManager = NULL;
 }
@@ -140,7 +135,7 @@ BOOL RFLAvailable(void) {
 }
 
 static void* allocal_(u32 size, s32 align) {
-    return MEMAllocFromExpHeapEx(RFLiGetManager()->tmpHeap, size, align);
+    return NebulaMiiHeapAlloc(RFLiGetManager()->tmpHeap, size, align);
 }
 
 static void* RFLiAlloc(u32 size) {
@@ -152,7 +147,7 @@ void* RFLiAlloc32(u32 size) {
 }
 
 void RFLiFree(void* block) {
-    MEMFreeToExpHeap(RFLiGetManager()->tmpHeap, block);
+    NebulaMiiHeapFree(RFLiGetManager()->tmpHeap, block);
 }
 
 RFLiLoader* RFLiGetLoader(void) {

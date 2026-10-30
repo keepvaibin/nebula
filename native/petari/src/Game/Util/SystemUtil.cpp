@@ -175,10 +175,6 @@ namespace MR {
         getGameSystemObjHolder()->mAudioSystem->stopAllSound(param1);
     }
 
-    void setLayoutDefaultAllocator() {
-        nw4r::lyt::Layout::mspAllocator = &MR::NewDeleteAllocator::sAllocator;
-    }
-
     // The output is 60 Hz: no PAL television to suggest PAL60 for.
     bool isDisplayEncouragePal60Window() {
         return false;

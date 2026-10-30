@@ -11,7 +11,6 @@
 #include "nw4r/lyt/util.h"
 #include "nw4r/lyt/window.h"
 #include "nw4r/ut/Rect.h"
-#include <revolution/mem/allocator.h>
 
 namespace {
     using namespace nw4r;
@@ -54,7 +53,6 @@ namespace nw4r {
             }
         };  // namespace
 
-        MEMAllocator* Layout::mspAllocator = nullptr;
 
         Layout::Layout() : mpRootPane(nullptr), mpGroupContainer(nullptr), mLayoutSize(0.0f, 0.0f), _20(0) {
         }

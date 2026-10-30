@@ -4,7 +4,7 @@
 #include "RFLi_Database.h"
 #include "RFLi_NANDLoader.h"
 #include "RFLi_Types.h"
-#include <revolution/mem.h>
+#include "RFLi_Heap.h"
 #include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
@@ -12,9 +12,9 @@ extern "C" {
 
 typedef struct RFLiManager {
     void* workBuffer;                      // at 0x0
-    MEMiHeapHead* rootHeap;                // at 0x4
-    MEMiHeapHead* systemHeap;              // at 0x8
-    MEMiHeapHead* tmpHeap;                 // at 0xC
+    NebulaMiiHeap* rootHeap;
+    NebulaMiiHeap* systemHeap;
+    NebulaMiiHeap* tmpHeap;
     RFLiLoader loader;                     // at 0xC0
     BOOL working;                          // at 0x1B34
     BOOL deluxeTex;                        // at 0x1B38
