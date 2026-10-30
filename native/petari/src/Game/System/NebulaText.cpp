@@ -4,13 +4,13 @@
 #ifdef TARGET_PC
 #include "Game/Screen/LayoutCoreUtil.hpp"
 #include "Game/System/Language.hpp"
+#include "Game/System/NebulaDisc.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
 #include <cstring>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/Rect.h>
-#include <revolution/dvd.h>
 #include <revolution/os.h>
 
 namespace {
@@ -171,20 +171,16 @@ namespace {
 
         char path[96];
         snprintf(path, sizeof(path), "/%s/MessageData/NebulaText.txt", pPrefix);
-        if (DVDConvertPathToEntrynum(path) < 0) {
+        NebulaDisc::File file;
+        if (!NebulaDisc::open(path, &file)) {
             return;
         }
-        DVDFileInfo file;
-        if (!DVDOpen(path, &file)) {
-            return;
-        }
-        const s32 length = file.length < static_cast< u32 >(cFileMax) ? static_cast< s32 >(file.length) : cFileMax;
+        const s32 length = file.mLength < static_cast< u32 >(cFileMax) ? static_cast< s32 >(file.mLength) : cFileMax;
         const s32 read = (length + 31) & ~31;
-        if (length > 0 && read <= cFileMax && DVDReadPrio(&file, sFile, read, 0, 2) >= 0) {
+        if (length > 0 && read <= cFileMax && NebulaDisc::read(&file, sFile, read, 0) >= 0) {
             parse(sFile, length);
             JUTNativeLog("NebulaText: %s (%d texts)\n", path, sOverrideNum);
         }
-        DVDClose(&file);
     }
 
     const wchar_t* find(const char* pId) {

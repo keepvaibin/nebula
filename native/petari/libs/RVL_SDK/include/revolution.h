@@ -2,7 +2,6 @@
 #define REVOLUTION_H
 
 #include "revolution/ai.h"
-#include "revolution/arc.h"
 #include "revolution/dvd.h"
 #include "revolution/fs.h"
 #include "revolution/gd.h"

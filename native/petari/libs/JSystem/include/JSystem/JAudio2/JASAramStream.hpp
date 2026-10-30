@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASTaskThread.hpp"
+#include "Game/System/NebulaDisc.hpp"
 
 class JASChannel;
 
@@ -69,7 +70,6 @@ public:
     bool headerLoad(u32, int);
     bool load();
     static s32 channelProcCallback(void*);
-    static s32 dvdErrorCheck(void*);
     static void channelCallback(u32, JASChannel*, JASDsp::TChannel*, void*);
     void updateChannel(u32, JASChannel*, JASDsp::TChannel*);
     s32 channelProc();
@@ -140,7 +140,7 @@ public:
     /* 0x0C0 */ bool _0C0;
     /* 0x0C4 */ volatile u32 _0C4;
     /* 0x0C8 */ volatile f32 _0C8;
-    /* 0x0CC */ DVDFileInfo mDvdFileInfo;
+    /* 0x0CC */ NebulaDisc::File mDvdFile;
     /* 0x108 */ u32 _108;
     /* 0x10C */ int _10C;
     /* 0x110 */ u32 mBlock;

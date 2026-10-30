@@ -6,6 +6,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
 #include <revolution.h>
+#include "Game/System/NebulaDisc.hpp"
 
 JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
     JSUPtrLink* current = JKRFileLoader::sVolumeList.mHead;
@@ -46,7 +47,7 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
 }
 
 JKRArchive* JKRArchive::mount(const char* pName, EMountMode mountMode, JKRHeap* pHeap, EMountDirection mountDir) {
-    s32 entryNum = DVDConvertPathToEntrynum(pName);
+    s32 entryNum = NebulaDisc::find(pName);
 
     if (entryNum < 0) {
         return nullptr;

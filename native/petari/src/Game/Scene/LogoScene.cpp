@@ -49,18 +49,6 @@ namespace {
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 
-#if (VERSION == RMGK01)
-#include "Game/Screen/IsbnManager.hpp"
-#include "Game/System/Language.hpp"
-#include "Game/Util/FileUtil.hpp"
-#include "Game/Util/MemoryUtil.hpp"
-#include "Game/Util/StringUtil.hpp"
-#include "Game/Util/SystemUtil.hpp"
-
-const wchar_t* pIsbnNumber = L"0000000000000";
-const wchar_t* pRegistNumber = L"0000000000";
-const wchar_t* pOtherNumber = L"0000000";
-#endif
 
 namespace {
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
@@ -72,11 +60,6 @@ namespace {
     const s32 STRAP_DISPLAY_MIN_FRAME = 450;
     const s32 STRAP_DISPLAY_MAX_FRAME = 1200;
 
-#if (VERSION == RMGK01)
-    NEW_NERVE(LogoSceneCensorshipFadein, LogoScene, CensorshipFadein);
-    NEW_NERVE(LogoSceneCensorshipDisplay, LogoScene, CensorshipDisplay);
-    NEW_NERVE(LogoSceneCensorshipFadeout, LogoScene, CensorshipFadeout);
-#endif
 
     NEW_NERVE(LogoSceneStrapFadein, LogoScene, StrapFadein);
     NEW_NERVE(LogoSceneStrapDisplay, LogoScene, StrapDisplay);
@@ -91,9 +74,6 @@ namespace {
 
 LogoScene::LogoScene()
     : Scene("LogoScene"),
-#if (VERSION == RMGK01)
-      mIsbnManager(),
-#endif
       mStrapLayout(), mLogoFader() {
     MainLoopFramework::getManager()->mUseVFilter = false;
     MainLoopFramework::getManager()->mUseAlpha = false;
@@ -105,11 +85,6 @@ LogoScene::~LogoScene() {
 }
 
 void LogoScene::init() {
-#if (VERSION == RMGK01)
-    if (MR::isEqualString(MR::getCurrentRegionPrefix(), "Cn")) {
-        initNerve(GET_NERVE_ANON(LogoSceneCensorshipFadein));
-    } else
-#endif
 #ifdef TARGET_PC
         // The console's strap screen covers the system archive's load and asks for a button press. Natively the load
         // runs behind black (the fader starts blank) and the title follows as soon as it and the save data are ready.
@@ -158,15 +133,6 @@ void LogoScene::draw() const {
     MR::clearZBuffer();
     MR::drawInitFor2DModel();
 
-#if (VERSION == RMGK01)
-    bool isCensorship = isNerve(GET_NERVE_ANON(LogoSceneCensorshipFadein)) || isNerve(GET_NERVE_ANON(LogoSceneCensorshipDisplay)) ||
-                        isNerve(GET_NERVE_ANON(LogoSceneCensorshipFadeout));
-
-    if (isCensorship) {
-        MR::setupDrawForNW4RLayout(1.0f, true);
-        mIsbnManager->draw();
-    }
-#endif
 
     CategoryList::drawOpa(MR::DrawBufferType_Model3DFor2D);
     CategoryList::drawXlu(MR::DrawBufferType_Model3DFor2D);
@@ -179,47 +145,10 @@ void LogoScene::draw() const {
 
 bool LogoScene::isDisplayStrapRemineder() const {
     return isNerve(GET_NERVE_ANON(LogoSceneDeactive)) ||
-#if (VERSION == RMGK01)
-           isNerve(GET_NERVE_ANON(LogoSceneCensorshipFadein)) || isNerve(GET_NERVE_ANON(LogoSceneCensorshipDisplay)) ||
-           isNerve(GET_NERVE_ANON(LogoSceneCensorshipFadeout)) ||
-#endif
            isNerve(GET_NERVE_ANON(LogoSceneStrapFadein)) || isNerve(GET_NERVE_ANON(LogoSceneStrapDisplay)) ||
            isNerve(GET_NERVE_ANON(LogoSceneStrapFadeout)) || isNerve(GET_NERVE_ANON(LogoSceneWaitReadDoneSystemArchive));
 }
 
-#if (VERSION == RMGK01)
-void LogoScene::exeCensorshipFadein() {
-    if (MR::isFirstStep(this)) {
-        mLogoFader->mMaxStep = FADEINOUT_FRAME;
-    }
-
-    mIsbnManager->calc(true);
-
-    if (tryFadeinLayout()) {
-        setNerve(GET_NERVE_ANON(LogoSceneCensorshipDisplay));
-    }
-}
-
-void LogoScene::exeCensorshipDisplay() {
-    if (MR::isFirstStep(this)) {
-        mIsbnManager->reset();
-    }
-
-    mIsbnManager->calc(true);
-
-    if (MR::isGreaterStep(this, CENSORSHIP_DISPLAY_FRAME)) {
-        setNerve(GET_NERVE_ANON(LogoSceneCensorshipFadeout));
-    }
-}
-
-void LogoScene::exeCensorshipFadeout() {
-    mIsbnManager->calc(true);
-
-    if (tryFadeoutLayout()) {
-        setNerve(GET_NERVE_ANON(LogoSceneStrapFadein));
-    }
-}
-#endif
 
 void LogoScene::exeStrapFadein() {
     if (MR::isFirstStep(this)) {
@@ -302,20 +231,6 @@ void LogoScene::initLayout() {
     mLogoFader->appear();
     MR::connectToSceneLayout(mLogoFader);
 
-#if (VERSION == RMGK01)
-    if (!MR::isEqualString(MR::getCurrentRegionPrefix(), "Cn")) {
-        return;
-    }
-
-    mIsbnManager =
-        IsbnManager::create(MR::loadToMainRAM("CnSimpChinese/LayoutData/ISBNLayoutData.arc", nullptr, nullptr, JKRDvdRipper::ALLOC_DIRECTION_FORWARD),
-                            &MR::NewDeleteAllocator::sAllocator);
-    mIsbnManager->setNumber(pIsbnNumber, pRegistNumber, pOtherNumber);
-
-    if (MR::isScreen16Per9()) {
-        mIsbnManager->setAdjustRate(0.75f, 1.0f);
-    }
-#endif
 }
 
 bool LogoScene::tryFadeinLayout(LayoutActor* pActor) {
@@ -365,28 +280,3 @@ bool LogoScene::tryFadeoutLayout(LayoutActor* pActor) {
 #endif
 }
 
-#if (VERSION == RMGK01)
-bool LogoScene::tryFadeinLayout() {
-    if (MR::isFirstStep(this)) {
-        mLogoFader->startFadeIn();
-    }
-
-    if (mLogoFader->isFadeEnd()) {
-        return true;
-    }
-
-    return false;
-}
-
-bool LogoScene::tryFadeoutLayout() {
-    if (MR::isFirstStep(this)) {
-        mLogoFader->startFadeOut();
-    }
-
-    if (mLogoFader->isFadeEnd()) {
-        return true;
-    }
-
-    return false;
-}
-#endif

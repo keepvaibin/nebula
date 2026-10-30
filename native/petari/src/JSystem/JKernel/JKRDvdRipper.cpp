@@ -52,7 +52,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
         u8 buffer[0x3F];
         u8* bufPtr = reinterpret_cast< u8* >(ALIGN_NEXT(reinterpret_cast< uintptr_t >(buffer), 32));
         while (true) {
-            int readBytes = DVDReadPrio(dvdFile->getFileInfo(), bufPtr, 0x20, 0, 2);
+            int readBytes = NebulaDisc::read(dvdFile->getFile(), bufPtr, 0x20, 0);
             if (readBytes >= 0)
                 break;
 
@@ -107,7 +107,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
             u8 buffer[0x3F];
             u8* bufPtr = reinterpret_cast< u8* >(ALIGN_NEXT(reinterpret_cast< uintptr_t >(buffer), 32));
             while (true) {
-                int readBytes = DVDReadPrio(dvdFile->getFileInfo(), bufPtr, 32, static_cast< s32 >(offset), 2);
+                int readBytes = NebulaDisc::read(dvdFile->getFile(), bufPtr, 32, static_cast< s32 >(offset));
                 if (readBytes >= 0)
                     break;
 
@@ -128,7 +128,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
             if (dstLength != 0 && dstLength < readSize)
                 readSize = dstLength;
             while (true) {
-                int readBytes = DVDReadPrio(dvdFile->getFileInfo(), dst, readSize, static_cast< s32 >(offset), 2);
+                int readBytes = NebulaDisc::read(dvdFile->getFile(), dst, readSize, static_cast< s32 >(offset));
                 if (readBytes >= 0)
                     break;
 
@@ -154,7 +154,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
             JUTException::panic(__FILE__, 0x14d, "Not support SZP with offset read");
         }
         while (true) {
-            int readBytes = DVDReadPrio(dvdFile->getFileInfo(), mem, fileSizeAligned, 0, 2);
+            int readBytes = NebulaDisc::read(dvdFile->getFile(), mem, fileSizeAligned, 0);
             if (readBytes >= 0)
                 break;
 
@@ -228,7 +228,7 @@ static inline u8* nextSrcData(u8* src) {
     }
 
     while (true) {
-        s32 result = DVDReadPrio(srcFile->getFileInfo(), (dest + limit), transSize, srcOffset, 2);
+        s32 result = NebulaDisc::read(srcFile->getFile(), (dest + limit), transSize, srcOffset);
         if (result >= 0)
             break;
 
@@ -252,7 +252,7 @@ static inline u8* firstSrcData() {
     u32 length = transLeft < bufSize ? transLeft : bufSize;
 
     while (true) {
-        int result = DVDReadPrio(srcFile->getFileInfo(), buffer, length, srcOffset, 2);
+        int result = NebulaDisc::read(srcFile->getFile(), buffer, length, srcOffset);
         if (result >= 0) {
             break;
         }

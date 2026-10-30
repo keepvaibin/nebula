@@ -10,6 +10,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <algorithm>
+#include "Game/System/NebulaDisc.hpp"
 
 template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const NO_INLINE;
 
@@ -157,17 +158,14 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
 #pragma push
 #pragma opt_propagation off
 ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mScenarioData() {
-    DVDDir dir;
-    DVDDirEntry dirent;
-    DVDOpenDir("/StageData", &dir);
-
-    while (DVDReadDir(&dir, &dirent)) {
-        if (!dirent.isDir) {
+    NebulaDisc::FolderEntry dirent;
+    for (u32 i = 0; NebulaDisc::folderEntry("/StageData", i, &dirent); i++) {
+        if (!dirent.mIsFolder) {
             continue;
         }
 
         char fileName[256];
-        MR::makeScenarioArchiveFileName(fileName, sizeof(fileName), dirent.name);
+        MR::makeScenarioArchiveFileName(fileName, sizeof(fileName), dirent.mName);
 
         if (!MR::isFileExist(fileName, false)) {
             continue;
@@ -182,8 +180,6 @@ ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mSce
         mScenarioData.mArray[index] = pData;
         mScenarioData.mCount = nextCount;
     }
-
-    DVDCloseDir(&dir);
 
     std::sort(mScenarioData.begin(), mScenarioData.end(), GalaxyNameSortLt());
 }

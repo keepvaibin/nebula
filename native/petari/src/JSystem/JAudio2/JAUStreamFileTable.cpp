@@ -1,5 +1,5 @@
 #include "JSystem/JAudio2/JAUStreamFileTable.hpp"
-#include <revolution/dvd.h>
+#include "Game/System/NebulaDisc.hpp"
 
 JAUStreamFileTable::JAUStreamFileTable() {
     mData = nullptr;
@@ -35,5 +35,5 @@ s32 JAUStreamDataMgr_StreamFileTable::getStreamFileEntry(JAISoundID soundID) {
     if (filePath == nullptr) {
         return -1;
     }
-    return DVDConvertPathToEntrynum(filePath);
+    return NebulaDisc::find(filePath);
 }

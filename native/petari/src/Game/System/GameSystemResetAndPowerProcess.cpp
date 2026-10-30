@@ -154,7 +154,8 @@ void GameSystemResetAndPowerProcess::exeReset() {
     if (MR::isFirstStep(this)) {
         _5C = false;
 
-        DVDCheckDiskAsync(&mCommandBlock, GameSystemResetAndPowerProcess::handleCheckDiskAsync);
+        // The console checked the disc was still in (its answer came before the check returned); the game's files are.
+        notifyCheckDiskResult(true);
     }
 
     if (_5C) {
@@ -257,10 +258,6 @@ void GameSystemResetAndPowerProcess::control() {
 
 void GameSystemResetAndPowerProcess::handleOSPowerCallback() {
     SingletonHolder< GameSystemResetAndPowerProcess >::get()->mIsValidPowerOff = true;
-}
-
-void GameSystemResetAndPowerProcess::handleCheckDiskAsync(s32 result, DVDCommandBlock* pBlock) {
-    SingletonHolder< GameSystemResetAndPowerProcess >::get()->notifyCheckDiskResult(result != 0);
 }
 
 GameSystemResetAndPowerProcess::GameSystemResetAndPowerProcess()

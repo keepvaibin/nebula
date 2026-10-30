@@ -5,6 +5,7 @@
 #include "JSystem/JKernel/JKRDvdAramRipper.hpp"
 #include <cstring>
 #include <stdint.h>
+#include "Game/System/NebulaDisc.hpp"
 
 JASHeap* JASWaveArcLoader::sAramHeap;
 
@@ -149,33 +150,11 @@ void JASWaveArc::onDispose() {
 }
 
 void JASWaveArc::setEntryNum(s32 entryNum) {
-    DVDFileInfo fileInfo;
-    if (entryNum < 0) {
+    NebulaDisc::File file;
+    if (entryNum < 0 || !NebulaDisc::open(entryNum, &file)) {
         return;
     }
-    if (DVDFastOpen(entryNum, &fileInfo) == FALSE) {
-        return;
-    }
-    mFileLength = fileInfo.length;
-    DVDClose(&fileInfo);
+    mFileLength = file.mLength;
     mEntryNum = entryNum;
 }
 
-#ifndef TARGET_PC
-// Replaced by Game's Overwrite file; only that copy is in the game.
-void JASWaveArc::setFileName(char const* fileName) {
-    char* currentDir = JASWaveArcLoader::getCurrentDir();
-    size_t length = strlen(currentDir);
-    length = length + strlen(fileName);
-    char* path = new (JASKernel::getSystemHeap(), -4) char[length + 1];
-    strcpy(path, currentDir);
-    strcat(path, fileName);
-    path[length] = '\0';
-    int entryNum = DVDConvertPathToEntrynum(path);
-    delete[] path;
-    if (entryNum < 0) {
-        return;
-    }
-    setEntryNum(entryNum);
-}
-#endif

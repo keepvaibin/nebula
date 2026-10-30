@@ -39,6 +39,7 @@
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/System/NebulaCutsceneSkip.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaDisc.hpp"
 #endif
 
 #define GX_FIFO_SIZE 0x80000
@@ -59,7 +60,7 @@ extern "C" void nebula_game_main(void) {
 #else
 void main(void) {
 #endif
-    DVDInit();
+    NebulaDisc::init();
     NebulaFrameClock::init();
     HeapMemoryWatcher::createRootHeap();
     OSInitMutex(&MR::MutexHolder< 0 >::sMutex);

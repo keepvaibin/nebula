@@ -5,7 +5,7 @@
 #include "JSystem/JAudio2/JAIStream.hpp"
 #include "JSystem/JAudio2/JASGlobal.hpp"
 #include "JSystem/JAudio2/JAUSoundTable.hpp"
-#include <revolution/dvd.h>
+#include "Game/System/NebulaDisc.hpp"
 
 u16 JAUStdSoundInfo::getBgmSeqResourceID(JAISoundID soundID) const {
     void* data = JASGlobalInstance< JAUSoundTable >::getInstance()->getData(soundID);
@@ -139,5 +139,5 @@ s32 JAUStdSoundInfo::getStreamFileEntry(JAISoundID soundID) {
     if (path == nullptr) {
         return -1;
     }
-    return DVDConvertPathToEntrynum(path);
+    return NebulaDisc::find(path);
 }

@@ -18,22 +18,6 @@
 #define WII_REMOTE_STATUS_UNPLAGGED 3
 
 namespace {
-    const GameSystemErrorWatcher::Message cMessageFatalError = {
-        "DISC_04",
-        ErrorMessageWindow::MessageType_System,
-    };
-    const GameSystemErrorWatcher::Message cMessageNoDisk = {
-        "DISC_01",
-        ErrorMessageWindow::MessageType_System,
-    };
-    const GameSystemErrorWatcher::Message cMessageWrongDisk = {
-        "DISC_02",
-        ErrorMessageWindow::MessageType_System,
-    };
-    const GameSystemErrorWatcher::Message cMessageRetry = {
-        "DISC_03",
-        ErrorMessageWindow::MessageType_System,
-    };
     const GameSystemErrorWatcher::Message cMessageUnplagged = {
         "CONT_01",
         ErrorMessageWindow::MessageType_Game,
@@ -60,7 +44,7 @@ namespace {
 
 GameSystemErrorWatcher::GameSystemErrorWatcher()
     : NerveExecutor("ErrorWatcher"), mWindow(nullptr), mMessage(nullptr), mUnplaggedTexMap(nullptr), mBatteryLayout(nullptr),
-      mDriveStatus(DVD_STATE_END), _1C(nullptr), mWiiRemoteStatus(WII_REMOTE_STATUS_OK), mCounterIgnoreCheckFreeStyle(0),
+      _1C(nullptr), mWiiRemoteStatus(WII_REMOTE_STATUS_OK), mCounterIgnoreCheckFreeStyle(0),
       mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mWiiRemoteBattery(WPAD_BATTERY_LEVEL_MAX), mPermissionUpdateWiiRemoteStatus(false) {
     mWindow = new ErrorMessageWindow();
     mWindow->initWithoutIter();
@@ -81,8 +65,6 @@ void GameSystemErrorWatcher::initAfterResourceLoaded() {
 void GameSystemErrorWatcher::movement() {
     mWindow->movement();
     mWindow->calcAnim();
-
-    mDriveStatus = DVDGetDriveStatus();
 
     updateWiiRemoteStatus();
     updateNerve();
@@ -247,17 +229,6 @@ void GameSystemErrorWatcher::updateWiiRemoteStatus() {
 }
 
 const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageId() const {
-    switch (mDriveStatus) {
-    case DVD_STATE_FATAL_ERROR:
-        return &::cMessageFatalError;
-    case DVD_STATE_NO_DISK:
-        return &::cMessageNoDisk;
-    case DVD_STATE_WRONG_DISK:
-        return &::cMessageWrongDisk;
-    case DVD_STATE_RETRY:
-        return &::cMessageRetry;
-    }
-
     switch (mWiiRemoteStatus) {
     case WII_REMOTE_STATUS_UNPLAGGED:
         return &::cMessageUnplagged;
@@ -271,17 +242,6 @@ const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageI
 }
 
 const nw4r::lyt::TexMap* GameSystemErrorWatcher::getProperErrorTexMap() const {
-    switch (mDriveStatus) {
-    case DVD_STATE_FATAL_ERROR:
-        return nullptr;
-    case DVD_STATE_NO_DISK:
-        return nullptr;
-    case DVD_STATE_WRONG_DISK:
-        return nullptr;
-    case DVD_STATE_RETRY:
-        return nullptr;
-    }
-
     switch (mWiiRemoteStatus) {
     case WII_REMOTE_STATUS_UNPLAGGED:
         return mUnplaggedTexMap;

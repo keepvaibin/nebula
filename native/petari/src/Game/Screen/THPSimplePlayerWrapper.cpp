@@ -9,6 +9,7 @@
 #include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
+#include "Game/System/NebulaDisc.hpp"
 
 namespace {
     // The open movie's disc path, for the host's replacement videos (one movie plays at a time).
@@ -47,8 +48,8 @@ THPSimplePlayerWrapper* THPSimplePlayerStaticAudio::mPlayer;
 #endif
 
 namespace {
-    void dvdCallBackFunc(s32 a1, DVDFileInfo* pFileInfo) {
-        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pFileInfo->cb.userData;
+    void dvdCallBackFunc(s32 a1, NebulaDisc::Request* pRequest) {
+        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pRequest->mUser;
         player->dvdCallBack(a1);
     }
 };  // namespace
@@ -66,7 +67,9 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
     mSoundBuffer[1] = new (32) s32[0x230];
     MR::zeroMemory(mSoundBuffer[0], 0x8C0);
     MR::zeroMemory(mSoundBuffer[1], 0x8C0);
-    MR::zeroMemory(&mFileInfo, sizeof(mFileInfo));
+    mFile.mEntry = -1;
+    mFile.mLength = 0;
+    MR::zeroMemory(&mRequest, sizeof(mRequest));
     MR::zeroMemory(&mHeader, sizeof(mHeader));
     MR::zeroMemory(&mFrameComp, sizeof(mFrameComp));
     MR::zeroMemory(&mVideoInfo, sizeof(mVideoInfo));
@@ -136,7 +139,6 @@ bool THPSimplePlayerWrapper::close() {
 
             if (!mReadProgress) {
                 mOpen = 0;
-                DVDClose(&mFileInfo);
 #ifdef TARGET_PC
                 __NebulaMovieFrame(nullptr, -1, 0.0f, nullptr, nullptr, nullptr, 0, 0);
 #endif
@@ -251,7 +253,7 @@ bool THPSimplePlayerWrapper::loadStop() {
         mPreFetchState = 0;
 
         if (mReadProgress) {
-            DVDCancel(&mFileInfo.cb);
+            NebulaDisc::cancel(&mRequest);
             mReadProgress = 0;
         }
 
@@ -472,9 +474,9 @@ void THPSimplePlayerWrapper::readFrameAsync() {
         }
 
         mReadProgress = 1;
-        mFileInfo.cb.userData = this;
+        mRequest.mUser = this;
 
-        if (DVDReadAsyncPrio(&mFileInfo, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::dvdCallBackFunc, 2) != 1) {
+        if (!NebulaDisc::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::dvdCallBackFunc)) {
             mReadProgress = 0;
             mDvdError = 1;
         }
@@ -526,7 +528,6 @@ void THPSimplePlayerWrapper::readAsyncCallBack(s32 a1) {
             isNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeReadPreLoad));
         }
 
-        DVDClose(&mFileInfo);
         return;
     }
 
@@ -585,7 +586,7 @@ bool THPSimplePlayerWrapper::tryDvdOpen(const char* pFileName) {
     MR::zeroMemory(&mVideoInfo, sizeof(THPVideoInfo));
     MR::zeroMemory(&mAudioInfo, sizeof(THPAudioInfo));
 
-    if (!DVDOpen(pFileName, &mFileInfo)) {
+    if (!NebulaDisc::open(pFileName, &mFile)) {
         return false;
     }
 
@@ -618,8 +619,8 @@ void THPSimplePlayerWrapper::setupParams() {
 }
 
 namespace {
-    void readAsyncCallBackFunc(s32 a1, DVDFileInfo* pInfo) {
-        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pInfo->cb.userData;
+    void readAsyncCallBackFunc(s32 a1, NebulaDisc::Request* pRequest) {
+        THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pRequest->mUser;
         player->readAsyncCallBack(a1);
     }
 };  // namespace
@@ -629,30 +630,30 @@ void THPSimplePlayerWrapper::exeWait() {
 
 void THPSimplePlayerWrapper::exeReadHeader() {
     if (MR::isFirstStep(this)) {
-        mFileInfo.cb.userData = this;
-        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 64, _C, ::readAsyncCallBackFunc, 2);
+        mRequest.mUser = this;
+        NebulaDisc::readAsync(&mFile, &mRequest, WorkBuffer, 64, _C, ::readAsyncCallBackFunc);
     }
 }
 
 void THPSimplePlayerWrapper::exeReadFrameComp() {
     if (MR::isFirstStep(this)) {
-        mFileInfo.cb.userData = this;
+        mRequest.mUser = this;
         _C = mHeader.compInfoDataOffsets;
-        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+        NebulaDisc::readAsync(&mFile, &mRequest, WorkBuffer, 32, _C, ::readAsyncCallBackFunc);
     }
 }
 
 void THPSimplePlayerWrapper::exeReadVideoComp() {
     if (MR::isFirstStep(this)) {
-        mFileInfo.cb.userData = this;
-        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+        mRequest.mUser = this;
+        NebulaDisc::readAsync(&mFile, &mRequest, WorkBuffer, 32, _C, ::readAsyncCallBackFunc);
     }
 }
 
 void THPSimplePlayerWrapper::exeReadAudioComp() {
     if (MR::isFirstStep(this)) {
-        mFileInfo.cb.userData = this;
-        DVDReadAsyncPrio(&mFileInfo, WorkBuffer, 32, _C, ::readAsyncCallBackFunc, 2);
+        mRequest.mUser = this;
+        NebulaDisc::readAsync(&mFile, &mRequest, WorkBuffer, 32, _C, ::readAsyncCallBackFunc);
     }
 }
 
@@ -674,12 +675,10 @@ void THPSimplePlayerWrapper::endReadHeader() {
     swapWords(&mHeader.version, sizeof(mHeader) - sizeof(mHeader.magic));
 #endif
     if (strcmp(mHeader.magic, "THP")) {
-        DVDClose(&mFileInfo);
         return;
     }
 
     if (mHeader.version != 0x11000) {
-        DVDClose(&mFileInfo);
     }
 }
 
@@ -713,7 +712,7 @@ void THPSimplePlayerWrapper::endReadAudioComp() {
 
 void THPSimplePlayerWrapper::exeReadPreLoad() {
     if (MR::isFirstStep(this)) {
-        DVDReadAsyncPrio(&mFileInfo, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::readAsyncCallBackFunc, 2);
+        NebulaDisc::readAsync(&mFile, &mRequest, mReadBuffer[mReadIndex].ptr, mReadSize, mCurOffset, ::readAsyncCallBackFunc);
     }
 
     if (!_314) {

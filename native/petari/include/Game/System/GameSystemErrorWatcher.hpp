@@ -40,7 +40,6 @@ private:
     /* 0x0C */ const Message* mMessage;
     /* 0x10 */ const nw4r::lyt::TexMap* mUnplaggedTexMap;
     /* 0x14 */ BatteryLayout* mBatteryLayout;
-    /* 0x18 */ s32 mDriveStatus;
     /* 0x1C */ TriggerChecker* _1C;
     /* 0x20 */ s32 mWiiRemoteStatus;
     /* 0x24 */ s32 mCounterIgnoreCheckFreeStyle;

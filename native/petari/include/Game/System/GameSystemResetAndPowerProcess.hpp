@@ -41,11 +41,9 @@ public:
     bool tryAcceptPowerOff();
     bool isResetAcceptAudio() const;
     static void handleOSPowerCallback();
-    static void handleCheckDiskAsync(s32, DVDCommandBlock*);
 
     /* 0x20 */ TriggerChecker* mResetTriggerChecker;
     /* 0x24 */ ValueControl* mFadeinoutControl;
-    /* 0x28 */ DVDCommandBlock mCommandBlock;
     /* 0x58 */ volatile s32 mResetOperation;
     /* 0x5C */ bool _5C;
     /* 0x5D */ volatile bool mIsValidPowerOff;

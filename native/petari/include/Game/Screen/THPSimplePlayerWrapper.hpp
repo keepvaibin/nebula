@@ -2,6 +2,7 @@
 
 #include "Game/System/NerveExecutor.hpp"
 #include <revolution/thp.h>
+#include "Game/System/NebulaDisc.hpp"
 
 class THPSimplePlayerWrapper;
 
@@ -73,7 +74,8 @@ public:
     /* 0x009 */ u8 _9;
     /* 0x00C */ u32 _C;
     /* 0x010 */ u32 _10;
-    /* 0x014 */ DVDFileInfo mFileInfo;
+    NebulaDisc::File mFile;
+    NebulaDisc::Request mRequest;
     /* 0x050 */ THPHeader mHeader;
     /* 0x080 */ THPFrameCompInfo mFrameComp;
     /* 0x094 */ THPVideoInfo mVideoInfo;
@@ -116,7 +118,8 @@ public:
     /* 0x009 */ u8 _9;
     /* 0x00C */ u32 _C;
     /* 0x010 */ u32 _10;
-    /* 0x014 */ DVDFileInfo mFileInfo;
+    NebulaDisc::File mFile;
+    NebulaDisc::Request mRequest;
     /* 0x050 */ THPHeader mHeader;
     /* 0x080 */ THPFrameCompInfo mFrameComp;
     /* 0x094 */ THPVideoInfo mVideoInfo;

@@ -96,7 +96,7 @@ JKRADCommand* JKRDvdAramRipper::callCommand_Async(JKRADCommand* command) {
             u8 buffer[0x40];
             u8* bufPtr = reinterpret_cast< u8* >(ALIGN_NEXT(reinterpret_cast< uintptr_t >(&buffer), 0x20));
             while (true) {
-                s32 result = DVDReadPrio(dvdFile->getFileInfo(), bufPtr, 0x20, 0, 2);
+                s32 result = NebulaDisc::read(dvdFile->getFile(), bufPtr, 0x20, 0);
                 if (result >= 0) {
                     break;
                 }
@@ -407,7 +407,7 @@ static u8* firstSrcData() {
     u32 bufSize = szpEnd - buffer;
     u32 length = transLeft < bufSize ? transLeft : bufSize;
     while (true) {
-        int result = DVDReadPrio(srcFile->getFileInfo(), buffer, length, 0, 2);
+        int result = NebulaDisc::read(srcFile->getFile(), buffer, length, 0);
         if (result >= 0) {
             break;
         }
@@ -437,7 +437,7 @@ static inline u8* nextSrcData(u8* src) {
     }
 
     while (true) {
-        s32 result = DVDReadPrio(srcFile->getFileInfo(), dest + size, transSize, srcOffset, 2);
+        s32 result = NebulaDisc::read(srcFile->getFile(), dest + size, transSize, srcOffset);
         if (result >= 0) {
             break;
         }

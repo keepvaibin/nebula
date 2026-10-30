@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 51u
+#define NEBULA_GAME_API_VERSION 52u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -330,6 +330,15 @@ typedef struct NebulaGameMemoryRegion {
     uint32_t size;
     uint8_t* host;
 } NebulaGameMemoryRegion;
+
+/* A file or folder of the game's disc (the game partition's file table, or the mods' disc built over it). */
+typedef struct NebulaDiscEntry {
+    int32_t index;     /* in the file table; 0 is the root folder */
+    uint32_t length;   /* a file's length in bytes; 0 for a folder */
+    uint8_t folder;
+    uint8_t reserved[3];
+    const char* name;  /* valid for the process's life */
+} NebulaDiscEntry;
 
 /* System settings (SCGet*), with the SDK's values (SC_LANGUAGE_*, SC_SOUND_MODE_*, SC_ASPECT_RATIO_*...). */
 enum {
@@ -746,11 +755,18 @@ typedef struct NebulaHostServices {
        lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
     void (*stripe_particle)(void* user, uint32_t particle, uint32_t age_lifetime, uint8_t strip);
 
-    /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
-    const uint8_t* (*disc_fst)(void* user, size_t* size);
-    /* Reads `size` bytes at byte `offset` of the game partition's data into `dst` (game memory) without blocking;
-       the host calls nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
-    void (*disc_read)(void* user, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
+    /* Disc: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
+       returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
+       none. */
+    int (*disc_find)(void* user, const char* path, NebulaDiscEntry* entry);
+    /* The entry with file-table index `index`: 0 when there is none. */
+    int (*disc_entry)(void* user, int32_t index, NebulaDiscEntry* entry);
+    /* The `child`-th entry of the folder `folder`, in the table's order: 0 past the last. */
+    int (*disc_child)(void* user, int32_t folder, uint32_t child, NebulaDiscEntry* entry);
+    /* Reads `size` bytes at `offset` of the file `file` into `dst` without blocking (offset at most the file's length,
+       the end before its length plus 32: the bytes after a file are the disc's); the host calls
+       nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
+    void (*disc_read)(void* user, int32_t file, uint32_t offset, uint32_t size, void* dst, uint32_t slot);
     /* The game partition's main.dol as on the disc, valid for the process's life: the module reads the data tables
        the game keeps in its executable from it at boot (sdk/dol_data.c). */
     const uint8_t* (*disc_dol)(void* user, size_t* size);

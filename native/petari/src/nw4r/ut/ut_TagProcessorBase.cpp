@@ -93,7 +93,6 @@ namespace nw4r {
             writer.SetCursor(x, y);
         }
 
-        template class TagProcessorBase< char >;
         template class TagProcessorBase< wchar_t >;
     };  // namespace ut
 };  // namespace nw4r

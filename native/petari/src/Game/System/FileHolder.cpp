@@ -1,12 +1,13 @@
 #include "Game/System/FileHolder.hpp"
 #include "Game/Util.hpp"
+#include "Game/System/NebulaDisc.hpp"
 
 #define FILE_HOLDER_STATE_NONE 0
 #define FILE_HOLDER_STATE_READING 1
 #define FILE_HOLDER_STATE_DONE 2
 
 FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
-    : mEntryNum(DVDConvertPathToEntrynum(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
+    : mEntryNum(NebulaDisc::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
     OSInitMessageQueue(&mQueue, &mMessage, 1);
 
     if (pContext) {
@@ -82,7 +83,7 @@ FileHolderFileEntry** FileHolder::removeFile(const char* pFilePath) {
 }
 
 FileHolderFileEntry* FileHolder::findEntry(const char* pFilePath) const {
-    s32 entryNum = DVDConvertPathToEntrynum(pFilePath);
+    s32 entryNum = NebulaDisc::find(pFilePath);
     for (FileHolderFileEntry* const* pEntry = mEntries.begin(); pEntry != mEntries.end(); pEntry++) {
         if (entryNum == (*pEntry)->mEntryNum) {
             return *pEntry;

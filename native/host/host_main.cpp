@@ -16,6 +16,7 @@
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/disc_files.h"
 #include "galaxy/save_files.h"
 #include "galaxy/crash_report.h"
 #include "galaxy/discord_presence.h"
@@ -2301,13 +2302,42 @@ void svc_gpu_coherent(void*, const void* address, uint32_t size) {
 #endif
 }
 
-const uint8_t* svc_disc_fst(void*, size_t* size) {
-    if (gMods != nullptr && !gMods->fst.empty()) {
-        *size = gMods->fst.size();
-        return gMods->fst.data();
+// The disc's file table: the mods' disc's when mods change files, else the partition's. Built at its first use (the
+// mods are set up before the game starts).
+const galaxy::disc::FileTable& disc_table() {
+    static const galaxy::disc::FileTable table = [] {
+        galaxy::disc::FileTable loaded;
+        const bool mods = gMods != nullptr && !gMods->fst.empty();
+        if (!(mods ? loaded.load(gMods->fst.data(), gMods->fst.size()) : loaded.load(gPak.fst, gPak.fst_size))) {
+            die("the disc's file table is malformed");
+        }
+        return loaded;
+    }();
+    return table;
+}
+
+int disc_entry_out(const std::optional<galaxy::disc::Entry>& entry, NebulaDiscEntry* out) {
+    if (!entry) {
+        return 0;
     }
-    *size = gPak.fst_size;
-    return gPak.fst;
+    *out = {};
+    out->index = entry->index;
+    out->length = entry->length;
+    out->folder = entry->folder ? 1 : 0;
+    out->name = entry->name;
+    return 1;
+}
+
+int svc_disc_find(void*, const char* path, NebulaDiscEntry* out) {
+    return path != nullptr ? disc_entry_out(disc_table().find(path), out) : 0;
+}
+
+int svc_disc_entry(void*, int32_t index, NebulaDiscEntry* out) {
+    return disc_entry_out(disc_table().entry(index), out);
+}
+
+int svc_disc_child(void*, int32_t folder, uint32_t child, NebulaDiscEntry* out) {
+    return disc_entry_out(disc_table().child(folder, child), out);
 }
 
 // A read of a file a mod changed: the crash report names the last one (galaxy::crash). The disc thread only.
@@ -2334,8 +2364,16 @@ void note_mod_file(uint64_t offset) {
     galaxy::crash::note_mod_read(mod, *path);
 }
 
-void svc_disc_read(void*, uint64_t offset, uint32_t size, void* dst, uint32_t slot) {
+void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, void* dst, uint32_t slot) {
     gDiscReads.fetch_add(1, std::memory_order_relaxed);
+    // Within the file, or up to 31 bytes past its end (reads rounded up to 32 bytes), as the console allowed.
+    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    if (!entry || entry->folder || file_offset > entry->length ||
+        uint64_t{file_offset} + size >= uint64_t{entry->length} + 32) {
+        gModule.disc_complete(slot, -1);
+        return;
+    }
+    const uint64_t offset = entry->position + file_offset;
     // GALAXY_TEST_DISC_DELAY_US: a slow drive (each read takes this long), so waits on loads are exercised.
     static const uint32_t test_delay_us = [] {
         const char* value = std::getenv("GALAXY_TEST_DISC_DELAY_US");
@@ -3779,7 +3817,9 @@ int main(int argc, char** argv) {
     services.readback_serial = svc_readback_serial;
     services.clock_ns = svc_clock_ns;
     services.stripe_particle = svc_stripe_particle;
-    services.disc_fst = svc_disc_fst;
+    services.disc_find = svc_disc_find;
+    services.disc_entry = svc_disc_entry;
+    services.disc_child = svc_disc_child;
     services.disc_read = svc_disc_read;
     services.disc_dol = svc_disc_dol;
     services.disc_id = svc_disc_id;

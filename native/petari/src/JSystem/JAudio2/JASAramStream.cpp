@@ -19,21 +19,19 @@ u32 JASAramStream::sBlockSize;
 
 u32 JASAramStream::sChannelMax;
 
-bool UNK_BOOL_A;
 bool UNK_BOOL_B;
 
 void JASAramStream::initSystem(u32 block_size, u32 channel_max) {
-    if (JASDriver::registerSubFrameCallback(dvdErrorCheck, nullptr)) {
-        if (sLoadThread == nullptr) {
-            sLoadThread = JASDvd::getThreadPointer();
-        }
-
-        sReadBuffer = new (JASDram, 0x20) u8[(block_size + 0x20) * channel_max];
-        sBlockSize = block_size;
-        sChannelMax = channel_max;
-        UNK_BOOL_A = false;
-        UNK_BOOL_B = false;
+    // The console also registered a check of the drive here, which paused streams on a disc error; a PC's game
+    // files have none.
+    if (sLoadThread == nullptr) {
+        sLoadThread = JASDvd::getThreadPointer();
     }
+
+    sReadBuffer = new (JASDram, 0x20) u8[(block_size + 0x20) * channel_max];
+    sBlockSize = block_size;
+    sChannelMax = channel_max;
+    UNK_BOOL_B = false;
 }
 
 JASAramStream::JASAramStream() : _0B8(), _0C4(), _0C8(), _114() {
@@ -105,7 +103,7 @@ void JASAramStream::init(u32 param_0, u32 param_1, StreamCallback i_callback, vo
 }
 
 bool JASAramStream::prepare(s32 param_0, int param_1) {
-    if (!DVDFastOpen(param_0, &mDvdFileInfo)) {
+    if (!NebulaDisc::open(param_0, &mDvdFile)) {
         return false;
     }
 
@@ -227,7 +225,7 @@ bool JASAramStream::headerLoad(u32 param_0, int param_1) {
         return false;
     }
 
-    if (DVDReadPrio(&mDvdFileInfo, sReadBuffer, sizeof(Header), 0, 1) < 0) {
+    if (NebulaDisc::read(&mDvdFile, sReadBuffer, sizeof(Header), 0) < 0) {
         UNK_BOOL_B = true;
         return false;
     }
@@ -296,10 +294,10 @@ bool JASAramStream::load() {
     u32 size = sBlockSize * mChannelNum + sizeof(BlockHeader);
     u32 offset = mBlock * size + sizeof(Header);
     if (mBlock == loop_end_block) {
-        size = mDvdFileInfo.length - offset;
+        size = mDvdFile.mLength - offset;
     }
 
-    if (DVDReadPrio(&mDvdFileInfo, sReadBuffer, size, offset, 1) < 0) {
+    if (NebulaDisc::read(&mDvdFile, sReadBuffer, size, offset) < 0) {
         UNK_BOOL_B = true;
         return false;
     }
@@ -355,31 +353,6 @@ bool JASAramStream::load() {
 s32 JASAramStream::channelProcCallback(void* i_this) {
     JASAramStream* stream = (JASAramStream*)i_this;
     return stream->channelProc();
-}
-
-s32 JASAramStream::dvdErrorCheck(void* param_0) {
-    s32 status = DVDGetDriveStatus();
-    switch (status) {
-    case DVD_STATE_END:
-        UNK_BOOL_A = false;
-        break;
-    case DVD_STATE_BUSY:
-        break;
-    case DVD_STATE_WAITING:
-    case DVD_STATE_COVER_CLOSED:
-    case DVD_STATE_NO_DISK:
-    case DVD_STATE_WRONG_DISK:
-    case DVD_STATE_MOTOR_STOPPED:
-    case DVD_STATE_IGNORED:
-    case DVD_STATE_CANCELED:
-    case DVD_STATE_RETRY:
-    case DVD_STATE_FATAL_ERROR:
-    default:
-        UNK_BOOL_A = true;
-        break;
-    }
-
-    return 0;
 }
 
 void JASAramStream::channelCallback(u32 i_callbackType, JASChannel* i_channel, JASDsp::TChannel* i_dspChannel, void* i_this) {
@@ -518,7 +491,7 @@ void JASAramStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JAS
                         }
                     }
                 } else {
-                    if (_118 == 0 && !UNK_BOOL_A) {
+                    if (_118 == 0) {
                         _0AE &= ~2;
                         _0AE &= ~4;
                     }
@@ -618,10 +591,6 @@ s32 JASAramStream::channelProc() {
 
     if (UNK_BOOL_B) {
         _0AE |= 8;
-    }
-
-    if (UNK_BOOL_A) {
-        _0AE |= 2;
     }
 
     for (int i = 0; i < mChannelNum; i++) {

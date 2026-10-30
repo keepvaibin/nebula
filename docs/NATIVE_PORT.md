@@ -242,7 +242,7 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 | Disc data byte order and 64-bit pointers (archives, J3D, JPA, KCL, JMap, BMG, layouts, audio banks; `JKRMemArchive` writes pointers into 32-bit file fields, D) | done: every kept unit compiles and links (M) |
 | 274 US data sections not yet compared byte for byte (`us_data_unverified.csv`) | H: symbol naming; verify against the matching build |
 | Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
-| `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | open |
+| `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | deleted: nothing in the game reaches it (the console's linker dropped it too) |
 | THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through v1.0.1's decoder with each frame's size, audio in `native/sdk/thp`; a route that reaches a movie is still to run |
 | Mii data (RFL) without a console NAND | an empty database (RFL_DB.dat) is created, as v1.0.1 does; Mii import (runtime/src/mii_import.cpp, mii_formats.cpp) adds any console's Miis to it and to the running game's (nebula_game_mii_prepare/install) |
 | Volume categories (music, effects, voices) natively | open: v1.0.1 classifies channels from game memory; the native game will report each channel's category |
