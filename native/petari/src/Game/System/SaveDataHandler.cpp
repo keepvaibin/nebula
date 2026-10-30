@@ -176,7 +176,7 @@ bool SaveDataHandler::isDone() const {
 }
 
 NANDResultCode SaveDataHandler::getLastResultCode() const {
-    return NANDResultCode(mNANDRequestInfo->mResult);
+    return NANDResultCode(mNANDRequestInfo->getResult());
 }
 
 void SaveDataHandler::exeWait() {
@@ -327,7 +327,7 @@ bool SaveDataHandler::tryRemoveFile(const char* pFileName, bool* pIsRemoved) {
     if (MR::isFirstStep(this)) {
         MR::addRequestToNANDManager(mNANDRequestInfo->setDelete(pFileName));
     } else if (mNANDRequestInfo->isDone()) {
-        NANDResultCode resultCode = NANDResultCode(mNANDRequestInfo->mResult);
+        NANDResultCode resultCode = NANDResultCode(mNANDRequestInfo->getResult());
 
         if (resultCode.isSuccess() || resultCode.isNoExistFile()) {
             *pIsRemoved = true;
@@ -346,7 +346,7 @@ bool SaveDataHandler::trySave(bool* pIsErr, bool isDone) {
         return false;
     }
 
-    NANDResultCode resultCode = NANDResultCode(mNANDRequestInfo->mResult);
+    NANDResultCode resultCode = NANDResultCode(mNANDRequestInfo->getResult());
 
     if (resultCode.isSuccess()) {
         *pIsErr = false;

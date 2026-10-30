@@ -12,7 +12,6 @@
 #include "Game/System/Language.hpp"
 #include "Game/System/MainLoopFramework.hpp"
 #include "Game/System/MessageHolder.hpp"
-#include "Game/System/NANDManager.hpp"
 #include "Game/System/RenderMode.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
 #include "Game/System/WPadHolder.hpp"
@@ -119,7 +118,6 @@ void GameSystemObjHolder::initDvd() {
 }
 
 void GameSystemObjHolder::initNAND() {
-    SingletonHolder< NANDManager >::init();
 }
 
 void GameSystemObjHolder::initAudio() {
