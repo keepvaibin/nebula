@@ -13,10 +13,20 @@
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JUtility/JUTAssert.hpp"
 
-// #include <ai.h>
-// #include <os.h>
 #include <stdint.h>
+#include <nebula_game_api.h>
+#include <nebula_kernel.h>
 #include "Game/System/NebulaClock.hpp"
+#include "Game/System/NebulaKernel.hpp"
+
+// The host's audio output plays the DAC blocks (on the console the AI's DMA engine): the driver hands it each block,
+// and when the output takes one (the console's DMA end) the host calls nebula_game_ai_interrupt, whose audio event
+// runs the driver's callback.
+extern "C" const NebulaHostServices* nebula_host(void);
+
+extern "C" NEBULA_GAME_API void nebula_game_ai_interrupt(void) {
+    nebula_raise_event(NEBULA_EVENT_AUDIO);
+}
 
 static u8 sDspDacBufferSize = 3;
 
@@ -63,24 +73,19 @@ void JASDriver::initAI(void (*param_0)(void)) {
     sDspDacReadBuffer = 0;
     sDspStatus = 0;
     JASChannel::initBankDisposeMsgQueue();
-    AIInit(nullptr);
-    AIInitDMA((uintptr_t)sDmaDacBuffer[2], size);
-    BOOL isOutputRate;
-    if (sOutputRate == 0) {
-        isOutputRate = FALSE;
-    } else {
-        isOutputRate = TRUE;
-    }
-    AISetDSPSampleRate((u8)isOutputRate);
-    AIRegisterDMACallback(param_0);
+    const NebulaHostServices* const host = nebula_host();
+    host->ai_dma(host->user, sDmaDacBuffer[2], size);
+    host->ai_control(host->user, NEBULA_AI_RATE, sOutputRate != 0 ? 48000 : 32000);
+    NebulaKernel::setEventHandler(NEBULA_EVENT_AUDIO, param_0);
+    NebulaKernel::enableEvent(NEBULA_EVENT_AUDIO);
 }
 
 void JASDriver::startDMA() {
-    AIStartDMA();
+    nebula_host()->ai_control(nebula_host()->user, NEBULA_AI_START, 0);
 }
 
 void JASDriver::stopDMA() {
-    AIStopDMA();
+    nebula_host()->ai_control(nebula_host()->user, NEBULA_AI_STOP, 0);
 }
 
 void JASDriver::setOutputRate(JASOutputRate param_0) {
@@ -109,7 +114,7 @@ void JASDriver::updateDac() {
     s16* r30 = lastRspMadep;
     lastRspMadep = nullptr;
     if (r30) {
-        AIInitDMA((uintptr_t)r30, getDacSize() * 2);
+        nebula_host()->ai_dma(nebula_host()->user, r30, getDacSize() * 2);
     }
     s32 frameSamples = getFrameSamples();
     readDspBuffer(sDmaDacBuffer[dacp], frameSamples);
