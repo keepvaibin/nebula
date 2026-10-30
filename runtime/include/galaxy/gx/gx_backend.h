@@ -238,9 +238,6 @@ public:
         std::uint32_t& value);
     // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
     [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
-    void notify_guest_memory_write(
-        std::uint32_t address,
-        std::uint32_t size) noexcept;
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
     [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;
@@ -324,11 +321,6 @@ private:
 
 
 
-    struct GuestWriteRange {
-        std::uint32_t guest_addr = 0;
-        std::uint32_t size = 0;
-    };
-
 
     struct EfbPeekRequest {
         std::uint16_t x = 0;
@@ -351,7 +343,6 @@ private:
         bool prerecorded_movie{};
         float safety_surround{};
         MovieFrameMark movie_frame{};
-        std::vector<GuestWriteRange> dirty_ranges;
         GuestMemory* memory = nullptr;
         const GxServices* services = nullptr;
         std::uint64_t producer_wait_ns = 0;
@@ -381,8 +372,6 @@ private:
         std::vector<StripeParticleMark> stripe_particles;
         // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
         std::vector<shapes::Record> shape_records;
-        std::uint64_t dirty_bytes = 0;
-        std::size_t dirty_range_count = 0;
     };
 
     struct PendingFrameEffects {
@@ -392,13 +381,6 @@ private:
         const GxServices* services = nullptr;
     };
 
-    void drain_guest_memory_writes(std::vector<GuestWriteRange>& out) noexcept;
-    static void coalesce_dirty_ranges(
-        std::vector<GuestWriteRange>& ranges) noexcept;
-    static std::uint64_t dirty_range_bytes(
-        const std::vector<GuestWriteRange>& ranges) noexcept;
-    std::size_t invalidate_dirty_texture_ranges(
-        const std::vector<GuestWriteRange>& ranges);
     // Starts one fresh GX command-stream session. Every parser, state and tail mirror resets
     // together. Resetting only some of them can classify a receipt as event-free after shutdown
     // or reinitialize.
@@ -1163,11 +1145,6 @@ private:
     static_assert(
         kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
         "the chunk pool must cover twice the deepest render queue plus the consumer's chunk");
-    // Dirty-range vectors travel with the chunk; recycled like the FIFO so
-    // the producer does not grow a fresh vector every frame.
-    std::vector<std::vector<GuestWriteRange>> dirty_range_pool_;
-    // Producer-thread scratch for drain_guest_memory_writes.
-    std::vector<GuestWriteRange> drain_scratch_ranges_;
     // Only the render owner accesses this record outside queue_mutex_. All
     // mutations hold that mutex for simulation-thread idle predicates.
     struct PendingPointerDepthCapture {
@@ -1230,10 +1207,6 @@ private:
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
     std::size_t utility_chunks_in_flight_ = 0;
-    // Sim-thread only: dirty guest ranges observed on retraces with no FIFO.
-    // They do not need a full render chunk, but the next real render must
-    // invalidate texture/display-list caches before parsing.
-    std::vector<GuestWriteRange> pending_async_dirty_ranges_;
 
     // GPU-resident decoded vertices (render thread only). One persistently
     // mapped UPLOAD buffer, created lazily per device; see
@@ -1353,27 +1326,6 @@ private:
     static constexpr std::uint32_t kMem1Size = 0x04000000u;
     static constexpr std::uint32_t kMem2PhysicalBase = 0x10000000u;
     static constexpr std::uint32_t kMem2Size = 0x10000000u;
-    static constexpr std::uint32_t kDirtyTrackedBase = 0x00000000u;
-    static constexpr std::uint32_t kDirtyTrackedSize = 0x20000000u;
-    // GX copy destinations and tiled rows use 32-byte units. Coarser pages
-    // falsely retire GPU-only EFB contents when adjacent heap data is written.
-    static constexpr std::uint32_t kDirtyPageShift = 5u;
-    static constexpr std::uint32_t kDirtyPageSize = 1u << kDirtyPageShift;
-    static constexpr std::uint32_t kDirtyPageCount =
-        kDirtyTrackedSize >> kDirtyPageShift;
-    static constexpr std::size_t kDirtyPageWordCount =
-        (kDirtyPageCount + 63u) / 64u;
-    // Two-level bitmap. `dirty_page_words_` holds one bit per 32-byte guest
-    // page (1 MiB of bitmap); `dirty_word_summary_` holds one bit per word of
-    // that bitmap. Producers set the summary bit whenever they publish a page
-    // bit, so end-of-frame draining can skip entire groups of empty words
-    // instead of loading every one of the 131,072 bitmap words.
-    static constexpr std::size_t kDirtyWordSummaryCount =
-        (kDirtyPageWordCount + 63u) / 64u;
-    static constexpr std::uint64_t kDirtyFullWord = ~std::uint64_t{0};
-    std::array<std::atomic_uint64_t, kDirtyPageWordCount> dirty_page_words_{};
-    std::array<std::atomic_uint64_t, kDirtyWordSummaryCount>
-        dirty_word_summary_{};
 
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     PixelShaderKey ps_key_{};
@@ -1655,7 +1607,6 @@ private:
         TextureBindingKeyHash>
         frame_texture_binding_tables_;
     std::vector<DirtyTextureAlias> dirty_texture_aliases_;
-    std::vector<TextureCache::GuestRange> dirty_texture_ranges_scratch_;
 
     std::uint64_t frame_index_ = 0;
     // frame_index_ published once per frame for the producer's sampling decision; it orders nothing.

@@ -895,7 +895,6 @@ void GxBackend::reset_fifo_session_state() {
     matrices_ = MatrixMemory{};
     draw_state_ = NativeDrawState{};
 
-    pending_async_dirty_ranges_.clear();
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
 
@@ -943,7 +942,6 @@ void GxBackend::reset_fifo_session_state() {
     // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
     clear_texture_binding_table_cache();
     texture_handle_cache_.clear();
-    dirty_texture_ranges_scratch_.clear();
 
     // Frame stamps, seeding and XFB addresses restart with the new EFB/XFB resources.
     frame_index_ = 0u;
@@ -958,13 +956,6 @@ void GxBackend::reset_fifo_session_state() {
     last_presented_xfb_serial_.store(
         ~std::uint64_t{0}, std::memory_order_relaxed);
     last_presented_slot_.store(0u, std::memory_order_relaxed);
-
-    for (std::atomic_uint64_t& word : dirty_page_words_) {
-        word.store(0u, std::memory_order_relaxed);
-    }
-    for (std::atomic_uint64_t& summary : dirty_word_summary_) {
-        summary.store(0u, std::memory_order_relaxed);
-    }
 }
 
 bool GxBackend::initialize(int w, int h) {
@@ -1359,238 +1350,6 @@ void GxBackend::record_skipped_duplicate_xfb_present(
     }
 }
 
-void GxBackend::notify_guest_memory_write(
-    std::uint32_t address,
-    std::uint32_t size) noexcept {
-    if (size == 0u) {
-        return;
-    }
-    const std::uint64_t write_begin = address;
-    const std::uint64_t write_end = write_begin + size;
-    const auto mark_physical = [this](
-                                   std::uint64_t physical_begin,
-                                   std::uint64_t physical_end) noexcept {
-        const std::uint64_t tracked_begin = kDirtyTrackedBase;
-        const std::uint64_t tracked_end = tracked_begin + kDirtyTrackedSize;
-        const std::uint64_t begin = std::max(physical_begin, tracked_begin);
-        const std::uint64_t end = std::min(physical_end, tracked_end);
-        if (begin >= end) {
-            return;
-        }
-
-        const std::uint32_t first_page =
-            static_cast<std::uint32_t>(
-                (begin - tracked_begin) >> kDirtyPageShift);
-        const std::uint32_t last_page =
-            static_cast<std::uint32_t>(
-                (end - 1u - tracked_begin) >> kDirtyPageShift);
-        if (last_page >= kDirtyPageCount) {
-            return;
-        }
-        galaxy::guest_mark_dirty_page_words(
-            dirty_page_words_.data(), first_page, last_page);
-        for (std::uint32_t word = first_page / 64u;; ++word) {
-            galaxy::guest_publish_dirty_word_summary(dirty_word_summary_.data(), word);
-            if (word == last_page / 64u) break;
-        }
-    };
-
-    const auto mark_alias = [write_begin, write_end, &mark_physical](
-                                std::uint32_t alias_base,
-                                std::uint32_t alias_size,
-                                std::uint32_t physical_base) noexcept {
-        const std::uint64_t alias_begin = alias_base;
-        const std::uint64_t alias_end = alias_begin + alias_size;
-        const std::uint64_t begin = std::max(write_begin, alias_begin);
-        const std::uint64_t end = std::min(write_end, alias_end);
-        if (begin >= end) {
-            return;
-        }
-        const std::uint64_t physical_begin =
-            static_cast<std::uint64_t>(physical_base) + (begin - alias_begin);
-        mark_physical(physical_begin, physical_begin + (end - begin));
-    };
-
-    mark_alias(0x00000000u, kMem1Size, kMem1PhysicalBase);
-    mark_alias(0x80000000u, kMem1Size, kMem1PhysicalBase);
-    mark_alias(0xC0000000u, kMem1Size, kMem1PhysicalBase);
-    mark_alias(0x10000000u, kMem2Size, kMem2PhysicalBase);
-    mark_alias(0x90000000u, kMem2Size, kMem2PhysicalBase);
-    mark_alias(0xD0000000u, kMem2Size, kMem2PhysicalBase);
-}
-
-void GxBackend::drain_guest_memory_writes(
-    std::vector<GuestWriteRange>& out) noexcept {
-    out.clear();
-    GuestWriteRange pending_range{};
-    bool have_pending = false;
-    const auto flush_pending = [&]() {
-        if (have_pending) {
-            out.push_back(pending_range);
-            pending_range = {};
-            have_pending = false;
-        }
-    };
-
-    // Dirty bits exist only for MEM1 and MEM2, so the scan skips the physical hole between them.
-    constexpr std::size_t kBytesPerWord = kDirtyPageSize * 64u;
-    constexpr std::size_t kMem1EndWord =
-        (kMem1PhysicalBase + kMem1Size - kDirtyTrackedBase) / kBytesPerWord;
-    constexpr std::size_t kMem2BeginWord =
-        (kMem2PhysicalBase - kDirtyTrackedBase) / kBytesPerWord;
-    static_assert((kMem1PhysicalBase + kMem1Size) % kBytesPerWord == 0u);
-    static_assert(kMem2PhysicalBase % kBytesPerWord == 0u);
-    static_assert(kMem1EndWord < kMem2BeginWord &&
-                  kMem2BeginWord < kDirtyPageWordCount);
-    const std::size_t word_count = dirty_page_words_.size();
-    for (std::size_t word_index = 0; word_index < word_count;) {
-        // Words are visited in groups of 64 through the group's summary word, so an empty group
-        // (most of them) costs one load. Producers always set the summary bit, and this loop clears
-        // the summary before exchanging any word of the group, so no publication is missed.
-        const std::size_t group = word_index / 64u;
-        std::uint64_t pending = 0u;
-        if (group < dirty_word_summary_.size()) {
-            pending = dirty_word_summary_[group].exchange(
-                0u, std::memory_order_relaxed);
-        } else {
-            pending = kDirtyFullWord;
-        }
-        std::size_t group_end = (group + 1u) * 64u;
-        if (group_end > word_count) {
-            group_end = word_count;
-        }
-        if (pending == 0u) {
-            word_index = word_index < kMem1EndWord && group_end >= kMem1EndWord
-                ? kMem2BeginWord
-                : group_end;
-            continue;
-        }
-        while (pending != 0u) {
-            const unsigned in_group =
-                static_cast<unsigned>(std::countr_zero(pending));
-            pending &= pending - 1u;
-            const std::size_t candidate = group * 64u + in_group;
-            if (candidate >= group_end) {
-                continue;
-            }
-            // The summary bit is only a hint; the word itself is authoritative.
-            if (dirty_page_words_[candidate].load(std::memory_order_relaxed) ==
-                0u) {
-                continue;
-            }
-            word_index = candidate;
-            // Exchange, not store: a bit a producer sets concurrently must survive.
-            std::uint64_t bits = dirty_page_words_[candidate].exchange(
-                0u, std::memory_order_relaxed);
-            while (bits != 0u) {
-                const unsigned bit_index =
-                    static_cast<unsigned>(std::countr_zero(bits));
-                bits &= bits - 1u;
-                const std::uint32_t page = static_cast<std::uint32_t>(
-                    candidate * 64u + bit_index);
-                if (page >= kDirtyPageCount) {
-                    continue;
-                }
-
-                const std::uint32_t addr =
-                    kDirtyTrackedBase + page * kDirtyPageSize;
-                if (have_pending &&
-                    pending_range.guest_addr + pending_range.size == addr) {
-                    pending_range.size += kDirtyPageSize;
-                } else {
-                    flush_pending();
-                    pending_range = GuestWriteRange{addr, kDirtyPageSize};
-                    have_pending = true;
-                }
-            }
-        }
-        word_index = word_index < kMem1EndWord && group_end >= kMem1EndWord
-            ? kMem2BeginWord
-            : group_end;
-    }
-    flush_pending();
-}
-
-void GxBackend::coalesce_dirty_ranges(
-    std::vector<GuestWriteRange>& ranges) noexcept {
-    if (ranges.size() < 2u) {
-        return;
-    }
-
-    std::sort(
-        ranges.begin(),
-        ranges.end(),
-        [](const GuestWriteRange& lhs, const GuestWriteRange& rhs) noexcept {
-            if (lhs.guest_addr != rhs.guest_addr) {
-                return lhs.guest_addr < rhs.guest_addr;
-            }
-            return lhs.size < rhs.size;
-        });
-
-    std::size_t out = 0;
-    for (const GuestWriteRange& range : ranges) {
-        if (range.size == 0u) {
-            continue;
-        }
-        if (out == 0u) {
-            ranges[out++] = range;
-            continue;
-        }
-
-        GuestWriteRange& previous = ranges[out - 1u];
-        const std::uint64_t previous_begin = previous.guest_addr;
-        const std::uint64_t previous_end = previous_begin + previous.size;
-        const std::uint64_t range_begin = range.guest_addr;
-        const std::uint64_t range_end = range_begin + range.size;
-        if (range_begin <= previous_end) {
-            const std::uint64_t merged_end = std::max(previous_end, range_end);
-            previous.size = static_cast<std::uint32_t>(
-                merged_end - previous_begin);
-            continue;
-        }
-
-        ranges[out++] = range;
-    }
-    ranges.resize(out);
-}
-
-std::uint64_t GxBackend::dirty_range_bytes(
-    const std::vector<GuestWriteRange>& ranges) noexcept {
-    std::uint64_t bytes = 0;
-    for (const GuestWriteRange& range : ranges) {
-        bytes += range.size;
-    }
-    return bytes;
-}
-
-std::size_t GxBackend::invalidate_dirty_texture_ranges(
-    const std::vector<GuestWriteRange>& ranges) {
-    if (ranges.empty()) {
-        return 0u;
-    }
-
-    dirty_texture_ranges_scratch_.clear();
-    dirty_texture_ranges_scratch_.reserve(ranges.size());
-    for (const GuestWriteRange& range : ranges) {
-        dirty_texture_ranges_scratch_.push_back(
-            TextureCache::GuestRange{range.guest_addr, range.size});
-    }
-
-    // Memory the game rewrote and only flushed: an image handed over there is out of date, so it decodes from memory.
-    texture_cache_.drop_registered_images(dirty_texture_ranges_scratch_);
-    const std::size_t evicted =
-        texture_cache_.invalidate_guest_ranges(dirty_texture_ranges_scratch_);
-    if (evicted != 0u) {
-        for (const GuestWriteRange& range : ranges) {
-            invalidate_texture_binding_cache_range(
-                range.guest_addr,
-                range.size);
-        }
-        texture_bindings_dirty_ = true;
-    }
-    return evicted;
-}
-
 bool GxBackend::ensure_resident_vertex_buffer() {
     gpu::Device* const device = renderer_.device();
     if (device == nullptr) {
@@ -1658,17 +1417,7 @@ void GxBackend::render_frame(
     // Nothing to render: nothing attached (records, scene markers, captures).
     const bool empty = producer_shape_records_.empty() && producer_fifo_marker_count_ == 0u &&
         producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
-    std::vector<GuestWriteRange>& drained_dirty_ranges = drain_scratch_ranges_;
-    drain_guest_memory_writes(drained_dirty_ranges);
-    coalesce_dirty_ranges(drained_dirty_ranges);
     if (empty) {
-        if (!drained_dirty_ranges.empty()) {
-            pending_async_dirty_ranges_.insert(
-                pending_async_dirty_ranges_.end(),
-                drained_dirty_ranges.begin(),
-                drained_dirty_ranges.end());
-            coalesce_dirty_ranges(pending_async_dirty_ranges_);
-        }
         if (present_swap_chain) {
             present_cached_xfb(black, true);
         } else {
@@ -1767,24 +1516,7 @@ void GxBackend::render_frame(
         if (stop_render_thread_) {
             return;
         }
-        if (!dirty_range_pool_.empty()) {
-            chunk.dirty_ranges = std::move(dirty_range_pool_.back());
-            dirty_range_pool_.pop_back();
-            chunk.dirty_ranges.clear();
-        }
     }
-
-    if (!pending_async_dirty_ranges_.empty()) {
-        chunk.dirty_ranges.swap(pending_async_dirty_ranges_);
-        pending_async_dirty_ranges_.clear();
-    }
-    chunk.dirty_ranges.insert(
-        chunk.dirty_ranges.end(),
-        drained_dirty_ranges.begin(),
-        drained_dirty_ranges.end());
-    coalesce_dirty_ranges(chunk.dirty_ranges);
-    chunk.dirty_range_count = chunk.dirty_ranges.size();
-    chunk.dirty_bytes = dirty_range_bytes(chunk.dirty_ranges);
 
     chunk.producer_wait_ns = producer_wait_ns;
     {
@@ -6608,10 +6340,6 @@ void GxBackend::render_thread_main() {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             // Every chunk returns its buffers here. Past kChunkPoolRetainedBuffers a buffer is
             // dropped (one re-allocation later) rather than kept at its peak capacity.
-            if (chunk.dirty_ranges.capacity() != 0u &&
-                dirty_range_pool_.size() < kChunkPoolRetainedBuffers) {
-                dirty_range_pool_.push_back(std::move(chunk.dirty_ranges));
-            }
             if (render_chunks_in_flight_ != 0u) {
                 --render_chunks_in_flight_;
             }
@@ -7046,9 +6774,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
     pending_draw_batch_ = {};
     GuestMemory* memory = chunk.memory;
     const GxServices* services = chunk.services;
-    coalesce_dirty_ranges(chunk.dirty_ranges);
-    chunk.dirty_range_count = chunk.dirty_ranges.size();
-    chunk.dirty_bytes = dirty_range_bytes(chunk.dirty_ranges);
 
     // begin_frame() drains PSO completions and rewinds ring segments.
     {
@@ -7250,18 +6975,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
         TextureCache& cache;
         ~TextureDecodeJoin() { cache.finish_pending_decodes_noexcept(); }
     } texture_decode_join{texture_cache_};
-    std::size_t dirty_texture_evictions = 0u;
-    {
-        const cadence::ScopedPhaseTimer cache_invalidation_timer{
-            cadence_diagnostics_,
-            cadence::TimingPhase::RenderCacheInvalidation};
-        {
-            const cadence::ScopedPhaseTimer timer{
-                cadence_diagnostics_, cadence::TimingPhase::RenderTextureInvalidation};
-            dirty_texture_evictions =
-                invalidate_dirty_texture_ranges(chunk.dirty_ranges);
-        }
-    }
     // GPU addresses and tables belong to the ring segment begin_frame() selected, so every binding
     // is written again in this frame slot even when the GX state did not change.
     frame_bindings_dirty_ = true;
@@ -7606,9 +7319,6 @@ void GxBackend::render_frame_on_thread(FrameChunk& chunk) {
                   << " begin-reset-us="
                   << renderer_.last_begin_reset_us()
                   << " producer-wait-us=" << producer_wait_us
-                  << " dirty-ranges=" << chunk.dirty_range_count
-                  << " dirty-bytes=" << chunk.dirty_bytes
-                  << " dirty-tex-evictions=" << dirty_texture_evictions
                   << " draws=" << frame_draws_issued_
                   << " draw-batches=" << frame_draw_batches_
                   << " no-pso=" << frame_draws_no_pso_

@@ -100,12 +100,6 @@ std::uint32_t readback_serial(std::uint16_t token) noexcept {
     return backend().readback_serial(token);
 }
 
-void notify_guest_memory_write(
-    std::uint32_t address,
-    std::uint32_t size) noexcept {
-    backend().notify_guest_memory_write(address, size);
-}
-
 void pump_messages() {
     backend().pump_messages();
 }

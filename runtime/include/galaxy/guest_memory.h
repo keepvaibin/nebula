@@ -78,46 +78,4 @@ GALAXY_ALWAYS_INLINE std::byte* resolve_guest_fast(GuestMemory* memory, std::uin
     return region.host_base + offset;
 }
 
-// Sets the bits of pages `first_page`..`last_page` in a dirty bitmap (one bit per page, 64 per word).
-template <typename Word>
-GALAXY_NOINLINE inline void guest_mark_dirty_page_words(Word* words, std::uint32_t first_page,
-                                                        std::uint32_t last_page) {
-    const auto first_word = first_page / 64u;
-    const auto last_word = last_page / 64u;
-    for (std::uint32_t word = first_word;; ++word) {
-        const auto low = word == first_word ? first_page % 64u : 0u;
-        const auto high = word == last_word ? last_page % 64u : 63u;
-        const std::uint64_t mask = (UINT64_MAX << low) & (UINT64_MAX >> (63u - high));
-        if constexpr (std::is_same_v<Word, std::atomic_uint64_t>) {
-            if ((words[word].load(std::memory_order_relaxed) & mask) != mask)
-                words[word].fetch_or(mask, std::memory_order_relaxed);
-        } else {
-            words[word] |= mask;
-        }
-        if (word == last_word) break;
-    }
-}
-
-// Sets the summary bit covering page word `word_index` (one bit per 64-bit page word), so a drain can skip empty
-// groups of words. The load first keeps a repeated publication into the same group free of locked writes.
-GALAXY_ALWAYS_INLINE void guest_publish_dirty_word_summary(std::atomic_uint64_t* summary,
-                                                           std::uint32_t word_index) {
-    if (summary == nullptr) {
-        return;
-    }
-    std::atomic_uint64_t& group = summary[word_index / 64u];
-    const std::uint64_t bit = 1ull << (word_index % 64u);
-#if defined(_MSC_VER) && defined(_M_X64)
-    const std::uint64_t loaded = *reinterpret_cast<const volatile std::uint64_t*>(&group);
-    _ReadWriteBarrier();
-    if ((loaded & bit) == 0u) {
-        (void)_InterlockedOr64(reinterpret_cast<volatile long long*>(&group), static_cast<long long>(bit));
-    }
-#else
-    if ((group.load(std::memory_order_relaxed) & bit) == 0u) {
-        group.fetch_or(bit, std::memory_order_relaxed);
-    }
-#endif
-}
-
 }  // namespace galaxy

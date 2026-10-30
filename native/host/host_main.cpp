@@ -482,7 +482,6 @@ void mark_written(const void* dst, uint32_t size) {
     const auto* p = static_cast<const uint8_t*>(dst);
     for (int i = 0; i < count; i++) {
         if (p >= regions[i].host && p < regions[i].host + regions[i].size) {
-            galaxy::gx::notify_guest_memory_write(regions[i].physical + (uint32_t)(p - regions[i].host), size);
 #if defined(NEBULA_HOST_RENDERER)
             forget_handed(regions[i].physical + (uint32_t)(p - regions[i].host), size);
 #endif
@@ -2444,7 +2443,6 @@ void svc_game_context(void*, uint32_t what, int32_t value) {
 
 void svc_gpu_coherent(void*, uint32_t physical, uint32_t size) {
 #if defined(NEBULA_HOST_RENDERER)
-    galaxy::gx::notify_guest_memory_write(physical, size);
     forget_handed(physical, size);
 #else
     (void)physical;
@@ -3435,11 +3433,6 @@ int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, v
     const int32_t result = galaxy::thp::decode_video(
         {p, end}, width, height, {static_cast<uint8_t*>(y), luma}, {static_cast<uint8_t*>(u), chroma},
         {static_cast<uint8_t*>(v), chroma});
-    for (const auto& [plane_pointer, size] : {std::pair{y, luma}, std::pair{u, chroma}, std::pair{v, chroma}}) {
-        if (const uint32_t physical = physical_of(plane_pointer)) {
-            galaxy::gx::notify_guest_memory_write(physical, static_cast<uint32_t>(size));
-        }
-    }
     return result;
 }
 #else
