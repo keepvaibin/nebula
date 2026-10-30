@@ -73,7 +73,7 @@ uint key_post_texgen(uint i) {
 // (squares 1e36), so a zero coefficient nulls an out-of-range cosine, such as
 // one against a light direction the game never initialized.
 void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
-               inout int3 lacc_i, inout int lacc_a_i) {
+               inout float3 lacc, inout float lacc_a) {
     const uint e = 0x180u + 4u * n;
     uint  lcw  = asuint(mtx_palette[mtx_palette_base + e].w);
     float4 le1 = mtx_palette[mtx_palette_base + e + 1u];
@@ -128,11 +128,11 @@ void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, flo
     if (alpha_part) {
         float lcol = float(lcw & 255u);
         if (diffuse_func == 1u) {
-            lacc_a_i += int(round(attn * dot(ldir, nrm) * lcol));
+            lacc_a += attn * dot(ldir, nrm) * lcol;
         } else if (diffuse_func == 2u) {
-            lacc_a_i += int(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+            lacc_a += attn * max(0.0, dot(ldir, nrm)) * lcol;
         } else {
-            lacc_a_i += int(round(attn * lcol));
+            lacc_a += attn * lcol;
         }
     } else {
         float3 lcol = float3(
@@ -140,11 +140,11 @@ void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, flo
             float((lcw >> 16) & 255u),
             float((lcw >>  8) & 255u));
         if (diffuse_func == 1u) {
-            lacc_i += int3(round(attn * dot(ldir, nrm) * lcol));
+            lacc += attn * dot(ldir, nrm) * lcol;
         } else if (diffuse_func == 2u) {
-            lacc_i += int3(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+            lacc += attn * max(0.0, dot(ldir, nrm)) * lcol;
         } else {
-            lacc_i += int3(round(attn * lcol));
+            lacc += attn * lcol;
         }
     }
 }
@@ -318,36 +318,34 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         const uint ca = uber_channel[2u + ch];
         float4 result;
 
-        int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : chan_material[ch]).rgb * 255.0));
+        const float3 mat_c = ((cc & 1u) != 0u ? vtx : chan_material[ch]).rgb;
         if (((cc >> 1u) & 1u) != 0u) {
-            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : chan_ambient[ch]).rgb * 255.0));
-            int unused_a = 0;
+            float3 lacc = (((cc >> 6u) & 1u) != 0u ? vtx : chan_ambient[ch]).rgb * 255.0;
+            float unused_a = 0.0;
             const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    add_light(n, cc, false, finite_attn, wpos.xyz, nrm, lacc_i, unused_a);
+                    add_light(n, cc, false, finite_attn, wpos.xyz, nrm, lacc, unused_a);
                 }
             }
-            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
-            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
+            result.rgb = mat_c * (clamp(lacc, 0.0, 255.0) / 255.0);
         } else {
-            result.rgb = float3(mat_c_i) / 255.0;
+            result.rgb = mat_c;
         }
 
-        int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : chan_material[ch].a) * 255.0));
+        const float mat_a = (ca & 1u) != 0u ? vtx.a : chan_material[ch].a;
         if (((ca >> 1u) & 1u) != 0u) {
-            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : chan_ambient[ch].a) * 255.0));
-            int3 unused_c = int3(0,0,0);
+            float lacc_a = (((ca >> 6u) & 1u) != 0u ? vtx.a : chan_ambient[ch].a) * 255.0;
+            float3 unused_c = float3(0.0, 0.0, 0.0);
             const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    add_light(n, ca, true, finite_attn, wpos.xyz, nrm, unused_c, lacc_a_i);
+                    add_light(n, ca, true, finite_attn, wpos.xyz, nrm, unused_c, lacc_a);
                 }
             }
-            lacc_a_i = clamp(lacc_a_i, 0, 255);
-            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
+            result.a = mat_a * (clamp(lacc_a, 0.0, 255.0) / 255.0);
         } else {
-            result.a = float(mat_a_i) / 255.0;
+            result.a = mat_a;
         }
         chan_out[ch] = result;
     }

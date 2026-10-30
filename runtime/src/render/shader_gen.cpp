@@ -2,8 +2,9 @@
 //
 // Generated shaders use the uber pipelines' constant buffer layout (uber_constants.h) and root
 // signature, so promoting a draw from the uber pipeline to a specialized PSO is a pipeline swap.
-// Regular and compare-mode TEV stages operate on the 8-bit integer lattice; fog and the alpha test
-// round from the same lattice. The TEV loop is emitted fully unrolled.
+// TEV stages compute in float on the 0..255 scale. What the material reads as 8-bit data stays exact: A/B/C read a
+// register's low 8 bits (tev_wrap), compare stages and the alpha test compare 8-bit values, the final result keeps
+// its low 8 bits. The TEV loop is emitted fully unrolled.
 //
 // Behaviour references (clean-room, behaviour only):
 //   texgen, post-matrix, q==0:  Dolphin VertexShaderGen.cpp
@@ -47,80 +48,80 @@ static void emit(std::ostringstream& s, const char* fmt, Args&&... args) {
 #pragma warning(pop)
 #endif
 
-// TevColorArg as an HLSL int3 expression.
+// TevColorArg as an HLSL float3 expression (0..255).
 static const char* color_arg_rgb(TevColorArg arg) {
     switch (arg) {
-    case TevColorArg::CPrev:    return "tev_prev_i.rgb";
-    case TevColorArg::APrev:    return "tev_prev_i.aaa";
-    case TevColorArg::C0:       return "tev_c_i[0].rgb";
-    case TevColorArg::A0:       return "tev_c_i[0].aaa";
-    case TevColorArg::C1:       return "tev_c_i[1].rgb";
-    case TevColorArg::A1:       return "tev_c_i[1].aaa";
-    case TevColorArg::C2:       return "tev_c_i[2].rgb";
-    case TevColorArg::A2:       return "tev_c_i[2].aaa";
-    case TevColorArg::TexColor: return "tex_color_i.rgb";
-    case TevColorArg::TexAlpha: return "tex_color_i.aaa";
-    case TevColorArg::RasColor: return "ras_color_i.rgb";
-    case TevColorArg::RasAlpha: return "ras_color_i.aaa";
-    case TevColorArg::One:      return "int3(255,255,255)";
-    case TevColorArg::Half:     return "int3(128,128,128)";
-    case TevColorArg::Konst:    return "konst_i.rgb";
-    case TevColorArg::Zero:     return "int3(0,0,0)";
+    case TevColorArg::CPrev:    return "tev_prev.rgb";
+    case TevColorArg::APrev:    return "tev_prev.aaa";
+    case TevColorArg::C0:       return "tev_c[0].rgb";
+    case TevColorArg::A0:       return "tev_c[0].aaa";
+    case TevColorArg::C1:       return "tev_c[1].rgb";
+    case TevColorArg::A1:       return "tev_c[1].aaa";
+    case TevColorArg::C2:       return "tev_c[2].rgb";
+    case TevColorArg::A2:       return "tev_c[2].aaa";
+    case TevColorArg::TexColor: return "tex_color.rgb";
+    case TevColorArg::TexAlpha: return "tex_color.aaa";
+    case TevColorArg::RasColor: return "ras_color.rgb";
+    case TevColorArg::RasAlpha: return "ras_color.aaa";
+    case TevColorArg::One:      return "float3(255.0, 255.0, 255.0)";
+    case TevColorArg::Half:     return "float3(128.0, 128.0, 128.0)";
+    case TevColorArg::Konst:    return "konst_v.rgb";
+    case TevColorArg::Zero:     return "float3(0.0, 0.0, 0.0)";
     }
-    return "int3(0,0,0)";
+    return "float3(0.0, 0.0, 0.0)";
 }
 
-// TevAlphaArg as an HLSL int expression.
+// TevAlphaArg as an HLSL float expression (0..255).
 static const char* alpha_arg(TevAlphaArg arg) {
     switch (arg) {
-    case TevAlphaArg::APrev:    return "tev_prev_i.a";
-    case TevAlphaArg::A0:       return "tev_c_i[0].a";
-    case TevAlphaArg::A1:       return "tev_c_i[1].a";
-    case TevAlphaArg::A2:       return "tev_c_i[2].a";
-    case TevAlphaArg::TexAlpha: return "tex_color_i.a";
-    case TevAlphaArg::RasAlpha: return "ras_color_i.a";
-    case TevAlphaArg::Konst:    return "konst_i.a";
-    case TevAlphaArg::Zero:     return "0";
+    case TevAlphaArg::APrev:    return "tev_prev.a";
+    case TevAlphaArg::A0:       return "tev_c[0].a";
+    case TevAlphaArg::A1:       return "tev_c[1].a";
+    case TevAlphaArg::A2:       return "tev_c[2].a";
+    case TevAlphaArg::TexAlpha: return "tex_color.a";
+    case TevAlphaArg::RasAlpha: return "ras_color.a";
+    case TevAlphaArg::Konst:    return "konst_v.a";
+    case TevAlphaArg::Zero:     return "0.0";
     }
-    return "0";
+    return "0.0";
 }
 
-static const char* tev_bias_i(TevBias bias) {
+// Whether an input reads a TEV register (PREV, REG0-2), whose value can leave 0..255.
+static bool color_arg_register(TevColorArg arg) {
+    return static_cast<unsigned>(arg) <= static_cast<unsigned>(TevColorArg::A2);
+}
+static bool alpha_arg_register(TevAlphaArg arg) {
+    return static_cast<unsigned>(arg) <= static_cast<unsigned>(TevAlphaArg::A2);
+}
+
+static const char* tev_bias(TevBias bias) {
     switch (bias) {
-    case TevBias::Zero:    return "0";
-    case TevBias::AddHalf: return "128";
-    case TevBias::SubHalf: return "-128";
+    case TevBias::Zero:    return "0.0";
+    case TevBias::AddHalf: return "128.0";
+    case TevBias::SubHalf: return "-128.0";
     case TevBias::Compare: break;
     }
-    return "0";
+    return "0.0";
 }
 
-static const char* tev_scale_left(TevScale scale) {
+static const char* tev_scale(TevScale scale) {
     switch (scale) {
     case TevScale::X1:   return "";
-    case TevScale::X2:   return " << 1";
-    case TevScale::X4:   return " << 2";
-    case TevScale::Half: return "";
+    case TevScale::X2:   return " * 2.0";
+    case TevScale::X4:   return " * 4.0";
+    case TevScale::Half: return " * 0.5";
     }
     return "";
 }
 
-static const char* tev_scale_right(TevScale scale) {
-    return scale == TevScale::Half ? " >> 1" : "";
-}
-
-static const char* tev_lerp_round_bias(bool subtract) {
-    return subtract ? "127" : "128";
-}
-
 static const char* tev_dest_name(unsigned dest) {
     switch (dest) {
-    case 0: return "tev_prev_i";
-    case 1: return "tev_c_i[0]";
-    case 2: return "tev_c_i[1]";
-    case 3: return "tev_c_i[2]";
+    case 0: return "tev_prev";
+    case 1: return "tev_c[0]";
+    case 2: return "tev_c[1]";
+    case 3: return "tev_c[2]";
     }
-    return "tev_prev_i";
+    return "tev_prev";
 }
 
 // Swap-table swizzle. `codes` packs four 2-bit channel selects (r=0, g=1, b=2,
@@ -592,7 +593,7 @@ cbuffer PplConstants : register(b0) {
 StructuredBuffer<float4> mtx_palette : register(t0, space1);
 
 void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
-                   inout int3 lacc_i, inout int lacc_a_i) {
+                   inout float3 lacc, inout float lacc_a) {
     const uint e = 0x180u + 4u * n;
     uint  lcw  = asuint(mtx_palette[ppl_mtx_palette_base + e].w);
     float4 le1 = mtx_palette[ppl_mtx_palette_base + e + 1u];
@@ -647,11 +648,11 @@ void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
     if (alpha_part) {
         float lcol = float(lcw & 255u);
         if (diffuse_func == 1u) {
-            lacc_a_i += int(round(attn * dot(ldir, nrm) * lcol));
+            lacc_a += attn * dot(ldir, nrm) * lcol;
         } else if (diffuse_func == 2u) {
-            lacc_a_i += int(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+            lacc_a += attn * max(0.0, dot(ldir, nrm)) * lcol;
         } else {
-            lacc_a_i += int(round(attn * lcol));
+            lacc_a += attn * lcol;
         }
     } else {
         float3 lcol = float3(
@@ -659,11 +660,11 @@ void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
             float((lcw >> 16) & 255u),
             float((lcw >>  8) & 255u));
         if (diffuse_func == 1u) {
-            lacc_i += int3(round(attn * dot(ldir, nrm) * lcol));
+            lacc += attn * dot(ldir, nrm) * lcol;
         } else if (diffuse_func == 2u) {
-            lacc_i += int3(round(attn * max(0.0, dot(ldir, nrm)) * lcol));
+            lacc += attn * max(0.0, dot(ldir, nrm)) * lcol;
         } else {
-            lacc_i += int3(round(attn * lcol));
+            lacc += attn * lcol;
         }
     }
 }
@@ -684,30 +685,28 @@ void ppl_apply(inout float4 col0, inout float4 col1, float3 wpos, float3 nrm_in,
         // wraps (Mario's skin and gloves turned cyan and magenta). Channels that overflow by design (a Luma's
         // blue wraps to its yellow) keep their wrap.
         if (((cc >> 1u) & 1u) != 0u && ((cc >> 9u) & 3u) != 1u) {
-            int3 mat_c_i = int3(round(((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb * 255.0));
-            int3 lacc_i = int3(round((((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0));
-            int unused_a = 0;
+            const float3 mat_c = ((cc & 1u) != 0u ? vtx : ppl_chan_material[ch]).rgb;
+            float3 lacc = (((cc >> 6u) & 1u) != 0u ? vtx : ppl_chan_ambient[ch]).rgb * 255.0;
+            float unused_a = 0.0;
             const uint mask = ((cc >> 2u) & 0xFu) | (((cc >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    ppl_add_light(n, cc, false, wpos, nrm, lacc_i, unused_a);
+                    ppl_add_light(n, cc, false, wpos, nrm, lacc, unused_a);
                 }
             }
-            lacc_i = clamp(lacc_i, int3(0,0,0), int3(255,255,255));
-            result.rgb = float3((mat_c_i * (lacc_i + (lacc_i >> 7))) >> 8) / 255.0;
+            result.rgb = mat_c * (clamp(lacc, 0.0, 255.0) / 255.0);
         }
         if (((ca >> 1u) & 1u) != 0u && ((ca >> 9u) & 3u) != 1u) {
-            int mat_a_i = int(round(((ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a) * 255.0));
-            int lacc_a_i = int(round((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a) * 255.0));
-            int3 unused_c = int3(0,0,0);
+            const float mat_a = (ca & 1u) != 0u ? vtx.a : ppl_chan_material[ch].a;
+            float lacc_a = ((((ca >> 6u) & 1u) != 0u ? vtx.a : ppl_chan_ambient[ch].a)) * 255.0;
+            float3 unused_c = float3(0.0, 0.0, 0.0);
             const uint mask = ((ca >> 2u) & 0xFu) | (((ca >> 11u) & 0xFu) << 4u);
             [loop] for (uint n = 0u; n < 8u; ++n) {
                 if (((mask >> n) & 1u) != 0u) {
-                    ppl_add_light(n, ca, true, wpos, nrm, unused_c, lacc_a_i);
+                    ppl_add_light(n, ca, true, wpos, nrm, unused_c, lacc_a);
                 }
             }
-            lacc_a_i = clamp(lacc_a_i, 0, 255);
-            result.a = float((mat_a_i * (lacc_a_i + (lacc_a_i >> 7))) >> 8) / 255.0;
+            result.a = mat_a * (clamp(lacc_a, 0.0, 255.0) / 255.0);
         }
         if (ch == 0u) {
             col0 = result;
@@ -1101,22 +1100,16 @@ static void emit_light(
     }
 
     // Diffuse function (0=none, 1=signed, 2=clamped).
-    const char* acc = alpha ? "lacc_a_i" : "lacc_i";
+    const char* acc = alpha ? "lacc_a" : "lacc";
     switch (ctrl.diffuse_func) {
     case 1u:  // Sign
-        emit(s,
-             "            %s += int%s(round(attn * dot(ldir, nrm) * lcol));\n",
-             acc, alpha ? "" : "3");
+        emit(s, "            %s += attn * dot(ldir, nrm) * lcol;\n", acc);
         break;
     case 2u:  // Clamp
-        emit(s,
-             "            %s += int%s(round(attn * max(0.0,"
-             " dot(ldir, nrm)) * lcol));\n",
-             acc, alpha ? "" : "3");
+        emit(s, "            %s += attn * max(0.0, dot(ldir, nrm)) * lcol;\n", acc);
         break;
     default:  // None
-        emit(s, "            %s += int%s(round(attn * lcol));\n",
-             acc, alpha ? "" : "3");
+        emit(s, "            %s += attn * lcol;\n", acc);
         break;
     }
     s << "        }\n";
@@ -1762,13 +1755,13 @@ float xfw(uint w) {
              cc.lighting_enable ? 1u : 0u,
              ca.light_mask);
 
-        // Color part.
-        emit(s, "        int3 mat_c_i = int3(round(%s.rgb * 255.0));\n",
+        // Color part: the material colour times the light (ambient plus each light, 0..255 clamped).
+        emit(s, "        float3 mat_c = %s.rgb;\n",
              cc.material_from_vertex ? vtx
                                      : (ch == 0 ? "chan_material[0]"
                                                 : "chan_material[1]"));
         if (cc.lighting_enable) {
-            emit(s, "        int3 lacc_i = int3(round(%s.rgb * 255.0));\n",
+            emit(s, "        float3 lacc = %s.rgb * 255.0;\n",
                  cc.ambient_from_vertex ? vtx
                                         : (ch == 0 ? "chan_ambient[0]"
                                                    : "chan_ambient[1]"));
@@ -1777,22 +1770,18 @@ float xfw(uint w) {
                     emit_light(s, n, cc, /*alpha=*/false, finite_attn);
                 }
             }
-            s << "        lacc_i = clamp(lacc_i, int3(0,0,0),"
-                 " int3(255,255,255));\n";
-            emit(s,
-                "        %s.rgb = float3((mat_c_i * (lacc_i +"
-                " (lacc_i >> 7))) >> 8) / 255.0;\n", out);
+            emit(s, "        %s.rgb = mat_c * (clamp(lacc, 0.0, 255.0) / 255.0);\n", out);
         } else {
-            emit(s, "        %s.rgb = float3(mat_c_i) / 255.0;\n", out);
+            emit(s, "        %s.rgb = mat_c;\n", out);
         }
 
         // Alpha part (separate channel control register).
-        emit(s, "        int mat_a_i = int(round(%s * 255.0));\n",
+        emit(s, "        float mat_a = %s;\n",
              ca.material_from_vertex
                  ? ((ch == 0) ? "vtx_col0.a" : "vtx_col1.a")
                  : (ch == 0 ? "chan_material[0].a" : "chan_material[1].a"));
         if (ca.lighting_enable) {
-            emit(s, "        int lacc_a_i = int(round(%s * 255.0));\n",
+            emit(s, "        float lacc_a = %s * 255.0;\n",
                  ca.ambient_from_vertex
                      ? ((ch == 0) ? "vtx_col0.a" : "vtx_col1.a")
                      : (ch == 0 ? "chan_ambient[0].a"
@@ -1802,12 +1791,9 @@ float xfw(uint w) {
                     emit_light(s, n, ca, /*alpha=*/true, finite_attn);
                 }
             }
-            s << "        lacc_a_i = clamp(lacc_a_i, 0, 255);\n";
-            emit(s,
-                "        %s.a = float((mat_a_i * (lacc_a_i +"
-                " (lacc_a_i >> 7))) >> 8) / 255.0;\n", out);
+            emit(s, "        %s.a = mat_a * (clamp(lacc_a, 0.0, 255.0) / 255.0);\n", out);
         } else {
-            emit(s, "        %s.a = float(mat_a_i) / 255.0;\n", out);
+            emit(s, "        %s.a = mat_a;\n", out);
         }
         s << "    }\n";
     }
@@ -2040,15 +2026,15 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "}\n";
     }
     if (scalar_masks) {
-        s << "int3 gx_u8(int3 v) { return int3(v.x & 255, v.y & 255, v.z & 255); }\n"
-             "int4 gx_u8(int4 v) { return int4(v.x & 255, v.y & 255, v.z & 255, v.w & 255); }\n"
-             "int2 gx_bit0(int2 v) { return int2(v.x & 1, v.y & 1); }\n";
+        s << "int2 gx_bit0(int2 v) { return int2(v.x & 1, v.y & 1); }\n";
     }
-    // `int3(expr) & 255` per component, in the form the options ask for.
-    const auto u8 = [&](const char* expr) {
-        return scalar_masks ? "gx_u8(int3(" + std::string(expr) + "))"
-                            : "int3(" + std::string(expr) + ") & int3(255,255,255)";
-    };
+    // A register's low 8 bits on the 0..255 scale (values within half a step of 256 count as 256), and an input's
+    // 8-bit value for the exact comparisons.
+    s << "float tev_wrap(float x) { return x - 256.0 * floor((x + 0.5) / 256.0); }\n"
+         "float3 tev_wrap(float3 x) { return x - 256.0 * floor((x + 0.5) / 256.0); }\n"
+         "float4 tev_wrap(float4 x) { return x - 256.0 * floor((x + 0.5) / 256.0); }\n"
+         "int tev_q(float x) { return int(floor(x + 0.5)) & 255; }\n"
+         "int3 tev_q(float3 x) { return int3(floor(x + 0.5)) & 255; }\n";
     if (motion) {
         s << insert_before_close(ppl_inputs ? kPsStructsPpl : kPsStructs, kMotionInterpolants, true);
     } else {
@@ -2084,11 +2070,11 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         // ray-traced lighting (header bit 17) they clamp instead, as the de-lit colour channel and the sphere
         // map's mean can lift a stage the game kept at 255 just past it.
         if (rt_paths) {
-            s << "int3 tev_in3(int3 x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n"
-                 "int tev_in1(int x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0, 255) : (x & 255); }\n";
+            s << "float3 tev_in(float3 x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0.0, 255.0) : tev_wrap(x); }\n"
+                 "float tev_in(float x) { return (uber_ps_header.w & 0x20000u) != 0u ? clamp(x, 0.0, 255.0) : tev_wrap(x); }\n";
         } else {
-            s << "int3 tev_in3(int3 x) { return x & 255; }\n"
-                 "int tev_in1(int x) { return x & 255; }\n";
+            s << "float3 tev_in(float3 x) { return tev_wrap(x); }\n"
+                 "float tev_in(float x) { return tev_wrap(x); }\n";
         }
     }
 
@@ -2144,14 +2130,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "float4 main(PSIn pin) : SV_Target0 {\n";
     }
 
-    // TEV working registers: PREV, REG0, REG1, REG2.
-    // Dolphin keeps these as int4s. A/B/C inputs are masked to 8-bit, D stays
-    // signed/raw, and unclamped outputs stay in the -1024..1023 range.
-    s << "    int4 tev_prev_i = int4(round(tev_regs[0] * 255.0));\n";
-    s << "    int4 tev_c_i[3];\n";
-    s << "    tev_c_i[0] = int4(round(tev_regs[1] * 255.0));\n";
-    s << "    tev_c_i[1] = int4(round(tev_regs[2] * 255.0));\n";
-    s << "    tev_c_i[2] = int4(round(tev_regs[3] * 255.0));\n";
+    // TEV registers PREV, REG0, REG1, REG2 (0..255 scale; unclamped stages keep -1024..1023).
+    s << "    float4 tev_prev = tev_regs[0] * 255.0;\n";
+    s << "    float4 tev_c[3];\n";
+    s << "    tev_c[0] = tev_regs[1] * 255.0;\n";
+    s << "    tev_c[1] = tev_regs[2] * 255.0;\n";
+    s << "    tev_c[2] = tev_regs[3] * 255.0;\n";
     // Per-stage working variables, declared once (stages assign them).
     if (ppl) {
         s << "    ppl_apply(pin.col0, pin.col1, pin.ppl_pos, pin.ppl_nrm,"
@@ -2270,10 +2254,12 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
              "        pin.col1.rgb = gx_tint_cleared(pin.col1.rgb, -ztex_params.w);\n"
              "    }\n";
     }
-    s << "    int4 tex_color_i = int4(0,0,0,0);\n";
-    s << "    int4 last_raw_tex_i = int4(0,0,0,0);\n";
-    s << "    int4 ras_color_i = int4(0,0,0,0);\n";
-    s << "    int4 konst_i = int4(0,0,0,0);\n";
+    s << "    float4 tex_color = float4(0.0, 0.0, 0.0, 0.0);\n";
+    if (ztex_on) {
+        s << "    int4 last_raw_tex_i = int4(0, 0, 0, 0);\n";
+    }
+    s << "    float4 ras_color = float4(0.0, 0.0, 0.0, 0.0);\n";
+    s << "    float4 konst_v = float4(0.0, 0.0, 0.0, 0.0);\n";
     s << "    int alphabump_i = 0;\n";
     s << "    int2 tevcoord_i = int2(0,0);\n";
     s << "    int3 ind_tex_i[4] = {"
@@ -2495,37 +2481,34 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 emit(s,
                     "    {\n"
                     "        float2 ind_tuv = (float2(tevcoord_i) / 128.0) / tex_dims[%u].xy;\n"
-                    "        float4 tex_sample = tex[%u].Sample(samp[%u], ind_tuv);\n"
-                    "        last_raw_tex_i = int4(round(saturate(tex_sample) * 255.0));\n"
-                    "        tex_color_i = last_raw_tex_i%s;\n"
-                    "    }\n",
+                    "        float4 tex_sample = saturate(tex[%u].Sample(samp[%u], ind_tuv));\n",
                     texmap,
                     texmap,
-                    texmap,
-                    tex_swz.c_str());
+                    texmap);
             } else {
+                // The coordinate in its GX scale (tex_dims zw) over the map's size.
                 emit(s,
                     "    {\n"
                     "        float3 tq = pin.uv[%u];\n"
                     "        float2 tuv = (tq.z == 0.0) ? tq.xy : tq.xy / tq.z;\n"
-                    "        int2 tex_fix = int2(round(tuv * tex_dims[%u].zw * 128.0));\n"
-                    "        float2 tex_tuv = (float2(tex_fix) / 128.0) / tex_dims[%u].xy;\n"
-                    "        float4 tex_sample = tex[%u].Sample(samp[%u], tex_tuv);\n"
-                    "        last_raw_tex_i = int4(round(saturate(tex_sample) * 255.0));\n"
-                    "        tex_color_i = last_raw_tex_i%s;\n"
-                    "    }\n",
-                    texcoord,
+                    "        float4 tex_sample = saturate(tex[%u].Sample(samp[%u], tuv * tex_dims[%u].zw / tex_dims[%u].xy));\n",
                     texcoord,
                     texmap,
                     texmap,
-                    texmap,
-                    tex_swz.c_str());
+                    texcoord,
+                    texmap);
             }
+            if (ztex_on) {
+                s << "        last_raw_tex_i = int4(round(tex_sample * 255.0));\n";
+            }
+            emit(s,
+                "        tex_color = (tex_sample * 255.0)%s;\n"
+                "    }\n",
+                tex_swz.c_str());
             if (rt_scene) {
                 emit(s,
                      "    if (((tinted_maps >> %uu) & 1u) != 0u) {\n"
-                     "        tex_color_i.rgb = int3(round(gx_tint_cleared(float3(tex_color_i.rgb) / 255.0, "
-                     "-ztex_params.w) * 255.0));\n"
+                     "        tex_color.rgb = gx_tint_cleared(tex_color.rgb / 255.0, -ztex_params.w) * 255.0;\n"
                      "    }\n",
                      texmap);
             }
@@ -2534,94 +2517,85 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 // and the traced reflection screens over it; replacing the map by its mean would flatten
                 // chrome. Enhanced lighting alone scales it.
                 s << (rt_paths ? "    if (enh_on && (uber_ps_header.w & 0x20000u) == 0u) {\n" : "    if (enh_on) {\n")
-                  << "        tex_color_i.rgb = min(int3(round(float3(tex_color_i.rgb) * enh.env_gain)), int3(255,255,255));\n"
+                  << "        tex_color.rgb = min(tex_color.rgb * enh.env_gain, 255.0);\n"
                      "    }\n";
             }
         } else if (key.num_texgens != 0u) {
             // GX supplies white when this TEV stage disables its texture
             // lookup but the pipeline has texture coordinates. This lets a
             // later stage use TEXC/TEXA as a neutral multiplier.
-            s << "    tex_color_i = int4(255,255,255,255);\n";
+            s << "    tex_color = float4(255.0, 255.0, 255.0, 255.0);\n";
         } else {
             // With no texgens at all, GX instead supplies black.
-            s << "    tex_color_i = int4(0,0,0,0);\n";
+            s << "    tex_color = float4(0.0, 0.0, 0.0, 0.0);\n";
         }
 
         // Rasterized color source (with the stage's ras swap swizzle).
         // libogc maps GX_COLORZERO/ALPHA_BUMP/ALPHA_BUMPN to BP channels
         // 7/5/6 respectively; channels other than color0/1 and bump read zero.
         if (ras_chan == 0u) {
-            emit(s, "    ras_color_i = int4(round(saturate(pin.col0%s) * 255.0));\n",
-                 ras_swz.c_str());
+            emit(s, "    ras_color = saturate(pin.col0%s) * 255.0;\n", ras_swz.c_str());
         } else if (ras_chan == 1u) {
-            emit(s, "    ras_color_i = int4(round(saturate(pin.col1%s) * 255.0));\n",
-                 ras_swz.c_str());
+            emit(s, "    ras_color = saturate(pin.col1%s) * 255.0;\n", ras_swz.c_str());
         } else if (ras_chan == 5u) {
             emit(s,
-                "    ras_color_i = int4(alphabump_i, alphabump_i, alphabump_i, alphabump_i)%s;\n",
+                "    ras_color = float4(alphabump_i, alphabump_i, alphabump_i, alphabump_i)%s;\n",
                 ras_swz.c_str());
         } else if (ras_chan == 6u) {
             emit(s,
                 "    { int abn = alphabump_i | (alphabump_i >> 5); "
-                "ras_color_i = int4(abn, abn, abn, abn)%s; }\n",
+                "ras_color = float4(abn, abn, abn, abn)%s; }\n",
                 ras_swz.c_str());
         } else {
-            s << "    ras_color_i = int4(0,0,0,0);\n";
+            s << "    ras_color = float4(0.0, 0.0, 0.0, 0.0);\n";
         }
 
         // GX selector numbering: 0-7 fixed fractions, 8-11 invalid,
         // color 12-15 K0-K3.rgb, and 16-31 component replication.
         // Alpha treats 8-15 as invalid and uses the same component groups.
+        static constexpr unsigned kKonstFixed[8] = {255u, 223u, 191u, 159u, 128u, 96u, 64u, 32u};
+        static constexpr const char* kKonstGroup[4] = {"r", "g", "b", "a"};
         auto emit_konst_rgb = [&](std::uint8_t kc) {
-            static constexpr unsigned fixed[8] = {
-                255u, 223u, 191u, 159u, 128u, 96u, 64u, 32u};
             if (kc <= 7u) {
-                emit(s, "int3(%u,%u,%u)", fixed[kc], fixed[kc], fixed[kc]);
-                return;
+                emit(s, "float3(%u.0, %u.0, %u.0)", kKonstFixed[kc], kKonstFixed[kc], kKonstFixed[kc]);
+            } else if (kc <= 11u) {
+                s << "float3(0.0, 0.0, 0.0)";
+            } else if (kc <= 15u) {
+                emit(s, "saturate(konst[%u].rgb) * 255.0", kc - 12u);
+            } else {
+                const char* c = kKonstGroup[(kc - 16u) / 4u];
+                emit(s, "saturate(konst[%u].%s%s%s) * 255.0", (kc - 16u) % 4u, c, c, c);
             }
-            if (kc <= 11u) {
-                s << "int3(0,0,0)";
-                return;
-            }
-            if (kc <= 15u) {
-                emit(s, "int3(round(saturate(konst[%u].rgb) * 255.0))",
-                     kc - 12u);
-                return;
-            }
-            static constexpr const char* component[4] = {
-                "rrr", "ggg", "bbb", "aaa"};
-            const unsigned group = (kc - 16u) / 4u;
-            const unsigned index = (kc - 16u) % 4u;
-            emit(s, "int3(round(saturate(konst[%u].%s) * 255.0))",
-                 index, component[group]);
         };
         auto emit_konst_a = [&](std::uint8_t ka) {
-            static constexpr unsigned fixed[8] = {
-                255u, 223u, 191u, 159u, 128u, 96u, 64u, 32u};
             if (ka <= 7u) {
-                emit(s, "%u", fixed[ka]);
-                return;
+                emit(s, "%u.0", kKonstFixed[ka]);
+            } else if (ka <= 15u) {
+                s << "0.0";
+            } else {
+                emit(s, "saturate(konst[%u].%s) * 255.0", (ka - 16u) % 4u, kKonstGroup[(ka - 16u) / 4u]);
             }
-            if (ka <= 15u) {
-                s << "0";
-                return;
-            }
-            static constexpr const char* component[4] = {
-                "r", "g", "b", "a"};
-            const unsigned group = (ka - 16u) / 4u;
-            const unsigned index = (ka - 16u) % 4u;
-            emit(s, "int(round(saturate(konst[%u].%s) * 255.0))",
-                 index, component[group]);
         };
 
-        s << "    konst_i = int4("; emit_konst_rgb(kcsel);
+        s << "    konst_v = float4("; emit_konst_rgb(kcsel);
         s << ", "; emit_konst_a(kasel); s << ");\n";
+
+        // A/B/C read a register's low 8 bits (tev_in under enhanced lighting, which clamps instead under ray-traced
+        // lighting); the other inputs are 0..255 already. D reads the register whole.
+        const auto in3 = [&](TevColorArg arg, const char* expr) {
+            if (!color_arg_register(arg)) return std::string(expr);
+            return std::string(enhanced ? "tev_in(" : "tev_wrap(") + expr + ")";
+        };
+        const auto in1 = [&](TevAlphaArg arg, const char* expr) {
+            if (!alpha_arg_register(arg)) return std::string(expr);
+            return std::string(enhanced ? "tev_in(" : "tev_wrap(") + expr + ")";
+        };
 
         // TEV color combiner.
         const char* ca = color_arg_rgb(color_a);
         const char* cb = color_arg_rgb(color_b);
         if (options_.tev_zero_from_constant) {
-            static constexpr const char* kConstantZero = "int3(uber_ps_header.www)";
+            static constexpr const char* kConstantZero = "float3(uber_ps_header.www)";
             if (color_a == TevColorArg::Zero) {
                 ca = kConstantZero;
             }
@@ -2635,44 +2609,22 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         // Color and alpha combiners observe the same stage-entry registers.
         // The alpha R8/GR16/BGR24 comparisons reuse COLOR A/B selectors.
         if (alpha_bias == TevBias::Compare && alpha_scale != TevScale::Half) {
-            if (enhanced) {
-                emit(s, "    int3 alpha_compare_a_%u = tev_in3(int3(%s));\n", st, ca);
-            } else {
-                emit(s, "    int3 alpha_compare_a_%u = %s;\n", st, u8(ca).c_str());
-            }
-            if (enhanced) {
-                emit(s, "    int3 alpha_compare_b_%u = tev_in3(int3(%s));\n", st, cb);
-            } else {
-                emit(s, "    int3 alpha_compare_b_%u = %s;\n", st, u8(cb).c_str());
-            }
+            emit(s, "    int3 alpha_compare_a_%u = tev_q(%s);\n", st, in3(color_a, ca).c_str());
+            emit(s, "    int3 alpha_compare_b_%u = tev_q(%s);\n", st, in3(color_b, cb).c_str());
         }
 
+        const char* const out_clamp3 = color_clamp ? "        outv = clamp(outv, 0.0, 255.0);\n"
+                                                    : "        outv = clamp(outv, -1024.0, 1023.0);\n";
         if (color_bias == TevBias::Compare) {
-            // Compare mode: dest = clamp(d + ((a OP b) ? c : 0), 0, 255)
-            // with operand width from the SCALE field and op from the SUB
-            // bit (Dolphin PixelShaderGen WriteTevRegular comparison path).
-            // Computed on int(round(x*255)) so the comparisons are exact;
-            // the result is already on the 8-bit lattice.
+            // Compare mode: dest = d + ((a OP b) ? c : 0) on the inputs' 8-bit values, with the operand width from
+            // the SCALE field and the op from the SUB bit (Dolphin PixelShaderGen WriteTevRegular comparison path).
             const auto kind =
                 static_cast<TevCompareKind>(static_cast<unsigned>(color_scale));
             const bool is_eq = color_sub;  // SUB bit: 0 = GT, 1 = EQ
             s << "    {\n";
-            if (enhanced) {
-                emit(s, "        int3 ca_i = tev_in3(int3(%s));\n", ca);
-            } else {
-                emit(s, "        int3 ca_i = %s;\n", u8(ca).c_str());
-            }
-            if (enhanced) {
-                emit(s, "        int3 cb_i = tev_in3(int3(%s));\n", cb);
-            } else {
-                emit(s, "        int3 cb_i = %s;\n", u8(cb).c_str());
-            }
-            if (enhanced) {
-                emit(s, "        int3 cc_i = tev_in3(int3(%s));\n", cc);
-            } else {
-                emit(s, "        int3 cc_i = %s;\n", u8(cc).c_str());
-            }
-            emit(s, "        int3 cd_i = int3(%s);\n", cd);
+            emit(s, "        int3 ca_i = tev_q(%s);\n", in3(color_a, ca).c_str());
+            emit(s, "        int3 cb_i = tev_q(%s);\n", in3(color_b, cb).c_str());
+            emit(s, "        int3 cc_i = tev_q(%s);\n", in3(color_c, cc).c_str());
             switch (kind) {
             case TevCompareKind::R8:
                 emit(s,
@@ -2707,57 +2659,18 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                 }
                 break;
             }
-            emit(s,
-                "        int3 outv = cd_i + cmp_i;\n");
-            if (color_clamp) {
-                s << "        outv = clamp(outv, int3(0,0,0), int3(255,255,255));\n";
-            } else {
-                s << "        outv = clamp(outv, int3(-1024,-1024,-1024), int3(1023,1023,1023));\n";
-            }
+            emit(s, "        float3 outv = %s + float3(cmp_i);\n", cd);
+            s << out_clamp3;
             emit(s, "        %s.rgb = outv;\n", dest_c);
             s << "    }\n";
         } else {
-            // GX regular TEV is integer math on the 8-bit lattice:
-            // d (+/-) lerp(a,b,c), where c=255 promotes to 256 before the
-            // final >>8.  Keeping the stage in int space preserves dark eye
-            // and UI-detail materials that float lerp over-brightens.
+            // d (+/-) lerp(a, b, c), biased and scaled, in float.
             s << "    {\n";
-            if (enhanced) {
-                emit(s, "        int3 ai = tev_in3(int3(%s));\n", ca);
-            } else {
-                emit(s, "        int3 ai = %s;\n", u8(ca).c_str());
-            }
-            if (enhanced) {
-                emit(s, "        int3 bi = tev_in3(int3(%s));\n", cb);
-            } else {
-                emit(s, "        int3 bi = %s;\n", u8(cb).c_str());
-            }
-            if (enhanced) {
-                emit(s, "        int3 ci = tev_in3(int3(%s));\n", cc);
-            } else {
-                emit(s, "        int3 ci = %s;\n", u8(cc).c_str());
-            }
-            emit(s, "        int3 di = int3(%s);\n", cd);
-            emit(s, "        int3 lhs = (di + int3(%s,%s,%s))%s;\n",
-                 tev_bias_i(color_bias), tev_bias_i(color_bias),
-                 tev_bias_i(color_bias), tev_scale_left(color_scale));
-            s << "        int3 mixv = (ai << 8) + (bi - ai) * (ci + (ci >> 7));\n";
-            emit(s, "        mixv = mixv%s;\n", tev_scale_left(color_scale));
-            if (color_scale != TevScale::Half) {
-                emit(s, "        mixv = (mixv + int3(%s,%s,%s)) >> 8;\n",
-                     tev_lerp_round_bias(color_sub),
-                     tev_lerp_round_bias(color_sub),
-                     tev_lerp_round_bias(color_sub));
-            } else {
-                s << "        mixv = mixv >> 8;\n";
-            }
-            emit(s, "        int3 outv = (lhs %c mixv)%s;\n",
-                 color_sub ? '-' : '+', tev_scale_right(color_scale));
-            if (color_clamp) {
-                s << "        outv = clamp(outv, int3(0,0,0), int3(255,255,255));\n";
-            } else {
-                s << "        outv = clamp(outv, int3(-1024,-1024,-1024), int3(1023,1023,1023));\n";
-            }
+            emit(s, "        float3 lerpv = lerp(%s, %s, %s / 255.0);\n", in3(color_a, ca).c_str(),
+                 in3(color_b, cb).c_str(), in3(color_c, cc).c_str());
+            emit(s, "        float3 outv = (%s + %s %c lerpv)%s;\n", cd, tev_bias(color_bias), color_sub ? '-' : '+',
+                 tev_scale(color_scale));
+            s << out_clamp3;
             emit(s, "        %s.rgb = outv;\n", dest_c);
             s << "    }\n";
         }
@@ -2769,19 +2682,21 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         const char* ac = alpha_arg(alpha_c);
         const char* ad = alpha_arg(alpha_d);
         const char* dest_a = tev_dest_name(alpha_dest);
+        const char* const out_clamp1 = alpha_clamp ? "        outv = clamp(outv, 0.0, 255.0);\n"
+                                                    : "        outv = clamp(outv, -1024.0, 1023.0);\n";
 
         if (alpha_bias == TevBias::Compare) {
             // Alpha compare: kinds 0-2 (R8/GR16/BGR24) compare the COLOR
             // selects of the stage (Dolphin's tevin registers are int4s
             // whose rgb comes from the color select); kind 3 (A8) compares
-            // the alpha selects.  Result: d + (cond ? c : 0), exact ints.
+            // the alpha selects. Result: d + (cond ? c : 0) on 8-bit values.
             const auto kind =
                 static_cast<TevCompareKind>(static_cast<unsigned>(alpha_scale));
             const bool is_eq = alpha_sub;
             s << "    {\n";
             if (kind == TevCompareKind::RGB8) {  // value 3 = A8 for alpha
-                emit(s, enhanced ? "        int aa_i = tev_in1(%s);\n" : "        int aa_i = (%s) & 255;\n", aa);
-                emit(s, enhanced ? "        int ab_i = tev_in1(%s);\n" : "        int ab_i = (%s) & 255;\n", ab);
+                emit(s, "        int aa_i = tev_q(%s);\n", in1(alpha_a, aa).c_str());
+                emit(s, "        int ab_i = tev_q(%s);\n", in1(alpha_b, ab).c_str());
                 emit(s, "        bool acmp = (aa_i %s ab_i);\n",
                      is_eq ? "==" : ">");
             } else {
@@ -2804,39 +2719,17 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
                          is_eq ? "==" : ">");
                 }
             }
-            emit(s, enhanced ? "        int ac_i = tev_in1(%s);\n" : "        int ac_i = (%s) & 255;\n", ac);
-            emit(s, "        int ad_i = %s;\n", ad);
-            s << "        int outv = ad_i + (acmp ? ac_i : 0);\n";
-            if (alpha_clamp) {
-                s << "        outv = clamp(outv, 0, 255);\n";
-            } else {
-                s << "        outv = clamp(outv, -1024, 1023);\n";
-            }
+            emit(s, "        float outv = %s + (acmp ? float(tev_q(%s)) : 0.0);\n", ad, in1(alpha_c, ac).c_str());
+            s << out_clamp1;
             emit(s, "        %s.a = outv;\n", dest_a);
             s << "    }\n";
         } else {
             s << "    {\n";
-            emit(s, enhanced ? "        int ai = tev_in1(%s);\n" : "        int ai = (%s) & 255;\n", aa);
-            emit(s, enhanced ? "        int bi = tev_in1(%s);\n" : "        int bi = (%s) & 255;\n", ab);
-            emit(s, enhanced ? "        int ci = tev_in1(%s);\n" : "        int ci = (%s) & 255;\n", ac);
-            emit(s, "        int di = %s;\n", ad);
-            emit(s, "        int lhs = (di + %s)%s;\n",
-                 tev_bias_i(alpha_bias), tev_scale_left(alpha_scale));
-            s << "        int mixv = (ai << 8) + (bi - ai) * (ci + (ci >> 7));\n";
-            emit(s, "        mixv = mixv%s;\n", tev_scale_left(alpha_scale));
-            if (alpha_scale != TevScale::Half) {
-                emit(s, "        mixv = (mixv + %s) >> 8;\n",
-                     tev_lerp_round_bias(alpha_sub));
-            } else {
-                s << "        mixv = mixv >> 8;\n";
-            }
-            emit(s, "        int outv = (lhs %c mixv)%s;\n",
-                 alpha_sub ? '-' : '+', tev_scale_right(alpha_scale));
-            if (alpha_clamp) {
-                s << "        outv = clamp(outv, 0, 255);\n";
-            } else {
-                s << "        outv = clamp(outv, -1024, 1023);\n";
-            }
+            emit(s, "        float lerpv = lerp(%s, %s, %s / 255.0);\n", in1(alpha_a, aa).c_str(),
+                 in1(alpha_b, ab).c_str(), in1(alpha_c, ac).c_str());
+            emit(s, "        float outv = (%s + %s %c lerpv)%s;\n", ad, tev_bias(alpha_bias), alpha_sub ? '-' : '+',
+                 tev_scale(alpha_scale));
+            s << out_clamp1;
             emit(s, "        %s.a = outv;\n", dest_a);
             s << "    }\n";
         }
@@ -2852,29 +2745,25 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         const unsigned last_color_dest = last.color_dest;
         const unsigned last_alpha_dest = last.alpha_dest;
         if (last_color_dest != 0u) {
-            emit(s, "    tev_prev_i.rgb = %s.rgb;\n",
+            emit(s, "    tev_prev.rgb = %s.rgb;\n",
                  tev_dest_name(last_color_dest));
         }
         if (last_alpha_dest != 0u) {
-            emit(s, "    tev_prev_i.a = %s.a;\n",
+            emit(s, "    tev_prev.a = %s.a;\n",
                  tev_dest_name(last_alpha_dest));
         }
     }
 
-    // The PE consumes the final TEV result on the 8-bit lattice. Unclamped TEV stages can hold wider signed
-    // intermediates, but alpha compare, fog/colour output and the alpha==1 blend quirk see only the low 8 bits.
-    // Under ray-traced lighting (enhanced keys, header bit 17) the final result clamps like the inputs, so a
-    // channel lifted just past 255 does not wrap.
+    // The PE takes the final TEV result's low 8 bits: unclamped stages can hold wider signed values, but the alpha
+    // test, fog, the colour output and the alpha == 1 blend rule see only those. Under ray-traced lighting (enhanced
+    // keys, header bit 17) the final result clamps like the inputs, so a channel lifted just past 255 does not wrap.
     if (rt_paths) {
-        s << "\n    int4 frag_i = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev_i, 0, 255)"
-             " : (tev_prev_i & int4(255,255,255,255));\n";
-    } else if (enhanced) {
-        s << "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n";
+        s << "\n    float4 frag8 = (uber_ps_header.w & 0x20000u) != 0u ? clamp(tev_prev, 0.0, 255.0) : tev_wrap(tev_prev);\n";
     } else {
-        s << (scalar_masks ? "\n    int4 frag_i = gx_u8(tev_prev_i);\n"
-                           : "\n    int4 frag_i = tev_prev_i & int4(255,255,255,255);\n");
+        s << "\n    float4 frag8 = tev_wrap(tev_prev);\n";
     }
-    s << "    float4 frag = float4(frag_i) / 255.0;\n\n";
+    s << "    float4 frag = saturate(frag8 / 255.0);\n"
+         "    uint frag_a8 = uint(tev_q(frag8.a));\n\n";
     if (enhanced) {
         if ((key.ind_reserved & kEnhancedReflective) != 0u) {
             // The ray tracer's reflections own this class's highlights while they run.
@@ -2904,7 +2793,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         s << "    discard;\n";
     } else if (alpha_static != AlphaTestStaticResult::Pass) {
         s << "    // Alpha test\n";
-        s << "    uint a_sample = uint(frag_i.a);\n";
+        s << "    uint a_sample = frag_a8;\n";
         s << "    uint a_ref0 = uint(round(saturate(alpha_refs.x) * 255.0));\n";
         s << "    uint a_ref1 = uint(round(saturate(alpha_refs.y) * 255.0));\n";
         s << "    bool test0 = ";
@@ -2926,8 +2815,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
 
     // Hardware tests in Dolphin show alpha value 1 passes alpha test but
     // behaves like 0 for blending/writes. Low-alpha UI masks rely on this.
-    s << "    uint tev_alpha_i = uint(frag_i.a);\n";
-    s << "    if (tev_alpha_i == 1u) frag.a = 0.0;\n\n";
+    s << "    if (frag_a8 == 1u) frag.a = 0.0;\n\n";
 
     // RGBA6 colour precision (bit 4 set: 8-bit colour, no dither).
     const bool rgba6 = (key.output_flags & 0x7u) == 1u && (key.output_flags & 0x10u) == 0u;
@@ -3023,12 +2911,7 @@ std::string ShaderGenerator::generate_ps(const PixelShaderKey& key) const {
         default:
             break;  // linear: fog_f as-is
         }
-        // Integer blend like hardware: (c*(256-ifog) + fogc*ifog) >> 8.
-        s << "    int fog_i = int(round(fog_f * 256.0));\n";
-        s << "    int3 fog_rgb_i = int3(round(frag.rgb * 255.0));\n";
-        s << "    int3 fog_color_i = int3(round(saturate(fog_params[1].rgb) * 255.0));\n";
-        s << "    frag.rgb = float3((fog_rgb_i * (256 - fog_i)"
-             " + fog_color_i * fog_i) >> 8) / 255.0;\n\n";
+        s << "    frag.rgb = lerp(frag.rgb, saturate(fog_params[1].rgb), fog_f);\n\n";
     }
 
     // Convert the 8-bit TEV result to the EFB precision. Alpha is always

@@ -801,9 +801,9 @@ int main() {
                 check_not_contains(src, "0x80000000u", label);
             }
             if (material == 0u) {
-                check_not_contains(src, "enh.env_gain))", label);
+                check_not_contains(src, "enh.env_gain, 255.0)", label);
             } else {
-                check_contains(src, "enh.env_gain))", label);
+                check_contains(src, "enh.env_gain, 255.0)", label);
                 // Under traced lighting the painted map stays as drawn (the traced reflection screens over it).
                 check_not_contains(src, "env_mean", label);
             }
@@ -921,10 +921,10 @@ int main() {
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src,
-                       "tex_fix = int2(round(tuv * tex_dims[0].zw * 128.0));",
+                       "tuv * tex_dims[0].zw",
                        "ps_regular_texture_uses_texcoord_scale");
         check_contains(src,
-                       "tex_tuv = (float2(tex_fix) / 128.0) / tex_dims[0].xy;",
+                       "tex_dims[0].zw / tex_dims[0].xy",
                        "ps_regular_texture_normalizes_by_texmap_size");
         check_compiles(src, "ps_5_1", "ps_baseline");
     }
@@ -944,9 +944,9 @@ int main() {
         k.stages[0].alpha_dest = 2u;
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
-        check_contains(src, "tev_prev_i.rgb = tev_c_i[0].rgb;",
+        check_contains(src, "tev_prev.rgb = tev_c[0].rgb;",
                        "ps_last_tev_color_reg0_becomes_output");
-        check_contains(src, "tev_prev_i.a = tev_c_i[1].a;",
+        check_contains(src, "tev_prev.a = tev_c[1].a;",
                        "ps_last_tev_alpha_reg1_becomes_output");
         check_compiles(src, "ps_5_1", "ps_last_tev_nonprev_dest_compiles");
     }
@@ -1029,11 +1029,11 @@ int main() {
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(src,
-                       "int4(alphabump_i, alphabump_i, alphabump_i, alphabump_i)",
+                       "float4(alphabump_i, alphabump_i, alphabump_i, alphabump_i)",
                        "ps_ras_channel_5_is_alpha_bump");
         check_contains(src, "int abn = alphabump_i | (alphabump_i >> 5);",
                        "ps_ras_channel_6_is_normalized_alpha_bump");
-        check_contains(src, "ras_color_i = int4(0,0,0,0);",
+        check_contains(src, "ras_color = float4(0.0, 0.0, 0.0, 0.0);",
                        "ps_ras_channel_7_is_zero");
         check_compiles(src, "ps_5_1", "ps_ras_channel_bump_mapping_compiles");
     }
@@ -1130,9 +1130,9 @@ int main() {
         k.stages[0] = basic_stage();
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
-        check_contains(src, "int3(round(saturate(konst[0].rgb) * 255.0))",
+        check_contains(src, "saturate(konst[0].rgb) * 255.0",
                        "ps_konst_color_k0_rgb");
-        check_contains(src, "int(round(saturate(konst[3].a) * 255.0))",
+        check_contains(src, "saturate(konst[3].a) * 255.0",
                        "ps_konst_alpha_k3_a");
 
         k.stages[0].konst_color = 0u;
@@ -1140,9 +1140,9 @@ int main() {
         std::memset(k.stages[0].ras_swizzle, 0, sizeof(k.stages[0].ras_swizzle));
         std::memset(k.stages[0].tex_swizzle, 0, sizeof(k.stages[0].tex_swizzle));
         const std::string fixed_src = gen.generate_ps(k);
-        check_contains(fixed_src, "konst_i = int4(int3(255,255,255), 32);",
+        check_contains(fixed_src, "konst_v = float4(float3(255.0, 255.0, 255.0), 32.0);",
                        "ps_konst_color_fixed_one");
-        check_contains(fixed_src, ", 32);",
+        check_contains(fixed_src, ", 32.0);",
                        "ps_konst_alpha_fixed_eighth");
     }
 
@@ -1158,7 +1158,7 @@ int main() {
         k.stages[0].color_in[0] = k.stages[0].color_in[1] = 15u;  // a = b = Zero
         const ShaderGenerator plain;
         const std::string plain_src = plain.generate_ps(k);
-        check_contains(plain_src, "int3 ai = int3(int3(0,0,0)) & int3(255,255,255);", "ps_default_vector_mask");
+        check_contains(plain_src, "lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), ", "ps_default_zero_inputs");
         if (plain_src.find("gx_u8") != std::string::npos || plain_src.find("uber_ps_header") != std::string::npos) {
             ++g_failures;
             std::printf("FAILED: ps_default_unchanged\n");
@@ -1171,10 +1171,9 @@ int main() {
         options.tev_zero_from_constant = true;
         worked.set_options(options);
         const std::string src = worked.generate_ps(k);
-        check_contains(src, "int3 ai = gx_u8(int3(int3(uber_ps_header.www)));", "ps_tev_zero_from_constant_a");
-        check_contains(src, "int3 bi = gx_u8(int3(int3(uber_ps_header.www)));", "ps_tev_zero_from_constant_b");
+        check_contains(src, "lerp(float3(uber_ps_header.www), float3(uber_ps_header.www), ", "ps_tev_zero_from_constant");
         check_contains(src, "uint4    uber_ps_header;", "ps_tev_zero_constant_declared");
-        check_contains(src, "int4 frag_i = gx_u8(tev_prev_i);", "ps_scalar_frag_mask");
+        check_contains(src, "int2 gx_bit0(int2 v)", "ps_scalar_bit_helper");
         check_compiles(src, "ps_5_1", "ps_workaround_forms_compile");
     }
 
@@ -1330,7 +1329,7 @@ int main() {
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(
-            src, "tex_color_i = int4(255,255,255,255);",
+            src, "tex_color = float4(255.0, 255.0, 255.0, 255.0);",
             "ps_disabled_texture_with_texgen_is_white");
         check_compiles(
             src, "ps_5_1", "ps_disabled_texture_with_texgen_compiles");
@@ -1347,7 +1346,7 @@ int main() {
         const ShaderGenerator gen;
         const std::string src = gen.generate_ps(k);
         check_contains(
-            src, "tex_color_i = int4(0,0,0,0);",
+            src, "tex_color = float4(0.0, 0.0, 0.0, 0.0);",
             "ps_disabled_texture_without_texgen_is_black");
         check_compiles(
             src, "ps_5_1", "ps_disabled_texture_without_texgen_compiles");
@@ -1604,7 +1603,7 @@ int main() {
             check_contains(compare_src, "int3 ca_i = alpha_compare_a_0;",
                            "ps_alpha_compare_uses_stage_entry_color");
             if (compare_src.find("alpha_compare_a_0 =") >=
-                compare_src.find("tev_prev_i.rgb = outv")) {
+                compare_src.find("tev_prev.rgb = outv")) {
                 ++g_failures;
                 std::printf("FAILED: alpha compare snapshot follows color write\n");
             }

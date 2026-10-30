@@ -2684,10 +2684,9 @@ bool test_gx_pixel_readbacks() {
         input.constants.fog_params[5] = 1.0f; // Green fog.
         input.constants.fog_params[7] = 1.0f; // Orthographic.
         const auto fog = harness.run_gx(input);
-        // Each 255*128 contribution truncates separately in the integer final sum's >>8, so red and
-        // green are 127, not a float-rounded 128.
-        passed &= expect_pixel(fog.color, {127u, 127u, 0u, 130u},
-            "early Z-texture modifies integer fog color before physical output quantization");
+        // Fog blends in float (half the colour, half the fog) and the output rounds: red and green 128.
+        passed &= expect_pixel(fog.color, {128u, 128u, 0u, 130u},
+            "early Z-texture modifies the fog colour before output quantization");
         passed &= expect(std::abs(fog.depth - 0.75f) < 2.0f / 16777216.0f,
             "early Z-texture fog retains geometric depth in the EFB");
 
