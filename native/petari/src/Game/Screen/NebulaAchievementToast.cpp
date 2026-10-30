@@ -22,7 +22,6 @@
 #include <nw4r/lyt/window.h>
 #include <nw4r/ut/Font.h>
 #include <revolution/os.h>
-#include <revolution/tpl.h>
 
 namespace {
     enum {
@@ -212,7 +211,7 @@ void NebulaAchievementToast::loadTextures() {
             void* pTpl = pHolder != nullptr ? pHolder->GetResource('timg', pIcon->mTexture, nullptr) : nullptr;
             if (pTpl != nullptr) {
                 mTextures[i] = new nw4r::lyt::TexMap();
-                mTextures[i]->ReplaceImage(static_cast< TPLPalette* >(pTpl), 0);
+                mTextures[i]->ReplaceImage(pTpl, 0);
             }
         } else if (MR::isExistResourceInArc(pIcon->mArchive, pIcon->mTexture)) {
             mTextures[i] = MR::createLytTexMap(pIcon->mArchive, pIcon->mTexture);

@@ -31,7 +31,6 @@
 #include <nw4r/ut/Font.h>
 #include <revolution/gx.h>
 #include <revolution/os.h>
-#include <revolution/tpl.h>
 #include <revolution/wpad.h>
 #include "Game/System/NebulaHost.hpp"
 
@@ -1135,7 +1134,7 @@ void NebulaAchievementBoard::init(const JMapInfoIter& rIter) {
             void* pTpl = pHolder != nullptr ? pHolder->GetResource('timg', pIcon->mTexture, nullptr) : nullptr;
             if (pTpl != nullptr) {
                 p->mTextures[i] = new nw4r::lyt::TexMap();
-                p->mTextures[i]->ReplaceImage(static_cast< TPLPalette* >(pTpl), 0);
+                p->mTextures[i]->ReplaceImage(pTpl, 0);
             }
         } else if (MR::isExistResourceInArc(pIcon->mArchive, pIcon->mTexture)) {
             p->mTextures[i] = MR::createLytTexMap(pIcon->mArchive, pIcon->mTexture);

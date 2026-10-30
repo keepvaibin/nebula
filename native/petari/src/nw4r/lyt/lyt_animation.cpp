@@ -158,7 +158,7 @@ namespace nw4r {
                         const u16 fileIdx = GetStepCurveValue(frame, keys, pAnimTarget->keyNum);
 
                         if (tpls[fileIdx]) {
-                            pMaterial->GetTexturePtr(pAnimTarget->id)->ReplaceImage(static_cast< TPLPalettePtr >(tpls[fileIdx]));
+                            pMaterial->GetTexturePtr(pAnimTarget->id)->ReplaceImage(tpls[fileIdx]);
                         }
                     }
                 }

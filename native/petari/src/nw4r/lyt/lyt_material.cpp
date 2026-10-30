@@ -284,7 +284,7 @@ namespace nw4r {
                         const char* const fileName = detail::ConvertOffsToPtr< char >(textures, textures[pResTexMap[si].texIdx].nameStrOffset);
 
                         void* const pTplRes = resBlockSet.pResAccessor->GetResource(0x74696D67, fileName, nullptr);
-                        texMaps[di].ReplaceImage(static_cast< TPLPalettePtr >(pTplRes), 0);
+                        texMaps[di].ReplaceImage(pTplRes, 0);
                         texMaps[di].SetWrapMode(pResTexMap[si].GetWarpModeS(), pResTexMap[si].GetWarpModeT());
                         texMaps[di].SetFilter(pResTexMap[si].GetMinFilter(), pResTexMap[si].GetMagFilter());
                         ++di;

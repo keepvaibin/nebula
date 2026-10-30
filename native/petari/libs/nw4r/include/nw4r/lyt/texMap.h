@@ -2,7 +2,7 @@
 
 #include "nw4r/lyt/types.h"
 #include <revolution.h>
-#include <revolution/tpl.h>
+#include <revolution/gx.h>
 
 namespace nw4r {
     namespace lyt {
@@ -43,8 +43,8 @@ namespace nw4r {
             void Get(_GXTexObj*) const;
             void Get(_GXTlutObj*) const;
             void Set(const _GXTexObj&);
-            void ReplaceImage(const TPLDescriptor*);
-            void ReplaceImage(TPLPalette*, u32 = 0);
+            // Image `id` of a TPL file (its bytes as the disc has them).
+            void ReplaceImage(const void* pTplFile, u32 id = 0);
 
             inline GXTexFmt GetTexelFormat() const {
                 return GXTexFmt(mBits.textureFormat);
