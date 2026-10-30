@@ -884,10 +884,6 @@ static void boot_thread(void* arg) {
     OSSetMEM2ArenaLo(mem2Lo);
     OSSetMEM2ArenaHi(mem2Hi);
 
-    /* The system time's bias from the time base (__OSGetSystemTime): none, since the time base is already calendar
-       time. */
-    *(OSTime*)OSPhysicalToCached(0x30D8) = 0;
-
     sInterruptsEnabled = FALSE;
     __OSThreadInit();
     __OSInitAlarm();

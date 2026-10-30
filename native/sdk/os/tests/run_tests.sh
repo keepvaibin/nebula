@@ -13,7 +13,7 @@ FL="-std=gnu11 -O2 -g -DTARGET_PC=1 -DVERSION=1 -DNEBULA_GAME_MODULE=1 -fsigned-
     -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast -Werror=pointer-to-enum-cast
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
-    -include nebula_prelude.h -I$N/msl/include -I$P/libs/RVL_SDK/include -I$P/include -I$N/sdk -I$N/include"
+    -include nebula_prelude.h -I$N/msl/include -I$N/math/include -I$P/libs/RVL_SDK/include -I$P/include -I$N/sdk -I$N/include"
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) LIBS="-lwinmm"; EXE=.exe ;;
     *) LIBS="-lpthread"; EXE= ;;
@@ -23,7 +23,7 @@ SDK="$P/src/RVL_SDK/os/OSThread.c $P/src/RVL_SDK/os/OSMutex.c $P/src/RVL_SDK/os/
      $P/src/RVL_SDK/os/OSTime.c $P/src/RVL_SDK/os/OSArena.c"
 $CC $FL "$N/sdk/os/tests/context_switch_tests.c" "$N/sdk/os/context_switch.c" -o "$OUT/context_switch_tests$EXE"
 $CC $FL "$N/sdk/os/tests/os_scheduler_tests.c" $OS $SDK $LIBS -o "$OUT/os_scheduler_tests$EXE"
-$CC $FL "$N/sdk/mtx/tests/mtx_tests.c" "$N/sdk/mtx/mtx_native.c" -o "$OUT/mtx_tests$EXE"
+$CC $FL "$N/sdk/mtx/tests/mtx_tests.c" "$N/sdk/mtx/mtx_native.c" "$N/math/src/nebula_math.c" -o "$OUT/mtx_tests$EXE"
 $CC $FL "$N/msl/tests/msl_runtime_tests.c" "$N/msl/src/msl_runtime.c" -o "$OUT/msl_runtime_tests$EXE"
 "$OUT/context_switch_tests$EXE"
 "$OUT/os_scheduler_tests$EXE"

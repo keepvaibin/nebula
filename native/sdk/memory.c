@@ -1,8 +1,7 @@
 /* The game's memory (docs/NATIVE_PORT.md, "Memory and the GPU's addresses"): one host reservation in the console's
-   physical layout, MEM1 at physical 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte
-   pointers. OSCachedToPhysical/OSPhysicalToCached map arena pointers to those physical addresses; the game module's
-   own image (static display lists and arrays the game gives GX) is a second window, in the unused span between MEM1
-   and MEM2, so every address the GPU sees stays below 512 MB (a texture's base is 24 bits of address >> 5). */
+   layout, MEM1 at offset 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte pointers. The
+   host sees the reservation and the game module's own image (a window in the unused span between MEM1 and MEM2) as
+   regions (nebula_memory_regions). */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -110,22 +109,6 @@ int nebula_memory_init(void) {
     return 1;
 }
 
-uint32_t __NebulaToPhysical(const void* addr) {
-    const uintptr_t a = (uintptr_t)addr;
-    const uintptr_t arena = (uintptr_t)sArena;
-    if (a - arena < kReserveSize) {
-        return (uint32_t)(a - arena);
-    }
-    if (a - sImageBase < sImageSize) {
-        return kImageWindow + (uint32_t)(a - sImageBase);
-    }
-    if (addr == NULL) {
-        return 0;
-    }
-    nebula_fatal("OSCachedToPhysical: %p is outside the game's arena and image", addr);
-    return 0;
-}
-
 uint32_t __NebulaObjectId(const void* object) {
     const uintptr_t a = (uintptr_t)object;
     if (a - (uintptr_t)sArena < kReserveSize) {
@@ -136,17 +119,6 @@ uint32_t __NebulaObjectId(const void* object) {
     }
     /* Outside the game's memory (none of its objects are): the address folded, never 0 unless NULL. */
     return (uint32_t)(a ^ (a >> 32)) | (a != 0 ? 0x80000000u : 0u);
-}
-
-void* __NebulaFromPhysical(uint32_t paddr) {
-    if (paddr - kImageWindow < sImageSize) {
-        return (void*)(sImageBase + (paddr - kImageWindow));
-    }
-    if (paddr < kReserveSize) {
-        return sArena + paddr;
-    }
-    nebula_fatal("OSPhysicalToCached: physical address 0x%08X has no mapping", paddr);
-    return NULL;
 }
 
 /* The arena the OS hands out (OSGetMEM1ArenaLo etc.): MEM1 past low memory, the boot stack and the console's

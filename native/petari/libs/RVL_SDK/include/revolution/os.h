@@ -50,12 +50,9 @@ void* OSPhysicalToUncached(u32);
 #define OS_BASE_UNCACHED (OS_UNCACHED_REGION_PREFIX << 16)
 
 #ifdef TARGET_PC
-// Natively a physical address is the 32-bit address the GX FIFO and DMA see: an offset in the game's memory
-// arena (the platform layer maps it both ways).
 #ifdef __cplusplus
 extern "C" {
 #endif
-u32 __NebulaToPhysical(const void* addr);
 // main.dol's version of a table the game compiles in (comet schedules, event flags): `pCompiled` while they match,
 // else the DOL's, its strings read from main.dol (a mod's memory patches over main.dol's data change it).
 const void* __NebulaDolTable(u32 kind, const void* pCompiled);
@@ -65,16 +62,11 @@ void __NebulaMovieFrame(const char* pName, s32 frame, f32 frameRate, const void*
 // A wait on another thread's work (a busy loop the console's interrupts preempt): runs what is pending, or sleeps until
 // a host thread raises something.
 void __NebulaPoll(void);
-void* __NebulaFromPhysical(u32 paddr);
-// A stable 32-bit name for a game object: its physical address (OSCachedToPhysical) when in the game's memory.
+// A stable 32-bit name for a game object: its offset in the game's memory.
 u32 __NebulaObjectId(const void* pObject);
 #ifdef __cplusplus
 }
 #endif
-#define OSPhysicalToCached(paddr) __NebulaFromPhysical((u32)(paddr))
-#define OSCachedToPhysical(caddr) __NebulaToPhysical((const void*)(caddr))
-#define OSUncachedToPhysical(ucaddr) __NebulaToPhysical((const void*)(ucaddr))
-#define OSPhysicalToUncached(paddr) __NebulaFromPhysical((u32)(paddr))
 #else
 #define OSPhysicalToCached(paddr) ((void*)((u32)(paddr) + OS_BASE_CACHED))
 #define OSCachedToPhysical(caddr) ((u32)((u8*)(caddr)-OS_BASE_CACHED))

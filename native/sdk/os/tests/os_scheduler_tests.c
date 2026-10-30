@@ -129,18 +129,17 @@ static void measure(void) {
     }
 }
 
-/* The arena is aligned to its size: an arena pointer's low 29 bits are its physical address. */
+/* The arena is aligned to its size and laid out as the console's memory (MEM1's arena past its first megabyte, MEM2's
+   at 0x10000000), so what the game derives from an address's low bits (hash slots, alignment tests) has the console's
+   value. */
 static void check_arena(void) {
+    u8* const base = nebula_arena_base();
     u8* const mem1 = (u8*)OSGetMEM1ArenaLo();
     u8* const mem2 = (u8*)OSGetMEM2ArenaLo();
-    if (((uintptr_t)mem1 & 0x1FFFFFFF) != OSCachedToPhysical(mem1) || ((uintptr_t)mem2 & 0x1FFFFFFF) != OSCachedToPhysical(mem2) ||
-        OSPhysicalToCached(OSCachedToPhysical(mem2 + 0x123)) != mem2 + 0x123) {
-        printf("FAIL arena: MEM1 %p (physical 0x%08X), MEM2 %p (physical 0x%08X)\n", (void*)mem1, OSCachedToPhysical(mem1),
-               (void*)mem2, OSCachedToPhysical(mem2));
-        sFailures++;
-    }
-    if (NEBULA_CONSOLE_ADDRESS(mem2) != 0x90000000u || NEBULA_CONSOLE_ADDRESS(mem1) != 0x80100000u) {
-        printf("FAIL console address: MEM1 0x%08X, MEM2 0x%08X\n", NEBULA_CONSOLE_ADDRESS(mem1), NEBULA_CONSOLE_ADDRESS(mem2));
+    const uintptr_t alignment = (uintptr_t)1 << 29;
+    const int aligned = (uintptr_t)base % alignment == 0;
+    if (!aligned || mem1 - base != 0x00100000 || mem2 - base != 0x10000000) {
+        printf("FAIL arena: base %p, MEM1 %p, MEM2 %p\n", (void*)base, (void*)mem1, (void*)mem2);
         sFailures++;
     }
 }

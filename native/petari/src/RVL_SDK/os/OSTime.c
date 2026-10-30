@@ -4,54 +4,14 @@
 static int YearDays[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
 static int LeapYearDays[] = { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 };
 
-#ifndef TARGET_PC
-asm OSTime OSGetTime(void) {
-    nofralloc
-
-loop:
-    mftbu r3
-    mftb r4
-    mftbu r5
-    cmpw r3, r5
-    bne loop
-    blr
-}
-
-asm OSTick OSGetTick(void) {
-    nofralloc
-    mftb r3
-    blr
-}
-#endif
-
-#ifdef TARGET_PC
-// The system time base (OSGetTime, OSGetTick) is the platform layer's; the offset that makes it calendar time is
-// in low memory as on the console.
-#define NEBULA_OS_SYSTEM_TIME ((OSTime*)OSPhysicalToCached(0x30D8))
-#else
-#define NEBULA_OS_SYSTEM_TIME ((OSTime*)(0x800030D8))
-#endif
-
+// The system time is the time base (OSGetTime, the platform layer's), which has no bias: the console kept one in low
+// memory.
 OSTime __OSGetSystemTime(void) {
-    BOOL en;
-    OSTime* time = NEBULA_OS_SYSTEM_TIME;
-    OSTime res;
-
-    en = OSDisableInterrupts();
-    res = *time + OSGetTime();
-    OSRestoreInterrupts(en);
-    return res;
+    return OSGetTime();
 }
 
 OSTime __OSTimeToSystemTime(OSTime time) {
-    BOOL en;
-    OSTime* os_time = NEBULA_OS_SYSTEM_TIME;
-    OSTime res;
-
-    en = OSDisableInterrupts();
-    res = *os_time + time;
-    OSRestoreInterrupts(en);
-    return res;
+    return time;
 }
 
 static BOOL IsLeapYear(int year) {
