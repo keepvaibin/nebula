@@ -12,6 +12,17 @@
 
 namespace galaxy::gx {
 
+// One texture map: its image, sampling (with the edge LOD and bias clamp enables) and palette.
+struct TextureMap {
+    TexImage image{1u, 1u, TexFormat::I4, 0u};
+    TexMode mode{};
+    bool edge_lod = true;
+    bool bias_clamp = false;
+    TlutRef tlut{};
+
+    [[nodiscard]] bool operator==(const TextureMap&) const = default;
+};
+
 // One stage's indirect texturing (GXSetTevIndirect).
 struct IndirectStage {
     std::uint8_t stage, format, bias, alpha, matrix, wrap_s, wrap_t;
@@ -72,6 +83,8 @@ struct NativeDrawState {
         bool bias[2], wrap[2], line_offset, point_offset;
     } coord[8]{};
 
+    TextureMap texture[8]{};
+
     // A state op (galaxy/gx/native_state.h), as the GX function it names sets the state.
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
@@ -98,6 +111,12 @@ struct NativeDrawState {
 // Coordinate `c`'s s (with the line and point offsets) and t scale words.
 [[nodiscard]] std::uint32_t coord_s_word(const NativeDrawState& state, unsigned c);
 [[nodiscard]] std::uint32_t coord_t_word(const NativeDrawState& state, unsigned c);
+
+// A texture map's packed forms (the check mode's comparison with the register file).
+[[nodiscard]] std::uint32_t tex_mode0_word(const TextureMap& map);
+[[nodiscard]] std::uint32_t tex_mode1_word(const TextureMap& map);
+[[nodiscard]] std::uint32_t tex_image0_word(const TextureMap& map);
+[[nodiscard]] std::uint32_t tlut_word(const TextureMap& map);
 
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);

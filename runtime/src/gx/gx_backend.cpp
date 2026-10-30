@@ -134,8 +134,7 @@ static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
 // Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
 // TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
 // sampled with it - indirect stages, then TEV stages, the last one winning - as GX re-derived them then.
-std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& state, const NativeDrawState& draw,
-                                                              bool derive) {
+std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const NativeDrawState& draw, bool derive) {
     std::array<std::array<std::uint32_t, 2>, 8> scales{};
     for (unsigned c = 0; c < 8u; ++c) {
         scales[c] = {draw.coord[c].size_minus_one[0] + 1u, draw.coord[c].size_minus_one[1] + 1u};
@@ -145,14 +144,14 @@ std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const GxState& sta
     }
     const GenMode gm = draw.gen;
     for (unsigned i = 0; i < gm.num_ind_stages && i < 4u; ++i) {
-        const TexImage image = state.tex_image(draw.ind_order[i].map);
+        const TexImage image = draw.texture[draw.ind_order[i].map].image;
         scales[draw.ind_order[i].coord] = {std::max<std::uint32_t>(image.width, 1u),
                                                    std::max<std::uint32_t>(image.height, 1u)};
     }
     for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
         const TevOrder order = draw.tev[s].order;
         if (order.tex_enable) {
-            const TexImage image = state.tex_image(order.texmap);
+            const TexImage image = draw.texture[order.texmap].image;
             scales[order.texcoord & 7u] = {std::max<std::uint32_t>(image.width, 1u),
                                            std::max<std::uint32_t>(image.height, 1u)};
         }
@@ -753,7 +752,7 @@ struct ScopedFlushTiming {
     return nullptr;
 }
 
-void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsConstants& out, bool derive_scales) {
+void fill_ps_constants(const NativeDrawState& draw, GxPsConstants& out, bool derive_scales) {
     std::memset(&out, 0, sizeof(out));
 
     const GenMode gm = draw.gen;
@@ -822,9 +821,9 @@ void fill_ps_constants(const GxState& state, const NativeDrawState& draw, GxPsCo
 
     // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
     // before sampling.
-    const auto scales = coordinate_scales(state, draw, derive_scales);
+    const auto scales = coordinate_scales(draw, derive_scales);
     for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        const TexImage img = state.tex_image(m);
+        const TexImage img = draw.texture[m].image;
         out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
         out.tex_dims[m][1] = static_cast<float>(img.height > 0 ? img.height : 1);
         out.tex_dims[m][2] = static_cast<float>(scales[m][0]);
@@ -2674,7 +2673,7 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
     const unsigned stages = std::min<unsigned>(ps_key_.num_tev_stages, kRtTevMaxStages);
     const unsigned texgens = std::min<unsigned>(vs_key_.num_texgens, 8u);
     tev.header = stages | (texgens << 28u);
-    const auto scales = coordinate_scales(state_, draw_state_, scales_from_textures_);
+    const auto scales = coordinate_scales(draw_state_, scales_from_textures_);
     for (unsigned s = 0; s < stages; ++s) {
         const TevStagePacked& packed = ps_key_.stages[s];
         RtTevStage& stage = stages_out[s];
@@ -2685,10 +2684,10 @@ void GxBackend::build_rt_tev(RtTevMaterial& tev, RtTevStage* stages_out, float f
         // The raster's coordinate scale: the texture coordinate's GX scale over its map's size.
         const unsigned map = packed.order & 7u;
         const unsigned coord = (packed.order >> 3u) & 7u;
-        const TexImage image = state_.tex_image(map);
+        const TexImage image = draw_state_.texture[map].image;
         stage.scale_s = static_cast<float>(scales[coord][0]) / static_cast<float>(std::max<unsigned>(image.width, 1u));
         stage.scale_t = static_cast<float>(scales[coord][1]) / static_cast<float>(std::max<unsigned>(image.height, 1u));
-        const TexMode tex_mode = state_.tex_mode(map);
+        const TexMode tex_mode = draw_state_.texture[map].mode;
         stage.pad[1] = static_cast<std::uint32_t>(tex_mode.wrap_s) | (static_cast<std::uint32_t>(tex_mode.wrap_t) << 2u);
         // Its indirect command (the raster's: active with indirect stages and a nonzero command), and whether the
         // program has indirect stages at all (rt_tev.hlsli carries the coordinates from stage to stage then).
@@ -3155,14 +3154,14 @@ void GxBackend::fill_rt_tev(RtDrawInfo& info, float facing) {
         RtTevIndirect& ind = info.tev_indirect;
         ind.order = (ps_key_.ind_ref & 0xFFFFFFu) | (ind_stages << 24u);
         const auto coord_size = [this](unsigned coord, unsigned axis) {
-            return coordinate_scales(state_, draw_state_, scales_from_textures_)[coord & 7u][axis];
+            return coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis];
         };
         for (unsigned i = 0; i < ind_stages; ++i) {
             const unsigned map = (ps_key_.ind_ref >> (6u * i)) & 7u;
             const unsigned coord_raw = (ps_key_.ind_ref >> (6u * i + 3u)) & 7u;
             const unsigned coord = coord_raw < texgens ? coord_raw : 0u;
             const std::uint32_t shifts = ps_key_.ind_scale[i / 2u] >> ((i & 1u) != 0u ? 8u : 0u);
-            const TexImage image = state_.tex_image(map);
+            const TexImage image = draw_state_.texture[map].image;
             ind.scale[i * 2u] = static_cast<float>(coord_size(coord, 0u)) /
                                 (std::ldexp(1.0f, static_cast<int>(shifts & 0xFu)) *
                                  static_cast<float>(std::max<unsigned>(image.width, 1u)));
@@ -4075,7 +4074,7 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (current_texture_table_.ptr != 0u && current_rt_map_ < kMaxTextureMaps) {
         info.texture = rt_texture_source(current_rt_map_);
         info.texture_map = current_rt_map_;
-        const TexMode mode = state_.tex_mode(current_rt_map_);
+        const TexMode mode = draw_state_.texture[current_rt_map_].mode;
         info.texture_wrap = static_cast<std::uint32_t>(mode.wrap_s) | (static_cast<std::uint32_t>(mode.wrap_t) << 2u);
         info.texgen = rt_texgen_of_map(current_rt_map_);
     }
@@ -4229,11 +4228,11 @@ bool GxBackend::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
                 break;
             }
             const auto coord_size = [&](unsigned coord, unsigned axis) {
-                return static_cast<float>(coordinate_scales(state_, draw_state_, scales_from_textures_)[coord & 7u][axis]);
+                return static_cast<float>(coordinate_scales(draw_state_, scales_from_textures_)[coord & 7u][axis]);
             };
             const std::uint32_t scale_word = ps_key_.ind_scale[ind_stage / 2u] >> ((ind_stage & 1u) != 0u ? 8u : 0u);
-            const TexImage wave_image = state_.tex_image(wave_map);
-            const TexImage main_image = state_.tex_image(main_map);
+            const TexImage wave_image = draw_state_.texture[wave_map].image;
+            const TexImage main_image = draw_state_.texture[main_map].image;
             const auto& mt = draw_state_.ind_matrix[(matrix - 1u) % 3u];
             // s = ma x + mc y (+ me z), t = mb x + md y (+ mf z): the map's x and y as a slope, z left out.
             float m[4] = {static_cast<float>(mt.m[0][0]), static_cast<float>(mt.m[0][1]), static_cast<float>(mt.m[1][0]),
@@ -7771,24 +7770,10 @@ GxBackend::TextureBindingKey GxBackend::capture_texture_binding_key(
         if ((map_mask & (1u << m)) == 0u) {
             continue;
         }
-        const unsigned bank_offset =
-            (m >= 4u) ? bp::kTexHighBankOffset : 0u;
-        const unsigned slot = m & 3u;
-        const unsigned base = m * 5u;
-        key.regs[base + 0u] = state_.bp(static_cast<std::uint8_t>(
-            bp::kTexMode0Base + bank_offset + slot));
-        key.regs[base + 1u] = state_.bp(static_cast<std::uint8_t>(
-            bp::kTexMode1Base + bank_offset + slot));
-        key.regs[base + 2u] = state_.bp(static_cast<std::uint8_t>(
-            bp::kTexImage0Base + bank_offset + slot));
-        key.regs[base + 3u] = state_.bp(static_cast<std::uint8_t>(
-            bp::kTexImage3Base + bank_offset + slot));
-        const TexFormat format =
-            decode_tex_image(key.regs[base + 2u], key.regs[base + 3u]).format;
-        if (format == TexFormat::C4 || format == TexFormat::C8 ||
-            format == TexFormat::C14X2) {
-            key.regs[base + 4u] = state_.bp(static_cast<std::uint8_t>(
-                bp::kTexTlutBase + bank_offset + slot));
+        key.maps[m] = draw_state_.texture[m];
+        const TexFormat format = key.maps[m].image.format;
+        if (format != TexFormat::C4 && format != TexFormat::C8 && format != TexFormat::C14X2) {
+            key.maps[m].tlut = TlutRef{};
         }
     }
     return key;
@@ -7837,7 +7822,7 @@ std::array<std::uint32_t, kMaxTextureMaps> GxBackend::capture_sampler_keys(
         }
         const TextureHandle& handle = handles[map];
         keys[map] = pack_sampler_key(
-            state_.tex_mode(map), handle.generated_mips, handle.mip_levels,
+            draw_state_.texture[map].mode, handle.generated_mips, handle.mip_levels,
             handle.lod_shift_x16, handle.lod_arbitrary, efb_scale_log2_x32);
     }
     // Unused slots still get valid zero-key descriptors, but cannot fragment
@@ -8195,9 +8180,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         current_texture_map_mask_valid_ = true;
     }
     const std::uint8_t texture_map_mask = current_texture_map_mask_;
-    // TextureBindingKey depends only on the map mask and the sampled maps' TexMode0/1, TexImage0/3
-    // and TexTlut words, all BP registers that set kDirtyTex, so the last key is reused until one of
-    // them changes (dropping the table cache also invalidates it).
+    // TextureBindingKey depends only on the map mask and the sampled maps' images, modes and palettes, whose
+    // changes set kDirtyTex, so the last key is reused until one of them changes (dropping the table cache also
+    // invalidates it).
     const bool texture_binding_key_fresh =
         current_texture_binding_key_valid_ &&
         dirty != ~0u &&
@@ -8228,7 +8213,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                            renderer_.rt_light_texture() != nullptr;
         lit_late_ = lit_translucent_ && !blended;
         if ((texture_map_mask & 0x80u) == 0u) {
-            texture_binding_key.regs[7u * 5u] = lit_translucent_ ? kLitTranslucentKey : 0u;
+            texture_binding_key.lit_translucent = lit_translucent_ ? kLitTranslucentKey : 0u;
         }
     }
     // A dirty BP input requires a fresh capture, but writes to unused maps,
@@ -8238,7 +8223,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
         !current_texture_binding_key_valid_ ||
         (!texture_binding_key_fresh &&
          !(texture_binding_key == current_texture_binding_key_)) ||
-        texture_binding_key.regs[7u * 5u] != current_texture_binding_key_.regs[7u * 5u];
+        texture_binding_key.lit_translucent != current_texture_binding_key_.lit_translucent;
     const bool tex_dirty = frame_bindings_dirty_ ||
         texture_bindings_dirty_ || texture_binding_changed;
 
@@ -8887,9 +8872,9 @@ gpu::Pipeline* GxBackend::flush_draw_state(
                 table_key.map_mask = texture_map_mask;
                 for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
                     if ((texture_map_mask & (1u << m)) != 0u) {
-                        const TexImage img = state_.tex_image(m);
-                        const TexMode mode = state_.tex_mode(m);
-                        const TlutRef tlut = state_.tex_tlut(m);
+                        const TexImage img = draw_state_.texture[m].image;
+                        const TexMode mode = draw_state_.texture[m].mode;
+                        const TlutRef tlut = draw_state_.texture[m].tlut;
                         const TextureHandleKey handle_key =
                             texture_handle_key(img, mode, tlut);
                         if (const auto handle_it =
@@ -9041,7 +9026,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         GxPsConstants ps_c{};
-        fill_ps_constants(state_, draw_state_, ps_c, scales_from_textures_);
+        fill_ps_constants(draw_state_, ps_c, scales_from_textures_);
         if (tint_cleared > 0.0f) {
             for (auto& reg : ps_c.tev_regs) {
                 clear_register_tint(reg, tint_cleared);
@@ -9788,6 +9773,16 @@ void GxBackend::check_draw_state() {
         word("mtxaxf", 0u, matrix_index_a(draw_state_), state_.xf(0x1018u));
         word("mtxbxf", 0u, matrix_index_b(draw_state_), state_.xf(0x1019u));
         word("linepoint", 0u, line_point_word(draw_state_), state_.bp(bp::kSuLpSize));
+        for (unsigned m = 0; m < 8u; ++m) {
+            const unsigned bank = m >= 4u ? bp::kTexHighBankOffset : 0u;
+            const auto reg = [&](std::uint8_t base) { return state_.bp(static_cast<std::uint8_t>(base + bank + (m & 3u))); };
+            const TextureMap& t = draw_state_.texture[m];
+            word("texmode0_", m, tex_mode0_word(t), reg(bp::kTexMode0Base) & 0x3FFFFFu);
+            word("texmode1_", m, tex_mode1_word(t), reg(bp::kTexMode1Base) & 0xFFFFu);
+            word("teximage0_", m, tex_image0_word(t), reg(bp::kTexImage0Base));
+            word("teximage3_", m, t.image.guest_addr >> 5u, reg(bp::kTexImage3Base));
+            word("textlut_", m, tlut_word(t), reg(bp::kTexTlutBase) & 0xFFFu);
+        }
         static std::uint64_t word_draws = 0, word_mismatches = 0;
         ++word_draws;
         if (!words.empty() && ++word_mismatches <= 40u) {
@@ -9816,6 +9811,7 @@ void GxBackend::check_draw_state() {
     expected.position_matrix = draw_state_.position_matrix;
     std::memcpy(expected.texture_matrix, draw_state_.texture_matrix, sizeof(expected.texture_matrix));
     expected.line_point = draw_state_.line_point;
+    std::memcpy(expected.texture, draw_state_.texture, sizeof(expected.texture));
     const std::uint32_t ind_ref = state_.bp(bp::kIndRef);
     for (unsigned i = 0; i < 4u; ++i) {
         const std::uint32_t scale = state_.bp(static_cast<std::uint8_t>(bp::kRas1Ss0 + i / 2u)) >> ((i & 1u) * 8u);

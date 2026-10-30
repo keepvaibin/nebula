@@ -1495,14 +1495,13 @@ private:
     mutable std::array<VertexLayoutCacheEntry, 8> vertex_layout_cache_{};
 
     struct TextureBindingKey {
-        std::array<std::uint32_t, kMaxTextureMaps * 5u> regs{};
+        // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path
+        // takes map 7.
+        std::array<TextureMap, kMaxTextureMaps> maps{};
+        std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
 
-        // Field-wise, like TextureBindingKeyHash: the 3 bytes of tail padding after map_mask must not take part.
-        [[nodiscard]] bool operator==(const TextureBindingKey& other) const
-            noexcept {
-            return regs == other.regs && map_mask == other.map_mask;
-        }
+        [[nodiscard]] bool operator==(const TextureBindingKey& other) const noexcept = default;
     };
     struct TextureHandleKey {
         std::uint32_t guest_addr = 0;
@@ -1574,10 +1573,8 @@ private:
                 map_mask == other.map_mask;
         }
     };
-    // Layout guards for both keys, tail padding included; the padding is why they compare field-wise rather
-    // than with key_bytes_equal like the padding-free shader keys.
-    static_assert(sizeof(TextureBindingKey) ==
-                  kMaxTextureMaps * 5u * sizeof(std::uint32_t) + 4u);
+    // Layout guard, tail padding included; the padding is why the keys compare field-wise rather than with
+    // key_bytes_equal like the padding-free shader keys (TextureBindingKey's typed maps compare and hash by field).
     static_assert(sizeof(TextureTableKey) ==
                   kMaxTextureMaps *
                           (sizeof(std::uintptr_t) + sizeof(std::uint32_t) +
@@ -1621,8 +1618,23 @@ private:
         [[nodiscard]] std::size_t operator()(
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
-            for (const std::uint32_t reg : key.regs) {
-                hash = mix64(hash, reg);
+            hash = mix64(hash, key.lit_translucent);
+            for (const TextureMap& t : key.maps) {
+                const TexMode& m = t.mode;
+                hash = mix64(hash, t.image.guest_addr);
+                hash = mix64(hash, static_cast<std::uint64_t>(t.image.width) | static_cast<std::uint64_t>(t.image.height) << 16u |
+                                       static_cast<std::uint64_t>(t.image.format) << 32u |
+                                       static_cast<std::uint64_t>(t.tlut.tmem_offset) << 40u |
+                                       static_cast<std::uint64_t>(t.tlut.format) << 56u);
+                hash = mix64(hash, static_cast<std::uint64_t>(m.wrap_s) | static_cast<std::uint64_t>(m.wrap_t) << 4u |
+                                       static_cast<std::uint64_t>(m.mag_filter) << 8u |
+                                       static_cast<std::uint64_t>(m.min_filter) << 12u |
+                                       static_cast<std::uint64_t>(static_cast<std::uint16_t>(m.lod_bias_x32)) << 16u |
+                                       static_cast<std::uint64_t>(m.max_aniso) << 32u |
+                                       static_cast<std::uint64_t>(m.min_lod_x16) << 40u |
+                                       static_cast<std::uint64_t>(m.max_lod_x16) << 48u |
+                                       static_cast<std::uint64_t>(t.edge_lod) << 56u |
+                                       static_cast<std::uint64_t>(t.bias_clamp) << 57u);
             }
             return static_cast<std::size_t>(hash);
         }

@@ -492,6 +492,8 @@ struct TexImage {
     std::uint16_t height;
     TexFormat format;
     std::uint32_t guest_addr;       // physical byte address (reg value << 5)
+
+    [[nodiscard]] bool operator==(const TexImage&) const = default;
 };
 
 [[nodiscard]] constexpr TexImage decode_tex_image(
@@ -514,6 +516,8 @@ struct TexMode {
     std::uint8_t max_aniso;         // 0=1x, 1=2x, 2=4x
     std::uint8_t min_lod_x16;       // unsigned, 1/16 LOD units
     std::uint8_t max_lod_x16;
+
+    [[nodiscard]] bool operator==(const TexMode&) const = default;
 };
 
 [[nodiscard]] constexpr TexMode decode_tex_mode(
@@ -538,6 +542,8 @@ struct TexMode {
 struct TlutRef {
     std::uint16_t tmem_offset;      // TLUT slot in TMEM high bank
     TlutFormat format;
+
+    [[nodiscard]] bool operator==(const TlutRef&) const = default;
 };
 
 [[nodiscard]] constexpr TlutRef decode_tlut_ref(std::uint32_t v) {
