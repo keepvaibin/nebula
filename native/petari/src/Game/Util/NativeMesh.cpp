@@ -247,8 +247,7 @@ void NativeMesh::send() {
 void NativeMesh::draw() const {
     J3DNativeShape::flushState();
     const NebulaHostServices* pHost = nebula_host();
-    pHost->shape_draw(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(this)), __NebulaGXWriter.ptr,
-                      mArrays[SLOT_POSITION], mArrays[SLOT_NORMAL], mArrays[SLOT_COLOR0], nullptr, 0, nullptr, nullptr,
+    pHost->shape_draw(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(this)), mArrays[SLOT_POSITION], mArrays[SLOT_NORMAL], mArrays[SLOT_COLOR0], nullptr, 0, nullptr, nullptr,
                       0);
 }
 

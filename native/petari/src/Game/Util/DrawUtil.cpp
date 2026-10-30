@@ -29,6 +29,7 @@
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
 #include <revolution/gx/GXVert.h>
+#include <nebula_gx_fifo.h>
 
 static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
                                               0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,

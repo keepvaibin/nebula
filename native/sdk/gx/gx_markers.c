@@ -9,9 +9,6 @@
 
 const NebulaHostServices* nebula_host(void);
 
-/* The writer position records name (always the start: no command is written). */
-NebulaGXWriter __NebulaGXWriter;
-
 /* Nonzero while the renderer reads draw identities (asked at each scene's begin). */
 uint8_t __NebulaGXMarkers;
 

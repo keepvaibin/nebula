@@ -11,6 +11,7 @@
 #include <JSystem/JUtility/JUTConsole.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/gx/GXRegs.h>
+#include <nebula_gx_fifo.h>
 #include <runtime.h>
 
 MainLoopFramework* MainLoopFramework::sManager;

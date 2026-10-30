@@ -58,7 +58,7 @@ namespace {
         }
         draw.position_matrix = (sAttributes & NEBULA_SHAPE_POSITION_MATRIX) != 0 ? sMatrix : nullptr;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->immediate(pHost->user, __NebulaGXWriter.ptr, &draw);
+        pHost->immediate(pHost->user, &draw);
     }
 
     // Moves past values the vertex does not have; a complete vertex starts the next (the last sends the primitive).

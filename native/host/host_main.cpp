@@ -2022,10 +2022,9 @@ void svc_shape_geometry(void*, const NebulaShapeGeometry* geometry) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// Where a record the game makes now runs: in the order the game makes it, after the arrays and groups it registered
-// before it (which join the stream here). There is no command stream to place it in, so every offset is 0.
-std::size_t record_offset(const void* stream) {
-    (void)stream;
+// A record the game makes now runs in the order the game makes it, after the arrays and groups it registered before it
+// (which join the records here).
+void attach_pending_records() {
     if (gShapePendingAny.load(std::memory_order_acquire)) {
         std::vector<galaxy::gx::shapes::Record> pending;
         {
@@ -2038,7 +2037,6 @@ std::size_t record_offset(const void* stream) {
             galaxy::gx::attach_shape_record(std::move(record));
         }
     }
-    return 0;
 }
 
 // The physical address of game memory at `key` (a host address), as the renderer's texture cache names it.
@@ -2054,16 +2052,15 @@ uint64_t physical_of(uint64_t key) {
 }
 #endif
 
-// A group drawn (record_offset's place).
-void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position, uint64_t normal, uint64_t color,
+// A group drawn.
+void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, uint64_t color,
                     const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
                     const NebulaShapeTexGen* texgens, uint32_t texgen_count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
-    const std::size_t offset = record_offset(stream);
+    attach_pending_records();
     shapes::Record record;
     record.kind = shapes::Record::Kind::Draw;
-    record.offset = offset;
     record.key = shape;
     record.position = position;
     record.normal = normal;
@@ -2091,20 +2088,19 @@ void svc_shape_draw(void*, uint64_t shape, const void* stream, uint64_t position
     }
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)shape, (void)stream, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
+    (void)shape, (void)position, (void)normal, (void)color, (void)matrices, (void)matrix_count,
         (void)current, (void)texgens, (void)texgen_count;
 #endif
 }
 
-// The material the next shape draws use (record_offset's place); texture identities become the physical addresses
+// The material the next shape draws use; texture identities become the physical addresses
 // the texture cache names images by.
-void svc_texture_image(void*, const void* stream, const NebulaTextureImage* image) {
+void svc_texture_image(void*, const NebulaTextureImage* image) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     if (image == nullptr || image->bytes == nullptr || image->size == 0u) {
         return;
     }
-    (void)stream;
     const auto* first = static_cast<const std::byte*>(image->bytes);
     const uint64_t address = physical_of(reinterpret_cast<uint64_t>(image->bytes));
     // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
@@ -2125,7 +2121,7 @@ void svc_texture_image(void*, const void* stream, const NebulaTextureImage* imag
     record.image = std::move(copy);
     queue_shape_record(std::move(record));
 #else
-    (void)stream, (void)image;
+    (void)image;
 #endif
 }
 
@@ -2201,7 +2197,7 @@ int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
     return 1;
 }
 
-void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
+void svc_immediate(void*, const NebulaImmediate* draw) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     if (draw == nullptr || draw->count == 0u || draw->position == nullptr) {
@@ -2258,48 +2254,46 @@ void svc_immediate(void*, const void* stream, const NebulaImmediate* draw) {
     }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Immediate;
-    record.offset = record_offset(stream);
+    attach_pending_records();
     record.immediate = std::move(imm);
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)stream, (void)draw;
+    (void)draw;
 #endif
 }
 
-void svc_readback_capture(void*, const void* stream, uint32_t channel) {
+void svc_readback_capture(void*, uint32_t channel) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::Readback;
-    record.offset = record_offset(stream);
+    attach_pending_records();
     record.key = channel;
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)stream, (void)channel;
+    (void)channel;
 #endif
 }
 
-void svc_marker(void*, const void* stream, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b) {
+void svc_marker(void*, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::Marker;
-    record.offset = record_offset(stream);
+    attach_pending_records();
     record.key = kind;
     record.marker = {aux, a, b};
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)stream, (void)kind, (void)aux, (void)a, (void)b;
+    (void)kind, (void)aux, (void)a, (void)b;
 #endif
 }
 
 // The game's frame end: the renderer takes the frame's records.
-void svc_frame_end(void*, const void* stream) {
+void svc_frame_end(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    (void)stream;
     submit_frame(false, false);
 #else
-    (void)stream;
 #endif
 }
 
@@ -2327,7 +2321,7 @@ uint32_t svc_readback_serial(void*, uint32_t channel) {
 #endif
 }
 
-void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t count) {
+void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     static_assert(sizeof(NebulaStateOp) == sizeof(galaxy::gx::state::Op), "the renderer's copy of NebulaStateOp");
@@ -2336,7 +2330,7 @@ void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t cou
     }
     shapes::Record record;
     record.kind = shapes::Record::Kind::State;
-    record.offset = record_offset(stream);
+    attach_pending_records();
     record.state.resize(count);
     std::memcpy(record.state.data(), ops, sizeof(NebulaStateOp) * count);
     for (galaxy::gx::state::Op& op : record.state) {
@@ -2344,11 +2338,11 @@ void svc_state(void*, const void* stream, const NebulaStateOp* ops, uint32_t cou
     }
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)stream, (void)ops, (void)count;
+    (void)ops, (void)count;
 #endif
 }
 
-void svc_material(void*, const void* stream, const NebulaMaterial* material) {
+void svc_material(void*, const NebulaMaterial* material) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::gx::shapes;
     static_assert(sizeof(NebulaMaterial) == sizeof(galaxy::gx::material::Material), "the renderer's copy of NebulaMaterial");
@@ -2363,11 +2357,11 @@ void svc_material(void*, const void* stream, const NebulaMaterial* material) {
     }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Material;
-    record.offset = record_offset(stream);
+    attach_pending_records();
     record.material = std::move(copy);
     galaxy::gx::attach_shape_record(std::move(record));
 #else
-    (void)stream, (void)material;
+    (void)material;
 #endif
 }
 

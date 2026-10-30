@@ -98,7 +98,7 @@ namespace J3DNativeTexture {
         image.format = format;
         image.levels = levels;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->texture_image(pHost->user, __NebulaGXWriter.ptr, &image);
+        pHost->texture_image(pHost->user, &image);
     }
 
     void registerPalette(const void* pPalette, u16 entries) {
@@ -113,7 +113,7 @@ namespace J3DNativeTexture {
         palette.format = 0xFF;  // not an image
         palette.levels = 1;
         const NebulaHostServices* pHost = nebula_host();
-        pHost->texture_image(pHost->user, __NebulaGXWriter.ptr, &palette);
+        pHost->texture_image(pHost->user, &palette);
     }
 
     void init(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,

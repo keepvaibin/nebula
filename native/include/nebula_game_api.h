@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 44u
+#define NEBULA_GAME_API_VERSION 45u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -887,38 +887,33 @@ typedef struct NebulaHostServices {
     /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
        normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
        the rest), after `matrices` (`matrix_count` of them), `texgens` and, when not null, `current` take effect.
-       `stream` is the game's GX command writer when it draws: the draw comes after every command written before it.
+       Records (shapes, materials, state, immediates, images, captures, markers) run in the order the game makes them.
        Shape 0 draws nothing: only the matrices, current matrices and texgens take effect (state the game set before a
        material record, kept in order with it). */
-    void (*shape_draw)(void* user, uint64_t shape, const void* stream, uint64_t position, uint64_t normal,
+    void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
                        uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
                        const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count);
-    /* The material the next shape draws use (NebulaMaterial), after every command the game wrote before it (`stream`
-       as shape_draw takes it). */
-    void (*material)(void* user, const void* stream, const NebulaMaterial* material);
-    /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order), after every
-       command written before `stream` (as shape_draw takes it). */
-    void (*state)(void* user, const void* stream, const NebulaStateOp* ops, uint32_t count);
-    /* Vertices drawn as the game sends them (NebulaImmediate), after every command written before `stream`. */
-    void (*immediate)(void* user, const void* stream, const NebulaImmediate* draw);
+    /* The material the next shape draws use (NebulaMaterial). */
+    void (*material)(void* user, const NebulaMaterial* material);
+    /* Drawing-state changes the game makes outside materials (NebulaStateOp, `count` of them, in order). */
+    void (*state)(void* user, const NebulaStateOp* ops, uint32_t count);
+    /* Vertices drawn as the game sends them (NebulaImmediate). */
+    void (*immediate)(void* user, const NebulaImmediate* draw);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
-       it from here on, after every command written before `stream`. Sent when the image is loaded or rewritten. */
-    void (*texture_image)(void* user, const void* stream, const NebulaTextureImage* image);
+       it from here on. Sent when the image is loaded or rewritten. */
+    void (*texture_image)(void* user, const NebulaTextureImage* image);
     /* The Mii in a slot of the console's Mii database (0-99): 1 when there is one (`mii` filled when not NULL), 0 for
        an empty slot. */
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
-    /* The picture's colour and depth where the drawing has reached (after every command written before `stream`),
-       kept as `channel`'s. */
-    void (*readback_capture)(void* user, const void* stream, uint32_t channel);
+    /* The picture's colour and depth where the drawing has reached, kept as `channel`'s. */
+    void (*readback_capture)(void* user, uint32_t channel);
     /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
        (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
-    /* The game's frame is complete (its picture was shown earlier in the stream): the renderer takes everything
-       written before `stream`, which the game has handed over in full. */
-    void (*frame_end)(void* user, const void* stream);
-    /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad) after every command
-       written before `stream`. */
-    void (*marker)(void* user, const void* stream, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b);
+    /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
+    void (*frame_end)(void* user);
+    /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). */
+    void (*marker)(void* user, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b);
     /* How many captures of `channel`'s colour have finished since the game first read it (0: none): a capture made
        when the count was n is readable once it passes n. */
     uint32_t (*readback_serial)(void* user, uint32_t channel);

@@ -39,15 +39,6 @@ extern volatile void* __memReg;
 
 /* GX fifo write helpers */
 
-#ifdef TARGET_PC
-// The command stream: big-endian bytes at the CPU FIFO's write pointer (Nebula's FIFO writer).
-#include <nebula_gx_fifo.h>
-#define GX_WRITE_U8(ub) __NebulaGXPut8((u8)(ub))
-#define GX_WRITE_U16(us) __NebulaGXPut16((u16)(us))
-#define GX_WRITE_S16(us) __NebulaGXPut16((u16)(us))
-#define GX_WRITE_U32(ui) __NebulaGXPut32((u32)(ui))
-#define GX_WRITE_F32(f) __NebulaGXPutF32((f32)(f));
-#else
 #define GX_WRITE_U8(ub) gxfifo.u8 = (u8)(ub)
 
 #define GX_WRITE_U16(us) gxfifo.u16 = (u16)(us)
@@ -57,7 +48,6 @@ extern volatile void* __memReg;
 #define GX_WRITE_U32(ui) gxfifo.u32 = (u32)(ui)
 
 #define GX_WRITE_F32(f) gxfifo.f32 = (f32)(f);
-#endif
 
 #define GX_PI_REG_WRITE_U32(a, d) *(vu32*)((vu8*)__piReg + (a)) = (u32)(d)
 
@@ -103,12 +93,6 @@ extern volatile void* __memReg;
 
 #define GX_CP_IDLE_REG_READ_U16(a) GX_CP_REG_READ_U16(a)
 
-#ifdef TARGET_PC
-// Each register load is one command written in one reservation (nebula_gx_fifo.h): the same bytes.
-#define GX_WRITE_CP_STRM_REG(addr, vtxfmt, data) __NebulaGXCmdCP((u8)CP_STREAM_REG((vtxfmt), (addr)), (u32)(data))
-#define GX_WRITE_XF_REG(addr, data, cnt) __NebulaGXCmdXF(CP_XF_LOADREGS((addr), (cnt)), (u32)(data))
-#define GX_WRITE_RA_REG(reg) __NebulaGXCmdBP((u32)(reg))
-#else
 #define GX_WRITE_CP_STRM_REG(addr, vtxfmt, data)                                                                                                     \
     {                                                                                                                                                \
         GX_WRITE_U8(CP_OPCODE(0, 1));                                                                                                                \
@@ -128,7 +112,6 @@ extern volatile void* __memReg;
         GX_WRITE_U8(CP_OPCODE(1, 0xC));                                                                                                              \
         GX_WRITE_U32((reg));                                                                                                                         \
     }
-#endif
 
 #define GX_WRITE_XF_MEM_U32(addr, data) GX_WRITE_U32(data)
 #define GX_WRITE_XF_MEM_F32(addr, data) GX_WRITE_F32(data)

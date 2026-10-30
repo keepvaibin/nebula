@@ -720,7 +720,7 @@ namespace J3DNativeState {
 
     void endFrame() {
         const NebulaHostServices* pHost = nebula_host();
-        pHost->frame_end(pHost->user, __NebulaGXWriter.ptr);
+        pHost->frame_end(pHost->user);
     }
 
     void copyTex(void* pDest, GXBool clear) {

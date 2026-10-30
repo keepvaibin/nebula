@@ -347,7 +347,7 @@ namespace J3DNativeMaterial {
         }
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, __NebulaGXWriter.ptr, pSnapshot);
+        pHost->material(pHost->user, pSnapshot);
     }
 
     void sendDiffered(J3DDisplayListObj* pList) {
@@ -356,6 +356,6 @@ namespace J3DNativeMaterial {
         }
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, __NebulaGXWriter.ptr, pList->mpNebulaMaterial);
+        pHost->material(pHost->user, pList->mpNebulaMaterial);
     }
 };  // namespace J3DNativeMaterial

@@ -38,7 +38,7 @@ void J3DStateList::send() const {
     }
     J3DNativeShape::flushState();
     const NebulaHostServices* pHost = nebula_host();
-    pHost->state(pHost->user, __NebulaGXWriter.ptr, mOps, mCount);
+    pHost->state(pHost->user, mOps, mCount);
 }
 
 NebulaStateOp& J3DStateList::add(u8 kind) {

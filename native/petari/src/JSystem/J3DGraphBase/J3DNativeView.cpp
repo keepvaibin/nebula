@@ -21,7 +21,7 @@ namespace {
 
     void sendOp(const NebulaStateOp& rOp) {
         const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, __NebulaGXWriter.ptr, &rOp, 1);
+        pHost->state(pHost->user, &rOp, 1);
     }
 
     void sendViewport() {
@@ -49,14 +49,14 @@ namespace {
             op.f[i] = sTerms[i];
         }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->state(pHost->user, __NebulaGXWriter.ptr, &op, 1);
+        pHost->state(pHost->user, &op, 1);
     }
 }  // namespace
 
 namespace J3DNativeView {
     void captureReadback(u32 channel) {
         const NebulaHostServices* pHost = nebula_host();
-        pHost->readback_capture(pHost->user, __NebulaGXWriter.ptr, channel);
+        pHost->readback_capture(pHost->user, channel);
     }
 
     u32 readbackColor(u32 channel, s32 x, s32 y) {

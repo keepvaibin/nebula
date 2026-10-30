@@ -84,19 +84,6 @@ static inline void J3DGDWriteXFCmdHdr(u16 addr, u8 len) {
 }
 #endif
 
-inline void J3DGXCmd1f32ptr(f32* data) {
-    GXCmd1u32(*(u32*)data);
-}
-
-inline void J3DGXCmd1f32(f32 data) {
-    union {
-        f32 f;
-        u32 u;
-    } fid;
-    fid.f = data;
-    GXCmd1u32(fid.u);
-}
-
 #ifdef TARGET_PC
 inline void J3DGDWriteCPCmd(u8 reg, u32 value) {
     u8* const p = __GDReserve(6);

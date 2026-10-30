@@ -642,7 +642,7 @@ namespace J3DNativeShape {
 
     void draw(const J3DShapeDraw* pDraw) {
         const NebulaHostServices* pHost = nebula_host();
-        pHost->shape_draw(pHost->user, keyOf(pDraw), __NebulaGXWriter.ptr, keyOf(j3dSys.getVtxPos()),
+        pHost->shape_draw(pHost->user, keyOf(pDraw), keyOf(j3dSys.getVtxPos()),
                           keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sMatrices, sMatrixCount,
                           sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
         sMatrixCount = 0;
@@ -655,7 +655,7 @@ namespace J3DNativeShape {
             return;
         }
         const NebulaHostServices* pHost = nebula_host();
-        pHost->shape_draw(pHost->user, 0, __NebulaGXWriter.ptr, 0, 0, 0, sMatrices, sMatrixCount,
+        pHost->shape_draw(pHost->user, 0, 0, 0, 0, sMatrices, sMatrixCount,
                           sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
         sMatrixCount = 0;
         sCurrentSet = false;
