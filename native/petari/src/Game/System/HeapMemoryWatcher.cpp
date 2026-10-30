@@ -8,6 +8,7 @@
 #include <revolution/os.h>
 #include <revolution/wpad.h>
 #include "Game/System/NebulaClock.hpp"
+#include "JSystem/JUtility/JUTException.hpp"
 
 JKRExpHeap* HeapMemoryWatcher::sRootHeapGDDR3;
 
@@ -170,20 +171,14 @@ HeapMemoryWatcher::HeapMemoryWatcher()
     createHeaps();
 }
 
-#ifdef TARGET_PC
 // Natively the report names the heap and the request, for the host's crash report.
 void HeapMemoryWatcher::memoryErrorCallback(void* pHeap, u32 size, int alignment) {
     if (static_cast< JKRHeap* >(pHeap)->getHeapType() == 'EXPH') {
         static_cast< JKRExpHeap* >(pHeap)->reportBlocks();
     }
-    OSPanic(__FILE__, 537, "out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
+    JUTException::panic_f(__FILE__, 537, "out of memory: heap %p (%d bytes free), %u bytes, alignment %d", pHeap,
             static_cast< JKRHeap* >(pHeap)->getFreeSize(), size, alignment);
 }
-#else
-void HeapMemoryWatcher::memoryErrorCallback(void*, u32, int) {
-    OSPanic(__FILE__, 537, "");
-}
-#endif
 
 void HeapMemoryWatcher::checkRestMemory() {
 }

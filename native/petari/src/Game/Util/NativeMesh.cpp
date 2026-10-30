@@ -3,6 +3,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
+#include "JSystem/JUtility/JUTException.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -58,7 +59,7 @@ namespace {
     }
 
     void fail(const char* pWhat) {
-        OSPanic(__FILE__, __LINE__, "NativeMesh: %s", pWhat);
+        JUTException::panic_f(__FILE__, __LINE__, "NativeMesh: %s", pWhat);
     }
 }  // namespace
 

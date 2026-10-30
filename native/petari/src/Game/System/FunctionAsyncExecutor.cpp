@@ -5,6 +5,7 @@
 #include "Game/Util/MutexHolder.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRUnitHeap.hpp>
+#include "JSystem/JUtility/JUTException.hpp"
 
 FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, int priority, const char* pName)
     : mFunc(pFunc), mPriority(priority), mName(pName), mIsEnd(false) {
@@ -166,7 +167,7 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
         for (FunctionAsyncExecInfo* const* p = mHolders.begin(); p != lst; p++) {
             JUTNativeLog("  async function %p \"%s\" end %d\n", (*p)->mName, (*p)->mName, (*p)->mIsEnd);
         }
-        OSPanic(__FILE__, __LINE__, "isEnd: no async function %p \"%s\" among %d", pName, pName, (int)mHolders.size());
+        JUTException::panic_f(__FILE__, __LINE__, "isEnd: no async function %p \"%s\" among %d", pName, pName, (int)mHolders.size());
     }
 #endif
     FunctionAsyncExecInfo* info = *cur;

@@ -3,6 +3,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
+#include "JSystem/JUtility/JUTException.hpp"
 
 extern "C" const NebulaHostServices* nebula_host(void);
 
@@ -42,7 +43,7 @@ void J3DStateList::send() const {
 
 NebulaStateOp& J3DStateList::add(u8 kind) {
     if (mCount == mCapacity) {
-        OSPanic(__FILE__, __LINE__, "J3DStateList: more changes than its storage holds");
+        JUTException::panic_f(__FILE__, __LINE__, "J3DStateList: more changes than its storage holds");
     }
     NebulaStateOp& rOp = mOps[mCount++];
     memset(&rOp, 0, sizeof(rOp));

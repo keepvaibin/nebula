@@ -1,10 +1,11 @@
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <revolution/os.h>
+#include "JSystem/JUtility/JUTException.hpp"
 
 void JUTPalette::storeTLUT(_GXTlut param_0, ResTLUT* tlut) {
     if (tlut == nullptr) {
-        OSPanic(__FILE__, 35, "JUTTexture: TLUT is NULL\n");
+        JUTException::panic_f(__FILE__, 35, "JUTTexture: TLUT is NULL\n");
     }
     mName = param_0;
     mFormat = tlut->mFormat;

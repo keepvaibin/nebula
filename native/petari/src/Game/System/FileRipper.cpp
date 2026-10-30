@@ -5,6 +5,7 @@
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaDisc.hpp"
 #include "Game/Util/RenderSignals.hpp"
+#include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
     OSMutex sDecompMutex;
@@ -44,14 +45,14 @@ void* FileRipper::loadToMainRAM(const char* fpath, u8* dest, bool decompress, JK
     u32 decompressedSize;
 
     if (!MR::isFileExist(fpath, false)) {
-        OSPanic(__FILE__, 0x70, "File isn't exist.");
+        JUTException::panic_f(__FILE__, 0x70, "File isn't exist.");
     }
 
     u32 fsize = (MR::getFileSize(fpath, false) + 0x1f) / 0x20 * 0x20;
 
     NebulaDisc::File fileInfo;
     if (!NebulaDisc::open(fpath, &fileInfo)) {
-        OSPanic(__FILE__, 0x77, "NebulaDisc::open() failed");
+        JUTException::panic_f(__FILE__, 0x77, "NebulaDisc::open() failed");
     }
 
 #ifdef TARGET_PC
