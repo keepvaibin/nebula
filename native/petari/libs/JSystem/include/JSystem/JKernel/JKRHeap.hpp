@@ -149,26 +149,6 @@ public:
     static void fillMemory(u8*, u32, u8);
     static bool checkMemoryFilled(u8*, u32, u8);
 
-    static void* getCodeStart(void) {
-        return mCodeStart;
-    }
-
-    static void* getCodeEnd(void) {
-        return mCodeEnd;
-    }
-
-    static void* getUserRamStart(void) {
-        return mUserRamStart;
-    }
-
-    static void* getUserRamEnd(void) {
-        return mUserRamEnd;
-    }
-
-    static u32 getMemorySize(void) {
-        return mMemorySize;
-    }
-
     static JKRHeap* getRootHeap() {
         return sRootHeap;
     }
@@ -199,11 +179,6 @@ public:
 
     static JKRErrorHandler mErrorHandler;
 
-    static void* mCodeStart;
-    static void* mCodeEnd;
-    static void* mUserRamStart;
-    static void* mUserRamEnd;
-    static u32 mMemorySize;
 
     inline void* getStartAddr() const {
         return (void*)mStart;

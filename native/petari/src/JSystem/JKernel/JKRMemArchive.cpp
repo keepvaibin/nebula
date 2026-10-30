@@ -54,18 +54,17 @@ void JKRMemArchive::fixedInit(s32 entryNum) {
 }
 
 bool JKRMemArchive::mountFixed(void* a1, JKRMemBreakFlag breakFlag) {
-#ifdef TARGET_PC
-    // The archive's identity is its address, as the console's cached address (0x80000000 | physical): never a disc
-    // entry number, and unique per archive.
-    const s32 identity = static_cast< s32 >(0x80000000u | OSCachedToPhysical(a1));
-#else
-    const s32 identity = reinterpret_cast< s32 >(a1);
-#endif
-    if (check_mount_already(identity) != nullptr) {
-        return false;
+    // An archive mounted from memory has no disc entry (-1): mounting the same data again finds it.
+    for (JSUPtrLink* link = sVolumeList.mHead; link != nullptr; link = link->mNext) {
+        JKRArchive* const archive = reinterpret_cast< JKRArchive* >(link->mData);
+        if (archive->mLoaderType == RARC_MAGIC && archive->mMountMode == MOUNT_MODE_MEM && archive->mEntryNum < 0 &&
+            static_cast< JKRMemArchive* >(archive)->mHeader == a1) {
+            archive->_34++;
+            return false;
+        }
     }
 
-    fixedInit(identity);
+    fixedInit(-1);
 
     if (!open(a1, 0xFFFF, breakFlag)) {
         return false;

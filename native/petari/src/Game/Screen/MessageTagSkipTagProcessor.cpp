@@ -1,8 +1,49 @@
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
-#ifdef TARGET_PC
-#include <nebula_endian.h>
-#include <revolution/os.h>
-#endif
+#include <string.h>
+
+namespace {
+    // A string argument's slot in the text has the console pointer's 4 bytes: it holds a token naming the string in
+    // this table (0: none). Each distinct string keeps its entry; a full table reuses the oldest, and a token to a
+    // reused entry reads as no string. The game's arguments are long-lived (messages, galaxy names, a few buffers).
+    const u32 kParamStringCount = 1024;
+    const wchar_t* sParamStrings[kParamStringCount];
+    u32 sParamStringGenerations[kParamStringCount];
+    u32 sParamStringUsed;
+    u32 sParamStringNext;
+
+    u32 paramStringToken(u32 index) {
+        return 1 + index + sParamStringGenerations[index] * kParamStringCount;
+    }
+
+    u32 nameParamString(const wchar_t* pString) {
+        if (pString == nullptr) {
+            return 0;
+        }
+        for (u32 i = 0; i < sParamStringUsed; i++) {
+            if (sParamStrings[i] == pString) {
+                return paramStringToken(i);
+            }
+        }
+        u32 index;
+        if (sParamStringUsed < kParamStringCount) {
+            index = sParamStringUsed++;
+        } else {
+            index = sParamStringNext;
+            sParamStringNext = (sParamStringNext + 1) % kParamStringCount;
+            sParamStringGenerations[index]++;
+        }
+        sParamStrings[index] = pString;
+        return paramStringToken(index);
+    }
+
+    const wchar_t* findParamString(u32 token) {
+        if (token == 0) {
+            return nullptr;
+        }
+        const u32 index = (token - 1) % kParamStringCount;
+        return index < sParamStringUsed && paramStringToken(index) == token ? sParamStrings[index] : nullptr;
+    }
+}  // namespace
 
 MessageEditorMessageTag::MessageEditorMessageTag(const nw4r::ut::PrintContext< wchar_t >* pContext) : mMessage(pContext->str) {
 }
@@ -62,18 +103,17 @@ wchar_t* MessageEditorMessageTag::getParamPtr(int index) const {
     return const_cast< wchar_t* >(reinterpret_cast< const wchar_t* >(pParam));
 }
 
-#ifdef TARGET_PC
-// The slot holds the string's console address, big-endian as the console stored the pointer: the bytes travel with the
-// message text as the pointer's did, and the first is nonzero once set (RMGK01 tests it).
+// The token travels with the message text as the console's pointer did.
 void MessageEditorMessageTag::setParamString(const wchar_t* pString) const {
-    nebula_store_be32(getParamPtr(0), pString != nullptr ? NEBULA_CONSOLE_ADDRESS(pString) : 0u);
+    const u32 token = nameParamString(pString);
+    memcpy(getParamPtr(0), &token, sizeof(token));
 }
 
 const wchar_t* MessageEditorMessageTag::getParamString() const {
-    const u32 address = nebula_load_be32(getParamPtr(0));
-    return address != 0 ? static_cast< const wchar_t* >(OSPhysicalToCached(address - OS_BASE_CACHED)) : nullptr;
+    u32 token;
+    memcpy(&token, getParamPtr(0), sizeof(token));
+    return findParamString(token);
 }
-#endif
 
 MessageTagSkipTagProcessor::MessageTagSkipTagProcessor() : nw4r::ut::TagProcessorBase< wchar_t >() {
 }

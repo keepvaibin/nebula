@@ -10,11 +10,6 @@ JKRErrorHandler JKRHeap::mErrorHandler;
 
 static bool byte_806B70B8;
 
-void* JKRHeap::mCodeStart;
-void* JKRHeap::mCodeEnd;
-void* JKRHeap::mUserRamStart;
-void* JKRHeap::mUserRamEnd;
-u32 JKRHeap::mMemorySize;
 
 static bool byte_806B26D8 = true;
 // The DSP's ARAM-in-MEM2 base; natively the MEM2 arena address HeapMemoryWatcher sets before the DSP boots.
@@ -108,15 +103,8 @@ bool JKRHeap::initArena(char** memory, u32* size, int maxHeaps) {
     }
 
     arenaStart = OSInitAlloc(arenaLo, arenaHi, maxHeaps);
-    OSBootInfo* code = (OSBootInfo*)OSPhysicalToCached(0);
     ramStart = (void*)(((uintptr_t)arenaStart + 31) & ~(uintptr_t)31);
     ramEnd = (void*)((uintptr_t)arenaHi & ~(uintptr_t)31);
-
-    JKRHeap::mCodeStart = code;
-    JKRHeap::mCodeEnd = ramStart;
-    JKRHeap::mUserRamStart = ramStart;
-    JKRHeap::mUserRamEnd = ramEnd;
-    JKRHeap::mMemorySize = code->memorySize;
 
     OSSetArenaLo(ramEnd);
     OSSetArenaHi(ramEnd);

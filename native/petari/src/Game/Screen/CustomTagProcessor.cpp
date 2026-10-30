@@ -425,11 +425,7 @@ void CustomTagProcessor::setArgString(const wchar_t* string, s32 index) {
             break;
         }
 
-#ifdef TARGET_PC
         tag.setParamString(string);
-#else
-        *reinterpret_cast< const wchar_t** >(tag.getParamPtr(0)) = string;
-#endif
     }
 }
 
@@ -666,11 +662,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeStringGroup(nw4r::ut::Rect*
     }
 #endif
 
-#ifdef TARGET_PC
     writeString(rect, tag.getParamString(), context);
-#else
-    writeString(rect, *reinterpret_cast< const wchar_t** >(tag.getParamPtr(0)), context);
-#endif
     return OPERATION_DEFAULT;
 }
 

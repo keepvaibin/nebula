@@ -9,22 +9,13 @@
 extern "C" {
 #endif
 
-#define PHY_ADDR_MASK ~((~0x3FFF) << 16)
 #ifdef TARGET_PC
-// The address the GPU sees: physical, from the platform layer's mapping of the game's memory.
-#ifdef __cplusplus
-extern "C" u32 __NebulaToPhysical(const void* addr);
-#else
-u32 __NebulaToPhysical(const void* addr);
-#endif
-#define GX_PHY_ADDR(a) __NebulaToPhysical((const void*)(a))
 // A colour as the console's 32-bit load of it read: r in the top byte, on any host.
 #define GX_COLOR_WORD(c) (((u32)(c).r << 24) | ((u32)(c).g << 16) | ((u32)(c).b << 8) | (u32)(c).a)
 // The two words of a GXColorS10 (four s16) as the console read them: r:g, then b:a.
 #define GX_COLOR_S10_RG(c) (((u32)(u16)(c).r << 16) | (u32)(u16)(c).g)
 #define GX_COLOR_S10_BA(c) (((u32)(u16)(c).b << 16) | (u32)(u16)(c).a)
 #else
-#define GX_PHY_ADDR(a) ((u32)a & PHY_ADDR_MASK)
 #define GX_COLOR_WORD(c) (*(u32*)(&(c)))
 #define GX_COLOR_S10_RG(c) (*(u32*)(&(c)))
 #define GX_COLOR_S10_BA(c) (*((u32*)(&(c)) + 1))

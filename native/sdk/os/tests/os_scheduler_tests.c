@@ -129,8 +129,7 @@ static void measure(void) {
     }
 }
 
-/* The arena is aligned to its size: an arena pointer's low 29 bits are its physical address, and the console address
-   (NEBULA_CONSOLE_ADDRESS) is the console's cached-region one. */
+/* The arena is aligned to its size: an arena pointer's low 29 bits are its physical address. */
 static void check_arena(void) {
     u8* const mem1 = (u8*)OSGetMEM1ArenaLo();
     u8* const mem2 = (u8*)OSGetMEM2ArenaLo();

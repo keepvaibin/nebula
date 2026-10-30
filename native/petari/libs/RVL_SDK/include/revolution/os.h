@@ -75,9 +75,6 @@ u32 __NebulaObjectId(const void* pObject);
 #define OSCachedToPhysical(caddr) __NebulaToPhysical((const void*)(caddr))
 #define OSUncachedToPhysical(ucaddr) __NebulaToPhysical((const void*)(ucaddr))
 #define OSPhysicalToUncached(paddr) __NebulaFromPhysical((u32)(paddr))
-// The address the console's game saw for a pointer into game memory (its cached-region address), where the game derives
-// a value from an address.
-#define NEBULA_CONSOLE_ADDRESS(caddr) (__NebulaToPhysical((const void*)(caddr)) + OS_BASE_CACHED)
 #else
 #define OSPhysicalToCached(paddr) ((void*)((u32)(paddr) + OS_BASE_CACHED))
 #define OSCachedToPhysical(caddr) ((u32)((u8*)(caddr)-OS_BASE_CACHED))

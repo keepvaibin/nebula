@@ -164,11 +164,7 @@ namespace MR {
                 }
 #endif
                 else if (tag.getGroup() == 7) {
-#ifdef TARGET_PC
                     count += countMessageChar(tag.getParamString());
-#else
-                    count += countMessageChar(*reinterpret_cast< const wchar_t* const* >(tag.getParamPtr(0)));
-#endif
                 } else if (tag.isGroupTagId(1, 1)) {
                     break;
                 }
