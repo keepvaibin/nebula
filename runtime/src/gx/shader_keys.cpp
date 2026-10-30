@@ -337,12 +337,12 @@ VertexShaderKey build_vertex_shader_key(const GxState& state, std::uint32_t matr
     return key;
 }
 
-RenderStateKey build_render_state_key(const GxState& state) {
+RenderStateKey build_render_state_key(const NativeDrawState& state) {
     RenderStateKey key{};
     std::memset(&key, 0, sizeof(key));
 
-    const BlendMode bm = state.blend_mode();
-    const PeControl pe = state.pe_control();
+    const PeControl pe = state.pe;
+    const BlendMode bm = effective_blend(state.blend, pe.pixel_format == 1u);
 
     // An EFB without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
@@ -398,7 +398,7 @@ RenderStateKey build_render_state_key(const GxState& state) {
     }
 
     // zmode_bits: test_enable(0) | func(3:1) | update_enable(4)
-    const ZMode zm = state.z_mode();
+    const ZMode zm = state.z;
     // A disabled compare passes unconditionally, so the function field is leftover state then.
     key.zmode_bits = static_cast<std::uint16_t>(
         (zm.test_enable   ? 1u : 0u)                                            |
@@ -406,8 +406,7 @@ RenderStateKey build_render_state_key(const GxState& state) {
              ? ((static_cast<std::uint32_t>(zm.func) & 0x7u) << 1u) : 0u)       |
         (zm.update_enable ? (1u << 4u) : 0u));
 
-    const GenMode gm = state.gen_mode();
-    key.cull = static_cast<std::uint8_t>(gm.cull);
+    key.cull = static_cast<std::uint8_t>(state.gen.cull);
 
     // The pipeline only distinguishes RGBA6 (has destination alpha) from the
     // other formats.

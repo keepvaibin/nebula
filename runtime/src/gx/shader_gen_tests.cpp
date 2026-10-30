@@ -278,22 +278,20 @@ int main() {
     {   // RGB8/RGB565 have no EFB alpha, so destination-alpha factors read ONE/ZERO (as in Aurora's GX pipeline
         // normalization), which writes the source unchanged: no blend at all (effective_blend), the key of an
         // unblended draw; RGBA6 keeps its factors and its blend.
-        GxState state;
-        const auto write_bp = [&state](std::uint8_t reg, std::uint32_t value) {
-            state.load_bp((static_cast<std::uint32_t>(reg) << 24u) | value);
+        NativeDrawState state;
+        const auto set_blend = [&state](BlendFactor source, BlendFactor destination) {
+            state.blend.blend_enable = true;
+            state.blend.src_factor = source;
+            state.blend.dst_factor = destination;
         };
-        constexpr std::uint32_t kDstAlphaBlend =
-            1u | (6u << 8u) | (7u << 5u);
-        constexpr std::uint32_t kNormalizedBlend =
-            1u | (1u << 8u) | (0u << 5u);
-        write_bp(bp::kBlendMode, kDstAlphaBlend);
+        set_blend(BlendFactor::DstAlpha, BlendFactor::InvDstAlpha);
         const RenderStateKey rgb8 = build_render_state_key(state);
-        write_bp(bp::kBlendMode, kNormalizedBlend);
+        set_blend(BlendFactor::One, BlendFactor::Zero);
         const RenderStateKey rgb8_normalized = build_render_state_key(state);
-        write_bp(bp::kPeControl, 2u);  // RGB565_Z16 also lacks EFB alpha.
-        write_bp(bp::kBlendMode, kDstAlphaBlend);
+        state.pe.pixel_format = 2u;  // RGB565_Z16 also lacks EFB alpha.
+        set_blend(BlendFactor::DstAlpha, BlendFactor::InvDstAlpha);
         const RenderStateKey rgb565 = build_render_state_key(state);
-        write_bp(bp::kPeControl, 1u);  // RGBA6_Z24 has EFB alpha.
+        state.pe.pixel_format = 1u;  // RGBA6_Z24 has EFB alpha.
         const RenderStateKey rgba6 = build_render_state_key(state);
         if (!(rgb8 == rgb8_normalized) || (rgb8.blend_bits & 1u) != 0u ||
             (rgb565.blend_bits & 0x1FFFu) != 0u ||
@@ -1509,17 +1507,21 @@ int main() {
         }
     }
     {
-        GxState state;
-        state.load_bp((static_cast<std::uint32_t>(bp::kPeControl) << 24u) | 1u);
+        NativeDrawState state;
+        state.pe.pixel_format = 1u;
         // RGBA6 src-alpha blending requires dual source without constant alpha.
-        state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) |
-                      1u | (1u << 4u) | (4u << 8u) | (5u << 5u));
+        state.blend.blend_enable = true;
+        state.blend.alpha_update = true;
+        state.blend.src_factor = BlendFactor::SrcAlpha;
+        state.blend.dst_factor = BlendFactor::InvSrcAlpha;
         const auto dual = build_render_state_key(state);
-        state.load_bp((static_cast<std::uint32_t>(bp::kConstAlpha) << 24u) | 0x180u);
+        state.blend.const_alpha_enable = true;
+        state.blend.const_alpha = 0x80u;
         const auto both = build_render_state_key(state);
         // Subtract uses ONE/ONE and still needs constant EFB alpha overwrite.
-        state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) |
-                      1u | (1u << 4u) | (1u << 11u));
+        state.blend.subtract = true;
+        state.blend.src_factor = BlendFactor::Zero;
+        state.blend.dst_factor = BlendFactor::Zero;
         const auto constant = build_render_state_key(state);
         if ((dual.blend_bits & (1u << 27u)) == 0u ||
             (dual.blend_bits & (1u << 28u)) != 0u ||
@@ -1528,8 +1530,8 @@ int main() {
             ++g_failures;
             std::printf("FAILED: independent alpha routing/overwrite key facts\n");
         }
-        state.load_bp((static_cast<std::uint32_t>(bp::kBlendMode) << 24u) |
-                      1u | (1u << 4u) | (1u << 11u) | (7u << 8u) | (6u << 5u));
+        state.blend.src_factor = BlendFactor::InvDstAlpha;
+        state.blend.dst_factor = BlendFactor::DstAlpha;
         if (!(build_render_state_key(state) == constant)) {
             ++g_failures;
             std::printf("FAILED: subtract keyed ignored blend factors\n");
@@ -1540,15 +1542,9 @@ int main() {
         state.load_bp(1u); // one regular texgen
         const std::uint32_t regular = 5u << 7u;
         state.load_xf(xf::kTexGenBase, &regular, 1u);
-        const auto disabled = build_vertex_shader_key(state);
+        // Post-transform texture matrices are always on (natively there is no revision bit).
         const std::uint32_t post = 29u | (1u << 8u);
         state.load_xf(xf::kPostTexGenBase, &post, 1u);
-        if (!(disabled == build_vertex_shader_key(state))) {
-            ++g_failures;
-            std::printf("FAILED: disabled post matrix fragmented shader key\n");
-        }
-        const std::uint32_t dual = 1u;
-        state.load_xf(xf::kDualTexTrans, &dual, 1u);
         const auto enabled = build_vertex_shader_key(state);
         const std::uint32_t other_post = 7u | (1u << 8u);
         state.load_xf(xf::kPostTexGenBase, &other_post, 1u);

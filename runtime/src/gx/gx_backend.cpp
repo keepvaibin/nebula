@@ -8471,7 +8471,7 @@ gpu::Pipeline* GxBackend::flush_draw_state(
     }
     shader_key_hashes_valid_ = true;
     if (rs_dirty) {
-        render_state_key_ = build_render_state_key(state_);
+        render_state_key_ = build_render_state_key(draw_state_);
     }
     // The EFB's variant (its samples per pixel, MSAA, the output EFB has one; the HDR scene EFB) decides the
     // pipeline's too.
