@@ -77,6 +77,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
+#include "Game/Util/RenderSignals.hpp"
 
 namespace {
     CometRetryButton* getCometRetryButton() {
@@ -619,7 +620,7 @@ void GameScene::draw3D() const {
     f32 sceneCamera[4][4];
     MotionSignal::sceneCamera(sceneCamera);
     __NebulaGameStage(MR::getCurrentStageName());
-    __NebulaGXSceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
+    NebulaRender::sceneMarker(NEBULA_SCENE_3D_BEGIN, sceneCamera);
     MotionSignal::sceneBegin();
     GameLightSignal::frame();
     CategoryList::execute(MR::DrawType_AstroDomeSkyClear);
@@ -670,7 +671,7 @@ void GameScene::draw3D() const {
     MR::loadLightPlayer();
     CategoryList::execute(MR::DrawType_0x24);
     CategoryList::execute(MR::DrawType_0x3B);
-    __NebulaGXSceneMarker(NEBULA_SCENE_3D_END, nullptr);
+    NebulaRender::sceneMarker(NEBULA_SCENE_3D_END, nullptr);
     MR::clearZBuffer();
 }
 

@@ -10,7 +10,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <revolution/os.h>
 #endif
 
@@ -65,7 +65,7 @@ void BloomEffectSimple::draw() const {
         const f32 vertical = MR::isScreen16Per9() ? 1.333f : 1.0f;
         u32 verticalBits;
         __builtin_memcpy(&verticalBits, &vertical, sizeof(verticalBits));
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_SIMPLE,
+        NebulaRender::bloomMarker(NebulaRender::kBloomSimple,
                               mThreshold | static_cast< u32 >(mMaskFilter & 0xFF) << 8 | tap << 16 | static_cast< u32 >(alpha) << 24,
                               verticalBits);
         MR::reinitGX();
@@ -87,7 +87,7 @@ void BloomEffectSimple::draw() const {
     // The renderer keeps the scene in the EFB's own format: the corner the chain works in is saved as a texture copy,
     // which cuts the ray tracer's HDR scene at 1 there.
     if (route != 0) {
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_KEEP, 0, 0);
+        NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
 #endif
     {
@@ -131,7 +131,7 @@ void BloomEffectSimple::draw() const {
 #ifdef TARGET_PC
     if (route != 0) {
         // The kept scene drawn back over the corner the chain worked in (the rest of the frame is unchanged).
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_RESTORE, 0, 0);
+        NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
     } else
 #endif
     {

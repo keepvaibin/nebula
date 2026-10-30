@@ -11,7 +11,7 @@
 #include <JSystem/JUtility/JUTConsole.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/gx/GXRegs.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <runtime.h>
 
 MainLoopFramework* MainLoopFramework::sManager;
@@ -215,7 +215,7 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     J3DNativeState::setCullMode(GX_CULL_BACK);
 
 #ifdef TARGET_PC
-    __NebulaGXClearQuadColourMarker(0xFFFFFF, (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
+    NebulaRender::clearQuadColour(0xFFFFFF, (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                                                   (static_cast< u32 >(color.b) << 8) | color.a);
 #endif
     J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 48u
+#define NEBULA_GAME_API_VERSION 49u
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -438,7 +438,7 @@ typedef struct NebulaDisplay {
 enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
-    NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (__NebulaGXHostMarker) */
+    NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
     NEBULA_OPTION_RT_SHADOW_CASTERS, /* 1 while the ray tracer lights the scene: actors are drawn to the camera's far
                                         plane at full detail (LodCtrl), and out-of-view ones whose shadow or light
                                         reaches the view stay unclipped (ClippingActorInfo::isWantedForLight) */
@@ -447,7 +447,7 @@ enum {
     NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
                                         model, 3 its high and middle models in turn each frame (the switch itself) */
     NEBULA_OPTION_BLOOM,             /* how BloomEffect and BloomEffectSimple go through the renderer
-                                        (__NebulaGXBloomMarker): 0 not at all (their copy chains, as the console's), 1
+                                        (NebulaRender::bloomMarker): 0 not at all (their copy chains, as the console's), 1
                                         their own chains with the scene they work over kept and restored by it (in the
                                         EFB's own format), 2 it draws the bloom from their values */
     NEBULA_OPTION_RT_PREPARATION,    /* ray tracing's shader preparation, which the title waits for (NebulaRtPrepare):
@@ -470,7 +470,7 @@ enum {
                                    follows the camera (1) */
 };
 
-/* gx_scene_marker: the scene bounds in the stream. */
+/* scene_marker: the scene bounds among the records. */
 enum {
     NEBULA_SCENE_3D_BEGIN = 0, /* GameScene::draw3D's begin, with the camera and the player's up */
     NEBULA_SCENE_3D_END,
@@ -744,13 +744,13 @@ typedef struct NebulaHostServices {
        its own diagnostics and ends the process. Does not return. */
     void (*fatal)(void* user, const char* text);
 
-    /* A scene bound (NEBULA_SCENE_*) at the end of the stream so far; the 3D scene's begin carries 16 floats: the
+    /* A scene bound (NEBULA_SCENE_*) after the records so far; the 3D scene's begin carries 16 floats: the
        camera's world-to-eye matrix (row-major 3x4), then the player's up in the world (against its gravity) and 1, or
        four zeros without a player. The others NULL. */
-    void (*gx_scene_marker)(void* user, uint32_t marker, const float* view);
+    void (*scene_marker)(void* user, uint32_t marker, const float* view);
     /* A JPA stripe particle whose two strip vertices are drawn next (galaxy/motion_signals.h): age << 16 |
        lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
-    void (*gx_stripe_particle)(void* user, uint32_t particle, uint32_t age_lifetime, uint8_t strip);
+    void (*stripe_particle)(void* user, uint32_t particle, uint32_t age_lifetime, uint8_t strip);
 
     /* Disc: the game partition's file table as on the disc (big-endian), valid for the process's life. */
     const uint8_t* (*disc_fst)(void* user, size_t* size);

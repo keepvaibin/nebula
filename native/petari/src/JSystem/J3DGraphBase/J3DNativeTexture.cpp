@@ -1,6 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 
 static_assert(sizeof(J3DNativeTexObj) <= sizeof(GXTexObj), "a GXTexObj holds a J3DNativeTexObj");

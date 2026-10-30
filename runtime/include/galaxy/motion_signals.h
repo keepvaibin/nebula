@@ -75,7 +75,7 @@ inline constexpr std::uint16_t kBloomKeep = 1u;
 inline constexpr std::uint16_t kBloomNormal = 2u;
 inline constexpr std::uint16_t kBloomSimple = 3u;
 inline constexpr std::uint16_t kBloomRestore = 4u;
-// The next draw is the game's EFB clear quad (nebula_gx_fifo.h __NebulaGXClearQuadMarker), a its Z texture's depth;
+// The next draw is the game's EFB clear quad (Game/Util/RenderSignals.hpp NebulaRender::clearQuad), a its Z texture's depth;
 // aux 1: b its constant colour (TEV C0 and A0, RGBA).
 inline constexpr std::uint8_t kMarkerClearQuad = 16u;
 

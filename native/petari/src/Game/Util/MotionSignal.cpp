@@ -24,6 +24,7 @@
 #include <nebula_game_api.h>
 #include <nw4r/lyt/pane.h>
 #include <revolution/os.h>
+#include "Game/Util/RenderSignals.hpp"
 
 namespace {
     // Host marker kinds and flags (galaxy/motion_signals.h).
@@ -145,7 +146,7 @@ namespace MotionSignal {
     // model's shape packets at each instance's model before its draw.
     void drawShapePacketImpl(const J3DShapePacket* pPacket) {
         const J3DModel* pModel = pPacket->getModel();
-        __NebulaGXHostMarker(Kind_ShapePacket, pModel != nullptr ? auxEpoch(pModel->mMotionEpoch) : 0,
+        NebulaRender::hostMarker(Kind_ShapePacket, pModel != nullptr ? auxEpoch(pModel->mMotionEpoch) : 0,
                              pModel != nullptr ? id(pModel) : id(pPacket), id(pPacket->getShape()));
     }
 
@@ -190,116 +191,116 @@ namespace MotionSignal {
                 }
             }
         }
-        __NebulaGXHostMarker(Kind_Material, 0, key, 0);
+        NebulaRender::hostMarker(Kind_Material, 0, key, 0);
     }
 
     void drawNameObjImpl(const NameObj* pObj) {
-        __NebulaGXHostMarker(Kind_NameObj, auxEpoch(pObj->mMotionEpoch), id(pObj), id(*reinterpret_cast< void* const* >(pObj)));
+        NebulaRender::hostMarker(Kind_NameObj, auxEpoch(pObj->mMotionEpoch), id(pObj), id(*reinterpret_cast< void* const* >(pObj)));
     }
 
     void drawEmitterImpl(const JPAResource* pResource, const JPABaseEmitter* pEmitter, bool child) {
-        __NebulaGXHostMarker(Kind_Emitter, static_cast< u16 >(auxEpoch(pEmitter->mMotionEpoch) | (child ? 1 : 0)), id(pEmitter),
+        NebulaRender::hostMarker(Kind_Emitter, static_cast< u16 >(auxEpoch(pEmitter->mMotionEpoch) | (child ? 1 : 0)), id(pEmitter),
                              id(pResource));
         // The effect its particles belong to, for the material table's effect rows (a fire's light, by its name).
-        __NebulaGXHostMarker(Kind_Effect, 0, effectIdentity(pResource, pEmitter), 0);
+        NebulaRender::hostMarker(Kind_Effect, 0, effectIdentity(pResource, pEmitter), 0);
     }
 
     // Particles come from a pool: the particle, its pass and its lifetime name it, and its age must continue from the
     // previous frame for the renderer to take it for the same particle.
     void drawParticleImpl(const JPABaseParticle* pParticle, bool child) {
-        __NebulaGXHostMarker(Kind_Particle, child ? 1 : 0, id(pParticle),
+        NebulaRender::hostMarker(Kind_Particle, child ? 1 : 0, id(pParticle),
                              static_cast< u32 >(static_cast< u16 >(pParticle->mAge)) << 16 |
                                  static_cast< u16 >(pParticle->mLifeTime));
     }
 
     void stripeParticle(const JPABaseParticle* pParticle, u8 strip) {
-        __NebulaGXStripeParticle(id(pParticle),
+        NebulaRender::stripeParticle(id(pParticle),
                                  static_cast< u32 >(static_cast< u16 >(pParticle->mAge)) << 16 |
                                      static_cast< u16 >(pParticle->mLifeTime),
                                  strip);
     }
 
     void categoryImpl(u16 source, u32 type) {
-        __NebulaGXHostMarker(Kind_Category, source, type, 0);
+        NebulaRender::hostMarker(Kind_Category, source, type, 0);
     }
 
     void mirror(bool begin) {
-        __NebulaGXHostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
+        NebulaRender::hostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
     }
 
     bool traceOnlyWanted() {
-        return __NebulaGXMarkers != 0 && __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
+        return NebulaRender::sDrawIdentities != 0 && __NebulaOption(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
     }
 
     void traceOnly(bool begin) {
-        __NebulaGXHostMarker(Kind_TraceOnly, begin ? 1 : 0, 0, 0);
+        NebulaRender::hostMarker(Kind_TraceOnly, begin ? 1 : 0, 0, 0);
     }
 
     void lightImpl(u16 site, const void* pInfo, u32 followCamera) {
-        __NebulaGXHostMarker(Kind_Light, site, pInfo != nullptr ? id(pInfo) : 0, followCamera);
+        NebulaRender::hostMarker(Kind_Light, site, pInfo != nullptr ? id(pInfo) : 0, followCamera);
     }
 
     // Bit 0: light A (GX light 0) follows the camera; bit 1: light B (GX light 1). The renderer moves those lights
     // with the camera under ray tracing.
     void actorLight(const ActorLightInfo* pInfo) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             lightImpl(LightSite_ActorLightInfo, pInfo, (pInfo->mInfo0.mIsFollowCamera ? 1 : 0) | (pInfo->mInfo1.mIsFollowCamera ? 2 : 0));
         }
     }
 
     void coinLight(const LightInfoCoin* pInfo) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             lightImpl(LightSite_Coin, pInfo, pInfo->base.mIsFollowCamera ? 1 : 0);
         }
     }
 
     void pointLight(const PointLightInfo* pInfo) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             lightImpl(LightSite_PointLight, pInfo, 0);
         }
     }
 
     void allLightWhite() {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             lightImpl(LightSite_AllWhite, nullptr, 0);
         }
     }
 
     void playerLight() {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             lightImpl(LightSite_Player, nullptr, 0);
         }
     }
 
     void scene2D(bool begin) {
-        __NebulaGXSceneMarker(begin ? NEBULA_SCENE_2D_BEGIN : NEBULA_SCENE_2D_END, nullptr);
+        NebulaRender::sceneMarker(begin ? NEBULA_SCENE_2D_BEGIN : NEBULA_SCENE_2D_END, nullptr);
         s2DOpen = begin;
     }
 
     void layoutImpl(u8 kind, u16 aux, const void* pObj, const void* pTag) {
-        __NebulaGXHostMarker(kind, aux, id(pObj), pTag != nullptr ? id(pTag) : 0);
+        NebulaRender::hostMarker(kind, aux, id(pObj), pTag != nullptr ? id(pTag) : 0);
     }
 
     void layoutPane(const nw4r::lyt::Pane* pPane) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             layoutImpl(Kind_LayoutPane, layoutAux(), pPane, pPane->GetParent());
         }
     }
 
     void layoutActor(const LayoutActor* pActor) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             layoutImpl(Kind_LayoutActor, layoutAux(), pActor, *reinterpret_cast< void* const* >(pActor));
         }
     }
 
     void starPointerLayout(const LayoutActor* pLayout) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             layoutImpl(Kind_StarPointer, layoutAux(), pLayout, *reinterpret_cast< void* const* >(pLayout));
         }
     }
 
     void starPointerDirector(const void* pDirector) {
-        if (__NebulaGXMarkers != 0) {
+        if (NebulaRender::sDrawIdentities != 0) {
             layoutImpl(Kind_StarPointer, static_cast< u16 >(layoutAux() | Layout_StarPointerDirector), pDirector, nullptr);
         }
     }
@@ -324,7 +325,7 @@ namespace MotionSignal {
     }
 
     void sceneBegin() {
-        __NebulaGXHostMarker(Kind_Scene, sCameraCutPending ? Scene_CameraCut : 0, sCameraCuts, sObjectEvents);
+        NebulaRender::hostMarker(Kind_Scene, sCameraCutPending ? Scene_CameraCut : 0, sCameraCuts, sObjectEvents);
         sCameraCutPending = false;
         sObjectEvents = 0;
     }

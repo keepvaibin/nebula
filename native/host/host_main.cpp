@@ -1791,7 +1791,7 @@ void svc_movie_frame(void*, const char* name, int32_t frame, float frame_rate, c
 #endif
 }
 
-void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
+void svc_scene_marker(void*, uint32_t marker, const float* view) {
     if (marker == NEBULA_SCENE_3D_BEGIN) {
         gSceneBegins.fetch_add(1, std::memory_order_relaxed);
         end_boot_fast("first 3D scene");
@@ -1813,7 +1813,7 @@ void svc_gx_scene_marker(void*, uint32_t marker, const float* view) {
 #endif
 }
 
-void svc_gx_stripe_particle(void*, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
+void svc_stripe_particle(void*, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::attach_stripe_particle(0, particle, age_lifetime, strip);
 #else
@@ -3868,7 +3868,7 @@ int main(int argc, char** argv) {
     services.size = sizeof(services);
     services.log = svc_log;
     services.fatal = svc_fatal;
-    services.gx_scene_marker = svc_gx_scene_marker;
+    services.scene_marker = svc_scene_marker;
     services.movie_frame = svc_movie_frame;
     services.code_patch = svc_code_patch;
     services.presence = svc_presence;
@@ -3902,7 +3902,7 @@ int main(int argc, char** argv) {
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;
     services.readback_serial = svc_readback_serial;
-    services.gx_stripe_particle = svc_gx_stripe_particle;
+    services.stripe_particle = svc_stripe_particle;
     services.disc_fst = svc_disc_fst;
     services.disc_read = svc_disc_read;
     services.disc_dol = svc_disc_dol;

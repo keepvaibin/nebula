@@ -3,7 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeTexture.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <math.h>
 #include <string.h>
 

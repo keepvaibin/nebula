@@ -1,7 +1,7 @@
 #include "Game/Util/NativeMesh.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <revolution/gx/GXRegs.h>
 #include <string.h>
 

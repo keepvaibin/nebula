@@ -1,6 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DNativeView.hpp"
 #include <nebula_game_api.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);

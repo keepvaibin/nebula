@@ -19,7 +19,7 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #ifdef TARGET_PC
 #include <nebula_game_api.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <revolution/os.h>
 #endif
 
@@ -97,7 +97,7 @@ void BloomEffect::preDraw() const {
     // tracer's HDR scene at 1.
     sBloomRoute = __NebulaOption(NEBULA_OPTION_BLOOM);
     if (sBloomRoute != 0) {
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_KEEP, 0, 0);
+        NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
 #endif
     {
@@ -125,7 +125,7 @@ void BloomEffect::postDraw() const {
         const u8 intensity = _14 * get_10();
         const u32 tap1 = static_cast< u8 >(static_cast< s32 >(_18 * 255.0f));
         const u32 tap2 = static_cast< u8 >(static_cast< s32 >(_1C * 255.0f));
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_NORMAL, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
+        NebulaRender::bloomMarker(NebulaRender::kBloomNormal, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
         initDraw();
         J3DNativeState::setCopyClear(Color8(0, 0, 0, 0xFF), 0xFFFFFF);
@@ -180,7 +180,7 @@ void BloomEffect::postDraw() const {
 #ifdef TARGET_PC
     if (sBloomRoute != 0) {
         // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).
-        __NebulaGXBloomMarker(NEBULA_GX_BLOOM_RESTORE, 0, 0);
+        NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
     } else
 #endif
     {

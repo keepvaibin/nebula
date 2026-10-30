@@ -7,7 +7,7 @@
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <nebula_game_api.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 #include <revolution/gx/GXRegs.h>
 #include <string.h>
 

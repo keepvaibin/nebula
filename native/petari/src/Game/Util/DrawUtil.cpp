@@ -29,7 +29,7 @@
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
 #include <revolution/gx/GXVert.h>
-#include <nebula_gx_fifo.h>
+#include "Game/Util/RenderSignals.hpp"
 
 static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
                                               0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
@@ -167,7 +167,7 @@ namespace MR {
         J3DNativeState::setCullMode(GX_CULL_BACK);
 
 #ifdef TARGET_PC
-        __NebulaGXClearQuadMarker(0xFFFFFF);
+        NebulaRender::clearQuad(0xFFFFFF);
 #endif
         J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
