@@ -12,6 +12,7 @@
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/Util/RenderSignals.hpp"
 #include <runtime.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 MainLoopFramework* MainLoopFramework::sManager;
 
@@ -86,7 +87,6 @@ void MainLoopFramework::prepareCopyDisp() {
     J3DNativeState::setDispCopySrc(0, 0, fbWidth, efbHeight);
     J3DNativeState::setDispCopyDst(fbWidth, nlines);
     J3DNativeState::setDispCopyYScale(yscale);
-    VIFlush();
     GXRenderModeObj* pMode = JUTVideo::getManager()->getRenderMode();
     u8* pVFilter = pMode->vfilter;
     J3DNativeState::setCopyFilter(pMode->aa, pMode->sample_pattern, mUseVFilter, pVFilter);
@@ -264,9 +264,8 @@ u32 MainLoopFramework::frameToTick(f32 frame) {
 
 void MainLoopFramework::setForOSResetSystem() {
     JUTVideo::destroyManager();
-    VISetBlack(TRUE);
-    VIFlush();
-    VIWaitForRetrace();
+    NebulaFrameClock::show(false);
+    NebulaFrameClock::waitFrame();
     if (sManager) {
         delete sManager;
         sManager = nullptr;
@@ -292,7 +291,7 @@ namespace {
             static u32 nextCount;
             static s8 countInitialized;
             if (!countInitialized) {
-                nextCount = VIGetRetraceCount();
+                nextCount = NebulaFrameClock::count();
                 countInitialized = 1;
             }
 

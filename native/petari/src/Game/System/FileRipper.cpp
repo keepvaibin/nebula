@@ -2,6 +2,7 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     OSMutex sDecompMutex;
@@ -67,7 +68,7 @@ void* FileRipper::loadToMainRAM(const char* fpath, u8* dest, bool decompress, JK
             } else if (result == -3) {
                 return 0;
             }
-            VIWaitForRetrace();
+            NebulaFrameClock::waitFrame();
         }
         compression = checkCompressed(copySrc);
         decompressedSize = (copySrc[4] << 24) | (copySrc[5] << 16) | (copySrc[6] << 8) | copySrc[7];
@@ -117,7 +118,7 @@ void* FileRipper::loadToMainRAM(const char* fpath, u8* dest, bool decompress, JK
                 }
                 return 0;
             }
-            VIWaitForRetrace();
+            NebulaFrameClock::waitFrame();
         }
         return dest;
     } else if (compression == 2) {
@@ -243,7 +244,7 @@ u8* FileRipper::readSrcDataFirst() {
         } else if (result == -3) {
             return 0;
         }
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
     ::sReadDvdOffset += readSize;
     ::sReadDvdLeftSize -= readSize;
@@ -271,7 +272,7 @@ u8* FileRipper::readSrcDataNext(u8* buf) {
         } else if (result == -3) {
             return 0;
         }
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
     ::sReadDvdOffset += readSize;
     ::sReadDvdLeftSize -= readSize;

@@ -39,6 +39,7 @@
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <revolution/sc.h>
 #include <revolution/vi/vifuncs.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 const char sAudioResFile[] = "/AudioRes/SMR.szs";
 const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq.arc";
@@ -653,7 +654,7 @@ bool AudSystem::isPauseMenuActive() const {
 }
 
 void AudSystem::screenSaverProcess() {
-    if (VIGetDimmingCount() > 0) {
+    if (NebulaFrameClock::framesUntilDimming() > 0) {
         return;
     }
 

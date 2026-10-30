@@ -15,6 +15,7 @@
 #include "Game/Util/TriggerChecker.hpp"
 #include "Game/Util/ValueControl.hpp"
 #include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace {
     static const s32 sFadeinoutFrame = 30;
@@ -207,9 +208,8 @@ void GameSystemResetAndPowerProcess::exitApplication() {
     NebulaAchievements::flushStats();
 #endif
     MainLoopFramework::setForOSResetSystem();
-    VISetBlack(TRUE);
-    VIFlush();
-    VIWaitForRetrace();
+    NebulaFrameClock::show(false);
+    NebulaFrameClock::waitFrame();
 
     switch (mResetOperation) {
     case ResetOperation_Restart:

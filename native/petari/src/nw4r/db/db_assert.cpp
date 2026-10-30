@@ -4,6 +4,7 @@
 #include "nw4r/db/directPrint.h"
 #include "nw4r/db/mapFile.h"
 #include <va_list.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 namespace nw4r {
     namespace db {
@@ -84,8 +85,8 @@ namespace nw4r {
             (void)OSDisableInterrupts();
             (void)OSDisableScheduler();
 
-            (void)VISetPreRetraceCallback(NULL);
-            (void)VISetPostRetraceCallback(NULL);
+            (void)NebulaFrameClock::setPreHook(NULL);
+            (void)NebulaFrameClock::setPostHook(NULL);
 
             if (sAssertionConsole) {
                 (void)detail::DirectPrint_SetupFB(NULL);

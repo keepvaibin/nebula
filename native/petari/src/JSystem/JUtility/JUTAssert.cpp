@@ -4,6 +4,7 @@
 #include "JSystem/JUtility/JUTFont.hpp"
 #include <cstdio>
 #include <revolution/vi.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 extern bool sAssertVisible;
 
@@ -41,7 +42,7 @@ namespace JUTAssertion {
         if (flush_subroutine() && sAssertVisible == true && JUTDbPrint::getManager() != nullptr) {
             JUTFont* font = JUTDbPrint::getManager()->getFont();
             if (font != nullptr) {
-                u8 tmp = ((VIGetRetraceCount() & 0x3C) << 2) | 0xF;
+                u8 tmp = ((NebulaFrameClock::count() & 0x3C) << 2) | 0xF;
                 font->setGX();
                 font->setCharColor(JUtility::TColor(255, tmp, tmp, 255));
                 font->drawString(30, 36, sMessageFileLine, true);

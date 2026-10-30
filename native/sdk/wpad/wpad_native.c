@@ -18,6 +18,9 @@
 
 #include "nebula_sdk.h"
 
+/* The game's frame clock (Game/System/NebulaFrameClock): controller input resets the screen saver's idle count. */
+void nebula_frame_clock_reset_idle(void);
+
 const NebulaHostServices* nebula_host(void);
 
 enum { kChannels = WPAD_MAX_CONTROLLERS, kReportBytes = 22, kQueue = 32, kDeferred = 32 };
@@ -398,7 +401,7 @@ static void decode(Channel* c, const u8* d) {
     if (changed) {
         c->accSettle = 0;
         c->stickSettle = 0;
-        __VIResetRFIdle();
+        nebula_frame_clock_reset_idle();
     }
     c->status = full;
 }
@@ -427,7 +430,7 @@ static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
             c->info = c->pendingInfo;
             apply_device_calibration(c);
             c->devType = WPAD_DEV_CORE;
-            __VIResetRFIdle();
+            nebula_frame_clock_reset_idle();
             if (!wasConnected && c->connectCallback != NULL) {
                 c->connectCallback(chan, WPAD_ERR_NONE);
             }

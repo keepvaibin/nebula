@@ -1,7 +1,7 @@
 #pragma once
 
 #include <revolution.h>
-#include <revolution/vi.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 typedef u8 (*Pattern)[2];
 
@@ -73,8 +73,8 @@ private:
     /* 0x10 */ u32 field_0x10;
     /* 0x14 */ u32 field_0x14;
     /* 0x18 */ u32 field_0x18;
-    /* 0x1C */ VIRetraceCallback mPreRetraceCallback;
-    /* 0x20 */ VIRetraceCallback mPostRetraceCallback;
+    /* 0x1C */ NebulaFrameClock::Hook mPreRetraceCallback;
+    /* 0x20 */ NebulaFrameClock::Hook mPostRetraceCallback;
     /* 0x24 */ Callback mPreCallback;
     /* 0x28 */ Callback mPostCallback;
     /* 0x2C */ bool mSetBlack;

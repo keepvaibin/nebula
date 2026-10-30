@@ -6,6 +6,7 @@
 #include "JSystem/JUtility/JUTException.hpp"
 #include <cstring>
 #include <stdint.h>
+#include "Game/System/NebulaFrameClock.hpp"
 
 
 JSUList< JKRDMCommand > JKRDvdRipper::sDvdAsyncList = JSUList< JKRDMCommand >();
@@ -58,7 +59,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
             if (readBytes == -3 || errorRetry == false)
                 return nullptr;
 
-            VIWaitForRetrace();
+            NebulaFrameClock::waitFrame();
         }
 
         compression = JKRCheckCompressed_noASR(bufPtr);
@@ -116,7 +117,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
                     }
                     return nullptr;
                 }
-                VIWaitForRetrace();
+                NebulaFrameClock::waitFrame();
             }
 
             compression2 = JKRCheckCompressed_noASR(bufPtr);
@@ -136,7 +137,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
                         JKRFree(dst);
                     return nullptr;
                 }
-                VIWaitForRetrace();
+                NebulaFrameClock::waitFrame();
             }
             if (param_8) {
                 *param_8 = readSize;
@@ -165,7 +166,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
                 JKRFree(mem);
                 return nullptr;
             }
-            VIWaitForRetrace();
+            NebulaFrameClock::waitFrame();
         }
 
         JKRDecompress(mem, dst, expandSize, offset);
@@ -234,7 +235,7 @@ static inline u8* nextSrcData(u8* src) {
         if (result == -3 || !JKRDvdRipper::isErrorRetry())
             return nullptr;
 
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
     srcOffset += transSize;
     transLeft -= transSize;
@@ -259,7 +260,7 @@ static inline u8* firstSrcData() {
         if (result == -3 || !JKRDvdRipper::isErrorRetry()) {
             return nullptr;
         }
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
 
     srcOffset += length;

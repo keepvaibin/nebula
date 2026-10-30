@@ -10,6 +10,7 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUFileStream.hpp"
 #include <cstring>
+#include "Game/System/NebulaFrameClock.hpp"
 
 int JKRDecompressFromDVDToAram(JKRDvdFile*, u32, u32, u32, u32, u32, u32*);
 static inline u8* firstSrcData();
@@ -105,7 +106,7 @@ JKRADCommand* JKRDvdAramRipper::callCommand_Async(JKRADCommand* command) {
                     return nullptr;
                 }
 
-                VIWaitForRetrace();
+                NebulaFrameClock::waitFrame();
             }
 
             JKRCompression detectedCompression = JKRDecomp::checkCompressed(bufPtr);
@@ -413,7 +414,7 @@ static u8* firstSrcData() {
         if (!JKRDvdAramRipper::isErrorRetry()) {
             return nullptr;
         }
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
     srcOffset += length;
     transLeft -= length;
@@ -443,7 +444,7 @@ static inline u8* nextSrcData(u8* src) {
         if (!JKRDvdAramRipper::isErrorRetry()) {
             return nullptr;
         }
-        VIWaitForRetrace();
+        NebulaFrameClock::waitFrame();
     }
     srcOffset += transSize;
     transLeft -= transSize;
