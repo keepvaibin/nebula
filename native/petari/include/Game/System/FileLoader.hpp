@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/System/ArchiveHolder.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/System/FileHolder.hpp"
 #include "Game/System/FileLoaderThread.hpp"
 #include <JSystem/JKernel/JKRDvdRipper.hpp>
@@ -31,7 +32,7 @@ public:
     RequestFileInfo* addRequest(const char*);
 
     /* 0x00 */ FileLoaderThread* mLoaderThread;
-    /* 0x04 */ OSMutex mMutex;
+    /* 0x04 */ NebulaMutex mMutex;
     /* 0x1C */ RequestFileInfo* mRequestFileInfos;
     /* 0x20 */ s32 mRequestedFileCount;
     /* 0x24 */ FileHolder* mFileHolder;

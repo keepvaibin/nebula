@@ -1,11 +1,12 @@
 #include "JSystem/JAudio2/JASReport.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
-#include <revolution/os/OSThread.h>
+#include "Game/System/NebulaKernel.hpp"
 #include <cstdio>
-#include <revolution/os/OSMutex.h>
+#include "Game/System/NebulaKernel.hpp"
 
-static OSMutex sMutex;
+static NebulaMutex sMutex;
 static char* sBuffer;
 static int sLineMax;
 static int sLineCount;
@@ -18,8 +19,8 @@ void JASReport(const char* pFormat, ...) {
     }
 
     va_start(vl, pFormat);
-    OSMutex* pMutex = &sMutex;
-    OSLockMutex(pMutex);
+    NebulaMutex* pMutex = &sMutex;
+    pMutex->lock();
     vsnprintf(sBuffer + (sTop * 64), 64, pFormat, vl);
     va_end(vl);
 
@@ -32,5 +33,5 @@ void JASReport(const char* pFormat, ...) {
         sLineCount++;
     }
 
-    OSUnlockMutex(pMutex);
+    pMutex->unlock();
 }

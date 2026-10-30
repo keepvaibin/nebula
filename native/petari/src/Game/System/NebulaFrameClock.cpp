@@ -1,19 +1,18 @@
 #include "Game/System/NebulaFrameClock.hpp"
+#include "Game/System/NebulaKernel.hpp"
 
 #include <math.h>
 #include <revolution/os.h>
 
 #include <nebula_game_api.h>
+#include <nebula_kernel.h>
 #include "Game/System/NebulaSystemSettings.hpp"
 
-extern "C" {
-const NebulaHostServices* nebula_host(void);
-void nebula_raise_interrupt(__OSInterrupt interrupt);
-}
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     volatile u32 sFrames;
-    OSThreadQueue sSleepers;
+    NebulaThreadQueue sSleepers;
     NebulaFrameClock::Hook sPreHook;
     NebulaFrameClock::Hook sPostHook;
     // show() sets the next state; it is what the screen shows from the next frame on.
@@ -62,16 +61,13 @@ namespace {
         sDisplay.vertical_fit = static_cast< f32 >(fmax(1.0, cWiiAspect / aspect));
     }
 
-    void onFrame(__OSInterrupt, OSContext* pContext) {
-        OSContext handlerContext;
+    void onFrame() {
         sFrames++;
         if (!sDimming) {
             sIdleFrames = 0;
         } else if (sIdleFrames < cTimeToDimming) {
             sIdleFrames++;
         }
-        OSClearContext(&handlerContext);
-        OSSetCurrentContext(&handlerContext);
         if (sPreHook != nullptr) {
             sPreHook(sFrames);
         }
@@ -79,12 +75,9 @@ namespace {
         nebula_host()->vi_frame(nebula_host()->user, 0, sPicture ? 0 : 1, sFrames);
         refreshDisplay();
         if (sPostHook != nullptr) {
-            OSClearContext(&handlerContext);
             sPostHook(sFrames);
         }
-        OSWakeupThread(&sSleepers);
-        OSClearContext(&handlerContext);
-        OSSetCurrentContext(pContext);
+        sSleepers.wakeup();
     }
 }  // namespace
 
@@ -93,7 +86,7 @@ extern "C" void nebula_frame_clock_reset_idle(void) {
 }
 
 extern "C" NEBULA_GAME_API void nebula_game_vi_retrace(void) {
-    nebula_raise_interrupt(__OS_INTERRUPT_PI_VI);
+    nebula_raise_event(NEBULA_EVENT_FRAME);
 }
 
 namespace NebulaFrameClock {
@@ -103,9 +96,9 @@ namespace NebulaFrameClock {
             return;
         }
         sStarted = true;
-        OSInitThreadQueue(&sSleepers);
-        __OSSetInterruptHandler(__OS_INTERRUPT_PI_VI, onFrame);
-        __OSUnmaskInterrupts(OS_INTERRUPTMASK_PI_VI);
+        sSleepers.init();
+        NebulaKernel::setEventHandler(NEBULA_EVENT_FRAME, onFrame);
+        NebulaKernel::enableEvent(NEBULA_EVENT_FRAME);
     }
 
     u32 count() {
@@ -114,20 +107,20 @@ namespace NebulaFrameClock {
 
     // Interrupts off from reading the count to sleeping: a frame delivered in between would wake no one.
     void waitFrame() {
-        const BOOL enabled = OSDisableInterrupts();
+        const BOOL enabled = NebulaKernel::disableInterrupts();
         const u32 frames = sFrames;
         do {
-            OSSleepThread(&sSleepers);
+            sSleepers.sleep();
         } while (frames == sFrames);
-        OSRestoreInterrupts(enabled);
+        NebulaKernel::restoreInterrupts(enabled);
     }
 
     void show(bool picture) {
         sNextPicture = picture;
     }
 
-    // The frame arrives as an interrupt, which the OS core delivers only at the end of an OS call: a plain store
-    // cannot be interrupted halfway.
+    // The frame arrives as a host event, which the kernel delivers only at its scheduling points: a plain store cannot
+    // be interrupted halfway.
     Hook setPreHook(Hook hook) {
         const Hook previous = sPreHook;
         sPreHook = hook;

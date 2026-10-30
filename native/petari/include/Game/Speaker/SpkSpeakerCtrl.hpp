@@ -1,6 +1,7 @@
 #pragma once
 
 #include <revolution.h>
+#include "Game/System/NebulaKernel.hpp"
 #include <revolution/wenc.h>
 
 class SpkMixingBuffer;
@@ -58,7 +59,7 @@ namespace SpkSpeakerCtrl {
     void reconnectProcess(s32);
     void initReconnect(s32);
     void continuousUsingProcess(s32);
-    void updateSpeaker(OSAlarm*, OSContext*);
+    void updateSpeaker(NebulaAlarm*);
     bool isEnable(s32);
     void extensionProcess(s32, s32);
     f32 getDeviceVolume(s32);

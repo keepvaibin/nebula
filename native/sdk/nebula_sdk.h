@@ -48,12 +48,7 @@ void nebula_load_dol_data(void);
 char nebula_disc_region(void);
 const char* nebula_home_dir(void);
 
-/* The OS core (os/os_native.c). */
-/* A device interrupt by its SDK number (__OS_INTERRUPT_*), from any host thread: the handler registered with
-   __OSSetInterruptHandler runs on the simulation thread at the next point interrupts are enabled. */
-void nebula_raise_interrupt(int interrupt);
-/* Wakes the simulation thread if it is idle (new host event). */
-void nebula_signal_simulation(void);
+/* The platform layer (os/os_native.c). */
 /* The console's time base: OSGetTime ticks (60.75 MHz) since boot. */
 int64_t nebula_time_base(void);
 /* Runs the game: the OS core's boot, then the game's entry on its boot thread. Does not return. */

@@ -1,4 +1,5 @@
 #include "Game/System/FileLoaderThread.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/System/FileRipper.hpp"
 #include "Game/Util/FileUtil.hpp"
 
@@ -21,8 +22,8 @@ FileLoaderThread::FileLoaderThread(int priority, int msgCount, JKRHeap* pHeap) :
 void* FileLoaderThread::run() {
 
     while (true) {
-        OSMessage msg;
-        OSReceiveMessage(&mQueue, &msg, OS_MESSAGE_BLOCK);
+        void* msg;
+        mQueue.receive(&msg, true);
         RequestFileInfo* info = (RequestFileInfo*)msg;
 
         switch (info->_0) {

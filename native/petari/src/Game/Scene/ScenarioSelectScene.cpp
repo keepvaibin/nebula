@@ -1,4 +1,5 @@
 #include "Game/Scene/ScenarioSelectScene.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Camera/CameraContext.hpp"
 #include "Game/Effect/EffectSystem.hpp"
@@ -121,12 +122,12 @@ void ScenarioSelectScene::calcViewAndEntry() {
     bool res = isExecForeground() && _28 == 0;
 
     if (res) {
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         setupCameraMtx();
         j3dSys.mDrawBuffer[0] = _20;
         j3dSys.mDrawBuffer[1] = _24;
         mScenarioLayout->calcViewAndEntryStarModel();
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
     }
 }
 
@@ -134,7 +135,7 @@ void ScenarioSelectScene::draw() const {
     bool res = isExecForeground() && _28 == 0;
 
     if (res) {
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         setupCameraMtx();
         j3dSys.drawInit();
         j3dSys.mDrawMode = 3;
@@ -143,7 +144,7 @@ void ScenarioSelectScene::draw() const {
         j3dSys.mDrawMode = 4;
         _24->draw();
         _24->frameInit();
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::Effect::drawEffect3D(mEffectSystem, mCameraContext->getViewMtx());
         mScenarioLayout->draw();
         MR::Effect::drawEffect2D(mEffectSystem);

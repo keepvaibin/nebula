@@ -1,4 +1,5 @@
 #include "Inline.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #pragma inline_max_size(250)
 #include "JSystem/JKernel/JKRDvdAramRipper.hpp"
 #include "JSystem/JKernel/JKRAram.hpp"
@@ -76,7 +77,7 @@ JKRADCommand* JKRDvdAramRipper::callCommand_Async(JKRADCommand* command) {
     JKRDvdFile* dvdFile = command->mDvdFile;
     s32 compression = 0;
     s32 uncompressedSize;
-    OSLockMutex(&dvdFile->mMutex2);
+    dvdFile->mMutex2.lock();
     if (command->field_0x44) {
         *command->field_0x44 = 0;
     }
@@ -84,7 +85,7 @@ JKRADCommand* JKRDvdAramRipper::callCommand_Async(JKRADCommand* command) {
     if (dvdFile->field_0x50) {
         bVar1 = false;
     } else {
-        dvdFile->field_0x50 = OSGetCurrentThread();
+        dvdFile->field_0x50 = NebulaKernel::current();
         JSUFileInputStream* stream = new (JKRGetSystemHeap(), -4) JSUFileInputStream(dvdFile);
         dvdFile->mFileStream = stream;
         u32 fileSize = dvdFile->getFileSize();
@@ -176,20 +177,20 @@ JKRADCommand* JKRDvdAramRipper::callCommand_Async(JKRADCommand* command) {
         }
     }
 
-    OSUnlockMutex(&dvdFile->mMutex2);
+    dvdFile->mMutex2.unlock();
     return bVar1 == true ? command : nullptr;
 }
 
 bool JKRDvdAramRipper::syncAram(JKRADCommand* command, int param_1) {
     JKRDvdFile* dvdFile = command->mDvdFile;
-    OSLockMutex(&dvdFile->mMutex2);
+    dvdFile->mMutex2.lock();
 
     if (command->mStreamCommand) {
         JKRAramStreamCommand* var1 = JKRStreamToAram_Sync(command->mStreamCommand, param_1);
         command->field_0x48 = (var1) ? 0 : -1;
 
         if (param_1 != 0 && var1 == nullptr) {
-            OSUnlockMutex(&dvdFile->mMutex2);
+            dvdFile->mMutex2.unlock();
             return false;
         }
     }
@@ -201,7 +202,7 @@ bool JKRDvdAramRipper::syncAram(JKRADCommand* command, int param_1) {
 
     delete dvdFile->mFileStream;
     dvdFile->field_0x50 = nullptr;
-    OSUnlockMutex(&dvdFile->mMutex2);
+    dvdFile->mMutex2.unlock();
     return true;
 }
 
@@ -216,7 +217,7 @@ JKRADCommand::~JKRADCommand() {
     }
 }
 
-static OSMutex decompMutex;
+static NebulaMutex decompMutex;
 
 u32 JKRDvdAramRipper::sSZSBufferSize = 0x00000400;
 
@@ -257,14 +258,14 @@ static u32* tsPtr;
 static u32 tsArea;
 
 int JKRDecompressFromDVDToAram(JKRDvdFile* dvdFile, u32 param_1, u32 fileSize, u32 uncompressedSize, u32 param_4, u32 param_5, u32* param_6) {
-    BOOL level = OSDisableInterrupts();
+    BOOL level = NebulaKernel::disableInterrupts();
     if (!data_804514A4) {
-        OSInitMutex(&decompMutex);
+        decompMutex.init();
         data_804514A4 = true;
     }
 
-    OSRestoreInterrupts(level);
-    OSLockMutex(&decompMutex);
+    NebulaKernel::restoreInterrupts(level);
+    decompMutex.lock();
     int result = 0;
     u32 bufferSize = JKRDvdAramRipper::getSZSBufferSize();
     szpBuf = static_cast< u8* >(JKRAllocFromSysHeap(bufferSize, 0x20));
@@ -295,7 +296,7 @@ int JKRDecompressFromDVDToAram(JKRDvdFile* dvdFile, u32 param_1, u32 fileSize, u
     JKRFree(szpBuf);
     JKRFree(refBuf);
     JKRFree(dmaBuf);
-    OSUnlockMutex(&decompMutex);
+    decompMutex.unlock();
     return result;
 }
 

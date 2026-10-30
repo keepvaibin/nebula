@@ -1,4 +1,5 @@
 #include "nw4r/db/assert.h"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "nw4r/db/console.h"
 #include "nw4r/db/directPrint.h"
@@ -84,8 +85,8 @@ namespace nw4r {
             }
             stackPointer = *((u32*)stackPointer);
 #endif
-            (void)OSDisableInterrupts();
-            (void)OSDisableScheduler();
+            (void)NebulaKernel::disableInterrupts();
+            (void)NebulaKernel::disableScheduler();
 
             (void)NebulaFrameClock::setPreHook(NULL);
             (void)NebulaFrameClock::setPostHook(NULL);

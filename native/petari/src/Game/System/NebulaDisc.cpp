@@ -1,17 +1,18 @@
 #include "Game/System/NebulaDisc.hpp"
+#include "Game/System/NebulaKernel.hpp"
 
 #include <revolution/os.h>
 
 #include <nebula_game_api.h>
+#include <nebula_kernel.h>
 
 extern "C" {
 const NebulaHostServices* nebula_host(void);
-void nebula_raise_interrupt(__OSInterrupt interrupt);
 __attribute__((noreturn)) void nebula_fatal(const char* format, ...);
 }
 
 namespace {
-    // Reads in flight: the host completes a slot from its own thread; the disc interrupt finishes it on the game's.
+    // Reads in flight: the host completes a slot from its own thread; the disc event finishes it on the game's.
     struct Slot {
         NebulaDisc::Request* mRequest;  // nullptr when free (game thread only)
         bool mCanceled;
@@ -21,7 +22,7 @@ namespace {
 
     const u32 cSlots = 64;
     Slot sSlots[cSlots];
-    OSThreadQueue sCancelQueue;
+    NebulaThreadQueue sCancelQueue;
 
     void finish(Slot* pSlot) {
         NebulaDisc::Request* pRequest = pSlot->mRequest;
@@ -37,11 +38,11 @@ namespace {
         }
 
         if (canceled) {
-            OSWakeupThread(&sCancelQueue);
+            sCancelQueue.wakeup();
         }
     }
 
-    void onDiscInterrupt(__OSInterrupt, OSContext*) {
+    void onDiscEvent() {
         for (u32 i = 0; i < cSlots; i++) {
             if (sSlots[i].mRequest != nullptr && __atomic_load_n(&sSlots[i].mDone, __ATOMIC_ACQUIRE) != 0) {
                 finish(&sSlots[i]);
@@ -70,7 +71,7 @@ namespace {
     }
 
     void wakeReader(s32, NebulaDisc::Request* pRequest) {
-        OSWakeupThread(static_cast< OSThreadQueue* >(pRequest->mUser));
+        (static_cast< NebulaThreadQueue* >(pRequest->mUser))->wakeup();
     }
 }  // namespace
 
@@ -78,7 +79,7 @@ extern "C" NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t
     if (slot < cSlots) {
         sSlots[slot].mResult = result;
         __atomic_store_n(&sSlots[slot].mDone, 1, __ATOMIC_RELEASE);
-        nebula_raise_interrupt(__OS_INTERRUPT_PI_DI);
+        nebula_raise_event(NEBULA_EVENT_DISC);
     }
 }
 
@@ -89,9 +90,9 @@ namespace NebulaDisc {
             return;
         }
         sStarted = true;
-        OSInitThreadQueue(&sCancelQueue);
-        __OSSetInterruptHandler(__OS_INTERRUPT_PI_DI, onDiscInterrupt);
-        __OSUnmaskInterrupts(OS_INTERRUPTMASK_PI_DI);
+        sCancelQueue.init();
+        NebulaKernel::setEventHandler(NEBULA_EVENT_DISC, onDiscEvent);
+        NebulaKernel::enableEvent(NEBULA_EVENT_DISC);
     }
 
     s32 find(const char* pPath) {
@@ -134,7 +135,7 @@ namespace NebulaDisc {
             nebula_fatal("disc read outside file %d (length %u): %d bytes at %d", pFile->mEntry, pFile->mLength, size, offset);
         }
 
-        const BOOL enabled = OSDisableInterrupts();
+        const BOOL enabled = NebulaKernel::disableInterrupts();
         u32 slot = 0;
         while (slot < cSlots && sSlots[slot].mRequest != nullptr) {
             slot++;
@@ -148,7 +149,7 @@ namespace NebulaDisc {
         sSlots[slot].mCanceled = false;
         pRequest->mCallback = callback;
         pRequest->mBusy = true;
-        OSRestoreInterrupts(enabled);
+        NebulaKernel::restoreInterrupts(enabled);
 
         const NebulaHostServices* const host = nebula_host();
         host->disc_read(host->user, pFile->mEntry, static_cast< u32 >(offset), static_cast< u32 >(size), pDst, slot);
@@ -156,30 +157,30 @@ namespace NebulaDisc {
     }
 
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset) {
-        OSThreadQueue queue;
-        OSInitThreadQueue(&queue);
+        NebulaThreadQueue queue;
+        queue.init();
         Request request;
         request.mUser = &queue;
 
-        const BOOL enabled = OSDisableInterrupts();
+        const BOOL enabled = NebulaKernel::disableInterrupts();
         readAsync(pFile, &request, pDst, size, offset, wakeReader);
         while (request.mBusy) {
-            OSSleepThread(&queue);
+            queue.sleep();
         }
-        OSRestoreInterrupts(enabled);
+        NebulaKernel::restoreInterrupts(enabled);
         return request.mResult;
     }
 
     void cancel(Request* pRequest) {
-        const BOOL enabled = OSDisableInterrupts();
+        const BOOL enabled = NebulaKernel::disableInterrupts();
         Slot* pSlot = slotOf(pRequest);
         if (pSlot != nullptr) {
             pSlot->mCanceled = true;
             while (slotOf(pRequest) != nullptr) {
-                OSSleepThread(&sCancelQueue);
+                sCancelQueue.sleep();
             }
         }
-        OSRestoreInterrupts(enabled);
+        NebulaKernel::restoreInterrupts(enabled);
     }
 
     bool isBusy() {

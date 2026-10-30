@@ -1,4 +1,5 @@
 #include "Game/Player/JetTurtleShadow.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include "Game/Player/J3DModelX.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -12,12 +13,12 @@ void JetTurtleShadow::calcType0(MtxPtr pMtx) {
     J3DModel* pModel = MR::getJ3DModel(this);
     MR::setBaseTRMtx(this, pMtx);
 
-    OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+    (MR::MutexHolder< 0 >::sMutex).lock();
 
     pModel->calc();
     pModel->viewCalc();
 
-    OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+    (MR::MutexHolder< 0 >::sMutex).unlock();
 }
 
 void JetTurtleShadow::drawType0() const {

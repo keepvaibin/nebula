@@ -1,4 +1,5 @@
 #include "JSystem/JUtility/JUTVideo.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 
@@ -35,7 +36,7 @@ JUTVideo::JUTVideo(GXRenderModeObj const* param_0) {
     mPostRetraceCallback = NebulaFrameClock::setPostHook(postRetraceProc);
     mPreCallback = nullptr;
     mPostCallback = nullptr;
-    OSInitMessageQueue(&mMessageQueue, &mMessage, 1);
+    mMessageQueue.init(&mMessage, 1);
 }
 
 JUTVideo::~JUTVideo() {
@@ -68,8 +69,8 @@ void JUTVideo::postRetraceProc(u32 retrace_count) {
         sManager->mPostCallback(retrace_count);
     }
 
-    OSMessage message = reinterpret_cast< OSMessage >(NebulaFrameClock::count());
-    OSSendMessage(&sManager->mMessageQueue, message, OS_MESSAGE_NOBLOCK);
+    void* message = reinterpret_cast< void* >(NebulaFrameClock::count());
+    sManager->mMessageQueue.send(message, false);
 }
 
 void JUTVideo::setRenderMode(GXRenderModeObj const* pObj) {

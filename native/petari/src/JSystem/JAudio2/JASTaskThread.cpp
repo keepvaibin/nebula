@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASTaskThread.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
@@ -6,11 +7,11 @@
 
 JASTaskThread::JASTaskThread(int priority, int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount, priority) {
     _84 = false;
-    OSInitThreadQueue(&threadQueue_);
+    threadQueue_.init();
 }
 
 JASTaskThread::~JASTaskThread() {
-    OSMessage msg;
+    void* msg;
     BOOL received;
     while (true) {
         msg = waitMessage(&received);
@@ -83,7 +84,7 @@ void* JASTaskThread::run() {
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
         if (_84) {
-            OSSleepThread(&threadQueue_);
+            threadQueue_.sleep();
         }
 
         if (callstack->msgType_) {
@@ -102,7 +103,7 @@ void JASTaskThread::pause(bool param_0) {
         _84 = 1;
     } else {
         if (_84) {
-            OSWakeupThread(&threadQueue_);
+            threadQueue_.wakeup();
         }
         _84 = 0;
     }

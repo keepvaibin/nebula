@@ -1,4 +1,5 @@
 #include "Game/MapObj/NormalMapBase.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -141,9 +142,9 @@ void NormalMapBase::control() {
 void NormalMapBase::calcAnim() {
     LiveActor::calcAnim();
     updateBtkMtx();
-    OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+    (MR::MutexHolder< 0 >::sMutex).lock();
     MR::getJ3DModel(this)->viewCalc();
-    OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+    (MR::MutexHolder< 0 >::sMutex).unlock();
 }
 
 void NormalMapBase::updateBtkMtx() {

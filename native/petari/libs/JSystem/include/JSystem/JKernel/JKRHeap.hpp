@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Inline.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <revolution.h>
@@ -102,11 +103,11 @@ public:
     }
 
     void lock() const {
-        OSLockMutex(const_cast< OSMutex* >(&mMutex));
+        (const_cast< NebulaMutex* >(&mMutex))->lock();
     }
 
     void unlock() const {
-        OSUnlockMutex(const_cast< OSMutex* >(&mMutex));
+        (const_cast< NebulaMutex* >(&mMutex))->unlock();
     }
 
     bool getErrorFlag() const {
@@ -188,7 +189,7 @@ public:
         return (void*)mEnd;
     }
 
-    /* 0x18 */ mutable OSMutex mMutex;
+    /* 0x18 */ mutable NebulaMutex mMutex;
     /* 0x30 */ u8* mStart;
     /* 0x34 */ u8* mEnd;
     /* 0x38 */ u32 mSize;

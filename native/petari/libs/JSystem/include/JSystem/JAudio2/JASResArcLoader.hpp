@@ -1,6 +1,7 @@
 #pragma once
 
 #include <revolution/os.h>
+#include "Game/System/NebulaKernel.hpp"
 
 class JKRArchive;
 
@@ -17,7 +18,7 @@ namespace JASResArcLoader {
         /* 0xC */ u32 mBufferSize;
         /* 0x10 */ LoadCallback mCallback;
         /* 0x14 */ uintptr_t mCallbackArg;
-        /* 0x18 */ OSMessageQueue* mMsgQueue;
+        /* 0x18 */ NebulaMessageQueue* mMsgQueue;
     };
 
     u32 getResSize(JKRArchive const*, u16);

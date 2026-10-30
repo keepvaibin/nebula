@@ -1,4 +1,5 @@
 #include "Game/Util/ModelUtil.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/Animation/XanimePlayer.hpp"
 #include "Game/Animation/XanimeResource.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -75,9 +76,9 @@ namespace MR {
     }
 
     void calcJ3DModel(LiveActor* pActor) {
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         getJ3DModel(pActor)->calc();
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
     }
 
     J3DModelData* getJ3DModelData(const LiveActor* pActor) {
@@ -558,31 +559,31 @@ namespace MR {
             MR::isEqualString(pChar, "BoneMario") || MR::isEqualString(pChar, "BoneLuigi") || MR::isEqualString(pChar, "SearchLightCone") ||
             strstr(pChar, "FlexibleSphere") || strstr(pChar, "FlexibleSandPlanetParts") || MR::isEqualString(pChar, "ScaleDownRelayPlanet") ||
             MR::isEqualString(pChar, "GhostMario") || MR::isEqualString(pChar, "GhostLuigi") || MR::isEqualString(pChar, "Koura")) {
-            OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).lock();
             newModel = static_cast< J3DModel* >(new J3DModelX(modelData, mdlFlag, 1));
-            OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).unlock();
         } else {
-            OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).lock();
             newModel = new J3DModel(modelData, mdlFlag, 1);
-            OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 
         initJ3DShapePacketUserData(newModel);
         Mtx mtx;
         NebulaMtxIdentity(mtx);
         newModel->unlock();
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         NebulaMtxCopy(mtx, j3dSys.mViewMtx);
         newModel->calc();
         newModel->calcMaterial();
         newModel->viewCalc();
         newModel->viewCalc();
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
         if (modelData->getModelDataType() == 0) {
             ProhibitSchedulerAndInterrupts prohibit(false);
-            OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).lock();
             newModel->makeDL();
-            OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+            (MR::MutexHolder< 0 >::sMutex).unlock();
         }
 
         newModel->lock();

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <revolution.h>
+#include "Game/System/NebulaKernel.hpp"
 
 class JKRHeap;
 
@@ -8,9 +9,9 @@ namespace MR {
     template < int T >
     class MutexHolder {
     public:
-        static OSMutex sMutex;
+        static NebulaMutex sMutex;
     };
 
     template < int T >
-    OSMutex MutexHolder< T >::sMutex;
+    NebulaMutex MutexHolder< T >::sMutex;
 };  // namespace MR

@@ -1,4 +1,5 @@
 #include "Game/System/MainLoopFramework.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -248,9 +249,9 @@ namespace {
 
         u32 frame;
         do {
-            // An OSMessage is pointer-sized natively: receive into one, keep the frame count it carries.
-            OSMessage message;
-            frame = OSReceiveMessage(JUTVideo::getManager()->getMessageQueue(), &message, OS_MESSAGE_BLOCK)
+            // A message is pointer-sized natively: receive into one, keep the frame count it carries.
+            void* message;
+            frame = (JUTVideo::getManager()->getMessageQueue())->receive(&message, true)
                         ? (u32)(uintptr_t)message
                         : 0;
         } while ((s32)(frame - nextCount) < 0);

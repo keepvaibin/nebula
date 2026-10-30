@@ -4,16 +4,6 @@
 static int YearDays[] = { 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334 };
 static int LeapYearDays[] = { 0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335 };
 
-// The system time is the time base (OSGetTime, the platform layer's), which has no bias: the console kept one in low
-// memory.
-OSTime __OSGetSystemTime(void) {
-    return OSGetTime();
-}
-
-OSTime __OSTimeToSystemTime(OSTime time) {
-    return time;
-}
-
 static BOOL IsLeapYear(int year) {
     return (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
 }

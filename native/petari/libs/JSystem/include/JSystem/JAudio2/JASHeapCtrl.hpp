@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 #include <revolution/os/OSInterrupt.h>
@@ -43,12 +44,12 @@ public:
         return mTree.getEndChild();
     }
 
-    OSMutex& getMutex() {
+    NebulaMutex& getMutex() {
         return mMutex;
     }
 
     /* 0x00 */ JSUTree< JASHeap > mTree;
-    /* 0x1C */ OSMutex mMutex;
+    /* 0x1C */ NebulaMutex mMutex;
     /* 0x34 */ JASDisposer* mDisposer;
     /* 0x38 */ u8* mBase;
     /* 0x3C */ u32 mSize;
@@ -89,10 +90,10 @@ namespace JASThreadingModel {
     public:
         struct Lock {
             Lock(const T&) {
-                mInterruptState = OSDisableInterrupts();
+                mInterruptState = NebulaKernel::disableInterrupts();
             }
             ~Lock() {
-                OSRestoreInterrupts(mInterruptState);
+                NebulaKernel::restoreInterrupts(mInterruptState);
             }
 
             /* 0x00 */ u32 mInterruptState;
@@ -100,19 +101,19 @@ namespace JASThreadingModel {
     };
 
     template < typename T >
-    struct ObjectLevelLockable : public OSMutex {
+    struct ObjectLevelLockable : public NebulaMutex {
         ObjectLevelLockable() {
-            OSInitMutex(this);
+            this->init();
         }
 
         struct Lock {
             Lock(T const& mutex) {
                 mMutex = (T*)&mutex;
-                OSLockMutex(mMutex);
+                mMutex->lock();
             }
 
             ~Lock() {
-                OSUnlockMutex(mMutex);
+                mMutex->unlock();
             }
 
             /* 0x00 */ T* mMutex;

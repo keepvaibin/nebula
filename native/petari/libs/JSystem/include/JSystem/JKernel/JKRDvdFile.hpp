@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Game/System/NebulaDisc.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 
 class JKRADCommand;
@@ -50,10 +51,10 @@ public:
         return &mFile;
     }
 
-    /* 0x1C */ OSMutex mMutex1;
-    /* 0x34 */ OSMutex mMutex2;
+    /* 0x1C */ NebulaMutex mMutex1;
+    /* 0x34 */ NebulaMutex mMutex2;
     /* 0x4C */ JKRAramBlock* mBlock;
-    /* 0x50 */ OSThread* field_0x50;
+    /* 0x50 */ NebulaThread* field_0x50;
     /* 0x54 */ JSUFileInputStream* mFileStream;
     /* 0x58 */ u32 field_0x58;
     NebulaDisc::File mFile;

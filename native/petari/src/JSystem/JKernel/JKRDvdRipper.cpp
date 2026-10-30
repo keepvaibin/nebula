@@ -1,5 +1,6 @@
 #pragma inline_max_size(250)
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRCompression.hpp"
 #include "JSystem/JKernel/JKRDecomp.hpp"
 #include "JSystem/JKernel/JKRDvdFile.hpp"
@@ -195,7 +196,7 @@ void* JKRDvdRipper::loadToMainRAM(JKRDvdFile* dvdFile, u8* dst, JKRExpandSwitch 
 
 
 static u8 lit_491[12];
-static OSMutex decompMutex;
+static NebulaMutex decompMutex;
 u32 JKRDvdRipper::sSZSBufferSize = 0x00000400;
 static u8* szpBuf;
 static u8* szpEnd;
@@ -385,13 +386,13 @@ static inline int decompSZS_subroutine(u8* src, u8* dest) {
 }
 
 static int JKRDecompressFromDVD(JKRDvdFile* dvdFile, void* dst, u32 fileSize, u32 inMaxDest, u32 inFileOffset, u32 inSrcOffset, u32* inTsPtr) {
-    BOOL interrupts = OSDisableInterrupts();
+    BOOL interrupts = NebulaKernel::disableInterrupts();
     if (data_80451458 == false) {
-        OSInitMutex(&decompMutex);
+        decompMutex.init();
         data_80451458 = true;
     }
-    OSRestoreInterrupts(interrupts);
-    OSLockMutex(&decompMutex);
+    NebulaKernel::restoreInterrupts(interrupts);
+    decompMutex.lock();
     u32 result = 0;
     u32 szsBufferSize = JKRDvdRipper::getSZSBufferSize();
     szpBuf = reinterpret_cast< u8* >(JKRAllocFromSysHeap(szsBufferSize, -0x20));
@@ -423,7 +424,7 @@ static int JKRDecompressFromDVD(JKRDvdFile* dvdFile, void* dst, u32 fileSize, u3
         JKRFree(refBuf);
     }
     NebulaRender::memoryRewritten(dst, *tsPtr);
-    OSUnlockMutex(&decompMutex);
+    decompMutex.unlock();
     return result;
 }
 

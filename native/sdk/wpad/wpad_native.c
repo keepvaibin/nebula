@@ -6,6 +6,7 @@
    thread in the controller interrupt (SI), which then runs the sampling callback per report, as WPAD's receive path
    does. Results of asynchronous calls (DPD, speaker, info) are delivered from the same interrupt. */
 #include <math.h>
+#include <nebula_kernel.h>
 #include <stdatomic.h>
 #include <string.h>
 
@@ -92,7 +93,7 @@ NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, cons
         c->pendingInfo.attach = connection->extension != WPAD_DEV_CORE;
     }
     atomic_store(&c->connectEvent, connected ? 1 : 2);
-    nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
+    nebula_raise_event(NEBULA_EVENT_CONTROLLER);
 }
 
 NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size,
@@ -112,7 +113,7 @@ NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* repor
     r->pointerX = pointer != NULL ? pointer->x : 0.0f;
     r->pointerY = pointer != NULL ? pointer->y : 0.0f;
     atomic_store_explicit(&c->head, head + 1, memory_order_release);
-    nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
+    nebula_raise_event(NEBULA_EVENT_CONTROLLER);
 }
 
 NEBULA_GAME_API void nebula_game_wpad_shake(uint32_t chan, uint32_t held) {
@@ -133,14 +134,14 @@ NEBULA_GAME_API void nebula_game_wpad_battery(uint32_t chan, uint32_t level) {
         return;
     }
     atomic_store(&sChannels[chan].pendingBattery, (level > 4u ? 4u : level) + 1u);
-    nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
+    nebula_raise_event(NEBULA_EVENT_CONTROLLER);
 }
 
 /* Before the game reads its remotes each frame (WPadHolder): the host's newest input in a report now, decoded here
    (the controller interrupt runs as interrupts are enabled again) so KPADRead has it this frame. */
 void __NebulaWPADSample(void) {
     nebula_host()->wpad_sample(nebula_host()->user, 0);
-    OSRestoreInterrupts(OSDisableInterrupts());
+    nebula_interrupts_restore(nebula_interrupts_disable());
 }
 
 /* The shake presses on the remote (device 0) or its Nunchuk (1) since the last call (WPadHVSwing). */
@@ -410,17 +411,15 @@ static void defer(WPADCallback callback, s32 chan, s32 result) {
     if (callback == NULL) {
         return;
     }
-    const BOOL enabled = OSDisableInterrupts();
+    const int enabled = nebula_interrupts_disable();
     if (sDeferredCount < kDeferred) {
         sDeferred[sDeferredCount++] = (Deferred){callback, chan, result};
     }
-    OSRestoreInterrupts(enabled);
-    nebula_raise_interrupt(__OS_INTERRUPT_PI_SI);
+    nebula_interrupts_restore(enabled);
+    nebula_raise_event(NEBULA_EVENT_CONTROLLER);
 }
 
-static void controller_interrupt(__OSInterrupt interrupt, OSContext* context) {
-    (void)interrupt;
-    (void)context;
+static void controller_interrupt(void) {
     for (s32 chan = 0; chan < kChannels; chan++) {
         Channel* c = &sChannels[chan];
         const int event = atomic_exchange(&c->connectEvent, 0);
@@ -499,8 +498,8 @@ void WPADInit(void) {
         sChannels[chan].devType = WPAD_DEV_NOT_FOUND;
         sChannels[chan].dataFormat = WPAD_FMT_CORE;
     }
-    __OSSetInterruptHandler(__OS_INTERRUPT_PI_SI, controller_interrupt);
-    __OSUnmaskInterrupts(OS_INTERRUPTMASK_PI_SI);
+    nebula_set_event_handler(NEBULA_EVENT_CONTROLLER, controller_interrupt);
+    nebula_enable_event(NEBULA_EVENT_CONTROLLER);
     nebula_host()->wpad_control(nebula_host()->user, 0, NEBULA_WPAD_INIT, 0);
 }
 
@@ -539,12 +538,12 @@ void WPADRead(s32 chan, void* status) {
     default:
         break;
     }
-    const BOOL enabled = OSDisableInterrupts();
+    const int enabled = nebula_interrupts_disable();
     memcpy(status, &c->status, size);
     if (!c->connected) {
         ((WPADStatus*)status)->err = WPAD_ERR_NO_CONTROLLER;
     }
-    OSRestoreInterrupts(enabled);
+    nebula_interrupts_restore(enabled);
 }
 
 u32 WPADGetDataFormat(s32 chan) {

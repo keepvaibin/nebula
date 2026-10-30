@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JUtility/JUTException.hpp"
 #include <revolution/os/OSBootInfo.h>
@@ -35,7 +36,7 @@ static void heapUnpoison(const void* p, s32 n) {
 #endif
 
 JKRHeap::JKRHeap(void* data, u32 size, JKRHeap* parent, bool error) : JKRDisposer(), mChildTree(this), mDisposerList() {
-    OSInitMutex(&mMutex);
+    mMutex.init();
     mSize = size;
     mStart = (u8*)data;
     mEnd = (u8*)data + size;

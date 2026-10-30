@@ -1,4 +1,5 @@
 #include "Game/System/ResourceHolder.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/Animation/MaterialAnmBuffer.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ModelUtil.hpp"
@@ -207,9 +208,9 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
     }
 
     if (strstr(pName, ".bmt") != nullptr) {
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         ResFileInfo* ret = mBmtResTable->add(pName, J3DModelLoaderDataBase::loadMaterialTable(pData), true);
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
         return ret;
     }
 
@@ -222,9 +223,9 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
     }
 
     if (strstr(pName, ".bdl") != nullptr) {
-        OSLockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).lock();
         J3DModelData* modelData = J3DModelLoaderDataBase::loadBinaryDisplayList(pData, J3DMLF_Material_UseIndirect | J3DMLF_UseUniqueMaterials);
-        OSUnlockMutex(&MR::MutexHolder< 0 >::sMutex);
+        (MR::MutexHolder< 0 >::sMutex).unlock();
         MR::initEnvelopeAndEnvMapOrProjMapModelData(modelData);
         if (MR::isUseFur(modelData) || MR::strcasecmp(pName, "MarioShadow.bdl") == 0) {
             MR::downFracVtx(modelData);

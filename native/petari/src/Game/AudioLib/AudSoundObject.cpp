@@ -1,4 +1,5 @@
 #include "Game/AudioLib/AudSoundObject.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/AudioLib/AudEffector.hpp"
 #include "Game/AudioLib/AudSoundId.hpp"
 #include "Game/AudioLib/AudSoundInfo.hpp"
@@ -45,15 +46,15 @@ bool AudSoundObject::writePort(JAISoundHandle* pHandle, u32 port, u16 value) {
         return false;
     }
 
-    BOOL en = OSDisableInterrupts();
+    BOOL en = NebulaKernel::disableInterrupts();
 
     JASTrack* track = pHandle->getSound()->getTrack();
     if (track != nullptr) {
         track->writePort(port, value);
-        OSRestoreInterrupts(en);
+        NebulaKernel::restoreInterrupts(en);
         return true;
     }
-    OSRestoreInterrupts(en);
+    NebulaKernel::restoreInterrupts(en);
     return false;
 }
 

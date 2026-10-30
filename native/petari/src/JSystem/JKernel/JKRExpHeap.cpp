@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRExpHeap.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JUtility/JUTConsole.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
@@ -146,7 +147,7 @@ JKRExpHeap::~JKRExpHeap() {
 
 void* JKRExpHeap::do_alloc(u32 size, int align) {
     void* ptr;
-    OSLockMutex(&mMutex);
+    mMutex.lock();
 
     if (size < 4) {
         size = 4;
@@ -176,7 +177,7 @@ void* JKRExpHeap::do_alloc(u32 size, int align) {
         }
     }
 
-    OSUnlockMutex(&mMutex);
+    mMutex.unlock();
     return ptr;
 }
 

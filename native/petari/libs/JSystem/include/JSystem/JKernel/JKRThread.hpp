@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRDisposer.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 
 #include <revolution/os.h>
@@ -27,7 +28,7 @@ public:
 
     JKRThread(u32 stack_size, int message_count, int param_3);
     JKRThread(JKRHeap* heap, u32 stack_size, int message_count, int param_4);
-    JKRThread(OSThread* thread, int message_count);
+    JKRThread(NebulaThread* thread, int message_count);
 
     virtual ~JKRThread();
     virtual void* run() {
@@ -37,7 +38,7 @@ public:
     void setCommon_mesgQueue(JKRHeap* heap, int message_count);
     void setCommon_heapSpecified(JKRHeap* heap, u32 stack_size, int param_3);
 
-    OSThread* getThreadRecord() const {
+    NebulaThread* getThreadRecord() const {
         return mThread;
     }
     void* getStack() const {
@@ -58,43 +59,43 @@ public:
     }
 
     void resume() {
-        OSResumeThread(mThread);
+        NebulaKernel::resume(mThread);
     }
-    BOOL sendMessage(OSMessage message) {
-        return OSSendMessage(&mMessageQueue, message, OS_MESSAGE_NOBLOCK);
+    BOOL sendMessage(void* message) {
+        return mMessageQueue.send(message, false);
     }
-    void sendMessageBlock(OSMessage message) {
-        OSSendMessage(&mMessageQueue, message, OS_MESSAGE_BLOCK);
+    void sendMessageBlock(void* message) {
+        mMessageQueue.send(message, true);
     }
-    OSMessage waitMessage() {
-        OSMessage message;
-        OSReceiveMessage(&mMessageQueue, &message, OS_MESSAGE_NOBLOCK);
+    void* waitMessage() {
+        void* message;
+        mMessageQueue.receive(&message, false);
         return message;
     }
 
-    OSMessage waitMessage(BOOL* received) {
-        OSMessage message;
-        *received = OSReceiveMessage(&mMessageQueue, &message, OS_MESSAGE_NOBLOCK);
+    void* waitMessage(BOOL* received) {
+        void* message;
+        *received = mMessageQueue.receive(&message, false);
         return message;
     }
-    OSMessage waitMessageBlock() {
-        OSMessage message;
-        OSReceiveMessage(&mMessageQueue, &message, OS_MESSAGE_BLOCK);
+    void* waitMessageBlock() {
+        void* message;
+        mMessageQueue.receive(&message, true);
         return message;
     }
-    void jamMessageBlock(OSMessage message) {
-        OSJamMessage(&mMessageQueue, message, OS_MESSAGE_BLOCK);
+    void jamMessageBlock(void* message) {
+        mMessageQueue.jam(message, true);
     }
 
     static void* start(void* pData);
 
-    static JKRThread* searchThread(OSThread*);
+    static JKRThread* searchThread(NebulaThread*);
 
     /* 0x18 */ JSULink< JKRThread > mThreadListLink;
     /* 0x28 */ JKRHeap* mHeap;
-    /* 0x2C */ OSThread* mThread;
-    /* 0x30 */ OSMessageQueue mMessageQueue;
-    /* 0x50 */ OSMessage* mMesgBuffer;
+    /* 0x2C */ NebulaThread* mThread;
+    /* 0x30 */ NebulaMessageQueue mMessageQueue;
+    /* 0x50 */ void** mMesgBuffer;
     /* 0x54 */ s32 mMessageCount;
     /* 0x58 */ void* mStackMemory;
     /* 0x5C */ u32 mStackSize;

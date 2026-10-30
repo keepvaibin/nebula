@@ -1,4 +1,5 @@
 #include "Game/Util/SystemUtil.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <revolution/os.h>
 #include "Game/NameObj/NameObjHolder.hpp"
 #ifdef TARGET_PC
@@ -76,7 +77,7 @@ namespace MR {
     void waitEndChangeArchivePlayer() {
         while (!GameSystemFunction::isEndChangeArchivePlayer()) {
 #ifdef TARGET_PC
-            __NebulaPoll();
+            NebulaKernel::poll();
 #endif
         }
     }
@@ -134,23 +135,23 @@ namespace MR {
     }
 
     void suspendAsyncExecuteThread(const char* pThreadName) {
-        OSSuspendThread(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+        NebulaKernel::suspend(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
     }
 
     void resumeAsyncExecuteThread(const char* pThreadName) {
-        OSThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
+        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
 
-        OSResumeThread(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
+        NebulaKernel::resume(::getFunctionAsyncExecutor()->getOSThread(pThreadName));
     }
 
     bool isSuspendedAsyncExecuteThread(const char* pThreadName) {
-        OSThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
+        NebulaThread* pThread = ::getFunctionAsyncExecutor()->getOSThread(pThreadName);
 
         if (pThread == nullptr) {
             return false;
         }
 
-        return OSIsThreadSuspended(pThread);
+        return NebulaKernel::isSuspended(pThread);
     }
 
     bool isScreen16Per9() {

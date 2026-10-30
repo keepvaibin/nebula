@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASAudioThread.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
@@ -14,7 +15,7 @@
 inline JASAudioThread::JASAudioThread(int stackSize, int msgCount, u32 threadPriority)
     : JKRThread(JASDram, threadPriority, msgCount, stackSize), JASGlobalInstance< JASAudioThread >(true) {
     sbPauseFlag = false;
-    OSInitThreadQueue(&sThreadQueue);
+    sThreadQueue.init();
 }
 
 void JASAudioThread::create(s32 threadPriority) {
@@ -40,14 +41,14 @@ void* JASAudioThread::run() {
     JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);
     JASDriver::startDMA();
 
-    OSMessage msg;
+    void* msg;
     while (true) {
         msg = waitMessageBlock();
         switch ((intptr_t)msg) {
         case AUDIOMSG_DMA:
             if (sbPauseFlag) {
                 JASDriver::stopDMA();
-                OSSleepThread(&sThreadQueue);
+                sThreadQueue.sleep();
             }
 
             JASDriver::updateDac();
@@ -69,7 +70,7 @@ void* JASAudioThread::run() {
 
         case AUDIOMSG_STOP:
             JASDriver::stopDMA();
-            OSExitThread(nullptr);
+            NebulaKernel::exit(nullptr);
             continue;
         }
     }

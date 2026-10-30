@@ -1,4 +1,5 @@
 #include "Game/Util/MemoryUtil.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/Util/MutexHolder.hpp"
 #include "Game/Util/SingletonHolder.hpp"
@@ -10,13 +11,13 @@
 namespace MR {
     CurrentHeapRestorer::CurrentHeapRestorer(JKRHeap* pHeap) {
         _0 = JKRHeap::sCurrentHeap;
-        OSLockMutex(&MR::MutexHolder< 1 >::sMutex);
+        (MR::MutexHolder< 1 >::sMutex).lock();
         MR::becomeCurrentHeap(pHeap);
     }
 
     CurrentHeapRestorer::~CurrentHeapRestorer() {
         MR::becomeCurrentHeap(_0);
-        OSUnlockMutex(&MR::MutexHolder< 1 >::sMutex);
+        (MR::MutexHolder< 1 >::sMutex).unlock();
     }
 
     JKRHeap* getCurrentHeap() {

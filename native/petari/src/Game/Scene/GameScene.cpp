@@ -1,4 +1,5 @@
 #include "Game/Scene/GameScene.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
@@ -191,7 +192,7 @@ void GameScene::init() {
 
         while (!GameSceneFunction::isLoadDoneScenarioWaveData()) {
 #ifdef TARGET_PC
-            __NebulaPoll();
+            NebulaKernel::poll();
 #endif
         }
     }

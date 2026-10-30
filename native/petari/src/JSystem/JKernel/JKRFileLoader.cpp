@@ -1,9 +1,10 @@
 #include "JSystem/JKernel/JKRFileLoader.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <revolution.h>
 
 JKRFileLoader* JKRFileLoader::sCurrentVolume;
 JSUList< JKRFileLoader > JKRFileLoader::sVolumeList = JSUList< JKRFileLoader >();
-OSMutex JKRFileLoader::sVolumeListMutex;
+NebulaMutex JKRFileLoader::sVolumeListMutex;
 
 JKRFileLoader::JKRFileLoader() : JKRDisposer(), mLoaderLink(this) {
     mLoaderName = nullptr;
@@ -52,21 +53,21 @@ void* JKRFileLoader::getGlbResource(const char* pName, JKRFileLoader* pLoader) {
 }
 
 void JKRFileLoader::initializeVolumeList() {
-    OSInitMutex(&sVolumeListMutex);
+    sVolumeListMutex.init();
 }
 
 void JKRFileLoader::prependVolumeList(JSULink< JKRFileLoader >* pLoader) {
-    OSLockMutex(&sVolumeListMutex);
+    sVolumeListMutex.lock();
 
     sVolumeList.prepend(pLoader);
 
-    OSUnlockMutex(&sVolumeListMutex);
+    sVolumeListMutex.unlock();
 }
 
 void JKRFileLoader::removeVolumeList(JSULink< JKRFileLoader >* pLoader) {
-    OSLockMutex(&sVolumeListMutex);
+    sVolumeListMutex.lock();
 
     sVolumeList.remove(pLoader);
 
-    OSUnlockMutex(&sVolumeListMutex);
+    sVolumeListMutex.unlock();
 }

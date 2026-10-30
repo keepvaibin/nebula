@@ -1,23 +1,24 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
 #include "JSystem/JKernel/JKRExpHeap.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include <revolution/aralt.h>
-#include <revolution/os/OSMutex.h>
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 JASHeap::JASHeap(JASDisposer* pDisposer) : mTree(this), mDisposer(pDisposer), mBase(), mSize(), mHeap() {
-    OSInitMutex(&mMutex);
+    mMutex.init();
 }
 
 void JASHeap::initRootHeap(void* pBase, u32 size) {
-    OSLockMutex(&mMutex);
+    mMutex.lock();
     mBase = (u8*)NebulaAlignUp32(pBase);
     mHeap = nullptr;
     mSize = size - (u32)(mBase - static_cast< u8* >(pBase));
-    OSUnlockMutex(&mMutex);
+    mMutex.unlock();
 }
 
 bool JASHeap::alloc(JASHeap* pParent, u32 size) {

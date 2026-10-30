@@ -1,4 +1,5 @@
 #include "Game/System/FunctionAsyncExecutor.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "Game/Util/Functor.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -9,7 +10,7 @@
 
 FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, int priority, const char* pName)
     : mFunc(pFunc), mPriority(priority), mName(pName), mIsEnd(false) {
-    OSInitMessageQueue(&mQueue, &mMessage, 1);
+    mQueue.init(&mMessage, 1);
 }
 
 FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
@@ -17,12 +18,12 @@ FunctionAsyncExecInfo::~FunctionAsyncExecInfo() {
 }
 
 void FunctionAsyncExecInfo::execute() {
-    OSThread* pThread = OSGetCurrentThread();
-    OSPriority priorityPrev = OSGetThreadPriority(pThread);
+    NebulaThread* pThread = NebulaKernel::current();
+    OSPriority priorityPrev = NebulaKernel::priority(pThread);
 
-    OSSetThreadPriority(pThread, mPriority);
+    NebulaKernel::setPriority(pThread, mPriority);
     (*mFunc)();
-    OSSetThreadPriority(pThread, priorityPrev);
+    NebulaKernel::setPriority(pThread, priorityPrev);
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
@@ -35,34 +36,34 @@ void* FunctionAsyncExecutorThread::run() {
         mIsSuspended = false;
         mName = nullptr;
 
-        OSMessage msg;
-        OSReceiveMessage(&mQueue, &msg, OS_MESSAGE_BLOCK);
+        void* msg;
+        mQueue.receive(&msg, true);
 
         FunctionAsyncExecInfo* info = reinterpret_cast< FunctionAsyncExecInfo* >(msg);
         mName = info->mName;
         mIsSuspended = true;
         info->execute();
-        OSSendMessage(&info->mQueue, nullptr, OS_MESSAGE_NOBLOCK);
+        info->mQueue.send(nullptr, false);
         info->mIsEnd = true;
     }
 }
 
-FunctionAsyncExecutorOnMainThread::FunctionAsyncExecutorOnMainThread(OSThread* pThread) : mThread(pThread), _0() {
-    OSInitMessageQueue(&mQueue, mMsgArray, ARRAY_SIZE(mMsgArray));
+FunctionAsyncExecutorOnMainThread::FunctionAsyncExecutorOnMainThread(NebulaThread* pThread) : mThread(pThread), _0() {
+    mQueue.init(mMsgArray, ARRAY_SIZE(mMsgArray));
 }
 
 void FunctionAsyncExecutorOnMainThread::update() {
-    OSMessage msg;
+    void* msg;
     FunctionAsyncExecInfo* info;
 
-    if (OSReceiveMessage(&mQueue, &msg, OS_MESSAGE_NOBLOCK)) {
+    if (mQueue.receive(&msg, false)) {
         _0 = true;
 
         info = static_cast< FunctionAsyncExecInfo* >(msg);
-        info->mPriority = OSGetThreadPriority(OSGetCurrentThread());
+        info->mPriority = NebulaKernel::priority(NebulaKernel::current());
         info->execute();
 
-        OSSendMessage(&info->mQueue, nullptr, OS_MESSAGE_NOBLOCK);
+        info->mQueue.send(nullptr, false);
 
         info->mIsEnd = true;
     }
@@ -72,10 +73,10 @@ FunctionAsyncExecutor::FunctionAsyncExecutor() : mMainThreadExec(nullptr), mHold
     for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
         FunctionAsyncExecutorThread* thread = new FunctionAsyncExecutorThread(MR::getStationedHeapNapa());
         mThreads[i] = thread;
-        OSResumeThread(thread->mThread);
+        NebulaKernel::resume(thread->mThread);
     }
 
-    mMainThreadExec = new FunctionAsyncExecutorOnMainThread(OSGetCurrentThread());
+    mMainThreadExec = new FunctionAsyncExecutorOnMainThread(NebulaKernel::current());
 #ifdef TARGET_PC
     // Units of the native record (0x34 bytes on the console), as many as the console's heap held.
     _410 = JKRUnitHeap::create(sizeof(FunctionAsyncExecInfo), 0x34A8 / 0x34 * ALIGN_NEXT(sizeof(FunctionAsyncExecInfo), 4), 4,
@@ -93,25 +94,25 @@ void FunctionAsyncExecutor::update() {
 void FunctionAsyncExecutor::start(const MR::FunctorBase& rFunc, int priority, const char* pName) {
     FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, priority, pName);
     FunctionAsyncExecutorThread* thread = getSuspendThread();
-    OSSendMessage(&thread->mQueue, info, OS_MESSAGE_NOBLOCK);
+    thread->mQueue.send(info, false);
 }
 
 bool FunctionAsyncExecutor::startOnMainThread(const MR::FunctorBase& rFunc, const char* pName) {
     FunctionAsyncExecutorOnMainThread* thread = mMainThreadExec;
-    bool isSameThread = OSGetCurrentThread() == thread->mThread;
+    bool isSameThread = NebulaKernel::current() == thread->mThread;
 
     if (isSameThread) {
         rFunc();
         return false;
     } else {
         FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, 0, pName);
-        OSSendMessage(&mMainThreadExec->mQueue, info, OS_MESSAGE_NOBLOCK);
+        mMainThreadExec->mQueue.send(info, false);
         return true;
     }
 }
 
 void FunctionAsyncExecutor::waitForEnd(const char* pName) {
-    OSLockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).lock();
     FunctionAsyncExecInfo** cur = mHolders.begin();
     FunctionAsyncExecInfo* const* lst = mHolders.end();
 
@@ -124,14 +125,14 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
     // reads past the list's end here and waits on whatever entry lies there; natively that can be a stale entry that
     // never ends (ResourceHolderManager::createAndAddInner on the main thread would hang).
     if (cur == lst) {
-        OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
+        (MR::MutexHolder< 2 >::sMutex).unlock();
         return;
     }
 #endif
     FunctionAsyncExecInfo* info = *cur;
-    OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
-    OSReceiveMessage(&info->mQueue, &info->mMessage, OS_MESSAGE_BLOCK);
-    OSLockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).unlock();
+    info->mQueue.receive(&info->mMessage, true);
+    (MR::MutexHolder< 2 >::sMutex).lock();
     cur = mHolders.begin();
     lst = mHolders.end();
 
@@ -147,13 +148,13 @@ void FunctionAsyncExecutor::waitForEnd(const char* pName) {
     }
 
     mHolders.mCount--;
-    OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).unlock();
     delete info;
 }
 
 /* this matches but on a different compiler version */
 bool FunctionAsyncExecutor::isEnd(const char* pName) const {
-    OSLockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).lock();
     FunctionAsyncExecInfo* const* cur = mHolders.begin();
     FunctionAsyncExecInfo* const* lst = mHolders.end();
 
@@ -171,11 +172,11 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
     }
 #endif
     FunctionAsyncExecInfo* info = *cur;
-    OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).unlock();
     return info->mIsEnd;
 }
 
-OSThread* FunctionAsyncExecutor::getOSThread(const char* pName) {
+NebulaThread* FunctionAsyncExecutor::getOSThread(const char* pName) {
     for (s32 i = 0; i < ARRAY_SIZE(mThreads); i++) {
         FunctionAsyncExecutorThread* pThread = mThreads[i];
 
@@ -191,9 +192,9 @@ FunctionAsyncExecInfo* FunctionAsyncExecutor::createAndAddExecInfo(const MR::Fun
     MR::FunctorBase* func = rFunc.clone(_414);
     FunctionAsyncExecInfo* info = new (_410, 0) FunctionAsyncExecInfo(func, priority, pName);
 
-    OSLockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).lock();
     mHolders.push_back(info);
-    OSUnlockMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 2 >::sMutex).unlock();
     return info;
 }
 

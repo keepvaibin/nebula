@@ -1,4 +1,5 @@
 #include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -91,10 +92,10 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
 }
 
 bool THPSimplePlayerWrapper::init(s32 audio) {
-    s32 old = OSDisableInterrupts();
+    s32 old = NebulaKernel::disableInterrupts();
     mSoundBufferIndex = 0;
     initAudio();
-    OSRestoreInterrupts(old);
+    NebulaKernel::restoreInterrupts(old);
     MR::zeroMemory(mSoundBuffer[0], 0x8C0);
     MR::zeroMemory(mSoundBuffer[1], 0x8C0);
     _2F0 = 0;
@@ -312,10 +313,10 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
                         break;
                     case 1:
                         u32 sample = THPAudioDecode(mAudioBuffer[mAudioDecodeIndex].buffer, ptr + (*compSize) * audio, 0);
-                        s32 interrupt = OSDisableInterrupts();
+                        s32 interrupt = NebulaKernel::disableInterrupts();
                         mAudioBuffer[mAudioDecodeIndex].validSample = sample;
                         mAudioBuffer[mAudioDecodeIndex].curPtr = mAudioBuffer[mAudioDecodeIndex].buffer;
-                        OSRestoreInterrupts(interrupt);
+                        NebulaKernel::restoreInterrupts(interrupt);
                         mAudioDecodeIndex++;
 
                         if (mAudioDecodeIndex >= 20) {
@@ -470,13 +471,13 @@ void THPSimplePlayerWrapper::readFrameAsync() {
 }
 
 void THPSimplePlayerWrapper::checkPrefetch() {
-    BOOL in = OSDisableInterrupts();
+    BOOL in = NebulaKernel::disableInterrupts();
     bool isValid = mReadBuffer[mReadIndex].isValid == true;
     if (!isValid && !mReadProgress) {
         readFrameAsync();
     }
 
-    OSRestoreInterrupts(in);
+    NebulaKernel::restoreInterrupts(in);
 }
 
 void THPSimplePlayerWrapper::dvdCallBack(s32 result) {
@@ -775,10 +776,10 @@ s16* THPSimplePlayerWrapper::audioCallback(s32 sample) {
         return nullptr;
     }
 
-    s32 en = OSEnableInterrupts();
+    s32 en = NebulaKernel::enableInterrupts();
     mSoundBufferIndex ^= 1;
     mixAudio((s16*)mSoundBuffer[mSoundBufferIndex], sample);
-    OSRestoreInterrupts(en);
+    NebulaKernel::restoreInterrupts(en);
     return (s16*)mSoundBuffer[mSoundBufferIndex];
 }
 
@@ -939,7 +940,7 @@ bool THPSimplePlayerWrapper::setVolume(s32 volume, s32 time) {
         time = 0;
     }
 
-    s32 en = OSEnableInterrupts();
+    s32 en = NebulaKernel::enableInterrupts();
     mTargetVolume = (f32)volume;
 
     if (time > 0) {
@@ -950,7 +951,7 @@ bool THPSimplePlayerWrapper::setVolume(s32 volume, s32 time) {
         mCurrentVolume = mTargetVolume;
     }
 
-    OSRestoreInterrupts(en);
+    NebulaKernel::restoreInterrupts(en);
     return true;
 }
 
@@ -959,9 +960,9 @@ bool THPSimplePlayerWrapper::isPreLoading() const {
 }
 
 void THPSimplePlayerWrapper::setUnpauseFrameFlag() {
-    s32 en = OSDisableInterrupts();
+    s32 en = NebulaKernel::disableInterrupts();
     _2F0 = 1;
-    OSRestoreInterrupts(en);
+    NebulaKernel::restoreInterrupts(en);
 }
 
 s16* THPSimplePlayerStaticAudio::audioCallback(s32 audio) {

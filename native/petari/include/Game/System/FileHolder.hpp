@@ -1,7 +1,8 @@
 #pragma once
 
 #include "Game/Util/Array.hpp"
-#include <revolution/os/OSMessage.h>
+#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <revolution/types.h>
 
 class JKRHeap;
@@ -29,8 +30,8 @@ public:
     /* 0x04 */ void* mContext;
     /* 0x08 */ JKRHeap* mHeap;
     /* 0x0C */ s32 mState;
-    /* 0x10 */ OSMessageQueue mQueue;
-    /* 0x30 */ OSMessage mMessage;
+    /* 0x10 */ NebulaMessageQueue mQueue;
+    /* 0x30 */ void* mMessage;
     /* 0x34 */ bool mContextSet;
 };
 

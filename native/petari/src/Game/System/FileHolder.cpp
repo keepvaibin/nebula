@@ -1,4 +1,5 @@
 #include "Game/System/FileHolder.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/Util.hpp"
 #include "Game/System/NebulaDisc.hpp"
 
@@ -8,7 +9,7 @@
 
 FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
     : mEntryNum(NebulaDisc::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
-    OSInitMessageQueue(&mQueue, &mMessage, 1);
+    mQueue.init(&mMessage, 1);
 
     if (pContext) {
         mContextSet = false;
@@ -24,8 +25,8 @@ FileHolderFileEntry::~FileHolderFileEntry() {
 
 void FileHolderFileEntry::waitReadDone() {
     if (mState != FILE_HOLDER_STATE_DONE) {
-        OSMessage msg;
-        OSReceiveMessage(&mQueue, &msg, OS_MESSAGE_BLOCK);
+        void* msg;
+        mQueue.receive(&msg, true);
         mState = FILE_HOLDER_STATE_DONE;
     }
 }
@@ -34,7 +35,7 @@ void FileHolderFileEntry::setContext(void* pContext, JKRHeap* pHeap) {
     mContext = pContext;
     mHeap = pHeap;
 
-    OSSendMessage(&mQueue, nullptr, OS_MESSAGE_NOBLOCK);
+    mQueue.send(nullptr, false);
     mState = FILE_HOLDER_STATE_READING;
 }
 

@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASChannel.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
@@ -7,11 +8,11 @@
 #include "JSystem/JMath/JMATrigonometric.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
-OSMessageQueue JASChannel::sBankDisposeMsgQ;
+NebulaMessageQueue JASChannel::sBankDisposeMsgQ;
 
-OSMessage JASChannel::sBankDisposeMsg[16];
+void* JASChannel::sBankDisposeMsg[16];
 
-OSMessage JASChannel::sBankDisposeList[16];
+void* JASChannel::sBankDisposeList[16];
 
 int JASChannel::sBankDisposeListSize;
 
@@ -459,13 +460,13 @@ void JASChannel::free() {
 }
 
 void JASChannel::initBankDisposeMsgQueue() {
-    OSInitMessageQueue(&sBankDisposeMsgQ, sBankDisposeMsg, 0x10);
+    sBankDisposeMsgQ.init(sBankDisposeMsg, 0x10);
     sBankDisposeListSize = 0;
 }
 
 void JASChannel::receiveBankDisposeMsg() {
-    OSMessage msg;
-    for (sBankDisposeListSize = 0; OSReceiveMessage(&sBankDisposeMsgQ, &msg, OS_MESSAGE_NOBLOCK); sBankDisposeListSize++) {
+    void* msg;
+    for (sBankDisposeListSize = 0; sBankDisposeMsgQ.receive(&msg, false); sBankDisposeListSize++) {
         sBankDisposeList[sBankDisposeListSize] = msg;
     }
 }

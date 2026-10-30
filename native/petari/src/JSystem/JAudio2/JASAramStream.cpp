@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASAramStream.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
@@ -98,8 +99,8 @@ void JASAramStream::init(u32 param_0, u32 param_1, StreamCallback i_callback, vo
     _1DC[0] = 0xffff;
     mCallback = i_callback;
     mCallbackData = i_callbackData;
-    OSInitMessageQueue(&_000, _040, 0x10);
-    OSInitMessageQueue(&_020, _080, 4);
+    _000.init(_040, 0x10);
+    _020.init(_080, 4);
 }
 
 bool JASAramStream::prepare(s32 param_0, int param_1) {
@@ -124,7 +125,7 @@ bool JASAramStream::prepare(s32 param_0, int param_1) {
 }
 
 bool JASAramStream::start() {
-    if (!OSSendMessage(&_000, (OSMessage)0, OS_MESSAGE_NOBLOCK)) {
+    if (!_000.send((void*)0, false)) {
         return false;
     }
 
@@ -132,7 +133,7 @@ bool JASAramStream::start() {
 }
 
 bool JASAramStream::stop(u16 param_0) {
-    if (!OSSendMessage(&_000, (OSMessage)(uintptr_t)(param_0 << 0x10 | 1), OS_MESSAGE_NOBLOCK)) {
+    if (!_000.send((void*)(uintptr_t)(param_0 << 0x10 | 1), false)) {
         return false;
     }
 
@@ -140,8 +141,8 @@ bool JASAramStream::stop(u16 param_0) {
 }
 
 bool JASAramStream::pause(bool param_0) {
-    OSMessage msg = param_0 ? (OSMessage)2 : (OSMessage)3;
-    if (!OSSendMessage(&_000, msg, OS_MESSAGE_NOBLOCK)) {
+    void* msg = param_0 ? (void*)2 : (void*)3;
+    if (!_000.send(msg, false)) {
         return false;
     }
 
@@ -210,7 +211,7 @@ void JASAramStream::finishTask(void* i_this) {
 
 void JASAramStream::prepareFinishTask(void* i_this) {
     JASAramStream* _this = (JASAramStream*)i_this;
-    OSSendMessage(&_this->_020, (OSMessage)4, OS_MESSAGE_BLOCK);
+    _this->_020.send((void*)4, true);
     if (_this->mCallback != nullptr) {
         _this->mCallback(CB_STOP, _this, _this->mCallbackData);
     }
@@ -329,7 +330,7 @@ bool JASAramStream::load() {
 
         if (r28 == loop_end_block || r28 + 2 == loop_end_block) {
             _108 = _160;
-            OSSendMessage(&_020, (OSMessage)5, OS_MESSAGE_BLOCK);
+            _020.send((void*)5, true);
         } else {
             _108 = _160 - 1;
         }
@@ -556,8 +557,8 @@ void JASAramStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JAS
 }
 
 s32 JASAramStream::channelProc() {
-    OSMessage msg;
-    while (OSReceiveMessage(&_020, &msg, OS_MESSAGE_NOBLOCK)) {
+    void* msg;
+    while (_020.receive(&msg, false)) {
         switch ((u32)(uintptr_t)msg) {
         case 4:
             _0AC = true;
@@ -572,7 +573,7 @@ s32 JASAramStream::channelProc() {
         return 0;
     }
 
-    while (OSReceiveMessage(&_000, &msg, OS_MESSAGE_NOBLOCK)) {
+    while (_000.receive(&msg, false)) {
         switch ((u32)(uintptr_t)msg & 0xff) {
         case 0:
             channelStart();

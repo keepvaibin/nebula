@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRAramStream.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRAramPiece.hpp"
 #include "JSystem/JSupport/JSUFileStream.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
@@ -23,7 +24,7 @@ void* JKRAramStream::sMessageBuffer[4] = {
     NULL,
 };
 
-OSMessageQueue JKRAramStream::sMessageQueue = {0};
+NebulaMessageQueue JKRAramStream::sMessageQueue = {0};
 
 JKRAramStream::JKRAramStream(s32 priority) : JKRThread(stack_size, 0x10, priority) {
     resume();
@@ -33,11 +34,11 @@ JKRAramStream::~JKRAramStream() {
 }
 
 void* JKRAramStream::run() {
-    OSInitMessageQueue(&sMessageQueue, sMessageBuffer, ARRAY_SIZEU(sMessageBuffer));
+    sMessageQueue.init(sMessageBuffer, ARRAY_SIZEU(sMessageBuffer));
 
     for (;;) {
-        OSMessage message;
-        OSReceiveMessage(&sMessageQueue, &message, OS_MESSAGE_BLOCK);
+        void* message;
+        sMessageQueue.receive(&message, true);
         JKRAramStreamCommand* command = (JKRAramStreamCommand*)message;
 
         switch (command->mType) {
@@ -117,7 +118,7 @@ s32 JKRAramStream::writeToAram(JKRAramStreamCommand* command) {
         }
     }
 
-    OSSendMessage(&command->mMessageQueue, (OSMessage)(intptr_t)writtenLength, OS_MESSAGE_NOBLOCK);
+    command->mMessageQueue.send((void*)(intptr_t)writtenLength, false);
     return writtenLength;
 }
 
@@ -141,22 +142,22 @@ JKRAramStreamCommand* JKRAramStream::write_StreamToAram_Async(JSUFileInputStream
         *returnSize = 0;
     }
 
-    OSInitMessageQueue(&command->mMessageQueue, &command->mMessage, 1);
-    OSSendMessage(&sMessageQueue, command, OS_MESSAGE_BLOCK);
+    command->mMessageQueue.init(&command->mMessage, 1);
+    sMessageQueue.send(command, true);
     return command;
 }
 
 JKRAramStreamCommand* JKRAramStream::sync(JKRAramStreamCommand* command, BOOL isNonBlocking) {
-    OSMessage message;
+    void* message;
     if (isNonBlocking == 0) {
-        OSReceiveMessage(&command->mMessageQueue, &message, OS_MESSAGE_BLOCK);
+        command->mMessageQueue.receive(&message, true);
         if (message == NULL) {
             return NULL;
         } else {
             return command;
         }
     } else {
-        if (OSReceiveMessage(&command->mMessageQueue, &message, OS_MESSAGE_NOBLOCK) == FALSE) {
+        if (command->mMessageQueue.receive(&message, false) == FALSE) {
             return NULL;
         } else if (message == NULL) {
             return NULL;

@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASWaveArcLoader.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
@@ -38,7 +39,7 @@ JASWaveArc::JASWaveArc() : mHeap(this) {
     mEntryNum = -1;
     mFileLength = 0;
     _5A = 0;
-    OSInitMutex(&mMutex);
+    mMutex.init();
 }
 
 JASWaveArc::~JASWaveArc() {

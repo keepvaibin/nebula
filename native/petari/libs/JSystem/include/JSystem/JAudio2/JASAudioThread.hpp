@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASGadget.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASGlobal.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
 
@@ -27,7 +28,7 @@ struct JASAudioThread : public JKRThread, public JASGlobalInstance< JASAudioThre
         snIntCount = intCount;
     }
 
-    /* 0x7C */ OSThreadQueue sThreadQueue;
+    /* 0x7C */ NebulaThreadQueue sThreadQueue;
     /* 0x84 */ bool sbPauseFlag;  // type unsure
 
     static volatile int snIntCount;  // type unsure

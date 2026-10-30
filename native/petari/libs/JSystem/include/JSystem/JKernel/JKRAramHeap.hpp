@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRAramBlock.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRDisposer.hpp"
 
 class JKRAramHeap : public JKRDisposer {
@@ -37,17 +38,17 @@ public:
 
 private:
     void lock() {
-        OSLockMutex(&mMutex);
+        mMutex.lock();
     }
 
     void unlock() {
-        OSUnlockMutex(&mMutex);
+        mMutex.unlock();
     }
 
 public:
     /* 0x00 */  // vtable
     /* 0x04 */  // JKRDisposer
-    /* 0x18 */ OSMutex mMutex;
+    /* 0x18 */ NebulaMutex mMutex;
     /* 0x30 */ JKRHeap* mHeap;
     /* 0x34 */ u32 mHeadAddress;
     /* 0x38 */ u32 mTailAddress;

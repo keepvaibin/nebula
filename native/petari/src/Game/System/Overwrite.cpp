@@ -1,4 +1,5 @@
 #include "Game/System/ShapePacketUserData.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -1108,7 +1109,7 @@ namespace {
 
 JASAudioThread::JASAudioThread(int priority, int, u32)
     : JKRThread(JASDram, ::sAudioThreadStackSize, ::sAudioThreadMsgSize, priority), JASGlobalInstance< JASAudioThread >(true), sbPauseFlag() {
-    OSInitThreadQueue(&sThreadQueue);
+    sThreadQueue.init();
 }
 
 JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAramThreadStackSize, ::sAramThreadMsgSize, priority) {

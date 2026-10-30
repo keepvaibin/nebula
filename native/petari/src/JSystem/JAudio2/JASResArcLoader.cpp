@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASResArcLoader.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
@@ -20,10 +21,10 @@ static void JASResArcLoader::loadResourceCallback(void* args) {
 
     if (readResult == 0) {
         if (castedArgs->mMsgQueue != nullptr) {
-            OSSendMessage(castedArgs->mMsgQueue, (void*)RESARC_MESSAGE_ERROR, OS_MESSAGE_BLOCK);
+            castedArgs->mMsgQueue->send((void*)RESARC_MESSAGE_ERROR, true);
         }
     } else if (castedArgs->mMsgQueue != nullptr) {
-        OSSendMessage(castedArgs->mMsgQueue, (void*)RESARC_MESSAGE_SUCCESS, OS_MESSAGE_BLOCK);
+        castedArgs->mMsgQueue->send((void*)RESARC_MESSAGE_SUCCESS, true);
     }
 }
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <revolution.h>
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 typedef u8 (*Pattern)[2];
@@ -43,7 +44,7 @@ public:
     u8* getVFilter() const {
         return mRenderObj->vfilter;
     }
-    OSMessageQueue* getMessageQueue() {
+    NebulaMessageQueue* getMessageQueue() {
         return &mMessageQueue;
     }
 
@@ -71,8 +72,8 @@ private:
     /* 0x28 */ Callback mPostCallback;
     /* 0x2C */ bool mSetBlack;
     /* 0x30 */ s32 mSetBlackFrameCount;
-    /* 0x34 */ OSMessage mMessage;
-    /* 0x38 */ OSMessageQueue mMessageQueue;
+    /* 0x34 */ void* mMessage;
+    /* 0x38 */ NebulaMessageQueue mMessageQueue;
 };
 
 inline JUTVideo* JUTGetVideoManager() {

@@ -1,4 +1,5 @@
 #include "Game/System/FileRipper.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
@@ -8,7 +9,7 @@
 #include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
-    OSMutex sDecompMutex;
+    NebulaMutex sDecompMutex;
 
     u8* sReadBuffer;
     u8* sReadBufferEnd;
@@ -21,7 +22,7 @@ namespace {
 void FileRipper::setup(u32 size, JKRHeap* pHeap) {
     ::sReadBuffer = new (pHeap, 0x40) u8[size];
     ::sReadBufferEnd = ::sReadBuffer + size;
-    OSInitMutex(&::sDecompMutex);
+    (::sDecompMutex).init();
 }
 
 s32 FileRipper::checkCompressed(const u8* pData) {
@@ -142,7 +143,7 @@ void* FileRipper::loadToMainRAM(const char* fpath, u8* dest, bool decompress, JK
 }
 
 bool FileRipper::decompressFromDVD(NebulaDisc::File* fileInfo, void* dest, u32 readSize, u32 destSize, const u8* currentPos, u32 copySize) {
-    OSLockMutex(&::sDecompMutex);
+    (::sDecompMutex).lock();
 
     ::sSrcFileInfo = fileInfo;
     ::sReadDvdOffset = 0;
@@ -167,7 +168,7 @@ bool FileRipper::decompressFromDVD(NebulaDisc::File* fileInfo, void* dest, u32 r
     }
 
     NebulaRender::memoryRewritten(dest, destSize);
-    OSUnlockMutex(&::sDecompMutex);
+    (::sDecompMutex).unlock();
 
     return result;
 }

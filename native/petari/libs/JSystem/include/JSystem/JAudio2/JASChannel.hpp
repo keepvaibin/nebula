@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASLfo.hpp"
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
@@ -215,8 +216,8 @@ public:
         /* 0x104 */ int mProgNo;
     };
 
-    static OSMessageQueue sBankDisposeMsgQ;
-    static OSMessage sBankDisposeMsg[16];
-    static OSMessage sBankDisposeList[16];
+    static NebulaMessageQueue sBankDisposeMsgQ;
+    static void* sBankDisposeMsg[16];
+    static void* sBankDisposeList[16];
     static int sBankDisposeListSize;
 };

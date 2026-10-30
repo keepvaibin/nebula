@@ -1,4 +1,5 @@
 #include "RVLFaceLibInternal.h"
+#include <nebula_kernel.h>
 #include <revolution/os.h>
 #include <cstdio>
 #include <revolution/types.h>
@@ -160,12 +161,12 @@ BOOL RFLiIsWorking(void) {
 }
 
 void RFLiStartWorking(void) {
-    BOOL enabled = OSDisableInterrupts();
+    int enabled = nebula_interrupts_disable();
 
     RFLiSetWorking(TRUE);
     RFLiGetManager()->lastErrCode = RFLErrcode_Busy;
 
-    OSRestoreInterrupts(enabled);
+    nebula_interrupts_restore(enabled);
 }
 
 void RFLiEndWorkingReason(RFLErrcode err, s32 reason) {
@@ -174,13 +175,13 @@ void RFLiEndWorkingReason(RFLErrcode err, s32 reason) {
     switch (RFLiGetManager()->lastErrCode) {
     case RFLErrcode_Busy:
     case RFLErrcode_Success:
-        enabled = OSDisableInterrupts();
+        enabled = nebula_interrupts_disable();
 
         RFLiSetWorking(FALSE);
         RFLiGetManager()->lastErrCode = err;
         RFLiGetManager()->lastReason = reason;
 
-        OSRestoreInterrupts(enabled);
+        nebula_interrupts_restore(enabled);
         break;
     default:
         break;
@@ -230,7 +231,7 @@ static RFLErrcode RFLWaitAsync(void) {
         status = RFLGetAsyncStatus();
 #ifdef TARGET_PC
         if (status == RFLErrcode_Busy) {
-            __NebulaPoll();
+            nebula_kernel_poll();
         }
 #endif
     } while (status == RFLErrcode_Busy);

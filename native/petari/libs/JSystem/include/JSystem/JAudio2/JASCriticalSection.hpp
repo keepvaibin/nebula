@@ -1,12 +1,13 @@
 #pragma once
 
 #include <revolution/os/OSInterrupt.h>
+#include "Game/System/NebulaKernel.hpp"
 
 class JASCriticalSection {
 public:
-    JASCriticalSection() : mInterruptState(OSDisableInterrupts()) {};
+    JASCriticalSection() : mInterruptState(NebulaKernel::disableInterrupts()) {};
     ~JASCriticalSection() {
-        OSRestoreInterrupts(mInterruptState);
+        NebulaKernel::restoreInterrupts(mInterruptState);
     }
     /* 0x00 */ BOOL mInterruptState;
 };

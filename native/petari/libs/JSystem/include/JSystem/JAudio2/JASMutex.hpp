@@ -1,16 +1,17 @@
 #pragma once
 
-#include <revolution/os/OSMutex.h>
+#include "Game/System/NebulaKernel.hpp"
+#include "Game/System/NebulaKernel.hpp"
 
 class JASMutexLock {
 public:
-    inline JASMutexLock(OSMutex* mutex) {
+    inline JASMutexLock(NebulaMutex* mutex) {
         mMutex = mutex;
-        OSLockMutex(mMutex);
+        mMutex->lock();
     }
     inline ~JASMutexLock() {
-        OSUnlockMutex(mMutex);
+        mMutex->unlock();
     }
 
-    /* 0x0 */ OSMutex* mMutex;
+    /* 0x0 */ NebulaMutex* mMutex;
 };

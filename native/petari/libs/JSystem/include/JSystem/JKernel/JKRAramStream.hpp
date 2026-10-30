@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRThread.hpp"
+#include "Game/System/NebulaKernel.hpp"
 
 class JSUFileInputStream;
 
@@ -30,8 +31,8 @@ public:
     /* 0x28 */ bool mAllocatedTransferBuffer;
     /* 0x29 */ u8 padding_0x29[3];
     /* 0x2C */ u32 field_0x2c;
-    /* 0x30 */ OSMessageQueue mMessageQueue;
-    /* 0x50 */ OSMessage mMessage;
+    /* 0x30 */ NebulaMessageQueue mMessageQueue;
+    /* 0x50 */ void* mMessage;
     /* 0x54 */ u32 field_0x54;
     /* 0x58 */ u32 field_0x58;
 };
@@ -54,8 +55,8 @@ public:
 
 private:
     static JKRAramStream* sAramStreamObject;
-    static OSMessage sMessageBuffer[4];
-    static OSMessageQueue sMessageQueue;
+    static void* sMessageBuffer[4];
+    static NebulaMessageQueue sMessageQueue;
 
     static u8* transBuffer;
     static u32 transSize;

@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRThread.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/TColor.hpp"
 
@@ -25,9 +26,9 @@ JKRThread::~JKRThread() {
     sThreadList.remove(&mThreadListLink);
 
     if (mHeap != nullptr) {
-        if (!OSIsThreadTerminated(mThread)) {
-            OSDetachThread(mThread);
-            OSCancelThread(mThread);
+        if (!NebulaKernel::isTerminated(mThread)) {
+            NebulaKernel::detach(mThread);
+            NebulaKernel::cancel(mThread);
         }
 
         JKRHeap::free(mStackMemory, mHeap);
@@ -40,12 +41,12 @@ JKRThread::~JKRThread() {
 void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
     mMessageCount = msgCount;
 #ifdef TARGET_PC
-    // OSMessage is a pointer: 8 bytes natively.
-    mMesgBuffer = reinterpret_cast< OSMessage* >(JKRHeap::alloc(mMessageCount * sizeof(OSMessage), 0, pHeap));
+    // A message is a pointer: 8 bytes natively.
+    mMesgBuffer = reinterpret_cast< void** >(JKRHeap::alloc(mMessageCount * sizeof(void*), 0, pHeap));
 #else
-    mMesgBuffer = reinterpret_cast< OSMessage* >(JKRHeap::alloc(mMessageCount * 4, 0, pHeap));
+    mMesgBuffer = reinterpret_cast< void** >(JKRHeap::alloc(mMessageCount * 4, 0, pHeap));
 #endif
-    OSInitMessageQueue(&mMessageQueue, mMesgBuffer, mMessageCount);
+    mMessageQueue.init(mMesgBuffer, mMessageCount);
     sThreadList.append(&mThreadListLink);
     mCurrentHeap = nullptr;
     mCurrentHeapError = 0;
@@ -55,15 +56,15 @@ void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size, int para
     mHeap = pHeap;
     mStackSize = stack_size & 0xffffffe0;
     mStackMemory = JKRAllocFromHeap(mHeap, mStackSize, 0x20);
-    mThread = reinterpret_cast< OSThread* >(JKRAllocFromHeap(mHeap, sizeof(OSThread), 0x20));
-    OSCreateThread(mThread, start, this, reinterpret_cast< u8* >(mStackMemory) + mStackSize, mStackSize, param_3, 1);
+    mThread = reinterpret_cast< NebulaThread* >(JKRAllocFromHeap(mHeap, sizeof(NebulaThread), 0x20));
+    NebulaKernel::create(mThread, start, this, mStackSize, param_3, true);
 }
 
 void* JKRThread::start(void* pThread) {
     return static_cast< JKRThread* >(pThread)->run();
 }
 
-JKRThread* JKRThread::searchThread(OSThread* pThread) {
+JKRThread* JKRThread::searchThread(NebulaThread* pThread) {
     for (JSUPtrLink* i = sThreadList.mHead; i != nullptr; i = i->mNext) {
         JKRThread* thread = reinterpret_cast< JKRThread* >(i->mData);
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRCompression.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRThread.hpp"
 
 class JKRAMCommand;
@@ -18,11 +19,11 @@ public:
     /* 0x10 */ u32 mDecompressedSize;
     /* 0x14 */ void (*_14)(uintptr_t);
     /* 0x18 */ JKRDecompCommand* mThis;
-    /* 0x1C */ OSMessageQueue* _1C;
+    /* 0x1C */ NebulaMessageQueue* _1C;
     /* 0x20 */ s32 _20;
     /* 0x24 */ JKRAMCommand* mAmCommand;
-    /* 0x28 */ OSMessageQueue mMessageQueue;
-    /* 0x48 */ OSMessage mMessage;
+    /* 0x28 */ NebulaMessageQueue mMessageQueue;
+    /* 0x48 */ void* mMessage;
 };
 
 class JKRDecomp : public JKRThread {
@@ -43,8 +44,8 @@ public:
     static EJKRCompression checkCompressed(unsigned char*);
 
     static JKRDecomp* sDecompObject;
-    static OSMessage sMessageBuffer[8];
-    static OSMessageQueue sMessageQueue;
+    static void* sMessageBuffer[8];
+    static NebulaMessageQueue sMessageQueue;
 };
 
 inline void JKRDecompress(u8* srcBuffer, u8* dstBuffer, u32 srcLength, u32 dstLength) {

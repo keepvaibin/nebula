@@ -1,4 +1,5 @@
 #include "Game/System/GameSystem.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/NameObj/NameObjRegister.hpp"
@@ -63,9 +64,9 @@ void main(void) {
     NebulaDisc::init();
     NebulaFrameClock::init();
     HeapMemoryWatcher::createRootHeap();
-    OSInitMutex(&MR::MutexHolder< 0 >::sMutex);
-    OSInitMutex(&MR::MutexHolder< 1 >::sMutex);
-    OSInitMutex(&MR::MutexHolder< 2 >::sMutex);
+    (MR::MutexHolder< 0 >::sMutex).init();
+    (MR::MutexHolder< 1 >::sMutex).init();
+    (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();
     SingletonHolder< HeapMemoryWatcher >::init();
     SingletonHolder< HeapMemoryWatcher >::get()->setCurrentHeapToStationedHeap();

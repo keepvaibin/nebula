@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRDvdFile.hpp"
+#include "Game/System/NebulaKernel.hpp"
 
 JKRDvdFile::JKRDvdFile() : mDvdLink(this) {
     initiate();
@@ -19,8 +20,8 @@ JKRDvdFile::~JKRDvdFile() {
 }
 
 void JKRDvdFile::initiate(void) {
-    OSInitMutex(&mMutex1);
-    OSInitMutex(&mMutex2);
+    mMutex1.init();
+    mMutex2.init();
     field_0x50 = NULL;
     field_0x58 = 0;
 }
@@ -55,9 +56,9 @@ void JKRDvdFile::close() {
 
 // One reader at a time; it sleeps while the host reads (NebulaDisc::read).
 s32 JKRDvdFile::readData(void* pDst, s32 length, s32 offset) {
-    OSLockMutex(&mMutex1);
+    mMutex1.lock();
     const s32 result = NebulaDisc::read(&mFile, pDst, length, offset);
-    OSUnlockMutex(&mMutex1);
+    mMutex1.unlock();
     return result;
 }
 

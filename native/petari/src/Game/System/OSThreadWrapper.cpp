@@ -1,4 +1,5 @@
 #include "Game/System/OSThreadWrapper.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 
 OSThreadWrapper::OSThreadWrapper(u32 stackSize, int messageCount, int priority, JKRHeap* pHeap) {
@@ -12,9 +13,9 @@ OSThreadWrapper::OSThreadWrapper(u32 stackSize, int messageCount, int priority, 
 
 OSThreadWrapper::~OSThreadWrapper() {
     if (mHeap != nullptr) {
-        if (!OSIsThreadTerminated(mThread)) {
-            OSDetachThread(mThread);
-            OSCancelThread(mThread);
+        if (!NebulaKernel::isTerminated(mThread)) {
+            NebulaKernel::detach(mThread);
+            NebulaKernel::cancel(mThread);
         }
 
         delete[] mStack;
@@ -26,18 +27,18 @@ OSThreadWrapper::~OSThreadWrapper() {
 
 void OSThreadWrapper::initMessageQueue(JKRHeap* pHeap, int messageCount) {
     mMessageCount = messageCount;
-    mMessageArray = new (pHeap, 0) OSMessage[mMessageCount];
+    mMessageArray = new (pHeap, 0) void*[mMessageCount];
 
-    OSInitMessageQueue(&mQueue, mMessageArray, mMessageCount);
+    mQueue.init(mMessageArray, mMessageCount);
 }
 
 void OSThreadWrapper::initHeapSpecified(JKRHeap* pHeap, u32 stackSize, int priority) {
     mHeap = pHeap;
     mStackSize = stackSize & ~31;
     mStack = new (mHeap, 32) u8[mStackSize];
-    mThread = new (mHeap, 32) OSThread();
+    mThread = new (mHeap, 32) NebulaThread();
 
-    OSCreateThread(mThread, &OSThreadWrapper::start, this, &mStack[mStackSize], mStackSize, priority, 1 /* OS_THREAD_ATTR_DETACH */);
+    NebulaKernel::create(mThread, &OSThreadWrapper::start, this, mStackSize, priority, true /* detached */);
 }
 
 void* OSThreadWrapper::start(void* pArg) {

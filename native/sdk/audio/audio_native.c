@@ -6,6 +6,7 @@
    - AR: the Wii's "dummy ARAM" in MEM2 (aralt.c's semantics): ARAM addresses are offsets from the MEM2 arena,
      transfers are copies, and the callback follows each one. */
 #include <string.h>
+#include <nebula_kernel.h>
 
 #include <revolution/ai.h>
 #include <revolution/aralt.h>
@@ -21,12 +22,10 @@ static AIDCallback sDMACallback;
 static BOOL sAIInitialized;
 
 NEBULA_GAME_API void nebula_game_ai_interrupt(void) {
-    nebula_raise_interrupt(__OS_INTERRUPT_DSP_AI);
+    nebula_raise_event(NEBULA_EVENT_AUDIO);
 }
 
-static void ai_interrupt(__OSInterrupt interrupt, OSContext* context) {
-    (void)interrupt;
-    (void)context;
+static void ai_interrupt(void) {
     if (sDMACallback != NULL) {
         sDMACallback();
     }
@@ -38,15 +37,15 @@ void AIInit(u8* stack) {
         return;
     }
     sAIInitialized = TRUE;
-    __OSSetInterruptHandler(__OS_INTERRUPT_DSP_AI, ai_interrupt);
-    __OSUnmaskInterrupts(OS_INTERRUPTMASK_DSP_AI);
+    nebula_set_event_handler(NEBULA_EVENT_AUDIO, ai_interrupt);
+    nebula_enable_event(NEBULA_EVENT_AUDIO);
 }
 
 AIDCallback AIRegisterDMACallback(AIDCallback callback) {
-    const BOOL enabled = OSDisableInterrupts();
+    const int enabled = nebula_interrupts_disable();
     const AIDCallback previous = sDMACallback;
     sDMACallback = callback;
-    OSRestoreInterrupts(enabled);
+    nebula_interrupts_restore(enabled);
     return previous;
 }
 
@@ -81,10 +80,10 @@ u32 ARInit(u32* stack, u32 entries) {
     if (sARInitialized) {
         return kARBase;
     }
-    const BOOL enabled = OSDisableInterrupts();
+    const int enabled = nebula_interrupts_disable();
     sARCallback = NULL;
     sARInitialized = TRUE;
-    OSRestoreInterrupts(enabled);
+    nebula_interrupts_restore(enabled);
     const uintptr_t lo = (uintptr_t)OSGetMEM2ArenaLo();
     const uintptr_t hi = (uintptr_t)OSGetMEM2ArenaHi();
     sARBase = lo;
@@ -94,10 +93,10 @@ u32 ARInit(u32* stack, u32 entries) {
 }
 
 u32 ARAlloc(u32 amount) {
-    const BOOL enabled = OSDisableInterrupts();
+    const int enabled = nebula_interrupts_disable();
     const uintptr_t top = sARTop;
     sARTop += amount;
-    OSRestoreInterrupts(enabled);
+    nebula_interrupts_restore(enabled);
     return (u32)(top - sARBase);
 }
 
@@ -110,7 +109,7 @@ u32 ARGetSize(void) {
 }
 
 void ARStartDMA(u32 type, uintptr_t src, uintptr_t dst, u32 length) {
-    OSDisableScheduler();
+    nebula_scheduler_disable();
     if (type == 0) {
         memcpy((void*)(sARBase + dst), (const void*)src, length);
         nebula_gpu_coherent((const void*)(sARBase + dst), length);
@@ -118,7 +117,7 @@ void ARStartDMA(u32 type, uintptr_t src, uintptr_t dst, u32 length) {
         memcpy((void*)dst, (const void*)(sARBase + src), length);
         nebula_gpu_coherent((const void*)dst, length);
     }
-    OSEnableScheduler();
+    nebula_scheduler_enable();
     if (sARCallback != NULL) {
         sARCallback();
     }

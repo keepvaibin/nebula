@@ -1,4 +1,5 @@
 #include "JSystem/JKernel/JKRAramPiece.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "JSystem/JKernel/JKRAram.hpp"
 #include "JSystem/JKernel/JKRAramStream.hpp"
@@ -21,7 +22,7 @@ void JKRAramPiece::sendCommand(JKRAMCommand* command) {
 }
 
 JSUList< JKRAMCommand > JKRAramPiece::sAramPieceCommandList;
-OSMutex JKRAramPiece::mMutex;
+NebulaMutex JKRAramPiece::mMutex;
 
 JKRAMCommand* JKRAramPiece::orderAsync(int direction, uintptr_t source, uintptr_t destination, u32 length, JKRAramBlock* block,
                                        JKRAMCommand::AsyncCallback callback) {
@@ -38,7 +39,7 @@ JKRAMCommand* JKRAramPiece::orderAsync(int direction, uintptr_t source, uintptr_
     JKRAMCommand* command = JKRAramPiece::prepareCommand(direction, source, destination, length, block, callback);
     message->setting(1, command);
 
-    OSSendMessage(&JKRAram::sMessageQueue, message, OS_MESSAGE_BLOCK);
+    (JKRAram::sMessageQueue).send(message, true);
     if (command->mCallback != NULL) {
         sAramPieceCommandList.append(&command->mPieceLink);
     }
@@ -48,17 +49,17 @@ JKRAMCommand* JKRAramPiece::orderAsync(int direction, uintptr_t source, uintptr_
 }
 
 BOOL JKRAramPiece::sync(JKRAMCommand* command, int is_non_blocking) {
-    OSMessage message;
+    void* message;
 
     lock();
     if (is_non_blocking == 0) {
-        OSReceiveMessage(&command->mMessageQueue, &message, OS_MESSAGE_BLOCK);
+        command->mMessageQueue.receive(&message, true);
         sAramPieceCommandList.remove(&command->mPieceLink);
         unlock();
         return TRUE;
     }
 
-    if (!OSReceiveMessage(&command->mMessageQueue, &message, OS_MESSAGE_NOBLOCK)) {
+    if (!command->mMessageQueue.receive(&message, false)) {
         unlock();
         return FALSE;
     }
@@ -89,14 +90,14 @@ void JKRAramPiece::doneDMA(uintptr_t requestAddress) {
     } else if (command->mCallback) {
         (*command->mCallback)(requestAddress);
     } else if (command->field_0x5C) {
-        OSSendMessage(command->field_0x5C, command, OS_MESSAGE_NOBLOCK);
+        command->field_0x5C->send(command, false);
     } else {
-        OSSendMessage(&command->mMessageQueue, command, OS_MESSAGE_NOBLOCK);
+        command->mMessageQueue.send(command, false);
     }
 }
 
 JKRAMCommand::JKRAMCommand() : mPieceLink(this), field_0x30(this) {
-    OSInitMessageQueue(&mMessageQueue, &mMessage, 1);
+    mMessageQueue.init(&mMessage, 1);
     mCallback = NULL;
     field_0x5C = NULL;
     field_0x60 = 0;

@@ -1,4 +1,5 @@
 #include "JSystem/JAudio2/JASBasicWaveBank.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
@@ -9,7 +10,7 @@ JASBasicWaveBank::JASBasicWaveBank() {
     mHandleCount = 0;
     mWaveGroupArray = nullptr;
     mGroupCount = 0;
-    OSInitMutex(&mMutex);
+    mMutex.init();
 }
 
 JASBasicWaveBank::~JASBasicWaveBank() {

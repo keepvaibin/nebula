@@ -1,10 +1,11 @@
 #include "JSystem/JKernel/JKRAramHeap.hpp"
+#include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 
 JSUList< JKRAramBlock > JKRAramHeap::sAramList;
 
 JKRAramHeap::JKRAramHeap(u32 startAddress, u32 size) {
-    OSInitMutex(&mMutex);
+    mMutex.init();
 
     mHeap = JKRHeap::findFromRoot(this);
     mSize = ALIGN_PREV(size, 0x20);
