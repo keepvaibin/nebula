@@ -247,6 +247,12 @@ public:
     // begin_output_efb returns false when the split is off or the EFB already
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
+    // A pass into a texture target (E-07): the EFB's targets trade places with the target set's (at the EFB's scale)
+    // until end_target_pass, so the pass's draws, clears and its closing texture copy use the target. False when the
+    // target cannot be made or a pass is open.
+    [[nodiscard]] bool begin_target_pass();
+    void end_target_pass();
+    [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
     // scene with the 2D layer), which the console's single EFB still holds until something draws.
@@ -816,6 +822,7 @@ private:
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
     [[nodiscard]] bool ensure_output_efb(unsigned scale);
     void swap_efb_sets();
+    void swap_target_set();
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
@@ -1065,6 +1072,11 @@ private:
         D3D12_GPU_DESCRIPTOR_HANDLE conv_depth_srv{};
     };
     EfbTargetSet alt_efb_;
+    // The target passes' set (begin_target_pass) and whether the EFB holds it now.
+    EfbTargetSet target_efb_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> target_efb_rtv_heap_;
+    Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> target_efb_dsv_heap_;
+    bool target_pass_active_ = false;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
@@ -1136,7 +1148,7 @@ private:
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
         Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
-        HdrBegin, HdrEnd, Bloom, LayerBegin, RtMist
+        HdrBegin, HdrEnd, Bloom, LayerBegin, RtMist, SwapTargetSet
     };
     // RtWater's and RtMist's index: the light slot, kReplayWaterLayer when the effects layer was open.
     static constexpr std::uint32_t kReplayWaterLayer = 0x80000000u;

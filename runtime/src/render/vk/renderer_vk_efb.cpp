@@ -626,6 +626,58 @@ void RendererVk::swap_efb_sets() {
     reset_gx_bindings();
 }
 
+// The EFB and the target passes' set trade places (begin_target_pass): targets and scale, the output EFB's state kept.
+void RendererVk::swap_target_set() {
+    end_efb_pass();
+    std::swap(efb_, target_efb_);
+    std::swap(efb_scale_, target_efb_scale_);
+    target_pass_active_ = !target_pass_active_;
+    reset_gx_bindings();
+}
+
+bool RendererVk::begin_target_pass() {
+    if (target_pass_active_) {
+        return false;
+    }
+    bool fresh = false;
+    if (!target_efb_.color || target_efb_scale_ != efb_scale_) {
+        if (target_efb_.color) {
+            destroy_efb_set(target_efb_);
+        }
+        if (!create_efb_set(target_efb_, efb_scale_)) {
+            target_efb_scale_ = 0u;
+            return false;
+        }
+        target_efb_scale_ = efb_scale_;
+        fresh = true;
+    }
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SwapTargetSet, 0u});
+    }
+    swap_target_set();
+    if (fresh) {
+        // A new set's first pass clears it (its images start without a layout).
+        const LogPause pause(*this);
+        const EfbClearValues clear = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
+        begin_efb_pass(&clear);
+        end_efb_pass();
+        reset_gx_bindings();
+    }
+    bind_efb(nullptr);
+    return true;
+}
+
+void RendererVk::end_target_pass() {
+    if (!target_pass_active_) {
+        return;
+    }
+    if (logging()) {
+        recording_log_.ops.push_back({ReplayKind::SwapTargetSet, 0u});
+    }
+    swap_target_set();
+    bind_efb(nullptr);
+}
+
 bool RendererVk::begin_output_efb() {
     if (output_efb_active_) {
         return false;

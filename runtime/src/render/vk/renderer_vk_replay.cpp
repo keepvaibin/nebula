@@ -1250,6 +1250,12 @@ bool RendererVk::record_replay_list(ReplayList& list) {
                 bind_efb(nullptr);
             }
             break;
+        case ReplayKind::SwapTargetSet:
+            if (target_efb_.color) {
+                swap_target_set();
+                bind_efb(nullptr);
+            }
+            break;
         case ReplayKind::Copy: {
             const ReplayCopy& copy = run_log_.copies[op.index];
             if (copy.display) {

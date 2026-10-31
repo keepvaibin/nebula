@@ -7259,6 +7259,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             case ReplayKind::SwapEfbSets:
                 swap_efb_sets();
                 break;
+            case ReplayKind::SwapTargetSet:
+                swap_target_set();
+                break;
             case ReplayKind::ClearDepth:
                 command_list_->ClearDepthStencilView(
                     efb_dsv_, D3D12_CLEAR_FLAG_DEPTH | D3D12_CLEAR_FLAG_STENCIL,
@@ -8180,6 +8183,48 @@ void RendererD3D12::swap_efb_sets() {
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
     bind_efb(nullptr);
+}
+
+// The EFB and the target passes' set trade places (begin_target_pass): targets, scale and copy sources, the output
+// EFB's state kept.
+void RendererD3D12::swap_target_set() {
+    settle_owed_efb();
+    if (replay_recording_) [[unlikely]] {
+        replay_ops_.push_back({ReplayKind::SwapTargetSet, 0u});
+    }
+    std::swap(efb_color_, target_efb_.color);
+    std::swap(efb_depth_, target_efb_.depth);
+    std::swap(efb_msaa_, target_efb_.msaa);
+    std::swap(efb_scale_, target_efb_.scale);
+    std::swap(efb_hdr_, target_efb_.hdr);
+    std::swap(efb_rtv_, target_efb_.rtv);
+    std::swap(efb_dsv_, target_efb_.dsv);
+    std::swap(conv_efb_source_table_, target_efb_.conv_table);
+    std::swap(conv_efb_color_srv_, target_efb_.conv_color_srv);
+    std::swap(conv_efb_depth_srv_, target_efb_.conv_depth_srv);
+    target_pass_active_ = !target_pass_active_;
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+    bind_efb(nullptr);
+}
+
+bool RendererD3D12::begin_target_pass() {
+    if (target_pass_active_) {
+        return false;
+    }
+    if (!target_efb_.color || target_efb_.scale != efb_scale_) {
+        if (!create_efb_set(target_efb_, target_efb_rtv_heap_, target_efb_dsv_heap_, efb_scale_, true)) {
+            return false;
+        }
+    }
+    swap_target_set();
+    return true;
+}
+
+void RendererD3D12::end_target_pass() {
+    if (target_pass_active_) {
+        swap_target_set();
+    }
 }
 
 // DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output EFB right after the
