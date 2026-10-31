@@ -9,5 +9,5 @@ Mario Galaxy, that the game module compiles (`native/CMakeLists.txt`), with Nebu
 - This fork is Nebula's and is not sent upstream: Petari does not accept AI-generated changes.
 - Only the compiled files and the headers they include are here (`native/tools/petari_files.py` lists them from a
   build). Nothing extracted from the game is: the data tables Petari takes from `main.dol` are read from the user's
-  disc at run time (`native/sdk/dol_data.c`), and the JAudio DSP program (Nintendo's DSP machine code, console-only)
+  disc by the cooker at import (`crates/nebula-import/src/cook/dol.rs`), and the JAudio DSP program (Nintendo's DSP machine code, console-only)
   is left out of `dsptask.cpp`.

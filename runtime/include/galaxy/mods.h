@@ -93,7 +93,6 @@ enum : std::uint32_t {
 struct ActiveMods {
     VirtualDisc disc;
     std::vector<std::uint8_t> fst;        // the disc's file table with the mods' files
-    std::vector<std::uint8_t> dol;        // main.dol with its patches (empty: unchanged)
     std::filesystem::path save_folder;    // Riivolution savegame: the game's saves there (empty: the NAND's)
     bool save_clone = false;              // copy the NAND's saves there when it is empty
     std::map<std::uint32_t, std::uint32_t> code_patches;  // native equivalents of code patches: NEBULA_PATCH_* -> value

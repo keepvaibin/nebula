@@ -4,6 +4,7 @@
 //! files' new places and sizes, the files after it.
 
 pub mod archive;
+pub mod dol;
 pub mod formats;
 pub mod texture;
 
@@ -198,11 +199,82 @@ pub fn write_cooked_pak(
             bail!("the import was cancelled");
         }
     }
-    pak.set_len(at)?;
-    pak.seek(SeekFrom::Start(system.fst_offset as u64))?;
+    // The tables main.dol holds, as files of their own folder after the disc's (B-05): the file table grows, so it
+    // moves after the files and boot.bin names its new place.
+    let dol = system_dol(system)?;
+    let game_id = String::from_utf8_lossy(&system.bytes[..6]).into_owned();
+    let extra = dol::tables(dol, &game_id, stats)?;
+    let mut placed = Vec::with_capacity(extra.len());
+    for (_, bytes) in &extra {
+        pak.seek(SeekFrom::Start(at))?;
+        pak.write_all(bytes)?;
+        placed.push(at);
+        at = (at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+    }
+    let fst = append_folder(&fst, dol::FOLDER, &extra, &placed)?;
+    let fst_at = at;
+    pak.seek(SeekFrom::Start(fst_at))?;
     pak.write_all(&fst)?;
+    at = (at + fst.len() as u64).div_ceil(ALIGN) * ALIGN;
+    let words = |n: u64| ((n >> 2) as u32).to_be_bytes();
+    pak.seek(SeekFrom::Start(0x424))?;
+    pak.write_all(&words(fst_at))?;
+    pak.write_all(&words(fst.len() as u64))?;
+    pak.write_all(&words(fst.len() as u64))?;
+    pak.set_len(at)?;
     pak.sync_all().context("game.pak cannot be flushed to storage")?;
     Ok(at)
+}
+
+/// main.dol in a system area (its header's sections give its length).
+fn system_dol(system: &SystemArea) -> Result<&[u8]> {
+    let start = (be32(&system.bytes, 0x420) as usize) << 2;
+    let header = system.bytes.get(start..start + 0x100).context("main.dol lies past the system area")?;
+    let mut end = 0x100usize;
+    for s in 0..18 {
+        let (offset, size) = (be32(header, s * 4) as usize, be32(header, 0x90 + s * 4) as usize);
+        if size != 0 {
+            end = end.max(offset + size);
+        }
+    }
+    system.bytes.get(start..start + end).context("main.dol runs past the system area")
+}
+
+/// A file table with a folder of `files` added at the root, after every other node: their places `placed`.
+fn append_folder(fst: &[u8], folder: &str, files: &[(String, Vec<u8>)], placed: &[u64]) -> Result<Vec<u8>> {
+    let count = be32(fst, 8) as usize;
+    let names_at = count * 12;
+    let new_count = count + 1 + files.len();
+    let mut out = Vec::with_capacity(fst.len() + (1 + files.len()) * 12 + 64);
+    out.extend_from_slice(&fst[..names_at]);
+    out[8..12].copy_from_slice(&(new_count as u32).to_be_bytes());
+    // Names: the table's own, then the folder's and its files'.
+    let mut names = fst[names_at..].to_vec();
+    while names.last() == Some(&0) && names.len() > 1 && names[names.len() - 2] == 0 {
+        names.pop();
+    }
+    let mut add_name = |names: &mut Vec<u8>, name: &str| -> u32 {
+        let at = names.len() as u32;
+        names.extend_from_slice(name.as_bytes());
+        names.push(0);
+        at
+    };
+    let folder_name = add_name(&mut names, folder);
+    out.extend_from_slice(&(0x0100_0000 | folder_name).to_be_bytes());
+    out.extend_from_slice(&0u32.to_be_bytes());
+    out.extend_from_slice(&(new_count as u32).to_be_bytes());
+    for ((name, bytes), at) in files.iter().zip(placed) {
+        let name = add_name(&mut names, name);
+        out.extend_from_slice(&name.to_be_bytes());
+        out.extend_from_slice(&((at >> 2) as u32).to_be_bytes());
+        out.extend_from_slice(&(bytes.len() as u32).to_be_bytes());
+    }
+    if names.len() > 0x00FF_FFFF {
+        bail!("the file table's names outgrow it");
+    }
+    out.extend_from_slice(&names);
+    out.resize((out.len() + 3) & !3, 0);
+    Ok(out)
 }
 
 /// The system area of an existing game.pak (the content format before cooking).
@@ -305,6 +377,39 @@ pub unsafe extern "C" fn nebula_cook_file(
     match result {
         Ok(Ok(Some(cooked))) => {
             let boxed = cooked.into_boxed_slice();
+            *out_size = boxed.len();
+            *out = Box::into_raw(boxed) as *mut u8;
+            1
+        }
+        Ok(Ok(None)) => 0,
+        _ => -1,
+    }
+}
+
+/// One of the NebulaData files (cook/dol.rs) of a main.dol (`size` bytes at `dol`) for release `game_id`: the runtime
+/// cooks a mod's patched main.dol with it. Returns 1 with the bytes in `*out` (`*out_size` of them, freed with
+/// nebula_cook_free), 0 when that release has no such file, -1 when main.dol cannot be read.
+///
+/// # Safety
+/// `game_id` and `name` are NUL-terminated strings, `dol` holds `size` bytes, `out` and `out_size` are writable.
+#[no_mangle]
+pub unsafe extern "C" fn nebula_cook_dol_table(
+    dol: *const u8,
+    size: usize,
+    game_id: *const std::ffi::c_char,
+    name: *const std::ffi::c_char,
+    out: *mut *mut u8,
+    out_size: *mut usize,
+) -> i32 {
+    let result = std::panic::catch_unwind(|| {
+        let game_id = std::ffi::CStr::from_ptr(game_id).to_string_lossy().into_owned();
+        let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
+        let dol = std::slice::from_raw_parts(dol, size);
+        dol::tables(dol, &game_id, &mut Stats::default()).map(|files| files.into_iter().find(|(n, _)| *n == name))
+    });
+    match result {
+        Ok(Ok(Some((_, bytes)))) => {
+            let boxed = bytes.into_boxed_slice();
             *out_size = boxed.len();
             *out = Box::into_raw(boxed) as *mut u8;
             1

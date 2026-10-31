@@ -1,6 +1,6 @@
 /* The release the disc is: North America (RMGE01), Europe (RMGP01) or Japan (RMGJ01), by its game id from the host
    (which plays no other). Their executables differ in a few places only (Petari's VERSION switches; the native game
-   follows the disc's through NebulaRegion.hpp), keep their data tables at the same addresses (dol_data.c), and save in
+   follows the disc's through NebulaRegion.hpp), keep their data tables at the same addresses (the cooker's NebulaData files), and save in
    their own titles' folders. */
 #include <revolution/types.h>
 
