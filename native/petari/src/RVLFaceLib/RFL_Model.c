@@ -90,60 +90,6 @@ static const GXColor cFavoriteColor[RFLFavoriteColor_Max] = {
 
 static const GXColor cWhite = {255, 255, 255, 255};
 
-static void RFLSetCoordinate(RFLCoordinateType u, RFLCoordinateType f) {
-    RFLCoordinateType r;
-
-    union {
-        RFLCoordinateType c;
-        u8 b[4];
-    } uu;
-    union {
-        RFLCoordinateType c;
-        u8 b[4];
-    } uf;
-    union {
-        RFLCoordinateType c;
-        u8 b[4];
-    } ur;
-
-    uu.c = u;
-    uf.c = f;
-
-    ur.b[0] = (uu.b[1] * uf.b[2]) - (uu.b[2] * uf.b[1]);
-    ur.b[1] = (uu.b[2] * uf.b[0]) - (uu.b[0] * uf.b[2]);
-    ur.b[2] = (uu.b[0] * uf.b[1]) - (uu.b[1] * uf.b[0]);
-
-    r = ur.c;
-
-    if (u & RFLCoordinateType_X) {
-        coordinateData.uOff = 0;  // U -> X
-    } else if (u & RFLCoordinateType_Y) {
-        coordinateData.uOff = 1;  // U -> Y
-    } else {
-        coordinateData.uOff = 2;  // U -> Z
-    }
-
-    if (f & RFLCoordinateType_X) {
-        coordinateData.fOff = 0;  // F -> X
-    } else if (f & RFLCoordinateType_Y) {
-        coordinateData.fOff = 1;  // F -> Y
-    } else {
-        coordinateData.fOff = 2;  // F -> Z
-    }
-
-    if (r & RFLCoordinateType_X) {
-        coordinateData.rOff = 0;  // R -> X
-    } else if (r & RFLCoordinateType_Y) {
-        coordinateData.rOff = 1;  // R -> Y
-    } else {
-        coordinateData.rOff = 2;  // R -> Z
-    }
-
-    coordinateData.uRev = (u & RFLCoordinateType_RevMask) != 0;
-    coordinateData.fRev = (f & RFLCoordinateType_RevMask) != 0;
-    coordinateData.rRev = (r & RFLCoordinateType_RevMask) != 0;
-}
-
 static u32 RFLiGetExpressionNum(u32 exprFlags) {
     int i;
     u32 num = 0;
@@ -266,11 +212,6 @@ void RFLSetMtx(RFLCharModel* model, const Mtx mvMtx) {
 void RFLSetExpression(RFLCharModel* model, RFLExpression expr) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     imodel->expression = expr;
-}
-
-static RFLExpression RFLGetExpression(const RFLCharModel* model) {
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
-    return imodel->expression;
 }
 
 GXColor RFLGetFavoriteColor(RFLFavoriteColor color) {
@@ -973,62 +914,3 @@ static void RFLiTransformCoordinate(s16* to, const s16* from) {
     to[coordinateData.fOff] = coordinateData.fRev ? -from[2] : from[2];
 }
 
-static void RFLDrawShape(const RFLCharModel* model) {
-    GXCullMode cullMode;
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
-    RFLiCharModelRes* res = imodel->res;
-
-
-    J3DNativeShapeSendPosition(imodel->posMtx, 0);
-    J3DNativeShapeSendNormal(imodel->nrmMtx, 0);
-    J3DNativeStateSetCurrentMtx(0);
-
-    if (res->beardDlSize > 0) {
-        RFLiDrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
-    }
-
-    if (res->noseDlSize > 0) {
-        RFLiDrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
-    }
-
-    if (res->flipHair) {
-        J3DNativeStateGetCullMode(&cullMode);
-        switch (cullMode) {
-        case GX_CULL_BACK:
-            J3DNativeStateSetCullMode(GX_CULL_FRONT);
-            break;
-        case GX_CULL_FRONT:
-            J3DNativeStateSetCullMode(GX_CULL_BACK);
-            break;
-        }
-    }
-
-    if (res->foreheadDlSize > 0) {
-        RFLiDrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
-    }
-
-    if (res->hairDlSize > 0) {
-        RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
-    }
-
-    if (res->capDlSize > 0) {
-        RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
-    }
-
-    if (res->flipHair) {
-        switch (cullMode) {
-        case GX_CULL_BACK:
-            J3DNativeStateSetCullMode(GX_CULL_BACK);
-            break;
-        case GX_CULL_FRONT:
-            J3DNativeStateSetCullMode(GX_CULL_FRONT);
-            break;
-        }
-    }
-
-    RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
-}
-
-void RFLSetModelDrawDoneCallback(RFLCallback cb) {
-    RFLiGetManager()->modelDrawCb = cb;
-}

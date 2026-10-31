@@ -152,7 +152,6 @@ void RFLiInitShapeRes(RFLiShapeRes* shape);
 void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file,
                     void* buffer) NO_INLINE;
 void RFLiTransformCoordinate(s16* to, const s16* from);
-void RFLSetModelDrawDoneCallback(RFLCallback cb);
 
 #ifdef __cplusplus
 }

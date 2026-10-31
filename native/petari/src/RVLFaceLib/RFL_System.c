@@ -43,13 +43,10 @@ RFLErrcode RFLInitRes(void* workBuffer, void* resBuffer, u32 resSize, BOOL useDe
     }
     sRFLManager->deluxeTex = useDeluxTex;
 
-    RFLSetIconDrawDoneCallback(NULL);
-    RFLSetModelDrawDoneCallback(NULL);
     RFLiInitLoader();
     RFLiSetCoordinateData(&scCoordinate);
 
     RFLiLoader* loader = &sRFLManager->loader;
-    loader->cached = TRUE;
     loader->cacheSize = resSize;
     loader->cache = resBuffer;
     RFLiLoadResourceHeader();
@@ -60,8 +57,6 @@ void RFLExit(void) {
     if (sRFLManager == NULL) {
         return;
     }
-
-    RFLFreeCachedResource();
 
     NebulaMiiHeapDestroy(sRFLManager->tmpHeap);
     NebulaMiiHeapDestroy(sRFLManager->systemHeap);

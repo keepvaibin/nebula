@@ -9,7 +9,6 @@ extern "C" {
 #include "RFL_Icon.h"
 #include "RFL_MiddleDatabase.h"
 #include "RFL_Model.h"
-#include "RFL_NANDLoader.h"
 #include "RFL_System.h"
 #include "RFL_Types.h"
 

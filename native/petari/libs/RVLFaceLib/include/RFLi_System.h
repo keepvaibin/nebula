@@ -18,8 +18,6 @@ typedef struct RFLiManager {
     RFLiLoader loader;                     // at 0xC0
     BOOL deluxeTex;                        // at 0x1B38
     RFLiCallback systemCb;                 // at 0x1F10
-    RFLCallback iconDrawCb;                // at 0x1F14
-    RFLCallback modelDrawCb;               // at 0x1F18
     char UNK_0x1F1C[0x4];
     u32 _1F20;
 } RFLiManager;

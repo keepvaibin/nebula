@@ -140,17 +140,9 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateCopyTex(buf, TRUE);
 
-    // The icon is drawn from records in order: only a caller's own callback needs telling.
-    if (RFLiGetManager()->iconDrawCb != NULL) {
-        RFLiGetManager()->iconDrawCb();
-    }
-
     RFLiFree(modelBuf);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
     J3DNativeViewSetScissor(scissorOffsetX, scissorOffsetY, scissorWidth, scissorHeight);
     RFLiSetCoordinateData(&coordData);
 }
 
-void RFLSetIconDrawDoneCallback(RFLCallback callback) {
-    RFLiGetManager()->iconDrawCb = callback;
-}

@@ -52,14 +52,12 @@ typedef struct RFLDrawCoreSetting {
     u8 reverseCulling;         // at 0x20
 } RFLDrawCoreSetting;
 
-void RFLSetCoordinate(RFLCoordinateType t1, RFLCoordinateType t2);
 u32 RFLGetModelBufferSize(RFLResolution res, u32 exprFlags);
 RFLErrcode RFLInitCharModel(RFLCharModel* model, RFLDataSource src,
                             struct RFLMiddleDB* db, u16 id, void* work,
                             RFLResolution res, u32 exprFlags);
 void RFLSetMtx(RFLCharModel* model, const Mtx mvMtx);
 void RFLSetExpression(RFLCharModel* model, RFLExpression expr);
-RFLExpression RFLGetExpression(const RFLCharModel* model);
 GXColor RFLGetFavoriteColor(RFLFavoriteColor color);
 void RFLLoadDrawSetting(const RFLDrawSetting* setting);
 void RFLDrawOpa(const RFLCharModel* model);
@@ -71,7 +69,6 @@ void RFLDrawOpaCore(const RFLCharModel* model,
                     const RFLDrawCoreSetting* setting);
 void RFLDrawXluCore(const RFLCharModel* model,
                     const RFLDrawCoreSetting* setting);
-void RFLDrawShape(const RFLCharModel* model);
 
 #ifdef __cplusplus
 }
