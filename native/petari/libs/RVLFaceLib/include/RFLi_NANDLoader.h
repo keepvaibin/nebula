@@ -1,6 +1,5 @@
 #ifndef RVL_FACE_LIBRARY_INTERNAL_NAND_LOADER_H
 #define RVL_FACE_LIBRARY_INTERNAL_NAND_LOADER_H
-#include "RFL_NANDLoader.h"
 #include "RFLi_Types.h"
 #include <revolution/types.h>
 #ifdef __cplusplus
@@ -20,7 +19,6 @@ typedef struct RFLiLoader {
     RFLiArchive archives[RFLiArcID_Max]; // at 0x0
     u32 cacheSize;                       // at 0x90
     void* cache;                         // at 0x94
-    BOOL cached;                         // at 0x98
     u16 version;                         // at 0x9C
     void* headerBuf1;                    // at 0xA0
     void* headerBuf2;                    // at 0xA4

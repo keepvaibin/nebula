@@ -715,11 +715,6 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
 
     J3DNativeStateSetColorUpdate(TRUE);
 
-    // The masks are drawn from records in order: only a caller's own callback needs telling.
-    if (RFLiGetManager()->modelDrawCb != NULL) {
-        RFLiGetManager()->modelDrawCb();
-    }
-
     J3DNativeStateCopyTex(buffer, 1);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
 }

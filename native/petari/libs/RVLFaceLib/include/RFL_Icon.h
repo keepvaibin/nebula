@@ -24,7 +24,6 @@ typedef struct {
 
 RFLErrcode RFLMakeIcon(void *buf, RFLDataSource source, RFLMiddleDB *middleDB, u16 index, RFLExpression expression, const RFLIconSetting *setting);
 void RFLiMakeIcon(void *buf, RFLiCharInfo* info, RFLExpression expression, const RFLIconSetting *setting);
-void RFLSetIconDrawDoneCallback(RFLCallback callback);
 
 #ifdef __cplusplus
 }
