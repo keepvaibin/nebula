@@ -39,7 +39,7 @@ struct AudioMixerStats {
     std::uint64_t stream_frames{};
     std::uint64_t unresolved_reads{};
     std::uint64_t category_decisions{};
-    std::uint64_t category_owner_misses{};
+    std::uint64_t category_unnamed{};
     std::uint64_t mix_ns{};
 };
 
@@ -93,11 +93,9 @@ public:
     // call; returns that output, interleaved (left, right), valid until the next call.
     std::span<const float> end_frame(const std::int16_t* stream, std::uint32_t stream_frames);
 
-    // Volume categories: `master` unused (the output applies it). A changed gain ramps over 10 ms; a voice's category
-    // is decided at its sound's start (retried for a few subframes while the game cannot name the owner yet).
+    // Volume categories: `master` unused (the output applies it). A voice's category follows the sound the game names
+    // on it (sound_route, sound_id), else its source's format; a changed gain ramps over 10 ms.
     void set_category_gains(const NativeAudioBusGains& gains) noexcept;
-    using OwnerResolver = std::uint32_t (*)(std::uint32_t voice, std::uint32_t* route);
-    void set_owner_resolver(OwnerResolver resolver) noexcept { owner_resolver_ = resolver; }
 
     [[nodiscard]] std::uint32_t rate() const noexcept { return rate_; }
     [[nodiscard]] bool configured() const noexcept { return voices_ != nullptr; }
@@ -141,7 +139,9 @@ private:
         std::uint32_t category_ramp{};
         NativeAudioBus category_bus{NativeAudioBus::Sfx};
         bool category_set{};
-        std::uint8_t category_retries{};
+        std::uint32_t category_key_id{0xFFFFFFFFu};
+        std::uint16_t category_key_route{0xFFFFu};
+        std::uint16_t category_key_format{0xFFFFu};
     };
 
     struct EffectState {
@@ -171,7 +171,7 @@ private:
     };
 
     [[nodiscard]] float* bus(std::uint32_t index) noexcept;
-    void classify(std::uint32_t index, const NebulaAudioVoice& voice, bool starting);
+    void classify(std::uint32_t index, const NebulaAudioVoice& voice);
     void render_voice(std::uint32_t index, NebulaAudioVoice& voice);
     void render_source(VoiceState& state, NebulaAudioVoice& voice, float* out);
     void decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float* out, std::uint32_t count);
@@ -219,7 +219,6 @@ private:
 
     std::array<float, 5> category_gains_{1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
     bool category_gains_set_{};
-    OwnerResolver owner_resolver_{};
     std::array<AudioVoiceCategory, kVoices> categories_{};
     AudioMixerStats stats_{};
 };

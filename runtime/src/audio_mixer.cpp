@@ -267,12 +267,11 @@ std::span<const float> AudioMixer::end_frame(const std::int16_t* stream, std::ui
     return out;
 }
 
-void AudioMixer::classify(std::uint32_t index, const NebulaAudioVoice& voice, bool starting) {
+void AudioMixer::classify(std::uint32_t index, const NebulaAudioVoice& voice) {
     AudioVoiceCategory& category = categories_[index];
-    VoiceState& state = voice_states_[index];
-    std::uint32_t route = 0u;
-    const std::uint32_t sound_id = owner_resolver_ != nullptr ? owner_resolver_(index, &route) : 0u;
-    category.owner = {static_cast<JAudioOwnerRoute>(route <= 3u ? route : 0u), sound_id};
+    const std::uint32_t route = voice.sound_route <= 3u ? voice.sound_route : 0u;
+    const std::uint32_t sound_id = voice.sound_id;
+    category.owner = {static_cast<JAudioOwnerRoute>(route), sound_id};
     category.decision = route != 0u ? native_audio_bus_from_sound_id(sound_id) : NativeAudioBusDecision{};
     if (category.decision.classification != NativeAudioBusClassification::OwnerSoundId) {
         // Without an owner the source decides: the game's streams and sequence voices are PCM16.
@@ -285,13 +284,8 @@ void AudioMixer::classify(std::uint32_t index, const NebulaAudioVoice& voice, bo
         }
     }
     ++stats_.category_decisions;
-    if (category.decision.classification == NativeAudioBusClassification::OwnerSoundId) {
-        state.category_retries = 0u;
-    } else if (starting) {
-        ++stats_.category_owner_misses;
-        state.category_retries = 8u;
-    } else if (state.category_retries != 0u) {
-        --state.category_retries;
+    if (route == 0u) {
+        ++stats_.category_unnamed;
     }
 }
 
@@ -318,8 +312,12 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaAudioVoice& voice) {
     apply_fir(state, voice, out);
     apply_iir(state, voice, out);
     if (category_gains_set_) {
-        if (starting || state.category_retries != 0u) {
-            classify(index, voice, starting);
+        if (state.category_key_id != voice.sound_id || state.category_key_route != voice.sound_route ||
+            state.category_key_format != voice.format) {
+            state.category_key_id = voice.sound_id;
+            state.category_key_route = voice.sound_route;
+            state.category_key_format = voice.format;
+            classify(index, voice);
         }
         apply_category(index, state, voice, out);
     }
