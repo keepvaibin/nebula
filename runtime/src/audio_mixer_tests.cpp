@@ -351,6 +351,16 @@ void test_categories() {
     const std::vector<float> out = run(mixer, 2u);
     expect(near(out[2u * 100u], 0.0, 1e-6), "muted music", out[2u * 100u]);
     expect(mixer.voice_category(0u).decision.bus == galaxy::audio::NativeAudioBus::Music, "PCM16 is music");
+    // A voice the game names as a player voice effect (section 0, category 1) follows the voice gain; music ramps back
+    // up over 10 ms.
+    NebulaAudioVoice& named = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
+    named.sound_route = 1u;
+    named.sound_id = 0x00010005u;
+    mixer.set_category_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
+    const std::vector<float> named_out = run(mixer, 7u);
+    expect(mixer.voice_category(1u).decision.bus == galaxy::audio::NativeAudioBus::Voice, "named player voice");
+    expect(near(named_out[2u * 100u + 1u], 0.0, 1e-6), "muted voices", named_out[2u * 100u + 1u]);
+    expect(near(named_out[2u * 800u], 0.5 * 32767.0 / 65536.0, 1e-3), "music back on", named_out[2u * 800u]);
 }
 
 // The movie player's 32 kHz stream: a constant comes out at its level, at 48 kHz.

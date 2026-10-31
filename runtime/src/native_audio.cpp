@@ -1473,7 +1473,6 @@ private:
 struct NativeGameAudio::State {
     NativeAudioSink sink;
     std::unique_ptr<galaxy::audio::AudioMixer> mixer;
-    galaxy::audio::AudioMixer::OwnerResolver owner{};
     float master{1.0f};
     bool master_started{};
     std::vector<std::byte> block;
@@ -1486,7 +1485,6 @@ void NativeGameAudio::setup(NebulaAudioVoice* voices, std::uint32_t count, const
                             const void* sound_memory, std::uint32_t sound_memory_size) {
     const std::uint32_t rate = state_->sink.open(48000u);
     state_->mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
-    state_->mixer->set_owner_resolver(state_->owner);
     state_->mixer->setup(voices, count, effects, static_cast<const std::byte*>(sound_memory), sound_memory_size);
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     state_->mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
@@ -1543,13 +1541,6 @@ bool NativeGameAudio::output_available() const {
 // The Windows host keeps the game and its sound running while minimised.
 void NativeGameAudio::set_paused(bool) {}
 
-void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
-    state_->owner = owner;
-    if (state_->mixer != nullptr) {
-        state_->mixer->set_owner_resolver(owner);
-    }
-}
-
 std::string NativeGameAudio::stats_line() const {
     if (state_->mixer == nullptr) {
         return "not set up";
@@ -1561,7 +1552,7 @@ std::string NativeGameAudio::stats_line() const {
          << " oscillators=" << s.oscillator_renders << " noise=" << s.noise_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " panner=" << s.panner_renders << " effect-subframes=" << s.effect_subframes
          << " stream-frames=" << s.stream_frames << " unresolved=" << s.unresolved_reads
-         << " categories=" << s.category_decisions << " owner-misses=" << s.category_owner_misses
+         << " categories=" << s.category_decisions << " unnamed=" << s.category_unnamed
          << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }

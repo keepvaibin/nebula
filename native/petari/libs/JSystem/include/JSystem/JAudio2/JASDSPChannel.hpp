@@ -24,6 +24,7 @@ struct JASDSPChannel {
     void drop();
     void setPriority(u8);
     void updateProc();
+    void nameSound();
     u8 getStatus() const {
         return mStatus;
     }

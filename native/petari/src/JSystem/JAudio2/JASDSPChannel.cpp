@@ -165,6 +165,7 @@ void JASDSPChannel::updateProc() {
                 }
             } else {
                 mChannel->playStart();
+                nameSound();
             }
         } else if (mStatus != STATUS_INACTIVE) {
             if (mCallback != NULL) {
@@ -185,6 +186,9 @@ void JASDSPChannel::updateProc() {
                 mChannel->playStop();
             } else {
                 field_0xc++;
+                if (mChannel->sound_route == 0) {
+                    nameSound();
+                }
             }
         }
     }
@@ -242,27 +246,19 @@ u32 JASDSPChannel::getNumBreak() {
     return count;
 }
 
-// The sound on each DSP channel, for the host's volume categories (music, voices, effects, ambience, cutscenes), from
-// the game's own objects, each step checked by type: a DSP channel's JASChannel is the one whose update callback it
-// carries and which points back at it; the JASChannel's callback says what its data is (a track's channel manager or a
-// stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq and JAIStream set it when
-// built). Called on the game's audio thread, which starts and ends the channels; every object it reads lives in a pool
-// or inside a sound, so a sound ending meanwhile leaves a stale name, never a bad read.
 namespace {
-constexpr uint32_t kDspChannels = 64;
-
 uint32_t owner_id(const JAISound* sound) {
     return sound != nullptr ? static_cast<uint32_t>(sound->getID()) : 0u;
 }
-}  // namespace
 
-extern "C" NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route) {
+// The sound playing on a voice, for the host's volume categories (music, voices, effects, ambience, cutscenes), from
+// the game's own objects, each step checked by type: the voice's JASChannel is the one whose update callback it
+// carries and which points back at it; the JASChannel's callback says what its data is (a track's channel manager or a
+// stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq and JAIStream set it when
+// built). Every object it reads lives in a pool or inside a sound, so a sound ending meanwhile leaves a stale name,
+// never a bad read.
+uint32_t voice_owner(JASDSPChannel& dsp, uint32_t* route) {
     *route = 0u;
-    JASDSPChannel* const channels = JASDSPChannel::sDspChannels;
-    if (channels == nullptr || channel >= kDspChannels) {
-        return 0u;
-    }
-    JASDSPChannel& dsp = channels[channel];
     if (dsp.mCallback != JASChannel::dspUpdateCallback) {
         return 0u;
     }
@@ -290,4 +286,15 @@ extern "C" NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t cha
         }
     }
     return 0u;
+}
+}  // namespace
+
+// Names the voice's sound on the record once the channel's callback has run (its owner may link only then).
+void JASDSPChannel::nameSound() {
+    if (mStatus != STATUS_ACTIVE || mChannel == NULL) {
+        return;
+    }
+    uint32_t route = 0u;
+    mChannel->sound_id = voice_owner(*this, &route);
+    mChannel->sound_route = static_cast< u16 >(route);
 }

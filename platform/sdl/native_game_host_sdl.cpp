@@ -255,7 +255,6 @@ void set_env_flag_cache_enabled(bool) noexcept {}
 // Sound: the native mixer at the output device's rate, its frames through an SDL audio stream (float samples).
 struct NativeGameAudio::State {
     std::unique_ptr<galaxy::audio::AudioMixer> mixer;
-    galaxy::audio::AudioMixer::OwnerResolver owner{};
     SDL_AudioStream* stream = nullptr;
     std::size_t block_bytes = 0;
     float master = 1.0f;
@@ -289,7 +288,6 @@ void NativeGameAudio::setup(NebulaAudioVoice* voices, std::uint32_t count, const
         SDL_ResumeAudioStreamDevice(s.stream);
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(static_cast<std::uint32_t>(rate));
-    s.mixer->set_owner_resolver(s.owner);
     s.mixer->setup(voices, count, effects, static_cast<const std::byte*>(sound_memory), sound_memory_size);
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
@@ -349,13 +347,6 @@ bool NativeGameAudio::output_available() const {
 void NativeGameAudio::set_paused(bool paused) {
     if (state_->stream != nullptr) {
         (void)(paused ? SDL_PauseAudioStreamDevice(state_->stream) : SDL_ResumeAudioStreamDevice(state_->stream));
-    }
-}
-
-void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
-    state_->owner = owner;
-    if (state_->mixer != nullptr) {
-        state_->mixer->set_owner_resolver(owner);
     }
 }
 

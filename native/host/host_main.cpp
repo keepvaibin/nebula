@@ -304,7 +304,6 @@ struct Module {
     decltype(&nebula_game_disc_complete) disc_complete;
     decltype(&nebula_game_vi_retrace) vi_retrace;
     decltype(&nebula_game_audio_tick) audio_tick;
-    decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
     void (*debug_dump)();  // optional: the module's thread report
@@ -429,8 +428,6 @@ void load_module(const fs::path& path) {
     gModule.disc_complete = reinterpret_cast<decltype(gModule.disc_complete)>(find_symbol(module, "nebula_game_disc_complete"));
     gModule.vi_retrace = reinterpret_cast<decltype(gModule.vi_retrace)>(find_symbol(module, "nebula_game_vi_retrace"));
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_audio_tick"));
-    gModule.audio_channel_owner = reinterpret_cast<decltype(gModule.audio_channel_owner)>(
-        find_symbol(module, "nebula_game_audio_channel_owner"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
@@ -3802,7 +3799,6 @@ int main(int argc, char** argv) {
     // While the start runs ahead, the retraces' presents alone reach the screen (svc_vi_frame).
     galaxy::render::set_frame_end_presents(!gBootFast.load(std::memory_order_relaxed));
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the audio clock is detached)
-    gAudio->set_channel_owner(gModule.audio_channel_owner);
     // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation
     // while the settings overlay or the HOME Menu is open.
     galaxy::host::install_host_pointer_provider([]() noexcept {

@@ -29,8 +29,6 @@ public:
     [[nodiscard]] bool output_available() const;
     // The device stopped while the app is out of sight (SDL hosts), queued frames kept for its return.
     void set_paused(bool paused);
-    // The game's name for the sound on a voice (nebula_game_audio_channel_owner), for the volume categories.
-    void set_channel_owner(std::uint32_t (*owner)(std::uint32_t voice, std::uint32_t* route));
     // The mixer's counters for the log.
     [[nodiscard]] std::string stats_line() const;
 
