@@ -16,13 +16,7 @@ typedef struct RFLiManager {
     NebulaMiiHeap* systemHeap;
     NebulaMiiHeap* tmpHeap;
     RFLiLoader loader;                     // at 0xC0
-    BOOL working;                          // at 0x1B34
     BOOL deluxeTex;                        // at 0x1B38
-    u8 brokenType;                         // at 0x1B3C
-    RFLErrcode lastErrCode;                // at 0x1B40
-    RFLErrcode beforeCloseErr;             // at 0x1B44
-    s32 lastReason;                        // at 0x1B48
-    s32 beforeCloseReason;                 // at 0x1B4C
     RFLiCallback systemCb;                 // at 0x1F10
     RFLCallback iconDrawCb;                // at 0x1F14
     RFLCallback modelDrawCb;               // at 0x1F18
@@ -30,23 +24,10 @@ typedef struct RFLiManager {
     u32 _1F20;
 } RFLiManager;
 
-RFLErrcode RFLiBootLoadAsync(void);
-void* RFLiAlloc(u32 size);
 void* RFLiAlloc32(u32 size);
 void RFLiFree(void* block);
 RFLiLoader* RFLiGetLoader(void);
-BOOL RFLiGetWorking(void);
-void RFLiSetWorking(BOOL working);
 RFLiManager* RFLiGetManager(void);
-BOOL RFLiIsWorking(void);
-void RFLiStartWorking(void);
-void RFLiEndWorkingReason(RFLErrcode err, s32 reason);
-void RFLiEndWorking(RFLErrcode err);
-s32 RFLiGetLastReason(void);
-void RFLiSetFileBroken(RFLiFileBrokenType type);
-BOOL RFLiNotFoundError(void);
-BOOL RFLiNeedRepairError(void);
-BOOL RFLiCriticalError(void);
 BOOL RFLiGetUseDeluxTex(void);
 
 #ifdef __cplusplus

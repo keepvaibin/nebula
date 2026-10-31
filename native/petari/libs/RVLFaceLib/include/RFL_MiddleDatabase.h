@@ -6,15 +6,6 @@
 extern "C" {
 #endif
 
-typedef enum {
-    RFLMiddleDBType_HiddenRandom,
-    RFLMiddleDBType_HiddenNewer,
-    RFLMiddleDBType_HiddenOlder,
-    RFLMiddleDBType_Random,
-    RFLMiddleDBType_UserSet,
-    RFLMiddleDBType_Reserved1
-} RFLMiddleDBType;
-
 typedef struct RFLMiddleDB {
 #ifdef TARGET_PC
     // Room for RFLiMiddleDB, which the library keeps here (40 bytes natively: pointer members).
@@ -26,17 +17,6 @@ typedef struct RFLMiddleDB {
     u8 dummy[0x18];
 #endif
 } RFLMiddleDB;
-
-u32 RFLGetMiddleDBBufferSize(u16 size);
-void RFLInitMiddleDB(RFLMiddleDB* db, RFLMiddleDBType type, void* buffer,
-                     u16 size);
-RFLErrcode RFLUpdateMiddleDBAsync(RFLMiddleDB* db);
-RFLMiddleDBType RFLGetMiddleDBType(const RFLMiddleDB* db);
-u16 RFLGetMiddleDBStoredSize(const RFLMiddleDB* db);
-void RFLSetMiddleDBRandomMask(RFLMiddleDB* db, RFLSex sex, RFLAge age,
-                              RFLRace race);
-void RFLSetMiddleDBHiddenMask(RFLMiddleDB* db, RFLSex sex);
-RFLErrcode RFLAddMiddleDBStoreData(RFLMiddleDB* db, const RFLStoreData* data);
 
 #ifdef __cplusplus
 }

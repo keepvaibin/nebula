@@ -214,23 +214,9 @@ static void parseOnmemoryRes_(void) NO_INLINE {
     }
 }
 
-RFLErrcode RFLiLoadResourceHeaderAsync(void) {
-    RFLiLoader* loader;
-
-    loader = RFLiGetLoader();
-    if (loader == NULL) {
-        RFLiEndWorking(RFLErrcode_Fatal);
-        return RFLErrcode_Fatal;
-    }
-
-    // The archive is always the one RFLInitResAsync was given.
-    if (!RFLIsResourceCached()) {
-        RFLiEndWorking(RFLErrcode_Fatal);
-        return RFLErrcode_Fatal;
-    }
+// The parts archive's sections (the one RFLInitRes was given).
+void RFLiLoadResourceHeader(void) {
     parseOnmemoryRes_();
-    RFLiEndWorking(RFLErrcode_Success);
-    return RFLErrcode_Busy;
 }
 
 static u32 getCachedLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
@@ -342,14 +328,6 @@ void* RFLiLoadShape(RFLiPartsShp part, u16 file, void* dst) {
 
 BOOL RFLFreeCachedResource(void) {
     RFLiLoader* loader;
-
-    if (!RFLAvailable()) {
-        return TRUE;
-    }
-
-    if (RFLiIsWorking()) {
-        return TRUE;
-    }
 
     loader = RFLiGetLoader();
     if (loader == NULL) {
