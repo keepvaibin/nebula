@@ -26,7 +26,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
-#include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
 #include <revolution/types.h>
 #include "Game/System/NebulaInput.hpp"

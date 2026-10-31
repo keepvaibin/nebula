@@ -27,8 +27,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
 #include "Game/System/NebulaInput.hpp"
 

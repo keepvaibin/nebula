@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DTevs.hpp"
-#include <revolution/gx/GXGeometry.h>
 #include <revolution/os/OSFastCast.h>
 
 J3DSys j3dSys;

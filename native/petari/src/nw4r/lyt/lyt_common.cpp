@@ -2,7 +2,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
 #include <cstdio>
 
 namespace nw4r {

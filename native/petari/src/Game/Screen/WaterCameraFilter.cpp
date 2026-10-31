@@ -22,7 +22,6 @@
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXStruct.h>
-#include <revolution/gx/GXTransform.h>
 
 namespace NrvWaterCameraFilter {
     NEW_NERVE(WaterCameraFilterNrvAir, WaterCameraFilter, Air);
