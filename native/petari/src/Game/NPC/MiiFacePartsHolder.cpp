@@ -32,7 +32,7 @@ void MiiFacePartsHolder::init(const JMapInfoIter& rIter) {
     JKRMemArchive* pArchive = MR::receiveArchive("/ObjectData/MiiFaceDatabase.arc");
     void* pResBuffer = pArchive->getResource("/RFL_Res.dat");
     u32 resSize = pArchive->getResSize(pResBuffer);
-    _38 = RFLInitResAsync(mRFLWorkBuffer, pResBuffer, resSize, false);
+    _38 = RFLInitRes(mRFLWorkBuffer, pResBuffer, resSize, false);
 
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_NPC, MR::DrawBufferType_None, MR::DrawType_MiiFacePartsHolder);
     MR::connectToScene(MR::createDrawAdaptor("Mii\203\202\203\146\203\213\215\304\215\354\220\254" /* Miiモデル再作成 */, MR::Functor(this, &MiiFacePartsHolder::reinitCharModel)), MR::MovementType_None,
@@ -80,22 +80,6 @@ void MiiFacePartsHolder::draw() const {
 void MiiFacePartsHolder::reinitCharModel() {
     MiiFaceParts* pParts;
 
-    if (_38 == RFLErrcode_Busy) {
-        RFLErrcode err = RFLGetAsyncStatus();
-
-        if (err == RFLErrcode_Busy) {
-            return;
-        }
-
-        _38 = err;
-
-        if (err == RFLErrcode_NANDCommandfail) {
-            _3C = RFLGetLastReason();
-
-            GameSequenceFunction::tryNANDErrorSequence(_3C);
-        }
-    }
-
     if (_38 == RFLErrcode_Success) {
         for (int i = 0; i < getObjNum(); i++) {
             pParts = static_cast< MiiFaceParts* >(getActor(i));
@@ -126,7 +110,7 @@ bool MiiFacePartsHolder::isInitEnd() const {
 }
 
 bool MiiFacePartsHolder::isError() const {
-    return _38 != RFLErrcode_Success && _38 != RFLErrcode_Busy;
+    return _38 != RFLErrcode_Success;
 }
 
 MiiFaceParts* MiiFacePartsHolder::createPartsFromReceipe(const char* pName, const MiiFaceRecipe& rRecipe) {
