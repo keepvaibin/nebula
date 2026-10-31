@@ -10,7 +10,6 @@
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
-#include <revolution/os/OSCache.h>
 
 JASTaskThread* JASAramStream::sLoadThread;
 

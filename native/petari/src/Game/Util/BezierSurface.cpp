@@ -1,7 +1,6 @@
 #include "Game/Util/BezierSurface.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/gx/GXVert.h>
 #include <revolution/mtx.h>
 
 namespace {

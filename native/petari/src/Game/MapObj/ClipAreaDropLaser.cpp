@@ -14,7 +14,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXPixel.h>
 
 namespace NrvClipAreaDropLaser {
     NEW_NERVE(ClipAreaDropLaserNrvWait, ClipAreaDropLaser, Wait);

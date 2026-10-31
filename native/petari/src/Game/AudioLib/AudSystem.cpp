@@ -37,7 +37,6 @@
 #include <JSystem/JKernel/JKRArchive.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
-#include <revolution/vi/vifuncs.h>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 #include "Game/System/NebulaDisc.hpp"

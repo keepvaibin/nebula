@@ -2,11 +2,6 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-#include <revolution/gd/GDIndirect.h>
-#include <revolution/gd/GDLight.h>
-#include <revolution/gd/GDPixel.h>
-#include <revolution/gd/GDTev.h>
-#include <revolution/gd/GDTexture.h>
 
 
 

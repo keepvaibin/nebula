@@ -11,7 +11,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXLighting.h>
 
 ShadowSurfaceOval::~ShadowSurfaceOval() {
 }

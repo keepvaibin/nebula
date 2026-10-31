@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <cmath>
-#include <revolution/gx/GXVert.h>
 
 void RFLiSetupCopyTex(GXTexFmt fmt, u16 width, u16 height, void* buffer, GXColor clearColor) {
     J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});

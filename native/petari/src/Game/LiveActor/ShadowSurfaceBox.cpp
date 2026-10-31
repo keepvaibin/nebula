@@ -8,7 +8,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXVert.h>
 #include <revolution/mtx.h>
 
 ShadowSurfaceBox::~ShadowSurfaceBox() {

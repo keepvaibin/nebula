@@ -9,7 +9,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
-#include <revolution/gx/GXVert.h>
 
 namespace {
     static const f32 sBeginThick = 10.0f;

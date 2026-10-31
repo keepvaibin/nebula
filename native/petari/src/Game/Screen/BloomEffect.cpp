@@ -13,9 +13,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTVideo.hpp"
 #include "revolution/gx/GXEnum.h"
-#include "revolution/gx/GXFrameBuf.h"
 #include "revolution/gx/GXStruct.h"
-#include "revolution/gx/GXTev.h"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #ifdef TARGET_PC
 #include <nebula_game_api.h>

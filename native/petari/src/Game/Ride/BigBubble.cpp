@@ -10,7 +10,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/OctahedronBezierSurface.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <revolution/gx/GXTev.h>
 #include <revolution/mtx.h>
 #include <revolution/types.h>
 

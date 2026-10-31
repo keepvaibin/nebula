@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <cstddef>
 #include <cstdio>
-#include <revolution/gx/GXVert.h>
 
 #ifdef TARGET_PC
 _Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel holds an RFLiCharModel");

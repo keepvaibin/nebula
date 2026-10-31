@@ -19,15 +19,10 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/gx/GXBump.h>
-#include <revolution/gx/GXCull.h>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXFrameBuf.h>
 #include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXPixel.h>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
-#include <revolution/gx/GXVert.h>
 #include "Game/Util/RenderSignals.hpp"
 
 static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,

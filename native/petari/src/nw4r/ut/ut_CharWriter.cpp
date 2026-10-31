@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/ut/Font.h"
-#include <revolution/gx/GXVert.h>
 
 namespace {
     void SetupGXCommon() {

@@ -21,7 +21,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXVert.h>
 #include <revolution/mtx.h>
 #include <revolution/wpad.h>
 

@@ -6,7 +6,6 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXVert.h>
 
 GXColor sWhirlPoolAcceleratorTevReg1 = {0x00, 0x34, 0x52, 0xFF};
 GXColor sWhirlPoolAcceleratorTevReg2 = {0x7C, 0xA9, 0xBD, 0xFF};

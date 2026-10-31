@@ -20,7 +20,6 @@
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/gx/GXBump.h>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>

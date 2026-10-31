@@ -1,5 +1,4 @@
 #include "revolution/gd/GDBase.h"
-#include "revolution/gd/GDGeometry.h"
 #include "revolution/gx.h"
 
 #ifdef __cplusplus

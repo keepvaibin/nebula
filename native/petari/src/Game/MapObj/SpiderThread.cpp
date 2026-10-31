@@ -19,7 +19,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXBump.h>
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};

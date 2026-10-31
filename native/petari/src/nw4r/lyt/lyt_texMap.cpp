@@ -2,7 +2,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/lyt/texMap.h"
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGet.h>
 #include <revolution/gx/GXStruct.h>
 #include "JSystem/JUtility/JUTException.hpp"
 

@@ -4,7 +4,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J2DGraph/J2DScreen.hpp"
 #include "JSystem/JUtility/JUTPalette.hpp"
-#include <revolution/gx/GXVert.h>
 
 J2DPicture::J2DPicture(JUTTexture* texture) {
     for (u32 i = 0; i < 4; i++) {

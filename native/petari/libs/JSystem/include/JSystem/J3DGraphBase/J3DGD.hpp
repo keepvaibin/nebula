@@ -2,7 +2,6 @@
 
 #include <revolution/gd.h>
 #include <revolution/gx.h>
-#include <revolution/gx/GXVert.h>
 #ifdef TARGET_PC
 // One reservation per value or command (GDBase.h's __GDReserve).
 inline void J3DGDWrite_u8(u8 data) {

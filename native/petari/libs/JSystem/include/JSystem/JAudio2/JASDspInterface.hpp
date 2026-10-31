@@ -1,7 +1,7 @@
 #pragma once
 
 #include <cstddef>
-#include <revolution/dsp.h>
+#include <revolution/types.h>
 
 struct JASWaveInfo;
 

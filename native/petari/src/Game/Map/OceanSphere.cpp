@@ -18,7 +18,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXVert.h>
 
 GXColor sOceanSphereTevReg0Face = {0x48, 0x80, 0xBE, 0x1C};
 GXColor sOceanSphereTevReg1FrontDefault = {0x00, 0x51, 0x70, 0x6F};

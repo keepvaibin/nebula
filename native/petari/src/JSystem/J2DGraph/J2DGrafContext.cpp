@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include <revolution/gx/GXVert.h>
 
 J2DGrafContext::J2DGrafContext(f32 x, f32 y, f32 width, f32 height)
     : mBounds(x, y, x + width, y + height), mScissorBounds(x, y, x + width, y + height) {

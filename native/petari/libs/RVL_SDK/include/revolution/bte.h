@@ -2,7 +2,6 @@
 #define BTE_H
 
 #include "revolution/bte/data_types.h"
-#include "revolution/bte/gki.h"
 #include "revolution/types.h"
 
 #ifdef __cplusplus

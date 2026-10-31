@@ -19,8 +19,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXFrameBuf.h>
-#include <revolution/gx/GXPixel.h>
 #include <revolution/os.h>
 
 void MarioActorSpecialDraw_FORCE_MATCH_SDATA2() {

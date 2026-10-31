@@ -27,10 +27,8 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXLighting.h>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
-#include <revolution/gx/GXVert.h>
 #include <revolution/wpad.h>
 
 void WaterRoad_DUMMY() {

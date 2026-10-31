@@ -13,14 +13,9 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx/GXCull.h>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXLighting.h>
-#include <revolution/gx/GXPixel.h>
-#include <revolution/gx/GXTev.h>
 #include <revolution/gx/GXTransform.h>
-#include <revolution/gx/GXVert.h>
 
 void PlantStalk_FORCE_MATCH_SDATA2() {
     (void)1.0f;

@@ -9,7 +9,6 @@
 #include "JSystem/JAudio2/JASProbe.hpp"
 #include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
-#include <revolution/dsp.h>
 #include <stdint.h>
 
 inline JASAudioThread::JASAudioThread(int stackSize, int msgCount, u32 threadPriority)

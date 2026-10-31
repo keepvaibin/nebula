@@ -14,7 +14,6 @@
 #include "Game/Util/SchedulerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
-#include <revolution/gx/GXVert.h>
 
 namespace {
     const f32 sPointNumInPart = 0.0f;

@@ -6,7 +6,6 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <revolution/gx/GXVert.h>
 
 OceanBowlBloomDrawer::OceanBowlBloomDrawer(OceanBowl* pHost) : NameObj("\203\111\201\133\203\126\203\203\203\223\203\173\203\105\203\213[\203\165\203\213\201\133\203\200\225\140\211\346]" /* オーシャンボウル[ブルーム描画] */), mHost(pHost) {
 }

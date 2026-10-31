@@ -9,7 +9,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <revolution/gx/GXStruct.h>
-#include <revolution/gx/GXVert.h>
 #include <revolution/wpad.h>
 
 void SpiderThreadPart_DUMMY() {

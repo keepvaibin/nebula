@@ -1,9 +1,6 @@
 #ifndef VI_H
 #define VI_H
 
-#include "revolution/vi/vi3in1.h"
-#include "revolution/vi/vi3in1types.h"
-#include "revolution/vi/vifuncs.h"
 #include "revolution/vi/vitypes.h"
 
 #ifdef __cplusplus
