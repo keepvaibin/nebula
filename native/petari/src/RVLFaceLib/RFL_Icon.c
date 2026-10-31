@@ -82,7 +82,8 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     J3DNativeViewGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
     J3DNativeViewSetScissor(0, 0, setting->width, setting->height);
 
-    RFLiBeginTexture(buf, setting->width, setting->height, backColor);
+    RFLiBeginTexture(buf, setting->width, setting->height,
+                     ((u32)backColor.r << 24) | ((u32)backColor.g << 16) | ((u32)backColor.b << 8) | backColor.a);
 
     J3DNativeViewGetViewportv(vp);
     J3DNativeViewSetViewport(0.0f, 0.0f, setting->width, setting->height, 0.0f, 1.0f);

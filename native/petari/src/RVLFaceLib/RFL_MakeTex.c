@@ -16,13 +16,11 @@ void RFLiSetupTextureDraw(void) {
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
 }
 
-// A Mii texture drawn into `buffer` (E-07): a target pass `width` x `height` cleared to `clearColor`; the texture is
+// A Mii texture drawn into `buffer` (E-07): a target pass `width` x `height` cleared to `clearRgba` (R << 24 | G << 16 | B << 8 | A); the texture is
 // the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
-void RFLiBeginTexture(void* buffer, u16 width, u16 height, GXColor clearColor) {
+void RFLiBeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
     RFLiSetupTextureDraw();
-    J3DNativeTargetBegin(buffer, width, height,
-                         ((u32)clearColor.r << 24) | ((u32)clearColor.g << 16) | ((u32)clearColor.b << 8) | clearColor.a,
-                         0xFFFFFF);
+    J3DNativeTargetBegin(buffer, width, height, clearRgba, 0xFFFFFF);
 }
 
 void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resolution) {
@@ -359,7 +357,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         if (resolution & 256) {
             J3DNativeViewSetScissor(0, 0, 256, 256);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_256);
-            RFLiBeginTexture(ptr, 256, 256, (GXColor){0, 0, 0, 0});
+            RFLiBeginTexture(ptr, 256, 256, 0x00000000);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_256);
             J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_256);
@@ -368,7 +366,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         if (resolution & 128) {
             J3DNativeViewSetScissor(0, 0, 128, 128);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_128);
-            RFLiBeginTexture(ptr, 128, 128, (GXColor){0, 0, 0, 0});
+            RFLiBeginTexture(ptr, 128, 128, 0x00000000);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_128);
             J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_128);
@@ -377,7 +375,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         if (resolution & 64) {
             J3DNativeViewSetScissor(0, 0, 64, 64);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_64);
-            RFLiBeginTexture(ptr, 64, 64, (GXColor){0, 0, 0, 0});
+            RFLiBeginTexture(ptr, 64, 64, 0x00000000);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_64);
             J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_64);
@@ -386,7 +384,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         if (resolution & 32) {
             J3DNativeViewSetScissor(0, 0, 32, 32);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_32);
-            RFLiBeginTexture(ptr, 32, 32, (GXColor){0, 0, 0, 0});
+            RFLiBeginTexture(ptr, 32, 32, 0x00000000);
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_32);
             J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_32);

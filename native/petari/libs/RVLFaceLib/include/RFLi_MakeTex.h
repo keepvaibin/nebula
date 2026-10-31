@@ -51,7 +51,7 @@ typedef struct RFLiFaceParts {
 } RFLiFaceParts;
 
 void RFLiSetupTextureDraw(void);
-void RFLiBeginTexture(void* buffer, u16 width, u16 height, GXColor clearColor);
+void RFLiBeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba);
 void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffer,
                      RFLResolution resolution);
 void RFLiInitRFLTexture(RFLiTexObj* tobj);
