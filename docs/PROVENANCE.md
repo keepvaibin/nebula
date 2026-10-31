@@ -37,7 +37,6 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 | [Dusklight](https://github.com/TwilitRealm/dusklight) | CC0 1.0 | Button press and trigger state per game frame | `runtime/include/galaxy/input/window_keys.h` |
 | Dusklight | CC0 1.0 | Layout fitting and pointer focus handling | `runtime/include/galaxy/content_viewport.h`, `runtime/include/galaxy/native_input.h`, `runtime/include/galaxy/host_pointer_events.h` |
 | Dusklight | CC0 1.0 | Widescreen camera and HUD scaling policy | `runtime/include/galaxy/experimental_ultrawide_aspect.h` |
-| WiiCompiled | GPL-3.0 | Wii audio interface PCM byte order | `runtime/include/galaxy/native_audio_queue.h` |
 | Petari | CC0 1.0 | JAudio2 structure layouts and command formats for the native audio host | `runtime/src/jaudio_host_mixer.cpp`, `runtime/include/galaxy/native_audio_bus.h` |
 
 GPL-2.0-or-later code is used under version 3 of the license in this GPL-3.0-only work.

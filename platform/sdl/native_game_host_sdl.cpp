@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The native game's host services on SDL3 platforms (native_host.h): the game's sound through SDL's audio stream,
-// player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the same
-// bindings and tuning as Windows), vibration, and the device data the game reads.
+// The native game's host services on SDL3 platforms (native_host.h, native_audio.h): the game's sound through SDL's
+// audio stream, player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the
+// same bindings and tuning as Windows), vibration, and the device data the game reads.
 
 #include "sdl_host.h"
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/input_bindings.h"
-#include "galaxy/jaudio_host_mixer.h"
+#include "galaxy/audio_mixer.h"
+#include "galaxy/native_audio.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
 #include "galaxy/platform_time.h"
@@ -251,13 +252,15 @@ void install_native_keyboard_capture_provider(NativeKeyboardCaptureProvider) noe
 void install_native_settings_pad_hooks(NativeSettingsVisibleProvider, NativeSettingsKeySink) noexcept {}
 void set_env_flag_cache_enabled(bool) noexcept {}
 
-// Sound: the JAudio DSP program on the game's channel records, its blocks through an SDL audio stream.
+// Sound: the native mixer at the output device's rate, its frames through an SDL audio stream (float samples).
 struct NativeGameAudio::State {
-    JAudioHostMixer mixer;
+    std::unique_ptr<galaxy::audio::AudioMixer> mixer;
+    galaxy::audio::AudioMixer::OwnerResolver owner{};
     SDL_AudioStream* stream = nullptr;
-    std::uint32_t rate = 0;
     std::size_t block_bytes = 0;
-    std::vector<std::int16_t> frames;
+    float master = 1.0f;
+    bool master_started = false;
+    std::vector<float> frames;
 };
 
 NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
@@ -268,56 +271,60 @@ NativeGameAudio::~NativeGameAudio() {
     }
 }
 
-void NativeGameAudio::setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
-                            const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
-    state_->mixer.setup(channels, static_cast<std::byte*>(channel_records), resample_filter, adpcm_filter, fx_lines);
-}
-
-void NativeGameAudio::set_aux(const void* base, std::uint32_t size) {
-    state_->mixer.set_aux(static_cast<const std::byte*>(base), size);
-}
-
-void NativeGameAudio::frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left,
-                            std::int16_t* right) {
-    // The volume categories, once an audio frame (master applies to the stream's output).
-    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
-    state_->mixer.set_bus_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
-    state_->mixer.sync_frame(subframes, mixer_level, left, right);
-}
-
-bool NativeGameAudio::mix(std::uint32_t group, std::uint32_t active) {
-    return state_->mixer.release_halt(group, active);
-}
-
-void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
-    state_->mixer.set_owner_resolver(owner);
-}
-
-bool NativeGameAudio::play(std::span<const std::byte> block, std::uint32_t sample_rate) {
+void NativeGameAudio::setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
+                            const void* sound_memory, std::uint32_t sound_memory_size) {
     State& s = *state_;
-    if (s.stream == nullptr || s.rate != sample_rate) {
-        const SDL_AudioSpec spec{SDL_AUDIO_S16, 2, static_cast<int>(sample_rate)};
-        if (s.stream == nullptr) {
-            s.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
-            if (s.stream == nullptr) {
-                std::fprintf(stderr, "[audio] no output: %s\n", SDL_GetError());
-                return false;
-            }
-            SDL_ResumeAudioStreamDevice(s.stream);
-        } else {
-            SDL_SetAudioStreamFormat(s.stream, &spec, nullptr);
-        }
-        s.rate = sample_rate;
+    SDL_AudioSpec device{};
+    int device_frames = 0;
+    int rate = 48000;
+    if (SDL_GetAudioDeviceFormat(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &device, &device_frames) && device.freq >= 8000 &&
+        device.freq <= 192000) {
+        rate = device.freq;
     }
-    // The AI's frames: right then left; the stream's: left then right.
-    const std::size_t count = block.size() / 4u;
+    const SDL_AudioSpec spec{SDL_AUDIO_F32, 2, rate};
+    s.stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, nullptr, nullptr);
+    if (s.stream == nullptr) {
+        std::fprintf(stderr, "[audio] no output: %s\n", SDL_GetError());
+    } else {
+        SDL_ResumeAudioStreamDevice(s.stream);
+    }
+    s.mixer = std::make_unique<galaxy::audio::AudioMixer>(static_cast<std::uint32_t>(rate));
+    s.mixer->set_owner_resolver(s.owner);
+    s.mixer->setup(voices, count, effects, static_cast<const std::byte*>(sound_memory), sound_memory_size);
+    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+    s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+}
+
+void NativeGameAudio::mix(float gain) {
+    if (state_->mixer != nullptr) {
+        state_->mixer->mix(gain);
+    }
+}
+
+void NativeGameAudio::frame(const std::int16_t* stream, std::uint32_t stream_frames) {
+    State& s = *state_;
+    if (s.mixer == nullptr) {
+        return;
+    }
+    const std::span<const float> samples = s.mixer->end_frame(stream, stream_frames);
+    const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
+    s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
+    const float target = audio.master >= 0.0f ? std::min(audio.master, 4.0f) : 0.0f;
+    const float start = s.master_started ? s.master : target;
+    s.master_started = true;
+    s.master = target;
+    const std::size_t count = samples.size() / 2u;
+    if (s.stream == nullptr || count == 0u) {
+        return;
+    }
     s.frames.resize(count * 2u);
-    std::memcpy(s.frames.data(), block.data(), count * 4u);
     for (std::size_t i = 0; i < count; ++i) {
-        std::swap(s.frames[i * 2u], s.frames[i * 2u + 1u]);
+        const float gain = start + (target - start) * static_cast<float>(i + 1u) / static_cast<float>(count);
+        s.frames[i * 2u] = std::clamp(samples[i * 2u] * gain, -1.0f, 1.0f);
+        s.frames[i * 2u + 1u] = std::clamp(samples[i * 2u + 1u] * gain, -1.0f, 1.0f);
     }
-    s.block_bytes = count * 4u;
-    return SDL_PutAudioStreamData(s.stream, s.frames.data(), static_cast<int>(count * 4u));
+    s.block_bytes = count * 2u * sizeof(float);
+    (void)SDL_PutAudioStreamData(s.stream, s.frames.data(), static_cast<int>(s.block_bytes));
 }
 
 unsigned NativeGameAudio::queued_blocks() const {
@@ -329,8 +336,8 @@ unsigned NativeGameAudio::queued_blocks() const {
     return queued > 0 ? static_cast<unsigned>(static_cast<std::size_t>(queued) / s.block_bytes) : 0u;
 }
 
-// SDL's stream plays silence when it runs dry and starts again with the next data: four blocks (70 ms at the game's
-// 17.5 ms blocks) absorb the device's period and the game's mixing time.
+// SDL's stream plays silence when it runs dry and starts again with the next data: four frames (70 ms at the game's
+// 17.5 ms frames) absorb the device's period and the game's mixing time.
 unsigned NativeGameAudio::target_blocks() const {
     return 4u;
 }
@@ -345,15 +352,24 @@ void NativeGameAudio::set_paused(bool paused) {
     }
 }
 
+void NativeGameAudio::set_channel_owner(std::uint32_t (*owner)(std::uint32_t, std::uint32_t*)) {
+    state_->owner = owner;
+    if (state_->mixer != nullptr) {
+        state_->mixer->set_owner_resolver(owner);
+    }
+}
+
 std::string NativeGameAudio::stats_line() const {
-    const JAudioHostMixerStats& s = state_->mixer.stats();
+    if (state_->mixer == nullptr) {
+        return "not set up";
+    }
+    const galaxy::audio::AudioMixerStats& s = state_->mixer->stats();
     std::ostringstream line;
-    line << "setups=" << s.setups << " frames=" << s.frames << " subframes=" << s.subframes
-         << " channel-renders=" << s.channel_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
-         << " oscillators=" << s.oscillator_renders << " fir=" << s.fir_renders
-         << " iir=" << s.iir_renders << " auto-mixer=" << s.auto_mixer_renders
-         << " fx-line-subframes=" << s.fx_line_subframes << " unresolved=" << s.unresolved_reads
-         << " unsupported-osc=" << s.unsupported_oscillators << " stray=" << s.stray_releases << " mix-ms=" << s.mix_ns / 1000000u;
+    line << "rate=" << state_->mixer->rate() << " frames=" << s.frames << " subframes=" << s.subframes
+         << " voice-renders=" << s.voice_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
+         << " oscillators=" << s.oscillator_renders << " iir=" << s.iir_renders << " panner=" << s.panner_renders
+         << " effect-subframes=" << s.effect_subframes << " unresolved=" << s.unresolved_reads
+         << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }
 
