@@ -109,24 +109,14 @@ std::uint64_t trace_gx_stall_threshold_us() {
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format_impl(
     std::uint8_t format) {
     switch (format) {
-    case 0u:
-        return static_cast<std::uint8_t>(TexFormat::I4);
     case 1u:
     case 7u:
     case 8u:
     case 9u:
     case 10u:
         return static_cast<std::uint8_t>(TexFormat::I8);
-    case 2u:
-        return static_cast<std::uint8_t>(TexFormat::IA4);
-    case 3u:
-    case 11u:
-    case 12u:
-        return static_cast<std::uint8_t>(TexFormat::IA8);
     case 4u:
         return static_cast<std::uint8_t>(TexFormat::RGB565);
-    case 5u:
-        return static_cast<std::uint8_t>(TexFormat::RGB5A3);
     case 6u:
         return static_cast<std::uint8_t>(TexFormat::RGBA8);
     default:
@@ -1513,8 +1503,6 @@ void TextureCache::shutdown() {
     decoded_source_bytes_ = 0;
     decoded_evicted_bytes_ = 0;
     decoded_evicted_entries_ = 0;
-    efb_aliases_.clear();
-    alias_envelope_.clear();
     retired_entries_.clear();
     for (auto& held : held_entries_) {
         held.clear();
@@ -1590,128 +1578,6 @@ std::uint32_t TextureCache::allocate_srv_index() {
 }
 
 
-bool TextureCache::register_efb_copy(
-    std::uint64_t address,
-    const EfbCopyParams& params,
-    gpu::TextureRef texture) {
-    // Validate before evicting a still-owned alias or consuming an SRV slot.
-    if (!backend_.ready() || !texture) {
-        throw std::runtime_error("[TextureCache] invalid EFB alias resource");
-    }
-    const std::uint32_t source_bytes = efb_copy_source_bytes(params);
-    if (address + source_bytes < address) {
-        throw std::runtime_error("[TextureCache] EFB alias address overflow");
-    }
-    std::uint32_t resource_width = 0, resource_height = 0;
-    if (!TextureBackend::alias_compatible(gpu::raw(texture), resource_width, resource_height)) {
-        throw std::runtime_error("[TextureCache] incompatible EFB alias resource");
-    }
-    const std::uint16_t alias_width = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_width / 2u)
-            : params.src_width);
-    const std::uint16_t alias_height = static_cast<std::uint16_t>(
-        params.half_scale
-            ? std::max<std::uint16_t>(1u, params.src_height / 2u)
-            : params.src_height);
-    const EfbAliasKey alias_key{
-        address,
-        alias_width,
-        alias_height,
-        efb_copy_alias_texture_format(params.target_format),
-        {},
-    };
-
-    // Called on every copy. The renderer keys destination textures by address and format, so one address can
-    // alternate resources. A same-resource alias still runs the overlap eviction below before returning.
-    const auto current_alias_it = efb_aliases_.find(alias_key);
-    const bool current_alias_same_resource =
-        current_alias_it != efb_aliases_.end() &&
-        gpu::raw(current_alias_it->second.texture) == gpu::raw(texture);
-
-    const auto overlaps = [](std::uint64_t a_begin, std::uint64_t a_end,
-                             std::uint64_t b_begin, std::uint64_t b_end) {
-        return a_begin < b_end && b_begin < a_end;
-    };
-
-    const std::uint64_t new_begin = address;
-    const std::uint64_t new_end =
-        new_begin + source_bytes;
-
-    // Evict every decoded entry and older alias overlapping the copy, not only the same address: the game reuses
-    // capture buffers for glass and blur effects.
-    bool evicted_overlap = false;
-    for (auto it = decoded_envelope_.may_overlap(address, source_bytes)
-             ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
-        const std::uint64_t entry_begin = it->first.address;
-        const std::uint64_t entry_end =
-            entry_begin + it->second.handle.source_bytes;
-        if (overlaps(new_begin, new_end, entry_begin, entry_end)) {
-            decoded_lru_release(it->first, it->second);
-            retire(std::move(it->second));
-            it = entries_.erase(it);
-            evicted_overlap = true;
-        } else {
-            ++it;
-        }
-    }
-    for (auto it = alias_envelope_.may_overlap(address, source_bytes)
-             ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
-        const std::uint64_t alias_begin = it->first.address;
-        const std::uint64_t alias_end =
-            alias_begin + it->second.handle.source_bytes;
-        const bool is_current_same_resource =
-            it->first == alias_key &&
-            gpu::raw(it->second.texture) == gpu::raw(texture);
-        if (!is_current_same_resource &&
-            overlaps(new_begin, new_end, alias_begin, alias_end)) {
-            retire(std::move(it->second));
-            it = efb_aliases_.erase(it);
-            evicted_overlap = true;
-        } else {
-            ++it;
-        }
-    }
-
-    // Removal never shrinks the envelope; an empty map resets it.
-    if (efb_aliases_.empty()) alias_envelope_.clear();
-    alias_envelope_.include(address, source_bytes);
-    if (current_alias_same_resource) {
-        const bool footprint_changed =
-            current_alias_it->second.handle.source_bytes != source_bytes;
-        current_alias_it->second.handle.source_bytes = source_bytes;
-        return evicted_overlap || footprint_changed;
-    }
-
-    const std::uint32_t srv_idx = allocate_srv_index();
-
-    // The renderer's EFB copy path creates a Texture2D.
-    backend_.write_view(srv_idx, gpu::raw(texture), 1u);
-
-    TextureHandle handle{};
-    handle.resource      = gpu::raw(texture);
-    handle.srv_index     = srv_idx;
-    handle.width         = static_cast<std::uint16_t>(resource_width);
-    handle.height        = static_cast<std::uint16_t>(resource_height);
-    handle.mip_levels    = 1u;
-    handle.from_efb_copy = true;
-    handle.generated_mips = false;
-    handle.source_bytes = source_bytes;
-
-    Entry entry{};
-    entry.texture = std::move(texture);
-    entry.handle  = handle;
-
-    auto alias_it = efb_aliases_.find(alias_key);
-    if (alias_it != efb_aliases_.end()) {
-        retire(std::move(alias_it->second));
-        alias_it->second = std::move(entry);
-    } else {
-        efb_aliases_.emplace(alias_key, std::move(entry));
-    }
-    return true;
-}
-
 void TextureCache::invalidate_all() {
     for (auto& [key, entry] : entries_) {
         (void)key;
@@ -1737,7 +1603,7 @@ std::size_t TextureCache::invalidate_range(
 std::size_t TextureCache::invalidate_ranges(
     std::span<const MemoryRange> sorted_coalesced_ranges) {
     if (sorted_coalesced_ranges.empty() ||
-        (entries_.empty() && efb_aliases_.empty())) {
+        entries_.empty()) {
         return 0u;
     }
 
@@ -1750,19 +1616,6 @@ std::size_t TextureCache::invalidate_ranges(
             decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
-            ++evicted;
-        } else {
-            ++it;
-        }
-    }
-    for (auto it = alias_envelope_.may_overlap(sorted_coalesced_ranges)
-             ? efb_aliases_.begin() : efb_aliases_.end(); it != efb_aliases_.end(); ) {
-        const std::uint64_t alias_begin = it->first.address;
-        const std::uint64_t alias_end =
-            alias_begin + it->second.handle.source_bytes;
-        if (first_overlapping_dirty_range(sorted_coalesced_ranges, alias_begin, alias_end) != nullptr) {
-            retire(std::move(it->second));
-            it = efb_aliases_.erase(it);
             ++evicted;
         } else {
             ++it;
@@ -2127,21 +1980,6 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
-    // EFB alias hit. Matching the full descriptor keeps a stale full-screen capture from being sampled by a later,
-    // smaller texture at the same address.
-    {
-        const EfbAliasKey alias_key{
-            image.address,
-            image.width,
-            image.height,
-            static_cast<std::uint8_t>(image.format),
-            {},
-        };
-        const auto alias_it = efb_aliases_.find(alias_key);
-        if (alias_it != efb_aliases_.end()) {
-            return alias_it->second.handle;
-        }
-    }
     const auto alias_end = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};

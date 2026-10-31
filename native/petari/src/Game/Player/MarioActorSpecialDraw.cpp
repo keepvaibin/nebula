@@ -1,6 +1,7 @@
 #include "Game/LiveActor/HitSensor.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Player/DLchanger.hpp"
@@ -135,15 +136,14 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    J3DNativeState::setTexCopyDst((s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_FALSE);
-    J3DNativeState::setTexCopySrc((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40));
     J3DNativeState::setColorUpdate(GX_FALSE);
     J3DNativeState::setAlphaUpdate(GX_TRUE);
 
     GXColor clear = {};
 
     J3DNativeState::setCopyClear(clear, 0xFFFFFF);
-    J3DNativeState::copyTex(_B44, GX_TRUE);
+    J3DNativeTarget::capture(_B44, (s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), NEBULA_TARGET_RGB,
+                             NEBULA_CAPTURE_CLEAR);
     J3DNativeState::setColorUpdate(GX_ENABLE);
     J3DNativeState::setAlphaUpdate(GX_FALSE);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
@@ -507,9 +507,7 @@ void MarioActor::drawColdWaterDamage() const {
     J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeState::setLineWidth(6, GX_TO_ZERO);
-    J3DNativeState::setTexCopyDst(width, 4, GX_TF_RGB565, GX_FALSE);
-    J3DNativeState::setTexCopySrc(0, 0, width, 4);
-    J3DNativeState::copyTex(_1D8, GX_FALSE);
+    J3DNativeTarget::capture(_1D8, 0, 0, width, 4, NEBULA_TARGET_RGB);
     f32 textureStep = 1.0f / static_cast< f32 >(stripHeight);
     f32 frequency = 89.0f * MR::sin((TWO_PI * mMario->mSwim->mColdWaterDamageInterval) / 120.0f);
 
@@ -518,9 +516,8 @@ void MarioActor::drawColdWaterDamage() const {
     }
 
     for (u32 y = 0; y < MR::getScreenHeight(); y += 4) {
-        J3DNativeState::setTexCopySrc(0, y + 4, width, 4);
         next = 1 - current;
-        J3DNativeState::copyTex(mRasterBuffers[next], GX_FALSE);
+        J3DNativeTarget::capture(mRasterBuffers[next], 0, y + 4, width, 4, NEBULA_TARGET_RGB);
         J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
         f32 v = 0.0f;
 
@@ -581,17 +578,14 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeState::setLineWidth(6, GX_TO_ZERO);
-    J3DNativeState::setTexCopyDst(width, 4, GX_TF_RGB565, GX_FALSE);
-    J3DNativeState::setTexCopySrc(0, 0, width, 4);
-    J3DNativeState::copyTex(_1D8, GX_FALSE);
+    J3DNativeTarget::capture(_1D8, 0, 0, width, 4, NEBULA_TARGET_RGB);
     f32 textureStep = 1.0f / static_cast< f32 >(stripHeight);
     f32 phase = (_37C * JMath::TAngleConstant_< f32 >::RADIAN_DEG360()) / period;
     f32 spatialPhase = TWO_PI / wavelength;
 
     for (u32 y = 0; y < MR::getScreenHeight(); y += 4) {
-        J3DNativeState::setTexCopySrc(0, y + 4, width, 4);
         next = 1 - current;
-        J3DNativeState::copyTex(mRasterBuffers[next], GX_FALSE);
+        J3DNativeTarget::capture(mRasterBuffers[next], 0, y + 4, width, 4, NEBULA_TARGET_RGB);
         J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
         f32 v = 0.0f;
 

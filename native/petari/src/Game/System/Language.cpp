@@ -4,7 +4,6 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <revolution/sc.h>
 #ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"

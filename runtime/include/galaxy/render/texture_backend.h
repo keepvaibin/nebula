@@ -42,8 +42,6 @@ public:
     // A texture made by create_texture that the pool may hand out again for the same extent.
     [[nodiscard]] static bool poolable(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
-    // EFB copies alias only single-level RGBA8 textures.
-    [[nodiscard]] static bool alias_compatible(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height);
     // Copies every level from the staging chunk (level l at offset + offsets[l], rows of pitches[l] bytes) and leaves
     // the texture readable by shaders. A reused pooled texture first returns to the copy-destination state.
     void record_upload(ID3D12Resource* texture, bool reused, const UploadChunk& staging, std::uint64_t offset,

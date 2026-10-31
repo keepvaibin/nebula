@@ -119,17 +119,6 @@ bool TextureBackend::poolable(vk::Texture* texture, std::uint32_t& width, std::u
     return true;
 }
 
-bool TextureBackend::alias_compatible(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height) {
-    if ((texture->format != VK_FORMAT_R8G8B8A8_UNORM && texture->format != VK_FORMAT_R8_UNORM) ||
-        texture->width == 0u || texture->width > UINT16_MAX ||
-        texture->height == 0u || texture->height > UINT16_MAX) {
-        return false;
-    }
-    width = texture->width;
-    height = texture->height;
-    return true;
-}
-
 void TextureBackend::record_upload(vk::Texture* texture, bool reused, const UploadChunk& staging,
                                    std::uint64_t offset, std::uint32_t width, std::uint32_t height, unsigned levels,
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {

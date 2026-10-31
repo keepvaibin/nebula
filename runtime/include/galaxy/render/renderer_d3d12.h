@@ -247,6 +247,18 @@ public:
     // begin_output_efb returns false when the split is off or the EFB already
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
+    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the EFB's scale, takes
+    // the EFB's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
+    // between passes (made again only when its size or the EFB's scale changes); the pass is drawn once, never
+    // replayed by sub-frames. False when the target cannot be made or a pass is open.
+    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
+    // Ends it: the EFB comes back and the target's picture is what draws sampling `key` at that size read (at full
+    // precision, in any format, through `channels`: NebulaTargetChannels).
+    void end_target_pass(std::uint8_t channels, TextureCache& textures);
+    // The picture of target `key` when it is `width` x `height`: its texture and view.
+    [[nodiscard]] bool target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                      TextureHandle& out) const;
+    [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
     // scene with the 2D layer), which the console's single EFB still holds until something draws.
@@ -816,6 +828,7 @@ private:
     [[nodiscard]] bool record_temporal_upscale(unsigned output_scale);
     [[nodiscard]] bool ensure_output_efb(unsigned scale);
     void swap_efb_sets();
+    void swap_target_set();
     // Live internal-resolution change, applied between frames by begin_frame
     // when get_render_config().efb_scale differs from the live targets.
     void apply_pending_efb_scale();
@@ -1065,6 +1078,39 @@ private:
         D3D12_GPU_DESCRIPTOR_HANDLE conv_depth_srv{};
     };
     EfbTargetSet alt_efb_;
+    // The open target pass's set (begin_target_pass) while the EFB holds it, and each key's set between passes
+    // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
+    // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
+    struct TargetSlot {
+        EfbTargetSet set;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> rtv_heap;
+        Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> dsv_heap;
+        std::uint64_t used = 0;
+        std::uint16_t width = 0, height = 0;  // game units
+    };
+    // The pictures draws sample by key (target passes' and captures'), each through its own view slot
+    // (TextureCache::allocate_view) reading its channels; a capture's `bytes` is its footprint at the key, over which a
+    // later capture replaces it.
+    struct Picture {
+        std::uint32_t view = ~0u;
+        gpu::TextureRef viewed;
+        std::uint16_t width = 0, height = 0;  // game units, the size draws sample it at
+        std::uint8_t channels = 0;
+        std::uint32_t bytes = 0;
+    };
+    std::unordered_map<std::uint64_t, Picture> pictures_;
+    // `texture` becomes picture `key` (`width` x `height` game units, read through `channels`): true when draws
+    // must look it up again (a new view, or a capture replacing others).
+    bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+                         std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
+    bool publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+                         TextureCache& textures);
+    static constexpr std::uint64_t kTargetIdleFrames = 600u;
+    std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    std::uint64_t target_key_ = 0;
+    bool target_recording_ = false;  // replay_recording_ before the pass
+    EfbTargetSet target_efb_;
+    bool target_pass_active_ = false;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_rtv_heap_;
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> alt_efb_dsv_heap_;
     bool output_efb_active_ = false;
@@ -1239,7 +1285,7 @@ private:
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
-                        bool hdr = false);
+                        bool hdr = false, unsigned width = kEfbWidth, unsigned height = kEfbHeight);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;

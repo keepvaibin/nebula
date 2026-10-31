@@ -52,11 +52,10 @@ namespace J3DNativeState {
     void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat);
     // Textures in memory changed.
     void invalidateTexAll();
-    // EFB copies: their settings kept here (GX's defaults until set), each copy sent with them.
+    // The display copy's settings, kept here (GX's defaults until set) and sent with it; the copy-clear colour and
+    // the filter also apply to captures (J3DNativeTarget::capture).
     void setDispCopySrc(u16 left, u16 top, u16 width, u16 height);
-    void setTexCopySrc(u16 left, u16 top, u16 width, u16 height);
     void setDispCopyDst(u16 width, u16 height);
-    void setTexCopyDst(u16 width, u16 height, GXTexFmt format, GXBool mipmap);
     void setDispCopyFrame2Field(GXCopyMode mode);
     void setCopyClamp(GXFBClamp clamp);
     void setDispCopyGamma(GXGamma gamma);
@@ -71,7 +70,6 @@ namespace J3DNativeState {
     void showFrame();
     // The game's frame is complete: the host renders what it drew.
     void endFrame();
-    void copyTex(void* pDest, GXBool clear);
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);
     void setTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
@@ -116,14 +114,7 @@ void J3DNativeStateSetPointSize(u8 size, GXTexOffset texOffsets);
 void J3DNativeStateInitLightColor(GXLightObj* pObj, GXColor color);
 void J3DNativeStateInitLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z);
 void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id);
-void J3DNativeStateSetPixelFmt(GXPixelFmt format, GXZFmt16 zFormat);
 void J3DNativeStateInvalidateTexAll(void);
-void J3DNativeStateSetTexCopySrc(u16 left, u16 top, u16 width, u16 height);
-void J3DNativeStateSetTexCopyDst(u16 width, u16 height, GXTexFmt format, GXBool mipmap);
-void J3DNativeStateSetCopyClamp(GXFBClamp clamp);
-void J3DNativeStateSetCopyClear(GXColor color, u32 depth);
-void J3DNativeStateSetCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
-void J3DNativeStateCopyTex(void* pDest, GXBool clear);
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
 void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
 void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);

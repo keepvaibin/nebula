@@ -4,10 +4,8 @@
 // per-draw texture table.
 //
 // Entries are dropped only explicitly: on GXInvalidateTexAll() (FifoSink::on_invalidate_textures ->
-// invalidate_all()), on an EFB copy over an overlapping range (register_efb_copy), and on a guest write
-// overlapping a cached range (invalidate_range), which drops decoded entries and EFB-copy aliases alike
-// because later CPU-written buffers can reuse those addresses. For a texture matching an EFB-copy alias's
-// address, size and format, get() returns the GPU-side copy; its source bytes are never decoded.
+// invalidate_all()) and on a write overlapping a cached range (invalidate_range). Pictures the renderer draws
+// (target passes, captures) are the renderer's, looked up before this cache.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -145,11 +143,11 @@ public:
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
-    // Aliases an EFB copy-to-texture at `address`, retiring every overlapping decoded entry and older copy.
-    [[nodiscard]] bool register_efb_copy(
-        std::uint64_t address,
-        const EfbCopyParams& params,
-        gpu::TextureRef texture);
+
+    // A view slot for a picture the renderer owns (a target pass's, E-07); retire_view returns both after the GPU.
+    [[nodiscard]] std::uint32_t allocate_view() { return allocate_srv_index(); }
+    void retire_view(std::uint32_t index, gpu::TextureRef picture) {
+        retire(Entry{std::move(picture), TextureHandle{.srv_index = index}}); }
 
     // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
     // content lives on the GPU, not in game memory.
@@ -290,20 +288,6 @@ private:
         std::uint32_t pack_slot = TexturePacks::kNone;
         bool pack_waiting = false;
     };
-    struct EfbAliasKey {
-        std::uint64_t address;
-        std::uint16_t width;
-        std::uint16_t height;
-        std::uint8_t format;
-        std::uint8_t pad[3];
-
-        bool operator==(const EfbAliasKey&) const = default;
-    };
-    struct EfbAliasKeyHasher {
-        [[nodiscard]] std::size_t operator()(const EfbAliasKey& key) const {
-            return static_cast<std::size_t>(fnv1a64(&key, sizeof(key)));
-        }
-    };
     void retire(Entry&& entry);
     // An entry that binds a resident replacement (no decode; charges no decoded budget and is never pooled).
     [[nodiscard]] Entry make_replacement_entry(const TextureReplacement& replacement, std::uint32_t slot,
@@ -347,9 +331,6 @@ private:
     std::uint64_t decoded_source_bytes_ = 0;
     std::uint64_t decoded_evicted_bytes_ = 0;
     std::uint64_t decoded_evicted_entries_ = 0;
-    // Full GX texture descriptor -> EFB-copy alias (checked before decode).
-    std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
-    detail::ConservativeRangeEnvelope alias_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
     // Interpolation: reclaimed textures held per game-frame segment.
     std::array<std::vector<Entry>, kMaxHoldSegments> held_entries_;

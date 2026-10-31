@@ -10,6 +10,93 @@
 #include "Game/Util/SchedulerUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
+#include <nebula_game_api.h>
+#include <cstring>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
+namespace {
+    // The pipe's inside (nebula_game_api.h NebulaMaterialProgram): the pipe texture (coordinate 0, texture matrix 0)
+    // warped by itself (coordinate 1, texture matrix 1) as a signed indirect offset, register 0 to register 1 by its
+    // colour and its alpha doubled, both scaled by four; blended by alpha, depth tested and not written, back faces
+    // culled, fog off, no channels.
+    NebulaMaterialProgram sInsideProgram;
+    bool sInsideRegistered = false;
+
+    void sendInsideProgram(JUTTexture* pTexture, f32 indirectScale) {
+        const NebulaHostServices* pHost = nebula_host();
+        if (!sInsideRegistered) {
+            NebulaMaterialProgram& rProgram = sInsideProgram;
+            memset(&rProgram, 0, sizeof(rProgram));
+            NebulaMaterialTevStage& rStage = rProgram.tev[0];
+            rStage.tex_coord = GX_TEXCOORD0;
+            rStage.tex_map = GX_TEXMAP0;
+            rStage.channel = GX_COLOR_NULL;
+            rStage.color_in[0] = GX_CC_C0;
+            rStage.color_in[1] = GX_CC_C1;
+            rStage.color_in[2] = GX_CC_TEXC;
+            rStage.color_in[3] = GX_CC_ZERO;
+            rStage.alpha_in[0] = GX_CA_ZERO;
+            rStage.alpha_in[1] = GX_CA_TEXA;
+            rStage.alpha_in[2] = GX_CA_TEXA;
+            rStage.alpha_in[3] = GX_CA_ZERO;
+            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_4;
+            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
+            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+            rStage.ind_stage = GX_INDTEXSTAGE0;
+            rStage.ind_format = GX_ITF_8;
+            rStage.ind_bias = GX_ITB_STU;
+            rStage.ind_matrix = GX_ITM_0;
+            rStage.ind_wrap_s = rStage.ind_wrap_t = GX_ITW_OFF;
+            rStage.ind_alpha = GX_ITBA_OFF;
+            rProgram.ind_order[0].coord = GX_TEXCOORD1;
+            rProgram.ind_order[0].map = GX_TEXMAP0;
+            rProgram.ind_order[0].scale_s = rProgram.ind_order[0].scale_t = GX_ITS_1;
+            for (u32 t = 0; t < 2; t++) {
+                rProgram.tex_gen[t].type = GX_TG_MTX2x4;
+                rProgram.tex_gen[t].source = static_cast< u8 >(GX_TG_TEX0 + t);
+                rProgram.tex_gen[t].matrix = static_cast< u8 >(GX_TEXMTX0 + t * 3);
+                rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
+            }
+            rProgram.tev_stages = 1;
+            rProgram.tex_gens = 2;
+            rProgram.ind_stages = 1;
+            rProgram.channels = 0;
+            rProgram.cull = GX_CULL_BACK;
+            rProgram.z_compare_location = 1;
+            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_INDIRECT | NEBULA_MATERIAL_LOADS_FOG;
+            rProgram.fog.type = GX_FOG_NONE;
+            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
+            rProgram.alpha_compare.op = GX_AOP_OR;
+            rProgram.blend.type = GX_BM_BLEND;
+            rProgram.blend.source = GX_BL_SRCALPHA;
+            rProgram.blend.destination = GX_BL_INVSRCALPHA;
+            rProgram.blend.logic_op = GX_LO_COPY;
+            rProgram.z_mode.enable = GX_TRUE;
+            rProgram.z_mode.func = GX_LEQUAL;
+            rProgram.z_mode.update = GX_FALSE;
+            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sInsideProgram), &rProgram);
+            sInsideRegistered = true;
+        }
+        NebulaMaterialValues values;
+        memset(&values, 0, sizeof(values));
+        values.ind_matrix[0].m[0][0] = indirectScale;
+        values.ind_matrix[0].m[1][1] = indirectScale;
+        values.fog.near_z = MR::getNearZ();
+        values.fog.far_z = MR::getFarZ();
+        memset(values.fog.color, 0xFF, sizeof(values.fog.color));
+        for (u32 c = 0; c < 2; c++) {
+            values.tex_coord_scale[c].scale_s = pTexture->getWidth();
+            values.tex_coord_scale[c].scale_t = pTexture->getHeight();
+        }
+        J3DNativeShape::flushState();
+        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sInsideProgram), &values);
+        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    }
+}  // namespace
 
 namespace {
     const f32 sTexRateU0 = 0.08f;
@@ -66,10 +153,6 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(0);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1E, 0, 0x7D);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, 0x21, 0, 0x7D);
 
     TMtx34f mtx;
     mtx.identity();
@@ -81,34 +164,10 @@ void OceanRingPipeInside::loadMaterial() const {
     J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
 
     mWaterPipeInsideTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(1);
-    J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP0);
-    J3DNativeState::setTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
-    Mtx23 new_mtx;
-    new_mtx[0][0] = ::sIndirectScale;
-    new_mtx[0][1] = 0.0f;
-    new_mtx[0][2] = 0.0f;
-    new_mtx[1][0] = 0.0f;
-    new_mtx[1][1] = ::sIndirectScale;
-    new_mtx[1][2] = 0.0f;
-    J3DNativeState::setIndTexMtx(GX_ITM_0, new_mtx, 0);
-
+    sendInsideProgram(mWaterPipeInsideTex, ::sIndirectScale);
     J3DNativeState::setTevColor(GX_TEVREG0, ::sTevReg0);
     J3DNativeState::setTevColor(GX_TEVREG1, ::sTevReg1);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_4, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_TEXA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_4, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(1, GX_LEQUAL, 0);
-    J3DNativeState::setZCompLoc(1);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, MR::getNearZ(), MR::getFarZ(), sFogCol);
 }
 
 void OceanRingPipeInside::sendGD() {

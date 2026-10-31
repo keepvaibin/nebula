@@ -1,5 +1,6 @@
 #include "Game/Screen/MoviePlayerSimple.hpp"
 #include "Game/LiveActor/Nerve.hpp"
+#include "Game/Screen/MovieDraw.hpp"
 #include "Game/Screen/THPSimplePlayerWrapper.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
@@ -89,7 +90,7 @@ void MoviePlayerSimple::draw() const {
         u32 ySize = mMovie->mVideoInfo.ySize;
         u32 v4 = (MR::getFrameBufferWidth() - frameBufferWidth) / 2;
         u32 v5 = (MR::getFrameBufferHeight() - ySize) / 2;
-        THPGXSetTexObjFilter(GX_LINEAR);
+        MovieDraw::setLinearFilter(true);
         mMovie->mCurrentFrame = mPlayerWrapper->drawCurrentFrame(JUTVideo::getManager()->getRenderMode(), v4, v5, frameBufferWidth, ySize);
     }
 }

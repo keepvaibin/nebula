@@ -1,8 +1,50 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
-#include <revolution/thp.h>
+#include <revolution/gx.h>
 #include "Game/System/NebulaDisc.hpp"
+
+// The THP movie file's header and component records as the game reads them, and its decoded frame buffers.
+typedef struct {
+    char magic[4];
+    u32 version;
+    u32 bufSize;
+    u32 audioMaxSamples;
+    f32 frameRate;
+    u32 numFrames;
+    u32 firstFrameSize;
+    u32 movieDataSize;           
+    u32 compInfoDataOffsets;
+    u32 offsetDataOffsets;
+    u32 movieDataOffsets;
+    u32 finalFrameDataOffsets;
+} THPHeader;
+typedef struct {
+    u32 xSize;
+    u32 ySize;
+    u32 videoType;
+} THPVideoInfo;
+typedef struct {
+    u32 numComponents;
+    u8 frameComp[16];
+} THPFrameCompInfo;
+typedef struct {
+    u32 sndChannels;
+    u32 sndFrequency;
+    u32 sndNumSamples;
+    u32 sndNumTracks;
+} THPAudioInfo;
+typedef struct {
+    u8* ptr;
+    s32 frameNumber;
+    volatile BOOL isValid;
+} THPReadBuffer;
+typedef struct {
+    u8* ytexture;
+    u8* utexture;
+    u8* vtexture;
+    s32 frameNumber;
+} THPTextureSet;
 
 class THPSimplePlayerWrapper : public NerveExecutor {
 public:

@@ -252,6 +252,18 @@ public:
     // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the EFB is resampled into
     // an EFB at the window's scale, which the 2D layer and the display copy then use, until end_output_efb.
     [[nodiscard]] bool begin_output_efb();
+    // A pass into texture target `key` (E-07): its target, `width` x `height` game units at the EFB's scale, takes
+    // the EFB's place until end_target_pass, so the pass's draws and clears go to it. Each key keeps its target
+    // between passes (made again only when its size or the EFB's scale changes); the pass is drawn once, never
+    // replayed by sub-frames. False when the target cannot be made or a pass is open.
+    [[nodiscard]] bool begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height);
+    // Ends it: the EFB comes back and the target's picture is what draws sampling `key` at that size read (at full
+    // precision, in any format, through `channels`: NebulaTargetChannels).
+    void end_target_pass(std::uint8_t channels, TextureCache& textures);
+    // The picture of target `key` when it is `width` x `height`: its texture and view.
+    [[nodiscard]] bool target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                      TextureHandle& out) const;
+    [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Not on Vulkan yet: temporal upscaling.
@@ -524,10 +536,46 @@ private:
     // The output EFB (begin_output_efb) and its scale; they trade places with efb_ and efb_scale_ while it is active.
     EfbSet alt_efb_;
     unsigned alt_efb_scale_ = 0;
+    // The open target pass's set (begin_target_pass) while the EFB holds it, and each key's set between passes
+    // ( its colour shared with its picture), dropped after kTargetIdleFrames frames unused. A picture is sampled
+    // through its own view slot (TextureCache::allocate_view) reading the pass's channels.
+    struct TargetSlot {
+        EfbSet set;
+        unsigned scale = 0;
+        std::uint64_t used = 0;
+        std::uint16_t width = 0, height = 0;  // game units
+    };
+    // The pictures draws sample by key (target passes' and captures'), each through its own view slot
+    // (TextureCache::allocate_view) reading its channels; a capture's `bytes` is its footprint at the key, over which a
+    // later capture replaces it.
+    struct Picture {
+        std::uint32_t view = ~0u;
+        gpu::TextureRef viewed;
+        std::uint16_t width = 0, height = 0;  // game units, the size draws sample it at
+        std::uint8_t channels = 0;
+        std::uint32_t bytes = 0;
+        VkImageView sampled = VK_NULL_HANDLE;  // the view reading `channels` (none: the texture's own view)
+    };
+    std::unordered_map<std::uint64_t, Picture> pictures_;
+    // `texture` becomes picture `key` (`width` x `height` game units, read through `channels`): true when draws
+    // must look it up again (a new view, or a capture replacing others).
+    bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+                         std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
+    bool publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+                         TextureCache& textures);
+    static constexpr std::uint64_t kTargetIdleFrames = 600u;
+    std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
+    std::vector<std::pair<VkDescriptorSet, VkDescriptorSet>> target_free_sources_;  // dropped slots' inputs
+    std::uint64_t target_key_ = 0;
+    bool target_log_paused_ = false;  // log_paused_ before the pass
+    EfbSet target_efb_;
+    unsigned target_efb_scale_ = 0;
+    bool target_pass_active_ = false;
     bool output_efb_active_ = false;
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
     bool enter_output_efb(unsigned scale);
     void swap_efb_sets();
+    void swap_target_set();
     gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
     gpu::TextureRef efb_carry_depth_;
     bool efb_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
@@ -665,7 +713,9 @@ private:
     // The log: one game frame's GX work in order (a display copy closes it).
     // OutputEfbBegin: the scene resampled into the output EFB at the op's scale; SwapEfbSets: the EFB and the output
     // EFB trade places.
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom };
+    enum class ReplayKind : std::uint8_t {
+        Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom
+    };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
@@ -910,7 +960,8 @@ private:
     unsigned replay_efb_scale_ = 0;
     EfbSet replay_alt_efb_;  // the replay's output EFB
     unsigned replay_alt_scale_ = 0;
-    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u);
+    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kEfbWidth,
+                        unsigned height = kEfbHeight);
     void destroy_efb_set(EfbSet& set);
     XfbTexture subframe_xfb_;
     bool replaying_ = false;

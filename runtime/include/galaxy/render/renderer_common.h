@@ -18,6 +18,15 @@
 
 namespace galaxy::render {
 
+// The picture channel each sampled channel reads (0-3: R, G, B, A) for a target pass's NebulaTargetChannels
+// (E-07): RGBA, INTENSITY_ALPHA (R R R A), ALPHA (A A A A), RED, GREEN, BLUE (that channel in all four), RGB
+// (alpha one: 4).
+[[nodiscard]] constexpr std::array<std::uint8_t, 4> target_channel_swizzle(std::uint8_t channels) noexcept {
+    constexpr std::array<std::array<std::uint8_t, 4>, 7> kSwizzle{{
+        {0, 1, 2, 3}, {0, 0, 0, 3}, {3, 3, 3, 3}, {0, 0, 0, 0}, {1, 1, 1, 1}, {2, 2, 2, 2}, {0, 1, 2, 4}}};
+    return kSwizzle[channels < kSwizzle.size() ? channels : 0u];
+}
+
 inline constexpr unsigned kFramesInFlight = 2;
 // Matrix-ring segments in temporal mode (see RendererD3D12::begin_frame):
 // two more than the frames in flight.

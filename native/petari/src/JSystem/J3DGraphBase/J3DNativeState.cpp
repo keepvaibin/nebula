@@ -15,14 +15,10 @@ namespace {
     GXPixelFmt sPixelFormat = GX_PF_RGB8_Z24;
     GXZFmt16 sZFormat = GX_ZC_LINEAR;
 
-    // The EFB copy settings: GXInit's (its NTSC 480 mode) until the game sets them.
+    // The display copy's settings: GXInit's (its NTSC 480 mode) until the game sets them.
     struct CopySettings {
         u16 mDispSrc[4] = {0, 0, 640, 480};
-        u16 mTexSrc[4] = {0, 0, 0, 0};
         u16 mDispWidth = 640;
-        u16 mTexSize[2] = {0, 0};
-        u8 mTexFormat = GX_TF_I4;
-        u8 mTexMipmap = 0;
         u8 mClampTop = 1, mClampBottom = 1;
         u8 mDispInterlaced = GX_COPY_PROGRESSIVE;
         u8 mDispVerticalScale = 0;
@@ -45,25 +41,19 @@ namespace {
         return lines > 1024 ? 1024 : lines;
     }
 
-    void sendCopy(void* pDest, GXBool clear, bool display) {
+    void sendCopy() {
         NebulaStateOp op;
         memset(&op, 0, sizeof(op));
-        op.a[0] = display;
-        op.a[1] = clear;
-        op.a[2] = sCopy.mTexFormat;
-        op.a[3] = sCopy.mTexMipmap;
+        op.a[0] = 1;
         op.a[4] = sCopy.mClampTop;
         op.a[5] = sCopy.mClampBottom;
-        op.a[6] = display ? sCopy.mDispInterlaced : GX_COPY_PROGRESSIVE;
+        op.a[6] = sCopy.mDispInterlaced;
         op.a[7] = sCopy.mDispVerticalScale;
         op.a[8] = sCopy.mDispGamma;
-        const u16* pSrc = display ? sCopy.mDispSrc : sCopy.mTexSrc;
         for (u32 i = 0; i < 4; i++) {
-            op.f[i] = pSrc[i];
+            op.f[i] = sCopy.mDispSrc[i];
         }
-        op.size[0] = display ? sCopy.mDispWidth : sCopy.mTexSize[0];
-        op.size[1] = display ? 0 : sCopy.mTexSize[1];
-        op.image = reinterpret_cast< uintptr_t >(pDest);
+        op.size[0] = sCopy.mDispWidth;
         NebulaStateOp storage;
         J3DStateList list(&storage, 1);
         list.copy(op);
@@ -530,22 +520,8 @@ namespace J3DNativeState {
         sCopy.mDispSrc[3] = height;
     }
 
-    void setTexCopySrc(u16 left, u16 top, u16 width, u16 height) {
-        sCopy.mTexSrc[0] = left;
-        sCopy.mTexSrc[1] = top;
-        sCopy.mTexSrc[2] = width;
-        sCopy.mTexSrc[3] = height;
-    }
-
     void setDispCopyDst(u16 width, u16 height) {
         sCopy.mDispWidth = width;
-    }
-
-    void setTexCopyDst(u16 width, u16 height, GXTexFmt format, GXBool mipmap) {
-        sCopy.mTexSize[0] = width;
-        sCopy.mTexSize[1] = height;
-        sCopy.mTexFormat = static_cast< u8 >(format);
-        sCopy.mTexMipmap = mipmap;
     }
 
     void setDispCopyFrame2Field(GXCopyMode mode) {
@@ -722,16 +698,12 @@ namespace J3DNativeState {
     }
 
     void showFrame() {
-        sendCopy(nullptr, GX_FALSE, true);
+        sendCopy();
     }
 
     void endFrame() {
         const NebulaHostServices* pHost = nebula_host();
         pHost->frame_end(pHost->user);
-    }
-
-    void copyTex(void* pDest, GXBool clear) {
-        sendCopy(pDest, clear, false);
     }
 
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {
@@ -845,36 +817,8 @@ void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id) {
     J3DNativeState::loadLightObjImm(pObj, id);
 }
 
-void J3DNativeStateSetPixelFmt(GXPixelFmt format, GXZFmt16 zFormat) {
-    J3DNativeState::setPixelFmt(format, zFormat);
-}
-
 void J3DNativeStateInvalidateTexAll(void) {
     J3DNativeState::invalidateTexAll();
-}
-
-void J3DNativeStateSetTexCopySrc(u16 left, u16 top, u16 width, u16 height) {
-    J3DNativeState::setTexCopySrc(left, top, width, height);
-}
-
-void J3DNativeStateSetTexCopyDst(u16 width, u16 height, GXTexFmt format, GXBool mipmap) {
-    J3DNativeState::setTexCopyDst(width, height, format, mipmap);
-}
-
-void J3DNativeStateSetCopyClamp(GXFBClamp clamp) {
-    J3DNativeState::setCopyClamp(clamp);
-}
-
-void J3DNativeStateSetCopyClear(GXColor color, u32 depth) {
-    J3DNativeState::setCopyClear(color, depth);
-}
-
-void J3DNativeStateSetCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]) {
-    J3DNativeState::setCopyFilter(antialias, samples, verticalFilter, coefficients);
-}
-
-void J3DNativeStateCopyTex(void* pDest, GXBool clear) {
-    J3DNativeState::copyTex(pDest, clear);
 }
 
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {

@@ -1,4 +1,5 @@
 #include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/Screen/MovieDraw.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -307,9 +308,8 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
                        mHeader.frameRate, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture,
                        mVideoInfo.xSize, mVideoInfo.ySize);
 #endif
-    THPGXYuv2RgbSetup(rmode);
-    THPGXYuv2RgbDraw(mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
-    THPGXRestore();
+    MovieDraw::drawFrame(rmode->fbWidth, rmode->efbHeight, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y,
+                         mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
 
     return mTextureSet.frameNumber;
 }
@@ -326,10 +326,8 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
                        mHeader.frameRate, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
                        mTextureSet[_310].vtexture, mVideoInfo.xSize, mVideoInfo.ySize);
 #endif
-    THPGXYuv2RgbSetup(rmode);
-    THPGXYuv2RgbDraw(mTextureSet[_310].ytexture, mTextureSet[_310].utexture, mTextureSet[_310].vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize,
-                     polyW, polyH);
-    THPGXRestore();
+    MovieDraw::drawFrame(rmode->fbWidth, rmode->efbHeight, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
+                         mTextureSet[_310].vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
     s32 ret = mTextureSet[_310].frameNumber;
     _310 = _310 == 0;
     return ret;

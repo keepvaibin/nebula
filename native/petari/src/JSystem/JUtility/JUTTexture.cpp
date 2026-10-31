@@ -1,6 +1,6 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "JSystem/JUtility/JUTPalette.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 
@@ -201,15 +201,45 @@ void JUTTexture::load(GXTexMapID texMapID) {
     J3DNativeTexture::load(&mObj, texMapID);
 }
 
-void JUTTexture::capture(int width, int height, GXTexFmt format, bool mipmap, GXBool clear) {
-    if (mFlag & 0x1) {
-        if (mipmap) {
-            J3DNativeState::setTexCopySrc(width, height, mTIMG->mWidth * 2, mTIMG->mHeight * 2);
-        } else {
-            J3DNativeState::setTexCopySrc(width, height, mTIMG->mWidth, mTIMG->mHeight);
+namespace {
+    // A capture read as a texture of `format`: the picture's channels it reads, and what its intensity holds.
+    NebulaTargetChannels captureChannels(GXTexFmt format, u32* pFlags) {
+        switch (format) {
+        case GX_TF_RGBA8:
+            return NEBULA_TARGET_RGBA;
+        case GX_TF_RGB565:
+            return NEBULA_TARGET_RGB;
+        case GX_TF_I8:
+            *pFlags |= NEBULA_CAPTURE_LUMA;
+            return NEBULA_TARGET_RED;
+        case GX_TF_Z8:
+            *pFlags |= NEBULA_CAPTURE_DEPTH;
+            return NEBULA_TARGET_RED;
+        case GX_CTF_A8:
+            return NEBULA_TARGET_ALPHA;
+        case GX_CTF_G8:
+            return NEBULA_TARGET_GREEN;
+        case GX_CTF_B8:
+            return NEBULA_TARGET_BLUE;
+        default:
+            return NEBULA_TARGET_RED;
         }
-
-        J3DNativeState::setTexCopyDst(mTIMG->mWidth, mTIMG->mHeight, format, mipmap);
-        J3DNativeState::copyTex(mImage, clear);
     }
+
+    void captureInto(void* pBuffer, int width, int height, int x, int y, bool half, GXTexFmt format, GXBool clear) {
+        u32 flags = (half ? NEBULA_CAPTURE_HALF : 0u) | (clear ? NEBULA_CAPTURE_CLEAR : 0u);
+        const NebulaTargetChannels channels = captureChannels(format, &flags);
+        const int scale = half ? 2 : 1;
+        J3DNativeTarget::capture(pBuffer, x, y, width * scale, height * scale, channels, flags);
+    }
+}  // namespace
+
+void JUTTexture::capture(int x, int y, GXTexFmt format, bool mipmap, GXBool clear) {
+    if (mFlag & 0x1) {
+        captureInto(mImage, mTIMG->mWidth, mTIMG->mHeight, x, y, mipmap, format, clear);
+    }
+}
+
+void JUTTexture::captureDolTexture(void* pBuffer, int width, int height, int x, int y, bool mipmap, GXTexFmt format) {
+    captureInto(pBuffer, width, height, x, y, mipmap, format, GX_FALSE);
 }

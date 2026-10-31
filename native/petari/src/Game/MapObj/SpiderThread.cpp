@@ -19,6 +19,10 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
+#include <nebula_game_api.h>
+#include <cstring>
+
+extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
     const CutPointEntry sCutPointNoTable[] = {{0, 3}, {1, 1}, {2, 0}, {4, 3}, {6, 1}, {6, 4}};
@@ -361,46 +365,90 @@ SpiderThreadHangInfo* SpiderThread::findHangInfo(LiveActor* pActor) const {
     return getActorHangInfo(0);
 }
 
+namespace {
+    // The threads' material (nebula_game_api.h NebulaMaterialProgram): the thread texture (0, coordinate 0) times the
+    // vertex colour, offset by the indirect texture (1, coordinate 1) as a signed warp; blended by its alpha where above
+    // zero, depth tested and not written, no culling.
+    NebulaMaterialProgram sThreadProgram;
+    bool sThreadRegistered = false;
+
+    void sendThreadProgram(JUTTexture* pThread, JUTTexture* pIndirect) {
+        const NebulaHostServices* pHost = nebula_host();
+        if (!sThreadRegistered) {
+            NebulaMaterialProgram& rProgram = sThreadProgram;
+            memset(&rProgram, 0, sizeof(rProgram));
+            NebulaMaterialTevStage& rStage = rProgram.tev[0];
+            rStage.tex_coord = GX_TEXCOORD0;
+            rStage.tex_map = GX_TEXMAP0;
+            rStage.channel = GX_COLOR0A0;
+            rStage.color_in[0] = GX_CC_ZERO;
+            rStage.color_in[1] = GX_CC_RASC;
+            rStage.color_in[2] = GX_CC_TEXC;
+            rStage.color_in[3] = GX_CC_ZERO;
+            rStage.alpha_in[0] = GX_CA_TEXA;
+            rStage.alpha_in[1] = rStage.alpha_in[2] = rStage.alpha_in[3] = GX_CA_ZERO;
+            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+            rStage.color_clamp = rStage.alpha_clamp = GX_FALSE;
+            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+            rStage.ind_stage = GX_INDTEXSTAGE0;
+            rStage.ind_format = GX_ITF_8;
+            rStage.ind_bias = GX_ITB_STU;
+            rStage.ind_matrix = GX_ITM_0;
+            rStage.ind_wrap_s = rStage.ind_wrap_t = GX_ITW_OFF;
+            rStage.ind_alpha = GX_ITBA_OFF;
+            rProgram.ind_order[0].coord = GX_TEXCOORD1;
+            rProgram.ind_order[0].map = GX_TEXMAP1;
+            rProgram.ind_order[0].scale_s = rProgram.ind_order[0].scale_t = GX_ITS_1;
+            for (u32 t = 0; t < 2; t++) {
+                rProgram.tex_gen[t].type = GX_TG_MTX3x4;
+                rProgram.tex_gen[t].source = static_cast< u8 >(GX_TG_TEX0 + t);
+                rProgram.tex_gen[t].matrix = GX_IDENTITY;
+                rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
+            }
+            rProgram.tev_stages = 1;
+            rProgram.tex_gens = 2;
+            rProgram.ind_stages = 1;
+            rProgram.channels = 1;
+            rProgram.cull = GX_CULL_NONE;
+            rProgram.z_compare_location = 0;
+            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_INDIRECT;
+            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
+            rProgram.alpha_compare.op = GX_AOP_OR;
+            rProgram.blend.type = GX_BM_BLEND;
+            rProgram.blend.source = GX_BL_SRCALPHA;
+            rProgram.blend.destination = GX_BL_INVSRCALPHA;
+            rProgram.blend.logic_op = GX_LO_NOOP;
+            rProgram.z_mode.enable = GX_TRUE;
+            rProgram.z_mode.func = GX_LEQUAL;
+            rProgram.z_mode.update = GX_FALSE;
+            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sThreadProgram), &rProgram);
+            sThreadRegistered = true;
+        }
+        NebulaMaterialValues values;
+        memset(&values, 0, sizeof(values));
+        values.ind_matrix[0].m[0][0] = ::sIndirectScaleX;
+        values.ind_matrix[0].m[1][1] = ::sIndirectScaleY;
+        values.tex_coord_scale[0].scale_s = pThread->getWidth();
+        values.tex_coord_scale[0].scale_t = pThread->getHeight();
+        values.tex_coord_scale[1].scale_s = pIndirect->getWidth();
+        values.tex_coord_scale[1].scale_t = pIndirect->getHeight();
+        J3DNativeShape::flushState();
+        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sThreadProgram), &values);
+        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    }
+}  // namespace
+
 void SpiderThread::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-
-    J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_TEX0, 60, GX_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX3x4, GX_TG_TEX1, 60, GX_FALSE, 125);
     mThreadTexture->load(GX_TEXMAP0);
     mIndirectTexture->load(GX_TEXMAP1);
-
-    J3DNativeState::setNumIndStages(1);
-    J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD1, GX_TEXMAP1);
-    J3DNativeState::setTevIndWarp(GX_TEVSTAGE0, GX_INDTEXSTAGE0, GX_TRUE, GX_FALSE, GX_ITM_0);
-
-    Mtx23 mtx;
-    mtx[0][0] = ::sIndirectScaleX;
-    mtx[0][1] = 0.0;
-    mtx[0][2] = 0.0;
-    mtx[1][0] = 0.0;
-    mtx[1][1] = ::sIndirectScaleY;
-    mtx[1][2] = 0.0;
-    J3DNativeState::setIndTexMtx(GX_ITM_0, mtx, 0);
-
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_RASC, GX_CC_TEXC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-
-    J3DNativeState::setZMode(GX_ENABLE, GX_LEQUAL, GX_DISABLE);
-    J3DNativeState::setZCompLoc(GX_DISABLE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
+    sendThreadProgram(mThreadTexture, mIndirectTexture);
 }
 
 namespace {
