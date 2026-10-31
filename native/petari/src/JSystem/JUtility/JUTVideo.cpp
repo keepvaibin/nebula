@@ -7,9 +7,9 @@ JUTVideo* JUTVideo::sManager;
 
 
 
-JUTVideo* JUTVideo::createManager(_GXRenderModeObj const* param_0) {
+JUTVideo* JUTVideo::createManager(u16 width, u16 height) {
     if (sManager == nullptr) {
-        sManager = new JUTVideo(param_0);
+        sManager = new JUTVideo(width, height);
     }
     return sManager;
 }
@@ -21,17 +21,16 @@ void JUTVideo::destroyManager() {
     }
 }
 
-JUTVideo::JUTVideo(GXRenderModeObj const* param_0) {
-    mRenderObj = nullptr;
+JUTVideo::JUTVideo(u16 width, u16 height) {
+    mWidth = width;
+    mHeight = height;
     NebulaFrameClock::init();
+    // Black for the first two frames shown.
     mSetBlack = true;
     mSetBlackFrameCount = 2;
-    setRenderMode(param_0);
+    NebulaFrameClock::waitFrame();
+    NebulaFrameClock::waitFrame();
     NebulaFrameClock::show(false);
-    field_0x8 = 0;
-    mRetraceCount = NebulaFrameClock::count();
-    field_0x10 = 1;
-    field_0x18 = 0;
     mPreRetraceCallback = NebulaFrameClock::setPreHook(preRetraceProc);
     mPostRetraceCallback = NebulaFrameClock::setPostHook(postRetraceProc);
     mPreCallback = nullptr;
@@ -71,19 +70,6 @@ void JUTVideo::postRetraceProc(u32 retrace_count) {
 
     void* message = reinterpret_cast< void* >(NebulaFrameClock::count());
     sManager->mMessageQueue.send(message, false);
-}
-
-void JUTVideo::setRenderMode(GXRenderModeObj const* pObj) {
-    if (mRenderObj != nullptr && pObj->viTVmode != mRenderObj->viTVmode) {
-        mSetBlack = true;
-        mSetBlackFrameCount = 4;
-    }
-    mRenderObj = const_cast< GXRenderModeObj* >(pObj);
-
-    if (mSetBlack) {
-        NebulaFrameClock::waitFrame();
-        NebulaFrameClock::waitFrame();
-    }
 }
 
 void JUTVideo::waitRetraceIfNeed() {

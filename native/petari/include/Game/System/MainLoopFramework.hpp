@@ -23,7 +23,7 @@ public:
         return sManager;
     }
 
-    static MainLoopFramework* createManager(const GXRenderModeObj*, bool);
+    static MainLoopFramework* createManager(bool useAlpha);
     void ctor_subroutine(bool);
     void prepareCopyDisp();
     void preGX();

@@ -79,8 +79,8 @@ JUTTexture* ImageEffectResource::createTexture(f32 scale, GXTexFmt format) {
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
-    pTexture = new JUTTexture(scale * (s32)JUTVideo::getManager()->getRenderMode()->fbWidth,
-                              scale * (s32)JUTVideo::getManager()->getRenderMode()->efbHeight, format);
+    pTexture = new JUTTexture(scale * (s32)JUTVideo::getManager()->getFbWidth(),
+                              scale * (s32)JUTVideo::getManager()->getEfbHeight(), format);
     pTexture->mWrapS = GX_CLAMP;
     pTexture->mWrapT = GX_CLAMP;
     pTexture->mMinType = GX_LINEAR;

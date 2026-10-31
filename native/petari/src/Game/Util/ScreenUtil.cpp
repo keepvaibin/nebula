@@ -95,7 +95,7 @@ void ScreenUtil_FORCE_MATCH_SDATA2() {
 }
 namespace MR {
     u32 getViWidth() {
-        return SingletonHolder< GameSystem >::get()->mObjHolder->getRenderModeObj()->viWidth;
+        return SingletonHolder< GameSystem >::get()->mObjHolder->getViWidth();
     }
 
     f32 getSafetyVIScreenWidthRatio() {
@@ -128,7 +128,7 @@ namespace MR {
     }
 
     s32 getSafetyFrameWidth() {
-        s32 viWidthMax = static_cast< u16 >(RenderModeObj::getViWidthMax());
+        const s32 viWidthMax = 720;  // a television line
         f32 safetyFrameWidthRatio = viWidthMax * getSafetyVIScreenWidthRatio();
         s32 screenWidth = getScreenWidth();
         f32 viWidthRatio = static_cast< f32 >(screenWidth) / static_cast< s32 >(getViWidth());

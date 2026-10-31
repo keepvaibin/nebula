@@ -2915,7 +2915,7 @@ bool MarioActor::binderFilter(const Triangle* pTriangle) {
 
 namespace MR {
     s32 getFrameBufferWidth() {
-        return JUTGetVideoManager()->getRenderMode()->fbWidth;
+        return JUTGetVideoManager()->getFbWidth();
     }
 };  // namespace MR
 

@@ -2,7 +2,6 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/JUtility/JUTNativeLog.hpp>
 #include "nw4r/db/console.h"
-#include "nw4r/db/directPrint.h"
 #include "nw4r/db/mapFile.h"
 #include <va_list.h>
 #include "Game/System/NebulaFrameClock.hpp"
@@ -90,10 +89,6 @@ namespace nw4r {
 
             (void)NebulaFrameClock::setPreHook(NULL);
             (void)NebulaFrameClock::setPostHook(NULL);
-
-            if (sAssertionConsole) {
-                (void)detail::DirectPrint_SetupFB(NULL);
-            }
 
             ShowStack_(stackPointer);
 

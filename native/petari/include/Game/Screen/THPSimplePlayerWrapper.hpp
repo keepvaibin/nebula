@@ -60,7 +60,7 @@ public:
     bool preLoad(s32);
     bool loadStop();
     s32 decode(s32);
-    s32 drawCurrentFrame(GXRenderModeObj*, u32, u32, u32, u32);
+    s32 drawCurrentFrame(u32, u32, u32, u32);
     bool getVideoInfo(THPVideoInfo*) const;
     f32 getFrameRate() const;
     s32 getTotalFrame() const;

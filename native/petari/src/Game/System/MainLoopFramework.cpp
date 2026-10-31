@@ -59,10 +59,7 @@ MainLoopFramework::~MainLoopFramework() {
     }
 }
 
-MainLoopFramework* MainLoopFramework::createManager(const GXRenderModeObj* pRenderModeObj, bool useAlpha) {
-    if (pRenderModeObj) {
-        JUTVideo::getManager()->setRenderMode(pRenderModeObj);
-    }
+MainLoopFramework* MainLoopFramework::createManager(bool useAlpha) {
     if (!sManager) {
         sManager = new MainLoopFramework(useAlpha);
     }
@@ -78,10 +75,7 @@ void MainLoopFramework::prepareCopyDisp() {
 
 void MainLoopFramework::preGX() {
     J3DNativeState::invalidateTexAll();
-    if (JUTVideo::getManager()->getRenderMode()->aa) {
-        J3DNativeState::setPixelFmt(GX_PF_RGB565_Z16, GX_ZC_LINEAR);
-        J3DNativeState::setDither(GX_TRUE);
-    } else if (mUseAlpha) {
+    if (mUseAlpha) {
         J3DNativeState::setPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
         J3DNativeState::setDither(GX_TRUE);
     } else {
@@ -91,7 +85,7 @@ void MainLoopFramework::preGX() {
 }
 
 void MainLoopFramework::endGX() {
-    J2DOrthoGraph ortho(0.0f, 0.0f, JUTVideo::getManager()->getRenderMode()->fbWidth, JUTVideo::getManager()->getRenderMode()->efbHeight, -1.0f,
+    J2DOrthoGraph ortho(0.0f, 0.0f, JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), -1.0f,
                         1.0f);
     if (JUTConsoleManager::sManager) {
         ortho.setPort();
@@ -122,8 +116,8 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame(JUTVideo::getManager()->getRenderMode()->fbWidth,
-                                  JUTVideo::getManager()->getRenderMode()->efbHeight, mUseVFilter);
+        J3DNativeState::showFrame(JUTVideo::getManager()->getFbWidth(),
+                                  JUTVideo::getManager()->getEfbHeight(), mUseVFilter);
     }
 }
 
@@ -139,14 +133,14 @@ void MainLoopFramework::waitBlanking(int tickCount) {
 
 
 void MainLoopFramework::clearEfb(GXColor color) {
-    u16 fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
-    u16 efbHeight = JUTVideo::getManager()->getRenderMode()->efbHeight;
+    u16 fbWidth = JUTVideo::getManager()->getFbWidth();
+    u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
     clearEfb(0, 0, fbWidth, efbHeight, color);
 }
 
 void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4, GXColor color) {
-    u16 fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
-    u16 efbHeight = JUTVideo::getManager()->getRenderMode()->efbHeight;
+    u16 fbWidth = JUTVideo::getManager()->getFbWidth();
+    u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
     Mtx44 proj;
     NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
     J3DNativeView::setProjection(proj, GX_ORTHOGRAPHIC);

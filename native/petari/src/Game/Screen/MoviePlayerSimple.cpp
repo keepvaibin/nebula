@@ -91,7 +91,7 @@ void MoviePlayerSimple::draw() const {
         u32 v4 = (MR::getFrameBufferWidth() - frameBufferWidth) / 2;
         u32 v5 = (MR::getFrameBufferHeight() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
-        mMovie->mCurrentFrame = mPlayerWrapper->drawCurrentFrame(JUTVideo::getManager()->getRenderMode(), v4, v5, frameBufferWidth, ySize);
+        mMovie->mCurrentFrame = mPlayerWrapper->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
     }
 }
 

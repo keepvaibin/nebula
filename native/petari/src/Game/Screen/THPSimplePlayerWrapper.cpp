@@ -5,6 +5,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include <JSystem/JKernel/JKRHeap.hpp>
+#include <JSystem/JUtility/JUTVideo.hpp>
 #include <cstring>
 #ifdef TARGET_PC
 #include <revolution/os.h>
@@ -297,7 +298,7 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
 }
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32 y, u32 polyW, u32 polyH) {
+s32 THPSimplePlayerWrapper::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
     if (mTextureSet.frameNumber < 0) {
         return -1;
     }
@@ -308,13 +309,13 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
                        mHeader.frameRate, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture,
                        mVideoInfo.xSize, mVideoInfo.ySize);
 #endif
-    MovieDraw::drawFrame(rmode->fbWidth, rmode->efbHeight, mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y,
+    MovieDraw::drawFrame(JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), mTextureSet.ytexture, mTextureSet.utexture, mTextureSet.vtexture, x, y,
                          mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
 
     return mTextureSet.frameNumber;
 }
 #else
-s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32 y, u32 polyW, u32 polyH) {
+s32 THPSimplePlayerWrapper::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
     if (mTextureSet[_310].frameNumber < 0) {
         return -1;
     }
@@ -326,7 +327,7 @@ s32 THPSimplePlayerWrapper::drawCurrentFrame(_GXRenderModeObj* rmode, u32 x, u32
                        mHeader.frameRate, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
                        mTextureSet[_310].vtexture, mVideoInfo.xSize, mVideoInfo.ySize);
 #endif
-    MovieDraw::drawFrame(rmode->fbWidth, rmode->efbHeight, mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
+    MovieDraw::drawFrame(JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), mTextureSet[_310].ytexture, mTextureSet[_310].utexture,
                          mTextureSet[_310].vtexture, x, y, mVideoInfo.xSize, mVideoInfo.ySize, polyW, polyH);
     s32 ret = mTextureSet[_310].frameNumber;
     _310 = _310 == 0;
