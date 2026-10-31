@@ -22,7 +22,7 @@ extern "C" {
 /* NebulaTextureImage.format of a record handed over whole (texture_image). */
 #define NEBULA_TEXTURE_IMAGE 0x40u
 /* NebulaTextureImage.format of texels the game wrote, one level in rows from the top, packed, laid out as
-   NEBULA_TEXTURE_L8 / _LA8 / _RGBA8 (the code minus NEBULA_TEXTURE_LINEAR_L8): the host keeps them as a record. */
+   NEBULA_TEXTURE_L8 / _LA8 / _RGBA8 (nebula_texture_linear_layout): the host keeps them as a record. */
 #define NEBULA_TEXTURE_LINEAR_L8 0x41u
 #define NEBULA_TEXTURE_LINEAR_LA8 0x42u
 #define NEBULA_TEXTURE_LINEAR_RGBA8 0x43u
@@ -45,6 +45,13 @@ enum {
        ran on every image before textures were cooked, and the cooker has already run them on the disc's). */
     NEBULA_TEXTURE_FILTER_AT_UPLOAD = 1u << 0,
 };
+
+/* The layout of texels handed over as NEBULA_TEXTURE_LINEAR_L8 / _LA8 / _RGBA8. */
+static inline uint8_t nebula_texture_linear_layout(uint8_t format) {
+    return format == NEBULA_TEXTURE_LINEAR_L8    ? (uint8_t)NEBULA_TEXTURE_L8
+           : format == NEBULA_TEXTURE_LINEAR_LA8 ? (uint8_t)NEBULA_TEXTURE_LA8
+                                                 : (uint8_t)NEBULA_TEXTURE_RGBA8;
+}
 
 typedef struct NebulaTexture {
     char magic[8];          /* NEBULA_TEXTURE_MAGIC, no terminator */
