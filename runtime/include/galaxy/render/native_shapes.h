@@ -123,8 +123,9 @@ struct Record {
     std::array<std::uint8_t, 9> current{};
     // Texture coordinates generated differently from the material: coord, type, source, normalize, post matrix id.
     std::vector<std::array<std::uint8_t, 5>> texgens;
-    // A host marker (Marker, its kind at `key`): aux, a, b.
-    std::array<std::uint32_t, 3> marker{};
+    // A host marker (Marker, its kind at `key`): aux, then a and b (a draw identity's objects by address).
+    std::uint32_t marker_aux = 0;
+    std::array<std::uint64_t, 2> marker{};
 };
 // Vectors of records move them when they grow (a throwing move would copy them).
 static_assert(std::is_nothrow_move_constructible_v<Record>);

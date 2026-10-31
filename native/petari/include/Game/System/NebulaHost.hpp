@@ -32,7 +32,12 @@ namespace NebulaHost {
         nebula_host()->scene_surround(nebula_host()->user, intensity);
     }
 
-    inline void gameLight(u32 kind, u32 id, const f32* pValues) {
+    // An object as the host names it (markers, lights, names): its address.
+    inline u64 objectId(const void* pObject) {
+        return static_cast< u64 >(reinterpret_cast< uintptr_t >(pObject));
+    }
+
+    inline void gameLight(u32 kind, u64 id, const f32* pValues) {
         nebula_host()->game_light(nebula_host()->user, kind, id, pValues);
     }
 

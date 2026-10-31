@@ -1299,7 +1299,7 @@ void svc_game_stage(void*, const char* name) {
     }
 }
 
-void svc_object_name(void*, uint32_t id, const char* name) {
+void svc_object_name(void*, uint64_t id, const char* name) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::note_object_name(id, name);
 #else
@@ -1613,7 +1613,7 @@ void svc_scene_marker(void*, uint32_t marker, const float* view) {
 #endif
 }
 
-void svc_stripe_particle(void*, uint32_t particle, uint32_t age_lifetime, uint8_t strip) {
+void svc_stripe_particle(void*, uint64_t particle, uint32_t age_lifetime, uint8_t strip) {
 #if defined(NEBULA_HOST_RENDERER)
     galaxy::render::attach_stripe_particle(0, particle, age_lifetime, strip);
 #else
@@ -2072,14 +2072,15 @@ void svc_readback_capture(void*, uint32_t channel) {
 #endif
 }
 
-void svc_marker(void*, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b) {
+void svc_marker(void*, uint32_t kind, uint32_t aux, uint64_t a, uint64_t b) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::Marker;
     attach_pending_records();
     record.key = kind;
-    record.marker = {aux, a, b};
+    record.marker_aux = aux;
+    record.marker = {a, b};
     galaxy::render::attach_shape_record(std::move(record));
 #else
     (void)kind, (void)aux, (void)a, (void)b;
@@ -2476,7 +2477,7 @@ void svc_scene_surround(void*, float intensity) {
 }
 
 // The game's lights (NEBULA_LIGHT_*) into the renderer's light registry (game_lights.cpp), which the ray tracer reads.
-void svc_game_light(void*, uint32_t kind, uint32_t id, const float* v) {
+void svc_game_light(void*, uint32_t kind, uint64_t id, const float* v) {
 #if defined(NEBULA_HOST_RENDERER)
     switch (kind) {
     case NEBULA_LIGHT_SUN:

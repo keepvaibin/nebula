@@ -81,8 +81,8 @@ namespace {
         sObjectEvents++;
     }
 
-    u32 id(const void* pObj) {
-        return __NebulaObjectId(pObj);
+    u64 id(const void* pObj) {
+        return NebulaHost::objectId(pObj);
     }
 
     u16 layoutAux() {

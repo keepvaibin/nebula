@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 56u
+#define NEBULA_GAME_API_VERSION 57u
 
 /* One of JAudio's four FX lines (JASDsp::FxBuf): a delay of `frames` subframes in `buffer` (frames * 80 samples)
    fed by its input bus, an 8-tap FIR before (flags bit 0) or after (bit 1) the sends to buses `dest_a` and `dest_b`. */
@@ -759,7 +759,7 @@ typedef struct NebulaHostServices {
     void (*scene_marker)(void* user, uint32_t marker, const float* view);
     /* A JPA stripe particle whose two strip vertices are drawn next (galaxy/motion_signals.h): age << 16 |
        lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
-    void (*stripe_particle)(void* user, uint32_t particle, uint32_t age_lifetime, uint8_t strip);
+    void (*stripe_particle)(void* user, uint64_t particle, uint32_t age_lifetime, uint8_t strip);
 
     /* Disc: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
@@ -845,14 +845,14 @@ typedef struct NebulaHostServices {
     void (*scene_surround)(void* user, float intensity);
     /* A Nebula option (NEBULA_OPTION_*), read when the game needs it. */
     uint32_t (*option)(void* user, uint32_t what);
-    /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (0: none), `values` as the kind lists. Called on
-       the simulation thread. */
-    void (*game_light)(void* user, uint32_t kind, uint32_t id, const float* values);
+    /* A light of the game (NEBULA_LIGHT_*): `id` names it across frames (its object's address; 0: none), `values` as
+       the kind lists. Called on the simulation thread. */
+    void (*game_light)(void* user, uint32_t kind, uint64_t id, const float* values);
     /* The stage being played (MR::getCurrentStageName), before each 3D scene's begin marker. */
     void (*game_stage)(void* user, const char* name);
-    /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` as the
-       host markers name the object (__NebulaObjectId). */
-    void (*object_name)(void* user, uint32_t id, const char* name);
+    /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` is the
+       object's address, as the host markers name it. */
+    void (*object_name)(void* user, uint64_t id, const char* name);
     /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: how far (world units) the traced light of a model (its resource name,
        MR::getModelResName) reaches from a ball of `radius` around it; 0 when the model is no light source. */
     float (*light_reach)(void* user, const char* model, float radius);
@@ -952,8 +952,9 @@ typedef struct NebulaHostServices {
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
     void (*frame_end)(void* user);
-    /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). */
-    void (*marker)(void* user, uint32_t kind, uint32_t aux, uint32_t a, uint32_t b);
+    /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). A draw identity names its
+       objects by address. */
+    void (*marker)(void* user, uint32_t kind, uint32_t aux, uint64_t a, uint64_t b);
     /* How many captures of `channel`'s colour have finished since the game first read it (0: none): a capture made
        when the count was n is readable once it passes n. */
     uint32_t (*readback_serial)(void* user, uint32_t channel);

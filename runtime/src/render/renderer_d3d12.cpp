@@ -6202,9 +6202,9 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             const StripeDraw& prev_draw =
                 prev_run_stripes_.draws[static_cast<std::size_t>(stripe_of_prev_draw_[order[at]])];
             const auto key_of = [](const StripeVertex& v) {
-                return (static_cast<std::uint64_t>(v.particle) << 32u) |
-                       (static_cast<std::uint64_t>(v.strip) << 24u) | (static_cast<std::uint64_t>(v.side) << 16u) |
-                       (v.age_lifetime & 0xFFFFu);
+                return std::pair<std::uint64_t, std::uint32_t>{
+                    v.particle, (static_cast<std::uint32_t>(v.strip) << 24u) |
+                                    (static_cast<std::uint32_t>(v.side) << 16u) | (v.age_lifetime & 0xFFFFu)};
             };
             stripe_keys_.clear();
             for (std::uint32_t i = 0; i < prev_draw.count; ++i) {
@@ -6221,9 +6221,9 @@ void RendererD3D12::prepare_vertex_blend(std::span<const std::int32_t> previous_
             for (std::uint32_t i = 0; i < draw.count; ++i) {
                 const StripeVertex& v = run_stripes_.vertices[draw.first + i];
                 if (v.vertex >= vertices) continue;
-                const std::uint64_t key = key_of(v);
+                const auto key = key_of(v);
                 const auto found = std::lower_bound(stripe_keys_.begin(), stripe_keys_.end(),
-                                                    std::pair<std::uint64_t, std::uint32_t>{key, 0u});
+                                                    std::pair{key, std::uint32_t{0}});
                 if (found == stripe_keys_.end() || found->first != key) continue;
                 const StripeVertex& was = prev_run_stripes_.vertices[found->second];
                 const auto steps = static_cast<std::uint16_t>((v.age_lifetime >> 16u) - (was.age_lifetime >> 16u));

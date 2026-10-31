@@ -91,7 +91,7 @@ private:
 // particle between game frames (RendererD3D12::note_stripe_vertices).
 struct StripeVertex {
     std::uint32_t vertex = 0;        // in the draw's vertex buffer
-    std::uint32_t particle = 0;      // JPABaseParticle
+    std::uint64_t particle = 0;      // JPABaseParticle (its address)
     std::uint32_t age_lifetime = 0;  // age << 16 | lifetime
     std::uint8_t strip = 0;          // JPADrawStripe 0, JPADrawStripeX passes 1-2
     std::uint8_t side = 0;           // the particle's first or second vertex

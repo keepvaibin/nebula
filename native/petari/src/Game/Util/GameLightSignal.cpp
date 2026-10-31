@@ -105,7 +105,7 @@ namespace GameLightSignal {
                 sRequesters[i] = sRequesters[--sRequesterCount];
                 continue;
             }
-            NebulaHost::gameLight(NEBULA_LIGHT_POINT_REQUEST, __NebulaObjectId(r.mActor), r.mValues);
+            NebulaHost::gameLight(NEBULA_LIGHT_POINT_REQUEST, NebulaHost::objectId(r.mActor), r.mValues);
             i++;
         }
     }
@@ -144,7 +144,7 @@ namespace GameLightSignal {
         const Vec& p = pInfo->mPos;
         const GXColor& c = pInfo->mColor;
         const f32 values[7] = {p.x, p.y, p.z, channel(c.r), channel(c.g), channel(c.b), half};
-        NebulaHost::gameLight(NEBULA_LIGHT_POINT, __NebulaObjectId(pInfo), values);
+        NebulaHost::gameLight(NEBULA_LIGHT_POINT, NebulaHost::objectId(pInfo), values);
     }
 
     // LightPointCtrl blends its light with J3DNativeState::initLightDistAttn(15, brightness, GX_DA_GENTLE): it halves at
@@ -153,7 +153,7 @@ namespace GameLightSignal {
         const f32 b = brightness >= 0.95f ? (brightness <= 0.999999f ? brightness : 0.999999f) : 0.95f;
         const f32 values[7] = {rPosition.x, rPosition.y,  rPosition.z, channel(color.r), channel(color.g), channel(color.b),
                                15.0f * __builtin_sqrtf(b / (1.0f - b))};
-        NebulaHost::gameLight(NEBULA_LIGHT_POINT_REQUEST, __NebulaObjectId(pActor), values);
+        NebulaHost::gameLight(NEBULA_LIGHT_POINT_REQUEST, NebulaHost::objectId(pActor), values);
         Requester* slot = nullptr;
         for (u32 i = 0; i < sRequesterCount && slot == nullptr; i++) {
             if (sRequesters[i].mActor == pActor) {

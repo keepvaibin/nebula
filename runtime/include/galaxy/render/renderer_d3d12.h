@@ -1364,7 +1364,7 @@ private:
     std::vector<std::array<std::uint32_t, 2>> stripe_gather_;
     std::vector<std::int32_t> stripe_of_draw_;
     std::vector<std::int32_t> stripe_of_prev_draw_;
-    std::vector<std::pair<std::uint64_t, std::uint32_t>> stripe_keys_;
+    std::vector<std::pair<std::pair<std::uint64_t, std::uint32_t>, std::uint32_t>> stripe_keys_;
     std::vector<std::int32_t> stripe_matched_;  // per vertex of a stripe draw: its earlier vertex, or -1
     Microsoft::WRL::ComPtr<ID3D12Resource> stripe_earlier_;
     std::uint64_t stripe_earlier_bytes_ = 0;

@@ -1,7 +1,6 @@
 /* The game's memory (docs/NATIVE_PORT.md, "Memory and the GPU's addresses"): one host reservation in the console's
-   layout, MEM1 at offset 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte pointers. The
-   game module's own image is a window in the unused span between MEM1 and MEM2 for object names
-   (__NebulaObjectId). */
+   layout, MEM1 at offset 0 and MEM2 at 0x10000000, each larger than the console's to allow for 8-byte pointers.
+   nebula_image_range gives the game module's image (the kernel's stack reports). */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -24,8 +23,7 @@ enum {
     kMem2Physical = 0x10000000u,
     kMem2Size = 0x10000000u, /* 256 MB (the console's 64 MB plus room) */
     kReserveSize = 0x20000000u,
-    kImageWindow = 0x08000000u, /* the module image, between MEM1's end and MEM2 */
-    kImageWindowSize = 0x08000000u,
+    kImageSpan = 0x08000000u, /* the image's extent where the loader does not report it */
     kStackPoolSize = 0x02000000u, /* 32 MB at the top of MEM2: game threads' native stacks */
 };
 
@@ -52,12 +50,8 @@ static void find_image(void) {
     if (dladdr((void*)&find_image, &info) != 0) {
         sImageBase = (uintptr_t)info.dli_fbase;
     }
-    /* The window's whole span; it only needs to cover the image. */
-    sImageSize = kImageWindowSize;
+    sImageSize = kImageSpan;
 #endif
-    if (sImageSize > kImageWindowSize) {
-        nebula_fatal("the module image (%llu bytes) is larger than its physical window", (unsigned long long)sImageSize);
-    }
 }
 
 /* The arena is aligned to its own size, so an arena pointer's low 29 bits are its physical address: what the game
@@ -94,18 +88,6 @@ int nebula_memory_init(void) {
 #endif
     find_image();
     return 1;
-}
-
-uint32_t __NebulaObjectId(const void* object) {
-    const uintptr_t a = (uintptr_t)object;
-    if (a - (uintptr_t)sArena < kReserveSize) {
-        return (uint32_t)(a - (uintptr_t)sArena);
-    }
-    if (a - sImageBase < sImageSize) {
-        return kImageWindow + (uint32_t)(a - sImageBase);
-    }
-    /* Outside the game's memory (none of its objects are): the address folded, never 0 unless NULL. */
-    return (uint32_t)(a ^ (a >> 32)) | (a != 0 ? 0x80000000u : 0u);
 }
 
 /* The arena the OS hands out (OSGetMEM1ArenaLo etc.): MEM1 past low memory, the boot stack and the console's

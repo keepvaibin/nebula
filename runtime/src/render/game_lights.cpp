@@ -33,7 +33,8 @@ struct NotedLight {
     GameLight light{};
     std::chrono::steady_clock::time_point first{};   // since when it has lit without a gap
     std::chrono::steady_clock::time_point seen{};
-    std::uint32_t id = 0u;
+    std::uint64_t id = 0u;
+    std::uint32_t serial = 0u;   // GameLight.key: given when the entry takes a light it did not hold
     bool used = false;
 };
 // A light fades in over its first kLightFadeIn and out over the kLightFadeOut before it ages out: one that starts or
@@ -44,6 +45,7 @@ constexpr std::chrono::milliseconds kLightGap{500};
 std::mutex g_game_lights_mutex;
 // The last point light request (note_game_point_request); guarded by g_game_lights_mutex.
 std::chrono::steady_clock::time_point g_point_request_seen{};
+std::uint32_t g_light_serial = 0u;
 std::array<NotedLight, 32> g_point_lights{};
 std::array<NotedLight, 16> g_world_lights{};
 
@@ -55,7 +57,7 @@ std::array<bool, 2> g_area_known{};
 // A light is matched by its guest info (id) when it has one, else by position.
 template <std::size_t N>
 void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& position,
-                const std::array<float, 3>& color, float half_distance = 0.0f, std::uint32_t id = 0u) {
+                const std::array<float, 3>& color, float half_distance = 0.0f, std::uint64_t id = 0u) {
     const auto now = std::chrono::steady_clock::now();
     const std::lock_guard<std::mutex> lock(g_game_lights_mutex);
     NotedLight* slot = &lights[0];
@@ -77,6 +79,10 @@ void note_light(std::array<NotedLight, N>& lights, const std::array<float, 3>& p
     if (!found || now - slot->seen > kLightGap) {
         slot->first = now;
     }
+    if (!found) {
+        g_light_serial = g_light_serial + 1u != 0u ? g_light_serial + 1u : 1u;
+        slot->serial = g_light_serial;
+    }
     slot->light = {position, color, half_distance, 0u};
     slot->id = id;
     slot->seen = now;
@@ -97,7 +103,7 @@ std::size_t active_lights(const std::array<NotedLight, N>& lights, std::span<Gam
             const float fade = std::clamp((limit - age) / kLightFadeOut, 0.0f, 1.0f);
             GameLight& light = out[count++];
             light = entry.light;
-            light.key = entry.id != 0u ? entry.id : 0x80000000u | static_cast<std::uint32_t>(&entry - lights.data());
+            light.key = entry.serial;
             for (float& v : light.color) {
                 v *= in * fade;
             }
@@ -157,7 +163,7 @@ std::uint64_t game_sun_updates() noexcept {
     return g_game_sun_updates;
 }
 
-void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
+void note_game_point_light(std::uint64_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept {
     {
         // While requests arrive (note_game_point_request) they carry every point light, and this nearest-light copy
@@ -170,7 +176,7 @@ void note_game_point_light(std::uint32_t info, const std::array<float, 3>& posit
     note_light(g_point_lights, position, color, half_distance, info);
 }
 
-void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
+void note_game_point_request(std::uint64_t actor, const std::array<float, 3>& position,
                              const std::array<float, 3>& color, float half_distance) noexcept {
     {
         const std::lock_guard<std::mutex> lock(g_game_lights_mutex);

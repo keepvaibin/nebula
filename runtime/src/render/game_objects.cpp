@@ -13,11 +13,11 @@ namespace galaxy::render {
 namespace {
 
 std::mutex g_object_names_mutex;
-std::unordered_map<std::uint32_t, std::string> g_object_names;
+std::unordered_map<std::uint64_t, std::string> g_object_names;
 
 }  // namespace
 
-void note_object_name(std::uint32_t id, const char* name) noexcept {
+void note_object_name(std::uint64_t id, const char* name) noexcept {
     if (id == 0u || name == nullptr) {
         return;
     }
@@ -28,7 +28,7 @@ void note_object_name(std::uint32_t id, const char* name) noexcept {
     }
 }
 
-bool game_object_name(std::uint32_t id, char* out, std::size_t size) noexcept {
+bool game_object_name(std::uint64_t id, char* out, std::size_t size) noexcept {
     if (size == 0u) {
         return false;
     }

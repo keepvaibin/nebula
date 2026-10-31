@@ -63,7 +63,6 @@ void __NebulaMovieFrame(const char* pName, s32 frame, f32 frameRate, const void*
 // a host thread raises something.
 void __NebulaPoll(void);
 // A stable 32-bit name for a game object: its offset in the game's memory.
-u32 __NebulaObjectId(const void* pObject);
 #ifdef __cplusplus
 }
 #endif

@@ -23,14 +23,14 @@ namespace NebulaRender {
     }
 
     // A host marker, whatever the draw identities.
-    inline void marker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
+    inline void marker(uint8_t kind, uint16_t aux, uint64_t a, uint64_t b) {
         const NebulaHostServices* const host = nebula_host();
         host->marker(host->user, kind, aux, a, b);
     }
 
     // A host marker while the renderer reads draw identities: the game object whose drawing follows, or a scene
     // signal.
-    inline void hostMarker(uint8_t kind, uint16_t aux, uint32_t a, uint32_t b) {
+    inline void hostMarker(uint8_t kind, uint16_t aux, uint64_t a, uint64_t b) {
         if (sDrawIdentities != 0) {
             marker(kind, aux, a, b);
         }
@@ -70,5 +70,5 @@ namespace NebulaRender {
 
     // A JPA stripe particle whose two strip vertices are drawn next: age << 16 | lifetime, strip 0 JPADrawStripe,
     // 1-2 the passes of JPADrawStripeX.
-    void stripeParticle(uint32_t particle, uint32_t ageLifetime, uint8_t strip);
+    void stripeParticle(uint64_t particle, uint32_t ageLifetime, uint8_t strip);
 }  // namespace NebulaRender

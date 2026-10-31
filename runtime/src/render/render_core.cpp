@@ -1814,19 +1814,18 @@ std::uint32_t RenderCore::rt_light_key() noexcept {
     return folded != 0u ? folded : 1u;
 }
 
-void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                               std::uint32_t b) {
+void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
     if (kind == motion::kMarkerClearQuad) {
         clear_quad_pending_ = true;
-        clear_quad_z24_ = a & 0xFFFFFFu;
+        clear_quad_z24_ = static_cast<std::uint32_t>(a & 0xFFFFFFu);
         clear_quad_has_colour_ = aux == 1u;
-        clear_quad_colour_ = b;
+        clear_quad_colour_ = static_cast<std::uint32_t>(b);
         return;
     }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
-        renderer_.game_bloom(aux, a, b);
+        renderer_.game_bloom(aux, static_cast<std::uint32_t>(a), static_cast<std::uint32_t>(b));
         return;
     }
     // The traced draws' identity (rt_light_key): an object, a model's shape, an emitter (its object, then its resource
@@ -1837,7 +1836,7 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint3
         rt_light_material_ = 0u;
         rt_light_draws_ = 0u;
     } else if (kind == motion::kMarkerMaterial) {
-        rt_light_material_ = a;
+        rt_light_material_ = static_cast<std::uint32_t>(a);
         rt_light_draws_ = 0u;
     }
     if (kind < identity_markers_by_kind_.size()) {
@@ -1847,13 +1846,13 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint3
     }
     // The J3D material whose shapes draw next: the table's row for it, where it has one, over its texture's.
     if (kind == motion::kMarkerMaterial) {
-        rt_material_identity_ = rt_material_by_identity(a);
-        rt_identity_seen_ = a;
+        rt_material_identity_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
+        rt_identity_seen_ = static_cast<std::uint32_t>(a);
         // GALAXY_RT_LOG_GLOWS=1: each identity the first time it is seen, and the row it found.
         if (rt_log_glows()) [[unlikely]] {
             static std::unordered_set<std::uint32_t> logged;
-            if (logged.size() < 4096u && logged.insert(a).second) {
-                std::fprintf(stderr, "[rt-identity] seen %08X -> material %u\n", a,
+            if (logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
+                std::fprintf(stderr, "[rt-identity] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
                              static_cast<unsigned>(rt_material_identity_));
             }
         }
@@ -1863,11 +1862,11 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint3
     // The effect an emitter's particles belong to (its marker follows the emitter's): its table row, where it has one,
     // over their textures' (a fire's light by its name, whatever its sprites' textures).
     if (kind == motion::kMarkerEffect) {
-        rt_effect_material_ = rt_material_by_identity(a);
+        rt_effect_material_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
         if (rt_log_glows()) [[unlikely]] {
             static std::unordered_set<std::uint32_t> logged;
-            if (a != 0u && logged.size() < 4096u && logged.insert(a).second) {
-                std::fprintf(stderr, "[rt-effect] seen %08X -> material %u\n", a,
+            if (a != 0u && logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
+                std::fprintf(stderr, "[rt-effect] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
                              static_cast<unsigned>(rt_effect_material_));
             }
         }
@@ -1928,13 +1927,13 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint3
         // Particles come from a pool: node, pass and lifetime name the slot's
         // particle; its age (the record's continuity) must continue on a
         // match, else the slot holds a new particle (TransformHistory::add).
-        identity_continuity_ = b >> 16u;
+        identity_continuity_ = static_cast<std::uint32_t>(b >> 16u);
         tag = b & 0xFFFFu;
     }
-    set_identity_marker(kind, aux, a, static_cast<std::uint32_t>(tag));
+    set_identity_marker(kind, aux, a, tag);
 }
 
-void RenderCore::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag) {
+void RenderCore::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t tag) {
     std::uint64_t key = combine64(combine64(kind | (static_cast<std::uint64_t>(aux) << 8u), a), tag);
     key = combine64(key, note_identity_occurrence(key));
     identity_marker_ = key;
@@ -1942,7 +1941,7 @@ void RenderCore::set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::
     matrices_.reset_load_signature();
 }
 
-void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b) {
+void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
@@ -1982,7 +1981,7 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
                 ++motion_image_effect_markers_;
             }
         }
-        identity_category_ = motion::encode_category(phase, aux, a);
+        identity_category_ = motion::encode_category(phase, aux, static_cast<std::uint32_t>(a));
         return;
     }
     case motion::kMarkerScene:
@@ -1992,7 +1991,7 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
             // lights): stage loads bring thousands, cuts within a stage none.
             constexpr std::uint32_t kStageObjectEvents = 256u;
             rt_scene_cut_ = true;
-            rt_cut_objects_ = std::max(rt_cut_objects_, b);
+            rt_cut_objects_ = std::max(rt_cut_objects_, static_cast<std::uint32_t>(b));
             if (b >= kStageObjectEvents && !scene_stage_known_) {
                 begin_rt_stage();
             }
@@ -2006,7 +2005,7 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         }
         if (interp_recording_) {
             InterpScene& scene = interp_scenes_[interp_scene_];
-            scene.camera_epoch = a;
+            scene.camera_epoch = static_cast<std::uint32_t>(a);
             scene.camera_epoch_known = true;
         }
         return;
@@ -2026,7 +2025,7 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         return;
     case motion::kMarkerLight: {
         ++motion_light_markers_;
-        const ActorLightLoad load = actor_light_load(aux, b);
+        const ActorLightLoad load = actor_light_load(aux, static_cast<std::uint32_t>(b));
         // GX lights 0 and 1 of an ActorLightInfo or coin load (LightFunction::loadLightInfo).
         const auto hooked = static_cast<std::uint8_t>(
             aux <= static_cast<std::uint16_t>(motion::LightSite::Coin) ? load.written & 0x03u : 0u);
@@ -3117,7 +3116,7 @@ void RenderCore::note_rt_stage() {
 // The game's own shadow drawers (blob and volume shadows: 影描画[...], 板状シャドウボリューム描画): under
 // traced lighting every object casts its true shadow, so these are not drawn. Their names are read
 // once per object (cached until the next stage).
-bool RenderCore::rt_fake_shadow_object(std::uint32_t object) {
+bool RenderCore::rt_fake_shadow_object(std::uint64_t object) {
     if (object == 0u) {
         return false;
     }
@@ -3239,7 +3238,7 @@ bool RenderCore::rt_hidden_draw() const noexcept {
 
 // The current object's name as the game reports it (game_object_name), Shift-JIS bytes with blanks as '_'. Returns a
 // key for the name (0 for none).
-std::uint32_t RenderCore::rt_object_name(char* out, std::size_t size) {
+std::uint64_t RenderCore::rt_object_name(char* out, std::size_t size) {
     out[0] = 0;
     if (rt_object_ == 0u) {
         return 0u;
@@ -3665,7 +3664,7 @@ bool RenderCore::begin_rt_batch(const DrawCall& call, RtDrawInfo& info) {
     if (surface.surface_class == RtSurfaceClass::Metal || surface.surface_class == RtSurfaceClass::Glossy) {
         // Clear materials the GX state shows as metal or gloss go by their object's name.
         char name[48];
-        const std::uint32_t pointer = rt_object_name(name, sizeof(name));
+        const std::uint64_t pointer = rt_object_name(name, sizeof(name));
         if (pointer != 0u) {
             if (rt_named_.size() > 4096u) {
                 rt_named_.clear();
@@ -9029,8 +9028,8 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         draw_record_immediate(*record.immediate);
         return;
     case shapes::Record::Kind::Marker:
-        on_host_marker(static_cast<std::uint8_t>(record.key), static_cast<std::uint16_t>(record.marker[0]),
-                       record.marker[1], record.marker[2]);
+        on_host_marker(static_cast<std::uint8_t>(record.key), static_cast<std::uint16_t>(record.marker_aux),
+                       record.marker[0], record.marker[1]);
         return;
     case shapes::Record::Kind::Readback:
         // The picture here, as the channel's next field (its reads take the latest finished one).

@@ -1,6 +1,5 @@
 #include "Game/System/NebulaHost.hpp"
 
-extern "C" u32 __NebulaObjectId(const void* pObject);
 
 namespace NebulaHost {
     bool codePatch(u32 id, u32* pValue) {
@@ -27,6 +26,6 @@ namespace NebulaHost {
     }
 
     void objectName(const void* pObject, const char* pName) {
-        nebula_host()->object_name(nebula_host()->user, __NebulaObjectId(pObject), pName);
+        nebula_host()->object_name(nebula_host()->user, objectId(pObject), pName);
     }
 }  // namespace NebulaHost

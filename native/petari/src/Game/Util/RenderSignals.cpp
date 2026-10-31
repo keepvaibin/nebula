@@ -11,7 +11,7 @@ namespace NebulaRender {
         host->scene_marker(host->user, marker, view != NULL ? &view[0][0] : NULL);
     }
 
-    void stripeParticle(uint32_t particle, uint32_t ageLifetime, uint8_t strip) {
+    void stripeParticle(uint64_t particle, uint32_t ageLifetime, uint8_t strip) {
         if (sDrawIdentities != 0) {
             const NebulaHostServices* const host = nebula_host();
             host->stripe_particle(host->user, particle, ageLifetime, strip);

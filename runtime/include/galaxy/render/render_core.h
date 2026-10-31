@@ -179,7 +179,7 @@ public:
     // (its two strip vertices follow); carried by the next submission.
     struct StripeParticleMark {
         std::size_t offset = 0;
-        std::uint32_t particle = 0;
+        std::uint64_t particle = 0;
         std::uint32_t age_lifetime = 0;   // mAge << 16 | mLifeTime
         std::uint8_t strip = 0;           // 0 JPADrawStripe, 1-2 JPADrawStripeX
     };
@@ -250,10 +250,9 @@ private:
     void on_palettes_changed();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
     void load_light(const state::Op& op);
-    void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a,
-                        std::uint32_t b);
+    void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
     // Motion-signal markers (galaxy/motion_signals.h kinds 5-8).
-    void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t b);
+    void on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
 
     // Consumes state_'s dirty bits: rebuilds the shader and render-state keys, writes
     // VertexConstants/PixelConstants into the constant ring, snapshots the XF matrix palette into the
@@ -593,16 +592,16 @@ private:
     // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
     [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
     // The current object's name (NameObj::mName) into `out`; its address, 0 for none.
-    std::uint32_t rt_object_name(char* out, std::size_t size);
+    std::uint64_t rt_object_name(char* out, std::size_t size);
     [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
                                                       const std::array<TextureHandle, kMaxTextureMaps>& handles,
                                                       unsigned& map) noexcept;
-    std::uint32_t rt_object_ = 0u;   // the last NameObj marker's object
+    std::uint64_t rt_object_ = 0u;   // the last NameObj marker's object
     bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
     bool rt_trace_only_ = false;          // trace-only draws (motion::kMarkerTraceOnly): traced, never drawn
-    std::unordered_map<std::uint32_t, bool> rt_fake_shadow_cache_;
-    bool rt_fake_shadow_object(std::uint32_t object);
+    std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
+    bool rt_fake_shadow_object(std::uint64_t object);
     std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
     // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an
     // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
@@ -682,7 +681,7 @@ private:
     // GALAXY_RT_DEBAKE=0: none.
     [[nodiscard]] std::uint32_t debake_channels() const;
     // Per object name (its address) the class its name gives (rt_named_class), + 1.
-    std::unordered_map<std::uint32_t, std::uint8_t> rt_named_;
+    std::unordered_map<std::uint64_t, std::uint8_t> rt_named_;
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
@@ -769,7 +768,7 @@ private:
     void begin_side_layer(unsigned layer);
     void end_side_layer();
     void end_record_layer(unsigned layer);
-    void set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint32_t a, std::uint32_t tag);
+    void set_identity_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t tag);
     // Interpolated redraw (present rate above 60, temporal upscaler off):
     // this render chunk records a replay log and per-record VS constants.
     bool interp_recording_ = false;

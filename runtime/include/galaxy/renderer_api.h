@@ -135,7 +135,7 @@ void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 // (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
 // ActorLightInfo (follow-camera off: its far position names its direction).
-void note_game_point_light(std::uint32_t info, const std::array<float, 3>& position,
+void note_game_point_light(std::uint64_t info, const std::array<float, 3>& position,
                            const std::array<float, 3>& color, float half_distance) noexcept;
 void note_game_world_light(const std::array<float, 3>& position, const std::array<float, 3>& color) noexcept;
 // The game's area lights (native game, NEBULA_LIGHT_AREA and _PLAYER): an ambient and two lights, each with its
@@ -154,19 +154,20 @@ void set_game_area_light(GameAreaLightKind kind, const GameAreaLight& light) noe
 [[nodiscard]] bool game_area_light(GameAreaLightKind kind, GameAreaLight& out, std::uint64_t max_age_ms) noexcept;
 
 // Simulation thread (native game): a game object's name (NameObj::mName) by the id its host markers carry.
-void note_object_name(std::uint32_t id, const char* name) noexcept;
+void note_object_name(std::uint64_t id, const char* name) noexcept;
 // Any thread: that name into `out` (NUL-terminated, cut to `size`); false when the game never named `id`.
-bool game_object_name(std::uint32_t id, char* out, std::size_t size) noexcept;
+bool game_object_name(std::uint64_t id, char* out, std::size_t size) noexcept;
 // Simulation thread: an actor asking for the game's one point light this frame (MR::requestPointLight: Lumas,
 // Power Stars, item blocks, fireballs, Boos), as its own light. While requests arrive, the one light the game hands
 // to the requester nearest the player (note_game_point_light) is not noted again.
-void note_game_point_request(std::uint32_t actor, const std::array<float, 3>& position,
+void note_game_point_request(std::uint64_t actor, const std::array<float, 3>& position,
                              const std::array<float, 3>& color, float half_distance) noexcept;
 struct GameLight {
     std::array<float, 3> position{};
     std::array<float, 3> color{};
     float half_distance = 0.0f;
-    // Its identity while it lights (the game's light info or requesting actor; else its slot in the store, bit 31).
+    // Its identity while it lights: the store's serial for the entry holding it (the game's light info or requesting
+    // actor, else its place), never 0.
     std::uint32_t key = 0u;
 };
 // The lights noted within `max_age_ms` (not black), at most `out.size()`; returns the count.
@@ -174,7 +175,7 @@ std::size_t game_point_lights(std::span<GameLight> out, std::uint64_t max_age_ms
 std::size_t game_world_lights(std::span<GameLight> out, std::uint64_t max_age_ms) noexcept;
 // Simulation thread: one particle of a JPA stripe at `stream_offset` bytes into the next submitted FIFO; its two
 // strip vertices follow. The next render_frame submission carries it.
-void attach_stripe_particle(std::size_t stream_offset, std::uint32_t particle, std::uint32_t age_lifetime,
+void attach_stripe_particle(std::size_t stream_offset, std::uint64_t particle, std::uint32_t age_lifetime,
                             std::uint8_t strip);
 // Simulation thread: a native shape record (native_shapes.h) at its offset into the next submitted FIFO.
 void attach_shape_record(shapes::Record&& record);
