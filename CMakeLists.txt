@@ -164,11 +164,11 @@ target_link_libraries(galaxy_native_host
 )
 galaxy_host_options(galaxy_native_host)
 
-# Shader sources the Vulkan renderer compiles on the device (runtime/src/render/uber_vs.hlsl, material_ps.hlsl) become
-# NUL-terminated char arrays in a generated translation unit. Editing a source re-runs configure.
+# Shader sources the Vulkan renderer and the curve sort compile on the device (runtime/src/render/material_*.hlsl,
+# curve_sort.hlsl) become NUL-terminated char arrays in a generated translation unit. Editing a source re-runs configure.
 set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
 set(galaxy_uber_embed_body "")
-foreach(galaxy_uber_stage uber_vs material_ps)
+foreach(galaxy_uber_stage material_vs material_ps material_curve material_lines curve_sort)
     set(galaxy_uber_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/${galaxy_uber_stage}.hlsl")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${galaxy_uber_hlsl}")
     file(READ "${galaxy_uber_hlsl}" galaxy_uber_hex HEX)
@@ -346,8 +346,56 @@ foreach(galaxy_material_light RANGE 3)
         math(EXPR galaxy_material_out "${galaxy_material_out} + 1")
     endforeach()
 endforeach()
+# The material vertex shader's sixteen variants (material_vs_variant_form: bits light outputs, motion, curved, blend),
+# the line and point geometry stages (MAT_POINTS) and the curved surfaces' hull and domain stages (variant bits light
+# outputs, motion), each by fxc into a header beside the pixel variants'.
+set(galaxy_material_vs_table "")
+set(galaxy_material_lines_table "")
+set(galaxy_material_curve_table "")
+function(galaxy_material_stage name source profile table)
+    set(header "${galaxy_post_dir}/${name}.h")
+    add_custom_command(OUTPUT "${header}"
+        COMMAND "${GALAXY_FXC}" /nologo /T ${profile} /E main /O1 /Ges /Zpr ${ARGN} /Vn g_${name} /Fh "${header}" "${source}"
+        DEPENDS "${source}"
+        VERBATIM)
+    set(galaxy_material_ps_headers ${galaxy_material_ps_headers} "${header}" PARENT_SCOPE)
+    set(galaxy_material_ps_includes "${galaxy_material_ps_includes}#include \"${name}.h\"\n" PARENT_SCOPE)
+    set(${table} "${${table}}    {g_${name}, sizeof(g_${name})},\n" PARENT_SCOPE)
+endfunction()
+set(galaxy_material_vs_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/material_vs.hlsl")
+foreach(galaxy_material_variant RANGE 15)
+    set(galaxy_material_defines "")
+    foreach(galaxy_material_bit_name 0:MAT_LIGHT_OUT 1:MAT_MOTION 2:MAT_CURVED 3:MAT_BLEND)
+        string(REPLACE ":" ";" galaxy_material_bit_pair "${galaxy_material_bit_name}")
+        list(GET galaxy_material_bit_pair 0 galaxy_material_bit)
+        list(GET galaxy_material_bit_pair 1 galaxy_material_name)
+        math(EXPR galaxy_material_on "(${galaxy_material_variant} >> ${galaxy_material_bit}) & 1")
+        list(APPEND galaxy_material_defines /D${galaxy_material_name}=${galaxy_material_on})
+    endforeach()
+    galaxy_material_stage(material_vs_${galaxy_material_variant} "${galaxy_material_vs_hlsl}" vs_5_1
+        galaxy_material_vs_table ${galaxy_material_defines})
+endforeach()
+set(galaxy_material_lines_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/material_lines.hlsl")
+galaxy_material_stage(material_lines_0 "${galaxy_material_lines_hlsl}" gs_5_1 galaxy_material_lines_table /DMAT_POINTS=0)
+galaxy_material_stage(material_lines_1 "${galaxy_material_lines_hlsl}" gs_5_1 galaxy_material_lines_table /DMAT_POINTS=1)
+set(galaxy_material_curve_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/material_curve.hlsl")
+foreach(galaxy_material_variant RANGE 3)
+    math(EXPR galaxy_material_light "${galaxy_material_variant} & 1")
+    math(EXPR galaxy_material_motion "(${galaxy_material_variant} >> 1) & 1")
+    foreach(galaxy_material_domain 0 1)
+        if(galaxy_material_domain EQUAL 0)
+            set(galaxy_material_profile hs_5_1)
+        else()
+            set(galaxy_material_profile ds_5_1)
+        endif()
+        math(EXPR galaxy_material_index "${galaxy_material_variant} * 2 + ${galaxy_material_domain}")
+        galaxy_material_stage(material_curve_${galaxy_material_index} "${galaxy_material_curve_hlsl}"
+            ${galaxy_material_profile} galaxy_material_curve_table /DMAT_DOMAIN=${galaxy_material_domain}
+            /DMAT_LIGHT_OUT=${galaxy_material_light} /DMAT_MOTION=${galaxy_material_motion})
+    endforeach()
+endforeach()
 file(CONFIGURE OUTPUT "${galaxy_material_ps_cpp}"
-    CONTENT "// Generated (CMakeLists.txt): the material pixel shader's DXBC by variant.\n#include <cstddef>\n\ntypedef unsigned char BYTE;\n${galaxy_material_ps_includes}\nnamespace galaxy::render {\nstruct MaterialPsBytecode { const unsigned char* data; std::size_t size; };\nextern const MaterialPsBytecode galaxy_material_ps_dxbc[60] = {\n${galaxy_material_ps_table}};\n}\n"
+    CONTENT "// Generated (CMakeLists.txt): the material shaders' DXBC by variant.\n#include <cstddef>\n\ntypedef unsigned char BYTE;\n${galaxy_material_ps_includes}\nnamespace galaxy::render {\nstruct MaterialPsBytecode { const unsigned char* data; std::size_t size; };\nextern const MaterialPsBytecode galaxy_material_ps_dxbc[60] = {\n${galaxy_material_ps_table}};\nextern const MaterialPsBytecode galaxy_material_vs_dxbc[16] = {\n${galaxy_material_vs_table}};\nextern const MaterialPsBytecode galaxy_material_lines_dxbc[2] = {\n${galaxy_material_lines_table}};\nextern const MaterialPsBytecode galaxy_material_curve_dxbc[8] = {\n${galaxy_material_curve_table}};\n}\n"
     @ONLY)
 set_source_files_properties("${galaxy_material_ps_cpp}" PROPERTIES OBJECT_DEPENDS "${galaxy_material_ps_headers}")
 
@@ -544,8 +592,6 @@ add_library(galaxy_gx STATIC
     runtime/src/render/efb_copy.cpp
     runtime/src/render/line_point_raster.cpp
     runtime/src/render/pipeline_cache.cpp
-    runtime/src/render/shader_gen.cpp
-    runtime/src/render/uber_shaders.cpp
     runtime/src/render/material_shaders.cpp
     ${galaxy_uber_embed_cpp}
     ${galaxy_material_ps_cpp}
@@ -711,7 +757,7 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name shader_gen curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
+foreach(name material_shader curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         efb_copy line_point_raster xf_lighting native_settings_overlay post_process
         efb_conversion native_material)
@@ -749,11 +795,9 @@ if(NEBULA_VULKAN)
         runtime/src/render/vk/vk_context.cpp
         runtime/src/render/vk/device_quirks_vk.cpp
         runtime/src/render/vk/vk_libraries.cpp
-        runtime/src/render/shader_gen.cpp
         runtime/src/render/enhanced_lighting.cpp
         runtime/src/render/rt_materials.cpp
         runtime/src/render/rt_surfaces.cpp
-        runtime/src/render/uber_shaders.cpp
         runtime/src/render/material_shaders.cpp
         ${galaxy_uber_embed_cpp}
         ${galaxy_material_ps_cpp}
@@ -788,8 +832,6 @@ if(NEBULA_VULKAN)
         runtime/src/render/shader_keys.cpp
         runtime/src/render/efb_copy.cpp
         runtime/src/render/line_point_raster.cpp
-        runtime/src/render/shader_gen.cpp
-        runtime/src/render/uber_shaders.cpp
         runtime/src/render/material_shaders.cpp
         ${galaxy_uber_embed_cpp}
         ${galaxy_material_ps_cpp}

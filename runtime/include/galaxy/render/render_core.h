@@ -51,7 +51,7 @@
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/vs_constants.h"
 #include "galaxy/render/render_vertex.h"
 #include "galaxy/renderer_api.h"
@@ -1322,6 +1322,7 @@ private:
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
     PixelShaderKey ps_key_{};
     UberPsKeyMemo uber_ps_memo_;
+    VertexProgramMemo vs_program_memo_;
     VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};

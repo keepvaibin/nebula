@@ -14,10 +14,9 @@
 #pragma warning(pop)
 
 #include "galaxy/render/draw_matrices.h"
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_keys.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/render_vertex.h"
 
 #include <algorithm>
@@ -518,8 +517,7 @@ int main() {
     try {
         WarpLighting warp;
         const std::vector<Case> cases = make_cases();
-        const ShaderGenerator gen;
-        const std::string_view uber = uber_vs_source();
+        const std::string uber = material_vs_defines(kMaterialVsStandIn) + std::string(material_vs_source());
         const std::array<UINT, 2> levels{D3DCOMPILE_OPTIMIZATION_LEVEL1, D3DCOMPILE_SKIP_OPTIMIZATION};
         for (const UINT optimization : levels) {
             const char* level = optimization == D3DCOMPILE_SKIP_OPTIMIZATION ? "unoptimized" : "O1";
@@ -530,8 +528,8 @@ int main() {
             for (const Case& c : cases) {
                 legacy_keys.push_back(key_for(c, false));
                 finite_keys.push_back(key_for(c, true));
-                const auto vs_legacy = compile_shader(gen.generate_vs(legacy_keys.back()), "vs_5_1", c.label, optimization);
-                const auto vs_finite = compile_shader(gen.generate_vs(finite_keys.back()), "vs_5_1", c.label, optimization);
+                const auto vs_legacy = compile_shader(material_vs_hlsl(legacy_keys.back()), "vs_5_1", c.label, optimization);
+                const auto vs_finite = compile_shader(material_vs_hlsl(finite_keys.back()), "vs_5_1", c.label, optimization);
                 special_legacy.push_back(warp.run({c}, {legacy_keys.back()}, vs_legacy.Get())[0]);
                 special_finite.push_back(warp.run({c}, {finite_keys.back()}, vs_finite.Get())[0]);
             }

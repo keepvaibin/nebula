@@ -14,7 +14,6 @@
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/material_shaders.h"
-#include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/texture_cache.h"
 

@@ -35,9 +35,8 @@
 #include "galaxy/render/rt_surfaces.h"
 #include "galaxy/render/texture_sampling.h"
 #include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -7573,8 +7572,8 @@ void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs,
         return;
     }
     std::fprintf(stderr, "[pso-desc] pso=%p %s %s blend=0x%08x z=0x%x cull=%u topo=0x%02x\n",
-                 static_cast<const void*>(pipeline), ShaderGenerator::describe(vs).c_str(),
-                 ShaderGenerator::describe(ps).c_str(), rs.blend_bits, static_cast<unsigned>(rs.zmode_bits),
+                 static_cast<const void*>(pipeline), describe_key(vs).c_str(),
+                 describe_key(ps).c_str(), rs.blend_bits, static_cast<unsigned>(rs.zmode_bits),
                  static_cast<unsigned>(rs.cull), static_cast<unsigned>(rs.primitive_topology));
 }
 
@@ -8391,7 +8390,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
     if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
-        (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
+        (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_) || !vs_program_memo_.holds(vs_key_)) {
         const auto constants_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
@@ -8404,6 +8403,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
         apply_uber_vs_key(vs_key_, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
+        vs_program_memo_.note(vs_key_);
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
         if (time_detail) {

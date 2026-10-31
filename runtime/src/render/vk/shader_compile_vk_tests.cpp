@@ -7,9 +7,7 @@
 
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/material_shaders.h"
-#include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
 
 #include <cstddef>
@@ -367,7 +365,12 @@ int main(int argc, char** argv) {
     const auto gx = gx_draw_bindings();
     expect_semantic_locations();
     expect_row_major_matrices();
-    expect("uber vs", uber_vs_source(), ShaderStage::Vertex, gx);
+    // Every material vertex variant and the uber stand-in's (material_shaders.h).
+    for (unsigned variant = 0; variant < kMaterialVsVariants; ++variant) {
+        const std::string label = "material vs variant " + std::to_string(variant);
+        expect(label.c_str(), material_vs_defines(variant) + std::string(material_vs_source()), ShaderStage::Vertex, gx);
+    }
+    const std::string uber_vs = material_vs_defines(kMaterialVsStandIn) + std::string(material_vs_source());
     // Every material pixel variant (material_shaders.h), as PipelineCacheVk compiles them.
     for (unsigned variant = 0; variant < kMaterialPsVariants; ++variant) {
         const std::string label = "material ps variant " + std::to_string(variant);
@@ -375,23 +378,22 @@ int main(int argc, char** argv) {
         expect(label.c_str(), material_ps_defines(variant) + std::string(material_ps_source()), ShaderStage::Fragment,
                gx, {}, dual);
     }
-    expect("line gs", ShaderGenerator::line_geometry_shader_source(), ShaderStage::Geometry, gx);
-    expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
+    expect("line gs", line_geometry_shader_source(), ShaderStage::Geometry, gx);
+    expect("point gs", point_geometry_shader_source(), ShaderStage::Geometry, gx);
     // Curved surfaces' hull and domain stages, every vertex output variant.
     for (unsigned variant = 0; variant < 4u; ++variant) {
-        const std::string hull = ShaderGenerator::curved_stage_source(variant, false);
-        const std::string domain = ShaderGenerator::curved_stage_source(variant, true);
+        const std::string hull = curved_stage_source(variant, false);
+        const std::string domain = curved_stage_source(variant, true);
         expect(("curved hs " + std::to_string(variant)).c_str(), hull, ShaderStage::Hull, gx);
         expect(("curved ds " + std::to_string(variant)).c_str(), domain, ShaderStage::Domain, gx);
     }
 
-    const ShaderGenerator generator;
     VertexShaderKey vs{};
     PixelShaderKey ps{};
-    expect("generated vs (default key)", generator.generate_vs(vs), ShaderStage::Vertex, gx);
+    expect("generated vs (default key)", material_vs_hlsl(vs), ShaderStage::Vertex, gx);
     expect("material ps (default key)", material_ps_hlsl(ps), ShaderStage::Fragment, gx);
-    expect("generated vs (point size)", with_point_size(generator.generate_vs(vs)), ShaderStage::Vertex, gx);
-    expect("uber vs (point size)", with_point_size(uber_vs_source()), ShaderStage::Vertex, gx);
+    expect("generated vs (point size)", with_point_size(material_vs_hlsl(vs)), ShaderStage::Vertex, gx);
+    expect("uber vs (point size)", with_point_size(uber_vs), ShaderStage::Vertex, gx);
 
     // argv[1]: keys a session captured (GALAXY_TEST_SHADER_KEY_CAPTURE): 'V' or 'P', then the key's bytes.
     if (argc > 1) {
@@ -427,11 +429,11 @@ int main(int argc, char** argv) {
         };
         for (int tag; (tag = std::fgetc(file)) != EOF;) {
             if (tag == 'V' && std::fread(&vs, sizeof(vs), 1, file) == 1) {
-                dump("vs", vs_count, ShaderGenerator::describe(vs), generator.generate_vs(vs));
+                dump("vs", vs_count, describe_key(vs), material_vs_hlsl(vs));
                 const std::string label = "captured vs " + std::to_string(vs_count++);
-                expect(label.c_str(), generator.generate_vs(vs), ShaderStage::Vertex, gx);
+                expect(label.c_str(), material_vs_hlsl(vs), ShaderStage::Vertex, gx);
             } else if (tag == 'P' && std::fread(&ps, sizeof(ps), 1, file) == 1) {
-                dump("ps", ps_count, ShaderGenerator::describe(ps), material_ps_hlsl(ps));
+                dump("ps", ps_count, describe_key(ps), material_ps_hlsl(ps));
                 const std::string label = "captured ps " + std::to_string(ps_count++);
                 const bool dual = (ps.flags & 0x80u) != 0u;
                 expect(label.c_str(), material_ps_hlsl(ps), ShaderStage::Fragment, gx, {}, dual);

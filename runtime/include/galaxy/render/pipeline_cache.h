@@ -22,7 +22,6 @@
 //   - pipelines.bin ID3D12PipelineLibrary1 blob, discarded when the stored
 //                   adapter LUID or shader-cache version differs, or the driver
 //                   rejects it.
-//   - uber.bin      uber shader DXBC, keyed by a hash of the uber HLSL source.
 
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
@@ -34,8 +33,7 @@
 #include <d3dcommon.h>
 #include <wrl/client.h>
 
-#include "galaxy/render/shader_gen.h"
-#include "galaxy/render/uber_shaders.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_keys.h"
 
 #include <array>
@@ -211,8 +209,8 @@ private:
     }
     // Keys with a specialization already in flight (render-thread-only).
     std::unordered_set<MemoizedPsoKey, MemoizedPsoKeyHasher> in_flight_;
-    // Uber pipelines (uber_shaders.h). The DXBC is compiled (or read from uber.bin)
-    // once per session on uber_compile_thread_ and is read-only once uber_blobs_ready_ is set;
+    // Uber pipelines (material_shaders.h): the build-time DXBC is taken once per session on
+    // uber_compile_thread_ and is read-only once uber_blobs_ready_ is set;
     // PSOs per (render state, output variant) are built by the compile
     // workers and published to uber_psos_ by drain_completions().
     struct UberPsoKey {
@@ -298,7 +296,6 @@ private:
     std::vector<std::uint8_t> pipeline_library_blob_;
     Microsoft::WRL::ComPtr<ID3D12PipelineLibrary1> pipeline_library_;
     std::filesystem::path cache_dir_;
-    ShaderGenerator generator_;
 
     // Render-thread-only, like published_.
     std::uint64_t specialized_hits_ = 0;

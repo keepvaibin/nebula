@@ -8,11 +8,8 @@
 
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
-#include "galaxy/render/shader_gen.h"
 #include "galaxy/render/material_shaders.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/shader_keys.h"
-#include "galaxy/render/shader_pair_compile.h"
 #include "galaxy/scope_exit.h"
 
 #pragma warning(push, 0)
@@ -108,7 +105,7 @@ void capture_shader_source(std::FILE* file, char kind, const std::string& source
     std::fwrite(source.data(), 1, source.size(), file);
 }
 
-void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs_key, const ShaderGenerator& generator) {
+void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs_key) {
     static std::unordered_set<std::uint64_t> vs_seen;
     static std::unordered_set<std::uint64_t> ps_seen;
     std::FILE* const file = shader_key_capture_file();
@@ -116,7 +113,7 @@ void capture_shader_keys(const PixelShaderKey& ps_key, const VertexShaderKey& vs
     if (vs_seen.insert(vs_key.hash()).second) {
         std::fputc('V', file);
         std::fwrite(&vs_key, sizeof(vs_key), 1, file);
-        if (sources != nullptr) capture_shader_source(sources, 'V', generator.generate_vs(vs_key));
+        if (sources != nullptr) capture_shader_source(sources, 'V', material_vs_hlsl(vs_key));
     }
     if (ps_seen.insert(ps_key.hash()).second) {
         std::fputc('P', file);
@@ -261,19 +258,35 @@ Microsoft::WRL::ComPtr<ID3DBlob> compile_shader_fast(
     return compile_shader_with_level(src, target, label, true);
 }
 
-// The material pixel shader's variant (material_shaders.h): DXBC compiled at build time, one blob a variant.
+// Build-time bytecode as a blob (the PSO descriptions take blobs).
+Microsoft::WRL::ComPtr<ID3DBlob> blob_of(std::span<const std::uint8_t> code) {
+    Microsoft::WRL::ComPtr<ID3DBlob> blob;
+    if (!code.empty() && SUCCEEDED(D3DCreateBlob(code.size(), &blob))) {
+        std::memcpy(blob->GetBufferPointer(), code.data(), code.size());
+    }
+    return blob;
+}
+
+// The material shaders' variants (material_shaders.h): DXBC compiled at build time, one blob a variant.
 Microsoft::WRL::ComPtr<ID3DBlob> material_ps_blob(unsigned variant) {
     static const std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kMaterialPsVariants> blobs = [] {
         std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kMaterialPsVariants> made{};
         for (unsigned v = 0; v < kMaterialPsVariants; ++v) {
-            const std::span<const std::uint8_t> code = material_ps_dxbc(v);
-            if (!code.empty() && SUCCEEDED(D3DCreateBlob(code.size(), &made[v]))) {
-                std::memcpy(made[v]->GetBufferPointer(), code.data(), code.size());
-            }
+            made[v] = blob_of(material_ps_dxbc(v));
         }
         return made;
     }();
     return variant < kMaterialPsVariants ? blobs[variant] : nullptr;
+}
+Microsoft::WRL::ComPtr<ID3DBlob> material_vs_blob(unsigned variant) {
+    static const std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kMaterialVsVariants> blobs = [] {
+        std::array<Microsoft::WRL::ComPtr<ID3DBlob>, kMaterialVsVariants> made{};
+        for (unsigned v = 0; v < kMaterialVsVariants; ++v) {
+            made[v] = blob_of(material_vs_dxbc(v));
+        }
+        return made;
+    }();
+    return variant < kMaterialVsVariants ? blobs[variant] : nullptr;
 }
 
 // Translate a RenderStateKey + compiled shaders into a full PSO desc.
@@ -631,24 +644,16 @@ bool PipelineCache::initialize(
     root_signature_ = root_signature;
     cache_dir_      = cache_dir;
 
-    const std::string line_geometry_source{
-        ShaderGenerator::line_geometry_shader_source()};
-    const std::string point_geometry_source{
-        ShaderGenerator::point_geometry_shader_source()};
-    line_geometry_shader_ = compile_shader(
-        line_geometry_source, "gs_5_1", "gx_line_gs");
-    point_geometry_shader_ = compile_shader(
-        point_geometry_source, "gs_5_1", "gx_point_gs");
+    line_geometry_shader_ = blob_of(line_geometry_dxbc());
+    point_geometry_shader_ = blob_of(point_geometry_dxbc());
     if (!line_geometry_shader_ || !point_geometry_shader_) {
         return false;
     }
     // Curved surfaces: a hull and domain pair per vertex output variant. Without them the draws stay flat.
     curved_ready_ = true;
     for (unsigned variant = 0; variant < kCurvedVariants; ++variant) {
-        curved_hull_shaders_[variant] =
-            compile_shader(ShaderGenerator::curved_stage_source(variant, false), "hs_5_1", "gx_curve_hs");
-        curved_domain_shaders_[variant] =
-            compile_shader(ShaderGenerator::curved_stage_source(variant, true), "ds_5_1", "gx_curve_ds");
+        curved_hull_shaders_[variant] = blob_of(curved_stage_dxbc(variant, false));
+        curved_domain_shaders_[variant] = blob_of(curved_stage_dxbc(variant, true));
         curved_ready_ = curved_ready_ && curved_hull_shaders_[variant] && curved_domain_shaders_[variant];
     }
     set_curved_surfaces_offered(curved_ready_);
@@ -805,7 +810,7 @@ ID3D12PipelineState* PipelineCache::get(
     // Hashed once for the memo and both map probes (published_ and in_flight_).
     const MemoizedPsoKey memoized{key, requested_hash};
     if (shader_key_capture_file() != nullptr) [[unlikely]] {
-        capture_shader_keys(ps_key, vs_key, generator_);
+        capture_shader_keys(ps_key, vs_key);
     }
     {
         const auto it = published_.find(memoized);
@@ -1148,10 +1153,10 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
         // Fast first use: unoptimized FXC for the missing stages, kept out of
         // every cache (a worker compiles and persists the optimized pair).
         if (need_vs && need_ps) {
-            pair.vs = compile_shader_fast(generator_.generate_vs(vs_key), "vs_5_1", "gx_vs");
+            pair.vs = material_vs_blob(material_vs_variant(vs_key));
             pair.ps = material_ps_blob(material_ps_variant(ps_key));
         } else if (need_vs) {
-            pair.vs = compile_shader_fast(generator_.generate_vs(vs_key), "vs_5_1", "gx_vs");
+            pair.vs = material_vs_blob(material_vs_variant(vs_key));
         } else {
             pair.ps = material_ps_blob(material_ps_variant(ps_key));
         }
@@ -1165,12 +1170,10 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
         return &fast_pair_scratch_;
     }
     if (need_vs && need_ps) {
-        const std::string vs_src = generator_.generate_vs(vs_key);
-        pair.vs = compile_shader(vs_src, "vs_5_1", "gx_vs");
+        pair.vs = material_vs_blob(material_vs_variant(vs_key));
         pair.ps = material_ps_blob(material_ps_variant(ps_key));
     } else if (need_vs) {
-        const std::string vs_src = generator_.generate_vs(vs_key);
-        pair.vs = compile_shader(vs_src, "vs_5_1", "gx_vs");
+        pair.vs = material_vs_blob(material_vs_variant(vs_key));
     } else if (need_ps) {
         pair.ps = material_ps_blob(material_ps_variant(ps_key));
     }
@@ -1212,9 +1215,8 @@ const PipelineCache::ShaderPair* PipelineCache::get_or_compile_blobs(
 namespace {
 constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
-// generate_vs emits different HLSL for the same key or the material pixel shader changes, or stale DXBC would be
-// served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 75u;
+// the material shaders change, or stale DXBC would be served for hash-identical keys.
+constexpr std::uint32_t kShaderCacheVersion = 76u;
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.
@@ -2363,78 +2365,21 @@ constexpr KnownRenderState kKnownRenderStates[] = {
 };
 }  // namespace
 
-// Uber compile thread. D3DCompile is thread-safe; the blobs are published
-// once, with release ordering.
+// The uber stand-ins' shaders: the material vertex shader's stand-in variant and the pixel variants of the uber
+// variants, all compiled at build time; published with release ordering.
 void PipelineCache::compile_uber_blobs() noexcept {
     try {
-        const auto start = std::chrono::steady_clock::now();
-        const std::string vs_source(uber_vs_source());
-        // The pixel variants are the material shader's, compiled at build time.
+        uber_vs_blob_ = material_vs_blob(kMaterialVsStandIn);
+        bool complete = static_cast<bool>(uber_vs_blob_);
+        // The pipelines' names in the driver's library carry the vertex shader's identity.
+        uber_source_hash_ = complete ? fnv1a64(uber_vs_blob_->GetBufferPointer(), uber_vs_blob_->GetBufferSize()) : 0u;
         for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
             uber_ps_blobs_[variant] = material_ps_blob(uber_ps_material_variant(variant));
+            complete = complete && static_cast<bool>(uber_ps_blobs_[variant]);
         }
-        uber_source_hash_ = fnv1a64(vs_source.data(), vs_source.size());
-        // uber.bin: u64 source hash, then the uber vertex shader's (u32 size, DXBC bytes). A different hash is a
-        // different build.
-        const std::filesystem::path cache_path = cache_dir_ / "uber.bin";
-        {
-            std::ifstream in(cache_path, std::ios::binary);
-            std::uint64_t hash = 0u;
-            if (in && in.read(reinterpret_cast<char*>(&hash), sizeof(hash)) &&
-                hash == uber_source_hash_) {
-                std::array<Microsoft::WRL::ComPtr<ID3DBlob>, 1u> blobs{};
-                bool loaded = true;
-                for (auto& blob : blobs) {
-                    std::uint32_t size = 0u;
-                    if (!in.read(reinterpret_cast<char*>(&size), sizeof(size)) ||
-                        size == 0u || size > (8u << 20u) ||
-                        FAILED(D3DCreateBlob(size, &blob)) ||
-                        !in.read(static_cast<char*>(blob->GetBufferPointer()), size)) {
-                        loaded = false;
-                        break;
-                    }
-                }
-                if (loaded) {
-                    uber_vs_blob_ = blobs[0];
-                    uber_blobs_ready_.store(true, std::memory_order_release);
-                    std::cerr << "[uber-pipeline] shaders loaded from cache\n";
-                    return;
-                }
-            }
+        if (complete) {
+            uber_blobs_ready_.store(true, std::memory_order_release);
         }
-        Microsoft::WRL::ComPtr<ID3DBlob> vs = compile_shader(vs_source, "vs_5_1", "gx_uber_vs");
-        bool complete = static_cast<bool>(vs);
-        for (const auto& blob : uber_ps_blobs_) {
-            complete = complete && static_cast<bool>(blob);
-        }
-        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::steady_clock::now() - start).count();
-        if (!complete) {
-            std::cerr << "[uber-pipeline] shader compile failed\n";
-            return;
-        }
-        uber_vs_blob_ = std::move(vs);
-        uber_blobs_ready_.store(true, std::memory_order_release);
-        {
-            // Written beside the cache and renamed, so a reader never sees a
-            // partial file. Optional: a failure only costs the next compile.
-            const std::filesystem::path temp_path = cache_dir_ / "uber.bin.tmp";
-            {
-                std::ofstream out(temp_path, std::ios::binary | std::ios::trunc);
-                out.write(reinterpret_cast<const char*>(&uber_source_hash_), sizeof(uber_source_hash_));
-                const auto write_blob = [&out](ID3DBlob* blob) {
-                    const auto size = static_cast<std::uint32_t>(blob->GetBufferSize());
-                    out.write(reinterpret_cast<const char*>(&size), sizeof(size));
-                    out.write(static_cast<const char*>(blob->GetBufferPointer()), size);
-                };
-                write_blob(uber_vs_blob_.Get());
-            }
-            std::error_code ec;
-            std::filesystem::rename(temp_path, cache_path, ec);
-        }
-        std::cerr << "[uber-pipeline] shaders ready compile-ms=" << elapsed_ms
-                  << " vs-bytes=" << uber_vs_blob_->GetBufferSize()
-                  << " ps-bytes=" << uber_ps_blobs_[0]->GetBufferSize() << '\n';
     } catch (...) {
         // Optional: without uber blobs every miss keeps the synchronous path.
     }
@@ -2699,8 +2644,7 @@ void PipelineCache::worker_main() {
         Microsoft::WRL::ComPtr<ID3DBlob> vs = job.vs_blob;
         Microsoft::WRL::ComPtr<ID3DBlob> ps = job.ps_blob;
         if (!job.use_cached_blobs) {
-            const std::string vs_src = generator_.generate_vs(job.vs_key);
-            vs = compile_shader(vs_src, "vs_5_1", "gx_vs");
+            vs = material_vs_blob(material_vs_variant(job.vs_key));
             ps = material_ps_blob(material_ps_variant(job.ps_key));
         }
 

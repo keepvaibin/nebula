@@ -14,7 +14,7 @@
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_prepare.h"
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/texture_cache.h"
 #include "galaxy/render/uber_constants.h"
@@ -3504,7 +3504,7 @@ bool RendererD3D12::ensure_curve_sort() {
         return false;
     }
     try {
-        const std::string source = ShaderGenerator::curve_sort_source();
+        const std::string source = curve_sort_source();
         const ComPtr<ID3DBlob> classify = compile_hlsl(source.data(), source.size(), "cs_5_1", "classify");
         const ComPtr<ID3DBlob> offsets = compile_hlsl(source.data(), source.size(), "cs_5_1", "offsets");
         const ComPtr<ID3DBlob> scatter = compile_hlsl(source.data(), source.size(), "cs_5_1", "scatter");

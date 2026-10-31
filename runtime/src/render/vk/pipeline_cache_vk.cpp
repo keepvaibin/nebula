@@ -163,17 +163,17 @@ const std::vector<UberProbe>& uber_ps_probes() {
 
 const std::vector<UberProbe>& uber_vs_probes() {
     static const std::vector<UberProbe> probes = [] {
-        const std::pair<const char*, const char*> no_texgen{"const uint key_texgens = uber_vs_header.x;",
-                                                            "const uint key_texgens = 0u;"};
-        const std::pair<const char*, const char*> no_lighting{"const uint key_chans = uber_vs_header.y;",
-                                                              "const uint key_chans = 0u;"};
+        const std::pair<const char*, const char*> no_texgen{"const uint n_coords = program_header.x;",
+                                                            "const uint n_coords = 0u;"};
+        const std::pair<const char*, const char*> no_lighting{"const uint n_chans = program_header.y;",
+                                                              "const uint n_chans = 0u;"};
         // Within the texture coordinates (the part the Adreno 840 refused): the loop unrolled, and each kind of
         // coordinate left out in turn.
         const std::pair<const char*, const char*> unrolled{
-            "[loop] for (uint i = 0u; i < key_texgens && i < 8u; ++i) {",
-            "[unroll] for (uint i = 0u; i < 8u && i < key_texgens; ++i) {"};
+            "[loop] for (uint i = 0u; i < n_coords && i < 8u; ++i) {",
+            "[unroll] for (uint i = 0u; i < 8u && i < n_coords; ++i) {"};
         const std::pair<const char*, const char*> no_emboss{"} else if (type == 1u) {", "} else if (false) {"};
-        const std::pair<const char*, const char*> no_texmtx{"if (((key_texmtx_mask >> i) & 1u) != 0u) {",
+        const std::pair<const char*, const char*> no_texmtx{"if (((matrix_slots >> i) & 1u) != 0u) {",
                                                             "if (false) {"};
         const std::pair<const char*, const char*> no_post{"if ((key_flags & 0x04u) != 0u) {", "if (false) {"};
         return std::vector<UberProbe>{{"no-texgen", {no_texgen}},
@@ -204,17 +204,13 @@ std::string apply_probe(std::string source, const UberProbe& probe) {
 // the same HLSL, which one driver refuses and accepts, so files of another compiler are dropped.
 std::uint64_t compiler_identity() {
     static const std::uint64_t identity = [] {
-        ShaderGenOptions options;
-        options.scalar_byte_masks = true;
-        ShaderGenerator generator;
-        generator.set_options(options);
         VertexShaderKey vs_key{};
         vs_key.num_texgens = 1u;
         vs_key.num_chans = 1u;
         PixelShaderKey ps_key{};
         std::string error;
         const std::vector<std::uint32_t> vs =
-            compile_module(generator.generate_vs(vs_key), vk::ShaderStage::Vertex, false, error);
+            compile_module(material_vs_hlsl(vs_key), vk::ShaderStage::Vertex, false, error);
         const std::vector<std::uint32_t> ps =
             compile_module(material_ps_hlsl(ps_key), vk::ShaderStage::Fragment, false, error);
         std::uint64_t hash = fnv1a64(vs.data(), vs.size() * sizeof(std::uint32_t));
@@ -223,6 +219,13 @@ std::uint64_t compiler_identity() {
         return combine64(hash, kShaderFileVersion);
     }();
     return identity;
+}
+
+// The uber stand-in's vertex shader: the material vertex shader's stand-in variant (kMaterialVsStandIn).
+std::string uber_vs_hlsl() {
+    std::string vs = material_vs_defines(kMaterialVsStandIn);
+    vs += material_vs_source();
+    return vs;
 }
 
 // An uber variant's pixel shader: the material shader's variant without lighting inputs (uber_ps_material_variant).
@@ -367,9 +370,6 @@ bool PipelineCacheVk::initialize(VkDevice device, const vk::RenderLayout* layout
     std::error_code error;
     std::filesystem::create_directories(cache_dir_, error);
     {
-        const vk::DeviceQuirks& quirks = vk::Context::get().quirks();
-        generator_defaults_.scalar_byte_masks = true;
-        generator_defaults_.tev_zero_from_constant = quirks.tev_zero_from_constant;
         driver_key_ = vk::driver_key(vk::Context::get().identity());
     }
     load_compat();
@@ -862,23 +862,11 @@ VkShaderModule PipelineCacheVk::point_size_variant(const std::string& vertex_hls
     return module_for(vk::with_point_size(vertex_hlsl), vk::ShaderStage::Vertex, false);
 }
 
-ShaderGenerator PipelineCacheVk::generator_for(std::uint32_t generator_bits) const {
-    ShaderGenOptions options = generator_defaults_;
-    if ((generator_bits & kGeneratorTevZeroFromConstant) != 0u) {
-        options.tev_zero_from_constant = !options.tev_zero_from_constant;
-    }
-    ShaderGenerator generator;
-    generator.set_options(options);
-    return generator;
-}
-
 VkPipeline PipelineCacheVk::build(const Entry& entry) {
     const bool dual_source = (entry.ps_key.flags & 0x80u) != 0u;
     const bool export_depth = (entry.ps_key.flags & 0x02u) != 0u && (entry.ps_key.flags & 0x01u) != 0u;
     const RenderStateKey& rs = entry.key.render_state;
-    const std::uint32_t generator_bits = generator_bits_.load(std::memory_order_acquire);
-    const ShaderGenerator generator = generator_for(generator_bits);
-    const std::string vs_hlsl = generator.generate_vs(entry.vs_key);
+    const std::string vs_hlsl = material_vs_hlsl(entry.vs_key);
     const std::string ps_hlsl = material_ps_hlsl(entry.ps_key);
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
@@ -972,12 +960,11 @@ void PipelineCacheVk::classify_refusal(const RenderStateKey& rs, const std::stri
         }
     }
     // diagnose_uber's simple pair: each shader with a partner every driver takes.
-    const ShaderGenerator generator = generator_for(generator_bits_.load(std::memory_order_acquire));
     PixelShaderKey simple_key{};
     if (dual_source) {
         simple_key.flags |= 0x80u;
     }
-    const VkShaderModule simple_vs = module_for(generator.generate_vs(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
+    const VkShaderModule simple_vs = module_for(material_vs_hlsl(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
     const VkShaderModule simple_ps = module_for(material_ps_hlsl(simple_key), vk::ShaderStage::Fragment, dual_source);
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
@@ -1011,7 +998,7 @@ void PipelineCacheVk::classify_refusal(const RenderStateKey& rs, const std::stri
 void PipelineCacheVk::compile_uber_shaders() noexcept {
     try {
         const auto start = std::chrono::steady_clock::now();
-        const std::string vs(uber_vs_source());
+        const std::string vs(uber_vs_hlsl());
         uber_vs_ = module_for(vs, vk::ShaderStage::Vertex, false);
         // The effects layer's variants are the ray tracer's (Direct3D 12 only).
         for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
@@ -1021,18 +1008,18 @@ void PipelineCacheVk::compile_uber_shaders() noexcept {
             }
         }
         if (layout_->geometry_shaders) {
-            line_gs_ = module_for(std::string(ShaderGenerator::line_geometry_shader_source()),
+            line_gs_ = module_for(line_geometry_shader_source(),
                                   vk::ShaderStage::Geometry, false);
-            point_gs_ = module_for(std::string(ShaderGenerator::point_geometry_shader_source()),
+            point_gs_ = module_for(point_geometry_shader_source(),
                                    vk::ShaderStage::Geometry, false);
         }
         // Curved surfaces, where the device tessellates: offered once every variant's stages compiled.
         bool curved = layout_->tessellation;
         for (unsigned variant = 0; variant < curved_hs_.size() && curved; ++variant) {
             curved_hs_[variant] =
-                module_for(ShaderGenerator::curved_stage_source(variant, false), vk::ShaderStage::Hull, false);
+                module_for(curved_stage_source(variant, false), vk::ShaderStage::Hull, false);
             curved_ds_[variant] =
-                module_for(ShaderGenerator::curved_stage_source(variant, true), vk::ShaderStage::Domain, false);
+                module_for(curved_stage_source(variant, true), vk::ShaderStage::Domain, false);
             curved = curved_hs_[variant] != VK_NULL_HANDLE && curved_ds_[variant] != VK_NULL_HANDLE;
         }
         set_curved_surfaces_offered(curved);
@@ -1089,14 +1076,9 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
     // Every module module_for can be asked for with these keys on any Vulkan device: both TEV zero forms (DeviceQuirks
     // and the fallback's flip), the point-size vertex shaders (no geometry shaders), the single-source form of a
     // dual-source pixel shader (kCompatNoDualSource), diagnose_uber's simple pair, the uber and geometry shaders.
-    for (const bool zero_from_constant : {false, true}) {
-        ShaderGenOptions options;
-        options.scalar_byte_masks = true;
-        options.tev_zero_from_constant = zero_from_constant;
-        ShaderGenerator generator;
-        generator.set_options(options);
+    {
         const auto add_pair = [&](const VertexShaderKey& vs_key, const PixelShaderKey& ps_key, bool points) {
-            std::string vs = generator.generate_vs(vs_key);
+            std::string vs = material_vs_hlsl(vs_key);
             if (points) {
                 add(vk::with_point_size(vs), vk::ShaderStage::Vertex, false);
             }
@@ -1117,8 +1099,8 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
         add_pair(diagnosis_vs_key(), PixelShaderKey{}, false);
         add_pair(diagnosis_vs_key(), dual_key, false);
     }
-    add(std::string(uber_vs_source()), vk::ShaderStage::Vertex, false);
-    add(vk::with_point_size(std::string(uber_vs_source())), vk::ShaderStage::Vertex, false);
+    add(uber_vs_hlsl(), vk::ShaderStage::Vertex, false);
+    add(vk::with_point_size(uber_vs_hlsl()), vk::ShaderStage::Vertex, false);
     for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
         if (uber_ps_variant_layer(variant)) {
             continue;
@@ -1129,8 +1111,8 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
             add(uber_ps_hlsl(variant), vk::ShaderStage::Fragment, false);
         }
     }
-    add(std::string(ShaderGenerator::line_geometry_shader_source()), vk::ShaderStage::Geometry, false);
-    add(std::string(ShaderGenerator::point_geometry_shader_source()), vk::ShaderStage::Geometry, false);
+    add(line_geometry_shader_source(), vk::ShaderStage::Geometry, false);
+    add(point_geometry_shader_source(), vk::ShaderStage::Geometry, false);
 
     std::vector<Source*> work;
     work.reserve(sources.size());
@@ -1182,10 +1164,9 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
 
 void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned variant) {
     // The simplest specialised shaders (default keys) with each uber shader: the half that still fails is the culprit.
-    const ShaderGenerator generator = generator_for(generator_bits_.load(std::memory_order_acquire));
     const bool dual = uber_ps_variant_dual_source(variant);
     const bool export_depth = uber_ps_variant_export_depth(variant);
-    const VkShaderModule simple_vs = module_for(generator.generate_vs(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
+    const VkShaderModule simple_vs = module_for(material_vs_hlsl(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
     PixelShaderKey ps_key{};
     if (dual) {
         ps_key.flags |= 0x80u;
@@ -1233,7 +1214,7 @@ void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned
         run(true, uber_ps_hlsl(variant), uber_ps_probes());
     }
     if (uber_vs_result != VK_SUCCESS) {
-        run(false, std::string(uber_vs_source()), uber_vs_probes());
+        run(false, uber_vs_hlsl(), uber_vs_probes());
     }
 }
 
@@ -1283,7 +1264,7 @@ void PipelineCacheVk::self_test() {
             [&](std::uint32_t compat, VkResult& result) {
                 const unsigned v = (compat & kCompatNoDualSource) != 0u ? variant & ~1u : variant;
                 const VkShaderModule vertex = unexpanded_points(render_state, compat)
-                    ? point_size_variant(std::string(uber_vs_source())) : uber_vs_;
+                    ? point_size_variant(uber_vs_hlsl()) : uber_vs_;
                 return create_pipeline(render_state, vertex, uber_ps_[v], uber_ps_variant_dual_source(v),
                                        export_depth, compat, result);
             },
@@ -1333,7 +1314,7 @@ VkPipeline PipelineCacheVk::uber_pipeline(const RenderStateKey& render_state, un
         [&](std::uint32_t compat, VkResult& result) {
             const unsigned v = (compat & kCompatNoDualSource) != 0u ? variant & ~1u : variant;
             const VkShaderModule vertex = unexpanded_points(key.render_state, compat)
-                ? point_size_variant(std::string(uber_vs_source())) : uber_vs_;
+                ? point_size_variant(uber_vs_hlsl()) : uber_vs_;
             return create_pipeline(key.render_state, vertex, uber_ps_[v], uber_ps_variant_dual_source(v),
                                    export_depth, compat, result);
         },

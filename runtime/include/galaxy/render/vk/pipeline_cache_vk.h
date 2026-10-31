@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // GX pipelines on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on PipelineCache.
 //
-// A pipeline is its key's specialised shaders (ShaderGenerator's HLSL, compiled by glslang) with its render state. A
+// A pipeline is its key's material shader variants (material_shaders.h, compiled by glslang) with its render state. A
 // key seen for the first time draws with the uber pipeline of its render state while a worker builds the specialised
 // one; drain_completions publishes finished pipelines at the frame boundary, so the render thread never waits for a
-// compile once the uber shaders exist. SPIR-V (by its HLSL's hash, so a changed generator never serves stale code),
+// compile once the uber shaders exist. SPIR-V (by its HLSL's hash, so a changed shader never serves stale code),
 // the keys seen and the driver's VkPipelineCache persist in cache_dir; a later session builds every known pipeline
 // on the workers at start.
 //
@@ -17,9 +17,8 @@
 // pipeline's state, the driver's own log (host_window::driver_log) and the shaders' HLSL.
 #pragma once
 
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_keys.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/vk/compile_journal.h"
 #include "galaxy/render/vk/renderer_vk.h"
 
@@ -91,7 +90,8 @@ public:
         kCompatNoGeometry = 1u << 4u,    // lines and points one pixel wide
         kCompatBits = 5u,
     };
-    // Shader-generator forms the fallbacks can switch (ShaderGenOptions).
+    // Shader forms the fallbacks can switch: none since the material shaders read their program as data (the bit stays
+    // in the compat file's format).
     enum GeneratorBit : std::uint32_t {
         kGeneratorTevZeroFromConstant = 1u << 0u,
     };
@@ -121,7 +121,6 @@ private:
     };
 
     [[nodiscard]] VkShaderModule module_for(const std::string& hlsl, vk::ShaderStage stage, bool dual_source);
-    [[nodiscard]] ShaderGenerator generator_for(std::uint32_t generator_bits) const;
     // Points drawn as points (no expanding geometry shader): the vertex shader must write the point size.
     [[nodiscard]] bool unexpanded_points(const RenderStateKey& render_state, std::uint32_t compat) const noexcept;
     [[nodiscard]] VkShaderModule point_size_variant(const std::string& vertex_hlsl);
@@ -162,7 +161,6 @@ private:
     const vk::RenderLayout* layout_ = nullptr;
     std::filesystem::path cache_dir_;
     VkPipelineCache driver_cache_ = VK_NULL_HANDLE;
-    ShaderGenOptions generator_defaults_;  // this device's (DeviceQuirks), before the fallbacks' changes
 
     // Shader modules by the hash of their HLSL (and output form); SPIR-V kept for the disk.
     mutable std::mutex modules_mutex_;

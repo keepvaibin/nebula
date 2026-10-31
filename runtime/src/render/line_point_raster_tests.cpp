@@ -14,7 +14,7 @@
 #include "galaxy/render/line_point_raster.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/renderer_d3d12.h"
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/render_vertex.h"
 
@@ -520,11 +520,11 @@ float4 main(PSIn input) : SV_Target {
         const ComPtr<ID3DBlob> pixel_shader = compile_shader(
             kPixelShader, "ps_5_1", "line_point_test_ps");
         line_geometry_shader_ = compile_shader(
-            galaxy::render::ShaderGenerator::line_geometry_shader_source(),
+            galaxy::render::line_geometry_shader_source(),
             "gs_5_1",
             "gx_line_gs");
         point_geometry_shader_ = compile_shader(
-            galaxy::render::ShaderGenerator::point_geometry_shader_source(),
+            galaxy::render::point_geometry_shader_source(),
             "gs_5_1",
             "gx_point_gs");
 
