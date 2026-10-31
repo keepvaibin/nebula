@@ -4,6 +4,38 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J2DGraph/J2DScreen.hpp"
 #include "JSystem/JUtility/JUTPalette.hpp"
+#include <nebula_game_api.h>
+#include <string.h>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
+namespace {
+    // The picture's TEV programs (nebula_game_api.h NebulaMaterialProgram), one per shape of its stages: the
+    // textures' count (1-4), which of them take their alpha from the texture, the black and white remap, the
+    // vertex colours. Each is registered with the host when first drawn; its key is its entry here.
+    struct PictureProgram {
+        NebulaMaterialProgram mProgram;
+        bool mRegistered;
+    };
+    PictureProgram sPrograms[4 * 16 * 2 * 2];
+
+    // A stage that adds its inputs (a + (b - a) c + d, no bias, scale 1, clamped) into the previous colour.
+    void addStage(NebulaMaterialTevStage& rStage, u8 coord, u8 map, u8 channel, const u8 (&color)[4],
+                  const u8 (&alpha)[4]) {
+        rStage.tex_coord = coord;
+        rStage.tex_map = map;
+        rStage.channel = channel;
+        for (u32 k = 0; k < 4; k++) {
+            rStage.color_in[k] = color[k];
+            rStage.alpha_in[k] = alpha[k];
+        }
+        rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+        rStage.color_bias = rStage.alpha_bias = GX_TB_ZERO;
+        rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+        rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
+        rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+    }
+}  // namespace
 
 J2DPicture::J2DPicture(JUTTexture* texture) {
     for (u32 i = 0; i < 4; i++) {
@@ -450,77 +482,110 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
     }
 }
 
+// The picture's stages as a native material: texture 0's colour (its alpha, or register 2's), each further texture
+// blended in by its konst colour and alpha (konst 0 and 2, by the selections the stage's place names), then the black
+// and white remap and the vertex colours when they change anything. The registers and konst colours stay state.
 void J2DPicture::setTevMode() {
-    u8 i;
-    for (i = 0; i < mTextureNum; i++) {
-        J3DNativeState::setTevOrder(GXTevStageID(i), GXTexCoordID(i), GXTexMapID(i), GX_COLOR_NULL);
+    const bool remap = mBlack != 0 || mWhite != 0xFFFFFFFF;
+    const bool vertexColours = mColorAlpha != 0xFF || mCornerColor[0] != 0xFFFFFFFF || mCornerColor[1] != 0xFFFFFFFF ||
+                               mCornerColor[2] != 0xFFFFFFFF || mCornerColor[3] != 0xFFFFFFFF;
+    u32 textureAlpha = 0;
+    for (u8 i = 0; i < mTextureNum; i++) {
+        textureAlpha |= mTexture[i] != NULL && mTexture[i]->getTransparency() ? 1u << i : 0u;
     }
+    const u32 shape = (((static_cast< u32 >(mTextureNum - 1) & 3u) * 16u + textureAlpha) * 2u + (remap ? 1u : 0u)) * 2u +
+                      (vertexColours ? 1u : 0u);
+    PictureProgram& rEntry = sPrograms[shape];
+    if (!rEntry.mRegistered) {
+        NebulaMaterialProgram& rProgram = rEntry.mProgram;
+        memset(&rProgram, 0, sizeof(rProgram));
+        // Stages that read no konst colour keep the selections J3D's drawing state starts with.
+        for (u32 s = 0; s < 16; s++) {
+            rProgram.tev[s].konst_color = GX_TEV_KCSEL_1_4;
+            rProgram.tev[s].konst_alpha = GX_TEV_KASEL_1;
+        }
+        u8 i = 0;
+        for (; i < mTextureNum; i++) {
+            const u8 alpha = (textureAlpha & (1u << i)) != 0 ? GX_CA_TEXA : GX_CA_A2;
+            if (i == 0) {
+                const u8 color[4] = {GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO};
+                const u8 alphaIn[4] = {alpha, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO};
+                addStage(rProgram.tev[i], i, i, GX_COLOR_NULL, color, alphaIn);
+            } else {
+                const u8 color[4] = {GX_CC_CPREV, GX_CC_TEXC, GX_CC_KONST, GX_CC_ZERO};
+                const u8 alphaIn[4] = {GX_CA_APREV, alpha, GX_CA_KONST, GX_CA_ZERO};
+                addStage(rProgram.tev[i], i, i, GX_COLOR_NULL, color, alphaIn);
+                rProgram.tev[i].konst_color = static_cast< u8 >(0x20 - i * 4);
+                rProgram.tev[i].konst_alpha = static_cast< u8 >(0x22 - i * 4);
+            }
+        }
+        if (remap) {
+            const u8 color[4] = {GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO};
+            const u8 alphaIn[4] = {GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO};
+            addStage(rProgram.tev[i++], GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL, color, alphaIn);
+        }
+        if (vertexColours) {
+            const u8 color[4] = {GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO};
+            const u8 alphaIn[4] = {GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO};
+            addStage(rProgram.tev[i++], GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, color, alphaIn);
+        }
+        // The swap tables as J3D's drawing state starts them.
+        static const u8 kSwap[4][4] = {{GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA},
+                                       {GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA},
+                                       {GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA},
+                                       {GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA}};
+        memcpy(rProgram.swap_table, kSwap, sizeof(kSwap));
+        rProgram.tev_stages = i;
+        rProgram.tex_gens = mTextureNum;
+        rProgram.channels = 1;
+        rProgram.cull = GX_CULL_NONE;
+        rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_KONST_SELECT;
+        for (u8 t = 0; t < mTextureNum; t++) {
+            rProgram.tex_gen[t].type = GX_TG_MTX2x4;
+            rProgram.tex_gen[t].source = GX_TG_TEX0;
+            rProgram.tex_gen[t].matrix = GX_IDENTITY;
+            rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
+        }
+        // J2DGrafContext::setup2D's alpha test and depth, the picture's blend.
+        rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
+        rProgram.alpha_compare.op = GX_AOP_OR;
+        rProgram.blend.type = GX_BM_BLEND;
+        rProgram.blend.source = GX_BL_SRCALPHA;
+        rProgram.blend.destination = GX_BL_INVSRCALPHA;
+        rProgram.blend.logic_op = GX_LO_SET;
+        rProgram.z_mode.enable = GX_FALSE;
+        rProgram.z_mode.func = GX_LEQUAL;
+        rProgram.z_mode.update = GX_FALSE;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &rProgram);
+        rEntry.mRegistered = true;
+    }
+
+    // Values: each texture's coordinate scale (its size, as GX derives it for a normalized coordinate).
+    NebulaMaterialValues values;
+    memset(&values, 0, sizeof(values));
+    for (u8 t = 0; t < mTextureNum; t++) {
+        if (mTexture[t] != NULL) {
+            values.tex_coord_scale[t].scale_s = mTexture[t]->getWidth();
+            values.tex_coord_scale[t].scale_t = mTexture[t]->getHeight();
+        }
+    }
+    J3DNativeShape::flushState();
+    const NebulaHostServices* pHost = nebula_host();
+    pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
+    // The coordinates' texture matrices: none (the identity's place), as GXSetTexCoordGen2's matrix sets them.
+    static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                    GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
 
     J3DNativeState::setTevColor(GX_TEVREG2, JUtility::TColor(0xFFFFFFFF));
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-
-    if (mTexture[0] == NULL) {
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    } else if (mTexture[0]->getTransparency()) {
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    } else {
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    }
-
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     J3DNativeState::setTevKColor(GX_KCOLOR0, mBlendKonstColor);
     J3DNativeState::setTevKColor(GX_KCOLOR2, mBlendKonstAlpha);
-
-    for (i = 1; i < mTextureNum; i++) {
-        J3DNativeState::setTevKColorSel(GXTevStageID(i), GXTevKColorSel(0x20 - i * 4));
-        J3DNativeState::setTevKAlphaSel(GXTevStageID(i), GXTevKAlphaSel(0x22 - i * 4));
-        J3DNativeState::setTevColorIn(GXTevStageID(i), GX_CC_CPREV, GX_CC_TEXC, GX_CC_KONST, GX_CC_ZERO);
-
-        if (mTexture[i] == NULL) {
-            J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_APREV, GX_CA_A2, GX_CA_KONST, GX_CA_ZERO);
-        } else if (mTexture[i]->getTransparency()) {
-            J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_APREV, GX_CA_TEXA, GX_CA_KONST, GX_CA_ZERO);
-        } else {
-            J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_APREV, GX_CA_A2, GX_CA_KONST, GX_CA_ZERO);
-        }
-
-        J3DNativeState::setTevColorOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    }
-
-    if (mBlack != 0 || mWhite != 0xFFFFFFFF) {
-        J3DNativeState::setTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
+    if (remap) {
         J3DNativeState::setTevColor(GX_TEVREG0, mBlack);
         J3DNativeState::setTevColor(GX_TEVREG1, mWhite);
-        J3DNativeState::setTevColorIn(GXTevStageID(i), GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO);
-        J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
-        J3DNativeState::setTevColorOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        i++;
     }
-
-    if (mColorAlpha != 0xFF || mCornerColor[0] != 0xFFFFFFFF || mCornerColor[1] != 0xFFFFFFFF || mCornerColor[2] != 0xFFFFFFFF ||
-        mCornerColor[3] != 0xFFFFFFFF) {
-        J3DNativeState::setTevOrder(GXTevStageID(i), GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        J3DNativeState::setTevColorIn(GXTevStageID(i), GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-        J3DNativeState::setTevAlphaIn(GXTevStageID(i), GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
-        J3DNativeState::setTevColorOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaOp(GXTevStageID(i), GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        i++;
-    }
-
-    J3DNativeState::setNumTevStages(u8(i));
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
-
-    for (i = 0; i < mTextureNum; i++) {
-        J3DNativeState::setTexCoordGen2(GXTexCoordID(i), GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, 0x7D);
-    }
-
-    J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumIndStages(0);
-
     for (int i = GX_TEVSTAGE0; i < GX_MAX_TEVSTAGE; i++) {
         J3DNativeState::setTevDirect((GXTevStageID)i);
     }
