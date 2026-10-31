@@ -101,6 +101,8 @@ void JASDsp::TChannel::init() {
     active = 0;
     panner = 0;
     restart = 0;
+    sound_route = 0;
+    sound_id = 0;
     initFilter();
 }
 

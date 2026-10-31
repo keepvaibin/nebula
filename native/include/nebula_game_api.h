@@ -107,7 +107,9 @@ typedef struct NebulaAudioVoice {
     int16_t panner_send;     /* effect send */
     int16_t panner_volume;   /* now (the mixer's) */
     int16_t panner_target;   /* reached over the next subframe */
-    uint16_t reserved;
+    uint16_t sound_route;    /* what plays it, for the volume categories: 1 an effect, 2 a sequence, 3 a stream, 0
+                                none the game can name (the source's format decides) */
+    uint32_t sound_id;       /* that sound's JAudio ID */
 } NebulaAudioVoice;
 
 /* One of the four effect lines: a delay of `subframes` subframes fed by its input bus, an 8-tap FIR over the delayed
@@ -1097,10 +1099,6 @@ NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (audio_mix, audio_frame). */
 NEBULA_GAME_API void nebula_game_audio_tick(void);
-/* The sound playing on voice `channel` (0-63) for the host's volume categories: its JAudio sound ID, with *route
-   1 (an effect), 2 (a sequence) or 3 (a stream); 0 with *route 0 when no sound the game can name plays there. The host
-   calls it from audio_mix (the game's audio thread). */
-NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route);
 /* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
    refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
    its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
