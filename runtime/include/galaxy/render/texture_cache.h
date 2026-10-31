@@ -36,6 +36,9 @@
 #include <unordered_map>
 #include <vector>
 
+// A texture record (nebula_cooked_texture.h).
+struct NebulaTexture;
+
 namespace galaxy::render {
 
 struct RGBA8 {
@@ -55,6 +58,9 @@ void decode_color_tiles(TexFormat format, const std::uint8_t* src,
 void decode_intensity_tiles(TexFormat format, const std::uint8_t* src,
                             std::uint32_t width, std::uint32_t height,
                             RGBA8* out);
+// One level of a texture record (nebula_cooked_texture.h: its texels from `texels`, `width` x `height`) as RGBA8.
+void expand_record_level(std::uint8_t layout, const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
+                         RGBA8* out);
 // One generated level for the enhanced-mipmaps option: a premultiplied-alpha 2x2 box filter with fixed
 // rounding. `source` and `dest` must be distinct.
 void generate_rgba8_mip_level(const std::vector<RGBA8>& source,
@@ -79,18 +85,6 @@ void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
 // GX selector order, 5/3 interpolation and averaged RGB for alpha-zero pixels.
 void decode_cmpr_tiles(const std::uint8_t* src, std::uint32_t width,
                        std::uint32_t height, RGBA8* out);
-// C4/C8 only. Caller validates tiled source and the full 16/256-entry palette;
-// palette points at the selected slot's big-endian entries.
-void decode_small_index_tiles(TexFormat format, const std::uint8_t* src,
-                              std::uint32_t width, std::uint32_t height,
-                              const std::uint8_t* palette, TlutFormat tlut_format,
-                              RGBA8* out);
-// C14X2: caller validates block-rounded source and the full 16384-entry palette.
-// Top two index bits are ignored; edge tiles still consume all 32 source bytes.
-void decode_c14x2_tiles(const std::uint8_t* src,
-                       std::uint32_t width, std::uint32_t height,
-                       const std::uint8_t* palette, TlutFormat tlut_format,
-                       RGBA8* out);
 }  // namespace detail
 
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
@@ -139,9 +133,9 @@ public:
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
-    // The GPU texture for an image, decoded on first use from the image the game handed over (register_image; one
-    // never handed over decodes from zeros). Palettized formats read their palette from the handed-over bytes at
-    // `palette_address` in `palette_format`.
+    // The GPU texture for an image, uploaded on first use from the texture record the game handed over, or decoded
+    // from the image's bytes (register_image; one never handed over decodes from zeros). Colour-indexed images come
+    // as records with their palettes applied: `palette_address` and `palette_format` are not read.
     [[nodiscard]] TextureHandle get(
         const TexImage& image,
         const TexMode& mode,
@@ -270,14 +264,14 @@ private:
     std::vector<std::shared_ptr<const std::vector<std::byte>>> replaced_images_;
     std::uint64_t missing_images_ = 0;
     [[nodiscard]] const std::byte* registered_bytes(std::uint64_t address, std::uint32_t size) const;
+    // The texture record handed over at exactly `address` (nebula_cooked_texture.h), when that is what it is.
+    [[nodiscard]] const ::NebulaTexture* registered_record(std::uint64_t address) const;
 
     struct Key {
         std::uint64_t address;
-        std::uint64_t palette_address;  // palettized formats; else 0
         std::uint16_t width;
         std::uint16_t height;
         std::uint8_t format;
-        std::uint8_t tlut_format;
         std::uint8_t levels;        // decoded mip chain length (1 = no mips)
         std::uint8_t generated_mips; // lower levels generated from mip0
 
@@ -434,7 +428,6 @@ private:
     // Kept monotonic across shutdown/reinitialization, like resource lifetimes.
     std::uint64_t retirement_revision_ = 0;
 
-    // All of TMEM, so every TLUT slot and the largest transfer or palette fit. Entries stay big-endian.
 };
 
 }  // namespace galaxy::render

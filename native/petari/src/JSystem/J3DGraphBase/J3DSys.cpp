@@ -11,7 +11,11 @@ Mtx J3DSys::mCurrentMtx;
 Vec J3DSys::mCurrentS;
 Vec J3DSys::mParentS;
 
-static u8 NullTexData[0x10] ATTRIBUTE_ALIGN(32) = {0};
+// The texture every map holds after a reset: 4x4 transparent black, a texture record (nebula_cooked_texture.h).
+static struct {
+    NebulaTexture header;
+    u8 texels[4 * 4 * 2];
+} sNullTexture ATTRIBUTE_ALIGN(32) = {NEBULA_TEXTURE_STATIC(4, 4, NEBULA_TEXTURE_LA8, 4 * 4 * 2), {0}};
 
 J3DTexCoordScaleInfo J3DSys::sTexCoordScaleTable[8];
 
@@ -219,8 +223,8 @@ void J3DSys::reinitTransform() {
 
 void J3DSys::reinitTexture() {
     GXTexObj texObj;
-    J3DNativeTexture::registerImage(NullTexData, GX_TF_IA8, 4, 4, 1);
-    J3DNativeTexture::init(&texObj, NullTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+    J3DNativeTexture::registerImage(&sNullTexture, GX_TF_IA8, 4, 4, 1);
+    J3DNativeTexture::init(&texObj, &sNullTexture, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::load(&texObj, GX_TEXMAP0);
     J3DNativeTexture::load(&texObj, GX_TEXMAP1);
     J3DNativeTexture::load(&texObj, GX_TEXMAP2);

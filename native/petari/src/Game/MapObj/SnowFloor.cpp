@@ -474,8 +474,8 @@ void SnowFloor::createTexture() {
             }
         }
 
-        TDDraw::tileConversion8(mImage, ::sTextureSize, ::sTextureSize);
-        J3DNativeTexture::registerImage(mImage, GX_TF_I8, ::sTextureSize, ::sTextureSize, 1);
+        // The depths as rows of texels (nebula_cooked_texture.h): the renderer reads them as they are.
+        J3DNativeTexture::registerImage(mImage, NEBULA_TEXTURE_LINEAR_L8, ::sTextureSize, ::sTextureSize, 1);
     }
 }
 

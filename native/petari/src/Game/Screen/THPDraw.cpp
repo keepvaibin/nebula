@@ -106,10 +106,10 @@ void THPGXSetTexObjFilter(GXTexFilter filter) {
 void THPGXYuv2RgbDraw(u8* y_data, u8* u_data, u8* v_data, s16 x, s16 y, s16 textureWidth, s16 textureHeight, s16 polygonWidth, s16 polygonHeight) {
     GXTexObj tobj0, tobj1, tobj2;
     GXTexFilter filter = THPGXGetTexObjFilter();
-    // The frame's planes, decoded into these buffers since the last frame.
-    J3DNativeTexture::registerImage(y_data, GX_TF_I8, textureWidth, textureHeight, 1);
-    J3DNativeTexture::registerImage(u_data, GX_TF_I8, textureWidth >> 1, textureHeight >> 1, 1);
-    J3DNativeTexture::registerImage(v_data, GX_TF_I8, textureWidth >> 1, textureHeight >> 1, 1);
+    // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
+    J3DNativeTexture::registerImage(y_data, NEBULA_TEXTURE_LINEAR_L8, textureWidth, textureHeight, 1);
+    J3DNativeTexture::registerImage(u_data, NEBULA_TEXTURE_LINEAR_L8, textureWidth >> 1, textureHeight >> 1, 1);
+    J3DNativeTexture::registerImage(v_data, NEBULA_TEXTURE_LINEAR_L8, textureWidth >> 1, textureHeight >> 1, 1);
     J3DNativeTexture::init(&tobj0, y_data, textureWidth, textureHeight, GX_TF_I8, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::initLOD(&tobj0, filter, filter, 0, 0, 0, 0, 0, GX_ANISO_1);
     J3DNativeTexture::load(&tobj0, GX_TEXMAP0);

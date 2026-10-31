@@ -22,16 +22,16 @@ GXTexObj clear_z_tobj;
 
 Mtx e_mtx = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
 
-#ifdef TARGET_PC
-// A texture: the GPU reads its bytes in the console's order (A/R pairs, then G/B pairs, of a Z24X8 tile).
-u8 clearZTexData[] ATTRIBUTE_ALIGN(32) = {0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
-                                          0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF, 0x00, 0xFF,
-                                          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-                                          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-#else
-u32 clearZTexData[] ATTRIBUTE_ALIGN(32) = {0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0x00FF00FF, 0x00FF00FF,
-                                           0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
-#endif
+// The depth-clear texture: 4x4 of (255, 255, 255, 0), what the GPU sampled from the console's Z24X8 tile, as a texture
+// record (nebula_cooked_texture.h).
+static struct {
+    NebulaTexture header;
+    u8 texels[4 * 4 * 4];
+} clearZTexData ATTRIBUTE_ALIGN(32) = {NEBULA_TEXTURE_STATIC(4, 4, NEBULA_TEXTURE_RGBA8, 4 * 4 * 4),
+                                       {0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0}};
 
 namespace {
     void waitForFrames(u16);
@@ -47,8 +47,8 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mUseAlpha = useAlpha;
     mUseVFilter = true;
     mCombinationRatio = 0.0f;
-    J3DNativeTexture::registerImage(clearZTexData, GX_TF_Z24X8, 4, 4, 1);
-    J3DNativeTexture::init(&clear_z_tobj, clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
+    J3DNativeTexture::registerImage(&clearZTexData, GX_TF_Z24X8, 4, 4, 1);
+    J3DNativeTexture::init(&clear_z_tobj, &clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
     J3DNativeTexture::initLOD(&clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
     mRenderInterval = 1;
     mRenderCounter = 0;

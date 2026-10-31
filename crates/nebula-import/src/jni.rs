@@ -99,7 +99,7 @@ pub unsafe extern "system" fn Java_dev_nebula_galaxy_Importer_build(
     };
     let result = disc_from_fd(fd).and_then(|disc| {
         Partition::from_disc(disc)
-            .and_then(|mut partition| partition.write_pak(&PathBuf::from(output), &mut report))
+            .and_then(|mut partition| partition.write_cooked_pak(&PathBuf::from(output), &mut report))
             .map_err(|error| format!("{error:#}"))
     });
     match result {

@@ -22,16 +22,10 @@ namespace nw4r {
                 SetBiasClampEnable(false);
                 SetEdgeLODEnable(false);
                 SetAnisotropy(GX_ANISO_1);
-                SetPalette(NULL);
-                SetPaletteFormat(GX_TL_IA8);
-                SetPaletteEntryNum(0);
             }
 
             TexMap(const GXTexObj& rTexObj) {
                 Set(rTexObj);
-                SetPalette(0);
-                SetPaletteFormat(GXTlutFmt(0));
-                SetPaletteEntryNum(0);
             }
 
             void SetImage(void* pImage) {
@@ -43,9 +37,8 @@ namespace nw4r {
             }
 
             void Get(_GXTexObj*) const;
-            void Get(_GXTlutObj*) const;
             void Set(const _GXTexObj&);
-            // Image `id` of a TPL file (its bytes as the disc has them).
+            // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 
             inline GXTexFmt GetTexelFormat() const {
@@ -96,18 +89,6 @@ namespace nw4r {
                 return 0 != mBits.mipmap;
             }
 
-            inline void* GetPalette() const {
-                return mPalette;
-            }
-
-            inline GXTlutFmt GetPaletteFormat() const {
-                return GXTlutFmt(mBits.paletteFormat);
-            }
-
-            inline u16 GetPaletteEntryNum() const {
-                return mPltEntryNum;
-            }
-
             void SetMipMap(bool mipmap) {
                 mBits.mipmap = mipmap;
             }
@@ -148,18 +129,6 @@ namespace nw4r {
                 mBits.textureFormat = value;
             }
 
-            void SetPalette(void* pPalette) {
-                mPalette = pPalette;
-            }
-
-            void SetPaletteFormat(GXTlutFmt value) {
-                mBits.paletteFormat = value;
-            }
-
-            void SetPaletteEntryNum(u16 value) {
-                mPltEntryNum = value;
-            }
-
             void Set(const TexMap& texMap) {
                 *this = texMap;
             }
@@ -168,14 +137,12 @@ namespace nw4r {
                 return Size(mWidth, mHeight);
             }
 
-            /* 0x00 */ void* mImage;
-            /* 0x04 */ void* mPalette;
-            /* 0x08 */ u16 mWidth;
-            /* 0x0A */ u16 mHeight;
-            /* 0x0C */ f32 mMinLOD;
-            /* 0x10 */ f32 mMaxLOD;
-            /* 0x14 */ u16 mLODBias;
-            /* 0x16 */ u16 mPltEntryNum;
+            void* mImage;
+            u16 mWidth;
+            u16 mHeight;
+            f32 mMinLOD;
+            f32 mMaxLOD;
+            u16 mLODBias;
 
             /* 0x18 */ struct {
                 /* 0x18 */ u32 textureFormat : 4;
@@ -187,7 +154,6 @@ namespace nw4r {
                 /* 0x30 */ u32 biasClampEnable : 1;
                 /* 0x34 */ u32 edgeLODEnable : 1;
                 /* 0x38 */ u32 anisotropy : 2;
-                /* 0x3C */ u32 paletteFormat : 2;
             } mBits;
         };
     };  // namespace lyt

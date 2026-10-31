@@ -39,12 +39,6 @@
 
 namespace galaxy::render {
 
-// The palette's hash: the TLUT entries from the lowest to the highest index the base level uses (2 bytes each, as
-// stored in TMEM); 0 for direct formats. (The texture's own hash is texture_pack_hash, rt_materials.h.)
-[[nodiscard]] std::uint64_t texture_pack_tlut_hash(TexFormat format, const std::uint8_t* base_level,
-                                                   std::uint32_t width, std::uint32_t height,
-                                                   const std::uint8_t* palette) noexcept;
-
 struct TexturePackName {
     std::uint16_t width = 0;
     std::uint16_t height = 0;

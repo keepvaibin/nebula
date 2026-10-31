@@ -27,6 +27,10 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace J3DNativeTexture {
     u32 imageSize(u8 format, u16 width, u16 height, u8 levels) {
+        // Linear texels the game wrote (nebula_cooked_texture.h): rows of the layout's texels.
+        if (format >= NEBULA_TEXTURE_LINEAR_L8 && format <= NEBULA_TEXTURE_LINEAR_RGBA8) {
+            return nebula_texture_level_bytes(width, height, levels != 0 ? levels : 1, format - NEBULA_TEXTURE_LINEAR_L8);
+        }
         // A tile is 32 bytes (RGBA8 and Z24X8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel
         // (texture and copy formats); an unknown format is a tile per texel, as GX counts it.
         u32 shiftX, shiftY;
@@ -88,6 +92,19 @@ namespace J3DNativeTexture {
 
     void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels) {
         if (pImage == nullptr || width == 0 || height == 0) {
+            return;
+        }
+        // A cooked texture (nebula_cooked_texture.h): the record goes whole; its header says the rest.
+        if (const NebulaTexture* pRecord = nebula_texture_record(pImage)) {
+            NebulaTextureImage record;
+            record.bytes = pRecord;
+            record.size = pRecord->size;
+            record.width = pRecord->width;
+            record.height = pRecord->height;
+            record.format = NEBULA_TEXTURE_IMAGE;
+            record.levels = pRecord->levels;
+            const NebulaHostServices* pHost = nebula_host();
+            pHost->texture_image(pHost->user, &record);
             return;
         }
         NebulaTextureImage image;

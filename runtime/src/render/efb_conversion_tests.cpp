@@ -16,6 +16,7 @@
 #include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/texture_cache.h"
+#include "nebula_cooked_texture.h"
 
 #include <algorithm>
 #include <array>
@@ -565,129 +566,6 @@ bool test_direct_color_tile_decode() {
         if (!check(256u, 256u, 1u, true)) return false;
         galaxy::render::detail::decode_color_tiles(format, nullptr, 0u, 9u, nullptr);
         galaxy::render::detail::decode_color_tiles(format, nullptr, 9u, 0u, nullptr);
-    }
-    return true;
-}
-
-bool test_small_index_tile_decode() {
-    using galaxy::render::RGBA8;
-    using galaxy::render::TexFormat;
-    using galaxy::render::TlutFormat;
-    // Every tile-tail width and height, full and multiple tiles, and both sides of the raw/decoded palette threshold.
-    // The oracle computes each tiled source address from the destination x/y.
-    constexpr auto sizes = [] {
-        constexpr std::array<std::uint32_t, 18> dimensions{
-            1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u,
-            15u, 16u, 31u, 32u, 33u, 64u, 65u, 256u, 257u};
-        std::array<std::array<std::uint32_t, 2>, dimensions.size() * dimensions.size()> result{};
-        std::size_t next = 0u;
-        for (auto width : dimensions) {
-            for (auto height : dimensions) result[next++] = {width, height};
-        }
-        return result;
-    }();
-    constexpr std::array<std::uint16_t, 8> edge_words{
-        0x0000u, 0xFFFFu, 0x8000u, 0x7FFFu,
-        0xF800u, 0x07E0u, 0x001Fu, 0x1234u};
-    constexpr RGBA8 guard{0x91u, 0x38u, 0xE2u, 0x57u};
-    const auto same = [](RGBA8 a, RGBA8 b) {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-    };
-    // Arithmetic channel expansion is independent of the decoder's shifts/ORs.
-    const auto color = [](std::uint16_t word, TlutFormat format) -> RGBA8 {
-        const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
-        const auto e6 = [](unsigned n) { return static_cast<std::uint8_t>(4u * n + n / 16u); };
-        const auto e4 = [](unsigned n) { return static_cast<std::uint8_t>(17u * n); };
-        if (format == TlutFormat::IA8) {
-            const auto intensity = static_cast<std::uint8_t>(word % 256u);
-            return {intensity, intensity, intensity, static_cast<std::uint8_t>(word / 256u)};
-        }
-        if (format == TlutFormat::RGB565) {
-            return {e5(word / 2048u), e6((word / 32u) % 64u), e5(word % 32u), 255u};
-        }
-        if (word >= 0x8000u) {
-            return {e5((word / 1024u) % 32u), e5((word / 32u) % 32u), e5(word % 32u), 255u};
-        }
-        const unsigned alpha = word / 4096u;
-        return {e4((word / 256u) % 16u), e4((word / 16u) % 16u), e4(word % 16u),
-                static_cast<std::uint8_t>(32u * alpha + 4u * alpha + alpha / 2u)};
-    };
-    const auto decode = [](TexFormat format, const std::uint8_t* src,
-                           std::uint32_t width, std::uint32_t height,
-                           const std::uint8_t* palette, TlutFormat tlut, RGBA8* out) {
-        if (format == TexFormat::C14X2) {
-            galaxy::render::detail::decode_c14x2_tiles(src, width, height, palette, tlut, out);
-        } else {
-            galaxy::render::detail::decode_small_index_tiles(format, src, width, height, palette, tlut, out);
-        }
-    };
-    for (const auto format : {TexFormat::C4, TexFormat::C8, TexFormat::C14X2}) {
-        const bool four_bits = format == TexFormat::C4;
-        const bool wide_index = format == TexFormat::C14X2;
-        const unsigned entries = wide_index ? 16384u : four_bits ? 16u : 256u;
-        const unsigned tile_rows = four_bits ? 8u : 4u;
-        const unsigned tile_columns = wide_index ? 4u : 8u;
-        for (const auto tlut : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3}) {
-            for (const auto size : sizes) {
-                const auto width = size[0], height = size[1];
-                const auto tiles_x = (width + tile_columns - 1u) / tile_columns;
-                const auto tiles_y = (height + tile_rows - 1u) / tile_rows;
-                for (const auto prefix : {0u, 513u}) {
-                    std::vector<std::uint8_t> source(3u + tiles_x * tiles_y * 32u);
-                    for (std::size_t i = 3u; i < source.size(); ++i) {
-                        source[i] = static_cast<std::uint8_t>((i - 3u) * 37u + 13u);
-                    }
-                    if (wide_index) {
-                        // The 256x256 case visits every raw 16-bit index, including all four values of the two
-                        // unused top bits.
-                        for (std::size_t i = 3u; i < source.size(); i += 2u) {
-                            const auto word = static_cast<std::uint16_t>((i - 3u) / 2u);
-                            source[i] = static_cast<std::uint8_t>(word / 256u);
-                            source[i + 1u] = static_cast<std::uint8_t>(word % 256u);
-                        }
-                    }
-                    std::vector<std::uint8_t> bank(prefix + entries * 2u, 0xE7u);
-                    std::vector<RGBA8> output(width * height + 2u, guard);
-                    // The same pointers with a changed palette: no decoded table may survive into the next call.
-                    for (unsigned round = 0u; round < 2u; ++round) {
-                        std::vector<std::uint16_t> words(entries);
-                        for (unsigned i = 0u; i < entries; ++i) {
-                            words[i] = static_cast<std::uint16_t>(i * 421u + round * 0x3D37u);
-                            if (round == 0u && i < edge_words.size()) words[i] = edge_words[i];
-                            bank[prefix + i * 2u] = static_cast<std::uint8_t>(words[i] >> 8u);
-                            bank[prefix + i * 2u + 1u] = static_cast<std::uint8_t>(words[i]);
-                        }
-                        std::fill(output.begin(), output.end(), guard);
-                        decode(format, source.data() + 3u,
-                            width, height, bank.data() + prefix, tlut, output.data() + 1u);
-                        if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                                    "indexed edge tiles stay inside output")) return false;
-                        for (std::uint32_t y = 0; y < height; ++y) {
-                            for (std::uint32_t x = 0; x < width; ++x) {
-                                const auto tile = (y / tile_rows) * tiles_x + x / tile_columns;
-                                const auto local_pixel = (y % tile_rows) * tile_columns + x % tile_columns;
-                                const auto byte_offset = 3u + tile * 32u + (wide_index
-                                    ? local_pixel * 2u : four_bits ? local_pixel / 2u : local_pixel);
-                                const auto byte = source[byte_offset];
-                                const unsigned index = four_bits
-                                    ? (local_pixel % 2u == 0u ? byte / 16u : byte % 16u)
-                                    : wide_index
-                                        ? (static_cast<unsigned>(byte) * 256u + source[byte_offset + 1u]) % 16384u
-                                        : byte;
-                                if (!expect(same(output[1u + y * width + x], color(words[index], tlut)),
-                                            "indexed tile address, TLUT channels and changed palette match oracle")) {
-                                    return false;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        decode(
-            format, nullptr, 0u, 9u, nullptr, TlutFormat::IA8, nullptr);
-        decode(
-            format, nullptr, 9u, 0u, nullptr, TlutFormat::RGB565, nullptr);
     }
     return true;
 }
@@ -1693,8 +1571,6 @@ V main(uint id : SV_VertexID) {
             {TexFormat::I8, 16u, 8u, TlutFormat::IA8},
             {TexFormat::I8, 5u, 3u, TlutFormat::IA8},
             {TexFormat::I4, 8u, 8u, TlutFormat::IA8},
-            {TexFormat::C8, 8u, 4u, TlutFormat::RGB5A3},
-            {TexFormat::C4, 8u, 8u, TlutFormat::RGB565},
         };
         const auto run = [&](bool async) {
             auto cache_owner = std::make_unique<TextureCache>();
@@ -1711,7 +1587,6 @@ V main(uint id : SV_VertexID) {
                 allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create async decode list");
             cache.backend().set_upload_list(list.Get());
             hand_over(cache, address, bytes.data(), bytes.size());
-            // A 256-entry palette: the handed-over bytes at +0x8000.
             cache.set_async_decode_allowed(async);
             std::vector<TextureHandle> handles;
             std::uint32_t offset = 0u;
@@ -1941,34 +1816,17 @@ V main(uint id : SV_VertexID) {
                     "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
             }
         }
-        auto indexed_image = image; indexed_image.address = address + 512u;
-        indexed_image.format = TexFormat::C4;
-        TexMode indexed_mode{}; indexed_mode.min_filter = TexMinFilter::Near;
-        // Palettes by address: A and B, each handed over on its own.
-        constexpr auto palette_a = address + 1536u;
-        constexpr auto palette_b = address + 1600u;
-        hand_over(cache, palette_a, bytes.data() + 1536u, 32u);
-        hand_over(cache, palette_b, bytes.data() + 1600u, 32u);
-        const auto indexed = cache.get(indexed_image, indexed_mode, palette_a, TlutFormat::IA8);
-        const auto other_palette_format = cache.get(indexed_image, indexed_mode, palette_a, TlutFormat::RGB565);
-        const auto other_palette = cache.get(indexed_image, indexed_mode, palette_b, TlutFormat::IA8);
-        passed &= expect(indexed.srv_index != other_palette_format.srv_index &&
-            indexed.srv_index != other_palette.srv_index,
-            "indexed textures key on their palette's format and address even when the palette bytes match");
-        const auto again = cache.get(indexed_image, indexed_mode, palette_a, TlutFormat::IA8);
-        passed &= expect(again.resource == indexed.resource && again.srv_index == indexed.srv_index,
-            "an unchanged palette keeps its decoded texture and descriptor");
-        bytes[1536] = std::byte{0xff};
-        hand_over(cache, palette_a, bytes.data() + 1536u, 32u);
-        const auto after_change = cache.get(indexed_image, indexed_mode, palette_a, TlutFormat::IA8);
-        const auto unaffected = cache.get(indexed_image, indexed_mode, palette_b, TlutFormat::IA8);
-        passed &= expect(after_change.resource != indexed.resource &&
-            unaffected.resource == other_palette.resource && unaffected.srv_index == other_palette.srv_index,
-            "handed-over palette bytes retire the textures decoded with them, not those of another palette");
-        const std::uint64_t missing_before = cache.missing_images();
-        (void)cache.get(indexed_image, indexed_mode, address + 0x100000u, TlutFormat::IA8);
-        passed &= expect(cache.missing_images() == missing_before + 1u,
-            "a palette never handed over decodes from zeros and is counted");
+        // A texture record (nebula_cooked_texture.h) uploads its own levels: an 8x8 L8 record with one level serves a
+        // sampler that asks for three with its one, its size the record's.
+        alignas(8) std::array<std::uint8_t, NEBULA_TEXTURE_HEADER + 64u> record_bytes{};
+        nebula_texture_init(record_bytes.data(), 8u, 8u, 1u, NEBULA_TEXTURE_L8, 0u);
+        constexpr auto record_address = address + 0x9000u;
+        hand_over(cache, record_address, reinterpret_cast<const std::byte*>(record_bytes.data()), record_bytes.size());
+        auto record_image = image; record_image.address = record_address;
+        record_image.format = TexFormat::I8;
+        const auto record = cache.get(record_image, mode, 0u, TlutFormat{});
+        passed &= expect(record.mip_levels == 1u && record.source_bytes == record_bytes.size() && record.width == 8u,
+            "a texture record uploads the levels it holds and is sized as the record");
 
         const auto original_config = get_render_config();
         auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
@@ -3166,7 +3024,6 @@ int main(int argc, char** argv) {
     passed &= test_flatten_texel_checker();
     passed &= test_remove_texel_checker();
     passed &= test_cmpr_tile_decode();
-    passed &= test_small_index_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     passed &= test_gx_pixel_readbacks();

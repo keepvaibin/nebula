@@ -1,5 +1,6 @@
 #pragma once
 
+#include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
@@ -54,7 +55,8 @@ namespace J3DNativeTexture {
     // GXInitTexObjTlut: the palette place a colour-indexed texture reads.
     void setTlut(GXTexObj* pObj, u32 tlutName);
     // An image's bytes handed to the renderer (nebula_game_api.h texture_image): where it is loaded or rewritten.
-    // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps).
+    // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps). An image that is a
+    // texture record (nebula_cooked_texture.h: a cooked file's, or one the game made) goes whole, as its header says.
     void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
     // A palette's colours handed to the renderer (`entries` 16-bit colours).
     void registerPalette(const void* pPalette, u16 entries);

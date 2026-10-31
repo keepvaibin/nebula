@@ -3,7 +3,8 @@
 # hidden, the sound to OUT/audio.wav, present snapshots and crash dumps into OUT, private settings and app-data.
 # Windows (Git Bash). The machine's paths come from the environment:
 #   NEBULA_BIN       folder with NebulaNative.exe and smg_game.dll (and tables/*.tsv when the build has them)
-#   NEBULA_PAK       the game content (game.pak)
+#   NEBULA_PAK       the game content (game.pak); a build whose folder holds pak.path runs that file's game.pak
+#                    instead (a cooked candidate beside a base on content packed before cooking)
 #   NEBULA_NAND      a test NAND folder (never a player's)
 #   NEBULA_APPDATA   a test app-data folder (shader caches; one per build when builds are compared)
 #   NEBULA_SETTINGS  a test settings folder (config.ini, runtime_settings.ini)
@@ -19,6 +20,9 @@ for v in NEBULA_BIN NEBULA_PAK NEBULA_NAND NEBULA_APPDATA NEBULA_SETTINGS; do
         exit 2
     fi
 done
+if [ -f "$NEBULA_BIN/pak.path" ]; then
+    NEBULA_PAK=$(tr -d '\r\n' < "$NEBULA_BIN/pak.path")
+fi
 mkdir -p "$out/bin" "$(cygpath -u "$NEBULA_APPDATA")" "$(cygpath -u "$NEBULA_SETTINGS")"
 cp "$NEBULA_BIN"/NebulaNative.exe "$NEBULA_BIN"/smg_game.dll "$out/bin/"
 cp "$NEBULA_BIN"/*.pdb "$out/bin/" 2>/dev/null || true

@@ -11,10 +11,6 @@ namespace nw4r {
         class Material;
 
         namespace detail {
-            inline bool IsCITexelFormat(_GXTexFmt fmt) {
-                return fmt == GX_TF_C4 || fmt == GX_TF_C8 || fmt == GX_TF_C14X2;
-            }
-
             inline u8 GetHorizontalPosition(u8 packed) {
                 return packed % 3;
             }

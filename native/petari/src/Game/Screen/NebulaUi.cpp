@@ -1,4 +1,5 @@
 #include "Game/Screen/NebulaUi.hpp"
+#include <nebula_cooked_texture.h>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 
 #ifdef TARGET_PC
@@ -208,6 +209,21 @@ namespace NebulaUi {
     // sheets are the console's tiled formats.
     s32 glyphCoverage(const nw4r::ut::Glyph& rGlyph, s32 x, s32 y) {
         const u8* pData = static_cast< const u8* >(rGlyph.pTexture);
+        // A cooked sheet (nebula_cooked_texture.h): texels in rows; the same 4-bit coverage as the tiles gave.
+        if (const NebulaTexture* pRecord = nebula_texture_record(pData)) {
+            const u8* pTexels = pData + NEBULA_TEXTURE_HEADER;
+            const s32 at = y * rGlyph.texWidth + x;
+            switch (pRecord->layout) {
+            case NEBULA_TEXTURE_L8:
+                return pTexels[at] >> 4;
+            case NEBULA_TEXTURE_LA8:
+                return pTexels[at * 2 + 1] >> 4;
+            case NEBULA_TEXTURE_RGBA8:
+                return pTexels[at * 4 + 3] >> 4;
+            default:
+                return -1;
+            }
+        }
         const s32 tilesAcross = (rGlyph.texWidth + 7) / 8;
         switch (rGlyph.texFormat) {
         case GX_TF_I4: {

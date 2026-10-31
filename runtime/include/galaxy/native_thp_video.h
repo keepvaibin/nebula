@@ -13,7 +13,8 @@ namespace galaxy::thp {
 // fmadd on AArch64; an error on a CPU without it), Automatic takes Fma3 when the CPU has it. Both give identical planes.
 enum class VideoKernel : std::uint8_t { Automatic, ExactSse2, Fma3 };
 
-// Decodes one frame into Y, U and V planes in GX I8 8x4 tiles; 0 on success, else a decoder error code.
+// Decodes one frame into Y, U and V planes, each rows of 8-bit texels from the top (width, then half width, across);
+// 0 on success, else a decoder error code.
 // Adapted from Aurora's THPDec.cpp (MIT; native_thp_video.cpp carries the notice).
 std::int32_t decode_video(std::span<const std::uint8_t> input,
     std::uint16_t width, std::uint16_t height,
