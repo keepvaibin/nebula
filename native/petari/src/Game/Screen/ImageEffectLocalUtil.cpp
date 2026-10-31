@@ -34,14 +34,15 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
     MR::connectToScene(pObj, MR::MovementType_ImageEffect, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool clear, u8 filter) {
+void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool half, u8 clear,
+                                   bool filtered) {
     // FallOutFieldDraw::draw passes 0 divisions each frame it draws: the capture then starts at the origin.
     if (divisions == 0) {
-        pTexture->capture(0, 0, format, clear, filter);
+        pTexture->capture(0, 0, format, half, clear, filtered);
         return;
     }
     pTexture->capture((tile % divisions) * MR::getFrameBufferWidth() / divisions, (tile / divisions) * MR::getFrameBufferHeight() / divisions, format,
-                      clear, filter);
+                      half, clear, filtered);
 }
 
 

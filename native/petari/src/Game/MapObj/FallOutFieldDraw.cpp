@@ -215,7 +215,7 @@ void FallOutFieldDraw::draw() const {
     JUTTexture* pScreenAlphaTexture3 = MR::getScreenAlphaTexture(3);
     JUTTexture* pScreenAlphaTexture4 = MR::getScreenAlphaTexture(4);
 
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GX_CTF_A8, true, 0);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GX_CTF_A8, true, 0, true);
 
     J3DNativeState::setTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
     J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
@@ -230,12 +230,12 @@ void FallOutFieldDraw::draw() const {
     ImageEffectLocalUtil::setCallerStage(&sMaskStages[_C ? 1 : 0]);
 
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture3, 2, 0, GX_CTF_A8, true, 0);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture3, 2, 0, GX_CTF_A8, true, 0, true);
 
     ImageEffectLocalUtil::setCallerStage(&sAlphaStage);
 
     ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, 4, 4, 5, 0.004f, 1.0f);
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture4, 4, 4, GX_CTF_A8, false, 0);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture4, 4, 4, GX_CTF_A8, false, 0, true);
     setUpEdgeAndClearAlpha();
     ImageEffectLocalUtil::setCallerStage(&sEdgeStage);
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture4, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);

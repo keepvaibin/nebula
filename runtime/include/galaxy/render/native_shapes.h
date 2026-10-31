@@ -104,7 +104,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial
+        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial, FrameShow
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
@@ -136,7 +136,8 @@ struct Record {
     std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
     // TargetClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd, TargetCapture: NebulaTargetChannels.
     std::uint8_t target_channels = 0;
-    // TargetCapture: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaCaptureFlags.
+    // TargetCapture: the frame's rectangle (target_x, target_y, target_width x target_height), NebulaCaptureFlags;
+    // FrameShow: the picture shown (target_width x target_height) and its NebulaCaptureFlags.
     std::uint16_t target_x = 0, target_y = 0;
     std::uint8_t target_flags = 0;
 };

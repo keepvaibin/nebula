@@ -48,7 +48,7 @@ path that replaces the GX stream step by step. Each record carries the GX writer
 | `J3DNativeDraw` (vertices sent as drawn: effects, shadows, 2D, text, particles, movie quad) | `immediate` (`NebulaImmediate`: primitive and typed vertex arrays) | `draw_record_immediate`, batched like direct draws |
 | `J3DStateList` (state lists built once: Mario's, CollisionShadow) and `J3DNativeState` (state set as the game draws: TEV, blend, depth, channels, texgens, counts, cull, lights, pixel format, fog) | `state` (`NebulaStateOp`: GX setter semantics; a partial setter changes only its fields of the live register) | `native_state::encode`, applied with the parser's side effects (copy, texture invalidation, TLUT load) |
 | `J3DNativeView` (projection, viewport, depth scale, scissor: kept game-side for read-back) | `state` | as above |
-| `J3DNativeState` copies (settings kept game-side) | `state` `NEBULA_STATE_COPY` | GXCopyDisp/GXCopyTex's sequence on the live Z, blend and pixel state, then `on_efb_copy` |
+| `J3DNativeState::showFrame` (the frame's size, the display filter as a flag) and `J3DNativeTarget::capture` | `frame_show`, `target_capture` (`NebulaCaptureFlags`) | the host's display picture and captures (`frame_show_params`, `capture_copy_params`), the display filter's taps host-side |
 | `J3DNativeShape::send*` (matrices the game loads) | a state-only `shape_draw` | `apply_record_matrices` |
 | RVLFaceLib (Miis) | its state through C entry points; its shapes as immediate vertices from its own index streams | as above |
 

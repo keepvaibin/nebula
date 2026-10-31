@@ -9026,9 +9026,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             }
         }
         for (const state::Op& op : record.state) {
-            if (op.kind == state::kCopy) {
-                on_efb_copy(efb_copy_params(draw_state_, op), draw_state_.pe.pixel_format);
-            } else if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
+            if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
             const std::uint32_t palettes = draw_state_.palette_revision;
@@ -9072,10 +9070,14 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     case shapes::Record::Kind::TargetCapture: {
         const std::uint16_t rect[4] = {record.target_x, record.target_y, record.target_width, record.target_height};
-        on_efb_copy(capture_copy_params(draw_state_, record.key, rect, record.target_channels, record.target_flags),
+        on_efb_copy(capture_copy_params(record.key, rect, record.target_channels, record.target_flags),
                     (record.target_flags & 8u) != 0u ? 3u : draw_state_.pe.pixel_format);
         return;
     }
+    case shapes::Record::Kind::FrameShow:
+        on_efb_copy(frame_show_params(record.target_width, record.target_height, record.target_flags),
+                    draw_state_.pe.pixel_format);
+        return;
     case shapes::Record::Kind::TargetClear:
         if (renderer_.target_pass_active()) {
             flush_pending_draw_batch();

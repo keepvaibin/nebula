@@ -34,11 +34,7 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
 }
 
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    GXRenderModeObj* renderModeObj = JUTVideo::getManager()->getRenderMode();
-
-    J3DNativeState::setCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_FALSE, renderModeObj->vfilter);
     mTexture[textureIndex]->capture(0, 0, GX_CTF_A8, false, 0);
-    J3DNativeState::setCopyFilter(GX_FALSE, renderModeObj->sample_pattern, GX_TRUE, renderModeObj->vfilter);
 }
 
 void ScreenAlphaCapture::loadScreenTexture(s32 index, GXTexMapID id) {

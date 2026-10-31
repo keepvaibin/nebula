@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
@@ -184,7 +183,6 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    CopyFilterNegater negator;
     ImageEffectLocalUtil::capture(_18, 4, 0, GX_TF_RGB565, false, 0);
     ImageEffectLocalUtil::capture(_1C, 1, 0, GX_TF_RGB565, true, 0);
     drawZAlphaTex();

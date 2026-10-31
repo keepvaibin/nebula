@@ -13,7 +13,6 @@
 #include "Game/Screen/CinemaFrame.hpp"
 #include "Game/Screen/CoinCounter.hpp"
 #include "Game/Screen/CometRetryButton.hpp"
-#include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/CountUpPaneRumbler.hpp"
 #include "Game/Screen/CounterLayoutAppearer.hpp"
 #include "Game/Screen/CounterLayoutController.hpp"

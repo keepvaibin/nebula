@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
@@ -178,8 +177,6 @@ void ScreenBlurEffect::drawBlur() const {
 }
 
 void ScreenBlurEffect::captureBlur() const {
-    CopyFilterNegater copyFilterNegater = CopyFilterNegater();
-
     _14->capture(0, 0, GX_TF_RGBA8, false, 0);
     _18->capture(0, 0, GX_TF_Z8, true, 0);
 }

@@ -2191,6 +2191,22 @@ void svc_target_capture(void*, uint64_t key, uint16_t left, uint16_t top, uint16
 #endif
 }
 
+// The frame shown (its display copy, host-made).
+void svc_frame_show(void*, uint16_t width, uint16_t height, uint32_t flags) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::FrameShow;
+    record.target_width = width;
+    record.target_height = height;
+    record.target_flags = static_cast<std::uint8_t>(flags);
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)width, (void)height, (void)flags;
+#endif
+}
+
 void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -3864,6 +3880,7 @@ int main(int argc, char** argv) {
     services.mii_record = svc_mii_record;
     services.readback_capture = svc_readback_capture;
     services.readback_pixel = svc_readback_pixel;
+    services.frame_show = svc_frame_show;
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;
     services.readback_serial = svc_readback_serial;

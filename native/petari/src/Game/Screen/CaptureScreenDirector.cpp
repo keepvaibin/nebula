@@ -31,11 +31,7 @@ void CaptureScreenDirector::captureIfAllow(const char* pName) {
 }
 
 void CaptureScreenDirector::capture() {
-    GXRenderModeObj* pRenderModeObj = JUTVideo::getManager()->getRenderMode();
-
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
     mTexture->capture(0, 0, GX_TF_RGB565, false, 0);
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
 }
 
 void CaptureScreenDirector::requestCaptureTiming(const char* pName) {

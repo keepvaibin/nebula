@@ -3,7 +3,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
-#include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
@@ -264,7 +263,6 @@ void BloomEffect::preDraw() const {
     } else
 #endif
     {
-        CopyFilterNegater copyFilterNegator;
         ImageEffectLocalUtil::capture(_24, 1, 0, GX_TF_RGBA8, false, 0);
     }
 
@@ -279,7 +277,6 @@ void BloomEffect::postDraw() const {
         return;
     }
 
-    GXRenderModeObj* pRenderObj = JUTVideo::getManager()->getRenderMode();
 #ifdef TARGET_PC
     if (sBloomRoute == 2) {
         // The chain below, drawn by the renderer at the internal resolution: the threshold, both blurs' tap weights (as
@@ -291,7 +288,6 @@ void BloomEffect::postDraw() const {
         NebulaRender::bloomMarker(NebulaRender::kBloomNormal, _20 | tap1 << 8 | tap2 << 16 | static_cast< u32 >(intensity) << 24,
                               floatBits(1.0f / MR::getAspect()));
         initDraw();
-        J3DNativeState::setCopyClear(Color8(0, 0, 0, 0xFF), 0xFFFFFF);
         J3DNativeState::setNumTexGens(1);
         J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
         J3DNativeState::setNumTevStages(1);
@@ -300,15 +296,12 @@ void BloomEffect::postDraw() const {
         _3C->load(GX_TEXMAP0);
         J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(0xFF, 0xFF, 0xFF, 0xFF));
         J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
-        J3DNativeState::setCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_TRUE, pRenderObj->vfilter);
         return;
     }
 #endif
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_FALSE, pRenderObj->vfilter);
 
     ImageEffectLocalUtil::capture(_28, 1, 0, GX_TF_RGB565, true, 0);
     initDraw();
-    J3DNativeState::setCopyClear(Color8(0, 0, 0, 0xFF), 0xFFFFFF);
     drawTexture(_28, 4, 0, 0xFF, DrawType_0);
 
     ImageEffectLocalUtil::capture(_2C, 4, 0, GX_TF_RGB565, false, 0);
@@ -335,7 +328,6 @@ void BloomEffect::postDraw() const {
     drawTexture(_38, 4, 7, intensity, DrawType_1);
 
     ImageEffectLocalUtil::capture(_3C, 4, 7, GX_TF_RGB565, false, 0);
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderObj->sample_pattern, GX_TRUE, pRenderObj->vfilter);
 
 #ifdef TARGET_PC
     if (sBloomRoute != 0) {

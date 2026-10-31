@@ -508,40 +508,6 @@ void J3DStateList::setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {
     r.a[4] = static_cast< u8 >(bias >> 16);
 }
 
-void J3DStateList::setCopyClear(GXColor color, u32 depth) {
-    NebulaStateOp& r = add(NEBULA_STATE_COPY_CLEAR);
-    setColor(r.a, color);
-    r.a[4] = static_cast< u8 >(depth);
-    r.a[5] = static_cast< u8 >(depth >> 8);
-    r.a[6] = static_cast< u8 >(depth >> 16);
-}
-
-void J3DStateList::setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter,
-                                 const u8 coefficients[7]) {
-    NebulaStateOp& rSamples = add(NEBULA_STATE_COPY_SAMPLES);
-    rSamples.a[0] = antialias;
-    if (antialias) {
-        for (u32 i = 0; i < 12; i++) {
-            rSamples.a[1 + i] = static_cast< u8 >((samples[i][0] & 15) | (samples[i][1] & 15) << 4);
-        }
-    }
-    NebulaStateOp& rFilter = add(NEBULA_STATE_COPY_VFILTER);
-    rFilter.a[0] = verticalFilter;
-    if (verticalFilter) {
-        memcpy(rFilter.a + 1, coefficients, 7);
-    }
-}
-
-void J3DStateList::setCopyYScale(u32 scale) {
-    add(NEBULA_STATE_COPY_YSCALE).size[0] = static_cast< u16 >(scale);
-}
-
-void J3DStateList::copy(const NebulaStateOp& rCopy) {
-    NebulaStateOp& r = add(NEBULA_STATE_COPY);
-    r = rCopy;
-    r.kind = NEBULA_STATE_COPY;
-}
-
 void J3DStateList::setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable) {
     if (enable) {
         for (u32 i = 0; i < 5; i++) {

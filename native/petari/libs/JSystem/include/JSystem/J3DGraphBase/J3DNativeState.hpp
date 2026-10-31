@@ -52,22 +52,11 @@ namespace J3DNativeState {
     void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat);
     // Textures in memory changed.
     void invalidateTexAll();
-    // The display copy's settings, kept here (GX's defaults until set) and sent with it; the copy-clear colour and
-    // the filter also apply to captures (J3DNativeTarget::capture).
-    void setDispCopySrc(u16 left, u16 top, u16 width, u16 height);
-    void setDispCopyDst(u16 width, u16 height);
-    void setDispCopyFrame2Field(GXCopyMode mode);
-    void setCopyClamp(GXFBClamp clamp);
-    void setDispCopyGamma(GXGamma gamma);
-    u32 setDispCopyYScale(f32 scale);
-    u16 getNumXfbLines(u16 efbHeight, f32 scale);
-    f32 getYScaleFactor(u16 efbHeight, u16 xfbHeight);
-    void setCopyClear(GXColor color, u32 depth);
-    void setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
     // The drawing state the game starts from (what GXInit set on the console), sent before anything is drawn.
     void initDefaults();
-    // The frame's picture is drawn: it becomes the one shown (the display copy's settings above apply).
-    void showFrame();
+    // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's
+    // vertical filter when `filtered`.
+    void showFrame(u16 width, u16 height, bool filtered);
     // The game's frame is complete: the host renders what it drew.
     void endFrame();
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);

@@ -1,6 +1,5 @@
 #include "Game/Screen/BloomEffectSimple.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
-#include "Game/Screen/CopyFilterNegater.hpp"
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
 #include "Game/Screen/ImageEffectResource.hpp"
 #include "Game/Screen/ImageEffectSystemHolder.hpp"
@@ -78,8 +77,6 @@ void BloomEffectSimple::draw() const {
         return;
     }
 #endif
-
-    CopyFilterNegater copyFilterNegator;
 
     ::TexSpec texSpec;
     texSpec.set(_20, 4, 0, GX_TF_RGB565);
