@@ -607,9 +607,15 @@ namespace J3DNativeState {
         list.send();
     }
 
-    // The texture every map holds until the game loads its own: 4x4 white IA8.
-    static u16 sDefaultTexData[16] ATTRIBUTE_ALIGN(32) = {0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF,
-                                                         0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF, 0xFFFF};
+    // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
+    // (nebula_cooked_texture.h).
+    static struct {
+        NebulaTexture header;
+        u8 texels[4 * 4 * 2];
+    } sDefaultTexData ATTRIBUTE_ALIGN(32) = {NEBULA_TEXTURE_STATIC(4, 4, NEBULA_TEXTURE_LA8, 4 * 4 * 2),
+                                             {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                                              0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+                                              0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
     // The frame GXInit assumed (its NTSC 480-line mode): 640x480, no antialiasing, the deflicker filter.
@@ -661,8 +667,8 @@ namespace J3DNativeState {
         invalidateTexAll();
 
         static GXTexObj sDefaultTexture;
-        J3DNativeTexture::registerImage(sDefaultTexData, GX_TF_IA8, 4, 4, 1);
-        J3DNativeTexture::init(&sDefaultTexture, sDefaultTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
+        J3DNativeTexture::registerImage(&sDefaultTexData, GX_TF_IA8, 4, 4, 1);
+        J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GX_TF_IA8, GX_CLAMP, GX_CLAMP, GX_FALSE);
         for (u32 i = 0; i < 8; i++) {
             J3DNativeTexture::load(&sDefaultTexture, static_cast< GXTexMapID >(i));
         }

@@ -139,6 +139,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/mod_xml.cpp
     runtime/src/virtual_disc.cpp
     runtime/src/mods.cpp
+    runtime/src/cooker_bridge.cpp
     runtime/src/mod_import.cpp
     runtime/src/crash_report.cpp
     runtime/src/discord_presence.cpp
@@ -564,6 +565,7 @@ target_include_directories(galaxy_gx
         "${galaxy_post_dir}"
         "${galaxy_rt_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
+        "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
 )
 if(MSVC)
     target_compile_options(galaxy_gx PRIVATE /GS- /GR- /Oi /favor:INTEL64)
@@ -602,6 +604,11 @@ message(STATUS "Host Release IPO: ${nebula_host_ipo_effective}")
 # Developer tool (tools/dev): the cosmetic asset extractor run against real game files.
 add_executable(galaxy_verify_asset_extract tools/dev/verify_asset_extract.cpp)
 target_link_libraries(galaxy_verify_asset_extract PRIVATE galaxy_gx)
+# Developer tool (tools/dev): the cooker's textures against the renderer's decode of the disc's (nebula-import's
+# NEBULA_COOK_DUMP).
+add_executable(galaxy_verify_cooked_textures tools/dev/verify_cooked_textures.cpp)
+target_include_directories(galaxy_verify_cooked_textures PRIVATE native/include)
+target_link_libraries(galaxy_verify_cooked_textures PRIVATE galaxy_gx)
 
 enable_testing()
 # A unit test: an executable from SOURCES linked with LIBS, registered with ctest (run with ARGS).
@@ -646,12 +653,14 @@ galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
     ${rt}/wii_device_data.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/virtual_disc.cpp ${rt}/mods.cpp
+    ${rt}/cooker_bridge.cpp
     ${rt}/mod_import.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(gxs runtime/src/render)
 galaxy_test(galaxy_game_asset_extract_tests SOURCES ${gxs}/game_asset_extract_tests.cpp ${gxs}/game_asset_extract.cpp)
+target_include_directories(galaxy_game_asset_extract_tests PRIVATE native/include)
 galaxy_test(galaxy_transform_history_tests SOURCES ${gxs}/transform_history_tests.cpp ${gxs}/transform_history.cpp)
 galaxy_test(galaxy_frame_interpolation_tests SOURCES ${gxs}/frame_interpolation_tests.cpp
     ${gxs}/frame_interpolation.cpp ${gxs}/transform_history.cpp)
@@ -670,6 +679,8 @@ endforeach()
 target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
     NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
 add_test(NAME galaxy_post_process_tests_held_no_deband COMMAND galaxy_post_process_tests --held-no-deband)
+# Texture records (nebula_cooked_texture.h) in the texture cache's suite.
+target_include_directories(galaxy_efb_conversion_tests PRIVATE native/include)
 foreach(mode content-key-hash oversized-content-cache decoded-allocation-budget)
     add_test(NAME galaxy_efb_conversion_tests_${mode} COMMAND galaxy_efb_conversion_tests --${mode})
 endforeach()
@@ -769,7 +780,8 @@ if(NEBULA_VULKAN)
         ${galaxy_post_embed_cpp}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
-    target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa")
+    target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
+        "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)
     target_link_libraries(galaxy_gx_vk
         PUBLIC

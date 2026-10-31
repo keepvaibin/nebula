@@ -25,10 +25,16 @@
 #include <revolution/gx/GXTransform.h>
 #include "Game/Util/RenderSignals.hpp"
 
-static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
-                                              0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,
-                                              0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-                                              0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+// The depth-clear texture: 4x4 of (255, 255, 255, 0), what the GPU sampled from the console's Z24X8 tile, as a texture
+// record (nebula_cooked_texture.h).
+static struct {
+    NebulaTexture header;
+    u8 texels[4 * 4 * 4];
+} sTexImgObj ATTRIBUTE_ALIGN(32) = {NEBULA_TEXTURE_STATIC(4, 4, NEBULA_TEXTURE_RGBA8, 4 * 4 * 4),
+                                 {0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                  0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                  0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
+                                  0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0}};
 
 void DrawUtil_FORCE_MATCH_SDATA2() {
     (void)-10000.0f;
@@ -135,8 +141,8 @@ namespace MR {
         J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         J3DNativeState::setNumTexGens(1);
         J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-        J3DNativeTexture::registerImage(sTexImgObj, GX_TF_Z24X8, 4, 4, 1);
-        J3DNativeTexture::init(&::clear_z_tobj, sTexImgObj, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
+        J3DNativeTexture::registerImage(&sTexImgObj, GX_TF_Z24X8, 4, 4, 1);
+        J3DNativeTexture::init(&::clear_z_tobj, &sTexImgObj, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
         J3DNativeTexture::initLOD(&::clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
         J3DNativeTexture::load(&::clear_z_tobj, GX_TEXMAP0);
         J3DNativeState::setNumTevStages(1);

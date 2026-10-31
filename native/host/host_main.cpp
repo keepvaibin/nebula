@@ -13,6 +13,7 @@
 #define NOMINMAX
 #endif
 #endif
+#include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
 
 #include "galaxy/atomic_file.h"
@@ -1903,13 +1904,24 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
     // images over too, so the record joins the stream ahead of the next one, as shape registrations do.
     std::shared_ptr<const std::vector<std::byte>> copy;
+    // Linear texels the game wrote (nebula_cooked_texture.h): kept as a texture record, its header first.
+    const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
+    const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
     {
         std::lock_guard guard(gHandedLock);
         auto& last = gHanded[address];
-        if (last != nullptr && last->size() == image->size && std::memcmp(last->data(), first, image->size) == 0) {
+        if (last != nullptr && last->size() == header + image->size &&
+            std::memcmp(last->data() + header, first, image->size) == 0) {
             return;
         }
-        last = std::make_shared<const std::vector<std::byte>>(first, first + image->size);
+        auto bytes = std::make_shared<std::vector<std::byte>>(header + image->size);
+        if (linear) {
+            nebula_texture_init(bytes->data(), image->width, image->height, 1u,
+                                static_cast<uint8_t>(image->format - NEBULA_TEXTURE_LINEAR_L8),
+                                NEBULA_TEXTURE_FILTER_AT_UPLOAD);
+        }
+        std::memcpy(bytes->data() + header, first, image->size);
+        last = std::move(bytes);
         copy = last;
     }
     shapes::Record record;

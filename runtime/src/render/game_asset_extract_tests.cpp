@@ -1,8 +1,10 @@
-// Game asset extraction: TPL decodes, malformed containers, RARC lookup and the disk loader.
+// Game asset extraction: cooked TPL texture records, malformed containers, RARC lookup and the disk loader.
 
 #include "galaxy/render/game_asset_extract.h"
+#include "nebula_cooked_texture.h"
 
 #include <algorithm>
+#include <cstring>
 #include <array>
 #include <chrono>
 #include <filesystem>
@@ -30,16 +32,21 @@ void put32(Bytes& bytes, std::size_t offset, std::uint32_t value) {
     put16(bytes, offset + 2, value & 65535u);
 }
 
-Bytes tpl(unsigned format, unsigned width, unsigned height, std::size_t tile_bytes) {
-    Bytes bytes(0x40u + tile_bytes);
+// A cooked TPL: one image whose data is a texture record of `layout` holding `texels` (the level's bytes).
+Bytes tpl(unsigned width, unsigned height, std::uint8_t layout, const std::vector<std::uint8_t>& texels) {
+    NebulaTexture record;
+    nebula_texture_init(&record, static_cast<std::uint16_t>(width), static_cast<std::uint16_t>(height), 1u, layout, 0u);
+    Bytes bytes(0x40u + record.size);
     put32(bytes, 0, 0x0020AF30u);
     put32(bytes, 4, 1);
     put32(bytes, 8, 12);
     put32(bytes, 12, 20);
     put16(bytes, 20, height);
     put16(bytes, 22, width);
-    put32(bytes, 24, format);
+    put32(bytes, 24, 6);
     put32(bytes, 28, 0x40);
+    std::memcpy(bytes.data() + 0x40, &record, sizeof(record));
+    std::memcpy(bytes.data() + 0x40 + sizeof(record), texels.data(), std::min<std::size_t>(texels.size(), record.size - sizeof(record)));
     return bytes;
 }
 
@@ -48,94 +55,40 @@ void expect_pixel(const galaxy::render::DecodedTexture& texture, unsigned x,
     const auto offset = (static_cast<std::size_t>(y) * texture.width + x) * 4;
     for (std::size_t channel = 0; channel < expected.size(); ++channel) {
         require(texture.rgba8.at(offset + channel) == expected[channel],
-                "decoded pixel differs from independent expected channels");
+                "texel differs from its record's");
     }
 }
 
 void test_pixels() {
-    // Every I4 nibble, including transparent zero, in tiled scan order.
-    auto i4 = tpl(0, 8, 8, 32);
-    for (unsigned i = 0; i < 8; ++i) {
-        i4[0x40 + i] = static_cast<std::byte>((2 * i << 4) | (2 * i + 1));
-    }
-    const auto decoded_i4 = galaxy::render::decode_tpl(i4);
-    require(decoded_i4.has_value(), "valid I4 rejected");
-    for (unsigned i = 0; i < 16; ++i) {
-        const auto value = static_cast<std::uint8_t>(i * 17);
-        expect_pixel(*decoded_i4, i % 8, i / 8, {value, value, value, value});
-    }
-
-    auto ia4 = tpl(2, 1, 1, 32);
-    ia4[0x40] = std::byte{0xA3};
-    const auto decoded_ia4 = galaxy::render::decode_tpl(ia4);
-    require(decoded_ia4.has_value(), "valid IA4 rejected");
-    expect_pixel(*decoded_ia4, 0, 0, {51, 51, 51, 170});
-
-    // Literal expansion tables catch floor(value*255/max) approximations.
-    constexpr std::array<std::uint8_t, 32> expanded5 = {
-        0, 8, 16, 24, 33, 41, 49, 57, 66, 74, 82, 90, 99, 107, 115, 123,
-        132, 140, 148, 156, 165, 173, 181, 189, 198, 206, 214, 222, 231, 239, 247, 255};
-    constexpr std::array<std::uint8_t, 8> expanded3 = {0, 36, 73, 109, 146, 182, 219, 255};
-    for (unsigned value = 0; value < 32; ++value) {
-        auto rgb = tpl(5, 1, 1, 32);
-        put16(rgb, 0x40, 0x8000u | (value << 10) | (value << 5) | value);
-        const auto decoded = galaxy::render::decode_tpl(rgb);
-        require(decoded.has_value(), "valid opaque RGB5A3 rejected");
-        expect_pixel(*decoded, 0, 0, {expanded5[value], expanded5[value], expanded5[value], 255});
-    }
-    for (unsigned alpha = 0; alpha < 8; ++alpha) {
-        auto rgb = tpl(5, 1, 1, 32);
-        put16(rgb, 0x40, (alpha << 12) | 0x012Fu);
-        const auto decoded = galaxy::render::decode_tpl(rgb);
-        require(decoded.has_value(), "valid alpha RGB5A3 rejected");
-        expect_pixel(*decoded, 0, 0, {17, 34, 255, expanded3[alpha]});
-    }
-
-    for (const unsigned format : {0u, 2u, 5u}) {
-        const unsigned tile_width = format == 5 ? 4u : 8u;
-        const unsigned tile_height = format == 0 ? 8u : 4u;
-        auto bytes = tpl(format, tile_width + 1, tile_height + 1, 128);
-        for (unsigned tile = 0; tile < 4; ++tile) {
-            for (unsigned i = 0; i < 32; ++i) {
-                bytes[0x40 + tile * 32 + i] = static_cast<std::byte>((tile + 1) * 0x11);
-            }
-        }
-        const auto decoded = galaxy::render::decode_tpl(bytes);
-        require(decoded.has_value(), "complete partial-edge tiles rejected");
-        require(decoded->rgba8.size() == static_cast<std::size_t>(tile_width + 1) * (tile_height + 1) * 4,
-                "logical output includes tile padding");
-        if (format != 5) {
-            expect_pixel(*decoded, tile_width, tile_height, {68, 68, 68, 68});
-        } else {
-            expect_pixel(*decoded, tile_width, tile_height, {68, 68, 68, 146});
-        }
-        bytes.pop_back();
-        require(!galaxy::render::decode_tpl(bytes), "truncated edge tile fabricated pixels");
-    }
+    const auto l8 = galaxy::render::tpl_texture(tpl(2, 1, NEBULA_TEXTURE_L8, {7, 200}));
+    require(l8.has_value() && l8->width == 2 && l8->height == 1, "valid L8 record rejected");
+    expect_pixel(*l8, 0, 0, {7, 7, 7, 7});
+    expect_pixel(*l8, 1, 0, {200, 200, 200, 200});
+    const auto la8 = galaxy::render::tpl_texture(tpl(1, 1, NEBULA_TEXTURE_LA8, {51, 170}));
+    require(la8.has_value(), "valid LA8 record rejected");
+    expect_pixel(*la8, 0, 0, {51, 51, 51, 170});
+    const auto rgba = galaxy::render::tpl_texture(tpl(1, 2, NEBULA_TEXTURE_RGBA8, {1, 2, 3, 4, 5, 6, 7, 8}));
+    require(rgba.has_value(), "valid RGBA8 record rejected");
+    expect_pixel(*rgba, 0, 1, {5, 6, 7, 8});
 }
 
 void test_malformed_tpl() {
-    const auto valid = tpl(0, 1, 1, 32);
+    const auto valid = tpl(1, 1, NEBULA_TEXTURE_L8, {9});
     for (std::size_t size = 0; size < valid.size(); ++size) {
-        require(!galaxy::render::decode_tpl(std::span(valid).first(size)),
-                "truncated TPL accepted");
+        require(!galaxy::render::tpl_texture(std::span(valid).first(size)), "truncated TPL accepted");
     }
-    for (const auto [offset, value] : std::array<std::pair<std::size_t, std::uint32_t>, 8>{
-             {{0, 0}, {4, 0}, {4, 0xFFFFFFFFu}, {8, 0xFFFFFFFCu},
-              {12, 0xFFFFFFFCu}, {12, 0}, {24, 6}, {28, 0xFFFFFFFFu}}}) {
+    for (const auto [offset, value] : std::array<std::pair<std::size_t, std::uint32_t>, 6>{
+             {{0, 0}, {4, 0}, {4, 0xFFFFFFFFu}, {8, 0xFFFFFFFCu}, {12, 0}, {28, 0xFFFFFFFFu}}}) {
         auto bytes = valid;
         put32(bytes, offset, value);
-        require(!galaxy::render::decode_tpl(bytes), "invalid TPL field accepted");
+        require(!galaxy::render::tpl_texture(bytes), "invalid TPL field accepted");
     }
-    for (const unsigned dimension : {0u, 4097u}) {
-        auto bytes = valid;
-        put16(bytes, 22, dimension);
-        require(!galaxy::render::decode_tpl(bytes), "invalid TPL dimension accepted");
-    }
-    auto incomplete_table = valid;
-    put32(incomplete_table, 4, 2);
-    put32(incomplete_table, 8, static_cast<std::uint32_t>(valid.size() - 8));
-    require(!galaxy::render::decode_tpl(incomplete_table), "incomplete descriptor array accepted");
+    auto other_size = valid;
+    put16(other_size, 22, 2);
+    require(!galaxy::render::tpl_texture(other_size), "a record of another size accepted");
+    auto uncooked = valid;
+    uncooked[0x40] = std::byte{0};
+    require(!galaxy::render::tpl_texture(uncooked), "a TPL packed before cooking accepted");
 }
 
 Bytes archive(const Bytes& texture) {
@@ -159,7 +112,7 @@ Bytes archive(const Bytes& texture) {
 }
 
 void test_archive_and_loader() {
-    const auto texture = tpl(2, 1, 1, 32);
+    const auto texture = tpl(1, 1, NEBULA_TEXTURE_LA8, {1, 2});
     const auto bytes = archive(texture);
     require(galaxy::render::rarc_find_file(bytes, "image.tpl").has_value(), "valid archive lookup failed");
     require(!galaxy::render::rarc_find_file(bytes, "IMAGE.TPL"), "archive lookup lost case sensitivity");
@@ -185,7 +138,9 @@ void test_archive_and_loader() {
     require(!galaxy::render::load_game_texture(root_string, "missing.arc", "image.tpl"), "missing file accepted");
     write(bytes);
     require(galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl").has_value(), "valid disk archive failed");
-    auto corrupt = archive(tpl(0, 1, 1, 31));
+    auto broken = texture;
+    broken.resize(broken.size() - 1u);
+    auto corrupt = archive(broken);
     write(corrupt);
     require(!galaxy::render::load_game_texture(root_string, "asset.arc", "image.tpl"), "bad file reused successful texture");
     std::filesystem::resize_file(root / "asset.arc", 64u * 1024u * 1024u + 1u);

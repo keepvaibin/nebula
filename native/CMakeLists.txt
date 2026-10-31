@@ -151,7 +151,7 @@ endif()
 # The native game's host (host/host_main.cpp): loads the module and serves it. Built with the host's own C++ library.
 # The mods' virtual disc (galaxy::mods) serves this host's disc reads as the windowed host's.
 add_executable(nebula_native_host host/host_main.cpp
-    ../runtime/src/mods.cpp ../runtime/src/mod_xml.cpp ../runtime/src/virtual_disc.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
+    ../runtime/src/mods.cpp ../runtime/src/cooker_bridge.cpp ../runtime/src/mod_xml.cpp ../runtime/src/virtual_disc.cpp ../runtime/src/atomic_file.cpp ../runtime/src/save_files.cpp ../runtime/src/disc_files.cpp
     ../runtime/src/crash_report.cpp ../runtime/src/discord_presence.cpp ../runtime/src/mii_import.cpp
     ../runtime/src/mii_formats.cpp ../runtime/src/wii_device_data.cpp)
 target_include_directories(nebula_native_host PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include"

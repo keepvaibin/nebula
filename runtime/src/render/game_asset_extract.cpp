@@ -1,6 +1,8 @@
-// Yaz0, RARC and TPL readers for the settings overlay's game art (game_asset_extract.h).
+// The settings overlay's game art from the cooked content (game_asset_extract.h): an archive's file, a TPL's
+// texture record.
 
 #include "galaxy/render/game_asset_extract.h"
+#include "nebula_cooked_texture.h"
 
 #include <bit>
 #include <cstring>
@@ -39,78 +41,7 @@ constexpr std::size_t kMaxCosmeticArchiveSize = 64u * 1024u * 1024u;
         static_cast<std::uint32_t>(data[offset + 1]));
 }
 
-[[nodiscard]] std::uint8_t read_u8(
-    std::span<const std::byte> data, std::size_t offset) noexcept {
-    return offset < data.size() ? static_cast<std::uint8_t>(data[offset])
-                                 : std::uint8_t{0};
-}
-
 }  // namespace
-
-std::vector<std::byte> yaz0_decompress(std::span<const std::byte> data) {
-    if (data.size() < 16 ||
-        std::memcmp(data.data(), "Yaz0", 4) != 0) {
-        return {};
-    }
-    const std::uint32_t dec_size = read_be32(data, 4);
-    // Refuse implausible sizes from corrupt archives instead of allocating them.
-    if (dec_size == 0 || dec_size > kMaxCosmeticArchiveSize) {
-        return {};
-    }
-    std::vector<std::byte> out(dec_size);
-    std::size_t src = 16;
-    std::size_t dst = 0;
-    while (dst < dec_size) {
-        if (src >= data.size()) {
-            return {};
-        }
-        std::uint8_t code = read_u8(data, src);
-        ++src;
-        for (int bit = 0; bit < 8 && dst < dec_size; ++bit) {
-            if ((code & 0x80u) != 0u) {
-                if (src >= data.size()) {
-                    return {};
-                }
-                out[dst] = data[src];
-                ++src;
-                ++dst;
-            } else {
-                if (src + 1 >= data.size()) {
-                    return {};
-                }
-                const std::uint8_t b1 = read_u8(data, src);
-                const std::uint8_t b2 = read_u8(data, src + 1);
-                src += 2;
-                const std::uint32_t dist =
-                    ((static_cast<std::uint32_t>(b1) & 0x0Fu) << 8) | b2;
-                std::uint32_t copy_len = static_cast<std::uint32_t>(b1) >> 4;
-                if (copy_len == 0) {
-                    if (src >= data.size()) {
-                        return {};
-                    }
-                    copy_len = static_cast<std::uint32_t>(read_u8(data, src)) +
-                        0x12u;
-                    ++src;
-                } else {
-                    copy_len += 2;
-                }
-                if (dist + 1 > dst) {
-                    // Back-reference before the start of output: corrupt input.
-                    return {};
-                }
-                std::size_t copy_src = dst - (dist + 1);
-                for (std::uint32_t i = 0;
-                     i < copy_len && dst < dec_size; ++i) {
-                    out[dst] = out[copy_src];
-                    ++dst;
-                    ++copy_src;
-                }
-            }
-            code = static_cast<std::uint8_t>(code << 1);
-        }
-    }
-    return out;
-}
 
 std::vector<RarcFile> rarc_list_files(std::span<const std::byte> data) {
     std::vector<RarcFile> result;
@@ -191,111 +122,7 @@ std::optional<std::span<const std::byte>> rarc_find_file(
     return std::nullopt;
 }
 
-namespace {
-
-void decode_i4(
-    std::span<const std::byte> data, std::size_t off, unsigned w,
-    unsigned h, std::vector<std::uint8_t>& out) {
-    std::size_t idx = off;
-    for (unsigned by = 0; by < h; by += 8) {
-        for (unsigned bx = 0; bx < w; bx += 8) {
-            for (unsigned y = 0; y < 8; ++y) {
-                for (unsigned x = 0; x < 8; x += 2) {
-                    const std::uint8_t b = read_u8(data, idx);
-                    ++idx;
-                    const std::uint8_t nibbles[2] = {
-                        static_cast<std::uint8_t>((b >> 4) & 0xFu),
-                        static_cast<std::uint8_t>(b & 0xFu)};
-                    for (int half = 0; half < 2; ++half) {
-                        const unsigned px = bx + x + static_cast<unsigned>(half);
-                        const unsigned py = by + y;
-                        if (px < w && py < h) {
-                            const std::uint8_t v = static_cast<std::uint8_t>(
-                                nibbles[half] * 17u);
-                            const std::size_t o = (static_cast<std::size_t>(py) * w + px) * 4u;
-                            out[o] = v;
-                            out[o + 1] = v;
-                            out[o + 2] = v;
-                            out[o + 3] = v;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-void decode_ia4(
-    std::span<const std::byte> data, std::size_t off, unsigned w,
-    unsigned h, std::vector<std::uint8_t>& out) {
-    std::size_t idx = off;
-    for (unsigned by = 0; by < h; by += 4) {
-        for (unsigned bx = 0; bx < w; bx += 8) {
-            for (unsigned y = 0; y < 4; ++y) {
-                for (unsigned x = 0; x < 8; ++x) {
-                    const std::uint8_t b = read_u8(data, idx);
-                    ++idx;
-                    const unsigned px = bx + x;
-                    const unsigned py = by + y;
-                    if (px < w && py < h) {
-                        const std::uint8_t a = static_cast<std::uint8_t>((b >> 4) * 17u);
-                        const std::uint8_t i = static_cast<std::uint8_t>((b & 0xFu) * 17u);
-                        const std::size_t o = (static_cast<std::size_t>(py) * w + px) * 4u;
-                        out[o] = i;
-                        out[o + 1] = i;
-                        out[o + 2] = i;
-                        out[o + 3] = a;
-                    }
-                }
-            }
-        }
-    }
-}
-
-void decode_rgb5a3(
-    std::span<const std::byte> data, std::size_t off, unsigned w,
-    unsigned h, std::vector<std::uint8_t>& out) {
-    std::size_t idx = off;
-    for (unsigned by = 0; by < h; by += 4) {
-        for (unsigned bx = 0; bx < w; bx += 4) {
-            for (unsigned y = 0; y < 4; ++y) {
-                for (unsigned x = 0; x < 4; ++x) {
-                    const unsigned px = bx + x;
-                    const unsigned py = by + y;
-                    const std::uint16_t val = read_be16(data, idx);
-                    idx += 2;
-                    std::uint8_t r, g, b, a;
-                    if ((val & 0x8000u) != 0u) {
-                        const auto expand5 = [](unsigned value) {
-                            return static_cast<std::uint8_t>((value << 3) | (value >> 2));
-                        };
-                        r = expand5((val >> 10) & 0x1Fu);
-                        g = expand5((val >> 5) & 0x1Fu);
-                        b = expand5(val & 0x1Fu);
-                        a = 255u;
-                    } else {
-                        const unsigned alpha = (val >> 12) & 0x7u;
-                        a = static_cast<std::uint8_t>((alpha << 5) | (alpha << 2) | (alpha >> 1));
-                        r = static_cast<std::uint8_t>(((val >> 8) & 0xFu) * 17u);
-                        g = static_cast<std::uint8_t>(((val >> 4) & 0xFu) * 17u);
-                        b = static_cast<std::uint8_t>((val & 0xFu) * 17u);
-                    }
-                    if (px < w && py < h) {
-                        const std::size_t o = (static_cast<std::size_t>(py) * w + px) * 4u;
-                        out[o] = r;
-                        out[o + 1] = g;
-                        out[o + 2] = b;
-                        out[o + 3] = a;
-                    }
-                }
-            }
-        }
-    }
-}
-
-}  // namespace
-
-std::optional<DecodedTexture> decode_tpl(std::span<const std::byte> data) noexcept try {
+std::optional<DecodedTexture> tpl_texture(std::span<const std::byte> data) noexcept try {
     if (data.size() < 12 || read_be32(data, 0) != 0x0020AF30u) {
         return std::nullopt;
     }
@@ -311,45 +138,32 @@ std::optional<DecodedTexture> decode_tpl(std::span<const std::byte> data) noexce
     }
     const std::uint16_t height = read_be16(data, header_off);
     const std::uint16_t width = read_be16(data, header_off + 2);
-    const std::uint32_t format = read_be32(data, header_off + 4);
-    const std::uint32_t data_off = read_be32(data, header_off + 8);
-    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
+    const std::size_t data_off = read_be32(data, header_off + 8);
+    if (!contains_bytes(data, data_off, NEBULA_TEXTURE_HEADER)) {
         return std::nullopt;
     }
-
-    unsigned tile_width = 0;
-    unsigned tile_height = 0;
-    switch (format) {
-        case 0: tile_width = 8; tile_height = 8; break;
-        case 2: tile_width = 8; tile_height = 4; break;
-        case 5: tile_width = 4; tile_height = 4; break;
-        default: return std::nullopt;
-    }
-    const std::size_t encoded_size =
-        ((static_cast<std::size_t>(width) + tile_width - 1u) / tile_width) *
-        ((static_cast<std::size_t>(height) + tile_height - 1u) / tile_height) * 32u;
-    if (!contains_bytes(data, data_off, encoded_size)) {
+    const NebulaTexture* record = nebula_texture_record(data.data() + data_off);
+    if (record == nullptr || record->width != width || record->height != height || width == 0 || height == 0 ||
+        record->layout > NEBULA_TEXTURE_LA8 || !contains_bytes(data, data_off, record->size) ||
+        NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(width, height, 1u, record->layout) > record->size) {
         return std::nullopt;
     }
-
     DecodedTexture result{};
     result.width = width;
     result.height = height;
-    result.rgba8.assign(static_cast<std::size_t>(width) * height * 4u, 0u);
-
-    switch (format) {
-        case 0:
-            decode_i4(data, data_off, width, height, result.rgba8);
-            break;
-        case 2:
-            decode_ia4(data, data_off, width, height, result.rgba8);
-            break;
-        case 5:
-            decode_rgb5a3(data, data_off, width, height, result.rgba8);
-            break;
-        default:
-            // Not a format this reader has been verified against.
-            return std::nullopt;
+    const std::size_t count = static_cast<std::size_t>(width) * height;
+    result.rgba8.resize(count * 4u);
+    const auto* texels = reinterpret_cast<const std::uint8_t*>(record) + NEBULA_TEXTURE_HEADER;
+    for (std::size_t i = 0; i < count; ++i) {
+        std::uint8_t* out = result.rgba8.data() + i * 4u;
+        if (record->layout == NEBULA_TEXTURE_L8) {
+            out[0] = out[1] = out[2] = out[3] = texels[i];
+        } else if (record->layout == NEBULA_TEXTURE_LA8) {
+            out[0] = out[1] = out[2] = texels[i * 2u];
+            out[3] = texels[i * 2u + 1u];
+        } else {
+            std::memcpy(out, texels + i * 4u, 4u);
+        }
     }
     return result;
 } catch (...) {
@@ -381,22 +195,11 @@ std::optional<DecodedTexture> load_game_texture(
         return std::nullopt;
     }
 
-    std::vector<std::byte> decompressed;
-    std::span<const std::byte> archive_bytes = raw;
-    if (raw.size() >= 4 && std::memcmp(raw.data(), "Yaz0", 4) == 0) {
-        decompressed = yaz0_decompress(raw);
-        if (decompressed.empty()) {
-            return std::nullopt;
-        }
-        archive_bytes = decompressed;
-    }
-
-    const std::optional<std::span<const std::byte>> entry =
-        rarc_find_file(archive_bytes, texture_entry_name);
+    const std::optional<std::span<const std::byte>> entry = rarc_find_file(raw, texture_entry_name);
     if (!entry.has_value()) {
         return std::nullopt;
     }
-    return decode_tpl(*entry);
+    return tpl_texture(*entry);
 } catch (...) {
     // Cosmetic extraction failures must not reach the renderer's failure path.
     return std::nullopt;
