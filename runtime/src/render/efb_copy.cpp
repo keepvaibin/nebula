@@ -145,46 +145,6 @@ gpu::TextureRef EfbCopyManager::acquire_idle_texture(
 // calculation is applied at all. The source-size register stores height - 1;
 // EfbCopyParams stores the decoded height, so the base result is
 // 1 + floor((height - 1) * 256 / y_scale_raw).
-std::uint16_t compute_xfb_copy_height(
-    std::uint16_t src_height,
-    std::uint32_t y_scale_raw,
-    bool scale_y) {
-    constexpr std::uint32_t kMaximumXfbLines = 1024u;
-    if (src_height == 0u) {
-        throw std::invalid_argument(
-            "XFB copy source height must be nonzero");
-    }
-    if (!scale_y) {
-        return static_cast<std::uint16_t>(
-            std::min<std::uint32_t>(src_height, kMaximumXfbLines));
-    }
-
-    // The register is nine bits wide. A zero inverse step cannot describe a
-    // finite display copy; fail instead of inventing a scale.
-    if (y_scale_raw == 0u || y_scale_raw > 0x1FFu) {
-        throw std::invalid_argument(
-            "XFB copy inverse y-scale is outside the 9-bit finite range");
-    }
-
-    const std::uint32_t count =
-        static_cast<std::uint32_t>(src_height - 1u) * 256u;
-    std::uint32_t output_lines = count / y_scale_raw + 1u;
-
-    // Exact RMGE01 RVL SDK __GXGetNumXfbLines divisor correction.
-    std::uint32_t reduced_step = y_scale_raw;
-    if (reduced_step > 0x80u && reduced_step < 0x100u) {
-        while ((reduced_step & 1u) == 0u) {
-            reduced_step >>= 1u;
-        }
-        if (src_height % reduced_step == 0u) {
-            ++output_lines;
-        }
-    }
-    // The RVL SDK caps the guest-visible result at 1024 XFB lines.
-    return static_cast<std::uint16_t>(
-        std::min(output_lines, kMaximumXfbLines));
-}
-
 ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
@@ -200,25 +160,6 @@ ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     return ScaledEfbCopyExtent{
         static_cast<std::uint16_t>(width),
         static_cast<std::uint16_t>(height)};
-}
-
-bool is_galaxy_bloom_workspace_copy(
-    const EfbCopyParams& p, bool is_depth_copy) noexcept {
-    if (is_depth_copy || p.copy_to_xfb || p.yuv || p.clear ||
-        p.intensity || p.target_format != 4u || p.gamma != 0u ||
-        p.scale_y || p.frame_to_field != 0u) return false;
-    // The game's colour-mask bloom chain: a 160x114 bright/blur workspace at (480,0), an 80x57 downsampled blur
-    // result at (320,114) and the final 160x114 colour composite at (480,114). The early mask and focus copies at
-    // (0,0) and (320,0) are excluded even when their format matches.
-    if (p.src_x == 480u && p.src_y == 0u &&
-        p.src_width == 160u && p.src_height == 114u)
-        return p.dest_stride == (p.half_scale ? 640u : 1280u);
-    if (p.src_x == 320u && p.src_y == 114u &&
-        p.src_width == 80u && p.src_height == 57u)
-        return !p.half_scale && p.dest_stride == 640u;
-    return p.src_x == 480u && p.src_y == 114u &&
-        p.src_width == 160u && p.src_height == 114u &&
-        !p.half_scale && p.dest_stride == 1280u;
 }
 
 EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
@@ -289,11 +230,7 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     // The ring moves on when a picture is published (mark_xfb_copied).
     const std::uint32_t slot = next_slot_;
 
-    const std::uint16_t logical_h =
-        compute_xfb_copy_height(
-            params.src_height,
-            params.y_scale,
-            params.scale_y);
+    const std::uint16_t logical_h = params.src_height;
     const ScaledEfbCopyExtent extent = compute_scaled_efb_copy_extent(
         params.src_width,
         logical_h,
@@ -388,8 +325,7 @@ std::optional<EfbCopyRect> efb_identity_copy_rect(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
     if (is_depth_copy || params.copy_to_xfb || params.target_format != 6u ||
-        params.intensity || params.yuv || (params.gamma & 3u) != 0u ||
-        params.half_scale || params.scale_y || params.frame_to_field != 0u ||
+        params.intensity || params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
         static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {

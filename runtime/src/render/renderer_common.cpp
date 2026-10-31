@@ -23,15 +23,15 @@
 
 namespace galaxy::render {
 
-// EFB-copy conversion pixel shader. Operation order on hardware: quantize source samples to
-// bytes -> integer 3-row filter -> gamma -> optional RGB-to-YUV conversion -> destination-format
-// channel mapping. The filter applies to color and packed depth RGB alike; alpha is always the
+// EFB-copy conversion pixel shader (captures, the display picture, peeks). Operation order: quantize
+// source samples to bytes -> integer 3-row filter -> optional luminance (RGB-to-YUV) -> the channels
+// the picture carries. The filter applies to color and packed depth RGB alike; alpha is always the
 // unfiltered center sample. The depth buffer is reversed, so guest z24 is reconstructed from
 // 1 - sampled depth before filtering its three bytes.
 //
 // Root constants (b0):
 //   src_xform = src origin.xy, src texels per dest pixel .zw (scaled EFB px)
-//   modes     = intensity, gamma, is_depth, keep_alpha
+//   modes     = intensity, unused, is_depth, keep_alpha
 //   filt      = integer filter upper/middle/lower (1/64 units), clamp_y min
 //   filt2     = clamp_y max, decoded EFB-copy format (15 = XFB), scaled
 //               one-logical-row filter offset, EFB-peek reduction width
@@ -141,12 +141,6 @@ float4 main(V v) : SV_Target {
         }
         texcol_raw = min(texcol_raw, uint4(255u, 255u, 255u, 255u));
     }
-    if (modes.y != 1.0) {
-        texcol_raw = uint4(round(
-            pow(abs(float4(texcol_raw) / 255.0),
-                float4(1.0 / modes.y, 1.0 / modes.y, 1.0 / modes.y, 1.0)) *
-            255.0));
-    }
     if (modes.x != 0.0) {
         int3 rgb = int3(texcol_raw.rgb);
         uint3 yuv = uint3(
@@ -163,39 +157,18 @@ float4 main(V v) : SV_Target {
     // and screen captures copy at RGB565, and 5-6 bits band every soft glow,
     // blur and frozen backdrop at a raised resolution.
     uint fmt = uint(filt2.y + 0.5);
-    if (fmt == 0u) {             // R4 -> I4
-        uint i = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-        texcol_raw = uint4(i, i, i, i);
-    } else if (fmt == 1u || fmt == 8u) { // R8 -> I8
+    if (fmt == 1u || fmt == 8u) { // red (or luminance) in every channel
         texcol_raw = texcol_raw.rrrr;
-    } else if (fmt == 2u) {      // RA4 -> IA4
-        uint i = (texcol_raw.r & 0xF0u) | (texcol_raw.r >> 4);
-        uint a = (texcol_raw.a & 0xF0u) | (texcol_raw.a >> 4);
-        texcol_raw = uint4(i, i, i, a);
-    } else if (fmt == 3u) {      // RA8 -> IA8
+    } else if (fmt == 3u) {      // intensity and alpha
         texcol_raw = texcol_raw.rrra;
-    } else if (fmt == 4u) {      // RGB565: 8-bit colour kept (below)
+    } else if (fmt == 4u || fmt == 15u) { // colour, opaque (8-bit colour kept)
         texcol_raw.a = 255u;
-    } else if (fmt == 5u) {      // RGB5A3: 8-bit colour kept, the alpha's 3 bits
-        if (texcol_raw.a > 224u) {
-            texcol_raw.a = 255u;
-        } else {
-            texcol_raw.a =
-                (texcol_raw.a & 0xE0u) | (texcol_raw.a >> 3) |
-                (texcol_raw.a >> 6);
-        }
-    } else if (fmt == 7u) {      // A8 bytes are loaded as I8
+    } else if (fmt == 7u) {      // alpha in every channel
         texcol_raw = texcol_raw.aaaa;
-    } else if (fmt == 9u) {      // G8 -> I8
+    } else if (fmt == 9u) {      // green
         texcol_raw = texcol_raw.gggg;
-    } else if (fmt == 10u) {     // B8 -> I8
+    } else if (fmt == 10u) {     // blue
         texcol_raw = texcol_raw.bbbb;
-    } else if (fmt == 11u) {     // RG8 -> IA8
-        texcol_raw = texcol_raw.rrrg;
-    } else if (fmt == 12u) {     // GB8 -> IA8
-        texcol_raw = texcol_raw.gggb;
-    } else if (fmt == 15u) {     // XFB: full RGB precision, opaque alpha
-        texcol_raw.a = 255u;
     }
     return float4(texcol_raw) / 255.0;
 }
@@ -436,12 +409,11 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     const float clamp_y_max = std::max(
         clamp_y_min,
         (params.clamp_bottom ? copy_y1 : full_y1) - 0.5f);
-    static constexpr float kGammaLut[4] = {1.0f, 1.7f, 2.2f, 2.2f};
 
     return EfbConversionShaderConstants{{
         src_x, src_y, step_x, step_y,
         intensity ? 1.0f : 0.0f,
-        kGammaLut[params.gamma & 3u],
+        1.0f,
         is_depth_copy ? 1.0f : 0.0f,
         keep_alpha ? 1.0f : 0.0f,
         fw_up, fw_mid, fw_low, clamp_y_min,

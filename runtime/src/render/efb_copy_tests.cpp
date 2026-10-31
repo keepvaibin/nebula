@@ -54,8 +54,6 @@ bool test_scaled_xfb_resource_allocation() {
     params.src_width = 640u;
     params.src_height = 456u;
     params.dest_stride = 1280u;
-    params.y_scale = 256u;
-    params.scale_y = true;
     params.copy_to_xfb = true;
     galaxy::render::XfbTexture* xfb = manager.acquire_xfb(params, 1u);
     const bool allocated = xfb != nullptr && xfb->texture != nullptr;
@@ -145,85 +143,17 @@ int main() {
             "a late serial below the diagnostic high-water mark is still counted exactly on first presentation");
     }
 
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 256u, true) == 456u,
-        "enabled XFB y-scale 1.0 preserves height");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 256u, false) == 456u,
-        "disabled XFB y-scale ignores the scale register");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 511u, true) == 228u,
-        "maximum finite inverse XFB y-step shrinks height");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 128u, true) == 911u,
-        "small inverse XFB y-step expands height");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 511u, false) == 456u,
-        "disabled XFB y-scale ignores a maximum register value");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 128u, false) == 456u,
-        "disabled XFB y-scale ignores a small register value");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 0u, false) == 456u,
-        "disabled XFB y-scale never consumes an invalid scale register");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 152u, true) == 768u &&
-            galaxy::render::compute_xfb_copy_height(456u, 192u, true) == 608u &&
-            galaxy::render::compute_xfb_copy_height(456u, 228u, true) == 512u,
-        "RVL SDK XFB divisor correction preserves exact integral scale endpoints");
-    passed &= expect(
-        galaxy::render::compute_xfb_copy_height(456u, 1u, true) == 1024u,
-        "enabled XFB y-scale caps the guest-visible result at 1024 lines");
-    {
-        bool rejected_zero_scale = false;
-        try {
-            static_cast<void>(
-                galaxy::render::compute_xfb_copy_height(456u, 0u, true));
-        } catch (const std::invalid_argument&) {
-            rejected_zero_scale = true;
-        }
-        passed &= expect(
-            rejected_zero_scale,
-            "enabled XFB y-scale rejects a non-finite zero inverse step");
-    }
     {
         galaxy::render::EfbCopyParams bloom{};
         bloom.src_x = 480u;
         bloom.src_width = 160u;
         bloom.src_height = 114u;
-        bloom.target_format = 4u;
-        bloom.dest_stride = 1280u;
-        passed &= expect(galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "observed late RGB565 bright-pass copy qualifies");
-        passed &= expect(!galaxy::render::is_galaxy_bloom_workspace_copy(bloom, true),
-            "depth source at the same rectangle must remain scaled");
-        bloom.src_x = 0u;
-        passed &= expect(!galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "early mask at reused address must remain scaled");
-        bloom.src_x = 480u;
         bloom.half_scale = true;
-        bloom.dest_stride = 640u;
-        passed &= expect(galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "observed bloom downsample qualifies");
         const auto native_bloom = galaxy::render::compute_efb_copy_sampling_geometry(bloom, 80u, 57u, 6u);
         passed &= expect_near(native_bloom.src_x, 2880.0f,
             "native bloom samples the genuine scaled EFB origin");
         passed &= expect_near(native_bloom.step_x, 12.0f,
             "native bloom downsamples the scaled source instead of lowering the scene");
-        bloom.clear = true;
-        passed &= expect(!galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "copy-clear ownership cannot qualify for bloom resolution override");
-        bloom.clear = false;
-        bloom.src_x = 320u;
-        bloom.src_y = 114u;
-        bloom.src_width = 80u;
-        bloom.src_height = 57u;
-        bloom.half_scale = false;
-        passed &= expect(galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "late small blur workspace qualifies");
-        bloom.target_format = 7u;
-        passed &= expect(!galaxy::render::is_galaxy_bloom_workspace_copy(bloom, false),
-            "nearby alpha/shadow workspaces remain scaled");
     }
     {
         const galaxy::render::ScaledEfbCopyExtent native =
