@@ -1,6 +1,4 @@
-#include "JSystem/JKernel/JKRAramArchive.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
-#include "JSystem/JKernel/JKRCompArchive.hpp"
 #include "JSystem/JKernel/JKRDvdArchive.hpp"
 #include "JSystem/JKernel/JKRFileFinder.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
@@ -75,14 +73,8 @@ JKRArchive* JKRArchive::mount(s32 entryNum, EMountMode mountMode, JKRHeap* pHeap
     case MOUNT_MODE_MEM:
         archive = new (pHeap, uVar1) JKRMemArchive(entryNum, mountDir);
         break;
-    case MOUNT_MODE_ARAM:
-        archive = new (pHeap, uVar1) JKRAramArchive(entryNum, mountDir);
-        break;
     case MOUNT_MODE_DVD:
         archive = new (pHeap, uVar1) JKRDvdArchive(entryNum, mountDir);
-        break;
-    case MOUNT_MODE_COMP:
-        archive = new (pHeap, uVar1) JKRCompArchive(entryNum, mountDir);
         break;
     }
 

@@ -1,5 +1,4 @@
 #include "JSystem/JKernel/JKRDvdArchive.hpp"
-#include "JSystem/JKernel/JKRAramArchive.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
 #include "JSystem/JKernel/JKRCompression.hpp"
 #include "JSystem/JKernel/JKRDecomp.hpp"
@@ -11,6 +10,17 @@
 #include <cstdlib>
 #include <cstring>
 #include <mem.h>
+
+namespace {
+    // A file entry's compression from its attribute flags: none, SZP (0x80 clear) or SZS.
+    int JKRConvertAttrToCompressionType(int arg) {
+        if ((arg & 0x4) == 0) {
+            return 0;
+        }
+
+        return ((arg & 0x80) != 0) + 1;
+    }
+}  // namespace
 
 JKRDvdArchive::JKRDvdArchive(s32 entryNum, EMountDirection mountDir) : JKRArchive(entryNum, MOUNT_MODE_DVD) {
     mMountDir = mountDir;
