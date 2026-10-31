@@ -38,9 +38,6 @@ struct GamePaths {
 
 GamePaths locate_game(const std::filesystem::path& input);
 
-// A valid, empty Mii database (RFL_DB.dat) for a NAND that has none.
-[[nodiscard]] std::vector<std::byte> native_game_empty_mii_database();
-
 // The game's sound: the JAudio DSP program run on the host (JAudioHostMixer) over the game's channel records, and the
 // audio interface's blocks played on the output device (XAudio2, master volume, WAV dump).
 class NativeGameAudio {
