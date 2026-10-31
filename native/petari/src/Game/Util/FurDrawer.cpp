@@ -268,15 +268,17 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
 
 void FurDrawer::createFurMap() {
     u32 count;
-    // IA8 texels for GX, in the console's byte order.
-    NEBULA_BE(u16)* pPixels;
+    // LA8 texels in rows (NEBULA_TEXTURE_LINEAR_LA8): intensity, then alpha. The game wrote each strand at index
+    // x + width * y of an IA8 image in the console's 4x4 tiles; it lands where those tiles showed it, so the map is
+    // the one the game drew.
+    u8* pTexels = mFurTexture->mImage;
     u32 width = mFurTexture->getTexInfo()->mWidth;
     u32 height = mFurTexture->getTexInfo()->mHeight;
-    pPixels = reinterpret_cast< NEBULA_BE(u16)* >(mFurTexture->mImage);
     count = height * width;
 
     for (u32 i = 0; i < count; i++) {
-        pPixels[i] = 255;
+        pTexels[2 * i] = 255;
+        pTexels[2 * i + 1] = 0;
     }
 
     for (u32 type = 0; type < 4; type++) {
@@ -294,9 +296,18 @@ void FurDrawer::createFurMap() {
                 x = s32(width) - 1;
             }
 
-            pPixels[x + width * y] = (u16((s32)(255.0f * mThickness[type])) << 8) | u16(255 - mLengthMap[type]);
+            const u32 index = x + width * y;
+            const u32 tilesAcross = (width + 3) / 4;
+            const u32 tile = index >> 4;
+            const u32 texelX = (tile % tilesAcross) * 4 + (index & 3);
+            const u32 texelY = (tile / tilesAcross) * 4 + ((index >> 2) & 3);
+            if (texelX < width && texelY < height) {
+                u8* pTexel = pTexels + 2 * (texelX + width * texelY);
+                pTexel[0] = static_cast< u8 >(255 - mLengthMap[type]);
+                pTexel[1] = static_cast< u8 >(static_cast< s32 >(255.0f * mThickness[type]));
+            }
         }
     }
 
-    J3DNativeTexture::registerImage(pPixels, GX_TF_IA8, width, height, 1);
+    J3DNativeTexture::registerImage(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }

@@ -120,7 +120,7 @@ void MarioActor::initDrawAndModel() {
         _B7C = new JUTTexture(0x80, 0x40, GX_TF_RGB565);
 
         for (u32 i = 0; i < 2; i++) {
-            mMaskTextures[i] = new JUTTexture(8, 8, GX_TF_IA4);
+            mMaskTextures[i] = new JUTTexture(8, 8, GX_TF_IA8);
             mMaskTextures[i]->mWrapS = 1;
             mMaskTextures[i]->mWrapT = 1;
             mMaskTextures[i]->mMinType = 0;
