@@ -9,7 +9,6 @@ extern "C" {
 #include "RFLi_DataUtility.h"
 #include "RFLi_Database.h"
 #include "RFLi_DefaultDatabase.h"
-#include "RFLi_MakeRandomFace.h"
 #include "RFLi_MakeTex.h"
 #include "RFLi_Model.h"
 #include "RFLi_NANDLoader.h"

@@ -1,150 +1,81 @@
 #include "RVLFaceLibInternal.h"
-#include <nebula_kernel.h>
-#include <revolution/os.h>
-#include <cstdio>
 #include <revolution/types.h>
 
 #define RFL_SYSTEM_HEAP_SIZE 0x24800
 #define RFL_WORK_SIZE 0x4B000
 #define RFL_DELUXE_WORK_SIZE 0x64000
 
-/**
- * These functions are inlined, but with their conditions inverted(?) from the
- * actual functions. To avoid manually inlining them, these defines will hide
- * the fake inlines.
- */
-#define RFLiGetLoader_() (RFLAvailable() ? &RFLiGetManager()->loader : NULL)
-#define RFLiGetLastReason_() (RFLAvailable() ? RFLiGetManager()->lastReason : 0)
-#define RFLGetLastReason_() (RFLAvailable() ? RFLiGetLastReason_() : sRFLLastReason)
-
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-static char* __RFLVersion = "<< RVL_SDK - RFL \trelease build: Aug 22 2007 11:53:43 (0x4199_60831) >>";
-#elif (VERSION == RMGK01)
-static char* __RFLVersion = "<< RVL_SDK - RFL \trelease build: Mar  6 2008 17:40:04 (0x4199_60831) >>";
-#endif
 const RFLiCoordinateData scCoordinate = {1, 2, 0, FALSE, FALSE, FALSE};
 
+// The library while it runs: the work memory the game gives it (its heaps), the parts archive, the draw callbacks.
 static RFLiManager* sRFLManager = NULL;
-static RFLErrcode sRFLLastErrCode = RFLErrcode_NotAvailable;
-static u8 sRFLiFileBrokenType;
-static s32 sRFLLastReason;
 
 u32 RFLGetWorkSize(BOOL deluxeTex) {
     return deluxeTex ? RFL_DELUXE_WORK_SIZE + sizeof(RFLiManager) : RFL_WORK_SIZE + sizeof(RFLiManager);
 }
 
-RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize, BOOL useDeluxTex) {
-    RFLErrcode errcode;
-    u32 wholesize;
-
+// Starts the library on `workBuffer` (RFLGetWorkSize bytes) with the parts archive `resBuffer` (the game's
+// MiiFaceDatabase.arc copy, converted to host order here once). The Miis are the host's (mii_record); nothing loads
+// later, so the library is ready when this returns: RFLErrcode_Success, or RFLErrcode_Fatal for an archive it cannot
+// read.
+RFLErrcode RFLInitRes(void* workBuffer, void* resBuffer, u32 resSize, BOOL useDeluxTex) {
     if (resBuffer == NULL || !RFLiCookResource(resBuffer, resSize)) {
         return RFLErrcode_Fatal;
     }
-
-    if (RFLiGetManager() == NULL) {
-
-        wholesize = useDeluxTex ? RFL_DELUXE_WORK_SIZE : RFL_WORK_SIZE;
-        memset(workBuffer, 0, wholesize);
-
-        sRFLManager = (RFLiManager*)workBuffer;
-        sRFLLastErrCode = RFLErrcode_NotAvailable;
-        sRFLLastReason = 0;
-        sRFLiFileBrokenType = RFLiFileBrokenType_DBNotFound;
-        sRFLManager->workBuffer = (u8*)workBuffer + sizeof(RFLiManager);
-
-        {
-            u32 size = useDeluxTex ? RFL_DELUXE_WORK_SIZE - sizeof(RFLiManager) : RFL_WORK_SIZE - sizeof(RFLiManager);
-            RFLiGetManager()->rootHeap = NebulaMiiHeapCreate(RFLiGetManager()->workBuffer, size);
-        }
-        {
-            u32 size = RFL_SYSTEM_HEAP_SIZE;
-            void* buffer = NebulaMiiHeapAlloc(RFLiGetManager()->rootHeap, size, 32);
-            RFLiGetManager()->systemHeap = NebulaMiiHeapCreate(buffer, size);
-        }
-        {
-            u32 size = NebulaMiiHeapLargestFree(RFLiGetManager()->rootHeap);
-            void* buffer = NebulaMiiHeapAlloc(RFLiGetManager()->rootHeap, size, 8);
-            RFLiGetManager()->tmpHeap = NebulaMiiHeapCreate(buffer, size);
-        }
-
-        RFLiGetManager()->lastErrCode = RFLErrcode_Success;
-        RFLiGetManager()->beforeCloseErr = RFLErrcode_Success;
-        RFLiGetManager()->lastReason = 0;
-        RFLiGetManager()->beforeCloseReason = 0;
-        RFLiGetManager()->deluxeTex = useDeluxTex;
-        RFLiGetManager()->brokenType = RFLiFileBrokenType_DBNotFound;
-
-        RFLSetIconDrawDoneCallback(NULL);
-        RFLSetModelDrawDoneCallback(NULL);
-        RFLiSetWorking(FALSE);
-        RFLiInitLoader();
-        RFLiSetCoordinateData(&scCoordinate);
-
-        if (resBuffer != NULL) {
-            RFLiLoader* loader = RFLiGetLoader_();
-            loader->cached = TRUE;
-            loader->cacheSize = resSize;
-            loader->cache = resBuffer;
-        }
-
-        errcode = RFLiBootLoadAsync();
-        if (errcode != RFLErrcode_Busy && errcode != RFLErrcode_Success) {
-            RFLExit();
-        }
-    } else {
-        errcode = RFLErrcode_Success;
+    if (sRFLManager != NULL) {
+        return RFLErrcode_Success;
     }
 
-    return errcode;
-}
+    const u32 wholesize = useDeluxTex ? RFL_DELUXE_WORK_SIZE : RFL_WORK_SIZE;
+    memset(workBuffer, 0, wholesize);
 
-static RFLErrcode RFLInitRes(void* workBuffer, void* resBuffer, u32 resSize, BOOL deluxeTex) {
-    RFLInitResAsync(workBuffer, resBuffer, resSize, deluxeTex);
-    return RFLWaitAsync();
+    sRFLManager = (RFLiManager*)workBuffer;
+    sRFLManager->workBuffer = (u8*)workBuffer + sizeof(RFLiManager);
+    sRFLManager->rootHeap = NebulaMiiHeapCreate(sRFLManager->workBuffer, wholesize - sizeof(RFLiManager));
+    {
+        void* buffer = NebulaMiiHeapAlloc(sRFLManager->rootHeap, RFL_SYSTEM_HEAP_SIZE, 32);
+        sRFLManager->systemHeap = NebulaMiiHeapCreate(buffer, RFL_SYSTEM_HEAP_SIZE);
+    }
+    {
+        const u32 size = NebulaMiiHeapLargestFree(sRFLManager->rootHeap);
+        void* buffer = NebulaMiiHeapAlloc(sRFLManager->rootHeap, size, 8);
+        sRFLManager->tmpHeap = NebulaMiiHeapCreate(buffer, size);
+    }
+    sRFLManager->deluxeTex = useDeluxTex;
+
+    RFLSetIconDrawDoneCallback(NULL);
+    RFLSetModelDrawDoneCallback(NULL);
+    RFLiInitLoader();
+    RFLiSetCoordinateData(&scCoordinate);
+
+    RFLiLoader* loader = &sRFLManager->loader;
+    loader->cached = TRUE;
+    loader->cacheSize = resSize;
+    loader->cache = resBuffer;
+    RFLiLoadResourceHeader();
+    return RFLErrcode_Success;
 }
 
 void RFLExit(void) {
-    if (RFLiGetManager() == NULL) {
+    if (sRFLManager == NULL) {
         return;
     }
 
-    RFLWaitAsync();
+    RFLFreeCachedResource();
 
-    sRFLLastErrCode = RFLGetAsyncStatus();
-    sRFLLastReason = RFLGetLastReason_();
-    sRFLiFileBrokenType = RFLiGetManager()->brokenType;
-
-    if (RFLIsResourceCached()) {
-        RFLFreeCachedResource();
-    }
-
-    NebulaMiiHeapDestroy(RFLiGetManager()->tmpHeap);
-    NebulaMiiHeapDestroy(RFLiGetManager()->systemHeap);
-    NebulaMiiHeapDestroy(RFLiGetManager()->rootHeap);
+    NebulaMiiHeapDestroy(sRFLManager->tmpHeap);
+    NebulaMiiHeapDestroy(sRFLManager->systemHeap);
+    NebulaMiiHeapDestroy(sRFLManager->rootHeap);
 
     sRFLManager = NULL;
-}
-
-// The Miis are the host's; booting reads the parts archive's header.
-static RFLErrcode RFLiBootLoadAsync(void) {
-    RFLiStartWorking();
-    return RFLiLoadResourceHeaderAsync();
 }
 
 BOOL RFLAvailable(void) {
     return sRFLManager != NULL;
 }
 
-static void* allocal_(u32 size, s32 align) {
-    return NebulaMiiHeapAlloc(RFLiGetManager()->tmpHeap, size, align);
-}
-
-static void* RFLiAlloc(u32 size) {
-    return allocal_(size, 8);
-}
-
 void* RFLiAlloc32(u32 size) {
-    return allocal_(size, 32);
+    return NebulaMiiHeapAlloc(RFLiGetManager()->tmpHeap, size, 32);
 }
 
 void RFLiFree(void* block) {
@@ -155,130 +86,10 @@ RFLiLoader* RFLiGetLoader(void) {
     return !RFLAvailable() ? NULL : &RFLiGetManager()->loader;
 }
 
-// The library's asynchronous status: busy while it works, then the result and its reason.
-BOOL RFLiIsWorking(void) {
-    return RFLiGetWorking();
-}
-
-void RFLiStartWorking(void) {
-    int enabled = nebula_interrupts_disable();
-
-    RFLiSetWorking(TRUE);
-    RFLiGetManager()->lastErrCode = RFLErrcode_Busy;
-
-    nebula_interrupts_restore(enabled);
-}
-
-void RFLiEndWorkingReason(RFLErrcode err, s32 reason) {
-    BOOL enabled;
-
-    switch (RFLiGetManager()->lastErrCode) {
-    case RFLErrcode_Busy:
-    case RFLErrcode_Success:
-        enabled = nebula_interrupts_disable();
-
-        RFLiSetWorking(FALSE);
-        RFLiGetManager()->lastErrCode = err;
-        RFLiGetManager()->lastReason = reason;
-
-        nebula_interrupts_restore(enabled);
-        break;
-    default:
-        break;
-    }
-}
-
-void RFLiEndWorking(RFLErrcode err) {
-    RFLiEndWorkingReason(err, 0);
-}
-
-BOOL RFLiGetWorking(void) {
-    return !RFLAvailable() ? FALSE : RFLiGetManager()->working;
-}
-
-void RFLiSetWorking(BOOL working) {
-    RFLiGetManager()->working = working;
-}
-
 RFLiManager* RFLiGetManager(void) {
     return sRFLManager;
 }
 
-RFLErrcode RFLGetAsyncStatus(void) {
-    if (!RFLAvailable()) {
-        return sRFLLastErrCode;
-    }
-
-    if (RFLiIsWorking()) {
-        return RFLErrcode_Busy;
-    }
-
-    if (RFLiCriticalError()) {
-        return RFLErrcode_Fatal;
-    }
-
-    return RFLiGetManager()->lastErrCode;
-}
-
-s32 RFLGetLastReason(void) {
-    return !RFLAvailable() ? sRFLLastReason : RFLiGetLastReason_();
-}
-
-static RFLErrcode RFLWaitAsync(void) {
-    volatile RFLErrcode status;
-
-    do {
-        status = RFLGetAsyncStatus();
-#ifdef TARGET_PC
-        if (status == RFLErrcode_Busy) {
-            nebula_kernel_poll();
-        }
-#endif
-    } while (status == RFLErrcode_Busy);
-
-    return status;
-}
-
 BOOL RFLiGetUseDeluxTex(void) {
     return !RFLAvailable() ? FALSE : RFLiGetManager()->deluxeTex;
-}
-
-s32 RFLiGetLastReason(void) {
-    return !RFLAvailable() ? FALSE : RFLiGetManager()->lastReason;
-}
-
-void RFLiSetFileBroken(RFLiFileBrokenType type) {
-    if (RFLAvailable()) {
-        RFLiGetManager()->brokenType |= (1 << type) & 0xFF;
-    }
-}
-
-BOOL RFLiNotFoundError(void) {
-    u8* broken = &sRFLiFileBrokenType;
-
-    if (RFLAvailable()) {
-        broken = &RFLiGetManager()->brokenType;
-    }
-
-    return *broken >> RFLiFileBrokenType_DBNotFound & 1;
-}
-
-BOOL RFLiNeedRepairError(void) {
-    u8* broken = &sRFLiFileBrokenType;
-
-    if (RFLAvailable()) {
-        broken = &RFLiGetManager()->brokenType;
-    }
-
-    return *broken >> RFLiFileBrokenType_DBBroken & 1;
-}
-
-static BOOL RFLiCriticalError(void) {
-    u8* broken = &sRFLiFileBrokenType;
-
-    if (RFLAvailable()) {
-        broken = &RFLiGetManager()->brokenType;
-    }
-
-    return *broken & 1 << RFLiFileBrokenType_ResBroken || *broken & 1 << RFLiFileBrokenType_Corrupt;
 }

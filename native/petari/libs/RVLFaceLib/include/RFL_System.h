@@ -7,15 +7,11 @@ extern "C" {
 #endif
 
 u32 RFLGetWorkSize(BOOL deluxeTex);
-RFLErrcode RFLInitResAsync(void* workBuffer, void* resBuffer, u32 resSize,
-                           BOOL deluxeTex);
+// Starts the library, ready when it returns (RFL_System.c).
 RFLErrcode RFLInitRes(void* workBuffer, void* resBuffer, u32 resSize,
                       BOOL deluxeTex);
 void RFLExit(void);
 BOOL RFLAvailable(void);
-RFLErrcode RFLGetAsyncStatus(void);
-s32 RFLGetLastReason(void);
-RFLErrcode RFLWaitAsync(void);
 
 #ifdef __cplusplus
 }
