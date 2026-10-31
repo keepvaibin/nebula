@@ -11,9 +11,7 @@ public:
     void updateSwing();
     void updateCentrifugal();
     void update();
-#ifdef TARGET_PC
     bool updateNebulaShake();
-#endif
 
     /* 0x00 */ const WPad* mPad;
     /* 0x04 */ s32 mChannel;
@@ -28,9 +26,7 @@ public:
     /* 0x21 */ bool mSwingTriggered;
     /* 0x24 */ s32 mSwingHoldFrames;
     /* 0x28 */ s32 mSwingCooldownFrames;
-#ifdef TARGET_PC
     s32 mNebulaShakePresses;  // shake button presses not yet swung
     s32 mNebulaShakeFrames;   // frames left of the swing a press makes
     bool mIsNebulaShaking;    // the last frame's swing was a press's
-#endif
 };
