@@ -11,8 +11,8 @@ namespace galaxy::render {
 // A reusable scene-depth result for mouse picking. The render thread writes the pixels and status, then releases
 // `complete`; the reader acquires it first. Held by shared_ptr so it outlives queued work and renderer failure.
 struct PointerDepthCapture {
-    std::array<std::uint32_t,640u*528u> pixels{};
-    // Asynchronous render path: the field in the capture ring's mapped readback buffer (640x528 RGBA8, contiguous
+    std::array<std::uint32_t,640u*456u> pixels{};
+    // Asynchronous render path: the field in the capture ring's mapped readback buffer (640x456 RGBA8, contiguous
     // rows), converted per queried pixel. Null when the result is in `pixels`.
     const std::uint8_t* rgba{};
     std::atomic<bool> complete{true};

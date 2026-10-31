@@ -620,9 +620,9 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
     // the previous targets move to efb_carry_*, whose contents begin_frame
     // copies into the new ones.
     const std::uint64_t width =
-        static_cast<std::uint64_t>(kEfbWidth) * efb_scale;
+        static_cast<std::uint64_t>(kFrameWidth) * efb_scale;
     const std::uint64_t height =
-        static_cast<std::uint64_t>(kEfbHeight) * efb_scale;
+        static_cast<std::uint64_t>(kFrameHeight) * efb_scale;
     if (efb_scale < 1u || efb_scale > kMaxEfbScale ||
         width > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         height > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
@@ -775,8 +775,8 @@ bool RendererD3D12::create_efb_msaa(EfbMsaa& msaa, ID3D12Resource* depth, unsign
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    rd.Width = kEfbWidth * scale;
-    rd.Height = kEfbHeight * scale;
+    rd.Width = kFrameWidth * scale;
+    rd.Height = kFrameHeight * scale;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
     rd.Format = kEfbColorFormat;
@@ -949,10 +949,10 @@ void RendererD3D12::record_efb_resolve(ID3D12GraphicsCommandList* list, bool col
         list->ResourceBarrier(1u, &barrier);
         D3D12_CPU_DESCRIPTOR_HANDLE resolve_dsv = msaa.dsv_heap->GetCPUDescriptorHandleForHeapStart();
         resolve_dsv.ptr += device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-        const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
-                                      static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
-        const D3D12_RECT scissor{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
-                                 static_cast<LONG>(kEfbHeight * efb_scale_)};
+        const D3D12_VIEWPORT viewport{0.0f, 0.0f, static_cast<float>(kFrameWidth * efb_scale_),
+                                      static_cast<float>(kFrameHeight * efb_scale_), 0.0f, 1.0f};
+        const D3D12_RECT scissor{0, 0, static_cast<LONG>(kFrameWidth * efb_scale_),
+                                 static_cast<LONG>(kFrameHeight * efb_scale_)};
         list->SetGraphicsRootSignature(s_blit_root_sig.Get());
         list->RSSetViewports(1, &viewport);
         list->RSSetScissorRects(1, &scissor);
@@ -1043,11 +1043,11 @@ void RendererD3D12::carry_over_efb_contents() {
     efb_carry_color_readable_ = false;
 
     const D3D12_VIEWPORT viewport{
-        0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
-        static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
+        0.0f, 0.0f, static_cast<float>(kFrameWidth * efb_scale_),
+        static_cast<float>(kFrameHeight * efb_scale_), 0.0f, 1.0f};
     const D3D12_RECT scissor{
-        0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
-        static_cast<LONG>(kEfbHeight * efb_scale_)};
+        0, 0, static_cast<LONG>(kFrameWidth * efb_scale_),
+        static_cast<LONG>(kFrameHeight * efb_scale_)};
     command_list_->SetGraphicsRootSignature(s_blit_root_sig.Get());
     command_list_->RSSetViewports(1, &viewport);
     command_list_->RSSetScissorRects(1, &scissor);
@@ -1494,8 +1494,8 @@ bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, cons
         (params.filter_upper() == 0u && params.filter_middle() == 0u && params.filter_lower() == 0u);
     return identity_filter && (params.gamma & 3u) == 0u && !params.intensity && !params.half_scale &&
            (!params.scale_y || params.y_scale == 256u) && params.src_x == 0u && params.src_y == 0u &&
-           params.src_width == kEfbWidth && params.src_height != 0u && params.src_height <= kEfbHeight &&
-           dest.width == kEfbWidth * scale && dest.height == params.src_height * scale;
+           params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
+           dest.width == kFrameWidth * scale && dest.height == params.src_height * scale;
 }
 
 gpu::TextureRef RendererD3D12::hand_over_efb_color(gpu::TextureRef fresh) {
@@ -1686,7 +1686,7 @@ void RendererD3D12::follow_window_internal_resolution() {
         return;
     }
     // The launcher's Match Output rule: cover the picture on both axes.
-    const double needed = std::max(content.width / static_cast<double>(kEfbWidth),
+    const double needed = std::max(content.width / static_cast<double>(kFrameWidth),
                                    content.height / 456.0);
     unsigned scale = std::clamp(
         static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
@@ -1773,8 +1773,8 @@ void RendererD3D12::apply_pending_efb_scale() {
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
     std::cout << "[Renderer] internal resolution " << previous << "x -> "
-              << applied << "x (" << kEfbWidth * applied << "x"
-              << kEfbHeight * applied << ")";
+              << applied << "x (" << kFrameWidth * applied << "x"
+              << kFrameHeight * applied << ")";
     if (efb_msaa_.samples > 1u) {
         std::cout << " MSAA " << efb_msaa_.samples << 'x';
     }
@@ -1797,8 +1797,8 @@ bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
     const double efb_bytes = ray_tracer_->ready() ? 20.0 : 8.0;
     const auto scaled_bytes = [efb_bytes](unsigned s) {
         const double area = static_cast<double>(s) * s;
-        return area * (static_cast<double>(kEfbWidth) * kEfbHeight * efb_bytes +
-                       static_cast<double>(kEfbWidth) * 456.0 * 12.0);
+        return area * (static_cast<double>(kFrameWidth) * kFrameHeight * efb_bytes +
+                       static_cast<double>(kFrameWidth) * 456.0 * 12.0);
     };
     const double needed = scaled_bytes(scale) - scaled_bytes(efb_scale_);
     return static_cast<double>(info.CurrentUsage) + needed <=
@@ -4768,8 +4768,8 @@ bool RendererD3D12::temporal_mode() const {
 }
 
 unsigned RendererD3D12::scene_display_scale() const {
-    if (temporal_ != nullptr && temporal_mode() && temporal_output_w_ > kEfbWidth * efb_scale_) {
-        return temporal_output_w_ / kEfbWidth;
+    if (temporal_ != nullptr && temporal_mode() && temporal_output_w_ > kFrameWidth * efb_scale_) {
+        return temporal_output_w_ / kFrameWidth;
     }
     return efb_scale_;
 }
@@ -4803,8 +4803,8 @@ bool RendererD3D12::ensure_motion_target() {
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    rd.Width = kEfbWidth * efb_scale_;
-    rd.Height = kEfbHeight * efb_scale_;
+    rd.Width = kFrameWidth * efb_scale_;
+    rd.Height = kFrameHeight * efb_scale_;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
     rd.Format = kMotionVectorFormat;
@@ -4927,10 +4927,10 @@ void RendererD3D12::record_motion_debug_view() {
     command_list_->SetGraphicsRootDescriptorTable(0, table.gpu);
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, nullptr);
     bound_rt_aux_ = 0u;
-    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(kEfbWidth * efb_scale_),
-                            static_cast<float>(kEfbHeight * efb_scale_), 0.0f, 1.0f};
-    const D3D12_RECT sci{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_),
-                         static_cast<LONG>(kEfbHeight * efb_scale_)};
+    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(kFrameWidth * efb_scale_),
+                            static_cast<float>(kFrameHeight * efb_scale_), 0.0f, 1.0f};
+    const D3D12_RECT sci{0, 0, static_cast<LONG>(kFrameWidth * efb_scale_),
+                         static_cast<LONG>(kFrameHeight * efb_scale_)};
     command_list_->RSSetViewports(1, &vp);
     command_list_->RSSetScissorRects(1, &sci);
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -6903,7 +6903,7 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
     unsigned output_scale = 0u;  // the log switches to the output EFB at this scale
     for (const ReplayCopy& copy : run_copies_) {
         if (copy.mode == 1u) display = &copy;
-        if (copy.mode == 2u) output_scale = copy.width / kEfbWidth;
+        if (copy.mode == 2u) output_scale = copy.width / kFrameWidth;
     }
     if (display == nullptr || run_start_output_active_) {
         // Logs begin at the ring advance after a display copy, on the render
@@ -7218,7 +7218,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                     // the log goes to the second list.
                     entry.split = true;
                     entry.upscale = {efb_color_.Get(), efb_depth_.Get(), motion_target_.Get(), reactive_target_.Get(),
-                                     alt_efb_.color.Get(), kEfbWidth * efb_scale_, kEfbHeight * efb_scale_,
+                                     alt_efb_.color.Get(), kFrameWidth * efb_scale_, kFrameHeight * efb_scale_,
                                      copy.width, copy.height, op.index};
                     d3d_check(command_list_->Close(), "replay Close");
                     std::swap(command_list_, *active);
@@ -7592,8 +7592,8 @@ bool RendererD3D12::ensure_replay_motion_targets() {
     hp.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC rd{};
     rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    rd.Width = kEfbWidth * efb_scale_;
-    rd.Height = kEfbHeight * efb_scale_;
+    rd.Width = kFrameWidth * efb_scale_;
+    rd.Height = kFrameHeight * efb_scale_;
     rd.DepthOrArraySize = 1;
     rd.MipLevels = 1;
     rd.Format = kMotionVectorFormat;
@@ -7776,10 +7776,10 @@ void RendererD3D12::prepare_temporal_upscaler() {
         temporal_history_valid_ = false;
         return;
     }
-    const unsigned rw = kEfbWidth * render_scale;
-    const unsigned rh = kEfbHeight * render_scale;
-    const unsigned ow = kEfbWidth * output_scale;
-    const unsigned oh = kEfbHeight * output_scale;
+    const unsigned rw = kFrameWidth * render_scale;
+    const unsigned rh = kFrameHeight * render_scale;
+    const unsigned ow = kFrameWidth * output_scale;
+    const unsigned oh = kFrameHeight * output_scale;
     const RenderConfig cfg = get_render_config();
     const unsigned kind = cfg.upscaler;
     const unsigned quality = std::min(cfg.temporal_quality, 4u);
@@ -7831,11 +7831,11 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     // The engine's histories follow what moved by itself through the raster's motion: without a temporal upscaler the
     // scene still writes it (MSAA is off with ray tracing).
     scene_motion_ = rt_active() && ray_tracer_->engine_active() && !output_efb_active_;
-    const unsigned rw = kEfbWidth * efb_scale_;
+    const unsigned rw = kFrameWidth * efb_scale_;
     const unsigned ow = temporal_output_w_;
     // The context is replaced only by begin_frame (prepare_temporal_upscaler).
     if (!temporal_ || !temporal_mode() || output_efb_active_ || rw != temporal_render_w_ ||
-        kEfbHeight * efb_scale_ != temporal_render_h_) {
+        kFrameHeight * efb_scale_ != temporal_render_h_) {
         temporal_history_valid_ = false;
         return false;
     }
@@ -7910,10 +7910,10 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     in.motion = motion_target_.Get();
     in.reactive = reactive_target_.Get();
     in.output = alt_efb_.color.Get();
-    in.render_width = kEfbWidth * efb_scale_;
-    in.render_height = kEfbHeight * efb_scale_;
-    in.output_width = kEfbWidth * output_scale;
-    in.output_height = kEfbHeight * output_scale;
+    in.render_width = kFrameWidth * efb_scale_;
+    in.render_height = kFrameHeight * efb_scale_;
+    in.output_width = kFrameWidth * output_scale;
+    in.output_height = kFrameHeight * output_scale;
     in.jitter_x = scene_jitter_[0];
     in.jitter_y = scene_jitter_[1];
     in.camera_near = scene_camera_[0];
@@ -7954,7 +7954,7 @@ unsigned RendererD3D12::output_efb_scale_for_window() const {
     }
     // The smallest integer scale whose 640x456 picture covers the window's
     // content rectangle on both axes (the launcher's Match Output rule).
-    const double needed = std::max(content.width / static_cast<double>(kEfbWidth),
+    const double needed = std::max(content.width / static_cast<double>(kFrameWidth),
                                    content.height / 456.0);
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
@@ -7964,8 +7964,8 @@ bool RendererD3D12::ensure_output_efb(unsigned scale) {
     if (alt_efb_.color && alt_efb_.scale == scale) {
         return true;
     }
-    const UINT w = kEfbWidth * scale;
-    const UINT h = kEfbHeight * scale;
+    const UINT w = kFrameWidth * scale;
+    const UINT h = kFrameHeight * scale;
     if (w > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION ||
         h > D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION) {
         return false;
@@ -8530,7 +8530,7 @@ void RendererD3D12::record_scene_aa() {
     const D3D12_RESOURCE_DESC desc = efb_color_->GetDesc();
     static_cast<void>(post_process_.record_scene_aa(
         command_list_.Get(), srv_ring_, efb_color_.Get(), efb_rtv_, static_cast<unsigned>(desc.Width),
-        desc.Height, kEfbWidth * efb_scale_, 456u * efb_scale_,
+        desc.Height, kFrameWidth * efb_scale_, kFrameHeight * efb_scale_,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         frame_index_, kFramesInFlight));
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
@@ -8607,10 +8607,10 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     in.samples = efb_msaa_.samples;
     in.hdr = efb_hdr_;
     in.scale = efb_scale_;
-    in.logical_width = kEfbWidth;
-    in.logical_height = kGameFrameHeight;
-    in.frame_width = std::min(kEfbWidth * efb_scale_, static_cast<unsigned>(desc.Width));
-    in.frame_height = std::min(kGameFrameHeight * efb_scale_, static_cast<unsigned>(desc.Height));
+    in.logical_width = kFrameWidth;
+    in.logical_height = kFrameHeight;
+    in.frame_width = std::min(kFrameWidth * efb_scale_, static_cast<unsigned>(desc.Width));
+    in.frame_height = std::min(kFrameHeight * efb_scale_, static_cast<unsigned>(desc.Height));
     if (bloom.phase == motion::kBloomKeep) {
         static_cast<void>(game_bloom_.keep(command_list_.Get(), in, frame_index_, kFramesInFlight));
         return;
@@ -8663,7 +8663,7 @@ bool RendererD3D12::begin_output_efb() {
     }
     // A temporal upscaler outputs the internal resolution; the 2D layer alone
     // goes to the window's.
-    const unsigned scale = temporal ? temporal_output_w_ / kEfbWidth
+    const unsigned scale = temporal ? temporal_output_w_ / kFrameWidth
                            : full   ? output_efb_scale_for_window()
                                     : std::min(output_efb_scale_for_window(), layout);
     if (scale == 0u || scale < efb_scale_ || (scale == efb_scale_ && !temporal) ||
@@ -8686,14 +8686,14 @@ bool RendererD3D12::begin_output_efb() {
     // The whole scene EFB, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
     EfbCopyParams params{};
-    params.src_width = static_cast<std::uint16_t>(kEfbWidth);
-    params.src_height = static_cast<std::uint16_t>(kEfbHeight);
+    params.src_width = static_cast<std::uint16_t>(kFrameWidth);
+    params.src_height = static_cast<std::uint16_t>(kFrameHeight);
     params.y_scale = 256u;
     params.vfilter[2] = 21u;
     params.vfilter[3] = 22u;
     params.vfilter[4] = 21u;
-    const unsigned w = kEfbWidth * scale;
-    const unsigned h = kEfbHeight * scale;
+    const unsigned w = kFrameWidth * scale;
+    const unsigned h = kFrameHeight * scale;
     const EfbCopySamplingGeometry sampling =
         compute_xfb_sampling_geometry(params, w, h, efb_scale_);
     if (replay_recording_) [[unlikely]] {
@@ -8766,8 +8766,8 @@ void RendererD3D12::bind_efb(const float xf_vp[6]) {
     bound_rt_aux_ = 0u;
 
     float vp_x = 0.0f, vp_y = 0.0f;
-    float vp_w = static_cast<float>(kEfbWidth  * efb_scale_);
-    float vp_h = static_cast<float>(kEfbHeight * efb_scale_);
+    float vp_w = static_cast<float>(kFrameWidth  * efb_scale_);
+    float vp_h = static_cast<float>(kFrameHeight * efb_scale_);
 
     if (xf_vp) {
         // GX XF viewport: [xs, xo, ys, yo, zs, zo]
@@ -8785,7 +8785,7 @@ void RendererD3D12::bind_efb(const float xf_vp[6]) {
     }
 
     D3D12_VIEWPORT vp{vp_x, vp_y, vp_w, vp_h, 0.0f, 1.0f};
-    D3D12_RECT sci{0, 0, static_cast<LONG>(kEfbWidth * efb_scale_), static_cast<LONG>(kEfbHeight * efb_scale_)};
+    D3D12_RECT sci{0, 0, static_cast<LONG>(kFrameWidth * efb_scale_), static_cast<LONG>(kFrameHeight * efb_scale_)};
     command_list_->RSSetViewports(1, &vp);
     command_list_->RSSetScissorRects(1, &sci);
     bound_viewport_ = vp;
@@ -8818,8 +8818,8 @@ void RendererD3D12::clear_efb(
     const D3D12_CPU_DESCRIPTOR_HANDLE dsv = efb_dsv_;
 
     // Scope the clear to the copy's src rect (scaled), per hardware.
-    const LONG efb_w = static_cast<LONG>(kEfbWidth * efb_scale_);
-    const LONG efb_h = static_cast<LONG>(kEfbHeight * efb_scale_);
+    const LONG efb_w = static_cast<LONG>(kFrameWidth * efb_scale_);
+    const LONG efb_h = static_cast<LONG>(kFrameHeight * efb_scale_);
     D3D12_RECT rect{0, 0, efb_w, efb_h};
     UINT num_rects = 0;
     const D3D12_RECT* rects = nullptr;
@@ -8829,8 +8829,8 @@ void RendererD3D12::clear_efb(
             static_cast<std::int32_t>(rect_y),
             static_cast<std::int32_t>(rect_x + rect_w),
             static_cast<std::int32_t>(rect_y + rect_h),
-            kEfbWidth,
-            kEfbHeight,
+            kFrameWidth,
+            kFrameHeight,
             efb_scale_);
         rect = D3D12_RECT{
             scaled.left, scaled.top, scaled.right, scaled.bottom};
@@ -8975,8 +8975,8 @@ void RendererD3D12::draw(const DrawCall& call) {
             call.scissor.top,
             call.scissor.right,
             call.scissor.bottom,
-            kEfbWidth,
-            kEfbHeight,
+            kFrameWidth,
+            kFrameHeight,
             efb_scale_);
         if (scaled.empty()) {
             return;  // nothing can rasterize
@@ -9253,7 +9253,7 @@ void RendererD3D12::record_conversion_blit(
             step_y,
             filter_row_offset,
             efb_scale_,
-            kEfbHeight);
+            kFrameHeight);
     command_list_->SetGraphicsRoot32BitConstants(
         0, 16, constants.values.data(), 0);
     command_list_->SetGraphicsRootDescriptorTable(1, src_srv);
@@ -9703,9 +9703,9 @@ bool RendererD3D12::ensure_pointer_depth_resources() {
     if (!ensure_peek_resources()) {
         return false;
     }
-    constexpr UINT width = kEfbWidth;
-    constexpr UINT height = kEfbHeight;
-    constexpr UINT row_pitch = kEfbWidth * 4u;
+    constexpr UINT width = kFrameWidth;
+    constexpr UINT height = kFrameHeight;
+    constexpr UINT row_pitch = kFrameWidth * 4u;
     ComPtr<ID3D12Resource> target_candidate;
     ComPtr<ID3D12Resource> readback_candidate;
     D3D12_HEAP_PROPERTIES hp{};
@@ -9751,9 +9751,9 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     if (!ensure_pointer_depth_resources()) {
         return false;
     }
-    constexpr UINT width = kEfbWidth;
-    constexpr UINT height = kEfbHeight;
-    constexpr UINT row_pitch = kEfbWidth * 4u;
+    constexpr UINT width = kFrameWidth;
+    constexpr UINT height = kFrameHeight;
+    constexpr UINT row_pitch = kFrameWidth * 4u;
     select_pointer_depth_destination();
     resolve_efb(true);
     ID3D12Resource* const target = pointer_depth_target_.Get();
@@ -9819,8 +9819,8 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
 }
 
 bool RendererD3D12::capture_pointer_depth(std::span<std::uint32_t> pixels) {
-    if (pixels.size() != kEfbWidth * kEfbHeight) {
-        throw std::invalid_argument("pointer depth field requires 640x528 pixels");
+    if (pixels.size() != kFrameWidth * kFrameHeight) {
+        throw std::invalid_argument("pointer depth field requires 640x456 pixels");
     }
     std::uint32_t unused{};
     return read_efb_pixels(0u, 0u, EfbPeekKind::Depth, unused, pixels);
@@ -9884,8 +9884,8 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     default_heap.Type = D3D12_HEAP_TYPE_DEFAULT;
     D3D12_RESOURCE_DESC target_desc{};
     target_desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    target_desc.Width = kEfbWidth;
-    target_desc.Height = kEfbHeight;
+    target_desc.Width = kFrameWidth;
+    target_desc.Height = kFrameHeight;
     target_desc.DepthOrArraySize = 1;
     target_desc.MipLevels = 1;
     target_desc.Format = kEfbColorFormat;
@@ -9909,7 +9909,7 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     readback_heap.Type = D3D12_HEAP_TYPE_READBACK;
     D3D12_RESOURCE_DESC readback_desc{};
     readback_desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-    readback_desc.Width = static_cast<UINT64>(kEfbWidth) * 4u * kEfbHeight;
+    readback_desc.Width = static_cast<UINT64>(kFrameWidth) * 4u * kFrameHeight;
     readback_desc.Height = 1;
     readback_desc.DepthOrArraySize = 1;
     readback_desc.MipLevels = 1;
@@ -9994,9 +9994,9 @@ void RendererD3D12::record_async_peek_field_commands(
     settle_owed_efb();
     const bool is_depth = kind == EfbPeekKind::Depth;
     resolve_efb_on(list, !is_depth, is_depth);
-    constexpr UINT width = kEfbWidth;
-    constexpr UINT height = kEfbHeight;
-    constexpr UINT row_pitch = kEfbWidth * 4u;
+    constexpr UINT width = kFrameWidth;
+    constexpr UINT height = kFrameHeight;
+    constexpr UINT row_pitch = kFrameWidth * 4u;
     static_assert(row_pitch % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0u);
     ID3D12Resource* const target = field.target.Get();
     ID3D12Resource* const readback = field.readbacks[slot].Get();
@@ -10081,14 +10081,14 @@ bool RendererD3D12::read_efb_pixels(
     if (pointer_depth_capture_fence_ != 0u) {
         throw std::logic_error("GXPeek resources still own an unpublished pointer field");
     }
-    if (x >= kEfbWidth || y >= kEfbHeight || !ensure_peek_resources()) {
+    if (x >= kFrameWidth || y >= kFrameHeight || !ensure_peek_resources()) {
         return false;
     }
 
     const bool field = defer_pointer_depth || !depth_pixels.empty();
-    const UINT width = field ? kEfbWidth : 1u;
-    const UINT height = field ? kEfbHeight : 1u;
-    const UINT row_pitch = field ? kEfbWidth * 4u : peek_readback_row_pitch_;
+    const UINT width = field ? kFrameWidth : 1u;
+    const UINT height = field ? kFrameHeight : 1u;
+    const UINT row_pitch = field ? kFrameWidth * 4u : peek_readback_row_pitch_;
     if (field && !ensure_pointer_depth_resources()) {
         return false;
     }
@@ -10223,7 +10223,7 @@ void RendererD3D12::copy_efb_readback_pixels(
     const auto* rgba = static_cast<const std::uint8_t*>(mapped);
     if (!depth_pixels.empty()) {
         // RGBA8 bytes to 0x00RRGGBB (depth) or 0xAARRGGBB (colour): a byte shuffle per four pixels.
-        // The full 640x528 field is converted for every published peek field and pointer-depth capture.
+        // The full 640x456 field is converted for every published peek field and pointer-depth capture.
         const __m128i order = is_depth
             ? _mm_setr_epi8(2, 1, 0, -128, 6, 5, 4, -128, 10, 9, 8, -128, 14, 13, 12, -128)
             : _mm_setr_epi8(2, 1, 0, 3, 6, 5, 4, 7, 10, 9, 8, 11, 14, 13, 12, 15);
@@ -10386,8 +10386,8 @@ bool RendererD3D12::debug_copy_efb_to_readback() {
                   << next_efb_capture_path_ << '\n';
         return false;
     }
-    const UINT w = kEfbWidth * efb_scale_;
-    const UINT h = kEfbHeight * efb_scale_;
+    const UINT w = kFrameWidth * efb_scale_;
+    const UINT h = kFrameHeight * efb_scale_;
     const UINT row_pitch =
         (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
@@ -10453,8 +10453,8 @@ void RendererD3D12::debug_log_readback() {
     readback_pending_ = false;
     readback_fence_value_ = 0u;
 
-    const UINT w = kEfbWidth * efb_scale_;
-    const UINT h = kEfbHeight * efb_scale_;
+    const UINT w = kFrameWidth * efb_scale_;
+    const UINT h = kFrameHeight * efb_scale_;
     const UINT row_pitch =
         (w * 4u + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) &
         ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
@@ -10553,12 +10553,12 @@ bool RendererD3D12::present(
         galaxy::experimental_effective_host_aspect();
     // A frame copied before a live internal-resolution change is still a
     // full-width copy at the scale it was made with.
-    const unsigned source_scale = source->width / kEfbWidth;
+    const unsigned source_scale = source->width / kFrameWidth;
     if (ultrawide &&
         (source_scale == 0u ||
-         source->width != kEfbWidth * source_scale ||
+         source->width != kFrameWidth * source_scale ||
          source->height == 0u ||
-         source->height > kEfbHeight * source_scale)) {
+         source->height > kFrameHeight * source_scale)) {
         throw std::runtime_error(
             "RMGE01 ultrawide aspect requires a full-width Wii XFB copy");
     }

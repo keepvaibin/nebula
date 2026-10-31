@@ -720,8 +720,8 @@ int main() {
             "unprogrammed XF viewport uses full 1x EFB width");
         passed &= expect_near(
             fallback.viewport_height_pixels,
-            528.0f,
-            "unprogrammed XF viewport uses full 1x EFB height");
+            456.0f,
+            "unprogrammed XF viewport uses the 1x frame height");
         const galaxy::render::LinePointRasterParams maximum_scale =
             galaxy::render::make_line_point_raster_params(
                 6u | (12u << 8u), {}, 32.0f, -32.0f, 99u);

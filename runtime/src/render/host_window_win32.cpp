@@ -182,10 +182,10 @@ unsigned dlss_min_render_scale(unsigned quality, unsigned output_scale) {
     static unsigned cached_scale = 1u;
     const std::lock_guard<std::mutex> lock(mutex);
     if (quality != cached_quality || output_scale != cached_output) {
-        const unsigned width = dlss_min_render_width(quality, kEfbWidth * output_scale, kEfbHeight * output_scale);
+        const unsigned width = dlss_min_render_width(quality, kFrameWidth * output_scale, kFrameHeight * output_scale);
         cached_quality = quality;
         cached_output = output_scale;
-        cached_scale = std::max((width + kEfbWidth - 1u) / kEfbWidth, 1u);
+        cached_scale = std::max((width + kFrameWidth - 1u) / kFrameWidth, 1u);
     }
     return cached_scale;
 }
@@ -2594,7 +2594,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
     {
         std::string value = "MATCH OUTPUT";
         if (!render.internal_follow_window) {
-            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, kEfbWidth * internal, kEfbHeight * internal,
+            std::snprintf(text, sizeof(text), "%uX %uX%u%s", internal, kFrameWidth * internal, kFrameHeight * internal,
                           internal >= settings_scale_cap(render) ? " MAX" : "");
             value = text;
         }
@@ -4181,7 +4181,7 @@ unsigned display_efb_scale_cap() {
     if (width == 0u || height == 0u) {
         return kMaxEfbScale;
     }
-    const double needed = std::max(width / static_cast<double>(kEfbWidth), height / 456.0);
+    const double needed = std::max(width / static_cast<double>(kFrameWidth), height / 456.0);
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
 

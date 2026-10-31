@@ -196,7 +196,7 @@ void record_efb_identity_copy(
 class RendererD3D12 final : public UiCanvas {
 public:
     // Creates the Win32 window, device, queue, swap chain, EFB targets at
-    // kEfbWidth x kEfbHeight x efb_scale, the shared GX root signature, the
+    // kFrameWidth x kFrameHeight x efb_scale, the shared GX root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, unsigned efb_scale);
     [[nodiscard]] std::string startup_failure() const { return {}; }
@@ -634,7 +634,7 @@ public:
     // diagnostic buffers never suppress the required blit/presentation.
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
-    // Reads the EFB's 640x528 depth field into `pixels`.
+    // Reads the EFB's 640x456 depth field into `pixels`.
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     // Render-owner only. Keeps the shared GXPeek resources owned until
     // try_complete_pointer_depth_capture_in_place has taken the field.
@@ -652,7 +652,7 @@ public:
     // could not be mapped).
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(
         const std::uint8_t*& rgba);
-    // Render-owner only. Asynchronous 640x528 EFB fields (depth for GXPeekZ,
+    // Render-owner only. Asynchronous 640x456 EFB fields (depth for GXPeekZ,
     // color for GXPeekARGB) for the simulation thread, one per channel
     // (RenderCore binds a channel to a peek kind and draw-sync token), each on
     // private resources so they never contend with the pointer field above or
@@ -661,7 +661,7 @@ public:
     static constexpr std::size_t kAsyncPeekFieldSlots = 3u;
     static constexpr std::size_t kAsyncPeekFieldChannels = 4u;
     // Captures the field into readback `slot` (0..2). Completion leaves it
-    // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x528).
+    // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x456).
     [[nodiscard]] std::uint64_t submit_async_peek_field(
         std::size_t channel, EfbPeekKind kind, std::size_t slot);
     // The same capture recorded in the open frame where the stream is now
@@ -1285,7 +1285,7 @@ private:
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
-                        bool hdr = false, unsigned width = kEfbWidth, unsigned height = kEfbHeight);
+                        bool hdr = false, unsigned width = kFrameWidth, unsigned height = kFrameHeight);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;
