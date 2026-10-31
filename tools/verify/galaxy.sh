@@ -1,6 +1,7 @@
 #!/bin/sh
 # galaxy.sh BASE_BIN NEW_BIN TAG FIRST LAST GALAXY...: window.sh's comparison at each galaxy's first star (one-stop tour
-# tours/tour_one_<Galaxy>.txt; its gameplay at presents ~2380-2440). SHIFT, MARGIN (default 200), MODE as in window.sh.
+# tours/tour_one_<Galaxy>.txt; its gameplay at presents ~2380-2440, the run held there by a wait event as window.sh's).
+# SHIFT, MARGIN (default 200), MODE as in window.sh.
 . "$(dirname "$0")/common.sh"
 base=$1
 new=$2
@@ -17,7 +18,7 @@ for g in "$@"; do
         echo "$g: no tour file tours/tour_one_$g.txt"
         continue
     fi
-    common="GALAXY_TEST_GALAXY_TOUR=$(tour_file "tour_one_$g.txt") GALAXY_TEST_GALAXY_TOUR_FRAMES=900 GALAXY_MAX_FPS=60 GALAXY_PRESENT_SNAPSHOT_EVERY=1"
+    common="GALAXY_TEST_GALAXY_TOUR=$(tour_file "tour_one_$g.txt") GALAXY_TEST_GALAXY_TOUR_FRAMES=900 GALAXY_TEST_EVENTS=wait@5400 GALAXY_MAX_FPS=60 GALAXY_PRESENT_SNAPSHOT_EVERY=1"
     # shellcheck disable=SC2086
     run_build "$base" "g_${tag}_${g}_0" 75 $common GALAXY_PRESENT_SNAPSHOT_FIRST=$first GALAXY_PRESENT_SNAPSHOT_LAST=$last
     # shellcheck disable=SC2086
