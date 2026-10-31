@@ -22,6 +22,7 @@ namespace JASDriver {
     void stopDMA();
     void setOutputRate(JASOutputRate);
     void updateDac();
+    void mixFrame();
     void updateDSP();
     void registerMixCallback(MixCallback, JASMixMode);
     f32 getDacRate();

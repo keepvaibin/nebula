@@ -18,7 +18,15 @@
 // the frame with the samples of the mix callback (the movie player's).
 extern "C" const NebulaHostServices* nebula_host(void);
 
+namespace {
+    // Frames the clock has asked for and the driver has not mixed: the audio event only says that there are some, so
+    // a late audio thread catches up rather than losing the clock's time.
+    u32 sFramesAsked;
+    const u32 cMaxCatchUp = 4;
+}  // namespace
+
 extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
+    __atomic_fetch_add(&sFramesAsked, 1u, __ATOMIC_RELAXED);
     nebula_raise_event(NEBULA_EVENT_AUDIO);
 }
 
@@ -92,8 +100,19 @@ void JASDriver::setOutputRate(JASOutputRate rate) {
     sDacRate *= 1.0008897f;
 }
 
-// One frame: its subframes, then the mix callback's samples with it to the output.
+// The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the mix
+// callback's samples with it to the output.
 void JASDriver::updateDac() {
+    u32 frames = __atomic_exchange_n(&sFramesAsked, 0u, __ATOMIC_RELAXED);
+    if (frames > cMaxCatchUp) {
+        frames = cMaxCatchUp;
+    }
+    for (u32 frame = 0; frame < frames; frame++) {
+        mixFrame();
+    }
+}
+
+void JASDriver::mixFrame() {
     for (u32 i = 0; i < getSubFrames(); i++) {
         updateDSP();
     }
