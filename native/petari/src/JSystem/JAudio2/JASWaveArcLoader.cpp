@@ -3,7 +3,7 @@
 #include "JSystem/JAudio2/JASDvdThread.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
 #include "JSystem/JAudio2/JASTaskThread.hpp"
-#include "JSystem/JKernel/JKRDvdAramRipper.hpp"
+#include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include <cstring>
 #include <stdint.h>
 #include "Game/System/NebulaDisc.hpp"
@@ -75,7 +75,8 @@ bool JASWaveArc::eraseSetup() {
 void JASWaveArc::loadToAramCallback(void* this_) {
     loadToAramCallbackParams* tmp = (loadToAramCallbackParams*)this_;
     JASWaveArc* wavArc = tmp->mWavArc;
-    if (JKRDvdAramRipper::loadToAram(tmp->mEntryNum, tmp->mBase, EXPAND_SWITCH_UNKNOWN0, 0, 0, nullptr) == nullptr) {
+    if (JKRDvdRipper::loadToMainRAM(tmp->mEntryNum, tmp->mBase, EXPAND_SWITCH_UNKNOWN0, wavArc->mFileLength, nullptr,
+                                    JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, nullptr, nullptr) == nullptr) {
         return;
     }
     wavArc->_5A--;
@@ -91,7 +92,7 @@ bool JASWaveArc::sendLoadCmd() {
     loadToAramCallbackParams commandInfo;
     commandInfo.mWavArc = this;
     commandInfo.mEntryNum = mEntryNum;
-    commandInfo.mBase = (uintptr_t)mHeap.getBase();
+    commandInfo.mBase = static_cast< u8* >(mHeap.getBase());
     commandInfo._C = ++_58;
 
     _5A++;

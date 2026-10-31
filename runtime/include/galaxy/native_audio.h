@@ -21,7 +21,10 @@ public:
     void setup(NebulaAudioVoice* voices, std::uint32_t count, const NebulaAudioEffect* effects,
                const void* sound_memory, std::uint32_t sound_memory_size);
     void mix(float gain);
-    void frame(const std::int16_t* stream, std::uint32_t stream_frames);
+    void frame();
+    // The movie player's sound (nebula_game_api.h movie_audio*).
+    bool movie_audio(const void* record, std::uint32_t size);
+    void movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds);
     // Frames submitted and not yet played (the sink's pending queue and the device's).
     [[nodiscard]] unsigned queued_blocks() const;
     // The frames the device holds before it plays (or plays again after running dry): the level to keep queued.

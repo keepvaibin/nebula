@@ -56,7 +56,7 @@ public:
 
     static void initSystem(u32, u32);
     JASAramStream();
-    void init(u32, u32, StreamCallback, void*);
+    void init(u8*, u32, StreamCallback, void*);
     bool prepare(s32, int);
     bool start();
     bool stop(u16);
@@ -154,7 +154,7 @@ public:
     /* 0x12C */ int _12C;
     /* 0x130 */ s16 _130[CHANNEL_MAX];
     /* 0x13C */ s16 _13C[CHANNEL_MAX];
-    /* 0x148 */ int _148;
+    /* 0x148 */ u8* mBuffer;  // the ring of decoded-on-play blocks, per channel
     /* 0x14C */ u32 _14C;
     /* 0x150 */ StreamCallback mCallback;
     /* 0x154 */ void* mCallbackData;

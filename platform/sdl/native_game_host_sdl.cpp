@@ -314,12 +314,12 @@ void NativeGameAudio::mix(float gain) {
     }
 }
 
-void NativeGameAudio::frame(const std::int16_t* stream, std::uint32_t stream_frames) {
+void NativeGameAudio::frame() {
     State& s = *state_;
     if (s.mixer == nullptr) {
         return;
     }
-    const std::span<const float> samples = s.mixer->end_frame(stream, stream_frames);
+    const std::span<const float> samples = s.mixer->end_frame();
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
     const float target = audio.master >= 0.0f ? std::min(audio.master, 4.0f) : 0.0f;
@@ -338,6 +338,29 @@ void NativeGameAudio::frame(const std::int16_t* stream, std::uint32_t stream_fra
     }
     s.block_bytes = count * 2u * sizeof(float);
     (void)SDL_PutAudioStreamData(s.stream, s.frames.data(), static_cast<int>(s.block_bytes));
+}
+
+bool NativeGameAudio::movie_audio(const void* record, std::uint32_t size) {
+    return state_->mixer != nullptr &&
+           state_->mixer->movie().push(static_cast<const std::uint8_t*>(record), size);
+}
+
+void NativeGameAudio::movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds) {
+    if (state_->mixer == nullptr) {
+        return;
+    }
+    galaxy::audio::MovieAudio& movie = state_->mixer->movie();
+    if (what == NEBULA_MOVIE_AUDIO_OPEN) {
+        movie.open(value != 0);
+    } else if (what == NEBULA_MOVIE_AUDIO_CLOSE) {
+        movie.close();
+    } else if (what == NEBULA_MOVIE_AUDIO_RESET) {
+        movie.reset();
+    } else if (what == NEBULA_MOVIE_AUDIO_VOLUME) {
+        movie.set_volume(value, milliseconds);
+    } else if (what == NEBULA_MOVIE_AUDIO_RESUME) {
+        movie.resume();
+    }
 }
 
 unsigned NativeGameAudio::queued_blocks() const {

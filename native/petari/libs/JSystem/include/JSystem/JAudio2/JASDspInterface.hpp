@@ -32,7 +32,7 @@ namespace JASDsp {
         void forceStop();
         bool isActive() const;
         bool isFinish() const;
-        void setWaveInfo(JASWaveInfo const&, u32, u32);
+        void setWaveInfo(JASWaveInfo const&, const u8*, u32);
         void setOscInfo(u32);
         void initAutoMixer();
         void setAutoMixer(u16, u8, u8, u8, u8);

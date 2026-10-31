@@ -122,6 +122,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/switch_controller.cpp
     ${rt}/tilt.cpp
     ${rt}/audio_mixer.cpp
+    ${rt}/movie_audio.cpp
     ${rt}/atomic_file.cpp
     ${rt}/wii_device_data.cpp
     ${rt}/mii_import.cpp

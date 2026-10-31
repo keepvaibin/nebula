@@ -126,7 +126,7 @@ target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_native_input)
 
 # The game's sound mixed natively (audio_mixer.h).
-add_library(galaxy_audio_mixer STATIC runtime/src/audio_mixer.cpp)
+add_library(galaxy_audio_mixer STATIC runtime/src/audio_mixer.cpp runtime/src/movie_audio.cpp)
 target_include_directories(galaxy_audio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
                            "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
 galaxy_host_options(galaxy_audio_mixer)

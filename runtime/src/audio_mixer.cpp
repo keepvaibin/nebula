@@ -188,6 +188,7 @@ void AudioMixer::mix(float gain) {
     }
     const auto begin = std::chrono::steady_clock::now();
     ++stats_.subframes;
+    ++frame_subframes_;
     samples_ = static_cast<std::uint32_t>((subframe_counter_ + 1u) * rate_ / kSubframesPerSecond -
                                           subframe_counter_ * rate_ / kSubframesPerSecond);
     ++subframe_counter_;
@@ -224,17 +225,21 @@ void AudioMixer::mix(float gain) {
         std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - begin).count());
 }
 
-std::span<const float> AudioMixer::end_frame(const std::int16_t* stream, std::uint32_t stream_frames) {
+std::span<const float> AudioMixer::end_frame() {
     ++stats_.frames;
     static thread_local std::vector<float> out;
     out.swap(frame_);
     frame_.clear();
     const std::size_t outputs = out.size() / 2u;
-    if (stream == nullptr || stream_frames == 0u || outputs == 0u) {
+    const std::uint32_t stream_frames = frame_subframes_ * kGameSubframeSamples;
+    frame_subframes_ = 0u;
+    if (!movie_.active() || stream_frames == 0u || outputs == 0u) {
         stream_running_ = false;
         return out;
     }
     ++stats_.stream_frames;
+    std::vector<float> stream(static_cast<std::size_t>(stream_frames) * 2u, 0.0f);
+    movie_.pull(stream.data(), stream_frames);
     // History: taps - 1 earlier samples' room, then the new ones; outputs from position taps/2 - 1.
     const std::size_t taps = stream_kernel_.taps();
     const std::size_t keep = taps;
@@ -243,11 +248,7 @@ std::span<const float> AudioMixer::end_frame(const std::int16_t* stream, std::ui
         stream_running_ = true;
     }
     std::vector<float> x(stream_history_);
-    x.reserve(x.size() + stream_frames * 2u);
-    for (std::uint32_t i = 0; i < stream_frames; ++i) {
-        x.push_back(static_cast<float>(stream[i * 2u + 1u]) / 32768.0f);  // left
-        x.push_back(static_cast<float>(stream[i * 2u]) / 32768.0f);       // right
-    }
+    x.insert(x.end(), stream.begin(), stream.end());
     const double step = static_cast<double>(stream_frames) / static_cast<double>(outputs);
     const double origin = static_cast<double>(taps / 2u - 1u);
     for (std::size_t j = 0; j < outputs; ++j) {
@@ -417,7 +418,7 @@ void AudioMixer::decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float*
         state.block[14] = 0;
         state.block[15] = 0;
         voice.left = voice.end;
-        voice.address = voice.wave;
+        voice.address = 0u;
     }
     if (voice.finished != 0u) {
         finish_float();
@@ -457,7 +458,7 @@ void AudioMixer::decode_adpcm(VoiceState& state, NebulaAudioVoice& voice, float*
             }
             // Loop: the loop start's block with the stored predictor history, from inside the block.
             const std::uint32_t loop_start = voice.loop_start;
-            voice.address = voice.wave + (loop_start >> 4u) * block_bytes;
+            voice.address = (loop_start >> 4u) * block_bytes;
             state.block[15] = voice.loop_history[0];
             state.block[14] = voice.loop_history[1];
             std::array<std::int16_t, 16> block{};
@@ -516,7 +517,7 @@ void AudioMixer::decode_adpcm_blocks(VoiceState& state, NebulaAudioVoice& voice,
     std::uint32_t address = voice.address;
     for (std::uint32_t b = 0; b < blocks; ++b, out += 16) {
         ++stats_.adpcm_blocks;
-        const std::byte* block = wave_bytes(address, block_bytes);
+        const std::byte* block = wave_bytes(voice, address, block_bytes);
         address += block_bytes;
         if (block == nullptr) {
             ++stats_.unresolved_reads;
@@ -554,14 +555,14 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaAudioVoice& voice, float* out
                           std::uint32_t bytes) {
     const auto restart = [&] {
         voice.left = voice.end - voice.restart;
-        voice.address = voice.wave + voice.restart * bytes;
+        voice.address = voice.restart * bytes;
         state.loop_pending = false;
     };
     const auto fetch = [&](std::uint32_t samples) {
         if (samples == 0u) {
             return;
         }
-        const std::byte* data = wave_bytes(voice.address, samples * bytes);
+        const std::byte* data = wave_bytes(voice, voice.address, samples * bytes);
         if (data == nullptr) {
             ++stats_.unresolved_reads;
             std::fill_n(out, samples, 0.0f);
@@ -930,11 +931,17 @@ void AudioMixer::effects_end() {
     }
 }
 
-const std::byte* AudioMixer::wave_bytes(std::uint32_t offset, std::uint32_t size) const {
-    if (sound_ == nullptr || offset > sound_size_ || size > sound_size_ - offset) {
+// `size` bytes `offset` past the voice's wave, when they lie in the sound memory.
+const std::byte* AudioMixer::wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset, std::uint32_t size) const {
+    const auto* wave = reinterpret_cast<const std::byte*>(voice.wave);
+    if (sound_ == nullptr || wave < sound_ || wave > sound_ + sound_size_) {
         return nullptr;
     }
-    return sound_ + offset;
+    const auto start = static_cast<std::size_t>(wave - sound_) + offset;
+    if (start > sound_size_ || size > sound_size_ - start) {
+        return nullptr;
+    }
+    return sound_ + start;
 }
 
 }  // namespace galaxy::audio

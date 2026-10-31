@@ -214,7 +214,7 @@ public:
     /* 0xDC */ u32 mChannelType;
     /* 0xE0 */ JASWaveInfo mWaveInfo;
     union {
-        /* 0x104 */ int mWavePtr;
+        /* 0x104 */ const u8* mWavePtr;
         /* 0x104 */ int mProgNo;
     };
 

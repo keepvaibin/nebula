@@ -59,7 +59,7 @@ struct JASWaveArc : JASDisposer {
         // not official struct name
         /* 0x0 */ JASWaveArc* mWavArc;
         /* 0x4 */ s32 mEntryNum;
-        /* 0x8 */ u32 mBase;
+        /* 0x8 */ u8* mBase;
         /* 0xC */ u32 _C;
     };
 

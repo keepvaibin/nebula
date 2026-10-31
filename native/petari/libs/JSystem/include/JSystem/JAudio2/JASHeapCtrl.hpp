@@ -290,7 +290,6 @@ namespace JASKernel {
     u32 getAramSize();
 
     extern JASHeap audioAramHeap;
-    extern u32 sAramBase;
     extern JKRHeap* sSystemHeap;
     extern JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* sCommandHeap;
 };  // namespace JASKernel
