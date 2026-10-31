@@ -18,10 +18,9 @@ namespace J3DNativeView {
     void setViewportJitter(f32 left, f32 top, f32 width, f32 height, f32 nearZ, f32 farZ, u32 field);
     void getViewportv(f32* pValues);
     void setZScaleOffset(f32 scale, f32 offset);
-    // The scissor box and its offset (GXSetScissor's and GXSetScissorBoxOffset's values).
+    // The scissor box (the viewport's units).
     void setScissor(u32 left, u32 top, u32 width, u32 height);
     void getScissor(u32* pLeft, u32* pTop, u32* pWidth, u32* pHeight);
-    void setScissorBoxOffset(s32 x, s32 y);
     // The picture's colour and depth where the drawing has reached, kept as `channel`'s; reads take the latest finished
     // capture (a frame or so old) and never wait. Frame-buffer coordinates.
     void captureReadback(u32 channel);

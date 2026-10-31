@@ -44,7 +44,6 @@ enum Kind : std::uint8_t {
     kProjection,
     kViewport,
     kScissor,
-    kScissorOffset,
     kTevKColor,
     kTevColorS10,
     kClipMode,

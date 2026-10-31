@@ -98,9 +98,8 @@ struct NativeDrawState {
     std::uint64_t palette_place[1024]{};
     std::uint32_t palette_revision = 0u;
 
-    // The scissor box (screen pixels, corners inclusive) and offset (GXSetScissor, GXSetScissorBoxOffset).
-    ScissorRect scissor{-342, -342, -342, -342};
-    ScissorOffset scissor_offset{};
+    // The scissor box (the frame's pixels, corners inclusive).
+    ScissorRect scissor{0, 0, -1, -1};
 
     // What changed since the last consume_dirty (kStateDirty*; all at the start).
     std::uint32_t dirty = ~0u;
