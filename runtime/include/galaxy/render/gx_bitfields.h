@@ -393,22 +393,14 @@ struct EfbCopyParams {
     bool intensity;                 // intensity conversion (I and IA texture copies)
     std::uint8_t clear_color[4];    // red, green, blue, alpha
     std::uint32_t clear_z;          // 24-bit depth
-    std::uint8_t vfilter[7];        // vertical filter taps (1/64 units)
+    // Through the display's vertical filter (NEBULA_CAPTURE_FILTERED, frame_show): each line half its own colour and
+    // half the line above's, as the game's television modes asked. Otherwise the line alone.
+    bool filtered;
 
-    // 3-tap vertical copy-filter weights (prev/current/next EFB row), in
-    // 1/64 units. The seven 6-bit taps collapse as {w0+w1, w2+w3+w4,
-    // w5+w6}: the first pair samples the previous row, the middle three
-    // sample the current row, and the final pair samples the next row.
-    // Therefore the standard {0,0,21,22,21,0,0} filter is (0,64,0)/64.
-    [[nodiscard]] constexpr std::uint32_t filter_upper() const {
-        return static_cast<std::uint32_t>(vfilter[0]) + vfilter[1];
-    }
-    [[nodiscard]] constexpr std::uint32_t filter_middle() const {
-        return static_cast<std::uint32_t>(vfilter[2]) + vfilter[3] + vfilter[4];
-    }
-    [[nodiscard]] constexpr std::uint32_t filter_lower() const {
-        return static_cast<std::uint32_t>(vfilter[5]) + vfilter[6];
-    }
+    // The filter's weights on the line above, the line and the line below, in 64ths.
+    [[nodiscard]] constexpr std::uint32_t filter_upper() const { return filtered ? 32u : 0u; }
+    [[nodiscard]] constexpr std::uint32_t filter_middle() const { return filtered ? 32u : 64u; }
+    [[nodiscard]] constexpr std::uint32_t filter_lower() const { return 0u; }
 };
 
 struct XfTexGen {
@@ -614,35 +606,6 @@ static_assert(kTexImage.width == 640);
 static_assert(kTexImage.height == 480);
 static_assert(kTexImage.format == TexFormat::RGB565);
 static_assert(kTexImage.address == 0x01000000u);
-
-constexpr EfbCopyParams make_efb_copy_filter(
-    std::uint32_t w0,
-    std::uint32_t w1,
-    std::uint32_t w2,
-    std::uint32_t w3,
-    std::uint32_t w4,
-    std::uint32_t w5,
-    std::uint32_t w6) {
-    EfbCopyParams params{};
-    const std::uint32_t taps[7] = {w0, w1, w2, w3, w4, w5, w6};
-    for (unsigned i = 0; i < 7u; ++i) {
-        params.vfilter[i] = static_cast<std::uint8_t>(taps[i] & 63u);
-    }
-    return params;
-}
-
-// Every tap is distinct, so a tap moved to the wrong row fails an assertion.
-constexpr auto kAsymmetricEfbCopyFilter =
-    make_efb_copy_filter(1u, 2u, 4u, 8u, 16u, 32u, 63u);
-static_assert(kAsymmetricEfbCopyFilter.filter_upper() == 3u);
-static_assert(kAsymmetricEfbCopyFilter.filter_middle() == 28u);
-static_assert(kAsymmetricEfbCopyFilter.filter_lower() == 95u);
-
-constexpr auto kStandardEfbCopyFilter =
-    make_efb_copy_filter(0u, 0u, 21u, 22u, 21u, 0u, 0u);
-static_assert(kStandardEfbCopyFilter.filter_upper() == 0u);
-static_assert(kStandardEfbCopyFilter.filter_middle() == 64u);
-static_assert(kStandardEfbCopyFilter.filter_lower() == 0u);
 
 }  // namespace bitfield_checks
 

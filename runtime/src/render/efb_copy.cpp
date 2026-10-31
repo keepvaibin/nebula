@@ -331,11 +331,7 @@ std::optional<EfbCopyRect> efb_identity_copy_rect(
         static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {
         return std::nullopt;
     }
-    const unsigned upper = params.filter_upper();
-    const unsigned middle = params.filter_middle();
-    const unsigned lower = params.filter_lower();
-    // All-zero startup registers use middle64 in the conversion shader too.
-    if (upper != 0u || lower != 0u || (middle != 0u && middle != 64u)) {
+    if (params.filtered) {
         return std::nullopt;
     }
     const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);

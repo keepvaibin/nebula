@@ -849,9 +849,6 @@ bool RendererVk::enter_output_efb(unsigned scale) {
     EfbCopyParams params{};
     params.src_width = static_cast<std::uint16_t>(kFrameWidth);
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
-    params.vfilter[2] = 21u;
-    params.vfilter[3] = 22u;
-    params.vfilter[4] = 21u;
     const unsigned width = kFrameWidth * scale;
     const unsigned height = kFrameHeight * scale;
     const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, width, height, efb_scale_);
