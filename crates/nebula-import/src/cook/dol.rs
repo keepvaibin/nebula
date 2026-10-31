@@ -50,15 +50,16 @@ fn at_address(dol: &[u8], address: u32, size: u32) -> Option<&[u8]> {
     })
 }
 
-/// The NUL-terminated string at a load address (None for 0 or one outside a section).
-fn string(dol: &[u8], address: u32) -> Result<Option<String>> {
+/// The NUL-terminated string at a load address, its bytes as main.dol has them (Shift-JIS for the Japanese names;
+/// None for 0).
+fn string(dol: &[u8], address: u32) -> Result<Option<Vec<u8>>> {
     if address == 0 {
         return Ok(None);
     }
     let bytes = at_address(dol, address, 1).with_context(|| format!("a string at {address:#x} outside main.dol"))?;
     let base = bytes.as_ptr() as usize - dol.as_ptr() as usize;
     let end = dol[base..].iter().position(|b| *b == 0).context("a string without its end")?;
-    Ok(Some(String::from_utf8_lossy(&dol[base..base + end]).into_owned()))
+    Ok(Some(dol[base..base + end].to_vec()))
 }
 
 /// A native table's strings, after its entries: each a NUL-terminated byte string, named by its offset in the file.
@@ -67,12 +68,12 @@ struct Strings {
 }
 
 impl Strings {
-    fn add(&mut self, text: Option<String>) -> u32 {
+    fn add(&mut self, text: Option<Vec<u8>>) -> u32 {
         match text {
             None => NONE,
             Some(text) => {
                 let at = self.pool.len() as u32;
-                self.pool.extend_from_slice(text.as_bytes());
+                self.pool.extend_from_slice(&text);
                 self.pool.push(0);
                 at
             }
@@ -171,13 +172,16 @@ mod tests {
     fn strings_resolve_through_the_sections_and_move_past_the_entries() {
         let mut data = vec![0u8; 0x40];
         data[0x20..0x24].copy_from_slice(b"Egg\0");
+        // A Shift-JIS name (the event flags' Japanese ones) keeps its bytes: they are not UTF-8.
+        data[0x28..0x2D].copy_from_slice(&[0x83, 0x6E, 0x83, 0x60, 0x00]);
         let image = dol(0x8000_0000, &data);
-        assert_eq!(string(&image, 0x8000_0020).unwrap().as_deref(), Some("Egg"));
+        assert_eq!(string(&image, 0x8000_0020).unwrap().as_deref(), Some(&b"Egg"[..]));
+        assert_eq!(string(&image, 0x8000_0028).unwrap().as_deref(), Some(&[0x83u8, 0x6E, 0x83, 0x60][..]));
         assert_eq!(string(&image, 0).unwrap(), None);
         assert!(string(&image, 0x9000_0000).is_err());
         let mut strings = Strings { pool: Vec::new() };
         let mut head = 1u32.to_le_bytes().to_vec();
-        head.extend_from_slice(&strings.add(Some("Egg".into())).to_le_bytes());
+        head.extend_from_slice(&strings.add(Some(b"Egg".to_vec())).to_le_bytes());
         head.extend_from_slice(&strings.add(None).to_le_bytes());
         let file = strings.finish(head, &[4, 8]);
         assert_eq!(u32::from_le_bytes(file[4..8].try_into().unwrap()), 12);
