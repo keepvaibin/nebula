@@ -39,7 +39,7 @@ const std::map<std::string, std::size_t>& constant_offsets() {
         {"chan_material", offsetof(VertexConstants, chan_material)},
         {"num_texgens", offsetof(VertexConstants, num_texgens)},
         {"num_chans", offsetof(VertexConstants, num_chans)},
-        {"mtx_palette_base", offsetof(VertexConstants, mtx_palette_base)},
+        {"pos_base", offsetof(VertexConstants, pos_base)},
         {"matrix_index_a", offsetof(VertexConstants, matrix_index_a)},
         {"matrix_index_b", offsetof(VertexConstants, matrix_index_b)},
         {"inline_pos_matrix", offsetof(VertexConstants, inline_pos_matrix)},

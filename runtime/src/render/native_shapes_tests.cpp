@@ -49,8 +49,8 @@ int main() {
     c.normal = 1u;
     c.color[0] = 1u;
     c.texcoord[1] = 2u;
-    c.position_matrix = 3u;
-    c.texture_matrix[1] = 30u;
+    c.position_matrix = 1u;     // place 1: rows 3-5
+    c.texture_matrix[1] = 0u;   // texture place 0: rows 30-32
     g.corners = {c};
     g.indices = {0u, 0u, 0u};
     DrawArrays arrays{};

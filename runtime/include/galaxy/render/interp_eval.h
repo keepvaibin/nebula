@@ -178,20 +178,6 @@ void copy_main(uint3 group : SV_GroupID, uint lane : SV_GroupIndex) {
         return;
     }
     const uint4 c = program.Load4(min(table + group.x * 16u, program_last));
-    if ((c.x & 0xFFu) == 2u) {
-        // A palette slot: its identity table, then each row through the source draw's table.
-        const uint rows = c.x >> 8u;
-        for (uint w = lane; w < rows * 5u; w += 64u) {
-            uint value = c.w + rows / 4u + w;
-            if (w >= rows) {
-                const uint rw = w - rows;
-                const uint at = matrix_ring.Load(min(c.y + (rw >> 2u) * 4u, matrices_last));
-                value = matrix_ring.Load(min(at * 16u + (rw & 3u) * 4u, matrices_last));
-            }
-            put(c.z / 4u + w, value);
-        }
-        return;
-    }
     for (uint w = lane; w < c.w; w += 64u) {
         const uint from = c.y + w * 4u;
         const uint a = constant_ring.Load(min(from, constants_last));

@@ -937,20 +937,30 @@ bool RendererVk::begin_replay_sequence(const ReplaySequence& sequence) {
             }
         }
     }
+    // Each palette slot takes its source draw's blocks (draw_matrices.h) at their rows; a motion vector's slot its
+    // position and texture blocks.
+    static constexpr std::array<std::pair<std::uint32_t, std::uint32_t>, 5> kBlocks{{
+        {draw_rows::kPosition, draw_rows::kPositionRows}, {draw_rows::kTexture, draw_rows::kTextureRows},
+        {draw_rows::kNormal, draw_rows::kNormalRows}, {draw_rows::kPost, draw_rows::kPostRows},
+        {draw_rows::kLight, draw_rows::kLightRows}}};
     for (std::uint32_t q = 0; q < layout.palette_count && q < sequence.palette_source.size(); ++q) {
-        const std::uint64_t source = static_cast<std::uint64_t>(sequence.palette_source[q]) * 16u;
-        if (source + interp_gpu::kPaletteRows * 4u > matrices_bytes) {
-            replay_failure_ = 9u;
-            return false;
+        const std::array<std::uint32_t, 5>& source = sequence.palette_source[q];
+        for (std::size_t k = 0; k < kBlocks.size(); ++k) {
+            if ((static_cast<std::uint64_t>(source[k]) + kBlocks[k].second) * 16u > matrices_bytes) {
+                replay_failure_ = 9u;
+                return false;
+            }
         }
-        const auto slot = [&](std::uint32_t offset, std::uint32_t rows) {
-            interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::MatrixRows) | rows << 8u,
-                                      static_cast<std::uint32_t>(source), offset,
-                                      (offset - layout.palette_base()) / 16u});
+        const auto slot = [&](std::uint32_t offset, std::uint32_t rows, std::size_t blocks) {
+            const std::uint32_t first = offset + rows * 4u;  // its rows, after the unused float4
+            for (std::size_t k = 0; k < blocks; ++k) {
+                interp_copies_.push_back({static_cast<std::uint32_t>(interp_gpu::Source::Matrices), source[k] * 16u,
+                                          first + kBlocks[k].first * 16u, kBlocks[k].second * 4u});
+            }
         };
-        slot(layout.palette_offset(q), interp_gpu::kPaletteRows);
+        slot(layout.palette_offset(q), interp_gpu::kPaletteRows, kBlocks.size());
         if (q < layout.prev_palette_count) {
-            slot(layout.prev_palette_offset(q), interp_gpu::kPrevPaletteRows);
+            slot(layout.prev_palette_offset(q), interp_gpu::kPrevPaletteRows, 2u);
         }
     }
 

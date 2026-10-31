@@ -439,10 +439,10 @@ bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) no
 
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
               const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
-    constexpr unsigned kColor = MatrixMemory::kLightColorWord, kAngle = MatrixMemory::kLightAngleWord,
-                       kPosition = MatrixMemory::kLightPositionWord, kDirection = MatrixMemory::kLightDirectionWord;
+    constexpr unsigned kColor = draw_rows::kLightColorWord, kAngle = draw_rows::kLightAngleWord,
+                       kPosition = draw_rows::kLightPositionWord, kDirection = draw_rows::kLightDirectionWord;
     static_assert(kAngle + 6u == kPosition);  // the angle and distance terms, then position and direction
-    for (unsigned i = 0; i < MatrixMemory::kLightWords; ++i) out[i] = b[i];
+    for (unsigned i = 0; i < draw_rows::kLightWords; ++i) out[i] = b[i];
     if (camera.known && camera.cut) {
         return;
     }
@@ -556,12 +556,12 @@ constexpr unsigned kTexRow = 30u;
 constexpr unsigned kPostRow = kPostBase / 4u;
 constexpr unsigned kLightRow = kLightBase / 4u;
 
-constexpr std::array<std::uint32_t, MatrixMemory::kRows> identity_table() noexcept {
-    std::array<std::uint32_t, MatrixMemory::kRows> table{};
-    for (std::uint32_t r = 0; r < MatrixMemory::kRows; ++r) table[r] = r;
+constexpr std::array<std::uint32_t, draw_rows::kRows> identity_table() noexcept {
+    std::array<std::uint32_t, draw_rows::kRows> table{};
+    for (std::uint32_t r = 0; r < draw_rows::kRows; ++r) table[r] = r;
     return table;
 }
-constexpr std::array<std::uint32_t, MatrixMemory::kRows> kIdentityTable = identity_table();
+constexpr std::array<std::uint32_t, draw_rows::kRows> kIdentityTable = identity_table();
 }  // namespace
 
 RowView::RowView(const std::uint32_t* words) noexcept
@@ -652,7 +652,7 @@ void palette_motion(RowView a, RowView b, const CameraMotion& camera,
 void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept {
-    b.gather(0u, MatrixMemory::kRows, out);
+    b.gather(0u, draw_rows::kRows, out);
     for (unsigned k = 0; k < 10u; ++k) {
         if (m.position_changed[k] != 0u) {
             store_matrix(eye_at(m.position[k], camera, camera_t, t), out + k * 12u);

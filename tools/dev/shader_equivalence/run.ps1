@@ -15,8 +15,10 @@ function Build-Harness([string]$Tree, [string]$Name) {
     $obj = Join-Path $Work $Name
     New-Item -ItemType Directory -Force $obj | Out-Null
     $render = Join-Path $Tree 'runtime\src\render'
+    # The draw's matrices: draw_matrices.cpp (E-05), matrix_memory.cpp in trees before it.
+    $matrices = if (Test-Path "$render\draw_matrices.cpp") { "$render\draw_matrices.cpp" } else { "$render\matrix_memory.cpp" }
     $src = @((Join-Path $here 'harness.cpp'), "$render\shader_keys.cpp", "$render\draw_state.cpp",
-             "$render\native_material.cpp", "$render\matrix_memory.cpp", "$render\shader_gen.cpp",
+             "$render\native_material.cpp", $matrices, "$render\shader_gen.cpp",
              "$render\enhanced_lighting.cpp", "$render\render_config.cpp", "$render\rt_surfaces.cpp",
              (Join-Path $Tree 'runtime\src\atomic_file.cpp'))
     $exe = Join-Path $Work "$Name.exe"
