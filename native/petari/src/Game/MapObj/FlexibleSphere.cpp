@@ -15,7 +15,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
-#include <revolution/gx/GXGeometry.h>
 #include <revolution/mtx.h>
 
 #define GROW true

@@ -27,7 +27,6 @@
 #include <cmath>
 #include <cstring>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
 
 s16 sgrad_tex_thresh;
 
