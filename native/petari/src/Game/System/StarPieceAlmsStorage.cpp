@@ -1,4 +1,5 @@
 #include "Game/System/StarPieceAlmsStorage.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -39,25 +40,17 @@ u32 StarPieceAlmsStorage::getSignature() const {
 }
 
 s32 StarPieceAlmsStorage::serialize(u8* pData, u32) const {
-#ifdef TARGET_PC
-    // Sixteen big-endian u16 values in the save file.
+    // Sixteen u16 values in the save file.
     for (s32 idx = 0; idx < 16; idx++) {
-        reinterpret_cast< BE< u16 >* >(pData)[idx] = mValueArray[idx];
+        MR::storeSaveU16(pData + idx * sizeof(u16), mValueArray[idx]);
     }
-#else
-    MR::copyMemory(pData, mValueArray, 32);
-#endif
     return 32;
 }
 
 s32 StarPieceAlmsStorage::deserialize(const u8* pData, u32) {
-#ifdef TARGET_PC
     for (s32 idx = 0; idx < 16; idx++) {
-        mValueArray[idx] = reinterpret_cast< const BE< u16 >* >(pData)[idx];
+        mValueArray[idx] = MR::loadSaveU16(pData + idx * sizeof(u16));
     }
-#else
-    MR::copyMemory(mValueArray, pData, 32);
-#endif
     return 0;
 }
 

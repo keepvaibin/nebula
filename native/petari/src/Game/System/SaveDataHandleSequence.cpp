@@ -1,10 +1,9 @@
 #include "Game/System/SaveDataHandleSequence.hpp"
-#include <revolution/nand.h>
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SaveIcon.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
-#include "Game/System/NANDErrorSequence.hpp"
-#include "Game/System/NANDManager.hpp"
+#include "Game/System/SaveErrorSequence.hpp"
+#include "Game/System/SaveRequest.hpp"
 #include "Game/System/SaveDataHandler.hpp"
 #include "Game/System/SysConfigFile.hpp"
 #include "Game/System/UserFile.hpp"
@@ -33,7 +32,7 @@ namespace {
 };  // namespace
 
 SaveDataHandleSequence::SaveDataHandleSequence()
-    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mSysConfigFile(), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mNANDErrorSequence(),
+    : NerveExecutor("\203\132\201\133\203\165/\203\215\201\133\203\150" /* セーブ/ロード */), mSysConfigFile(), mCurrentUserFile(), mBackupUserFile(), mSaveDataHandler(), mSaveErrorSequence(),
       mSysInfoWindowConfirm(), mSysInfoWindowSave(), _24(), mIsConfirmRemind(), mIsSaveAndQuitMsg(), _2A(), _2B(), _2C(), mWorkUserFile(),
       mNerveForError(), mTempBuffer(), mOnSaveSuccessFunc(), mJustBeforeSaveFunc(), mSaveIcon()
 #ifdef TARGET_PC
@@ -58,7 +57,7 @@ void SaveDataHandleSequence::initAfterResourceLoaded() {
     mSysInfoWindowSave = MR::createSysInfoWindowMiniExecuteWithChildren();
     mSysInfoWindowSave->kill();
 
-    mNANDErrorSequence = new NANDErrorSequence(this, mSysInfoWindowConfirm, mSysInfoWindowSave);
+    mSaveErrorSequence = new SaveErrorSequence(this, mSysInfoWindowConfirm, mSysInfoWindowSave);
 
     mSaveIcon = new SaveIcon(mSysInfoWindowSave);
     mSaveIcon->kill();
@@ -177,8 +176,8 @@ void SaveDataHandleSequence::storeCopyUserFile(int indexDst, int indexSrc) {
     mSaveDataHandler->copyUserFileMemory(indexDst, indexSrc);
 }
 
-bool SaveDataHandleSequence::tryNANDErrorSequence(s32 code) {
-    if (mNANDErrorSequence->tryNoRecoverErroSequence(code)) {
+bool SaveDataHandleSequence::tryUnrecoverableError(SaveRequest::Result result) {
+    if (mSaveErrorSequence->tryUnrecoverable(result)) {
         mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
@@ -189,26 +188,33 @@ bool SaveDataHandleSequence::tryNANDErrorSequence(s32 code) {
     return false;
 }
 
+// The NWC24 messenger's system-memory error: the message, then the game stops.
+void SaveDataHandleSequence::startSystemMemoryErrorFreeze() {
+    mSaveErrorSequence->startErrorToFreeze("NAND_08");
+    mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
+    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
+}
+
 bool SaveDataHandleSequence::isActive() const {
     return !isNerve(GET_NERVE_ANON(SaveDataHandleSequenceNoOperation));
 }
 
 bool SaveDataHandleSequence::isPermitToReset() const {
-    if (mNANDErrorSequence != nullptr) {
-        return mNANDErrorSequence->isPermitToReset();
+    if (mSaveErrorSequence != nullptr) {
+        return mSaveErrorSequence->isPermitToReset();
     }
 
     return true;
 }
 
 void SaveDataHandleSequence::prepareReset() {
-    if (mNANDErrorSequence != nullptr) {
-        mNANDErrorSequence->prepareReset();
+    if (mSaveErrorSequence != nullptr) {
+        mSaveErrorSequence->prepareReset();
     }
 }
 
 bool SaveDataHandleSequence::isPreparedReset() const {
-    if (mNANDErrorSequence != nullptr && !mNANDErrorSequence->isPreparedReset()) {
+    if (mSaveErrorSequence != nullptr && !mSaveErrorSequence->isPreparedReset()) {
         return false;
     }
 
@@ -226,14 +232,14 @@ bool SaveDataHandleSequence::isPreparedReset() const {
     }
 
     if (isNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate)) || isNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling))) {
-        return mNANDErrorSequence->isPreparedReset();
+        return mSaveErrorSequence->isPreparedReset();
     }
 
     return false;
 }
 
 void SaveDataHandleSequence::restoreFromReset() {
-    mNANDErrorSequence->restoreFromReset();
+    mSaveErrorSequence->restoreFromReset();
 
     if (!MR::isDead(mSysInfoWindowConfirm)) {
         mSysInfoWindowConfirm->forceKill();
@@ -279,12 +285,12 @@ void SaveDataHandleSequence::exeNoOperation() {
 
 void SaveDataHandleSequence::exeCheckEnableToCreate() {
     if (MR::isFirstStep(this)) {
-        mNANDErrorSequence->startCheckEnableToCreate();
+        mSaveErrorSequence->startCheckEnableToCreate();
     }
 
-    mNANDErrorSequence->update();
+    mSaveErrorSequence->update();
 
-    if (!mNANDErrorSequence->mIsDead) {
+    if (!mSaveErrorSequence->mIsDead) {
         return;
     }
 
@@ -480,18 +486,18 @@ void SaveDataHandleSequence::exePreLoad() {
         return;
     }
 
-    NANDResultCode resultCode = mSaveDataHandler->getLastResultCode();
+    const SaveRequest::Result result = mSaveDataHandler->getLastResult();
 
-    if (resultCode.isSuccess()) {
+    if (result == SaveRequest::Result_Done) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequencePreLoadDone));
-    } else if (resultCode.isNoExistFile()) {
+    } else if (result == SaveRequest::Result_NoFile) {
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate));
-    } else if (resultCode.isSaveDataCorrupted()) {
+    } else if (result == SaveRequest::Result_Corrupted) {
         mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
 
-        mNANDErrorSequence->startRemoveFile();
+        mSaveErrorSequence->startRemoveFile();
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
-    } else if (tryNANDErrorSequence(resultCode.getCode())) {
+    } else if (tryUnrecoverableError(result)) {
         return;
     }
 }
@@ -499,7 +505,7 @@ void SaveDataHandleSequence::exePreLoad() {
 void SaveDataHandleSequence::exePreLoadDone() {
     if (!mSaveDataHandler->requestVerifyAfterLoadGameDataFile()) {
         mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
-        mNANDErrorSequence->startRemoveFile();
+        mSaveErrorSequence->startRemoveFile();
 
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
     } else {
@@ -533,9 +539,9 @@ void SaveDataHandleSequence::exeNoSaveConfirmRemind() {
 }
 
 void SaveDataHandleSequence::exeErrorHandling() {
-    mNANDErrorSequence->update();
+    mSaveErrorSequence->update();
 
-    if (!mNANDErrorSequence->mIsDead) {
+    if (!mSaveErrorSequence->mIsDead) {
         return;
     }
 
@@ -567,7 +573,6 @@ void SaveDataHandleSequence_FORCE_MATCH_STRINGS() {
     MR::isEqualString("luigi", "luigi");
     MR::isEqualString("config%1d", "config%1d");
     MR::isEqualString("sysconf", "sysconf");
-    MR::isEqualString("NAND_08", "NAND_08");
 }
 
 void SaveDataHandleSequence::restoreUserFileConfigData(UserFile* pUserFile, int index) {
@@ -689,7 +694,7 @@ bool SaveDataHandleSequence::isEnablePointer() const {
         return false;
     }
 
-    if (isNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate)) && !mNANDErrorSequence->isEnablePointer()) {
+    if (isNerve(GET_NERVE_ANON(SaveDataHandleSequenceCheckEnableToCreate)) && !mSaveErrorSequence->isEnablePointer()) {
         return false;
     }
 
@@ -697,13 +702,13 @@ bool SaveDataHandleSequence::isEnablePointer() const {
 }
 
 bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerveForError) {
-    NANDResultCode resultCode = mSaveDataHandler->getLastResultCode();
+    SaveRequest::Result result = mSaveDataHandler->getLastResult();
 
     if (_2A) {
-        resultCode = NANDResultCode(NAND_RESULT_AUTHENTICATION);
+        result = SaveRequest::Result_Corrupted;
     }
 
-    if (resultCode.isSuccess()) {
+    if (result == SaveRequest::Result_Done) {
         MR::startSystemSE("SE_SY_SAVE_SUCCESS");
 
         *pIsErr = false;
@@ -716,31 +721,32 @@ bool SaveDataHandleSequence::executeSaveFinish(bool* pIsErr, const Nerve* pNerve
 
     MR::startSystemSE("SE_SY_SAVE_FAILURE");
 
-    if (resultCode.isSaveDataCorrupted()) {
+    if (result == SaveRequest::Result_Corrupted) {
         mNerveForError = pNerveForError;
 
-        mNANDErrorSequence->startRemoveFile();
+        mSaveErrorSequence->startRemoveFile();
         setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
 
         return true;
     }
 
-    if (tryNANDErrorSequence(resultCode.getCode())) {
+    if (tryUnrecoverableError(result)) {
         return true;
     }
 
     mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
 
-    mNANDErrorSequence->startErrorToWiiMenu("NAND_11_2");
+    mSaveErrorSequence->startErrorToMenu("NAND_11_2");
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
 
     return true;
 }
 
 void SaveDataHandleSequence::syncNoSaveFlagsFromErrorSequence() {
-    _2C = mNANDErrorSequence->isResultNoSave();
+    // The console's "no room to create the save" answer, which a host's disk never gives.
+    _2C = false;
 
-    bool isResultFileCorrupted = mNANDErrorSequence->isResultFileCorrupted();
+    bool isResultFileCorrupted = mSaveErrorSequence->isResultFileCorrupted();
 
     _2A = isResultFileCorrupted;
     _2B = isResultFileCorrupted;

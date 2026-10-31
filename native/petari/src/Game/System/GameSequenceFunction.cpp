@@ -256,8 +256,8 @@ namespace GameSequenceFunction {
         ::getSaveDataHandleSequence()->restoreUserFile(pUserFile, userFileIndex, isPlayerMario);
     }
 
-    void tryNANDErrorSequence(s32 code) {
-        ::getSaveDataHandleSequence()->tryNANDErrorSequence(code);
+    void startSystemMemoryErrorFreeze() {
+        ::getSaveDataHandleSequence()->startSystemMemoryErrorFreeze();
     }
 
     void reserveUserName(const wchar_t* pUserName) {

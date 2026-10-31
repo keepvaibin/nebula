@@ -57,7 +57,7 @@ namespace GameSequenceFunction {
     bool isSuccessSaveDataHandleSequence();
     void restoreUserFile(UserFile*, int);
     void restoreUserFile(UserFile*, int, bool);
-    void tryNANDErrorSequence(s32);
+    void startSystemMemoryErrorFreeze();
     void reserveUserName(const wchar_t*);
     void requestPrepareResetNWC24();
     bool isEnableToResetNWC24();

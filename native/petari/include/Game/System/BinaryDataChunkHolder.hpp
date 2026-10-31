@@ -1,7 +1,7 @@
 #pragma once
 
 #include <revolution/types.h>
-#include <cstddef>
+#include "Game/System/SaveBinary.hpp"
 
 class BinaryDataChunkBase {
 public:
@@ -12,27 +12,14 @@ public:
     virtual void initializeData() = 0;
 };
 
-struct BinaryDataChunkHolderChunkData {
-public:
-    u32 getDataOffset() const {
-        return offsetof(BinaryDataChunkHolderChunkData, mData);
-    }
-
-    u8* getData() const {
-        return (u8*)this + getDataOffset();
-    }
-
-    // GameData.bin, big-endian.
-    /* 0x00 */ NEBULA_BE(u32) mSignature;
-    /* 0x04 */ NEBULA_BE(u32) mHash;
-    /* 0x08 */ NEBULA_BE(u32) mChunkSize;
-#ifdef TARGET_PC
-    // Where the chunk's data starts: 0x0C, as in the console's save files (a pointer member would move it to 0x10).
-    /* 0x0C */ u32 mData;
-#else
-    /* 0x0C */ void* mData;
-#endif
-};
+// One chunk in a user file of GameData.bin: its signature, header hash and size (header included), then its data;
+// the numbers big-endian by the file format, read and written field by field (SaveBinary.hpp).
+namespace BinaryDataChunk {
+    const u32 cSignature = 0x0;
+    const u32 cHash = 0x4;
+    const u32 cSize = 0x8;
+    const u32 cDataOffset = 0xC;
+};  // namespace BinaryDataChunk
 
 class BinaryDataChunkHolder {
 public:
@@ -41,7 +28,7 @@ public:
     void addChunk(BinaryDataChunkBase* pChunk);
     u32 makeFileBinary(u8*, u32);
     bool loadFromFileBinary(const u8* pData, u32 dataSize);
-    static void makeChunkData(BinaryDataChunkHolderChunkData* pData, u32 dataSize, const BinaryDataChunkBase*);
+    static u32 makeChunkData(u8* pData, u32 dataSize, const BinaryDataChunkBase*);
     BinaryDataChunkBase* findFromSignature(u32 signature) const;
     static u32 calcBinarySize(const u8* pData);
 

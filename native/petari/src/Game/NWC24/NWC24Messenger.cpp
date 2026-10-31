@@ -453,7 +453,7 @@ namespace NWC24MessengerSub {
                 appearSysInfo("WC24_01", mTask->mErrCode);
                 break;
             case NWC24_ERR_NAND_CORRUPT:
-                GameSequenceFunction::tryNANDErrorSequence(NAND_RESULT_CORRUPT);
+                GameSequenceFunction::startSystemMemoryErrorFreeze();
                 break;
             case NWC24_ERR_OLD_SYSTEM:
                 appearSysInfo("WC24_02", mTask->mErrCode);
@@ -493,7 +493,7 @@ namespace NWC24MessengerSub {
                 }
                 break;
             case NWC24_ERR_NAND_CORRUPT:
-                GameSequenceFunction::tryNANDErrorSequence(NAND_RESULT_CORRUPT);
+                GameSequenceFunction::startSystemMemoryErrorFreeze();
                 break;
             case NWC24_ERR_FULL:
                 pMessageId = "WC24_08";

@@ -1,4 +1,5 @@
 #include "Game/System/SysConfigFile.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/System/BinaryDataContentAccessor.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/System/NebulaCalendar.hpp"
@@ -25,13 +26,13 @@ s32 SysConfigChunk::deserialize(const u8* pBuffer, u32 size) {
     u8* pData = const_cast< u8* >(pBuffer) + headerSize;
 
     pName = "mTimeAnnounced";
-    mTimeAnnounced = *static_cast< NEBULA_BE(OSTime)* >(accessor.getPointer(pName, pData));
+    mTimeAnnounced = static_cast< OSTime >(MR::loadSaveU64(accessor.getPointer(pName, pData)));
 
     pName = "mTimeSent";
-    mTimeSent = *static_cast< NEBULA_BE(OSTime)* >(accessor.getPointer(pName, pData));
+    mTimeSent = static_cast< OSTime >(MR::loadSaveU64(accessor.getPointer(pName, pData)));
 
     pName = "mSentBytes";
-    mSentBytes = *static_cast< NEBULA_BE(u32)* >(accessor.getPointer(pName, pData));
+    mSentBytes = MR::loadSaveU32(accessor.getPointer(pName, pData));
 
     s32 newSize = headerSize + mHeaderSerializer->getDataSize();
 
@@ -111,17 +112,17 @@ s32 SysConfigChunk::serialize(u8* pBuffer, u32 size) const {
     u8* pData = pBuffer + headerSize;
 
     pName = "mTimeAnnounced";
-    NEBULA_BE(OSTime)* pTimeAnnounced = static_cast< NEBULA_BE(OSTime)* >(accessor.getPointer(pName, pData));
+    void* pTimeAnnounced = accessor.getPointer(pName, pData);
 
     pName = "mTimeSent";
-    NEBULA_BE(OSTime)* pTimeSent = static_cast< NEBULA_BE(OSTime)* >(accessor.getPointer(pName, pData));
+    void* pTimeSent = accessor.getPointer(pName, pData);
 
     pName = "mSentBytes";
-    NEBULA_BE(u32)* pSentBytes = static_cast< NEBULA_BE(u32)* >(accessor.getPointer(pName, pData));
+    void* pSentBytes = accessor.getPointer(pName, pData);
 
-    *pTimeAnnounced = mTimeAnnounced;
-    *pTimeSent = mTimeSent;
-    *pSentBytes = mSentBytes;
+    MR::storeSaveU64(pTimeAnnounced, static_cast< u64 >(mTimeAnnounced));
+    MR::storeSaveU64(pTimeSent, static_cast< u64 >(mTimeSent));
+    MR::storeSaveU32(pSentBytes, mSentBytes);
 
     return headerSize + mHeaderSerializer->getDataSize();
 }

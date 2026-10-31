@@ -1,4 +1,5 @@
 #include "Game/System/BinaryDataContentAccessor.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/Util/HashUtil.hpp"
 #include <JSystem/JSupport/JSUInputStream.hpp>
 #include <JSystem/JSupport/JSUMemoryInputStream.hpp>
@@ -43,16 +44,16 @@ BinaryDataContentAccessor::BinaryDataContentAccessor(u8* pData) : mData(pData) {
 }
 
 s32 BinaryDataContentAccessor::getHeaderSize() const {
-    return *reinterpret_cast< NEBULA_BE(u16)* >(mData + 0) * 4 + 4;
+    return MR::loadSaveU16(mData + 0) * 4 + 4;
 }
 
 s32 BinaryDataContentAccessor::getDataSize() const {
-    return *reinterpret_cast< NEBULA_BE(u16)* >(mData + 2);
+    return MR::loadSaveU16(mData + 2);
 }
 
 // stripped
 s32 BinaryDataContentAccessor::getAttributeNum() const {
-    return *reinterpret_cast< NEBULA_BE(u16)* >(mData + 0);
+    return MR::loadSaveU16(mData + 0);
 }
 
 void* BinaryDataContentAccessor::getPointer(const char* pAttributeName, u8* pData) const {
