@@ -1,6 +1,6 @@
 // The game's sound mixed natively (nebula_game_api.h audio_*): the game's 64 voices and four effect lines, mixed in
-// float at the output device's rate. Each audio_mix call is one subframe (1/400 s); audio_frame ends a frame with the
-// movie player's 32 kHz samples and hands the frame to the output.
+// float at the output device's rate. Each audio_mix call is one subframe (1/400 s); audio_frame ends a frame and
+// hands it to the output.
 //
 // Per voice: the source (ADPCM blocks, PCM8/PCM16, or an oscillator) is read at its own rate with the record's
 // position bookkeeping (the stream player reads and moves it), resampled to the output rate with a 4-tap
@@ -8,7 +8,8 @@
 // with), through its FIR and IIR filters (their 32 kHz responses carried to the output rate), then into the buses with
 // ramped volumes or through the surround panner (quarter-sine pan law). The effect lines are feedback delays with an
 // 8-tap FIR; the surround buses are matrix-encoded into left and right one subframe later; center and the inverted
-// right join at the output. Volume categories (music, voices, effects, ambience, cutscenes) scale each voice.
+// right join at the output. Volume categories (music, voices, effects, ambience, cutscenes) scale each voice. The
+// movie player's sound (movie_audio.h) joins each frame at 32 kHz through a 128-tap windowed sinc.
 #pragma once
 
 #include <array>
@@ -17,6 +18,7 @@
 #include <span>
 #include <vector>
 
+#include "galaxy/movie_audio.h"
 #include "galaxy/native_audio_bus.h"
 
 #include <nebula_game_api.h>
@@ -89,9 +91,10 @@ public:
                const std::byte* sound_memory, std::uint32_t sound_memory_size);
     // One subframe at `gain` into the frame being built.
     void mix(float gain);
-    // Ends the frame: `stream_frames` pairs (right, left) at 32 kHz are added over the subframes mixed since the last
-    // call; returns that output, interleaved (left, right), valid until the next call.
-    std::span<const float> end_frame(const std::int16_t* stream, std::uint32_t stream_frames);
+    // Ends the frame: the movie's sound for the subframes mixed since the last call is added; returns that output,
+    // interleaved (left, right), valid until the next call.
+    std::span<const float> end_frame();
+    [[nodiscard]] MovieAudio& movie() noexcept { return movie_; }
 
     // Volume categories: `master` unused (the output applies it). A voice's category follows the sound the game names
     // on it (sound_route, sound_id), else its source's format; a changed gain ramps over 10 ms.
@@ -187,7 +190,8 @@ private:
     void ramp_mix(float* destination, const float* source, float start, float delta) const;
     void effects_begin();
     void effects_end();
-    [[nodiscard]] const std::byte* wave_bytes(std::uint32_t offset, std::uint32_t size) const;
+    [[nodiscard]] const std::byte* wave_bytes(const NebulaAudioVoice& voice, std::uint32_t offset,
+                                              std::uint32_t size) const;
     [[nodiscard]] std::uint32_t game_to_output_delay(double game_samples) const noexcept;
 
     std::uint32_t rate_;
@@ -212,10 +216,11 @@ private:
     SampleDelay panner_send_left_, panner_send_right_;  // the panner's rear sends: one subframe, half a subframe
     std::vector<float> frame_;                     // the frame's output so far, interleaved (left, right)
 
-    // The movie player's stream: its last samples and the position between them.
-    std::vector<float> stream_history_;  // interleaved (left, right)
-    double stream_position_{};
+    // The movie player's sound and its last 32 kHz samples, interleaved (left, right).
+    MovieAudio movie_;
+    std::vector<float> stream_history_;
     bool stream_running_{};
+    std::uint32_t frame_subframes_{};
 
     std::array<float, 5> category_gains_{1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
     bool category_gains_set_{};

@@ -8,7 +8,7 @@ struct JASSimpleWaveBank : JASWaveBank, JASWaveArc {
     struct TWaveHandle : JASWaveHandle {
         TWaveHandle() : mHeap(){};
 
-        int getWavePtr() const;
+        const u8* getWavePtr() const;
         const JASWaveInfo* getWaveInfo() const {
             return &mWaveInfo;
         }

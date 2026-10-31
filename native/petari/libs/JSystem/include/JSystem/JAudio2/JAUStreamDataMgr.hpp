@@ -25,7 +25,7 @@ public:
     }
 
     virtual void* newStreamAram(u32*) = 0;
-    virtual bool deleteStreamAram(u32) = 0;
+    virtual bool deleteStreamAram(void*) = 0;
 
     void alloc(JASHeap* pHeap, u32 size) {
         for (int i = 0; i < N; i++) {
@@ -60,9 +60,9 @@ public:
         return nullptr;
     }
 
-    virtual bool deleteStreamAram(u32 addr) {
+    virtual bool deleteStreamAram(void* addr) {
         for (s32 i = 0; i < Base::mSize; i++) {
-            if (Base::mBits.test(i) && addr == (u32)(uintptr_t)Base::mHeaps[i].mBase) {
+            if (Base::mBits.test(i) && addr == Base::mHeaps[i].mBase) {
                 Base::mBits.reset(i);
                 return true;
             }

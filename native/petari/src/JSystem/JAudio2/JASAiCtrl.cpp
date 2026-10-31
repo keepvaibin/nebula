@@ -15,7 +15,7 @@
 
 // The host's audio clock asks for each frame (nebula_game_audio_tick, raised on the audio thread as its event): the
 // driver runs the frame's subframes - commands, the voices' updates and one mix each, then the sequencers - and ends
-// the frame with the samples of the mix callback (the movie player's).
+// the frame (the host adds the movie's sound).
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
@@ -30,48 +30,13 @@ extern "C" NEBULA_GAME_API void nebula_game_audio_tick(void) {
     nebula_raise_event(NEBULA_EVENT_AUDIO);
 }
 
-JASDriver::MixCallback JASDriver::extMixCallback;
-
 u32 JASDriver::sOutputRate;
-
-JASMixMode JASDriver::sMixMode = MIX_MODE_EXTRA;
 
 f32 JASDriver::sDacRate = 32028.5f;
 
 u32 JASDriver::sSubFrames = 0x00000007;
 
 volatile u32 JASDriver::sSubFrameCounter;
-
-namespace {
-    // A mix callback's samples as stereo pairs (right, left), for the modes that return another layout.
-    s16 sMixPairs[10 * 80 * 2];
-
-    const s16* mixPairs(const s16* samples, u32 count) {
-        switch (JASDriver::sMixMode) {
-        case MIX_MODE_MONO:
-            for (u32 i = 0; i < count; i++) {
-                sMixPairs[i * 2] = samples[i];
-                sMixPairs[i * 2 + 1] = samples[i];
-            }
-            return sMixPairs;
-        case MIX_MODE_MONO_WIDE:
-            for (u32 i = 0; i < count; i++) {
-                sMixPairs[i * 2] = samples[i];
-                sMixPairs[i * 2 + 1] = JASCalc::clamp< s16, s32 >(-samples[i]);
-            }
-            return sMixPairs;
-        case MIX_MODE_EXTRA:
-            for (u32 i = 0; i < count; i++) {
-                sMixPairs[i * 2] = samples[count + i];
-                sMixPairs[i * 2 + 1] = samples[i];
-            }
-            return sMixPairs;
-        case MIX_MODE_INTERLEAVE:
-        default:
-            return samples;
-        }
-    }
-}  // namespace
 
 void JASDriver::initAI(void (*callback)(void)) {
     setOutputRate(OUTPUT_RATE_0);
@@ -100,8 +65,8 @@ void JASDriver::setOutputRate(JASOutputRate rate) {
     sDacRate *= 1.0008897f;
 }
 
-// The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the mix
-// callback's samples with it to the output.
+// The frames the clock asked for (at most cMaxCatchUp; the rest are dropped): each one's subframes, then the frame to
+// the output.
 void JASDriver::updateDac() {
     u32 frames = __atomic_exchange_n(&sFramesAsked, 0u, __ATOMIC_RELAXED);
     if (frames > cMaxCatchUp) {
@@ -116,18 +81,8 @@ void JASDriver::mixFrame() {
     for (u32 i = 0; i < getSubFrames(); i++) {
         updateDSP();
     }
-    const u32 frameSamples = getFrameSamples();
-    const s16* stream = nullptr;
-    if (extMixCallback != nullptr) {
-        JASProbe::start(5, "MOVIE-MIX");
-        const s16* samples = extMixCallback(frameSamples);
-        JASProbe::stop(5);
-        if (samples != nullptr) {
-            stream = mixPairs(samples, frameSamples);
-        }
-    }
     const NebulaHostServices* const host = nebula_host();
-    host->audio_frame(host->user, stream, stream != nullptr ? frameSamples : 0);
+    host->audio_frame(host->user);
 }
 
 void JASDriver::updateDSP() {
@@ -142,11 +97,6 @@ void JASDriver::updateDSP() {
     JASLfo::updateFreeRun(freeRun);
     JASProbe::stop(3);
     sSubFrameCounter++;
-}
-
-void JASDriver::registerMixCallback(MixCallback callback, JASMixMode mode) {
-    extMixCallback = callback;
-    sMixMode = mode;
 }
 
 f32 JASDriver::getDacRate() {

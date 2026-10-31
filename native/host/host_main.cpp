@@ -2912,11 +2912,27 @@ void svc_audio_mix(void*, float gain) {
     gDspFrames.fetch_add(1, std::memory_order_relaxed);
 }
 
-void svc_audio_frame(void*, const int16_t* stream, uint32_t stream_frames) {
+void svc_audio_frame(void*) {
 #if defined(NEBULA_HOST_RENDERER)
-    gAudio->frame(stream, stream_frames);
+    gAudio->frame();
+#endif
+}
+
+// The movie's sound: headless, every frame is taken and dropped.
+int svc_movie_audio(void*, const void* record, uint32_t size) {
+#if defined(NEBULA_HOST_RENDERER)
+    return gAudio->movie_audio(record, size) ? 1 : 0;
 #else
-    (void)stream, (void)stream_frames;
+    (void)record, (void)size;
+    return 1;
+#endif
+}
+
+void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t milliseconds) {
+#if defined(NEBULA_HOST_RENDERER)
+    gAudio->movie_audio_control(what, value, milliseconds);
+#else
+    (void)what, (void)value, (void)milliseconds;
 #endif
 }
 
@@ -3755,6 +3771,8 @@ int main(int argc, char** argv) {
     services.audio_setup = svc_audio_setup;
     services.audio_mix = svc_audio_mix;
     services.audio_frame = svc_audio_frame;
+    services.movie_audio = svc_movie_audio;
+    services.movie_audio_control = svc_movie_audio_control;
     services.audio_control = svc_audio_control;
     services.hbm = svc_hbm;
     services.thp_video_decode = svc_thp_video_decode;

@@ -46,7 +46,7 @@ public:
     virtual ~JASWaveHandle() {
     }
     virtual const JASWaveInfo* getWaveInfo() const = 0;
-    virtual int getWavePtr() const = 0;
+    virtual const u8* getWavePtr() const = 0;
 };
 
 class JASWaveBank {

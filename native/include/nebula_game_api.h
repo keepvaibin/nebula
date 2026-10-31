@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 60u
+#define NEBULA_GAME_API_VERSION 61u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -85,7 +85,7 @@ typedef struct NebulaAudioVoice {
     uint16_t pitch;          /* source samples per 32 kHz sample, 4.12 */
     uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
-    uint32_t wave;           /* the source's first byte, an offset into the sound memory (audio_setup) */
+    const uint8_t* wave;     /* the source's first byte, in the sound memory (audio_setup) */
     uint32_t restart;        /* PCM: the sample it starts at */
     uint32_t loop_start;     /* samples */
     uint32_t end;            /* samples: the end, or the loop's end when loop is set */
@@ -93,7 +93,7 @@ typedef struct NebulaAudioVoice {
     int16_t loop_history[2]; /* ADPCM: the decoder's previous two samples at loop_start, newest first */
     /* The position, advanced by the mixer each subframe (the stream player reads and moves it): */
     uint16_t leftover;       /* ADPCM: decoded samples of the current block still to play */
-    uint32_t address;        /* the next ADPCM block or PCM sample, an offset into the sound memory */
+    uint32_t address;        /* the next ADPCM block or PCM sample, in bytes from wave */
     uint32_t left;           /* samples before end */
     uint16_t filter;         /* FIR taps (bits 0-4; coefficients past the eighth are zero), IIR on (bit 5) */
     /* FIR: y[n] = sum fir[k] x[n - taps + k], k < taps; IIR: y[n] = iir[0] x[n] + iir[1] x[n-1] + iir[2] y[n-1] +
@@ -582,6 +582,15 @@ enum {
     NEBULA_SCENE_2D_END,
 };
 
+/* The movie player's sound (movie_audio_control). */
+enum {
+    NEBULA_MOVIE_AUDIO_OPEN = 1, /* value 1: mono output (both sides their mean at -3 dB) */
+    NEBULA_MOVIE_AUDIO_CLOSE,
+    NEBULA_MOVIE_AUDIO_RESET,    /* the waiting frames dropped, the volume at its target */
+    NEBULA_MOVIE_AUDIO_VOLUME,   /* value 0-127 (the gain is its square), reached over `milliseconds` */
+    NEBULA_MOVIE_AUDIO_RESUME,   /* after a pause: once two frames wait, 150 ms of silence, then a 31 ms fade in */
+};
+
 /* The audio clock (audio_control). */
 enum {
     NEBULA_AUDIO_START = 1, /* value: a frame's length in 32 kHz samples; the host calls nebula_game_audio_tick once
@@ -905,13 +914,19 @@ typedef struct NebulaHostServices {
     void (*speaker_samples)(void* user, uint32_t player, const int16_t* samples, uint32_t count);
 
     /* Audio, on the game's audio thread. audio_setup hands over the voices and the four effect lines (they stay the
-       game's; the mixer reads and advances them in audio_mix) and the sound memory the voices' offsets count from.
+       game's; the mixer reads and advances them in audio_mix) and the sound memory the voices' waves lie in.
        audio_mix mixes one subframe at `gain`; audio_frame ends a frame: the subframes mixed since the last call, with
-       `stream_frames` stereo samples of the movie player's at 32 kHz (right, left; none: null), go to the output. */
+       the movie's sound for them, go to the output. */
     void (*audio_setup)(void* user, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,
                         const void* sound_memory, uint32_t sound_memory_size);
     void (*audio_mix)(void* user, float gain);
-    void (*audio_frame)(void* user, const int16_t* stream, uint32_t stream_frames);
+    void (*audio_frame)(void* user);
+    /* The movie player's sound (THP), on the game's threads: movie_audio queues one frame's audio record (its
+       big-endian header, then the ADPCM data of the track played) for the host to decode and play with the game's
+       sound at 32 kHz; 0 when 20 frames already wait (nothing taken). A null record only asks for room.
+       movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
+    int (*movie_audio)(void* user, const void* record, uint32_t size);
+    void (*movie_audio_control)(void* user, uint32_t what, int32_t value, int32_t milliseconds);
     void (*audio_control)(void* user, uint32_t what, uint32_t value);
 
     /* The HOME Menu (NEBULA_HBM_*). */

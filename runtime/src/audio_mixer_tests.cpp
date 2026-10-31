@@ -46,7 +46,7 @@ struct Game {
         v.starting = 1u;
         v.pitch = 0x1000u;
         v.format = NEBULA_AUDIO_PCM16;
-        v.wave = wave;
+        v.wave = reinterpret_cast<const std::uint8_t*>(sound.data()) + wave;
         v.end = samples;
         v.loop = loop ? 1u : 0u;
         v.sends[0] = {bus, volume, volume, 0u};
@@ -59,7 +59,7 @@ std::vector<float> run(AudioMixer& mixer, std::uint32_t subframes, float gain = 
     for (std::uint32_t i = 0; i < subframes; ++i) {
         mixer.mix(gain);
     }
-    const std::span<const float> out = mixer.end_frame(nullptr, 0u);
+    const std::span<const float> out = mixer.end_frame();
     return {out.begin(), out.end()};
 }
 
@@ -170,7 +170,7 @@ void test_adpcm_bookkeeping() {
     v.starting = 1u;
     v.pitch = 0x1000u;
     v.format = NEBULA_AUDIO_ADPCM4;
-    v.wave = 0u;
+    v.wave = reinterpret_cast<const std::uint8_t*>(game.sound.data());
     v.end = 1000u;
     v.leftover = 16u;
     v.sends[0] = {NEBULA_AUDIO_BUS_LEFT, 32767, 32767, 0u};
@@ -178,7 +178,7 @@ void test_adpcm_bookkeeping() {
     game.attach(mixer);
     (void)run(mixer, 1u);
     // 80 samples: 5 blocks.
-    expect(v.address == 45u, "next block", v.address);
+    expect(v.address == 45u, "next block (bytes from the wave)", v.address);
     expect(v.left == 1000u - 80u, "samples left", v.left);
     expect(v.leftover == 0u, "no leftover", v.leftover);
     v.pitch = 0x0800u;  // 40 samples: two blocks and a half
@@ -363,25 +363,88 @@ void test_categories() {
     expect(near(named_out[2u * 800u], 0.5 * 32767.0 / 65536.0, 1e-3), "music back on", named_out[2u * 800u]);
 }
 
-// The movie player's 32 kHz stream: a constant comes out at its level, at 48 kHz.
+// A THP audio record of `samples` samples per channel that holds each channel at its history (predictor 0 is
+// {1, 0}; every nibble 0), or with `nibble` and `scale` set and no predictor, plays nibble << scale.
+std::vector<std::uint8_t> thp_record(std::uint32_t samples, std::int16_t left, std::int16_t right, int nibble = 0,
+                                     int scale = 0) {
+    const std::uint32_t frames = (samples + 13u) / 14u;
+    const std::uint32_t channel = frames * 8u;
+    std::vector<std::uint8_t> r(0x50u + channel * 2u, 0);
+    const auto put32 = [&](std::size_t at, std::uint32_t v) {
+        r[at] = static_cast<std::uint8_t>(v >> 24u);
+        r[at + 1u] = static_cast<std::uint8_t>(v >> 16u);
+        r[at + 2u] = static_cast<std::uint8_t>(v >> 8u);
+        r[at + 3u] = static_cast<std::uint8_t>(v);
+    };
+    const auto put16 = [&](std::size_t at, std::int16_t v) {
+        r[at] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v) >> 8u);
+        r[at + 1u] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v));
+    };
+    put32(0u, channel);
+    put32(4u, samples);
+    if (nibble == 0) {
+        put16(8u, 2048);
+        put16(0x28u, 2048);
+    }
+    put16(0x48u, left);
+    put16(0x4Cu, right);
+    for (std::uint32_t f = 0; f < frames * 2u; ++f) {
+        std::uint8_t* frame = r.data() + 0x50u + f * 8u;
+        frame[0] = static_cast<std::uint8_t>(scale & 0xF);
+        for (int k = 1; k < 8; ++k) {
+            frame[k] = static_cast<std::uint8_t>(((nibble & 0xF) << 4) | (nibble & 0xF));
+        }
+    }
+    return r;
+}
+
+// The movie's ADPCM: a nibble of 1 at scale 11 is 2048; held history stays.
+void test_movie_decode() {
+    std::vector<std::int16_t> out;
+    std::vector<std::uint8_t> r = thp_record(28u, 0, 0, 1, 11);
+    expect(galaxy::audio::MovieAudio::decode(r.data(), r.size(), out), "movie record decodes");
+    expect(out.size() == 56u && out[0] == 2048 && out[55] == 2048, "nibble 1 at scale 11", out.empty() ? 0 : out[0]);
+    r = thp_record(28u, 1000, -1000);
+    expect(galaxy::audio::MovieAudio::decode(r.data(), r.size(), out) && out[54] == 1000 && out[55] == -1000,
+           "held histories, left then right", out.empty() ? 0 : out[55]);
+    expect(!galaxy::audio::MovieAudio::decode(r.data(), 0x40u, out), "a short record is refused");
+}
+
+// The movie's sound at 48 kHz: its level through the player's volume (a square law), and silent until the frame
+// after the current one is decoded too.
 void test_stream() {
     Game game;
     AudioMixer mixer(48000u);
     game.attach(mixer);
-    std::vector<std::int16_t> stream(560u * 2u);
-    for (std::size_t i = 0; i < 560u; ++i) {
-        stream[i * 2u] = 8192;        // right
-        stream[i * 2u + 1u] = -8192;  // left
-    }
+    galaxy::audio::MovieAudio& movie = mixer.movie();
+    movie.open(false);
+    const std::vector<std::uint8_t> record = thp_record(560u, 2048, -2048);
     std::vector<float> out;
+    expect(movie.push(record.data(), record.size()), "room for a frame");
+    for (int s = 0; s < 7; ++s) mixer.mix(1.0f);
+    const std::span<const float> first = mixer.end_frame();
+    expect(near(first[2u * 400u], 0.0, 1e-6), "one frame waiting: silent", first[2u * 400u]);
     for (int f = 0; f < 3; ++f) {
+        expect(movie.push(record.data(), record.size()), "room for a frame");
         for (int s = 0; s < 7; ++s) mixer.mix(1.0f);
-        const std::span<const float> frame = mixer.end_frame(stream.data(), 560u);
+        const std::span<const float> frame = mixer.end_frame();
         out.assign(frame.begin(), frame.end());
     }
     expect(out.size() == 840u * 2u, "stream frame length", static_cast<double>(out.size()));
-    expect(near(out[2u * 400u], -0.25, 1e-3), "stream left", out[2u * 400u]);
-    expect(near(out[2u * 400u + 1u], 0.25, 1e-3), "stream right", out[2u * 400u + 1u]);
+    expect(near(out[2u * 400u], 0.0625, 1e-3), "stream left", out[2u * 400u]);
+    expect(near(out[2u * 400u + 1u], -0.0625, 1e-3), "stream right", out[2u * 400u + 1u]);
+    movie.set_volume(64, 0);
+    for (int f = 0; f < 2; ++f) {
+        movie.push(record.data(), record.size());
+        for (int s = 0; s < 7; ++s) mixer.mix(1.0f);
+        const std::span<const float> frame = mixer.end_frame();
+        out.assign(frame.begin(), frame.end());
+    }
+    expect(near(out[2u * 400u], 0.0625 * 8321.0 / 32768.0, 1e-3), "volume 64", out[2u * 400u]);
+    for (int f = 0; f < 30; ++f) {
+        if (!movie.push(record.data(), record.size())) break;
+    }
+    expect(!movie.push(nullptr, 0u), "20 frames waiting: no room");
 }
 
 // A forced stop halves the volume each subframe and finishes the voice.
@@ -415,6 +478,7 @@ int main() {
     test_iir();
     test_square();
     test_categories();
+    test_movie_decode();
     test_stream();
     test_forced_stop();
     if (g_failures != 0) {
