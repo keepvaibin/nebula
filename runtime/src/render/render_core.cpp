@@ -9026,7 +9026,61 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         flush_pending_draw_batch();
         record_async_peek_fields_at_token(static_cast<std::uint16_t>(record.key));
         return;
+    case shapes::Record::Kind::TargetBegin:
+        begin_target_pass(record);
+        return;
+    case shapes::Record::Kind::TargetEnd:
+        end_target_pass(record);
+        return;
     }
+}
+
+// A pass into a texture target (E-07): the draws until its end go to the target set, whose top left the pass clears
+// as the game asked.
+void RenderCore::begin_target_pass(const shapes::Record& record) {
+    flush_pending_draw_batch();
+    if (!renderer_.begin_target_pass()) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            std::fprintf(stderr, "[target] a pass into %llx could not begin (one is open, or no target)\n",
+                         static_cast<unsigned long long>(record.key));
+        }
+        return;
+    }
+    target_pass_size_ = {record.target_width, record.target_height};
+    frame_bindings_dirty_ = true;
+    renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
+                        record.target_width, record.target_height, draw_state_.pe.pixel_format);
+}
+
+// The pass's end: its picture becomes the texture at its key, converted to the game's copy format as a texture copy of
+// it would be (none for kTargetNoCopy: the pass's own copies took what it needed), then the frame's targets come back.
+void RenderCore::end_target_pass(const shapes::Record& record) {
+    if (!renderer_.target_pass_active()) {
+        return;
+    }
+    flush_pending_draw_batch();
+    // NebulaTargetTexture -> the texture copy that keeps the same (its conversion is the copy path's).
+    static constexpr std::uint8_t kCopyKept[] = {0x06u, 0x04u, 0x05u, 0x01u, 0x27u, 0x28u, 0x29u, 0x2Au, 0x23u};
+    if (record.target_format >= std::size(kCopyKept)) {
+        renderer_.end_target_pass();
+        frame_bindings_dirty_ = true;
+        return;
+    }
+    state::Op copy{};
+    copy.kind = state::kCopy;
+    copy.a[2] = kCopyKept[record.target_format];
+    copy.a[4] = 1u;  // clamped at the picture's top and bottom
+    copy.a[5] = 1u;
+    copy.f[2] = static_cast<float>(target_pass_size_[0]);
+    copy.f[3] = static_cast<float>(target_pass_size_[1]);
+    copy.size[0] = target_pass_size_[0];
+    copy.size[1] = target_pass_size_[1];
+    copy.image = record.key;
+    on_efb_copy(efb_copy_params(draw_state_, copy), copy_pixel_format(draw_state_, copy));
+    renderer_.end_target_pass();
+    frame_bindings_dirty_ = true;
 }
 
 void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {

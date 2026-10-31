@@ -2124,6 +2124,38 @@ uint32_t svc_readback_serial(void*, uint32_t channel) {
 #endif
 }
 
+// A pass into a texture target (E-07): its start and end as records in draw order.
+void svc_target_begin(void*, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba, uint32_t clear_z) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TargetBegin;
+    record.key = key;
+    record.target_width = width;
+    record.target_height = height;
+    record.target_clear_rgba = clear_rgba;
+    record.target_clear_z = clear_z & 0xFFFFFFu;
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)key, (void)width, (void)height, (void)clear_rgba, (void)clear_z;
+#endif
+}
+
+void svc_target_end(void*, uint64_t key, uint8_t kept) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TargetEnd;
+    record.key = key;
+    record.target_format = kept;
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)key, (void)kept;
+#endif
+}
+
 void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -3768,6 +3800,8 @@ int main(int argc, char** argv) {
     services.material = svc_material;
     services.state = svc_state;
     services.immediate = svc_immediate;
+    services.target_begin = svc_target_begin;
+    services.target_end = svc_target_end;
     services.texture_image = svc_texture_image;
     services.mii_record = svc_mii_record;
     services.readback_capture = svc_readback_capture;

@@ -103,7 +103,8 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 // The game's records, in the order it made them (render_core.h attach_shape_record).
 struct Record {
     enum class Kind : std::uint8_t {
-        Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker
+        Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
+        TargetBegin, TargetEnd
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
@@ -128,6 +129,11 @@ struct Record {
     // A host marker (Marker, its kind at `key`): aux, then a and b (a draw identity's objects by address).
     std::uint32_t marker_aux = 0;
     std::array<std::uint64_t, 2> marker{};
+    // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth, and what
+    // its texture keeps (NebulaTargetTexture).
+    std::uint16_t target_width = 0, target_height = 0;
+    std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
+    std::uint8_t target_format = 0;
 };
 // Vectors of records move them when they grow (a throwing move would copy them).
 static_assert(std::is_nothrow_move_constructible_v<Record>);

@@ -252,6 +252,12 @@ public:
     // The 2D layer at the window's resolution (hud_output_resolution): at the scene's end the EFB is resampled into
     // an EFB at the window's scale, which the 2D layer and the display copy then use, until end_output_efb.
     [[nodiscard]] bool begin_output_efb();
+    // A pass into a texture target (E-07): the EFB's targets trade places with the target set's (at the EFB's scale)
+    // until end_target_pass, so the pass's draws, clears and its closing texture copy use the target. False when the
+    // target cannot be made or a pass is open.
+    [[nodiscard]] bool begin_target_pass();
+    void end_target_pass();
+    [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
     // Not on Vulkan yet: temporal upscaling.
@@ -524,10 +530,15 @@ private:
     // The output EFB (begin_output_efb) and its scale; they trade places with efb_ and efb_scale_ while it is active.
     EfbSet alt_efb_;
     unsigned alt_efb_scale_ = 0;
+    // The target passes' set (begin_target_pass) and whether the EFB holds it now.
+    EfbSet target_efb_;
+    unsigned target_efb_scale_ = 0;
+    bool target_pass_active_ = false;
     bool output_efb_active_ = false;
     [[nodiscard]] unsigned output_efb_scale_for_window() const;
     bool enter_output_efb(unsigned scale);
     void swap_efb_sets();
+    void swap_target_set();
     gpu::TextureRef efb_carry_color_;  // the previous targets, read once after a resolution change
     gpu::TextureRef efb_carry_depth_;
     bool efb_carry_clear_ = false;  // the new targets start cleared (MSAA before or after the change)
@@ -665,7 +676,9 @@ private:
     // The log: one game frame's GX work in order (a display copy closes it).
     // OutputEfbBegin: the scene resampled into the output EFB at the op's scale; SwapEfbSets: the EFB and the output
     // EFB trade places.
-    enum class ReplayKind : std::uint8_t { Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom };
+    enum class ReplayKind : std::uint8_t {
+        Draw, BindEfb, Clear, Copy, SceneAa, OutputEfbBegin, SwapEfbSets, Bloom, SwapTargetSet
+    };
     struct ReplayOp {
         ReplayKind kind = ReplayKind::Draw;
         std::uint32_t index = 0;
