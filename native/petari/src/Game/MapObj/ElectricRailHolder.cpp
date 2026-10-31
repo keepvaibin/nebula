@@ -139,7 +139,7 @@ void ElectricRailHolder::control() {
 }
 
 void ElectricRailHolder::initDraw() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), GX_PNMTX0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
 }

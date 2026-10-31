@@ -130,7 +130,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 TMtx34f mtx;
                 MtxPtr pTranslationMtx = MR::tmpMtxTrans(cellOrigin);
                 MR::multMtx(mtx, pTranslationMtx, MR::getCameraViewMtx());
-                J3DNativeShape::sendPosition(mtx, 0);
+                J3DNativeShape::setPosition(0, mtx);
 
                 u16 lastParticle;
                 u16 firstParticle;

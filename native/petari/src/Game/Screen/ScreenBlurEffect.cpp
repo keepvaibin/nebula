@@ -52,7 +52,7 @@ void ScreenBlurEffect::drawBlur() const {
 
     TMtx34f posMtx;
     posMtx.identity();
-    J3DNativeShape::sendPosition((MtxPtr)&posMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, (MtxPtr)&posMtx);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
 
     J3DNativeState::setCullMode(GX_CULL_NONE);

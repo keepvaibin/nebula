@@ -97,7 +97,7 @@ ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, Elec
 }
 
 void ElectricRailShadowDrawer::loadModelDrawMtx() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), GX_PNMTX0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
 }
 

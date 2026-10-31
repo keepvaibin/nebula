@@ -40,17 +40,17 @@ namespace TDDraw {
     }
 
     void loadViewMtx(MtxPtr pMtx) {
-        J3DNativeShape::sendPosition(pMtx, 0);
+        J3DNativeShape::setPosition(0, pMtx);
     }
 
     void setModelMtx(MtxPtr pMtx) {
         MR::multMtx(::mViewMtx, pMtx, MR::getCameraViewMtx());
-        J3DNativeShape::sendPosition(::mViewMtx, 0);
+        J3DNativeShape::setPosition(0, ::mViewMtx);
     }
 
     void resetViewMtx() {
         NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
-        J3DNativeShape::sendPosition(::mViewMtx, 0);
+        J3DNativeShape::setPosition(0, ::mViewMtx);
     }
 
     void close() {
@@ -84,22 +84,22 @@ namespace TDDraw {
         switch (viewMode) {
         case 0:
             NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
-            J3DNativeShape::sendPosition(::mViewMtx, 0);
+            J3DNativeShape::setPosition(0, ::mViewMtx);
             NebulaMtxCopy(::mViewMtx, mtx);
             break;
         case 1:
             MR::loadProjectionMtx();
-            J3DNativeShape::sendPosition(::mViewMtx, 0);
+            J3DNativeShape::setPosition(0, ::mViewMtx);
             break;
         case 2:
             cameraInit2D();
             NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
             mtx[1][1] = -1.0f;
-            J3DNativeShape::sendPosition(mtx, 0);
+            J3DNativeShape::setPosition(0, mtx);
             break;
         }
 
-        J3DNativeShape::sendNormal(mtx, 0);
+        J3DNativeShape::setNormal(0, mtx);
         J3DNativeState::setCurrentMtx(0);
         J3DNativeState::setTevDirect(GX_TEVSTAGE0);
         J3DNativeState::setNumIndStages(0);

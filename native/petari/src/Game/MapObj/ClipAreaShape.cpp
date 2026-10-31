@@ -42,7 +42,7 @@ void ClipAreaShape::drawVolumeShape(const TPos3f& rMtx, const TVec3f& rPos) cons
     volMtx.identity();
     calcVolumeMatrix(&volMtx, rMtx, rPos);
     MR::multMtx(volMtx, volMtx, MR::getCameraViewMtx());
-    J3DNativeShape::sendPosition(volMtx, 0);
+    J3DNativeShape::setPosition(0, volMtx);
     MR::drawSimpleModel(mModelData);
 }
 

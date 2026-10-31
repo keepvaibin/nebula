@@ -128,7 +128,7 @@ namespace MR {
         MR::setDefaultViewportAndScissor();
         TMtx34f mtxImm;
         mtxImm.identity();
-        J3DNativeShape::sendPosition(mtxImm, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, mtxImm);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         J3DNativeState::setNumChans(0);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -199,7 +199,7 @@ namespace MR {
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         Mtx matrix;
         NebulaMtxIdentity(matrix);
-        J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, matrix);
         J3DNativeState::setNumTexGens(0);
         J3DNativeState::setNumTevStages(1);
         J3DNativeState::setTevDirect(GX_TEVSTAGE0);
@@ -232,7 +232,7 @@ namespace MR {
     void fillScreenSetup(const GXColor& rColor) {
         TMtx34f mtxImm;
         mtxImm.identity();
-        J3DNativeShape::sendPosition(mtxImm, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, mtxImm);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
@@ -319,7 +319,7 @@ namespace MR {
         J3DNativeState::setNumIndStages(0);
         TMtx34f mtxImm;
         mtxImm.identity();
-        J3DNativeShape::sendPosition(mtxImm, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, mtxImm);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         J3DNativeState::setNumChans(1);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
@@ -406,7 +406,7 @@ namespace MR {
         mat[1][1] = -0.5f;
         mat[1][2] = 0.5f;
         MR::multMtx(matrix, matrix, mat);
-        J3DNativeShape::sendTexture(matrix, id, GX_MTX3x4);
+        J3DNativeShape::setTexture((id - GX_TEXMTX0) / 3, matrix, 3);
     }
 
     void nonFilteredCapture(JUTTexture* pTexture, s16 width, s16 height) {

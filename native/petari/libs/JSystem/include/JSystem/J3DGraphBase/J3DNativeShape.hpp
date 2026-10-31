@@ -5,6 +5,7 @@
 #include <revolution/os.h>
 
 #ifdef __cplusplus
+struct NebulaDrawMatrix;
 class J3DModelData;
 class J3DShape;
 class J3DShapeDraw;
@@ -18,35 +19,46 @@ namespace J3DNativeShape {
     void registerShape(J3DShape* pShape);
     // Group `pDraw` drawn with the arrays j3dSys names.
     void draw(const J3DShapeDraw* pDraw);
-    // Matrices the next draw reads, by GX's matrix id (nebula_game_api.h NebulaShapeMatrix): `modelMatrix` the model's
-    // draw matrix it is (its index + 1), 0 for any other.
-    void loadPosition(const f32 (*pMtx)[4], u32 id, u16 modelMatrix = 0);
-    void loadNormal(const f32 (*pMtx)[4], u32 id, u16 modelMatrix = 0);
-    void loadNormal33(const f32 (*pMtx)[3], u32 id, u16 modelMatrix = 0);
-    void loadNormalToTexture(const f32 (*pMtx)[4], u32 id);
-    void loadNormal33ToTexture(const f32 (*pMtx)[3], u32 id);
-    // A texture matrix as GXLoadTexMtxImm takes it (`type` GX_MTX3x4 or GX_MTX2x4; ids from 64 post-transform).
-    void loadTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type);
-    // The same, sent now (a record before every command written after it): matrices the game loads as it draws.
-    void sendPosition(const f32 (*pMtx)[4], u32 id);
-    void sendNormal(const f32 (*pMtx)[4], u32 id);
-    void sendTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type);
-    // The matrices the next draw's corners take when they carry none.
+    // Geometry `key` the game registered itself drawn with the arrays named, its corners reading the position
+    // matrices at `places` (bit k: place k; 0: the current place).
+    void drawGeometry(u64 key, u64 position, u64 normal, u64 color, u32 places);
+    // The matrices draws read, by their place in a draw (nebula_game_api.h NebulaDrawMatrix): position matrices 0-9
+    // with their normal matrices (every draw carries the ones its corners read: setPosition and setNormal change what
+    // the following draws carry), texture matrices 0-9 and the identity's place, post-transform texture matrices 0-19
+    // and the identity's (each goes with the next draw or material record and stays until given again).
+    // `modelMatrix`: the model's draw matrix it is (its index + 1), 0 for any other.
+    enum { kPositions = 10, kIdentityTexture = 10, kIdentityPost = 20 };
+    void setPosition(u32 index, const f32 (*pMtx)[4], u16 modelMatrix = 0);
+    void setNormal(u32 index, const f32 (*pMtx)[4], u16 modelMatrix = 0);
+    void setNormal33(u32 index, const f32 (*pMtx)[3], u16 modelMatrix = 0);
+    // A texture matrix of `rows` rows (2 or 3) of four.
+    void setTexture(u32 index, const f32 (*pMtx)[4], u32 rows);
+    // A normal matrix as texture matrix `index` (its fourth column zero).
+    void setNormalTexture(u32 index, const f32 (*pMtx)[4]);
+    void setNormal33Texture(u32 index, const f32 (*pMtx)[3]);
+    void setPostTexture(u32 index, const f32 (*pMtx)[4]);
+    // The matrices the next draw's corners take when they carry none: the position matrix's place and texture
+    // coordinates 0-7's texture matrix places (the model file's matrix ids, three apart, the identity's at 60).
     void setCurrent(u8 position, const u8* pTexture);
+    // The position matrix corners without one take (J3DNativeState::setCurrentMtx).
+    void setCurrentPosition(u32 index);
     // Texture coordinate `coord` of the next draw generated as given (GXSetTexCoordGen's values).
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
-    // Matrices, current matrices and texgens set since the last draw, as a record now (before a material record,
-    // which must not overtake them).
+    // Texture matrices, current matrices and texgens set since the last draw, as a record now (before a material
+    // record, which must not overtake them).
     void flushState();
+    // An immediate's position and normal matrices: those at the places `mask` names (bit k: place k; 0: the current
+    // place), in a buffer valid until the next record.
+    u32 positionMatrices(u32 mask, const NebulaDrawMatrix** ppMatrices);
     // A position array the game wrote (`count` entries in its model's position format) as values.
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac);
 };  // namespace J3DNativeShape
 
 extern "C" {
 #endif
-// The matrix loads for the C sources (RVLFaceLib).
-void J3DNativeShapeSendPosition(const f32 (*pMtx)[4], u32 id);
-void J3DNativeShapeSendNormal(const f32 (*pMtx)[4], u32 id);
+// The same for the C sources (RVLFaceLib).
+void J3DNativeShapeSetPosition(u32 index, const f32 (*pMtx)[4]);
+void J3DNativeShapeSetNormal(u32 index, const f32 (*pMtx)[4]);
 #ifdef __cplusplus
 }
 #endif

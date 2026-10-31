@@ -806,7 +806,7 @@ TrapezeRopeDrawInit::TrapezeRopeDrawInit(const char* pName) : NameObj(pName) {
 }
 
 void TrapezeRopeDrawInit::initDraw() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
 
     J3DNativeState::setNumChans(1);

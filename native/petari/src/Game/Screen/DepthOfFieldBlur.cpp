@@ -65,7 +65,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 
     TMtx34f posMtx;
     posMtx.identity();
-    J3DNativeShape::sendPosition(posMtx.toMtxPtr(), GX_PNMTX0);
+    J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
@@ -73,7 +73,7 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setNumTexGens(0);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeShape::sendTexture(posMtx.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, posMtx.toMtxPtr(), 2);
     J3DNativeState::setNumTevStages(1);
     J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);

@@ -439,7 +439,7 @@ void OceanRingDrawer::drawGD() {
 }
 
 void OceanRingDrawer::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
@@ -453,13 +453,13 @@ void OceanRingDrawer::loadMaterial() const {
     mtx.identity();
     mtx.mMtx[0][2] = _C;
     mtx.mMtx[1][2] = _10;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
     mtx.mMtx[0][2] = _14;
     mtx.mMtx[1][2] = _18;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
     mtx.mMtx[0][2] = _1C;
     mtx.mMtx[1][2] = _20;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x24, GX_MTX2x4);
+    J3DNativeShape::setTexture(2, mtx.toMtxPtr(), 2);
     MR::loadTexProjectionMtx(39);
 
     mWaterTex->load(GX_TEXMAP0);
@@ -521,7 +521,7 @@ void OceanRingDrawer::loadMaterial() const {
 }
 
 void OceanRingDrawer::loadMaterialBloom() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setNumTexGens(2);
@@ -532,10 +532,10 @@ void OceanRingDrawer::loadMaterialBloom() const {
     mtx.identity();
     mtx.mMtx[0][2] = _C;
     mtx.mMtx[1][2] = _10;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
     mtx.mMtx[0][2] = _14;
     mtx.mMtx[1][2] = _18;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
     mWaterTex->load(GX_TEXMAP0);
     J3DNativeState::setNumIndStages(0);
     TVec3f zDir = MR::getCamZdir();

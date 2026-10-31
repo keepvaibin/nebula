@@ -27,7 +27,7 @@ void J2DOrthoGraph::setOrtho(JGeometry::TBox2< f32 > const& bounds, f32 far, f32
 
 void J2DOrthoGraph::setLookat() {
     NebulaMtxIdentity(mPosMtx);
-    J3DNativeShape::sendPosition(mPosMtx, 0);
+    J3DNativeShape::setPosition(0, mPosMtx);
 }
 
 void J2DFillBox(f32 x, f32 y, f32 width, f32 height, JUtility::TColor color) {

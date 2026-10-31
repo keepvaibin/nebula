@@ -59,8 +59,8 @@ void OceanRingPipeOutside::draw() const {
 const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 
 void OceanRingPipeOutside::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
-    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -73,7 +73,7 @@ void OceanRingPipeOutside::loadMaterial() const {
     mtx.identity();
     mtx.mMtx[0][2] = mTexU;
     mtx.mMtx[1][2] = 0.0f;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
 
     TPos3f mtx2;
     mtx2.identity();
@@ -88,7 +88,7 @@ void OceanRingPipeOutside::loadMaterial() const {
 
     MR::multMtx(mtx2, scaleMtx, mtx2);
     MR::multMtx(mtx2, qMtx2, mtx2);
-    J3DNativeShape::sendTexture(mtx2, 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx2, 2);
 
     mWaterPipeIndirectTex->load(GX_TEXMAP0);
     mWaterPipeHighLightTex->load(GX_TEXMAP1);

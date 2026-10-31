@@ -9025,6 +9025,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         current_texture_binding_key_valid_ = false;
         return;
     case shapes::Record::Kind::Immediate:
+        apply_record_matrices(record);
         draw_record_immediate(*record.immediate);
         return;
     case shapes::Record::Kind::Marker:
@@ -9054,18 +9055,22 @@ void RenderCore::release_record_shape(RecordShape& shape) noexcept {
 
 void RenderCore::apply_record_matrices(const shapes::Record& record) {
     for (const shapes::Matrix& m : record.matrices) {
-        std::uint16_t base = static_cast<std::uint16_t>(4u * m.id);
+        // Its rows: three a place (texture matrices from row 30, the post-transform identity's at row 61).
+        std::uint16_t base = static_cast<std::uint16_t>(12u * m.place);
         std::uint16_t count = 12u;
         switch (m.kind) {
         case shapes::MatrixKind::Normal:
-            base = static_cast<std::uint16_t>(MatrixMemory::kNormalBase + 4u * m.id);
+            base = static_cast<std::uint16_t>(MatrixMemory::kNormalBase + 12u * m.place);
             count = 9u;
             break;
+        case shapes::MatrixKind::Texture:
         case shapes::MatrixKind::Texture2x4:
-            count = 8u;
+            base = static_cast<std::uint16_t>(4u * (30u + 3u * m.place));
+            count = m.kind == shapes::MatrixKind::Texture2x4 ? 8u : 12u;
             break;
         case shapes::MatrixKind::PostTexture:
-            base = static_cast<std::uint16_t>(MatrixMemory::kPostBase + 4u * (m.id - 64u));
+            base = static_cast<std::uint16_t>(
+                MatrixMemory::kPostBase + 4u * (m.place == shapes::kIdentityPostPlace ? 61u : 3u * m.place));
             break;
         default:
             break;
@@ -9093,9 +9098,9 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
     if (record.has_current) {
         const auto& c = record.current;
         const std::uint32_t before_a = matrix_index_a(draw_state_), before_b = matrix_index_b(draw_state_);
-        draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] & 63u);
+        draw_state_.position_matrix = static_cast<std::uint8_t>(3u * (c[0] % 10u));
         for (unsigned i = 0; i < 8u; ++i) {
-            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(c[1u + i] & 63u);
+            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(30u + 3u * std::min<unsigned>(c[1u + i], 10u));
         }
         if (matrix_index_a(draw_state_) != before_a || matrix_index_b(draw_state_) != before_b) {
             draw_state_.dirty |= kStateDirtyVertexConstants;

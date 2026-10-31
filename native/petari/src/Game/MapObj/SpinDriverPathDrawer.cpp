@@ -54,7 +54,7 @@ SpinDriverPathDrawer::SpinDriverPathDrawer(SpinDriverShootPath* pShootPath)
 void SpinDriverPathDrawInit::initDraw() {
     TDDraw::cameraInit3D();
 
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setNumTexGens(2);
@@ -316,13 +316,13 @@ void SpinDriverPathDrawer::draw() const {
     mtx[1][1] = -maskSteps;
     mtx[1][3] = 0.5f + maskSteps * drawCode;
 
-    J3DNativeShape::sendTexture(mtx, 33, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx, 2);
 
     mtx.identity();
     mtx[1][1] = 1.0f / mFadeScale;
     mtx[1][3] = 1.0f - drawBaseCode * mtx[1][1];
 
-    J3DNativeShape::sendTexture(mtx, 30, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx, 2);
 
     for (u32 i = 1; i < mPositionCount; i++) {
         f32 alpha;

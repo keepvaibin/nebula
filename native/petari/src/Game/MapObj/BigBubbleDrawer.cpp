@@ -33,12 +33,12 @@ void BigBubbleDrawer::setUpTexture() const {
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX3x4, GX_TG_NRM, 0x21, 0, 0x7D);
     TPos3f mtx;
     mtx.identity();
-    J3DNativeShape::sendTexture(mtx, 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx, 2);
 
     mtx.set(MR::getCameraViewMtx());
     mtx.setTrans(::sEnvMatTrans);
 
-    J3DNativeShape::sendTexture(mtx, 0x21, GX_MTX3x4);
+    J3DNativeShape::setTexture(1, mtx, 3);
     mRainbowTexture->load(GX_TEXMAP0);
     mBubbleTexture->load(GX_TEXMAP1);
 }
@@ -84,11 +84,11 @@ void BigBubbleDrawer::setUpMaterial() const {
     setUpTexture();
     setUpTevStage();
     setUpPixelFormat();
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
 
     Mtx normalMtx;
     NebulaMtxIdentity(normalMtx);
-    J3DNativeShape::sendNormal(normalMtx, 0);
+    J3DNativeShape::setNormal(0, normalMtx);
     J3DNativeState::setCurrentMtx(0);
     MR::loadProjectionMtx();
 }

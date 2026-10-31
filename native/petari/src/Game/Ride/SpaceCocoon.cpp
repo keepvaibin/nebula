@@ -867,7 +867,7 @@ void SpaceCocoon::drawPlane(f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color
 }
 
 void SpaceCocoon::initDraw() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
 
     J3DNativeState::setNumChans(1);

@@ -46,7 +46,7 @@ void THPGXYuv2RgbSetup(GXRenderModeObj* rmode) {
     J3DNativeView::setViewport(0.0f, 0.0f, scrWidth, scrHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, scrWidth, scrHeight);
     NebulaMtxIdentity(mMtx);
-    J3DNativeShape::sendPosition(mMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, mMtx);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setZMode(GX_ENABLE, GX_ALWAYS, GX_DISABLE);
     J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);

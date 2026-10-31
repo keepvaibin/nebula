@@ -103,7 +103,7 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     TPos3f rotateMtx;
     SphereSelectorFunction::calcHandledRotateMtx(mRotation, &rotateMtx);
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
-    J3DNativeShape::sendPosition(rotateMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, rotateMtx);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);

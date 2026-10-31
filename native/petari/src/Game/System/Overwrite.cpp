@@ -234,7 +234,7 @@ namespace {
     void loadPrj(JPAEmitterWorkData const* pWork, const Mtx pSrt) {
         Mtx mtx;
         NebulaMtxConcat(pWork->mPrjMtx, pSrt, mtx);
-        J3DNativeShape::sendTexture(mtx, GX_TEXMTX0, GX_MTX3x4);
+        J3DNativeShape::setTexture(0, mtx, 3);
     }
 
 // only way I can get these to match
@@ -268,7 +268,7 @@ namespace {
         matrix[2][3] = 0.0f;
         NebulaMtxConcat(matrix, pWork->mPrjMtx, matrix);
         NebulaMtxConcat(matrix, pSrt, matrix);
-        J3DNativeShape::sendTexture(matrix, 0x1e, GX_MTX3x4);
+        J3DNativeShape::setTexture(0, matrix, 3);
     }
 #pragma pop
 
@@ -525,7 +525,7 @@ void JPADrawDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][3] = pParticle->mPosition.z;
     p_plane[pWork->mPlaneType](matrix, scaleX, scaleY);
     NebulaMtxConcat(pWork->mPosCamMtx, matrix, matrix);
-    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -573,7 +573,7 @@ void JPADrawRotDirection(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) 
     matrix[2][3] = pParticle->mPosition.z;
     NebulaMtxConcat(matrix, rotation, rotation);
     NebulaMtxConcat(pWork->mPosCamMtx, rotation, matrix);
-    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(pWork->mDLType);
 }
@@ -607,7 +607,7 @@ void JPADrawDBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = 1.0f;
     matrix[2][3] = position.z;
     matrix[0][2] = matrix[1][2] = matrix[2][0] = matrix[2][1] = 0.0f;
-    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -663,7 +663,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::sendPosition(pWork->mPosCamMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
@@ -756,7 +756,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
         pNext = ::getNext;
     }
 
-    J3DNativeShape::sendPosition(pWork->mPosCamMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, pWork->mPosCamMtx);
     p_prj[pWork->mPrjType](pWork, pWork->mPosCamMtx);
     TVec3f position;
     TVec3f direction;
@@ -981,7 +981,7 @@ void JPADrawYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
     matrix[2][2] = pWork->mYBBCamMtx[2][2];
     matrix[2][3] = position.z;
     matrix[0][1] = matrix[0][2] = matrix[1][0] = matrix[2][0] = 0.0f;
-    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }
@@ -1019,7 +1019,7 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     matrix[2][1] = cosY * z;
     matrix[2][2] = y;
     matrix[2][3] = position.z;
-    J3DNativeShape::sendPosition(matrix, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, matrix);
     p_prj[pWork->mPrjType](pWork, matrix);
     JPADrawQuad(0);
 }

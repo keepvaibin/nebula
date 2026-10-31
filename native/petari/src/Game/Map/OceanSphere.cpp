@@ -599,10 +599,10 @@ const GXColor sOceanSphereFogFace = {0xFF, 0xFF, 0xFF, 0};
 const GXColor sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 
 void OceanSphere::loadMaterialFace() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     // The face's vertices carry the sphere's normals (unlit: the picture is unchanged), so ray tracing shades the
     // water as the sphere it is rather than as its flat triangles.
-    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -648,7 +648,7 @@ void OceanSphere::loadMaterialFace() const {
 }
 
 void OceanSphere::loadMaterialBack() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -660,7 +660,7 @@ void OceanSphere::loadMaterialBack() const {
     pos.set(MR::getCameraViewMtx());
     pos.zeroTrans();
     pos.scale(0.779175f);
-    J3DNativeShape::sendTexture(pos.toMtxPtr(), GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, pos.toMtxPtr(), 2);
 
     mWaterEnvTex->load(GX_TEXMAP0);
     J3DNativeState::setNumIndStages(0);

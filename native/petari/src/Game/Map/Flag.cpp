@@ -451,7 +451,7 @@ void Flag::sendEntry(u8 index) const {
 }
 
 void Flag::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
 
     J3DNativeState::setNumChans(1);

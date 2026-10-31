@@ -261,7 +261,7 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     local_108[2][1] = 0.0f;
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
-    J3DNativeShape::sendTexture(local_108, 0x1e, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, local_108, 2);
     J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1e, false, 0x7d);
 }
 #pragma pop
@@ -293,7 +293,7 @@ void JPALoadCalcTexCrdMtxAnm(JPAEmitterWorkData* work, JPABaseParticle* param_1)
     local_108[2][1] = 0.0f;
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
-    J3DNativeShape::sendTexture(local_108, 0x1e, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, local_108, 2);
 }
 #pragma pop
 
@@ -376,7 +376,7 @@ void JPACalcTexIdxRandom(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
 }
 
 void JPALoadPosMtxCam(JPAEmitterWorkData* work) {
-    J3DNativeShape::sendPosition(work->mPosCamMtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, work->mPosCamMtx);
 }
 
 static void noLoadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
@@ -386,7 +386,7 @@ static void noLoadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
 void loadPrj(JPAEmitterWorkData const* work, const Mtx srt) {
     Mtx mtx;
     NebulaMtxConcat(work->mPrjMtx, srt, mtx);
-    J3DNativeShape::sendTexture(mtx, GX_TEXMTX0, GX_MTX3x4);
+    J3DNativeShape::setTexture(0, mtx, 3);
 }
 
 #pragma push
@@ -418,7 +418,7 @@ static void loadPrjAnm(JPAEmitterWorkData const* work, const Mtx srt) {
     local_108[2][3] = 0.0f;
     NebulaMtxConcat(local_108, work->mPrjMtx, local_108);
     NebulaMtxConcat(local_108, srt, local_108);
-    J3DNativeShape::sendTexture(local_108, 0x1e, GX_MTX3x4);
+    J3DNativeShape::setTexture(0, local_108, 3);
 }
 #pragma pop
 
@@ -478,7 +478,7 @@ void JPADrawBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[1][0] = 0.0f;
         local_38[0][2] = 0.0f;
         local_38[0][1] = 0.0f;
-        J3DNativeShape::sendPosition(local_38, 0);
+        J3DNativeShape::setPosition(0, local_38);
         p_prj[work->mPrjType](work, local_38);
         JPADrawQuad(0);
     }
@@ -506,7 +506,7 @@ void JPADrawRotBillboard(JPAEmitterWorkData* work, JPABaseParticle* param_1) {
         local_38[2][0] = 0.0f;
         local_38[1][2] = 0.0f;
         local_38[0][2] = 0.0f;
-        J3DNativeShape::sendPosition(local_38, 0);
+        J3DNativeShape::setPosition(0, local_38);
         p_prj[work->mPrjType](work, local_38);
         JPADrawQuad(0);
     }
@@ -669,7 +669,7 @@ void JPADrawRotation(JPAEmitterWorkData* param_0, JPABaseParticle* param_1) {
         auStack_88[1][3] = param_1->mPosition.y;
         auStack_88[2][3] = param_1->mPosition.z;
         NebulaMtxConcat(param_0->mPosCamMtx, auStack_88, auStack_88);
-        J3DNativeShape::sendPosition(auStack_88, 0);
+        J3DNativeShape::setPosition(0, auStack_88);
         p_prj[param_0->mPrjType](param_0, auStack_88);
         JPADrawQuad(param_0->mDLType);
     }
@@ -752,7 +752,7 @@ void JPADrawStripe(JPAEmitterWorkData* param_0) {
         node_func = getNext;
     }
 
-    J3DNativeShape::sendPosition(param_0->mPosCamMtx, 0);
+    J3DNativeShape::setPosition(0, param_0->mPosCamMtx);
     p_prj[param_0->mPrjType](param_0, param_0->mPosCamMtx);
     J3DNativeDraw::begin(GX_TRIANGLESTRIP, ptcl_num << 1, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* node = startNode; node != param_0->mpAlivePtcl->getEnd(); node = node_func(node), coord += step) {
@@ -836,7 +836,7 @@ void JPADrawStripeX(JPAEmitterWorkData* param_0) {
         node_func = getNext;
     }
 
-    J3DNativeShape::sendPosition(param_0->mPosCamMtx, 0);
+    J3DNativeShape::setPosition(0, param_0->mPosCamMtx);
     p_prj[param_0->mPrjType](param_0, param_0->mPosCamMtx);
     J3DNativeDraw::begin(GX_TRIANGLESTRIP, ptcl_num << 1, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* node = startNode; node != param_0->mpAlivePtcl->getEnd(); node = node_func(node), coord += step) {

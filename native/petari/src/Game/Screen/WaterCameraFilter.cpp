@@ -162,7 +162,7 @@ void WaterCameraFilter::loadMaterial() const {
     J3DNativeView::setProjection(projection, GX_ORTHOGRAPHIC);
     TMtx34f modelView;
     modelView.identity();
-    J3DNativeShape::sendPosition(modelView, 0);
+    J3DNativeShape::setPosition(0, modelView);
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
@@ -189,7 +189,7 @@ void WaterCameraFilter::loadMaterial() const {
     MR::multMtx(textureMtx, translation, rotation);
     translation.setTrans(TVec3f(0.5f, 0.5f, 0.0f));
     MR::multMtx(textureMtx, textureMtx, translation);
-    J3DNativeShape::sendTexture(textureMtx, 0x1E, GX_MTX3x4);
+    J3DNativeShape::setTexture(0, textureMtx, 3);
     mFilterTex->load(GX_TEXMAP0);
     mScreenTex->load(GX_TEXMAP1);
     J3DNativeState::setNumIndStages(1);

@@ -322,6 +322,7 @@ namespace J3DNativeState {
     }
 
     void setCurrentMtx(u32 id) {
+        J3DNativeShape::setCurrentPosition(id / 3);
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setCurrentMtx(id);
@@ -638,11 +639,11 @@ namespace J3DNativeState {
 
         Mtx identity;
         NebulaMtxIdentity(identity);
-        J3DNativeShape::sendPosition(identity, GX_PNMTX0);
-        J3DNativeShape::sendNormal(identity, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, identity);
+        J3DNativeShape::setNormal(0, identity);
         setCurrentMtx(GX_PNMTX0);
-        J3DNativeShape::sendTexture(identity, GX_IDENTITY, GX_MTX3x4);
-        J3DNativeShape::sendTexture(identity, GX_PTIDENTITY, GX_MTX3x4);
+        J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, identity, 3);
+        J3DNativeShape::setPostTexture(J3DNativeShape::kIdentityPost, identity);
         J3DNativeView::setViewport(0.0f, 0.0f, cDefaultWidth, cDefaultHeight, 0.0f, 1.0f);
         J3DNativeView::setProjectionv(sDefaultProjection);
 

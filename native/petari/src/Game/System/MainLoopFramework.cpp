@@ -171,7 +171,7 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     J3DNativeView::setProjection(proj, GX_ORTHOGRAPHIC);
     J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);
-    J3DNativeShape::sendPosition(e_mtx, GX_PNMTX0);
+    J3DNativeShape::setPosition(0, e_mtx);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);

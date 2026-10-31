@@ -57,6 +57,13 @@ namespace {
             draw.texcoord[t] = (sAttributes & (NEBULA_SHAPE_TEXCOORD0 << t)) != 0 ? sTexCoord[t] : nullptr;
         }
         draw.position_matrix = (sAttributes & NEBULA_SHAPE_POSITION_MATRIX) != 0 ? sMatrix : nullptr;
+        u32 places = 0;
+        if (draw.position_matrix != nullptr) {
+            for (u32 v = 0; v < sCount; v++) {
+                places |= 1u << sMatrix[v];
+            }
+        }
+        draw.matrix_count = J3DNativeShape::positionMatrices(places, &draw.matrices);
         const NebulaHostServices* pHost = nebula_host();
         pHost->immediate(pHost->user, &draw);
     }
@@ -111,8 +118,11 @@ namespace J3DNativeDraw {
         }
     }
 
-    void matrix(u8 id) {
-        sMatrix[sVertex] = id;
+    void matrix(u8 place) {
+        if (place >= J3DNativeShape::kPositions) {
+            fail("a position matrix past place 9");
+        }
+        sMatrix[sVertex] = place;
         arrive(0);
     }
 
