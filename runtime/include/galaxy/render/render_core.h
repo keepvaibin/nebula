@@ -1217,15 +1217,6 @@ private:
     std::uint64_t frame_curved_flat_triangles_ = 0;
     std::uint64_t frame_curved_patch_triangles_ = 0;
     std::uint64_t frame_curved_split_draws_ = 0;
-    // The game's EFB clear quads drawn as a depth clear (and their colour without the Z texture).
-    std::uint64_t frame_clear_quads_ = 0;
-    // A kMarkerClearQuad marker for the next draw, with its Z texture's depth.
-    bool clear_quad_pending_ = false;
-    bool clear_quads_ = true;
-    std::uint32_t clear_quad_z24_ = 0;
-    // The clear quad's constant colour (RGBA), where its marker gave one.
-    std::uint32_t clear_quad_colour_ = 0;
-    bool clear_quad_has_colour_ = false;
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
     void release_resident_vertex_buffer() noexcept;

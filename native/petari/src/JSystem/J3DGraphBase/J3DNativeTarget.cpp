@@ -24,6 +24,12 @@ namespace J3DNativeTarget {
         pHost->target_clear(pHost->user, clearRgba, clearZ & 0xFFFFFF, channels);
     }
 
+    void clearFrame(u16 left, u16 top, u16 width, u16 height, u32 clearRgba, u32 clearZ, u32 channels) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_clear(pHost->user, left, top, width, height, clearRgba, clearZ & 0xFFFFFF, channels);
+    }
+
     void capture(const void* pKey, u16 left, u16 top, u16 width, u16 height, NebulaTargetChannels channels, u32 flags) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();

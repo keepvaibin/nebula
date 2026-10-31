@@ -2,6 +2,7 @@
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -18,21 +19,6 @@
 MainLoopFramework* MainLoopFramework::sManager;
 
 
-GXTexObj clear_z_tobj;
-
-Mtx e_mtx = {{1.0f, 0.0f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f, 0.0f}};
-
-// The depth-clear texture: 4x4 of (255, 255, 255, 0), what the GPU sampled from the console's Z24X8 tile, as a texture
-// record (nebula_cooked_texture.h).
-static struct {
-    NebulaTexture header;
-    u8 texels[4 * 4 * 4];
-} clearZTexData ATTRIBUTE_ALIGN(32) = {NEBULA_TEXTURE_STATIC(4, 4, NEBULA_TEXTURE_RGBA8, 4 * 4 * 4),
-                                       {0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
-                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
-                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0,
-                                        0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0, 0xFF, 0xFF, 0xFF, 0}};
-
 namespace {
     void waitForFrames(u16);
 
@@ -44,9 +30,6 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mUseAlpha = useAlpha;
     mUseVFilter = true;
     mCombinationRatio = 0.0f;
-    J3DNativeTexture::registerImage(&clearZTexData, GX_TF_Z24X8, 4, 4, 1);
-    J3DNativeTexture::init(&clear_z_tobj, &clearZTexData, 4, 4, GX_TF_Z24X8, GX_REPEAT, GX_REPEAT, GX_FALSE);
-    J3DNativeTexture::initLOD(&clear_z_tobj, GX_NEAR, GX_NEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
     mRenderInterval = 1;
     mRenderCounter = 0;
     mDoRenderFrame = false;
@@ -132,13 +115,9 @@ void MainLoopFramework::waitBlanking(int tickCount) {
 }
 
 
+// The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
+// pixel state the frame's first draws start from.
 void MainLoopFramework::clearEfb(GXColor color) {
-    u16 fbWidth = JUTVideo::getManager()->getFbWidth();
-    u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
-    clearEfb(0, 0, fbWidth, efbHeight, color);
-}
-
-void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4, GXColor color) {
     u16 fbWidth = JUTVideo::getManager()->getFbWidth();
     u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
     Mtx44 proj;
@@ -146,59 +125,23 @@ void MainLoopFramework::clearEfb(int param1, int param2, int param3, int param4,
     J3DNativeView::setProjection(proj, GX_ORTHOGRAPHIC);
     J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);
-    J3DNativeShape::setPosition(0, e_mtx);
+    Mtx identity;
+    NebulaMtxIdentity(identity);
+    J3DNativeShape::setPosition(0, identity);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setNumChans(0);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeTexture::load(&clear_z_tobj, GX_TEXMAP0);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevColor(GX_TEVREG0, color);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZTexture(GX_ZT_REPLACE, GX_TF_Z24X8, 0);
-    J3DNativeState::setZCompLoc(GX_FALSE);
+    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
-
     if (mUseAlpha) {
         J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setDstAlpha(GX_TRUE, color.a);
-    }
-
-    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-
-#ifdef TARGET_PC
-    NebulaRender::clearQuadColour(0xFFFFFF, (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
-                                                  (static_cast< u32 >(color.b) << 8) | color.a);
-#endif
-    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
-    {
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1)), static_cast< f32 >(static_cast< u16 >(param2)), 0.0f);
-        J3DNativeDraw::texCoord(0.0f, 0.0f);
-
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1 + param3)), static_cast< f32 >(static_cast< u16 >(param2)), 0.0f);
-        J3DNativeDraw::texCoord(1.0f, 0.0f);
-
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1 + param3)), static_cast< f32 >(static_cast< u16 >(param2 + param4)), 0.0f);
-        J3DNativeDraw::texCoord(1.0f, 1.0f);
-
-        J3DNativeDraw::position(static_cast< f32 >(static_cast< u16 >(param1)), static_cast< f32 >(static_cast< u16 >(param2 + param4)), 0.0f);
-        J3DNativeDraw::texCoord(0.0f, 1.0f);
-    }
-
-    J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-
-    if (mUseAlpha) {
         J3DNativeState::setDstAlpha(GX_FALSE, color.a);
     }
+    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
+    J3DNativeState::setCullMode(GX_CULL_BACK);
+    const u32 rgba = (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
+                     (static_cast< u32 >(color.b) << 8) | color.a;
+    J3DNativeTarget::clearFrame(0, 0, fbWidth, efbHeight, rgba, 0xFFFFFF,
+                                NEBULA_CLEAR_COLOR | (mUseAlpha ? NEBULA_CLEAR_ALPHA : 0u) | NEBULA_CLEAR_DEPTH);
 }
 
 void MainLoopFramework::setForOSResetSystem() {

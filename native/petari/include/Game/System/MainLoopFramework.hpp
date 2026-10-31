@@ -34,7 +34,6 @@ public:
     void endFrame();
     void waitBlanking(int);
     void clearEfb(GXColor);
-    void clearEfb(int, int, int, int, GXColor);
     static void setForOSResetSystem();
 
     /* 0x00 */ Color8 mClearColor;

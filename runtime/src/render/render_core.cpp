@@ -1809,13 +1809,6 @@ std::uint32_t RenderCore::rt_light_key() noexcept {
 }
 
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
-    if (kind == motion::kMarkerClearQuad) {
-        clear_quad_pending_ = true;
-        clear_quad_z24_ = static_cast<std::uint32_t>(a & 0xFFFFFFu);
-        clear_quad_has_colour_ = aux == 1u;
-        clear_quad_colour_ = static_cast<std::uint32_t>(b);
-        return;
-    }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
@@ -6638,7 +6631,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     frame_curved_flat_triangles_ = 0;
     frame_curved_patch_triangles_ = 0;
     frame_curved_split_draws_ = 0;
-    frame_clear_quads_ = 0;
     pending_draw_batch_ = {};
     const RenderServices* services = chunk.services;
 
@@ -6663,9 +6655,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
             static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
             curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
-            // GALAXY_TEST_CLEAR_QUAD_AB=1: the game's clear quads draw as written in those frames.
-            static const bool clear_ab = read_env_u64("GALAXY_TEST_CLEAR_QUAD_AB", 0u) != 0u;
-            clear_quads_ = !(clear_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
             rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
                 render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
@@ -7253,7 +7242,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                   << " curved-split-draws=" << frame_curved_split_draws_
                   << " curved-flat-tris=" << frame_curved_flat_triangles_
                   << " curved-patch-tris=" << frame_curved_patch_triangles_
-                  << " clear-quads=" << frame_clear_quads_
                   << " resident-vtx-bytes=" << frame_resident_vertex_bytes_
                   << " resident-vtx-used-bytes="
                   << static_cast<std::uint64_t>(resident_vertices_.used_units()) *
@@ -9078,6 +9066,20 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         on_efb_copy(frame_show_params(record.target_width, record.target_height, record.target_flags),
                     draw_state_.pe.pixel_format);
         return;
+    case shapes::Record::Kind::FrameClear: {
+        // The values a draw would store: 8-bit colour, and on a frame with 6-bit alpha its alpha at 6 bits.
+        flush_pending_draw_batch();
+        std::uint32_t rgba = record.target_clear_rgba;
+        if (draw_state_.pe.pixel_format == 1u) {
+            const std::uint32_t alpha = rgba & 255u;
+            rgba = (rgba & ~255u) | (alpha & 0xFCu) | (alpha >> 6u);
+        }
+        renderer_.clear_efb(rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+                            (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
+                            record.target_y, record.target_width, record.target_height,
+                            static_cast<std::uint8_t>(draw_state_.pe.pixel_format | kEfbClearExact));
+        return;
+    }
     case shapes::Record::Kind::TargetClear:
         if (renderer_.target_pass_active()) {
             flush_pending_draw_batch();
