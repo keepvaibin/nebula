@@ -21,8 +21,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
 #include <revolution/wpad.h>
 

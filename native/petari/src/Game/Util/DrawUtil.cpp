@@ -20,9 +20,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXStruct.h>
-#include <revolution/gx/GXTransform.h>
 #include "Game/Util/RenderSignals.hpp"
 
 static u8 sTexImgObj[] ATTRIBUTE_ALIGN(32) = {0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF, 0,    0xFF,

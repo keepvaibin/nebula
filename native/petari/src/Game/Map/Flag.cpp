@@ -18,8 +18,6 @@
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXGeometry.h>
-#include <revolution/gx/GXTransform.h>
 
 namespace {
     static const f32 sDefaultPointIntervalU = 40.0f;

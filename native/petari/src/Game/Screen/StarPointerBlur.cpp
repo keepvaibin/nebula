@@ -8,7 +8,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/gx/GXStruct.h>
-#include <revolution/gx/GXTransform.h>
 
 namespace {
     static const f32 sBeginThick = 10.0f;
