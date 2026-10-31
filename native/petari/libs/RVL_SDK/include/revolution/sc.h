@@ -1,8 +1,8 @@
 #ifndef SC_H
 #define SC_H
 
-#include "revolution/bte.h"
 #include "revolution/types.h"
+#include <revolution/bte/data_types.h>
 #include "revolution/os.h"
 
 #ifdef __cplusplus
