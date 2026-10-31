@@ -8076,9 +8076,9 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
     ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
-    bool unordered_access, unsigned samples, bool hdr) {
-    const UINT w = kEfbWidth * scale;
-    const UINT h = kEfbHeight * scale;
+    bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height) {
+    const UINT w = width * scale;
+    const UINT h = height * scale;
     if (set.color) {
         wait_for_gpu();
     }
@@ -8208,23 +8208,37 @@ void RendererD3D12::swap_target_set() {
     bind_efb(nullptr);
 }
 
-bool RendererD3D12::begin_target_pass() {
-    if (target_pass_active_) {
+bool RendererD3D12::begin_target_pass(std::uint16_t width, std::uint16_t height) {
+    if (target_pass_active_ || width == 0u || height == 0u) {
         return false;
     }
-    if (!target_efb_.color || target_efb_.scale != efb_scale_) {
-        if (!create_efb_set(target_efb_, target_efb_rtv_heap_, target_efb_dsv_heap_, efb_scale_, true)) {
-            return false;
-        }
+    const bool fits = target_efb_.color && target_efb_.scale == efb_scale_ &&
+                      target_efb_.color->GetDesc().Width == UINT64{width} * efb_scale_ &&
+                      target_efb_.color->GetDesc().Height == UINT{height} * efb_scale_;
+    if (!fits && !create_efb_set(target_efb_, target_efb_rtv_heap_, target_efb_dsv_heap_, efb_scale_, true, false, 1u,
+                                 false, width, height)) {
+        return false;
     }
     swap_target_set();
     return true;
 }
 
-void RendererD3D12::end_target_pass() {
-    if (target_pass_active_) {
-        swap_target_set();
+void RendererD3D12::end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                    TextureCache& textures) {
+    if (!target_pass_active_) {
+        return;
     }
+    swap_target_set();
+    // The picture is the texture: a shader resource from here on, the cache's to keep and retire.
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target_efb_.color.Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &barrier);
+    textures.register_target(key, width, height, gpu::TextureRef(target_efb_.color));
+    target_efb_.color.Reset();
 }
 
 // DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output EFB right after the

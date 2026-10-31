@@ -845,36 +845,8 @@ void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id) {
     J3DNativeState::loadLightObjImm(pObj, id);
 }
 
-void J3DNativeStateSetPixelFmt(GXPixelFmt format, GXZFmt16 zFormat) {
-    J3DNativeState::setPixelFmt(format, zFormat);
-}
-
 void J3DNativeStateInvalidateTexAll(void) {
     J3DNativeState::invalidateTexAll();
-}
-
-void J3DNativeStateSetTexCopySrc(u16 left, u16 top, u16 width, u16 height) {
-    J3DNativeState::setTexCopySrc(left, top, width, height);
-}
-
-void J3DNativeStateSetTexCopyDst(u16 width, u16 height, GXTexFmt format, GXBool mipmap) {
-    J3DNativeState::setTexCopyDst(width, height, format, mipmap);
-}
-
-void J3DNativeStateSetCopyClamp(GXFBClamp clamp) {
-    J3DNativeState::setCopyClamp(clamp);
-}
-
-void J3DNativeStateSetCopyClear(GXColor color, u32 depth) {
-    J3DNativeState::setCopyClear(color, depth);
-}
-
-void J3DNativeStateSetCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]) {
-    J3DNativeState::setCopyFilter(antialias, samples, verticalFilter, coefficients);
-}
-
-void J3DNativeStateCopyTex(void* pDest, GXBool clear) {
-    J3DNativeState::copyTex(pDest, clear);
 }
 
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {

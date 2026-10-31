@@ -1,5 +1,6 @@
 #include "RVLFaceLibInternal.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 
 static const f32 RAD_TO_DEG = 57.29578f;
@@ -81,7 +82,7 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     J3DNativeViewGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
     J3DNativeViewSetScissor(0, 0, setting->width, setting->height);
 
-    RFLiSetupCopyTex(GX_RGBA8, setting->width, setting->height, buf, backColor);
+    RFLiBeginTexture(buf, setting->width, setting->height, backColor);
 
     J3DNativeViewGetViewportv(vp);
     J3DNativeViewSetViewport(0.0f, 0.0f, setting->width, setting->height, 0.0f, 1.0f);
@@ -138,7 +139,7 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
 
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
     J3DNativeStateSetColorUpdate(TRUE);
-    J3DNativeStateCopyTex(buf, TRUE);
+    J3DNativeTargetEnd(buf);
 
     RFLiFree(modelBuf);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);

@@ -50,8 +50,8 @@ typedef struct RFLiFaceParts {
     RFLiPart mole;      // at 0x1C0
 } RFLiFaceParts;
 
-void RFLiSetupCopyTex(GXTexFmt fmt, u16 width, u16 height, void* buffer,
-                      GXColor clearColor) NO_INLINE;
+void RFLiSetupTextureDraw(void);
+void RFLiBeginTexture(void* buffer, u16 width, u16 height, GXColor clearColor);
 void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffer,
                      RFLResolution resolution);
 void RFLiInitRFLTexture(RFLiTexObj* tobj);

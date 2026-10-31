@@ -255,8 +255,10 @@ public:
     // A pass into a texture target (E-07): the EFB's targets trade places with the target set's (at the EFB's scale)
     // until end_target_pass, so the pass's draws, clears and its closing texture copy use the target. False when the
     // target cannot be made or a pass is open.
-    [[nodiscard]] bool begin_target_pass();
-    void end_target_pass();
+    [[nodiscard]] bool begin_target_pass(std::uint16_t width, std::uint16_t height);
+    // Ends it: the EFB comes back and the target's picture becomes texture `key` in `textures` (at full
+    // precision, sampled in any format at that size); the next pass makes a fresh target.
+    void end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height, TextureCache& textures);
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     [[nodiscard]] bool output_efb_active() const noexcept { return output_efb_active_; }
@@ -923,7 +925,8 @@ private:
     unsigned replay_efb_scale_ = 0;
     EfbSet replay_alt_efb_;  // the replay's output EFB
     unsigned replay_alt_scale_ = 0;
-    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u);
+    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kEfbWidth,
+                        unsigned height = kEfbHeight);
     void destroy_efb_set(EfbSet& set);
     XfbTexture subframe_xfb_;
     bool replaying_ = false;

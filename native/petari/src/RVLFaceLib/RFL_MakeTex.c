@@ -1,24 +1,28 @@
 #include "RVLFaceLibInternal.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <cmath>
 
-void RFLiSetupCopyTex(GXTexFmt fmt, u16 width, u16 height, void* buffer, GXColor clearColor) {
+// The drawing state a Mii texture is drawn with.
+void RFLiSetupTextureDraw(void) {
     J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDstAlpha(FALSE, 0);
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
-    J3DNativeStateSetPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
-    J3DNativeStateSetCopyFilter(FALSE, NULL, FALSE, NULL);
-    J3DNativeStateSetCopyClamp(3);
-    J3DNativeStateSetTexCopySrc(0, 0, width, height);
-    J3DNativeStateSetTexCopyDst(width, height, fmt, FALSE);
-    J3DNativeStateSetCopyClear(clearColor, 0xFFFFFF);
-    J3DNativeStateCopyTex(buffer, TRUE);
+}
+
+// A Mii texture drawn into `buffer` (E-07): a target pass `width` x `height` cleared to `clearColor`; the texture is
+// the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
+void RFLiBeginTexture(void* buffer, u16 width, u16 height, GXColor clearColor) {
+    RFLiSetupTextureDraw();
+    J3DNativeTargetBegin(buffer, width, height,
+                         ((u32)clearColor.r << 24) | ((u32)clearColor.g << 16) | ((u32)clearColor.b << 8) | clearColor.a,
+                         0xFFFFFF);
 }
 
 void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resolution) {
@@ -336,7 +340,7 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         }
     }
 
-    RFLiSetupCopyTex(GX_TF_RGB5A3, max, max, buffers[i], (GXColor){0, 0, 0, 0});
+    RFLiSetupTextureDraw();
 
     size = RFLiGetMaskBufSize(resolution);
     for (i = 0; i < RFLExp_Max; i++) {
@@ -353,38 +357,38 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         ptr = buffers[i];
 
         if (resolution & 256) {
-            J3DNativeStateSetTexCopySrc(0, 0, 256, 256);
-            J3DNativeStateSetTexCopyDst(256, 256, GX_TF_RGB5A3, FALSE);
             J3DNativeViewSetScissor(0, 0, 256, 256);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_256);
+            RFLiBeginTexture(ptr, 256, 256, (GXColor){0, 0, 0, 0});
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_256);
+            J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_256);
         }
 
         if (resolution & 128) {
-            J3DNativeStateSetTexCopySrc(0, 0, 128, 128);
-            J3DNativeStateSetTexCopyDst(128, 128, GX_TF_RGB5A3, FALSE);
             J3DNativeViewSetScissor(0, 0, 128, 128);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_128);
+            RFLiBeginTexture(ptr, 128, 128, (GXColor){0, 0, 0, 0});
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_128);
+            J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_128);
         }
 
         if (resolution & 64) {
-            J3DNativeStateSetTexCopySrc(0, 0, 64, 64);
-            J3DNativeStateSetTexCopyDst(64, 64, GX_TF_RGB5A3, FALSE);
             J3DNativeViewSetScissor(0, 0, 64, 64);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_64);
+            RFLiBeginTexture(ptr, 64, 64, (GXColor){0, 0, 0, 0});
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_64);
+            J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_64);
         }
 
         if (resolution & 32) {
-            J3DNativeStateSetTexCopySrc(0, 0, 32, 32);
-            J3DNativeStateSetTexCopyDst(32, 32, GX_TF_RGB5A3, FALSE);
             J3DNativeViewSetScissor(0, 0, 32, 32);
             RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_32);
+            RFLiBeginTexture(ptr, 32, 32, (GXColor){0, 0, 0, 0});
             RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_32);
+            J3DNativeTargetEnd(ptr);
             ptr += RFLiGetMaskSize(RFLi_MASKRSL_32);
         }
     }
@@ -691,8 +695,10 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
     RFLiSetTev4Mole();
     RFLiDrawFaceParts(&face->mole);
 
+    // The parts' colours stay; their alpha is drawn again on a cleared alpha channel (the console's copy cleared
+    // alpha only, colour updates being off).
     J3DNativeStateSetColorUpdate(FALSE);
-    J3DNativeStateCopyTex(buffer, TRUE);
+    J3DNativeTargetClear(0x00000000, 0xFFFFFF, 2u | 4u);
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_ONE, GX_LO_SET);
 
     RFLiSetTev4Mustache(info->beard.color);
@@ -714,8 +720,6 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
     RFLiDrawFaceParts(&face->mole);
 
     J3DNativeStateSetColorUpdate(TRUE);
-
-    J3DNativeStateCopyTex(buffer, 1);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
 }
 

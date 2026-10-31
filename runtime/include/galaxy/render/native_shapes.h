@@ -104,7 +104,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd
+        TargetBegin, TargetEnd, TargetClear
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
@@ -132,6 +132,8 @@ struct Record {
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
     std::uint16_t target_width = 0, target_height = 0;
     std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
+    // TargetClear: the channels cleared (1 colour, 2 alpha, 4 depth).
+    std::uint8_t target_channels = 0;
 };
 // Vectors of records move them when they grow (a throwing move would copy them).
 static_assert(std::is_nothrow_move_constructible_v<Record>);

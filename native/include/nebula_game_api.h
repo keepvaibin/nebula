@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 63u
+#define NEBULA_GAME_API_VERSION 64u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -1064,6 +1064,8 @@ typedef struct NebulaHostServices {
     /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
        naming `key` reads it, whatever format it names). */
     void (*target_end)(void* user, uint64_t key);
+    /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` / `clear_z`. */
+    void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);

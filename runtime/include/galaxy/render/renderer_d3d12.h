@@ -247,11 +247,13 @@ public:
     // begin_output_efb returns false when the split is off or the EFB already
     // covers the window.
     [[nodiscard]] bool begin_output_efb();
-    // A pass into a texture target (E-07): the EFB's targets trade places with the target set's (at the EFB's scale)
-    // until end_target_pass, so the pass's draws, clears and its closing texture copy use the target. False when the
-    // target cannot be made or a pass is open.
-    [[nodiscard]] bool begin_target_pass();
-    void end_target_pass();
+    // A pass into a texture target (E-07): a target `width` x `height` (game units, at the EFB's scale) takes the
+    // EFB's place until end_target_pass, so the pass's draws and clears go to it. False when the target cannot be
+    // made or a pass is open.
+    [[nodiscard]] bool begin_target_pass(std::uint16_t width, std::uint16_t height);
+    // Ends it: the EFB comes back and the target's picture becomes texture `key` in `textures` (at full
+    // precision, sampled in any format at that size); the next pass makes a fresh target.
+    void end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height, TextureCache& textures);
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
@@ -1251,7 +1253,7 @@ private:
     bool create_efb_set(EfbTargetSet& set, Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& rtv_heap,
                         Microsoft::WRL::ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale,
                         bool persistent_views = true, bool unordered_access = false, unsigned samples = 1u,
-                        bool hdr = false);
+                        bool hdr = false, unsigned width = kEfbWidth, unsigned height = kEfbHeight);
     void write_efb_set_views(EfbTargetSet& set, const DescriptorRing::Table& table);
     void swap_efb_with(EfbTargetSet& other);
     bool replay_playing_ = false;

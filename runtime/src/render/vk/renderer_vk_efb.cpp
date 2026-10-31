@@ -47,11 +47,12 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
 
 // An EFB set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
 // once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
-bool RendererVk::create_efb_set(EfbSet& set, unsigned scale, unsigned samples) {
+bool RendererVk::create_efb_set(EfbSet& set, unsigned scale, unsigned samples, unsigned set_width,
+                                unsigned set_height) {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    const std::uint32_t width = kEfbWidth * scale;
-    const std::uint32_t height = kEfbHeight * scale;
+    const std::uint32_t width = set_width * scale;
+    const std::uint32_t height = set_height * scale;
     gpu::TextureRef color = context.create_texture(
         width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -635,16 +636,17 @@ void RendererVk::swap_target_set() {
     reset_gx_bindings();
 }
 
-bool RendererVk::begin_target_pass() {
-    if (target_pass_active_) {
+bool RendererVk::begin_target_pass(std::uint16_t width, std::uint16_t height) {
+    if (target_pass_active_ || width == 0u || height == 0u) {
         return false;
     }
     bool fresh = false;
-    if (!target_efb_.color || target_efb_scale_ != efb_scale_) {
-        if (target_efb_.color) {
+    if (!target_efb_.color || target_efb_scale_ != efb_scale_ || target_efb_.color->width != width * efb_scale_ ||
+        target_efb_.color->height != height * efb_scale_) {
+        if (target_efb_.color || target_efb_.depth) {
             destroy_efb_set(target_efb_);
         }
-        if (!create_efb_set(target_efb_, efb_scale_)) {
+        if (!create_efb_set(target_efb_, efb_scale_, 1u, width, height)) {
             target_efb_scale_ = 0u;
             return false;
         }
@@ -667,7 +669,8 @@ bool RendererVk::begin_target_pass() {
     return true;
 }
 
-void RendererVk::end_target_pass() {
+void RendererVk::end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                 TextureCache& textures) {
     if (!target_pass_active_) {
         return;
     }
@@ -675,6 +678,16 @@ void RendererVk::end_target_pass() {
         recording_log_.ops.push_back({ReplayKind::SwapTargetSet, 0u});
     }
     swap_target_set();
+    // The picture is the texture: sampled from here on, the cache's to keep and retire.
+    gpu::TextureRef picture = std::move(target_efb_.color);
+    image_barrier(commands_, picture->image, VK_IMAGE_ASPECT_COLOR_BIT, picture->layout,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+    picture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    textures.register_target(key, width, height, std::move(picture));
+    destroy_efb_set(target_efb_);
+    target_efb_scale_ = 0u;
     bind_efb(nullptr);
 }
 

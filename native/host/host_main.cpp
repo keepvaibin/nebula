@@ -2155,6 +2155,21 @@ void svc_target_end(void*, uint64_t key) {
 #endif
 }
 
+void svc_target_clear(void*, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::TargetClear;
+    record.target_clear_rgba = clear_rgba;
+    record.target_clear_z = clear_z & 0xFFFFFFu;
+    record.target_channels = static_cast<std::uint8_t>(channels & 7u);
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)clear_rgba, (void)clear_z, (void)channels;
+#endif
+}
+
 void svc_state(void*, const NebulaStateOp* ops, uint32_t count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -3801,6 +3816,7 @@ int main(int argc, char** argv) {
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;
     services.target_end = svc_target_end;
+    services.target_clear = svc_target_clear;
     services.texture_image = svc_texture_image;
     services.mii_record = svc_mii_record;
     services.readback_capture = svc_readback_capture;

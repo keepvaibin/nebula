@@ -13,6 +13,8 @@ namespace J3DNativeTarget {
     void begin(const void* pKey, u16 width, u16 height, u32 clearRgba, u32 clearZ);
     // Closes it: the picture, at full precision, as texture `pKey`.
     void end(const void* pKey);
+    // Clears channels of the open pass (`channels`: 1 colour, 2 alpha, 4 depth).
+    void clear(u32 clearRgba, u32 clearZ, u32 channels);
 };  // namespace J3DNativeTarget
 
 extern "C" {
@@ -20,6 +22,7 @@ extern "C" {
 // The same for the C sources (RVLFaceLib).
 void J3DNativeTargetBegin(const void* pKey, u16 width, u16 height, u32 clearRgba, u32 clearZ);
 void J3DNativeTargetEnd(const void* pKey);
+void J3DNativeTargetClear(u32 clearRgba, u32 clearZ, u32 channels);
 #ifdef __cplusplus
 }
 #endif
