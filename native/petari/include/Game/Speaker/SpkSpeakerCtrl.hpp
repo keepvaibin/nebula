@@ -4,7 +4,6 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 #include "Game/System/NebulaKernel.hpp"
-#include <revolution/wenc.h>
 
 class SpkMixingBuffer;
 
@@ -31,7 +30,6 @@ struct SpeakerInfo {
 
     bool mIsConnected;
     bool mIsPlaying;
-    WENCInfo mWENCInfo;
     bool mIsUpdated;
     bool mIsMuted;
     u32 mState;
@@ -51,9 +49,7 @@ namespace SpkSpeakerCtrl {
     void connect(s32);
     void disconnect(s32);
     void setSpeakerOn(s32);
-    void setSpeakerOnCallback(s32, s32);
     void setSpeakerPlay(s32);
-    void startPlayCallback(s32, s32);
     void setSpeakerOff(s32);
     void retryConnection(s32);
     void reconnect(s32);

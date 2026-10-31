@@ -1,9 +1,8 @@
 #pragma once
 
-// A real Wii Remote (RVL-CNT-01 and RVL-CNT-01-TR, with or without a Nunchuk) paired with Windows. Its own input
-// reports, EEPROM calibration and Nunchuk calibration go to the game's WPAD (wpad_native.c) as the remote sends them,
-// as the console's Bluetooth stack hands them over; the game's report format, IR camera and motor are mirrored to the
-// remote. Protocol per WiiBrew's Wiimote pages; this file is an independent implementation.
+// A real Wii Remote (RVL-CNT-01 and RVL-CNT-01-TR, with or without a Nunchuk) paired with Windows. Its input reports,
+// EEPROM calibration and Nunchuk calibration go to the host's input thread, which reads them into the player's input
+// (input/wiimote_input.h); the report format, IR camera and motor are set from there. Protocol per WiiBrew's Wiimote pages; this file is an independent implementation.
 
 #include <array>
 #include <atomic>

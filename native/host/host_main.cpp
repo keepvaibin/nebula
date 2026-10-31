@@ -2638,8 +2638,6 @@ uint32_t svc_sc_get(void*, uint32_t item) {
         return 0;
     case NEBULA_SC_EURGB60_MODE:
         return 1;
-    case NEBULA_SC_SPEAKER_VOLUME:
-        return 0x58;
     case NEBULA_SC_SCREEN_SAVER_MODE:
         return 1;  // IPL.SSV
     case NEBULA_SC_MOTOR_MODE:
@@ -2905,7 +2903,8 @@ void input_thread() {
 }
 #endif
 
-void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
+// The remote speaker's sound is not played yet (I-06: the host's speaker mixer, galaxy/wiimote_speaker.h).
+void svc_speaker_samples(void*, uint32_t, const int16_t*, uint32_t) {}
 
 // The JAudio DSP program, run on the host: it mixes each subframe when the CPU releases its last channel group
 // (JASDSPChannel::updateAll's releaseHalt(3), a one-word command). Headless, the subframe completes unmixed.
@@ -3802,7 +3801,7 @@ int main(int argc, char** argv) {
     services.sc_get = svc_sc_get;
     services.input_read = svc_input_read;
     services.input_control = svc_input_control;
-    services.wpad_speaker_data = svc_wpad_speaker_data;
+    services.speaker_samples = svc_speaker_samples;
     services.jaudio_setup = svc_jaudio_setup;
     services.jaudio_aux = svc_jaudio_aux;
     services.jaudio_frame = svc_jaudio_frame;
