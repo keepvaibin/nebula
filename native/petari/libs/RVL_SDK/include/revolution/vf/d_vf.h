@@ -14,8 +14,6 @@ typedef enum {
     VF_ERROR_B001 = 0xB001,
 } VFError;
 
-s32 VFIsAvailable();
-
 #ifdef __cplusplus
 extern "C" {
 #endif

@@ -134,7 +134,6 @@ s32 SCReloadConfFileAsync(u8*, u32, SCReloadConfFileCallback);
 #define SC_LANG_ITALIAN 5u
 #define SC_LANG_DUTCH 6u
 #define SC_LANG_SIMP_CHINESE 7u
-#define SC_LANG_TRAD_CHINESE 8u
 #define SC_LANG_KOREAN 9u
 
 u8 SCGetLanguage(void);
@@ -146,33 +145,15 @@ void SCInit(void);
 
 #define SC_STATUS_OK 0
 #define SC_STATUS_BUSY 1
-#define SC_STATUS_ERROR 2
 
 u32 SCCheckStatus(void);
 u32 SCGetCounterBias(void);
 
-#define SC_SOUND_MODE_MONO 0u
-#define SC_SOUND_MODE_STEREO 1u
-#define SC_SOUND_MODE_SURROUND 2u
-#define SC_SOUND_MODE_DEFAULT SC_SOUND_MODE_STEREO
-
 u8 SCGetSoundMode(void);
-
-#define SC_ASPECT_RATIO_4x3 0u
-#define SC_ASPECT_RATIO_16x9 1u
-#define SC_ASPECT_RATIO_DEFAULT SC_ASPECT_RATIO_4x3
 
 u8 SCGetAspectRatio(void);
 
-#define SC_PROGRESSIVE_MODE_OFF 0u
-#define SC_PROGRESSIVE_MODE_ON 1u
-#define SC_PROGRESSIVE_MODE_DEFAULT SC_PROGRESSIVE_MODE_OFF
-
 u8 SCGetProgressiveMode(void);
-
-#define SC_EURGB60_MODE_OFF 0u
-#define SC_EURGB60_MODE_ON 1u
-#define SC_EURGB60_MODE_DEFAULT SC_EURGB60_MODE_OFF
 
 u8 SCGetEuRgb60Mode(void);
 

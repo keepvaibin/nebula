@@ -8,8 +8,6 @@
 extern "C" {
 #endif
 
-#define OSHalt(msg) OSPanic(__FILE__, __LINE__, msg)
-
 #ifdef __MWERKS__
 u32 __OSBusClock : (0x8000 << 16 | 0x00F8);
 u32 __MEM2End : (0x8000 << 16 | 0x3128);
@@ -32,21 +30,14 @@ u32 __MEM2End = 0x80003128;
 #define OS_TIMER_CLOCK (OS_BUS_CLOCK / 4)
 #endif
 
-#define OSNanosecondsToTicks(nsec) (((nsec) * (OS_TIMER_CLOCK / 125000)) / 8000)
-
-#define OSTicksToSeconds(ticks) ((ticks) / OS_TIMER_CLOCK)
 #define OSTicksToMilliseconds(ticks) ((ticks) / (OS_TIMER_CLOCK / 1000))
-#define OSTicksToMicroseconds(ticks) (((ticks)*8) / (OS_TIMER_CLOCK / 125000))
-#define OSSecondsToTicks(sec) ((sec)*OS_TIMER_CLOCK)
 #define OSMillisecondsToTicks(msec) ((msec) * (OS_TIMER_CLOCK / 1000))
 #define OSMicrosecondsToTicks(usec) (((usec) * (OS_TIMER_CLOCK / 125000)) / 8)
 
 void* OSPhysicalToUncached(u32);
 
-#define OS_CACHED_REGION_PREFIX 0x8000
 #define OS_UNCACHED_REGION_PREFIX 0xC000
 
-#define OS_BASE_CACHED (OS_CACHED_REGION_PREFIX << 16)
 #define OS_BASE_UNCACHED (OS_UNCACHED_REGION_PREFIX << 16)
 
 #ifdef TARGET_PC
@@ -67,16 +58,11 @@ void __NebulaPoll(void);
 }
 #endif
 #else
-#define OSPhysicalToCached(paddr) ((void*)((u32)(paddr) + OS_BASE_CACHED))
-#define OSCachedToPhysical(caddr) ((u32)((u8*)(caddr)-OS_BASE_CACHED))
-#define OSUncachedToPhysical(ucaddr) ((u32)((u32)(ucaddr) & (~OS_BASE_UNCACHED)))
 #define OSPhysicalToUncached(paddr) ((void*)((u32)(paddr) + OS_BASE_UNCACHED))
 #endif
 
 #ifndef TARGET_PC
 // Console address tests; host addresses carry no MEM1/MEM2 bits (native/tools/console_address_audit.py).
-#define OSIsMEM1Region(addr) (((u32)(addr)&0x30000000) == 0x00000000)
-#define OSIsMEM2Region(addr) (((u32)(addr)&0x30000000) == 0x10000000)
 #endif
 
 #ifdef TARGET_PC
@@ -84,9 +70,6 @@ void __NebulaPoll(void);
 #else
 #define OSRoundDown32B(x) (((u32)(x)) & ~(32 - 1))
 #endif
-#define OSDiffTick(tick1, tick0) ((s32)(tick1) - (s32)(tick0))
-
-#define OS_TICKS_DELTA(x, y) ((s32)x - (s32)y)
 
 u32 OSGetSoundMode(void);
 void OSSetSoundMode(u32 mode);
@@ -146,8 +129,6 @@ const char* OSGetAppGamename(void);
 
 void* OSAllocFromArenaLo(u32 size, u32 align);
 void* OSAllocFromArenaHi(u32 size, u32 align);
-
-#define OSAssert_Line(line_, exp_)
 
 #ifndef ASSERT
 #define ASSERT(exp) ((void)0)

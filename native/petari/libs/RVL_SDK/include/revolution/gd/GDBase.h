@@ -7,8 +7,6 @@
 extern "C" {
 #endif
 
-#define SS_MASK(mask) ((u32)((0xfe << 24) | (mask)))
-
 typedef struct _GDLObj {
     u8* start;
     u32 length;

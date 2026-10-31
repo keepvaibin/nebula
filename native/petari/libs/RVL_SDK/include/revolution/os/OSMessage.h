@@ -19,9 +19,6 @@ struct OSMessageQueue {
     s32 usedCount;
 };
 
-#define OS_MESSAGE_NOBLOCK  0
-#define OS_MESSAGE_BLOCK    1
-
 void OSInitMessageQueue(OSMessageQueue *, OSMessage *, s32);
 BOOL OSSendMessage(OSMessageQueue *, OSMessage, s32);
 BOOL OSJamMessage(OSMessageQueue *, OSMessage, s32);

@@ -34,7 +34,6 @@ typedef f32 Mtx33[3][3];
 typedef f32 (*Mtx3P)[3];
 
 #define MTXDegToRad(a) ((a)*0.01745329252f)
-#define MTXRadToDeg(a) ((a)*57.29577951f)
 
 #define MTXRowCol(m, r, c) ((m)[(r)][(c)])
 
@@ -145,8 +144,6 @@ void C_MTXLightOrtho(Mtx m, f32 t, f32 b, f32 l, f32 r, f32 scaleS, f32 scaleT, 
 #endif
 
 /* SMG1 uses the paired single versions of matrix / vector operations */
-#define VECNormalize PSVECNormalize
-#define VECMag PSVECMag
 
 #ifdef __cplusplus
 }

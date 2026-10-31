@@ -12,7 +12,4 @@ typedef struct {
     u8 reserved[24];
 } OSStateFlags;
 
-BOOL __OSWriteStateFlags(OSStateFlags *);
-BOOL __OSReadStateFlags(OSStateFlags *);
-
 #endif // OSSTATEFLAGS_H

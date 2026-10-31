@@ -112,10 +112,6 @@ extern GXBool __GXinBegin;
 #endif
 
 // this is required to match some functions, even when stripped
-#define CHECK_IN_BGN(func) ASSERTMSG(!__GXinBegin, "'" #func "' is not allowed between GXBegin/GXEnd")
-
-#define BP_SENT() gx->bpSentNot = GX_FALSE;
-#define XF_SENT() gx->bpSentNot = GX_TRUE;
 
 extern void __GXFlushTextureState();
 extern void __GXAbort();
@@ -164,22 +160,6 @@ typedef struct __GXTlutRegionInt_struct {
     u32 loadTlut1;
     GXTlutObjInt tlutObj;
 } GXTlutRegionInt;
-
-#define GX_SETUP_LIGHT(l, p)                                                                                                                         \
-    GXLightObjInt* l;                                                                                                                                \
-    l = (GXLightObjInt*)p;
-
-#define GX_SETUP_TEXOBJ(l, p) GXTexObjInt* l = (GXTexObjInt*)p;
-
-#define GX_SETUP_ALL_TEXOBJS(l, p, m, q)                                                                                                             \
-    GXTexObjInt* l = (GXTexObjInt*)p;                                                                                                                \
-    GXTexRegionInt* m = (GXTexRegionInt*)q;
-
-#define GX_SETUP_TLUTOBJ(l, p) GXTlutObjInt* l = (GXTlutObjInt*)p;
-
-#define GX_SETUP_TREGOBJ(l, p) GXTexRegionInt* l = (GXTexRegionInt*)p;
-
-#define GX_SETUP_TLUTREGOBJ(l, p) GXTlutRegionInt* l = (GXTlutRegionInt*)p;
 
 #ifdef __cplusplus
 }

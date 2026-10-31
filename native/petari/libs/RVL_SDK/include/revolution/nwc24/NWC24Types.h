@@ -10,8 +10,6 @@
 extern "C" {
 #endif
 
-#define NWC24_FRIEND_LIST_CAPACITY 100
-
 typedef enum {
     NWC24_MSGTYPE_RVL_MENU_SHARED = 0,
     NWC24_MSGTYPE_WII_MENU_SHARED = 0,

@@ -40,13 +40,6 @@ vu32 OS_BUS_CLOCK_SPEED;
 #endif
 #endif
 
-#define OS_TIME_SPEED (OS_BUS_CLOCK_SPEED / 4)
-
-#define OS_SEC_TO_TICKS(x) ((x) * (OS_TIME_SPEED))
-#define OS_MSEC_TO_TICKS(x) ((x) * (OS_TIME_SPEED / 1000))
-#define OS_USEC_TO_TICKS(x) ((x) * (OS_TIME_SPEED / 125000) / 8)
-#define OS_NSEC_TO_TICKS(x) ((x) * (OS_TIME_SPEED / 125000) / 8000)
-
 #ifdef __cplusplus
 }
 #endif

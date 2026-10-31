@@ -14,18 +14,11 @@ extern "C" {
 #define NAND_RESULT_BUSY (-3)
 #define NAND_RESULT_CORRUPT (-4)
 #define NAND_RESULT_ECC_CRIT (-5)
-#define NAND_RESULT_EXISTS (-6)
-#define NAND_RESULT_INVALID (-8)
 #define NAND_RESULT_MAXBLOCKS (-9)
-#define NAND_RESULT_MAXFD (-10)
 #define NAND_RESULT_MAXFILES (-11)
 #define NAND_RESULT_NOEXISTS (-12)
-#define NAND_RESULT_NOTEMPTY (-13)
-#define NAND_RESULT_OPENFD (-14)
 #define NAND_RESULT_AUTHENTICATION (-15)
-#define NAND_RESULT_MAXDEPTH (-16)
 #define NAND_RESULT_UNKNOWN (-64)
-#define NAND_RESULT_FATAL_ERROR (-128)
 
 #define NAND_MAX_PATH 64
 
@@ -175,26 +168,6 @@ s32 NANDPrivateCreateAsync(const char*, u8, u8, NANDCallback, NANDCommandBlock*)
 #define NAND_BANNER_TEXTURE_SIZE (192 * 64 * 2)
 #define NAND_BANNER_ICON_SIZE (48 * 48 * 2)
 #define NAND_BANNER_COMMENT_SIZE 32
-
-#define NAND_BANNER_ICON_ANIM_SPEED_END 0
-#define NAND_BANNER_ICON_ANIM_SPEED_FAST 1
-#define NAND_BANNER_ICON_ANIM_SPEED_NORMAL 2
-#define NAND_BANNER_ICON_ANIM_SPEED_SLOW 3
-#define NAND_BANNER_ICON_ANIM_SPEED_MASK 3
-
-#define NAND_BANNER_FLAG_NOTCOPY 0x00000001
-
-#define NAND_BANNER_FLAG_ANIM_BOUNCE 0x00000010
-#define NAND_BANNER_FLAG_ANIM_LOOP 0x00000000
-#define NAND_BANNER_FLAG_ANIM_MASK 0x00000010
-
-#define NAND_BANNER_SIGNATURE 0x5749424E
-
-#define NANDGetIconSpeed(stat, n) (((stat)->iconSpeed >> (2 * (n))) & NAND_BANNER_ICON_ANIM_SPEED_MASK)
-#define NANDSetIconSpeed(stat, n, f)                                                                                                                 \
-    ((stat)->iconSpeed = (u16)(((stat)->iconSpeed & ~(NAND_BANNER_ICON_ANIM_SPEED_MASK << (2 * (n)))) | ((f) << (2 * (n)))))
-
-#define NAND_BANNER_SIZE(i) (32 + NAND_BANNER_COMMENT_SIZE * sizeof(u16) * 2 + NAND_BANNER_TEXTURE_SIZE + NAND_BANNER_ICON_SIZE * (i))
 
 #if defined(TARGET_PC) && defined(__cplusplus)
 // The save banner is file data in the console's byte order (NANDInitBanner writes the rest).

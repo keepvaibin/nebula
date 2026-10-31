@@ -5,8 +5,6 @@
 extern "C" {
 #endif
 
-#define GX_FIFO_ADDR 0xCC008000
-
 #include "revolution/gx/GXCpu2Efb.h"
 #include "revolution/gx/GXEnum.h"
 #include "revolution/gx/GXFifo.h"

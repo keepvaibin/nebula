@@ -5,31 +5,9 @@
 #include "private/iostypes.h"
 #include "revolution/types.h"
 
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define ISFS_ERROR_OK 0
-#define ISFS_ERROR_INVALID -101
-#define ISFS_ERROR_ACCESS -102
-#define ISFS_ERROR_CORRUPT -103
-#define ISFS_ERROR_NOTREADY -104
-#define ISFS_ERROR_EXISTS -105
-#define ISFS_ERROR_NOEXISTS -106
-#define ISFS_ERROR_MAXFILES -107
-#define ISFS_ERROR_MAXBLOCKS -108
-#define ISFS_ERROR_MAXFD -109
-#define ISFS_ERROR_MAXDEPTH -110
-#define ISFS_ERROR_OPENFD -111
-#define ISFS_ERROR_BADBLOCK -112
-#define ISFS_ERROR_ECC -113
-#define ISFS_ERROR_ECC_CRIT -114
-#define ISFS_ERROR_NOTEMPTY -115
-#define ISFS_ERROR_HMAC -116
-#define ISFS_ERROR_UNKNOWN -117
-#define ISFS_ERROR_BUSY -118
-#define ISFS_ERROR_SHUTDOWN -119
 
 typedef s32 ISFSError;
 typedef void (*ISFSCallback)(ISFSError, void* ctxt);
