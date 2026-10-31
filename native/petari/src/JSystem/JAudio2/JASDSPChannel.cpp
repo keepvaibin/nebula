@@ -1,6 +1,12 @@
 #include "JSystem/JAudio2/JASDSPChannel.hpp"
+#include "JSystem/JAudio2/JAISound.hpp"
+#include "JSystem/JAudio2/JASAramStream.hpp"
+#include "JSystem/JAudio2/JASChannel.hpp"
+#include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
+
+#include <nebula_game_api.h>
 
 static const s32 MAX_DSP_CHANNELS = 64;
 
@@ -120,7 +126,6 @@ JASDSPChannel* JASDSPChannel::getLowestActiveChannel() {
 
 void JASDSPChannel::updateProc() {
     int ret = 0;
-    bool flush;
     if (mChannel->isFinish()) {
         mFlags &= ~2;
         if (mStatus == STATUS_ACTIVE) {
@@ -135,11 +140,9 @@ void JASDSPChannel::updateProc() {
         }
         mStatus = STATUS_INACTIVE;
         mChannel->replyFinishRequest();
-        mChannel->flush();
     } else if (mFlags & 2) {
         mFlags &= ~2;
         mChannel->forceStop();
-        mChannel->flush();
     } else if (mStatus != STATUS_DROP) {
         if ((mFlags & 1) && mStatus == STATUS_INACTIVE) {
             mFlags &= ~1;
@@ -160,16 +163,12 @@ void JASDSPChannel::updateProc() {
                 if (ret < 0) {
                     mPriority = -1;
                 }
-                mChannel->flush();
             } else {
                 mChannel->playStart();
-                mChannel->flush();
             }
         } else if (mStatus != STATUS_INACTIVE) {
-            flush = false;
             if (mCallback != NULL) {
                 ret = mCallback(CB_PLAY, mChannel, mCallbackData);
-                flush = true;
             } else {
                 ret = 0;
             }
@@ -184,25 +183,19 @@ void JASDSPChannel::updateProc() {
                     mPriority = -1;
                 }
                 mChannel->playStop();
-                mChannel->flush();
             } else {
                 field_0xc++;
-                if (flush) {
-                    mChannel->flush();
-                }
             }
         }
     }
 }
 
+// The voices' updates, then the host mixes the subframe.
 void JASDSPChannel::updateAll() {
     for (u32 i = 0; i < MAX_DSP_CHANNELS; i++) {
-        if ((i & 0xf) == 0 && i != 0) {
-            JASDsp::releaseHalt((i - 1) >> 4);
-        }
         sDspChannels[i].updateProc();
     }
-    JASDsp::releaseHalt(3);
+    JASDsp::mixSubframe();
 }
 
 int JASDSPChannel::killActiveChannel() {
@@ -247,4 +240,54 @@ u32 JASDSPChannel::getNumBreak() {
         }
     }
     return count;
+}
+
+// The sound on each DSP channel, for the host's volume categories (music, voices, effects, ambience, cutscenes), from
+// the game's own objects, each step checked by type: a DSP channel's JASChannel is the one whose update callback it
+// carries and which points back at it; the JASChannel's callback says what its data is (a track's channel manager or a
+// stream); the track's root (or the stream) names the sound that owns it (JAISe, JAISeq and JAIStream set it when
+// built). Called on the game's audio thread, which starts and ends the channels; every object it reads lives in a pool
+// or inside a sound, so a sound ending meanwhile leaves a stale name, never a bad read.
+namespace {
+constexpr uint32_t kDspChannels = 64;
+
+uint32_t owner_id(const JAISound* sound) {
+    return sound != nullptr ? static_cast<uint32_t>(sound->getID()) : 0u;
+}
+}  // namespace
+
+extern "C" NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route) {
+    *route = 0u;
+    JASDSPChannel* const channels = JASDSPChannel::sDspChannels;
+    if (channels == nullptr || channel >= kDspChannels) {
+        return 0u;
+    }
+    JASDSPChannel& dsp = channels[channel];
+    if (dsp.mCallback != JASChannel::dspUpdateCallback) {
+        return 0u;
+    }
+    const auto* voice = static_cast<const JASChannel*>(dsp.mCallbackData);
+    if (voice == nullptr || voice->mDspCh != &dsp) {
+        return 0u;
+    }
+    if (voice->mCallback == JASTrack::channelUpdateCallback) {
+        const auto* manager = static_cast<const JASTrack::TChannelMgr*>(voice->mCallbackData);
+        const JASTrack* track = manager != nullptr ? manager->mTrack : nullptr;
+        for (int depth = 0; track != nullptr && depth < 16; ++depth) {
+            if (track->mNebulaOwner != nullptr) {
+                *route = track->mNebulaOwnerRoute;
+                return owner_id(track->mNebulaOwner);
+            }
+            track = track->mParent != track ? track->mParent : nullptr;
+        }
+        return 0u;
+    }
+    if (voice->mCallback == JASAramStream::channelCallback) {
+        const auto* stream = static_cast<const JASAramStream*>(voice->mCallbackData);
+        if (stream != nullptr && stream->mNebulaOwner != nullptr) {
+            *route = 3u;
+            return owner_id(stream->mNebulaOwner);
+        }
+    }
+    return 0u;
 }

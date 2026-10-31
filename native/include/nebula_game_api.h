@@ -23,80 +23,107 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 58u
+#define NEBULA_GAME_API_VERSION 59u
 
-/* One of JAudio's 64 channels (JASDsp::TChannel, 0x180 bytes, host byte order): the game sets its source, pitch,
-   volumes and filters; the host's mixer plays it and advances its playback state. */
-typedef struct NebulaJAudioBusSend {
-    uint16_t connect;  /* the mix bus fed (0: none) */
-    int16_t target;    /* volume ramped to over a subframe */
-    int16_t current;   /* volume now */
-    uint16_t delay;    /* samples of delay: target in the high byte, now in the low */
-} NebulaJAudioBusSend;
+/* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
+   of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
+   its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
+   Volumes are 15-bit fractions (a send of 32767 adds half the voice to its bus; audio_mix's gain scales the output). */
+enum {
+    NEBULA_AUDIO_BUS_NONE = 0,
+    NEBULA_AUDIO_BUS_LEFT,
+    NEBULA_AUDIO_BUS_RIGHT,
+    NEBULA_AUDIO_BUS_EFFECT0, /* the inputs of the four effect lines */
+    NEBULA_AUDIO_BUS_EFFECT1,
+    NEBULA_AUDIO_BUS_EFFECT2,
+    NEBULA_AUDIO_BUS_EFFECT3,
+    NEBULA_AUDIO_BUS_SURROUND_RIGHT, /* matrix-encoded into left and right one subframe later */
+    NEBULA_AUDIO_BUS_SURROUND_LEFT,
+    NEBULA_AUDIO_BUS_RIGHT_INVERTED, /* subtracted from the right */
+    NEBULA_AUDIO_BUS_DISCARD,
+    NEBULA_AUDIO_BUS_CENTER, /* both sides at -3 dB */
+    NEBULA_AUDIO_BUSES
+};
 
-typedef struct NebulaJAudioChannel {
-    uint16_t active;                  /* 0x000 */
-    uint16_t finished;                /* 0x002 */
-    uint16_t pitch;                   /* 0x004 source samples per output sample, 4.12 */
-    uint16_t reserved_006;
-    uint16_t starting;                /* 0x008 set at play start: the next render restarts the source */
-    uint16_t loop_pending;            /* 0x00A PCM: the position reached the end (loop or finish next) */
-    uint16_t paused;                  /* 0x00C */
-    uint16_t delay_history;           /* 0x00E samples of the previous subframe the bus delays read */
-    NebulaJAudioBusSend buses[6];     /* 0x010 */
-    uint8_t reserved_040[0x10];
-    uint16_t auto_pan;                /* 0x050 auto mixer: pan (high byte), front/surround balance (low byte) */
-    int16_t auto_send;                /* 0x052 effect send */
-    int16_t auto_volume;              /* 0x054 volume now */
-    int16_t auto_target;              /* 0x056 volume ramped to */
-    uint16_t auto_mixer;              /* 0x058 nonzero: the auto mixer plays the channel, else its bus sends */
-    uint8_t reserved_05A[6];
-    uint16_t phase;                   /* 0x060 position between source samples (12 bits) */
-    uint16_t reserved_062;
-    uint16_t leftover;                /* 0x064 decoded samples of `block` still to play (the game starts it at the
-                                         format's block size) */
-    int16_t last_sample;              /* 0x066 the last output, held while paused */
-    uint32_t restart;                 /* 0x068 PCM: the sample its source restarts at */
-    uint32_t reserved_06C;
-    uint32_t address;                 /* 0x070 next block or sample, from the wave data's base */
-    uint32_t left;                    /* 0x074 samples before the end (or loop end) */
-    int16_t resample_history[4];      /* 0x078 the previous subframe's last source samples */
-    int16_t fir_history[20];          /* 0x080 */
-    int16_t iir_state[4];             /* 0x0A8 x1, x2, y2, y3 */
-    int16_t block[16];                /* 0x0B0 the decoded ADPCM block; [14] and [15] the predictor's history */
-    int16_t delay_samples[16];        /* 0x0D0 the previous subframe's last samples, newest at [15] */
-    uint8_t reserved_0F0[6];
-    uint16_t play_count;              /* 0x0F6 */
-    uint8_t reserved_0F8[8];
-    uint16_t format;                  /* 0x100 ADPCM bytes per block (9, 5), 8 PCM8, 16 PCM16, else an oscillator */
-    uint16_t loop;                    /* 0x102 */
-    int16_t loop_history1;            /* 0x104 ADPCM predictor history at the loop start */
-    int16_t loop_history2;            /* 0x106 */
-    uint16_t filter_mode;             /* 0x108 FIR taps (bits 0-4), IIR on (bit 5) */
-    uint16_t forced_stop;             /* 0x10A */
-    uint32_t reserved_10C;
-    uint32_t loop_start;              /* 0x110 */
-    uint32_t end;                     /* 0x114 */
-    uint32_t wave;                    /* 0x118 the wave data's start */
-    uint32_t reserved_11C;
-    int16_t fir_coefficients[8];      /* 0x120 */
-    uint8_t reserved_130[0x18];
-    int16_t iir_coefficients[8];      /* 0x148 (four used) */
-    uint8_t reserved_158[0x28];
-} NebulaJAudioChannel;
+/* A voice's source (NebulaAudioVoice.format). Wave data stays as on the disc (big-endian PCM16). */
+enum {
+    NEBULA_AUDIO_SILENT = 0,
+    NEBULA_AUDIO_ADPCM4,     /* 9-byte blocks of 16 samples */
+    NEBULA_AUDIO_ADPCM2,     /* 5-byte blocks of 16 samples */
+    NEBULA_AUDIO_PCM8,
+    NEBULA_AUDIO_PCM16,
+    NEBULA_AUDIO_OSCILLATOR, /* waveform `oscillator`, no wave data */
+};
 
-/* One of JAudio's four FX lines (JASDsp::FxBuf): a delay of `frames` subframes in `buffer` (frames * 80 samples)
-   fed by its input bus, an 8-tap FIR before (flags bit 0) or after (bit 1) the sends to buses `dest_a` and `dest_b`. */
-typedef struct NebulaJAudioFxLine {
-    uint16_t flags;
-    uint16_t frames;
-    int16_t* buffer;
-    uint16_t dest_a;
+/* Oscillator waveforms (NebulaAudioVoice.oscillator); the frequency is pitch / 131072 cycles per 32 kHz sample. */
+enum {
+    NEBULA_AUDIO_SQUARE = 0,
+    NEBULA_AUDIO_SAWTOOTH = 1,
+    NEBULA_AUDIO_SQUARE_FM = 2, /* the square, its rate modulated by the surround-right bus (which it consumes) */
+    NEBULA_AUDIO_PULSE25 = 3,   /* 25 % duty */
+    NEBULA_AUDIO_TRIANGLE = 4,
+    NEBULA_AUDIO_CONSTANT = 6,  /* the value pitch */
+    NEBULA_AUDIO_SINE = 7,
+    NEBULA_AUDIO_SINE_PM = 10,
+    NEBULA_AUDIO_NOISE_A = 11,
+    NEBULA_AUDIO_NOISE_B = 12,
+};
+
+typedef struct NebulaAudioSend {
+    uint16_t bus;    /* NEBULA_AUDIO_BUS_* */
+    int16_t target;  /* volume reached over the next subframe */
+    int16_t current; /* volume now (the mixer's) */
+    uint16_t reserved;
+} NebulaAudioSend;
+
+typedef struct NebulaAudioVoice {
+    uint16_t active;         /* the game plays it */
+    uint16_t finished;       /* the mixer's: the source ended, or a forced stop faded out */
+    uint16_t starting;       /* set at play start: the next mix starts the source over (the mixer clears it) */
+    uint16_t paused;         /* holds its last output */
+    uint16_t forced_stop;    /* every volume halves each subframe; finished once all are zero */
+    uint16_t pitch;          /* source samples per 32 kHz sample, 4.12 */
+    uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
+    uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
+    uint32_t wave;           /* the source's first byte, an offset into the sound memory (audio_setup) */
+    uint32_t restart;        /* PCM: the sample it starts at */
+    uint32_t loop_start;     /* samples */
+    uint32_t end;            /* samples: the end, or the loop's end when loop is set */
+    uint16_t loop;           /* nonzero: plays on from loop_start after end */
+    int16_t loop_history[2]; /* ADPCM: the decoder's previous two samples at loop_start, newest first */
+    /* The position, advanced by the mixer each subframe (the stream player reads and moves it): */
+    uint16_t leftover;       /* ADPCM: decoded samples of the current block still to play */
+    uint32_t address;        /* the next ADPCM block or PCM sample, an offset into the sound memory */
+    uint32_t left;           /* samples before end */
+    uint16_t filter;         /* FIR taps (bits 0-4; coefficients past the eighth are zero), IIR on (bit 5) */
+    /* FIR: y[n] = sum fir[k] x[n - taps + k], k < taps; IIR: y[n] = iir[0] x[n] + iir[1] x[n-1] + iir[2] y[n-1] +
+       iir[3] y[n-2]; Q15 at 32 kHz (the mixer keeps their responses at its own rate). */
+    int16_t fir[8];
+    int16_t iir[4];
+    NebulaAudioSend sends[6];
+    uint16_t panner;         /* nonzero: the surround panner plays the voice instead of its sends */
+    uint8_t pan;             /* 0 left .. 127 right */
+    uint8_t rear;            /* 0 front .. 127 rear */
+    int16_t panner_send;     /* effect send */
+    int16_t panner_volume;   /* now (the mixer's) */
+    int16_t panner_target;   /* reached over the next subframe */
+    uint16_t reserved;
+} NebulaAudioVoice;
+
+/* One of the four effect lines: a delay of `subframes` subframes fed by its input bus, an 8-tap FIR over the delayed
+   signal (fir[k] at 8 - k samples of 32 kHz back) applied before (filter bit 0) or after (bit 1) its sends to `bus_a`
+   and `bus_b`; the delayed signal (filtered when a bit is set) goes back into the delay with the input. `generation`
+   changes when the game starts the line over (its delay then starts silent). filter 0: the line is off. */
+typedef struct NebulaAudioEffect {
+    uint16_t filter;
+    uint16_t subframes;
+    uint16_t bus_a;
     int16_t volume_a;
-    uint16_t dest_b;
+    uint16_t bus_b;
     int16_t volume_b;
-    int16_t coefficients[8];
-} NebulaJAudioFxLine;
+    int16_t fir[8];
+    uint32_t generation;
+} NebulaAudioEffect;
 
 /* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
    matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
@@ -537,11 +564,11 @@ enum {
     NEBULA_SCENE_2D_END,
 };
 
-/* Audio interface requests (ai_control). */
+/* The audio clock (audio_control). */
 enum {
-    NEBULA_AI_START = 1, /* the DMA engine runs the latched blocks */
-    NEBULA_AI_STOP,
-    NEBULA_AI_RATE,      /* value: the output rate in Hz (32000 or 48000) */
+    NEBULA_AUDIO_START = 1, /* value: a frame's length in 32 kHz samples; the host calls nebula_game_audio_tick once
+                               a frame's length */
+    NEBULA_AUDIO_STOP,
 };
 
 /* One operation on a save file of the game's (by name, e.g. "GameData.bin"), in the player's save folder. */
@@ -855,25 +882,15 @@ typedef struct NebulaHostServices {
     void (*wpad_control)(void* user, uint32_t chan, uint32_t what, uint32_t value);
     void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
 
-    /* JAudio's mixer (on the console a DSP program; the host runs it). Pointers are into the game's memory.
-       jaudio_setup hands over the channel records (`channels` of them, in the program's layout, host byte order), the
-       resampling filter (640 words) and ADPCM coefficients (32 words) and the four FX lines, once. */
-    void (*jaudio_setup)(void* user, uint32_t channels, NebulaJAudioChannel* channel_records,
-                         const int16_t* resample_filter,
-                         const int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
-    /* The game's sound data in its auxiliary memory: the channels' wave offsets count from `base`, below `size`. */
-    void (*jaudio_aux)(void* user, const void* base, uint32_t size);
-    /* An audio frame: `subframes` subframes of 80 samples mix into the left and right output planes at
-       `mixer_level` (4096 = 1). */
-    void (*jaudio_frame)(void* user, uint32_t subframes, uint32_t mixer_level, int16_t* left, int16_t* right);
-    /* Channel group `group` (0-3) is ready; `active` holds its 16 channels' active bits, the first channel in bit 15.
-       Group 3 mixes the frame's next subframe: returns 1 when it did. */
-    int (*jaudio_mix)(void* user, uint32_t group, uint32_t active);
-    /* The AI's next DMA block: `size` bytes of 16-bit (right, left) pairs in host byte order, latched to play after
-       the current block; the host calls nebula_game_ai_interrupt when it takes it. The block stays the game's: the
-       host reads it while it plays. */
-    void (*ai_dma)(void* user, const void* samples, uint32_t size);
-    void (*ai_control)(void* user, uint32_t what, uint32_t value);
+    /* Audio, on the game's audio thread. audio_setup hands over the voices and the four effect lines (they stay the
+       game's; the mixer reads and advances them in audio_mix) and the sound memory the voices' offsets count from.
+       audio_mix mixes one subframe at `gain`; audio_frame ends a frame: the subframes mixed since the last call, with
+       `stream_frames` stereo samples of the movie player's at 32 kHz (right, left; none: null), go to the output. */
+    void (*audio_setup)(void* user, NebulaAudioVoice* voices, uint32_t count, const NebulaAudioEffect* effects,
+                        const void* sound_memory, uint32_t sound_memory_size);
+    void (*audio_mix)(void* user, float gain);
+    void (*audio_frame)(void* user, const int16_t* stream, uint32_t stream_frames);
+    void (*audio_control)(void* user, uint32_t what, uint32_t value);
 
     /* The HOME Menu (NEBULA_HBM_*). */
     int (*hbm)(void* user, uint32_t what, uint32_t value);
@@ -1078,11 +1095,11 @@ NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
 NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */
-/* The AI took the latched DMA block (the console's AI DMA interrupt): the game prepares the next. */
-NEBULA_GAME_API void nebula_game_ai_interrupt(void);
-/* The sound playing on DSP channel `channel` (0-63) for the host's volume categories: its JAudio sound ID, with *route
+/* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (audio_mix, audio_frame). */
+NEBULA_GAME_API void nebula_game_audio_tick(void);
+/* The sound playing on voice `channel` (0-63) for the host's volume categories: its JAudio sound ID, with *route
    1 (an effect), 2 (a sequence) or 3 (a stream); 0 with *route 0 when no sound the game can name plays there. The host
-   calls it from the DSP command it is running (the game's audio thread). */
+   calls it from audio_mix (the game's audio thread). */
 NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint32_t* route);
 /* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
    refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as

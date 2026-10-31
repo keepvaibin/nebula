@@ -56,14 +56,6 @@ submodule is Aurora, above) or the Nintendo material its decompiled sources are 
 Nebula's game core is Petari's decompilation of Super Mario Galaxy. CC0 does not require
 attribution; this entry records the source and credits its authors.
 
-## WiiCompiled (GPL-3.0)
-
-- Upstream: <https://github.com/patchzyy/Wiicompiled>
-- Revisions used: `83463764b8acda394e058b0c689a10b8561fc380`, `9b7b9913e4ab60b9c57fa4be56b8da308e76d06e`
-- License: GNU General Public License version 3; full text in this repository's `LICENSE`
-
-`runtime/include/galaxy/native_audio_queue.h` adapts its Wii audio interface PCM byte order.
-
 ## AMD FidelityFX SDK 1.1.4 (MIT)
 
 The FSR 3 upscaler and its DX12 backend, built from <https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK>

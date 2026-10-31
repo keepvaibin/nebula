@@ -125,14 +125,15 @@ add_library(galaxy_native_input STATIC
 target_link_libraries(galaxy_native_input PUBLIC galaxy_runtime_abi)
 galaxy_host_options(galaxy_native_input)
 
-# The game's audio commands mixed on the host (jaudio_host_mixer.h).
-add_library(galaxy_jaudio_mixer STATIC runtime/src/jaudio_host_mixer.cpp)
-target_include_directories(galaxy_jaudio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
+# The game's sound mixed natively (audio_mixer.h).
+add_library(galaxy_audio_mixer STATIC runtime/src/audio_mixer.cpp)
+target_include_directories(galaxy_audio_mixer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/runtime/include"
                            "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
-galaxy_host_options(galaxy_jaudio_mixer)
+galaxy_host_options(galaxy_audio_mixer)
 
 add_library(galaxy_native_host STATIC
     runtime/src/native_host.cpp
+    runtime/src/native_audio.cpp
     runtime/src/wii_device_data.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
@@ -149,7 +150,7 @@ target_link_libraries(galaxy_native_host
         galaxy_runtime_abi
         galaxy_runtime_settings
         galaxy_native_input
-        galaxy_jaudio_mixer
+        galaxy_audio_mixer
         galaxy_frame_cadence_diagnostics
         galaxy_atomic_file
         nebula_archive
@@ -589,7 +590,7 @@ if(NEBULA_HOST_IPO)
     check_ipo_supported(RESULT nebula_host_ipo_supported OUTPUT nebula_host_ipo_error LANGUAGES CXX)
     if(nebula_host_ipo_supported)
         foreach(target galaxy_native_host galaxy_gx galaxy_native_input galaxy_host_pointer_events
-                galaxy_frame_cadence_diagnostics galaxy_runtime_settings galaxy_atomic_file galaxy_jaudio_mixer)
+                galaxy_frame_cadence_diagnostics galaxy_runtime_settings galaxy_atomic_file galaxy_audio_mixer)
             set_property(TARGET ${target} PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
         endforeach()
         set(nebula_host_ipo_effective ON)
@@ -638,7 +639,7 @@ galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS 
 galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
     LIBS galaxy_host_pointer_events)
 galaxy_test(galaxy_diagnostic_stick_lease_tests SOURCES ${rt}/diagnostic_stick_lease_tests.cpp)
-galaxy_test(galaxy_jaudio_mixer_tests SOURCES ${rt}/jaudio_host_mixer_tests.cpp LIBS galaxy_jaudio_mixer)
+galaxy_test(galaxy_audio_mixer_tests SOURCES ${rt}/audio_mixer_tests.cpp LIBS galaxy_audio_mixer)
 galaxy_test(galaxy_native_thp_video_tests SOURCES ${rt}/native_thp_video_tests.cpp ${rt}/native_thp_video.cpp)
 galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_motion_signals_tests SOURCES ${rt}/motion_signals_tests.cpp)
@@ -680,7 +681,7 @@ target_compile_definitions(galaxy_pipeline_cache_persistence_tests PRIVATE GALAX
 
 if(MSVC)
     foreach(target galaxy_gx galaxy_runtime_settings galaxy_atomic_file galaxy_frame_cadence_diagnostics
-            galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_jaudio_mixer
+            galaxy_host_pointer_events galaxy_native_input galaxy_native_host galaxy_audio_mixer
             galaxy_verify_asset_extract)
         target_compile_options(${target} PRIVATE /W4 /WX /permissive- /EHsc)
     endforeach()

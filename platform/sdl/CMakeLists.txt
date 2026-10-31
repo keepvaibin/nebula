@@ -121,7 +121,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/rumble.cpp
     ${rt}/switch_controller.cpp
     ${rt}/tilt.cpp
-    ${rt}/jaudio_host_mixer.cpp
+    ${rt}/audio_mixer.cpp
     ${rt}/atomic_file.cpp
     ${rt}/wii_device_data.cpp
     ${rt}/mii_import.cpp
