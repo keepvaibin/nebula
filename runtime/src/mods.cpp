@@ -1159,7 +1159,7 @@ bool mods_differ_from_session(std::span<const ModInfo> mods) {
 
 // A mod's files are cooked as the disc's were at import (D-01, D-04): each changed file the cooker reads, made only of
 // the mod's own bytes, is cooked once into the mods folder's .cooked cache (named by its bytes' hash) and read from
-// there. A file a mod patches in part over the game's (cooked) file stays as patched.
+// there. Patches in part over the game's cooked files are refused where they are placed (apply_mods).
 static void cook_mod_files(DiscNode& dir, const std::string& path, const std::uint8_t* partition, std::uint64_t partition_size,
                     std::ostringstream& report, unsigned& cooked) {
     for (DiscNode& node : dir.children) {
@@ -1270,6 +1270,15 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
             }
             for (const auto& [node, path] : nodes) {
                 if (node == nullptr || node->directory) continue;
+                // The import cooked this file (D-01): its bytes are no longer the disc file's, so a patch placed by
+                // the disc file's offsets would land in the wrong bytes. It is left as the game has it.
+                if (!whole && node != &dol_node && cook::cooks(node->name) &&
+                    std::any_of(node->pieces.begin(), node->pieces.end(),
+                                [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; })) {
+                    notes.push_back((path.empty() ? node->name : path) +
+                                    ": patched in part by the disc file's offsets, which the cooked file does not have (not applied)");
+                    continue;
+                }
                 VirtualDisc::patch(*node, *host, host_size, f.offset & ~std::uint64_t{3}, f.file_offset, f.length,
                                    f.resize);
                 ++changed;

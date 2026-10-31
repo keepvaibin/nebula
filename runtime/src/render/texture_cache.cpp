@@ -2203,7 +2203,7 @@ TextureHandle TextureCache::get(
         }
         ++pack_hashed_;
         if (pack_lookup) {
-            pack_slot = packs_.find(image.width, image.height, image.format, pack_name.hash, pack_name.tlut,
+            pack_slot = packs_.find(image.width, image.height, source_format, pack_name.hash, pack_name.tlut,
                                     pack_name.mipmapped);
             if (const TextureReplacement* replacement = packs_.resident(pack_slot)) {
                 Entry entry = make_replacement_entry(*replacement, pack_slot, image.width, image.height,

@@ -547,8 +547,36 @@ bool importing() {
 
 }  // namespace
 
+// A patch by the disc file's offsets into a file the import cooked is refused and reported; the game's file stays.
+bool partial_patch_on_cooked() {
+    bool ok = true;
+    const fs::path root = fs::temp_directory_path() / "nebula_mods_partial";
+    std::error_code ec;
+    fs::remove_all(root, ec);
+    const fs::path mods = root / "mods";
+    write(mods / "1 Part" / "riivolution" / "Part.xml",
+          "<wiidisc version=\"1\" root=\"/Part\"><id game=\"RMG\"/>"
+          "<options><section name=\"Main\"><option name=\"On\" default=\"1\"><choice name=\"On\"><patch id=\"p\"/>"
+          "</choice></option></section></options>"
+          "<patch id=\"p\"><file disc=\"/StageData/B.arc\" external=\"x.bin\" offset=\"1\" resize=\"false\"/></patch>"
+          "</wiidisc>");
+    write(mods / "1 Part" / "Part" / "x.bin", "xy");
+    galaxy::mods::set_mods_folder(mods, root / "mods.ini", "RMGE01");
+    Partition p;
+    const auto active = galaxy::mods::apply_mods(p.fst, std::span(p.bytes.data() + p.dol, p.dol_size), p.dol,
+                                                 p.bytes.data(), p.bytes.size(), "RMGE01", 0, 0);
+    ok &= expect(active != nullptr, "the mod is applied (its refused patch reported)");
+    if (active) {
+        ok &= expect(read_file(active->disc, active->fst, p.bytes.data(), "/StageData/B.arc") == "BBBB",
+                     "a cooked file keeps its bytes under a patch by the disc file's offsets");
+        ok &= expect(active->report.find("not applied") != std::string::npos, "the refused patch is reported");
+    }
+    fs::remove_all(root, ec);
+    return ok;
+}
+
 int main() {
-    const bool ok = xml() & disc() & riivolution() & layouts() & importing();
+    const bool ok = xml() & disc() & riivolution() & layouts() & importing() & partial_patch_on_cooked();
     std::cout << (ok ? "mods tests passed" : "mods tests FAILED") << '\n';
     return ok ? 0 : 1;
 }
