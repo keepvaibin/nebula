@@ -1,5 +1,6 @@
 #include "Game/Player/MarioShadow.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/Map/HitInfo.hpp"
@@ -349,6 +350,8 @@ void CollisionShadow::initCaptureTex() {
         MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
         _300 = new JUTTexture(_2FC, _2FE, GX_TF_I8);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
+        // Rows of L8 texels (nebula_cooked_texture.h): the blank picture shown until the first capture.
+        J3DNativeTexture::registerImage(_300->mImage, NEBULA_TEXTURE_LINEAR_L8, _2FC, _2FE, 1);
         MR::setMarioShadowTex(_300);
     }
 

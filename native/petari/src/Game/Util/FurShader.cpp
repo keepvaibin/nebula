@@ -8,6 +8,7 @@
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
+#include <nebula_cooked_texture.h>
 #include <revolution/gx/GXEnum.h>
 
 CShader::CShader(const J3DModelData* pModelData, const ResTIMG* pTimg) : mIndexArray(), mLengthMap(pTimg) {
@@ -510,13 +511,15 @@ void CShader::CLengthMap::setLengthMap(const ResTIMG* pTimg) {
         return;
     }
 
-    if (pTimg->mFormat != GX_TF_I8) {
+    // A disc texture's image is a record (nebula_cooked_texture.h); an I8 image's are rows of L8 texels.
+    const NebulaTexture* pRecord = nebula_texture_record(reinterpret_cast< const u8* >(pTimg) + static_cast< s32 >(pTimg->mImageDataOffset));
+    if (pTimg->mFormat != GX_TF_I8 || pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_L8) {
         _8 = 1;
         return;
     }
 
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = reinterpret_cast< const u8* >(pRecord) + NEBULA_TEXTURE_HEADER;
     _8 = 0;
 }
 
@@ -531,7 +534,7 @@ f32 CShader::CLengthMap::refer(f32 u, f32 v) const {
 
     u16 x = getTexelOrder(_0->mWidth, u, static_cast< GXTexWrapMode >(_0->mWrapS));
     u16 y = getTexelOrder(_0->mHeight, v, static_cast< GXTexWrapMode >(_0->mWrapT));
-    return f32(_4[((x % 8) + (y % 4) * 8) + (x / 8 + (_0->mWidth / 8) * (y / 4)) * 32]) / 255.0f;
+    return f32(_4[y * _0->mWidth + x]) / 255.0f;
 }
 
 u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GXTexWrapMode mode) const {

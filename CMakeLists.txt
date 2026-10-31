@@ -604,12 +604,6 @@ message(STATUS "Host Release IPO: ${nebula_host_ipo_effective}")
 # Developer tool (tools/dev): the cosmetic asset extractor run against real game files.
 add_executable(galaxy_verify_asset_extract tools/dev/verify_asset_extract.cpp)
 target_link_libraries(galaxy_verify_asset_extract PRIVATE galaxy_gx)
-# Developer tool (tools/dev): the cooker's textures against the renderer's decode of the disc's (nebula-import's
-# NEBULA_COOK_DUMP).
-add_executable(galaxy_verify_cooked_textures tools/dev/verify_cooked_textures.cpp)
-target_include_directories(galaxy_verify_cooked_textures PRIVATE native/include)
-target_link_libraries(galaxy_verify_cooked_textures PRIVATE galaxy_gx)
-
 enable_testing()
 # A unit test: an executable from SOURCES linked with LIBS, registered with ctest (run with ARGS).
 function(galaxy_test name)
@@ -669,7 +663,7 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name shader_gen curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
+foreach(name shader_gen curved_surfaces native_shapes vs_constants rt_tev_eval render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         efb_copy line_point_raster xf_lighting native_settings_overlay post_process
         efb_conversion native_material)

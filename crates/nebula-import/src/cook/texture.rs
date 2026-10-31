@@ -438,7 +438,6 @@ pub fn cook_widened(image: &Image, wider: u8) -> Result<Vec<u8>> {
     }
     let size = record.len() as u32;
     record[12..16].copy_from_slice(&size.to_le_bytes());
-    dump(image, levels, &record);
     Ok(record)
 }
 
@@ -467,41 +466,12 @@ fn block4_level(src: &[u8], width: u32, height: u32, out: &mut Vec<u8>) {
     }
 }
 
-/// With NEBULA_COOK_DUMP=<file>, each cooked image is appended to the file for the cook check
-/// (runtime/src/render/texture_cache_cook_check.cpp): format, width, height, levels, palette format (0xFF: none),
-/// palette length, image length, record length (u32 LE each), then the palette, image and record bytes.
-fn dump(image: &Image, levels: u32, record: &[u8]) {
-    use std::io::Write;
-    use std::sync::Mutex;
-    static FILE: Mutex<Option<std::fs::File>> = Mutex::new(None);
-    let Some(path) = std::env::var_os("NEBULA_COOK_DUMP") else { return };
-    let mut file = FILE.lock().unwrap();
-    if file.is_none() {
-        *file = std::fs::OpenOptions::new().create(true).append(true).open(path).ok();
-    }
-    let Some(file) = file.as_mut() else { return };
-    let mut bytes_used = 0usize;
-    for l in 0..levels {
-        bytes_used += image.format.level_bytes((image.width >> l).max(1), (image.height >> l).max(1));
-    }
-    let (palette, palette_format) = image.palette.map_or((&[][..], 0xFFu32), |(p, f)| (p, f as u32));
-    let mut head = Vec::new();
-    for v in [image.format as u32, image.width, image.height, levels, palette_format, palette.len() as u32,
-              bytes_used as u32, record.len() as u32] {
-        head.extend_from_slice(&v.to_le_bytes());
-    }
-    let _ = file.write_all(&head);
-    let _ = file.write_all(palette);
-    let _ = file.write_all(&image.data[..bytes_used]);
-    let _ = file.write_all(record);
-}
-
 /// Whether `bytes` start with a texture record (an already cooked file).
 pub fn is_record(bytes: &[u8]) -> bool {
     bytes.len() >= HEADER && &bytes[..8] == MAGIC
 }
 
-/// The RGBA texels of a record's level 0 (tests and the cook check).
+/// The RGBA texels of a record's level 0 (tests).
 pub fn record_level0(record: &[u8]) -> Option<(u32, u32, Vec<[u8; 4]>)> {
     if !is_record(record) {
         return None;

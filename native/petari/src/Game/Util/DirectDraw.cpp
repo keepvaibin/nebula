@@ -510,56 +510,6 @@ namespace TDDraw {
         J3DNativeState::setFog(GX_FOG_PERSP_LIN, start, end, nearZ, farZ, color);
     }
 
-    namespace {
-        u8 tileBuffer[0x800] ATTRIBUTE_ALIGN(32);
-    }
-
-    inline void tileConversion16Impl(u16* pTexture, u32 width, u32 height, u8* pBuffer) {
-        u8* pDest = reinterpret_cast< u8* >(pTexture);
-        u8* const pBufferLocal = pBuffer;
-        u32 offset, y, row, column, x;
-        offset = 0;
-        for (y = 0; y < height; y += 4, pDest += 32) {
-            for (x = 0; x < width; x += 4) {
-                for (row = 0; row < 4; row++) {
-                    for (column = 0; column < 4; column++) {
-                        // The texels are GX data, in the console's byte order.
-                        pBufferLocal[offset] = reinterpret_cast< NEBULA_BE(u16)* >(pTexture)[(y + row) * width + (x + column)];
-                        offset++;
-                    }
-                }
-            }
-
-            MR::copyMemory(pDest, pBufferLocal, 32);
-            offset = 0;
-        }
-    }
-
-    void tileConversion16(u16* pTexture, u32 width, u32 height) {
-        tileConversion16Impl(pTexture, width, height, tileBuffer);
-    }
-
-    u32 getTexel32(const JUTTexture* pTexture, u32 x, u32 y) {
-        return getTexel32(pTexture->mImage, pTexture->getWidth(), x, y);
-    }
-
-    u32 getTexel32(const u8* pTexture, u32 width, u32 x, u32 y) {
-        u32 offset = ((width << 4) & ~0x3F) * (y >> 2) + (((x & 3) << 1) + (((y & 3) << 3) + ((x << 4) & ~0x3F)));
-        return (pTexture[offset] | (pTexture[offset + 0x21] << 8)) | ((pTexture[offset + 1] << 24) | (pTexture[offset + 0x20] << 16));
-    }
-
-    void setTexel32(JUTTexture* pTexture, u32 x, u32 y, u32 color) {
-        setTexel32(pTexture->mImage, pTexture->getWidth(), x, y, color);
-    }
-
-    void setTexel32(u8* pTexture, u32 width, u32 x, u32 y, u32 color) {
-        u32 offset = ((width << 4) & ~0x3F) * (y >> 2) + (((x & 3) << 1) + (((y & 3) << 3) + ((x << 4) & ~0x3F)));
-        pTexture[offset] = color;
-        pTexture[offset + 1] = color >> 24;
-        pTexture[offset + 0x20] = color >> 16;
-        pTexture[offset + 0x21] = color >> 8;
-    }
-
     void invProject(TVec3f* pDest, const TVec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {
         f32 screenZ;
         if (normalizedZ == false) {

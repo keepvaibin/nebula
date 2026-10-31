@@ -268,15 +268,22 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
 
 void FurDrawer::createFurMap() {
     u32 count;
-    // IA8 texels for GX, in the console's byte order.
-    NEBULA_BE(u16)* pPixels;
+    // Rows of LA8 texels (nebula_cooked_texture.h). The game writes texel i of a row-ordered IA8 buffer, which the GPU
+    // reads as 4x4 tiles: texel i shows at the place its tile and position in the tile give, so it is written there.
+    u8* pTexels = mFurTexture->mImage;
     u32 width = mFurTexture->getTexInfo()->mWidth;
     u32 height = mFurTexture->getTexInfo()->mHeight;
-    pPixels = reinterpret_cast< NEBULA_BE(u16)* >(mFurTexture->mImage);
     count = height * width;
+    const auto put = [pTexels, width](u32 i, u16 value) {
+        const u32 tile = i / 16;
+        const u32 x = (tile % (width / 4)) * 4 + (i % 16) % 4;
+        const u32 y = (tile / (width / 4)) * 4 + (i % 16) / 4;
+        pTexels[(y * width + x) * 2] = static_cast< u8 >(value);
+        pTexels[(y * width + x) * 2 + 1] = static_cast< u8 >(value >> 8);
+    };
 
     for (u32 i = 0; i < count; i++) {
-        pPixels[i] = 255;
+        put(i, 255);
     }
 
     for (u32 type = 0; type < 4; type++) {
@@ -294,9 +301,9 @@ void FurDrawer::createFurMap() {
                 x = s32(width) - 1;
             }
 
-            pPixels[x + width * y] = (u16((s32)(255.0f * mThickness[type])) << 8) | u16(255 - mLengthMap[type]);
+            put(x + width * y, (u16((s32)(255.0f * mThickness[type])) << 8) | u16(255 - mLengthMap[type]));
         }
     }
 
-    J3DNativeTexture::registerImage(pPixels, GX_TF_IA8, width, height, 1);
+    J3DNativeTexture::registerImage(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }

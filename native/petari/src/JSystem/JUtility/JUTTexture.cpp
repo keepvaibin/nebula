@@ -165,8 +165,12 @@ void JUTTexture::initTexObj() {
     }
     u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
     image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
-    J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
-                                    mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
+    // A texture the size constructor made (the capture flag) holds no image: its writer hands over the texels it puts
+    // there, a capture the copy it makes.
+    if (!getCaptureFlag()) {
+        J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
+                                        mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
+    }
     J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXTexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
                  static_cast< GXTexWrapMode >(mWrapT), mipmapEnabled);
 

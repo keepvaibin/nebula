@@ -721,6 +721,32 @@ void NormalMapBase::drawSettingForDebug(MtxPtr pMtx) const {
     J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_CLEAR);
 }
 
+// The gradient as rows of LA8 texels (nebula_cooked_texture.h) placed where the console showed it: the game writes each
+// texel's intensity (its x gradient) and alpha (its y gradient) into a row-ordered IA8 buffer, packs it with
+// tileConversion16 (whose byte-wide buffer keeps each texel's intensity alone, 32 bytes a band of four rows), and the GPU
+// reads the buffer as IA8's 4x4 tiles. sIntensity/sAlpha are the two gradients; texel() is the picture that results.
+namespace {
+    u8 sIntensity[0x100];
+    u8 sAlpha[0x100];
+
+    // The texel (x, y) the game wrote, as its 16-bit IA8 value (alpha << 8 | intensity).
+    u16 written(u32 x, u32 y) {
+        return static_cast< u16 >(sAlpha[y] << 8 | sIntensity[x]);
+    }
+
+    // The packed buffer's byte at `offset`: the packed bands' bytes (each texel's low byte), then the rows as written.
+    u8 packedByte(u32 offset) {
+        if (offset < static_cast< u32 >(height / 4) * 32) {
+            const u32 band = offset / 32;
+            const u32 at = offset % 32;
+            return static_cast< u8 >(written((at / 16) * 4 + at % 4, band * 4 + (at % 16) / 4));
+        }
+        const u32 texel = offset / 2;
+        const u16 value = written(texel % width, texel / width);
+        return static_cast< u8 >(offset % 2 == 0 ? value >> 8 : value);
+    }
+}  // namespace
+
 void NormalMapBase::createGradTexture() {
     f32 step = 256.0f / width;
     for (u32 x = 0; x < width; x++) {
@@ -746,10 +772,7 @@ void NormalMapBase::createGradTexture() {
 
         f32 ratio = value / 255.0f;
         value = mAmbColor + ratio * (mMatColor - mAmbColor);
-        for (u32 y = 0; y < height; y++) {
-            // IA8 texels for GX, in the console's byte order (tileConversion16 reads them the same way).
-            static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x] = value;
-        }
+        sIntensity[x] = static_cast< u8 >(value);
     }
 
     if (!(_138 & 1)) {
@@ -777,29 +800,40 @@ void NormalMapBase::createGradTexture() {
 
             f32 ratio = value / 255.0f;
             value = mAmbColor + ratio * (mMatColor - mAmbColor);
-            for (u32 x = 0; x < width; x++) {
-                NEBULA_BE(u16)& texel = static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x];
-                texel = texel | (value << 8);
-            }
+            sAlpha[y] = static_cast< u8 >(value);
         }
+    } else {
+        memset(sAlpha, 0, sizeof(sAlpha));
     }
 
-    TDDraw::tileConversion16(static_cast< u16* >(mImagePtr), width, height);
-    J3DNativeTexture::registerImage(mImagePtr, GX_TF_IA8, width, height, 1);
+    u8* pTexels = static_cast< u8* >(mImagePtr);
+    for (u32 y = 0; y < static_cast< u32 >(height); y++) {
+        for (u32 x = 0; x < static_cast< u32 >(width); x++) {
+            const u32 offset = ((y / 4) * (width / 4) + x / 4) * 32 + ((y % 4) * 4 + x % 4) * 2;
+            pTexels[(y * width + x) * 2] = packedByte(offset + 1);
+            pTexels[(y * width + x) * 2 + 1] = packedByte(offset);
+        }
+    }
+    J3DNativeTexture::registerImage(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }
 
+// Level 0 as the console's texel accessors left it: they read a texel's alpha, blue and green as the normal's x, y and z
+// and wrote them back as alpha, green and blue, red cleared. A disc texture is a record (nebula_cooked_texture.h).
 void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
-    for (u32 y = 0; y < pTexture->getHeight(); y++) {
-        for (u32 x = 0; x < pTexture->getWidth(); x++) {
-            u32 color = TDDraw::getTexel32(pTexture, x, y);
-            TVec3f normal;
-            normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
-                       static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
-            u8 r = (s32)(128.0f + 127.0f * normal.x);
-            u8 g = (s32)(128.0f + 127.0f * normal.y);
-            u8 b = (s32)(128.0f + 127.0f * normal.z);
-            TDDraw::setTexel32(pTexture, x, y, (g << 16) | (b << 8) | r);
-        }
+    const NebulaTexture* pRecord = nebula_texture_record(pTexture->mImage);
+    if (pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_RGBA8) {
+        return;
+    }
+    const auto component = [](u8 value) {
+        return static_cast< u8 >(static_cast< s32 >(128.0f + 127.0f * (static_cast< s8 >(value - 128) / 128.0f)));
+    };
+    u8* pTexel = pTexture->mImage + NEBULA_TEXTURE_HEADER;
+    for (u32 i = 0; i < static_cast< u32 >(pRecord->width) * pRecord->height; i++, pTexel += 4) {
+        const u8 green = pTexel[1];
+        pTexel[0] = 0;
+        pTexel[1] = component(pTexel[2]);
+        pTexel[2] = component(green);
+        pTexel[3] = component(pTexel[3]);
     }
 
     J3DNativeTexture::registerImage(pTexture->mImage, GX_TF_RGBA8, pTexture->getWidth(), pTexture->getHeight(), 1);

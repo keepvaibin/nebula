@@ -120,7 +120,8 @@ void MarioActor::initDrawAndModel() {
         _B7C = new JUTTexture(0x80, 0x40, GX_TF_RGB565);
 
         for (u32 i = 0; i < 2; i++) {
-            mMaskTextures[i] = new JUTTexture(8, 8, GX_TF_IA4);
+            // 8x8 alpha masks, written as rows of LA8 texels (their IA8 size holds them; nebula_cooked_texture.h).
+            mMaskTextures[i] = new JUTTexture(8, 8, GX_TF_IA8);
             mMaskTextures[i]->mWrapS = 1;
             mMaskTextures[i]->mWrapT = 1;
             mMaskTextures[i]->mMinType = 0;

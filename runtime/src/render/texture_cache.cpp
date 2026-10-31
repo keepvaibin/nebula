@@ -17,7 +17,6 @@
 
 #include <algorithm>
 #include <array>
-#include "galaxy/simd128.h"
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
@@ -151,68 +150,6 @@ static const std::byte* missing_image_bytes(std::uint32_t size) {
         throw std::runtime_error("[TextureCache] image larger than any GX image");
     }
     return zeros.data();
-}
-
-// SIMD tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64). Each decodes one complete tile with the
-// scalar loops' arithmetic; clipped edge tiles use the scalar loops. RGBA8 is stored as bytes r,g,b,a
-// (little-endian u32 r | g<<8 | b<<16 | a<<24).
-using simd::v128;
-[[nodiscard]] static inline v128 load_tile16(const std::uint8_t* p) noexcept {
-    return simd::load(p);
-}
-static inline void store_pixels4(RGBA8* p, v128 v) noexcept {
-    simd::store(p, v);
-}
-// Bit replication of a narrow channel held in u16 lanes.
-[[nodiscard]] static inline v128 expand5(v128 x) noexcept {
-    return simd::or_(simd::shl16<3>(x), simd::shr16<2>(x));
-}
-[[nodiscard]] static inline v128 expand6(v128 x) noexcept {
-    return simd::or_(simd::shl16<2>(x), simd::shr16<4>(x));
-}
-[[nodiscard]] static inline v128 expand4(v128 x) noexcept {
-    return simd::or_(simd::shl16<4>(x), x);
-}
-// 8 RGB565 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb565x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
-    const v128 m5 = simd::splat16(0x1F);
-    const v128 m6 = simd::splat16(0x3F);
-    const v128 r = expand5(simd::shr16<11>(v));
-    const v128 g = expand6(simd::and_(simd::shr16<5>(v), m6));
-    const v128 b = expand5(simd::and_(v, m5));
-    const v128 rg = simd::or_(r, simd::shl16<8>(g));
-    const v128 ba = simd::or_(b, simd::splat16(0xFF00));
-    store_pixels4(row0, simd::interleave_low16(rg, ba));
-    store_pixels4(row1, simd::interleave_high16(rg, ba));
-}
-// 8 RGB5A3 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
-    const v128 m3 = simd::splat16(0x07);
-    const v128 m4 = simd::splat16(0x0F);
-    const v128 m5 = simd::splat16(0x1F);
-    const v128 opaque = simd::sign_mask16(v);  // bit 15
-    const v128 r555 = expand5(simd::and_(simd::shr16<10>(v), m5));
-    const v128 g555 = expand5(simd::and_(simd::shr16<5>(v), m5));
-    const v128 b555 = expand5(simd::and_(v, m5));
-    const v128 a3 = simd::and_(simd::shr16<12>(v), m3);
-    const v128 r4 = expand4(simd::and_(simd::shr16<8>(v), m4));
-    const v128 g4 = expand4(simd::and_(simd::shr16<4>(v), m4));
-    const v128 b4 = expand4(simd::and_(v, m4));
-    const v128 a8 = simd::or_(
-        simd::or_(simd::shl16<5>(a3), simd::shl16<2>(a3)),
-        simd::shr16<1>(a3));
-    const auto select = [opaque](v128 when_opaque, v128 otherwise) {
-        return simd::or_(simd::and_(opaque, when_opaque),
-                         simd::andnot(opaque, otherwise));
-    };
-    const v128 r = select(r555, r4);
-    const v128 g = select(g555, g4);
-    const v128 b = select(b555, b4);
-    const v128 a = select(simd::splat16(0xFF), a8);
-    const v128 rg = simd::or_(r, simd::shl16<8>(g));
-    const v128 ba = simd::or_(b, simd::shl16<8>(a));
-    store_pixels4(row0, simd::interleave_low16(rg, ba));
-    store_pixels4(row1, simd::interleave_high16(rg, ba));
 }
 
 [[nodiscard]] static inline std::uint16_t read_be16(const std::uint8_t* p) {
@@ -434,382 +371,54 @@ void detail::generate_rgba8_mip_level(
 
 namespace {
 
-// One direct-colour texel word (big-endian RGB565 or RGB5A3), its channels widened by bit replication.
-[[nodiscard]] static RGBA8 decode_colour_word(
-    const std::uint8_t* entry,
-    TlutFormat fmt) {
-    const std::uint16_t v = read_be16(entry);
-    switch (fmt) {
-    case TlutFormat::RGB565: {
-        const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
-        const std::uint8_t g6 = static_cast<std::uint8_t>((v >> 5)  & 0x3Fu);
-        const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-        return RGBA8{
-            static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-            static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4)),
-            static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-            0xFFu
-        };
+// RGB5A3: a 16-bit big-endian texel, opaque 5:5:5 or 3-bit alpha 4:4:4, widened by bit replication.
+[[nodiscard]] static RGBA8 decode_rgb5a3(const std::uint8_t* texel) {
+    const std::uint16_t v = read_be16(texel);
+    const auto five = [](std::uint32_t c) { return static_cast<std::uint8_t>((c << 3) | (c >> 2)); };
+    const auto four = [](std::uint32_t c) { return static_cast<std::uint8_t>((c << 4) | c); };
+    if ((v & 0x8000u) != 0u) {
+        return RGBA8{five((v >> 10) & 0x1Fu), five((v >> 5) & 0x1Fu), five(v & 0x1Fu), 0xFFu};
     }
-    case TlutFormat::RGB5A3: {
-        if ((v & 0x8000u) != 0u) {
-            // RGB555
-            const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 10) & 0x1Fu);
-            const std::uint8_t g5 = static_cast<std::uint8_t>((v >>  5) & 0x1Fu);
-            const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-            return RGBA8{
-                static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-                static_cast<std::uint8_t>((g5 << 3) | (g5 >> 2)),
-                static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-                0xFFu
-            };
-        } else {
-            // RGBA3444
-            const std::uint8_t a3 = static_cast<std::uint8_t>((v >> 12) & 0x7u);
-            const std::uint8_t r4 = static_cast<std::uint8_t>((v >>  8) & 0xFu);
-            const std::uint8_t g4 = static_cast<std::uint8_t>((v >>  4) & 0xFu);
-            const std::uint8_t b4 = static_cast<std::uint8_t>( v        & 0xFu);
-            return RGBA8{
-                static_cast<std::uint8_t>((r4 << 4) | r4),
-                static_cast<std::uint8_t>((g4 << 4) | g4),
-                static_cast<std::uint8_t>((b4 << 4) | b4),
-                static_cast<std::uint8_t>((a3 << 5) | (a3 << 2) | (a3 >> 1))
-            };
-        }
-    }
-    default:
-        throw std::runtime_error("[TextureCache] not a direct-colour format");
-    }
+    const std::uint32_t a3 = (v >> 12) & 0x7u;
+    return RGBA8{four((v >> 8) & 0xFu), four((v >> 4) & 0xFu), four(v & 0xFu),
+                 static_cast<std::uint8_t>((a3 << 5) | (a3 << 2) | (a3 >> 1))};
 }
 
-// Per-format decoders: each writes width * height RGBA8 pixels (row-major, unpadded) to `out` from the
-// texture's base `src`, in raster order inside each tile.
-template <TexFormat Format>
-void decode_intensity_tiles_impl(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    static_assert(Format == TexFormat::I4 || Format == TexFormat::I8 ||
-                  Format == TexFormat::IA4 || Format == TexFormat::IA8);
-    // All four formats use a 32-byte tile; clipping is per tile, not per pixel.
-    constexpr std::uint32_t block_width = Format == TexFormat::IA8 ? 4u : 8u;
-    constexpr std::uint32_t block_height = Format == TexFormat::I4 ? 8u : 4u;
-    constexpr std::uint32_t row_bytes = 32u / block_height;
-    const std::uint32_t blocks_x = (width + block_width - 1u) / block_width;
-    const std::uint32_t blocks_y = (height + block_height - 1u) / block_height;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * block_height;
-        const std::uint32_t rows = std::min(block_height, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * block_width;
-            const std::uint32_t columns = std::min(block_width, width - base_x);
-            if constexpr (Format == TexFormat::I8 || Format == TexFormat::IA8) {
-                if (rows == block_height && columns == block_width) {
-                    RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                    const std::size_t stride = width;
-                    const v128 rows01 = load_tile16(src);
-                    const v128 rows23 = load_tile16(src + 16u);
-                    if constexpr (Format == TexFormat::I8) {
-                        // 8 bytes per row; replicate each intensity 4 times.
-                        const v128 q0 = simd::bytes(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
-                        const v128 q1 = simd::bytes(4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
-                        const v128 q2 = simd::bytes(8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11);
-                        const v128 q3 = simd::bytes(12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15);
-                        store_pixels4(dst, simd::shuffle_bytes(rows01, q0));
-                        store_pixels4(dst + 4u, simd::shuffle_bytes(rows01, q1));
-                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, q2));
-                        store_pixels4(dst + stride + 4u, simd::shuffle_bytes(rows01, q3));
-                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, q0));
-                        store_pixels4(dst + 2u * stride + 4u, simd::shuffle_bytes(rows23, q1));
-                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, q2));
-                        store_pixels4(dst + 3u * stride + 4u, simd::shuffle_bytes(rows23, q3));
+}  // namespace
+
+// The console formats some images still reach the renderer in (RVLFaceLib's parts, NebulaIcons): I4 (8x8 tiles of
+// 4-bit intensity), IA4 (8x4 tiles of 4-bit alpha and intensity) and RGB5A3 (4x4 tiles of 16-bit texels), each tile
+// 32 bytes in raster order. Clipped edge tiles still advance by their whole 32 bytes.
+void detail::decode_console_tiles(TexFormat format, const std::uint8_t* src, std::uint32_t width,
+                                  std::uint32_t height, RGBA8* out) {
+    if (format != TexFormat::I4 && format != TexFormat::IA4 && format != TexFormat::RGB5A3) {
+        throw std::runtime_error("[TextureCache] a console format no image arrives in");
+    }
+    const std::uint32_t tile_width = format == TexFormat::RGB5A3 ? 4u : 8u;
+    const std::uint32_t tile_height = format == TexFormat::I4 ? 8u : 4u;
+    for (std::uint32_t ty = 0; ty < (height + tile_height - 1u) / tile_height; ++ty) {
+        for (std::uint32_t tx = 0; tx < (width + tile_width - 1u) / tile_width; ++tx) {
+            for (std::uint32_t py = 0; py < tile_height; ++py) {
+                for (std::uint32_t px = 0; px < tile_width; ++px) {
+                    const std::uint32_t x = tx * tile_width + px;
+                    const std::uint32_t y = ty * tile_height + py;
+                    if (x >= width || y >= height) {
+                        continue;
+                    }
+                    const std::uint32_t i = py * tile_width + px;
+                    RGBA8& texel = out[static_cast<std::size_t>(y) * width + x];
+                    if (format == TexFormat::I4) {
+                        const auto v = static_cast<std::uint8_t>(((src[i / 2u] >> ((i & 1u) == 0u ? 4u : 0u)) & 0xFu) * 17u);
+                        texel = RGBA8{v, v, v, v};
+                    } else if (format == TexFormat::IA4) {
+                        const auto v = static_cast<std::uint8_t>((src[i] & 0xFu) * 17u);
+                        texel = RGBA8{v, v, v, static_cast<std::uint8_t>((src[i] >> 4u) * 17u)};
                     } else {
-                        // (A, I) byte pairs -> I, I, I, A.
-                        const v128 lo = simd::bytes(1, 1, 1, 0, 3, 3, 3, 2, 5, 5, 5, 4, 7, 7, 7, 6);
-                        const v128 hi = simd::bytes(9, 9, 9, 8, 11, 11, 11, 10, 13, 13, 13, 12, 15, 15, 15, 14);
-                        store_pixels4(dst, simd::shuffle_bytes(rows01, lo));
-                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, hi));
-                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, lo));
-                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, hi));
+                        texel = decode_rgb5a3(src + i * 2u);
                     }
-                    src += 32u;
-                    continue;
-                }
-            }
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                const std::uint8_t* row = src + py * row_bytes;
-                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
-                if constexpr (Format == TexFormat::I4) {
-                    // High nibble first. I4 and I8 replicate intensity into alpha.
-                    std::uint32_t px = 0u;
-                    for (; px + 1u < columns; px += 2u) {
-                        const std::uint8_t byte = row[px / 2u];
-                        const auto high = static_cast<std::uint8_t>((byte >> 4u) * 17u);
-                        const auto low = static_cast<std::uint8_t>((byte & 15u) * 17u);
-                        dst[px] = RGBA8{high, high, high, high};
-                        dst[px + 1u] = RGBA8{low, low, low, low};
-                    }
-                    if (px < columns) {
-                        const auto high = static_cast<std::uint8_t>((row[px / 2u] >> 4u) * 17u);
-                        dst[px] = RGBA8{high, high, high, high};
-                    }
-                } else {
-                    for (std::uint32_t px = 0; px < columns; ++px) {
-                        if constexpr (Format == TexFormat::I8) {
-                            const std::uint8_t i = row[px];
-                            dst[px] = RGBA8{i, i, i, i};
-                        } else if constexpr (Format == TexFormat::IA4) {
-                            // A[7:4] I[3:0], both expanded by bit replication.
-                            const std::uint8_t byte = row[px];
-                            const auto i = static_cast<std::uint8_t>((byte & 15u) * 17u);
-                            const auto a = static_cast<std::uint8_t>((byte >> 4u) * 17u);
-                            dst[px] = RGBA8{i, i, i, a};
-                        } else {
-                            // IA8 stores A then I in guest byte order.
-                            const std::uint8_t a = row[px * 2u];
-                            const std::uint8_t i = row[px * 2u + 1u];
-                            dst[px] = RGBA8{i, i, i, a};
-                        }
-                    }
-                }
-            }
-            // A clipped tile still occupies its full 32 bytes.
-            src += 32u;
-        }
-    }
-}
-
-template <TlutFormat Format>
-static void decode_color_tiles_impl(
-    const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
-    RGBA8* out) {
-    static_assert(Format == TlutFormat::RGB565 || Format == TlutFormat::RGB5A3);
-    const std::uint32_t blocks_x = (width + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * 4u;
-        const std::uint32_t rows = std::min(4u, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * 4u;
-            const std::uint32_t columns = std::min(4u, width - base_x);
-            if (rows == 4u && columns == 4u) {
-                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                const std::size_t stride = width;
-                const v128 rows01 = simd::byteswap16(load_tile16(src));
-                const v128 rows23 = simd::byteswap16(load_tile16(src + 16u));
-                if constexpr (Format == TlutFormat::RGB565) {
-                    rgb565x8_to_rgba(rows01, dst, dst + stride);
-                    rgb565x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
-                } else {
-                    rgb5a3x8_to_rgba(rows01, dst, dst + stride);
-                    rgb5a3x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
-                }
-                src += 32u;
-                continue;
-            }
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                const std::uint8_t* row = src + py * 8u;
-                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
-                for (std::uint32_t px = 0; px < columns; ++px) {
-                    // Direct colour and TLUT entries share the GX word encoding.
-                    dst[px] = decode_colour_word(row + px * 2u, Format);
                 }
             }
             src += 32u;
-        }
-    }
-}
-
-}  // namespace
-
-void detail::decode_color_tiles(
-    TexFormat format, const std::uint8_t* src,
-    std::uint32_t width, std::uint32_t height, RGBA8* out) {
-    switch (format) {
-    case TexFormat::RGB565:
-        decode_color_tiles_impl<TlutFormat::RGB565>(src, width, height, out);
-        break;
-    case TexFormat::RGB5A3:
-        decode_color_tiles_impl<TlutFormat::RGB5A3>(src, width, height, out);
-        break;
-    default: throw std::runtime_error("[TextureCache] unsupported direct color format");
-    }
-}
-
-void detail::decode_intensity_tiles(
-    TexFormat format, const std::uint8_t* src,
-    std::uint32_t width, std::uint32_t height, RGBA8* out) {
-    switch (format) {
-    case TexFormat::I4: decode_intensity_tiles_impl<TexFormat::I4>(src, width, height, out); break;
-    case TexFormat::I8: decode_intensity_tiles_impl<TexFormat::I8>(src, width, height, out); break;
-    case TexFormat::IA4: decode_intensity_tiles_impl<TexFormat::IA4>(src, width, height, out); break;
-    case TexFormat::IA8: decode_intensity_tiles_impl<TexFormat::IA8>(src, width, height, out); break;
-    default: throw std::runtime_error("[TextureCache] unsupported intensity format");
-    }
-}
-
-void detail::decode_rgba8_tiles(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 4x4 pixels stored as two 32-byte sub-tiles:
-    //   tile 0 (bytes 0-31): 16 AR pairs (A then R, row-major within 4x4)
-    //   tile 1 (bytes 32-63): 16 GB pairs (G then B)
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * 4u;
-        const std::uint32_t rows = std::min(4u, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * 4u;
-            const std::uint32_t columns = std::min(4u, width - base_x);
-            if (rows == 4u && columns == 4u) {
-                // unpack(AR, GB) gives bytes A,R,G,B per pixel; rotate each
-                // pixel right by one byte to R,G,B,A.
-                const auto rotate = [](v128 x) {
-                    return simd::or_(simd::shr32<8>(x), simd::shl32<24>(x));
-                };
-                const v128 ar01 = load_tile16(src);
-                const v128 ar23 = load_tile16(src + 16u);
-                const v128 gb01 = load_tile16(src + 32u);
-                const v128 gb23 = load_tile16(src + 48u);
-                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                const std::size_t stride = width;
-                store_pixels4(dst, rotate(simd::interleave_low16(ar01, gb01)));
-                store_pixels4(dst + stride, rotate(simd::interleave_high16(ar01, gb01)));
-                store_pixels4(dst + 2u * stride, rotate(simd::interleave_low16(ar23, gb23)));
-                store_pixels4(dst + 3u * stride, rotate(simd::interleave_high16(ar23, gb23)));
-                src += 64u;
-                continue;
-            }
-            const std::uint8_t* ar = src;
-            const std::uint8_t* gb = src + 32u;
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                RGBA8* dst = out + (base_y + py) * width + base_x;
-                const std::uint8_t* ar_row = ar + py * 8u;
-                const std::uint8_t* gb_row = gb + py * 8u;
-                for (std::uint32_t px = 0; px < columns; ++px) {
-                    dst[px] = {ar_row[px * 2u + 1u], gb_row[px * 2u],
-                               gb_row[px * 2u + 1u], ar_row[px * 2u]};
-                }
-            }
-            src += 64u;
-        }
-    }
-}
-
-namespace {
-
-// CMPR (S3TC/DXT1): 8x8 blocks of four 4x4 DXT1 sub-blocks in the order top-left, top-right, bottom-left,
-// bottom-right. Decodes one 8-byte sub-block into the 4x4 patch of `out` at (ox, oy), clipped to the image.
-static void decode_dxt1_subblock(
-    const std::uint8_t* block,
-    std::uint32_t ox,
-    std::uint32_t oy,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    if (ox >= width || oy >= height) {
-        return;
-    }
-    const std::uint32_t columns = std::min(4u, width - ox);
-    const std::uint32_t rows = std::min(4u, height - oy);
-    const std::uint16_t c0 = read_be16(block);
-    const std::uint16_t c1 = read_be16(block + 2);
-
-    auto expand565 = [](std::uint16_t v) -> RGBA8 {
-        const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
-        const std::uint8_t g6 = static_cast<std::uint8_t>((v >>  5) & 0x3Fu);
-        const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-        return RGBA8{
-            static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-            static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4)),
-            static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-            0xFFu
-        };
-    };
-
-    const RGBA8 col0 = expand565(c0);
-    const RGBA8 col1 = expand565(c1);
-
-    RGBA8 palette[4];
-    palette[0] = col0;
-    palette[1] = col1;
-    if (c0 > c1) {
-        // Four-color mode (no transparency).
-        palette[2] = RGBA8{
-            cmpr_interpolated_channel(col0.r, col1.r),
-            cmpr_interpolated_channel(col0.g, col1.g),
-            cmpr_interpolated_channel(col0.b, col1.b),
-            0xFFu
-        };
-        palette[3] = RGBA8{
-            cmpr_interpolated_channel(col1.r, col0.r),
-            cmpr_interpolated_channel(col1.g, col0.g),
-            cmpr_interpolated_channel(col1.b, col0.b),
-            0xFFu
-        };
-    } else {
-        // Three-color mode: palette[3] has averaged RGB with zero alpha.
-        palette[2] = RGBA8{
-            static_cast<std::uint8_t>((col0.r + col1.r) / 2u),
-            static_cast<std::uint8_t>((col0.g + col1.g) / 2u),
-            static_cast<std::uint8_t>((col0.b + col1.b) / 2u),
-            0xFFu
-        };
-        palette[3] = RGBA8{
-            static_cast<std::uint8_t>((col0.r + col1.r) / 2u),
-            static_cast<std::uint8_t>((col0.g + col1.g) / 2u),
-            static_cast<std::uint8_t>((col0.b + col1.b) / 2u),
-            0u
-        };
-    }
-
-    // One selector byte per row, leftmost pixel in its top two bits. Rows advance an integer offset: a pointer
-    // advanced past the last clipped row could point beyond one-past-the-end of `out`.
-    std::size_t offset = static_cast<std::size_t>(oy) * width + ox;
-    if (columns == 4u) {
-        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
-            RGBA8* row = out + offset;
-            const std::uint8_t selectors = block[4u + py];
-            row[0] = palette[(selectors >> 6u) & 3u];
-            row[1] = palette[(selectors >> 4u) & 3u];
-            row[2] = palette[(selectors >> 2u) & 3u];
-            row[3] = palette[selectors & 3u];
-        }
-    } else {
-        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
-            RGBA8* row = out + offset;
-            const std::uint8_t selectors = block[4u + py];
-            for (std::uint32_t px = 0; px < columns; ++px) {
-                row[px] = palette[(selectors >> (6u - px * 2u)) & 3u];
-            }
-        }
-    }
-}
-
-}  // namespace
-
-void detail::decode_cmpr_tiles(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    const std::uint32_t macro_x = (width  + 7u) / 8u;
-    const std::uint32_t macro_y = (height + 7u) / 8u;
-    static constexpr std::uint32_t kSubOffX[4] = {0u, 4u, 0u, 4u};
-    static constexpr std::uint32_t kSubOffY[4] = {0u, 0u, 4u, 4u};
-
-    for (std::uint32_t by = 0; by < macro_y; ++by) {
-        for (std::uint32_t bx = 0; bx < macro_x; ++bx) {
-            for (std::uint32_t sub = 0; sub < 4u; ++sub) {
-                const std::uint32_t ox = bx * 8u + kSubOffX[sub];
-                const std::uint32_t oy = by * 8u + kSubOffY[sub];
-                decode_dxt1_subblock(src, ox, oy, width, height, out);
-                src += 8u;
-            }
         }
     }
 }
@@ -845,19 +454,7 @@ namespace {
 }
 
 [[nodiscard]] static bool texture_decode_format_supported(TexFormat format) {
-    switch (format) {
-    case TexFormat::I4:
-    case TexFormat::I8:
-    case TexFormat::IA4:
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-    case TexFormat::RGBA8:
-    case TexFormat::CMPR:
-        return true;
-    default:
-        return false;
-    }
+    return format == TexFormat::I4 || format == TexFormat::IA4 || format == TexFormat::RGB5A3;
 }
 
 // Decodes every guest-authored level (contiguous, block-aligned from `src`)
@@ -880,26 +477,11 @@ static void decode_texture_levels(
             static_cast<std::size_t>(lw) * static_cast<std::size_t>(lh));
         RGBA8* out = level_pixels[l].data();
 
-        switch (format) {
-        case TexFormat::I4:
-        case TexFormat::I8:
-        case TexFormat::IA4:
-        case TexFormat::IA8:
-            detail::decode_intensity_tiles(format, src, lw, lh, out);
-            break;
-        case TexFormat::RGB565:
-        case TexFormat::RGB5A3:
-            detail::decode_color_tiles(format, src, lw, lh, out);
-            break;
-        case TexFormat::RGBA8:
-            detail::decode_rgba8_tiles(src, lw, lh, out);
-            break;
-        case TexFormat::CMPR:
-            detail::decode_cmpr_tiles(src, lw, lh, out);
-            break;
-        default:
-            throw std::runtime_error(
-                "[TextureCache] get: unhandled TexFormat");
+        if (texture_decode_format_supported(format)) {
+            detail::decode_console_tiles(format, src, lw, lh, out);
+        } else {
+            // Bytes in a format every image of which arrives as a record (nebula_cooked_texture.h): none to draw.
+            std::fill_n(out, static_cast<std::size_t>(lw) * lh, RGBA8{});
         }
         if (!detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
             detail::remove_texel_checker(level_pixels[l], lw, lh);

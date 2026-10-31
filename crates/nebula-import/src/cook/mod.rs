@@ -253,7 +253,7 @@ fn append_folder(fst: &[u8], folder: &str, files: &[(String, Vec<u8>)], placed: 
     while names.last() == Some(&0) && names.len() > 1 && names[names.len() - 2] == 0 {
         names.pop();
     }
-    let mut add_name = |names: &mut Vec<u8>, name: &str| -> u32 {
+    let add_name = |names: &mut Vec<u8>, name: &str| -> u32 {
         let at = names.len() as u32;
         names.extend_from_slice(name.as_bytes());
         names.push(0);

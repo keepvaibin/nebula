@@ -49,15 +49,10 @@ struct RGBA8 {
 };
 
 namespace detail {
-// Caller validates the complete 32-byte 4x4 tile footprint for RGB565/RGB5A3.
-// Clipped edge tiles advance by 32 source bytes and write valid pixels only.
-void decode_color_tiles(TexFormat format, const std::uint8_t* src,
-    std::uint32_t width, std::uint32_t height, RGBA8* out);
-// I4/I8/IA4/IA8 only. Caller validates the entire block-rounded source;
-// clipped rows still advance over each complete 32-byte tile.
-void decode_intensity_tiles(TexFormat format, const std::uint8_t* src,
-                            std::uint32_t width, std::uint32_t height,
-                            RGBA8* out);
+// I4, IA4 or RGB5A3 tiles (the console formats images still arrive in until RVLFaceLib and NebulaIcons hand over texture
+// records) into width * height RGBA8 texels; the caller validates the block-rounded source.
+void decode_console_tiles(TexFormat format, const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
+                          RGBA8* out);
 // One level of a texture record (nebula_cooked_texture.h: its texels from `texels`, `width` x `height`) as RGBA8.
 void expand_record_level(std::uint8_t layout, const std::uint8_t* texels, std::uint32_t width, std::uint32_t height,
                          RGBA8* out);
@@ -77,14 +72,6 @@ bool flatten_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std:
 // phase in at least 95 % of them. Each colour channel loses the checker at its local amplitude (the 3x3 mean of the
 // difference against the checker); the content and alpha stay. Returns whether it was one.
 bool remove_texel_checker(std::vector<RGBA8>& pixels, std::uint32_t width, std::uint32_t height);
-// Caller validates the complete block-rounded source footprint. Edge tiles
-// advance by all 64 source bytes but write only pixels inside width/height.
-void decode_rgba8_tiles(const std::uint8_t* src, std::uint32_t width,
-                        std::uint32_t height, RGBA8* out);
-// Caller validates the complete block-rounded CMPR footprint. Subblocks keep
-// GX selector order, 5/3 interpolation and averaged RGB for alpha-zero pixels.
-void decode_cmpr_tiles(const std::uint8_t* src, std::uint32_t width,
-                       std::uint32_t height, RGBA8* out);
 }  // namespace detail
 
 [[nodiscard]] std::uint8_t efb_copy_alias_texture_format(

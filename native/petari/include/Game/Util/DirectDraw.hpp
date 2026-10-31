@@ -32,11 +32,6 @@ namespace TDDraw {
     void cameraInit3D();
     void cameraInit2D();
     void mixFogColor(TVec3f, f32, u32);
-    void tileConversion16(u16*, u32, u32);
-    u32 getTexel32(const JUTTexture*, u32, u32);
-    u32 getTexel32(const u8*, u32, u32, u32);
-    void setTexel32(JUTTexture*, u32, u32, u32);
-    void setTexel32(u8*, u32, u32, u32, u32);
     void invProject(TVec3f*, const TVec3f&, MtxPtr, const f32*, const f32*, bool);
     void project2D(TVec3f*, const TVec3f&);
     void project2D(TVec2f*, const TVec3f&);
