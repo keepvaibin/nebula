@@ -202,7 +202,7 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
-    (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video)",
+    (r"^runtime/(?:src|include/galaxy)/(?:native_host|virtual_disc|native_thp_video)",
      "host-console-model", "REPLACE",
      "Input as Wii Remote reports, virtual device data, disc image, software THP: replace with native input, "
      "cooked assets and native video."),

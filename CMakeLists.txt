@@ -136,7 +136,6 @@ add_library(galaxy_native_host STATIC
     runtime/src/native_host.cpp
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
-    runtime/src/wii_device_data.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
     runtime/src/mod_xml.cpp
@@ -648,7 +647,7 @@ galaxy_test(galaxy_windows_power_tests SOURCES ${rt}/windows_power_tests.cpp)
 galaxy_test(galaxy_motion_signals_tests SOURCES ${rt}/motion_signals_tests.cpp)
 galaxy_test(galaxy_frame_telemetry_tests SOURCES ${rt}/frame_telemetry_tests.cpp ${rt}/frame_telemetry.cpp)
 galaxy_test(galaxy_mii_import_tests SOURCES ${rt}/mii_import_tests.cpp ${rt}/mii_import.cpp ${rt}/mii_formats.cpp
-    ${rt}/wii_device_data.cpp LIBS galaxy_atomic_file)
+    LIBS galaxy_atomic_file)
 galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${rt}/virtual_disc.cpp ${rt}/mods.cpp
     ${rt}/mod_import.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)

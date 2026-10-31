@@ -9,8 +9,6 @@
 
 #include "galaxy/mii_formats.h"
 
-#include "galaxy/wii_device_data.h"
-
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -37,6 +35,9 @@ constexpr std::size_t kRemoteBlock = 0x2F0;
 constexpr u32 kRemoteMagic = 0x524E4344;  // "RNCD"
 constexpr u32 kCflMagic = 0x43464F47;     // "CFOG": the 3DS's CFL_DB.dat
 constexpr u32 kFflMagic = 0x46464F43;     // "FFOC": the Wii U's FFL_ODB.dat
+constexpr u32 kRflMagic = 0x524E4F44;     // "RNOD": the Wii's RFL_DB.dat
+constexpr std::size_t kRflDatabase = 0x1F1E0;
+constexpr std::size_t kRflFirstRecord = 0x04;
 
 u8 byte(std::span<const std::byte> b, std::size_t at) { return static_cast<u8>(b[at]); }
 u16 le16(std::span<const std::byte> b, std::size_t at) { return static_cast<u16>(byte(b, at) | byte(b, at + 1) << 8); }
@@ -633,11 +634,16 @@ bool hex_text(std::span<const std::byte> b, std::vector<std::byte>& out) {
     return true;
 }
 
+// CRC-16 (XMODEM: polynomial 0x1021, no initial value) of a Mii file's record, as its trailing two bytes store it.
 std::uint16_t xmodem(std::span<const std::byte> block) {
-    std::vector<std::byte> bytes(block.begin(), block.end());
-    bytes.push_back(std::byte{0});
-    bytes.push_back(std::byte{0});
-    return rfl_crc(bytes);
+    std::uint16_t crc = 0;
+    for (const std::byte b : block) {
+        crc = static_cast<std::uint16_t>(crc ^ static_cast<std::uint8_t>(b) << 8);
+        for (int bit = 0; bit < 8; ++bit) {
+            crc = static_cast<std::uint16_t>((crc & 0x8000u) != 0 ? (crc << 1) ^ 0x1021u : crc << 1);
+        }
+    }
+    return crc;
 }
 
 bool has_id(std::span<const std::byte> record) {
@@ -671,8 +677,8 @@ MiiFileContents read_bytes(std::span<const std::byte> b, std::string_view extens
     const bool ds = extension == "ncd" || extension == "nsd";
     const u32 magic = b.size() >= 4u ? be32(b, 0) : 0u;
     ModernMii m;
-    if (b.size() == kRflDatabaseSize && magic == kRflOfficialMagic) {
-        wii(0x04, kMiiDatabaseSlots, kWiiRecord, "Wii Mii database (RFL_DB.dat)");
+    if (b.size() == kRflDatabase && magic == kRflMagic) {
+        wii(kRflFirstRecord, kMiiLibrarySlots, kWiiRecord, "Wii Mii database (RFL_DB.dat)");
     } else if (b.size() == kRemoteBlock && magic == kRemoteMagic) {
         wii(0x08, 10u, kWiiRecord, "Wii Remote Mii data");
     } else if (magic == kCflMagic) {
@@ -735,6 +741,22 @@ u32 get_bits(const MiiRecord& r, WiiField f) {
 constexpr std::size_t kName = 0x02, kHeight = 0x16, kBuild = 0x17, kCreateIdAt = 0x18, kCreator = 0x36;
 
 }  // namespace
+
+std::vector<std::pair<unsigned, MiiRecord>> read_wii_mii_database(std::span<const std::byte> bytes) {
+    std::vector<std::pair<unsigned, MiiRecord>> out;
+    if (bytes.size() != kRflDatabase || be32(bytes, 0) != kRflMagic) {
+        return out;
+    }
+    for (unsigned slot = 0; slot < kMiiLibrarySlots; ++slot) {
+        const auto record = bytes.subspan(kRflFirstRecord + slot * kWiiRecord, kWiiRecord);
+        if (has_id(record)) {
+            MiiRecord r{};
+            std::copy(record.begin(), record.end(), r.begin());
+            out.emplace_back(slot, r);
+        }
+    }
+    return out;
+}
 
 MiiFields decode_wii_mii(const MiiRecord& r) noexcept {
     MiiFields m;

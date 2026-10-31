@@ -1,75 +1,137 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Mii import (mii_import.h).
+// The Mii library and Mii import (mii_import.h).
 
 #include "galaxy/mii_import.h"
 
 #include "galaxy/atomic_file.h"
 #include "galaxy/mii_formats.h"
-#include "galaxy/wii_device_data.h"
 
 #include <algorithm>
 #include <atomic>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <mutex>
-#include <string_view>
 
 namespace galaxy::host {
 namespace {
 
-constexpr std::size_t kDatabaseFirst = 0x04;
-constexpr std::size_t kCreateId = 0x18;              // RFLiCharData::createID, 8 bytes
-constexpr std::uint8_t kTemporaryId = 0x20;          // RFLi_CREATE_ID_MASK_TEMPORARY, in the create ID's first byte
+constexpr std::string_view kLibraryFormat = "nebula-mii-library 1";
+constexpr std::uint8_t kTemporaryId = 0x20;          // the create ID's temporary bit, in its first byte
 constexpr std::uint32_t kNebulaSystemId = 0x4E45424Cu;  // "NEBL": the console part of create IDs made here
 
-std::span<const std::byte> create_id(std::span<const std::byte> record) { return record.subspan(kCreateId, 8u); }
+// The library file's numeric fields, by name.
+struct NumberField {
+    std::string_view name;
+    std::uint8_t MiiFields::*member;
+};
+constexpr NumberField kNumbers[] = {
+    {"sex", &MiiFields::sex},
+    {"birth_month", &MiiFields::birth_month},
+    {"birth_day", &MiiFields::birth_day},
+    {"favorite_color", &MiiFields::favorite_color},
+    {"favorite", &MiiFields::favorite},
+    {"local_only", &MiiFields::local_only},
+    {"height", &MiiFields::height},
+    {"build", &MiiFields::build},
+    {"face_type", &MiiFields::face_type},
+    {"face_color", &MiiFields::face_color},
+    {"face_texture", &MiiFields::face_texture},
+    {"hair_type", &MiiFields::hair_type},
+    {"hair_color", &MiiFields::hair_color},
+    {"hair_flip", &MiiFields::hair_flip},
+    {"eye_type", &MiiFields::eye_type},
+    {"eye_color", &MiiFields::eye_color},
+    {"eye_scale", &MiiFields::eye_scale},
+    {"eye_rotate", &MiiFields::eye_rotate},
+    {"eye_x", &MiiFields::eye_x},
+    {"eye_y", &MiiFields::eye_y},
+    {"eyebrow_type", &MiiFields::eyebrow_type},
+    {"eyebrow_color", &MiiFields::eyebrow_color},
+    {"eyebrow_scale", &MiiFields::eyebrow_scale},
+    {"eyebrow_rotate", &MiiFields::eyebrow_rotate},
+    {"eyebrow_x", &MiiFields::eyebrow_x},
+    {"eyebrow_y", &MiiFields::eyebrow_y},
+    {"nose_type", &MiiFields::nose_type},
+    {"nose_scale", &MiiFields::nose_scale},
+    {"nose_y", &MiiFields::nose_y},
+    {"mouth_type", &MiiFields::mouth_type},
+    {"mouth_color", &MiiFields::mouth_color},
+    {"mouth_scale", &MiiFields::mouth_scale},
+    {"mouth_y", &MiiFields::mouth_y},
+    {"mustache", &MiiFields::mustache},
+    {"beard_type", &MiiFields::beard_type},
+    {"beard_color", &MiiFields::beard_color},
+    {"beard_scale", &MiiFields::beard_scale},
+    {"beard_y", &MiiFields::beard_y},
+    {"glass_type", &MiiFields::glass_type},
+    {"glass_color", &MiiFields::glass_color},
+    {"glass_scale", &MiiFields::glass_scale},
+    {"glass_y", &MiiFields::glass_y},
+    {"mole_type", &MiiFields::mole_type},
+    {"mole_scale", &MiiFields::mole_scale},
+    {"mole_x", &MiiFields::mole_x},
+    {"mole_y", &MiiFields::mole_y},
+};
 
-bool has_id(std::span<const std::byte> record) {
-    const auto id = create_id(record);
-    return std::any_of(id.begin(), id.end(), [](std::byte b) { return b != std::byte{0}; });
+constexpr char kHex[] = "0123456789abcdef";
+
+template <typename T, std::size_t N>
+std::string hex(const std::array<T, N>& values) {
+    std::string out;
+    for (const T v : values) {
+        for (int shift = static_cast<int>(sizeof(T) * 8) - 4; shift >= 0; shift -= 4) {
+            out.push_back(kHex[(v >> shift) & 0xFu]);
+        }
+    }
+    return out;
 }
 
+template <typename T, std::size_t N>
+bool parse_hex(std::string_view text, std::array<T, N>& values) {
+    constexpr std::size_t digits = sizeof(T) * 2;
+    if (text.size() != N * digits) {
+        return false;
+    }
+    for (std::size_t i = 0; i < N; ++i) {
+        unsigned value = 0;
+        const char* first = text.data() + i * digits;
+        const auto [end, error] = std::from_chars(first, first + digits, value, 16);
+        if (error != std::errc{} || end != first + digits) {
+            return false;
+        }
+        values[i] = static_cast<T>(value);
+    }
+    return true;
+}
+
+bool has_id(const MiiFields& mii) {
+    return std::any_of(mii.create_id.begin(), mii.create_id.end(), [](std::uint8_t b) { return b != 0u; });
+}
+
+// A create ID a console keeps (not temporary), read from an imported record.
 bool stored_id(const MiiRecord& record) {
-    return has_id(record) && (static_cast<std::uint8_t>(record[kCreateId]) & kTemporaryId) == 0u;
+    const auto id = std::span<const std::byte>(record).subspan(0x18, 8);
+    return std::any_of(id.begin(), id.end(), [](std::byte b) { return b != std::byte{0}; }) &&
+           (static_cast<std::uint8_t>(id[0]) & kTemporaryId) == 0u;
 }
 
-bool same_id(std::span<const std::byte> a, std::span<const std::byte> b) {
-    return std::equal(create_id(a).begin(), create_id(a).end(), create_id(b).begin());
-}
-
-// The same Mii whatever its create ID (one exported twice by a tool that writes none) and favourite bit (one past
+// The same Mii whatever its create ID (one exported twice by a tool that writes none) and favourite flag (one past
 // the ten favourites was imported without it).
-bool same_mii(std::span<const std::byte> a, std::span<const std::byte> b) {
-    return a[0] == b[0] && (a[1] & std::byte{0xFE}) == (b[1] & std::byte{0xFE}) &&
-           std::equal(a.begin() + 2, a.begin() + kCreateId, b.begin() + 2) &&
-           std::equal(a.begin() + kCreateId + 8, a.end(), b.begin() + kCreateId + 8);
+bool same_mii(MiiFields a, MiiFields b) {
+    a.create_id = b.create_id = {};
+    a.favorite = b.favorite = 0;
+    return a == b;
 }
 
-// RFLiCharData's favourite bit: the first unit's least significant (RFLi_Endian.h favorite, bit 15).
-bool favorite(std::span<const std::byte> record) { return (static_cast<std::uint8_t>(record[1]) & 1u) != 0u; }
-
-void renew_crc(std::vector<std::byte>& database) {
-    database[kRflDatabaseSize - 2u] = std::byte{0};
-    database[kRflDatabaseSize - 1u] = std::byte{0};
-    const std::uint16_t crc = rfl_crc(database);
-    database[kRflDatabaseSize - 2u] = static_cast<std::byte>(crc >> 8u);
-    database[kRflDatabaseSize - 1u] = static_cast<std::byte>(crc & 0xFFu);
-}
-
-std::uint32_t load_be32(std::span<const std::byte> b, std::size_t at) {
-    return static_cast<std::uint32_t>(b[at]) << 24u | static_cast<std::uint32_t>(b[at + 1u]) << 16u |
-           static_cast<std::uint32_t>(b[at + 2u]) << 8u | static_cast<std::uint32_t>(b[at + 3u]);
-}
-
-void store_be32(MiiRecord& r, std::size_t at, std::uint32_t v) {
-    for (unsigned i = 0; i < 4u; ++i) r[at + i] = static_cast<std::byte>(v >> (24u - 8u * i));
-}
-
-bool is_database(std::span<const std::byte> bytes) {
-    return bytes.size() == kRflDatabaseSize && load_be32(bytes, 0u) == kRflOfficialMagic;
+void set_create_id(MiiFields& mii, std::uint32_t mii_part) {
+    for (unsigned i = 0; i < 4u; ++i) {
+        mii.create_id[i] = static_cast<std::uint8_t>(mii_part >> (24u - 8u * i));
+        mii.create_id[4u + i] = static_cast<std::uint8_t>(kNebulaSystemId >> (24u - 8u * i));
+    }
 }
 
 std::vector<std::byte> read_file(const std::filesystem::path& path) {
@@ -92,18 +154,57 @@ std::string lower_extension(const std::filesystem::path& path) {
 
 struct Library {
     std::mutex mutex;
-    std::filesystem::path database;
+    std::filesystem::path file;
+    std::filesystem::path console_database;
     std::filesystem::path folder;
     MiiPreparer prepare;
-    std::vector<std::pair<unsigned, MiiRecord>> installs;
+    std::vector<std::pair<unsigned, MiiFields>> installs;
     std::atomic<bool> pending{false};
-    std::vector<std::byte> cache;  // the database as last read or written (mii_library_slot)
-    bool cached = false;
+    MiiLibrary miis;
+    bool loaded = false;
+    bool damaged = false;  // the file exists and is not a library: imports leave it alone
 };
 
 Library& library() {
     static Library instance;
     return instance;
+}
+
+// The library from its file; without one, from the console's database (its Miis in their slots, where saves that use
+// them point), written as the file.
+void load(Library& lib) {
+    if (lib.loaded) {
+        return;
+    }
+    lib.loaded = true;
+    lib.damaged = false;
+    lib.miis = {};
+    if (lib.file.empty()) {
+        return;
+    }
+    std::error_code error;
+    if (std::filesystem::exists(lib.file, error)) {
+        const std::vector<std::byte> bytes = read_file(lib.file);
+        const std::optional<MiiLibrary> read =
+            read_mii_library(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+        if (read) {
+            lib.miis = *read;
+        } else {
+            lib.damaged = true;
+        }
+        return;
+    }
+    if (lib.console_database.empty()) {
+        return;
+    }
+    const auto console = read_wii_mii_database(read_file(lib.console_database));
+    if (console.empty()) {
+        return;
+    }
+    for (const auto& [slot, record] : console) {
+        lib.miis.slots[slot] = decode_wii_mii(record);
+    }
+    (void)io::write_text_file_atomically(lib.file, write_mii_library(lib.miis));
 }
 
 // A copy of a file Miis came from, kept in the library folder that every start imports again: none for a file already
@@ -150,109 +251,173 @@ std::string result_text(const MiiMergeResult& r) {
 
 }  // namespace
 
+std::string write_mii_library(const MiiLibrary& library) {
+    std::string out(kLibraryFormat);
+    out.push_back('\n');
+    for (std::size_t slot = 0; slot < kMiiLibrarySlots; ++slot) {
+        const std::optional<MiiFields>& mii = library.slots[slot];
+        if (!mii) {
+            continue;
+        }
+        out += std::to_string(slot);
+        for (const NumberField& f : kNumbers) {
+            out += ' ';
+            out += f.name;
+            out += '=';
+            out += std::to_string((*mii).*f.member);
+        }
+        out += " name=" + hex(mii->name) + " creator=" + hex(mii->creator) + " create_id=" + hex(mii->create_id);
+        out.push_back('\n');
+    }
+    return out;
+}
+
+std::optional<MiiLibrary> read_mii_library(std::string_view text) {
+    const auto next_line = [&text]() {
+        const std::size_t end = text.find('\n');
+        std::string_view line = text.substr(0, end);
+        text = end == std::string_view::npos ? std::string_view{} : text.substr(end + 1);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        return line;
+    };
+    if (next_line() != kLibraryFormat) {
+        return std::nullopt;
+    }
+    MiiLibrary library;
+    while (!text.empty()) {
+        std::string_view line = next_line();
+        const std::size_t space = line.find(' ');
+        unsigned slot = kMiiLibrarySlots;
+        const std::string_view slot_text = line.substr(0, space);
+        const auto [end, error] = std::from_chars(slot_text.data(), slot_text.data() + slot_text.size(), slot);
+        if (error != std::errc{} || end != slot_text.data() + slot_text.size() || slot >= kMiiLibrarySlots ||
+            space == std::string_view::npos) {
+            continue;
+        }
+        MiiFields mii;
+        line.remove_prefix(space + 1);
+        while (!line.empty()) {
+            const std::size_t gap = line.find(' ');
+            const std::string_view item = line.substr(0, gap);
+            line = gap == std::string_view::npos ? std::string_view{} : line.substr(gap + 1);
+            const std::size_t eq = item.find('=');
+            if (eq == std::string_view::npos) {
+                continue;
+            }
+            const std::string_view name = item.substr(0, eq);
+            const std::string_view value = item.substr(eq + 1);
+            if (name == "name") {
+                (void)parse_hex(value, mii.name);
+            } else if (name == "creator") {
+                (void)parse_hex(value, mii.creator);
+            } else if (name == "create_id") {
+                (void)parse_hex(value, mii.create_id);
+            } else {
+                for (const NumberField& f : kNumbers) {
+                    unsigned number = 0;
+                    if (f.name == name && std::from_chars(value.data(), value.data() + value.size(), number).ec ==
+                                              std::errc{} && number <= 0xFFu) {
+                        mii.*f.member = static_cast<std::uint8_t>(number);
+                    }
+                }
+            }
+        }
+        if (has_id(mii)) {
+            library.slots[slot] = mii;
+        }
+    }
+    return library;
+}
+
 std::vector<MiiRecord> read_miis(std::span<const std::byte> bytes, std::string* error) {
     MiiFileContents contents = read_mii_file(bytes, {});
     if (error != nullptr) *error = contents.error;
     return std::move(contents.miis);
 }
-MiiMergeResult merge_miis(std::vector<std::byte>& database, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
-                          std::vector<std::pair<unsigned, MiiRecord>>* placed) {
+
+MiiMergeResult merge_miis(MiiLibrary& library, std::span<const MiiRecord> miis, const MiiPreparer& prepare,
+                          std::vector<std::pair<unsigned, MiiFields>>* placed) {
     MiiMergeResult result;
-    if (!is_database(database)) {
-        result.no_room = static_cast<unsigned>(miis.size());
-        return result;
-    }
-    const auto slot_bytes = [&database](std::size_t slot) {
-        return std::span<std::byte>(database).subspan(kDatabaseFirst + slot * kMiiRecordSize, kMiiRecordSize);
-    };
+    auto& slots = library.slots;
     // Fresh create IDs: the Wii's Mii ID (its type bits, then 4-second units since 2006-01-01) and this console's.
     const auto now = std::chrono::system_clock::now().time_since_epoch();
     std::uint32_t next_time = static_cast<std::uint32_t>(
         ((std::chrono::duration_cast<std::chrono::seconds>(now).count() - 1136073600) / 4) & 0x1FFFFFFF);
-    bool changed = false;
-    for (MiiRecord mii : miis) {
-        if (!stored_id(mii) || (prepare && !prepare(mii))) {
+    for (MiiRecord record : miis) {
+        if (!stored_id(record) || (prepare && !prepare(record))) {
             ++result.invalid;
             continue;
         }
-        const bool placeholder = mii_placeholder_id(mii);
-        std::size_t id_slot = kMiiDatabaseSlots;
-        std::size_t free_slot = kMiiDatabaseSlots;
+        const bool placeholder = mii_placeholder_id(record);
+        MiiFields mii = decode_wii_mii(record);
+        std::size_t id_slot = kMiiLibrarySlots;
+        std::size_t free_slot = kMiiLibrarySlots;
         bool duplicate = false;
         unsigned favorites = 0u;
-        for (std::size_t slot = 0; slot < kMiiDatabaseSlots; ++slot) {
-            const auto existing = slot_bytes(slot);
-            if (!has_id(existing)) {
+        for (std::size_t slot = 0; slot < kMiiLibrarySlots; ++slot) {
+            if (!slots[slot]) {
                 free_slot = std::min(free_slot, slot);
                 continue;
             }
-            favorites += favorite(existing) ? 1u : 0u;
-            duplicate = duplicate || same_mii(existing, mii);
-            if (same_id(existing, mii)) id_slot = slot;
+            favorites += slots[slot]->favorite != 0u ? 1u : 0u;
+            duplicate = duplicate || same_mii(*slots[slot], mii);
+            if (slots[slot]->create_id == mii.create_id) id_slot = slot;
         }
         if (duplicate) {
             ++result.duplicates;
             continue;
         }
-        if (id_slot != kMiiDatabaseSlots && !placeholder) {
+        if (id_slot != kMiiLibrarySlots && !placeholder) {
             // The same Mii (a console's create ID), changed: over its old self, where saves that use it point.
-            if (favorite(mii) && !favorite(slot_bytes(id_slot)) && favorites >= kMiiFavoriteLimit) {
-                mii[1] &= std::byte{0xFE};
+            if (mii.favorite != 0u && slots[id_slot]->favorite == 0u && favorites >= kMiiFavoriteLimit) {
+                mii.favorite = 0u;
                 ++result.unfavorited;
             }
-            std::copy(mii.begin(), mii.end(), slot_bytes(id_slot).begin());
+            slots[id_slot] = mii;
             ++result.updated;
-            changed = true;
             if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(id_slot), mii);
             continue;
         }
-        if (free_slot == kMiiDatabaseSlots) {
+        if (free_slot == kMiiLibrarySlots) {
             ++result.no_room;
             continue;
         }
-        if (placeholder || id_slot != kMiiDatabaseSlots) {
-            // A create ID of its own: its type bits kept (special or not), unique in the database.
-            const std::uint32_t type = load_be32(mii, kCreateId) & 0xE0000000u;
+        if (placeholder || id_slot != kMiiLibrarySlots) {
+            // A create ID of its own: its type bits kept (special or not), unique in the library.
+            const std::uint32_t type = static_cast<std::uint32_t>(mii.create_id[0] & 0xE0u) << 24u;
             for (;;) {
-                store_be32(mii, kCreateId, (type != 0u ? type : 0x80000000u) | (next_time++ & 0x1FFFFFFFu));
-                store_be32(mii, kCreateId + 4u, kNebulaSystemId);
-                bool taken = false;
-                for (std::size_t slot = 0; slot < kMiiDatabaseSlots && !taken; ++slot) {
-                    taken = same_id(slot_bytes(slot), mii);
-                }
+                set_create_id(mii, (type != 0u ? type : 0x80000000u) | (next_time++ & 0x1FFFFFFFu));
+                const bool taken = std::any_of(slots.begin(), slots.end(), [&mii](const std::optional<MiiFields>& s) {
+                    return s && s->create_id == mii.create_id;
+                });
                 if (!taken) break;
             }
         }
-        if (favorite(mii) && favorites >= kMiiFavoriteLimit) {
-            mii[1] &= std::byte{0xFE};
+        if (mii.favorite != 0u && favorites >= kMiiFavoriteLimit) {
+            mii.favorite = 0u;
             ++result.unfavorited;
         }
-        std::copy(mii.begin(), mii.end(), slot_bytes(free_slot).begin());
+        slots[free_slot] = mii;
         ++result.added;
-        changed = true;
         if (placed != nullptr) placed->emplace_back(static_cast<unsigned>(free_slot), mii);
     }
-    if (changed) renew_crc(database);
     return result;
 }
 
-unsigned count_miis(std::span<const std::byte> database) {
-    if (!is_database(database)) return 0u;
-    unsigned count = 0u;
-    for (std::size_t slot = 0; slot < kMiiDatabaseSlots; ++slot) {
-        count += has_id(database.subspan(kDatabaseFirst + slot * kMiiRecordSize, kMiiRecordSize)) ? 1u : 0u;
-    }
-    return count;
+unsigned count_miis(const MiiLibrary& library) {
+    return static_cast<unsigned>(std::count_if(library.slots.begin(), library.slots.end(),
+                                               [](const std::optional<MiiFields>& s) { return s.has_value(); }));
 }
 
-void set_mii_library(const std::filesystem::path& database, const std::filesystem::path& import_folder,
-                     MiiPreparer prepare) {
+void set_mii_library(const std::filesystem::path& file, const std::filesystem::path& console_database,
+                     const std::filesystem::path& import_folder, MiiPreparer prepare) {
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);
-    lib.database = database;
+    lib.file = file;
+    lib.console_database = console_database;
     lib.folder = import_folder;
     lib.prepare = std::move(prepare);
-    lib.cached = false;
+    lib.loaded = false;
 }
 
 std::filesystem::path mii_import_folder() {
@@ -265,18 +430,19 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);
     MiiMergeResult total;
-    if (lib.database.empty()) {
-        if (message != nullptr) *message = "NO MII DATABASE";
+    if (lib.file.empty()) {
+        if (message != nullptr) *message = "NO MII LIBRARY";
         return total;
     }
-    std::vector<std::byte> database = read_file(lib.database);
-    if (!is_database(database)) {
-        if (message != nullptr) *message = "THE CONSOLE'S MII DATABASE IS DAMAGED";
+    load(lib);
+    if (lib.damaged) {
+        if (message != nullptr) *message = "THE MII LIBRARY FILE IS DAMAGED";
         return total;
     }
+    MiiLibrary miis = lib.miis;
     unsigned unreadable = 0u;
     unsigned unkept = 0u;
-    std::vector<std::pair<unsigned, MiiRecord>> placed;
+    std::vector<std::pair<unsigned, MiiFields>> placed;
     for (const std::filesystem::path& file : files) {
         const std::vector<std::byte> bytes = read_file(file);
         const MiiFileContents contents = read_mii_file(bytes, lower_extension(file));
@@ -287,7 +453,7 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         if (!keep_in_library(lib.folder, file, bytes)) {
             ++unkept;
         }
-        const MiiMergeResult r = merge_miis(database, contents.miis, lib.prepare, &placed);
+        const MiiMergeResult r = merge_miis(miis, contents.miis, lib.prepare, &placed);
         total.added += r.added;
         total.updated += r.updated;
         total.duplicates += r.duplicates;
@@ -297,14 +463,12 @@ MiiMergeResult import_mii_files(std::span<const std::filesystem::path> files, st
         total.converted += contents.converted;
     }
     if (!placed.empty()) {
-        const std::string_view contents(reinterpret_cast<const char*>(database.data()), database.size());
-        if (!io::write_text_file_atomically(lib.database, contents)) {
-            if (message != nullptr) *message = "COULD NOT WRITE THE MII DATABASE";
+        if (!io::write_text_file_atomically(lib.file, write_mii_library(miis))) {
+            if (message != nullptr) *message = "COULD NOT WRITE THE MII LIBRARY";
             return MiiMergeResult{};
         }
+        lib.miis = miis;
         lib.installs.insert(lib.installs.end(), placed.begin(), placed.end());
-        lib.cache = database;
-        lib.cached = true;
         lib.pending.store(true, std::memory_order_release);
     }
     if (message != nullptr) {
@@ -335,30 +499,21 @@ MiiMergeResult import_mii_folder(std::string* message) {
 unsigned mii_library_count() {
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);
-    if (lib.database.empty()) return 0u;
-    return count_miis(read_file(lib.database));
+    load(lib);
+    return count_miis(lib.miis);
 }
 
-std::optional<MiiRecord> mii_library_slot(unsigned slot) {
+std::optional<MiiFields> mii_library_slot(unsigned slot) {
     Library& lib = library();
     const std::lock_guard<std::mutex> lock(lib.mutex);
-    if (!lib.cached) {
-        lib.cache = lib.database.empty() ? std::vector<std::byte>{} : read_file(lib.database);
-        lib.cached = true;
-    }
-    if (slot >= kMiiDatabaseSlots || !is_database(lib.cache)) {
+    load(lib);
+    if (slot >= kMiiLibrarySlots) {
         return std::nullopt;
     }
-    const auto record = std::span<const std::byte>(lib.cache).subspan(kDatabaseFirst + slot * kMiiRecordSize, kMiiRecordSize);
-    if (!has_id(record)) {
-        return std::nullopt;
-    }
-    MiiRecord out;
-    std::copy(record.begin(), record.end(), out.begin());
-    return out;
+    return lib.miis.slots[slot];
 }
 
-std::vector<std::pair<unsigned, MiiRecord>> take_mii_installs() {
+std::vector<std::pair<unsigned, MiiFields>> take_mii_installs() {
     Library& lib = library();
     if (!lib.pending.load(std::memory_order_acquire)) return {};
     const std::lock_guard<std::mutex> lock(lib.mutex);

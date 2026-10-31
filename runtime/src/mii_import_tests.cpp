@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Mii import (mii_import.h, mii_formats.h): file formats, merging into the console's database, the library's files.
+// Mii import (mii_import.h, mii_formats.h): file formats, merging into the library, its file, the library's files.
 
 #include "galaxy/mii_formats.h"
 #include "galaxy/mii_import.h"
-#include "galaxy/wii_device_data.h"
 
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <span>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -44,14 +45,27 @@ unsigned field(const MiiRecord& r, unsigned pos, unsigned len) {
     return (word >> (16u - (pos & 15u) - len)) & ((1u << len) - 1u);
 }
 
-std::uint16_t stored_crc(const std::vector<std::byte>& db) {
-    return static_cast<std::uint16_t>(static_cast<std::uint16_t>(db[db.size() - 2u]) << 8u |
-                                      static_cast<std::uint16_t>(db[db.size() - 1u]));
+// FaceLib's CRC-16 as the Wii computes it: the bits shifted in after the register (a record and two zero bytes).
+std::uint16_t facelib_crc(std::span<const std::byte> bytes) {
+    std::uint16_t crc = 0;
+    for (const std::byte byte : bytes) {
+        std::uint8_t data = static_cast<std::uint8_t>(byte);
+        for (int bit = 0; bit < 8; ++bit, data <<= 1) {
+            crc = static_cast<std::uint16_t>((crc & 0x8000u) != 0 ? (crc << 1) ^ 0x1021u : crc << 1);
+            if ((data & 0x80u) != 0) crc ^= 1u;
+        }
+    }
+    return crc;
 }
 
-std::uint16_t crc_with_zero_field(std::vector<std::byte> bytes, std::size_t field_at) {
-    bytes[field_at] = bytes[field_at + 1u] = std::byte{0};
-    return galaxy::host::rfl_crc(bytes);
+// An empty Wii Mii database (RFL_DB.dat): its magic and size.
+std::vector<std::byte> console_database() {
+    std::vector<std::byte> db(0x1F1E0u);
+    db[0] = std::byte{'R'};
+    db[1] = std::byte{'N'};
+    db[2] = std::byte{'O'};
+    db[3] = std::byte{'D'};
+    return db;
 }
 
 void write_file(const std::filesystem::path& path, std::span<const std::byte> bytes) {
@@ -73,12 +87,14 @@ bool wii_formats() {
     std::vector<std::byte> with_crc(one.begin(), one.end());
     with_crc.push_back(std::byte{0});
     with_crc.push_back(std::byte{0});
-    const std::uint16_t crc = galaxy::host::rfl_crc(with_crc);
+    const std::uint16_t crc = facelib_crc(with_crc);
     with_crc[74] = static_cast<std::byte>(crc >> 8u);
     with_crc[75] = static_cast<std::byte>(crc & 0xFFu);
     ok &= expect(read_miis(with_crc, &error).size() == 1u, "a 76-byte .rsd with its CRC");
+    ok &= expect(galaxy::host::read_mii_file(with_crc, "rsd").format == "Wii Mii (.rsd)", "its CRC matches");
     with_crc[75] ^= std::byte{1};
     ok &= expect(read_miis(with_crc, &error).size() == 1u, "a wrong CRC: the game's checks decide");
+    ok &= expect(galaxy::host::read_mii_file(with_crc, "rsd").format == "Wii Mii (.rsd), CRC mismatch", "told");
     ok &= expect(read_miis(std::vector<std::byte>(100u), &error).empty(), "anything else");
     ok &= expect(read_miis(MiiRecord{}, &error).empty(), "an empty Mii");
 
@@ -93,10 +109,12 @@ bool wii_formats() {
     std::copy(three.begin(), three.end(), remote.begin() + 0x08 + 5 * 0x4A);
     ok &= expect(read_miis(remote, &error).size() == 2u, "a Wii Remote's block, empty slots skipped");
 
-    std::vector<std::byte> database = galaxy::host::create_empty_rfl_database();
+    std::vector<std::byte> database = console_database();
     ok &= expect(read_miis(database, &error).empty(), "an empty database");
     std::copy(two.begin(), two.end(), database.begin() + 4 + 7 * 0x4A);
     ok &= expect(read_miis(database, &error).size() == 1u, "a database's Miis");
+    const auto slots = galaxy::host::read_wii_mii_database(database);
+    ok &= expect(slots.size() == 1u && slots[0].first == 7u, "a database's Miis by slot");
 
     // A DS Mii: the Wii's 16-bit units and names little-endian.
     MiiRecord wii = mii(7u);
@@ -195,18 +213,19 @@ bool newer_formats() {
 }
 
 bool merging() {
+    using galaxy::host::MiiFields;
     using galaxy::host::merge_miis;
     bool ok = true;
-    std::vector<std::byte> db = galaxy::host::create_empty_rfl_database();
-    ok &= expect(galaxy::host::count_miis(db) == 0u, "an empty database holds none");
-    std::vector<std::pair<unsigned, MiiRecord>> placed;
+    galaxy::host::MiiLibrary db;
+    ok &= expect(galaxy::host::count_miis(db) == 0u, "an empty library holds none");
+    std::vector<std::pair<unsigned, MiiFields>> placed;
     const std::vector<MiiRecord> miis{mii(1u), mii(2u), mii(1u), mii(4u, 0xA0u)};
     const auto r = merge_miis(db, miis, {}, &placed);
     ok &= expect(r.added == 2u && r.duplicates == 1u && r.invalid == 1u && r.no_room == 0u,
                  "two added, a duplicate, a temporary ID refused");
     ok &= expect(placed.size() == 2u && placed[0].first == 0u && placed[1].first == 1u, "the first free slots");
     ok &= expect(galaxy::host::count_miis(db) == 2u, "two held");
-    ok &= expect(stored_crc(db) == crc_with_zero_field(db, db.size() - 2u), "the CRC renewed");
+    ok &= expect(db.slots[1] == galaxy::host::decode_wii_mii(mii(2u)), "held as its fields");
     const auto again = merge_miis(db, std::vector<MiiRecord>{mii(2u)}, {}, nullptr);
     ok &= expect(again.added == 0u && again.duplicates == 1u, "importing again adds nothing");
     const auto refused = merge_miis(db, std::vector<MiiRecord>{mii(9u)}, [](MiiRecord&) { return false; }, nullptr);
@@ -218,6 +237,7 @@ bool merging() {
     placed.clear();
     const auto update = merge_miis(db, std::vector<MiiRecord>{changed}, {}, &placed);
     ok &= expect(update.updated == 1u && placed.size() == 1u && placed[0].first == 1u, "a changed Mii updated");
+    ok &= expect(db.slots[1]->height == 99u, "its new fields kept");
 
     // Placeholder create IDs (tools write 80000000 00000000): fresh ones, each unique; the same Mii again a duplicate.
     MiiRecord a = mii(0u);
@@ -229,9 +249,8 @@ bool merging() {
     placed.clear();
     const auto fresh = merge_miis(db, std::vector<MiiRecord>{a, b, a}, {}, &placed);
     ok &= expect(fresh.added == 2u && fresh.duplicates == 1u, "two placeholder Miis added, the same one skipped");
-    ok &= expect(placed.size() == 2u && !galaxy::host::mii_placeholder_id(placed[0].second) &&
-                     !std::equal(placed[0].second.begin() + 0x18, placed[0].second.begin() + 0x20,
-                                 placed[1].second.begin() + 0x18),
+    ok &= expect(placed.size() == 2u && placed[0].second.create_id != placed[1].second.create_id &&
+                     (placed[0].second.create_id[0] & 0xE0u) == 0x80u && placed[0].second.create_id[4] == 'N',
                  "each a fresh create ID of its own");
 
     // Favourites: at most the Wii's ten.
@@ -249,6 +268,12 @@ bool merging() {
     const auto full = merge_miis(db, many, {}, nullptr);
     ok &= expect(full.added == 85u && full.no_room == 25u, "100 slots at most");
     ok &= expect(galaxy::host::count_miis(db) == 100u, "full");
+
+    // The library file: every field and slot read back as written.
+    const std::string text = galaxy::host::write_mii_library(db);
+    const auto read = galaxy::host::read_mii_library(text);
+    ok &= expect(read.has_value() && read->slots == db.slots, "the file holds the library");
+    ok &= expect(!galaxy::host::read_mii_library("RNOD").has_value(), "anything else is not a library");
     return ok;
 }
 
@@ -258,19 +283,31 @@ bool library() {
     std::error_code error;
     std::filesystem::remove_all(root, error);
     std::filesystem::create_directories(root / "miis", error);
-    const std::filesystem::path db = root / "RFL_DB.dat";
-    write_file(db, galaxy::host::create_empty_rfl_database());
+    const std::filesystem::path file = root / "miis.txt";
+    const std::filesystem::path console = root / "RFL_DB.dat";
+    // The library starts from the console's database (a Mii in slot 5) when its file does not exist.
+    std::vector<std::byte> database = console_database();
+    const MiiRecord ten = mii(10u);
+    std::copy(ten.begin(), ten.end(), database.begin() + 4 + 5 * 0x4A);
+    write_file(console, database);
     write_file(root / "miis" / "a.mii", mii(11u));
     write_file(root / "miis" / "notes.txt", std::vector<std::byte>(5u, std::byte{'x'}));
-    galaxy::host::set_mii_library(db, root / "miis", {});
+    galaxy::host::set_mii_library(file, console, root / "miis", {});
+    ok &= expect(galaxy::host::mii_library_count() == 1u && galaxy::host::mii_library_slot(5u).has_value(),
+                 "the console's Mii in its slot");
+    ok &= expect(std::filesystem::exists(file), "the library file written from it");
     std::string message;
     const auto r = galaxy::host::import_mii_folder(&message);
     ok &= expect(r.added == 1u, "the folder's Mii added");
     ok &= expect(message == "ADDED 1, 1 FILE(S) NOT MII DATA", "the message");
-    ok &= expect(galaxy::host::mii_library_count() == 1u, "the library holds it");
+    ok &= expect(galaxy::host::mii_library_count() == 2u, "the library holds it");
     const auto installs = galaxy::host::take_mii_installs();
     ok &= expect(installs.size() == 1u && installs[0].first == 0u, "queued for the running game");
     ok &= expect(galaxy::host::take_mii_installs().empty(), "once");
+    // The next start reads the library's file, not the console's database.
+    std::filesystem::remove(console, error);
+    galaxy::host::set_mii_library(file, console, root / "miis", {});
+    ok &= expect(galaxy::host::mii_library_count() == 2u, "the next start reads its file");
     const auto again = galaxy::host::import_mii_folder(&message);
     ok &= expect(again.added == 0u && again.duplicates == 1u, "the next start adds nothing");
     ok &= expect(galaxy::host::take_mii_installs().empty(), "nothing queued");
@@ -292,6 +329,13 @@ bool library() {
     (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&kept_a, 1u), &message);
     ok &= expect(!std::filesystem::exists(root / "miis" / "a (2).mii"), "a file in the folder not copied again");
     (void)galaxy::host::take_mii_installs();
+
+    // A damaged library file is left alone.
+    write_file(file, std::vector<std::byte>(3u, std::byte{'?'}));
+    galaxy::host::set_mii_library(file, console, root / "miis", {});
+    (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&b, 1u), &message);
+    ok &= expect(message == "THE MII LIBRARY FILE IS DAMAGED" && std::filesystem::file_size(file) == 3u,
+                 "a damaged file left alone");
     std::filesystem::remove_all(root, error);
     return ok;
 }

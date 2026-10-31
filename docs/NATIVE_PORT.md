@@ -243,7 +243,7 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 | Heap sizes: pointers double in size natively, so fixed JKRHeap sizes need a 64-bit allowance | open |
 | `nw4r::ut::RomFont`: the console's system font comes from the IPL ROM, not the disc | deleted: nothing in the game reaches it (the console's linker dropped it too) |
 | THP movies (prologue, endings, final battle): Petari's decoder is paired-single assembly | video through v1.0.1's decoder with each frame's size, audio in `native/sdk/thp`; a route that reaches a movie is still to run |
-| Mii data (RFL) without a console NAND | an empty database (RFL_DB.dat) is created, as v1.0.1 does; Mii import (runtime/src/mii_import.cpp, mii_formats.cpp) adds any console's Miis to it and to the running game's (nebula_game_mii_prepare/install) |
+| Mii data (RFL) without a console NAND | the Mii library is a native file (nebula-miis.txt in the data folder, one line of fields per Mii), started once from a NAND's RFL_DB.dat when it has one; Mii import (runtime/src/mii_import.cpp, mii_formats.cpp) adds any console's Miis to it and the running game reads them as typed records (mii_record) |
 | Volume categories (music, effects, voices) natively | open: v1.0.1 classifies channels from game memory; the native game will report each channel's category |
 | The remote speaker's sound | not in v1.0.1 (a v2 feature on wt-motion); the game's speaker sound reaches the host as 6 kHz samples (`speaker_samples`) and is not played yet |
 | Crash dumps, the single-instance lease and the launcher for NebulaNative | open (release, P7) |

@@ -2,7 +2,6 @@
 // Remote input reports (with the scripted and replayed test input), vibration and the virtual Wii devices.
 #include "galaxy/native_host.h"
 #include "galaxy/host_env.h"
-#include "galaxy/wii_device_data.h"
 
 #include "galaxy/native_audio_queue.h"
 #include "galaxy/platform_time.h"
@@ -1583,10 +1582,6 @@ private:
 
 }  // namespace
 
-
-std::vector<std::byte> native_game_empty_mii_database() {
-    return create_empty_rfl_database();
-}
 
 struct NativeGameAudio::State {
     JAudioHostMixer mixer;

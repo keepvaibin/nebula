@@ -1915,9 +1915,12 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
 }
 
 
-// The Mii database in the file a console keeps it in, so the Miis a NAND (or an earlier Nebula) already holds stay
-// where they are; the game reads its slots as typed records.
-fs::path mii_database_path() {
+// The Mii library's file (mii_import.h) in the data folder; a NAND's console database (or an earlier Nebula's) is
+// where it starts the first time, so the Miis it holds stay in their slots. The game reads the slots as typed records.
+fs::path mii_library_path() {
+    return gNandRoot / "nebula-miis.txt";
+}
+fs::path console_mii_database_path() {
     return gNandRoot / "shared2/menu/FaceLib/RFL_DB.dat";
 }
 
@@ -1976,12 +1979,12 @@ NebulaMii nebula_mii(const galaxy::host::MiiFields& f) {
 }
 
 int32_t svc_mii_record(void*, uint32_t slot, NebulaMii* mii) {
-    const std::optional<galaxy::host::MiiRecord> record = galaxy::host::mii_library_slot(slot);
-    if (!record) {
+    const std::optional<galaxy::host::MiiFields> fields = galaxy::host::mii_library_slot(slot);
+    if (!fields) {
         return 0;
     }
     if (mii != nullptr) {
-        *mii = nebula_mii(galaxy::host::decode_wii_mii(*record));
+        *mii = nebula_mii(*fields);
     }
     return 1;
 }
@@ -3603,20 +3606,6 @@ int main(int argc, char** argv) {
     gNandRoot = nand;
     std::error_code error;
     fs::create_directories(gNandRoot / "tmp", error);  // where saves stage their banner before moving it
-#if defined(NEBULA_HOST_RENDERER)
-    // The system's Mii database, which every console has: an empty one when this NAND has none (the game treats a
-    // missing database as a NAND error when it saves).
-    const fs::path mii_database = mii_database_path();
-    if (!fs::exists(mii_database, error)) {
-        fs::create_directories(mii_database.parent_path(), error);
-        const std::vector<std::byte> bytes = galaxy::host::native_game_empty_mii_database();
-        if (FILE* file = std::fopen(mii_database.string().c_str(), "wb")) {
-            std::fwrite(bytes.data(), 1, bytes.size(), file);
-            std::fclose(file);
-        }
-    }
-#endif
-
     open_pak(pak);
     boot_mark("disc opened");
     load_module(module);
@@ -3625,13 +3614,13 @@ int main(int argc, char** argv) {
     galaxy::render::set_texture_pack_game_id(gPak.id);  // packs' and dumps' game folders: the disc's release
     {
         // Mii import: the files in the import folder (next to the settings: any console's Mii files, mii_formats.h)
-        // join the database before the game reads it; the settings import more while it runs.
+        // join the library before the game reads it; the settings import more while it runs.
         const fs::path settings_folder = galaxy::runtime_settings_folder();
         const fs::path import_folder = settings_folder.empty() ? fs::path{} : settings_folder / "miis";
         if (!import_folder.empty()) {
             fs::create_directories(import_folder, error);
         }
-        galaxy::host::set_mii_library(mii_database, import_folder,
+        galaxy::host::set_mii_library(mii_library_path(), console_mii_database_path(), import_folder,
                                       [](galaxy::host::MiiRecord& mii) {
                                           galaxy::host::fix_wii_mii(mii);
                                           const NebulaMii fields = nebula_mii(galaxy::host::decode_wii_mii(mii));
@@ -3639,7 +3628,7 @@ int main(int argc, char** argv) {
                                       });
         std::string message;
         (void)galaxy::host::import_mii_folder(&message);
-        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the database)\n", import_folder.string().c_str(),
+        std::fprintf(stderr, "[mii] import folder %s: %s (%u in the library)\n", import_folder.string().c_str(),
                      message.c_str(), galaxy::host::mii_library_count());
         (void)galaxy::host::take_mii_installs();  // in the file the game reads at boot
     }
