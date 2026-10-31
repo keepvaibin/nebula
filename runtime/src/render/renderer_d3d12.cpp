@@ -8224,7 +8224,7 @@ bool RendererD3D12::begin_target_pass(std::uint16_t width, std::uint16_t height)
 }
 
 void RendererD3D12::end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height,
-                                    TextureCache& textures) {
+                                    std::uint8_t channels, TextureCache& textures) {
     if (!target_pass_active_) {
         return;
     }
@@ -8237,7 +8237,7 @@ void RendererD3D12::end_target_pass(std::uint64_t key, std::uint16_t width, std:
     barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
     command_list_->ResourceBarrier(1, &barrier);
-    textures.register_target(key, width, height, gpu::TextureRef(target_efb_.color));
+    textures.register_target(key, width, height, gpu::TextureRef(target_efb_.color), channels);
     target_efb_.color.Reset();
 }
 

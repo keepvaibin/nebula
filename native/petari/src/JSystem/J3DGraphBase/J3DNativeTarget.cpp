@@ -13,10 +13,10 @@ namespace J3DNativeTarget {
                             clearRgba, clearZ & 0xFFFFFF);
     }
 
-    void end(const void* pKey) {
+    void end(const void* pKey, NebulaTargetChannels channels) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
-        pHost->target_end(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)));
+        pHost->target_end(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), static_cast< u32 >(channels));
     }
     void clear(u32 clearRgba, u32 clearZ, u32 channels) {
         J3DNativeShape::flushState();
@@ -31,6 +31,10 @@ void J3DNativeTargetBegin(const void* pKey, u16 width, u16 height, u32 clearRgba
 
 void J3DNativeTargetEnd(const void* pKey) {
     J3DNativeTarget::end(pKey);
+}
+
+void J3DNativeTargetEndChannels(const void* pKey, NebulaTargetChannels channels) {
+    J3DNativeTarget::end(pKey, channels);
 }
 
 void J3DNativeTargetClear(u32 clearRgba, u32 clearZ, u32 channels) {

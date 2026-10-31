@@ -2142,16 +2142,17 @@ void svc_target_begin(void*, uint64_t key, uint16_t width, uint16_t height, uint
 #endif
 }
 
-void svc_target_end(void*, uint64_t key) {
+void svc_target_end(void*, uint64_t key, uint32_t channels) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
     shapes::Record record;
     record.kind = shapes::Record::Kind::TargetEnd;
     record.key = key;
+    record.target_channels = static_cast<std::uint8_t>(channels);
     attach_pending_records();
     galaxy::render::attach_shape_record(std::move(record));
 #else
-    (void)key;
+    (void)key, (void)channels;
 #endif
 }
 

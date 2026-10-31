@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/MapObj/NormalMapBase.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
@@ -884,6 +885,8 @@ void NormalMapBase::indirectCapture() const {
                 s32 screenHeight = MR::getScreenHeight();
                 f32 scaleY = static_cast< f32 >(MR::getScreenHeight()) / screenHeight;
                 TVec3f position(0.0f, 0.0f, 0.0f);
+                // The light texture is drawn into a target of its own size (E-07): intensity from red, and alpha.
+                J3DNativeTarget::begin(_4B8->mImage, _4B8->getWidth(), _4B8->getHeight(), 0, 0xFFFFFF);
                 J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
                 J3DNativeDraw::position(position.x, position.y, 0.0f);
                 J3DNativeDraw::texCoord(0.0f, 0.0f);
@@ -893,7 +896,7 @@ void NormalMapBase::indirectCapture() const {
                 J3DNativeDraw::texCoord(1.0f, 1.0f);
                 J3DNativeDraw::position(position.x, position.y + scaleY * pTexture->getHeight(), 0.0f);
                 J3DNativeDraw::texCoord(0.0f, 1.0f);
-                _4B8->capture(0, 0, GX_CTF_RA8, false, 0);
+                J3DNativeTarget::end(_4B8->mImage, NEBULA_TARGET_INTENSITY_ALPHA);
                 break;
             }
         }

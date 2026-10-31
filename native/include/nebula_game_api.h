@@ -863,6 +863,16 @@ typedef struct NebulaMii {
     uint8_t create_id[8];
 } NebulaMii;
 
+/* The channels a target pass's picture carries for the textures that sample it (target_end). */
+typedef enum NebulaTargetChannels {
+    NEBULA_TARGET_RGBA = 0,            /* colour and alpha */
+    NEBULA_TARGET_INTENSITY_ALPHA = 1, /* intensity (the red channel) and alpha */
+    NEBULA_TARGET_ALPHA = 2,           /* alpha alone, read in every channel */
+    NEBULA_TARGET_RED = 3,             /* one colour channel, read in every channel */
+    NEBULA_TARGET_GREEN = 4,
+    NEBULA_TARGET_BLUE = 5
+} NebulaTargetChannels;
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -1062,8 +1072,8 @@ typedef struct NebulaHostServices {
     void (*target_begin)(void* user, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba,
                          uint32_t clear_z);
     /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
-       naming `key` reads it, whatever format it names). */
-    void (*target_end)(void* user, uint64_t key);
+       naming `key` reads it, whatever format it names), carrying `channels` (NebulaTargetChannels). */
+    void (*target_end)(void* user, uint64_t key, uint32_t channels);
     /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` / `clear_z`. */
     void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from

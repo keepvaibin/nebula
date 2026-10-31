@@ -5,6 +5,7 @@
 
 #include "galaxy/render/vk/vk_context.h"
 
+#include <array>
 #include <cstdint>
 #include <memory>
 #include <vector>
@@ -35,6 +36,10 @@ public:
     [[nodiscard]] bool ready() const noexcept { return !views_.empty(); }
 
     void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels);
+    // The same with the channels each sampled channel reads (0-3: R, G, B, A): the texture's sampled view is
+    // replaced by one with that mapping (a target's picture, sampled through the cache only).
+    void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels,
+                    const std::array<std::uint8_t, 4>& swizzle);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).

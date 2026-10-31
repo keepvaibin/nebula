@@ -76,6 +76,19 @@ void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, un
     device_->CreateShaderResourceView(texture, &srv_desc, cpu);
 }
 
+void TextureBackend::write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels,
+                                const std::array<std::uint8_t, 4>& swizzle) {
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+    srv_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv_desc.Shader4ComponentMapping =
+        D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(swizzle[0], swizzle[1], swizzle[2], swizzle[3]);
+    srv_desc.Texture2D.MipLevels = static_cast<UINT>(levels);
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = srv_cpu_base_;
+    cpu.ptr += static_cast<SIZE_T>(index) * srv_stride_;
+    device_->CreateShaderResourceView(texture, &srv_desc, cpu);
+}
+
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {
     UploadChunk chunk{};
     chunk.size = size;

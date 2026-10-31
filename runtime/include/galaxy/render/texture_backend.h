@@ -7,6 +7,7 @@
 
 #include "galaxy/render/gpu_types.h"
 
+#include <array>
 #include <cstdint>
 
 #if defined(NEBULA_GPU_VULKAN)
@@ -34,6 +35,9 @@ public:
 
     // A Texture2D view of `levels` mips in slot `index`: RGBA8, or a one-byte texture's value in every channel.
     void write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels);
+    // The same with the channels each sampled channel reads (0-3: R, G, B, A of the texture).
+    void write_view(std::uint32_t index, ID3D12Resource* texture, unsigned levels,
+                    const std::array<std::uint8_t, 4>& swizzle);
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // A DEFAULT-heap texture in the copy-destination state: RGBA8, or one byte per texel (`grey`, a movie plane).

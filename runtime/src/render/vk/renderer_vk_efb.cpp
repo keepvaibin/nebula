@@ -670,7 +670,7 @@ bool RendererVk::begin_target_pass(std::uint16_t width, std::uint16_t height) {
 }
 
 void RendererVk::end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height,
-                                 TextureCache& textures) {
+                                 std::uint8_t channels, TextureCache& textures) {
     if (!target_pass_active_) {
         return;
     }
@@ -685,7 +685,7 @@ void RendererVk::end_target_pass(std::uint64_t key, std::uint16_t width, std::ui
                   VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
                   VK_ACCESS_SHADER_READ_BIT);
     picture->layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    textures.register_target(key, width, height, std::move(picture));
+    textures.register_target(key, width, height, std::move(picture), channels);
     destroy_efb_set(target_efb_);
     target_efb_scale_ = 0u;
     bind_efb(nullptr);

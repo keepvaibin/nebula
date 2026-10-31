@@ -154,7 +154,9 @@ public:
     // A target pass's picture (E-07) at `address`, `width` x `height` in the game's units: a draw sampling that
     // address at that size reads it whatever format its texture object names (the picture at full precision).
     // Replaces an earlier picture there; the texture is the cache's from now on.
-    void register_target(std::uint64_t address, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture);
+    // `channels` (NebulaTargetChannels) picks the channels the samplers read (texture_backend write_view swizzle).
+    void register_target(std::uint64_t address, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+                         std::uint8_t channels = 0u);
 
     // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
     // content lives on the GPU, not in game memory.

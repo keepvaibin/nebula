@@ -253,7 +253,8 @@ public:
     [[nodiscard]] bool begin_target_pass(std::uint16_t width, std::uint16_t height);
     // Ends it: the EFB comes back and the target's picture becomes texture `key` in `textures` (at full
     // precision, sampled in any format at that size); the next pass makes a fresh target.
-    void end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height, TextureCache& textures);
+    void end_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height, std::uint8_t channels,
+                         TextureCache& textures);
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the

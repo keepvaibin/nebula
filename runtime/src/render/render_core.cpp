@@ -9069,7 +9069,8 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
         return;
     }
     flush_pending_draw_batch();
-    renderer_.end_target_pass(record.key, target_pass_size_[0], target_pass_size_[1], texture_cache_);
+    renderer_.end_target_pass(record.key, target_pass_size_[0], target_pass_size_[1], record.target_channels,
+                              texture_cache_);
     frame_bindings_dirty_ = true;
 }
 

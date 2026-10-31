@@ -63,6 +63,29 @@ void TextureBackend::write_view(std::uint32_t index, vk::Texture* texture, unsig
     views_[index] = texture->view;
 }
 
+void TextureBackend::write_view(std::uint32_t index, vk::Texture* texture, unsigned levels,
+                                const std::array<std::uint8_t, 4>& swizzle) {
+    if (swizzle != std::array<std::uint8_t, 4>{0, 1, 2, 3}) {
+        static constexpr VkComponentSwizzle kChannel[4] = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+                                                         VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A};
+        VkImageViewCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        info.image = texture->image;
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = texture->format;
+        info.components = {kChannel[swizzle[0] & 3u], kChannel[swizzle[1] & 3u], kChannel[swizzle[2] & 3u],
+                           kChannel[swizzle[3] & 3u]};
+        info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, levels, 0u, 1u};
+        VkImageView view = VK_NULL_HANDLE;
+        if (vkCreateImageView(vk::Context::get().device(), &info, nullptr, &view) == VK_SUCCESS) {
+            const VkDevice device = vk::Context::get().device();
+            const VkImageView old = texture->view;
+            vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+            texture->view = view;
+        }
+    }
+    views_[index] = texture->view;
+}
+
 TextureBackend::UploadChunk TextureBackend::create_upload_chunk(std::uint64_t size) {
     UploadChunk chunk{};
     chunk.resource = vk::Context::get().create_buffer(size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, "texture upload arena");

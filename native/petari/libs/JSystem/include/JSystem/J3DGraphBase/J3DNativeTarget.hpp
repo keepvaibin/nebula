@@ -12,7 +12,7 @@ namespace J3DNativeTarget {
     // (R << 24 | G << 16 | B << 8 | A) and depth `clearZ` (24 bits).
     void begin(const void* pKey, u16 width, u16 height, u32 clearRgba, u32 clearZ);
     // Closes it: the picture, at full precision, as texture `pKey`.
-    void end(const void* pKey);
+    void end(const void* pKey, NebulaTargetChannels channels = NEBULA_TARGET_RGBA);
     // Clears channels of the open pass (`channels`: 1 colour, 2 alpha, 4 depth).
     void clear(u32 clearRgba, u32 clearZ, u32 channels);
 };  // namespace J3DNativeTarget
@@ -22,6 +22,7 @@ extern "C" {
 // The same for the C sources (RVLFaceLib).
 void J3DNativeTargetBegin(const void* pKey, u16 width, u16 height, u32 clearRgba, u32 clearZ);
 void J3DNativeTargetEnd(const void* pKey);
+void J3DNativeTargetEndChannels(const void* pKey, NebulaTargetChannels channels);
 void J3DNativeTargetClear(u32 clearRgba, u32 clearZ, u32 channels);
 #ifdef __cplusplus
 }

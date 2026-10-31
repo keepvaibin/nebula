@@ -132,7 +132,7 @@ struct Record {
     // A target pass (TargetBegin and TargetEnd, the target at `key`): its size, clear colour (RGBA) and depth.
     std::uint16_t target_width = 0, target_height = 0;
     std::uint32_t target_clear_rgba = 0, target_clear_z = 0;
-    // TargetClear: the channels cleared (1 colour, 2 alpha, 4 depth).
+    // TargetClear: the channels cleared (1 colour, 2 alpha, 4 depth); TargetEnd: NebulaTargetChannels.
     std::uint8_t target_channels = 0;
 };
 // Vectors of records move them when they grow (a throwing move would copy them).

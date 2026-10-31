@@ -1718,12 +1718,15 @@ bool TextureCache::register_efb_copy(
 }
 
 void TextureCache::register_target(std::uint64_t address, std::uint16_t width, std::uint16_t height,
-                                   gpu::TextureRef texture) {
+                                   gpu::TextureRef texture, std::uint8_t channels) {
     if (!backend_.ready() || !texture) {
         throw std::runtime_error("[TextureCache] invalid target picture");
     }
+    // Each channel the samplers read: 0-3 the picture's R, G, B, A.
+    static constexpr std::array<std::array<std::uint8_t, 4>, 6> kSwizzle{{
+        {0, 1, 2, 3}, {0, 0, 0, 3}, {3, 3, 3, 3}, {0, 0, 0, 0}, {1, 1, 1, 1}, {2, 2, 2, 2}}};
     const std::uint32_t srv_idx = allocate_srv_index();
-    backend_.write_view(srv_idx, gpu::raw(texture), 1u);
+    backend_.write_view(srv_idx, gpu::raw(texture), 1u, kSwizzle[channels < kSwizzle.size() ? channels : 0u]);
     Entry entry{};
     entry.handle.resource = gpu::raw(texture);
     entry.handle.srv_index = srv_idx;
