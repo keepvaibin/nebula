@@ -476,6 +476,17 @@ namespace {
     NebulaDrawMatrix sRecord[2 * J3DNativeShape::kPositions + 64];
 
     NebulaDrawMatrix* nextTexture(u32 kind, u32 place) {
+        // A texture matrix given again for the same place before a record replaces the pending one, as a load into
+        // a slot replaces what the slot held: only the last one before a draw is the one it reads.
+        for (u32 i = 0; i < sTextureCount; i++) {
+            if (sTextures[i].kind == kind && sTextures[i].place == place) {
+                NebulaDrawMatrix* pOut = &sTextures[i];
+                memset(pOut, 0, sizeof(*pOut));
+                pOut->kind = static_cast< u8 >(kind);
+                pOut->place = static_cast< u8 >(place);
+                return pOut;
+            }
+        }
         if (sTextureCount == sizeof(sTextures) / sizeof(sTextures[0])) {
             fail("more texture matrices before one draw than a draw can carry", nullptr);
             return nullptr;
