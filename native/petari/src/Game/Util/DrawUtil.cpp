@@ -366,10 +366,6 @@ namespace MR {
         MR::multMtx(*pMtx, matrix, mat);
     }
 
-    void nonFilteredCapture(JUTTexture* pTexture, s16 width, s16 height) {
-        pTexture->capture(width, height, (GXTexFmt)pTexture->getFormat(), false, 0);
-    }
-
     void simpleDraw(J3DModel* pModel, J3DMaterial* pMaterial) {
         if (pMaterial != nullptr && pMaterial->mShape != nullptr && !pMaterial->mShape->checkFlag(1)) {
             J3DMatPacket* pMatPacket = pModel->getMatPacket(pMaterial->mIndex);

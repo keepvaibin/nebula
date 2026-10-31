@@ -16,9 +16,9 @@ namespace {
     f32 sViewport[6] = {};
     f32 sZScale = 16777216.0f;
     f32 sZOffset = 0.0f;
-    // The scissor's corners in GX's coordinates (GXSetScissor's fields).
+    // The scissor box: left, top, width, height.
     bool sScissorSet = false;
-    u32 sScissorTop = 0, sScissorLeft = 0, sScissorBottom = 0, sScissorRight = 0;
+    u32 sScissor[4] = {};
 
     void sendOp(const NebulaStateOp& rOp) {
         const NebulaHostServices* pHost = nebula_host();
@@ -138,12 +138,10 @@ namespace J3DNativeView {
     }
 
     void setScissor(u32 left, u32 top, u32 width, u32 height) {
-        const u32 tp = top + 342;
-        const u32 lf = left + 342;
-        sScissorTop = tp & 0x7FF;
-        sScissorLeft = lf & 0x7FF;
-        sScissorBottom = (tp + height - 1) & 0x7FF;
-        sScissorRight = (lf + width - 1) & 0x7FF;
+        sScissor[0] = left;
+        sScissor[1] = top;
+        sScissor[2] = width;
+        sScissor[3] = height;
         sScissorSet = true;
         NebulaStateOp op;
         memset(&op, 0, sizeof(op));
@@ -159,19 +157,10 @@ namespace J3DNativeView {
         if (!sScissorSet) {
             JUTException::panic_f(__FILE__, __LINE__, "J3DNativeView: the scissor read before the game set one");
         }
-        *pLeft = sScissorLeft - 342;
-        *pTop = sScissorTop - 342;
-        *pWidth = sScissorRight - sScissorLeft + 1;
-        *pHeight = sScissorBottom - sScissorTop + 1;
-    }
-
-    void setScissorBoxOffset(s32 x, s32 y) {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.kind = NEBULA_STATE_SCISSOR_OFFSET;
-        op.f[0] = static_cast< f32 >(x);
-        op.f[1] = static_cast< f32 >(y);
-        sendOp(op);
+        *pLeft = sScissor[0];
+        *pTop = sScissor[1];
+        *pWidth = sScissor[2];
+        *pHeight = sScissor[3];
     }
 };  // namespace J3DNativeView
 

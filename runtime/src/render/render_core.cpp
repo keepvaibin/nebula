@@ -8847,8 +8847,7 @@ bool RenderCore::begin_cached_draw_run(
     gpu::TopologyType topology_type{};
     gx_topology_for_primitive(primitive, topology, topology_type);
 
-    const EfbScissor efb_sc = efb_scissor(draw_state_.scissor, draw_state_.scissor_offset, 640, 528);
-    const ScissorRect sc = efb_sc.rect;
+    const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
     // GX_CULL_ALL.
     cached_draw_run_scissor_reject_ =
@@ -8904,9 +8903,6 @@ bool RenderCore::begin_cached_draw_run(
     for (unsigned i = 0; i < 6; ++i) {
         cached_draw_run_state_call_.xf_viewport[i] = draw_state_.viewport[i];
     }
-    // Viewport origin in EFB pixels: screen position minus the scissor offset.
-    cached_draw_run_state_call_.xf_viewport[3] -= static_cast<float>(efb_sc.offset.x);
-    cached_draw_run_state_call_.xf_viewport[4] -= static_cast<float>(efb_sc.offset.y);
     cached_draw_run_state_call_.has_viewport =
         cached_draw_run_state_call_.xf_viewport[0] > 0.0f &&
         cached_draw_run_state_call_.xf_viewport[1] < 0.0f;

@@ -193,7 +193,6 @@ enum {
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
     NEBULA_STATE_VIEWPORT,          /* f: x scale, y scale, z scale, x origin, y origin, z origin (GX's terms) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
-    NEBULA_STATE_SCISSOR_OFFSET,    /* f: x, y (pixels) */
     NEBULA_STATE_TEV_KCOLOR,        /* konst register, r, g, b, a */
     NEBULA_STATE_TEV_COLOR_S10,     /* register; size: r, g; f: b, a (signed 10-bit values) */
     NEBULA_STATE_CLIP_MODE,         /* mode (GXClipMode) */

@@ -45,7 +45,6 @@ namespace MR {
     void loadTexProjectionMtx(u32);
     // The camera's projection to screen texture coordinates (s, t, q from a world position) loadTexProjectionMtx loads.
     void calcTexProjectionMtx(TPos3f*);
-    void nonFilteredCapture(JUTTexture*, s16, s16);
     void simpleDraw(J3DModel*, J3DMaterial*);
     void activateGameSceneDraw3D();
     void deactivateGameSceneDraw3D();

@@ -551,19 +551,11 @@ void NativeDrawState::set_op(const state::Op& op) {
         coord[a[0] & 7u].point_offset = (a[2] & 1u) != 0u;
         break;
     case state::kScissor: {
-        // GX's coordinates (342 added), 11 bits each, read back as the rasterizer holds them.
-        const auto left = static_cast<std::uint32_t>(op.f[0]);
-        const auto top = static_cast<std::uint32_t>(op.f[1]);
-        const std::uint32_t tp = top + 342u, lf = left + 342u;
-        const std::uint32_t bm = tp + static_cast<std::uint32_t>(op.f[3]) - 1u;
-        const std::uint32_t rt = lf + static_cast<std::uint32_t>(op.f[2]) - 1u;
-        scissor = decode_scissor((tp & 0x7FFu) | (lf & 0x7FFu) << 12u, (bm & 0x7FFu) | (rt & 0x7FFu) << 12u);
-        break;
-    }
-    case state::kScissorOffset: {
-        const std::uint32_t hx = static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[0]) + 342) >> 1u;
-        const std::uint32_t hy = static_cast<std::uint32_t>(static_cast<std::int32_t>(op.f[1]) + 342) >> 1u;
-        scissor_offset = decode_scissor_offset((hx & 0x3FFu) | (hy & 0x3FFu) << 10u);
+        // Left, top, width, height: the box's corners, inclusive.
+        const auto left = static_cast<std::int32_t>(op.f[0]);
+        const auto top = static_cast<std::int32_t>(op.f[1]);
+        scissor = ScissorRect{left, top, left + static_cast<std::int32_t>(op.f[2]) - 1,
+                              top + static_cast<std::int32_t>(op.f[3]) - 1};
         break;
     }
     case state::kTexLookup:

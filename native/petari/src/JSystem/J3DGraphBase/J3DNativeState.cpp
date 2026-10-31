@@ -512,7 +512,6 @@ namespace J3DNativeState {
         setCullMode(GX_CULL_BACK);
         setClipMode(GX_CLIP_ENABLE);
         J3DNativeView::setScissor(0, 0, cDefaultWidth, cDefaultHeight);
-        J3DNativeView::setScissorBoxOffset(0, 0);
         setNumChans(0);
         setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         setChanAmbColor(GX_COLOR0A0, black);
