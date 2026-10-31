@@ -3,7 +3,7 @@
 
 #ifdef TARGET_PC
 #include "Game/System/WPadHolder.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     // A shake press's swing lasts as long as a flick of the remote keeps the detector above its threshold.

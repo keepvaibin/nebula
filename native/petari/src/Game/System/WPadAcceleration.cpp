@@ -2,7 +2,6 @@
 #include "Game/System/WPad.hpp"
 #include "Game/System/WPadHolder.hpp"
 #include "Game/Util/MathUtil.hpp"
-#include <revolution/wpad.h>
 
 namespace {
     bool sSelectDominantRotation;

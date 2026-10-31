@@ -3,7 +3,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void SphereAccelSensorController_FORCE_MATCH_SDATA2() {
     (void)1.0f;

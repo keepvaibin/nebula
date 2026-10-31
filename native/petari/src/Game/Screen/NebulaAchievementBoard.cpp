@@ -31,7 +31,7 @@
 #include <nw4r/ut/Font.h>
 #include <revolution/gx.h>
 #include <revolution/os.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 
 namespace NrvNebulaAchievementBoard {

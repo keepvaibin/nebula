@@ -9,7 +9,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <revolution/gx/GXStruct.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void SpiderThreadPart_DUMMY() {
     TVec3f a(1.0f);

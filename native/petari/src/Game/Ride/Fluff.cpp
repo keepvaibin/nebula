@@ -4,7 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Ride/FluffWind.hpp"
 #include "Game/Util.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     static const s32 sFreeBloomFlyUpStep = 15;

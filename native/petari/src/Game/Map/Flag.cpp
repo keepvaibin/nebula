@@ -1,5 +1,4 @@
 #include "Game/Map/Flag.hpp"
-#include <revolution/kpad.h>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -416,7 +415,7 @@ void Flag::draw() const {
     if (mStickLength > 0.0f) {
         TVec3f pos(mPosition.x, mPosition.y, mPosition.z);
 
-        const Vec2 stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
+        const TVec2f stickCoords[] = {{1.0f, 0.0f}, {0.0f, 1.0f}, {-1.0f, 0.0f}, {1.0f, 0.0f}};
 
         // The stick's colours are ::sStickColors' entries, its texture coordinate mTexST's first.
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 8, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);

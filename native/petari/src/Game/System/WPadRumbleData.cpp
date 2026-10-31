@@ -1,6 +1,6 @@
 #include "Game/System/WPadRumbleData.hpp"
 #include "Game/Util/HashUtil.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 static RumblePattern gRumblePatternTable[] = {
     {

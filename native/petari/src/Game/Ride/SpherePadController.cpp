@@ -5,7 +5,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TQuat.hpp>
 #include <JSystem/JGeometry/TUtil.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void SpherePadController_DUMMY() {
     TPos3f m;

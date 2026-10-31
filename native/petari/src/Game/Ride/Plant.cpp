@@ -29,7 +29,7 @@
 #include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
 #include <revolution/types.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     static const f32 sDistanceNear = 700.0f;

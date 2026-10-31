@@ -1,5 +1,5 @@
 #include "Game/Screen/StarPointerBlur.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>

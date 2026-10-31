@@ -24,7 +24,7 @@
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     static const f32 sPointInterval = 50.0f;

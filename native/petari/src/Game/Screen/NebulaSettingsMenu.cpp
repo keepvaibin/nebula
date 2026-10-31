@@ -24,7 +24,7 @@
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
 #include <revolution/os.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 #include <wstring.h>
 #include "Game/System/NebulaHost.hpp"
 
