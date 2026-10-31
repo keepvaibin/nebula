@@ -2621,7 +2621,11 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
                 break;
             }
         }
+#if defined(__cpp_lib_atomic_ref)
         std::atomic_ref<int32_t>(*const_cast<int32_t*>(r.status)).store(result, std::memory_order_release);
+#else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
+        __atomic_store_n(const_cast<int32_t*>(r.status), result, __ATOMIC_RELEASE);
+#endif
     });
 }
 

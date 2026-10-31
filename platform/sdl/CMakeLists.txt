@@ -62,53 +62,52 @@ galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
 
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_gx_vk STATIC
-    ${rt}/gx/renderer_api.cpp
-    ${rt}/gx/gx_state.cpp
-    ${rt}/gx/frame_completion.cpp
-    ${rt}/gx/render_config.cpp
-    ${rt}/gx/renderer_common.cpp
-    ${rt}/gx/upload_ring.cpp
-    ${rt}/gx/texture_cache.cpp
-    ${rt}/gx/texture_pack.cpp
-    ${rt}/gx/texture_pack_codecs.cpp
-    ${rt}/gx/movie_replacement.cpp
-    ${rt}/gx/vertex_loader.cpp
-    ${rt}/gx/curved_surfaces.cpp
-    ${rt}/gx/native_shapes.cpp
-    ${rt}/gx/shader_keys.cpp
-    ${rt}/gx/efb_copy.cpp
-    ${rt}/gx/line_point_raster.cpp
-    ${rt}/gx/shader_gen.cpp
-    ${rt}/gx/uber_shaders.cpp
+    ${rt}/render/renderer_api.cpp
+    ${rt}/render/render_config.cpp
+    ${rt}/render/renderer_common.cpp
+    ${rt}/render/upload_ring.cpp
+    ${rt}/render/texture_cache.cpp
+    ${rt}/render/texture_pack.cpp
+    ${rt}/render/texture_pack_codecs.cpp
+    ${rt}/render/movie_replacement.cpp
+    ${rt}/render/curved_surfaces.cpp
+    ${rt}/render/native_shapes.cpp
+    ${rt}/render/native_material.cpp
+    ${rt}/render/draw_state.cpp
+    ${rt}/render/draw_matrices.cpp
+    ${rt}/render/shader_keys.cpp
+    ${rt}/render/efb_copy.cpp
+    ${rt}/render/line_point_raster.cpp
+    ${rt}/render/shader_gen.cpp
+    ${rt}/render/uber_shaders.cpp
     ${galaxy_uber_embed_cpp}
-    ${rt}/gx/post_process_settings.cpp
-    ${rt}/gx/transform_history.cpp
-    ${rt}/gx/fifo_parser.cpp
-    ${rt}/gx/render_core.cpp
-    ${rt}/gx/game_lights.cpp
-    ${rt}/gx/game_objects.cpp
-    ${rt}/gx/rt_tev_eval.cpp
-    ${rt}/gx/galaxy_select.cpp
-    ${rt}/gx/frame_interpolation.cpp
-    ${rt}/gx/interp_gpu.cpp
-    ${rt}/gx/rt_surfaces.cpp
-    ${rt}/gx/rt_materials.cpp
-    ${rt}/gx/enhanced_lighting.cpp
+    ${rt}/render/post_process_settings.cpp
+    ${rt}/render/transform_history.cpp
+    ${rt}/render/render_core.cpp
+    ${rt}/render/game_lights.cpp
+    ${rt}/render/game_objects.cpp
+    ${rt}/render/rt_tev_eval.cpp
+    ${rt}/render/galaxy_select.cpp
+    ${rt}/render/frame_interpolation.cpp
+    ${rt}/render/interp_gpu.cpp
+    ${rt}/render/rt_surfaces.cpp
+    ${rt}/render/rt_materials.cpp
+    ${rt}/render/enhanced_lighting.cpp
     ${rt}/frame_telemetry.cpp
     ${rt}/perf_hint.cpp
-    ${rt}/gx/game_asset_extract.cpp
-    ${rt}/gx/vk/vk_context.cpp
-    ${rt}/gx/vk/device_quirks_vk.cpp
-    ${rt}/gx/vk/vk_libraries.cpp
-    ${rt}/gx/vk/shader_compile_vk.cpp
-    ${rt}/gx/vk/texture_backend_vk.cpp
-    ${rt}/gx/vk/pipeline_cache_vk.cpp
-    ${rt}/gx/vk/compile_journal.cpp
-    ${rt}/gx/vk/renderer_vk.cpp
-    ${rt}/gx/vk/renderer_vk_efb.cpp
-    ${rt}/gx/vk/renderer_vk_replay.cpp
-    ${rt}/gx/vk/post_process_vk.cpp
-    ${rt}/gx/vk/game_bloom_vk.cpp
+    ${rt}/render/game_asset_extract.cpp
+    ${rt}/render/vk/vk_context.cpp
+    ${rt}/render/vk/device_quirks_vk.cpp
+    ${rt}/render/vk/vk_libraries.cpp
+    ${rt}/render/vk/shader_compile_vk.cpp
+    ${rt}/render/vk/texture_backend_vk.cpp
+    ${rt}/render/vk/pipeline_cache_vk.cpp
+    ${rt}/render/vk/compile_journal.cpp
+    ${rt}/render/vk/renderer_vk.cpp
+    ${rt}/render/vk/renderer_vk_efb.cpp
+    ${rt}/render/vk/renderer_vk_replay.cpp
+    ${rt}/render/vk/post_process_vk.cpp
+    ${rt}/render/vk/game_bloom_vk.cpp
     ${galaxy_post_embed_cpp}
     ${rt}/frame_cadence_diagnostics.cpp
     ${rt}/runtime_settings.cpp
@@ -124,6 +123,8 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/audio_mixer.cpp
     ${rt}/movie_audio.cpp
     ${rt}/atomic_file.cpp
+    ${rt}/disc_files.cpp
+    ${rt}/save_files.cpp
     ${rt}/mii_import.cpp
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp
@@ -140,7 +141,7 @@ if(NOT ANDROID AND NOT IOS)
     target_link_libraries(galaxy_gx_vk PUBLIC nebula_archive)
 endif()
 target_include_directories(galaxy_gx_vk PUBLIC "${nebula_root}/runtime/include")
-target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa")
+target_include_directories(galaxy_gx_vk PRIVATE "${nebula_root}/third_party/smaa" "${nebula_root}/native/include")
 target_compile_options(galaxy_gx_vk PUBLIC "SHELL:-include ${nebula_root}/runtime/include/galaxy/posix_compat.h")
 # vk_mem_alloc.h leaves pointer nullability unannotated.
 target_compile_options(galaxy_gx_vk PRIVATE -Wno-nullability-completeness)
