@@ -7,8 +7,7 @@ class SaveDataHandleSequence;
 class SysInfoWindow;
 
 // What the game shows when its save file cannot be used: a corrupted file (remove it, or play without saving) and a
-// save the host could not read or write (the error, then back to the menu). The NWC24 messenger's own system-memory
-// error freezes (startErrorToFreeze).
+// save the host could not read or write (the error, then back to the menu).
 class SaveErrorSequence : public ActorStateBase< SaveDataHandleSequence > {
 public:
     SaveErrorSequence(SaveDataHandleSequence*, SysInfoWindow*, SysInfoWindow*);
@@ -16,7 +15,6 @@ public:
     virtual void control();
 
     void startErrorToMenu(const char*);
-    void startErrorToFreeze(const char*);
     void startRemoveFile();
     void startCheckEnableToCreate();
     // A result no sequence recovers from: the error, then the menu. False for the others.
@@ -27,7 +25,6 @@ public:
     void restoreFromReset();
     void exeIdle();
     void exeError();
-    void exeErrorToFreeze();
     void exeRemoveConfirm();
     void exeRemove();
     void exeRemoveDoneKeyWait();

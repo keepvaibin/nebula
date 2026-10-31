@@ -1,5 +1,4 @@
 #include "Game/System/SaveErrorSequence.hpp"
-#include "Game/System/NebulaKernel.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/GameSystemFunction.hpp"
@@ -12,7 +11,6 @@
 namespace {
     NEW_NERVE(SaveErrorSequenceIdle, SaveErrorSequence, Idle);
     NEW_NERVE(SaveErrorSequenceError, SaveErrorSequence, Error);
-    NEW_NERVE(SaveErrorSequenceErrorToFreeze, SaveErrorSequence, ErrorToFreeze);
     NEW_NERVE(SaveErrorSequenceRemoveConfirm, SaveErrorSequence, RemoveConfirm);
     NEW_NERVE(SaveErrorSequenceRemove, SaveErrorSequence, Remove);
     NEW_NERVE(SaveErrorSequenceRemoveDoneKeyWait, SaveErrorSequence, RemoveDoneKeyWait);
@@ -34,15 +32,6 @@ void SaveErrorSequence::startErrorToMenu(const char* pSystemMessageId) {
     mSystemMessageId = pSystemMessageId;
 
     setNerve(GET_NERVE_ANON(SaveErrorSequenceError));
-}
-
-void SaveErrorSequence::startErrorToFreeze(const char* pSystemMessageId) {
-    appear();
-    resetParam();
-
-    mSystemMessageId = pSystemMessageId;
-
-    setNerve(GET_NERVE_ANON(SaveErrorSequenceErrorToFreeze));
 }
 
 void SaveErrorSequence::startRemoveFile() {
@@ -70,11 +59,11 @@ bool SaveErrorSequence::tryUnrecoverable(SaveRequest::Result result) {
 }
 
 bool SaveErrorSequence::isPermitToReset() const {
-    return !isNerve(GET_NERVE_ANON(SaveErrorSequenceErrorToFreeze));
+    return true;
 }
 
 void SaveErrorSequence::prepareReset() {
-    if (isNerve(GET_NERVE_ANON(SaveErrorSequenceError)) || isNerve(GET_NERVE_ANON(SaveErrorSequenceErrorToFreeze))) {
+    if (isNerve(GET_NERVE_ANON(SaveErrorSequenceError))) {
         GameSystemFunction::setResetOperationReturnToMenu();
     }
 }
@@ -111,20 +100,6 @@ void SaveErrorSequence::exeError() {
 
     if (MR::isDead(mSysInfoWindow)) {
         GameSystemFunction::requestGoWiiMenu(false);
-    }
-}
-
-void SaveErrorSequence::exeErrorToFreeze() {
-    if (MR::isFirstStep(this)) {
-        mSysInfoWindow->appear(mSystemMessageId, SysInfoWindow::Type_Blocking, SysInfoWindow::TextPos_Center, SysInfoWindow::MessageType_System);
-    }
-
-    if (!mSysInfoWindow->isWait()) {
-        return;
-    }
-
-    for (;;) {
-        NebulaKernel::poll();
     }
 }
 
@@ -198,7 +173,7 @@ void SaveErrorSequence::exeCheckEnableToCreate() {
 }
 
 bool SaveErrorSequence::isEnablePointer() const {
-    if (isNerve(GET_NERVE_ANON(SaveErrorSequenceError)) || isNerve(GET_NERVE_ANON(SaveErrorSequenceErrorToFreeze)) ||
+    if (isNerve(GET_NERVE_ANON(SaveErrorSequenceError)) ||
         isNerve(GET_NERVE_ANON(SaveErrorSequenceRemoveConfirm)) || isNerve(GET_NERVE_ANON(SaveErrorSequenceRemoveDoneKeyWait)) ||
         isNerve(GET_NERVE_ANON(SaveErrorSequenceNoSaveConfirmBeforeRemove))) {
         return true;

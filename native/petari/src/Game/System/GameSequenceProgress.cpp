@@ -288,7 +288,6 @@ void GameSequenceProgress::exeResetProcessing() {
             mPlayerMissLeft->kill();
         }
 
-        mFindingLuigiEventScheduler->clearLostAndFoundCount();
     }
 
     if (!GameSystemFunction::isResetProcessing()) {

@@ -77,7 +77,6 @@
 #include "Game/Screen/MovieSubtitles.hpp"
 #include "Game/Screen/MovieSubtitlesDataTable.hpp"
 #include "Game/Screen/NoteCounter.hpp"
-#include "Game/Screen/OdhConverter.hpp"
 #include "Game/Screen/OneUpBoard.hpp"
 #include "Game/Screen/PaneEffectKeeper.hpp"
 #include "Game/Screen/PauseMenu.hpp"

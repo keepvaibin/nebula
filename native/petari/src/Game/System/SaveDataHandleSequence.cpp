@@ -152,11 +152,6 @@ void SaveDataHandleSequence::startSaveAll() {
     setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutKeyWait));
 }
 
-void SaveDataHandleSequence::startSaveTotalMailSize() {
-    mSaveDataHandler->storeSysConfigFile(mSysConfigFile);
-    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceSaveAllWithoutWindow));
-}
-
 void SaveDataHandleSequence::startLoad(int userFileIndex, bool isPlayerMario) {
     restoreUserFile(mCurrentUserFile, userFileIndex, isPlayerMario);
 
@@ -186,13 +181,6 @@ bool SaveDataHandleSequence::tryUnrecoverableError(SaveRequest::Result result) {
     }
 
     return false;
-}
-
-// The NWC24 messenger's system-memory error: the message, then the game stops.
-void SaveDataHandleSequence::startSystemMemoryErrorFreeze() {
-    mSaveErrorSequence->startErrorToFreeze("NAND_08");
-    mNerveForError = GET_NERVE_ANON(SaveDataHandleSequenceNoOperation);
-    setNerve(GET_NERVE_ANON(SaveDataHandleSequenceErrorHandling));
 }
 
 bool SaveDataHandleSequence::isActive() const {

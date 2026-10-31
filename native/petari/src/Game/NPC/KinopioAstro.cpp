@@ -8,7 +8,6 @@
 #include "Game/LiveActor/PartsModel.hpp"
 #include "Game/NPC/NPCActorItem.hpp"
 #include "Game/NPC/TalkMessageFunc.hpp"
-#include "Game/NWC24/ReceiverTagMail.hpp"
 #include "Game/NameObj/NameObjArchiveListCollector.hpp"
 #include "Game/Screen/GameSceneLayoutHolder.hpp"
 #include "Game/Screen/LuigiLetter.hpp"
@@ -83,7 +82,7 @@ void KinopioAstro::makeArchiveList(NameObjArchiveListCollector* pCollector, cons
 }
 
 KinopioAstro::KinopioAstro(const char* pName)
-    : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), _194(), _195(), mIsPlayerLuigi(), _197(), _198(), _19C() {
+    : Kinopio(pName), mLuigiLetter(), mPeachLetter(), mLetterIconTalkCtrl(), _194(), _195(), mIsPlayerLuigi() {
 }
 
 bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {
@@ -100,14 +99,6 @@ bool KinopioAstro::dispLetter(LayoutActor* pLayout) const {
 }
 
 bool KinopioAstro::isDispLetterIcon() const {
-    if (_198 != nullptr) {
-        if (MR::isStageStatePowerStarAppeared() && !_197) {
-            return true;
-        }
-
-        return false;
-    }
-
     return _195 || _194;
 }
 
@@ -116,26 +107,8 @@ void KinopioAstro::createLetterIcon(const JMapInfoIter& rIter) {
     MR::setDistanceToTalk(mLetterIconTalkCtrl, ::sMessangerTalkDistance);
 }
 
-bool KinopioAstro::sendLetter() {
-    if (!_197) {
-        u32 size;
-        const char* pImage = MR::isPlayerLuigi() ? "AllCompleteImage2.bin" : "AllCompleteImage1.bin";
-
-        size = _19C->mArchive->getExpandedResSize(_19C->mArchive->getResource(pImage));
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-        _198->send(reinterpret_cast< u8* >(_19C->mFileInfoTable->getRes(pImage)), size);
-#elif (VERSION == RMGK01)
-        _198->send(reinterpret_cast< u8* >(_19C->mFileInfoTable->getRes(pImage)), size, false);
-#endif
-        _197 = true;
-    }
-
-    _198->update();
-    return _198->isDone();
-}
-
 bool KinopioAstro::branchFunc(u32) {
-    return !_198->isError();
+    return true;
 }
 
 bool KinopioAstro::eventFunc(u32 letterEvent) {
@@ -175,8 +148,6 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
         return true;
     } else if (letterEvent == LetterEvent_3) {
         return true;
-    } else if (letterEvent == LetterEvent_SendLetter) {
-        return sendLetter();
     }
 #if (VERSION == RMGK01)
     else if (letterEvent == LetterEvent_OnMsgLedPattern) {
@@ -209,9 +180,7 @@ void KinopioAstro::init(const JMapInfoIter& rIter) {
     }
 
     if (MR::isEqualStageName("PeachCastleFinalGalaxy")) {
-        _198 = new ReceiverTagMail("StaffLetter", ::sStaffLetterID, ::sSenderID);
-        _19C = MR::createAndAddResourceHolder("AllCompleteImage.arc");
-        createLetterIcon(rIter);
+        // The staff's letter went to the Wii Message Board: no message board (B-31, Q5), no letter.
         return;
     }
 

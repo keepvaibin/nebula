@@ -132,7 +132,7 @@ void GalaxyMapController::movement() {
         mPowerStarList->movement();
     }
 
-    if (!mPowerStarList->isExecCapture() && !mMap->isShowDetail()) {
+    if (!mMap->isShowDetail()) {
         mBackButton->movement();
     }
 
@@ -410,7 +410,7 @@ void GalaxyMapController::exeAppearPowerStarList() {
 }
 
 void GalaxyMapController::exeDisplayPowerStarList() {
-    if (!mPowerStarList->isExecCapture() && tryPushBackButton()) {
+    if (tryPushBackButton()) {
         mMode = Mode_AstroMap;
 
         setNerve(GET_NERVE_ANON(GalaxyMapControllerDisappearPowerStarList));

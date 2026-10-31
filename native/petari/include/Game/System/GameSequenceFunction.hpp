@@ -44,7 +44,6 @@ namespace GameSequenceFunction {
     void reflectStageResultSequenceCoin();
     void resetStageResultSequenceParam();
     void startPreLoadSaveDataSequence();
-    void startTotalMailSizeSaveSequence();
     void startGameDataLoadSequence(int, bool);
     void startCreateUserFileSequence(int);
     void startDeleteUserFileSequence(int);
@@ -57,11 +56,7 @@ namespace GameSequenceFunction {
     bool isSuccessSaveDataHandleSequence();
     void restoreUserFile(UserFile*, int);
     void restoreUserFile(UserFile*, int, bool);
-    void startSystemMemoryErrorFreeze();
     void reserveUserName(const wchar_t*);
-    void requestPrepareResetNWC24();
-    bool isEnableToResetNWC24();
-    void resetNWC24();
     void storeSceneStartGameDataHolder();
     void updateGameDataAndSequenceAfterStageResultSequence();
     void startGameDataSaveSequence(bool, bool);

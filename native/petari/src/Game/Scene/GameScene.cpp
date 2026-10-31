@@ -49,7 +49,6 @@
 #include "Game/Screen/GameStageClearSequence.hpp"
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Screen/MoviePlayingSequence.hpp"
-#include "Game/Screen/OdhConverter.hpp"
 #include "Game/Screen/ScreenAlphaCapture.hpp"
 #include "Game/System/GalaxyMapController.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
@@ -413,7 +412,6 @@ void GameScene::draw() const {
 #endif
     MR::drawInit();
     LightFunction::initLightRegisterAll();
-    drawOdhCapture();
     CategoryList::execute(MR::DrawType_MiiFaceIcon);
     CategoryList::execute(MR::DrawType_MiiFaceNew);
     drawMirror();
@@ -713,21 +711,6 @@ void GameScene::drawOverlay() const {
 
 bool GameScene::isValidScenarioOpeningCamera() const {
     return MR::hasStartAnimCamera() != false;
-}
-
-void GameScene::drawOdhCapture() const {
-    if (!_29) {
-        return;
-    }
-
-    if (!MR::isRequestedCaptureOdhImage()) {
-        return;
-    }
-
-    MR::setPortCaptureOdhImage();
-    CategoryList::execute(MR::DrawType_MessageBoardCapture);
-    MR::captureOdhImage();
-    MR::reinitGX();
 }
 
 void GameScene::startStagePlayFirst() {

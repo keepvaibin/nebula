@@ -120,7 +120,6 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
         GameSystemFunction::prepareResetSystem();
         GameSystemFunction::resetAllControllerRumble();
         GameSystemFunction::forceToDeactivateHomeButtonLayout();
-        GameSequenceFunction::requestPrepareResetNWC24();
         GameSystemFunction::prepareResetSaveDataHandleSequence();
     }
 
@@ -139,11 +138,6 @@ void GameSystemResetAndPowerProcess::exePrepareReset() {
     }
 
     if (b) {
-        b = GameSequenceFunction::isEnableToResetNWC24();
-    }
-
-    if (b) {
-        GameSequenceFunction::resetNWC24();
         setNerve(GET_NERVE(GameSystemResetAndPowerProcess, GameSystemResetAndPowerProcessReset));
     }
 }

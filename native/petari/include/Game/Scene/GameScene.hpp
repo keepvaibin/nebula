@@ -51,7 +51,6 @@ public:
     void draw3D() const;
     void draw2D() const;
     bool isValidScenarioOpeningCamera() const NO_INLINE;
-    void drawOdhCapture() const;
     void startStagePlayFirst();
     void startStagePlayRetry();
     bool isPermitToPauseMenu() const;

@@ -1,5 +1,4 @@
 #include "Game/System/FindingLuigiEventScheduler.hpp"
-#include "Game/NWC24/LuigiMailDirector.hpp"
 #include "Game/System/GalaxyMoveArgument.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GameEventFlagTable.hpp"
@@ -14,12 +13,10 @@ namespace {
     }
 };  // namespace
 
-FindingLuigiEventScheduler::FindingLuigiEventScheduler() : mLuigiLostStageName(nullptr), mLuigiLostStarID(-1), mLuigiMailDirector(nullptr) {
+FindingLuigiEventScheduler::FindingLuigiEventScheduler() : mLuigiLostStageName(nullptr), mLuigiLostStarID(-1) {
 }
 
 void FindingLuigiEventScheduler::initAfterResourceLoaded() {
-    mLuigiMailDirector = new LuigiMailDirector();
-    mLuigiMailDirector->initAfterResourceLoaded();
 }
 
 void FindingLuigiEventScheduler::update(const GalaxyMoveArgument& rMoveArg) {
@@ -34,7 +31,6 @@ void FindingLuigiEventScheduler::update(const GalaxyMoveArgument& rMoveArg) {
     case 6:
         // On Normal Level Load
         syncWithGameEventFlag();
-        mLuigiMailDirector->reset();
         break;
     case 7:
         // On Title Screen
@@ -58,7 +54,6 @@ void FindingLuigiEventScheduler::updateOnStageResult(const char* pClearedStageNa
                     // if number of stars safeguard passed or eventflag open
                     // of speaking to luigi in garage after rescued from ghostly galaxy
                     // force luigi to lost state
-                    mLuigiMailDirector->lost();
                     GameDataFunction::setGameEventValue("LuigiEventState", STATE_DISAPPEAR);
                     return;
                 }
@@ -68,7 +63,6 @@ void FindingLuigiEventScheduler::updateOnStageResult(const char* pClearedStageNa
         if (::getLuigiEventState() == STATE_HIDING && MR::isEqualString(mLuigiLostStageName, pClearedStageName) &&
             mLuigiLostStarID == clearedStarID) {
             // if Luigi was hiding and just rescued him
-            mLuigiMailDirector->found();
             if (calcPowerStarIndexLuigiHas() == 4) {
                 // if got all luigi stars, set luigi to "completed" state
                 GameDataFunction::setGameEventValue("LuigiEventState", STATE_END);
@@ -86,7 +80,6 @@ void FindingLuigiEventScheduler::updateOnStageResult(const char* pClearedStageNa
             if (countdown != 0 && --countdown == 0) {
                 // if just counted down to 0
                 // set luigi to lost state
-                mLuigiMailDirector->lost();
                 GameDataFunction::setGameEventValue("LuigiEventState", STATE_DISAPPEAR);
             } else {
                 // if countdown was already 0, or countdown not hit 0 yet,
@@ -145,20 +138,6 @@ bool FindingLuigiEventScheduler::isEnd() const {
     return ::getLuigiEventState() == STATE_END;
 }
 
-void FindingLuigiEventScheduler::sendMail() {
-    mLuigiMailDirector->sendMail();
-}
-
-void FindingLuigiEventScheduler::writeSendSize() {
-    mLuigiMailDirector->writeSendSize();
-}
-
-void FindingLuigiEventScheduler::clearLostAndFoundCount() {
-    if (mLuigiMailDirector != nullptr) {
-        mLuigiMailDirector->reset();
-    }
-}
-
 void FindingLuigiEventScheduler::syncWithGameEventFlag() {
     if (::getLuigiEventState() == STATE_HIDING) {
         GameDataFunction::setGameEventValue("LuigiEventState", STATE_HIDING);
@@ -197,7 +176,6 @@ bool FindingLuigiEventScheduler::isState(u32 state) const {
 void FindingLuigiEventScheduler::setStateReturnAstroGalaxy(int state) {
     if (GameDataFunction::calcCurrentPowerStarNum() > 108) {
         // safeguard if above 109 stars, force luigi to get lost
-        mLuigiMailDirector->lost();
         GameDataFunction::setGameEventValue("LuigiEventState", STATE_DISAPPEAR);
     } else {
         // if before the 109 star safeguard, set countdown state normally
