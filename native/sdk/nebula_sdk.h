@@ -33,9 +33,8 @@ void nebula_vlog(const char* format, va_list args) __attribute__((format(printf,
 void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
 
-/* The disc's release (region.c): 'E' North America, 'P' Europe, 'J' Japan; and its save folder on the NAND. */
+/* The disc's release (region.c): 'E' North America, 'P' Europe, 'J' Japan. */
 char nebula_disc_region(void);
-const char* nebula_home_dir(void);
 
 /* The platform layer (os/os_native.c). */
 /* The console's time base: OSGetTime ticks (60.75 MHz) since boot. */

@@ -73,12 +73,6 @@ void OSSetSoundMode(u32 mode);
 
 u32 OSGetConsoleType(void);
 
-void OSRegisterVersion(const char*);
-
-void OSReport(const char*, ...) ATTRIBUTE_PRINTF(1, 2);
-void OSVReport(const char*, va_list);
-void OSPanic(const char*, int, const char*, ...) ATTRIBUTE_PRINTF(3, 4);
-
 void* OSGetArenaHi(void);
 void* OSGetArenaLo(void);
 
@@ -201,7 +195,6 @@ inline void OSf32tou8(f32* f, u8* out) {
 #include "revolution/os/OSException.h"
 #include "revolution/os/OSExecParams.h"
 #include "revolution/os/OSFastCast.h"
-#include "revolution/os/OSInterrupt.h"
 #include "revolution/os/OSMessage.h"
 #include "revolution/os/OSPlayRecord.h"
 #include "revolution/os/OSStateFlags.h"

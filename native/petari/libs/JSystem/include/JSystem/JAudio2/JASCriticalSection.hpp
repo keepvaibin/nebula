@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/os/OSInterrupt.h>
+#include <revolution/types.h>
 #include "Game/System/NebulaKernel.hpp"
 
 class JASCriticalSection {
