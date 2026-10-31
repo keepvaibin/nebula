@@ -20,3 +20,12 @@ run_build "$new" "w_${tag}_1" 75 $common GALAXY_PRESENT_SNAPSHOT_FIRST=$((first 
 tool=align_frames.py
 [ "${MODE:-identity}" = "tolerance" ] && tool=align_tol.py
 echo "$tag: crash $(grep -ci 'crash:' "$RUNS/w_${tag}_1/run.log") $(python -I "$VERIFY/$tool" "$RUNS/w_${tag}_0" "$RUNS/w_${tag}_1" - - $((shift_by + margin)) | tail -1)"
+# CONTROL=1: the base runs again with the new build's window, for screens that animate on their own clock (the HOME
+# Menu opening, the file select): the new build passes when it differs from the base no more than the base does.
+if [ "${CONTROL:-0}" = "1" ]; then
+    # shellcheck disable=SC2086
+    run_build "$base" "w_${tag}_c" 75 $common GALAXY_PRESENT_SNAPSHOT_FIRST=$((first - margin)) \
+        GALAXY_PRESENT_SNAPSHOT_LAST=$((last + margin)) $EXTRA
+    echo "$tag control: $(python -I "$VERIFY/align_tol.py" "$RUNS/w_${tag}_0" "$RUNS/w_${tag}_c" - - "$margin" | tail -1)"
+    [ "$tool" = "align_tol.py" ] || echo "$tag (tolerance): $(python -I "$VERIFY/align_tol.py" "$RUNS/w_${tag}_0" "$RUNS/w_${tag}_1" - - $((shift_by + margin)) | tail -1)"
+fi
