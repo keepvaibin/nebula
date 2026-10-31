@@ -908,6 +908,13 @@ typedef enum NebulaTargetChannels {
     NEBULA_TARGET_RGB = 6              /* colour, alpha read as one */
 } NebulaTargetChannels;
 
+/* The channels a clear writes (frame_clear). */
+typedef enum NebulaClearChannels {
+    NEBULA_CLEAR_COLOR = 1u,
+    NEBULA_CLEAR_ALPHA = 2u,
+    NEBULA_CLEAR_DEPTH = 4u
+} NebulaClearChannels;
+
 /* How target_capture takes its picture. */
 typedef enum NebulaCaptureFlags {
     NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards: colour and alpha 0, depth far (where
@@ -1137,6 +1144,10 @@ typedef struct NebulaHostServices {
     /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
        (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
+    /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
+       viewport's units) to `clear_rgba` (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits, far 0xFFFFFF). */
+    void (*frame_clear)(void* user, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
+                        uint32_t clear_z, uint32_t channels);
     /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units); `flags`
        NEBULA_CAPTURE_FILTERED: through the display's vertical filter (the host's: each line blended with the one
        above, as the game's television modes asked), else as drawn. */

@@ -15,6 +15,9 @@ namespace J3DNativeTarget {
     void end(const void* pKey, NebulaTargetChannels channels = NEBULA_TARGET_RGBA);
     // Clears channels of the open pass (`channels`: 1 colour, 2 alpha, 4 depth).
     void clear(u32 clearRgba, u32 clearZ, u32 channels);
+    // Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the
+    // viewport's units) to `clearRgba` and depth `clearZ` (24 bits).
+    void clearFrame(u16 left, u16 top, u16 width, u16 height, u32 clearRgba, u32 clearZ, u32 channels);
     // The frame drawn so far, its rectangle at `left`, `top` (`width` x `height`), as texture `pKey` carrying
     // `channels`; `flags`: NebulaCaptureFlags.
     void capture(const void* pKey, u16 left, u16 top, u16 width, u16 height, NebulaTargetChannels channels,

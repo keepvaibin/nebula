@@ -2191,6 +2191,27 @@ void svc_target_capture(void*, uint64_t key, uint16_t left, uint16_t top, uint16
 #endif
 }
 
+// A clear of the frame's rectangle.
+void svc_frame_clear(void*, uint16_t left, uint16_t top, uint16_t width, uint16_t height, uint32_t clear_rgba,
+                     uint32_t clear_z, uint32_t channels) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::FrameClear;
+    record.target_x = left;
+    record.target_y = top;
+    record.target_width = width;
+    record.target_height = height;
+    record.target_clear_rgba = clear_rgba;
+    record.target_clear_z = clear_z & 0xFFFFFFu;
+    record.target_channels = static_cast<std::uint8_t>(channels & 7u);
+    attach_pending_records();
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)left, (void)top, (void)width, (void)height, (void)clear_rgba, (void)clear_z, (void)channels;
+#endif
+}
+
 // The frame shown (its display copy, host-made).
 void svc_frame_show(void*, uint16_t width, uint16_t height, uint32_t flags) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -3880,6 +3901,7 @@ int main(int argc, char** argv) {
     services.mii_record = svc_mii_record;
     services.readback_capture = svc_readback_capture;
     services.readback_pixel = svc_readback_pixel;
+    services.frame_clear = svc_frame_clear;
     services.frame_show = svc_frame_show;
     services.frame_end = svc_frame_end;
     services.marker = svc_marker;

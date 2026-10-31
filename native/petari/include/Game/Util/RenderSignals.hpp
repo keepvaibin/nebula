@@ -50,20 +50,6 @@ namespace NebulaRender {
         marker(kMarkerBloom, phase, a, b);
     }
 
-    // The next draw is an EFB clear quad (MainLoopFramework::clearEfb, MR::clearZBuffer): one quad filling its
-    // viewport in a constant colour, writing its Z texture's depth (`z`, 24 bits) with the compare always. The renderer
-    // clears that depth and draws the colour without the Z texture where the draw is the one it expects; else the
-    // quad draws as written. With its colour (clearQuadColour: the TEV's only stage outputs C0 and A0, `rgba`) the
-    // renderer clears the colour too.
-    enum { kMarkerClearQuad = 16 };
-
-    inline void clearQuad(uint32_t z) {
-        marker(kMarkerClearQuad, 0, z, 0);
-    }
-
-    inline void clearQuadColour(uint32_t z, uint32_t rgba) {
-        marker(kMarkerClearQuad, 1, z, rgba);
-    }
 
     // A scene bound (NEBULA_SCENE_*); the 3D scene's begin carries the camera (world to eye, 3x4) and the player's up.
     void sceneMarker(uint32_t marker, const float (*view)[4]);
