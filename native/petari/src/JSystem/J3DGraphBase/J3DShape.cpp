@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include "JSystem/J3DGraphBase/J3DGD.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeDraw.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"

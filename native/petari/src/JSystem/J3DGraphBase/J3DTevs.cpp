@@ -1,13 +1,10 @@
 #include "JSystem/J3DGraphBase/J3DTevs.hpp"
-#include "JSystem/J3DGraphBase/J3DGD.hpp"
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <revolution/gx/GXEnum.h>
 
-static void J3DGDLoadTexMtxImm(f32 (*)[4], u32, GXTexMtxType);
-static void J3DGDLoadPostTexMtxImm(f32 (*)[4], u32);
 
 
 

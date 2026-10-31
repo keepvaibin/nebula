@@ -1,5 +1,4 @@
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
-#include "JSystem/J3DGraphBase/J3DGD.hpp"
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
