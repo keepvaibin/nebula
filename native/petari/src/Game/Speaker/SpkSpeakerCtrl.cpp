@@ -4,8 +4,7 @@
 #include "Game/Speaker/SpkSound.hpp"
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <mem.h>
-#include "Game/System/NebulaKernel.hpp"
-#include <revolution/wenc.h>
+#include "Game/System/NebulaHost.hpp"
 #include <revolution/wpad.h>
 
 NebulaAlarm sSpeakerAlarm;
@@ -37,7 +36,6 @@ void SpkSpeakerCtrl::setup() {
         sSpeakerInfo[i].mExtensionTimer = 0;
         SpkSpeakerCtrl::initReconnect(i);
         sSpeakerInfo[i].mUsingTimeOut = -1;
-        memset(&sSpeakerInfo[i].mWENCInfo, 0, sizeof(WENCInfo));
     }
 
     sSpeakerAlarm.init();
@@ -64,60 +62,25 @@ void SpkSpeakerCtrl::disconnect(s32 padChannel) {
     sSpeakerInfo[padChannel].mUsingTimeOut = -1;
 }
 
+// The speaker is the host's: it plays as soon as the game turns it on (no handshake with a remote), and its sound
+// goes to the host as 16-bit samples (speaker_samples).
 void SpkSpeakerCtrl::setSpeakerOn(s32 padChannel) {
     JASCriticalSection crit;
-    // TODO: WPAD command magic numbers
-    s32 err = WPADControlSpeaker(padChannel, 1, SpkSpeakerCtrl::setSpeakerOnCallback);
-
-    if (err == WPAD_ERR_BUSY) {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ON;
-    } else {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
-    }
-}
-
-void SpkSpeakerCtrl::setSpeakerOnCallback(s32 padChannel, s32 err) {
-    JASCriticalSection crit;
-    if (err == WPAD_ERR_NONE) {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
-        SpkSpeakerCtrl::setSpeakerPlay(padChannel);
-    } else if (err == WPAD_ERR_TRANSFER) {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ON;
-    }
+    sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
+    SpkSpeakerCtrl::setSpeakerPlay(padChannel);
 }
 
 void SpkSpeakerCtrl::setSpeakerPlay(s32 padChannel) {
     JASCriticalSection crit;
-    // TODO: WPAD command magic numbers
-    s32 err = WPADControlSpeaker(padChannel, 4, SpkSpeakerCtrl::startPlayCallback);
-
-    if (err == WPAD_ERR_BUSY) {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_PLAY;
-    } else {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
-    }
-}
-
-void SpkSpeakerCtrl::startPlayCallback(s32 padChannel, s32 err) {
-    JASCriticalSection crit;
-
-    if (err == WPAD_ERR_NONE) {
-        sSpeakerInfo[padChannel].mIsPlaying = true;
-        sSpeakerInfo[padChannel].mIsUpdated = true;
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
-        sSpeakerInfo[padChannel].mUsingTimeOut = 8 * 60 * 60;
-        memset(&sSpeakerInfo[padChannel].mWENCInfo, 0, sizeof(WENCInfo));
-    } else if (err == WPAD_ERR_TRANSFER) {
-        sSpeakerInfo[padChannel].mState = SpeakerInfo::State_PLAY;
-    }
+    sSpeakerInfo[padChannel].mIsPlaying = true;
+    sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
+    sSpeakerInfo[padChannel].mUsingTimeOut = 8 * 60 * 60;
 }
 
 void SpkSpeakerCtrl::setSpeakerOff(s32 padChannel) {
     sSpeakerInfo[padChannel].mIsPlaying = false;
     sSpeakerInfo[padChannel].mState = SpeakerInfo::State_ENABLE;
     sSpeakerInfo[padChannel].mUsingTimeOut = -1;
-    // TODO: WPAD command magic numbers
-    WPADControlSpeaker(padChannel, 0, nullptr);
 }
 
 void SpkSpeakerCtrl::retryConnection(s32 padChannel) {
@@ -205,48 +168,26 @@ void SpkSpeakerCtrl::updateSpeaker(NebulaAlarm*) {
             continue;
         }
 
-        if (sMixingBuffer->update(i)) {
-            u32 flags = WENC_FLAG_USER_INFO;
-
-            if (inf.mIsPlaying && sMixingBuffer != nullptr) {
-                BOOL en = NebulaKernel::disableInterrupts();
-
-                if (!WPADCanSendStreamData(i)) {
-                    NebulaKernel::restoreInterrupts(en);
-                    continue;
-                }
-
-                if (inf.mIsUpdated) {
-                    flags = 0;
-                    inf.mIsUpdated = false;
-                }
-
-                const s16* samples = sMixingBuffer->getSamples(i);
-                u8 data[16];
-                WENCGetEncodeData(&inf.mWENCInfo, flags, samples, 40, data);
-                WPADSendStreamData(i, data, 20);
-
-                NebulaKernel::restoreInterrupts(en);
-            }
-            continue;
+        // 40 samples every 6.67 ms: 6 kHz.
+        if (sMixingBuffer->update(i) && inf.mIsConnected) {
+            const NebulaHostServices* host = nebula_host();
+            host->speaker_samples(host->user, static_cast< u32 >(i), sMixingBuffer->getSamples(i), 40);
         }
-
-        inf.mIsUpdated = true;
     }
 }
 
 bool SpkSpeakerCtrl::isEnable(s32 padChannel) {
-    return WPADIsSpeakerEnabled(padChannel) && sSpeakerInfo[padChannel].mIsPlaying && sSpeakerInfo[padChannel].mState == SpeakerInfo::State_ENABLE &&
-           sMixingBuffer != nullptr;
+    return sSpeakerInfo[padChannel].mIsPlaying && sSpeakerInfo[padChannel].mState == SpeakerInfo::State_ENABLE && sMixingBuffer != nullptr;
 }
 
 void SpkSpeakerCtrl::extensionProcess(s32, s32) {
 }
 
 f32 SpkSpeakerCtrl::getDeviceVolume(s32 padChannel) {
-    if (padChannel >= WPAD_CHAN0 && !WPADIsSpeakerEnabled(padChannel)) {
+    if (padChannel >= WPAD_CHAN0 && !sSpeakerInfo[padChannel].mIsPlaying) {
         return 0.0f;
     }
 
-    return WPADGetSpeakerVolume() / 127.0f;
+    // The console's speaker volume setting at its default (0x58 of 127); the host's speaker gain is the player's.
+    return 0x58 / 127.0f;
 }

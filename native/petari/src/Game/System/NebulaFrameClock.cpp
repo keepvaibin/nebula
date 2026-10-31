@@ -81,10 +81,6 @@ namespace {
     }
 }  // namespace
 
-extern "C" void nebula_frame_clock_reset_idle(void) {
-    NebulaFrameClock::resetIdle();
-}
-
 extern "C" NEBULA_GAME_API void nebula_game_vi_retrace(void) {
     nebula_raise_event(NEBULA_EVENT_FRAME);
 }

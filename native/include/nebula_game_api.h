@@ -413,7 +413,6 @@ enum {
     NEBULA_SC_ASPECT_RATIO,
     NEBULA_SC_PROGRESSIVE_MODE,
     NEBULA_SC_EURGB60_MODE,
-    NEBULA_SC_SPEAKER_VOLUME,       /* 0..127 */
     NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
     NEBULA_SC_SCREEN_SAVER_MODE,    /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
 };
@@ -873,8 +872,8 @@ typedef struct NebulaHostServices {
     uint32_t (*input_read)(void* user, uint32_t player, NebulaInputDevice* device, NebulaInputSample* samples,
                            uint32_t max);
     void (*input_control)(void* user, uint32_t player, uint32_t what, uint32_t value);
-    /* A remote's speaker data (the game's encoded ADPCM). */
-    void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
+    /* Player `player`'s remote speaker: `count` 16-bit samples at 6 kHz, as the game mixes them. */
+    void (*speaker_samples)(void* user, uint32_t player, const int16_t* samples, uint32_t count);
 
     /* JAudio's mixer (on the console a DSP program; the host runs it). Pointers are into the game's memory.
        jaudio_setup hands over the channel records (`channels` of them, in the program's layout, host byte order), the

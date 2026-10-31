@@ -292,13 +292,6 @@ typedef struct WPADMEMControlBlock {
     WPADCallback callback;
 } WPADMEMControlBlock;
 
-/* The remote speaker's entry points (native/sdk/wpad/wpad_native.c); the controller is native input. */
-BOOL WPADIsSpeakerEnabled(s32);
-s32 WPADControlSpeaker(s32, u32, WPADCallback);
-u8 WPADGetSpeakerVolume(void);
-s32 WPADSendStreamData(s32, void*, u16);
-BOOL WPADCanSendStreamData(s32);
-
 #ifdef __cplusplus
 }
 #endif
