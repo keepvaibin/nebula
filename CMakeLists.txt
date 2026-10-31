@@ -637,6 +637,7 @@ galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_r
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
+galaxy_test(galaxy_wiimote_speaker_tests SOURCES ${rt}/wiimote_speaker_tests.cpp LIBS galaxy_native_input)
 galaxy_test(galaxy_player_input_tests SOURCES ${rt}/input/player_input_tests.cpp LIBS galaxy_gx)
 galaxy_test(galaxy_host_pointer_events_tests SOURCES ${rt}/host_pointer_events_tests.cpp
     LIBS galaxy_host_pointer_events)

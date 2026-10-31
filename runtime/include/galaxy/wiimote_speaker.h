@@ -18,6 +18,10 @@ public:
     static constexpr std::uint32_t kRingSamples = 8192;
     static constexpr std::uint32_t kTaps = 16;
 
+    // Producer: the game's thread. The speaker's samples (16-bit) at `rate` Hz as the game hands them over (its 6 kHz
+    // blocks of 40). Kept only while a consumer listens (a speaker volume above 0); dropped when the ring is full.
+    void push(std::span<const std::int16_t> samples, std::uint32_t rate) noexcept;
+
     // Consumer: one audio thread, called with each output buffer as the game produces it. Adds the speaker, scaled by
     // `gain`, to both channels of interleaved 16-bit little-endian stereo at `output_rate`.
     void mix(std::span<std::byte> stereo_le, std::uint32_t output_rate, float gain) noexcept;
@@ -39,5 +43,8 @@ private:
     std::uint32_t last_head_ = 0;
     bool playing_ = false;
 };
+
+// The speaker of player 1's controller: the game's speaker sound (speaker_samples) goes in, the audio output mixes it.
+Speaker& game_speaker() noexcept;
 
 }  // namespace galaxy::input::speaker
