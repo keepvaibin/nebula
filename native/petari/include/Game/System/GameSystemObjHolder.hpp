@@ -34,7 +34,10 @@ public:
     void drawStarPointer();
     void drawBeforeEndRender();
     void captureIfAllowForScreenPreserver();
-    GXRenderModeObj* getRenderModeObj() const;
+    // The picture's width on a television's 720-pixel line, as chosen at boot: the safety frame scales from it.
+    u16 getViWidth() const {
+        return mViWidth;
+    }
     void initDvd();
     void initNAND();
     void initAudio();
@@ -49,7 +52,7 @@ public:
 
     /* 0x00 */ NameObjHolder* mObjHolder;
     /* 0x04 */ ParticleResourceHolder* mParticleResHolder;
-    /* 0x08 */ GXRenderModeObj* mRenderModeObj;
+    u16 mViWidth;
     /* 0x18 */ CaptureScreenDirector* mCaptureScreenDirector;
     /* 0x1C */ ScreenPreserver* mScreenPreserver;
     /* 0x20 */ AudSystemWrapper* mAudioSystem;

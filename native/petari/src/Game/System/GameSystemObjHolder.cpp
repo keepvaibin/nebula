@@ -24,7 +24,7 @@
 #include <JSystem/JUtility/JUTVideo.hpp>
 
 GameSystemObjHolder::GameSystemObjHolder()
-    : mObjHolder(), mParticleResHolder(), mRenderModeObj(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),
+    : mObjHolder(), mParticleResHolder(), mViWidth(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),
       mFunctionAsyncExecutor(), mMessageHolder(), mStarPointerDirector(), mRandom(0), mLanguage(MR::getDecidedLanguageFromIPL()) {
     initDvd();
     initNAND();
@@ -106,10 +106,6 @@ void GameSystemObjHolder::captureIfAllowForScreenPreserver() {
     mScreenPreserver->captureIfAllow();
 }
 
-GXRenderModeObj* GameSystemObjHolder::getRenderModeObj() const {
-    return JUTVideo::getManager()->getRenderMode();
-}
-
 void GameSystemObjHolder::initDvd() {
     JKRMemArchive archive;
 
@@ -126,10 +122,10 @@ void GameSystemObjHolder::initAudio() {
 }
 
 void GameSystemObjHolder::initRenderMode() {
-    mRenderModeObj = new GXRenderModeObj();
-    *mRenderModeObj = *MR::getSuitableRenderMode();
-
-    JUTVideo::createManager(mRenderModeObj);
+    // The game's frame, 640x456 in either aspect; the picture spans 686 of the television line's 720 in 16:9, 670 in
+    // 4:3.
+    mViWidth = MR::isAspectRatioFlag16Per9() ? 686 : 670;
+    JUTVideo::createManager(640, 456);
 }
 
 void GameSystemObjHolder::initNameObj() {
@@ -161,7 +157,7 @@ void GameSystemObjHolder::initStarPointerDirector() {
 }
 
 void GameSystemObjHolder::initDisplay() {
-    MainLoopFramework* pManager = MainLoopFramework::createManager(nullptr, true);
+    MainLoopFramework* pManager = MainLoopFramework::createManager(true);
     pManager->setClearColor(Color8(30, 30, 200, 0));
 
     mCaptureScreenDirector = new CaptureScreenDirector();

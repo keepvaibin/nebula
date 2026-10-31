@@ -6,45 +6,30 @@
 #include "Game/System/NebulaKernel.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
-typedef u8 (*Pattern)[2];
-
+// The game's frame: the size it draws in (its viewport's units), and the hooks around each shown picture.
 class JUTVideo {
 public:
     typedef void (*Callback)(u32);
 
-    JUTVideo(GXRenderModeObj const*);
+    JUTVideo(u16 width, u16 height);
     virtual ~JUTVideo();
 
-    // TODO: return types not confirmed
-    static JUTVideo* createManager(GXRenderModeObj const*);
+    static JUTVideo* createManager(u16 width, u16 height);
     static void destroyManager();
-    void setRenderMode(GXRenderModeObj const*);
     void waitRetraceIfNeed();
 
     static void preRetraceProc(u32);
     static void postRetraceProc(u32);
 
     u16 getFbWidth() const {
-        return mRenderObj->fbWidth;
+        return mWidth;
     }
     u16 getEfbHeight() const {
-        return mRenderObj->efbHeight;
+        return mHeight;
     }
     void getBounds(u16& width, u16& height) const {
         width = (u16)getFbWidth();
         height = (u16)getEfbHeight();
-    }
-    u16 getXfbHeight() const {
-        return mRenderObj->xfbHeight;
-    }
-    u32 isAntiAliasing() const {
-        return mRenderObj->aa;
-    }
-    Pattern getSamplePattern() const {
-        return mRenderObj->sample_pattern;
-    }
-    u8* getVFilter() const {
-        return mRenderObj->vfilter;
     }
     NebulaMessageQueue* getMessageQueue() {
         return &mMessageQueue;
@@ -54,20 +39,12 @@ public:
         return sManager;
     }
 
-    GXRenderModeObj* getRenderMode() const {
-        return mRenderObj;
-    }
-
 private:
     static JUTVideo* sManager;
 
 private:
-    /* 0x04 */ _GXRenderModeObj* mRenderObj;
-    /* 0x08 */ u32 field_0x8;
-    /* 0x0C */ u32 mRetraceCount;
-    /* 0x10 */ u32 field_0x10;
-    /* 0x14 */ u32 field_0x14;
-    /* 0x18 */ u32 field_0x18;
+    u16 mWidth;
+    u16 mHeight;
     /* 0x1C */ NebulaFrameClock::Hook mPreRetraceCallback;
     /* 0x20 */ NebulaFrameClock::Hook mPostRetraceCallback;
     /* 0x24 */ Callback mPreCallback;
