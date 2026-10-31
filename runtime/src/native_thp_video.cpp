@@ -481,12 +481,25 @@ bool decode_block(BitReader& reader, DecodeContext& context, size_t componentInd
   return reader.valid();
 }
 
-// One 8x8 block of a plane into its rows (the plane is `width` texels across, rows from the top, packed: the
-// renderer's L8 layout, nebula_cooked_texture.h).
 void write_block(u8* output, u16 width, u16 height, u16 blockX, u16 blockY, const std::array<u8, 64>& pixels) noexcept {
-  const u16 columns = static_cast<u16>(std::min<int>(8, width - blockX));
+  const size_t tilesPerRow = (width + 7) / 8;
+  if ((blockX & 7u) == 0u && blockX + 8u <= width && blockY + 8u <= height) {
+    // Whole block: each 8-pixel row is 8 contiguous bytes of one 8x4 tile.
+    for (u16 row = 0; row < 8; ++row) {
+      const u16 y = static_cast<u16>(blockY + row);
+      const size_t tile = static_cast<size_t>(y / 4) * tilesPerRow + blockX / 8;
+      std::memcpy(output + tile * 32 + static_cast<size_t>(y & 3) * 8, &pixels[row * 8], 8);
+    }
+    return;
+  }
   for (u16 row = 0; row < 8 && blockY + row < height; ++row) {
-    std::memcpy(output + static_cast<size_t>(blockY + row) * width + blockX, &pixels[row * 8], columns);
+    for (u16 column = 0; column < 8 && blockX + column < width; ++column) {
+      const u16 x = blockX + column;
+      const u16 y = blockY + row;
+      const size_t tile = static_cast<size_t>(y / 4) * tilesPerRow + x / 8;
+      const size_t offset = tile * 32 + static_cast<size_t>(y & 3) * 8 + (x & 7);
+      output[offset] = pixels[row * 8 + column];
+    }
   }
 }
 
