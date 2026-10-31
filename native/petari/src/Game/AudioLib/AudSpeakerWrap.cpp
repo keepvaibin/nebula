@@ -2,7 +2,7 @@
 #include "Game/Speaker/SpkSound.hpp"
 #include "Game/Speaker/SpkSystem.hpp"
 #include <JSystem/JAudio2/JASGlobal.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     static SpkSoundHandle sSoundHandle[WPAD_MAX_CONTROLLERS];

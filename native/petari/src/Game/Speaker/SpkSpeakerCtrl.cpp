@@ -5,7 +5,7 @@
 #include <JSystem/JAudio2/JASCriticalSection.hpp>
 #include <mem.h>
 #include "Game/System/NebulaHost.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 NebulaAlarm sSpeakerAlarm;
 SpeakerInfo sSpeakerInfo[WPAD_MAX_CONTROLLERS];

@@ -5,7 +5,7 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "JSystem/JGeometry/TVec.hpp"
-#include "revolution/wpad.h"
+#include "Game/System/NebulaInput.hpp"
 
 namespace NrvJumpStand {
     NEW_NERVE(JumpStandNrvWait, JumpStand, Wait);

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 class WPadRumble;
 

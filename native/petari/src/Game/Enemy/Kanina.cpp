@@ -4,7 +4,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util.hpp"
 #include "Game/Util/JointRumbler.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void Kanina_FORCE_MATCH_SDATA2() {
     (void)1.0f;

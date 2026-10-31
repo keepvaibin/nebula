@@ -1,8 +1,8 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
+#include "Game/System/NebulaInput.hpp"
 #include <revolution/types.h>
-#include <revolution/wpad.h>
 
 class WPadAcceleration;
 class WPadButton;

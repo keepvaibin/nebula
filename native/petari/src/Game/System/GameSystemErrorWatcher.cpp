@@ -10,7 +10,7 @@
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 #define WII_REMOTE_STATUS_OK 0
 #define WII_REMOTE_STATUS_DISCONNECT 1

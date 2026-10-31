@@ -22,7 +22,7 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     // TODO: names

@@ -23,7 +23,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
 

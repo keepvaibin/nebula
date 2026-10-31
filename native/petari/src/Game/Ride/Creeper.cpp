@@ -22,7 +22,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <revolution/mtx.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace NrvCreeper {
     NEW_NERVE(CreeperNrvFree, Creeper, Free);

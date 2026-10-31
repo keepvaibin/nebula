@@ -7,7 +7,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include <math.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 #define WPAD_SAMPLE_MAX 120
 

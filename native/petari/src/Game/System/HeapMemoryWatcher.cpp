@@ -7,7 +7,6 @@
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <revolution/os.h>
-#include <revolution/wpad.h>
 #include "JSystem/JUtility/JUTException.hpp"
 
 JKRExpHeap* HeapMemoryWatcher::sRootHeapGDDR3;
