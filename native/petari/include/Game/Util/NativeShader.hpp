@@ -12,14 +12,28 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace NativeShader {
-    inline void init(NebulaNativeMaterial& rMaterial, NebulaShaderId shader, u8 blend, u8 depth, bool depthWrite,
-                     u8 cull) {
+    // Blend presets for hand-written sites.
+    enum Blend { BLEND_OPAQUE, BLEND_ALPHA, BLEND_ADD_ALPHA, BLEND_SUBTRACT };
+
+    // `depthFunc` NEBULA_COMPARE_* (NEBULA_COMPARE_ALWAYS with no write: depth off).
+    inline void init(NebulaNativeMaterial& rMaterial, NebulaShaderId shader, Blend blend, u8 depthFunc,
+                     bool depthWrite, u8 cull) {
         memset(&rMaterial, 0, sizeof(rMaterial));
         rMaterial.shader = shader;
-        rMaterial.blend = blend;
-        rMaterial.depth = depth;
+        rMaterial.blend_op = blend == BLEND_OPAQUE ? NEBULA_BLEND_REPLACE
+                             : blend == BLEND_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                                                       : NEBULA_BLEND_ADD;
+        rMaterial.blend_src = blend == BLEND_OPAQUE || blend == BLEND_SUBTRACT ? NEBULA_FACTOR_ONE
+                                                                                : NEBULA_FACTOR_SRC_ALPHA;
+        rMaterial.blend_dst = blend == BLEND_ALPHA ? NEBULA_FACTOR_INV_SRC_ALPHA
+                              : blend == BLEND_OPAQUE ? NEBULA_FACTOR_ZERO
+                                                      : NEBULA_FACTOR_ONE;
+        rMaterial.depth_test = depthFunc != NEBULA_COMPARE_ALWAYS || depthWrite ? 1 : 0;
+        rMaterial.depth_func = depthFunc;
         rMaterial.depth_write = depthWrite ? 1 : 0;
         rMaterial.cull = cull;
+        rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
+        rMaterial.alpha_write = 2;
     }
 
     // Texture `slot` (the shader's t<slot>): the texture's image, size, format, wrap and filtering.

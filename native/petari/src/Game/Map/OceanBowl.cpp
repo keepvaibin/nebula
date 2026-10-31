@@ -409,8 +409,9 @@ void OceanBowl::loadMaterial() const {
     const bool inWater = MR::isCameraInWater();
     JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
     NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL, inWater ? NEBULA_BLEND_ADD : NEBULA_BLEND_ALPHA,
-                       NEBULA_DEPTH_LEQUAL, false, NEBULA_CULL_NONE);
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL,
+                       inWater ? NativeShader::BLEND_ADD_ALPHA : NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+                       false, NEBULA_CULL_NONE);
     NativeShader::setColor(material, 0, ::sOceanBowlTevReg0.r, ::sOceanBowlTevReg0.g, ::sOceanBowlTevReg0.b,
                            ::sOceanBowlTevReg0.a);
     NativeShader::setColor(material, 4, ::sOceanBowlTevReg1.r, ::sOceanBowlTevReg1.g, ::sOceanBowlTevReg1.b,

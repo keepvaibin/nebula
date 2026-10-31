@@ -5,9 +5,11 @@
 #include <revolution/os.h>
 
 class J3DMaterial;
+class J3DModelData;
 class J3DTexture;
 class J3DDisplayListObj;
 struct NebulaMaterialParts;
+struct NebulaStateOp;
 
 // A J3D material as the renderer takes it (nebula_game_api.h NebulaMaterialProgram and NebulaMaterialValues): every
 // block's settings as values.
@@ -25,4 +27,11 @@ namespace J3DNativeMaterial {
     // An instance's differed list (a shape packet's: the material with that instance's animated values), when it has
     // been made.
     void sendDiffered(J3DDisplayListObj* pList);
+    // Tests (NEBULA_OPTION_TEST_MATERIAL_SWEEP): every material of a model just loaded built, and the programs no
+    // native shader is made for registered with the host (whose GALAXY_DUMP_MATERIAL_PROGRAMS file collects them).
+    void sweep(J3DModelData* pModelData);
+    // State changes the game makes (J3DStateList::send), before they go to the host: the register file the J3D
+    // materials' constants take, a value change folded into the current native J3D material, and a change of what
+    // its shader computes handing its draws back to the drawing state.
+    void state(const NebulaStateOp* pOps, u32 count);
 };  // namespace J3DNativeMaterial

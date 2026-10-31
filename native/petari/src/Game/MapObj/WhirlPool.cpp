@@ -162,7 +162,8 @@ void WhirlPool::loadMaterial() const {
     J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
     JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
     NebulaNativeMaterial material;
-    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NEBULA_BLEND_ALPHA, NEBULA_DEPTH_LEQUAL, true, NEBULA_CULL_NONE);
+    NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
     NativeShader::setColor(material, 0, sWhirlPoolTevReg1.r, sWhirlPoolTevReg1.g, sWhirlPoolTevReg1.b,
                            sWhirlPoolTevReg1.a);
     NativeShader::setColor(material, 4, sWhirlPoolTevReg2.r, sWhirlPoolTevReg2.g, sWhirlPoolTevReg2.b,

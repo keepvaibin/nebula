@@ -528,9 +528,19 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
     const VkShaderModule vs = native_module(vs_bytes.data, vs_bytes.size, vk::ShaderStage::Vertex);
     const VkShaderModule ps = native_module(ps_bytes.data, ps_bytes.size, vk::ShaderStage::Fragment);
     VkPipeline pipeline = VK_NULL_HANDLE;
+    // A curved surface's patches: the native patch stages for the output layout.
+    VkShaderModule hs = VK_NULL_HANDLE;
+    VkShaderModule ds = VK_NULL_HANDLE;
+    if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
+        const bool motion = variant == kNativeVariantMotion;
+        const NativeShaderBytes hull = native_curved_bytes(motion, false);
+        const NativeShaderBytes domain = native_curved_bytes(motion, true);
+        hs = native_module(hull.data, hull.size, vk::ShaderStage::Hull);
+        ds = native_module(domain.data, domain.size, vk::ShaderStage::Domain);
+    }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, false, false, compat, result);
+            return create_pipeline(rs, vs, ps, false, false, compat, result, hs, ds);
         };
         pipeline = with_fallbacks(make, applicable_compat(rs, false, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
@@ -541,7 +551,7 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
                                             bool dual_source, bool export_depth, std::uint32_t compat,
-                                            VkResult& result) const {
+                                            VkResult& result, VkShaderModule hs, VkShaderModule ds) const {
     result = VK_ERROR_INITIALIZATION_FAILED;
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
@@ -582,12 +592,14 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
     if (curved) {
         const unsigned variant = curved_variant(rs.primitive_topology);
-        if (curved_hs_[variant] == VK_NULL_HANDLE || curved_ds_[variant] == VK_NULL_HANDLE) {
+        const VkShaderModule hull = hs != VK_NULL_HANDLE ? hs : curved_hs_[variant];
+        const VkShaderModule domain = ds != VK_NULL_HANDLE ? ds : curved_ds_[variant];
+        if (hull == VK_NULL_HANDLE || domain == VK_NULL_HANDLE) {
             return VK_NULL_HANDLE;
         }
         topology = VK_PRIMITIVE_TOPOLOGY_PATCH_LIST;
-        add_stage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, curved_hs_[variant]);
-        add_stage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, curved_ds_[variant]);
+        add_stage(VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT, hull);
+        add_stage(VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT, domain);
     }
     add_stage(VK_SHADER_STAGE_FRAGMENT_BIT, ps);
 

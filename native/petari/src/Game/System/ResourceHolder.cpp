@@ -16,6 +16,7 @@
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #endif
 
 namespace {
@@ -237,6 +238,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
+        J3DNativeMaterial::sweep(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }
@@ -248,6 +250,7 @@ ResFileInfo* ResourceHolder::createAndRegisterObject(const char* pName, void* pD
 #ifdef TARGET_PC
         MotionSignal::modelResource(modelData, pName);
         J3DNativeShape::registerModel(modelData);
+        J3DNativeMaterial::sweep(modelData);
 #endif
         return mModelResTable->add(pName, modelData, true);
     }

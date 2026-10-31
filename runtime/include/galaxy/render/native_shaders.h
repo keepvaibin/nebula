@@ -16,6 +16,9 @@ struct NativeShaderBytes {
 };
 
 // Output variants (native_material.hlsli): the targets a pipeline's render state names.
+// The J3D material set's first NebulaShaderId (nebula_game_api.h NEBULA_SHADER_J3D_FIRST).
+inline constexpr std::uint32_t kNativeShaderJ3DFirst = 256u;
+
 enum NativeShaderVariant : unsigned {
     kNativeVariantBase = 0u,
     kNativeVariantReactive = 1u,  // + the reactive mask
@@ -33,6 +36,10 @@ enum NativeShaderVariant : unsigned {
 
 // `shader` (NebulaShaderId)'s vertex (pixel false) or pixel shader in `variant`; empty when the build has none.
 [[nodiscard]] NativeShaderBytes native_shader_bytes(std::uint32_t shader, unsigned variant, bool pixel) noexcept;
+
+// The curved surfaces' hull (domain false) or domain stage for every native material (native_curved.hlsl), by
+// whether the output layout carries motion vectors (kNativeVariantMotion).
+[[nodiscard]] NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept;
 
 // A native pipeline's render state: the draw's, without dual-source blending (a native shader writes one colour).
 [[nodiscard]] inline RenderStateKey native_render_state(RenderStateKey rs) noexcept {

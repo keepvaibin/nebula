@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Build tool (cmake/native_materials.cmake): a native material's shader as SPIR-V, through the renderer's own HLSL
 // front end and bindings (shader_compile_vk.h), written as a C++ header.
-//   galaxy_native_spirv <material.hlsl> <native_material.hlsli> <vs|ps> <array name> <out.h> [DEFINE...]
+//   galaxy_native_spirv <material.hlsl> <materials dir (its includes)> <vs|ps> <array name> <out.h> [DEFINE...]
 #include "galaxy/render/vk/shader_compile_vk.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <vector>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -30,32 +32,42 @@ int main(int argc, char** argv) {
         return 2;
     }
     std::string source;
-    std::string framework;
-    if (!read_text(argv[1], source) || !read_text(argv[2], framework)) {
-        std::fprintf(stderr, "galaxy_native_spirv: cannot read %s or %s\n", argv[1], argv[2]);
+    if (!read_text(argv[1], source)) {
+        std::fprintf(stderr, "galaxy_native_spirv: cannot read %s\n", argv[1]);
         return 1;
     }
-    const std::string include = "#include \"native_material.hlsli\"";
-    const std::size_t at = source.find(include);
-    if (at == std::string::npos) {
-        std::fprintf(stderr, "galaxy_native_spirv: %s does not include native_material.hlsli\n", argv[1]);
-        return 1;
+    // Each #include "name" replaced by the materials directory's file of that name (recursively, each once).
+    std::vector<std::string> included;
+    for (std::size_t at = source.find("#include \""); at != std::string::npos; at = source.find("#include \"", at)) {
+        const std::size_t open = at + 10u;
+        const std::size_t close = source.find('"', open);
+        const std::string name = source.substr(open, close - open);
+        std::string text;
+        if (std::find(included.begin(), included.end(), name) == included.end()) {
+            if (!read_text((std::string(argv[2]) + "/" + name).c_str(), text)) {
+                std::fprintf(stderr, "galaxy_native_spirv: %s: cannot read the include %s\n", argv[1], name.c_str());
+                return 1;
+            }
+            included.push_back(name);
+        }
+        source.replace(at, close + 1u - at, text);
     }
-    source.replace(at, include.size(), framework);
     std::string defines;
     for (int i = 6; i < argc; ++i) {
         defines += "#define " + std::string(argv[i]) + " 1\n";
     }
-    const bool pixel = std::string(argv[3]) == "ps";
-    // The renderer names every stage's entry point "main" (PipelineCacheVk::create_pipeline).
-    source += pixel ? "\nNativeOut main(NativeVaryings i) { return native_ps(i); }\n"
-                    : "\nNativeVaryings main(NativeVertexIn input) { return native_vs(input); }\n";
     namespace vk = galaxy::render::vk;
+    const std::string stage_name = argv[3];
+    const vk::ShaderStage stage = stage_name == "ps"   ? vk::ShaderStage::Fragment
+                                  : stage_name == "hs" ? vk::ShaderStage::Hull
+                                  : stage_name == "ds" ? vk::ShaderStage::Domain
+                                                       : vk::ShaderStage::Vertex;
+    // The renderer names every stage's entry point "main" (PipelineCacheVk::create_pipeline): the stage's function
+    // takes that name.
+    defines += "#define native_" + stage_name + " main\n";
     std::string error;
-    const std::vector<std::uint32_t> spirv =
-        vk::compile_hlsl(vk::annotate(defines + source, vk::gx_draw_bindings()),
-                         pixel ? vk::ShaderStage::Fragment : vk::ShaderStage::Vertex, "main", {}, error,
-                         {true, false, false});
+    const std::vector<std::uint32_t> spirv = vk::compile_hlsl(vk::annotate(defines + source, vk::gx_draw_bindings()),
+                                                              stage, "main", {}, error, {true, false, false});
     if (spirv.empty()) {
         std::fprintf(stderr, "galaxy_native_spirv: %s (%s): %s\n", argv[1], argv[3], error.c_str());
         return 1;
