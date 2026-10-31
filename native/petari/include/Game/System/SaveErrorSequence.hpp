@@ -1,22 +1,26 @@
 #pragma once
 
 #include "Game/LiveActor/ActorStateBase.hpp"
+#include "Game/System/SaveRequest.hpp"
 
 class SaveDataHandleSequence;
 class SysInfoWindow;
 
-class NANDErrorSequence : public ActorStateBase< SaveDataHandleSequence > {
+// What the game shows when its save file cannot be used: a corrupted file (remove it, or play without saving) and a
+// save the host could not read or write (the error, then back to the menu). The NWC24 messenger's own system-memory
+// error freezes (startErrorToFreeze).
+class SaveErrorSequence : public ActorStateBase< SaveDataHandleSequence > {
 public:
-    NANDErrorSequence(SaveDataHandleSequence*, SysInfoWindow*, SysInfoWindow*);
+    SaveErrorSequence(SaveDataHandleSequence*, SysInfoWindow*, SysInfoWindow*);
 
     virtual void control();
 
-    void startErrorToWiiMenu(const char*);
+    void startErrorToMenu(const char*);
     void startErrorToFreeze(const char*);
     void startRemoveFile();
     void startCheckEnableToCreate();
-    bool tryLessBlockOrInode(u32);
-    bool tryNoRecoverErroSequence(s32);
+    // A result no sequence recovers from: the error, then the menu. False for the others.
+    bool tryUnrecoverable(SaveRequest::Result);
     bool isPermitToReset() const;
     void prepareReset();
     bool isPreparedReset() const;
@@ -28,25 +32,17 @@ public:
     void exeRemove();
     void exeRemoveDoneKeyWait();
     void exeNoSaveConfirmBeforeRemove();
-    void exeNoSaveConfirmLessBlockOrInode();
-    void exeLessBlockOrInodeConfirm();
-    void exeGoWiiMenu();
-    void exeCheckEnableToCreateOnPreloading();
-    void exeCheckEnableToCreateAfterRemove();
+    void exeCheckEnableToCreate();
     bool isEnablePointer() const;
-    bool isResultNoSave() const;
     bool isResultFileCorrupted() const;
     void resetParam();
     bool tryConfirm(const char*, bool*);
     bool tryProcessDoneKeyWait(const char*);
-    bool tryCheckEnableToCreate();
-    bool tryVerifyNANDCheckResult() NO_INLINE;
 
 private:
     /* 0x10 */ const char* mSystemMessageId;
     /* 0x14 */ bool _14;
     /* 0x15 */ bool _15;
-    /* 0x18 */ u32 mAnswer;
     /* 0x1C */ u32 mResult;
     /* 0x20 */ SysInfoWindow* mSysInfoWindow;
 };

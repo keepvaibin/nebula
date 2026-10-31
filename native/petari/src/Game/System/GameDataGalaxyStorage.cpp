@@ -1,4 +1,5 @@
 #include "Game/System/GameDataGalaxyStorage.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/System/BinaryDataContentAccessor.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataFunction.hpp"
@@ -11,7 +12,7 @@
 
 namespace {
     inline s32 writeU16(void* pData, u16 value) {
-        *static_cast< NEBULA_BE(u16)* >(pData) = value;
+        MR::storeSaveU16(pData, value);
         return sizeof(value);
     }
 };  // namespace
@@ -94,10 +95,10 @@ s32 GameDataSomeGalaxyStorage::deserialize(const BinaryDataContentAccessor& rAcc
         mAlreadyVisitedFlags = 0b00000000;
     }
 
-    NEBULA_BE(u16)* maxCoinNums = (NEBULA_BE(u16)*)rAccessor.getPointer("mMaxCoinNum", (u8*)pData);
+    const u8* maxCoinNums = (const u8*)rAccessor.getPointer("mMaxCoinNum", (u8*)pData);
     for (s32 idx = 0; idx < 8; idx++) {
         if (maxCoinNums != nullptr) {
-            mMaxCoinNum[idx] = maxCoinNums[idx];
+            mMaxCoinNum[idx] = MR::loadSaveU16(maxCoinNums + idx * sizeof(u16));
         } else {
             mMaxCoinNum[idx] = 0;
         }
@@ -171,7 +172,7 @@ u32 GameDataAllGalaxyStorage::getSignature() const {
 }
 
 s32 GameDataAllGalaxyStorage::deserialize(const u8* pData, u32 dataSize) {
-    s32 attributeNum = *(NEBULA_BE(u16)*)(pData + 0);
+    s32 attributeNum = MR::loadSaveU16(pData + 0);
     const char* name;
     BinaryDataContentAccessor accessor((u8*)(pData + 2));
     u32 readOffset = accessor.getHeaderSize() + 2;
@@ -181,7 +182,7 @@ s32 GameDataAllGalaxyStorage::deserialize(const u8* pData, u32 dataSize) {
     for (s32 idx = 0; idx < attributeNum; idx++) {
         name = "mGalaxyName";
         u8* ptr = (u8*)(pData + readOffset);
-        s32 galaxyIndex = findIndex(*(NEBULA_BE(u16)*)accessor.getPointer(name, ptr));
+        s32 galaxyIndex = findIndex(MR::loadSaveU16(accessor.getPointer(name, ptr)));
         if (galaxyIndex >= 0) {
             switch (mSomeGalaxyStorages[galaxyIndex]->deserialize(accessor, ptr)) {
             case 0:
@@ -244,9 +245,9 @@ void GameDataSomeGalaxyStorage::serialize(const BinaryDataContentAccessor& rAcce
     u8* firstPlayFlags = (u8*)rAccessor.getPointer("mFirstPlayFlag", pData);
     *firstPlayFlags = mAlreadyVisitedFlags;
 
-    NEBULA_BE(u16)* maxCoinNums = (NEBULA_BE(u16)*)rAccessor.getPointer("mMaxCoinNum", pData);
+    u8* maxCoinNums = (u8*)rAccessor.getPointer("mMaxCoinNum", pData);
     for (s32 idx = 0; idx < 8; idx++) {
-        maxCoinNums[idx] = mMaxCoinNum[idx];
+        MR::storeSaveU16(maxCoinNums + idx * sizeof(u16), mMaxCoinNum[idx]);
     }
 }
 

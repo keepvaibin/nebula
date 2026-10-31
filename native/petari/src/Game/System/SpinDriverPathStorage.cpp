@@ -1,4 +1,5 @@
 #include "Game/System/SpinDriverPathStorage.hpp"
+#include "Game/System/SaveBinary.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/HashUtil.hpp"
@@ -147,7 +148,7 @@ s32 SpinDriverPathStorageScenario::serialize(u8* pData, u32 dataSize) const {
 
     u16 blockSize = size + 3;
     *(pData + size + 2) = SpinDriverScenarioDataFlag_EndOfData;
-    *(NEBULA_BE(u16)*)(pData + 0) = blockSize;
+    MR::storeSaveU16(pData + 0, blockSize);
     return blockSize;
 }
 
@@ -224,29 +225,29 @@ s32 SpinDriverPathStorageGalaxy::serialize(u8* pData, u32 maxBufferSize) const {
         size += mScenarioStorage[idx].serialize(pData + size + 6, maxBufferSize - size - 6);
     }
 
-    *(NEBULA_BE(u16)*)(pData + 0) = MR::getHashCode(mGalaxyName);
+    MR::storeSaveU16(pData + 0, MR::getHashCode(mGalaxyName));
     u16 blockSize = size + 6;
-    *(NEBULA_BE(u16)*)(pData + 2) = blockSize;
+    MR::storeSaveU16(pData + 2, blockSize);
     *(u8*)(pData + 4) = mNumScenarios;
     *(u8*)(pData + 5) = 0;
     return blockSize;
 }
 
 s32 SpinDriverPathStorageGalaxy::deserialize(const u8* pData, u32 maxBufferSize) {
-    if (*(NEBULA_BE(u16)*)(pData + 0) != (u16)MR::getHashCode(mGalaxyName)) {
-        return *(NEBULA_BE(u16)*)(pData + 2);
+    if (MR::loadSaveU16(pData + 0) != (u16)MR::getHashCode(mGalaxyName)) {
+        return MR::loadSaveU16(pData + 2);
     }
 
     if (*(u8*)(pData + 4) != mNumScenarios) {
         resetAllData();
-        return *(NEBULA_BE(u16)*)(pData + 2);
+        return MR::loadSaveU16(pData + 2);
     }
 
     s32 size = 0;
     for (s32 idx = 0; idx < mNumScenarios; idx++) {
         size += mScenarioStorage[idx].deserialize((u8*)(pData + size + 6), maxBufferSize - size - 6);
     }
-    return *(NEBULA_BE(u16)*)(pData + 2);
+    return MR::loadSaveU16(pData + 2);
 }
 
 SpinDriverPathStorage::SpinDriverPathStorage() {
@@ -300,13 +301,13 @@ s32 SpinDriverPathStorage::deserialize(const u8* pData, u32 maxBufferSize) {
 
     for (s32 idx = 0; idx < numEntries; idx++) {
         u8* readPtr = (u8*)stream.mBuffer + stream.mPosition;
-        SpinDriverPathStorageGalaxy* storage = findFromHashCode(*(NEBULA_BE(u16)*)readPtr);
+        SpinDriverPathStorageGalaxy* storage = findFromHashCode(MR::loadSaveU16(readPtr));
         if (storage != nullptr) {
             storage->deserialize((u8*)stream.mBuffer + stream.mPosition, maxBufferSize - stream.mPosition);
         } else {
             readError = 1;
         }
-        stream.seek(*(NEBULA_BE(u16)*)(readPtr + 2), SEEK_FROM_POSITION);
+        stream.seek(MR::loadSaveU16(readPtr + 2), SEEK_FROM_POSITION);
     }
 
     return readError ? 1 : 0;

@@ -1,9 +1,10 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
+#include "Game/System/SaveRequest.hpp"
 
 class GameDataHolder;
-class NANDErrorSequence;
+class SaveErrorSequence;
 class SaveDataHandler;
 class SaveIcon;
 class SysConfigFile;
@@ -41,7 +42,8 @@ public:
     void startLoad(int, bool);
     void storeMiiOrIconId(int, const void*, const u32*);
     void storeCopyUserFile(int, int);
-    bool tryNANDErrorSequence(s32);
+    bool tryUnrecoverableError(SaveRequest::Result);
+    void startSystemMemoryErrorFreeze();
     bool isActive() const;
     bool isPermitToReset() const;
     void prepareReset();
@@ -85,7 +87,7 @@ public:
     /* 0x0C */ UserFile* mCurrentUserFile;
     /* 0x10 */ UserFile* mBackupUserFile;
     /* 0x14 */ SaveDataHandler* mSaveDataHandler;
-    /* 0x18 */ NANDErrorSequence* mNANDErrorSequence;
+    /* 0x18 */ SaveErrorSequence* mSaveErrorSequence;
     /* 0x1C */ SysInfoWindow* mSysInfoWindowConfirm;
     /* 0x20 */ SysInfoWindow* mSysInfoWindowSave;
     /* 0x24 */ s32 _24;

@@ -2,15 +2,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <cstring>
 
-SaveDataFileAccessor::SaveDataFileAccessor(u8* pSaveDataFile) : mFile(reinterpret_cast< SaveDataFile* >(pSaveDataFile)) {
-}
-
-SaveDataFileHeader* SaveDataFileAccessor::getHeader() {
-    return &mFile->mHeader;
-}
-
-SaveDataFileInfo* SaveDataFileAccessor::getFileInfo(int index) {
-    return &mFile->mInfo[index];
+SaveDataFileAccessor::SaveDataFileAccessor(u8* pSaveDataFile) : mFile(pSaveDataFile) {
 }
 
 void SaveDataFileAccessor::makeUserFileInfo(SaveDataUserFileInfo* pUserFileInfo, const char* pName) {
@@ -18,27 +10,28 @@ void SaveDataFileAccessor::makeUserFileInfo(SaveDataUserFileInfo* pUserFileInfo,
     pUserFileInfo->mDataSize = 0;
     pUserFileInfo->mKind = 1;
 
-    SaveDataFileHeader* pHeader = getHeader();
-    SaveDataFileInfo* pInfo = getFileInfo(0);
+    const u32 num = getUserFileInfoNum();
 
-    for (u32 i = 0; i < pHeader->mUserFileInfoNum; i++) {
-        if (!MR::isEqualString(pInfo[i].mName, pName)) {
+    for (u32 i = 0; i < num; i++) {
+        const char* pEntryName = getFileName(i);
+
+        if (!MR::isEqualString(pEntryName, pName)) {
             continue;
         }
 
-        if (i == pHeader->mUserFileInfoNum - 1) {
-            pUserFileInfo->mDataSize = pHeader->mFileSize - pInfo[i].mOffset;
+        if (i == num - 1) {
+            pUserFileInfo->mDataSize = getFileSize() - getFileOffset(i);
         } else {
-            pUserFileInfo->mDataSize = pInfo[i + 1].mOffset - pInfo[i].mOffset;
+            pUserFileInfo->mDataSize = getFileOffset(i + 1) - getFileOffset(i);
         }
 
-        pUserFileInfo->mData = reinterpret_cast< u8* >(getHeader()) + pInfo[i].mOffset;
+        pUserFileInfo->mData = mFile + getFileOffset(i);
 
-        if (strstr(pInfo[i].mName, "mario") != nullptr || strstr(pInfo[i].mName, "luigi") != nullptr) {
+        if (strstr(pEntryName, "mario") != nullptr || strstr(pEntryName, "luigi") != nullptr) {
             pUserFileInfo->mKind = 0;
         }
 
-        if (strstr(pInfo[i].mName, "sysconf") != nullptr) {
+        if (strstr(pEntryName, "sysconf") != nullptr) {
             pUserFileInfo->mKind = 2;
         }
     }

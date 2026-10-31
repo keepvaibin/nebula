@@ -26,11 +26,11 @@ u32 BinaryDataChunkHolder::makeFileBinary(u8* pData, u32 a2) {
     for (s32 idx = 0; idx < mNumChunks; idx++) {
         MR::zeroMemory(mData, mBufferSize);
 
-        BinaryDataChunkHolderChunkData* chunkData = reinterpret_cast< BinaryDataChunkHolderChunkData* >(mData);
-        makeChunkData(chunkData, mBufferSize, mChunks[idx]);
+        u8* chunkData = static_cast< u8* >(mData);
+        const u32 chunkSize = makeChunkData(chunkData, mBufferSize, mChunks[idx]);
 
-        MR::copyMemory(&pData[offset], chunkData, chunkData->mChunkSize);
-        offset += chunkData->mChunkSize;
+        MR::copyMemory(&pData[offset], chunkData, chunkSize);
+        offset += chunkSize;
     }
 
     return offset;
@@ -48,15 +48,16 @@ bool BinaryDataChunkHolder::loadFromFileBinary(const u8* pData, u32 dataSize) {
     bool deserializeError = 0;
 
     for (s32 idx = 0; idx < pData[1]; idx++) {
-        const BinaryDataChunkHolderChunkData* chunkData = reinterpret_cast< const BinaryDataChunkHolderChunkData* >(&pData[offset]);
-        BinaryDataChunkBase* chunk = findFromSignature(chunkData->mSignature);
+        const u8* chunkData = &pData[offset];
+        const u32 chunkSize = MR::loadSaveU32(chunkData + BinaryDataChunk::cSize);
+        BinaryDataChunkBase* chunk = findFromSignature(MR::loadSaveU32(chunkData + BinaryDataChunk::cSignature));
 
         if (chunk != nullptr) {
-            if (chunkData->mHash != chunk->makeHeaderHashCode()) {
+            if (MR::loadSaveU32(chunkData + BinaryDataChunk::cHash) != chunk->makeHeaderHashCode()) {
                 hashError = true;
             }
 
-            s32 status = chunk->deserialize(chunkData->getData(), chunkData->mChunkSize - chunkData->getDataOffset());
+            s32 status = chunk->deserialize(chunkData + BinaryDataChunk::cDataOffset, chunkSize - BinaryDataChunk::cDataOffset);
             bool deserializeSuccess;
             switch (status) {
             case 0:
@@ -70,7 +71,7 @@ bool BinaryDataChunkHolder::loadFromFileBinary(const u8* pData, u32 dataSize) {
 
             deserializeError |= !deserializeSuccess;
         }
-        offset += chunkData->mChunkSize;
+        offset += chunkSize;
     }
 
     bool success = true;
@@ -89,10 +90,14 @@ bool BinaryDataChunkHolder::loadFromFileBinary(const u8* pData, u32 dataSize) {
     return success;
 }
 
-void BinaryDataChunkHolder::makeChunkData(BinaryDataChunkHolderChunkData* pData, u32 bufferSize, const BinaryDataChunkBase* pChunk) {
-    pData->mSignature = pChunk->getSignature();
-    pData->mHash = pChunk->makeHeaderHashCode();
-    pData->mChunkSize = pChunk->serialize(pData->getData(), bufferSize - pData->getDataOffset()) + pData->getDataOffset();
+// The chunk's header and data at pData; returns its size, header included.
+u32 BinaryDataChunkHolder::makeChunkData(u8* pData, u32 bufferSize, const BinaryDataChunkBase* pChunk) {
+    const u32 size = pChunk->serialize(pData + BinaryDataChunk::cDataOffset, bufferSize - BinaryDataChunk::cDataOffset) +
+                     BinaryDataChunk::cDataOffset;
+    MR::storeSaveU32(pData + BinaryDataChunk::cSignature, pChunk->getSignature());
+    MR::storeSaveU32(pData + BinaryDataChunk::cHash, pChunk->makeHeaderHashCode());
+    MR::storeSaveU32(pData + BinaryDataChunk::cSize, size);
+    return size;
 }
 
 BinaryDataChunkBase* BinaryDataChunkHolder::findFromSignature(u32 signature) const {
@@ -110,7 +115,7 @@ BinaryDataChunkBase* BinaryDataChunkHolder::findFromSignature(u32 signature) con
 u32 BinaryDataChunkHolder::calcBinarySize(const u8* pData) {
     s32 size = 4;
     for (s32 idx = 0; idx < pData[1]; idx++) {
-        size += reinterpret_cast< const BinaryDataChunkHolderChunkData* >(&pData[size])->mChunkSize;
+        size += MR::loadSaveU32(&pData[size] + BinaryDataChunk::cSize);
     }
     return size;
 }

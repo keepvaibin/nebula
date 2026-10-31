@@ -1,9 +1,8 @@
 #pragma once
 
 #include "Game/System/NerveExecutor.hpp"
+#include "Game/System/SaveRequest.hpp"
 
-class NANDRequestInfo;
-class NANDResultCode;
 class SysConfigFile;
 class UserFile;
 
@@ -24,7 +23,7 @@ public:
     void requestRemoveSaveData();
     static u32 getEnoughtTempBufferSize();
     bool isDone() const;
-    NANDResultCode getLastResultCode() const;
+    SaveRequest::Result getLastResult() const;
     void exeWait();
     void exeProcessing();
     void exeSaveProcessingGameData();
@@ -37,9 +36,8 @@ public:
     bool tryRemoveFile(const char*, bool*);
     bool trySave(bool*, bool);
 
-    /* 0x08 */ NANDRequestInfo* mNANDRequestInfo;
+    /* 0x08 */ SaveRequest* mSaveRequest;
     /* 0x0C */ u32 _C;
-    /* 0x10 */ u32 _10;
     /* 0x14 */ u8* _14;
     /* 0x18 */ u8* _18;
 };

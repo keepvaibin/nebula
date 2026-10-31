@@ -3,7 +3,6 @@
 #include "revolution/types.h"
 #include <cstdlib>
 
-#include "revolution/nand.h"
 #include "revolution/vf.h"
 
 #ifdef __cplusplus
