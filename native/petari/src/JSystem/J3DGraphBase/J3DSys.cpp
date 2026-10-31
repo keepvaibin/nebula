@@ -65,11 +65,11 @@ J3DSys::J3DSys() {
 
 // The model's draw and normal matrices `indx` into matrix slot `addr` (the next shape draw carries them).
 void J3DSys::loadPosMtxIndx(int addr, u16 indx) const {
-    J3DNativeShape::loadPosition(mModelDrawMtx[indx], addr * 3, indx + 1);
+    J3DNativeShape::setPosition(addr, mModelDrawMtx[indx], indx + 1);
 }
 
 void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
-    J3DNativeShape::loadNormal33(mModelNrmMtx[indx], addr * 3, indx + 1);
+    J3DNativeShape::setNormal33(addr, mModelNrmMtx[indx], indx + 1);
 }
 
 
@@ -106,7 +106,7 @@ void J3DSys::drawInit() {
     J3DNativeState::setTevOrder(GX_TEVSTAGE15, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
 
     for (u32 i = 0; i < 10; i++)
-        J3DNativeShape::sendTexture(j3dIdentityMtx, GX_TEXMTX0 + i * 3, GX_MTX3x4);
+        J3DNativeShape::setTexture(i, j3dIdentityMtx, 3);
 
     Mtx23 indTexMtx = {
         {0.5f, 0.0f, 0.0f},

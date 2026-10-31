@@ -13,7 +13,8 @@ namespace J3DNativeDraw {
     // _NORMAL, _COLOR0, _COLOR1, _TEXCOORD0 << n; every vertex has a position) in GX's order: position matrix,
     // position, normal, colour 0, colour 1, texture coordinates. The record goes when the last vertex is complete.
     void begin(GXPrimitive primitive, u16 count, u32 attributes);
-    void matrix(u8 id);
+    // The vertex's position matrix place (0-9, J3DNativeShape::setPosition).
+    void matrix(u8 place);
     void position(f32 x, f32 y, f32 z);
     void normal(f32 x, f32 y, f32 z);
     // R << 24 | G << 16 | B << 8 | A.

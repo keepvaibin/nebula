@@ -85,10 +85,10 @@ void J2DGrafContext::setup2D() {
     J3DNativeState::setNumTexGens(0);
     J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeShape::sendPosition(mPosMtx, 0);
+    J3DNativeShape::setPosition(0, mPosMtx);
     Mtx mtx;
     NebulaMtxIdentity(mtx);
-    J3DNativeShape::sendTexture(mtx, GX_IDENTITY, GX_MTX3x4);
+    J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, mtx, 3);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setCurrentMtx(0);
@@ -122,7 +122,7 @@ void J2DGrafContext::place(JGeometry::TBox2< f32 > const& rBounds) {
 
 void J2DGrafContext::fillBox(JGeometry::TBox2< f32 > const& rBox) {
     J3DNativeState::setBlendMode((GXBlendMode)mBoxPart.mType, (GXBlendFactor)mBoxPart.mSrcFactor, (GXBlendFactor)mBoxPart.mDestFactor, GX_LO_SET);
-    J3DNativeShape::sendPosition(mPosMtx, 0);
+    J3DNativeShape::setPosition(0, mPosMtx);
     J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(rBox.i.x, rBox.i.y, 0);
     J3DNativeDraw::color(mColorTL);

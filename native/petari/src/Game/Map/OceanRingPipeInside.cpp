@@ -63,8 +63,8 @@ void OceanRingPipeInside::draw() const {
 
 const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 void OceanRingPipeInside::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
-    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setNumTexGens(2);
@@ -75,10 +75,10 @@ void OceanRingPipeInside::loadMaterial() const {
     mtx.identity();
     mtx.mMtx[0][2] = mTexU0;
     mtx.mMtx[1][2] = mTexV0;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx.toMtxPtr(), 2);
     mtx.mMtx[0][2] = mTexU1;
     mtx.mMtx[1][2] = mTexV1;
-    J3DNativeShape::sendTexture(mtx.toMtxPtr(), 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
 
     mWaterPipeInsideTex->load(GX_TEXMAP0);
     J3DNativeState::setNumIndStages(1);

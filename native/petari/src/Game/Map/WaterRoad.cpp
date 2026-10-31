@@ -372,8 +372,8 @@ s32 WaterRoadModelInfo::calcDemoDrawPointNum(const WaterRoad* pRoad) const {
 }
 
 void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
-    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setNumTexGens(5);
@@ -397,7 +397,7 @@ void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
 
     MR::multMtx(pos.mMtx, mtx, pos.mMtx);
     MR::multMtx(pos.mMtx, qMtx2, pos.mMtx);
-    J3DNativeShape::sendTexture(pos.mMtx, 0x2A, GX_MTX2x4);
+    J3DNativeShape::setTexture(4, pos.mMtx, 2);
     J3DNativeState::setNumIndStages(1);
     J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP1);
     J3DNativeState::setTevIndWarp(GX_TEVSTAGE3, GX_INDTEXSTAGE0, GX_TRUE, GX_FALSE, GX_ITM_0);
@@ -462,8 +462,8 @@ void WaterRoadModelInfo::loadMaterialHigh(const WaterRoad* pRoad) const {
 }
 
 void WaterRoadModelInfo::loadMaterialLow() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
-    J3DNativeShape::sendNormal(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
+    J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(0);
     J3DNativeState::setNumTexGens(4);
@@ -487,7 +487,7 @@ void WaterRoadModelInfo::loadMaterialLow() const {
 
     MR::multMtx(pos.mMtx, mtx, pos.mMtx);
     MR::multMtx(pos.mMtx, qMtx2, pos.mMtx);
-    J3DNativeShape::sendTexture(pos.mMtx, 0x27, GX_MTX2x4);
+    J3DNativeShape::setTexture(3, pos.mMtx, 2);
 
     J3DNativeState::setNumIndStages(0);
     J3DNativeState::setNumTevStages(4);
@@ -809,10 +809,10 @@ void WaterRoad::draw() const {
     mtx.identity();
     mtx[0][2] = mTexUV0.x;
     mtx[1][2] = mTexUV0.y;
-    J3DNativeShape::sendTexture(mtx, 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx, 2);
     mtx[0][2] = mTexUV1.x;
     mtx[1][2] = mTexUV1.y;
-    J3DNativeShape::sendTexture(mtx, 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mtx, 2);
 
     mTexture->load(GX_TEXMAP0);
     JUTTexture screenTex(MR::getScreenResTIMG(), 0);
@@ -823,7 +823,7 @@ void WaterRoad::draw() const {
         mIndirect->load(GX_TEXMAP1);
         mtx[0][2] = mTexUV2.x;
         mtx[1][2] = mTexUV2.y;
-        J3DNativeShape::sendTexture(mtx, 0x24, GX_MTX2x4);
+        J3DNativeShape::setTexture(2, mtx, 2);
         mModelInfoHigh->drawDirect(this);
         return;
     }
@@ -839,7 +839,7 @@ void WaterRoad::draw() const {
         mIndirect->load(GX_TEXMAP1);
         mtx[0][2] = mTexUV2.x;
         mtx[1][2] = mTexUV2.y;
-        J3DNativeShape::sendTexture(mtx, 0x24, GX_MTX2x4);
+        J3DNativeShape::setTexture(2, mtx, 2);
         mModelInfoHigh->drawGD();
     }
 }

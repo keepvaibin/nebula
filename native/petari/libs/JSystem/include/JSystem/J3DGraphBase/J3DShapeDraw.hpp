@@ -26,4 +26,9 @@ public:
 private:
     /* 0x04 */ u32 mDisplayListSize;
     /* 0x08 */ void* mDisplayList;
+
+public:
+    // The position matrix places its corners read (bit k: place k; 0: none of their own), set when it is registered
+    // (J3DNativeShape::registerShape).
+    u16 mNebulaPlaces = 0;
 };

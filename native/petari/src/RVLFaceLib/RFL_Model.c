@@ -388,8 +388,8 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
 
     J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
 
-    J3DNativeShapeSendPosition(imodel->posMtx, setting->posNrmMtxID);
-    J3DNativeShapeSendNormal(imodel->nrmMtx, setting->posNrmMtxID);
+    J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
+    J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
     J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_POS, 60, 0, 0x7D);
@@ -454,8 +454,8 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
     J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
 
-    J3DNativeShapeSendPosition(imodel->posMtx, setting->posNrmMtxID);
-    J3DNativeShapeSendNormal(imodel->nrmMtx, setting->posNrmMtxID);
+    J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
+    J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
     J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
@@ -981,8 +981,8 @@ static void RFLDrawShape(const RFLCharModel* model) {
     RFLiCharModelRes* res = imodel->res;
 
 
-    J3DNativeShapeSendPosition(imodel->posMtx, 0);
-    J3DNativeShapeSendNormal(imodel->nrmMtx, 0);
+    J3DNativeShapeSetPosition(0, imodel->posMtx);
+    J3DNativeShapeSetNormal(0, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(0);
 
     if (res->beardDlSize > 0) {

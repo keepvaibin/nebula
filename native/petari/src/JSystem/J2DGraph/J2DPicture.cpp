@@ -328,7 +328,7 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
 
         setTevMode();
         makeMatrix(x, y, 0.0f, 0.0f);
-        J3DNativeShape::sendPosition(mPositionMtx, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, mPositionMtx);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
 
         JGeometry::TVec2< s16 > coords[4];
@@ -358,7 +358,7 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
 
         Mtx m;
         NebulaMtxIdentity(m);
-        J3DNativeShape::sendPosition(m, GX_PNMTX0);
+        J3DNativeShape::setPosition(0, m);
         J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     }
 }
@@ -427,7 +427,7 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
         setTevMode();
         NebulaMtxConcat((MtxPtr)param_12, mGlobalMtx, outputMtx);
 
-        J3DNativeShape::sendPosition(outputMtx, 0);
+        J3DNativeShape::setPosition(0, outputMtx);
         J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
 
         J3DNativeDraw::position(param_0, param_1, 0.0f);

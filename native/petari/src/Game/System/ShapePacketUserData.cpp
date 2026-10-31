@@ -62,12 +62,12 @@ void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index
             if (mTexMtxInfo[i].mType == 2) {
                 mtx.set(j3dSys.getModelDrawMtx(index));
                 mtx.setTrans(0.0f, 0.0f, 0.0f);
-                J3DNativeShape::loadTexture(mtx, GX_TEXMTX0 + slot * 3, static_cast< GXTexMtxType >(pMaterial->getTexCoord(i)->getTexGenType()));
+                J3DNativeShape::setTexture(slot, mtx, pMaterial->getTexCoord(i)->getTexGenType() == GX_MTX2x4 ? 2 : 3);
             }
 
             J3DTexMtx* const pTexMtx = pMaterial->getTexMtx(i);
             pTexMtx->calcPostTexMtx(MR::getCameraInvViewMtx());
-            J3DNativeShape::loadTexture(pTexMtx->getMtx(), mTexMtxInfo[i].mPostMtx, GX_MTX3x4);
+            J3DNativeShape::setPostTexture((mTexMtxInfo[i].mPostMtx - GX_PTTEXMTX0) / 3, pTexMtx->getMtx());
         }
     }
 }

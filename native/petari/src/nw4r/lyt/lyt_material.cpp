@@ -723,7 +723,7 @@ namespace nw4r {
 
                     math::MTX34 mtx;
                     CalcTextureMtx(&mtx, pTexSrt[i]);
-                    J3DNativeShape::sendTexture(mtx, GetTexMtx(i), GX_MTX2x4);
+                    J3DNativeShape::setTexture((GetTexMtx(i) - GX_TEXMTX0) / 3, mtx, 2);
                 }
             }
 

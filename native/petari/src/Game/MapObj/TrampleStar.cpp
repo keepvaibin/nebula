@@ -613,7 +613,7 @@ void TrampleStar::drawSelf() const {
     mtx4[1][3] = debug5;
     MR::multMtx(mtx3, mtx3, mtx4);
 
-    J3DNativeShape::sendTexture(mtx3, GX_TEXMTX1, GX_MTX3x4);
+    J3DNativeShape::setTexture(1, mtx3, 3);
     J3DNativeState::setNumTevStages(3);
     J3DNativeState::setNumTexGens(2);
     J3DNativeState::setTevDirect(GX_TEVSTAGE0);

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 58u
+#define NEBULA_GAME_API_VERSION 59u
 
 /* One of JAudio's 64 channels (JASDsp::TChannel, 0x180 bytes, host byte order): the game sets its source, pitch,
    volumes and filters; the host's mixer plays it and advances its playback state. */
@@ -98,24 +98,26 @@ typedef struct NebulaJAudioFxLine {
     int16_t coefficients[8];
 } NebulaJAudioFxLine;
 
-/* A matrix a shape draw reads (shape_draw), by GX's matrix id: position and texture matrices 0-63 in threes, a normal
-   matrix by its position matrix's id, post-transform texture matrices from 64. `values` holds rows of four (a normal
-   matrix rows of three, a 2x4 texture matrix two rows). `model_matrix`: the model's draw matrix it is (its index + 1;
-   0 for any other), which names it from frame to frame. */
+/* A matrix a draw carries (shape_draw, immediate), named by its place in the draw: position matrix 0-9 (rows of
+   four) and its normal matrix (rows of three), which a corner's matrix index names together; texture matrix 0-9 (two
+   or three rows of four; 10 the identity's place) and post-transform texture matrix 0-19 (three rows of four; 20 the
+   identity's), which texture coordinates name. A draw carries every position and normal matrix its corners read; a
+   texture or post-transform matrix stays until a draw or material gives it again. `model_matrix`: the model's draw
+   matrix it is (its index + 1; 0 for any other), which names it from frame to frame. */
 enum {
-    NEBULA_SHAPE_MATRIX_POSITION = 0,
-    NEBULA_SHAPE_MATRIX_NORMAL = 1,
-    NEBULA_SHAPE_MATRIX_TEXTURE = 2,
-    NEBULA_SHAPE_MATRIX_TEXTURE_2X4 = 3,
-    NEBULA_SHAPE_MATRIX_POST_TEXTURE = 4,
+    NEBULA_DRAW_MATRIX_POSITION = 0,
+    NEBULA_DRAW_MATRIX_NORMAL = 1,
+    NEBULA_DRAW_MATRIX_TEXTURE = 2,
+    NEBULA_DRAW_MATRIX_TEXTURE_2X4 = 3,
+    NEBULA_DRAW_MATRIX_POST_TEXTURE = 4,
 };
 
-typedef struct NebulaShapeMatrix {
+typedef struct NebulaDrawMatrix {
     uint8_t kind;
-    uint8_t id;
+    uint8_t place;
     uint16_t model_matrix;
     float values[12];
-} NebulaShapeMatrix;
+} NebulaDrawMatrix;
 
 /* One drawing-state change the game makes outside a material (state): `kind` names the GX function whose
    arguments `a` holds in its order (enumerations and bytes), `size` its sizes, `f` its float arguments and `image`
@@ -226,8 +228,9 @@ typedef struct NebulaTextureImage {
 /* Vertices the game sends as it draws (immediate): `count` of them grouped as `primitive` (GXBegin's: quads,
    triangles, strips, fans, lines, line strips, points), each with the values `attributes` names (NEBULA_SHAPE_NORMAL,
    _COLOR0, _COLOR1, _TEXCOORD0 << n, _POSITION_MATRIX): 3 floats of position and of normal, an R << 24 | G << 16 |
-   B << 8 | A word per colour, 2 floats per texture coordinate, a GX matrix id per position matrix. Without a position
-   matrix the vertices take the current one. */
+   B << 8 | A word per colour, 2 floats per texture coordinate, a position matrix place (0-9) per position matrix.
+   Without a position matrix the vertices take the current one. `matrices` (`matrix_count`): the position and normal
+   matrices they read and texture matrices given since the last record (NebulaDrawMatrix). */
 typedef struct NebulaImmediate {
     uint8_t primitive;
     uint8_t reserved[3];
@@ -239,6 +242,9 @@ typedef struct NebulaImmediate {
     const uint32_t* color[2];
     const float* texcoord[8];
     const uint8_t* position_matrix;
+    const struct NebulaDrawMatrix* matrices;
+    uint32_t matrix_count;
+    uint32_t reserved3;
 } NebulaImmediate;
 
 /* A texture coordinate a shape draw generates differently from its material (shape_draw): GXSetTexCoordGen's values
@@ -248,8 +254,8 @@ typedef struct NebulaShapeTexGen {
     uint8_t reserved[3];
 } NebulaShapeTexGen;
 
-/* The matrices a shape draw's corners take when they carry none (shape_draw): the position matrix's id and texture
-   coordinates 0-7's. */
+/* The matrices a shape draw's corners take when they carry none (shape_draw): the position matrix's place (0-9) and
+   texture coordinates 0-7's texture matrix places (0-9, 10 the identity). */
 typedef struct NebulaShapeCurrent {
     uint8_t position;
     uint8_t texture[8];
@@ -356,7 +362,8 @@ typedef struct NebulaShapeArray {
     const void* values;
 } NebulaShapeArray;
 
-/* One corner of a shape group: the entry it takes from each array and its matrix slots. */
+/* One corner of a shape group: the entry it takes from each array and its matrices' places in a draw
+   (NebulaDrawMatrix: position 0-9, texture 0-9 or 10 the identity). */
 typedef struct NebulaShapeCorner {
     uint16_t position;
     uint16_t normal; /* for a bump-mapped group with three normal indices: the normal's */
@@ -369,7 +376,7 @@ typedef struct NebulaShapeCorner {
     uint8_t reserved[3];
 } NebulaShapeCorner;
 
-/* Which arrays a shape group's corners read and which matrix slots they carry (NebulaShapeGeometry::attributes). */
+/* Which arrays a shape group's corners read and which matrix places they carry (NebulaShapeGeometry::attributes). */
 enum {
     NEBULA_SHAPE_NORMAL = 1u << 0,
     NEBULA_SHAPE_COLOR0 = 1u << 1,
@@ -377,8 +384,8 @@ enum {
     NEBULA_SHAPE_TEXCOORD0 = 1u << 3,         /* to 1u << 10 for texture coordinate 7 */
     NEBULA_SHAPE_NBT = 1u << 11,              /* normals from the NBT array */
     NEBULA_SHAPE_NBT_THREE = 1u << 12,        /* separate normal, tangent and binormal entries */
-    NEBULA_SHAPE_POSITION_MATRIX = 1u << 13,  /* corners carry their position matrix slot */
-    NEBULA_SHAPE_TEXTURE_MATRIX0 = 1u << 14,  /* to 1u << 21: corners carry texture matrix 0-7's slot */
+    NEBULA_SHAPE_POSITION_MATRIX = 1u << 13,  /* corners carry their position matrix place */
+    NEBULA_SHAPE_TEXTURE_MATRIX0 = 1u << 14,  /* to 1u << 21: corners carry texture coordinate 0-7's matrix place */
     NEBULA_SHAPE_OWN_POSITIONS = 1u << 22,    /* positions (and colours) are the group's own values, not an array a
                                                  model or the game keeps: geometry the game builds */
 };
@@ -983,12 +990,13 @@ typedef struct NebulaHostServices {
     void (*shape_geometry)(void* user, const struct NebulaShapeGeometry* geometry);
     /* Draws shape group `shape` (NebulaShapeGeometry::key) under the drawing state the game has set so far, its corners reading the position,
        normal and colour 0 arrays named by `position`, `normal` and `color` (shape_array keys; the geometry's own for
-       the rest), after `matrices` (`matrix_count` of them), `texgens` and, when not null, `current` take effect.
-       Records (shapes, materials, state, immediates, images, captures, markers) run in the order the game makes them.
-       Shape 0 draws nothing: only the matrices, current matrices and texgens take effect (state the game set before a
-       material record, kept in order with it). */
+       the rest) and the position and normal matrices among `matrices` (`matrix_count` of them, NebulaDrawMatrix),
+       after their texture matrices, `texgens` and, when not null, `current` take effect. Records (shapes, materials,
+       state, immediates, images, captures, markers) run in the order the game makes them. Shape 0 draws nothing:
+       only the texture matrices, current matrices and texgens take effect (state the game set before a material
+       record, kept in order with it). */
     void (*shape_draw)(void* user, uint64_t shape, uint64_t position, uint64_t normal,
-                       uint64_t color, const NebulaShapeMatrix* matrices, uint32_t matrix_count,
+                       uint64_t color, const NebulaDrawMatrix* matrices, uint32_t matrix_count,
                        const NebulaShapeCurrent* current, const NebulaShapeTexGen* texgens, uint32_t texgen_count);
     /* A material program (NebulaMaterialProgram), registered or replaced under `program` (the display list's
        identity); the host copies it and prepares its pipelines. */

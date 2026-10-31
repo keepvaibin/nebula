@@ -167,7 +167,7 @@ void WhirlPoolAccelerator::drawPlane(f32 x0, f32 y0, f32 x1, f32 y1, f32 u0, f32
 }
 
 void WhirlPoolAccelerator::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), GX_PNMTX0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);

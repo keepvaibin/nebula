@@ -215,7 +215,7 @@ void StarPointerBlur::initDraw() const {
 
     TPos3f mtx;
     mtx.identity();
-    J3DNativeShape::sendPosition(mtx, 0);
+    J3DNativeShape::setPosition(0, mtx);
     J3DNativeState::setCurrentMtx(0);
 
     J3DNativeState::setNumChans(1);

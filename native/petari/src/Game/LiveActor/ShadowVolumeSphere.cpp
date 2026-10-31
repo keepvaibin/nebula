@@ -52,5 +52,5 @@ void ShadowVolumeSphere::loadModelDrawMtx() const {
     mtx.setTrans(position);
 
     NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::sendPosition(mtx, 0);
+    J3DNativeShape::setPosition(0, mtx);
 }

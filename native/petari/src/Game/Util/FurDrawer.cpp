@@ -158,11 +158,11 @@ void FurDrawer::setupMaterial(DynamicFurParam* pParam) const {
     }
 
     NebulaMtxScale(bodyMtx, mBodyUVScale, mBodyUVScale, 1.0f);
-    J3DNativeShape::sendTexture(bodyMtx, GX_TEXMTX0, GX_MTX2x4);
-    J3DNativeShape::sendTexture(furMtx, GX_TEXMTX1, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, bodyMtx, 2);
+    J3DNativeShape::setTexture(1, furMtx, 2);
 
     if (mUseIndirect) {
-        J3DNativeShape::sendTexture(indirectMtx, GX_TEXMTX2, GX_MTX2x4);
+        J3DNativeShape::setTexture(2, indirectMtx, 2);
         J3DNativeState::setNumTexGens(3);
         J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP2);
         J3DNativeState::setIndTexCoordScale(GX_INDTEXSTAGE0, GX_ITS_1, GX_ITS_1);

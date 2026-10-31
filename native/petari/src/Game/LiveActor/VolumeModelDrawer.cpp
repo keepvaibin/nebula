@@ -57,5 +57,5 @@ void VolumeModelDrawer::draw() const {
 void VolumeModelDrawer::loadModelDrawMtx() const {
     Mtx drawMtx;
     MR::multMtx(drawMtx, mMtx, MR::getCameraViewMtx().mMtx);
-    J3DNativeShape::sendPosition(drawMtx, 0);
+    J3DNativeShape::setPosition(0, drawMtx);
 }
