@@ -84,8 +84,10 @@ struct Values {
 // and fixed-function state in the API's own enums.
 struct Native {
     std::uint32_t shader;
-    std::uint8_t blend, depth, depth_write, cull;
-    float constants[64];
+    std::uint8_t blend_op, blend_src, blend_dst, logic_op;
+    std::uint8_t depth_test, depth_func, depth_write, early_depth;
+    std::uint8_t cull, color_write, alpha_write, light_mask;
+    float constants[96];
     struct {
         std::uint64_t image;
         std::uint16_t width, height;
@@ -94,11 +96,13 @@ struct Native {
         std::uint8_t mag_linear, min_linear, mip_filter, anisotropy, edge_lod;
         float lod_bias, min_lod, max_lod;
     } textures[8];
+    NativeLight light[8];
+    std::uint32_t constants_only;
 };
-inline constexpr std::uint8_t kNativeBlendOpaque = 0u, kNativeBlendAlpha = 1u, kNativeBlendAdd = 2u,
-                              kNativeBlendSubtract = 3u;
-inline constexpr std::uint8_t kNativeDepthOff = 0u, kNativeDepthLEqual = 1u, kNativeDepthGEqual = 2u,
-                              kNativeDepthAlways = 3u;
+inline constexpr std::uint8_t kNativeBlendReplace = 0u, kNativeBlendAdd = 1u, kNativeBlendSubtract = 2u,
+                              kNativeBlendLogic = 3u;
+inline constexpr std::uint8_t kNativeFactorSrcColor = 2u, kNativeFactorInvSrcColor = 3u, kNativeFactorDstColor = 8u,
+                              kNativeFactorInvDstColor = 9u;
 inline constexpr std::uint8_t kNativeCullNone = 0u, kNativeCullBack = 1u, kNativeCullFront = 2u;
 
 // GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).

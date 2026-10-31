@@ -332,27 +332,35 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_NONE = 0,
     NEBULA_SHADER_WHIRLPOOL = 1, /* WhirlPool: the swirl over the warped screen behind */
     NEBULA_SHADER_OCEAN_BOWL = 2, /* OceanBowl: Beach Bowl's sea over the warped screen behind */
-    NEBULA_SHADER_COUNT
+    NEBULA_SHADER_COUNT,
+    /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
+    NEBULA_SHADER_J3D_FIRST = 256
 } NebulaShaderId;
 
 enum {
-    NEBULA_BLEND_OPAQUE = 0,   /* source replaces */
-    NEBULA_BLEND_ALPHA = 1,    /* source * alpha + destination * (1 - alpha) */
-    NEBULA_BLEND_ADD = 2,      /* source * alpha + destination */
-    NEBULA_BLEND_SUBTRACT = 3, /* destination - source */
+    NEBULA_BLEND_REPLACE = 0,  /* blend_op: the source replaces */
+    NEBULA_BLEND_ADD = 1,      /* source * blend_src + destination * blend_dst */
+    NEBULA_BLEND_SUBTRACT = 2, /* destination - source */
+    NEBULA_BLEND_LOGIC = 3,    /* logic_op (NEBULA_LOGIC_*: GX's order: clear, and, ..., set) */
 };
 enum {
-    NEBULA_DEPTH_OFF = 0,      /* no test, no write */
-    NEBULA_DEPTH_LEQUAL = 1,   /* drawn where nearer or equal */
-    NEBULA_DEPTH_GEQUAL = 2,
-    NEBULA_DEPTH_ALWAYS = 3,   /* tested always (written when depth_write) */
+    NEBULA_FACTOR_ZERO = 0, NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_COLOR, NEBULA_FACTOR_INV_SRC_COLOR,
+    NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA, NEBULA_FACTOR_DST_ALPHA, NEBULA_FACTOR_INV_DST_ALPHA,
+    NEBULA_FACTOR_DST_COLOR, NEBULA_FACTOR_INV_DST_COLOR,
+};
+enum {
+    NEBULA_COMPARE_NEVER = 0, NEBULA_COMPARE_LESS, NEBULA_COMPARE_EQUAL, NEBULA_COMPARE_LEQUAL,
+    NEBULA_COMPARE_GREATER, NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_ALWAYS,
 };
 enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
 
 typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */
-    uint8_t blend, depth, depth_write, cull;
-    float constants[64];
+    uint8_t blend_op, blend_src, blend_dst, logic_op;
+    uint8_t depth_test, depth_func, depth_write, early_depth; /* depth_func NEBULA_COMPARE_* */
+    uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on, 2 as they were */
+    uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */
+    float constants[96];
     struct {
         uint64_t image;        /* the texture's identity: the game's address of its image (or a capture's) */
         uint16_t width, height;
@@ -365,6 +373,9 @@ typedef struct NebulaNativeMaterial {
         uint8_t edge_lod;      /* 1 the level from the texel's edges */
         float lod_bias, min_lod, max_lod;
     } textures[8];
+    NebulaMaterialLight light[8];
+    uint32_t constants_only; /* 1: only the constants of the material the draws use change (the game folding a state
+                                change of one of its values in); its state, textures and lights stay as set since */
 } NebulaNativeMaterial;
 
 typedef struct NebulaMaterialProgram {
@@ -599,6 +610,8 @@ enum {
                                         (the preparation screen shows) */
     NEBULA_OPTION_RT_PREPARE_PROGRESS, /* while NEBULA_OPTION_RT_PREPARATION is 2: its progress, 0 to 10000, never
                                           going back */
+    NEBULA_OPTION_TEST_MATERIAL_SWEEP, /* tests (GALAXY_DUMP_MATERIAL_PROGRAMS set): 1 every loaded model's materials
+                                          are built at load and the programs without a native shader registered */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */
@@ -1164,7 +1177,8 @@ typedef struct NebulaHostServices {
     /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the console's clock counted from
        there; the game's saves store times in its unit). */
     int64_t (*calendar_ns)(void* user);
-    /* A native material for the draws that follow (NebulaNativeMaterial). */
+    /* A native material for the draws that follow (NebulaNativeMaterial), through state changes (which set its
+       fixed-function state and textures), until the next material or one whose shader is NEBULA_SHADER_NONE. */
     void (*native_material)(void* user, const NebulaNativeMaterial* material);
 } NebulaHostServices;
 

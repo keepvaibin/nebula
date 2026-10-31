@@ -613,15 +613,24 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
     }
     const NativeShaderBytes vs_bytes = native_shader_bytes(shader, variant, false);
     const NativeShaderBytes ps_bytes = native_shader_bytes(shader, variant, true);
+    const auto blob = [](const NativeShaderBytes& bytes) {
+        Microsoft::WRL::ComPtr<ID3DBlob> b;
+        if (bytes.size != 0u && SUCCEEDED(D3DCreateBlob(bytes.size, &b))) {
+            std::memcpy(b->GetBufferPointer(), bytes.data, bytes.size);
+        }
+        return b;
+    };
     Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
-    Microsoft::WRL::ComPtr<ID3DBlob> vs;
-    Microsoft::WRL::ComPtr<ID3DBlob> ps;
-    if (vs_bytes.size != 0u && ps_bytes.size != 0u && SUCCEEDED(D3DCreateBlob(vs_bytes.size, &vs)) &&
-        SUCCEEDED(D3DCreateBlob(ps_bytes.size, &ps))) {
-        std::memcpy(vs->GetBufferPointer(), vs_bytes.data, vs_bytes.size);
-        std::memcpy(ps->GetBufferPointer(), ps_bytes.data, ps_bytes.size);
-        pso = create_gx_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), nullptr, nullptr, nullptr,
-                            nullptr);
+    const Microsoft::WRL::ComPtr<ID3DBlob> vs = blob(vs_bytes);
+    const Microsoft::WRL::ComPtr<ID3DBlob> ps = blob(ps_bytes);
+    // A curved surface's patches: the native patch stages for the output layout.
+    const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
+    const bool motion = variant == kNativeVariantMotion;
+    const Microsoft::WRL::ComPtr<ID3DBlob> hs = curved ? blob(native_curved_bytes(motion, false)) : nullptr;
+    const Microsoft::WRL::ComPtr<ID3DBlob> ds = curved ? blob(native_curved_bytes(motion, true)) : nullptr;
+    if (vs && ps && (!curved || (hs && ds))) {
+        pso = create_gx_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), nullptr, nullptr, hs.Get(),
+                            ds.Get());
     }
     bucket.emplace_back(std::make_pair(id, rs), pso);
     return pso.Get();

@@ -130,9 +130,11 @@ private:
     [[nodiscard]] VkShaderModule point_size_variant(const std::string& vertex_hlsl);
     [[nodiscard]] VkPipeline build(const Entry& entry);
     // `export_depth`: the pixel shader writes the fragment depth (Z textures). `compat`: CompatBits to build without.
+    // `hs`/`ds`: a curved surface's patch stages in place of the GX ones (native materials).
     [[nodiscard]] VkPipeline create_pipeline(const RenderStateKey& render_state, VkShaderModule vs, VkShaderModule ps,
                                              bool dual_source, bool export_depth, std::uint32_t compat,
-                                             VkResult& result) const;
+                                             VkResult& result, VkShaderModule hs = VK_NULL_HANDLE,
+                                             VkShaderModule ds = VK_NULL_HANDLE) const;
     // The CompatBits `render_state` (with these shaders' outputs) uses.
     [[nodiscard]] std::uint32_t applicable_compat(const RenderStateKey& render_state, bool dual_source,
                                                   bool export_depth) const;

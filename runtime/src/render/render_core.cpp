@@ -7654,8 +7654,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
-    const bool curved = native_material_ == nullptr && primitive_topology_type == gpu::kTopologyTypeTriangle &&
-                        curved_draw(vtxfmt);
+    const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
     const std::uint32_t dirty =
@@ -8115,9 +8114,18 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                              render_state_key_.blend_bits, static_cast<unsigned>(render_state_key_.zmode_bits),
                              static_cast<unsigned>(render_state_key_.cull), static_cast<unsigned>(native_texture_mask_));
             }
+            // Native draws under a constant destination alpha (native pipelines write the shader's alpha instead).
+            if ((render_state_key_.blend_bits & ((1u << 28u) | kRenderStateZeroAlpha)) != 0u) {
+                static std::uint64_t constant_alpha_draws = 0u;
+                if ((constant_alpha_draws++ & 0x3FFu) == 0u) {
+                    std::fprintf(stderr, "[native-material] constant destination alpha: %llu draws (shader %u)\n",
+                                 static_cast<unsigned long long>(constant_alpha_draws), native_material_->shader);
+                }
+            }
         }
         current_pipeline_is_uber_ = false;
         current_pso_key_valid_ = false;
+        // A curved native draw goes whole through its patch stages (native_curved.hlsl).
         current_flat_pipeline_ = nullptr;
     } else if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
         tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
@@ -9012,7 +9020,8 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     }
     case shapes::Record::Kind::State: {
-        end_native_material();
+        // A native material stays through state changes (the game folds a change of its values into it and ends it
+        // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
         // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
         for (const state::Op& op : record.state) {
             if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
@@ -9131,23 +9140,43 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
 
 void RenderCore::apply_native_material(std::shared_ptr<const material::Native> native) {
     if (native == nullptr) {
+        end_native_material();  // NEBULA_SHADER_NONE: the game ended it
         return;
     }
     const material::Native& m = *native;
+    if (m.constants_only != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
+        native_material_ = std::move(native);
+        native_constants_dirty_ = true;
+        return;
+    }
+    // The pipeline's state in the drawing state's terms (its colour factors name the other side's colour on each
+    // side: a source factor 2 is the destination's colour, a destination factor 2 the source's).
+    const auto factor = [](std::uint8_t f, bool source) {
+        if (f == material::kNativeFactorDstColor || f == material::kNativeFactorInvDstColor) {
+            return static_cast<BlendFactor>(source ? f - 6u : 0u);
+        }
+        if (f == material::kNativeFactorSrcColor || f == material::kNativeFactorInvSrcColor) {
+            return static_cast<BlendFactor>(source ? 0u : f);
+        }
+        return static_cast<BlendFactor>(f & 7u);
+    };
     BlendMode& blend = draw_state_.blend;
-    blend.blend_enable = m.blend != material::kNativeBlendOpaque;
-    blend.logic_op_enable = false;
-    blend.subtract = m.blend == material::kNativeBlendSubtract;
-    blend.color_update = true;
-    blend.src_factor = m.blend == material::kNativeBlendOpaque ? BlendFactor::One : BlendFactor::SrcAlpha;
-    blend.dst_factor = m.blend == material::kNativeBlendAlpha ? BlendFactor::InvSrcAlpha
-                       : m.blend == material::kNativeBlendOpaque ? BlendFactor::Zero
-                                                                  : BlendFactor::One;
-    draw_state_.z.test_enable = m.depth != material::kNativeDepthOff;
-    draw_state_.z.func = m.depth == material::kNativeDepthGEqual ? CompareFunc::GEqual
-                         : m.depth == material::kNativeDepthAlways ? CompareFunc::Always
-                                                                   : CompareFunc::LEqual;
-    draw_state_.z.update_enable = m.depth != material::kNativeDepthOff && m.depth_write != 0u;
+    blend.blend_enable = m.blend_op == material::kNativeBlendAdd || m.blend_op == material::kNativeBlendSubtract;
+    blend.logic_op_enable = m.blend_op == material::kNativeBlendLogic;
+    blend.logic_mode = static_cast<std::uint8_t>(m.logic_op & 15u);
+    blend.subtract = m.blend_op == material::kNativeBlendSubtract;
+    // Colour and alpha writes: 0 off, 1 on, 2 as they were.
+    if (m.color_write != 2u) {
+        blend.color_update = m.color_write != 0u;
+    }
+    if (m.alpha_write != 2u) {
+        blend.alpha_update = m.alpha_write != 0u;
+    }
+    blend.src_factor = factor(m.blend_src, true);
+    blend.dst_factor = factor(m.blend_dst, false);
+    draw_state_.z.test_enable = m.depth_test != 0u;
+    draw_state_.z.func = static_cast<CompareFunc>(m.depth_func & 7u);
+    draw_state_.z.update_enable = m.depth_write != 0u;
     draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Back
                            : m.cull == material::kNativeCullFront ? CullMode::Front
                                                                   : CullMode::None;
@@ -9181,6 +9210,12 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         out.tlut = TlutRef{};
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
+    // The material's own lights (a J3D colour block that loads them) into the light rows its shader reads.
+    for (unsigned n = 0; n < 8u; ++n) {
+        if ((m.light_mask & (1u << n)) != 0u) {
+            matrices_.set_light(n, m.light[n]);
+        }
+    }
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
     native_material_ = std::move(native);
     native_constants_dirty_ = true;
@@ -9193,7 +9228,9 @@ void RenderCore::end_native_material() {
         return;
     }
     native_material_.reset();
-    // The GX state's pipeline, constants and textures are rebuilt at the next draw.
+    // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
+    // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
+    applied_program_ = nullptr;
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
     current_pso_key_valid_ = false;
     current_texture_map_mask_valid_ = false;

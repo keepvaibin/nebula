@@ -1,5 +1,6 @@
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
@@ -37,6 +38,7 @@ void J3DStateList::send() const {
         return;
     }
     J3DNativeShape::flushState();
+    J3DNativeMaterial::state(mOps, mCount);
     const NebulaHostServices* pHost = nebula_host();
     pHost->state(pHost->user, mOps, mCount);
 }

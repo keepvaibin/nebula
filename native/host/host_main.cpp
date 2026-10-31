@@ -2295,11 +2295,15 @@ void svc_native_material(void*, const NebulaNativeMaterial* native) {
     namespace shapes = galaxy::render::shapes;
     static_assert(sizeof(NebulaNativeMaterial) == sizeof(galaxy::render::material::Native),
                   "the renderer's copy of NebulaNativeMaterial");
-    if (native == nullptr || native->shader == NEBULA_SHADER_NONE || native->shader >= NEBULA_SHADER_COUNT) {
+    if (native == nullptr || (native->shader >= NEBULA_SHADER_COUNT && native->shader < NEBULA_SHADER_J3D_FIRST)) {
         return;
     }
-    auto copy = std::make_shared<galaxy::render::material::Native>();
-    std::memcpy(copy.get(), native, sizeof(NebulaNativeMaterial));
+    // NEBULA_SHADER_NONE: the draws that follow go back to the drawing state (a record without a material).
+    std::shared_ptr<galaxy::render::material::Native> copy;
+    if (native->shader != NEBULA_SHADER_NONE) {
+        copy = std::make_shared<galaxy::render::material::Native>();
+        std::memcpy(copy.get(), native, sizeof(NebulaNativeMaterial));
+    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::NativeMaterial;
     attach_pending_records();
@@ -2695,6 +2699,13 @@ uint32_t svc_option(void*, uint32_t what) {
             return value != nullptr && value[0] == '1';
         }();
         return dump ? 1u : 0u;
+    }
+    case NEBULA_OPTION_TEST_MATERIAL_SWEEP: {
+        static const bool sweep = [] {
+            const char* value = std::getenv("GALAXY_DUMP_MATERIAL_PROGRAMS");
+            return value != nullptr && value[0] != '\0';
+        }();
+        return sweep ? 1u : 0u;
     }
     case NEBULA_OPTION_TEST_LOD: {
         static const uint32_t lod = [] {

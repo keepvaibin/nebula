@@ -26,6 +26,10 @@ void nebula_memory_guard(void* p, size_t size);
 
 /* The host's services (sdk/core.c); NULL before nebula_game_attach. */
 const struct NebulaHostServices* nebula_host(void);
+/* `watch` hears each material the game sends before the host does: a native one, or NULL for a drawing-state one
+   (J3DNativeMaterial's state folding). */
+struct NebulaNativeMaterial;
+void nebula_material_watch(void (*watch)(const struct NebulaNativeMaterial* native));
 
 /* Log lines and fatal errors, through the host's log and fatal services (stderr before the host attaches). */
 void nebula_log(const char* format, ...) __attribute__((format(printf, 1, 2)));

@@ -9,4 +9,8 @@ NativeShaderBytes native_shader_bytes(std::uint32_t, unsigned, bool) noexcept {
     return {};
 }
 
+NativeShaderBytes native_curved_bytes(bool, bool) noexcept {
+    return {};
+}
+
 }  // namespace galaxy::render
