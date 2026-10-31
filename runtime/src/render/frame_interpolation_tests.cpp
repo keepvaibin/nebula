@@ -220,7 +220,7 @@ void test_light_and_palette() {
 
 std::array<float, 3> light_position(const std::vector<std::uint32_t>& palette, unsigned light) {
     const std::uint32_t* p =
-        palette.data() + kLightBase + MatrixMemory::kLightWords * light + MatrixMemory::kLightPositionWord;
+        palette.data() + kLightBase + draw_rows::kLightWords * light + draw_rows::kLightPositionWord;
     return {std::bit_cast<float>(p[0]), std::bit_cast<float>(p[1]), std::bit_cast<float>(p[2])};
 }
 
@@ -249,11 +249,11 @@ void test_actor_lights() {
     std::vector<std::uint32_t> pal_a(kPaletteWords, 0u), pal_b(kPaletteWords, 0u), out(kPaletteWords);
     const float key[3]{75000.0f, 100000.0f, 76400.0f}, fill[3]{-100000.0f, -93017.6f, -24902.3f};
     for (std::vector<std::uint32_t>* p : {&pal_a, &pal_b}) {
-        (*p)[kLightBase + MatrixMemory::kLightColorWord] = 0xA49F8900u;
-        (*p)[kLightBase + MatrixMemory::kLightWords + MatrixMemory::kLightColorWord] = 0x565F9100u;
+        (*p)[kLightBase + draw_rows::kLightColorWord] = 0xA49F8900u;
+        (*p)[kLightBase + draw_rows::kLightWords + draw_rows::kLightColorWord] = 0x565F9100u;
         for (unsigned i = 0; i < 3u; ++i) {
-            (*p)[kLightBase + MatrixMemory::kLightPositionWord + i] = std::bit_cast<std::uint32_t>(key[i]);
-            (*p)[kLightBase + MatrixMemory::kLightWords + MatrixMemory::kLightPositionWord + i] =
+            (*p)[kLightBase + draw_rows::kLightPositionWord + i] = std::bit_cast<std::uint32_t>(key[i]);
+            (*p)[kLightBase + draw_rows::kLightWords + draw_rows::kLightPositionWord + i] =
                 std::bit_cast<std::uint32_t>(fill[i]);
         }
     }
@@ -267,10 +267,10 @@ void test_actor_lights() {
     const Affine34 vb = camera(0.3f, 80.0f, 100.0f, 420.0f);
     const ActorLightAim aim_a = aim_at_key(va, sun), aim_b = aim_at_key(vb, sun);
     check(aim_a.valid && aim_b.valid, "the sun gives an aim");
-    aim_actor_lights(pal_a.data(), game, 0x01u, 0x02u, aim_a);
-    aim_actor_lights(pal_b.data(), game, 0x01u, 0x02u, aim_b);
-    check(pal_a[kLightBase + MatrixMemory::kLightColorWord] == 0xA49F8900u &&
-              pal_a[kLightBase + MatrixMemory::kLightWords + MatrixMemory::kLightColorWord] == 0x565F9100u,
+    aim_actor_lights(pal_a.data() + kLightBase, game, 0x01u, 0x02u, aim_a);
+    aim_actor_lights(pal_b.data() + kLightBase, game, 0x01u, 0x02u, aim_b);
+    check(pal_a[kLightBase + draw_rows::kLightColorWord] == 0xA49F8900u &&
+              pal_a[kLightBase + draw_rows::kLightWords + draw_rows::kLightColorWord] == 0x565F9100u,
           "moved lights keep the game's colours");
     const std::array<float, 3> to_sun = eye_direction(va, sun);
     const std::array<float, 3> away{-to_sun[0], -to_sun[1], -to_sun[2]};
@@ -296,11 +296,11 @@ void test_actor_lights() {
     ActorLightAim ramping = aim_a;
     const float key_length = std::sqrt(key[0] * key[0] + key[1] * key[1] + key[2] * key[2]);
     ramping.blend = 0.0f;
-    aim_actor_lights(pal_a.data(), game, 0x01u, 0x00u, ramping);
+    aim_actor_lights(pal_a.data() + kLightBase, game, 0x01u, 0x00u, ramping);
     const std::array<float, 3> g0 = light_position(pal_a, 0u);
     check(near(g0[0], key[0]) && near(g0[1], key[1]) && near(g0[2], key[2]), "blend 0 is the game's position");
     ramping.blend = 0.25f;
-    aim_actor_lights(pal_a.data(), game, 0x01u, 0x00u, ramping);
+    aim_actor_lights(pal_a.data() + kLightBase, game, 0x01u, 0x00u, ramping);
     std::array<float, 3> quarter{};
     for (unsigned i = 0; i < 3u; ++i) {
         quarter[i] = key[i] / key_length * 0.75f + to_sun[i] * 0.25f;

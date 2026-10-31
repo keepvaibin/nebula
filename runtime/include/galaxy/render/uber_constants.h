@@ -87,8 +87,8 @@ struct alignas(256) VertexConstants {
     // vertex colour hue and light it at the neutral level; bit 6 de-bakes by debake_sh; bit 7 marks a draw lit by the
     // player light rig (its level, not its hue); bits 8-15 and 16-23 hold the levels.
     std::uint32_t flags;
-    // Index of this draw's palette snapshot within the frame's matrix buffer.
-    std::uint32_t mtx_palette_base;
+    // The first row of the draw's position block in the bound matrix rows (position place k at pos_base + 3k).
+    std::uint32_t pos_base;
     // CP MatrixIndexA/B: default (non-per-vertex) matrix indices.
     //   A: bits 0-5 pos/normal, 6-11 tex0, 12-17 tex1, 18-23 tex2, 24-29 tex3
     //   B: bits 0-5 tex4, 6-11 tex5, 12-17 tex6, 18-23 tex7
@@ -132,6 +132,10 @@ struct alignas(256) VertexConstants {
     // paint and occlusion stay.
     float debake_sh[7][4];
     float debake_peak[4];
+    // The first rows of the draw's normal, texture, post-transform and light blocks (draw_matrices.h): normal row q
+    // at row_bases[0] + q, texture row r (30-63) at row_bases[1] + r - 30, post-transform row q at row_bases[2] + q,
+    // light n's rows at row_bases[3] + 4n.
+    std::uint32_t row_bases[4];
 };
 
 static_assert(offsetof(VertexConstants, projection) == 0);
@@ -151,10 +155,11 @@ static_assert(offsetof(VertexConstants, uber_post_texgen) == 1120);
 static_assert(offsetof(VertexConstants, uber_channel) == 1152);
 static_assert(offsetof(VertexConstants, motion_prev_proj) == 1168);
 static_assert(offsetof(VertexConstants, motion_ctrl) == 1264);
-// motion_ctrl[1] in mode 0 for the draw's own row table (its previous rows are its rows).
+// motion_ctrl[1] in mode 0 for the draw's own position rows (its previous rows are its rows).
 inline constexpr std::uint32_t kMotionOwnRows = 0xFFFFFFFFu;
 static_assert(offsetof(VertexConstants, debake_sh) == 1280);
 static_assert(offsetof(VertexConstants, debake_peak) == 1392);
+static_assert(offsetof(VertexConstants, row_bases) == 1408);
 static_assert(sizeof(VertexConstants) == 1536);
 
 #if defined(_MSC_VER)

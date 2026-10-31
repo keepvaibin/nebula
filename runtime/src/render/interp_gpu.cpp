@@ -272,8 +272,8 @@ void Program::light(std::uint32_t dst, const std::uint32_t* a, const std::uint32
         a = b;
     }
     const std::uint32_t* const end_a = held ? nullptr : a;
-    constexpr unsigned kColor = MatrixMemory::kLightColorWord, kAngle = MatrixMemory::kLightAngleWord,
-                       kPosition = MatrixMemory::kLightPositionWord, kDirection = MatrixMemory::kLightDirectionWord;
+    constexpr unsigned kColor = draw_rows::kLightColorWord, kAngle = draw_rows::kLightAngleWord,
+                       kPosition = draw_rows::kLightPositionWord, kDirection = draw_rows::kLightDirectionWord;
     static_assert(kDirection == kPosition + 3u);  // the Light op writes position then direction
     if (a[kColor] != b[kColor]) {
         color8(dst + kColor, a[kColor], b[kColor]);

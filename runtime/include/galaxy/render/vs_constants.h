@@ -4,7 +4,7 @@
 // VertexConstants filled from the drawing state on the CPU, and a cache of the last fill. Every changed draw still gets a
 // complete constant-ring allocation; nothing here touches GPU upload memory.
 #include "galaxy/render/draw_state.h"
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/line_point_raster.h"
 #include <algorithm>
@@ -53,16 +53,14 @@ inline void fill_vs_projection(const NativeDrawState& draw, float out[4][4]) {
     }
 }
 
-inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDrawState& draw, VertexConstants& out) {
+inline void refresh_vs_inline_matrices(const DrawMatrices& state, const NativeDrawState& draw, VertexConstants& out) {
     const auto copy_matrix = [&state](
                                  unsigned row,
                                  float destination[3][4]) {
         row = std::min(row, 61u);
         for (unsigned r = 0; r < 3; ++r) {
             for (unsigned c = 0; c < 4; ++c) {
-                destination[r][c] = std::bit_cast<float>(
-                    state.word(static_cast<std::uint16_t>(
-                        (row + r) * 4u + c)));
+                destination[r][c] = state.matrix_value(row + r, c);
             }
         }
     };
@@ -81,22 +79,18 @@ inline void refresh_vs_inline_matrices(const MatrixMemory& state, const NativeDr
         for (unsigned r = 0; r < 3; ++r) {
             for (unsigned c = 0; c < 4; ++c) {
                 out.inline_post_matrices[i][r][c] =
-                    std::bit_cast<float>(state.word(
-                        static_cast<std::uint16_t>(
-                            MatrixMemory::kPostBase +
-                            (((post_row + r) & 0x3Fu) * 4u) + c)));
+                    std::bit_cast<float>(state.row(draw_rows::kPost + ((post_row + r) & 0x3Fu))[c]);
             }
         }
     }
 
 }
 
-// Fills VertexConstants for the current drawing state (matrix rows from MatrixMemory).
-// `palette_snapshot_index` is the index of this frame's XF matrix upload in the matrix ring (written by RenderCore).
+// Fills VertexConstants for the current drawing state (inline matrices from the draw's matrices; the blocks' bases
+// RenderCore sets).
 inline void fill_vs_constants(
-    const MatrixMemory& state,
+    const DrawMatrices& state,
     const NativeDrawState& draw,
-    std::uint32_t palette_snapshot_index,
     unsigned efb_scale,
     VertexConstants& out) {
     std::memset(&out, 0, sizeof(out));
@@ -134,8 +128,7 @@ inline void fill_vs_constants(
         }
     }
 
-    out.mtx_palette_base = palette_snapshot_index;
-    // Previous rows: the draw's own (no motion of its own) unless a motion scene names another table.
+    // Previous rows: the draw's own (no motion of its own) unless a motion scene names other position rows.
     out.motion_ctrl[1] = kMotionOwnRows;
 
     // Default matrix indices (CP MatrixIndexA/B). The VS resolves them per texgen when the
@@ -218,8 +211,11 @@ struct VsConstantsCpuCache {
     // VertexConstants::debake_sh, debake_peak (flags bit 6).
     float debake_sh[7][4]{};
     float debake_peak[4]{};
+    // The draw's matrix blocks (VertexConstants::pos_base, row_bases), RenderCore's.
+    std::uint32_t pos_base = 0u;
+    std::uint32_t row_bases[4]{};
 
-    const VertexConstants& update(const MatrixMemory& state, const NativeDrawState& draw, std::uint32_t dirty,
+    const VertexConstants& update(const DrawMatrices& state, const NativeDrawState& draw, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
         // When only XF matrices changed, refresh the inline matrices and keep the rest of the last full fill;
         // any other change, dirty frame bindings or a new scale refill everything.
@@ -227,7 +223,7 @@ struct VsConstantsCpuCache {
             dirty == kStateDirtyMatrices) {
             refresh_vs_inline_matrices(state, draw, constants);
         } else {
-            fill_vs_constants(state, draw, 0u, current_scale, constants);
+            fill_vs_constants(state, draw, current_scale, constants);
             efb_scale = current_scale;
             valid = true;
         }
@@ -236,6 +232,8 @@ struct VsConstantsCpuCache {
         constants.flags = (constants.flags & 0x3u) | debake;
         std::memcpy(constants.debake_sh, debake_sh, sizeof(debake_sh));
         std::memcpy(constants.debake_peak, debake_peak, sizeof(debake_peak));
+        constants.pos_base = pos_base;
+        std::memcpy(constants.row_bases, row_bases, sizeof(row_bases));
         return constants;
     }
 };

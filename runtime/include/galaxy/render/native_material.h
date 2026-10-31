@@ -4,12 +4,12 @@
 // the order J3D's material display list set it.
 #pragma once
 
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 
 #include <cstdint>
 
 namespace galaxy::render {
-class MatrixMemory;
+class DrawMatrices;
 }
 
 namespace galaxy::render::material {
@@ -85,6 +85,6 @@ struct Values {
 
 // Loads the material's texture matrices and lights as J3D's material display list did (the whole material, or the
 // parts its change flags name); the rest of the material is typed drawing state (draw_state.h).
-void load_matrices(const Program& program, const Values& values, MatrixMemory& memory);
+void load_matrices(const Program& program, const Values& values, DrawMatrices& matrices);
 
 }  // namespace galaxy::render::material

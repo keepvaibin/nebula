@@ -18,7 +18,9 @@ struct ReplaySequence {
     std::span<const std::int32_t> record_vs_slot;       // per scene record, -1 none
     std::span<const std::int32_t> record_palette_slot;  // per scene record, -1 none
     std::span<const std::int32_t> ps_slot;              // per pixel-constant record, -1 none
-    std::span<const std::uint32_t> palette_source;      // per palette slot: float4 offset in the matrix ring
+    // Per palette slot: its source draw's blocks (float4 offsets in the matrix ring: positions, textures, normals,
+    // post-transform matrices, lights).
+    std::span<const std::array<std::uint32_t, 5>> palette_source;
     const interp_gpu::Program* program = nullptr;
     bool vertex_blend = false;
 };

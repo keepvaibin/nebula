@@ -494,7 +494,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/native_shapes.cpp
     runtime/src/render/native_material.cpp
     runtime/src/render/draw_state.cpp
-    runtime/src/render/matrix_memory.cpp
+    runtime/src/render/draw_matrices.cpp
     runtime/src/render/shader_keys.cpp
     runtime/src/render/efb_copy.cpp
     runtime/src/render/line_point_raster.cpp
@@ -734,7 +734,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/native_shapes.cpp
         runtime/src/render/native_material.cpp
         runtime/src/render/draw_state.cpp
-        runtime/src/render/matrix_memory.cpp
+        runtime/src/render/draw_matrices.cpp
         runtime/src/render/shader_keys.cpp
         runtime/src/render/efb_copy.cpp
         runtime/src/render/line_point_raster.cpp

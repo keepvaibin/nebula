@@ -82,19 +82,19 @@ inline constexpr float kActorLightRampScenes = 16.0f;
     return aim;
 }
 
-// Writes the positions of the lights in `key` (towards the aim) and `fill` (opposite) into a palette
-// snapshot's light section (written, never read). `game`: the lights the game loaded. While the
+// Writes the positions of the lights in `key` (towards the aim) and `fill` (opposite) into a copy of the
+// light rows (draw_rows::kLightRows rows). `game`: the lights the game loaded. While the
 // aim's blend is below 1 a light turns from the game's direction (normalized lerp) and its distance
 // goes from the game's to kActorLightDistance: the game's lights stand 1e5 out, so a lerp of the
 // positions would turn nearly all the way in the first scenes.
-inline void aim_actor_lights(std::uint32_t* palette, const std::array<NativeLight, 8>& game, std::uint8_t key,
+inline void aim_actor_lights(std::uint32_t* lights, const std::array<NativeLight, 8>& game, std::uint8_t key,
                              std::uint8_t fill, const ActorLightAim& aim) noexcept {
     for (unsigned n = 0; n < 8u; ++n) {
         const bool towards = (key & (1u << n)) != 0u;
         if (!towards && (fill & (1u << n)) == 0u) {
             continue;
         }
-        const unsigned word = MatrixMemory::kLightBase + MatrixMemory::kLightWords * n + MatrixMemory::kLightPositionWord;
+        const unsigned word = draw_rows::kLightWords * n + draw_rows::kLightPositionWord;
         const float sign = towards ? 1.0f : -1.0f;
         float d[3]{aim.key[0] * sign, aim.key[1] * sign, aim.key[2] * sign};
         float distance = kActorLightDistance;
@@ -121,7 +121,7 @@ inline void aim_actor_lights(std::uint32_t* palette, const std::array<NativeLigh
             }
         }
         for (unsigned i = 0; i < 3u; ++i) {
-            palette[word + i] = std::bit_cast<std::uint32_t>(d[i] * distance);
+            lights[word + i] = std::bit_cast<std::uint32_t>(d[i] * distance);
         }
     }
 }

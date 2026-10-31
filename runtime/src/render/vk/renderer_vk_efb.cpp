@@ -11,7 +11,7 @@
 #include "galaxy/render/shader_gen.h"
 #include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/texture_cache.h"
 #include "galaxy/render/uber_constants.h"
 
@@ -1279,9 +1279,9 @@ void RendererVk::draw(const DrawCall& call) {
     }
     if (constants_changed || buffers != bound_.buffers || offsets != bound_.offsets || earlier != bound_.earlier) {
         // The palette's range follows its addressing: palettes indexed from the buffer's base (an interpolating or
-        // temporal frame's: mtx_palette_base counts from the ring's start) reach the buffer's end; a replay's
+        // temporal frame's: its blocks count from the ring's start) reach the buffer's end; a replay's
         // evaluated palettes, from their base in the output; otherwise the draw's own palette.
-        constexpr VkDeviceSize kPaletteBytes = MatrixMemory::kPaletteWords * sizeof(std::uint32_t);
+        constexpr VkDeviceSize kPaletteBytes = draw_rows::kRows * 16u;
         std::array<std::uint32_t, 3> dynamic = offsets;
         VkDescriptorSet set = VK_NULL_HANDLE;
         if (replaying_ && interp_output_ && buffers[2] == interp_output_->buffer) {

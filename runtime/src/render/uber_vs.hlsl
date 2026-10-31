@@ -12,7 +12,7 @@ cbuffer VertexConstants : register(b0) {
     uint     num_texgens;
     uint     num_chans;
     uint     flags;
-    uint     mtx_palette_base;
+    uint     pos_base;
     uint     matrix_index_a;
     uint     matrix_index_b;
     uint     pad0;
@@ -32,14 +32,14 @@ cbuffer VertexConstants : register(b0) {
     // Physical ray tracing (flags bit 6): the model's baked light by facing (uber_constants.h).
     float4   debake_sh[7];
     float4   debake_peak;
+    // The draw's normal, texture, post-transform and light blocks' first rows (uber_constants.h row_bases).
+    uint4    row_bases;
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
-StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
-// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
-// names the row's float4 among the rows.
-float4 mrow(uint table, uint r) {
-    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
-}
+StructuredBuffer<float4> mtx_rows : register(t3, space1);  // the matrix ring, or a replay's output
+// The draw's matrices and lights (draw_matrices.h), as ShaderGenerator's kVsMatrixRows.
+float4 matrix_row(uint r) { return mtx_rows[r < 30u ? pos_base + r : row_bases.y + (r - 30u)]; }
+float4 normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
+float4 light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
 
 struct VSIn {
     float3   pos      : POSITION;
@@ -75,11 +75,10 @@ uint key_post_texgen(uint i) {
 // one against a light direction the game never initialized.
 void add_light(uint n, uint ctrl, bool alpha_part, bool finite, float3 wpos, float3 nrm,
                inout float3 lacc, inout float lacc_a) {
-    const uint e = 0xA8u + 4u * n;  // the light section (MatrixMemory::kLightBase / 4)
-    uint  lcw  = asuint(mrow(mtx_palette_base, e).w);
-    float4 le1 = mrow(mtx_palette_base, e + 1u);
-    float4 le2 = mrow(mtx_palette_base, e + 2u);
-    float4 le3 = mrow(mtx_palette_base, e + 3u);
+    uint  lcw  = asuint(light_row(n, 0u).w);
+    float4 le1 = light_row(n, 1u);
+    float4 le2 = light_row(n, 2u);
+    float4 le3 = light_row(n, 3u);
     float3 lpos  = float3(le2.z, le2.w, le3.x);
     float3 ldvec = float3(le3.y, le3.z, le3.w);
     float3 cosA  = le1.xyz;
@@ -252,9 +251,9 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     float4 wpos;
     if ((key_flags & 0x01u) != 0u) {
         wpos = float4(
-            dot(mrow(mtx_palette_base, pn_row+0u), float4(pos_in, 1.0)),
-            dot(mrow(mtx_palette_base, pn_row+1u), float4(pos_in, 1.0)),
-            dot(mrow(mtx_palette_base, pn_row+2u), float4(pos_in, 1.0)),
+            dot(matrix_row(pn_row+0u), float4(pos_in, 1.0)),
+            dot(matrix_row(pn_row+1u), float4(pos_in, 1.0)),
+            dot(matrix_row(pn_row+2u), float4(pos_in, 1.0)),
             1.0);
     } else {
         wpos = float4(
@@ -298,11 +297,11 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
     }
     float3 nrm = float3(0.0, 0.0, 0.0);
     if (lighting_used) {
-        // The normal section's rows (MatrixMemory::kNormalBase / 4 = 0x40) at the position matrix's row.
-        const uint nrm_q = 0x40u + (pn_row & 31u);
-        float3 nrm_t = float3(dot(mrow(mtx_palette_base, nrm_q).xyz, v.nrm),
-                              dot(mrow(mtx_palette_base, nrm_q + 1u).xyz, v.nrm),
-                              dot(mrow(mtx_palette_base, nrm_q + 2u).xyz, v.nrm));
+        // The normal block's rows at the position matrix's row.
+        const uint nrm_q = pn_row & 31u;
+        float3 nrm_t = float3(dot(normal_row(nrm_q).xyz, v.nrm),
+                              dot(normal_row(nrm_q + 1u).xyz, v.nrm),
+                              dot(normal_row(nrm_q + 2u).xyz, v.nrm));
         nrm = (dot(nrm_t, nrm_t) > 0.0) ? normalize(nrm_t) : nrm_t;
     }
 
@@ -372,15 +371,15 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
         } else if (type == 3u) {
             res = float3(o.col1.rg, 1.0);
         } else if (type == 1u) {
-            const uint emboss_q = 0x40u + (pn_row & 31u);
-            float3x3 emboss_matrix = float3x3(mrow(mtx_palette_base, emboss_q).xyz,
-                                              mrow(mtx_palette_base, emboss_q + 1u).xyz,
-                                              mrow(mtx_palette_base, emboss_q + 2u).xyz);
+            const uint emboss_q = pn_row & 31u;
+            float3x3 emboss_matrix = float3x3(normal_row(emboss_q).xyz,
+                                              normal_row(emboss_q + 1u).xyz,
+                                              normal_row(emboss_q + 2u).xyz);
             float3 emboss_tangent = mul(emboss_matrix, v.tangent);
             float3 emboss_binormal = mul(emboss_matrix, v.binormal);
-            const uint light = 0xA8u + 4u * ((tg >> 15u) & 7u);
-            float4 emboss_l2 = mrow(mtx_palette_base, light + 2u);
-            float4 emboss_l3 = mrow(mtx_palette_base, light + 3u);
+            const uint light = (tg >> 15u) & 7u;
+            float4 emboss_l2 = light_row(light, 2u);
+            float4 emboss_l3 = light_row(light, 3u);
             float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;
             float emboss_dist2 = dot(emboss_delta, emboss_delta);
             float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);
@@ -440,9 +439,9 @@ VSOut main(VSIn v, uint vertex_id : SV_VertexID) {
                 }
                 uint tm = min((packed >> shift) & 0xFFu, 61u);
                 res = float3(
-                    dot(coord, mrow(mtx_palette_base, tm+0u)),
-                    dot(coord, mrow(mtx_palette_base, tm+1u)),
-                    stq ? dot(coord, mrow(mtx_palette_base, tm+2u)) : 1.0);
+                    dot(coord, matrix_row(tm+0u)),
+                    dot(coord, matrix_row(tm+1u)),
+                    stq ? dot(coord, matrix_row(tm+2u)) : 1.0);
             } else {
                 const uint inline_base = i * 3u;
                 res = float3(

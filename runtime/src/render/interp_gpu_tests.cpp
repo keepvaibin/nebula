@@ -104,7 +104,7 @@ void test_transforms() {
 }
 
 void random_palette(std::vector<std::uint32_t>& words, const Affine34& view_matrix, float scale) {
-    words.assign(MatrixMemory::kPaletteWords, 0u);
+    words.assign(galaxy::render::kPaletteWords, 0u);
     for (unsigned k = 0; k < 10u; ++k) {
         const Affine34 m = affine_multiply(view_matrix, random_object());
         for (unsigned i = 0; i < 12u; ++i) words[k * 12u + i] = std::bit_cast<std::uint32_t>(m[i]);
@@ -161,10 +161,10 @@ void test_palettes() {
             const Affine34 camera_t = camera_at(camera, t);
             std::vector<std::uint32_t> got = b;
             evaluate(program, camera_t, t, got.data());
-            std::vector<std::uint32_t> want(MatrixMemory::kPaletteWords);
+            std::vector<std::uint32_t> want(galaxy::render::kPaletteWords);
             palette_at(motion, no_before ? nullptr : a.data(), b.data(), camera, camera_t, t, want.data());
             bool same = true;
-            for (unsigned w = 0; w < MatrixMemory::kPaletteWords; ++w) {
+            for (unsigned w = 0; w < galaxy::render::kPaletteWords; ++w) {
                 const bool colour = w >= kLightBase && ((w - kLightBase) & 15u) == 3u;
                 const bool ok = colour ? got[w] == want[w] : near_word(got[w], want[w], 1e-4f);
                 same = same && ok;

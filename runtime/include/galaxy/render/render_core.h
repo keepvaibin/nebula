@@ -31,7 +31,7 @@
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/draw_state.h"
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/movie_replacement.h"
 #include "galaxy/render/native_shapes.h"
 #if defined(NEBULA_GPU_VULKAN)
@@ -508,8 +508,7 @@ private:
     bool motion_bits_set_ = false;
     // Render target 1 of the resolved pipeline (DrawCall::aux_target).
     std::uint8_t current_pipeline_aux_ = 0;
-    // Root SRV for draws: the palette snapshot, or the matrix ring base in
-    // temporal scenes (palettes then addressed by mtx_palette_base).
+    // The matrix rows' binding for draws: the matrix ring from its start (draws name their blocks' rows from it).
     gpu::Address draw_matrix_palette_ = 0;
     gpu::Address temporal_vs_palette_va_ = 0;
     TransformHistory transform_history_;
@@ -795,14 +794,14 @@ private:
         std::vector<std::int32_t> prev_index;   // matched record of the previous scene
         std::vector<std::int32_t> palette;      // per record: shadow index or -1
         std::vector<std::uint8_t> per_vertex;   // per-vertex palette draw
-        // The palettes (shadows) as rows: per shadow a table of MatrixMemory::kRows indices into `palette_rows` (4
-        // words a row). A shadow appends only the rows that changed since the one before it; the rest it shares.
+        // The palettes (shadows) as rows: per shadow a table of draw_rows::kRows indices into `palette_rows` (4
+        // words a row). A shadow appends only the kinds that changed since the one before it; the rest it shares.
         std::vector<std::uint32_t> palette_tables;
         std::vector<std::uint32_t> palette_rows;
         std::size_t palette_count = 0;
         // Shadow `shadow`'s palette (valid until the scene appends rows).
         [[nodiscard]] RowView palette_view(std::size_t shadow) const noexcept {
-            return {palette_tables.data() + shadow * MatrixMemory::kRows, palette_rows.data()};
+            return {palette_tables.data() + shadow * draw_rows::kRows, palette_rows.data()};
         }
         // Pixel-stage constants per upload in the scene (draws carry the index).
         std::vector<PixelConstants> ps_constants;
@@ -1019,7 +1018,7 @@ private:
     std::vector<std::int32_t> interp_ps_slot_;             // per pixel-constant record
     std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
     std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
-    std::vector<std::uint32_t> interp_palette_source_;     // per palette slot: mtx_palette_base
+    std::vector<std::array<std::uint32_t, 5>> interp_palette_source_;  // per palette slot: its draw's blocks
     bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.
@@ -1100,7 +1099,7 @@ private:
     static void reset_monotonic_cadence(
         MonotonicCadenceAccumulator& accumulator) noexcept;
     // The matrices and lights the game loads (E-05 replaces it with a per-frame arena).
-    MatrixMemory matrices_;
+    DrawMatrices matrices_;
     // The drawing state the game's records set, as typed values (draw_state.h).
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
@@ -1402,20 +1401,21 @@ private:
     // bindings while retaining stale palette debt for a later palette user.
     bool current_palette_required_ = true;
     bool inline_matrices_stale_ = true;
-    // The matrix arena (E-05): where each row the shaders read was last appended in this frame slot's matrix ring
-    // (float4 index from the ring's base). A draw's row table (current_matrix_palette_) lists them; a new table is
-    // written when rows changed (only those rows are appended) or when the draw's moved lights differ. The indices
-    // hold once the slot's first table appended every row (matrix_rows_valid_, cleared on the slot rewind and on
-    // session reset).
-    std::array<std::uint32_t, MatrixMemory::kRows> matrix_row_index_{};
-    // The recording scene's index (InterpScene::palette_rows) of each game row's current value; its first shadow
-    // appends every row.
-    std::array<std::uint32_t, MatrixMemory::kRows> scene_row_index_{};
-    // Rows changed since the recording scene's last shadow (uploads between shadows clear the matrices' own mask).
-    MatrixMemory::RowMask scene_rows_pending_{};
-    bool matrix_rows_valid_ = false;
-    std::uint64_t matrix_rows_epoch_ = 0;  // the matrix ring's epoch() the rows were appended in
-    bool matrix_table_forced_ = true;
+    // The matrix blocks (E-05): where each kind's rows were last appended in this frame slot's matrix ring (float4
+    // index from the ring's base; positions, textures, normals, post-transform matrices, lights), and the light
+    // block the draw reads (the game's, or its moved lights'). They hold once the slot's first draw appended every
+    // kind (matrix_blocks_valid_, cleared on the slot rewind and on session reset).
+    std::array<std::uint32_t, 5> matrix_block_base_{};
+    std::uint32_t draw_light_base_ = 0;
+    bool matrix_bases_changed_ = true;
+    // The recording scene's index (InterpScene::palette_rows) of each row's current value (draw_rows numbering); its
+    // first shadow appends every row.
+    std::array<std::uint32_t, draw_rows::kRows> scene_row_index_{};
+    // Kinds changed since the recording scene's last shadow (uploads between shadows clear the matrices' own mask).
+    std::uint32_t scene_kinds_pending_ = 0;
+    bool matrix_blocks_valid_ = false;
+    std::uint64_t matrix_blocks_epoch_ = 0;  // the matrix ring's epoch() the blocks were appended in
+    bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when GX register state did not
     // change. EFB copies can also replace a guest-address texture alias

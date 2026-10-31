@@ -11,13 +11,13 @@
 // under a moving camera therefore stays exactly in place, and a moving object
 // keeps its own path. Orthographic (screen-space) draws interpolate M directly.
 //
-// XF palette words: PNMTX0-9 rows 0-29, texture matrices rows 30-63, normal
-// matrices at 0x400 (9 words each, PNMTXk at 0x400 + 9k), dual-texture post
-// matrices 0x500-0x5FF, lights 0x600-0x67F (16 words each).
+// A draw's matrices and lights as one palette of words in the draw_rows numbering (draw_matrices.h): position
+// places 0-9 at rows 0-29, texture matrices rows 30-63, normal matrices from row 64 (place k at 64 + 3k),
+// post-transform matrices from row 104, lights from row 168 (16 words each).
 //
 // No Windows/D3D12 includes (unit-tested offline).
 
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/uber_constants.h"
 
@@ -101,13 +101,13 @@ void tex_matrix_at(const float* a, const float* b, bool spatial, float t, float*
 // normal or a binormal.
 [[nodiscard]] bool texgen_spatial(std::uint32_t texgen) noexcept;
 
-inline constexpr unsigned kPaletteWords = MatrixMemory::kPaletteWords;
-inline constexpr unsigned kNormalBase = MatrixMemory::kNormalBase;
-inline constexpr unsigned kPostBase = MatrixMemory::kPostBase;
-inline constexpr unsigned kLightBase = MatrixMemory::kLightBase;
+inline constexpr unsigned kPaletteWords = draw_rows::kRows * 4u;
+inline constexpr unsigned kNormalBase = draw_rows::kNormal * 4u;
+inline constexpr unsigned kPostBase = draw_rows::kPost * 4u;
+inline constexpr unsigned kLightBase = draw_rows::kLight * 4u;
 
-// A palette read by rows: its table (MatrixMemory::kRows row indices) into its rows (4 words a row), as a frame's
-// matrix arena holds it. Empty: no palette. A palette held as words reads through the identity table.
+// A palette read by rows: its table (draw_rows::kRows row indices) into its rows (4 words a row), as an
+// interpolation scene keeps a draw's blocks. Empty: no palette. A palette held as words reads through the identity table.
 struct RowView {
     const std::uint32_t* table = nullptr;
     const std::uint32_t* rows = nullptr;

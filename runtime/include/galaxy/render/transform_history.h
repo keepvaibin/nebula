@@ -74,7 +74,7 @@ struct TransformRecord {
     std::uint32_t palette_offset = kNoPaletteOffset;
     bool palette = false;
     // Hash of the XF matrix-load destinations since the record's marker
-    // (MatrixMemory::load_signature): an identity match must have the same
+    // (DrawMatrices::load_signature): an identity match must have the same
     // sequence of loads, not only the same count.
     std::uint64_t load_signature = 0;
     // Draw phase and category (galaxy/motion_signals.h encode_category).
