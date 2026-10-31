@@ -143,7 +143,8 @@ AudioMixer::AudioMixer(std::uint32_t rate)
     : rate_(std::clamp<std::uint32_t>(rate, 8000u, 192000u)),
       game_ratio_(static_cast<double>(rate_) / kGameRate),
       voice_kernel_(4u, 0.753, 7.05, 1024u),
-      stream_kernel_(16u, 0.92 * std::min(1.0, game_ratio_), 8.0, 512u),
+      // The movie's 32 kHz sound: 64 taps, flat to 14 kHz, -1 dB at 15 kHz.
+      stream_kernel_(64u, 0.97 * std::min(1.0, game_ratio_), 7.0, 512u),
       source_(kMaxSourceSamples, 0.0f) {
     const std::size_t subframe = (rate_ + kSubframesPerSecond - 1u) / kSubframesPerSecond;
     fold_left_.reset(subframe);
