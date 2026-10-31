@@ -53,8 +53,6 @@ typedef enum { VI_XFBMODE_SF = 0, VI_XFBMODE_DF } VIXFBMode;
 #define VI_MAX_WIDTH_EURGB60 VI_MAX_WIDTH_NTSC
 #define VI_MAX_HEIGHT_EURGB60 VI_MAX_HEIGHT_NTSC
 
-typedef void (*VIRetraceCallback)(u32 retraceCount);
-
 #ifdef __cplusplus
 }
 #endif

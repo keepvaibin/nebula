@@ -20,20 +20,6 @@ typedef struct _GXFifoObj {
 #endif
 } GXFifoObj;
 
-typedef struct __GXFifoObj {
-    u8* base;
-    u8* top;
-    u32 size;
-    u32 hiWatermark;
-    u32 loWatermark;
-    void* rdPtr;
-    void* wrPtr;
-    s32 count;
-    GXBool wrap;
-    GXBool bind_cpu;
-    GXBool bind_gp;
-} __GXFifoObj;
-
 GXBool GXGetCPUFifo(GXFifoObj*);
 GXBool GXGetGPFifo(GXFifoObj*);
 

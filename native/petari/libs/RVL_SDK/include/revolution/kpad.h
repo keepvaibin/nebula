@@ -95,8 +95,6 @@ typedef union {
 } KPADTmpStatus;
 
 typedef void (*KPADControlDpdCallback)(s32 chan, s32 reason);
-typedef WPADCallback KPADCallback;
-typedef WPADChannel KPADChannel;
 
 typedef struct {
     KPADStatus status;

@@ -99,7 +99,6 @@ typedef struct NANDStatus {
 } NANDStatus;
 
 typedef void (*NANDCallback)(s32, NANDCommandBlock*);
-typedef void (*NANDAsyncCallback)(s32 result, struct NANDCommandBlock* block);
 
 s32 NANDInit(void);
 

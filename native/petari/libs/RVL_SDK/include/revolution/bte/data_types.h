@@ -12,10 +12,7 @@ typedef unsigned short UINT16;
 typedef u32 UINT32;
 typedef s32 INT32;
 typedef signed char INT8;
-typedef signed short INT16;
 typedef unsigned char BOOLEAN;
-
-typedef unsigned char UBYTE;
 
 #ifdef __cplusplus
 }

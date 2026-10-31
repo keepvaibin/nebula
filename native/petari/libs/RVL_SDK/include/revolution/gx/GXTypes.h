@@ -119,48 +119,6 @@ extern void __GXSetTmemConfig(u32);
 
 extern void __GetImageTileCount(GXTexFmt fmt, u16 wd, u16 ht, u32* rowTiles, u32* colTiles, u32* cmpTiles);
 
-typedef struct __GXLightObjInt_struct {
-    u32 reserved[3];
-    u32 Color;
-    f32 a[3];
-    f32 k[3];
-    f32 lpos[3];
-    f32 ldir[3];
-} GXLightObjInt;
-
-typedef struct __GXTexObjInt_struct {
-    u32 mode0;
-    u32 mode1;
-    u32 image0;
-    u32 image3;
-    void* userData;
-    GXTexFmt fmt;
-    u32 tlutName;
-    u16 loadCnt;
-    u8 loadFmt;
-    u8 flags;
-} GXTexObjInt;
-
-typedef struct __GXTexRegionInt_struct {
-    u32 image1;
-    u32 image2;
-    u16 sizeEven;
-    u16 sizeOdd;
-    u8 is32bMipmap;
-    u8 isCached;
-} GXTexRegionInt;
-
-typedef struct __GXTlutObjInt_struct {
-    u32 tlut;
-    u32 loadTlut0;
-    u16 numEntries;
-} GXTlutObjInt;
-
-typedef struct __GXTlutRegionInt_struct {
-    u32 loadTlut1;
-    GXTlutObjInt tlutObj;
-} GXTlutRegionInt;
-
 #ifdef __cplusplus
 }
 #endif

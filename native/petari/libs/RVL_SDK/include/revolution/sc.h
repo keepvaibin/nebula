@@ -13,36 +13,12 @@ extern "C" {
 #define SC_MAX_DEV_ENTRY_FOR_SMP 6
 #define SC_MAX_DEV_ENTRY (SC_MAX_DEV_ENTRY_FOR_STD + SC_MAX_DEV_ENTRY_FOR_SMP)
 
-typedef u8 SCType;
-
 typedef enum { SC_STATUS_OK, SC_STATUS_BUSY, SC_STATUS_FATAL, SC_STATUS_PARSE } SCStatus;
 
 typedef struct {
     u8 mode;
     u8 led;
 } SCIdleModeInfo;
-
-typedef struct {
-    union {
-        u8 type_u8;
-        s8 type_s8;
-        u16 type_u16;
-        s16 type_s16;
-        u32 type_u32;
-        s32 type_s32;
-        u64 type_u64;
-        s64 type_s64;
-        u8 longPrecision64[sizeof(u64)];
-    } integer;
-
-    SCType typeInteger;
-    SCType typeByteArray;
-    u32 nameLen;
-    u32 dataSize;
-    char* name;
-    u8* data;
-    u32 packedSize;
-} SCItem;
 
 typedef UINT8 BD_ADDR[6];
 typedef UINT8 LINK_KEY[16];
@@ -62,19 +38,6 @@ typedef struct {
     u8 num;
     SCBtCmpDevInfoSingle info[6];
 } SCBtCmpDevInfoArray;
-
-typedef struct SCDevInfo {
-    char devName[20];  // at 0x0
-    char at_0x14[1];
-    char UNK_0x15[0xB];
-    LINK_KEY linkKey;  // at 0x20
-    char UNK_0x30[0x10];
-} SCDevInfo;
-
-typedef struct SCBtDeviceInfo {
-    BD_ADDR addr;    // at 0x0
-    SCDevInfo info;  // at 0x6
-} SCBtDeviceInfo;
 
 typedef struct {
     u8 num;

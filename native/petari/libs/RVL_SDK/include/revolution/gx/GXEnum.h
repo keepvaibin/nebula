@@ -322,21 +322,6 @@ typedef enum _GXTexFmt {
   GX_TF_A8 = GX_CTF_A8
 } GXTexFmt;
 
-typedef enum _GXTlutSize {
-    GX_TLUT_16 = 1,
-    GX_TLUT_32 = 2,
-    GX_TLUT_64 = 4,
-    GX_TLUT_128 = 8,
-    GX_TLUT_256 = 16,
-    GX_TLUT_512 = 32,
-    GX_TLUT_1K = 64,
-    GX_TLUT_2K = 128,
-    GX_TLUT_4K = 256,
-    GX_TLUT_8K = 512,
-    GX_TLUT_16K = 1024
-
-} GXTlutSize;
-
 typedef enum _GXCullMode {
   GX_CULL_NONE,
   GX_CULL_FRONT,
@@ -456,14 +441,6 @@ typedef enum _GXTevBias {
   GX_TB_SUBHALF,
   GX_MAX_TEVBIAS
 } GXTevBias;
-
-typedef enum _GXTevClampMode {
-  GX_TC_LINEAR,
-  GX_TC_GE,
-  GX_TC_EQ,
-  GX_TC_LE,
-  GX_MAX_TEVCLAMPMODE
-} GXTevClampMode;
 
 typedef enum _GXTevKColorID {
   GX_KCOLOR0 = 0,
@@ -663,12 +640,6 @@ typedef enum _GXProjectionType {
   GX_ORTHOGRAPHIC
 } GXProjectionType;
 
-typedef enum _GXEvent {
-  GX_VCACHE_MISS_ALL,
-  GX_VCACHE_MISS_POS,
-  GX_VCACHE_MISS_NRM
-} GXEvent;
-
 typedef enum _GXFBClamp {
   GX_CLAMP_NONE,
   GX_CLAMP_TOP,
@@ -783,39 +754,11 @@ typedef enum _GXPerf1 {
   GX_PERF1_NONE
 } GXPerf1;
 
-typedef enum _GXVCachePerf {
-  GX_VC_POS,
-  GX_VC_NRM,
-  GX_VC_CLR0,
-  GX_VC_CLR1,
-  GX_VC_TEX0,
-  GX_VC_TEX1,
-  GX_VC_TEX2,
-  GX_VC_TEX3,
-  GX_VC_TEX4,
-  GX_VC_TEX5,
-  GX_VC_TEX6,
-  GX_VC_TEX7,
-  GX_VC_ALL = 0xf
-} GXVCachePerf;
-
 typedef enum _GXCopyMode {
   GX_COPY_PROGRESSIVE = 0,
   GX_COPY_INTLC_EVEN = 2,
   GX_COPY_INTLC_ODD = 3
 } GXCopyMode;
-
-typedef enum _GXMiscToken{
-    GX_MT_XF_FLUSH           = 1,
-    GX_MT_DL_SAVE_CONTEXT    = 2,
-    GX_MT_ABORT_WAIT_COPYOUT = 3, 
-    GX_MT_NULL               = 0
-} GXMiscToken;
-
-typedef enum _GXXFFlushVal {
-    GX_XF_FLUSH_NONE  = 0,
-    GX_XF_FLUSH_SAFE  = 8
-} GXXFFlushVal;
 
 typedef enum _GXTlutFmt {
   GX_TL_IA8 = 0x0,
@@ -900,13 +843,6 @@ typedef enum _GXCITexFmt {
   GX_TF_C14X2 = 0xA
 
 } GXCITexFmt;
-
-typedef enum _GXTexCacheSize {
-    GX_TEXCACHE_32K,
-    GX_TEXCACHE_128K,
-    GX_TEXCACHE_512K,
-    GX_TEXCACHE_NONE
-} GXTexCacheSize;
 
 typedef enum _GXSpotFn {
   GX_SP_OFF = 0,

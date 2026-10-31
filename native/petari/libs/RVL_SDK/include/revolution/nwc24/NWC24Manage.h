@@ -9,11 +9,6 @@
 extern "C" {
 #endif
 
-#define NWC24_WORK_PUBLIC_SIZE 0x4000
-typedef struct NWC24Work {
-    u8 data[NWC24_WORK_PUBLIC_SIZE];
-} NWC24Work;
-
 NWC24Err NWC24OpenLib(void* pWork);
 NWC24Err NWC24CloseLib(void);
 s32 NWC24GetErrorCode(void);

@@ -118,47 +118,6 @@ typedef enum {
 
 typedef enum { NWC24_ENC_7BIT, NWC24_ENC_8BIT, NWC24_ENC_BASE64, NWC24_ENC_QUOTED_PRINTABLE, NWC24_MAX_ENCODINGS } NWC24Encoding;
 
-typedef enum NWC24MsgBoxId { NWC24_MSGBOX_SEND, NWC24_MSGBOX_RECV, NWC24_MSGBOX_MAX } NWC24MsgBoxId;
-
-typedef struct NWC24File {
-    u32 id;
-    u32 mode;
-    u32 align;
-    NANDFileInfo nandf;
-    VFFile vff;
-} NWC24File;
-
-typedef struct NWC24Data {
-    union {
-        const void* pData;
-        u32 offset;
-    };
-
-    u32 size;
-} NWC24Data;
-
-typedef struct NWC24Date {
-    u16 year;
-    u8 month;
-    u8 day;
-    u8 hour;
-    u8 sec;
-    u8 min;
-    u8 BYTE_0x7;
-} NWC24Date;
-
-typedef struct NWC24Calendar {
-    u32 sec;
-    u32 min;
-    u32 hour;
-    u32 day;
-    u32 month;
-    u32 year;
-    u32 UNK_0x18;
-    u32 UNK_0x1C;
-    u32 UNK_0x20;
-} NWC24Calendar;
-
 typedef u64 NWC24UserId;
 
 typedef struct NWC24MsgObj {

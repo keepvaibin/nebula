@@ -9,7 +9,6 @@
 extern "C" {
 #endif
 
-typedef u8 THPSample;
 typedef s16 THPCoeff;
 typedef float THPQuantTab[64];
 

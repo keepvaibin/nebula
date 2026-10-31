@@ -12,36 +12,6 @@ extern "C" {
 typedef s32 ISFSError;
 typedef void (*ISFSCallback)(ISFSError, void* ctxt);
 
-typedef struct {
-    u32 blockSize;
-    u32 freeBlocks;
-    u32 occupiedBlcocks;
-    u32 badBlocks;
-    u32 reservedBlocks;
-    u32 freeInodes;
-    u32 occupedInodes;
-} ISFSStats;
-
-typedef struct {
-    u32 size;
-    u32 offset;
-} ISFSFileStats;
-
-typedef struct {
-    IOSUid ownerId;
-    IOSGid groupId;
-    u8 path[64];
-    u8 ownerAccess;
-    u8 groupAccess;
-    u8 othersAccess;
-    u8 attr;
-} ISFSPathAttrArgs;
-
-typedef struct {
-    u8 path1[64];
-    u8 path2[64];
-} ISFSPathsArgs;
-
 s32 ISFS_Open(const u8*, u32);
 s32 ISFS_OpenAsync(const u8*, u32, ISFSCallback, void*);
 

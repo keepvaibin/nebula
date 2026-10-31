@@ -14,8 +14,6 @@ typedef struct _GDLObj {
     u8* top;
 } GDLObj;
 
-typedef void (*GDOverflowCallback)(void);
-
 extern GDLObj* __GDCurrentDL;
 
 void GDInitGDLObj(GDLObj*, void*, u32);

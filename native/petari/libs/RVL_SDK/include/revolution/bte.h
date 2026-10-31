@@ -19,14 +19,12 @@ typedef unsigned char BOOLEAN;
 
 #define BD_ADDR_LEN 6               /* Device address length */
 typedef UINT8 BD_ADDR[BD_ADDR_LEN]; /* Device address */
-typedef UINT8* BD_ADDR_PTR;         /* Pointer to Device Address */
 
 #define LINK_KEY_LEN 16
 typedef UINT8 LINK_KEY[LINK_KEY_LEN]; /* Link Key */
 
 #define DEV_CLASS_LEN 3
 typedef UINT8 DEV_CLASS[DEV_CLASS_LEN]; /* Device class */
-typedef UINT8* DEV_CLASS_PTR;           /* Pointer to Device class */
 
 /* muff1n: TODO: bta_dm_pin_cback looks mostly the same except that BD_NAME_LEN
  * is 33 (or it was 32 and BD_NAME_LEN was not decreased by 1 in BCM_STRNCPY_S
@@ -37,7 +35,6 @@ typedef UINT8* DEV_CLASS_PTR;           /* Pointer to Device class */
  */
 #define BD_NAME_LEN 248
 typedef UINT8 BD_NAME[BD_NAME_LEN]; /* Device name */
-typedef UINT8* BD_NAME_PTR;         /* Pointer to Device name */
 
 #define BD_FEATURES_LEN 8
 typedef UINT8 BD_FEATURES[BD_FEATURES_LEN]; /* LMP features supported by device */
@@ -97,8 +94,6 @@ typedef UINT32 tBTA_SERVICE_MASK;
 /* GENERIC */
 
 /* JV */
-
-typedef UINT8 tBTA_SYS_ID;
 
 enum {
     BTM_SUCCESS = 0,         /* 0  Command succeeded                 */
@@ -506,45 +501,6 @@ typedef void(tBTM_PM_STATUS_CBACK)(BD_ADDR p_bda, tBTM_PM_STATUS status, UINT16 
 **  Stored Linkkey Types
 *************************/
 
-typedef struct {
-    UINT8 event;
-
-} tBTM_STORED_LINK_KEYS_EVT;
-
-typedef struct {
-    UINT8 event;
-    UINT8 num_keys;
-
-} tBTM_RETURN_LINK_KEYS_EVT;
-
-typedef struct {
-    BD_ADDR bd_addr;
-    LINK_KEY link_key;
-
-} tBTM_BD_ADDR_LINK_KEY_PAIR;
-
-typedef struct {
-    UINT8 event;
-    UINT8 status;
-    UINT16 max_keys;
-    UINT16 read_keys;
-
-} tBTM_READ_STORED_LINK_KEY_COMPLETE;
-
-typedef struct {
-    UINT8 event;
-    UINT8 status;
-    UINT8 num_keys;
-
-} tBTM_WRITE_STORED_LINK_KEY_COMPLETE;
-
-typedef struct {
-    UINT8 event;
-    UINT8 status;
-    UINT16 num_keys;
-
-} tBTM_DELETE_STORED_LINK_KEY_COMPLETE;
-
 // ---
 
 tBTA_STATUS BTA_EnableBluetooth(tBTA_DM_SEC_CBACK* p_cback);
@@ -625,29 +581,7 @@ void BTA_CleanUp(void (*p_cb)(tBTA_STATUS status));  // probably
 #define SC_MAX_DEV_ENTRY_FOR_SMP 6
 #define SC_MAX_DEV_ENTRY (SC_MAX_DEV_ENTRY_FOR_STD + SC_MAX_DEV_ENTRY_FOR_SMP)
 
-struct small_dev_info {
-    char devName[20];  // size 0x14? offset 0x00 // might be 0x13?
-    char at_0x14[1];   // size 0x??, offset 0x14?
-    char __pad0[0x20 - (0x14 + 0x01)];
-    LINK_KEY linkKey;  // size 0x10, offset 0x20
-    char __pad1[0x10];
-};  // size 0x40
-
-typedef struct {
-    UINT8 handle;         /* device handle */
-    UINT16 num_queued;    /* Number of buffers queued by l2cap */
-    UINT16 num_not_acked; /* Number of buffers queued in baseband (sent to baseband, but have not received 'number of packets complete event') */
-} tBTA_HH_ACL_QUEUE;
-
 /* Data for BTA_HH_ACL_QUEUE_INFO_EVT */
-typedef struct {
-    UINT16 num_avail_buffs;          /* Number of available ACL buffers */
-    UINT16 num_buffs;                /* Number of ACL buffers that the controller can handle */
-    UINT16 num_links;                /* Number of active links */
-    tBTA_HH_ACL_QUEUE queue_info[4]; /* Array of queue info */
-} tBTA_HH_ACL_QUEUE_INFO;
-
-typedef void (*tUSER_CBACK)(UINT8 err);
 
 #ifdef __cplusplus
 }

@@ -14,12 +14,7 @@ typedef void (*WPADConnectCallback)(s32 chan, s32 reason);
 typedef void (*WPADCallback)(s32 chan, s32 result);
 typedef void* (*WPADAlloc)(u32 size);
 typedef u8 (*WPADFree)(void* ptr);
-typedef void (*WPADSyncDeviceCallback)(s32 result, s32 num);
 typedef void (*WPADSamplingCallback)(s32 chan);
-typedef void (*WPADFlushCallback)(u32 result);
-
-typedef u32 WPADDeviceType;
-typedef s32 WPADChannel;
 
 #define WPAD_CHAN0 0
 #define WPAD_CHAN1 1
@@ -93,27 +88,6 @@ typedef struct DPDObject {
     u8 traceId;
 } DPDObject;
 
-typedef struct DPDObjEx {
-    s16 range_x1;
-    s16 range_y1;
-    s16 range_x2;
-    s16 range_y2;
-    u16 pixel;
-    s8 radius;
-} DPDObjEx;
-
-typedef struct WPADStatusEx {
-    u16 button;
-    s16 accX;
-    s16 accY;
-    s16 accZ;
-    DPDObject obj[WPAD_DPD_MAX_OBJECTS];
-    u8 dev;
-    s8 err;
-    DPDObjEx exp[WPAD_DPD_MAX_OBJECTS];
-
-} WPADStatusEx;
-
 typedef struct WPADInfo {
     BOOL dpd;
     BOOL speaker;
@@ -125,14 +99,6 @@ typedef struct WPADInfo {
     u8 protocol;
     u8 firmware;
 } WPADInfo;
-
-typedef enum {
-    WPAD_RESULT_ERR_3 = -3,
-    WPAD_RESULT_ERR_2,
-    WPAD_RESULT_ERR_1,
-
-    WPAD_RESULT_SUCCESS = 0,
-} WPADResult;
 
 typedef struct WPADStatus {
     u16 button;
