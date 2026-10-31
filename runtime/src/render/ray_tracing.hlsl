@@ -56,7 +56,8 @@ static const uint kVertexUv = 56u;
 static const uint kVertexMatrixIndex2 = 128u;
 static const uint kVertexFlatCorner = 0x8000u;
 static const uint kVsFlags = 200u;
-static const uint kVsPaletteBase = 204u;
+static const uint kVsPosBase = 204u;
+static const uint kVsRowBases = 1408u;
 static const uint kVsInlinePosMatrix = 224u;
 // VertexConstants (uber_constants.h): the texture generators' matrices and post matrices, and the vertex key's flags
 // (bit 2: dual texture transforms), per-vertex texture matrices, texture generators and post generators.
@@ -97,14 +98,16 @@ uint pack_vertex_normal(float3 n)
 
 // A vertex in eye space, and its normal by the inverse transpose of the same matrix (rows of
 // cofactors; the determinant's sign keeps mirrored matrices facing out).
-// Row `row` of a draw's matrices: its row table (float4 `table` from the draw's palette offset, one uint a row) names
-// the row's float4 in the matrix ring (mrow in the vertex shaders).
-float4 matrix_row(uint4 draw2, uint table, uint row) {
-    const uint at = g_matrix_ring.Load(min(draw2.w + table * 16u + row * 4u, g_matrix_ring_limit));
+// Row `row` (0-63) of a draw's position and texture rows: its blocks in the matrix ring (VertexConstants pos_base and
+// row_bases.y; matrix_row in the vertex shaders).
+float4 matrix_row(uint4 draw2, uint pos_base, uint row) {
+    const uint at = row < 30u
+        ? pos_base + row
+        : g_constant_ring.Load(min(draw2.z, g_constant_ring_limit) + kVsRowBases + 4u) + (row - 30u);
     return asfloat(g_matrix_ring.Load4(min(at * 16u, g_matrix_ring_limit)));
 }
 
-float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint palette_base, out float3 normal)
+float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uint pos_base, out float3 normal)
 {
     const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
     float3 position;
@@ -124,9 +127,9 @@ float3 transform_vertex(uint4 draw, uint4 draw2, uint vertex, uint vs_flags, uin
     [branch] if ((vs_flags & 1u) != 0u) {
         // Per-vertex position matrix: XF row index (PNMTX n at row 3n), clamped as in the VS.
         const uint row = min(matrix_index & 0x3Fu, 61u);
-        r0 = matrix_row(draw2, palette_base, row);
-        r1 = matrix_row(draw2, palette_base, row + 1u);
-        r2 = matrix_row(draw2, palette_base, row + 2u);
+        r0 = matrix_row(draw2, pos_base, row);
+        r1 = matrix_row(draw2, pos_base, row + 1u);
+        r2 = matrix_row(draw2, pos_base, row + 2u);
     } else {
         const uint c = min(draw2.z, g_constant_ring_limit) + kVsInlinePosMatrix;
         r0 = asfloat(g_constant_ring.Load4(c));
@@ -187,7 +190,7 @@ uint debake_colour(uint colour, uint4 draw, uint vertex, uint constants)
 // The texture coordinates texture generator `gen` gives a vertex, as the uber vertex shader makes them (uber_vs.hlsl):
 // its source (the position, the normal or a texture coordinate; the colour, emboss and binormal sources keep the first
 // coordinates), its matrix (inline or the vertex's palette row), the dual transform, then the projection's divide.
-float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_base)
+float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint pos_base)
 {
     const bool resident = (draw.y & 1u) != 0u;
     const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
@@ -213,9 +216,9 @@ float2 texgen_uv(uint4 draw, uint4 draw2, uint vertex, uint gen, uint palette_ba
         const uint packed = gen < 3u ? indices.x : gen < 7u ? indices.y : indices.z;
         const uint shift = gen < 3u ? 8u + 8u * gen : gen < 7u ? 8u * (gen - 3u) : 0u;
         const uint tex_row = min((packed >> shift) & 0xFFu, 61u);
-        r0 = matrix_row(draw2, palette_base, tex_row);
-        r1 = matrix_row(draw2, palette_base, tex_row + 1u);
-        r2 = matrix_row(draw2, palette_base, tex_row + 2u);
+        r0 = matrix_row(draw2, pos_base, tex_row);
+        r1 = matrix_row(draw2, pos_base, tex_row + 1u);
+        r2 = matrix_row(draw2, pos_base, tex_row + 2u);
     } else {
         const uint c = constants + kVsInlineTexMatrices + gen * 48u;
         r0 = asfloat(g_constant_ring.Load4(c));
@@ -264,7 +267,7 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     const uint local = tri - draw2.x;
     const uint constants = min(draw2.z, g_constant_ring_limit);
     const uint vs_flags = g_constant_ring.Load(constants + kVsFlags);
-    const uint palette_base = g_constant_ring.Load(constants + kVsPaletteBase);
+    const uint pos_base = g_constant_ring.Load(constants + kVsPosBase);
     const bool indexed = (draw.y & 2u) != 0u;
     const bool wide = (draw.y & 4u) != 0u;
     float3 corners[3];
@@ -278,7 +281,7 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
     [unroll] for (uint k = 0u; k < 3u; ++k) {
         const uint i = local * 3u + k;
         const uint vertex = indexed ? load_index(draw.w, i, wide) : i;
-        corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, palette_base, corner_normals[k]);
+        corners[k] = transform_vertex(draw, draw2, vertex, vs_flags, pos_base, corner_normals[k]);
         {
             const uint at = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride + kVertexMatrixIndex2;
             const uint word = (draw.y & 1u) != 0u ? g_resident.Load(min(at, g_resident_limit))
@@ -292,9 +295,9 @@ void GeometryCS(uint3 id : SV_DispatchThreadID)
             const uint slot0 = (draw.z >> 24u) & 0xFu;
             const uint slot1 = draw.z >> 28u;
             if (slot0 != 0u) {
-                uvs[k] = texgen_uv(draw, draw2, vertex, slot0 - 1u, palette_base);
+                uvs[k] = texgen_uv(draw, draw2, vertex, slot0 - 1u, pos_base);
             }
-            uvs2[k] = slot1 != 0u ? texgen_uv(draw, draw2, vertex, slot1 - 1u, palette_base) : uvs[k];
+            uvs2[k] = slot1 != 0u ? texgen_uv(draw, draw2, vertex, slot1 - 1u, pos_base) : uvs[k];
             const uint address = draw.x + min(vertex, max(draw.z & 0xFFFFFFu, 1u) - 1u) * kVertexStride;
             colours2[k] = (draw.y & 1u) != 0u ? g_resident.Load(min(address, g_resident_limit) + kVertexColor + 4u)
                                               : g_vertex_ring.Load(min(address, g_vertex_ring_limit) + kVertexColor + 4u);

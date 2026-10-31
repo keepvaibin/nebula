@@ -9,7 +9,7 @@
 #include <cstring>
 using namespace galaxy::render;
 int main() {
-    MatrixMemory state;
+    DrawMatrices state;
     NativeDrawState draw;
     VsConstantsCpuCache cache;
     bool ok = true;
@@ -17,15 +17,23 @@ int main() {
     const auto next = [&] {seed ^= seed << 13u;seed ^= seed >> 17u;seed ^= seed << 5u;return seed;};
     unsigned scale = 1u;
     std::array<std::uint32_t,12> words{};
+    std::array<float,12> values{};
     for (unsigned i = 0; i < 8192u; ++i) {
         bool frame = false;
         bool typed = false;  // a typed field changed: the backend's dirty flags then name vertex constants
         const unsigned kind=i%12u;
         for (auto& word:words)word=0x3F800000u | (next()&0x007FFFFFu);
+        for (unsigned w=0;w<12u;++w)values[w]=std::bit_cast<float>(words[w]);
         switch(kind) {
-        case 0: state.load(static_cast<std::uint16_t>((next()%61u)*4u),words.data(),12u);break;
-        case 1: state.load(static_cast<std::uint16_t>(MatrixMemory::kPostBase+(next()%61u)*4u),words.data(),12u);break;
-        case 2: state.load(static_cast<std::uint16_t>(MatrixMemory::kLightBase+next()%128u),words.data(),1u);break;
+        case 0: state.set_material_texture(next()%61u,values.data(),3u);break;
+        case 1: state.set_material_texture(64u+next()%61u,values.data(),3u);break;
+        case 2: {
+            NativeLight light{};
+            std::memcpy(light.position,values.data(),sizeof(light.position));
+            light.color[0]=static_cast<std::uint8_t>(words[11]);
+            state.set_light(next()%8u,light);
+            break;
+        }
         case 3: {
             const std::uint32_t a=next()&0x3FFFFFFFu;
             draw.position_matrix=static_cast<std::uint8_t>(a&0x3Fu);
@@ -56,8 +64,8 @@ int main() {
         case 10: scale=1u+next()%16u;break;
         case 11: frame=true;break;
         }
-        const std::uint32_t dirty=(state.consume_changed()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);
-        VertexConstants reference{};fill_vs_constants(state,draw,0u,scale,reference);
+        const std::uint32_t dirty=(state.consume_any_change()?kStateDirtyMatrices:0u)|(typed?kStateDirtyVertexConstants:0u);
+        VertexConstants reference{};fill_vs_constants(state,draw,scale,reference);
         const auto& got=cache.update(state,draw,dirty,scale,frame);
         ok &= std::memcmp(&got,&reference,sizeof(got))==0;
         if(kind==5u)ok &= ((got.flags&2u)!=0u)==draw.channel[0].lighting_enable;

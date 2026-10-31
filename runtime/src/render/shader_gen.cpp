@@ -15,7 +15,7 @@
 
 #include "galaxy/render/enhanced_lighting.h"
 #include "galaxy/render/gx_bitfields.h"
-#include "galaxy/render/matrix_memory.h"
+#include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/render_vertex.h"
@@ -28,13 +28,15 @@
 
 namespace galaxy::render {
 
-// The per-pixel lighting text reads the light section at float4 0xA8.
-static_assert(MatrixMemory::kLightBase / 4u == 0xA8u);
+// The matrix row text reads the blocks of draw_matrices.h: texture rows from row 30, a light's four rows.
+static_assert(draw_rows::kTexture == 30u && draw_rows::kLightWords == 16u);
 // The light text (emit_light, ppl_add_light, enh_light, the emboss texgen; uber_vs.hlsl add_light) reads a light
 // as four float4: the colour in the first's w, the angle terms, the distance terms, position and direction after.
-static_assert(MatrixMemory::kLightColorWord == 3u && MatrixMemory::kLightAngleWord == 4u &&
-              MatrixMemory::kLightDistanceWord == 7u && MatrixMemory::kLightPositionWord == 10u &&
-              MatrixMemory::kLightDirectionWord == 13u);
+static_assert(draw_rows::kLightColorWord == 3u && draw_rows::kLightAngleWord == 4u &&
+              draw_rows::kLightDistanceWord == 7u && draw_rows::kLightPositionWord == 10u &&
+              draw_rows::kLightDirectionWord == 13u);
+// VertexConstants::row_bases at c88 (the generated vertex shader's cbuffer and the pixel shader's light reads).
+static_assert(offsetof(VertexConstants, row_bases) == 88u * 16u);
 
 namespace {
 
@@ -276,7 +278,7 @@ cbuffer VertexConstants : register(b0) {
     float4x4 projection;
     // C++ packs texgen_config as uint32_t[8][2] (tight, 64 bytes).  HLSL pads
     // each array element to 16 bytes, so uint2[8] would occupy 128 bytes and
-    // shift every field after it — num_texgens/flags/mtx_palette_base then
+    // shift every field after it — num_texgens/flags/pos_base then
     // read PAST the 256-byte allocation (garbage palette base => degenerate
     // positions, the boot96-98 invisible-frame root cause).  uint4[4] keeps
     // the tight 64-byte footprint; element i of the C++ array is
@@ -287,7 +289,7 @@ cbuffer VertexConstants : register(b0) {
     uint     num_texgens;
     uint     num_chans;
     uint     flags;
-    uint     mtx_palette_base;
+    uint     pos_base;
     uint     matrix_index_a;
     uint     matrix_index_b;
     uint     sky_up;
@@ -296,17 +298,19 @@ cbuffer VertexConstants : register(b0) {
     float4   inline_tex_matrices[24];
     float4   inline_post_matrices[24];
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
-StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
-// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
-// names the row's float4 among the rows.
-float4 mrow(uint table, uint r) {
-    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
-}
-// Row r through another table among the rows (a motion scene's previous frame), or kMotionOwnRows: the draw's own.
-float4 mrow_prev(uint table, uint r) {
-    return table == 0xFFFFFFFFu ? mrow(mtx_palette_base, r) : mtx_rows[asuint(mtx_rows[table + (r >> 2u)][r & 3u])];
-}
+)HLSL";
+
+// The draw's matrices and lights (draw_matrices.h), after a cbuffer with pos_base and row_bases.
+static constexpr const char* kVsMatrixRows = R"HLSL(
+StructuredBuffer<float4> mtx_rows : register(t3, space1);  // the matrix ring, or a replay's output
+// Position and texture rows 0-63 (positions from pos_base, textures from row_bases.y), normal rows from row_bases.x,
+// post-transform rows from row_bases.z, light n's four rows at row_bases.w + 4n.
+float4 matrix_row(uint r) { return mtx_rows[r < 30u ? pos_base + r : row_bases.y + (r - 30u)]; }
+float4 normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
+float4 post_row(uint q) { return mtx_rows[row_bases.z + q]; }
+float4 light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
+// Position row r at the frame before (motion vectors): the rows from `base`, or kMotionOwnRows: the draw's own.
+float4 matrix_row_prev(uint base, uint r) { return base == 0xFFFFFFFFu ? matrix_row(r) : mtx_rows[base + r]; }
 )HLSL";
 
 static constexpr const char* kPsConstantsDef = R"HLSL(
@@ -604,26 +608,21 @@ cbuffer PplConstants : register(b0) {
     float4 ppl_chan_material[2] : packoffset(c10);
     uint   ppl_num_chans        : packoffset(c12.y);
     uint   ppl_flags            : packoffset(c12.z);
-    uint   ppl_mtx_palette_base : packoffset(c12.w);
     uint   ppl_sky_up           : packoffset(c13.z);
     uint   ppl_sky_up_known     : packoffset(c13.w);
     uint4  ppl_channel          : packoffset(c72);
+    uint4  ppl_row_bases        : packoffset(c88);
 };
-StructuredBuffer<float4> mtx_palette : register(t0, space1);  // the draw's row table
-StructuredBuffer<float4> mtx_rows : register(t3, space1);     // the rows tables name (the matrix arena, E-05)
-// Row r of a draw's matrices and lights: its row table (from float4 `table` of the table binding, one uint a row)
-// names the row's float4 among the rows.
-float4 mrow(uint table, uint r) {
-    return mtx_rows[asuint(mtx_palette[table + (r >> 2u)][r & 3u])];
-}
+StructuredBuffer<float4> mtx_rows : register(t3, space1);  // the matrix ring, or a replay's output
+// Light n's rows w (0-3) from the draw's light block.
+float4 ppl_light_row(uint n, uint w) { return mtx_rows[ppl_row_bases.w + 4u * n + w]; }
 
 void ppl_add_light(uint n, uint ctrl, bool alpha_part, float3 wpos, float3 nrm,
                    inout float3 lacc, inout float lacc_a) {
-    const uint e = 0xA8u + 4u * n;
-    uint  lcw  = asuint(mrow(ppl_mtx_palette_base, e).w);
-    float4 le1 = mrow(ppl_mtx_palette_base, e + 1u);
-    float4 le2 = mrow(ppl_mtx_palette_base, e + 2u);
-    float4 le3 = mrow(ppl_mtx_palette_base, e + 3u);
+    uint  lcw  = asuint(ppl_light_row(n, 0u).w);
+    float4 le1 = ppl_light_row(n, 1u);
+    float4 le2 = ppl_light_row(n, 2u);
+    float4 le3 = ppl_light_row(n, 3u);
     float3 lpos  = float3(le2.z, le2.w, le3.x);
     float3 ldvec = float3(le3.y, le3.z, le3.w);
     float3 cosA  = le1.xyz;
@@ -772,11 +771,10 @@ float enh_vis(float NoL, float NoV, float a) {
 // attenuation operands stay finite (kVsKeyFiniteLightAttn): a light the game left without a
 // direction keeps its light.
 void enh_light(uint n, bool spot, float3 P, out float3 ldir, out float attn, out float3 lcol) {
-    const uint e = 0xA8u + 4u * n;
-    const uint lcw = asuint(mrow(ppl_mtx_palette_base, e).w);
-    const float4 le1 = mrow(ppl_mtx_palette_base, e + 1u);
-    const float4 le2 = mrow(ppl_mtx_palette_base, e + 2u);
-    const float4 le3 = mrow(ppl_mtx_palette_base, e + 3u);
+    const uint lcw = asuint(ppl_light_row(n, 0u).w);
+    const float4 le1 = ppl_light_row(n, 1u);
+    const float4 le2 = ppl_light_row(n, 2u);
+    const float4 le3 = ppl_light_row(n, 3u);
     const float3 ldelta = float3(le2.z, le2.w, le3.x) - P;
     const float dist2 = dot(ldelta, ldelta);
     const float dist = sqrt(dist2);
@@ -1043,13 +1041,12 @@ static void emit_light(
     bool alpha,
     bool finite) {
     emit(s, "        {  // light %u\n", n);
-    const unsigned e = MatrixMemory::kLightBase / 4u + 4u * n;
     emit(s,
-        "            uint  lcw  = asuint(mrow(mtx_palette_base, %uu).w);\n"
-        "            float4 le1 = mrow(mtx_palette_base, %uu);\n"
-        "            float4 le2 = mrow(mtx_palette_base, %uu);\n"
-        "            float4 le3 = mrow(mtx_palette_base, %uu);\n",
-        e, e + 1u, e + 2u, e + 3u);
+        "            uint  lcw  = asuint(light_row(%uu, 0u).w);\n"
+        "            float4 le1 = light_row(%uu, 1u);\n"
+        "            float4 le2 = light_row(%uu, 2u);\n"
+        "            float4 le3 = light_row(%uu, 3u);\n",
+        n, n, n, n);
     s << "            float3 lpos  = float3(le2.z, le2.w, le3.x);\n";
     s << "            float3 ldvec = float3(le3.y, le3.z, le3.w);\n";
     s << "            float3 cosA  = le1.xyz;\n";
@@ -1336,9 +1333,10 @@ void load_draw_rows(CurveDraw d, uint tid) {
         draw_rows[7] = float4(0.5 * asfloat(constant_data.Load2(d.constants + CB_RASTER)), 0.0, 0.0);
     }
     if ((d.flags & 1u) != 0u) {
-        // The position rows through the draw's row table (d.palette: its byte offset in the matrix ring).
-        const uint base = constant_data.Load(d.constants + CB_PALETTE_BASE);
-        const uint at = palette_data.Load(d.palette + 16u * base + 4u * tid);
+        // The position and texture rows from the draw's blocks in the matrix ring (VertexConstants pos_base and
+        // row_bases.y).
+        const uint at = tid < 30u ? constant_data.Load(d.constants + CB_POS_BASE) + tid
+                                  : constant_data.Load(d.constants + CB_ROW_BASES + 4u) + (tid - 30u);
         draw_rows[8u + tid] = asfloat(palette_data.Load4(16u * at));
     }
     GroupMemoryBarrierWithGroupSync();
@@ -1480,10 +1478,11 @@ std::string ShaderGenerator::curve_sort_source() {
     char defines[256];
     std::snprintf(defines, sizeof(defines),
                   "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
-                  "#define CB_PALETTE_BASE %zuu\n#define CB_INLINE_POS %zuu\n#define CB_RASTER %zuu\n",
+                  "#define CB_POS_BASE %zuu\n#define CB_ROW_BASES %zuu\n#define CB_INLINE_POS %zuu\n"
+                  "#define CB_RASTER %zuu\n",
                   sizeof(RenderVertex), offsetof(RenderVertex, mtx_indices), offsetof(RenderVertex, curve),
-                  offsetof(VertexConstants, mtx_palette_base), offsetof(VertexConstants, inline_pos_matrix),
-                  offsetof(VertexConstants, line_point_raster));
+                  offsetof(VertexConstants, pos_base), offsetof(VertexConstants, row_bases),
+                  offsetof(VertexConstants, inline_pos_matrix), offsetof(VertexConstants, line_point_raster));
     return std::string("// Curved surfaces' triangles sorted (ShaderGenerator::curve_sort_source).\n") + defines +
            kCurveCodec + kCurveValue + kCurveSort;
 }
@@ -1573,7 +1572,8 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     const bool motion = (key.flags & kVsKeyMotion) != 0u;
     const bool curved = (key.flags & kVsKeyCurved) != 0u;
     // Physical ray tracing's facing fit (flags bit 6) at the struct's end (c80, uber_constants.h).
-    static constexpr const char* kVsDebakeMembers = "    float4   debake_sh[7];\n    float4   debake_peak;\n";
+    static constexpr const char* kVsDebakeMembers =
+        "    float4   debake_sh[7];\n    float4   debake_peak;\n    uint4    row_bases;\n";
     std::string structs = ppl_outputs ? kVsStructsPpl : kVsStructs;
     if (motion) {
         s << insert_before_close(kVsConstantsDef, (std::string(kVsMotionConstantMembers) + kVsDebakeMembers).c_str(),
@@ -1583,6 +1583,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << insert_before_close(kVsConstantsDef,
                                  (std::string("    float4   debake_skip_[15];\n") + kVsDebakeMembers).c_str(), false);
     }
+    s << kVsMatrixRows;
     if (curved) {
         structs = insert_before_close(structs.c_str(), kCurvedInput, false);
         structs = insert_before_close(structs.c_str(), kCurvedInterpolants, true);
@@ -1629,16 +1630,16 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
     // The position/normal matrix's XF row (PNMTX0=0, PNMTX1=3, ...; a matrix occupies rows n..n+2): the vertex's
     // PNMATIDX (BLENDINDICES) where the stream carries one, else the draw's CP MatrixIndexA, the value the loader
     // would put in each vertex (so a vertex's bytes do not depend on the draw). Clamped to the 64-row
-    // position-matrix region so a bad index cannot read past the draw's row table (mrow): the matrices are a root
+    // position and texture rows so a bad index cannot read past the draw's blocks (matrix_row): the rows are a root
     // SRV, and hardware does not clamp out-of-bounds reads, which can page-fault the GPU.
     s << ((key.flags & 0x01u) != 0u ? "    uint pn_row = min(v.mtx_idx.x & 0x3Fu, 61u);\n"
                                     : "    uint pn_row = min(matrix_index_a & 0x3Fu, 61u);\n");
     s << "    float3 pos_in = v.pos;\n";
     if ((key.flags & 0x01u) != 0u) {
         s << "    float4 wpos = float4(\n";
-        s << "        dot(mrow(mtx_palette_base, pn_row+0u), float4(pos_in, 1.0)),\n";
-        s << "        dot(mrow(mtx_palette_base, pn_row+1u), float4(pos_in, 1.0)),\n";
-        s << "        dot(mrow(mtx_palette_base, pn_row+2u), float4(pos_in, 1.0)),\n";
+        s << "        dot(matrix_row(pn_row+0u), float4(pos_in, 1.0)),\n";
+        s << "        dot(matrix_row(pn_row+1u), float4(pos_in, 1.0)),\n";
+        s << "        dot(matrix_row(pn_row+2u), float4(pos_in, 1.0)),\n";
         s << "        1.0);\n\n";
     } else {
         s << "    float4 wpos = float4(\n";
@@ -1659,9 +1660,9 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         s << "    float3 prev_eye;\n";
         if ((key.flags & 0x01u) != 0u) {
             s << "    if (motion_ctrl.x == 0u) {\n"
-                 "        prev_eye = float3(dot(mrow_prev(motion_ctrl.y, pn_row+0u), float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mrow_prev(motion_ctrl.y, pn_row+1u), float4(vb_pos_prev, 1.0)),\n"
-                 "                          dot(mrow_prev(motion_ctrl.y, pn_row+2u), float4(vb_pos_prev, 1.0)));\n"
+                 "        prev_eye = float3(dot(matrix_row_prev(motion_ctrl.y, pn_row+0u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(matrix_row_prev(motion_ctrl.y, pn_row+1u), float4(vb_pos_prev, 1.0)),\n"
+                 "                          dot(matrix_row_prev(motion_ctrl.y, pn_row+2u), float4(vb_pos_prev, 1.0)));\n"
                  "    } else {\n"
                  "        prev_eye = float3(dot(motion_prev_pos[0], wpos),\n"
                  "                          dot(motion_prev_pos[1], wpos),\n"
@@ -1711,10 +1712,10 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         // Lighting-space normal: transform by the normal (inverse-transpose) matrix, three rows at the normal
         // section's row pn_row & 31 (Dolphin VertexShaderGen I_NORMALMATRICES[posidx & 31]). The result is
         // renormalized as in Dolphin. The zero guard keeps draws without a normal attribute NaN-free.
-        emit(s, "    const uint nrm_q = %uu + (pn_row & 31u);\n", MatrixMemory::kNormalBase / 4u);
-        s << "    const float3 nrm_r0 = mrow(mtx_palette_base, nrm_q).xyz;\n"
-             "    const float3 nrm_r1 = mrow(mtx_palette_base, nrm_q + 1u).xyz;\n"
-             "    const float3 nrm_r2 = mrow(mtx_palette_base, nrm_q + 2u).xyz;\n";
+        s << "    const uint nrm_q = pn_row & 31u;\n";
+        s << "    const float3 nrm_r0 = normal_row(nrm_q).xyz;\n"
+             "    const float3 nrm_r1 = normal_row(nrm_q + 1u).xyz;\n"
+             "    const float3 nrm_r2 = normal_row(nrm_q + 2u).xyz;\n";
         s << "    float3 nrm_t = float3(dot(nrm_r0, v.nrm), dot(nrm_r1, v.nrm), dot(nrm_r2, v.nrm));\n";
         s << "    float3 nrm = (dot(nrm_t, nrm_t) > 0.0)"
              " ? normalize(nrm_t) : nrm_t;\n\n";
@@ -1724,7 +1725,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         const bool palette = (key.flags & 0x01u) != 0u;
         for (unsigned r = 0; r < 3u; ++r) {
             emit(s, "    const float3 nrm_row%u = %s%u%s.xyz;\n", r,
-                 palette ? "mrow(mtx_palette_base, pn_row+" : "inline_pos_matrix[", r,
+                 palette ? "matrix_row(pn_row+" : "inline_pos_matrix[", r,
                  palette ? "u)" : "]");
         }
         s << "    float3 nrm_t = float3(dot(nrm_row0, v.nrm), dot(nrm_row1, v.nrm),"
@@ -1832,17 +1833,16 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         case TexGenType::EmbossMap: {
             // Both vertex decode routes supply zero for absent NBT vectors.
             // Keep transformed basis scale: it controls emboss magnitude.
-            emit(s, "        uint emboss_q = %uu + (pn_row & 31u);\n", MatrixMemory::kNormalBase / 4u);
-            s << "        float3x3 emboss_matrix = float3x3(mrow(mtx_palette_base, emboss_q).xyz,\n"
-                 "                                          mrow(mtx_palette_base, emboss_q + 1u).xyz,\n"
-                 "                                          mrow(mtx_palette_base, emboss_q + 2u).xyz);\n";
+            s << "        uint emboss_q = pn_row & 31u;\n";
+            s << "        float3x3 emboss_matrix = float3x3(normal_row(emboss_q).xyz,\n"
+                 "                                          normal_row(emboss_q + 1u).xyz,\n"
+                 "                                          normal_row(emboss_q + 2u).xyz);\n";
             s << "        float3 emboss_tangent = mul(emboss_matrix, v.tangent);\n"
                  "        float3 emboss_binormal = mul(emboss_matrix, v.binormal);\n";
-            const unsigned light = MatrixMemory::kLightBase / 4u + 4u * tg.emboss_light;
             emit(s,
-                 "        float4 emboss_l2 = mrow(mtx_palette_base, %uu);\n"
-                 "        float4 emboss_l3 = mrow(mtx_palette_base, %uu);\n",
-                 light + 2u, light + 3u);
+                 "        float4 emboss_l2 = light_row(%uu, 2u);\n"
+                 "        float4 emboss_l3 = light_row(%uu, 3u);\n",
+                 static_cast<unsigned>(tg.emboss_light), static_cast<unsigned>(tg.emboss_light));
             s << "        float3 emboss_delta = float3(emboss_l2.zw, emboss_l3.x) - wpos.xyz;\n"
                  "        float emboss_dist2 = dot(emboss_delta, emboss_delta);\n"
                  "        float3 emboss_ldir = (emboss_dist2 > 0.0) ? emboss_delta * rsqrt(emboss_dist2) : float3(0,0,0);\n";
@@ -1900,13 +1900,13 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
             if (per_vertex) {
                 if (tg.generate_stq) {
                     s << "        float3 res = float3(\n"
-                         "            dot(coord, mrow(mtx_palette_base, tm+0u)),\n"
-                         "            dot(coord, mrow(mtx_palette_base, tm+1u)),\n"
-                         "            dot(coord, mrow(mtx_palette_base, tm+2u)));\n";
+                         "            dot(coord, matrix_row(tm+0u)),\n"
+                         "            dot(coord, matrix_row(tm+1u)),\n"
+                         "            dot(coord, matrix_row(tm+2u)));\n";
                 } else {
                     s << "        float3 res = float3(\n"
-                         "            dot(coord, mrow(mtx_palette_base, tm+0u)),\n"
-                         "            dot(coord, mrow(mtx_palette_base, tm+1u)),\n"
+                         "            dot(coord, matrix_row(tm+0u)),\n"
+                         "            dot(coord, matrix_row(tm+1u)),\n"
                          "            1.0);\n";
                 }
             } else {
@@ -1963,7 +1963,7 @@ std::string ShaderGenerator::generate_vs(const VertexShaderKey& key) const {
         const bool palette = (key.flags & 0x01u) != 0u;
         for (unsigned r = 0; r < 3u; ++r) {
             emit(s, "    const float3 curve_r%u = %s%u%s.xyz;\n", r,
-                 palette ? "mrow(mtx_palette_base, pn_row + " : "inline_pos_matrix[", r,
+                 palette ? "matrix_row(pn_row + " : "inline_pos_matrix[", r,
                  palette ? "u)" : "]");
         }
         s << "    const float3x3 curve_cofactor = float3x3(cross(curve_r1, curve_r2), cross(curve_r2, curve_r0),\n"

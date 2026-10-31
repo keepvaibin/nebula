@@ -223,20 +223,21 @@ void values_only_marks_no_program_change() {
     std::printf("ok: values-only application leaves the shader keys\n");
 }
 
-// A light's words in the light section, as the shaders read them.
-bool section_holds(const MatrixMemory& memory, unsigned n, const NativeLight& l) {
+// A light's words in the light rows, as the shaders read them.
+bool section_holds(const DrawMatrices& matrices, unsigned n, const NativeLight& l) {
     const auto at = [&](std::uint32_t word) {
-        return memory.word(MatrixMemory::kLightBase + MatrixMemory::kLightWords * n + word);
+        const std::uint32_t w = draw_rows::kLightWords * n + word;
+        return matrices.row(draw_rows::kLight + w / 4u)[w % 4u];
     };
     for (unsigned i = 0; i < 3u; ++i) {
-        if (at(MatrixMemory::kLightPositionWord + i) != std::bit_cast<std::uint32_t>(l.position[i]) ||
-            at(MatrixMemory::kLightDirectionWord + i) != std::bit_cast<std::uint32_t>(l.direction[i]) ||
-            at(MatrixMemory::kLightAngleWord + i) != std::bit_cast<std::uint32_t>(l.angle[i]) ||
-            at(MatrixMemory::kLightDistanceWord + i) != std::bit_cast<std::uint32_t>(l.distance[i])) {
+        if (at(draw_rows::kLightPositionWord + i) != std::bit_cast<std::uint32_t>(l.position[i]) ||
+            at(draw_rows::kLightDirectionWord + i) != std::bit_cast<std::uint32_t>(l.direction[i]) ||
+            at(draw_rows::kLightAngleWord + i) != std::bit_cast<std::uint32_t>(l.angle[i]) ||
+            at(draw_rows::kLightDistanceWord + i) != std::bit_cast<std::uint32_t>(l.distance[i])) {
             return false;
         }
     }
-    return at(MatrixMemory::kLightColorWord) == light_color_word(l);
+    return at(draw_rows::kLightColorWord) == light_color_word(l);
 }
 
 bool same_light(const NativeLight& a, const NativeLight& b) {
@@ -249,7 +250,7 @@ void typed_lights_write_the_section() {
     Random r;
     bool ok = true;
     for (unsigned trial = 0; trial < 2000u && ok; ++trial) {
-        MatrixMemory memory;
+        DrawMatrices memory;
         material::Program program{};
         program.loads = material::kLoadsLights | material::kLoadsChannels;  // lights load with the channels
         material::Values values{};
@@ -277,14 +278,14 @@ void typed_lights_write_the_section() {
                                        static_cast<std::uint8_t>(r(256u)), static_cast<std::uint8_t>(r(256u))};
         const float angle[3] = {r.real(-2.0f, 2.0f), r.real(-2.0f, 2.0f), r.real(-2.0f, 2.0f)};
         const float distance[3] = {r.real(0.0f, 4.0f), r.real(0.0f, 4.0f), r.real(0.0f, 4.0f)};
-        memory.load_light_attenuation(n, color, angle, distance);
+        memory.set_light_attenuation(n, color, angle, distance);
         std::memcpy(next.color, color, sizeof(color));
         std::memcpy(next.angle, angle, sizeof(angle));
         std::memcpy(next.distance, distance, sizeof(distance));
         ok = ok && same_light(memory.light(n), next) && section_holds(memory, n, next);
         const float position[3] = {r.real(-1e5f, 1e5f), r.real(-1e5f, 1e5f), r.real(-1e5f, 1e5f)};
         const float direction[3] = {r.real(-1.0f, 1.0f), r.real(-1.0f, 1.0f), r.real(-1.0f, 1.0f)};
-        memory.load_light_position(n, position, direction);
+        memory.set_light_position(n, position, direction);
         std::memcpy(next.position, position, sizeof(position));
         std::memcpy(next.direction, direction, sizeof(direction));
         ok = ok && same_light(memory.light(n), next) && section_holds(memory, n, next);
@@ -295,52 +296,56 @@ void typed_lights_write_the_section() {
     }
 }
 
-// E-05 step 3: the matrix arena appends only the rows a load changed. MatrixMemory's dirty rows are exactly the rows
-// whose words changed since they were last taken (a load of equal words marks none).
-void dirty_rows_name_the_changed_rows() {
+// E-05: a draw's blocks are appended per kind when the kind's rows changed. A write marks its kind changed exactly when
+// its values differ from the rows it writes (a write of equal values marks none).
+void changed_kinds_name_the_changed_blocks() {
     Random r;
     bool ok = true;
-    MatrixMemory memory;
-    memory.clear_dirty_rows();
-    std::vector<std::uint32_t> shadow(MatrixMemory::kWords, 0u);
+    DrawMatrices matrices;
+    matrices.clear_changed();
     for (unsigned trial = 0; trial < 5000u && ok; ++trial) {
-        const auto base = static_cast<std::uint16_t>(r(MatrixMemory::kPaletteWords));
-        const auto count = static_cast<std::uint16_t>(1u + r(16u));
-        std::uint32_t words[16];
-        for (unsigned i = 0; i < count; ++i) {
-            // Half the loads repeat what is there.
-            words[i] = r(2u) == 0u && base + i < MatrixMemory::kWords ? shadow[base + i] : r(1u << 20);
-        }
-        MatrixMemory::RowMask expected{};
-        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
-            if (shadow[base + i] != words[i] && (base + i) / 4u < MatrixMemory::kRows) {
-                const unsigned row = (base + i) / 4u;
-                expected[row / 64u] |= std::uint64_t{1} << (row % 64u);
+        const unsigned kind = r(4u);
+        const unsigned place = r(10u);
+        float values[12];
+        // Half the writes repeat what is there.
+        const bool same = r(2u) == 0u;
+        const std::uint32_t first = kind == 0u ? draw_rows::kPosition + 3u * place
+                                    : kind == 1u ? draw_rows::kNormal + 3u * place
+                                    : kind == 2u ? draw_rows::kTexture + 3u * place
+                                                 : draw_rows::kPost + 3u * place;
+        const unsigned width = kind == 1u ? 3u : 4u;
+        for (unsigned row = 0; row < 3u; ++row) {
+            for (unsigned c = 0; c < width; ++c) {
+                values[row * width + c] =
+                    same ? std::bit_cast<float>(matrices.row(first + row)[c]) : r.real(-8.0f, 8.0f);
             }
         }
-        bool any_change = false;  // any word of the load, a row's or past the rows
-        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
-            any_change = any_change || shadow[base + i] != words[i];
-        }
-        memory.load(base, words, count);
-        for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
-            shadow[base + i] = words[i];
-        }
-        // A changed load marks the whole span it wrote (rows from its first to its last word).
-        if (any_change) {
-            for (unsigned i = 0; i < count && base + i < MatrixMemory::kWords; ++i) {
-                const unsigned row = (base + i) / 4u;
-                if (row < MatrixMemory::kRows) {
-                    expected[row / 64u] |= std::uint64_t{1} << (row % 64u);
-                }
+        bool differs = false;
+        for (unsigned row = 0; row < 3u; ++row) {
+            for (unsigned c = 0; c < 4u; ++c) {
+                const std::uint32_t want = c < width ? std::bit_cast<std::uint32_t>(values[row * width + c]) : 0u;
+                differs = differs || matrices.row(first + row)[c] != want;
             }
         }
-        ok = memory.dirty_rows() == expected;
-        memory.clear_dirty_rows();
+        const std::uint32_t bit = kind == 0u ? DrawMatrices::kPositions
+                                  : kind == 1u ? DrawMatrices::kNormals
+                                  : kind == 2u ? DrawMatrices::kTextures
+                                               : DrawMatrices::kPosts;
+        if (kind == 0u) {
+            matrices.set_position(place, values, 0u);
+        } else if (kind == 1u) {
+            matrices.set_normal(place, values, 0u);
+        } else if (kind == 2u) {
+            matrices.set_texture(place, values, 3u);
+        } else {
+            matrices.set_post(place, values);
+        }
+        ok = matrices.changed() == (differs ? bit : 0u);
+        matrices.clear_changed();
     }
-    check(ok, "dirty rows are the rows a changed load wrote, none for an unchanged one");
+    check(ok, "a write marks its kind changed when its values differ, none when they are equal");
     if (ok) {
-        std::printf("ok: dirty rows name the changed rows\n");
+        std::printf("ok: changed kinds name the changed blocks\n");
     }
 }
 
@@ -350,7 +355,7 @@ int main() {
     values_only_matches_whole();
     values_only_marks_no_program_change();
     typed_lights_write_the_section();
-    dirty_rows_name_the_changed_rows();
+    changed_kinds_name_the_changed_blocks();
     if (g_failures != 0) {
         std::printf("%d native material checks FAILED\n", g_failures);
         return 1;

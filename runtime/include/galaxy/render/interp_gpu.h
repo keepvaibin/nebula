@@ -70,9 +70,8 @@ struct Op {
 };
 static_assert(sizeof(Op) == 16u);
 
-// MatrixRows: a palette slot from a draw's row table in the matrix ring (`src` the table; the source's low byte, then
-// the row count from bit 8; `words` the slot's float4 index from the palette base, for its identity table).
-enum class Source : std::uint32_t { Constants = 0, Matrices = 1, MatrixRows = 2 };
+// Matrices: rows from the matrix ring (a palette slot takes each of its source draw's blocks so).
+enum class Source : std::uint32_t { Constants = 0, Matrices = 1 };
 
 // A block copied from a ring into the output before the first evaluation of a
 // sequence.
@@ -84,15 +83,15 @@ struct Copy {
 };
 static_assert(sizeof(Copy) == 16u);
 
-// A palette slot: a row table (one uint a row: the identity, the slot's own rows) then the rows, as a draw's matrices
-// are read (mrow); padded to 256 bytes.
-inline constexpr std::uint32_t kPaletteRows = MatrixMemory::kRows;
+// A palette slot: kPaletteRows / 4 float4 the slot leaves unused, then the rows in the draw_rows numbering (a replay's
+// constants name them as its blocks); padded to 256 bytes.
+inline constexpr std::uint32_t kPaletteRows = draw_rows::kRows;
 inline constexpr std::uint32_t kPaletteWords = (kPaletteRows * 5u + 63u) & ~63u;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
 inline constexpr std::uint32_t kPsBytes = sizeof(PixelConstants);
 // The rows a motion vector reads from a palette at the frame presented before
-// (position and texture matrices, rows 0-63), with their table.
+// (position and texture matrices, rows 0-63), after 16 unused float4.
 inline constexpr std::uint32_t kPrevPaletteRows = 64u;
 inline constexpr std::uint32_t kPrevPaletteWords = kPrevPaletteRows * 5u;
 inline constexpr std::uint32_t kPrevPaletteBytes = kPrevPaletteWords * 4u;
@@ -103,7 +102,8 @@ static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 
 inline constexpr std::uint32_t kVsProjection = offsetof(VertexConstants, projection) / 4u;
 inline constexpr std::uint32_t kVsAmbient = offsetof(VertexConstants, chan_ambient) / 4u;
 inline constexpr std::uint32_t kVsMaterial = offsetof(VertexConstants, chan_material) / 4u;
-inline constexpr std::uint32_t kVsPaletteBase = offsetof(VertexConstants, mtx_palette_base) / 4u;
+inline constexpr std::uint32_t kVsPosBase = offsetof(VertexConstants, pos_base) / 4u;
+inline constexpr std::uint32_t kVsRowBases = offsetof(VertexConstants, row_bases) / 4u;
 inline constexpr std::uint32_t kVsPosition = offsetof(VertexConstants, inline_pos_matrix) / 4u;
 inline constexpr std::uint32_t kVsTex = offsetof(VertexConstants, inline_tex_matrices) / 4u;
 inline constexpr std::uint32_t kVsPost = offsetof(VertexConstants, inline_post_matrices) / 4u;
