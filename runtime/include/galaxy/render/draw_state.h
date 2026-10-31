@@ -157,7 +157,11 @@ public:
 // A copy op's parameters (GXCopyDisp, GXCopyTex) with the copy settings, and the pixel format the copy reads (Z24
 // for a depth-format texture copy, as GXCopyTex switches it).
 [[nodiscard]] EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& copy);
-[[nodiscard]] std::uint8_t copy_pixel_format(const NativeDrawState& state, const state::Op& copy);
+// A capture (target_capture: key, rectangle left/top/width/height, NebulaTargetChannels, NebulaCaptureFlags) as the
+// conversion takes it.
+[[nodiscard]] EfbCopyParams capture_copy_params(const NativeDrawState& state, std::uint64_t key,
+                                                const std::uint16_t rect[4], std::uint8_t channels,
+                                                std::uint8_t flags);
 
 // Konst colour `k` as RGBA8 (red in the top byte).
 [[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);

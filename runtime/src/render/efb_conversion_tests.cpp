@@ -1871,56 +1871,6 @@ V main(uint id : SV_VertexID) {
         passed &= expect(cache.invalidate_ranges(mip_dirty) == 1u,
             "write confined to a lower mip retires the decoded resource");
 
-        const auto make_alias = [&] {
-            D3D12_HEAP_PROPERTIES heap{};
-            heap.Type = D3D12_HEAP_TYPE_DEFAULT;
-            D3D12_RESOURCE_DESC desc{};
-            desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-            desc.Width = desc.Height = 8u;
-            desc.DepthOrArraySize = desc.MipLevels = 1u;
-            desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-            desc.SampleDesc.Count = 1u;
-            ComPtr<ID3D12Resource> texture;
-            check_hr(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE,
-                &desc, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-                IID_PPV_ARGS(&texture)), "Create texture cache alias");
-            return texture;
-        };
-        EfbCopyParams copy{};
-        copy.src_width = copy.src_height = 8u;
-        copy.target_format = 6u;
-        copy.dest_addr = address;
-        copy.dest_stride = 512u;
-        auto alias = make_alias();
-        passed &= expect(cache.register_efb_copy(address, copy, alias), "register strided alias");
-        passed &= expect(cache.invalidate_range(address + 17u, 0u) == 0u &&
-            !cache.register_efb_copy(address, copy, alias),
-            "zero-byte write preserves existing alias ownership");
-        passed &= expect(cache.invalidate_range(address + 512u, 1u) == 1u,
-            "write to strided second block-row invalidates its alias");
-        passed &= expect(cache.register_efb_copy(address, copy, alias), "register alias again");
-        copy.dest_stride = 128u;
-        passed &= expect(cache.register_efb_copy(address, copy, alias),
-            "same GPU resource with changed guest footprint requests outer cache refresh");
-        passed &= expect(cache.invalidate_range(address + 512u, 1u) == 0u,
-            "updated packed footprint excludes prior stride gap");
-        copy.dest_stride = 512u;
-        passed &= expect(cache.register_efb_copy(address, copy, alias) &&
-            cache.invalidate_range(address + 512u, 1u) == 1u,
-            "same-resource alias extension publishes its new guest footprint");
-        copy.dest_stride = 128u;
-        passed &= expect(cache.register_efb_copy(address, copy, alias),
-            "restore packed alias after footprint-extension eviction");
-        image.format = TexFormat::RGBA8;
-        mode.min_filter = TexMinFilter::Near;
-        passed &= expect(cache.get(image, mode, 0u, TlutFormat{}).source_bytes == 256u,
-            "exact alias handle publishes current packed footprint");
-        bool rejected = false;
-        try { (void)cache.register_efb_copy(address, copy, {}); }
-        catch (const std::runtime_error&) { rejected = true; }
-        passed &= expect(rejected, "null alias is rejected before retiring live entry");
-        passed &= expect(cache.get(image, mode, 0u, TlutFormat{}).resource == alias.Get(),
-            "rejected alias leaves the previous resource owned and bindable");
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();
         return passed;

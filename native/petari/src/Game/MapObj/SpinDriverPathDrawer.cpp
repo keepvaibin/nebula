@@ -13,6 +13,81 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
+#include <nebula_game_api.h>
+#include <cstring>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
+namespace {
+    // The paths' material (nebula_game_api.h NebulaMaterialProgram): stage 0 the path colour (texture 0, coordinate 0
+    // through texture matrix 0), stage 1 its alpha times the mask (texture 1, coordinate 1 through texture matrix 1);
+    // added by source alpha where above zero, depth tested and not written, no fog, no culling, no channels.
+    NebulaMaterialProgram sPathProgram;
+    bool sPathRegistered = false;
+
+    void sendPathProgram(JUTTexture* pColor, JUTTexture* pMask) {
+        const NebulaHostServices* pHost = nebula_host();
+        if (!sPathRegistered) {
+            NebulaMaterialProgram& rProgram = sPathProgram;
+            memset(&rProgram, 0, sizeof(rProgram));
+            for (u32 i = 0; i < 2; i++) {
+                NebulaMaterialTevStage& rStage = rProgram.tev[i];
+                rStage.tex_coord = static_cast< u8 >(GX_TEXCOORD0 + i);
+                rStage.tex_map = static_cast< u8 >(GX_TEXMAP0 + i);
+                rStage.channel = GX_COLOR_NULL;
+                rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+                rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+                rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
+                rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+                rProgram.tex_gen[i].type = GX_TG_MTX2x4;
+                rProgram.tex_gen[i].source = GX_TG_TEX0;
+                rProgram.tex_gen[i].matrix = static_cast< u8 >(GX_TEXMTX0 + i * 3);
+                rProgram.tex_gen[i].post_matrix = GX_PTIDENTITY;
+            }
+            NebulaMaterialTevStage& rColor = rProgram.tev[0];
+            rColor.color_in[0] = rColor.color_in[1] = rColor.color_in[2] = GX_CC_ZERO;
+            rColor.color_in[3] = GX_CC_TEXC;
+            rColor.alpha_in[0] = rColor.alpha_in[1] = rColor.alpha_in[2] = GX_CA_ZERO;
+            rColor.alpha_in[3] = GX_CA_TEXA;
+            NebulaMaterialTevStage& rMask = rProgram.tev[1];
+            rMask.color_in[0] = GX_CC_CPREV;
+            rMask.color_in[1] = rMask.color_in[2] = rMask.color_in[3] = GX_CC_ZERO;
+            rMask.alpha_in[0] = GX_CA_ZERO;
+            rMask.alpha_in[1] = GX_CA_APREV;
+            rMask.alpha_in[2] = GX_CA_TEXA;
+            rMask.alpha_in[3] = GX_CA_ZERO;
+            rProgram.tev_stages = 2;
+            rProgram.tex_gens = 2;
+            rProgram.channels = 0;
+            rProgram.cull = GX_CULL_NONE;
+            rProgram.z_compare_location = 1;
+            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_FOG;
+            rProgram.fog.type = GX_FOG_NONE;
+            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
+            rProgram.alpha_compare.op = GX_AOP_OR;
+            rProgram.blend.type = GX_BM_BLEND;
+            rProgram.blend.source = GX_BL_SRCALPHA;
+            rProgram.blend.destination = GX_BL_ONE;
+            rProgram.blend.logic_op = GX_LO_CLEAR;
+            rProgram.z_mode.enable = GX_TRUE;
+            rProgram.z_mode.func = GX_LEQUAL;
+            rProgram.z_mode.update = GX_FALSE;
+            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sPathProgram), &rProgram);
+            sPathRegistered = true;
+        }
+        NebulaMaterialValues values;
+        memset(&values, 0, sizeof(values));
+        values.tex_coord_scale[0].scale_s = pColor->getWidth();
+        values.tex_coord_scale[0].scale_t = pColor->getHeight();
+        values.tex_coord_scale[1].scale_s = pMask->getWidth();
+        values.tex_coord_scale[1].scale_t = pMask->getHeight();
+        J3DNativeShape::flushState();
+        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sPathProgram), &values);
+        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    }
+}  // namespace
 
 namespace {
     inline u32 packPathColor(const TVec3f& rColor, const f32& rAlpha) {
@@ -56,26 +131,9 @@ void SpinDriverPathDrawInit::initDraw() {
 
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(0);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 33, GX_FALSE, 125);
-    J3DNativeState::setNumTevStages(2);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_REPLACE);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_CPREV, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_APREV, GX_CA_TEXA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0));
     J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
+    sendPathProgram(mOrangeTexture, mMaskTexture);
     mMaskTexture->load(GX_TEXMAP1);
 }
 

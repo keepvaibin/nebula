@@ -35,6 +35,7 @@ public:
     [[nodiscard]] bool ready() const noexcept { return !views_.empty(); }
 
     void write_view(std::uint32_t index, vk::Texture* texture, unsigned levels);
+    void write_view(std::uint32_t index, VkImageView view) noexcept { views_[index] = view; }
     [[nodiscard]] UploadChunk create_upload_chunk(std::uint64_t size);
     static void release_upload_chunk(UploadChunk& chunk) noexcept;
     // RGBA8, or one byte per texel whose view repeats it in every channel (`grey`, a movie plane).
@@ -42,7 +43,6 @@ public:
         std::uint32_t width, std::uint32_t height, unsigned levels, std::uint64_t& allocation_bytes, bool grey = false);
     [[nodiscard]] static bool poolable(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height,
                                        std::uint32_t& levels);
-    [[nodiscard]] static bool alias_compatible(vk::Texture* texture, std::uint32_t& width, std::uint32_t& height);
     void record_upload(vk::Texture* texture, bool reused, const UploadChunk& staging, std::uint64_t offset,
                        std::uint32_t width, std::uint32_t height, unsigned levels, const std::uint64_t* offsets,
                        const std::uint32_t* pitches);

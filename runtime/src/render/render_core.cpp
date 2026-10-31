@@ -7492,8 +7492,6 @@ void RenderCore::mark_texture_binding_alias_dirty(
     dirty.dependency.address = params.dest_addr;
     dirty.dependency.width = alias_width;
     dirty.dependency.height = alias_height;
-    dirty.dependency.format =
-        efb_copy_alias_texture_format(params.target_format);
     dirty.dependency.source_bytes = efb_copy_source_bytes(params);
     dirty_texture_aliases_.push_back(dirty);
     invalidate_texture_handle_cache_dependency(dirty.dependency);
@@ -8469,7 +8467,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                         const std::uint64_t palette = palette_address(draw_state_, m);
                         const TextureHandleKey handle_key =
                             texture_handle_key(img, mode, palette, palette_format);
-                        if (const auto handle_it =
+                        if (renderer_.target_picture(img.address, img.width, img.height, texture_handles[m])) {
+                            // A target pass's picture (E-07), in whatever format the draw names it.
+                        } else if (const auto handle_it =
                                 frame_texture_handle_cache_.find(handle_key);
                             handle_it != frame_texture_handle_cache_.end()) {
                             texture_handles[m] = handle_it->second;
@@ -8989,7 +8989,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         }
         for (const state::Op& op : record.state) {
             if (op.kind == state::kCopy) {
-                on_efb_copy(efb_copy_params(draw_state_, op), copy_pixel_format(draw_state_, op));
+                on_efb_copy(efb_copy_params(draw_state_, op), draw_state_.pe.pixel_format);
             } else if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
@@ -9026,7 +9026,57 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         flush_pending_draw_batch();
         record_async_peek_fields_at_token(static_cast<std::uint16_t>(record.key));
         return;
+    case shapes::Record::Kind::TargetBegin:
+        begin_target_pass(record);
+        return;
+    case shapes::Record::Kind::TargetEnd:
+        end_target_pass(record);
+        return;
+    case shapes::Record::Kind::TargetCapture: {
+        const std::uint16_t rect[4] = {record.target_x, record.target_y, record.target_width, record.target_height};
+        on_efb_copy(capture_copy_params(draw_state_, record.key, rect, record.target_channels, record.target_flags),
+                    (record.target_flags & 8u) != 0u ? 3u : draw_state_.pe.pixel_format);
+        return;
     }
+    case shapes::Record::Kind::TargetClear:
+        if (renderer_.target_pass_active()) {
+            flush_pending_draw_batch();
+            renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+                                (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
+                                target_pass_size_[0], target_pass_size_[1], draw_state_.pe.pixel_format);
+        }
+        return;
+    }
+}
+
+// A pass into a texture target (E-07): the draws until its end go to the target set, whose top left the pass clears
+// as the game asked.
+void RenderCore::begin_target_pass(const shapes::Record& record) {
+    flush_pending_draw_batch();
+    if (!renderer_.begin_target_pass(record.key, record.target_width, record.target_height)) {
+        static bool warned = false;
+        if (!warned) {
+            warned = true;
+            std::fprintf(stderr, "[target] a pass into %llx could not begin (one is open, or no target)\n",
+                         static_cast<unsigned long long>(record.key));
+        }
+        return;
+    }
+    target_pass_size_ = {record.target_width, record.target_height};
+    frame_bindings_dirty_ = true;
+    renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
+                        record.target_width, record.target_height, draw_state_.pe.pixel_format);
+}
+
+// The pass's end: its picture, at full precision, becomes the texture at its key, then the frame's targets come
+// back.
+void RenderCore::end_target_pass(const shapes::Record& record) {
+    if (!renderer_.target_pass_active()) {
+        return;
+    }
+    flush_pending_draw_batch();
+    renderer_.end_target_pass(record.target_channels, texture_cache_);
+    frame_bindings_dirty_ = true;
 }
 
 void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
@@ -9451,6 +9501,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
         const TextureCache::MemoryRange copied{
             params.dest_addr, params.dest_stride * ((static_cast<std::uint32_t>(params.src_height) + 3u) / 4u)};
         texture_cache_.drop_registered_images(std::span<const TextureCache::MemoryRange>(&copied, 1u));
+        const bool decoded_evicted = texture_cache_.invalidate_range(copied.address, copied.size) != 0u;
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = pixel_format == 3u;
@@ -9461,7 +9512,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
         const bool alias_updated = from_display
             ? renderer_.copy_output_efb_to_texture(params, texture_cache_)
             : renderer_.copy_efb_to_texture(params, texture_cache_, is_depth_copy);
-        if (alias_updated) {
+        if (alias_updated || decoded_evicted) {
             ++frame_efb_alias_updates_;
             // One address can alternate between format-keyed GPU resources, and the game need not
             // rewrite the BP texture registers after a copy, so the next draw refreshes every frame table

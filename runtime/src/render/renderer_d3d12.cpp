@@ -8073,9 +8073,9 @@ void RendererD3D12::write_efb_set_views(EfbTargetSet& set, const DescriptorRing:
 bool RendererD3D12::create_efb_set(
     EfbTargetSet& set, ComPtr<ID3D12DescriptorHeap>& rtv_heap,
     ComPtr<ID3D12DescriptorHeap>& dsv_heap, unsigned scale, bool persistent_views,
-    bool unordered_access, unsigned samples, bool hdr) {
-    const UINT w = kEfbWidth * scale;
-    const UINT h = kEfbHeight * scale;
+    bool unordered_access, unsigned samples, bool hdr, unsigned width, unsigned height) {
+    const UINT w = width * scale;
+    const UINT h = height * scale;
     if (set.color) {
         wait_for_gpu();
     }
@@ -8180,6 +8180,164 @@ void RendererD3D12::swap_efb_sets() {
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
     bind_efb(nullptr);
+}
+
+// The EFB and the target passes' set trade places (begin_target_pass): targets, scale and copy sources, the output
+// EFB's state kept.
+void RendererD3D12::swap_target_set() {
+    settle_owed_efb();
+    std::swap(efb_color_, target_efb_.color);
+    std::swap(efb_depth_, target_efb_.depth);
+    std::swap(efb_msaa_, target_efb_.msaa);
+    std::swap(efb_scale_, target_efb_.scale);
+    std::swap(efb_hdr_, target_efb_.hdr);
+    std::swap(efb_rtv_, target_efb_.rtv);
+    std::swap(efb_dsv_, target_efb_.dsv);
+    std::swap(conv_efb_source_table_, target_efb_.conv_table);
+    std::swap(conv_efb_color_srv_, target_efb_.conv_color_srv);
+    std::swap(conv_efb_depth_srv_, target_efb_.conv_depth_srv);
+    target_pass_active_ = !target_pass_active_;
+    invalidate_gx_bindings();
+    bound_scissor_input_scale_ = 0u;
+    bind_efb(nullptr);
+}
+
+bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height) {
+    if (target_pass_active_ || width == 0u || height == 0u) {
+        return false;
+    }
+    TargetSlot& slot = target_slots_[key];
+    const bool kept = slot.set.color && slot.set.scale == efb_scale_ && slot.width == width && slot.height == height;
+    // A new set starts as a render target; the pass's first clear (RenderCore) fills it. Its copy views are written
+    // per use (no persistent descriptors per key).
+    if (!kept) {
+        if (!create_efb_set(slot.set, slot.rtv_heap, slot.dsv_heap, efb_scale_, false, false, 1u, false, width,
+                            height)) {
+            target_slots_.erase(key);
+            return false;
+        }
+        slot.width = width;
+        slot.height = height;
+    } else {
+        // Sampled since its last pass: drawn into again.
+        D3D12_RESOURCE_BARRIER barrier{};
+        barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.pResource = slot.set.color.Get();
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+        barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+        barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        command_list_->ResourceBarrier(1, &barrier);
+    }
+    slot.used = frame_index_;
+    target_key_ = key;
+    std::swap(target_efb_, slot.set);
+    swap_target_set();
+    // The pass is the game frame's alone: sub-frames sample its picture, never draw it again.
+    target_recording_ = replay_recording_;
+    replay_recording_ = false;
+    return true;
+}
+
+void RendererD3D12::end_target_pass(std::uint8_t channels, TextureCache& textures) {
+    if (!target_pass_active_) {
+        return;
+    }
+    swap_target_set();
+    replay_recording_ = target_recording_;
+    // The picture is sampled until the key's next pass.
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource = target_efb_.color.Get();
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &barrier);
+    TargetSlot& slot = target_slots_[target_key_];
+    std::swap(slot.set, target_efb_);
+    (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, 0u, textures);
+    // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        it = it->second.used + kTargetIdleFrames < frame_index_ ? target_slots_.erase(it) : std::next(it);
+    }
+}
+
+bool RendererD3D12::target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                   TextureHandle& out) const {
+    if (pictures_.empty()) {
+        return false;
+    }
+    const auto it = pictures_.find(key);
+    if (it == pictures_.end() || it->second.width != width || it->second.height != height) {
+        return false;
+    }
+    out = TextureHandle{};
+    out.resource = gpu::raw(it->second.viewed);
+    out.srv_index = it->second.view;
+    out.width = static_cast<std::uint16_t>(it->second.viewed->GetDesc().Width);
+    out.height = static_cast<std::uint16_t>(it->second.viewed->GetDesc().Height);
+    out.mip_levels = 1u;
+    out.from_efb_copy = true;
+    out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(width) * height * 4u;
+    return true;
+}
+
+bool RendererD3D12::publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                    gpu::TextureRef texture, std::uint8_t channels, std::uint32_t bytes,
+                                    TextureCache& textures) {
+    bool changed = false;
+    if (bytes != 0u) {
+        // A capture over memory another capture's picture names replaces it (the game reuses capture buffers).
+        for (auto it = pictures_.begin(); it != pictures_.end();) {
+            Picture& other = it->second;
+            if (it->first != key && other.bytes != 0u && it->first < key + bytes && key < it->first + other.bytes) {
+                textures.retire_view(other.view, std::move(other.viewed));
+                                it = pictures_.erase(it);
+                changed = true;
+            } else {
+                ++it;
+            }
+        }
+    }
+    Picture& picture = pictures_[key];
+    if (picture.view != ~0u && picture.viewed == texture && picture.channels == channels && picture.width == width &&
+        picture.height == height) {
+        changed = changed || picture.bytes != bytes;
+        picture.bytes = bytes;
+        return changed;
+    }
+    if (picture.view != ~0u) {
+        textures.retire_view(picture.view, std::move(picture.viewed));
+    }
+    picture.view = textures.allocate_view();
+    picture.viewed = std::move(texture);
+    picture.width = width;
+    picture.height = height;
+    picture.channels = channels;
+    picture.bytes = bytes;
+    const std::array<std::uint8_t, 4> swizzle = target_channel_swizzle(channels);
+    // D3D12's component mapping: 0-3 the texture's R, G, B, A, 5 one.
+    D3D12_SHADER_RESOURCE_VIEW_DESC desc{};
+    desc.Format = picture.viewed->GetDesc().Format;
+    desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(
+        swizzle[0] == 4u ? 5u : swizzle[0], swizzle[1] == 4u ? 5u : swizzle[1], swizzle[2] == 4u ? 5u : swizzle[2],
+        swizzle[3] == 4u ? 5u : swizzle[3]);
+    desc.Texture2D.MipLevels = 1u;
+    D3D12_CPU_DESCRIPTOR_HANDLE cpu = textures.backend().srv_cpu_base();
+    cpu.ptr += static_cast<SIZE_T>(picture.view) * textures.backend().srv_descriptor_stride();
+    device_->CreateShaderResourceView(picture.viewed.Get(), &desc, cpu);
+    return true;
+}
+
+bool RendererD3D12::publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+                          TextureCache& textures) {
+    const auto size = [&](std::uint16_t extent) {
+        return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
+    };
+    // A one-channel conversion is read in every channel (NEBULA_TARGET_RED).
+    const std::uint8_t channels = efb_copy_single_channel(params.target_format, is_depth_copy) ? 3u : 0u;
+    return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture),
+                           channels, efb_copy_source_bytes(params), textures);
 }
 
 // DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output EFB right after the
@@ -9380,7 +9538,7 @@ bool RendererD3D12::copy_efb_to_texture(
         if (ring_mode_ == RingMode::Interp) note_copy_write(dest.texture.Get());
         ++efb_identity_copies_;
         efb_identity_payload_bytes_ += static_cast<std::uint64_t>(w) * h * 4u;
-        return textures.register_efb_copy(params.dest_addr, params, dest.texture);
+        return publish_capture(params, dest.texture, is_depth_copy, textures);
     }
 
     // This descriptor shares its slot with XFB and other texture copies;
@@ -9437,11 +9595,8 @@ bool RendererD3D12::copy_efb_to_texture(
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
 
-    // Refresh the guest-address alias every copy: with format-keyed dest
-    // textures one address can alternate between resources, and the alias
-    // must always point at the most recent copy (register_efb_copy is a
-    // cheap no-op when the resource is unchanged).
-    return textures.register_efb_copy(params.dest_addr, params, dest.texture);
+    // The key's picture is the latest copy: format-keyed destinations alternate at one address.
+    return publish_capture(params, dest.texture, is_depth_copy, textures);
 }
 
 bool RendererD3D12::ensure_peek_resources() {

@@ -34,12 +34,6 @@ u32 __MEM2End = 0x80003128;
 #define OSMillisecondsToTicks(msec) ((msec) * (OS_TIMER_CLOCK / 1000))
 #define OSMicrosecondsToTicks(usec) (((usec) * (OS_TIMER_CLOCK / 125000)) / 8)
 
-void* OSPhysicalToUncached(u32);
-
-#define OS_UNCACHED_REGION_PREFIX 0xC000
-
-#define OS_BASE_UNCACHED (OS_UNCACHED_REGION_PREFIX << 16)
-
 #ifdef TARGET_PC
 #ifdef __cplusplus
 extern "C" {
@@ -54,45 +48,9 @@ void __NebulaPoll(void);
 #ifdef __cplusplus
 }
 #endif
-#else
-#define OSPhysicalToUncached(paddr) ((void*)((u32)(paddr) + OS_BASE_UNCACHED))
 #endif
-
-#ifndef TARGET_PC
-// Console address tests; host addresses carry no MEM1/MEM2 bits (native/tools/console_address_audit.py).
-#endif
-
-#ifdef TARGET_PC
-#define OSRoundDown32B(x) (((uintptr_t)(x)) & ~(uintptr_t)(32 - 1))
-#else
-#define OSRoundDown32B(x) (((u32)(x)) & ~(32 - 1))
-#endif
-
-u32 OSGetSoundMode(void);
-void OSSetSoundMode(u32 mode);
-
-u32 OSGetConsoleType(void);
-
-void* OSGetArenaHi(void);
-void* OSGetArenaLo(void);
-
-void OSSetArenaHi(void*);
-void OSSetArenaLo(void*);
-
-void OSSetMEM2ArenaHi(void*);
 
 void* OSGetMEM1ArenaLo(void);
-void* OSGetMEM1ArenaHi(void);
-void* OSGetMEM2ArenaLo(void);
-void* OSGetMEM2ArenaHi(void);
-
-void* OSAllocFromMEM1ArenaLo(u32, u32);
-
-u32 OSGetPhysicalMem2Size(void);
-
-void OSProtectRange(u32, void*, u32, u32);
-
-void* OSAllocFromHeap(int, u32);
 
 typedef struct OSIOSRev {
     u8 reserved;
@@ -104,22 +62,10 @@ typedef struct OSIOSRev {
     u16 year;
 } OSIOSRev;
 
-const u8 OSGetAppType(void);
-
-char* OSUTF8to32(const char*, u32*);
-u16* OSUTF16to32(const u16*, u32*);
-u8 OSUTF32toANSI(u32);
-u16 OSUTF32toSJIS(u32);
-
 extern void __RAS_OSDisableInterrupts_begin(void);
 extern void __RAS_OSDisableInterrupts_end(void);
 
 extern s64 __OSStartTime;
-
-const char* OSGetAppGamename(void);
-
-void* OSAllocFromArenaLo(u32 size, u32 align);
-void* OSAllocFromArenaHi(u32 size, u32 align);
 
 #ifndef ASSERT
 #define ASSERT(exp) ((void)0)
@@ -190,33 +136,10 @@ inline void OSf32tou8(f32* f, u8* out) {
 #endif
 
 #include "revolution/gx.h"
-#include "revolution/os/OSAlarm.h"
 #include "revolution/os/OSContext.h"
-#include "revolution/os/OSException.h"
-#include "revolution/os/OSExecParams.h"
 #include "revolution/os/OSFastCast.h"
-#include "revolution/os/OSMessage.h"
-#include "revolution/os/OSPlayRecord.h"
-#include "revolution/os/OSStateFlags.h"
 #include "revolution/os/OSThread.h"
 #include "revolution/os/OSTime.h"
-
-/* PRIVATE OS FUNCTIONS */
-void __OSInitSystemCall(void);
-void __OSUnhandledException(__OSException, OSContext*, u32, u32);
-void __OSReschedule(void);
-void __OSInitAlarm(void);
-void __OSModuleInit(void);
-void __OSInterruptInit(void);
-void __OSContextInit(void);
-void __OSInitAudioSystem(void);
-void __OSInitMemoryProtection(void);
-void __OSGetIOSRev(OSIOSRev*);
-int __OSInitSTM(void);
-void __OSInitNet(void);
-void __OSPromoteThread(OSThread*, OSPriority);
-
-void OSFatal(GXColor, GXColor, const char*);
 
 #ifdef __cplusplus
 }

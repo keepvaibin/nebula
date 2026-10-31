@@ -2,9 +2,7 @@
 
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include <revolution/thp.h>
-
-class THPSimplePlayerWrapper;
+#include "Game/Screen/THPSimplePlayerWrapper.hpp"
 class JKRExpHeap;
 
 struct Movie {

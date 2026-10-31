@@ -1002,34 +1002,6 @@ std::uint32_t coord_s_word(const NativeDrawState& s, unsigned c) {
            static_cast<std::uint32_t>(k.point_offset) << 19u;
 }
 
-namespace {
-
-// GXCopyTex's block counts: a format's tile is 2^row_shift texels wide.
-void copy_tiles(std::uint8_t format, unsigned& row_shift, unsigned& column_shift) {
-    switch (format) {
-    case 0x00: case 0x08: case 0x0E: case 0x20: case 0x30:  // I4, C4, CMPR, R4, Z4
-        row_shift = 3;
-        column_shift = 3;
-        break;
-    case 0x01: case 0x02: case 0x09: case 0x11: case 0x22: case 0x27: case 0x28: case 0x29: case 0x2A: case 0x39:
-    case 0x3A:  // I8, IA4, C8, Z8, RA4, A8, R8, G8, B8, Z8M, Z8L
-        row_shift = 3;
-        column_shift = 2;
-        break;
-    case 0x03: case 0x04: case 0x05: case 0x06: case 0x0A: case 0x13: case 0x16: case 0x23: case 0x2B: case 0x2C:
-    case 0x3C:  // IA8, RGB565, RGB5A3, RGBA8, C14X2, Z16, Z24X8, RA8, RG8, GB8, Z16L
-        row_shift = 2;
-        column_shift = 2;
-        break;
-    default:
-        row_shift = 0;
-        column_shift = 0;
-        break;
-    }
-}
-
-}  // namespace
-
 EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& op) {
     const std::uint8_t* a = op.a;
     const bool display = a[0] != 0u;
@@ -1051,18 +1023,6 @@ EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& op)
         p.dest_stride = (((op.size[0] * 2u) >> 5u) & 0x3FFu) << 5u;
         p.gamma = static_cast<std::uint8_t>(a[8] & 3u);
         p.scale_y = (a[7] & 1u) != 0u;
-    } else {
-        const std::uint8_t format = a[2];
-        unsigned row_shift = 0, column_shift = 0;
-        copy_tiles(format, row_shift, column_shift);
-        const std::uint32_t w = op.size[0] != 0u ? op.size[0] : 1u;
-        const std::uint32_t row_tiles = (w + (1u << row_shift) - 1u) >> row_shift;
-        const std::uint32_t blocks = format == 0x06u || format == 0x16u ? 2u : 1u;
-        p.dest_stride = ((row_tiles * blocks) & 0x3FFu) << 5u;
-        const std::uint32_t pe_format = format == 0x13u ? 0xBu : format & 0xFu;
-        p.target_format = static_cast<std::uint8_t>((((pe_format >> 3u) & 1u) << 3u) | (pe_format & 7u));
-        p.half_scale = (a[3] & 1u) != 0u;
-        p.intensity = format == 0x00u || format == 0x01u || format == 0x02u || format == 0x03u || format == 0x26u;
     }
     for (unsigned i = 0; i < 4u; ++i) {
         p.clear_color[i] = state.copy_setup.clear_color[i];
@@ -1074,8 +1034,33 @@ EfbCopyParams efb_copy_params(const NativeDrawState& state, const state::Op& op)
     return p;
 }
 
-std::uint8_t copy_pixel_format(const NativeDrawState& state, const state::Op& op) {
-    return op.a[0] == 0u && (op.a[2] & 0x10u) != 0u ? 3u : state.pe.pixel_format;
+EfbCopyParams capture_copy_params(const NativeDrawState& state, std::uint64_t key, const std::uint16_t rect[4],
+                                  std::uint8_t channels, std::uint8_t flags) {
+    EfbCopyParams p{};
+    p.src_x = rect[0];
+    p.src_y = rect[1];
+    p.src_width = rect[2];
+    p.src_height = rect[3];
+    p.dest_addr = key;
+    p.clamp_top = true;
+    p.clamp_bottom = true;
+    p.clear = (flags & 1u) != 0u;
+    p.half_scale = (flags & 2u) != 0u;
+    p.intensity = (flags & 4u) != 0u;
+    // The conversion's channel layouts (the texture format the picture is read as).
+    static constexpr std::uint8_t kLayout[7] = {6u, 3u, 7u, 8u, 9u, 10u, 4u};
+    p.target_format = channels == 3u && (flags & 12u) != 0u ? 1u : kLayout[channels < 7u ? channels : 0u];
+    const std::uint32_t w = p.half_scale ? std::max(1u, p.src_width / 2u) : p.src_width;
+    const bool wide = p.target_format == 3u || p.target_format == 4u || p.target_format == 6u;
+    p.dest_stride = ((((w + (wide ? 3u : 7u)) >> (wide ? 2u : 3u)) * (p.target_format == 6u ? 2u : 1u)) & 0x3FFu) << 5u;
+    for (unsigned i = 0; i < 4u; ++i) {
+        p.clear_color[i] = state.copy_setup.clear_color[i];
+    }
+    p.clear_z = state.copy_setup.clear_z;
+    for (unsigned i = 0; i < 7u; ++i) {
+        p.vfilter[i] = state.copy_setup.vfilter[i];
+    }
+    return p;
 }
 
 std::uint64_t palette_address(const NativeDrawState& state, unsigned map) {

@@ -195,17 +195,6 @@ extern "C" void JUTWarningConsole(const char* pMessage) {
     JUTWarningConsole_f("%s", pMessage);
 }
 
-void JUTTexture::captureDolTexture(void* pBuffer, int width, int height, int x, int y, bool mipmap, GXTexFmt format) {
-    if (mipmap) {
-        J3DNativeState::setTexCopySrc(x, y, width * 2, height * 2);
-    } else {
-        J3DNativeState::setTexCopySrc(x, y, width, height);
-    }
-
-    J3DNativeState::setTexCopyDst(width, height, format, mipmap);
-    J3DNativeState::copyTex(pBuffer, GX_FALSE);
-}
-
 JSUOutputStream::~JSUOutputStream() {
 }
 

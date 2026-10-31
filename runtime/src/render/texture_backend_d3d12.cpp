@@ -145,20 +145,6 @@ bool TextureBackend::poolable(ID3D12Resource* texture, std::uint32_t& width, std
     return true;
 }
 
-bool TextureBackend::alias_compatible(ID3D12Resource* texture, std::uint32_t& width, std::uint32_t& height) {
-    const D3D12_RESOURCE_DESC resource_desc = texture->GetDesc();
-    if (resource_desc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D ||
-        (resource_desc.Format != DXGI_FORMAT_R8G8B8A8_UNORM && resource_desc.Format != DXGI_FORMAT_R8_UNORM) ||
-        resource_desc.DepthOrArraySize != 1u || resource_desc.SampleDesc.Count != 1u ||
-        resource_desc.Width == 0u || resource_desc.Width > UINT16_MAX ||
-        resource_desc.Height == 0u || resource_desc.Height > UINT16_MAX) {
-        return false;
-    }
-    width = static_cast<std::uint32_t>(resource_desc.Width);
-    height = static_cast<std::uint32_t>(resource_desc.Height);
-    return true;
-}
-
 void TextureBackend::record_upload(ID3D12Resource* texture, bool reused, const UploadChunk& staging,
                                    std::uint64_t offset, std::uint32_t width, std::uint32_t height, unsigned levels,
                                    const std::uint64_t* offsets, const std::uint32_t* pitches) {

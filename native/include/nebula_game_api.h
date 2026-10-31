@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 63u
+#define NEBULA_GAME_API_VERSION 65u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -863,6 +863,25 @@ typedef struct NebulaMii {
     uint8_t create_id[8];
 } NebulaMii;
 
+/* The channels a target pass's picture carries for the textures that sample it (target_end). */
+typedef enum NebulaTargetChannels {
+    NEBULA_TARGET_RGBA = 0,            /* colour and alpha */
+    NEBULA_TARGET_INTENSITY_ALPHA = 1, /* intensity (the red channel) and alpha */
+    NEBULA_TARGET_ALPHA = 2,           /* alpha alone, read in every channel */
+    NEBULA_TARGET_RED = 3,             /* one colour channel, read in every channel */
+    NEBULA_TARGET_GREEN = 4,
+    NEBULA_TARGET_BLUE = 5,
+    NEBULA_TARGET_RGB = 6              /* colour, alpha read as one */
+} NebulaTargetChannels;
+
+/* How target_capture takes its picture. */
+typedef enum NebulaCaptureFlags {
+    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards (the copy-clear colour and depth) */
+    NEBULA_CAPTURE_HALF = 2u,  /* half size: each picture texel averages 2x2 of the frame's */
+    NEBULA_CAPTURE_LUMA = 4u,  /* the red channel holds the colour's luminance */
+    NEBULA_CAPTURE_DEPTH = 8u  /* the red channel holds the depth's high byte */
+} NebulaCaptureFlags;
+
 typedef struct NebulaHostServices {
     uint32_t version;
     uint32_t size;
@@ -1056,6 +1075,21 @@ typedef struct NebulaHostServices {
     void (*state)(void* user, const NebulaStateOp* ops, uint32_t count);
     /* Vertices drawn as the game sends them (NebulaImmediate). */
     void (*immediate)(void* user, const NebulaImmediate* draw);
+    /* A pass into a texture target the renderer owns (E-07): the records until target_end draw into it, not the
+       frame; its top left `width` x `height` (in the units the game's viewport uses) cleared to `clear_rgba`
+       (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits). */
+    void (*target_begin)(void* user, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba,
+                         uint32_t clear_z);
+    /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
+       naming `key` reads it, whatever format it names), carrying `channels` (NebulaTargetChannels). */
+    void (*target_end)(void* user, uint64_t key, uint32_t channels);
+    /* Clears channels of the open target pass (`channels`: 1 colour, 2 alpha, 4 depth) to `clear_rgba` / `clear_z`. */
+    void (*target_clear)(void* user, uint32_t clear_rgba, uint32_t clear_z, uint32_t channels);
+    /* The frame drawn so far, its rectangle at `left`, `top` (`width` x `height`, the viewport's units), becomes
+       texture `key` as target_end's pictures do, carrying `channels` (NebulaTargetChannels); `flags`:
+       NebulaCaptureFlags. */
+    void (*target_capture)(void* user, uint64_t key, uint16_t left, uint16_t top, uint16_t width, uint16_t height,
+                           uint32_t channels, uint32_t flags);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);

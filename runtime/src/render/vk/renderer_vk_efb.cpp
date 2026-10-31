@@ -47,11 +47,12 @@ void write_ppm_async(std::string path, std::vector<std::uint8_t> rgb, unsigned w
 
 // An EFB set at `scale`: targets in their attachment layouts, the framebuffer, and the conversion inputs (allocated
 // once per set; rewriting them needs a GPU that no longer reads the old views, which callers ensure).
-bool RendererVk::create_efb_set(EfbSet& set, unsigned scale, unsigned samples) {
+bool RendererVk::create_efb_set(EfbSet& set, unsigned scale, unsigned samples, unsigned set_width,
+                                unsigned set_height) {
     vk::Context& context = vk::Context::get();
     const VkDevice device = context.device();
-    const std::uint32_t width = kEfbWidth * scale;
-    const std::uint32_t height = kEfbHeight * scale;
+    const std::uint32_t width = set_width * scale;
+    const std::uint32_t height = set_height * scale;
     gpu::TextureRef color = context.create_texture(
         width, height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -408,7 +409,8 @@ void RendererVk::begin_efb_pass(const EfbClearValues* clear) {
     begin.renderPass = gx_layout_.pass_for(efb_samples_log2(), clear != nullptr);
     begin.framebuffer = efb_.framebuffer;
     efb_.depth_dirty = efb_.samples > 1u;
-    begin.renderArea = {{0, 0}, {kEfbWidth * efb_scale_, kEfbHeight * efb_scale_}};
+    // The set's own size: the EFB, or a target pass's smaller target (E-07).
+    begin.renderArea = {{0, 0}, {efb_.color->width, efb_.color->height}};
     VkClearValue values[2]{};
     if (clear != nullptr) {
         std::memcpy(values[0].color.float32, clear->color.data(), sizeof(float) * 4u);
@@ -451,8 +453,8 @@ void RendererVk::bind_efb(const float xf_vp[6]) {
         recording_log_.viewports.push_back(viewport);
     }
     float x = 0.0f, y = 0.0f;
-    float w = static_cast<float>(kEfbWidth * efb_scale_);
-    float h = static_cast<float>(kEfbHeight * efb_scale_);
+    float w = static_cast<float>(efb_.color->width);
+    float h = static_cast<float>(efb_.color->height);
     if (xf_vp != nullptr) {
         // GX XF viewport [xs, xo, ys, yo, zs, zo]: centre (xo - 342, yo - 342), half extents |xs|, |ys|.
         const float scale = static_cast<float>(efb_scale_);
@@ -465,7 +467,7 @@ void RendererVk::bind_efb(const float xf_vp[6]) {
     }
     bound_.viewport = VkViewport{x, y + h, w, -h, 0.0f, 1.0f};
     bound_.viewport_valid = true;
-    bound_.scissor = VkRect2D{{0, 0}, {kEfbWidth * efb_scale_, kEfbHeight * efb_scale_}};
+    bound_.scissor = VkRect2D{{0, 0}, {efb_.color->width, efb_.color->height}};
     bound_.scissor_valid = true;
     bound_.scissor_input_valid = false;
     if (efb_pass_open_) {
@@ -490,8 +492,8 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         start_clear_valid_ = true;
     }
     const LogPause pause{*this};
-    const std::int32_t efb_w = static_cast<std::int32_t>(kEfbWidth * efb_scale_);
-    const std::int32_t efb_h = static_cast<std::int32_t>(kEfbHeight * efb_scale_);
+    const std::int32_t efb_w = static_cast<std::int32_t>(efb_.color->width);
+    const std::int32_t efb_h = static_cast<std::int32_t>(efb_.color->height);
     VkRect2D rect{{0, 0}, {static_cast<std::uint32_t>(efb_w), static_cast<std::uint32_t>(efb_h)}};
     if (rect_w != 0u && rect_h != 0u) {
         // Scoped to the copy's source rectangle (scaled), as the hardware's copy-clear.
@@ -624,6 +626,187 @@ void RendererVk::swap_efb_sets() {
     std::swap(efb_scale_, alt_efb_scale_);
     output_efb_active_ = !output_efb_active_;
     reset_gx_bindings();
+}
+
+// The EFB and the target passes' set trade places (begin_target_pass): targets and scale, the output EFB's state kept.
+void RendererVk::swap_target_set() {
+    end_efb_pass();
+    std::swap(efb_, target_efb_);
+    std::swap(efb_scale_, target_efb_scale_);
+    target_pass_active_ = !target_pass_active_;
+    reset_gx_bindings();
+}
+
+bool RendererVk::begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height) {
+    if (target_pass_active_ || width == 0u || height == 0u) {
+        return false;
+    }
+    TargetSlot& slot = target_slots_[key];
+    if (slot.set.color_source == VK_NULL_HANDLE && !target_free_sources_.empty()) {
+        slot.set.color_source = target_free_sources_.back().first;
+        slot.set.depth_source = target_free_sources_.back().second;
+        target_free_sources_.pop_back();
+    }
+    const bool kept = slot.set.color && slot.scale == efb_scale_ && slot.width == width && slot.height == height;
+    if (!kept) {
+        if (slot.set.color || slot.set.depth) {
+            destroy_efb_set(slot.set);
+        }
+        // A new set enters its attachment layouts (create_efb_set); the pass's first clear (RenderCore) fills it.
+        if (!create_efb_set(slot.set, efb_scale_, 1u, width, height)) {
+            if (slot.set.color_source != VK_NULL_HANDLE) {
+                target_free_sources_.push_back({slot.set.color_source, slot.set.depth_source});
+            }
+            target_slots_.erase(key);
+            return false;
+        }
+        slot.set.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        slot.scale = efb_scale_;
+        slot.width = width;
+        slot.height = height;
+    }
+    slot.used = frame_index_;
+    target_key_ = key;
+    std::swap(target_efb_, slot.set);
+    target_efb_scale_ = slot.scale;
+    // The pass is the game frame's alone: sub-frames sample its picture, never draw it again.
+    target_log_paused_ = log_paused_;
+    log_paused_ = true;
+    swap_target_set();
+    if (kept) {
+        // Sampled since its last pass: drawn into again, after those reads.
+        image_barrier(commands_, efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+                      VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0,
+                      VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
+        efb_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+    bind_efb(nullptr);
+    return true;
+}
+
+void RendererVk::end_target_pass(std::uint8_t channels, TextureCache& textures) {
+    if (!target_pass_active_) {
+        return;
+    }
+    swap_target_set();
+    log_paused_ = target_log_paused_;
+    // The picture is sampled until the key's next pass.
+    vk::Texture& picture = *target_efb_.color;
+    image_barrier(commands_, picture.image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                  VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                  VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                  VK_ACCESS_SHADER_READ_BIT);
+    picture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    TargetSlot& slot = target_slots_[target_key_];
+    std::swap(slot.set, target_efb_);
+    slot.scale = target_efb_scale_;
+    target_efb_scale_ = 0u;
+    (void)publish_picture(target_key_, slot.width, slot.height, slot.set.color, channels, 0u, textures);
+    // Keys unused for kTargetIdleFrames frames give back their render resources (their pictures stay).
+    for (auto it = target_slots_.begin(); it != target_slots_.end();) {
+        TargetSlot& idle = it->second;
+        if (idle.used + kTargetIdleFrames >= frame_index_) {
+            ++it;
+            continue;
+        }
+        destroy_efb_set(idle.set);
+        target_free_sources_.push_back({idle.set.color_source, idle.set.depth_source});
+        it = target_slots_.erase(it);
+    }
+    bind_efb(nullptr);
+}
+
+bool RendererVk::target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
+                                TextureHandle& out) const {
+    if (pictures_.empty()) {
+        return false;
+    }
+    const auto it = pictures_.find(key);
+    if (it == pictures_.end() || it->second.width != width || it->second.height != height) {
+        return false;
+    }
+    out = TextureHandle{};
+    out.resource = gpu::raw(it->second.viewed);
+    out.srv_index = it->second.view;
+    out.width = static_cast<std::uint16_t>(it->second.viewed->width);
+    out.height = static_cast<std::uint16_t>(it->second.viewed->height);
+    out.mip_levels = 1u;
+    out.from_efb_copy = true;
+    out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(width) * height * 4u;
+    return true;
+}
+
+bool RendererVk::publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
+                                 std::uint8_t channels, std::uint32_t bytes, TextureCache& textures) {
+    const VkDevice device = vk::Context::get().device();
+    bool changed = false;
+    if (bytes != 0u) {
+        // A capture over memory another capture's picture names replaces it (the game reuses capture buffers).
+        for (auto it = pictures_.begin(); it != pictures_.end();) {
+            Picture& other = it->second;
+            if (it->first != key && other.bytes != 0u && it->first < key + bytes && key < it->first + other.bytes) {
+                textures.retire_view(other.view, std::move(other.viewed));
+                if (other.sampled != VK_NULL_HANDLE) {
+                    const VkImageView old = other.sampled;
+                    vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+                }
+                it = pictures_.erase(it);
+                changed = true;
+            } else {
+                ++it;
+            }
+        }
+    }
+    Picture& picture = pictures_[key];
+    if (picture.view != ~0u && picture.viewed == texture && picture.channels == channels && picture.width == width &&
+        picture.height == height) {
+        changed = changed || picture.bytes != bytes;
+        picture.bytes = bytes;
+        return changed;
+    }
+    if (picture.view != ~0u) {
+        textures.retire_view(picture.view, std::move(picture.viewed));
+    }
+    picture.view = textures.allocate_view();
+    picture.viewed = std::move(texture);
+    picture.width = width;
+    picture.height = height;
+    picture.channels = channels;
+    picture.bytes = bytes;
+    const std::array<std::uint8_t, 4> swizzle = target_channel_swizzle(channels);
+    if (picture.sampled != VK_NULL_HANDLE) {
+        const VkImageView old = picture.sampled;
+        vk::Context::get().defer([device, old] { vkDestroyImageView(device, old, nullptr); });
+        picture.sampled = VK_NULL_HANDLE;
+    }
+    if (swizzle != std::array<std::uint8_t, 4>{0, 1, 2, 3}) {
+        static constexpr VkComponentSwizzle kChannel[5] = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+                                                         VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A,
+                                                         VK_COMPONENT_SWIZZLE_ONE};
+        VkImageViewCreateInfo info{VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+        info.image = picture.viewed->image;
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = picture.viewed->format;
+        info.components = {kChannel[swizzle[0]], kChannel[swizzle[1]], kChannel[swizzle[2]], kChannel[swizzle[3]]};
+        info.subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0u, 1u, 0u, 1u};
+        vk::check(vkCreateImageView(device, &info, nullptr, &picture.sampled), "vkCreateImageView (picture channels)");
+    }
+    textures.backend().write_view(picture.view, picture.sampled != VK_NULL_HANDLE ? picture.sampled
+                                                                                 : picture.viewed->view);
+    return true;
+}
+
+bool RendererVk::publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+                          TextureCache& textures) {
+    const auto size = [&](std::uint16_t extent) {
+        return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
+    };
+    // A one-channel destination's own view repeats its channel (Context::grey_view), and sub-frames redirect draws by
+    // that view (redirect_), so the picture is read through it, unswizzled.
+    (void)is_depth_copy;
+    return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture), 0u,
+                           efb_copy_source_bytes(params), textures);
 }
 
 bool RendererVk::begin_output_efb() {
@@ -1664,14 +1847,14 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         reset_gx_bindings();
         bind_efb(nullptr);
-        return textures.register_efb_copy(params.dest_addr, params, current.texture);
+        return publish_capture(params, current.texture, is_depth_copy, textures);
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
     const bool keep_alpha = params.target_format == 2u || params.target_format == 3u;
     record_conversion_blit(texture, w, h, params, is_depth_copy, params.intensity, keep_alpha, params.target_format,
                            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                            sampling.filter_row_offset);
-    return textures.register_efb_copy(params.dest_addr, params, current.texture);
+    return publish_capture(params, current.texture, is_depth_copy, textures);
 }
 
 void RendererVk::create_first_use_resources() {

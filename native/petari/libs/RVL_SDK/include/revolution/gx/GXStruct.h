@@ -46,14 +46,6 @@ typedef struct _GXVtxDescList {
     GXAttrType type;
 } GXVtxDescList;
 
-typedef struct _GXTexRegion {
-    u32 dummy[4];
-} GXTexRegion;
-
-typedef struct _GXTlutRegion {
-    u32 dummy[4];
-} GXTlutRegion;
-
 typedef struct _GXRenderModeObj {
     /* 0x0 */ VITVMode viTVmode;
     /* 0x4 */ u16 fbWidth;

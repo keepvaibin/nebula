@@ -10,6 +10,58 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
+#include <nebula_game_api.h>
+#include <cstring>
+
+extern "C" const NebulaHostServices* nebula_host(void);
+
+namespace {
+    // The orbits' material (nebula_game_api.h NebulaMaterialProgram): the material colour (channel 0) passed through
+    // and added to the frame, depth tested and not written, back faces culled.
+    NebulaMaterialProgram sOrbitProgram;
+    bool sOrbitRegistered = false;
+
+    void sendOrbitProgram() {
+        const NebulaHostServices* pHost = nebula_host();
+        if (!sOrbitRegistered) {
+            NebulaMaterialProgram& rProgram = sOrbitProgram;
+            memset(&rProgram, 0, sizeof(rProgram));
+            NebulaMaterialTevStage& rStage = rProgram.tev[0];
+            rStage.tex_coord = GX_TEXCOORD_NULL;
+            rStage.tex_map = GX_TEXMAP_NULL;
+            rStage.channel = GX_COLOR0A0;
+            rStage.color_in[0] = rStage.color_in[1] = rStage.color_in[2] = GX_CC_ZERO;
+            rStage.color_in[3] = GX_CC_RASC;
+            rStage.alpha_in[0] = rStage.alpha_in[1] = rStage.alpha_in[2] = GX_CA_ZERO;
+            rStage.alpha_in[3] = GX_CA_RASA;
+            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
+            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+            rProgram.tev_stages = 1;
+            rProgram.tex_gens = 0;
+            rProgram.channels = 1;
+            rProgram.cull = GX_CULL_BACK;
+            rProgram.z_compare_location = 0;
+            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV;
+            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
+            rProgram.alpha_compare.op = GX_AOP_OR;
+            rProgram.blend.type = GX_BM_BLEND;
+            rProgram.blend.source = GX_BL_ONE;
+            rProgram.blend.destination = GX_BL_ONE;
+            rProgram.blend.logic_op = GX_LO_NOOP;
+            rProgram.z_mode.enable = GX_TRUE;
+            rProgram.z_mode.func = GX_LEQUAL;
+            rProgram.z_mode.update = GX_FALSE;
+            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sOrbitProgram), &rProgram);
+            sOrbitRegistered = true;
+        }
+        NebulaMaterialValues values;
+        memset(&values, 0, sizeof(values));
+        J3DNativeShape::flushState();
+        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sOrbitProgram), &values);
+    }
+}  // namespace
 
 namespace {
     const static Vec cRotateOutermost = {20.0f, 45.0f, 0.0f};
@@ -105,18 +157,9 @@ void AstroDomeOrbit::initDraw(const Color8& rColor) const {
     rotateMtx.concat(MR::getCameraViewMtx(), rotateMtx);
     J3DNativeShape::setPosition(0, rotateMtx);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setChanMatColor(GX_COLOR0A0, rColor);
-    J3DNativeState::setNumTexGens(0);
-    J3DNativeState::setNumTevStages(1u);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(1u, GX_LEQUAL, 0);
-    J3DNativeState::setZCompLoc(0);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
+    sendOrbitProgram();
 }
 
 void AstroDomeOrbit::drawCelling(f32 width, bool isAddHeight, f32 height) const {

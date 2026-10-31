@@ -5,6 +5,7 @@
 class BloomEffect;
 class JUTTexture;
 class NameObj;
+struct NebulaMaterialTevStage;
 
 namespace ImageEffectLocalUtil {
     enum ETexDrawType {
@@ -14,7 +15,18 @@ namespace ImageEffectLocalUtil {
         TexDrawType_3,
     };
 
+    // The stage the texture draws use: setupDrawTexture's (modulate) or the brightness threshold (red above the
+    // material colour's, konst alpha).
+    enum EStage {
+        Stage_Modulate,
+        Stage_Threshold,
+    };
+
     void capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool clear, u8 filter);
+    void setStage(EStage stage);
+    // A stage of the caller's own (its address the key: a static), with setupDrawTexture's order (texture 0,
+    // coordinate 0, colour channel 0); its registers and konst colours stay as the caller set them.
+    void setCallerStage(const NebulaMaterialTevStage* pStage);
     void setupDrawTexture();
     void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(s32 divisions, s32 tile);
