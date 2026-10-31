@@ -30,7 +30,7 @@
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXTransform.h>
 #include <revolution/mtx.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void SpaceCocoon_FORCE_MATCH_SDATA2() {
     (void)1.0f;

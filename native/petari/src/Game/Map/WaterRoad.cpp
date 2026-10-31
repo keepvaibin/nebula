@@ -29,7 +29,7 @@
 #include <revolution/gx/GXGeometry.h>
 #include <revolution/gx/GXStruct.h>
 #include <revolution/gx/GXTransform.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 void WaterRoad_DUMMY() {
     TVec3f a, b;

@@ -12,7 +12,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <revolution/mtx.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     static Vec sStartPointVelocity = {0.0f, 0.0f, 0.0f};

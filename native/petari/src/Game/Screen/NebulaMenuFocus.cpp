@@ -8,7 +8,7 @@
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include <nw4r/lyt/pane.h>
-#include <revolution/wpad.h>
+#include "Game/System/NebulaInput.hpp"
 
 namespace {
     using NebulaMenuFocus::Direction;
