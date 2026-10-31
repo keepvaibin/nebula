@@ -144,7 +144,6 @@ public:
 [[nodiscard]] std::uint32_t texgen_word(const XfTexGen& texgen);
 [[nodiscard]] std::uint32_t post_texgen_word(const XfPostTexGen& post);
 [[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
-// The matrix indices as two words (position and coordinates 0-3; coordinates 4-7), six bits each.
 [[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t line_point_word(const NativeDrawState& state);

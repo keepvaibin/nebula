@@ -57,6 +57,9 @@ public:
     // waits here (a variant the draw can do without).
     [[nodiscard]] VkPipeline get_if_ready(const PsoKey& key, const PixelShaderKey& ps_key,
                                           const VertexShaderKey& vs_key);
+    // A native material's pipeline (native_shaders.h): its build-compiled SPIR-V under the draw's render state; null
+    // when the build has none or the driver refuses it.
+    [[nodiscard]] VkPipeline get_native(std::uint32_t shader, const RenderStateKey& render_state);
     void drain_completions();
 
     void flush_disk();
@@ -169,6 +172,10 @@ private:
     std::unordered_map<std::uint64_t, VkShaderModule> modules_;
     // A vertex module's input locations (bit n: location n): its pipelines bind only those attributes.
     std::unordered_map<VkShaderModule, std::uint32_t> input_masks_;
+    // Native materials' modules (by their SPIR-V's hash) and pipelines (by shader, output variant and render state).
+    [[nodiscard]] VkShaderModule native_module(const void* words, std::size_t bytes, vk::ShaderStage stage);
+    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>, VkPipeline>>>
+        native_pipelines_;
     std::unordered_map<std::uint64_t, std::vector<std::uint32_t>> spirv_;
     std::size_t spirv_on_disk_ = 0;
     // vk_seed_shaders.bin: by hash, the record's file offset and words (read when its module is made).

@@ -1086,7 +1086,7 @@ HRESULT create_gx_root_signature(
 
     // GX root signature:
     //   [0] Root CBV b0,space0  VS+GS - VertexConstants
-    //   [1] Root CBV b1,space0  PS - PixelConstants
+    //   [1] Root CBV b1,space0  VS+PS - PixelConstants (a native material's constants: both stages)
     //   [2] Descriptor table   SRV t0..t7,space0  PS - textures
     //   [3] Descriptor table   Sampler s0..s7       PS
     //   [4] Root SRV  t0,space1 VS - matrix palette
@@ -1117,7 +1117,7 @@ HRESULT create_gx_root_signature(
     params[1].ParameterType             = D3D12_ROOT_PARAMETER_TYPE_CBV;
     params[1].Descriptor.ShaderRegister = 1;
     params[1].Descriptor.RegisterSpace  = 0;
-    params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_PIXEL;
+    params[1].ShaderVisibility          = D3D12_SHADER_VISIBILITY_ALL;
 
     params[2].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
     params[2].DescriptorTable.NumDescriptorRanges = 1;

@@ -24,6 +24,7 @@
 #include "galaxy/perf_hint.h"
 
 #include "galaxy/render/render_core.h"
+#include "galaxy/render/native_shaders.h"
 #include "galaxy/render/dependency_range_memo.h"
 #include "galaxy/render/fifo_cache_fingerprint.h"
 #include "galaxy/render/rt_tev_eval.h"
@@ -891,6 +892,7 @@ void RenderCore::reset_fifo_session_state() {
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
     current_texture_map_mask_valid_ = false;
+    native_material_.reset();
     current_texture_binding_key_ = {};
     current_texture_binding_key_mask_ = 0u;
     // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
@@ -7662,7 +7664,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
-    const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
+    const bool curved = native_material_ == nullptr && primitive_topology_type == gpu::kTopologyTypeTriangle &&
+                        curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
     const std::uint32_t dirty =
@@ -7725,7 +7728,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
 
     // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
     // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
-    if (!current_texture_map_mask_valid_ || tev_dirty) {
+    if (native_material_ != nullptr) {
+        current_texture_map_mask_ = native_texture_mask_;
+        current_texture_map_mask_valid_ = true;
+    } else if (!current_texture_map_mask_valid_ || tev_dirty) {
         current_texture_map_mask_ = sampled_texture_map_mask(draw_state_);
         current_texture_map_mask_valid_ = true;
     }
@@ -8106,7 +8112,24 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         curved_changed = curved_changed || render_state_key_.primitive_topology != patch;
         render_state_key_.primitive_topology = patch;
     }
-    if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
+    if (native_material_ != nullptr) {
+        // A native material's pipeline: its build-compiled shaders under the draw's render state.
+        current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
+        // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
+        static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
+        if (log_native) [[unlikely]] {
+            static std::set<std::pair<std::uint32_t, const void*>> logged;
+            if (logged.emplace(native_material_->shader, current_pipeline_).second) {
+                std::fprintf(stderr, "[native-material] shader=%u pipeline=%p blend=0x%08x z=0x%x cull=%u maps=0x%02x\n",
+                             native_material_->shader, static_cast<const void*>(current_pipeline_),
+                             render_state_key_.blend_bits, static_cast<unsigned>(render_state_key_.zmode_bits),
+                             static_cast<unsigned>(render_state_key_.cull), static_cast<unsigned>(native_texture_mask_));
+            }
+        }
+        current_pipeline_is_uber_ = false;
+        current_pso_key_valid_ = false;
+        current_flat_pipeline_ = nullptr;
+    } else if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
         tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
         motion_key_changed || curved_changed || vs_features_changed) {
         const PsoKey pso_key{
@@ -8608,7 +8631,17 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         tinted != nullptr && tinted->tint_kept < 1.0f && scene_phase_ && renderer_.rt_physical()) {
         tint_cleared = 1.0f - std::clamp(tinted->tint_kept, 0.0f, 1.0f);
     }
-    if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
+    if (native_material_ != nullptr) {
+        // A native material's constants (its MaterialConstants), uploaded once per material.
+        if (native_constants_dirty_ || frame_bindings_dirty_ || current_ps_constants_ == 0u) {
+            UploadRing::Allocation alloc =
+                renderer_.constant_ring().allocate(sizeof(native_material_->constants), 256u);
+            std::memcpy(alloc.cpu, native_material_->constants, sizeof(native_material_->constants));
+            current_ps_constants_ = alloc.gpu;
+            current_ps_record_ = -1;
+            native_constants_dirty_ = false;
+        }
+    } else if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
         glow_material != glow_material_ || tint_cleared != ps_tint_cleared_) {
         enhanced_material_bits_ = enhanced_material_bits;
@@ -8948,7 +8981,11 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         registered = *shared;
         return;
     }
+    case shapes::Record::Kind::NativeMaterial:
+        apply_native_material(record.native);
+        return;
     case shapes::Record::Kind::Material: {
+        end_native_material();
         const auto program = material_programs_.find(record.key);
         if (program == material_programs_.end()) {
             return;  // the game registers every program before its first use
@@ -8979,6 +9016,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     }
     case shapes::Record::Kind::State: {
+        end_native_material();
         // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
         for (const state::Op& op : record.state) {
             if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
@@ -9077,6 +9115,77 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     flush_pending_draw_batch();
     renderer_.end_target_pass(record.target_channels, texture_cache_);
     frame_bindings_dirty_ = true;
+}
+
+void RenderCore::apply_native_material(std::shared_ptr<const material::Native> native) {
+    if (native == nullptr) {
+        return;
+    }
+    const material::Native& m = *native;
+    BlendMode& blend = draw_state_.blend;
+    blend.blend_enable = m.blend != material::kNativeBlendOpaque;
+    blend.logic_op_enable = false;
+    blend.subtract = m.blend == material::kNativeBlendSubtract;
+    blend.color_update = true;
+    blend.src_factor = m.blend == material::kNativeBlendOpaque ? BlendFactor::One : BlendFactor::SrcAlpha;
+    blend.dst_factor = m.blend == material::kNativeBlendAlpha ? BlendFactor::InvSrcAlpha
+                       : m.blend == material::kNativeBlendOpaque ? BlendFactor::Zero
+                                                                  : BlendFactor::One;
+    draw_state_.z.test_enable = m.depth != material::kNativeDepthOff;
+    draw_state_.z.func = m.depth == material::kNativeDepthGEqual ? CompareFunc::GEqual
+                         : m.depth == material::kNativeDepthAlways ? CompareFunc::Always
+                                                                   : CompareFunc::LEqual;
+    draw_state_.z.update_enable = m.depth != material::kNativeDepthOff && m.depth_write != 0u;
+    draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Back
+                           : m.cull == material::kNativeCullFront ? CullMode::Front
+                                                                  : CullMode::None;
+    // The shader tests its own alpha.
+    draw_state_.alpha = AlphaCompare{0u, 0u, CompareFunc::Always, CompareFunc::Always, AlphaTestLogic::And};
+    native_texture_mask_ = 0u;
+    for (unsigned map = 0; map < 8u; ++map) {
+        const auto& t = m.textures[map];
+        if (t.image == 0u) {
+            continue;
+        }
+        // The map as the native material names it: its image, size and format, and its sampling.
+        TextureMap& out = draw_state_.texture[map];
+        out.image.address = t.image;
+        out.image.width = t.width;
+        out.image.height = t.height;
+        out.image.format = static_cast<TexFormat>(t.format & 15u);
+        out.mode.wrap_s = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_s, 2u));
+        out.mode.wrap_t = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_t, 2u));
+        out.mode.mag_filter = t.mag_linear != 0u ? TexMagFilter::Linear : TexMagFilter::Near;
+        out.mode.min_filter = t.mip_filter == 0u ? (t.min_linear != 0u ? TexMinFilter::Linear : TexMinFilter::Near)
+                              : t.mip_filter == 1u
+                                  ? (t.min_linear != 0u ? TexMinFilter::LinearMipNear : TexMinFilter::NearMipNear)
+                                  : (t.min_linear != 0u ? TexMinFilter::LinearMipLinear : TexMinFilter::NearMipLinear);
+        out.mode.lod_bias_x32 = static_cast<std::int8_t>(static_cast<std::int32_t>(32.0f * t.lod_bias));
+        out.mode.max_aniso = static_cast<std::uint8_t>(t.anisotropy & 3u);
+        out.mode.min_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.min_lod));
+        out.mode.max_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.max_lod));
+        out.edge_lod = t.edge_lod != 0u;
+        out.bias_clamp = false;
+        out.tlut = TlutRef{};
+        native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
+    }
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
+    native_material_ = std::move(native);
+    native_constants_dirty_ = true;
+    current_texture_map_mask_valid_ = false;
+    texture_bindings_dirty_ = true;
+}
+
+void RenderCore::end_native_material() {
+    if (native_material_ == nullptr) {
+        return;
+    }
+    native_material_.reset();
+    // The GX state's pipeline, constants and textures are rebuilt at the next draw.
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
+    current_pso_key_valid_ = false;
+    current_texture_map_mask_valid_ = false;
+    texture_bindings_dirty_ = true;
 }
 
 void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
@@ -9297,7 +9406,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     }
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
-    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
     exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
@@ -9413,7 +9522,7 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     call.index_count = index_count;
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
-    pending_draw_batch_.rt = begin_rt_batch(call, pending_draw_batch_.rt_info);
+    pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
     exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);

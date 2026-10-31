@@ -392,6 +392,12 @@ namespace MR {
     }
 
     void loadTexProjectionMtx(u32 id) {
+        TPos3f matrix;
+        calcTexProjectionMtx(&matrix);
+        J3DNativeShape::setTexture((id - GX_TEXMTX0) / 3, matrix, 3);
+    }
+
+    void calcTexProjectionMtx(TPos3f* pMtx) {
         TProj3f cameraProjection = MR::getCameraProjectionMtx();
         cameraProjection.mMtx[2][0] = 0.0f;
         cameraProjection.mMtx[2][1] = 0.0f;
@@ -409,8 +415,7 @@ namespace MR {
         mat[0][2] = 0.5f;
         mat[1][1] = -0.5f;
         mat[1][2] = 0.5f;
-        MR::multMtx(matrix, matrix, mat);
-        J3DNativeShape::setTexture((id - GX_TEXMTX0) / 3, matrix, 3);
+        MR::multMtx(*pMtx, matrix, mat);
     }
 
     void nonFilteredCapture(JUTTexture* pTexture, s16 width, s16 height) {

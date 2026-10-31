@@ -104,7 +104,7 @@ void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, MaterialProgram, Material, State, Immediate, TextureImage, Readback, Marker,
-        TargetBegin, TargetEnd, TargetClear, TargetCapture
+        TargetBegin, TargetEnd, TargetClear, TargetCapture, NativeMaterial
     };
     std::uint64_t serial = 0;  // its place among the records (and so among the scene markers)
     Kind kind = Kind::Draw;
@@ -115,6 +115,8 @@ struct Record {
     // A material program (MaterialProgram) and a material's values (Material), both under `key`: the program's.
     std::shared_ptr<const material::Program> program;
     std::shared_ptr<const material::Values> material;
+    // A native material (NativeMaterial): a shader compiled at build with its constants, textures and state.
+    std::shared_ptr<const material::Native> native;
     std::vector<state::Op> state;  // drawing-state changes outside materials, in order
     std::shared_ptr<const Immediate> immediate;
     // An image's bytes (TextureImage), at `key`: its physical address.

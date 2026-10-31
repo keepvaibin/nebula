@@ -2253,6 +2253,26 @@ void svc_material(void*, uint64_t key, const NebulaMaterialValues* values) {
 #endif
 }
 
+void svc_native_material(void*, const NebulaNativeMaterial* native) {
+#if defined(NEBULA_HOST_RENDERER)
+    namespace shapes = galaxy::render::shapes;
+    static_assert(sizeof(NebulaNativeMaterial) == sizeof(galaxy::render::material::Native),
+                  "the renderer's copy of NebulaNativeMaterial");
+    if (native == nullptr || native->shader == NEBULA_SHADER_NONE || native->shader >= NEBULA_SHADER_COUNT) {
+        return;
+    }
+    auto copy = std::make_shared<galaxy::render::material::Native>();
+    std::memcpy(copy.get(), native, sizeof(NebulaNativeMaterial));
+    shapes::Record record;
+    record.kind = shapes::Record::Kind::NativeMaterial;
+    attach_pending_records();
+    record.native = std::move(copy);
+    galaxy::render::attach_shape_record(std::move(record));
+#else
+    (void)native;
+#endif
+}
+
 // The wheel's turn the window gathered since the game last asked.
 int32_t svc_pointer_wheel(void*) {
 #if defined(NEBULA_HOST_RENDERER)
@@ -3833,6 +3853,7 @@ int main(int argc, char** argv) {
     services.shape_draw = svc_shape_draw;
     services.material_program = svc_material_program;
     services.material = svc_material;
+    services.native_material = svc_native_material;
     services.state = svc_state;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;
