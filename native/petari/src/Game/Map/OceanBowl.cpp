@@ -16,6 +16,7 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
+#include "Game/Util/NativeShader.hpp"
 
 // These are from the debug symbol map
 namespace {
@@ -398,105 +399,46 @@ void OceanBowl::draw() const {
 }
 
 void OceanBowl::loadMaterial() const {
+    // runtime/src/render/materials/ocean_bowl.hlsl: the water (texture 0) and, above water, the screen behind (texture
+    // 1) warped by the indirect texture (texture 2); alpha the vertex alpha times the shore mask (texture 3). Blended by
+    // its alpha (added under water), depth tested, not written.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(5);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, GX_TEXMTX1, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX2, GX_TEXMTX2, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD3, GX_TG_MTX3x4, GX_TG_POS, GX_TEXMTX3, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD4, GX_TG_MTX3x4, GX_TG_TEX3, GX_TEXMTX4, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD4, GX_TG_MTX2x4, GX_TG_TEX3, GX_TEXMTX4, GX_TRUE, GX_PTIDENTITY);
-
-    TMtx34f mat;
-    mat.identity();
-    mat[0][2] = mTexU0;
-    mat[1][2] = mTexV0;
-    J3DNativeShape::setTexture(0, mat, 2);
-    mat[0][2] = mTexU1;
-    mat[1][2] = mTexV1;
-    J3DNativeShape::setTexture(1, mat, 2);
-    mat[0][2] = mTexU2;
-    mat[1][2] = mTexV2;
-    J3DNativeShape::setTexture(2, mat, 2);
-    f32 a = (getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + 2400.0f;
-    f32 b = (getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + 2400.0f;
-    f32 c = a / 4800.0f;
-    f32 d = b / 4800.0f;
-    mat[0][2] = d;
-    mat[1][2] = c;
-    J3DNativeShape::setTexture(4, mat, 2);
-    MR::loadTexProjectionMtx(39);
-    mWaterTex->load(GX_TEXMAP0);
-    JUTTexture screentex(MR::getScreenResTIMG(), 0);
-    screentex.load(GX_TEXMAP1);
-    mWaterIndirectTex->load(GX_TEXMAP2);
-    mMaskTex->load(GX_TEXMAP3);
-    if (MR::isCameraInWater()) {
-        J3DNativeState::setNumIndStages(0);
-    } else {
-        J3DNativeState::setNumIndStages(1);
-        J3DNativeState::setIndTexOrder(GX_INDTEXSTAGE0, GX_TEXCOORD2, GX_TEXMAP2);
-        J3DNativeState::setTevIndWarp(GX_TEVSTAGE3, GX_INDTEXSTAGE0, 1, 0, GX_ITM_0);
-        f32 indmtx[2][3];
-        indmtx[0][0] = ::sIndirectScale;
-        indmtx[0][1] = 0.0f;
-        indmtx[0][2] = 0.0f;
-        indmtx[1][0] = 0.0f;
-        indmtx[1][1] = ::sIndirectScale;
-        indmtx[1][2] = 0.0f;
-
-        J3DNativeState::setIndTexMtx(GX_ITM_0, indmtx, 0);
+    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    const bool inWater = MR::isCameraInWater();
+    JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL, inWater ? NEBULA_BLEND_ADD : NEBULA_BLEND_ALPHA,
+                       NEBULA_DEPTH_LEQUAL, false, NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, ::sOceanBowlTevReg0.r, ::sOceanBowlTevReg0.g, ::sOceanBowlTevReg0.b,
+                           ::sOceanBowlTevReg0.a);
+    NativeShader::setColor(material, 4, ::sOceanBowlTevReg1.r, ::sOceanBowlTevReg1.g, ::sOceanBowlTevReg1.b,
+                           ::sOceanBowlTevReg1.a);
+    material.constants[8] = mTexU0;
+    material.constants[9] = mTexV0;
+    material.constants[10] = mTexU1;
+    material.constants[11] = mTexV1;
+    material.constants[12] = mTexU2;
+    material.constants[13] = mTexV2;
+    // The shore mask follows the player: its offset from the bowl's first point, over the mask's 4800 units.
+    material.constants[14] = ((getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + 2400.0f) / 4800.0f;
+    material.constants[15] = ((getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + 2400.0f) / 4800.0f;
+    TPos3f screen;
+    MR::calcTexProjectionMtx(&screen);
+    for (u32 row = 0; row < 3; row++) {
+        for (u32 column = 0; column < 4; column++) {
+            material.constants[16 + row * 4 + column] = screen.mMtx[row][column];
+        }
     }
-
-    if (MR::isCameraInWater()) {
-        J3DNativeState::setNumTevStages(3);
-    } else {
-        J3DNativeState::setNumTevStages(4);
-    }
-
-    J3DNativeState::setTevColor(GX_TEVREG0, ::sOceanBowlTevReg0);
-    J3DNativeState::setTevColor(GX_TEVREG1, ::sOceanBowlTevReg1);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_CPREV, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_APREV, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE2, GX_TEXCOORD4, GX_TEXMAP3, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE2, GX_CC_CPREV, GX_CC_A0, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE2, GX_TEV_COMP_R8_EQ, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_RASA, GX_CA_TEXA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    if (!MR::isCameraInWater()) {
-        J3DNativeState::setTevOrder(GX_TEVSTAGE3, GX_TEXCOORD3, GX_TEXMAP1, GX_COLOR_NULL);
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE3, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C1, GX_CC_CPREV);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE3, GX_CA_APREV, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE3, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    }
-
-    if (MR::isCameraInWater()) {
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-    } else {
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    }
-
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    material.constants[28] = ::sIndirectScale / screenTexture.getWidth();
+    material.constants[29] = ::sIndirectScale / screenTexture.getHeight();
+    material.constants[30] = inWater ? 0.0f : 1.0f;
+    NativeShader::setTexture(material, 0, mWaterTex);
+    NativeShader::setTexture(material, 1, &screenTexture);
+    NativeShader::setTexture(material, 2, mWaterIndirectTex);
+    NativeShader::setTexture(material, 3, mMaskTex);
+    NativeShader::send(material);
 }
 
 void OceanBowl::loadMaterialBloom() const {

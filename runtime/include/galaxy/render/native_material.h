@@ -80,6 +80,27 @@ struct Values {
     float texture_matrix[8][12];
 };
 
+// The renderer's copy of NebulaNativeMaterial (nebula_game_api.h): a shader compiled at build, its constants, textures
+// and fixed-function state in the API's own enums.
+struct Native {
+    std::uint32_t shader;
+    std::uint8_t blend, depth, depth_write, cull;
+    float constants[64];
+    struct {
+        std::uint64_t image;
+        std::uint16_t width, height;
+        std::uint8_t format;
+        std::uint8_t repeat_s, repeat_t;
+        std::uint8_t mag_linear, min_linear, mip_filter, anisotropy, edge_lod;
+        float lod_bias, min_lod, max_lod;
+    } textures[8];
+};
+inline constexpr std::uint8_t kNativeBlendOpaque = 0u, kNativeBlendAlpha = 1u, kNativeBlendAdd = 2u,
+                              kNativeBlendSubtract = 3u;
+inline constexpr std::uint8_t kNativeDepthOff = 0u, kNativeDepthLEqual = 1u, kNativeDepthGEqual = 2u,
+                              kNativeDepthAlways = 3u;
+inline constexpr std::uint8_t kNativeCullNone = 0u, kNativeCullBack = 1u, kNativeCullFront = 2u;
+
 // GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
 [[nodiscard]] std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source);
 

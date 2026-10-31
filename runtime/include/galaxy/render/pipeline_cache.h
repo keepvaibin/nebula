@@ -131,6 +131,9 @@ public:
         const PsoKey& key,
         const PixelShaderKey& ps_key,
         const VertexShaderKey& vs_key);
+    // A native material's pipeline (native_shaders.h): its build-compiled shaders under the draw's render state; null
+    // when the build has none or the driver refuses it.
+    [[nodiscard]] ID3D12PipelineState* get_native(std::uint32_t shader, const RenderStateKey& render_state);
 
     // RENDER THREAD ONLY, called from begin_frame(): publishes every
     // completed specialization into the lookup map.
@@ -244,6 +247,9 @@ private:
     std::unordered_map<UberPsoKey, Microsoft::WRL::ComPtr<ID3D12PipelineState>,
         UberPsoKeyHasher> uber_psos_;
     std::unordered_set<UberPsoKey, UberPsoKeyHasher> uber_pending_;
+    // Native materials' pipelines by shader, output variant and render state.
+    std::unordered_map<std::uint64_t, std::vector<std::pair<std::pair<std::uint32_t, RenderStateKey>,
+                                                         Microsoft::WRL::ComPtr<ID3D12PipelineState>>>> native_psos_;
     // Bit n: draws asked for pipelines with 2^n samples per pixel (MSAA) / the uber prewarm ran for them.
     std::uint8_t seen_samples_mask_ = 0u;
     std::uint8_t uber_prewarmed_samples_mask_ = 0u;

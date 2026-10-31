@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 65u
+#define NEBULA_GAME_API_VERSION 66u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -333,6 +333,49 @@ typedef struct NebulaMaterialLight {
     float angle[3], distance[3];  /* attenuation coefficients */
     uint8_t color[4];
 } NebulaMaterialLight;
+
+/* A native material (native_material): a shader compiled at build (runtime/src/render/materials/<name>.hlsl, one
+   NebulaShaderId each), its constants (the shader's MaterialConstants: floats, in its declaration order), its textures
+   (texture i at the shader's t<i>; image 0: none) and its fixed-function state. The draws that follow use it until the
+   next material (native or not) or drawing-state change. */
+typedef enum NebulaShaderId {
+    NEBULA_SHADER_NONE = 0,
+    NEBULA_SHADER_WHIRLPOOL = 1, /* WhirlPool: the swirl over the warped screen behind */
+    NEBULA_SHADER_OCEAN_BOWL = 2, /* OceanBowl: Beach Bowl's sea over the warped screen behind */
+    NEBULA_SHADER_COUNT
+} NebulaShaderId;
+
+enum {
+    NEBULA_BLEND_OPAQUE = 0,   /* source replaces */
+    NEBULA_BLEND_ALPHA = 1,    /* source * alpha + destination * (1 - alpha) */
+    NEBULA_BLEND_ADD = 2,      /* source * alpha + destination */
+    NEBULA_BLEND_SUBTRACT = 3, /* destination - source */
+};
+enum {
+    NEBULA_DEPTH_OFF = 0,      /* no test, no write */
+    NEBULA_DEPTH_LEQUAL = 1,   /* drawn where nearer or equal */
+    NEBULA_DEPTH_GEQUAL = 2,
+    NEBULA_DEPTH_ALWAYS = 3,   /* tested always (written when depth_write) */
+};
+enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
+
+typedef struct NebulaNativeMaterial {
+    uint32_t shader;           /* NebulaShaderId */
+    uint8_t blend, depth, depth_write, cull;
+    float constants[64];
+    struct {
+        uint64_t image;        /* the texture's identity: the game's address of its image (or a capture's) */
+        uint16_t width, height;
+        uint8_t format;        /* the cooked image's format (as NebulaMaterialTexture::format) */
+        uint8_t repeat_s, repeat_t; /* 0 clamp, 1 repeat, 2 mirror */
+        uint8_t mag_linear;    /* magnified: 1 linear, 0 nearest */
+        uint8_t min_linear;    /* minified within a level: 1 linear, 0 nearest */
+        uint8_t mip_filter;    /* 0 the first level only, 1 the nearest level, 2 between levels */
+        uint8_t anisotropy;    /* 0 off, 1 two, 2 four samples */
+        uint8_t edge_lod;      /* 1 the level from the texel's edges */
+        float lod_bias, min_lod, max_lod;
+    } textures[8];
+} NebulaNativeMaterial;
 
 typedef struct NebulaMaterialProgram {
     uint8_t tev_stages, tex_gens, channels, ind_stages, cull;
@@ -1114,6 +1157,8 @@ typedef struct NebulaHostServices {
     /* The local date and time now: nanoseconds from 2000-01-01 00:00 local time (the console's clock counted from
        there; the game's saves store times in its unit). */
     int64_t (*calendar_ns)(void* user);
+    /* A native material for the draws that follow (NebulaNativeMaterial). */
+    void (*native_material)(void* user, const NebulaNativeMaterial* material);
 } NebulaHostServices;
 
 

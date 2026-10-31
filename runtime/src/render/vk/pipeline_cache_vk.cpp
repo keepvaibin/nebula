@@ -2,6 +2,7 @@
 // GX pipelines on Vulkan (pipeline_cache_vk.h).
 
 #include "galaxy/render/vk/pipeline_cache_vk.h"
+#include "galaxy/render/native_shaders.h"
 
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
@@ -481,6 +482,61 @@ VkShaderModule PipelineCacheVk::module_for(const std::string& hlsl, vk::ShaderSt
         unsaved_.store(true, std::memory_order_release);
     }
     return module;
+}
+
+VkShaderModule PipelineCacheVk::native_module(const void* words, std::size_t bytes, vk::ShaderStage stage) {
+    if (words == nullptr || bytes < 4u || bytes % 4u != 0u) {
+        return VK_NULL_HANDLE;
+    }
+    const std::uint64_t hash = combine64(fnv1a64(words, bytes), 0x4E41544956450000ull | static_cast<unsigned>(stage));
+    {
+        std::lock_guard<std::mutex> lock(modules_mutex_);
+        if (const auto it = modules_.find(hash); it != modules_.end()) {
+            return it->second;
+        }
+    }
+    std::vector<std::uint32_t> spirv(bytes / 4u);
+    std::memcpy(spirv.data(), words, bytes);
+    VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
+    info.codeSize = bytes;
+    info.pCode = spirv.data();
+    VkShaderModule module = VK_NULL_HANDLE;
+    if (vkCreateShaderModule(device_, &info, nullptr, &module) != VK_SUCCESS) {
+        return VK_NULL_HANDLE;
+    }
+    std::lock_guard<std::mutex> lock(modules_mutex_);
+    modules_.emplace(hash, module);
+    if (stage == vk::ShaderStage::Vertex) {
+        input_masks_.emplace(module, input_location_mask(spirv));
+    }
+    return module;
+}
+
+VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
+    const RenderStateKey rs = native_render_state(render_state);
+    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const std::uint32_t id = shader * kNativeVariants + variant;
+    const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
+    auto& bucket = native_pipelines_[hash];
+    for (const auto& entry : bucket) {
+        if (entry.first.first == id && entry.first.second == rs) {
+            return entry.second;
+        }
+    }
+    const NativeShaderBytes vs_bytes = native_shader_bytes(shader, variant, false);
+    const NativeShaderBytes ps_bytes = native_shader_bytes(shader, variant, true);
+    const VkShaderModule vs = native_module(vs_bytes.data, vs_bytes.size, vk::ShaderStage::Vertex);
+    const VkShaderModule ps = native_module(ps_bytes.data, ps_bytes.size, vk::ShaderStage::Fragment);
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
+        const auto make = [&](std::uint32_t compat, VkResult& result) {
+            return create_pipeline(rs, vs, ps, false, false, compat, result);
+        };
+        pipeline = with_fallbacks(make, applicable_compat(rs, false, false), "a native pipeline",
+                                  describe_render_state(rs), nullptr);
+    }
+    bucket.emplace_back(std::make_pair(id, rs), pipeline);
+    return pipeline;
 }
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,

@@ -5,6 +5,7 @@
 // job_cv_) uses a mutex and condition variable; the path back to the render thread stays lock-free.
 
 #include "galaxy/render/pipeline_cache.h"
+#include "galaxy/render/native_shaders.h"
 
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_d3d12.h"
@@ -594,6 +595,36 @@ bool PsoCompletionQueue::try_pop(Item& out) {
     delete tail_;
     tail_ = next;
     return true;
+}
+
+ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
+    if (!device_ || !root_signature_) {
+        return nullptr;
+    }
+    const RenderStateKey rs = native_render_state(render_state);
+    const unsigned variant = native_shader_variant(rs.blend_bits);
+    const std::uint32_t id = shader * kNativeVariants + variant;
+    const std::uint64_t hash = combine64(hash_key_words(&rs, sizeof(rs)), id);
+    auto& bucket = native_psos_[hash];
+    for (const auto& entry : bucket) {
+        if (entry.first.first == id && entry.first.second == rs) {
+            return entry.second.Get();
+        }
+    }
+    const NativeShaderBytes vs_bytes = native_shader_bytes(shader, variant, false);
+    const NativeShaderBytes ps_bytes = native_shader_bytes(shader, variant, true);
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    Microsoft::WRL::ComPtr<ID3DBlob> vs;
+    Microsoft::WRL::ComPtr<ID3DBlob> ps;
+    if (vs_bytes.size != 0u && ps_bytes.size != 0u && SUCCEEDED(D3DCreateBlob(vs_bytes.size, &vs)) &&
+        SUCCEEDED(D3DCreateBlob(ps_bytes.size, &ps))) {
+        std::memcpy(vs->GetBufferPointer(), vs_bytes.data, vs_bytes.size);
+        std::memcpy(ps->GetBufferPointer(), ps_bytes.data, ps_bytes.size);
+        pso = create_gx_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), nullptr, nullptr, nullptr,
+                            nullptr);
+    }
+    bucket.emplace_back(std::make_pair(id, rs), pso);
+    return pso.Get();
 }
 
 bool PipelineCache::initialize(
@@ -1204,7 +1235,7 @@ constexpr std::uint32_t kShaderCacheMagic   = 0x43535847u;  // "GXSC"
 // The version gates generator output, not only the file format: bump it whenever
 // generate_vs or generate_ps emits different HLSL for the same key, or stale DXBC
 // would be served for hash-identical keys.
-constexpr std::uint32_t kShaderCacheVersion = 74u;
+constexpr std::uint32_t kShaderCacheVersion = 75u;  // 75: b1 visible to the vertex stage (native materials)
 constexpr std::uint32_t kPsoKeyCacheMagic = 0x43504B47u;  // "GKPC"
 // PSO keys name shader-cache stages, so psos.bin is rebuilt whenever the shader cache
 // version changes; a key whose stages are missing is skipped at prewarm.

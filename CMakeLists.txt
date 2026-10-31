@@ -475,6 +475,10 @@ add_custom_command(OUTPUT "${galaxy_rt_manifest}"
     VERBATIM)
 list(APPEND galaxy_rt_headers "${galaxy_rt_manifest}")
 
+# The native materials' shaders (E-04), compiled by dxc at build (cmake/native_materials.cmake).
+include(cmake/native_materials.cmake)
+galaxy_native_material_sources(galaxy_native_dxil dxil)
+
 add_library(galaxy_gx STATIC
     runtime/src/render/renderer_api.cpp
     runtime/src/render/render_config.cpp
@@ -533,7 +537,9 @@ add_library(galaxy_gx STATIC
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
     runtime/src/render/game_asset_extract.cpp
+    ${galaxy_native_dxil}
 )
+target_include_directories(galaxy_gx PRIVATE "${galaxy_native_include_dir_dxil}")
 # AMD FSR 3 (cmake/fidelityfx.cmake).
 include(cmake/fidelityfx.cmake)
 target_link_libraries(galaxy_gx PRIVATE nebula_fidelityfx)
@@ -707,6 +713,14 @@ option(NEBULA_VULKAN "Build the Vulkan GX backend" OFF)
 if(NEBULA_VULKAN)
     include(cmake/vulkan_deps.cmake)
 
+    # The native materials' SPIR-V (cmake/native_materials.cmake): the renderer's HLSL front end (shader_compile_vk.cpp)
+    # run at build by this tool.
+    add_executable(galaxy_native_spirv tools/dev/native_spirv.cpp runtime/src/render/vk/shader_compile_vk.cpp)
+    target_include_directories(galaxy_native_spirv PRIVATE runtime/include)
+    target_compile_features(galaxy_native_spirv PRIVATE cxx_std_20)
+    target_link_libraries(galaxy_native_spirv PRIVATE nebula_vulkan_deps)
+    galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
+
     add_executable(galaxy_vk_shader_tests
         runtime/src/render/vk/shader_compile_vk_tests.cpp
         runtime/src/render/vk/shader_compile_vk.cpp
@@ -782,8 +796,10 @@ if(NEBULA_VULKAN)
         runtime/src/render/vk/post_process_vk.cpp
         runtime/src/render/vk/game_bloom_vk.cpp
         ${galaxy_post_embed_cpp}
+        ${galaxy_native_spirv_sources}
         runtime/src/render/vk/surface_win32.cpp)
     target_include_directories(galaxy_gx_vk PUBLIC runtime/include)
+    target_include_directories(galaxy_gx_vk PRIVATE "${galaxy_native_include_dir_spirv}")
     target_include_directories(galaxy_gx_vk PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include")
     target_compile_features(galaxy_gx_vk PUBLIC cxx_std_20)

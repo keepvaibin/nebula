@@ -102,6 +102,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/vk/shader_compile_vk.cpp
     ${rt}/render/vk/texture_backend_vk.cpp
     ${rt}/render/vk/pipeline_cache_vk.cpp
+    ${rt}/render/native_shaders_none.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
     ${rt}/render/vk/renderer_vk_efb.cpp
