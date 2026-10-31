@@ -996,7 +996,6 @@ EfbCopyParams frame_show_params(std::uint16_t width, std::uint16_t height, std::
     EfbCopyParams p{};
     p.src_width = static_cast<std::uint16_t>(((width - 1u) & 0x3FFu) + 1u);
     p.src_height = static_cast<std::uint16_t>(((height - 1u) & 0x3FFu) + 1u);
-    p.y_scale = 256u;
     p.clamp_top = true;
     p.clamp_bottom = true;
     p.copy_to_xfb = true;

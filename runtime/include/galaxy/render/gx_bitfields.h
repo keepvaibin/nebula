@@ -385,15 +385,10 @@ struct EfbCopyParams {
     std::uint16_t src_width, src_height;
     std::uint64_t dest_addr;        // the destination's address
     std::uint32_t dest_stride;      // bytes (reg << 5)
-    std::uint32_t y_scale;          // 8.8 fixed-point inverse scale (256: 1.0)
     std::uint8_t target_format;     // copy pixel format
-    std::uint8_t gamma;             // 0=1.0, 1=1.7, 2=2.2
     bool clamp_top, clamp_bottom;
-    bool yuv;                       // RGB->YUV conversion (XFB copies)
     bool half_scale;                // vertical 2x downsample
-    bool scale_y;                   // PE bit 10: use inverse BP 0x4E y scale
     bool clear;                     // clear EFB rect after copy
-    std::uint8_t frame_to_field;
     bool copy_to_xfb;               // true = display copy, false = texture copy
     bool intensity;                 // intensity conversion (I and IA texture copies)
     std::uint8_t clear_color[4];    // red, green, blue, alpha

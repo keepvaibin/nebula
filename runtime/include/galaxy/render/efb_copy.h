@@ -73,11 +73,6 @@ struct XfbSerialAccountingEvent {
     std::uint64_t copy_serial) noexcept;
 
 
-[[nodiscard]] std::uint16_t compute_xfb_copy_height(
-    std::uint16_t src_height,
-    std::uint32_t y_scale_raw,
-    bool scale_y);
-
 // EFB-copy textures are at the internal resolution; addresses, strides and VI selection stay in Wii units.
 struct ScaledEfbCopyExtent {
     std::uint16_t width = 0;
@@ -88,12 +83,6 @@ struct ScaledEfbCopyExtent {
     std::uint16_t logical_width,
     std::uint16_t logical_height,
     unsigned efb_scale) noexcept;
-
-// The game's bloom workspace copies (used when native effect copies are off): late colour workspaces differ from
-// earlier mask and depth passes by copy rectangle, format, stride and flags, not only by size.
-[[nodiscard]] bool is_galaxy_bloom_workspace_copy(
-    const EfbCopyParams& params,
-    bool is_depth_copy) noexcept;
 
 struct EfbCopySamplingGeometry {
     float src_x = 0.0f;
@@ -255,7 +244,7 @@ public:
     [[nodiscard]] unsigned efb_scale() const noexcept { return efb_scale_; }
     void begin_frame(unsigned frame_slot, unsigned frames_in_flight);
 
-    // The next picture of the ring, created or resized to match the copy (its size times the y-scale). The caller
+    // The next picture of the ring, created or resized to match the copy's size. The caller
     // (renderer) then records the EFB -> picture blit into it, or hands it the EFB's target (adopt_picture).
     XfbTexture* acquire_xfb(
         const EfbCopyParams& params,

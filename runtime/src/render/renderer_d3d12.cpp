@@ -1492,8 +1492,7 @@ bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, cons
     const bool identity_filter =
         (params.filter_upper() == 0u && params.filter_middle() == 64u && params.filter_lower() == 0u) ||
         (params.filter_upper() == 0u && params.filter_middle() == 0u && params.filter_lower() == 0u);
-    return identity_filter && (params.gamma & 3u) == 0u && !params.intensity && !params.half_scale &&
-           (!params.scale_y || params.y_scale == 256u) && params.src_x == 0u && params.src_y == 0u &&
+    return identity_filter && !params.intensity && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
            dest.width == kFrameWidth * scale && dest.height == params.src_height * scale;
 }
@@ -8688,7 +8687,6 @@ bool RendererD3D12::begin_output_efb() {
     EfbCopyParams params{};
     params.src_width = static_cast<std::uint16_t>(kFrameWidth);
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
-    params.y_scale = 256u;
     params.vfilter[2] = 21u;
     params.vfilter[3] = 22u;
     params.vfilter[4] = 21u;
@@ -9233,7 +9231,7 @@ void RendererD3D12::record_conversion_blit(
                value[0] == '1';
     }();
     const bool display_filter = !(filter_ab && (presented_frames_ & 1u) != 0u) && copy_format == 15u && keep_alpha &&
-                                !intensity && !is_depth_copy && (params.gamma & 3u) == 0u && step_x == 1.0f &&
+                                !intensity && !is_depth_copy && step_x == 1.0f &&
                                 step_y == 1.0f &&
                                 display_filter_pipeline_ != nullptr && dest->GetDesc().Format == kEfbColorFormat;
     command_list_->SetPipelineState(display_filter ? display_filter_pipeline_.Get()

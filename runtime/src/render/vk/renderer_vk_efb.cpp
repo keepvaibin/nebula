@@ -849,7 +849,6 @@ bool RendererVk::enter_output_efb(unsigned scale) {
     EfbCopyParams params{};
     params.src_width = static_cast<std::uint16_t>(kFrameWidth);
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
-    params.y_scale = 256u;
     params.vfilter[2] = 21u;
     params.vfilter[3] = 22u;
     params.vfilter[4] = 21u;
@@ -1661,7 +1660,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdSetScissor(commands, 0, 1, &scissor);
     // A display copy one EFB pixel to one XFB pixel without gamma: its filter alone (display_filter_shader_source).
     const bool display_filter = copy_format == 15u && keep_alpha && !intensity && !is_depth_copy && !grey &&
-                                (params.gamma & 3u) == 0u && step_x == 1.0f && step_y == 1.0f &&
+                                step_x == 1.0f && step_y == 1.0f &&
                                 display_filter_pipeline_ != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       display_filter ? display_filter_pipeline_

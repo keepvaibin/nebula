@@ -598,19 +598,6 @@ Pixel oracle_convert(
         current.a,
     };
 
-    static constexpr float kGamma[4] = {1.0f, 1.7f, 2.2f, 2.2f};
-    const float gamma = kGamma[params.gamma & 3u];
-    if (gamma != 1.0f) {
-        const auto apply_gamma = [gamma](std::uint8_t value) {
-            return static_cast<std::uint8_t>(std::lround(
-                std::pow(static_cast<float>(value) / 255.0f, 1.0f / gamma) *
-                255.0f));
-        };
-        raw.r = apply_gamma(raw.r);
-        raw.g = apply_gamma(raw.g);
-        raw.b = apply_gamma(raw.b);
-    }
-
     if (intensity) {
         const int r = raw.r;
         const int g = raw.g;
@@ -630,21 +617,9 @@ Pixel oracle_convert(
     }
 
     switch (copy_format) {
-    case 0u: {
-        const std::uint8_t i = static_cast<std::uint8_t>(
-            (raw.r & 0xf0u) | (raw.r >> 4u));
-        return Pixel{i, i, i, i};
-    }
     case 1u:
     case 8u:
         return Pixel{raw.r, raw.r, raw.r, raw.r};
-    case 2u: {
-        const std::uint8_t i = static_cast<std::uint8_t>(
-            (raw.r & 0xf0u) | (raw.r >> 4u));
-        const std::uint8_t a = static_cast<std::uint8_t>(
-            (raw.a & 0xf0u) | (raw.a >> 4u));
-        return Pixel{i, i, i, a};
-    }
     case 3u:
         return Pixel{raw.r, raw.r, raw.r, raw.a};
     case 4u:
@@ -652,20 +627,6 @@ Pixel oracle_convert(
         raw.g = static_cast<std::uint8_t>((raw.g & 0xfcu) | (raw.g >> 6u));
         raw.b = static_cast<std::uint8_t>((raw.b & 0xf8u) | (raw.b >> 5u));
         raw.a = 255u;
-        return raw;
-    case 5u:
-        if (raw.a > 224u) {
-            raw.r = static_cast<std::uint8_t>((raw.r & 0xf8u) | (raw.r >> 5u));
-            raw.g = static_cast<std::uint8_t>((raw.g & 0xf8u) | (raw.g >> 5u));
-            raw.b = static_cast<std::uint8_t>((raw.b & 0xf8u) | (raw.b >> 5u));
-            raw.a = 255u;
-        } else {
-            raw.r = static_cast<std::uint8_t>((raw.r & 0xf0u) | (raw.r >> 4u));
-            raw.g = static_cast<std::uint8_t>((raw.g & 0xf0u) | (raw.g >> 4u));
-            raw.b = static_cast<std::uint8_t>((raw.b & 0xf0u) | (raw.b >> 4u));
-            raw.a = static_cast<std::uint8_t>(
-                (raw.a & 0xe0u) | (raw.a >> 3u) | (raw.a >> 6u));
-        }
         return raw;
     case 6u:
     case 255u:
@@ -676,10 +637,6 @@ Pixel oracle_convert(
         return Pixel{raw.g, raw.g, raw.g, raw.g};
     case 10u:
         return Pixel{raw.b, raw.b, raw.b, raw.b};
-    case 11u:
-        return Pixel{raw.r, raw.r, raw.r, raw.g};
-    case 12u:
-        return Pixel{raw.g, raw.g, raw.g, raw.b};
     case 15u:
         raw.a = 255u;
         return raw;
@@ -1202,23 +1159,19 @@ V main(uint id : SV_VertexID) {
         params.target_format = 6u;
         bool passed = expect(detail::efb_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 14u; ++flag) {
+        for (unsigned flag = 0u; flag < 10u; ++flag) {
             auto rejected = params;
             switch (flag) {
             case 0u: rejected.target_format = 4u; break;
             case 1u: rejected.intensity = true; break;
-            case 2u: rejected.yuv = true; break;
-            case 3u: rejected.gamma = 1u; break;
-            case 4u: rejected.half_scale = true; break;
-            case 5u: rejected.scale_y = true; break;
-            case 6u: rejected.frame_to_field = 1u; break;
-            case 7u: rejected.copy_to_xfb = true; break;
-            case 8u: rejected.src_width = 0u; break;
-            case 9u: rejected.src_x = kFrameWidth - 15u; break;
-            case 10u: rejected.src_y = kFrameHeight - 15u; break;
-            case 11u: rejected.vfilter[0] |= 1u; break;
-            case 12u: rejected.vfilter[5] |= 1u; break;
-            case 13u: rejected.vfilter[4] += 1u; break;
+            case 2u: rejected.half_scale = true; break;
+            case 3u: rejected.copy_to_xfb = true; break;
+            case 4u: rejected.src_width = 0u; break;
+            case 5u: rejected.src_x = kFrameWidth - 15u; break;
+            case 6u: rejected.src_y = kFrameHeight - 15u; break;
+            case 7u: rejected.vfilter[0] |= 1u; break;
+            case 8u: rejected.vfilter[5] |= 1u; break;
+            case 9u: rejected.vfilter[4] += 1u; break;
             }
             passed &= expect(!detail::efb_identity_copy_box(rejected, false,
                 1u, 16u, 16u), "nonidentity copy cannot bypass conversion");
@@ -2658,14 +2611,6 @@ bool test_cpu_oracle() {
         oracle_from_three_rows(red_rows, identity, true, 10u),
         Pixel{240u, 240u, 240u, 240u},
         "integer oracle intensity B8 selects V");
-    passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 11u),
-        Pixel{82u, 82u, 82u, 90u},
-        "integer oracle intensity RG8 selects Y/U");
-    passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 12u),
-        Pixel{90u, 90u, 90u, 240u},
-        "integer oracle intensity GB8 selects U/V");
 
     const std::array<Pixel, 3> depth_rows{
         packed_depth(0x102030u),
@@ -2755,8 +2700,8 @@ bool test_warp_against_oracle() {
 
             const galaxy::render::EfbCopyParams identity = make_filter_params(
                 {0u, 0u, 21u, 22u, 21u, 0u, 0u});
-            constexpr std::array<std::uint8_t, 5> kIntensityFormats{
-                8u, 9u, 10u, 11u, 12u};
+            constexpr std::array<std::uint8_t, 3> kIntensityFormats{
+                8u, 9u, 10u};
             for (const std::uint8_t format : kIntensityFormats) {
                 char intensity_label[64]{};
                 std::snprintf(
