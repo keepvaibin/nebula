@@ -34,7 +34,7 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 | Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/render/texture_sampling.h`, `runtime/src/render/render_core.cpp` |
 | Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/render/texture_cache.cpp` |
 | Aurora | MIT | Presentation viewport, logical-to-physical viewport and scissor mapping | `runtime/include/galaxy/content_viewport.h`, `runtime/src/render/render_config.cpp`, `runtime/src/render/renderer_d3d12.cpp` |
-| [Dusklight](https://github.com/TwilitRealm/dusklight) | CC0 1.0 | Button press and trigger state per game frame | `runtime/include/galaxy/synthetic_kpad_buttons.h` |
+| [Dusklight](https://github.com/TwilitRealm/dusklight) | CC0 1.0 | Button press and trigger state per game frame | `runtime/include/galaxy/input/window_keys.h` |
 | Dusklight | CC0 1.0 | Layout fitting and pointer focus handling | `runtime/include/galaxy/content_viewport.h`, `runtime/include/galaxy/native_input.h`, `runtime/include/galaxy/host_pointer_events.h` |
 | Dusklight | CC0 1.0 | Widescreen camera and HUD scaling policy | `runtime/include/galaxy/experimental_ultrawide_aspect.h` |
 | WiiCompiled | GPL-3.0 | Wii audio interface PCM byte order | `runtime/include/galaxy/native_audio_queue.h` |

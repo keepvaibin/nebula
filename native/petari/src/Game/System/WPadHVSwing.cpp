@@ -2,9 +2,8 @@
 #include "Game/System/WPad.hpp"
 
 #ifdef TARGET_PC
+#include "Game/System/WPadHolder.hpp"
 #include <revolution/wpad.h>
-
-extern "C" u32 __NebulaWPADTakeShakePresses(s32 chan, s32 device);
 
 namespace {
     // A shake press's swing lasts as long as a flick of the remote keeps the detector above its threshold.
@@ -113,7 +112,7 @@ void WPadHVSwing::updateCentrifugal() {
 // a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
 // Without presses the accelerometer decides, as on the console.
 bool WPadHVSwing::updateNebulaShake() {
-    mNebulaShakePresses += __NebulaWPADTakeShakePresses(mPad->mChannel, mChannel == WPAD_DEV_CORE ? 0 : 1);
+    mNebulaShakePresses += mPad->mReadInfo->takeShakePresses(mChannel == WPAD_DEV_CORE ? 0 : 1);
     if (mNebulaShakeFrames == 0 && mNebulaShakePresses == 0 && !mIsNebulaShaking) {
         return false;
     }

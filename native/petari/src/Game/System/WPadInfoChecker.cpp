@@ -1,5 +1,6 @@
 #include "Game/System/WPadInfoChecker.hpp"
 #include "Game/System/WPad.hpp"
+#include "Game/System/WPadHolder.hpp"
 
 namespace {
     static const s32 sCheckInfoInterval = 18000;
@@ -13,12 +14,8 @@ s32 WPadInfoChecker::getBattery() const {
     return mBattery;
 }
 
-void WPadInfoChecker::successGetInfo() {
-    mBattery = mPadInfo.battery;
-}
-
 void WPadInfoChecker::startCheck() {
-    WPADGetInfoAsync(mPad->mChannel, &mPadInfo, WPad::getInfoCallback);
+    mBattery = mPad->mReadInfo->mDevice.battery;
 
     mCheckInfoFrame = ::sCheckInfoInterval;
 }

@@ -1,5 +1,6 @@
 #include "Game/System/WPadAcceleration.hpp"
 #include "Game/System/WPad.hpp"
+#include "Game/System/WPadHolder.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <revolution/wpad.h>
 
@@ -14,7 +15,7 @@ namespace {
 WPadAcceleration::WPadAcceleration(const WPad* pPad, u32 device)
     : mPad(pPad), _4(device), _8(), _C(0.15f), _10(0, 0, 0), _1C(), _20(true), _624(-1), _628(), _62C(0, 0, 0), _638(0.0f, 0.0f, 0.0f), _644(128),
       _648(), _64C() {
-    KPADSetAccParam(mPad->mChannel, _8, _C);
+    mPad->mReadInfo->setAccelParam(_8, _C);
 }
 
 bool WPadAcceleration::getAcceleration(TVec3f* pOut) const {
@@ -76,26 +77,22 @@ void WPadAcceleration::update() {
     }
 
     for (s32 i = statusCount - 1; i >= 0; i--) {
-        KPADStatus* pStatus = mPad->getKPadStatus(i);
+        WPadSample* pSample = mPad->getSample(i);
 
-        if (pStatus == nullptr) {
+        if (pSample == nullptr) {
             continue;
         }
 
         TVec3f acceleration;
 
         if (_4 == 0) {
-            acceleration.x = -pStatus->acc.x;
-            acceleration.y = pStatus->acc.z;
-            acceleration.z = -pStatus->acc.y;
+            acceleration = pSample->mAccel;
         } else {
-            if (!MR::isDeviceFreeStyle(pStatus)) {
+            if (!MR::isDeviceFreeStyle(pSample)) {
                 continue;
             }
 
-            acceleration.x = -pStatus->ex_status.fs.acc.x;
-            acceleration.y = pStatus->ex_status.fs.acc.z;
-            acceleration.z = -pStatus->ex_status.fs.acc.y;
+            acceleration = pSample->mSubAccel;
         }
 
         _624++;

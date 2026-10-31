@@ -1,4 +1,5 @@
 #include "Game/System/WPadRumble.hpp"
+#include "Game/System/WPadHolder.hpp"
 #include "Game/System/WPad.hpp"
 #include "Game/System/WPadRumbleData.hpp"
 #include "Game/Util/GamePadUtil.hpp"
@@ -67,7 +68,7 @@ WPadRumble::~WPadRumble() {
     if (_8) {
         _8 = false;
 
-        WPADControlMotor(chan, WPAD_MOTOR_STOP);
+        MR::setWPadMotor(chan, false);
     }
 
     sInstanceForCallback[chan] = nullptr;
@@ -79,12 +80,12 @@ void WPadRumble::registInstance() {
     sInstanceForCallback[chan] = this;
 
     if (_8) {
-        WPADControlMotor(chan, WPAD_MOTOR_RUMBLE);
+        MR::setWPadMotor(chan, true);
     }
 }
 
 void WPadRumble::pause() {
-    WPADControlMotor(mPad->mChannel, WPAD_MOTOR_STOP);
+    MR::setWPadMotor(mPad->mChannel, false);
 }
 
 void WPadRumble::stop() {
@@ -148,7 +149,7 @@ void WPadRumble::updateRumble() {
             if (!_8) {
                 _8 = true;
 
-                WPADControlMotor(mPad->mChannel, WPAD_MOTOR_RUMBLE);
+                MR::setWPadMotor(mPad->mChannel, true);
             }
         } else if (_8) {
             _8 = false;

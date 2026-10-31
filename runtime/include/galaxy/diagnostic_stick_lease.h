@@ -80,7 +80,7 @@ parse_diagnostic_stick_command(std::string_view text) noexcept {
     return command;
 }
 
-// Used by the input report's thread only. Times are monotonic host milliseconds.
+// Used by the input poll's thread only. Times are monotonic host milliseconds.
 class DiagnosticStickLease {
 public:
     void cancel() noexcept { command_.duration_ms = 0u; }

@@ -127,7 +127,6 @@ void HomeButtonLayout::exeActive() {
     }
 
     MR::setWPadHolderModeGame();
-    GameSystemFunction::setPadConnectCallback();
 
     if (_24) {
         GameSystemFunction::startControllerLeaveWatcher();

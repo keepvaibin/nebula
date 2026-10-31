@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The native game's host services on SDL3 platforms (native_host.h): the game's sound through SDL's audio stream,
-// the virtual Wii Remote from the on-screen controls, the finger on the picture, keys and gamepads (with the same
+// player 1's input from the on-screen controls, the finger on the picture, keys and gamepads (with the same
 // bindings and tuning as Windows), vibration, and the device data the game reads.
 
 #include "sdl_host.h"
@@ -75,7 +75,7 @@ in::LogicalInput touch_logic(const sdl::InputState& state) {
     return logic;
 }
 
-// A point in window pixels as the pointer (KPAD's -1..1, y down), through the rectangle the picture was last drawn in.
+// A point in window pixels as the pointer (-1..1 across the picture, y down), through the rectangle the picture was last drawn in.
 bool project_window_point(const sdl::InputState& state, float x, float y, float& out_x, float& out_y) {
     const auto content = galaxy::g_presentation_content.read();
     if (!content || content->surface_width != state.window_width || content->surface_height != state.window_height) {
@@ -97,8 +97,7 @@ float g_rumble_strength = 1.0f;
 
 }  // namespace
 
-in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_enabled,
-                                                      std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
+in::PlayerInput native_game_input(std::uint64_t, std::int32_t star_pointer_mode, std::uint8_t tilt_section) {
     const in::PlayContext context =
         star_pointer_mode >= 0 && static_cast<std::uint32_t>(star_pointer_mode) < in::kStarPointerModeCount
         ? in::play_context_from_star_pointer_mode(static_cast<std::uint32_t>(star_pointer_mode))
@@ -109,7 +108,7 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_ena
         : in::tilt::Section::None;
     const sdl::InputState state = sdl::input_state();
     const in::ControlsConfig& config = live_controls();
-    in::WiimoteInputSnapshot snapshot{};
+    in::PlayerInput snapshot{};
 
     // Gamepads: the bindings and tuning of each one's scheme, as on Windows.
     static std::array<std::uint32_t, sdl::kMaxPads> s_previous{};
@@ -164,10 +163,11 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_ena
     const in::JumpBackLatch::Output jump_back = s_jump_back.update(held(in::WiiTarget::JumpBack), context);
     snapshot.buttons.a = held(in::WiiTarget::A) || jump_back.a;
     snapshot.buttons.b = held(in::WiiTarget::B) || jump_back.b;
-    snapshot.nunchuk.stick_x = in::native_stick_axis_byte(logic.stick_x, 0x15, 0x7b, 0xe0);
-    snapshot.nunchuk.stick_y = in::native_stick_axis_byte(logic.stick_y, 0x1d, 0x81, 0xe6);
-    snapshot.nunchuk.c = held(in::WiiTarget::C);
-    snapshot.nunchuk.z = held(in::WiiTarget::Z);
+    const in::StickValue stick = in::nunchuk_stick(logic.stick_x, logic.stick_y);
+    snapshot.stick_x = stick.x;
+    snapshot.stick_y = stick.y;
+    snapshot.buttons.c = held(in::WiiTarget::C);
+    snapshot.buttons.z = held(in::WiiTarget::Z);
 
     // The pointer: the finger (or mouse) on the picture where it is; a stick or keys move it at their speed.
     static float s_pointer_x = 0.0f;
@@ -221,17 +221,15 @@ in::WiimoteInputSnapshot native_game_wiimote_snapshot(std::uint64_t, bool ir_ena
         --s_tap_reports;
     }
     const bool pointer_active = s_pointer_ms != 0 && now - s_pointer_ms <= s_hold_ms;
-    in::publish_wiimote_ir_dots(snapshot, s_pointer_x, s_pointer_y, pointer_active && ir_enabled);
+    in::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
 
     // Tilt sections steer with the stick.
     static in::tilt::Tilt s_tilt{};
     const in::tilt::Tilt::Output tilt = s_tilt.update(section, nullptr, logic.stick_x, logic.stick_y, false);
     if (tilt.active) {
-        const in::tilt::Counts counts = in::tilt::accel_counts(tilt.game);
-        snapshot.accel.x = counts.x;
-        snapshot.accel.y = counts.y;
-        snapshot.accel.z = counts.z;
+        snapshot.gravity = tilt.game;
     }
+    snapshot.pointer_on = snapshot.pointer_on && in::remote_faces_screen(snapshot.gravity);
     snapshot.shake = held(in::WiiTarget::Shake);
     snapshot.nunchuk_shake = held(in::WiiTarget::NunchukShake);
     return snapshot;
@@ -241,13 +239,6 @@ void native_game_rumble(bool motor_on, std::int32_t) noexcept {
     if (g_rumble_pad != 0) {
         sdl::rumble(g_rumble_pad, motor_on ? g_rumble_strength : 0.0f);
     }
-}
-
-void native_game_wiimote_calibration(std::uint8_t (&eeprom)[0x2A], std::uint8_t (&nunchuk_calibration)[32]) {
-    const auto bytes = create_virtual_wiimote_eeprom();
-    std::memcpy(eeprom, bytes.data(), sizeof(eeprom));
-    const auto registers = create_virtual_nunchuk_registers(true);
-    std::memcpy(nunchuk_calibration, registers.data() + 0x20u, sizeof(nunchuk_calibration));
 }
 
 std::vector<std::byte> native_game_empty_mii_database() {

@@ -197,10 +197,6 @@ namespace GameSystemFunction {
         }
     }
 
-    void setPadConnectCallback() {
-        WPadHolder::setConnectCallback();
-    }
-
     void resetAllControllerRumble() {
         for (s32 chan = WPAD_CHAN0; chan < WPAD_CHAN0 + MR::getWPadMaxCount(); chan++) {
             MR::getWPad(chan)->_18->registInstance();

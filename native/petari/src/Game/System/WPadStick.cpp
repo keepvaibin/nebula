@@ -1,5 +1,6 @@
 #include "Game/System/WPadStick.hpp"
 #include "Game/System/WPad.hpp"
+#include "Game/System/WPadHolder.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
 #define STICK_FLAG_NONE 0x0
@@ -17,14 +18,14 @@ WPadStick::WPadStick(const WPad* pPad)
 }
 
 void WPadStick::update() {
-    KPADStatus* pStatus = mPad->getKPadStatus(0);
+    WPadSample* pSample = mPad->getSample(0);
 
-    if (!MR::isDeviceFreeStyle(pStatus)) {
+    if (!MR::isDeviceFreeStyle(pSample)) {
         return;
     }
 
     TVec2f stickPrev(mStick);
-    mStick.set(pStatus->ex_status.fs.stick.x, pStatus->ex_status.fs.stick.y);
+    mStick.set(pSample->mStick.x, pSample->mStick.y);
     mSpeed = mStick.distance(stickPrev);
     u32 flagPrev = STICK_FLAG_NONE;
 

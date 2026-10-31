@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: CC0-1.0
-// The game window's key presses and levels for the input report. The press latch follows the per-frame press state
+// The game window's key presses and levels for the input poll. The press latch follows the per-frame press state
 // of TwilitRealm/dusklight, src/dusk/action_bindings.cpp::{updateActionBindings,getActionBindTrig}, revision
 // 40457c6adb381928e4b5fef6ed459ed291edd5e2 (CC0), with separate producer and consumer clocks.
 #pragma once
@@ -23,7 +23,7 @@ namespace galaxy::input {
     return key;
 }
 
-// Keeps a non-repeat key-down from the window thread until the input report consumes it, even when the key-up
+// Keeps a non-repeat key-down from the window thread until the input poll consumes it, even when the key-up
 // arrives first. It never makes up repeats.
 class NativeWindowKeyPressLatch {
 public:

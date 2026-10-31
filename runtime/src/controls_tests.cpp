@@ -1185,10 +1185,6 @@ void test_tilt() {
     expect(close_to(ray_turn(remote_gravity(Section::Ray, up_from_stick(Section::Ray, 1.0f, 0.0f))),
                 std::sin(kRayStickDegrees * 3.14159265f / 180.0f), 0.01f),
            "ray: full stick is a 50-degree twist");
-    // Counts: the flat remote is the rest reading.
-    const Counts rest = accel_counts({0.0f, 0.0f, 1.0f});
-    expect(rest.x == kWiimoteRestAccelX && rest.y == kWiimoteRestAccelY && rest.z == kWiimoteRestAccelZ,
-           "the flat remote is the rest reading");
     // State: inactive outside sections; the neutral is captured at the start
     // and again on recenter; a motion controller steers by tilt only, a
     // controller without motion by the stick.
@@ -1585,26 +1581,6 @@ void test_playstation_and_steam_schemes() {
            "Cross is Wii A and L1 is Wii B");
 }
 
-void test_kpad_dots_stable() {
-    // A still pointer produces identical IR dots report after report, and a
-    // sub-unit move never jumps more than one raw unit.
-    WiimoteInputSnapshot a{}, b{};
-    publish_wiimote_ir_dots(a, 0.31234f, -0.12f, true);
-    publish_wiimote_ir_dots(b, 0.31234f, -0.12f, true);
-    expect(a.ir[0].x == b.ir[0].x && a.ir[0].y == b.ir[0].y && a.ir[1].x == b.ir[1].x,
-           "a still pointer gives identical dots");
-    int previous = -1;
-    bool monotonic = true;
-    for (int i = 0; i <= 200; ++i) {
-        WiimoteInputSnapshot s{};
-        publish_wiimote_ir_dots(s, -0.5f + i * 0.005f, 0.0f, true);
-        const int x = s.ir[0].x;
-        if (previous >= 0 && (x > previous || previous - x > 2)) monotonic = false;
-        previous = x;
-    }
-    expect(monotonic, "a steady sweep moves the dots in single small steps");
-}
-
 }  // namespace
 
 // The game's button icons: each Wii button's first controller input in the style asked; B in menus the button that
@@ -1816,7 +1792,6 @@ int main(int argc, char** argv) {
     test_tilt();
     test_defaults_and_migration();
     test_playstation_and_steam_schemes();
-    test_kpad_dots_stable();
     test_button_icons();
     test_keyboard_icons();
     test_shared_bindings();

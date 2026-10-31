@@ -202,12 +202,11 @@ AREAS = [
     (r"^runtime/(?:src|include/galaxy)/render/", "renderer-other", "CONVERT", "Renderer: native records."),
     (r"^runtime/(?:src|include/galaxy)/jaudio_host_mixer", "host-dsp", "REPLACE",
      "Host copy of the JAudio DSP program: replace with a native float mixer."),
-    (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video|"
-     r"synthetic_kpad_buttons)",
+    (r"^runtime/(?:src|include/galaxy)/(?:native_host|wii_device_data|virtual_disc|native_thp_video)",
      "host-console-model", "REPLACE",
      "Input as Wii Remote reports, virtual device data, disc image, software THP: replace with native input, "
      "cooked assets and native video."),
-    (r"^runtime/(?:src|include/galaxy)/(?:wiimote_|controller_|generic_hid|switch_controller|playstation_|"
+    (r"^runtime/(?:src|include/galaxy)/(?:input/|wiimote_|controller_|generic_hid|switch_controller|playstation_|"
      r"steam_controller|native_input|input_bindings|pointer_control|host_pointer|rumble|tilt)", "host-input-devices",
      "KEEP", "Device drivers: feed the native input API directly (no reports)."),
     (r"^runtime/(?:src|include/galaxy)/(?:mods|mod_import|mod_xml)", "host-mods", "CONVERT",

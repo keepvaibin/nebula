@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 58u
+#define NEBULA_GAME_API_VERSION 59u
 
 /* One of JAudio's 64 channels (JASDsp::TChannel, 0x180 bytes, host byte order): the game sets its source, pitch,
    volumes and filters; the host's mixer plays it and advances its playback state. */
@@ -413,37 +413,54 @@ enum {
     NEBULA_SC_ASPECT_RATIO,
     NEBULA_SC_PROGRESSIVE_MODE,
     NEBULA_SC_EURGB60_MODE,
-    NEBULA_SC_SENSOR_BAR_POSITION,  /* 0 below the screen, 1 above */
-    NEBULA_SC_DPD_SENSITIVITY,      /* 1..5 */
     NEBULA_SC_SPEAKER_VOLUME,       /* 0..127 */
     NEBULA_SC_MOTOR_MODE,           /* 0 rumble off, 1 on */
     NEBULA_SC_SCREEN_SAVER_MODE,    /* 0 off, 1 on: the screen dims after 5 idle minutes (the game lowers its volume) */
 };
 
-/* A Wii Remote's connection: its EEPROM's first 0x2A bytes (DPD and accelerometer calibration), the attached extension
-   (0 none, 1 Nunchuk: the SDK's WPAD_DEV_* values) with its 32-byte calibration block, and the battery level. */
-typedef struct NebulaWiimoteConnection {
-    uint8_t eeprom[0x2A];
-    uint8_t extension_calibration[32];
-    uint32_t extension;
-    uint8_t battery; /* WPADInfo's level, 0 empty to 4 */
-} NebulaWiimoteConnection;
-
-/* The pointer a report's IR data stands for, in KPAD's units (-1..1 across the screen, x right, y down), when the
-   host points directly (mouse, gyro): KPAD takes it as the position instead of solving it from the IR dots. */
-typedef struct NebulaWpadPointer {
-    float x;
-    float y;
-} NebulaWpadPointer;
-
-/* What the game asks of a remote (wpad_control). */
+/* A player's controller as the game reads it (input_read): one sample per moment, oldest first. */
 enum {
-    NEBULA_WPAD_INIT = 1,   /* the game started WPAD */
-    NEBULA_WPAD_FORMAT,     /* value: WPAD_FMT_*, which selects the input report the host sends */
-    NEBULA_WPAD_DPD,        /* value: 0 IR camera off, else on */
-    NEBULA_WPAD_MOTOR,      /* value: 0 stop, 1 rumble */
-    NEBULA_WPAD_SPEAKER,    /* value: the WPADControlSpeaker command (0 off, 1 on, 2 mute, 3 unmute, 4 play) */
-    NEBULA_WPAD_DISCONNECT,
+    NEBULA_BUTTON_A = 1u << 0,
+    NEBULA_BUTTON_B = 1u << 1,
+    NEBULA_BUTTON_1 = 1u << 2,
+    NEBULA_BUTTON_2 = 1u << 3,
+    NEBULA_BUTTON_PLUS = 1u << 4,
+    NEBULA_BUTTON_MINUS = 1u << 5,
+    NEBULA_BUTTON_HOME = 1u << 6,
+    NEBULA_BUTTON_UP = 1u << 7,
+    NEBULA_BUTTON_DOWN = 1u << 8,
+    NEBULA_BUTTON_LEFT = 1u << 9,
+    NEBULA_BUTTON_RIGHT = 1u << 10,
+    NEBULA_BUTTON_C = 1u << 11, /* the Nunchuk's */
+    NEBULA_BUTTON_Z = 1u << 12,
+};
+enum {
+    NEBULA_SHAKE_REMOTE = 1u << 0,  /* held while the remote (or the controller standing in for it) is shaken */
+    NEBULA_SHAKE_NUNCHUK = 1u << 1,
+};
+typedef struct NebulaInputSample {
+    uint32_t buttons;       /* NEBULA_BUTTON_* held */
+    float stick[2];         /* the Nunchuk stick, -1..1: right, up */
+    float pointer[2];       /* where the remote points, -1..1 across the picture: right, down (pointer_on) */
+    float roll[2];          /* the remote's roll as the screen sees it, a unit vector: (1, 0) level */
+    float distance;         /* from the screen, in the sensor bar's units (pointer_on) */
+    float gravity[3];       /* the remote's acceleration in g (1 at rest): x out of its left side, y toward the
+                               expansion port, z out of the A face */
+    float nunchuk_gravity[3]; /* the Nunchuk's, the same axes */
+    uint8_t pointer_on;     /* 1: the remote points at the picture */
+    uint8_t shake;          /* NEBULA_SHAKE_* */
+    uint8_t reserved[2];
+} NebulaInputSample;
+typedef struct NebulaInputDevice {
+    uint8_t connected;
+    uint8_t nunchuk;        /* 1: a Nunchuk is attached */
+    uint8_t battery;        /* 0 empty .. 4 full */
+    uint8_t reserved;
+} NebulaInputDevice;
+/* What the game asks of a player's controller (input_control). */
+enum {
+    NEBULA_INPUT_RUMBLE = 1, /* value: 0 off, 1 on */
+    NEBULA_INPUT_RELEASE,    /* the game lets the controller go (players 3 and 4 in play) */
 };
 
 /* The HOME Menu (hbm). NEBULA_HBM_POLL returns the choice so far: -1 none yet, 0 close, 1 leave the game, 2 reset.
@@ -851,8 +868,12 @@ typedef struct NebulaHostServices {
     /* A system setting (NEBULA_SC_*). */
     uint32_t (*sc_get)(void* user, uint32_t item);
 
-    /* Wii Remotes: a request to remote `chan` (NEBULA_WPAD_*), and speaker data (the game's encoded ADPCM). */
-    void (*wpad_control)(void* user, uint32_t chan, uint32_t what, uint32_t value);
+    /* Input. `device` gets player `player`'s controller; with `max` > 0 `samples` gets its samples since the last
+       read, oldest first, one taken now and one every 10 ms before it (at most `max`, the newest kept): the count. */
+    uint32_t (*input_read)(void* user, uint32_t player, NebulaInputDevice* device, NebulaInputSample* samples,
+                           uint32_t max);
+    void (*input_control)(void* user, uint32_t player, uint32_t what, uint32_t value);
+    /* A remote's speaker data (the game's encoded ADPCM). */
     void (*wpad_speaker_data)(void* user, uint32_t chan, const uint8_t* data, uint32_t size);
 
     /* JAudio's mixer (on the console a DSP program; the host runs it). Pointers are into the game's memory.
@@ -951,9 +972,6 @@ typedef struct NebulaHostServices {
     void (*sharp_2d)(void* user, uint32_t on);
     /* The button icons as the player's controller and the setting have them now (NebulaButtonIcons). */
     void (*button_icons)(void* user, NebulaButtonIcons* icons);
-    /* The game reads remote `chan` now (each frame, before KPADRead): the host's newest input in a report at once
-       (nebula_game_wpad_report, from this thread), rather than at its next one. */
-    void (*wpad_sample)(void* user, uint32_t chan);
     /* GALAXY_EXPORT_ART=<folder>: Nebula's own pictures written there (NebulaArtExport). NULL asks whether an export
        is on: 1, else 0 (the game then paints nothing for it). */
     uint32_t (*art_export)(void* user, const NebulaArtExport* art);
@@ -1093,19 +1111,6 @@ NEBULA_GAME_API uint32_t nebula_game_audio_channel_owner(uint32_t channel, uint3
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */
 NEBULA_GAME_API void nebula_game_mii_changed(void);
-/* A Wii Remote connected (with its calibration) or disconnected. */
-NEBULA_GAME_API void nebula_game_wpad_connect(uint32_t chan, int connected, const NebulaWiimoteConnection* connection);
-/* A Wii Remote input report, from its id (0x30, 0x31, 0x33 or 0x37 as the data format asks), extension bytes decrypted;
-   one per report the remote sends (100 per second). `pointer`: the exact position its IR dots stand for, or NULL (a
-   real remote). */
-NEBULA_GAME_API void nebula_game_wpad_report(uint32_t chan, const uint8_t* report, size_t size,
-                                             const NebulaWpadPointer* pointer);
-/* The shake buttons held on a controller standing in for a remote (bit 0: the remote's, bit 1: the Nunchuk's): each
-   press is one swing for the game's swing detector, the frame it is pressed. Any thread; called on every change. */
-NEBULA_GAME_API void nebula_game_wpad_shake(uint32_t chan, uint32_t held);
-/* A connected remote's battery, as WPADInfo's level (0 empty to 4), when it changes. */
-NEBULA_GAME_API void nebula_game_wpad_battery(uint32_t chan, uint32_t level);
-
 #ifdef __cplusplus
 }
 #endif

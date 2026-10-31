@@ -1,6 +1,7 @@
-// The virtual Wii Remote's input reports and IR dots, a real Wii Remote's output reports and replies, the
-// settings-overlay pad and the input-script integer fields.
+// The player's input (PlayerInput): buttons, the virtual remote's pointer, stick and motion; a real Wii Remote's
+// reports read into it, its output reports and replies; the settings-overlay pad and the input-script integer fields.
 
+#include "galaxy/input/wiimote_input.h"
 #include "galaxy/native_input.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/wiimote_hid.h"
@@ -148,97 +149,6 @@ bool native_input_script_unsigned_fields_fail_closed() {
     return passed;
 }
 
-bool expect_bytes(
-    std::span<const std::uint8_t> actual,
-    std::span<const std::uint8_t> expected,
-    const char* message) {
-    if (actual.size() != expected.size()) {
-        std::cerr << "FAILED: " << message << " size actual=" << actual.size()
-                  << " expected=" << expected.size() << '\n';
-        return false;
-    }
-    for (std::size_t i = 0; i < actual.size(); ++i) {
-        if (actual[i] != expected[i]) {
-            std::cerr << "FAILED: " << message << " byte[" << i
-                      << "] actual=0x" << std::hex
-                      << static_cast<unsigned>(actual[i]) << " expected=0x"
-                      << static_cast<unsigned>(expected[i]) << std::dec << '\n';
-            return false;
-        }
-    }
-    return true;
-}
-
-struct DecodedIrDot {
-    bool visible = false;
-    std::uint16_t x = 0x03ffu;
-    std::uint16_t y = 0x03ffu;
-    std::uint8_t size = 0;
-};
-
-std::array<DecodedIrDot, 2> decode_basic_ir_pair(
-    std::span<const std::uint8_t> bytes) {
-    if (bytes.size() != 5u) {
-        return {};
-    }
-
-    const std::uint8_t high = bytes[2];
-    const auto first_x = static_cast<std::uint16_t>(bytes[0] | (high & 0x30u) << 4u);
-    const auto first_y = static_cast<std::uint16_t>(bytes[1] | (high & 0xc0u) << 2u);
-    const auto second_x = static_cast<std::uint16_t>(bytes[3] | (high & 0x03u) << 8u);
-    const auto second_y = static_cast<std::uint16_t>(bytes[4] | (high & 0x0cu) << 6u);
-    const bool first_visible = first_x != 0x03ffu || first_y != 0x03ffu;
-    const bool second_visible = second_x != 0x03ffu || second_y != 0x03ffu;
-    return {{
-        {
-            first_visible,
-            first_visible
-                ? static_cast<std::uint16_t>(
-                      bytes[0] |
-                      static_cast<std::uint16_t>(high & 0x30u) << 4u)
-                : static_cast<std::uint16_t>(0x03ffu),
-            first_visible
-                ? static_cast<std::uint16_t>(
-                      bytes[1] |
-                      static_cast<std::uint16_t>(high & 0xc0u) << 2u)
-                : static_cast<std::uint16_t>(0x03ffu),
-            0,
-        },
-        {
-            second_visible,
-            second_visible
-                ? static_cast<std::uint16_t>(
-                      bytes[3] |
-                      static_cast<std::uint16_t>(high & 0x03u) << 8u)
-                : static_cast<std::uint16_t>(0x03ffu),
-            second_visible
-                ? static_cast<std::uint16_t>(
-                      bytes[4] |
-                      static_cast<std::uint16_t>(high & 0x0cu) << 6u)
-                : static_cast<std::uint16_t>(0x03ffu),
-            0,
-        },
-    }};
-}
-
-DecodedIrDot decode_extended_ir_dot(
-    std::span<const std::uint8_t> bytes) {
-    if (bytes.size() != 3u ||
-        (bytes[0] == 0xffu && bytes[1] == 0xffu && bytes[2] == 0xffu)) {
-        return {};
-    }
-    return {
-        true,
-        static_cast<std::uint16_t>(
-            bytes[0] |
-            static_cast<std::uint16_t>(bytes[2] & 0x30u) << 4u),
-        static_cast<std::uint16_t>(
-            bytes[1] |
-            static_cast<std::uint16_t>(bytes[2] & 0xc0u) << 2u),
-        static_cast<std::uint8_t>(bytes[2] & 0x0fu),
-    };
-}
-
 bool normalizes_xinput_axes() {
     constexpr std::int16_t kDeadzone = 7849;
     return expect(
@@ -265,683 +175,188 @@ bool normalizes_xinput_axes() {
                "XInput just outside deadzone is nonzero");
 }
 
-bool publishes_native_pointer_as_ir_dots() {
-    galaxy::input::WiimoteInputSnapshot inactive{};
-    galaxy::input::publish_wiimote_ir_dots(inactive, 0.0f, 0.0f, false);
-    bool passed =
-        expect(
-            std::none_of(inactive.ir.begin(), inactive.ir.end(), [](const auto& dot) {
-                return dot.visible;
-            }),
-            "inactive pointer leaves all IR dots hidden");
-
-    galaxy::input::WiimoteInputSnapshot centered{};
-    galaxy::input::publish_wiimote_ir_dots(centered, 0.0f, 0.0f, true);
-    passed &= expect(
-        centered.ir[0].visible && centered.ir[1].visible,
-        "active pointer publishes primary IR dots");
-    passed &= expect(
-        !centered.ir[2].visible && !centered.ir[3].visible,
-        "active pointer leaves ambiguous extra IR dots hidden");
-    passed &= expect(centered.ir[0].x == 430u, "center pointer left IR x");
-    passed &= expect(centered.ir[1].x == 590u, "center pointer right IR x");
-    passed &= expect(centered.ir[0].y == 487u, "center pointer left IR y");
-    passed &= expect(centered.ir[1].y == 487u, "center pointer right IR y");
-    passed &= expect(centered.ir[0].size == 8u, "center pointer left IR size");
-    passed &= expect(centered.ir[1].size == 8u, "center pointer right IR size");
-    passed &= expect(centered.ir[2].size == 0u, "center pointer hidden IR size");
-    passed &= expect(centered.ir[3].size == 0u, "center pointer hidden IR size");
-
-    galaxy::input::WiimoteInputSnapshot clamped{};
-    galaxy::input::publish_wiimote_ir_dots(clamped, -2.0f, 2.0f, true);
-    passed &= expect(clamped.ir[0].x == 656u, "clamped pointer left IR x");
-    passed &= expect(clamped.ir[1].x == 816u, "clamped pointer right IR x");
-    passed &= expect(clamped.ir[0].y == 713u, "clamped pointer left IR y");
-    passed &= expect(clamped.ir[1].y == 713u, "clamped pointer right IR y");
-    passed &= expect(
-        std::none_of(clamped.ir.begin(), clamped.ir.end(), [](const auto& dot) {
-            return dot.visible && (dot.x == 1023u || dot.y == 0u);
-        }),
-        "clamped pointer avoids WPAD invalid IR sentinels");
-
-    galaxy::input::WiimoteInputSnapshot top_edge{};
-    galaxy::input::publish_wiimote_ir_dots(top_edge, 0.0f, -2.0f, true);
-    passed &= expect(top_edge.ir[0].y == 261u, "top-edge pointer left IR y");
-    passed &= expect(top_edge.ir[1].y == 261u, "top-edge pointer right IR y");
-    return passed;
-}
-
-bool stress_publishes_native_pointer_ir_edges() {
-    struct EdgeCase {
-        const char* name;
-        float pointer_x;
-        float pointer_y;
-        std::uint16_t left_x;
-        std::uint16_t right_x;
-        std::uint16_t y;
-    };
-    constexpr std::array<EdgeCase, 8> cases{{
-        {"center", 0.0f, 0.0f, 430u, 590u, 487u},
-        {"top_left", -1.0f, -1.0f, 656u, 816u, 261u},
-        {"top_right", 1.0f, -1.0f, 204u, 364u, 261u},
-        {"bottom_left", -1.0f, 1.0f, 656u, 816u, 713u},
-        {"bottom_right", 1.0f, 1.0f, 204u, 364u, 713u},
-        {"clamp_low_high", -4.0f, 4.0f, 656u, 816u, 713u},
-        {"clamp_high_low", 4.0f, -4.0f, 204u, 364u, 261u},
-        {"subpixel_round", 0.001f, -0.001f, 430u, 590u, 487u},
-    }};
-
-    bool passed = true;
-    for (const EdgeCase& edge : cases) {
-        galaxy::input::WiimoteInputSnapshot snapshot{};
-        galaxy::input::publish_wiimote_ir_dots(
-            snapshot, edge.pointer_x, edge.pointer_y, true);
-        passed &= expect(snapshot.ir[0].visible, edge.name);
-        passed &= expect(snapshot.ir[1].visible, edge.name);
-        passed &= expect(!snapshot.ir[2].visible, edge.name);
-        passed &= expect(!snapshot.ir[3].visible, edge.name);
-        passed &= expect(snapshot.ir[0].x == edge.left_x, edge.name);
-        passed &= expect(snapshot.ir[1].x == edge.right_x, edge.name);
-        passed &= expect(snapshot.ir[0].y == edge.y, edge.name);
-        passed &= expect(snapshot.ir[1].y == edge.y, edge.name);
-        passed &= expect(
-            snapshot.ir[1].x - snapshot.ir[0].x == 160u,
-            "native IR primary dot separation remains stable");
-        passed &= expect(
-            snapshot.ir[0].size == 8u && snapshot.ir[1].size == 8u,
-            "native IR primary dot sizes stay visible");
-        passed &= expect(
-            snapshot.ir[2].x == 0x03ffu && snapshot.ir[2].y == 0x03ffu &&
-                snapshot.ir[3].x == 0x03ffu &&
-                snapshot.ir[3].y == 0x03ffu,
-            "native IR hidden dots stay at hardware hidden sentinel");
-
-        std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes>
-            report{};
-        const auto result =
-            galaxy::input::build_wiimote_input_report(0x37, snapshot, report);
-        passed &= expect(
-            result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-            "stress native IR 0x37 report builds");
-        passed &= expect(result.size == 23u, "stress native IR 0x37 report size");
-        passed &= expect(
-            report[0] == 0xa1u && report[1] == 0x37u,
-            "stress native IR 0x37 report header");
-        bool first_pair_visible = false;
-        for (std::size_t i = 7u; i < 12u; ++i) {
-            first_pair_visible = first_pair_visible || report[i] != 0xffu;
-        }
-        bool second_pair_hidden = true;
-        for (std::size_t i = 12u; i < 17u; ++i) {
-            second_pair_hidden = second_pair_hidden && report[i] == 0xffu;
-        }
-        passed &= expect(
-            first_pair_visible,
-            "stress native IR report publishes first basic pair");
-        passed &= expect(
-            second_pair_hidden,
-            "stress native IR report hides unused second basic pair");
-        passed &= expect(
-            report[17] == 0x7bu && report[18] == 0x81u,
-            "stress native IR report leaves default nunchuk stick neutral");
+// Each button is its own bit, the game's NEBULA_BUTTON_* order.
+bool player_buttons_are_bits() {
+    using namespace galaxy::input;
+    bool ok = true;
+    const std::pair<bool ButtonState::*, std::uint32_t> map[] = {
+        {&ButtonState::a, kButtonA},         {&ButtonState::b, kButtonB},         {&ButtonState::one, kButton1},
+        {&ButtonState::two, kButton2},       {&ButtonState::plus, kButtonPlus},   {&ButtonState::minus, kButtonMinus},
+        {&ButtonState::home, kButtonHome},   {&ButtonState::up, kButtonUp},       {&ButtonState::down, kButtonDown},
+        {&ButtonState::left, kButtonLeft},   {&ButtonState::right, kButtonRight}, {&ButtonState::c, kButtonC},
+        {&ButtonState::z, kButtonZ}};
+    std::uint32_t all = 0;
+    for (const auto& [field, bit] : map) {
+        ButtonState buttons{};
+        buttons.*field = true;
+        ok &= expect(button_bits(buttons) == bit, "one button, one bit");
+        ok &= expect((all & bit) == 0u, "no two buttons share a bit");
+        all |= bit;
     }
-    return passed;
+    ok &= expect(button_bits(ButtonState{}) == 0u && all == 0x1fffu, "thirteen buttons in bits 0-12");
+    return ok;
 }
 
-float approximate_kpad_pointing_x(
-    const galaxy::input::WiimoteInputSnapshot& snapshot) {
-    const float object_center_x =
-        (static_cast<float>(snapshot.ir[0].x) +
-         static_cast<float>(snapshot.ir[1].x)) * 0.5f;
-    return (510.0f - object_center_x) / 226.0f;
+// The virtual remote's pointer: on the picture (clamped), level, at its distance; off without a source; lost when the
+// remote points up or down.
+bool virtual_pointer_and_motion() {
+    using namespace galaxy::input;
+    bool ok = true;
+    PlayerInput input{};
+    ok &= expect(!input.pointer_on && input.gravity == Gravity{0.0f, 0.0f, 1.0f} &&
+                     input.nunchuk_gravity == Gravity{0.0f, 0.0f, 1.0f},
+                 "at rest: no pointer, lying still");
+    set_pointer(input, -0.26f, 1.7f, true);
+    ok &= expect(input.pointer_on && input.pointer_x == -0.26f && input.pointer_y == 1.0f && input.roll_x == 1.0f &&
+                     input.roll_y == 0.0f,
+                 "a pointer on the picture, clamped, level");
+    ok &= expect_close(input.distance, 1.667255f, 1e-5f, "the virtual remote's distance");
+    set_pointer(input, 0.5f, 0.5f, false);
+    ok &= expect(!input.pointer_on, "no source, no pointer");
+    ok &= expect(remote_faces_screen({0.0f, 0.0f, 1.0f}), "lying flat: points at the screen");
+    ok &= expect(!remote_faces_screen({0.0f, -1.0f, 0.0f}), "held upright (Star Ball): no pointer");
+    ok &= expect(!remote_faces_screen({0.0f, 1.0f, 0.0f}), "pointing at the floor: no pointer");
+    ok &= expect(remote_faces_screen({0.0f, -0.70f, 0.714f}) && !remote_faces_screen({0.0f, -0.72f, 0.69f}),
+                 "the edge at ~45 degrees");
+    ok &= expect(remote_faces_screen({0.0f, 0.0f, 0.0f}), "no reading: the pointer stays");
+    return ok;
 }
 
-float approximate_kpad_pointing_y(
-    const galaxy::input::WiimoteInputSnapshot& snapshot) {
-    const float object_center_y =
-        (static_cast<float>(snapshot.ir[0].y) +
-         static_cast<float>(snapshot.ir[1].y)) * 0.5f;
-    return (object_center_y - 487.0f) / 226.0f;
+// A stick read as the Nunchuk's: dead zone, linear, full; never longer than 1.
+bool nunchuk_stick_response() {
+    using namespace galaxy::input;
+    bool ok = true;
+    ok &= expect(nunchuk_stick(0.10f, -0.14f).x == 0.0f && nunchuk_stick(0.10f, -0.14f).y == 0.0f, "inside the dead zone");
+    ok &= expect_close(nunchuk_stick(0.5f, 0.0f).x, (50.5f - 15.0f) / 56.0f, 1e-5f, "linear between");
+    ok &= expect(nunchuk_stick(-0.71f, 0.0f).x == -1.0f && nunchuk_stick(0.0f, 1.0f).y == 1.0f, "full from 71/101");
+    const StickValue diagonal = nunchuk_stick(1.0f, 1.0f);
+    ok &= expect_close(diagonal.x, 0.70710678f, 1e-5f, "a full diagonal on the circle") &&
+          expect_close(diagonal.y, 0.70710678f, 1e-5f, "a full diagonal on the circle (y)");
+    ok &= expect(nunchuk_stick_counts(15.0f, -15.0f).x == 0.0f && nunchuk_stick_counts(71.0f, 0.0f).x == 1.0f &&
+                     nunchuk_stick_counts(-43.0f, 0.0f).x == -0.5f,
+                 "a Nunchuk's own counts: 15 nothing, 43 half, 71 full");
+    return ok;
 }
 
-bool publishes_camera_space_ir_for_kpad_pointer_position() {
-    galaxy::input::WiimoteInputSnapshot upper_right{};
-    galaxy::input::publish_wiimote_ir_dots(upper_right, 0.75f, 0.50f, true);
-    bool passed = expect_close(
-        approximate_kpad_pointing_x(upper_right),
-        0.75f,
-        0.01f,
-        "positive native pointer x maps directly after WPAD/KPAD transform");
-    passed &= expect_close(
-        approximate_kpad_pointing_y(upper_right),
-        0.50f,
-        0.01f,
-        "positive native pointer y stays positive after WPAD/KPAD transform");
-
-    galaxy::input::WiimoteInputSnapshot lower_left{};
-    galaxy::input::publish_wiimote_ir_dots(lower_left, -0.50f, -0.50f, true);
-    passed &= expect_close(
-        approximate_kpad_pointing_x(lower_left),
-        -0.50f,
-        0.01f,
-        "negative native pointer x maps directly after WPAD/KPAD transform");
-    passed &= expect_close(
-        approximate_kpad_pointing_y(lower_left),
-        -0.50f,
-        0.01f,
-        "negative native pointer y stays negative after WPAD/KPAD transform");
-    return passed;
-}
-
-bool native_pointer_ir_sweeps_are_monotonic() {
-    bool passed = true;
-    float previous_kpad_x = -2.0f;
-    std::uint16_t previous_left_raw_x = 0x03ffu;
-    std::uint16_t previous_right_raw_x = 0x03ffu;
-    for (int step = -1000; step <= 1000; ++step) {
-        const float pointer_x = static_cast<float>(step) / 1000.0f;
-        galaxy::input::WiimoteInputSnapshot snapshot{};
-        galaxy::input::publish_wiimote_ir_dots(
-            snapshot, pointer_x, 0.0f, true);
-        const float kpad_x = approximate_kpad_pointing_x(snapshot);
-        if (kpad_x + 0.000001f < previous_kpad_x ||
-            snapshot.ir[0].x > previous_left_raw_x ||
-            snapshot.ir[1].x > previous_right_raw_x ||
-            snapshot.ir[1].x - snapshot.ir[0].x != 160u) {
-            std::cerr << "FAILED: native horizontal IR sweep reversed or "
-                         "changed dot geometry at step="
-                      << step << " pointer=" << pointer_x
-                      << " kpad=" << kpad_x << " dots=("
-                      << snapshot.ir[0].x << ',' << snapshot.ir[1].x
-                      << ")\n";
-            passed = false;
-            break;
+// A remote's calibration as its EEPROM holds it: IR (unused), then the accelerometer's 0 g at 512 and 1 g at 612 on
+// every axis, twice, with checksums.
+std::array<std::uint8_t, 0x2a> remote_eeprom() {
+    std::array<std::uint8_t, 0x2a> eeprom{};
+    const std::uint8_t accel[9] = {0x80, 0x80, 0x80, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00};
+    for (std::size_t block = 0; block < 2; ++block) {
+        int sum = 0;
+        for (std::size_t i = 0; i < 9; ++i) {
+            eeprom[0x16 + block * 10 + i] = accel[i];
+            sum += accel[i];
         }
-        previous_kpad_x = kpad_x;
-        previous_left_raw_x = snapshot.ir[0].x;
-        previous_right_raw_x = snapshot.ir[1].x;
+        eeprom[0x16 + block * 10 + 9] = static_cast<std::uint8_t>(sum + 0x55);
     }
+    return eeprom;
+}
 
-    float previous_kpad_y = -2.0f;
-    std::uint16_t previous_raw_y = 0u;
-    for (int step = -1000; step <= 1000; ++step) {
-        const float pointer_y = static_cast<float>(step) / 1000.0f;
-        galaxy::input::WiimoteInputSnapshot snapshot{};
-        galaxy::input::publish_wiimote_ir_dots(
-            snapshot, 0.0f, pointer_y, true);
-        const float kpad_y = approximate_kpad_pointing_y(snapshot);
-        if (kpad_y + 0.000001f < previous_kpad_y ||
-            snapshot.ir[0].y < previous_raw_y ||
-            snapshot.ir[1].y != snapshot.ir[0].y) {
-            std::cerr << "FAILED: native vertical IR sweep reversed or split "
-                         "dot rows at step="
-                      << step << " pointer=" << pointer_y
-                      << " kpad=" << kpad_y
-                      << " y=" << snapshot.ir[0].y << '\n';
-            passed = false;
-            break;
+// A Nunchuk's calibration block: 0 g at 512 and 1 g at 712, stick limits; its two checksums; twice.
+std::array<std::uint8_t, 32> nunchuk_calibration() {
+    std::array<std::uint8_t, 32> block{};
+    const std::uint8_t data[14] = {0x80, 0x80, 0x80, 0x00, 0xb2, 0xb2, 0xb2, 0x00, 0xe0, 0x15, 0x7b, 0xe6, 0x1d, 0x81};
+    for (std::size_t copy = 0; copy < 2; ++copy) {
+        int sum = 0;
+        for (std::size_t i = 0; i < 14; ++i) {
+            block[copy * 16 + i] = data[i];
+            sum += data[i];
         }
-        previous_kpad_y = kpad_y;
-        previous_raw_y = snapshot.ir[0].y;
+        block[copy * 16 + 14] = static_cast<std::uint8_t>(sum + 0x55);
+        block[copy * 16 + 15] = static_cast<std::uint8_t>(sum + 0xaa);
     }
-    return passed;
+    return block;
 }
 
-bool preserves_ir_coordinates_across_report_modes() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    galaxy::input::publish_wiimote_ir_dots(
-        snapshot, 0.3125f, -0.2734375f, true);
-
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes>
-        report33{};
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes>
-        report36{};
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes>
-        report37{};
-    const auto built33 = galaxy::input::build_wiimote_input_report(
-        0x33u, snapshot, report33);
-    const auto built36 = galaxy::input::build_wiimote_input_report(
-        0x36u, snapshot, report36);
-    const auto built37 = galaxy::input::build_wiimote_input_report(
-        0x37u, snapshot, report37);
-    bool passed = expect(
-        built33.status == galaxy::input::WiimoteReportBuildStatus::Ok &&
-            built36.status == galaxy::input::WiimoteReportBuildStatus::Ok &&
-            built37.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-        "all IR-bearing modes build");
-
-    const DecodedIrDot extended0 = decode_extended_ir_dot(
-        std::span<const std::uint8_t>(report33).subspan(7u, 3u));
-    const DecodedIrDot extended1 = decode_extended_ir_dot(
-        std::span<const std::uint8_t>(report33).subspan(10u, 3u));
-    const auto basic36 = decode_basic_ir_pair(
-        std::span<const std::uint8_t>(report36).subspan(4u, 5u));
-    const auto basic37 = decode_basic_ir_pair(
-        std::span<const std::uint8_t>(report37).subspan(7u, 5u));
-    const auto matches_snapshot = [&](const DecodedIrDot& decoded,
-                                      std::size_t index) {
-        return decoded.visible == snapshot.ir[index].visible &&
-               decoded.x == snapshot.ir[index].x &&
-               decoded.y == snapshot.ir[index].y;
-    };
-    passed &= expect(
-        matches_snapshot(extended0, 0u) && matches_snapshot(extended1, 1u),
-        "extended IR mode preserves both native pointer dots");
-    passed &= expect(
-        matches_snapshot(basic36[0], 0u) &&
-            matches_snapshot(basic36[1], 1u),
-        "0x36 basic IR mode preserves both native pointer dots");
-    passed &= expect(
-        matches_snapshot(basic37[0], 0u) &&
-            matches_snapshot(basic37[1], 1u),
-        "0x37 basic IR mode preserves both native pointer dots");
-    passed &= expect(
-        extended0.size == 8u && extended1.size == 8u,
-        "extended IR mode preserves native pointer dot sizes");
-    return passed;
-}
-
-bool clearing_ir_never_reuses_stale_dots() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    galaxy::input::publish_wiimote_ir_dots(
-        snapshot, 0.625f, -0.375f, true);
-    const auto first_visible = snapshot.ir;
-
-    bool passed = true;
-    for (std::size_t frame = 0; frame < 120u; ++frame) {
-        galaxy::input::publish_wiimote_ir_dots(
-            snapshot, -0.5f, 0.5f, false);
-        std::array<
-            std::uint8_t,
-            galaxy::input::kMaxWiimoteInputReportBytes>
-            report{};
-        const auto built = galaxy::input::build_wiimote_input_report(
-            0x37u, snapshot, report);
-        const bool all_hidden = std::all_of(
-            snapshot.ir.begin(), snapshot.ir.end(), [](const auto& dot) {
-                return !dot.visible && dot.x == 0x03ffu &&
-                       dot.y == 0x03ffu && dot.size == 0u;
-            });
-        const bool hidden_on_wire = std::all_of(
-            report.begin() + 7,
-            report.begin() + 17,
-            [](std::uint8_t byte) { return byte == 0xffu; });
-        if (built.status != galaxy::input::WiimoteReportBuildStatus::Ok ||
-            !all_hidden || !hidden_on_wire) {
-            std::cerr << "FAILED: inactive native IR retained stale dots at "
-                         "slot="
-                      << frame << '\n';
-            passed = false;
-            break;
+// Report 0x33: buttons, the accelerometer (10 bits: X's low two and Y's and Z's second in the button bytes) and four
+// extended IR lights; `lights` raw camera positions (size 8), the rest unseen.
+std::array<std::uint8_t, 18> report_0x33(std::uint8_t b1, std::uint8_t b2, int x, int y, int z,
+                                         std::span<const std::array<int, 2>> lights) {
+    std::array<std::uint8_t, 18> r{};
+    r[0] = 0x33;
+    r[1] = static_cast<std::uint8_t>(b1 | ((x & 3) << 5));
+    r[2] = static_cast<std::uint8_t>(b2 | ((y & 2) << 4) | ((z & 2) << 5));
+    r[3] = static_cast<std::uint8_t>(x >> 2);
+    r[4] = static_cast<std::uint8_t>(y >> 2);
+    r[5] = static_cast<std::uint8_t>(z >> 2);
+    for (std::size_t i = 0; i < 4; ++i) {
+        std::uint8_t* d = r.data() + 6 + i * 3;
+        if (i >= lights.size()) {
+            d[0] = d[1] = d[2] = 0xff;
+            continue;
         }
+        const int lx = lights[i][0];
+        const int ly = lights[i][1];
+        d[0] = static_cast<std::uint8_t>(lx & 0xff);
+        d[1] = static_cast<std::uint8_t>(ly & 0xff);
+        d[2] = static_cast<std::uint8_t>(((ly >> 8) & 3) << 6 | ((lx >> 8) & 3) << 4 | 8);
     }
-
-    galaxy::input::publish_wiimote_ir_dots(
-        snapshot, -0.5f, 0.5f, true);
-    passed &= expect(
-        snapshot.ir[0].visible && snapshot.ir[1].visible &&
-            (snapshot.ir[0].x != first_visible[0].x ||
-             snapshot.ir[0].y != first_visible[0].y) &&
-            (snapshot.ir[1].x != first_visible[1].x ||
-             snapshot.ir[1].y != first_visible[1].y),
-        "reactivated native IR uses only the new pointer sample");
-    return passed;
+    return r;
 }
 
-bool builds_core_button_report() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.buttons.left = true;
-    snapshot.buttons.up = true;
-    snapshot.buttons.plus = true;
-    snapshot.buttons.b = true;
-    snapshot.buttons.a = true;
-    snapshot.buttons.home = true;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x30, snapshot, report);
-    constexpr std::array<std::uint8_t, 4> expected{
-        0xa1, 0x30, 0x19, 0x8c};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x30 core report builds") &&
-           expect(result.size == expected.size(), "0x30 core report size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x30 core report bytes");
-}
+// A real remote's reports read as the player's input: buttons, motion through its calibration, the pointer from the
+// sensor bar's two lights (level, centred, then right; smoothed as the game smooths a camera pointer), none when held
+// upright; its Nunchuk's stick from where it rested, C and Z, motion.
+bool real_remote_reports() {
+    using namespace galaxy::input;
+    bool ok = true;
+    wiimote::Reader reader;
+    const auto eeprom = remote_eeprom();
+    const auto calibration = nunchuk_calibration();
+    reader.connect(eeprom, calibration, false);
+    PlayerInput in{};
+    const std::array<int, 2> centred[2] = {{430, 487}, {590, 487}};
+    auto r = report_0x33(0x08, 0x08, 512, 512, 612, centred);  // Up, A; lying flat
+    ok &= expect(reader.read(r, in), "a 0x33 report reads");
+    ok &= expect(in.buttons.up && in.buttons.a && !in.buttons.b && !in.buttons.c, "Up and A");
+    ok &= expect_close(in.gravity[0], 0.0f, 1e-6f, "flat: x 0") && expect_close(in.gravity[1], 0.0f, 1e-6f, "flat: y 0") &&
+          expect_close(in.gravity[2], 1.0f, 1e-6f, "flat: z 1 g");
+    ok &= expect(in.pointer_on, "the bar seen: a pointer");
+    ok &= expect_close(in.pointer_x, 0.0f, 0.01f, "the bar's centre: the picture's (x)") &&
+          expect_close(in.pointer_y, 0.0f, 0.01f, "the bar's centre: the picture's (y)");
+    ok &= expect_close(in.roll_x, 1.0f, 1e-6f, "level") && expect_close(in.distance, 1.667255f, 1e-4f, "distance 1.67");
+    const float first_x = in.pointer_x;
+    const std::array<int, 2> left[2] = {{330, 487}, {490, 487}};
+    r = report_0x33(0, 0, 512, 512, 612, left);
+    ok &= expect(reader.read(r, in) && in.pointer_on, "the bar moved left in the camera");
+    const float target = first_x + 100.0f * (2.0f / 1024.0f) * (1.25f / 0.55f);
+    ok &= expect_close(in.pointer_x, first_x + (target - first_x) * 0.5f, 1e-4f, "half of a large step: pointing right");
+    r = report_0x33(0, 0, 512, 412, 512, left);  // y -1 g: held upright
+    ok &= expect(reader.read(r, in) && !in.pointer_on, "held upright: no pointer");
+    ok &= expect_close(in.gravity[1], -1.0f, 1e-6f, "upright: y -1 g");
+    const std::array<int, 2> too_close[2] = {{500, 487}, {520, 487}};
+    r = report_0x33(0, 0, 512, 512, 612, too_close);
+    ok &= expect(reader.read(r, in) && !in.pointer_on, "two lights too close are not the bar");
+    // A quarter turn: the bar's lights one above the other, gravity along x.
+    const std::array<int, 2> turned[2] = {{510, 407}, {510, 567}};
+    r = report_0x33(0, 0, 612, 512, 512, turned);
+    ok &= expect(reader.read(r, in) && in.pointer_on && std::fabs(in.roll_y) > 0.99f, "rolled a quarter turn");
 
-bool packs_hardware_accelerometer_low_bits_into_button_bytes() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.accel.x = 0x0201;
-    snapshot.accel.y = 0x0202;
-    snapshot.accel.z = 0x0203;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x31, snapshot, report);
-    constexpr std::array<std::uint8_t, 7> expected{
-        0xa1, 0x31, 0x20, 0x60, 0x80, 0x80, 0x80};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x31 accel report builds") &&
-           expect(result.size == expected.size(), "0x31 accel report size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x31 virtual accel report matches hardware low-bit packing");
-}
-
-bool accel_low_bits_do_not_change_core_button_semantics() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.buttons.left = true;
-    snapshot.buttons.right = true;
-    snapshot.buttons.down = true;
-    snapshot.buttons.up = true;
-    snapshot.buttons.plus = true;
-    snapshot.buttons.two = true;
-    snapshot.buttons.one = true;
-    snapshot.buttons.b = true;
-    snapshot.buttons.a = true;
-    snapshot.buttons.minus = true;
-    snapshot.buttons.home = true;
-    snapshot.accel.x = 0x0203;
-    snapshot.accel.y = 0x0202;
-    snapshot.accel.z = 0x0202;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x31, snapshot, report);
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x31 combined button/accel report builds") &&
-           expect(
-               report[2] == 0x7fu && report[3] == 0xffu,
-               "0x31 combined report preserves hardware button and accel bits") &&
-           expect(
-               (report[2] & 0x1fu) == 0x1fu &&
-                   (report[3] & 0x9fu) == 0x9fu,
-               "the game's button masks keep every pressed core button");
-}
-
-bool packs_nunchuk_extension_bytes() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.nunchuk.stick_x = 200;
-    snapshot.nunchuk.stick_y = 42;
-    snapshot.nunchuk.accel.x = 0x0155;
-    snapshot.nunchuk.accel.y = 0x02aa;
-    snapshot.nunchuk.accel.z = 0x03ff;
-    snapshot.nunchuk.c = true;
-    snapshot.nunchuk.z = false;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x35, snapshot, report);
-    constexpr std::array<std::uint8_t, 23> expected{
-        0xa1, 0x35, 0x00, 0x00, 0x7f, 0x81, 0x99,
-        0xc8, 0x2a, 0x55, 0xaa, 0xff, 0xe5,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x35 nunchuk report builds") &&
-           expect(result.size == expected.size(), "0x35 nunchuk report size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x35 nunchuk report bytes");
-}
-
-bool packs_core_and_short_extension_report() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.nunchuk.stick_x = 200;
-    snapshot.nunchuk.stick_y = 42;
-    snapshot.nunchuk.accel.x = 0x0155;
-    snapshot.nunchuk.accel.y = 0x02aa;
-    snapshot.nunchuk.accel.z = 0x03ff;
-    snapshot.nunchuk.c = true;
-    snapshot.nunchuk.z = false;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x32, snapshot, report);
-    constexpr std::array<std::uint8_t, 12> expected{
-        0xa1, 0x32, 0x00, 0x00,
-        0xc8, 0x2a, 0x55, 0xaa, 0xff, 0xe5, 0x00, 0x00};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x32 short extension report builds") &&
-           expect(result.size == expected.size(), "0x32 short extension size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x32 short extension bytes");
-}
-
-bool packs_accel_and_extended_ir_report() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.accel.x = 0x0201;
-    snapshot.accel.y = 0x0202;
-    snapshot.accel.z = 0x0203;
-    snapshot.ir[0].visible = true;
-    snapshot.ir[0].x = 0x0155;
-    snapshot.ir[0].y = 0x02aa;
-    snapshot.ir[0].size = 0x0d;
-    snapshot.ir[1].visible = true;
-    snapshot.ir[1].x = 0x03fe;
-    snapshot.ir[1].y = 0x0001;
-    snapshot.ir[1].size = 0x05;
-    snapshot.ir[3].visible = true;
-    snapshot.ir[3].x = 0x0123;
-    snapshot.ir[3].y = 0x0321;
-    snapshot.ir[3].size = 0x0f;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x33, snapshot, report);
-    constexpr std::array<std::uint8_t, 19> expected{
-        0xa1, 0x33, 0x20, 0x60, 0x80, 0x80, 0x80,
-        0x55, 0xaa, 0x9d, 0xfe, 0x01, 0x35,
-        0xff, 0xff, 0xff, 0x23, 0x21, 0xdf};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x33 extended IR report builds") &&
-           expect(result.size == expected.size(), "0x33 extended IR size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x33 extended IR bytes");
-}
-
-bool packs_wide_extension_report() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.nunchuk.stick_x = 200;
-    snapshot.nunchuk.stick_y = 42;
-    snapshot.nunchuk.accel.x = 0x0155;
-    snapshot.nunchuk.accel.y = 0x02aa;
-    snapshot.nunchuk.accel.z = 0x03ff;
-    snapshot.nunchuk.c = true;
-    snapshot.nunchuk.z = false;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x34, snapshot, report);
-    constexpr std::array<std::uint8_t, 23> expected{
-        0xa1, 0x34, 0x00, 0x00,
-        0xc8, 0x2a, 0x55, 0xaa, 0xff, 0xe5,
-        0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x34 wide extension report builds") &&
-           expect(result.size == expected.size(), "0x34 wide extension size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x34 wide extension bytes");
-}
-
-bool packs_basic_ir_pairs() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.ir[0].visible = true;
-    snapshot.ir[0].x = 0x0155;
-    snapshot.ir[0].y = 0x02aa;
-    snapshot.ir[1].visible = true;
-    snapshot.ir[1].x = 0x03fe;
-    snapshot.ir[1].y = 0x0001;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x37, snapshot, report);
-    constexpr std::array<std::uint8_t, 23> expected{
-        0xa1, 0x37, 0x00, 0x00, 0x7f, 0x81, 0x99,
-        0x55, 0xaa, 0x93, 0xfe, 0x01,
-        0xff, 0xff, 0xff, 0xff, 0xff,
-        0x7b, 0x81, 0x80, 0x80, 0x80, 0x03};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x37 IR report builds") &&
-           expect(result.size == expected.size(), "0x37 IR report size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x37 IR report bytes");
-}
-
-bool packs_basic_ir_mixed_visibility_sentinels() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.ir[0] = {true, 0x0155u, 0x02aau, 8u};
-    snapshot.ir[3] = {true, 0x03feu, 0x0001u, 8u};
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x37, snapshot, report);
-    constexpr std::array<std::uint8_t, 10> expected_ir{
-        0x55, 0xaa, 0x9f, 0xff, 0xff,
-        0xff, 0xff, 0xf3, 0xfe, 0x01};
-    const auto first_pair = decode_basic_ir_pair(
-        std::span<const std::uint8_t>(report).subspan(7u, 5u));
-    const auto second_pair = decode_basic_ir_pair(
-        std::span<const std::uint8_t>(report).subspan(12u, 5u));
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x37 mixed-visibility IR report builds") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).subspan(7u, 10u),
-               expected_ir,
-               "0x37 mixed-visibility IR report uses exact hardware sentinels") &&
-           expect(
-               first_pair[0].visible && !first_pair[1].visible &&
-                   !second_pair[0].visible && second_pair[1].visible &&
-                   first_pair[1].x == 0x03ffu &&
-                   first_pair[1].y == 0x03ffu &&
-                   second_pair[0].x == 0x03ffu &&
-                   second_pair[0].y == 0x03ffu,
-               "both basic-IR mixed visibility orders decode losslessly");
-}
-
-bool packs_ir_and_extension_report() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    snapshot.ir[0].visible = true;
-    snapshot.ir[0].x = 0x0155;
-    snapshot.ir[0].y = 0x02aa;
-    snapshot.ir[1].visible = true;
-    snapshot.ir[1].x = 0x03fe;
-    snapshot.ir[1].y = 0x0001;
-    snapshot.nunchuk.stick_x = 200;
-    snapshot.nunchuk.stick_y = 42;
-    snapshot.nunchuk.accel.x = 0x0155;
-    snapshot.nunchuk.accel.y = 0x02aa;
-    snapshot.nunchuk.accel.z = 0x03ff;
-    snapshot.nunchuk.c = true;
-    snapshot.nunchuk.z = false;
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x36, snapshot, report);
-    constexpr std::array<std::uint8_t, 23> expected{
-        0xa1, 0x36, 0x00, 0x00,
-        0x55, 0xaa, 0x93, 0xfe, 0x01,
-        0xff, 0xff, 0xff, 0xff, 0xff,
-        0xc8, 0x2a, 0x55, 0xaa, 0xff, 0xe5,
-        0x00, 0x00, 0x00};
-    return expect(
-               result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-               "0x36 IR extension report builds") &&
-           expect(result.size == expected.size(), "0x36 IR extension size") &&
-           expect_bytes(
-               std::span<const std::uint8_t>(report).first(result.size),
-               expected,
-               "0x36 IR extension bytes");
-}
-
-bool all_supported_input_report_modes_build() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    struct ModeCase {
-        std::uint8_t mode;
-        std::size_t size;
-    };
-    constexpr std::array<ModeCase, 8> modes{{
-        {0x30, 4},
-        {0x31, 7},
-        {0x32, 12},
-        {0x33, 19},
-        {0x34, 23},
-        {0x35, 23},
-        {0x36, 23},
-        {0x37, 23},
-    }};
-    bool passed = true;
-    for (const ModeCase& mode : modes) {
-        report.fill(0);
-        const auto result =
-            galaxy::input::build_wiimote_input_report(mode.mode, snapshot, report);
-        passed &= expect(
-            result.status == galaxy::input::WiimoteReportBuildStatus::Ok,
-            "supported report mode builds");
-        passed &= expect(result.size == mode.size, "supported report mode size");
-        passed &= expect(report[0] == 0xa1, "supported report mode HID input tag");
-        passed &= expect(report[1] == mode.mode, "supported report mode id");
-        passed &= expect(
-            galaxy::input::wiimote_input_report_size(mode.mode) == mode.size,
-            "supported report mode advertised size matches builder");
-    }
-    return passed;
-}
-
-bool rejects_unsupported_modes() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    std::array<std::uint8_t, galaxy::input::kMaxWiimoteInputReportBytes> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x3e, snapshot, report);
-    return expect(
-        result.status ==
-            galaxy::input::WiimoteReportBuildStatus::UnsupportedReportMode,
-        "unsupported report mode is rejected");
-}
-
-bool reports_small_output_buffer() {
-    galaxy::input::WiimoteInputSnapshot snapshot{};
-    std::array<std::uint8_t, 3> report{};
-    const auto result =
-        galaxy::input::build_wiimote_input_report(0x30, snapshot, report);
-    return expect(
-               result.status ==
-                   galaxy::input::WiimoteReportBuildStatus::OutputTooSmall,
-               "small output buffer is rejected") &&
-           expect(result.size == 4, "small output reports required size");
-}
-
-bool basic_ir_decoder_preserves_low_ff_visible_coordinates() {
-    // Independent wire values: first=(255,511), second=(767,255).
-    const std::array<std::uint8_t, 5> visible{0xffu, 0xffu, 0x42u, 0xffu, 0xffu};
-    const auto decoded = decode_basic_ir_pair(visible);
-    bool passed = expect(decoded[0].visible && decoded[0].x == 255u && decoded[0].y == 511u &&
-                         decoded[1].visible && decoded[1].x == 767u && decoded[1].y == 255u,
-                         "full ten-bit coordinates distinguish visible low-FF dots");
-    const std::array<std::uint8_t, 5> mixed{0xffu, 0xffu, 0x1fu, 0xffu, 0xffu};
-    const auto mixed_decoded = decode_basic_ir_pair(mixed);
-    passed &= expect(mixed_decoded[0].visible && mixed_decoded[0].x == 511u &&
-                     mixed_decoded[0].y == 255u && !mixed_decoded[1].visible,
-                     "shared high byte retains independent first/second sentinel semantics");
-    const std::array<std::uint8_t, 5> hidden{0xffu, 0xffu, 0xffu, 0xffu, 0xffu};
-    const auto hidden_decoded = decode_basic_ir_pair(hidden);
-    passed &= expect(!hidden_decoded[0].visible && !hidden_decoded[1].visible,
-                     "only all-ones full coordinates are hidden");
-    return passed;
+    reader.connect(eeprom, calibration, true);
+    std::array<std::uint8_t, 22> n{};
+    n[0] = 0x37;
+    n[3] = 0x80;
+    n[4] = 0x80;
+    n[5] = 0x99;
+    for (std::size_t i = 6; i < 16; ++i) n[i] = 0xff;
+    n[16] = 0x7b;
+    n[17] = 0x81;
+    n[18] = 0x80;
+    n[19] = 0x80;
+    n[20] = 0xb2;
+    n[21] = 0x03;  // C and Z up
+    ok &= expect(reader.read(n, in) && in.stick_x == 0.0f && in.stick_y == 0.0f && !in.buttons.c && !in.buttons.z,
+                 "the Nunchuk at rest");
+    ok &= expect_close(in.nunchuk_gravity[2], 1.0f, 1e-6f, "the Nunchuk lying flat: z 1 g");
+    n[16] = 0x7b + 101;
+    n[17] = 0x81 - 43;
+    n[21] = 0x01;  // C down
+    ok &= expect(reader.read(n, in) && in.buttons.c && !in.buttons.z, "C pressed");
+    ok &= expect(in.stick_y < 0.0f && in.stick_x > 0.0f, "the stick right and down from where it rested");
+    ok &= expect_close(in.stick_x * in.stick_x + in.stick_y * in.stick_y, 1.0f, 1e-5f, "a full push reaches the circle");
+    return ok;
 }
 
 // A real Wii Remote's output reports and replies (WiiBrew's layouts).
@@ -1003,7 +418,7 @@ bool real_wiimote_protocol() {
     return ok;
 }
 
-// The hand-off of a real remote's state and reports to the host's WPAD thread.
+// The hand-off of a real remote's state and reports to the host's input thread.
 bool real_wiimote_handoff() {
     using galaxy::host::RealWiimoteEvent;
     bool ok = true;
@@ -1064,28 +479,12 @@ bool real_wiimote_handoff() {
 int main() {
     bool ok = true;
     ok &= settings_pad_toggles_navigates_and_hides_buttons();
-    ok &= basic_ir_decoder_preserves_low_ff_visible_coordinates();
     ok &= native_input_script_unsigned_fields_fail_closed();
     ok &= normalizes_xinput_axes();
-    ok &= publishes_native_pointer_as_ir_dots();
-    ok &= stress_publishes_native_pointer_ir_edges();
-    ok &= publishes_camera_space_ir_for_kpad_pointer_position();
-    ok &= native_pointer_ir_sweeps_are_monotonic();
-    ok &= preserves_ir_coordinates_across_report_modes();
-    ok &= clearing_ir_never_reuses_stale_dots();
-    ok &= builds_core_button_report();
-    ok &= packs_hardware_accelerometer_low_bits_into_button_bytes();
-    ok &= accel_low_bits_do_not_change_core_button_semantics();
-    ok &= packs_core_and_short_extension_report();
-    ok &= packs_accel_and_extended_ir_report();
-    ok &= packs_wide_extension_report();
-    ok &= packs_nunchuk_extension_bytes();
-    ok &= packs_basic_ir_pairs();
-    ok &= packs_basic_ir_mixed_visibility_sentinels();
-    ok &= packs_ir_and_extension_report();
-    ok &= all_supported_input_report_modes_build();
-    ok &= rejects_unsupported_modes();
-    ok &= reports_small_output_buffer();
+    ok &= player_buttons_are_bits();
+    ok &= virtual_pointer_and_motion();
+    ok &= nunchuk_stick_response();
+    ok &= real_remote_reports();
     ok &= real_wiimote_protocol();
     ok &= real_wiimote_handoff();
     return ok ? 0 : 1;

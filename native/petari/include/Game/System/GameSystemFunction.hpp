@@ -33,7 +33,6 @@ namespace GameSystemFunction {
     void stopControllerLeaveWatcher();
     void startControllerLeaveWatcher();
     void restartControllerLeaveWatcher();
-    void setPadConnectCallback();
     void resetAllControllerRumble();
     void setAutoSleepTimeWiiRemote(bool);
     bool setPermissionToCheckWiiRemoteConnectAndScreenDimming(bool);
