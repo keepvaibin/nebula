@@ -29,7 +29,8 @@ namespace J3DNativeTexture {
     u32 imageSize(u8 format, u16 width, u16 height, u8 levels) {
         // Linear texels the game wrote (nebula_cooked_texture.h): rows of the layout's texels.
         if (format >= NEBULA_TEXTURE_LINEAR_L8 && format <= NEBULA_TEXTURE_LINEAR_RGBA8) {
-            return nebula_texture_level_bytes(width, height, levels != 0 ? levels : 1, format - NEBULA_TEXTURE_LINEAR_L8);
+            return nebula_texture_level_bytes(width, height, levels != 0 ? levels : 1,
+                                              nebula_texture_linear_layout(format));
         }
         // A tile is 32 bytes (RGBA8 and Z24X8: two of them) of 8x8, 8x4 or 4x4 texels by the format's bits per texel
         // (texture and copy formats); an unknown format is a tile per texel, as GX counts it.

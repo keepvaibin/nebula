@@ -1907,7 +1907,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
         auto bytes = std::make_shared<std::vector<std::byte>>(header + image->size);
         if (linear) {
             nebula_texture_init(bytes->data(), image->width, image->height, 1u,
-                                static_cast<uint8_t>(image->format - NEBULA_TEXTURE_LINEAR_L8),
+                                nebula_texture_linear_layout(image->format),
                                 NEBULA_TEXTURE_FILTER_AT_UPLOAD);
         }
         std::memcpy(bytes->data() + header, first, image->size);
