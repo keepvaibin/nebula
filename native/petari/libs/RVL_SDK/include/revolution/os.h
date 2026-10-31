@@ -44,9 +44,6 @@ void* OSPhysicalToUncached(u32);
 #ifdef __cplusplus
 extern "C" {
 #endif
-// main.dol's version of a table the game compiles in (comet schedules, event flags): `pCompiled` while they match,
-// else the DOL's, its strings read from main.dol (a mod's memory patches over main.dol's data change it).
-const void* __NebulaDolTable(u32 kind, const void* pCompiled);
 // A THP movie's opening (frame -2), each frame it draws and its close (-1) (movie_frame in nebula_game_api.h).
 void __NebulaMovieFrame(const char* pName, s32 frame, f32 frameRate, const void* pY, const void* pU, const void* pV,
                         u32 width, u32 height);

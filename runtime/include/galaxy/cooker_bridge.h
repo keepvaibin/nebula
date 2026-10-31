@@ -20,4 +20,15 @@ namespace galaxy::cook {
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> cook_file(std::string_view name, std::span<const std::uint8_t> bytes,
                                                                  std::string* error);
 
+// The NebulaData files main.dol's tables become (crates/nebula-import/src/cook/dol.rs), by name.
+inline constexpr const char* kDolTableFiles[] = {"StoryProgressTable.bcsv", "GalaxyInfoTable.bcsv",
+                                                  "ErrorMessageArchive.arc", "GalaxyCometSchedules.bin",
+                                                  "GameEventFlags.bin"};
+
+// The NebulaData file `name` of a main.dol for release `game_id`; nullopt when that release has none or the cooker
+// cannot read it (`*error` says which).
+[[nodiscard]] std::optional<std::vector<std::uint8_t>> cook_dol_table(std::span<const std::uint8_t> dol,
+                                                                      std::string_view game_id, std::string_view name,
+                                                                      std::string* error);
+
 }  // namespace galaxy::cook

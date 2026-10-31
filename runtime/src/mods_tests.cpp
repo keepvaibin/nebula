@@ -222,7 +222,8 @@ bool riivolution() {
                      "a folder patch creates files");
         ok &= expect(active->save_folder == mods / "1 Riiv" / "save" / "RMGE" && active->save_clone,
                      "the savegame folder, its placeholders filled");
-        ok &= expect(!active->dol.empty() && active->dol[0x100 + 0x800] == 0x22, "a memory patch over a data table");
+        ok &= expect(active->report.find("applied to main.dol's data") != std::string::npos,
+                     "a memory patch over a data table");
         ok &= expect(active->unsupported == 2u, "code and ocarina patches reported unsupported");
         ok &= expect(active->texture_folders.empty(), "no textures");
     }
@@ -238,7 +239,8 @@ bool riivolution() {
         ok &= expect(read_file(again->disc, again->fst, p.bytes.data(), "/StageData/A.arc") == "BLUE", "a saved choice");
         ok &= expect(read_file(again->disc, again->fst, p.bytes.data(), "/StageData/B.arc") == "BBBB",
                      "an option turned off");
-        ok &= expect(again->dol.empty(), "no memory patch: main.dol untouched");
+        ok &= expect(again->report.find("applied to main.dol's data") == std::string::npos,
+                     "no memory patch: main.dol untouched");
     } else {
         ok &= expect(false, "mods applied again");
     }

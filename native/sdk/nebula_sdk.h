@@ -32,8 +32,6 @@ void nebula_log(const char* format, ...) __attribute__((format(printf, 1, 2)));
 void nebula_vlog(const char* format, va_list args) __attribute__((format(printf, 1, 0)));
 void nebula_fatal(const char* format, ...) __attribute__((noreturn, format(printf, 1, 2)));
 
-/* The data tables the game keeps in main.dol, read from the user's disc (dol_data.c). */
-void nebula_load_dol_data(void);
 
 /* The disc's release (region.c): 'E' North America, 'P' Europe, 'J' Japan; and its save folder on the NAND. */
 char nebula_disc_region(void);

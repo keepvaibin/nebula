@@ -1,10 +1,4 @@
 #pragma once
 
-#include <revolution/types.h>
-
-#ifdef TARGET_PC
-// Natively read from the user's main.dol at boot (Nebula's native/sdk/dol_data.c), never part of the build.
-extern "C" u8 cStoryProgressTable[];
-#else
-extern const u8 cStoryProgressTable[];
-#endif
+// The story's progress table, read from the cooked disc (NebulaDiscTables, B-05).
+#include "Game/System/NebulaDiscTables.hpp"
