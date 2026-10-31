@@ -194,10 +194,7 @@ void WaterCameraFilter::draw() const {
         return;
     }
 
-    GXRenderModeObj* pRenderMode = JUTVideo::getManager()->getRenderMode();
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderMode->sample_pattern, GX_FALSE, pRenderMode->vfilter);
     mScreenTex->capture(0, 0, GX_TF_RGB565, false, 0);
-    J3DNativeState::setCopyFilter(GX_FALSE, pRenderMode->sample_pattern, GX_TRUE, pRenderMode->vfilter);
     loadMaterial();
     TVec2f pos;
     pos.x = 0.0f;

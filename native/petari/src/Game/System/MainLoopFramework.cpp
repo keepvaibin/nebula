@@ -40,9 +40,6 @@ namespace {
 
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
     mClearColor = (GXColor){0, 0, 0, 0};
-    mClearZ = 0xffffff;
-    mDispCopyGamma = GX_GM_1_0;
-    mCopyClamp = GX_CLAMP_TOP | GX_CLAMP_BOTTOM;
     mRetraceCount = 1;
     mUseAlpha = useAlpha;
     mUseVFilter = true;
@@ -72,29 +69,12 @@ MainLoopFramework* MainLoopFramework::createManager(const GXRenderModeObj* pRend
     return sManager;
 }
 
-#pragma push
-#pragma global_optimizer off
 void MainLoopFramework::prepareCopyDisp() {
-    u16 fbWidth = JUTVideo::getManager()->getRenderMode()->fbWidth;
-    u16 efbHeight = JUTVideo::getManager()->getRenderMode()->efbHeight;
-    u16 xfbHeight = JUTVideo::getManager()->getRenderMode()->xfbHeight;
-    f32 yscale = J3DNativeState::getYScaleFactor(efbHeight, xfbHeight);
-    u16 nlines = J3DNativeState::getNumXfbLines(efbHeight, yscale);
-    J3DNativeState::setCopyClear(mClearColor, mClearZ);
-    J3DNativeState::setDispCopySrc(0, 0, fbWidth, efbHeight);
-    J3DNativeState::setDispCopyDst(fbWidth, nlines);
-    J3DNativeState::setDispCopyYScale(yscale);
-    GXRenderModeObj* pMode = JUTVideo::getManager()->getRenderMode();
-    u8* pVFilter = pMode->vfilter;
-    J3DNativeState::setCopyFilter(pMode->aa, pMode->sample_pattern, mUseVFilter, pVFilter);
-    J3DNativeState::setCopyClamp((GXFBClamp)mCopyClamp);
-    J3DNativeState::setDispCopyGamma((GXGamma)mDispCopyGamma);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
     if (mUseAlpha) {
         J3DNativeState::setAlphaUpdate(GX_TRUE);
     }
 }
-#pragma pop
 
 void MainLoopFramework::preGX() {
     J3DNativeState::invalidateTexAll();
@@ -142,7 +122,8 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame();
+        J3DNativeState::showFrame(JUTVideo::getManager()->getRenderMode()->fbWidth,
+                                  JUTVideo::getManager()->getRenderMode()->efbHeight, mUseVFilter);
     }
 }
 

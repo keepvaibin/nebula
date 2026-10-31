@@ -80,7 +80,9 @@ public:
     void initTexObj();
     void initTexObj(_GXTlut);
     void load(_GXTexMapID);
-    void capture(int, int, GXTexFmt, bool, u8);
+    // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
+    // filter: J3DNativeTarget::capture's flags).
+    void capture(int x, int y, GXTexFmt format, bool half, u8 clear, bool filtered = false);
     static void captureDolTexture(void*, int, int, int, int, bool, GXTexFmt);
 
     const ResTIMG* getTexInfo() const {

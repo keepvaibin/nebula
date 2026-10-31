@@ -15,51 +15,6 @@ namespace {
     GXPixelFmt sPixelFormat = GX_PF_RGB8_Z24;
     GXZFmt16 sZFormat = GX_ZC_LINEAR;
 
-    // The display copy's settings: GXInit's (its NTSC 480 mode) until the game sets them.
-    struct CopySettings {
-        u16 mDispSrc[4] = {0, 0, 640, 480};
-        u16 mDispWidth = 640;
-        u8 mClampTop = 1, mClampBottom = 1;
-        u8 mDispInterlaced = GX_COPY_PROGRESSIVE;
-        u8 mDispVerticalScale = 0;
-        u8 mDispGamma = GX_GM_1_0;
-    };
-    CopySettings sCopy;
-
-    // GX's count of XFB lines a copy of `efbHeight` lines at scale 256 / `scale` makes.
-    u32 numXfbLines(u32 efbHeight, u32 scale) {
-        u32 lines = ((efbHeight - 1) * 256) / scale + 1;
-        u32 odd = scale;
-        if (odd > 0x80 && odd < 0x100) {
-            while ((odd & 1) == 0) {
-                odd >>= 1;
-            }
-            if (efbHeight % odd == 0) {
-                lines++;
-            }
-        }
-        return lines > 1024 ? 1024 : lines;
-    }
-
-    void sendCopy() {
-        NebulaStateOp op;
-        memset(&op, 0, sizeof(op));
-        op.a[0] = 1;
-        op.a[4] = sCopy.mClampTop;
-        op.a[5] = sCopy.mClampBottom;
-        op.a[6] = sCopy.mDispInterlaced;
-        op.a[7] = sCopy.mDispVerticalScale;
-        op.a[8] = sCopy.mDispGamma;
-        for (u32 i = 0; i < 4; i++) {
-            op.f[i] = sCopy.mDispSrc[i];
-        }
-        op.size[0] = sCopy.mDispWidth;
-        NebulaStateOp storage;
-        J3DStateList list(&storage, 1);
-        list.copy(op);
-        list.send();
-    }
-
     static_assert(sizeof(J3DNativeLight) <= sizeof(GXLightObj), "a GXLightObj holds a J3DNativeLight");
 
     J3DNativeLight& light(GXLightObj* pObj) {
@@ -513,77 +468,6 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setDispCopySrc(u16 left, u16 top, u16 width, u16 height) {
-        sCopy.mDispSrc[0] = left;
-        sCopy.mDispSrc[1] = top;
-        sCopy.mDispSrc[2] = width;
-        sCopy.mDispSrc[3] = height;
-    }
-
-    void setDispCopyDst(u16 width, u16 height) {
-        sCopy.mDispWidth = width;
-    }
-
-    void setDispCopyFrame2Field(GXCopyMode mode) {
-        sCopy.mDispInterlaced = static_cast< u8 >(mode);
-    }
-
-    void setCopyClamp(GXFBClamp clamp) {
-        sCopy.mClampTop = (clamp & GX_CLAMP_TOP) == GX_CLAMP_TOP;
-        sCopy.mClampBottom = (clamp & GX_CLAMP_BOTTOM) == GX_CLAMP_BOTTOM;
-    }
-
-    void setDispCopyGamma(GXGamma gamma) {
-        sCopy.mDispGamma = static_cast< u8 >(gamma);
-    }
-
-    u32 setDispCopyYScale(f32 scale) {
-        const u32 iScale = static_cast< u32 >(256.0f / scale) & 0x1FF;
-        sCopy.mDispVerticalScale = iScale != 0x100;
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCopyYScale(iScale);
-        list.send();
-        return numXfbLines(sCopy.mDispSrc[3], iScale);
-    }
-
-    u16 getNumXfbLines(u16 efbHeight, f32 scale) {
-        return static_cast< u16 >(numXfbLines(efbHeight, static_cast< u32 >(256.0f / scale) & 0x1FF));
-    }
-
-    f32 getYScaleFactor(u16 efbHeight, u16 xfbHeight) {
-        u32 target = xfbHeight;
-        f32 yScale = static_cast< f32 >(xfbHeight) / static_cast< f32 >(efbHeight);
-        u32 lines = numXfbLines(efbHeight, static_cast< u32 >(256.0f / yScale) & 0x1FF);
-        while (lines > xfbHeight) {
-            target--;
-            yScale = static_cast< f32 >(target) / static_cast< f32 >(efbHeight);
-            lines = numXfbLines(efbHeight, static_cast< u32 >(256.0f / yScale) & 0x1FF);
-        }
-        f32 fScale = yScale;
-        while (lines < xfbHeight) {
-            fScale = yScale;
-            target++;
-            yScale = static_cast< f32 >(target) / static_cast< f32 >(efbHeight);
-            lines = numXfbLines(efbHeight, static_cast< u32 >(256.0f / yScale) & 0x1FF);
-        }
-        return fScale;
-    }
-
-    void setCopyClear(GXColor color, u32 depth) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setCopyClear(color, depth);
-        list.send();
-    }
-
-    void setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]) {
-        NebulaStateOp ops[2];
-        J3DStateList list(ops, 2);
-        list.setCopyFilter(antialias, samples, verticalFilter, coefficients);
-        list.send();
-    }
-
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
     // (nebula_cooked_texture.h).
     static struct {
@@ -595,19 +479,14 @@ namespace J3DNativeState {
                                               0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}};
     // The projection before the game sets its own (orthographic, -1..1 depth).
     static const f32 sDefaultProjection[7] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f, 0.0f};
-    // The frame GXInit assumed (its NTSC 480-line mode): 640x480, no antialiasing, the deflicker filter.
+    // The frame GXInit assumed (its NTSC 480-line mode): 640x480.
     const u16 cDefaultWidth = 640;
     const u16 cDefaultHeight = 480;
-    static const u8 sDefaultSamples[12][2] = {{6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6},
-                                              {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}, {6, 6}};
-    static const u8 sDefaultVerticalFilter[7] = {8, 8, 10, 12, 10, 8, 8};
 
     void initDefaults() {
-        const GXColor clear = {64, 64, 64, 255};
         const GXColor black = {0, 0, 0, 0};
         const GXColor white = {255, 255, 255, 255};
 
-        setCopyClear(clear, 0xFFFFFF);
         for (u32 i = 0; i < 8; i++) {
             setTexCoordGen2(static_cast< GXTexCoordID >(i), GX_TG_MTX2x4, static_cast< GXTexGenSrc >(GX_TG_TEX0 + i),
                             GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
@@ -688,17 +567,12 @@ namespace J3DNativeState {
         setDither(GX_TRUE);
         setDstAlpha(GX_FALSE, 0);
         setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
-        setDispCopySrc(0, 0, cDefaultWidth, cDefaultHeight);
-        setDispCopyDst(cDefaultWidth, cDefaultHeight);
-        setDispCopyYScale(1.0f);
-        setCopyClamp(static_cast< GXFBClamp >(GX_CLAMP_TOP | GX_CLAMP_BOTTOM));
-        setCopyFilter(GX_FALSE, sDefaultSamples, GX_TRUE, sDefaultVerticalFilter);
-        setDispCopyGamma(GX_GM_1_0);
-        setDispCopyFrame2Field(GX_COPY_PROGRESSIVE);
     }
 
-    void showFrame() {
-        sendCopy();
+    void showFrame(u16 width, u16 height, bool filtered) {
+        J3DNativeShape::flushState();
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->frame_show(pHost->user, width, height, filtered ? NEBULA_CAPTURE_FILTERED : 0u);
     }
 
     void endFrame() {

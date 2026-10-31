@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 66u
+#define NEBULA_GAME_API_VERSION 67u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -219,15 +219,6 @@ enum {
                                        YUV component */
     NEBULA_STATE_INVALIDATE_TEXTURES, /* none: textures in memory changed (GXInvalidateTexAll) */
     NEBULA_STATE_Z_TEXTURE,         /* operation (GXZTexOp), format (GXTexFmt), bias (24 bits, a[2..4] low first) */
-    NEBULA_STATE_COPY_CLEAR,        /* r, g, b, a, depth (24 bits, a[4..6] low first) */
-    NEBULA_STATE_COPY_SAMPLES,      /* antialiasing, then (when set) the 12 sample points' x, y (4 bits each, two a
-                                       byte from a[1], x low) */
-    NEBULA_STATE_COPY_VFILTER,      /* vertical filter on, its 7 coefficients */
-    NEBULA_STATE_COPY_YSCALE,       /* size[0]: the display copy's vertical scale (256 / scale, 9 bits) */
-    NEBULA_STATE_COPY,              /* an EFB copy, run with the current state: display (1) or texture (0), clear,
-                                       texture format (GXTexFmt), mipmap, clamp top, clamp bottom, interlaced (GXCopyMode),
-                                       vertical scale on, gamma (GXGamma); f: source left, top, width, height; size: the
-                                       destination's width and height (a display copy: its width); image: destination */
     NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
                                        table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */
     NEBULA_STATE_FOG_RANGE_TABLE,   /* pair index (0-4); size: the pair's two entries */
@@ -919,10 +910,12 @@ typedef enum NebulaTargetChannels {
 
 /* How target_capture takes its picture. */
 typedef enum NebulaCaptureFlags {
-    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards (the copy-clear colour and depth) */
+    NEBULA_CAPTURE_CLEAR = 1u, /* the frame's rectangle is cleared afterwards: colour and alpha 0, depth far (where
+                                  the colour, alpha and depth updates allow) */
     NEBULA_CAPTURE_HALF = 2u,  /* half size: each picture texel averages 2x2 of the frame's */
     NEBULA_CAPTURE_LUMA = 4u,  /* the red channel holds the colour's luminance */
-    NEBULA_CAPTURE_DEPTH = 8u  /* the red channel holds the depth's high byte */
+    NEBULA_CAPTURE_DEPTH = 8u, /* the red channel holds the depth's high byte */
+    NEBULA_CAPTURE_FILTERED = 16u /* through the display's vertical filter (frame_show's NEBULA_CAPTURE_FILTERED) */
 } NebulaCaptureFlags;
 
 typedef struct NebulaHostServices {
@@ -1144,6 +1137,10 @@ typedef struct NebulaHostServices {
     /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
        (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
+    /* The frame drawn so far is the picture shown: its top left `width` x `height` (the viewport's units); `flags`
+       NEBULA_CAPTURE_FILTERED: through the display's vertical filter (the host's: each line blended with the one
+       above, as the game's television modes asked), else as drawn. */
+    void (*frame_show)(void* user, uint16_t width, uint16_t height, uint32_t flags);
     /* The game's frame is complete (its picture was shown earlier): the renderer takes every record made before. */
     void (*frame_end)(void* user);
     /* A host marker (galaxy/motion_signals.h: a draw identity, a bloom phase, a clear quad). A draw identity names its

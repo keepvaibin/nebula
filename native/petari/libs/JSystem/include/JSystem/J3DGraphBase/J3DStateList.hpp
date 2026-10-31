@@ -110,11 +110,6 @@ public:
     void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed);
     void invalidateTexAll();
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
-    void setCopyClear(GXColor color, u32 depth);
-    // GXSetCopyFilter's two changes (sample locations, vertical filter).
-    void setCopyFilter(GXBool antialias, const u8 samples[12][2], GXBool verticalFilter, const u8 coefficients[7]);
-    void setCopyYScale(u32 scale);
-    void copy(const NebulaStateOp& rCopy);
     // GXSetFogRangeAdj's changes: an enabled one's table pairs, then the centre and enable.
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);
 

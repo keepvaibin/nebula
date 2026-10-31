@@ -226,20 +226,22 @@ namespace {
         }
     }
 
-    void captureInto(void* pBuffer, int width, int height, int x, int y, bool half, GXTexFmt format, GXBool clear) {
-        u32 flags = (half ? NEBULA_CAPTURE_HALF : 0u) | (clear ? NEBULA_CAPTURE_CLEAR : 0u);
+    void captureInto(void* pBuffer, int width, int height, int x, int y, bool half, GXTexFmt format, GXBool clear,
+                     bool filtered) {
+        u32 flags = (half ? NEBULA_CAPTURE_HALF : 0u) | (clear ? NEBULA_CAPTURE_CLEAR : 0u) |
+                    (filtered ? NEBULA_CAPTURE_FILTERED : 0u);
         const NebulaTargetChannels channels = captureChannels(format, &flags);
         const int scale = half ? 2 : 1;
         J3DNativeTarget::capture(pBuffer, x, y, width * scale, height * scale, channels, flags);
     }
 }  // namespace
 
-void JUTTexture::capture(int x, int y, GXTexFmt format, bool mipmap, GXBool clear) {
+void JUTTexture::capture(int x, int y, GXTexFmt format, bool half, u8 clear, bool filtered) {
     if (mFlag & 0x1) {
-        captureInto(mImage, mTIMG->mWidth, mTIMG->mHeight, x, y, mipmap, format, clear);
+        captureInto(mImage, mTIMG->mWidth, mTIMG->mHeight, x, y, half, format, clear, filtered);
     }
 }
 
 void JUTTexture::captureDolTexture(void* pBuffer, int width, int height, int x, int y, bool mipmap, GXTexFmt format) {
-    captureInto(pBuffer, width, height, x, y, mipmap, format, GX_FALSE);
+    captureInto(pBuffer, width, height, x, y, mipmap, format, GX_FALSE, false);
 }

@@ -38,9 +38,6 @@ public:
     static void setForOSResetSystem();
 
     /* 0x00 */ Color8 mClearColor;
-    /* 0x04 */ u32 mClearZ;
-    /* 0x08 */ u16 mDispCopyGamma;
-    /* 0x0A */ u16 mCopyClamp;
     /* 0x10 */ u16 mRetraceCount;
     /* 0x18 */ bool mUseAlpha;
     /* 0x19 */ bool mUseVFilter;

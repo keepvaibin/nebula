@@ -419,10 +419,7 @@ namespace MR {
     }
 
     void nonFilteredCapture(JUTTexture* pTexture, s16 width, s16 height) {
-        GXRenderModeObj* pRenderModeObj = JUTVideo::getManager()->getRenderMode();
-        J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_FALSE, pRenderModeObj->vfilter);
         pTexture->capture(width, height, (GXTexFmt)pTexture->getFormat(), false, 0);
-        J3DNativeState::setCopyFilter(GX_FALSE, pRenderModeObj->sample_pattern, GX_TRUE, pRenderModeObj->vfilter);
     }
 
     void simpleDraw(J3DModel* pModel, J3DMaterial* pMaterial) {

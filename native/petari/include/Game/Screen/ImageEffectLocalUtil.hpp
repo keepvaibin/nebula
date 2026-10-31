@@ -22,7 +22,9 @@ namespace ImageEffectLocalUtil {
         Stage_Threshold,
     };
 
-    void capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool clear, u8 filter);
+    // `filtered`: through the display's vertical filter (NEBULA_CAPTURE_FILTERED).
+    void capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool half, u8 clear,
+                 bool filtered = false);
     void setStage(EStage stage);
     // A stage of the caller's own (its address the key: a static), with setupDrawTexture's order (texture 0,
     // coordinate 0, colour channel 0); its registers and konst colours stay as the caller set them.
