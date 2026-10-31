@@ -6,9 +6,7 @@
 #include <cstddef>
 #include <cstdio>
 
-#ifdef TARGET_PC
 _Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel holds an RFLiCharModel");
-#endif
 
 #define NUM_VTX_POS(size) ((size) / VTX_POS_SIZE)
 #define SIZE_VTX_POS(count) ((count) * VTX_POS_SIZE)

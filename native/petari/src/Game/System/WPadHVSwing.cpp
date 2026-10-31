@@ -1,7 +1,6 @@
 #include "Game/System/WPadHVSwing.hpp"
 #include "Game/System/WPad.hpp"
 
-#ifdef TARGET_PC
 #include "Game/System/WPadHolder.hpp"
 #include "Game/System/NebulaInput.hpp"
 
@@ -9,16 +8,13 @@ namespace {
     // A shake press's swing lasts as long as a flick of the remote keeps the detector above its threshold.
     const s32 cNebulaShakeSwingFrames = 6;
 };  // namespace
-#endif
 
 WPadHVSwing::WPadHVSwing(const WPad* pPad, u32 channel)
     : mPad(pPad), mChannel(channel), mDistanceSwingThreshold(1.0f), mIsSwing(), mIsSwingLatched(), mSwingLatchedFrames(),
       mSwingBelowThresholdFrames(), mIsTriggerSwing(), mSwingThreshold(0.4f), mSwingDetected(), mSwingTriggered(), mSwingHoldFrames(),
       mSwingCooldownFrames()
-#ifdef TARGET_PC
       ,
       mNebulaShakePresses(0), mNebulaShakeFrames(0), mIsNebulaShaking(false)
-#endif
 {
 }
 
@@ -107,7 +103,6 @@ void WPadHVSwing::updateCentrifugal() {
     }
 }
 
-#ifdef TARGET_PC
 // A shake button (a controller without motion sensors, or a key) swings directly, the frame it is pressed: each press is
 // a new swing (the flag drops for one frame first if a press's swing is still up), held for cNebulaShakeSwingFrames.
 // Without presses the accelerometer decides, as on the console.
@@ -140,14 +135,11 @@ bool WPadHVSwing::updateNebulaShake() {
     mIsTriggerSwing = mSwingLatchedFrames == 1;
     return true;
 }
-#endif
 
 void WPadHVSwing::update() {
-#ifdef TARGET_PC
     if (updateNebulaShake()) {
         return;
     }
-#endif
     updateSwing();
     updateCentrifugal();
 

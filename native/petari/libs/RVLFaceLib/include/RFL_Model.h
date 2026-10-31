@@ -24,15 +24,11 @@ typedef enum {
 } RFLCoordinateType;
 
 typedef struct RFLCharModel {
-#ifdef TARGET_PC
     // Room for RFLiCharModel, which the library keeps here (168 bytes natively: pointer members).
     union {
         u8 dummy[0xA8];
         void* align;
     };
-#else
-    u8 dummy[0x88];
-#endif
 } RFLCharModel;
 
 typedef struct RFLDrawSetting {
