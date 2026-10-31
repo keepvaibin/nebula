@@ -14,6 +14,8 @@ cbuffer NativeDraw : register(b0) {
     uint4 draw_counts : packoffset(c12);      // num_texgens, num_chans, flags, pos_base
     uint4 draw_indices : packoffset(c13);     // matrix_index_a, matrix_index_b, sky_up, sky_up_known
     float4 inline_pos_matrix[3] : packoffset(c14);
+    float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
+    float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
     float4 motion_prev_proj[2] : packoffset(c73);
     float4 motion_prev_pos[3] : packoffset(c75);
     float4 motion_params : packoffset(c78);
@@ -28,12 +30,22 @@ cbuffer MaterialBlock : register(b1) {
 Texture2D tex[8] : register(t0);
 SamplerState samp[8] : register(s0);
 
+// The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
+// row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
+StructuredBuffer<float4> mtx_rows : register(t3, space1);
+float4 native_matrix_row(uint r) { return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)]; }
+float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
+float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
+
 struct NativeVertexIn {
     float3 pos : POSITION;
     float3 nrm : NORMAL;
+    float3 tangent : TANGENT;
+    float3 binormal : BINORMAL;
     uint color0 : COLOR0;
     uint color1 : COLOR1;
     float2 uv[8] : TEXCOORD;
+    uint3 mtx_idx : BLENDINDICES;  // x: position place, then texture coordinates' (draw_matrices.h packing)
 };
 
 // What a material's vertex function sees: the vertex in the space its draw sent it (object), its position in the eye
@@ -41,16 +53,22 @@ struct NativeVertexIn {
 struct NativeVertex {
     float3 pos;
     float3 eye;
-    float3 nrm;
+    float3 nrm;      // as sent (object space)
+    float3 eye_nrm;  // in eye space (the position matrix's turn; unit length or zero)
+    float3 tangent;
+    float3 binormal;
     float4 color0;
     float4 color1;
     float2 uv[8];
+    uint3 mtx_idx;
+    uint pn_row;     // the position matrix's first row
 };
 
 struct NativeVaryings {
     float4 pos : SV_Position;
     float4 color : COLOR0;
-    float4 uv[4] : TEXCOORD;
+    float4 color1 : COLOR1;
+    float4 uv[8] : TEXCOORD;
 #if NATIVE_MOTION
     float4 mv_cur : TEXCOORD12;
     float4 mv_prev : TEXCOORD13;
@@ -68,9 +86,27 @@ NativeVaryings native_vs(NativeVertexIn input) {
     NativeVertex v;
     v.pos = input.pos;
     v.nrm = input.nrm;
-    // The draw's position matrix (its current place; immediate draws carry none per vertex).
+    v.tangent = input.tangent;
+    v.binormal = input.binormal;
+    v.mtx_idx = input.mtx_idx;
+    // The position matrix: the vertex's place where it carries one (flags bit 0, skinned and multi-matrix models),
+    // else the draw's (inline).
     const float4 p = float4(input.pos, 1.0);
-    v.eye = float3(dot(inline_pos_matrix[0], p), dot(inline_pos_matrix[1], p), dot(inline_pos_matrix[2], p));
+    float4 m0, m1, m2;
+    if ((draw_counts.z & 1u) != 0u) {
+        v.pn_row = min(input.mtx_idx.x & 0x3Fu, 61u);
+        m0 = native_matrix_row(v.pn_row);
+        m1 = native_matrix_row(v.pn_row + 1u);
+        m2 = native_matrix_row(v.pn_row + 2u);
+    } else {
+        v.pn_row = min(draw_indices.x & 0x3Fu, 61u);
+        m0 = inline_pos_matrix[0];
+        m1 = inline_pos_matrix[1];
+        m2 = inline_pos_matrix[2];
+    }
+    v.eye = float3(dot(m0, p), dot(m1, p), dot(m2, p));
+    const float3 n = float3(dot(m0.xyz, input.nrm), dot(m1.xyz, input.nrm), dot(m2.xyz, input.nrm));
+    v.eye_nrm = dot(n, n) > 0.0 ? normalize(n) : n;
     v.color0 = native_unpack_color(input.color0);
     v.color1 = native_unpack_color(input.color1);
     [unroll] for (uint i = 0u; i < 8u; ++i) {
@@ -81,7 +117,19 @@ NativeVaryings native_vs(NativeVertexIn input) {
 #if NATIVE_MOTION
     // Motion vectors (temporal scenes): this frame's clip position without the jitter, and the previous frame's (the
     // camera delta applied to the eye position).
-    const float3 prev_eye = float3(dot(motion_prev_pos[0], p), dot(motion_prev_pos[1], p), dot(motion_prev_pos[2], p));
+    float3 prev_eye;
+    if ((draw_counts.z & 1u) != 0u && motion_ctrl.x == 0u) {
+        // The vertex's position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
+        const uint base = motion_ctrl.y;
+        const uint r = v.pn_row;
+        prev_eye = float3(dot(base == 0xFFFFFFFFu ? native_matrix_row(r) : mtx_rows[base + r], p),
+                          dot(base == 0xFFFFFFFFu ? native_matrix_row(r + 1u) : mtx_rows[base + r + 1u], p),
+                          dot(base == 0xFFFFFFFFu ? native_matrix_row(r + 2u) : mtx_rows[base + r + 2u], p));
+    } else {
+        // The camera's move applied to the eye position (palette draws), or the previous position matrix (inline).
+        const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p;
+        prev_eye = float3(dot(motion_prev_pos[0], q), dot(motion_prev_pos[1], q), dot(motion_prev_pos[2], q));
+    }
     const float4 pp0 = motion_prev_proj[0];
     const float3 prev_clip = motion_prev_proj[1].z == 0.0
         ? float3(pp0.x * prev_eye.x + pp0.y * prev_eye.z, pp0.z * prev_eye.y + pp0.w * prev_eye.z, -prev_eye.z)

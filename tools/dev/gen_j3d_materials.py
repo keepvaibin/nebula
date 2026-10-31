@@ -1,0 +1,364 @@
+"""E-04 step 3: the J3D material set. Reads material program dumps (GALAXY_DUMP_MATERIAL_PROGRAMS: raw
+NebulaMaterialProgram records, nebula_game_api.h), reduces each to its shader key (only what a shader of it uses:
+stages, their inputs, ops, swaps and konst selections, indirect texturing, texture coordinate generation, lit
+channels, alpha test, fog type; not blend, depth, culling or values) and reports the distinct keys.
+
+    python -I tools/dev/gen_j3d_materials.py census <dump.bin> [more dumps...]
+"""
+import struct
+import sys
+from collections import Counter
+
+RECORD = 756
+
+
+def stage(rec, i):
+    base = 16 + i * 34
+    b = rec[base:base + 34]
+    return {
+        "coord": b[0], "map": b[1], "channel": b[2],
+        "color_in": tuple(b[3:7]), "color_op": b[7], "color_bias": b[8], "color_scale": b[9], "color_clamp": b[10],
+        "color_reg": b[11],
+        "alpha_in": tuple(b[12:16]), "alpha_op": b[16], "alpha_bias": b[17], "alpha_scale": b[18],
+        "alpha_clamp": b[19], "alpha_reg": b[20],
+        "ras_swap": b[21], "tex_swap": b[22], "konst_color": b[23], "konst_alpha": b[24],
+        "ind": tuple(b[25:34]),
+    }
+
+
+def parse(rec):
+    tev_stages, tex_gens, channels, ind_stages, cull, dither, zloc, origin = rec[0:8]
+    loads = struct.unpack_from("<H", rec, 8)[0]
+    p = {
+        "tev_stages": tev_stages, "tex_gens": tex_gens, "channels": channels, "ind_stages": ind_stages,
+        "zloc": zloc, "loads": loads,
+        "stages": [stage(rec, i) for i in range(min(tev_stages, 16))],
+        "swap": [tuple(rec[560 + 4 * t:564 + 4 * t]) for t in range(4)],
+        "ind_order": [tuple(rec[576 + 4 * t:580 + 4 * t]) for t in range(4)],
+        "tex_gen": [tuple(rec[592 + 8 * t:597 + 8 * t]) for t in range(8)],
+        "channel": [tuple(rec[656 + 8 * c:662 + 8 * c]) for c in range(4)],
+        "fog_type": rec[688],
+        "alpha_compare": tuple(rec[712:715]),
+    }
+    return p
+
+
+ALPHA_KONST = 6
+COLOR_KONST = 14
+
+
+def shader_key(p):
+    """What a native shader of this program depends on (values excluded)."""
+    stages = []
+    for s in p["stages"]:
+        uses_tex = s["map"] != 0xFF and (8 in s["color_in"] or 9 in s["color_in"] or 4 in s["alpha_in"])
+        uses_ras = s["channel"] != 0xFF and (10 in s["color_in"] or 11 in s["color_in"] or 5 in s["alpha_in"])
+        uses_kc = COLOR_KONST in s["color_in"]
+        uses_ka = ALPHA_KONST in s["alpha_in"]
+        stages.append((
+            s["coord"] if uses_tex or any(s["ind"]) else 0xFF, s["map"] if uses_tex else 0xFF,
+            s["channel"] if uses_ras else 0xFF,
+            s["color_in"], s["color_op"], s["color_bias"], s["color_scale"], s["color_clamp"], s["color_reg"],
+            s["alpha_in"], s["alpha_op"], s["alpha_bias"], s["alpha_scale"], s["alpha_clamp"], s["alpha_reg"],
+            p["swap"][s["ras_swap"] & 3] if uses_ras else (), p["swap"][s["tex_swap"] & 3] if uses_tex else (),
+            s["konst_color"] if uses_kc else 0, s["konst_alpha"] if uses_ka else 0,
+            s["ind"] if p["ind_stages"] else (),
+        ))
+    lit = []
+    for c in p["channel"][:2 * min(p["channels"], 2)]:
+        lit.append(c)
+    return (
+        tuple(stages),
+        tuple(p["tex_gen"][:p["tex_gens"]]),
+        tuple(p["ind_order"][:p["ind_stages"]]),
+        tuple(lit),
+        p["fog_type"],
+        p["alpha_compare"],
+    )
+
+
+def read(paths):
+    records = []
+    for path in paths:
+        data = open(path, "rb").read()
+        if len(data) % RECORD:
+            raise SystemExit(f"{path}: {len(data)} bytes is not a whole number of {RECORD}-byte records")
+        records += [data[i:i + RECORD] for i in range(0, len(data), RECORD)]
+    return records
+
+
+def census(paths):
+    records = read(paths)
+    programs = set(records)
+    keys = Counter(shader_key(parse(r)) for r in programs)
+    stages = Counter(len(k[0]) for k in keys)
+    print(f"records {len(records)}, distinct programs {len(programs)}, distinct shader keys {len(keys)}")
+    print("stages per key:", dict(sorted(stages.items())))
+    lit = sum(1 for k in keys if any(c[0] for c in k[3]))
+    ind = sum(1 for k in keys if k[2])
+    fog = sum(1 for k in keys if k[4])
+    print(f"lit {lit}, indirect {ind}, fogged {fog}")
+
+
+class Unsupported(Exception):
+    pass
+
+
+CC = ["prev.rgb", "prev.aaa", "r0.rgb", "r0.aaa", "r1.rgb", "r1.aaa", "r2.rgb", "r2.aaa", "t.rgb", "t.aaa",
+      "ras.rgb", "ras.aaa", "float3(1.0, 1.0, 1.0)", "float3(0.5, 0.5, 0.5)", "k.rgb", "float3(0.0, 0.0, 0.0)"]
+CA = ["prev.a", "r0.a", "r1.a", "r2.a", "t.a", "ras.a", "ka", "0.0"]
+FRACTION = ["1.0", "0.875", "0.75", "0.625", "0.5", "0.375", "0.25", "0.125"]
+BIAS = ["", " + 0.5", " - 0.5"]
+SCALE = ["", " * 2.0", " * 4.0", " * 0.5"]
+DEST = ["prev", "r0", "r1", "r2"]
+COMPARE = ["false", "a8 < r8", "a8 == r8", "a8 <= r8", "a8 > r8", "a8 != r8", "a8 >= r8", "true"]
+
+
+def konst_color(sel):
+    if sel < 8:
+        return f"float3({FRACTION[sel]}, {FRACTION[sel]}, {FRACTION[sel]})"
+    if 0x0C <= sel <= 0x0F:
+        return f"material.konst[{sel - 0x0C}].rgb"
+    if 0x10 <= sel <= 0x1F:
+        comp = "rgba"[(sel - 0x10) // 4]
+        return f"material.konst[{(sel - 0x10) % 4}].{comp * 3}"
+    raise Unsupported(f"konst colour selection {sel}")
+
+
+def konst_alpha(sel):
+    if sel < 8:
+        return FRACTION[sel]
+    if 0x10 <= sel <= 0x1F:
+        return f"material.konst[{(sel - 0x10) % 4}].{'rgba'[(sel - 0x10) // 4]}"
+    raise Unsupported(f"konst alpha selection {sel}")
+
+
+def swizzle(table):
+    return "".join("rgba"[c & 3] for c in table) if table else "rgba"
+
+
+def emit_vertex(p, out):
+    out.append("void material_vertex(NativeVertex v, inout NativeVaryings o) {")
+    for i, (gen_type, source, matrix, normalize, post) in enumerate(p["tex_gen"][:p["tex_gens"]]):
+        if gen_type == 10:
+            out.append(f"    o.uv[{i}] = float4(o.color.rg, 1.0, 0.0);")
+            continue
+        if gen_type not in (0, 1):
+            raise Unsupported(f"texgen type {gen_type} (bump)")
+        if source == 0:
+            coord = "float4(v.pos, 1.0)"
+        elif source == 1:
+            coord = "float4(v.nrm, 1.0)"
+        elif source == 2:
+            coord = "float4(v.binormal, 1.0)"
+        elif source == 3:
+            coord = "float4(v.tangent, 1.0)"
+        elif 4 <= source <= 11:
+            coord = f"float4(v.uv[{source - 4}], 1.0, 1.0)"
+        else:
+            raise Unsupported(f"texgen source {source}")
+        out.append(f"    {{  // coordinate {i}: type {gen_type}, source {source}, matrix {matrix}")
+        out.append(f"        const float4 c = {coord};")
+        if matrix == 60:
+            out.append("        float3 res = c.xyz;" if gen_type == 0 else "        float3 res = float3(c.xy, 1.0);")
+        else:
+            rows = [f"dot(c, inline_tex_matrices[{3 * i + r}])" for r in range(3)]
+            third = rows[2] if gen_type == 0 else "1.0"
+            out.append(f"        float3 res = float3({rows[0]}, {rows[1]}, {third});")
+        if post != 125:
+            if normalize:
+                out.append("        res = dot(res, res) > 0.0 ? normalize(res) : res;")
+            prow = [f"dot(float4(res, 1.0), inline_post_matrices[{3 * i + r}])" for r in range(3)]
+            out.append(f"        res = float3({prow[0]}, {prow[1]}, {prow[2]});")
+            out.append(f"        o.uv[{i}] = float4(res, 1.0);")
+        else:
+            out.append(f"        o.uv[{i}] = float4(res, {'1.0' if gen_type == 0 else '0.0'});")
+        out.append("    }")
+    chans = p["channels"]
+    lit_any = any(p["channel"][k][0] for k in range(2 * min(chans, 2)))
+    if lit_any:
+        out.append("    const uint nq = v.pn_row & 31u;")
+        out.append("    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz,"
+                   " v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));")
+        out.append("    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;")
+    for ch in range(2):
+        target = "o.color" if ch == 0 else "o.color1"
+        vtx = f"v.color{ch}"
+        if ch >= chans:
+            out.append(f"    {target} = {vtx};")
+            continue
+        for part, (enable, mat_src, amb_src, mask, diffuse, atten) in (("rgb", p["channel"][2 * ch]),
+                                                                      ("a", p["channel"][2 * ch + 1])):
+            mat = f"{vtx}.{part}" if mat_src else f"material.mat_color[{ch}].{part}"
+            if not enable:
+                out.append(f"    {target}.{part} = {mat};")
+                continue
+            amb = f"{vtx}.{part}" if amb_src else f"material.amb_color[{ch}].{part}"
+            xf_atten = {0: 1, 1: 3, 2: 2}[atten]
+            xf_diffuse = 0 if atten == 0 else diffuse
+            terms = " + ".join(f"j3d_light({n}u, {xf_atten}u, {xf_diffuse}u, v.eye, nrm).{part}"
+                               for n in range(8) if (mask >> n) & 1) or "0.0"
+            out.append(f"    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);")
+    out.append("}")
+
+
+def emit_pixel(p, out):
+    out.append("float4 material_color(NativeVaryings i) {")
+    out.append("    float4 prev = material.reg[0];")
+    out.append("    float4 r0 = material.reg[1];")
+    out.append("    float4 r1 = material.reg[2];")
+    out.append("    float4 r2 = material.reg[3];")
+    ind_used = p["ind_stages"] > 0 and any(any(s["ind"]) for s in p["stages"])
+    if ind_used:
+        out.append("    float2 tevcoord = float2(0.0, 0.0);")
+        for n, (coord, imap, scale_s, scale_t) in enumerate(p["ind_order"][:p["ind_stages"]]):
+            out.append(f"    const float3 ind{n} = round(tex[{imap}].Sample(samp[{imap}], "
+                       f"j3d_coord(i.uv[{coord}]) / float2({1 << scale_s}.0, {1 << scale_t}.0)).abg * 255.0);")
+    for n, s in enumerate(p["stages"]):
+        out.append(f"    {{  // stage {n}")
+        uses_tex = s["map"] != 0xFF and (8 in s["color_in"] or 9 in s["color_in"] or 4 in s["alpha_in"])
+        ind = s["ind"]
+        if uses_tex:
+            coord = f"j3d_coord(i.uv[{s['coord']}])"
+            if ind_used and any(ind):
+                ind_stage, fmt, bias, matrix, wrap_s, wrap_t, add_prev, lod, ind_alpha = ind
+                if ind_alpha:
+                    raise Unsupported("bump alpha")
+                out.append("        float tw, th;")
+                out.append(f"        tex[{s['map']}].GetDimensions(tw, th);")
+                out.append(f"        float2 texel = {coord} * float2(tw, th);")
+                for axis, wrap in (("x", wrap_s), ("y", wrap_t)):
+                    if wrap == 6:
+                        out.append(f"        texel.{axis} = 0.0;")
+                    elif wrap:
+                        out.append(f"        texel.{axis} = texel.{axis} - {256 >> (wrap - 1)}.0 * "
+                                   f"floor(texel.{axis} / {256 >> (wrap - 1)}.0);")
+                shift = [0, 3, 4, 5][fmt]
+                add = -128 if fmt == 0 else 1
+                out.append(f"        float3 sv = floor(ind{ind_stage} / {1 << shift}.0);")
+                for b, comp in enumerate("xyz"):
+                    if bias & (1 << b):
+                        out.append(f"        sv.{comp} += {add}.0;")
+                if 1 <= matrix <= 3:
+                    m = matrix - 1
+                    out.append(f"        const float2 off = float2(dot(material.ind_mtx[{2 * m}].xyz, sv), "
+                               f"dot(material.ind_mtx[{2 * m + 1}].xyz, sv));")
+                elif 5 <= matrix <= 7:
+                    out.append("        const float2 off = texel * sv.x / 256.0;")
+                elif 9 <= matrix <= 11:
+                    out.append("        const float2 off = texel * sv.y / 256.0;")
+                else:
+                    out.append("        const float2 off = float2(0.0, 0.0);")
+                out.append("        tevcoord = " + ("tevcoord + " if add_prev else "") + "texel + off;")
+                coord = "tevcoord / float2(tw, th)"
+            out.append(f"        const float4 t = tex[{s['map']}].Sample(samp[{s['map']}], {coord})"
+                       f".{swizzle(p['swap'][s['tex_swap'] & 3])};")
+        else:
+            out.append("        const float4 t = float4(0.0, 0.0, 0.0, 0.0);")
+        ch = s["channel"]
+        ras = {4: "i.color", 5: "i.color1"}.get(ch, "float4(0.0, 0.0, 0.0, 0.0)")
+        if ch in (7, 8):
+            raise Unsupported("bump alpha raster")
+        out.append(f"        const float4 ras = {ras}.{swizzle(p['swap'][s['ras_swap'] & 3])};")
+        if 14 in s["color_in"]:
+            out.append(f"        const float3 k = float4({konst_color(s['konst_color'])}, 0.0).rgb;")
+        if 6 in s["alpha_in"]:
+            out.append(f"        const float ka = {konst_alpha(s['konst_alpha'])};")
+        a, b, c, d = (CC[x] for x in s["color_in"])
+        if s["color_op"] <= 1:
+            sign = "-" if s["color_op"] == 1 else "+"
+            expr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['color_bias']]}){SCALE[s['color_scale']]}"
+        else:
+            op = s["color_op"]
+            if op in (14, 15):
+                cmp = ">" if op == 14 else "=="
+                expr = (f"{d} + float3(round({a} * 255.0) {cmp} round({b} * 255.0)) * {c}")
+            else:
+                pack = {8: "round(x.r * 255.0)", 10: "round(x.g * 255.0) * 256.0 + round(x.r * 255.0)",
+                        12: "dot(round(x * 255.0), float3(1.0, 256.0, 65536.0))"}[op & ~1]
+                cmp = ">" if op % 2 == 0 else "=="
+                pa, pb = pack.replace("x", f"({a})"), pack.replace("x", f"({b})")
+                expr = f"{d} + (({pa}) {cmp} ({pb}) ? {c} : float3(0.0, 0.0, 0.0))"
+        if s["color_clamp"]:
+            expr = f"saturate({expr})"
+        out.append(f"        const float3 rc = {expr};")
+        a, b, c, d = (CA[x] for x in s["alpha_in"])
+        if s["alpha_op"] <= 1:
+            sign = "-" if s["alpha_op"] == 1 else "+"
+            aexpr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['alpha_bias']]}){SCALE[s['alpha_scale']]}"
+        elif s["alpha_op"] in (14, 15):
+            cmp = ">" if s["alpha_op"] == 14 else "=="
+            aexpr = f"{d} + (round({a} * 255.0) {cmp} round({b} * 255.0) ? {c} : 0.0)"
+        else:
+            raise Unsupported(f"alpha compare op {s['alpha_op']} on colour channels")
+        if s["alpha_clamp"]:
+            aexpr = f"saturate({aexpr})"
+        out.append(f"        const float ra = {aexpr};")
+        out.append(f"        {DEST[s['color_reg'] & 3]}.rgb = rc;")
+        out.append(f"        {DEST[s['alpha_reg'] & 3]}.a = ra;")
+        out.append("    }")
+    comp0, op, comp1 = p["alpha_compare"]
+    if not (comp0 == 7 and comp1 == 7) and not (op == 1 and (comp0 == 7 or comp1 == 7)):
+        logic = ["&&", "||", "!=", "=="][op & 3]
+        c0 = COMPARE[comp0 & 7].replace("r8", "round(material.alpha_ref.x * 255.0)")
+        c1 = COMPARE[comp1 & 7].replace("r8", "round(material.alpha_ref.y * 255.0)")
+        out.append("    const float a8 = round(saturate(prev.a) * 255.0);")
+        out.append(f"    if (!(({c0}) {logic} ({c1}))) {{")
+        out.append("        discard;")
+        out.append("    }")
+    fog = p["fog_type"]
+    if fog:
+        out.append("    const float ze = i.pos.w;")
+        out.append("    float f = saturate((ze - material.fog.x) / max(material.fog.y - material.fog.x, 1.0e-6));")
+        curve = {2: "", 4: "f = 1.0 - exp2(-8.0 * f);", 5: "f = 1.0 - exp2(-8.0 * f * f);",
+                 6: "f = exp2(-8.0 * (1.0 - f));", 7: "f = 1.0 - f; f = exp2(-8.0 * f * f);"}.get(fog & 7)
+        if curve is None:
+            raise Unsupported(f"fog type {fog}")
+        if curve:
+            out.append("    " + curve)
+        out.append("    prev.rgb = lerp(saturate(prev.rgb), material.fog_color.rgb, f);")
+    out.append("    return saturate(prev);")
+    out.append("}")
+
+
+def emit(paths, out_dir):
+    import os
+    records = read(paths)
+    programs = sorted(set(records))
+    keys = {}
+    for r in programs:
+        keys.setdefault(shader_key(parse(r)), r)
+    os.makedirs(out_dir, exist_ok=True)
+    made, failed = 0, Counter()
+    table = []
+    for key, rec in sorted(keys.items(), key=lambda kv: repr(kv[0])):
+        p = parse(rec)
+        lines = []
+        try:
+            emit_vertex(p, lines)
+            emit_pixel(p, lines)
+        except Unsupported as e:
+            failed[str(e)] += 1
+            continue
+        made += 1
+        ident = made
+        with open(os.path.join(out_dir, f"m{ident:04d}.hlsl"), "w", encoding="utf-8", newline="\n") as f:
+            f.write(f"// J3D material {ident} (tools/dev/gen_j3d_materials.py from the game's material set; E-04)\n")
+            f.write('#include "j3d_material.hlsli"\n\n')
+            f.write("\n".join(lines) + "\n")
+        table.append((ident, key))
+    print(f"distinct keys {len(keys)}, emitted {made}, unsupported {sum(failed.values())}: {dict(failed)}")
+    return table
+
+
+def main():
+    if len(sys.argv) >= 3 and sys.argv[1] == "census":
+        census(sys.argv[2:])
+    elif len(sys.argv) >= 4 and sys.argv[1] == "emit":
+        emit(sys.argv[3:], sys.argv[2])
+    else:
+        raise SystemExit(__doc__)
+
+
+if __name__ == "__main__":
+    main()

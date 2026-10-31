@@ -25,6 +25,7 @@
 
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
+#include "galaxy/host_env.h"
 #include "galaxy/render/dependency_range_memo.h"
 #include "galaxy/render/fifo_cache_fingerprint.h"
 #include "galaxy/render/rt_tev_eval.h"
@@ -58,6 +59,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <fstream>
 #include <set>
 #include <span>
 #include <stdexcept>
@@ -8958,6 +8960,16 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         if (shared == nullptr) {
             shared = &material_program_contents_[content].emplace_back(record.program);
             ++material_census_.distinct;
+            // GALAXY_DUMP_MATERIAL_PROGRAMS=<file>: each distinct program appended as it arrives (the J3D material set's
+            // input for tools/dev/gen_j3d_materials.py; E-04 step 3).
+            static std::ofstream dump = [] {
+                const std::optional<std::string> path = host::read_env_string("GALAXY_DUMP_MATERIAL_PROGRAMS");
+                return path && !path->empty() ? std::ofstream(*path, std::ios::binary | std::ios::app) : std::ofstream();
+            }();
+            if (dump.is_open()) [[unlikely]] {
+                dump.write(reinterpret_cast<const char*>(&bytes), sizeof(material::Program));
+                dump.flush();
+            }
         }
         ++material_census_.registrations;
         auto& registered = material_programs_[record.key];
