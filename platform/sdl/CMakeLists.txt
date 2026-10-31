@@ -123,7 +123,6 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/tilt.cpp
     ${rt}/jaudio_host_mixer.cpp
     ${rt}/atomic_file.cpp
-    ${rt}/wii_device_data.cpp
     ${rt}/mii_import.cpp
     ${rt}/mii_formats.cpp
     ${rt}/mod_xml.cpp

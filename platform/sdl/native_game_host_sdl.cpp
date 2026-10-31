@@ -14,7 +14,6 @@
 #include "galaxy/pointer_control.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/tilt.h"
-#include "galaxy/wii_device_data.h"
 
 #include <SDL3/SDL.h>
 
@@ -239,10 +238,6 @@ void native_game_rumble(bool motor_on, std::int32_t) noexcept {
     if (g_rumble_pad != 0) {
         sdl::rumble(g_rumble_pad, motor_on ? g_rumble_strength : 0.0f);
     }
-}
-
-std::vector<std::byte> native_game_empty_mii_database() {
-    return create_empty_rfl_database();
 }
 
 GamePaths locate_game(const std::filesystem::path& input) {
