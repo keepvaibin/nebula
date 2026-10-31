@@ -437,42 +437,6 @@ static void* boot_stack_end(void) {
     return nebula_arena_base() + kBootStackTop - kBootStackSize;
 }
 
-/* KPAD (the SDK's controller processing, still compiled until the native input replaces it, I-01) guards its state and
-   registers its version through these. */
-BOOL OSDisableInterrupts(void) {
-    return nebula_interrupts_disable();
-}
-
-BOOL OSRestoreInterrupts(BOOL enabled) {
-    return nebula_interrupts_restore(enabled);
-}
-
-void OSRegisterVersion(const char* id) {
-    (void)id;
-}
-
-void OSReport(const char* format, ...) {
-    va_list args;
-    va_start(args, format);
-    nebula_vlog(format, args);
-    va_end(args);
-}
-
-void OSVReport(const char* format, va_list args) {
-    nebula_vlog(format, args);
-}
-
-void OSPanic(const char* file, int line, const char* format, ...) {
-    char message[768];
-    char text[1024];
-    va_list args;
-    va_start(args, format);
-    vsnprintf(message, sizeof(message), format, args);
-    va_end(args);
-    snprintf(text, sizeof(text), "the game stopped (OSPanic) at %s:%d: %s", file, line, message);
-    fatal_text(text);
-}
-
 static void (*sGameMain)(void);
 static void* sHostStack;
 

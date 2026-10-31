@@ -4,7 +4,7 @@
 #include "Game/System/NebulaKernel.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
-#include <revolution/os/OSInterrupt.h>
+#include <revolution/types.h>
 #include <revolution/os.h>
 #include <revolution/types.h>
 
