@@ -135,11 +135,7 @@ float4 main(V v) : SV_Target {
                 float2(sp.x, clamp(sp.y + filter_offset, ylo, yhi)), inv);
             combined_rows += next_row.rgb * coefficients.z;
         }
-        texcol_raw = uint4(combined_rows >> 6, current_row.a);
-        if (coefficients.x + coefficients.y + coefficients.z >= 128u) {
-            texcol_raw &= 0x1ffu;
-        }
-        texcol_raw = min(texcol_raw, uint4(255u, 255u, 255u, 255u));
+        texcol_raw = min(uint4(combined_rows >> 6, current_row.a), uint4(255u, 255u, 255u, 255u));
     }
     if (modes.x != 0.0) {
         int3 rgb = int3(texcol_raw.rgb);
@@ -201,9 +197,6 @@ float4 main(float4 pos : SV_Position) : SV_Target {
         sum += row(p.x, p.y + 1, lo, hi) * weights.z;
     }
     uint3 rgb = sum >> 6;
-    if (weights.x + weights.y + weights.z >= 128u) {
-        rgb &= 0x1ffu;
-    }
     return float4(float3(min(rgb, uint3(255u, 255u, 255u))) / 255.0, 1.0);
 }
 )HLSL";
@@ -391,13 +384,9 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     unsigned reduction_width) noexcept {
     const float scale = static_cast<float>(
         std::clamp(efb_scale, 1u, kMaxEfbScale));
-    float fw_up = static_cast<float>(params.filter_upper());
-    float fw_mid = static_cast<float>(params.filter_middle());
-    float fw_low = static_cast<float>(params.filter_lower());
-    if (fw_up == 0.0f && fw_mid == 0.0f && fw_low == 0.0f) {
-        // BP 0x53/0x54 not programmed yet (before GXInit): the centre row alone.
-        fw_mid = 64.0f;
-    }
+    const float fw_up = static_cast<float>(params.filter_upper());
+    const float fw_mid = static_cast<float>(params.filter_middle());
+    const float fw_low = static_cast<float>(params.filter_lower());
 
     const float copy_y0 = static_cast<float>(params.src_y) * scale;
     const float copy_y1 =

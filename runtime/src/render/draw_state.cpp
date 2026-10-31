@@ -976,18 +976,10 @@ std::uint32_t coord_s_word(const NativeDrawState& s, unsigned c) {
 
 namespace {
 
-// The vertical filter a picture is taken through (taps in 64ths: two above, three on the line, two below). The
-// display's (NEBULA_CAPTURE_FILTERED, what the game's television modes asked for): each line half its own colour and
-// half the line above's. Otherwise the line alone.
-constexpr std::uint8_t kDisplayFilter[7] = {32u, 0u, 32u, 0u, 0u, 0u, 0u};
-constexpr std::uint8_t kNoFilter[7] = {0u, 0u, 21u, 22u, 21u, 0u, 0u};
 constexpr std::uint8_t kCaptureFiltered = 16u;  // NEBULA_CAPTURE_FILTERED
 
 void set_filter(EfbCopyParams& p, std::uint8_t flags) {
-    const std::uint8_t* taps = (flags & kCaptureFiltered) != 0u ? kDisplayFilter : kNoFilter;
-    for (unsigned i = 0; i < 7u; ++i) {
-        p.vfilter[i] = taps[i];
-    }
+    p.filtered = (flags & kCaptureFiltered) != 0u;
 }
 
 }  // namespace

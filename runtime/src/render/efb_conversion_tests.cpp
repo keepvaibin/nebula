@@ -546,15 +546,12 @@ bool test_direct_color_tile_decode() {
     return true;
 }
 
-galaxy::render::EfbCopyParams make_filter_params(
-    const std::array<std::uint32_t, 7>& taps) {
+galaxy::render::EfbCopyParams make_filter_params(bool filtered) {
     galaxy::render::EfbCopyParams params{};
     params.src_y = 1u;
     params.src_width = 1u;
     params.src_height = 1u;
-    for (unsigned i = 0; i < 7u; ++i) {
-        params.vfilter[i] = static_cast<std::uint8_t>(taps[i] & 63u);
-    }
+    params.filtered = filtered;
     return params;
 }
 
@@ -568,26 +565,16 @@ Pixel oracle_convert(
     const galaxy::render::EfbCopyParams& params,
     bool intensity,
     std::uint8_t copy_format) {
-    std::array<std::uint32_t, 3> coefficients{
+    const std::array<std::uint32_t, 3> coefficients{
         params.filter_upper(),
         params.filter_middle(),
         params.filter_lower(),
     };
-    if (coefficients[0] == 0u && coefficients[1] == 0u &&
-        coefficients[2] == 0u) {
-        // Unprogrammed (all-zero) filter registers act as middle = 64.
-        coefficients[1] = 64u;
-    }
-    const std::uint32_t coefficient_sum =
-        coefficients[0] + coefficients[1] + coefficients[2];
     const auto filtered = [&](std::uint8_t p, std::uint8_t c, std::uint8_t n) {
-        std::uint32_t value =
+        const std::uint32_t value =
             (static_cast<std::uint32_t>(p) * coefficients[0] +
              static_cast<std::uint32_t>(c) * coefficients[1] +
              static_cast<std::uint32_t>(n) * coefficients[2]) >> 6u;
-        if (coefficient_sum >= 128u) {
-            value &= 0x1ffu;
-        }
         return static_cast<std::uint8_t>(std::min(value, 255u));
     };
 
@@ -1153,13 +1140,13 @@ V main(uint id : SV_VertexID) {
 
     bool test_identity_efb_copy() {
         using namespace galaxy::render;
-        auto params = make_filter_params({0u, 0u, 21u, 22u, 21u, 0u, 0u});
+        auto params = make_filter_params(false);
         params.src_x = params.src_y = 0u;
         params.src_width = params.src_height = 16u;
         params.target_format = 6u;
         bool passed = expect(detail::efb_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
-        for (unsigned flag = 0u; flag < 10u; ++flag) {
+        for (unsigned flag = 0u; flag < 8u; ++flag) {
             auto rejected = params;
             switch (flag) {
             case 0u: rejected.target_format = 4u; break;
@@ -1169,9 +1156,7 @@ V main(uint id : SV_VertexID) {
             case 4u: rejected.src_width = 0u; break;
             case 5u: rejected.src_x = kFrameWidth - 15u; break;
             case 6u: rejected.src_y = kFrameHeight - 15u; break;
-            case 7u: rejected.vfilter[0] |= 1u; break;
-            case 8u: rejected.vfilter[5] |= 1u; break;
-            case 9u: rejected.vfilter[4] += 1u; break;
+            case 7u: rejected.filtered = true; break;
             }
             passed &= expect(!detail::efb_identity_copy_box(rejected, false,
                 1u, 16u, 16u), "nonidentity copy cannot bypass conversion");
@@ -1248,9 +1233,6 @@ V main(uint id : SV_VertexID) {
                 }
             }
         }
-        std::fill(std::begin(params.vfilter), std::end(params.vfilter), std::uint8_t{0});
-        passed &= expect(detail::efb_identity_copy_box(params, false, 1u, 16u, 16u).has_value(),
-            "uninitialized all-zero filter retains existing identity fallback");
         std::printf("Identity EFB copy: %zu exact shader/copy/source pixels: %s\n",
             checked, passed ? "PASS" : "FAIL");
         return passed;
@@ -2522,7 +2504,7 @@ bool test_scaled_xfb_filter() {
     const std::array<Pixel, 3> rows{
         Pixel{0u, 0u, 0u, 1u}, Pixel{255u, 0u, 0u, 77u},
         Pixel{0u, 0u, 0u, 2u}};
-    const auto params = make_filter_params({8u, 8u, 10u, 12u, 10u, 8u, 8u});
+    const auto params = make_filter_params(true);
     for (const unsigned scale : {1u, 2u, 6u}) {
         const auto sampling = galaxy::render::compute_xfb_sampling_geometry(
             params, scale, scale, scale);
@@ -2538,9 +2520,7 @@ bool test_scaled_xfb_filter() {
             sampling.step_x, sampling.step_y, sampling.filter_row_offset, scale, 3u);
         const auto result = harness.run_color(rows, scale, constants);
         for (unsigned y = 0; y < scale; ++y) {
-            const auto red = static_cast<std::uint8_t>(
-                ((y == 0 ? 0u : 255u) * 16u + 255u * 32u +
-                 (y + 1u == scale ? 0u : 255u) * 16u) >> 6u);
+            const auto red = static_cast<std::uint8_t>(((y == 0 ? 0u : 255u) * 32u + 255u * 32u) >> 6u);
             for (unsigned x = 0; x < scale; ++x) {
                 passed &= expect_pixel(result[y * scale + x], {red, 0u, 0u, 255u},
                     "scaled XFB filter affects adjacent edge rows, retaining brightness and opaque XFB alpha");
@@ -2557,48 +2537,23 @@ bool test_cpu_oracle() {
         Pixel{40u, 50u, 60u, 77u},
         Pixel{70u, 80u, 90u, 100u},
     };
-    galaxy::render::EfbCopyParams filter = make_filter_params(
-        {1u, 2u, 4u, 8u, 16u, 17u, 16u});
+    galaxy::render::EfbCopyParams filter = make_filter_params(true);
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 6u),
-        Pixel{54u, 64u, 74u, 77u},
-        "integer oracle unbounded vertical filter");
-    filter.clamp_top = true;
-    passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 6u),
-        Pixel{55u, 65u, 75u, 77u},
-        "integer oracle top-only clamp");
-    filter.clamp_top = false;
-    filter.clamp_bottom = true;
-    passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 6u),
-        Pixel{38u, 48u, 58u, 77u},
-        "integer oracle bottom-only clamp");
+        Pixel{25u, 35u, 45u, 77u},
+        "integer oracle display filter: half the line above");
     filter.clamp_top = true;
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 6u),
         Pixel{40u, 50u, 60u, 77u},
-        "integer oracle clamps both filter edges");
-
-    const std::array<Pixel, 3> white_rows{
-        Pixel{255u, 255u, 255u, 100u},
-        Pixel{255u, 255u, 255u, 200u},
-        Pixel{255u, 255u, 255u, 250u},
-    };
-    const galaxy::render::EfbCopyParams overflow = make_filter_params(
-        {63u, 63u, 63u, 63u, 63u, 63u, 63u});
-    passed &= expect_pixel(
-        oracle_from_three_rows(white_rows, overflow, false, 6u),
-        Pixel{221u, 221u, 221u, 200u},
-        "integer oracle applies nine-bit copy-filter overflow");
+        "integer oracle top clamp keeps the line");
 
     const std::array<Pixel, 3> red_rows{
         Pixel{0u, 0u, 0u, 1u},
         Pixel{255u, 0u, 0u, 77u},
         Pixel{0u, 0u, 0u, 2u},
     };
-    const galaxy::render::EfbCopyParams identity = make_filter_params(
-        {0u, 0u, 21u, 22u, 21u, 0u, 0u});
+    const galaxy::render::EfbCopyParams identity = make_filter_params(false);
     passed &= expect_pixel(
         oracle_from_three_rows(red_rows, identity, true, 8u),
         Pixel{82u, 82u, 82u, 82u},
@@ -2618,9 +2573,8 @@ bool test_cpu_oracle() {
         packed_depth(0x708090u),
     };
     passed &= expect_pixel(
-        oracle_from_three_rows(depth_rows, make_filter_params(
-            {1u, 2u, 4u, 8u, 16u, 17u, 16u}), false, 6u),
-        Pixel{86u, 102u, 118u, 255u},
+        oracle_from_three_rows(depth_rows, make_filter_params(true), false, 6u),
+        Pixel{40u, 56u, 72u, 255u},
         "integer oracle filters packed depth bytes");
     return passed;
 }
@@ -2633,11 +2587,6 @@ bool test_warp_against_oracle() {
             Pixel{10u, 20u, 30u, 40u},
             Pixel{40u, 50u, 60u, 77u},
             Pixel{70u, 80u, 90u, 100u},
-        };
-        const std::array<Pixel, 3> white_rows{
-            Pixel{255u, 255u, 255u, 100u},
-            Pixel{255u, 255u, 255u, 200u},
-            Pixel{255u, 255u, 255u, 250u},
         };
         const std::array<Pixel, 3> red_rows{
             Pixel{0u, 0u, 0u, 1u},
@@ -2657,8 +2606,7 @@ bool test_warp_against_oracle() {
 
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
             for (unsigned clamp_case = 0u; clamp_case < 4u; ++clamp_case) {
-                galaxy::render::EfbCopyParams params = make_filter_params(
-                    {1u, 2u, 4u, 8u, 16u, 17u, 16u});
+                galaxy::render::EfbCopyParams params = make_filter_params(true);
                 params.clamp_top = (clamp_case & 1u) != 0u;
                 params.clamp_bottom = (clamp_case & 2u) != 0u;
                 const Pixel expected =
@@ -2681,25 +2629,7 @@ bool test_warp_against_oracle() {
                     label);
             }
 
-            const galaxy::render::EfbCopyParams overflow = make_filter_params(
-                {63u, 63u, 63u, 63u, 63u, 63u, 63u});
-            char overflow_label[64]{};
-            std::snprintf(
-                overflow_label,
-                sizeof(overflow_label),
-                "%ux coefficient overflow",
-                scale);
-            passed &= expect_uniform_pixels(
-                harness.run_color(
-                    white_rows,
-                    scale,
-                    constants_for_case(overflow, scale, false, false, 6u)),
-                scale,
-                oracle_from_three_rows(white_rows, overflow, false, 6u),
-                overflow_label);
-
-            const galaxy::render::EfbCopyParams identity = make_filter_params(
-                {0u, 0u, 21u, 22u, 21u, 0u, 0u});
+            const galaxy::render::EfbCopyParams identity = make_filter_params(false);
             constexpr std::array<std::uint8_t, 3> kIntensityFormats{
                 8u, 9u, 10u};
             for (const std::uint8_t format : kIntensityFormats) {
@@ -2720,8 +2650,7 @@ bool test_warp_against_oracle() {
                     intensity_label);
             }
 
-            const galaxy::render::EfbCopyParams depth_filter = make_filter_params(
-                {1u, 2u, 4u, 8u, 16u, 17u, 16u});
+            const galaxy::render::EfbCopyParams depth_filter = make_filter_params(true);
             char depth_label[64]{};
             std::snprintf(
                 depth_label,
