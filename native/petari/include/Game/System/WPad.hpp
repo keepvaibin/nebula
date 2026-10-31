@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/kpad.h>
 #include <revolution/types.h>
 #include <revolution/wpad.h>
 
@@ -14,13 +13,13 @@ class WPadPointer;
 class WPadReadDataInfo;
 class WPadRumble;
 class WPadStick;
-struct KPADStatus;
+struct WPadSample;
 
 class WPad {
 public:
-    WPad(s32);
+    // `pReadInfo`: the reader of this pad's samples, which its parts set up as they are made.
+    WPad(s32, WPadReadDataInfo* pReadInfo);
 
-    void setReadInfo(WPadReadDataInfo*);
     void update();
     WPadRumble* getRumbleInstance() const;
     void startLeaveWatcher();
@@ -32,8 +31,7 @@ public:
     void disconnected();
     static void connectCallback(s32, s32);
     static void extensionCallback(s32, s32);
-    static void getInfoCallback(s32, s32);
-    KPADStatus* getKPadStatus(u32) const;
+    WPadSample* getSample(u32) const;
     s32 getValidStatusCount() const;
     s32 getEnableAccelPastCount(u32) const;
     bool getAcceleration(TVec3f*, u32) const;
@@ -58,6 +56,5 @@ public:
 };
 
 namespace MR {
-    bool isDeviceFreeStyle(const KPADStatus*);
-    void getPadDataForExceptionNoInit(u32, u32*, u32*);
+    bool isDeviceFreeStyle(const WPadSample*);
 };  // namespace MR

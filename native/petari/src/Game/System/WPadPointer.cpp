@@ -1,4 +1,5 @@
 #include "Game/System/WPadPointer.hpp"
+#include "Game/System/WPadHolder.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/JUtility/JUTVideo.hpp>
 
@@ -37,26 +38,19 @@ void WPadPointer::reset() {
     mLostSensorTime = 0;
     mIsPointInScreen = false;
     mIsPointerMoved = false;
-    KPADSetPosParam(mPad->mChannel, mPosPlayRadius, mPosSensitivity);
-    KPADSetHoriParam(mPad->mChannel, mHoriPlayRadius, mHoriSensitivity);
-    KPADSetDistParam(mPad->mChannel, mDistPlayRadius, mDistSensitivity);
-}
-
-void WPadPointer::setSensorBarLevel(f32 level) {
-    KPADSetSensorHeight(mPad->mChannel, level);
 }
 
 void WPadPointer::update() {
-    KPADStatus* status = mPad->getKPadStatus(0);
+    WPadSample* pSample = mPad->getSample(0);
 
-    if (status == nullptr) {
+    if (pSample == nullptr) {
         reset();
         return;
     }
 
     mIsPointerMoved = false;
-    mDistDisplay = status->dist;
-    mDpdValidFg = status->dpd_valid_fg;
+    mDistDisplay = pSample->mDistance;
+    mDpdValidFg = pSample->mIsPointerOn ? 2 : 0;
 
     s32 validCount = mPad->getValidStatusCount();
     mEnablePastCount = 0;
@@ -68,8 +62,8 @@ void WPadPointer::update() {
     bool isAnyDpdValid = false;
 
     for (s32 i = validCount - 1; i >= 0; i--) {
-        KPADStatus* curStatus = mPad->getKPadStatus(i);
-        s8 dpdValidFg = curStatus->dpd_valid_fg;
+        WPadSample* curStatus = mPad->getSample(i);
+        s8 dpdValidFg = curStatus->mIsPointerOn ? 2 : 0;
 
         if (dpdValidFg > 0) {
             isAnyDpdValid = true;
@@ -81,12 +75,12 @@ void WPadPointer::update() {
         } else {
             if (!mIsPointInScreen && mValidInScreenTime >= ::sIsValidInScreenTime ||
                 mIsPointInScreen && mInValidOutScreenTime <= ::sIsInValidOutScreenTime) {
-                mPointingPosArray[mEnablePastCount].x = curStatus->pos.x;
-                mPointingPosArray[mEnablePastCount].y = curStatus->pos.y;
-                mHorizonArray[mEnablePastCount].x = curStatus->horizon.x;
-                mHorizonArray[mEnablePastCount].y = curStatus->horizon.y;
+                mPointingPosArray[mEnablePastCount].x = curStatus->mPointerPos.x;
+                mPointingPosArray[mEnablePastCount].y = curStatus->mPointerPos.y;
+                mHorizonArray[mEnablePastCount].x = curStatus->mHorizon.x;
+                mHorizonArray[mEnablePastCount].y = curStatus->mHorizon.y;
 
-                if (curStatus->speed > ::sMoveJudgeSpeed) {
+                if (curStatus->mPointerSpeed > ::sMoveJudgeSpeed) {
                     mIsPointerMoved = true;
                 }
 

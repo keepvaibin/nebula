@@ -138,9 +138,9 @@ private:
     /// @brief The combination of buttons pressed during the repeat period.
     /* 0x10 */ u32 mRepeat;
 
-    /// @brief The number of seconds to hold down any button before the `KPAD_BUTTON_RPT` flag is set.
+    /// @brief The number of seconds to hold down any button before the button repeats.
     /* 0x14 */ f32 mDelaySec;
 
-    /// @brief The number of seconds to hold down any button after @ref mDelaySec before the `KPAD_BUTTON_RPT` flag is set.
+    /// @brief The number of seconds to hold down any button after @ref mDelaySec before the button repeats.
     /* 0x18 */ f32 mPulseSec;
 };

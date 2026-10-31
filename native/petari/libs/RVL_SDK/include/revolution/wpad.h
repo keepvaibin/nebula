@@ -292,85 +292,12 @@ typedef struct WPADMEMControlBlock {
     WPADCallback callback;
 } WPADMEMControlBlock;
 
-void WPADRegisterAllocator(WPADAlloc, WPADFree);
-u32 WPADGetWorkMemorySize(void);
-
-void WPADDisconnect(s32);
-s32 WPADGetInfoAsync(s32, WPADInfo*, WPADCallback);
-
+/* The remote speaker's entry points (native/sdk/wpad/wpad_native.c); the controller is native input. */
 BOOL WPADIsSpeakerEnabled(s32);
 s32 WPADControlSpeaker(s32, u32, WPADCallback);
 u8 WPADGetSpeakerVolume(void);
 s32 WPADSendStreamData(s32, void*, u16);
 BOOL WPADCanSendStreamData(s32);
-void WPADGetAccGravityUnit(s32 chan, u32 type, WPADAcc* acc);
-void WPADControlMotor(s32, u32);
-BOOL WPADStopSimpleSync(void);
-
-BOOL WPADIsDpdEnabled(s32 chan);
-s32 WPADControlDpd(s32 chan, u32 command, WPADCallback callback);
-u32 WPADGetDataFormat(s32 chan);
-s32 WPADSetDataFormat(s32 chan, u32 fmt);
-void WPADRead(s32 chan, void* status);
-s32 WPADReadFaceData(s32 chan, void* p_buf, u32 len, u32 addr, WPADCallback callback);
-void WPADSetAutoSleepTime(u8);
-u8 WPADGetSensorBarPosition(void);
-s32 WPADProbe(s32 chan, u32* type);
-s32 WPADGetStatus(void);
-
-void WPADInit(void);
-u8 WPADGetDpdSensitivity(void);
-
-void WPADRegisterAllocator(WPADAlloc, WPADFree);
-
-WPADExtensionCallback WPADSetExtensionCallback(s32, WPADExtensionCallback);
-WPADConnectCallback WPADSetConnectCallback(s32, WPADConnectCallback callback);
-WPADSamplingCallback WPADSetSamplingCallback(s32 chan, WPADSamplingCallback callback);
-
-void WPADiCreateKey(s32);
-void WPADiCreateKeyFor3rd(s32);
-void WPADiDecode(s32, void*, u16, u16);
-s32 WPADiHIDParser(u8, u8*);
-
-void WPADiClearQueue(WPADCmdQueue*);
-BOOL WPADiSendSetReportType(WPADCmdQueue*, u32, BOOL, WPADCallback);
-BOOL WPADiSendWriteDataCmd(WPADCmdQueue*, u8, u32, WPADCallback);
-BOOL WPADiSendReadData(WPADCmdQueue*, void*, u16, u32, WPADCallback);
-BOOL WPADiSendWriteData(WPADCmdQueue*, void*, u16, u32, WPADCallback);
-
-void WPADiCopyOut(s32);
-void WPADiExcludeButton(s32);
-s32 WPADiGetStatus(s32);
-
-void __WPADShutdown(void);
-void __WPADReconnect(BOOL);
-
-BOOL WPADStopSimpleSync();
-BOOL WPADCancelSyncDevice();
-
-static void WPADiShutdown(BOOL);
-void WPADiDisconnect(s32, BOOL);
-
-s32 WPADControlLed(s32, u8, WPADCallback);
-void WPADGetAddress(s32, u8*);
-
-BOOL WPADiSendSetPort(WPADCmdQueue*, u8, WPADCallback);
-BOOL WPADiSendDPDCSB(WPADCmdQueue*, BOOL, WPADCallback);
-BOOL WPADiSendGetContStat(WPADCmdQueue*, WPADInfo*, WPADCallback);
-
-s32 WPADiRetrieveChannel(u8);
-s32 WPADiSendData(s32, WPADCommand);
-
-BOOL WPADiGetCommand(WPADCmdQueue*, WPADCommand*);
-BOOL WPADiPopCommand(WPADCmdQueue*);
-BOOL WPADiPushCommand(WPADCmdQueue*, WPADCommand);
-
-void WPADSetAutoSamplingBuf(s32, void*, u32);
-
-#define WPADStopMotor(chan) WPADControlMotor((chan), WPAD_MOTOR_STOP)
-
-extern WPADMEMControlBlock _wmb[WPAD_MAX_CONTROLLERS];
-extern WPADControlBlock* _wpdcb[WPAD_MAX_CONTROLLERS];
 
 #ifdef __cplusplus
 }

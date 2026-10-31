@@ -84,14 +84,6 @@ Vec3 remote_gravity(Section section, const Vec3& relative_in) noexcept {
     return {0.0f, 0.0f, 1.0f};
 }
 
-Counts accel_counts(const Vec3& g) noexcept {
-    const auto count = [](int base, float value) {
-        const float v = std::isfinite(value) ? std::clamp(value, -3.0f, 3.0f) : 0.0f;
-        return static_cast<std::uint16_t>(std::clamp(base + static_cast<int>(std::lround(v * 100.0f)), 0, 1023));
-    };
-    return {count(0x1FC, g[0]), count(0x204, g[1]), count(0x200, g[2])};
-}
-
 Tilt::Output Tilt::update(Section active, const Vec3* controller_up, float stick_x, float stick_y,
                           bool recenter) noexcept {
     if (active == Section::None) {

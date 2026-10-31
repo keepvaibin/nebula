@@ -38,6 +38,7 @@
 #if defined(_WIN32) && !defined(NEBULA_HOST_SDL)
 // A real Wii Remote over Windows HID (wiimote_hid.h).
 #define NEBULA_REAL_WIIMOTE 1
+#include "galaxy/input/wiimote_input.h"
 #include "galaxy/wiimote_hid.h"
 #endif
 #include "galaxy/runtime_settings.h"
@@ -305,10 +306,6 @@ struct Module {
     decltype(&nebula_game_audio_channel_owner) audio_channel_owner;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
-    decltype(&nebula_game_wpad_connect) wpad_connect;
-    decltype(&nebula_game_wpad_report) wpad_report;
-    decltype(&nebula_game_wpad_shake) wpad_shake;
-    decltype(&nebula_game_wpad_battery) wpad_battery;
     void (*debug_dump)();  // optional: the module's thread report
 };
 Module gModule;
@@ -436,11 +433,6 @@ void load_module(const fs::path& path) {
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
         reinterpret_cast<decltype(gModule.mii_changed)>(find_symbol(module, "nebula_game_mii_changed"));
-    gModule.wpad_connect = reinterpret_cast<decltype(gModule.wpad_connect)>(find_symbol(module, "nebula_game_wpad_connect"));
-    gModule.wpad_report = reinterpret_cast<decltype(gModule.wpad_report)>(find_symbol(module, "nebula_game_wpad_report"));
-    gModule.wpad_shake = reinterpret_cast<decltype(gModule.wpad_shake)>(find_symbol(module, "nebula_game_wpad_shake"));
-    gModule.wpad_battery =
-        reinterpret_cast<decltype(gModule.wpad_battery)>(find_symbol(module, "nebula_game_wpad_battery"));
 #if defined(_WIN32)
     gModule.debug_dump = reinterpret_cast<void (*)()>(GetProcAddress(static_cast<HMODULE>(module), "nebula_game_debug_dump"));
 #else
@@ -2646,10 +2638,6 @@ uint32_t svc_sc_get(void*, uint32_t item) {
         return 0;
     case NEBULA_SC_EURGB60_MODE:
         return 1;
-    case NEBULA_SC_SENSOR_BAR_POSITION:
-        return 1;  // above the screen
-    case NEBULA_SC_DPD_SENSITIVITY:
-        return 3;
     case NEBULA_SC_SPEAKER_VOLUME:
         return 0x58;
     case NEBULA_SC_SCREEN_SAVER_MODE:
@@ -2661,150 +2649,182 @@ uint32_t svc_sc_get(void*, uint32_t item) {
     }
 }
 
-// Remote 0: Nebula's controls (the bindings, keyboard and mouse, controllers) as a Wii Remote with a Nunchuk,
-// connected when the game starts WPAD and reporting 100 times a second in the format the game asks for. Headless, the
-// same remote at rest: the game sees a connected controller (no "connect the Wii Remote" pause) and no input.
-std::atomic<int> gWpadStarted{0};
-std::atomic<uint32_t> gWpadReport{0x30};
-std::atomic<int> gWpadDpd{0};
+// Player 1: Nebula's controls (the bindings, keyboard and mouse, controllers; a real Wii Remote while it is in use)
+// as a remote with a Nunchuk, connected from the start. The host takes a sample every 10 ms and one each time the
+// game reads (svc_input_read), when it starts its 10 ms anew; the game gets every sample since its last read.
+// Headless, the remote lies still: one sample per read, nothing pressed.
+constexpr uint32_t kInputSamples = 120;  // a read takes at most the newest 1.2 s
 
-uint8_t report_id_for_format(uint32_t format) {
-    switch (format) {
-    case 0:
-        return 0x30;  // WPAD_FMT_CORE
-    case 1:
-        return 0x31;  // WPAD_FMT_CORE_ACC
-    case 2:
-        return 0x33;  // WPAD_FMT_CORE_ACC_DPD
-    default:
-        return 0x37;  // the Nunchuk formats: core, accelerometer, IR and extension
-    }
+NebulaInputSample rest_input_sample() {
+    NebulaInputSample sample{};
+    sample.roll[0] = 1.0f;
+    sample.distance = (0.2f / 0.383864f) / 0.3125f;
+    sample.gravity[2] = 1.0f;
+    sample.nunchuk_gravity[2] = 1.0f;
+    return sample;
 }
-
-#if !defined(NEBULA_HOST_RENDERER)
-// The virtual remote's EEPROM calibration, as native_host.cpp gives it: IR, then the accelerometer's 0 g and 1 g, each
-// twice; and its Nunchuk's: accelerometer 0 g and 1 g, stick maximum, minimum and centre.
-void idle_wiimote_calibration(uint8_t (&eeprom)[0x2A], uint8_t (&nunchuk)[32]) {
-    static const uint8_t ir[11] = {0x7f, 0xa2, 0x8b, 0x80, 0xa2, 0x80, 0x5d, 0x30, 0x7f, 0x5d, 0x0c};
-    static const uint8_t accel[10] = {0x80, 0x80, 0x80, 0x00, 0x99, 0x99, 0x99, 0x00, 0x00, 0xa0};
-    static const uint8_t extension[16] = {0x7d, 0x7e, 0x7a, 0x3c, 0xb1, 0xaf, 0xae, 0x1b,
-                                          0xe0, 0x15, 0x7b, 0xe6, 0x1d, 0x81, 0x23, 0x78};
-    std::memset(eeprom, 0, sizeof(eeprom));
-    std::memset(nunchuk, 0, sizeof(nunchuk));
-    std::memcpy(eeprom, ir, sizeof(ir));
-    std::memcpy(eeprom + 0x0B, ir, sizeof(ir));
-    std::memcpy(eeprom + 0x16, accel, sizeof(accel));
-    std::memcpy(eeprom + 0x20, accel, sizeof(accel));
-    std::memcpy(nunchuk, extension, sizeof(extension));
-}
-
-// A report from the remote at rest, from its id: no buttons, the accelerometer at 1 g on Z, no IR points, the Nunchuk
-// level with its stick at the calibrated centre and C and Z up.
-size_t idle_wiimote_report(uint8_t id, uint8_t* report) {
-    std::memset(report, 0, 22);
-    report[0] = id;
-    if (id == 0x30) {
-        return 3;
-    }
-    report[3] = 0x80;
-    report[4] = 0x80;
-    report[5] = 0x99;
-    if (id == 0x31) {
-        return 6;
-    }
-    if (id == 0x33) {
-        std::memset(report + 6, 0xFF, 12);
-        return 18;
-    }
-    std::memset(report + 6, 0xFF, 10);
-    static const uint8_t nunchuk[6] = {0x7b, 0x81, 0x7d, 0x7e, 0xae, 0x03};
-    std::memcpy(report + 16, nunchuk, sizeof(nunchuk));
-    return 22;
-}
-#endif
 
 #if defined(NEBULA_HOST_RENDERER)
-// The stand-in remote's reports are built on the WPAD thread every 10 ms and on the game's thread when it reads its
-// remotes (svc_wpad_sample), one at a time; the WPAD thread's next one then comes 10 ms after the game's.
-std::mutex gVirtualReportLock;
-std::atomic<int64_t> gVirtualSampledNs{std::numeric_limits<int64_t>::min() / 2};  // the game's last, steady clock
-std::atomic<bool> gVirtualReports{true};  // the game takes the stand-in's reports (not a real remote's)
+static_assert(NEBULA_BUTTON_A == galaxy::input::kButtonA && NEBULA_BUTTON_B == galaxy::input::kButtonB &&
+              NEBULA_BUTTON_1 == galaxy::input::kButton1 && NEBULA_BUTTON_2 == galaxy::input::kButton2 &&
+              NEBULA_BUTTON_PLUS == galaxy::input::kButtonPlus && NEBULA_BUTTON_MINUS == galaxy::input::kButtonMinus &&
+              NEBULA_BUTTON_HOME == galaxy::input::kButtonHome && NEBULA_BUTTON_UP == galaxy::input::kButtonUp &&
+              NEBULA_BUTTON_DOWN == galaxy::input::kButtonDown && NEBULA_BUTTON_LEFT == galaxy::input::kButtonLeft &&
+              NEBULA_BUTTON_RIGHT == galaxy::input::kButtonRight && NEBULA_BUTTON_C == galaxy::input::kButtonC &&
+              NEBULA_BUTTON_Z == galaxy::input::kButtonZ,
+              "the host's buttons are the game's");
 
-galaxy::input::WiimoteInputSnapshot virtual_snapshot() {
+NebulaInputSample input_sample(const galaxy::input::PlayerInput& input) {
+    NebulaInputSample sample{};
+    sample.buttons = galaxy::input::button_bits(input.buttons);
+    sample.stick[0] = input.stick_x;
+    sample.stick[1] = input.stick_y;
+    sample.pointer_on = input.pointer_on ? 1u : 0u;
+    sample.pointer[0] = input.pointer_x;
+    sample.pointer[1] = input.pointer_y;
+    sample.roll[0] = input.roll_x;
+    sample.roll[1] = input.roll_y;
+    sample.distance = input.distance;
+    for (int i = 0; i < 3; ++i) {
+        sample.gravity[i] = input.gravity[i];
+        sample.nunchuk_gravity[i] = input.nunchuk_gravity[i];
+    }
+    sample.shake = static_cast<uint8_t>((input.shake ? NEBULA_SHAKE_REMOTE : 0u) |
+                                        (input.nunchuk_shake ? NEBULA_SHAKE_NUNCHUK : 0u));
+    return sample;
+}
+
+// Player 1's samples not yet read, oldest first; past kInputSamples the oldest go.
+class InputSamples {
+public:
+    void push(const NebulaInputSample& sample) {
+        const std::lock_guard<std::mutex> lock(lock_);
+        ring_[(head_ + count_) % kInputSamples] = sample;
+        if (count_ < kInputSamples) {
+            ++count_;
+        } else {
+            head_ = (head_ + 1) % kInputSamples;
+        }
+    }
+    uint32_t take(NebulaInputSample* out, uint32_t max) {
+        const std::lock_guard<std::mutex> lock(lock_);
+        const uint32_t count = std::min(count_, max);
+        const uint32_t skip = count_ - count;
+        for (uint32_t i = 0; i < count; ++i) {
+            out[i] = ring_[(head_ + skip + i) % kInputSamples];
+        }
+        head_ = (head_ + count_) % kInputSamples;
+        count_ = 0;
+        return count;
+    }
+
+private:
+    std::mutex lock_;
+    std::array<NebulaInputSample, kInputSamples> ring_{};
+    uint32_t head_ = 0;
+    uint32_t count_ = 0;
+};
+
+InputSamples gInputSamples;
+// One sample is taken at a time: on the input thread every 10 ms and on the game's thread when it reads.
+std::mutex gInputSampleLock;
+std::atomic<int64_t> gInputReadNs{std::numeric_limits<int64_t>::min() / 2};  // the game's last read, steady clock
+std::atomic<bool> gInputRead{false};  // the game has read its input (the 10 ms samples start then)
+std::atomic<bool> gControlsInput{true};  // player 1 is the controls (not a real remote)
+std::atomic<uint8_t> gInputNunchuk{1};
+std::atomic<uint8_t> gInputBattery{4};
+
+// The controls now (under gInputSampleLock). Each sample renews the motor's state (a stale one stops).
+NebulaInputSample controls_sample() {
     static const bool frame_clock = [] {
         const char* value = std::getenv("GALAXY_TEST_SCRIPT_CLOCK");
         return value != nullptr && std::strcmp(value, "frames") == 0;
     }();
-    return galaxy::host::native_game_wiimote_snapshot(
-        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gRetraces.load(std::memory_order_relaxed),
-        gWpadDpd.load(std::memory_order_relaxed) != 0,
-        gStarPointerMode.load(std::memory_order_relaxed), static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed)));
-}
-
-void send_virtual_report(const galaxy::input::WiimoteInputSnapshot& snapshot) {
-    // Every report renews the motor's state (a stale one stops), as the console's remote keeps its motor bit.
-    galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), gStarPointerMode.load(std::memory_order_relaxed));
-    uint8_t report[galaxy::input::kMaxWiimoteInputReportBytes];
-    const auto built = galaxy::input::build_wiimote_input_report(
-        static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed)), snapshot, report);
-    if (built.status == galaxy::input::WiimoteReportBuildStatus::Ok && built.size > 1) {
-        // From the report id, past the HID header; the exact pointer its IR dots stand for, when there is one.
-        const NebulaWpadPointer pointer{snapshot.pointer_x, snapshot.pointer_y};
-        gModule.wpad_shake(0, (snapshot.shake ? 1u : 0u) | (snapshot.nunchuk_shake ? 2u : 0u));
-        gModule.wpad_report(0, report + 1, built.size - 1, snapshot.pointer_exact ? &pointer : nullptr);
-    }
+    const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
+    galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
+    return input_sample(galaxy::host::native_game_input(
+        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gRetraces.load(std::memory_order_relaxed), mode,
+        static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed))));
 }
 #endif
 
-void svc_wpad_sample(void*, uint32_t chan) {
+uint32_t svc_input_read(void*, uint32_t player, NebulaInputDevice* device, NebulaInputSample* samples, uint32_t max) {
+    if (device != nullptr) {
+        *device = {};
+        if (player == 0) {
+            device->connected = 1;
 #if defined(NEBULA_HOST_RENDERER)
-    // GALAXY_WPAD_SAMPLE=0: only the 10 ms reports (the timing before reports followed the game's reads).
-    static const bool enabled = [] {
-        const char* value = std::getenv("GALAXY_WPAD_SAMPLE");
+            device->nunchuk = gInputNunchuk.load(std::memory_order_relaxed);
+            device->battery = gInputBattery.load(std::memory_order_relaxed);
+#else
+            device->nunchuk = 1;
+            device->battery = 4;
+#endif
+        }
+    }
+    if (player != 0 || samples == nullptr || max == 0) {
+        return 0;
+    }
+#if defined(NEBULA_HOST_RENDERER)
+    gInputRead.store(true, std::memory_order_release);
+    // GALAXY_INPUT_READ_SAMPLE=0: only the 10 ms samples (the timing before samples followed the game's reads).
+    static const bool sample_on_read = [] {
+        const char* value = std::getenv("GALAXY_INPUT_READ_SAMPLE");
         return value == nullptr || value[0] != '0';
     }();
-    if (!enabled || chan != 0 || gWpadStarted.load(std::memory_order_acquire) == 0 ||
-        !gVirtualReports.load(std::memory_order_acquire)) {
-        return;
+    if (sample_on_read && gControlsInput.load(std::memory_order_acquire)) {
+        const std::lock_guard<std::mutex> lock(gInputSampleLock);
+        gInputSamples.push(controls_sample());
+        gInputReadNs.store(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(),
+                           std::memory_order_release);
     }
-    const std::lock_guard<std::mutex> lock(gVirtualReportLock);
-    send_virtual_report(virtual_snapshot());
-    gVirtualSampledNs.store(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count(),
-                            std::memory_order_release);
+    return gInputSamples.take(samples, max);
 #else
-    (void)chan;
+    samples[0] = rest_input_sample();
+    return 1;
 #endif
 }
 
-void wpad_thread() {
-    name_thread(L"Nebula Host WPAD");
-    while (!gWpadStarted.load(std::memory_order_acquire)) {
+void svc_input_control(void*, uint32_t player, uint32_t what, uint32_t value) {
+    if (player != 0 || what != NEBULA_INPUT_RUMBLE) {
+        return;  // player 1's controller is never let go; there are no others
+    }
+    gMotor.store(value != 0, std::memory_order_relaxed);
+#if defined(NEBULA_REAL_WIIMOTE)
+    if (!galaxy::host::real_wiimote_in_use()) {
+        galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+    }
+    galaxy::host::real_wiimote_set_rumble(value != 0);
+#elif defined(NEBULA_HOST_RENDERER)
+    galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
+#endif
+}
+
+#if defined(NEBULA_HOST_RENDERER)
+void input_thread() {
+    name_thread(L"Nebula Host Input");
+    while (!gInputRead.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    NebulaWiimoteConnection connection{};
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::host::native_game_wiimote_calibration(connection.eeprom, connection.extension_calibration);
-#else
-    idle_wiimote_calibration(connection.eeprom, connection.extension_calibration);
-#endif
-    connection.extension = 1;  // WPAD_DEV_FREESTYLE: the Nunchuk
-    connection.battery = 4;  // full
-    gModule.wpad_connect(0, 1, &connection);
     const auto period = std::chrono::milliseconds(10);
     auto next = Clock::now() + period;
 #if defined(NEBULA_REAL_WIIMOTE)
     galaxy::host::ensure_real_wiimote_started();
+    // The remote's data reports, IR camera on: with its Nunchuk, buttons, accelerometer, IR and extension; without.
+    galaxy::host::real_wiimote_set_report(0x37);
+    galaxy::host::real_wiimote_set_ir(true);
     // A real Wii Remote: `remote` while one is connected (its calibration), `real` while the game plays with it.
-    std::optional<NebulaWiimoteConnection> remote;
+    std::optional<galaxy::host::RealWiimoteConnection> remote;
+    galaxy::input::wiimote::Reader reader;
     bool real = false;
     std::optional<galaxy::input::DeviceKey> device_when_real;
     const auto use_remote = [&](bool on) {
         if (on == real || (on && !remote.has_value())) return;
         real = on;
-        gModule.wpad_shake(0, 0);
-        gModule.wpad_connect(0, 1, on ? &*remote : &connection);
         galaxy::host::real_wiimote_set_active(on);
-        gVirtualReports.store(!on, std::memory_order_release);
+        gControlsInput.store(!on, std::memory_order_release);
+        gInputNunchuk.store(on ? (remote->nunchuk ? 1u : 0u) : 1u, std::memory_order_relaxed);
+        gInputBattery.store(on ? remote->battery : 4u, std::memory_order_relaxed);
         device_when_real = galaxy::host::last_input_device();
         next = Clock::now() + period;
         log_line("[wiimote]", on ? "in use" : "keyboard, mouse and controllers in use");
@@ -2814,9 +2834,9 @@ void wpad_thread() {
 #endif
     for (;;) {
 #if defined(NEBULA_REAL_WIIMOTE)
-        // A real Wii Remote's reports go to the game as they arrive, with its own calibration: in the Wii Remote input
-        // mode while it is connected, in Auto from its first button press until a key, a mouse button or a controller
-        // is used. The keyboard, mouse and controllers are read every 10 ms meanwhile (for that, and the settings menu).
+        // A real Wii Remote's reports become samples as they arrive: in the Wii Remote input mode while it is
+        // connected, in Auto from its first button press until a key, a mouse button or a controller is used. The
+        // keyboard, mouse and controllers are read every 10 ms meanwhile (for that, and the settings menu).
         std::array<uint8_t, 22> real_report{};
         std::size_t real_size = 0;
         galaxy::host::RealWiimoteConnection real_connection{};
@@ -2828,15 +2848,12 @@ void wpad_thread() {
         const bool wii_remote_mode =
             galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote;
         if (event == galaxy::host::RealWiimoteEvent::Connected) {
-            NebulaWiimoteConnection attached{};
-            std::memcpy(attached.eeprom, real_connection.eeprom.data(), sizeof(attached.eeprom));
-            std::memcpy(attached.extension_calibration, real_connection.extension_calibration.data(),
-                        sizeof(attached.extension_calibration));
-            attached.extension = real_connection.nunchuk ? 1u : 0u;
-            attached.battery = real_connection.battery;
-            remote = attached;
+            remote = real_connection;
+            reader.connect(real_connection.eeprom, real_connection.extension_calibration, real_connection.nunchuk);
+            galaxy::host::real_wiimote_set_report(real_connection.nunchuk ? 0x37 : 0x33);
             if (real) {
-                gModule.wpad_connect(0, 1, &*remote);  // its Nunchuk in or out
+                gInputNunchuk.store(real_connection.nunchuk ? 1u : 0u, std::memory_order_relaxed);
+                gInputBattery.store(real_connection.battery, std::memory_order_relaxed);
             } else if (wii_remote_mode) {
                 use_remote(true);
             }
@@ -2849,13 +2866,14 @@ void wpad_thread() {
         }
         if (event == galaxy::host::RealWiimoteEvent::Battery) {
             if (remote.has_value()) remote->battery = real_connection.battery;
-            if (real) gModule.wpad_battery(0, real_connection.battery);
+            if (real) gInputBattery.store(real_connection.battery, std::memory_order_relaxed);
             continue;
         }
         if (event == galaxy::host::RealWiimoteEvent::Report) {
             const std::span<const uint8_t> bytes(real_report.data(), real_size);
             if (!real && (wii_remote_mode || galaxy::host::real_wiimote_buttons_held(bytes))) use_remote(true);
-            if (real) gModule.wpad_report(0, real_report.data(), real_size, nullptr);
+            galaxy::input::PlayerInput input{};
+            if (real && reader.read(bytes, input)) gInputSamples.push(input_sample(input));
             continue;
         }
         if (real && Clock::now() < next) {
@@ -2863,25 +2881,18 @@ void wpad_thread() {
         }
 #endif
         sleep_until_precise(next);
-#if !defined(NEBULA_HOST_RENDERER)
-        next += period;
-        const uint8_t id = static_cast<uint8_t>(gWpadReport.load(std::memory_order_relaxed));
-        uint8_t idle[22];
-        gModule.wpad_report(0, idle, idle_wiimote_report(id, idle), nullptr);
-        continue;
-#else
-        // The game read within the last 10 ms: the next report 10 ms after its.
-        const Clock::time_point sampled{std::chrono::nanoseconds(gVirtualSampledNs.load(std::memory_order_acquire))};
-        if (!real && sampled + period > next) {
-            next = sampled + period;
+        // The game read within the last 10 ms: the next sample 10 ms after its.
+        const Clock::time_point read{std::chrono::nanoseconds(gInputReadNs.load(std::memory_order_acquire))};
+        if (!real && read + period > next) {
+            next = read + period;
             continue;
         }
         next += period;
-        std::unique_lock<std::mutex> report_lock(gVirtualReportLock);
-        const auto snapshot = virtual_snapshot();
+        const std::lock_guard<std::mutex> lock(gInputSampleLock);
+        const NebulaInputSample sample = controls_sample();
 #if defined(NEBULA_REAL_WIIMOTE)
         if (real) {
-            // Another device used (in Auto): back to the keyboard, mouse and controllers, with this report.
+            // Another device used (in Auto): back to the keyboard, mouse and controllers, with this sample.
             if (galaxy::get_runtime_input_mode_state().mode == galaxy::RuntimeInputMode::RealWiimote ||
                 galaxy::host::last_input_device() == device_when_real) {
                 continue;
@@ -2889,48 +2900,11 @@ void wpad_thread() {
             use_remote(false);
         }
 #endif
-        send_virtual_report(snapshot);
-#endif
+        gInputSamples.push(sample);
     }
 }
+#endif
 
-void svc_wpad_control(void*, uint32_t chan, uint32_t what, uint32_t value) {
-    if (chan != 0) {
-        return;
-    }
-    switch (what) {
-    case NEBULA_WPAD_INIT:
-        gWpadStarted.store(1, std::memory_order_release);
-        break;
-    case NEBULA_WPAD_FORMAT:
-        gWpadReport.store(report_id_for_format(value), std::memory_order_relaxed);
-#if defined(NEBULA_REAL_WIIMOTE)
-        galaxy::host::real_wiimote_set_report(report_id_for_format(value));
-#endif
-        break;
-    case NEBULA_WPAD_DPD:
-        gWpadDpd.store(value != 0, std::memory_order_relaxed);
-#if defined(NEBULA_REAL_WIIMOTE)
-        galaxy::host::real_wiimote_set_ir(value != 0);
-#endif
-        break;
-    case NEBULA_WPAD_MOTOR:
-        gMotor.store(value != 0, std::memory_order_relaxed);
-#if defined(NEBULA_REAL_WIIMOTE)
-        if (!galaxy::host::real_wiimote_in_use()) {
-            galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
-        }
-#elif defined(NEBULA_HOST_RENDERER)
-        galaxy::host::native_game_rumble(value != 0, gStarPointerMode.load(std::memory_order_relaxed));
-#endif
-#if defined(NEBULA_REAL_WIIMOTE)
-        galaxy::host::real_wiimote_set_rumble(value != 0);
-#endif
-        break;
-    default:
-        break;
-    }
-}
 void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 
 // The JAudio DSP program, run on the host: it mixes each subframe when the CPU releases its last channel group
@@ -3793,7 +3767,6 @@ int main(int argc, char** argv) {
     services.settings_input = svc_settings_input;
     services.sharp_2d = svc_sharp_2d;
     services.button_icons = svc_button_icons;
-    services.wpad_sample = svc_wpad_sample;
     services.art_export = svc_art_export;
     services.layer_2d_scale = svc_layer_2d_scale;
     services.pointer_wheel = svc_pointer_wheel;
@@ -3827,7 +3800,8 @@ int main(int argc, char** argv) {
     services.vi_frame = svc_vi_frame;
     services.save_request = svc_save_request;
     services.sc_get = svc_sc_get;
-    services.wpad_control = svc_wpad_control;
+    services.input_read = svc_input_read;
+    services.input_control = svc_input_control;
     services.wpad_speaker_data = svc_wpad_speaker_data;
     services.jaudio_setup = svc_jaudio_setup;
     services.jaudio_aux = svc_jaudio_aux;
@@ -3913,7 +3887,9 @@ int main(int argc, char** argv) {
     gFs.start();
     std::thread(ai_thread).detach();
     std::thread(vi_thread).detach();
-    std::thread(wpad_thread).detach();
+#if defined(NEBULA_HOST_RENDERER)
+    std::thread(input_thread).detach();
+#endif
 #if defined(NEBULA_HOST_SDL)
     galaxy::sdl::start_thread_sampler();
 #endif
