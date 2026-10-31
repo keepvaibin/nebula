@@ -42,7 +42,7 @@ JASChannel* JASBank::noteOn(JASBank const* pBank, int progNo, u8 pitch, u8 veloc
         return nullptr;
     }
 
-    int wavePtr = waveHandle->getWavePtr();
+    const u8* wavePtr = waveHandle->getWavePtr();
     if (!wavePtr) {
         return nullptr;
     }
@@ -105,7 +105,7 @@ JASChannel* JASTrack::channelStart(JASTrack::TChannelMgr* pChannelMgr, u32 pitch
                 return nullptr;
             }
 
-            int wavePtr = waveHandle->getWavePtr();
+            const u8* wavePtr = waveHandle->getWavePtr();
             if (!wavePtr) {
                 return nullptr;
             }

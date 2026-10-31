@@ -6,10 +6,11 @@
 #include "JSystem/JAudio2/JASDspInterface.hpp"
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "JSystem/JAudio2/JASDvdThread.hpp"
-#include "JSystem/JKernel/JKRAram.hpp"
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
+
+#include <cstring>
 
 JASTaskThread* JASAramStream::sLoadThread;
 
@@ -48,7 +49,7 @@ JASAramStream::JASAramStream() : _0B8(), _0C4(), _0C8(), _114() {
     mBlock = 0;
     _118 = 0;
     _12C = 0;
-    _148 = 0;
+    mBuffer = nullptr;
     _14C = 0;
     mCallback = nullptr;
     mCallbackData = nullptr;
@@ -77,8 +78,8 @@ JASAramStream::JASAramStream() : _0B8(), _0C4(), _0C8(), _114() {
     }
 }
 
-void JASAramStream::init(u32 param_0, u32 param_1, StreamCallback i_callback, void* i_callbackData) {
-    _148 = param_0;
+void JASAramStream::init(u8* buffer, u32 param_1, StreamCallback i_callback, void* i_callbackData) {
+    mBuffer = buffer;
     _14C = param_1;
     _0C8 = 0.0f;
     _0AE = 0;
@@ -307,13 +308,9 @@ bool JASAramStream::load() {
         return false;
     }
 
-    u32 sp08 = _148 + _10C * sBlockSize;
+    u8* const slot = mBuffer + _10C * sBlockSize;
     for (int i = 0; i < mChannelNum; i++) {
-        if (!JKRAram::mainRamToAram(sReadBuffer + sizeof(BlockHeader) + bhead->_4 * i, sp08 + sBlockSize * _160 * i, bhead->_4,
-                                    EXPAND_SWITCH_UNKNOWN0, 0, nullptr, -1, nullptr)) {
-            UNK_BOOL_B = 1;
-            return false;
-        }
+        memcpy(slot + sBlockSize * _160 * i, sReadBuffer + sizeof(BlockHeader) + bhead->_4 * i, bhead->_4);
     }
 
     _10C++;
@@ -436,7 +433,7 @@ void JASAramStream::updateChannel(u32 i_callbackType, JASChannel* i_channel, JAS
                     _0C0 = true;
                 }
 
-                u32 uvar4 = i_dspChannel->address - i_channel->mWavePtr;
+                u32 uvar4 = i_dspChannel->address;
                 if (uvar4 != 0) {
                     uvar4--;
                 }
@@ -648,7 +645,7 @@ void JASAramStream::channelStart() {
         jc->setInitPitch(_164 / JASDriver::getDacRate());
         jc->setOscInit(0, &OSC_ENV);
         jc->mWaveInfo = wave_info;
-        jc->mWavePtr = _148 + sBlockSize * _160 * i;
+        jc->mWavePtr = mBuffer + sBlockSize * _160 * i;
         jc->mChannelType = JASChannel::CH_WAVE;
         int ret = jc->playForce();
         mChannels[i] = jc;

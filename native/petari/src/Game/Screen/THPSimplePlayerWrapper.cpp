@@ -3,7 +3,6 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
-#include <JSystem/JAudio2/JASAiCtrl.hpp>
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <cstring>
 #ifdef TARGET_PC
@@ -21,21 +20,7 @@ namespace {
 }  // namespace
 #endif
 
-static u16 VolumeTable[] = {0,     2,     8,     18,    32,    50,    73,    99,    130,   164,   203,   245,   292,   343,   398,   457,
-                            520,   587,   658,   733,   812,   895,   983,   1074,  1170,  1269,  1373,  1481,  1592,  1708,  1828,  1952,
-                            2080,  2212,  2348,  2488,  2632,  2781,  2933,  3090,  3250,  3415,  3583,  3756,  3933,  4114,  4298,  4487,
-                            4680,  4877,  5079,  5284,  5493,  5706,  5924,  6145,  6371,  6600,  6834,  7072,  7313,  7559,  7809,  8063,
-                            8321,  8583,  8849,  9119,  9394,  9672,  9954,  10241, 10531, 10826, 11125, 11427, 11734, 12045, 12360, 12679,
-                            13002, 13329, 13660, 13995, 14335, 14678, 15025, 15377, 15732, 16092, 16456, 16823, 17195, 17571, 17951, 18335,
-                            18723, 19115, 19511, 19911, 20316, 20724, 21136, 21553, 21974, 22398, 22827, 23260, 23696, 24137, 24582, 25031,
-                            25484, 25941, 26402, 26868, 27337, 27810, 28288, 28769, 29255, 29744, 30238, 30736, 31238, 31744, 32254, 32768};
-
 static s32 WorkBuffer[16] ATTRIBUTE_ALIGN(32);
-
-#if (VERSION == RMGK01)
-THPSimplePlayerStaticAudio THPSimplePlayerWrapper::mStaticAudioPlayer;
-THPSimplePlayerWrapper* THPSimplePlayerStaticAudio::mPlayer;
-#endif
 
 namespace NrvTHPSimplePlayerWrapper {
     NEW_NERVE(HostTypeWait, THPSimplePlayerWrapper, Wait);
@@ -46,11 +31,6 @@ namespace NrvTHPSimplePlayerWrapper {
     NEW_NERVE(HostTypeReadPreLoad, THPSimplePlayerWrapper, ReadPreLoad);
 };  // namespace NrvTHPSimplePlayerWrapper
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-THPSimplePlayerStaticAudio THPSimplePlayerWrapper::mStaticAudioPlayer;
-THPSimplePlayerWrapper* THPSimplePlayerStaticAudio::mPlayer;
-#endif
-
 namespace {
     void dvdCallBackFunc(s32 a1, NebulaDisc::Request* pRequest) {
         THPSimplePlayerWrapper* player = (THPSimplePlayerWrapper*)pRequest->mUser;
@@ -60,17 +40,12 @@ namespace {
 
 THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
     : NerveExecutor(pName), _8(), _9(), _C(), _10(), mTHPWork(), mOpen(), mPreFetchState(), mAudioState(), mLoop(), mAudioExist(), mCurOffset(),
-      mDvdError(), mReadProgress(), mNextDecodeIndex(), mReadIndex(), mReadSize(), mTotalReadFrame(), mCurrentVolume(), mTargetVolume(),
-      mDeltaVolume(), mRampCount(), mAudioDecodeIndex(), mAudioOutputIndex(), _2F0(), _2F4(1.0f), _2F8(), _2FC(), mSoundBufferIndex(), _30C()
+      mDvdError(), mReadProgress(), mNextDecodeIndex(), mReadIndex(), mReadSize(), mTotalReadFrame()
 #if (VERSION == RMGK01)
       ,
       _310()
 #endif
 {
-    mSoundBuffer[0] = new (32) s32[0x230];
-    mSoundBuffer[1] = new (32) s32[0x230];
-    MR::zeroMemory(mSoundBuffer[0], 0x8C0);
-    MR::zeroMemory(mSoundBuffer[1], 0x8C0);
     mFile.mEntry = -1;
     mFile.mLength = 0;
     MR::zeroMemory(&mRequest, sizeof(mRequest));
@@ -87,28 +62,17 @@ THPSimplePlayerWrapper::THPSimplePlayerWrapper(const char* pName)
     MR::zeroMemory(&mTextureSet[1], sizeof(mTextureSet[1]));
 #endif
 
-    MR::zeroMemory(mAudioBuffer, sizeof(mAudioBuffer));
     initNerve(GET_NERVE(THPSimplePlayerWrapper, HostTypeWait));
 }
 
 bool THPSimplePlayerWrapper::init(s32 audio) {
-    s32 old = NebulaKernel::disableInterrupts();
-    mSoundBufferIndex = 0;
-    initAudio();
-    NebulaKernel::restoreInterrupts(old);
-    MR::zeroMemory(mSoundBuffer[0], 0x8C0);
-    MR::zeroMemory(mSoundBuffer[1], 0x8C0);
-    _2F0 = 0;
-    _2F4 = 1.0f;
-    _2F8 = 0.0f;
-    _2FC = 0;
     _8 = 1;
     return true;
 }
 
 void THPSimplePlayerWrapper::quit() {
-    JASDriver::registerMixCallback(nullptr, (JASMixMode)3);
-    THPSimplePlayerStaticAudio::mPlayer = nullptr;
+    const NebulaHostServices* const host = nebula_host();
+    host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_CLOSE, 0, 0);
     _8 = 0;
 }
 
@@ -139,6 +103,8 @@ bool THPSimplePlayerWrapper::close() {
 
             if (!mReadProgress) {
                 mOpen = 0;
+                const NebulaHostServices* const host = nebula_host();
+                host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_CLOSE, 0, 0);
 #ifdef TARGET_PC
                 __NebulaMovieFrame(nullptr, -1, 0.0f, nullptr, nullptr, nullptr, 0, 0);
 #endif
@@ -170,10 +136,6 @@ u32 THPSimplePlayerWrapper::calcNeedMemory() {
     size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
     size += NebulaAlignUp32(mVideoInfo.xSize * mVideoInfo.ySize / 2 & 0x7FFFFFFE);
 #endif
-
-    if (mAudioExist) {
-        size += (NebulaAlignUp32(mHeader.audioMaxSamples * 4) * 20);
-    }
 
     size += 0x1000;
     return size;
@@ -217,15 +179,6 @@ bool THPSimplePlayerWrapper::setBuffer(u8* pBuffer) {
             mReadBuffer[i].isValid = 0;
         }
 
-        if (mAudioExist) {
-            for (s32 i = 0; i < 20; i++) {
-                mAudioBuffer[i].buffer = (s16*)pBuffer;
-                mAudioBuffer[i].curPtr = (s16*)pBuffer;
-                mAudioBuffer[i].validSample = 0;
-                pBuffer += NebulaAlignUp32(mHeader.audioMaxSamples * 4);
-            }
-        }
-
         mTHPWork = (void*)pBuffer;
     }
 
@@ -261,10 +214,6 @@ bool THPSimplePlayerWrapper::loadStop() {
             mReadBuffer[i].isValid = 0;
         }
 
-        for (s32 i = 0; i < 0x14; i++) {
-            mAudioBuffer[i].validSample = 0;
-        }
-
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         mTextureSet.frameNumber = -1;
 #else
@@ -278,10 +227,8 @@ bool THPSimplePlayerWrapper::loadStop() {
         mTotalReadFrame = 0;
         mDvdError = 0;
         mNextDecodeIndex = 0;
-        mAudioDecodeIndex = 0;
-        mAudioOutputIndex = 0;
-        mCurrentVolume = mTargetVolume;
-        mRampCount = 0;
+        const NebulaHostServices* const host = nebula_host();
+        host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_RESET, 0, 0);
 
 #if (VERSION == RMGK01)
         _310 = 0;
@@ -303,7 +250,8 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
                 return 4;
             }
 
-            if (mAudioBuffer[mAudioDecodeIndex].validSample == 0) {
+            const NebulaHostServices* const host = nebula_host();
+            if (host->movie_audio(host->user, nullptr, 0) != 0) {
                 for (s32 i = 0; i < mFrameComp.numComponents; i++) {
                     switch (mFrameComp.frameComp[i]) {
                     case 0:
@@ -312,17 +260,8 @@ s32 THPSimplePlayerWrapper::decode(s32 audio) {
                         }
                         break;
                     case 1:
-                        u32 sample = THPAudioDecode(mAudioBuffer[mAudioDecodeIndex].buffer, ptr + (*compSize) * audio, 0);
-                        s32 interrupt = NebulaKernel::disableInterrupts();
-                        mAudioBuffer[mAudioDecodeIndex].validSample = sample;
-                        mAudioBuffer[mAudioDecodeIndex].curPtr = mAudioBuffer[mAudioDecodeIndex].buffer;
-                        NebulaKernel::restoreInterrupts(interrupt);
-                        mAudioDecodeIndex++;
-
-                        if (mAudioDecodeIndex >= 20) {
-                            mAudioDecodeIndex = 0;
-                        }
-
+                        // The host decodes and plays the frame's sound (the track's record).
+                        host->movie_audio(host->user, ptr + (*compSize) * audio, *compSize);
                         break;
                     }
 
@@ -752,171 +691,19 @@ bool THPSimplePlayerWrapper::tryFinishDvdOpen() {
     return true;
 }
 
-void THPSimplePlayerWrapper::initAudio() {
-    if (NebulaSystemSettings::soundMode() == NebulaSystemSettings::SoundModeMono) {
-        _30C = 1;
+// The movie's sound plays from the host while the movie with it is open.
+void THPSimplePlayerWrapper::resetAudioParams() {
+    const NebulaHostServices* const host = nebula_host();
+    if (mAudioExist) {
+        const bool mono = NebulaSystemSettings::soundMode() == NebulaSystemSettings::SoundModeMono;
+        host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_OPEN, mono ? 1 : 0, 0);
     } else {
-        _30C = 0;
+        host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_CLOSE, 0, 0);
     }
-
-    THPSimplePlayerStaticAudio::mPlayer = this;
-    JASDriver::registerMixCallback(THPSimplePlayerStaticAudio::audioCallback, (JASMixMode)3);
 }
 
 bool THPSimplePlayerWrapper::isAudioProcessValid() {
-    if (mOpen && mAudioExist) {
-        return true;
-    }
-
-    return false;
-}
-
-s16* THPSimplePlayerWrapper::audioCallback(s32 sample) {
-    if (!isAudioProcessValid()) {
-        return nullptr;
-    }
-
-    s32 en = NebulaKernel::enableInterrupts();
-    mSoundBufferIndex ^= 1;
-    mixAudio((s16*)mSoundBuffer[mSoundBufferIndex], sample);
-    NebulaKernel::restoreInterrupts(en);
-    return (s16*)mSoundBuffer[mSoundBufferIndex];
-}
-
-void THPSimplePlayerWrapper::mixAudio(s16* pDest, u32 sample) {
-    u32 sampleNum, requestSample;
-    s32 mix;
-    s16 *libsrc, *thpsrc;
-    u16 attenuation;
-
-    if (isAudioProcessValid()) {
-        if (_2F0) {
-            _2F0 = 0;
-            _2F4 = 0.0f;
-            _2F8 = 0.001f;
-            _2FC = 4800;
-
-            s32 idx1 = (mAudioOutputIndex + 1) % 0x14;
-            s32 idx2 = (mAudioOutputIndex + 2) % 0x14;
-            if (!mAudioBuffer[idx1].validSample || !mAudioBuffer[idx2].validSample) {
-                MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
-                return;
-            }
-        } else if (!mAudioBuffer[(mAudioOutputIndex + 1) % 0x14].validSample) {
-            MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
-            return;
-        }
-
-        do {
-            if (mAudioBuffer[mAudioOutputIndex].validSample) {
-                if (mAudioBuffer[mAudioOutputIndex].validSample >= sample) {
-                    sampleNum = sample;
-                } else {
-                    sampleNum = mAudioBuffer[mAudioOutputIndex].validSample;
-                }
-
-                thpsrc = mAudioBuffer[mAudioOutputIndex].curPtr;
-
-                for (u32 i = 0; i < sampleNum; i++) {
-                    if (mRampCount) {
-                        mRampCount--;
-                        mCurrentVolume += mDeltaVolume;
-                    } else {
-                        mCurrentVolume = mTargetVolume;
-                    }
-
-                    f32 vol = mCurrentVolume;
-
-                    if (_2FC > 0) {
-                        s32 v19 = _2FC - 1;
-                        vol = 0.0f;
-                        _2FC = v19;
-                        if (v19 < 0) {
-                            _2FC = 0;
-                        }
-                    } else if (_2F4 < 1.0f) {
-                        vol = mCurrentVolume * _2F4;
-                        f32 v20 = _2F4 + _2F8;
-                        _2F4 += _2F8;
-
-                        if (v20 >= 1.0f) {
-                            _2F4 = 1.0f;
-                            _2F8 = 0.0f;
-                        }
-                    }
-
-                    attenuation = VolumeTable[(s32)vol];
-                    mix = ((attenuation * (*thpsrc)) >> 15);
-
-                    if (mix < -32768) {
-                        mix = -32768;
-                    }
-
-                    if (mix > 32767) {
-                        mix = 32767;
-                    }
-
-                    *pDest = (s16)mix;
-                    *thpsrc = 0;
-                    pDest++;
-                    thpsrc++;
-
-                    mix = ((attenuation * (*thpsrc)) >> 15);
-
-                    if (mix < -32768) {
-                        mix = -32768;
-                    }
-                    if (mix > 32767) {
-                        mix = 32767;
-                    }
-
-                    *pDest = (s16)mix;
-                    *thpsrc = 0;
-                    pDest++;
-                    thpsrc++;
-
-                    if (_30C) {
-                        s32 diff = *(pDest - 2) + (*(pDest - 1));
-                        f32 v16 = (diff / 2);
-                        *(pDest - 1) = *(pDest - 2) = (s32)(0.707f * v16);
-                    }
-                }
-
-                sample -= sampleNum;
-                mAudioBuffer[mAudioOutputIndex].validSample -= sampleNum;
-                mAudioBuffer[mAudioOutputIndex].curPtr = thpsrc;
-
-                if (mAudioBuffer[mAudioOutputIndex].validSample == 0) {
-                    mAudioOutputIndex++;
-                    if (mAudioOutputIndex >= 0x14) {
-                        mAudioOutputIndex = 0;
-                    }
-                }
-                if (sample == 0)
-                    break;
-            } else {
-                MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
-                return;
-            }
-        } while (true);
-
-    } else {
-        MR::zeroMemory(pDest, sample * 2 * sizeof(s16));
-    }
-}
-
-void THPSimplePlayerWrapper::resetAudioParams() {
-    mAudioDecodeIndex = 0;
-    mAudioOutputIndex = 0;
-    MR::zeroMemory(mAudioBuffer, sizeof(mAudioBuffer));
-
-    for (s32 i = 0; i < 20; i++) {
-        mAudioBuffer[i].validSample = 0;
-    }
-
-    mRampCount = 0;
-    mCurrentVolume = 127.0f;
-    mTargetVolume = 127.0f;
+    return mOpen && mAudioExist;
 }
 
 bool THPSimplePlayerWrapper::setVolume(s32 volume, s32 time) {
@@ -940,18 +727,8 @@ bool THPSimplePlayerWrapper::setVolume(s32 volume, s32 time) {
         time = 0;
     }
 
-    s32 en = NebulaKernel::enableInterrupts();
-    mTargetVolume = (f32)volume;
-
-    if (time > 0) {
-        mRampCount = 32 * time;
-        mDeltaVolume = (mTargetVolume - mCurrentVolume) / (f32)mRampCount;
-    } else {
-        mRampCount = 0;
-        mCurrentVolume = mTargetVolume;
-    }
-
-    NebulaKernel::restoreInterrupts(en);
+    const NebulaHostServices* const host = nebula_host();
+    host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_VOLUME, volume, time);
     return true;
 }
 
@@ -960,19 +737,6 @@ bool THPSimplePlayerWrapper::isPreLoading() const {
 }
 
 void THPSimplePlayerWrapper::setUnpauseFrameFlag() {
-    s32 en = NebulaKernel::disableInterrupts();
-    _2F0 = 1;
-    NebulaKernel::restoreInterrupts(en);
-}
-
-s16* THPSimplePlayerStaticAudio::audioCallback(s32 audio) {
-    THPSimplePlayerWrapper* player = THPSimplePlayerStaticAudio::mPlayer;
-    if (player == nullptr) {
-        return nullptr;
-    }
-
-    return player->audioCallback(audio);
-}
-
-THPSimplePlayerStaticAudio::THPSimplePlayerStaticAudio() {
+    const NebulaHostServices* const host = nebula_host();
+    host->movie_audio_control(host->user, NEBULA_MOVIE_AUDIO_RESUME, 0, 0);
 }

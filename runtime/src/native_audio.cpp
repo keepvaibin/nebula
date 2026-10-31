@@ -1497,12 +1497,12 @@ void NativeGameAudio::mix(float gain) {
 }
 
 // The frame to the output: the master volume (ramped across the frame from the last one's), 16-bit samples.
-void NativeGameAudio::frame(const std::int16_t* stream, std::uint32_t stream_frames) {
+void NativeGameAudio::frame() {
     if (state_->mixer == nullptr) {
         return;
     }
     State& s = *state_;
-    const std::span<const float> samples = s.mixer->end_frame(stream, stream_frames);
+    const std::span<const float> samples = s.mixer->end_frame();
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
     const float target = audio.master >= 0.0f ? std::min(audio.master, 4.0f) : 0.0f;
@@ -1524,6 +1524,39 @@ void NativeGameAudio::frame(const std::int16_t* stream, std::uint32_t stream_fra
         }
     }
     (void)s.sink.submit_pcm16_stereo(s.block, s.mixer->rate());
+}
+
+bool NativeGameAudio::movie_audio(const void* record, std::uint32_t size) {
+    if (state_->mixer == nullptr) {
+        return false;
+    }
+    return state_->mixer->movie().push(static_cast<const std::uint8_t*>(record), size);
+}
+
+void NativeGameAudio::movie_audio_control(std::uint32_t what, std::int32_t value, std::int32_t milliseconds) {
+    if (state_->mixer == nullptr) {
+        return;
+    }
+    galaxy::audio::MovieAudio& movie = state_->mixer->movie();
+    switch (what) {
+    case NEBULA_MOVIE_AUDIO_OPEN:
+        movie.open(value != 0);
+        break;
+    case NEBULA_MOVIE_AUDIO_CLOSE:
+        movie.close();
+        break;
+    case NEBULA_MOVIE_AUDIO_RESET:
+        movie.reset();
+        break;
+    case NEBULA_MOVIE_AUDIO_VOLUME:
+        movie.set_volume(value, milliseconds);
+        break;
+    case NEBULA_MOVIE_AUDIO_RESUME:
+        movie.resume();
+        break;
+    default:
+        break;
+    }
 }
 
 unsigned NativeGameAudio::queued_blocks() const {

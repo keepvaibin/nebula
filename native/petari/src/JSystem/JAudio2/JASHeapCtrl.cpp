@@ -253,8 +253,6 @@ void JASGenericMemPool::free(void* pMemory, u32 size) {
     mFreeMemCount++;
 }
 
-u32 JASKernel::sAramBase;
-
 JKRHeap* JASKernel::sSystemHeap;
 
 JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::sCommandHeap;
@@ -275,12 +273,10 @@ JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable >* JASKernel::getC
 
 JASHeap JASKernel::audioAramHeap;
 
-void JASKernel::setupAramHeap(u32 base, u32 size) {
-    JUTNativeLog("setupAramHeap %x, %x, %x\n", base, NebulaAuxMemory::cReserved, size);
-    base = NebulaAuxMemory::cReserved;
-    sAramBase = base;
-    // An ARAM address, not a pointer: the heap only does arithmetic on it.
-    audioAramHeap.initRootHeap((void*)(uintptr_t)sAramBase, size);
+// The sound memory (wave archives and stream buffers): `size` bytes of the auxiliary memory past its reserved start,
+// handed out as pointers the mixer reads.
+void JASKernel::setupAramHeap(u32, u32 size) {
+    audioAramHeap.initRootHeap(NebulaAuxMemory::base() + NebulaAuxMemory::cReserved, size);
 }
 
 JASHeap* JASKernel::getAramHeap() {

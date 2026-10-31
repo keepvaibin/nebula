@@ -142,11 +142,11 @@ void JASBasicWaveBank::TWaveGroup::onEraseDone() {
     mBank->decWaveTable(this);
 }
 
-int JASBasicWaveBank::TWaveHandle::getWavePtr() const {
-    void* base = mHeap->getBase();
-    if (base == 0) {
-        return 0;
+const u8* JASBasicWaveBank::TWaveHandle::getWavePtr() const {
+    const u8* base = static_cast< const u8* >(mHeap->getBase());
+    if (base == nullptr) {
+        return nullptr;
     }
 
-    return (intptr_t)base + mWaveInfo.mAWStartOffs;
+    return base + mWaveInfo.mAWStartOffs;
 }

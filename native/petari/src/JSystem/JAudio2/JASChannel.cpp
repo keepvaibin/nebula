@@ -20,7 +20,7 @@ JASChannel::JASChannel(Callback i_callback, void* i_callbackData)
     : mStatus(STATUS_STOP), mDspCh(nullptr), mCallback(i_callback), mCallbackData(i_callbackData), mUpdateTimer(0), mBankDisposeID(nullptr), mKey(0),
       mVelocity(0x7f), mKeySweep(0.0f), mKeySweepTarget(0.0f), mKeySweepCount(0), mSkipSamples(0) {
     mChannelType = JASChannel::CH_WAVE;
-    mWavePtr = 0;
+    mWavePtr = nullptr;
     mMixConfig[0].whole = 0x150;
     mMixConfig[1].whole = 0x210;
     mMixConfig[2].whole = 0x352;

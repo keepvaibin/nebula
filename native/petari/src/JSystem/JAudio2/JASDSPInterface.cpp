@@ -3,7 +3,6 @@
 #include "JSystem/JAudio2/JASCriticalSection.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
-#include "JSystem/JKernel/JKRAram.hpp"
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
 #include <nebula_game_api.h>
@@ -64,10 +63,9 @@ void JASDsp::initBuffer() {
     for (u8 i = 0; i < 4; i++) {
         setFXLine(i, NULL, NULL);
     }
-    const JKRAram* const aram = JKRAram::getManager();
+    JASHeap* const sound = JASKernel::getAramHeap();
     const NebulaHostServices* const host = nebula_host();
-    host->audio_setup(host->user, sVoices, 64, sEffects, reinterpret_cast< const void* >(JKRHeap::getAltAramStartAdr()),
-                      aram->getAudioMemory() + aram->getAudioMemSize());
+    host->audio_setup(host->user, sVoices, 64, sEffects, sound->getBase(), sound->getSize());
 }
 
 // Settings change, the line's delay kept; with a buffer the line starts over, silent. Without either the line is off.
@@ -132,8 +130,8 @@ bool JASDsp::TChannel::isFinish() const {
     return finished != 0;
 }
 
-// `wave`: the sound memory offset of the wave's data; `skip`: samples to start into it (1: from its loop start).
-void JASDsp::TChannel::setWaveInfo(JASWaveInfo const& waveInfo, u32 wave_offset, u32 skip) {
+// `wave_data`: the wave's data in the sound memory; `skip`: samples to start into it (1: from its loop start).
+void JASDsp::TChannel::setWaveInfo(JASWaveInfo const& waveInfo, const u8* wave_data, u32 skip) {
     static const u16 FORMATS[8] = {
         NEBULA_AUDIO_ADPCM4, NEBULA_AUDIO_ADPCM2, NEBULA_AUDIO_PCM8,   NEBULA_AUDIO_PCM16,
         NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT,
@@ -141,7 +139,7 @@ void JASDsp::TChannel::setWaveInfo(JASWaveInfo const& waveInfo, u32 wave_offset,
     static const u8 BLOCK_SAMPLES[8] = {16, 16, 1, 1, 1, 16, 16, 1};
     static const u8 BLOCK_BYTES[8] = {9, 5, 1, 2, 0, 0, 0, 0};
     const u8 kind = waveInfo.mFormat & 7;
-    wave = wave_offset;
+    wave = wave_data;
     leftover = BLOCK_SAMPLES[kind];
     format = FORMATS[kind];
     restart = 0;
@@ -171,7 +169,7 @@ void JASDsp::TChannel::setWaveInfo(JASWaveInfo const& waveInfo, u32 wave_offset,
 }
 
 void JASDsp::TChannel::setOscInfo(u32 waveform) {
-    wave = 0;
+    wave = nullptr;
     leftover = 16;
     format = NEBULA_AUDIO_OSCILLATOR;
     oscillator = waveform;

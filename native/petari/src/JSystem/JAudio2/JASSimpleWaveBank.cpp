@@ -36,10 +36,10 @@ JASWaveArc* JASSimpleWaveBank::getWaveArc(u32 no) {
     return this;
 }
 
-int JASSimpleWaveBank::TWaveHandle::getWavePtr() const {
-    void* base = mHeap->getBase();
+const u8* JASSimpleWaveBank::TWaveHandle::getWavePtr() const {
+    const u8* base = static_cast< const u8* >(mHeap->getBase());
     if (base == nullptr) {
-        return 0;
+        return nullptr;
     }
-    return (intptr_t)base + mWaveInfo.mAWStartOffs;
+    return base + mWaveInfo.mAWStartOffs;
 }

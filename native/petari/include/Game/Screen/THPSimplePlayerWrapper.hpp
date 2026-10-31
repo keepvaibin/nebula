@@ -4,16 +4,6 @@
 #include <revolution/thp.h>
 #include "Game/System/NebulaDisc.hpp"
 
-class THPSimplePlayerWrapper;
-
-class THPSimplePlayerStaticAudio {
-public:
-    THPSimplePlayerStaticAudio();
-
-    static s16* audioCallback(s32);
-    static THPSimplePlayerWrapper* mPlayer;
-};
-
 class THPSimplePlayerWrapper : public NerveExecutor {
 public:
     THPSimplePlayerWrapper(const char*);
@@ -53,16 +43,11 @@ public:
     void endReadPreLoadOne();
     bool checkComponentsInFrame(s32);
     bool tryFinishDvdOpen();
-    void initAudio();
     bool isAudioProcessValid();
-    s16* audioCallback(s32);
-    void mixAudio(s16*, u32);
     void resetAudioParams();
     bool setVolume(s32, s32);
     bool isPreLoading() const;
     void setUnpauseFrameFlag();
-
-    static THPSimplePlayerStaticAudio mStaticAudioPlayer;
 
     // TODO: make proper member names
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
@@ -89,25 +74,8 @@ public:
     /* 0x0CC */ volatile s32 mReadIndex;
     /* 0x0D0 */ s32 mReadSize;
     /* 0x0D4 */ s32 mTotalReadFrame;
-    /* 0x0D8 */ f32 mCurrentVolume;
-    /* 0x0DC */ f32 mTargetVolume;
-    /* 0x0E0 */ f32 mDeltaVolume;
-    /* 0x0E4 */ s32 mRampCount;
     /* 0x0E8 */ THPReadBuffer mReadBuffer[20];
     /* 0x1D8 */ THPTextureSet mTextureSet;
-    /* 0x1E8 */ THPAudioBuffer mAudioBuffer[20];
-    /* 0x2D8 */ s32 mAudioDecodeIndex;
-    /* 0x2DC */ s32 mAudioOutputIndex;
-    /* 0x2E0 */ u8 _2F0;
-    /* 0x2E4 */ f32 _2F4;
-    /* 0x2E8 */ f32 _2F8;
-    /* 0x2EC */ s32 _2FC;
-    /* 0x2F0 */ s32* mSoundBuffer[2];
-    /* 0x2F8 */ u32 mSoundBufferIndex;
-    /* 0x2FC */ u8 _30C;
-    /* 0x2FD */ u8 _30D;
-    /* 0x2FE */ u8 _30E;
-    /* 0x2FF */ u8 _30F;
     /* 0x300 */ s32 _314;
 #else
     /* 0x008 */ u8 _8;
@@ -133,25 +101,8 @@ public:
     /* 0x0CC */ volatile s32 mReadIndex;
     /* 0x0D0 */ s32 mReadSize;
     /* 0x0D4 */ s32 mTotalReadFrame;
-    /* 0x0D8 */ f32 mCurrentVolume;
-    /* 0x0DC */ f32 mTargetVolume;
-    /* 0x0E0 */ f32 mDeltaVolume;
-    /* 0x0E4 */ s32 mRampCount;
     /* 0x0E8 */ THPReadBuffer mReadBuffer[20];
     /* 0x1D8 */ THPTextureSet mTextureSet[2];
-    /* 0x1F8 */ THPAudioBuffer mAudioBuffer[20];
-    /* 0x2E8 */ s32 mAudioDecodeIndex;
-    /* 0x2EC */ s32 mAudioOutputIndex;
-    /* 0x2F0 */ u8 _2F0;
-    /* 0x2F4 */ f32 _2F4;
-    /* 0x2F8 */ f32 _2F8;
-    /* 0x2FC */ s32 _2FC;
-    /* 0x300 */ s32* mSoundBuffer[2];
-    /* 0x308 */ u32 mSoundBufferIndex;
-    /* 0x30C */ u8 _30C;
-    /* 0x30D */ u8 _30D;
-    /* 0x30E */ u8 _30E;
-    /* 0x30F */ u8 _30F;
     /* 0x310 */ u8 _310;
     /* 0x314 */ s32 _314;
 #endif

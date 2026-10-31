@@ -35,7 +35,7 @@ struct JASBasicWaveBank : public JASWaveBank {
         virtual const JASWaveInfo* getWaveInfo() const {
             return &mWaveInfo;
         }
-        virtual int getWavePtr() const;
+        virtual const u8* getWavePtr() const;
 
         bool compareHeap(JASHeap* heap) const {
             return mHeap == heap;
