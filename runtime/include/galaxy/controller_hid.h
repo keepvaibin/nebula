@@ -58,7 +58,7 @@ struct HidPadState {
 
 // Vibration: the virtual Wii Remote's motor bit (rumble.h) mirrored to the
 // controller in use. The game thread publishes the game's state with every
-// Wii Remote input report; the controller worker drives the motor (XInput, HID
+// player's input sample; the controller worker drives the motor (XInput, HID
 // output reports) and turns it off when publications stop for
 // rumble::kStallUs, the window loses focus, a pause or HOME menu opens, the
 // controller disconnects or the process exits. A hidden window (test

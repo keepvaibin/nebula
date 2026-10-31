@@ -8,7 +8,6 @@ public:
     WPadPointer(const WPad*);
 
     void reset();
-    void setSensorBarLevel(f32);
     void update();
     void getPointingPos(TVec2f*) const;
     void getHorizonVec(TVec2f*) const;

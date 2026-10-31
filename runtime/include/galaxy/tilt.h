@@ -5,15 +5,15 @@
 // SurfRay::updateRotate, both through MR::getCorePadAcceleration;
 // SpherePadController's stick path is overridden), so a controller without
 // that sensor cannot play them. While one is active the virtual remote's
-// accelerometer reports a gravity direction built from the tilt of the
+// acceleration is a gravity direction built from the tilt of the
 // controller in use when it has motion sensors (Pro Controller, Pro
 // Controller 2) or else from the Nunchuk stick (Xbox left stick, keyboard
 // WASD); elsewhere it stays at rest.
 //
-// The game's vector is the remote's calibrated raw reading
-// (WPadAcceleration::update: (-kpad.x, kpad.z, -kpad.y)), the gravity
-// reaction in the remote frame: +X out of the left side, +Y toward the
-// expansion port, +Z out of the A face (Wiibrew calibration poses).
+// The game's vector is the remote's acceleration as the game reads it
+// (PlayerInput::gravity, WPadAcceleration), the gravity reaction in the
+// remote frame: +X out of the left side, +Y toward the expansion port, +Z out
+// of the A face (Wiibrew calibration poses).
 // - Star Ball: held upright like a joystick (TamakoroTutorial waits for
 //   (0,-1,0) within 30 degrees). clacXY's neutral leans the top 10 degrees
 //   away from the face; X and Y are the lean beyond 5 degrees, full at 25,
@@ -55,15 +55,6 @@ inline constexpr float kRayStickDegrees = 50.0f;
 // controller up vector in a section.
 inline constexpr float kStarBallLeanDegrees = 10.0f;
 [[nodiscard]] Vec3 remote_gravity(Section section, const Vec3& relative) noexcept;
-
-// 10-bit accelerometer counts for the WiimoteInputSnapshot: 100 counts per g,
-// rest (0x1FC, 0x204, 0x264) for the remote lying flat.
-struct Counts {
-    std::uint16_t x = 0;
-    std::uint16_t y = 0;
-    std::uint16_t z = 0;
-};
-[[nodiscard]] Counts accel_counts(const Vec3& game_vector) noexcept;
 
 // Section state: captures the neutral when a section starts (or on
 // recenter) and produces the reading per report.

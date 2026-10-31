@@ -21,10 +21,9 @@ file(GLOB_RECURSE game_sources CONFIGURE_DEPENDS
     "${petari}/src/JSystem/*.cpp" "${petari}/src/JSystem/*.c"
     "${petari}/src/nw4r/*.cpp" "${petari}/src/nw4r/*.c"
     "${petari}/src/RVLFaceLib/*.c" "${petari}/src/RVLFaceLib/*.cpp")
-# The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): KPAD's processing and the Wii
-# Remote speaker's encoder (wenc.c).
+# The SDK code the native layer reuses (docs/NATIVE_PORT.md, "Platform boundary"): the Wii Remote speaker's
+# encoder (wenc.c).
 file(GLOB sdk_sources CONFIGURE_DEPENDS
-    "${petari}/src/RVL_SDK/kpad/*.c"
     "${petari}/src/RVL_SDK/wenc/wenc.c")
 file(GLOB_RECURSE layer_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.cpp" "${CMAKE_CURRENT_SOURCE_DIR}/sdk/*.c")
 list(FILTER layer_sources EXCLUDE REGEX "/tests/")

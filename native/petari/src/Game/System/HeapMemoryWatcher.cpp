@@ -8,7 +8,6 @@
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <revolution/os.h>
 #include <revolution/wpad.h>
-#include "Game/System/NebulaClock.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
 
 JKRExpHeap* HeapMemoryWatcher::sRootHeapGDDR3;
@@ -153,7 +152,8 @@ void HeapMemoryWatcher::createHeaps() {
     mAudSystemHeap = ::createSolidHeap(0x1E0000, JKRHeap::sRootHeap);
     mStationedHeapNapa = ::createExpHeap(0x900000, JKRHeap::sRootHeap, false);
     JKRHeap* pRootHeapGDDR = HeapMemoryWatcher::sRootHeapGDDR3;
-    u32 wpadHeapSize = NebulaAlignUp32(WPADGetWorkMemorySize()) + 0xD0;
+    // The controller layer's heap as the console sized it (its work memory, 32 bytes here, and 0xD0).
+    u32 wpadHeapSize = 0x20 + 0xD0;
     mWPadHeap = ::createExpHeap(wpadHeapSize, pRootHeapGDDR, false);
     mHomeButtonLayoutHeap = ::createExpHeap(0x80000, HeapMemoryWatcher::sRootHeapGDDR3, false);
 #ifdef TARGET_PC
