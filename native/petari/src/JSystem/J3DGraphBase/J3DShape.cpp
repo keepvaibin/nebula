@@ -169,8 +169,8 @@ void J3DShape::drawFast() const {
                 mShapeDraw[i]->draw();
         }
     } else {
-        J3DNativeShape::loadPosition(*j3dSys.getShapePacket()->getBaseMtxPtr(), GX_PNMTX0);
-        J3DNativeShape::loadNormal(*j3dSys.getShapePacket()->getBaseMtxPtr(), GX_PNMTX0);
+        J3DNativeShape::setPosition(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
+        J3DNativeShape::setNormal(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
         for (u16 n = mMtxGroupNum, i = 0; i < n; i++) {
             if (mShapeDraw[i] != nullptr)
                 mShapeDraw[i]->draw();

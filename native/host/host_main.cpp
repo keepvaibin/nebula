@@ -1827,8 +1827,33 @@ void attach_pending_records() {
 #endif
 
 // A group drawn.
+#if defined(NEBULA_HOST_RENDERER)
+// A draw's matrices (NebulaDrawMatrix) as the renderer's records hold them.
+void copy_draw_matrices(const NebulaDrawMatrix* matrices, uint32_t count,
+                        std::vector<galaxy::render::shapes::Matrix>& out) {
+    namespace shapes = galaxy::render::shapes;
+    out.resize(matrices != nullptr ? count : 0u);
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        const NebulaDrawMatrix& in = matrices[i];
+        if (in.kind > NEBULA_DRAW_MATRIX_POST_TEXTURE) {
+            die("a draw's matrix of unknown kind %u", in.kind);
+        }
+        const unsigned places = in.kind <= NEBULA_DRAW_MATRIX_NORMAL ? 10u
+                                : in.kind == NEBULA_DRAW_MATRIX_POST_TEXTURE ? 21u : 11u;
+        if (in.place >= places) {
+            die("a draw's matrix of kind %u at place %u", in.kind, in.place);
+        }
+        shapes::Matrix& m = out[i];
+        m.kind = static_cast<shapes::MatrixKind>(in.kind);
+        m.place = in.place;
+        m.model_matrix = in.model_matrix;
+        std::memcpy(m.values.data(), in.values, sizeof(in.values));
+    }
+}
+#endif
+
 void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, uint64_t color,
-                    const NebulaShapeMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
+                    const NebulaDrawMatrix* matrices, uint32_t matrix_count, const NebulaShapeCurrent* current,
                     const NebulaShapeTexGen* texgens, uint32_t texgen_count) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
@@ -1839,18 +1864,7 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
     record.position = position;
     record.normal = normal;
     record.color = color;
-    record.matrices.resize(matrices != nullptr ? matrix_count : 0u);
-    for (std::size_t i = 0; i < record.matrices.size(); ++i) {
-        const NebulaShapeMatrix& in = matrices[i];
-        if (in.kind > NEBULA_SHAPE_MATRIX_POST_TEXTURE) {
-            die("a shape draw's matrix of unknown kind %u", in.kind);
-        }
-        shapes::Matrix& out = record.matrices[i];
-        out.kind = static_cast<shapes::MatrixKind>(in.kind);
-        out.id = in.id;
-        out.model_matrix = in.model_matrix;
-        std::memcpy(out.values.data(), in.values, sizeof(in.values));
-    }
+    copy_draw_matrices(matrices, matrix_count, record.matrices);
     for (uint32_t i = 0; texgens != nullptr && i < texgen_count; ++i) {
         const NebulaShapeTexGen& g = texgens[i];
         record.texgens.push_back({g.coord, g.type, g.source, g.normalize, g.post_matrix});
@@ -2030,6 +2044,7 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
     }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Immediate;
+    copy_draw_matrices(draw->matrices, draw->matrix_count, record.matrices);
     attach_pending_records();
     record.immediate = std::move(imm);
     galaxy::render::attach_shape_record(std::move(record));

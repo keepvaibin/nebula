@@ -370,7 +370,7 @@ namespace nw4r {
                 pMtx = &mGlbMtx;
             }
 
-            J3DNativeShape::sendPosition(*pMtx, GX_PNMTX0);
+            J3DNativeShape::setPosition(0, *pMtx);
             J3DNativeState::setCurrentMtx(GX_PNMTX0);
         }
 

@@ -738,7 +738,7 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
     NebulaMtxScaleApply(pos, pos, RFLi_TEX_SCALE_X, RFLi_TEX_SCALE_Y, 1.0f);
     NebulaMtxTransApply(pos, pos, x, y, 0.0f);
 
-    J3DNativeShapeSendPosition(pos, GX_PNMTX0);
+    J3DNativeShapeSetPosition(0, pos);
     J3DNativeStateSetCurrentMtx(GX_PNMTX0);
 
     switch (origin) {

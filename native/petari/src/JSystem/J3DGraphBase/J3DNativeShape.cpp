@@ -350,10 +350,11 @@ namespace {
     // A display list's corner as the arrays name it.
     void readCorner(const u8* pVertex, const Layout& rLayout, NebulaShapeCorner* pCorner, u32* pNeeded) {
         memset(pCorner, 0, sizeof(*pCorner));
-        pCorner->position_matrix = static_cast< u8 >(rLayout.mOffset[GX_VA_PNMTXIDX] >= 0 ? pVertex[rLayout.mOffset[GX_VA_PNMTXIDX]] : 0);
+        // The display list's matrix ids (three apart; texture matrices from 30, the identity at 60) as places.
+        pCorner->position_matrix = static_cast< u8 >(rLayout.mOffset[GX_VA_PNMTXIDX] >= 0 ? pVertex[rLayout.mOffset[GX_VA_PNMTXIDX]] / 3 : 0);
         for (u32 t = 0; t < 8; t++) {
             const s32 at = rLayout.mOffset[GX_VA_TEX0MTXIDX + t];
-            pCorner->texture_matrix[t] = static_cast< u8 >(at >= 0 ? pVertex[at] : 0);
+            pCorner->texture_matrix[t] = static_cast< u8 >(at >= 0 && pVertex[at] >= 30 ? (pVertex[at] - 30) / 3 : 0);
         }
         pCorner->position = indexAt(pVertex, rLayout, GX_VA_POS, 0);
         noteUse(pNeeded, kPosition, pCorner->position);
@@ -454,25 +455,76 @@ namespace {
         }
         return true;
     }
-    // The matrices and current slots the next draw reads.
-    NebulaShapeMatrix sMatrices[64];
-    u32 sMatrixCount = 0;
+    // The position and normal matrices draws carry, by place; the texture matrices, current places and texgens given
+    // since the last record.
+    struct Place {
+        NebulaDrawMatrix mMatrix;
+        bool mSet;
+    };
+    Place sPositions[J3DNativeShape::kPositions];
+    Place sNormals[J3DNativeShape::kPositions];
+    // Places given since the last record: the next record carries them whether its corners read them or not.
+    u32 sGivenPlaces = 0;
+    u8 sCurrentPosition = 0;
+    NebulaDrawMatrix sTextures[64];
+    u32 sTextureCount = 0;
     NebulaShapeCurrent sCurrent;
     bool sCurrentSet = false;
     NebulaShapeTexGen sTexGens[8];
     u32 sTexGenCount = 0;
+    // A record's matrices: its position and normal matrices, then the texture matrices.
+    NebulaDrawMatrix sRecord[2 * J3DNativeShape::kPositions + 64];
 
-    NebulaShapeMatrix* nextMatrix(u32 kind, u32 id, u16 modelMatrix) {
-        if (sMatrixCount == sizeof(sMatrices) / sizeof(sMatrices[0])) {
-            fail("more matrices before one draw than a draw can carry", nullptr);
+    NebulaDrawMatrix* nextTexture(u32 kind, u32 place) {
+        if (sTextureCount == sizeof(sTextures) / sizeof(sTextures[0])) {
+            fail("more texture matrices before one draw than a draw can carry", nullptr);
             return nullptr;
         }
-        NebulaShapeMatrix* pOut = &sMatrices[sMatrixCount++];
+        NebulaDrawMatrix* pOut = &sTextures[sTextureCount++];
         memset(pOut, 0, sizeof(*pOut));
         pOut->kind = static_cast< u8 >(kind);
-        pOut->id = static_cast< u8 >(id);
-        pOut->model_matrix = modelMatrix;
+        pOut->place = static_cast< u8 >(place);
         return pOut;
+    }
+
+    NebulaDrawMatrix* placeAt(Place* pPlaces, u32 kind, u32 place, u16 modelMatrix) {
+        if (place >= J3DNativeShape::kPositions) {
+            fail("a position or normal matrix past place 9", nullptr);
+            return nullptr;
+        }
+        Place& rPlace = pPlaces[place];
+        memset(&rPlace.mMatrix, 0, sizeof(rPlace.mMatrix));
+        rPlace.mMatrix.kind = static_cast< u8 >(kind);
+        rPlace.mMatrix.place = static_cast< u8 >(place);
+        rPlace.mMatrix.model_matrix = modelMatrix;
+        rPlace.mSet = true;
+        sGivenPlaces |= 1u << place;
+        return &rPlace.mMatrix;
+    }
+
+    // The record's matrices: the position and normal matrices at the places `mask` names (bit k: place k) and those
+    // given since the last record, and, with `textures`, the texture matrices given since the last record.
+    u32 gather(u32 mask, bool textures) {
+        mask |= sGivenPlaces;
+        sGivenPlaces = 0;
+        u32 count = 0;
+        for (u32 k = 0; k < J3DNativeShape::kPositions; k++) {
+            if ((mask & (1u << k)) == 0) {
+                continue;
+            }
+            if (sPositions[k].mSet) {
+                sRecord[count++] = sPositions[k].mMatrix;
+            }
+            if (sNormals[k].mSet) {
+                sRecord[count++] = sNormals[k].mMatrix;
+            }
+        }
+        if (textures) {
+            memcpy(&sRecord[count], sTextures, sTextureCount * sizeof(sTextures[0]));
+            count += sTextureCount;
+            sTextureCount = 0;
+        }
+        return count;
     }
 
     void copyRows(f32* pOut, const f32* pIn, u32 rows, u32 columns, u32 stride, u32 outColumns) {
@@ -485,59 +537,47 @@ namespace {
 }  // namespace
 
 namespace J3DNativeShape {
-    void loadPosition(const f32 (*pMtx)[4], u32 id, u16 modelMatrix) {
-        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_POSITION, id, modelMatrix)) {
+    void setPosition(u32 index, const f32 (*pMtx)[4], u16 modelMatrix) {
+        if (NebulaDrawMatrix* pOut = placeAt(sPositions, NEBULA_DRAW_MATRIX_POSITION, index, modelMatrix)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 4, 4, 4);
         }
     }
 
-    void loadNormal(const f32 (*pMtx)[4], u32 id, u16 modelMatrix) {
-        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_NORMAL, id, modelMatrix)) {
+    void setNormal(u32 index, const f32 (*pMtx)[4], u16 modelMatrix) {
+        if (NebulaDrawMatrix* pOut = placeAt(sNormals, NEBULA_DRAW_MATRIX_NORMAL, index, modelMatrix)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 3, 4, 3);
         }
     }
 
-    void loadNormal33(const f32 (*pMtx)[3], u32 id, u16 modelMatrix) {
-        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_NORMAL, id, modelMatrix)) {
+    void setNormal33(u32 index, const f32 (*pMtx)[3], u16 modelMatrix) {
+        if (NebulaDrawMatrix* pOut = placeAt(sNormals, NEBULA_DRAW_MATRIX_NORMAL, index, modelMatrix)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 3);
         }
     }
 
-    // A normal matrix as a texture matrix: its fourth column zero.
-    void loadNormalToTexture(const f32 (*pMtx)[4], u32 id) {
-        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_TEXTURE, id, 0)) {
+    void setTexture(u32 index, const f32 (*pMtx)[4], u32 rows) {
+        const u32 kind = rows == 2 ? NEBULA_DRAW_MATRIX_TEXTURE_2X4 : NEBULA_DRAW_MATRIX_TEXTURE;
+        if (NebulaDrawMatrix* pOut = nextTexture(kind, index)) {
+            copyRows(pOut->values, &pMtx[0][0], rows == 2 ? 2 : 3, 4, 4, 4);
+        }
+    }
+
+    void setNormalTexture(u32 index, const f32 (*pMtx)[4]) {
+        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_TEXTURE, index)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 3, 4, 4);
         }
     }
 
-    void loadNormal33ToTexture(const f32 (*pMtx)[3], u32 id) {
-        if (NebulaShapeMatrix* pOut = nextMatrix(NEBULA_SHAPE_MATRIX_TEXTURE, id, 0)) {
+    void setNormal33Texture(u32 index, const f32 (*pMtx)[3]) {
+        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_TEXTURE, index)) {
             copyRows(pOut->values, &pMtx[0][0], 3, 3, 3, 4);
         }
     }
 
-    void loadTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type) {
-        const u32 kind = id >= GX_PTTEXMTX0 ? NEBULA_SHAPE_MATRIX_POST_TEXTURE :
-                         type == GX_MTX2x4  ? NEBULA_SHAPE_MATRIX_TEXTURE_2X4 :
-                                              NEBULA_SHAPE_MATRIX_TEXTURE;
-        if (NebulaShapeMatrix* pOut = nextMatrix(kind, id, 0)) {
-            copyRows(pOut->values, &pMtx[0][0], kind == NEBULA_SHAPE_MATRIX_TEXTURE_2X4 ? 2 : 3, 4, 4, 4);
+    void setPostTexture(u32 index, const f32 (*pMtx)[4]) {
+        if (NebulaDrawMatrix* pOut = nextTexture(NEBULA_DRAW_MATRIX_POST_TEXTURE, index)) {
+            copyRows(pOut->values, &pMtx[0][0], 3, 4, 4, 4);
         }
-    }
-
-    void sendPosition(const f32 (*pMtx)[4], u32 id) {
-        loadPosition(pMtx, id, 0);
-        flushState();
-    }
-
-    void sendNormal(const f32 (*pMtx)[4], u32 id) {
-        loadNormal(pMtx, id, 0);
-        flushState();
-    }
-
-    void sendTexture(const f32 (*pMtx)[4], u32 id, GXTexMtxType type) {
-        loadTexture(pMtx, id, type);
-        flushState();
     }
 
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix) {
@@ -555,11 +595,16 @@ namespace J3DNativeShape {
     }
 
     void setCurrent(u8 position, const u8* pTexture) {
-        sCurrent.position = position;
+        sCurrent.position = static_cast< u8 >(position / 3);
         for (u32 t = 0; t < 8; t++) {
-            sCurrent.texture[t] = pTexture[t];
+            sCurrent.texture[t] = static_cast< u8 >(pTexture[t] >= 30 ? (pTexture[t] - 30) / 3 : 0);
         }
         sCurrentSet = true;
+        sCurrentPosition = sCurrent.position;
+    }
+
+    void setCurrentPosition(u32 index) {
+        sCurrentPosition = static_cast< u8 >(index);
     }
 
     void registerModel(J3DModelData* pModelData) {
@@ -617,6 +662,14 @@ namespace J3DNativeShape {
                 const u32 array = a == 0 ? kPosition : a == 1 ? (layout.mNbt ? kNbt : kNormal) : a - 2 + kColor0;
                 geometry.arrays[a] = keyOf(arrayOf(pData, array));
             }
+            // The position matrix places its corners read: each draw of the group carries those.
+            u32 places = 0;
+            if (layout.mOffset[GX_VA_PNMTXIDX] >= 0) {
+                for (u32 c = 0; c < corners.mCorners.mCount; c++) {
+                    places |= 1u << corners.mCorners.mData[c].position_matrix;
+                }
+            }
+            pShape->mShapeDraw[g]->mNebulaPlaces = static_cast< u16 >(places);
             geometry.corner_count = corners.mCorners.mCount;
             geometry.index_count = indices.mCount;
             geometry.corners = corners.mCorners.mData;
@@ -640,25 +693,40 @@ namespace J3DNativeShape {
     }
 
     void draw(const J3DShapeDraw* pDraw) {
+        const u32 mask = pDraw->mNebulaPlaces != 0 ? pDraw->mNebulaPlaces : 1u << sCurrentPosition;
+        const u32 count = gather(mask, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, keyOf(pDraw), keyOf(j3dSys.getVtxPos()),
-                          keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sMatrices, sMatrixCount,
+                          keyOf(j3dSys.getVtxNrm()), keyOf(j3dSys.getVtxCol()), sRecord, count,
                           sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
-        sMatrixCount = 0;
+        sCurrentSet = false;
+        sTexGenCount = 0;
+    }
+
+    void drawGeometry(u64 key, u64 position, u64 normal, u64 color, u32 places) {
+        const u32 count = gather(places != 0 ? places : 1u << sCurrentPosition, true);
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, sCurrentSet ? &sCurrent : nullptr,
+                          sTexGens, sTexGenCount);
         sCurrentSet = false;
         sTexGenCount = 0;
     }
 
     void flushState() {
-        if (sMatrixCount == 0 && !sCurrentSet && sTexGenCount == 0) {
+        if (sTextureCount == 0 && sGivenPlaces == 0 && !sCurrentSet && sTexGenCount == 0) {
             return;
         }
+        const u32 count = gather(0, true);
         const NebulaHostServices* pHost = nebula_host();
-        pHost->shape_draw(pHost->user, 0, 0, 0, 0, sMatrices, sMatrixCount,
-                          sCurrentSet ? &sCurrent : nullptr, sTexGens, sTexGenCount);
-        sMatrixCount = 0;
+        pHost->shape_draw(pHost->user, 0, 0, 0, 0, sRecord, count, sCurrentSet ? &sCurrent : nullptr, sTexGens,
+                          sTexGenCount);
         sCurrentSet = false;
         sTexGenCount = 0;
+    }
+
+    u32 positionMatrices(u32 mask, const NebulaDrawMatrix** ppMatrices) {
+        *ppMatrices = sRecord;
+        return gather(mask != 0 ? mask : 1u << sCurrentPosition, false);
     }
 
     void sendPositions(const void* pArray, u32 count, GXCompType type, GXCompCnt cnt, u8 frac) {
@@ -670,10 +738,10 @@ namespace J3DNativeShape {
     }
 };  // namespace J3DNativeShape
 
-void J3DNativeShapeSendPosition(const f32 (*pMtx)[4], u32 id) {
-    J3DNativeShape::sendPosition(pMtx, id);
+void J3DNativeShapeSetPosition(u32 index, const f32 (*pMtx)[4]) {
+    J3DNativeShape::setPosition(index, pMtx);
 }
 
-void J3DNativeShapeSendNormal(const f32 (*pMtx)[4], u32 id) {
-    J3DNativeShape::sendNormal(pMtx, id);
+void J3DNativeShapeSetNormal(u32 index, const f32 (*pMtx)[4]) {
+    J3DNativeShape::setNormal(index, pMtx);
 }

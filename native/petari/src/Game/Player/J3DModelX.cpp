@@ -485,8 +485,8 @@ void J3DModelX::shapeDrawFast(J3DShapeX* shape) const {
             }
         }
     } else {
-        J3DNativeShape::loadPosition(*j3dSys.getShapePacket()->getBaseMtxPtr(), 0);
-        J3DNativeShape::loadNormal(*j3dSys.getShapePacket()->getBaseMtxPtr(), 0);
+        J3DNativeShape::setPosition(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
+        J3DNativeShape::setNormal(0, *j3dSys.getShapePacket()->getBaseMtxPtr());
         u16 count = shape->mMtxGroupNum;
         for (u16 i = 0; i < count; i++) {
             if (shape->mShapeDraw[i]) {

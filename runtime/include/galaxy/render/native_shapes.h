@@ -75,12 +75,14 @@ using DrawArrays = std::array<const Array*, 12>;
 [[nodiscard]] bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t position_matrix,
                           const curved::Model* curved, std::vector<RenderVertex>& out);
 
-// A matrix a draw reads, by GX's matrix id (as nebula_game_api.h's NebulaShapeMatrix): rows of four (a normal
+// A matrix a draw carries, by its place in the draw (as nebula_game_api.h's NebulaDrawMatrix): rows of four (a normal
 // matrix's of three, a 2x4 texture matrix's two); `model_matrix` the model's draw matrix it is (index + 1), else 0.
 enum class MatrixKind : std::uint8_t { Position, Normal, Texture, Texture2x4, PostTexture };
+inline constexpr std::uint8_t kIdentityTexturePlace = 10u;
+inline constexpr std::uint8_t kIdentityPostPlace = 20u;
 struct Matrix {
     MatrixKind kind = MatrixKind::Position;
-    std::uint8_t id = 0;
+    std::uint8_t place = 0;
     std::uint16_t model_matrix = 0;
     std::array<float, 12> values{};
 };
@@ -116,8 +118,8 @@ struct Record {
     std::shared_ptr<const Immediate> immediate;
     // An image's bytes (TextureImage), at `key`: its physical address.
     std::shared_ptr<const std::vector<std::byte>> image;
-    // A draw's matrices, and the matrices its corners take when they carry none (position, texture coordinates 0-7)
-    // when the game set them since its last draw.
+    // A draw's (or an immediate's) matrices, and the places its corners take when they carry none (position, texture
+    // coordinates 0-7) when the game set them since its last draw.
     std::vector<Matrix> matrices;
     bool has_current = false;
     std::array<std::uint8_t, 9> current{};

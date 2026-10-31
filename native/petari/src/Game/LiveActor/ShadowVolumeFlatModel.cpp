@@ -53,14 +53,14 @@ void ShadowVolumeFlatModel::loadModelDrawMtx() const {
     }
 
     NebulaMtxConcat(MR::getCameraViewMtx(), rootMtx, rootMtx);
-    J3DNativeShape::sendPosition(rootMtx, mRootDrawMtxIndex);
+    J3DNativeShape::setPosition(mRootDrawMtxIndex / 3, rootMtx);
     calcDropJoint(&dropMtx, displacement);
     if (controller->isFollowHostScale()) {
         MR::preScaleMtx(dropMtx, controller->getHost()->mScale);
     }
 
     NebulaMtxConcat(MR::getCameraViewMtx(), dropMtx, dropMtx);
-    J3DNativeShape::sendPosition(dropMtx, mDropDrawMtxIndex);
+    J3DNativeShape::setPosition(mDropDrawMtxIndex / 3, dropMtx);
 }
 
 void ShadowVolumeFlatModel::calcRootJoint(TPos3f* pMtx, const TVec3f& rDisplacement) const {

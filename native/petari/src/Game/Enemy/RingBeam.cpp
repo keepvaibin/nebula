@@ -141,7 +141,7 @@ void RingBeamShadowDrawer::drawShape() const {
 }
 
 void RingBeamShadowDrawer::loadModelDrawMtx() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
 };
 

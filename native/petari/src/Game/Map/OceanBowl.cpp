@@ -398,7 +398,7 @@ void OceanBowl::draw() const {
 }
 
 void OceanBowl::loadMaterial() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
@@ -414,20 +414,20 @@ void OceanBowl::loadMaterial() const {
     mat.identity();
     mat[0][2] = mTexU0;
     mat[1][2] = mTexV0;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mat, 2);
     mat[0][2] = mTexU1;
     mat[1][2] = mTexV1;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX1, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mat, 2);
     mat[0][2] = mTexU2;
     mat[1][2] = mTexV2;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX2, GX_MTX2x4);
+    J3DNativeShape::setTexture(2, mat, 2);
     f32 a = (getPoint(0, 0)->mVertexPosition.x - MR::getPlayerPos()->x) + 2400.0f;
     f32 b = (getPoint(0, 0)->mVertexPosition.z - MR::getPlayerPos()->z) + 2400.0f;
     f32 c = a / 4800.0f;
     f32 d = b / 4800.0f;
     mat[0][2] = d;
     mat[1][2] = c;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX4, GX_MTX2x4);
+    J3DNativeShape::setTexture(4, mat, 2);
     MR::loadTexProjectionMtx(39);
     mWaterTex->load(GX_TEXMAP0);
     JUTTexture screentex(MR::getScreenResTIMG(), 0);
@@ -500,7 +500,7 @@ void OceanBowl::loadMaterial() const {
 }
 
 void OceanBowl::loadMaterialBloom() const {
-    J3DNativeShape::sendPosition(MR::getCameraViewMtx(), 0);
+    J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
@@ -512,10 +512,10 @@ void OceanBowl::loadMaterialBloom() const {
     mat.identity();
     mat[0][2] = mTexU0;
     mat[1][2] = mTexV0;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mat, 2);
     mat[0][2] = mTexU1;
     mat[1][2] = mTexV1;
-    J3DNativeShape::sendTexture(mat, GX_TEXMTX1, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, mat, 2);
     mWaterTex->load(GX_TEXMAP0);
     J3DNativeState::setNumIndStages(0);
     J3DNativeState::setNumTevStages(2);

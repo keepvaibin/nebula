@@ -39,5 +39,5 @@ void ShadowVolumeCylinder::loadModelDrawMtx() const {
     TVec3f scale(radius, calcBaseDropLength() / ::sModelScale, radius);
     MR::preScaleMtx(mtx, scale);
     NebulaMtxConcat(MR::getCameraViewMtx(), mtx, mtx);
-    J3DNativeShape::sendPosition(mtx, 0);
+    J3DNativeShape::setPosition(0, mtx);
 }

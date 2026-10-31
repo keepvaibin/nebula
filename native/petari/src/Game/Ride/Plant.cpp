@@ -721,8 +721,8 @@ void Plant::draw() const {
     }
 
     for (s32 leaf = 0; leaf < mNumLeaves; leaf++) {
-        J3DNativeShape::loadPosition(mLeaves[leaf]->mPosMtx, 0);
-        J3DNativeShape::loadNormal(mLeaves[leaf]->mPosMtx, 0);
+        J3DNativeShape::setPosition(0, mLeaves[leaf]->mPosMtx);
+        J3DNativeShape::setNormal(0, mLeaves[leaf]->mPosMtx);
         mShapeDraw->draw();
     }
 }

@@ -165,7 +165,7 @@ void NormalMapBase::updateBtkMtx() {
 void NormalMapBase::loadTexMtxBtk(J3DMaterial* pMaterial) const {
     if (mBtkPlayer != nullptr) {
         if (_150) {
-            J3DNativeShape::sendTexture(_184[pMaterial->mIndex], 0x1E, GX_MTX2x4);
+            J3DNativeShape::setTexture(0, _184[pMaterial->mIndex], 2);
         }
     }
 }
@@ -332,8 +332,8 @@ void NormalMapBase::shapeAnalyzeDraw(J3DModel* pModel) const {
                         NebulaMtxConcat(inverse, viewMtx, localMtx);
                     }
 
-                    J3DNativeShape::loadPosition(viewMtx, GX_PNMTX0);
-                    J3DNativeShape::loadNormal(viewMtx, GX_PNMTX0);
+                    J3DNativeShape::setPosition(0, viewMtx);
+                    J3DNativeShape::setNormal(0, viewMtx);
                     MR::normalize(&localMtx);
                     updateLightMtx(localMtx);
                     drawMaterialSetting(pMaterial);
@@ -367,8 +367,8 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
                 u16 index = pShapeMtx->getUseMtxIndex(j);
                 if (index != 0xFFFF) {
                     MtxPtr pMtx = pModel->getDrawMtx(index);
-                    J3DNativeShape::loadPosition(pMtx, static_cast< u16 >(j * 3));
-                    J3DNativeShape::loadNormal(pMtx, static_cast< u16 >(j * 3));
+                    J3DNativeShape::setPosition(j, pMtx);
+                    J3DNativeShape::setNormal(j, pMtx);
                 }
             }
 
@@ -438,7 +438,7 @@ void NormalMapBase::loadTexture1(J3DMaterial* pMaterial) const {
 void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
     loadTexture1(pMaterial);
     loadTexMtxBtk(pMaterial);
-    J3DNativeShape::sendTexture(pMaterial->getTexMtx(0)->getMtx(), GX_TEXMTX2, GX_MTX2x4);
+    J3DNativeShape::setTexture(2, pMaterial->getTexMtx(0)->getMtx(), 2);
     Color8 ambient;
     Color8 material;
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);
@@ -483,7 +483,7 @@ void NormalMapBase::drawSetting(MtxPtr pMtx) const {
     Mtx scale_mtx;
     NebulaMtxScale(scale_mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(scale_mtx, 0.5f, 0.5f, 0.0f);
-    J3DNativeShape::sendTexture(scale_mtx, 0x21, GX_MTX2x4);
+    J3DNativeShape::setTexture(1, scale_mtx, 2);
     J3DNativeState::setCullMode(GX_CULL_BACK);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     J3DNativeState::setNumChans(1);
@@ -642,7 +642,7 @@ void NormalMapBase::setTevForDebug() const {
     Mtx mtx;
     NebulaMtxScale(mtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(mtx, 0.5f, 0.5f, 0.0f);
-    J3DNativeShape::sendTexture(mtx, 0x1E, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, mtx, 2);
     loadDiffuseGradTex(GX_TEXMAP0);
     J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
     J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
@@ -656,7 +656,7 @@ void NormalMapBase::drawSettingForDebug(MtxPtr pMtx) const {
     Mtx texMtx;
     NebulaMtxScale(texMtx, 0.0f, 0.0f, 0.0f);
     MR::setMtxTrans(texMtx, 0.0f, 0.0f, 0.0f);
-    J3DNativeShape::sendTexture(texMtx, GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, texMtx, 2);
     J3DNativeState::setCullMode(GX_CULL_BACK);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     J3DNativeState::setNumChans(1);
@@ -825,7 +825,7 @@ void NormalMapBase::indirectCapture() const {
     f32 exponent = sgrad_tex_thresh - 1;
     f32 threshold = pow(2.0, exponent);
     MR::setMtxTrans(texMtx, 0.5f, 1.0f - threshold, 0.0f);
-    J3DNativeShape::sendTexture(texMtx, GX_TEXMTX0, GX_MTX2x4);
+    J3DNativeShape::setTexture(0, texMtx, 2);
     J3DNativeState::setNumChans(1);
     J3DNativeState::setChanCtrl(GX_COLOR0A0, 1, GX_SRC_REG, GX_SRC_REG, 2, GX_DF_CLAMP, GX_AF_NONE);
     J3DNativeState::setChanCtrl(GX_COLOR1A1, 0, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
