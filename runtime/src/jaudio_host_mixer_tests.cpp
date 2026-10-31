@@ -93,7 +93,8 @@ std::uint32_t record(std::uint32_t channel) { return kChannels + channel * 0x180
 
 void start(JAudioHostMixer& mixer, Guest& guest) {
     build_tables(guest);
-    mixer.setup(0x40u, guest.ptr(kChannels), guest.samples(kResampler), guest.samples(kAdpcm),
+    mixer.setup(0x40u, reinterpret_cast<NebulaJAudioChannel*>(guest.ptr(kChannels)), guest.samples(kResampler),
+                guest.samples(kAdpcm),
                 reinterpret_cast<NebulaJAudioFxLine*>(guest.ptr(kFx)));
     mixer.set_aux(guest.ptr(0x80000000u), static_cast<std::uint32_t>(guest.bytes.size()));
 }

@@ -19,6 +19,41 @@ static_assert(sizeof(JASDsp::FxBuf) == sizeof(NebulaJAudioFxLine), "FxBuf layout
 static_assert(offsetof(JASDsp::FxBuf, _4) == offsetof(NebulaJAudioFxLine, buffer), "FxBuf layout");
 static_assert(offsetof(JASDsp::FxBuf, _8) == offsetof(NebulaJAudioFxLine, dest_a), "FxBuf layout");
 static_assert(offsetof(JASDsp::FxBuf, _E) == offsetof(NebulaJAudioFxLine, volume_b), "FxBuf layout");
+// The host's mixer reads the channels as NebulaJAudioChannel.
+static_assert(sizeof(JASDsp::TChannel) == sizeof(NebulaJAudioChannel), "TChannel size");
+static_assert(offsetof(JASDsp::TChannel, mIsActive) == offsetof(NebulaJAudioChannel, active), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, mIsFinished) == offsetof(NebulaJAudioChannel, finished), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, mPitch) == offsetof(NebulaJAudioChannel, pitch), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _8) == offsetof(NebulaJAudioChannel, starting), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, mPauseFlag) == offsetof(NebulaJAudioChannel, paused), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _E) == offsetof(NebulaJAudioChannel, delay_history), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _10) == offsetof(NebulaJAudioChannel, buses), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _50) == offsetof(NebulaJAudioChannel, auto_pan), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _52) == offsetof(NebulaJAudioChannel, auto_send), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _54) == offsetof(NebulaJAudioChannel, auto_volume), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _56) == offsetof(NebulaJAudioChannel, auto_target), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _58) == offsetof(NebulaJAudioChannel, auto_mixer), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _60) == offsetof(NebulaJAudioChannel, phase), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _64) == offsetof(NebulaJAudioChannel, leftover), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _66) == offsetof(NebulaJAudioChannel, last_sample), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _68) == offsetof(NebulaJAudioChannel, restart), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _70) == offsetof(NebulaJAudioChannel, address), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _74) == offsetof(NebulaJAudioChannel, left), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _78) == offsetof(NebulaJAudioChannel, resample_history), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _80) == offsetof(NebulaJAudioChannel, fir_history), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _A8) == offsetof(NebulaJAudioChannel, iir_state), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _B0) == offsetof(NebulaJAudioChannel, block), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _100) == offsetof(NebulaJAudioChannel, format), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _102) == offsetof(NebulaJAudioChannel, loop), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _104) == offsetof(NebulaJAudioChannel, loop_history1), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _106) == offsetof(NebulaJAudioChannel, loop_history2), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, mFilterMode) == offsetof(NebulaJAudioChannel, filter_mode), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, mForcedStop) == offsetof(NebulaJAudioChannel, forced_stop), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _110) == offsetof(NebulaJAudioChannel, loop_start), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _114) == offsetof(NebulaJAudioChannel, end), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, _118) == offsetof(NebulaJAudioChannel, wave), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, fir_filter_params) == offsetof(NebulaJAudioChannel, fir_coefficients), "TChannel layout");
+static_assert(offsetof(JASDsp::TChannel, iir_filter_params) == offsetof(NebulaJAudioChannel, iir_coefficients), "TChannel layout");
 static_assert(offsetof(JASDsp::FxBuf, _10) == offsetof(NebulaJAudioFxLine, coefficients), "FxBuf layout");
 
 namespace {
@@ -146,7 +181,7 @@ void JASDsp::initBuffer() {
         setFXLine(i, NULL, NULL);
     }
     const NebulaHostServices* const host = nebula_host();
-    host->jaudio_setup(host->user, 0x40, CH_BUF, DSPRES_FILTER, DSPADPCM_FILTER, reinterpret_cast< NebulaJAudioFxLine* >(FX_BUF));
+    host->jaudio_setup(host->user, 0x40, reinterpret_cast< NebulaJAudioChannel* >(CH_BUF), DSPRES_FILTER, DSPADPCM_FILTER, reinterpret_cast< NebulaJAudioFxLine* >(FX_BUF));
     flushBuffer();
 }
 

@@ -4555,9 +4555,10 @@ struct NativeGameAudio::State {
 NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
 NativeGameAudio::~NativeGameAudio() = default;
 
-void NativeGameAudio::setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
-                            const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
-    state_->mixer.setup(channels, static_cast<std::byte*>(channel_records), resample_filter, adpcm_filter, fx_lines);
+void NativeGameAudio::setup(std::uint32_t channels, NebulaJAudioChannel* channel_records,
+                            const std::int16_t* resample_filter, const std::int16_t* adpcm_filter,
+                            const NebulaJAudioFxLine* fx_lines) {
+    state_->mixer.setup(channels, channel_records, resample_filter, adpcm_filter, fx_lines);
 }
 
 void NativeGameAudio::set_aux(const void* base, std::uint32_t size) {

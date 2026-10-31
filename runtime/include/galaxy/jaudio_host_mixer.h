@@ -61,7 +61,7 @@ public:
     JAudioHostMixer();
 
     // The game's channel records, filter tables (640 and 32 words) and FX lines, once (JASDsp's setup).
-    void setup(std::uint32_t channel_count, std::byte* channel_records, const std::int16_t* resample_filter,
+    void setup(std::uint32_t channel_count, NebulaJAudioChannel* channel_records, const std::int16_t* resample_filter,
                const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
     // The sound data in auxiliary memory (JKRHeap::getAltAramStartAdr()): wave offsets below `size`.
     void set_aux(const std::byte* base, std::uint32_t size) noexcept;
@@ -101,22 +101,22 @@ private:
     };
 
     void mix_subframe();
-    void classify_channel(std::uint32_t index, const std::byte* record, bool starting);
-    void render_channel(std::byte* record, std::uint32_t index);
-    std::uint32_t render_source(std::byte* record, std::int16_t* out);
-    void resample(std::byte* record, std::int16_t* history_and_source,
+    void classify_channel(std::uint32_t index, const NebulaJAudioChannel& ch, bool starting);
+    void render_channel(NebulaJAudioChannel& ch, std::uint32_t index);
+    std::uint32_t render_source(NebulaJAudioChannel& ch, std::int16_t* out);
+    void resample(NebulaJAudioChannel& ch, std::int16_t* history_and_source,
                   std::int16_t* out);
-    void decode_adpcm(std::byte* record, std::int16_t* out, std::uint32_t count);
-    void decode_adpcm_blocks(std::byte* record, std::int16_t* out,
+    void decode_adpcm(NebulaJAudioChannel& ch, std::int16_t* out, std::uint32_t count);
+    void decode_adpcm_blocks(NebulaJAudioChannel& ch, std::int16_t* out,
                              std::uint32_t blocks);
-    void read_pcm(std::byte* record, std::int16_t* out, std::uint32_t count,
+    void read_pcm(NebulaJAudioChannel& ch, std::int16_t* out, std::uint32_t count,
                   std::uint32_t bytes_per_sample);
-    void render_oscillator(std::byte* record, std::int16_t* out,
+    void render_oscillator(NebulaJAudioChannel& ch, std::int16_t* out,
                            std::uint16_t type);
-    void apply_fir(std::byte* record, std::int16_t* samples);
-    void apply_iir(std::byte* record, std::int16_t* samples);
-    void mix_buses(std::byte* record, std::int16_t* samples);
-    void mix_auto(std::byte* record, const std::int16_t* samples);
+    void apply_fir(NebulaJAudioChannel& ch, std::int16_t* samples);
+    void apply_iir(NebulaJAudioChannel& ch, std::int16_t* samples);
+    void mix_buses(NebulaJAudioChannel& ch, std::int16_t* samples);
+    void mix_auto(NebulaJAudioChannel& ch, const std::int16_t* samples);
     std::int16_t ramp_mix(std::uint32_t destination, const std::int16_t* source,
                           std::int16_t start, std::int32_t delta);
     void add_scaled(std::uint32_t destination, const std::int16_t* source,
@@ -142,7 +142,7 @@ private:
     std::array<std::int16_t, 4 + 2048> source_{};
     std::array<std::int16_t, 64 + 80 + 32> channel_out_{};
 
-    std::byte* channels_{};
+    NebulaJAudioChannel* channels_{};
     std::uint32_t channel_count_{};
     const NebulaJAudioFxLine* fx_lines_{};
     const std::byte* aux_{};

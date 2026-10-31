@@ -23,7 +23,67 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 57u
+#define NEBULA_GAME_API_VERSION 58u
+
+/* One of JAudio's 64 channels (JASDsp::TChannel, 0x180 bytes, host byte order): the game sets its source, pitch,
+   volumes and filters; the host's mixer plays it and advances its playback state. */
+typedef struct NebulaJAudioBusSend {
+    uint16_t connect;  /* the mix bus fed (0: none) */
+    int16_t target;    /* volume ramped to over a subframe */
+    int16_t current;   /* volume now */
+    uint16_t delay;    /* samples of delay: target in the high byte, now in the low */
+} NebulaJAudioBusSend;
+
+typedef struct NebulaJAudioChannel {
+    uint16_t active;                  /* 0x000 */
+    uint16_t finished;                /* 0x002 */
+    uint16_t pitch;                   /* 0x004 source samples per output sample, 4.12 */
+    uint16_t reserved_006;
+    uint16_t starting;                /* 0x008 set at play start: the next render restarts the source */
+    uint16_t loop_pending;            /* 0x00A PCM: the position reached the end (loop or finish next) */
+    uint16_t paused;                  /* 0x00C */
+    uint16_t delay_history;           /* 0x00E samples of the previous subframe the bus delays read */
+    NebulaJAudioBusSend buses[6];     /* 0x010 */
+    uint8_t reserved_040[0x10];
+    uint16_t auto_pan;                /* 0x050 auto mixer: pan (high byte), front/surround balance (low byte) */
+    int16_t auto_send;                /* 0x052 effect send */
+    int16_t auto_volume;              /* 0x054 volume now */
+    int16_t auto_target;              /* 0x056 volume ramped to */
+    uint16_t auto_mixer;              /* 0x058 nonzero: the auto mixer plays the channel, else its bus sends */
+    uint8_t reserved_05A[6];
+    uint16_t phase;                   /* 0x060 position between source samples (12 bits) */
+    uint16_t reserved_062;
+    uint16_t leftover;                /* 0x064 decoded samples of `block` still to play (the game starts it at the
+                                         format's block size) */
+    int16_t last_sample;              /* 0x066 the last output, held while paused */
+    uint32_t restart;                 /* 0x068 PCM: the sample its source restarts at */
+    uint32_t reserved_06C;
+    uint32_t address;                 /* 0x070 next block or sample, from the wave data's base */
+    uint32_t left;                    /* 0x074 samples before the end (or loop end) */
+    int16_t resample_history[4];      /* 0x078 the previous subframe's last source samples */
+    int16_t fir_history[20];          /* 0x080 */
+    int16_t iir_state[4];             /* 0x0A8 x1, x2, y2, y3 */
+    int16_t block[16];                /* 0x0B0 the decoded ADPCM block; [14] and [15] the predictor's history */
+    int16_t delay_samples[16];        /* 0x0D0 the previous subframe's last samples, newest at [15] */
+    uint8_t reserved_0F0[6];
+    uint16_t play_count;              /* 0x0F6 */
+    uint8_t reserved_0F8[8];
+    uint16_t format;                  /* 0x100 ADPCM bytes per block (9, 5), 8 PCM8, 16 PCM16, else an oscillator */
+    uint16_t loop;                    /* 0x102 */
+    int16_t loop_history1;            /* 0x104 ADPCM predictor history at the loop start */
+    int16_t loop_history2;            /* 0x106 */
+    uint16_t filter_mode;             /* 0x108 FIR taps (bits 0-4), IIR on (bit 5) */
+    uint16_t forced_stop;             /* 0x10A */
+    uint32_t reserved_10C;
+    uint32_t loop_start;              /* 0x110 */
+    uint32_t end;                     /* 0x114 */
+    uint32_t wave;                    /* 0x118 the wave data's start */
+    uint32_t reserved_11C;
+    int16_t fir_coefficients[8];      /* 0x120 */
+    uint8_t reserved_130[0x18];
+    int16_t iir_coefficients[8];      /* 0x148 (four used) */
+    uint8_t reserved_158[0x28];
+} NebulaJAudioChannel;
 
 /* One of JAudio's four FX lines (JASDsp::FxBuf): a delay of `frames` subframes in `buffer` (frames * 80 samples)
    fed by its input bus, an 8-tap FIR before (flags bit 0) or after (bit 1) the sends to buses `dest_a` and `dest_b`. */
@@ -798,7 +858,8 @@ typedef struct NebulaHostServices {
     /* JAudio's mixer (on the console a DSP program; the host runs it). Pointers are into the game's memory.
        jaudio_setup hands over the channel records (`channels` of them, in the program's layout, host byte order), the
        resampling filter (640 words) and ADPCM coefficients (32 words) and the four FX lines, once. */
-    void (*jaudio_setup)(void* user, uint32_t channels, void* channel_records, const int16_t* resample_filter,
+    void (*jaudio_setup)(void* user, uint32_t channels, NebulaJAudioChannel* channel_records,
+                         const int16_t* resample_filter,
                          const int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
     /* The game's sound data in its auxiliary memory: the channels' wave offsets count from `base`, below `size`. */
     void (*jaudio_aux)(void* user, const void* base, uint32_t size);

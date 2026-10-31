@@ -2939,7 +2939,7 @@ void svc_wpad_speaker_data(void*, uint32_t, const uint8_t*, uint32_t) {}
 // A pointer into the game's memory as the guest address the mixer reads by (0 outside it).
 #endif
 
-void svc_jaudio_setup(void*, uint32_t channels, void* records, const int16_t* resample_filter,
+void svc_jaudio_setup(void*, uint32_t channels, NebulaJAudioChannel* records, const int16_t* resample_filter,
                       const int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines) {
 #if defined(NEBULA_HOST_RENDERER)
     gAudio->setup(channels, records, resample_filter, adpcm_filter, fx_lines);

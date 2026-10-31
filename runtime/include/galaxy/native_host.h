@@ -27,6 +27,7 @@
 #include <vector>
 
 struct NebulaJAudioFxLine;  // nebula_game_api.h
+struct NebulaJAudioChannel;  // nebula_game_api.h
 
 namespace galaxy::host {
 
@@ -145,7 +146,7 @@ public:
 
     // The game's JAudio mixer calls (nebula_game_api.h jaudio_*). mix returns true when it completed a subframe (the
     // game then posts its AUDIOMSG_DSP).
-    void setup(std::uint32_t channels, void* channel_records, const std::int16_t* resample_filter,
+    void setup(std::uint32_t channels, NebulaJAudioChannel* channel_records, const std::int16_t* resample_filter,
                const std::int16_t* adpcm_filter, const NebulaJAudioFxLine* fx_lines);
     void set_aux(const void* base, std::uint32_t size);
     void frame(std::uint32_t subframes, std::uint32_t mixer_level, std::int16_t* left, std::int16_t* right);
