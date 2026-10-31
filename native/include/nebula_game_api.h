@@ -260,20 +260,6 @@ typedef struct NebulaTextureImage {
    B << 8 | A word per colour, 2 floats per texture coordinate, a position matrix place (0-9) per position matrix.
    Without a position matrix the vertices take the current one. `matrices` (`matrix_count`): the position and normal
    matrices they read and texture matrices given since the last record (NebulaDrawMatrix). */
-/* What a target pass's texture keeps of its picture (target_end): the channels and precision the texture holds. */
-typedef enum NebulaTargetTexture {
-    NEBULA_TARGET_TEXTURE_RGBA8 = 0,      /* colour and alpha, 8 bits each */
-    NEBULA_TARGET_TEXTURE_RGB565 = 1,     /* colour, 5/6/5 bits, opaque */
-    NEBULA_TARGET_TEXTURE_RGB5A3 = 2,     /* colour 5 bits each where opaque, else 4 bits with 3 bits of alpha */
-    NEBULA_TARGET_TEXTURE_LUMA8 = 3,      /* luminance, 8 bits */
-    NEBULA_TARGET_TEXTURE_ALPHA8 = 4,     /* alpha, 8 bits */
-    NEBULA_TARGET_TEXTURE_RED8 = 5,       /* one colour channel, 8 bits */
-    NEBULA_TARGET_TEXTURE_GREEN8 = 6,
-    NEBULA_TARGET_TEXTURE_BLUE8 = 7,
-    NEBULA_TARGET_TEXTURE_RED_ALPHA8 = 8, /* red and alpha, 8 bits each */
-    NEBULA_TARGET_TEXTURE_NONE = 0xFF
-} NebulaTargetTexture;
-
 typedef struct NebulaImmediate {
     uint8_t primitive;
     uint8_t reserved[3];
@@ -1075,10 +1061,9 @@ typedef struct NebulaHostServices {
        (R << 24 | G << 16 | B << 8 | A) and depth `clear_z` (24 bits). */
     void (*target_begin)(void* user, uint64_t key, uint16_t width, uint16_t height, uint32_t clear_rgba,
                          uint32_t clear_z);
-    /* Ends the pass: its picture becomes the texture `key` names (an image or texture load naming `key` reads it),
-       keeping what `kept` (NebulaTargetTexture) says; NEBULA_TARGET_TEXTURE_NONE: no texture (the pass's own texture
-       copies took its pictures). */
-    void (*target_end)(void* user, uint64_t key, uint8_t kept);
+    /* Ends the pass: its picture, at full precision, becomes the texture `key` names (an image or texture load
+       naming `key` reads it, whatever format it names). */
+    void (*target_end)(void* user, uint64_t key);
     /* An image's bytes as the game has them (NebulaTextureImage): the renderer takes a copy and draws the image from
        it from here on. Sent when the image is loaded or rewritten. */
     void (*texture_image)(void* user, const NebulaTextureImage* image);

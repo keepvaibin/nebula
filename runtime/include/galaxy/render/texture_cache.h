@@ -151,6 +151,11 @@ public:
         const EfbCopyParams& params,
         gpu::TextureRef texture);
 
+    // A target pass's picture (E-07) at `address`, `width` x `height` in the game's units: a draw sampling that
+    // address at that size reads it whatever format its texture object names (the picture at full precision).
+    // Replaces an earlier picture there; the texture is the cache's from now on.
+    void register_target(std::uint64_t address, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture);
+
     // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
     // content lives on the GPU, not in game memory.
     void invalidate_all();
@@ -349,6 +354,8 @@ private:
     std::uint64_t decoded_evicted_entries_ = 0;
     // Full GX texture descriptor -> EFB-copy alias (checked before decode).
     std::unordered_map<EfbAliasKey, Entry, EfbAliasKeyHasher> efb_aliases_;
+    // Target passes' pictures by address (register_target), checked before the EFB-copy aliases.
+    std::unordered_map<std::uint64_t, Entry> targets_;
     detail::ConservativeRangeEnvelope alias_envelope_;
     std::vector<std::vector<Entry>> retired_entries_;
     // Interpolation: reclaimed textures held per game-frame segment.

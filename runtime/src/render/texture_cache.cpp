@@ -1514,6 +1514,11 @@ void TextureCache::shutdown() {
     decoded_evicted_bytes_ = 0;
     decoded_evicted_entries_ = 0;
     efb_aliases_.clear();
+    for (auto& [address, entry] : targets_) {
+        (void)address;
+        retire(std::move(entry));
+    }
+    targets_.clear();
     alias_envelope_.clear();
     retired_entries_.clear();
     for (auto& held : held_entries_) {
@@ -1710,6 +1715,32 @@ bool TextureCache::register_efb_copy(
         efb_aliases_.emplace(alias_key, std::move(entry));
     }
     return true;
+}
+
+void TextureCache::register_target(std::uint64_t address, std::uint16_t width, std::uint16_t height,
+                                   gpu::TextureRef texture) {
+    if (!backend_.ready() || !texture) {
+        throw std::runtime_error("[TextureCache] invalid target picture");
+    }
+    const std::uint32_t srv_idx = allocate_srv_index();
+    backend_.write_view(srv_idx, gpu::raw(texture), 1u);
+    Entry entry{};
+    entry.handle.resource = gpu::raw(texture);
+    entry.handle.srv_index = srv_idx;
+    entry.handle.width = width;
+    entry.handle.height = height;
+    entry.handle.mip_levels = 1u;
+    entry.handle.from_efb_copy = true;
+    entry.handle.generated_mips = false;
+    entry.handle.source_bytes = static_cast<std::uint32_t>(width) * height * 4u;
+    entry.texture = std::move(texture);
+    auto it = targets_.find(address);
+    if (it != targets_.end()) {
+        retire(std::move(it->second));
+        it->second = std::move(entry);
+    } else {
+        targets_.emplace(address, std::move(entry));
+    }
 }
 
 void TextureCache::invalidate_all() {
@@ -2127,6 +2158,12 @@ TextureHandle TextureCache::get(
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
 
+    // A target pass's picture at this address and size, in whatever format the draw names it.
+    if (const auto target_it = targets_.find(image.address);
+        target_it != targets_.end() && target_it->second.handle.width == image.width &&
+        target_it->second.handle.height == image.height) {
+        return target_it->second.handle;
+    }
     // EFB alias hit. Matching the full descriptor keeps a stale full-screen capture from being sampled by a later,
     // smaller texture at the same address.
     {
