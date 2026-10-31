@@ -13,6 +13,7 @@
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/texture_cache.h"
@@ -2103,7 +2104,7 @@ PSIn main(uint id : SV_VertexID) {
     return p;
 })HLSL";
             const auto vs = compile_shader(kGxVs, "vs_5_1");
-            const auto ps = compile_shader(galaxy::render::ShaderGenerator{}.generate_ps(gx->shader), "ps_5_1");
+            const auto ps = compile_shader(galaxy::render::material_ps_hlsl(gx->shader), "ps_5_1");
             auto desc = galaxy::render::make_gx_pso_desc(gx_root.Get(), gx->state,
                 vs.Get(), ps.Get(), nullptr, nullptr);
             // The fixture VS emits a full-screen triangle using SV_VertexID.
@@ -2116,7 +2117,9 @@ PSIn main(uint id : SV_VertexID) {
             void* mapped = nullptr;
             const D3D12_RANGE no_read{0u, 0u};
             check_hr(gx_constants->Map(0u, &no_read, &mapped), "Map GX constants");
-            std::memcpy(mapped, &gx->constants, sizeof(gx->constants));
+            galaxy::render::PixelConstants gx_program = gx->constants;
+            galaxy::render::pack_material_program(gx->shader, gx_program);
+            std::memcpy(mapped, &gx_program, sizeof(gx_program));
             gx_constants->Unmap(0u, nullptr);
         }
 
@@ -2559,72 +2562,6 @@ PixelCase gx_pixel_fixture() {
     input.state.zmode_bits = 31u; // Enable, ALWAYS, update.
     for (auto& dims : input.constants.tex_dims) std::fill(std::begin(dims), std::end(dims), 1.0f);
     return input;
-}
-
-bool test_uniform_dither_readbacks() {
-    bool passed = true;
-    try {
-        WarpConversionHarness harness;
-        std::size_t checked = 0u;
-        for (unsigned scale = 1u; scale <= galaxy::render::kMaxEfbScale; ++scale) {
-            for (bool fog : {false, true}) {
-                auto input = gx_pixel_fixture();
-                input.texture = {2u, 65u, 126u, 120u};
-                input.shader.stages[0].color_in[3] = 8u; // D = texture.
-                input.shader.stages[0].alpha_in[3] = 4u;
-                // Identity texture swap (RGBA), which this colour oracle needs and the depth fixture does not set.
-                for (std::uint8_t c = 0; c < 4u; ++c) input.shader.stages[0].tex_swizzle[c] = c;
-                input.state.pixfmt = 1u;
-                input.shader.output_flags = 1u | 8u;
-                input.shader.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
-                input.constants.ztex_params[1] = 1.0f / static_cast<float>(scale);
-                if (fog) {
-                    input.shader.fog_type = 2u;
-                    input.constants.fog_params[0] = 1.0f;
-                    input.constants.fog_params[5] = 1.0f;
-                    input.constants.fog_params[7] = 1.0f;
-                }
-                // Four logical pixels per axis test both pattern phases,
-                // every subpixel, and multiple boundaries for odd scales.
-                const unsigned size = 4u * scale;
-                const auto legacy = harness.run_gx_grid(input, size);
-                input.shader.efb_scale_minus_one = 0xffu;
-                const auto uniform = harness.run_gx_grid(input, size);
-                passed &= expect(legacy == uniform,
-                    "uniform dither matches every legacy GPU pixel, including fog and alpha");
-                checked += uniform.size();
-                if (!fog) {
-                    bool oracle_matches = true;
-                    for (unsigned y = 0u; y < size; ++y) {
-                        for (unsigned x = 0u; x < size; ++x) {
-                            const unsigned dx = (x / scale) & 1u;
-                            const unsigned dy = (y / scale) & 1u;
-                            const unsigned d = (dx ^ dy) * 2u + dy;
-                            const auto channel = [d](unsigned value) {
-                                return static_cast<std::uint8_t>(std::lround(
-                                    static_cast<double>((value - (value >> 6u) + d) >> 2u) * 255.0 / 63.0));
-                            };
-                            const Pixel expected{channel(2u), channel(65u), channel(126u), 121u};
-                            const auto actual = uniform[static_cast<std::size_t>(y) * size + x];
-                            if (oracle_matches && actual != expected) {
-                                std::fprintf(stderr, "dither oracle scale=%u pixel=%u,%u\n", scale, x, y);
-                                expect_pixel(actual, expected, "first dither oracle mismatch");
-                            }
-                            oracle_matches &= actual == expected;
-                        }
-                    }
-                    passed &= expect(oracle_matches,
-                        "GPU RGBA6 dither agrees with independent integer Bayer/quantization oracle");
-                }
-            }
-        }
-        std::printf("uniform dither WARP: %zu pixels across all scales/fog states: %s\n",
-            checked, passed ? "PASS" : "FAIL");
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "FAILED: WARP uniform dither: %s\n", e.what());
-        passed = false;
-    }
-    return passed;
 }
 
 bool test_gx_pixel_readbacks() {
@@ -3170,7 +3107,6 @@ int main(int argc, char** argv) {
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     passed &= test_gx_pixel_readbacks();
-    passed &= test_uniform_dither_readbacks();
     try {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();

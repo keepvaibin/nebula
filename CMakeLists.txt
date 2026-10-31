@@ -164,17 +164,17 @@ target_link_libraries(galaxy_native_host
 )
 galaxy_host_options(galaxy_native_host)
 
-# Uber shader sources (runtime/src/render/uber_*.hlsl) become NUL-terminated char
-# arrays in a generated translation unit. Editing a source re-runs configure.
+# Shader sources the Vulkan renderer compiles on the device (runtime/src/render/uber_vs.hlsl, material_ps.hlsl) become
+# NUL-terminated char arrays in a generated translation unit. Editing a source re-runs configure.
 set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
 set(galaxy_uber_embed_body "")
-foreach(galaxy_uber_stage vs ps)
-    set(galaxy_uber_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/uber_${galaxy_uber_stage}.hlsl")
+foreach(galaxy_uber_stage uber_vs material_ps)
+    set(galaxy_uber_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/${galaxy_uber_stage}.hlsl")
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${galaxy_uber_hlsl}")
     file(READ "${galaxy_uber_hlsl}" galaxy_uber_hex HEX)
     string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," galaxy_uber_hex "${galaxy_uber_hex}")
     string(APPEND galaxy_uber_embed_body
-        "extern const char galaxy_uber_${galaxy_uber_stage}_hlsl[] = {${galaxy_uber_hex}0x00};\n")
+        "extern const char galaxy_${galaxy_uber_stage}_hlsl[] = {${galaxy_uber_hex}0x00};\n")
 endforeach()
 file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}"
     CONTENT "namespace galaxy::render {\n${galaxy_uber_embed_body}}\n"
@@ -302,6 +302,54 @@ foreach(galaxy_bloom_pass down_cs:DownCS:cs_5_0 box_cs:BoxCS:cs_5_0 blur_cs:Blur
         VERBATIM)
     list(APPEND galaxy_bloom_headers "${galaxy_bloom_header}")
 endforeach()
+
+# The material pixel shader (runtime/src/render/material_ps.hlsl, material_shaders.h): each variant compiled by fxc
+# into a bytecode header, and one table of them. The numbering is material_ps_variant_form's: four lighting inputs
+# times fifteen output forms (galaxy_material_shader_tests checks each against the source compiled at run time).
+set(galaxy_material_ps_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/material_ps.hlsl")
+set(galaxy_material_ps_cpp "${galaxy_post_dir}/material_ps_dxbc.cpp")
+set(galaxy_material_ps_headers "")
+set(galaxy_material_ps_table "")
+set(galaxy_material_ps_includes "")
+set(galaxy_material_outputs
+    "MAT_EARLY=0" "MAT_EARLY=1" "MAT_DUAL=1,MAT_EARLY=0" "MAT_DUAL=1,MAT_EARLY=1" "MAT_DEPTH=1,MAT_EARLY=0"
+    "MAT_DEPTH=1,MAT_DUAL=1,MAT_EARLY=0" "MAT_MOTION=1,MAT_EARLY=0" "MAT_MOTION=1,MAT_EARLY=1"
+    "MAT_MOTION=1,MAT_DEPTH=1,MAT_EARLY=0" "MAT_REACTIVE=1,MAT_EARLY=0" "MAT_REACTIVE=1,MAT_EARLY=1"
+    "MAT_REACTIVE=1,MAT_DEPTH=1,MAT_EARLY=0" "MAT_REACTIVE=1,MAT_LAYER=1,MAT_EARLY=0"
+    "MAT_REACTIVE=1,MAT_LAYER=1,MAT_EARLY=1" "MAT_REACTIVE=1,MAT_LAYER=1,MAT_DEPTH=1,MAT_EARLY=0")
+foreach(galaxy_material_light RANGE 3)
+    set(galaxy_material_light_defines "")
+    if(galaxy_material_light EQUAL 1 OR galaxy_material_light EQUAL 3)
+        list(APPEND galaxy_material_light_defines /DMAT_PPL=1)
+    endif()
+    if(galaxy_material_light GREATER_EQUAL 2)
+        list(APPEND galaxy_material_light_defines /DMAT_ENH=1)
+    endif()
+    set(galaxy_material_out 0)
+    foreach(galaxy_material_output IN LISTS galaxy_material_outputs)
+        math(EXPR galaxy_material_variant "${galaxy_material_light} * 15 + ${galaxy_material_out}")
+        set(galaxy_material_defines ${galaxy_material_light_defines})
+        string(REPLACE "," ";" galaxy_material_output_list "${galaxy_material_output}")
+        foreach(galaxy_material_define IN LISTS galaxy_material_output_list)
+            list(APPEND galaxy_material_defines /D${galaxy_material_define})
+        endforeach()
+        set(galaxy_material_header "${galaxy_post_dir}/material_ps_${galaxy_material_variant}.h")
+        add_custom_command(OUTPUT "${galaxy_material_header}"
+            COMMAND "${GALAXY_FXC}" /nologo /T ps_5_1 /E main /O1 /Ges /Zpr ${galaxy_material_defines}
+                /Vn g_material_ps_${galaxy_material_variant} /Fh "${galaxy_material_header}" "${galaxy_material_ps_hlsl}"
+            DEPENDS "${galaxy_material_ps_hlsl}"
+            VERBATIM)
+        list(APPEND galaxy_material_ps_headers "${galaxy_material_header}")
+        string(APPEND galaxy_material_ps_includes "#include \"material_ps_${galaxy_material_variant}.h\"\n")
+        string(APPEND galaxy_material_ps_table
+            "    {g_material_ps_${galaxy_material_variant}, sizeof(g_material_ps_${galaxy_material_variant})},\n")
+        math(EXPR galaxy_material_out "${galaxy_material_out} + 1")
+    endforeach()
+endforeach()
+file(CONFIGURE OUTPUT "${galaxy_material_ps_cpp}"
+    CONTENT "// Generated (CMakeLists.txt): the material pixel shader's DXBC by variant.\n#include <cstddef>\n\ntypedef unsigned char BYTE;\n${galaxy_material_ps_includes}\nnamespace galaxy::render {\nstruct MaterialPsBytecode { const unsigned char* data; std::size_t size; };\nextern const MaterialPsBytecode galaxy_material_ps_dxbc[60] = {\n${galaxy_material_ps_table}};\n}\n"
+    @ONLY)
+set_source_files_properties("${galaxy_material_ps_cpp}" PROPERTIES OBJECT_DEPENDS "${galaxy_material_ps_headers}")
 
 # Ray-tracing compute shaders (runtime/src/render/ray_tracing.hlsl: DXR 1.1 inline ray queries,
 # shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
@@ -498,7 +546,10 @@ add_library(galaxy_gx STATIC
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/shader_gen.cpp
     runtime/src/render/uber_shaders.cpp
+    runtime/src/render/material_shaders.cpp
     ${galaxy_uber_embed_cpp}
+    ${galaxy_material_ps_cpp}
+    ${galaxy_material_ps_headers}
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
     ${galaxy_post_headers}
@@ -703,7 +754,10 @@ if(NEBULA_VULKAN)
         runtime/src/render/rt_materials.cpp
         runtime/src/render/rt_surfaces.cpp
         runtime/src/render/uber_shaders.cpp
+        runtime/src/render/material_shaders.cpp
         ${galaxy_uber_embed_cpp}
+        ${galaxy_material_ps_cpp}
+        ${galaxy_material_ps_headers}
         ${galaxy_post_embed_cpp}
         runtime/src/render/renderer_common.cpp
         runtime/src/render/efb_copy.cpp
@@ -736,7 +790,10 @@ if(NEBULA_VULKAN)
         runtime/src/render/line_point_raster.cpp
         runtime/src/render/shader_gen.cpp
         runtime/src/render/uber_shaders.cpp
+        runtime/src/render/material_shaders.cpp
         ${galaxy_uber_embed_cpp}
+        ${galaxy_material_ps_cpp}
+        ${galaxy_material_ps_headers}
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp
