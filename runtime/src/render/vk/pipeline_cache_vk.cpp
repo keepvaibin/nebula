@@ -3,6 +3,8 @@
 
 #include "galaxy/render/vk/pipeline_cache_vk.h"
 
+#include "galaxy/render/material_shaders.h"
+
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
@@ -146,10 +148,10 @@ const std::vector<UberProbe>& uber_ps_probes() {
             "float4 sample_map(uint map, float2 uv) {",
             "float4 sample_map(uint map, float2 uv) {\n    return float4(0.5, 0.5, 0.5, 0.5);\n}\n"
             "float4 sample_map_unused(uint map, float2 uv) {"};
-        const std::pair<const char*, const char*> no_indirect{"const uint num_ind = ind_misc.w;",
-                                                              "const uint num_ind = 0u;"};
+        const std::pair<const char*, const char*> no_indirect{"const uint n_indirect = indirect_misc.w & 0xFFu;",
+                                                              "const uint n_indirect = 0u;"};
         const std::pair<const char*, const char*> one_stage{
-            "[loop] for (uint st = 0u; st < n_stages && st < 16u; ++st) {",
+            "[loop] for (uint st = 0u; st < n_stages; ++st) {",
             "[unroll] for (uint st = 0u; st < 1u; ++st) {"};
         return std::vector<UberProbe>{{"no-sampling", {no_sampling}},
                                       {"no-indirect", {no_indirect}},
@@ -214,7 +216,7 @@ std::uint64_t compiler_identity() {
         const std::vector<std::uint32_t> vs =
             compile_module(generator.generate_vs(vs_key), vk::ShaderStage::Vertex, false, error);
         const std::vector<std::uint32_t> ps =
-            compile_module(generator.generate_ps(ps_key), vk::ShaderStage::Fragment, false, error);
+            compile_module(material_ps_hlsl(ps_key), vk::ShaderStage::Fragment, false, error);
         std::uint64_t hash = fnv1a64(vs.data(), vs.size() * sizeof(std::uint32_t));
         hash = combine64(hash, fnv1a64(ps.data(), ps.size() * sizeof(std::uint32_t)));
         hash = combine64(hash, vk::kCompilerRevision);
@@ -223,14 +225,10 @@ std::uint64_t compiler_identity() {
     return identity;
 }
 
+// An uber variant's pixel shader: the material shader's variant without lighting inputs (uber_ps_material_variant).
 std::string uber_ps_hlsl(unsigned variant) {
-    std::string ps;
-    ps.reserve(uber_ps_source().size() + 96u);
-    ps += uber_ps_variant_dual_source(variant) ? "#define UBER_DUAL_SRC 1\n" : "#define UBER_DUAL_SRC 0\n";
-    ps += uber_ps_variant_export_depth(variant) ? "#define UBER_EXPORT_DEPTH 1\n" : "#define UBER_EXPORT_DEPTH 0\n";
-    ps += uber_ps_variant_early_depth(variant) ? "#define UBER_EARLY_DEPTH 1\n" : "#define UBER_EARLY_DEPTH 0\n";
-    ps += "#define UBER_LAYER 0\n";
-    ps += uber_ps_source();
+    std::string ps = material_ps_defines(uber_ps_material_variant(variant));
+    ps += material_ps_source();
     return ps;
 }
 
@@ -881,7 +879,7 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     const std::uint32_t generator_bits = generator_bits_.load(std::memory_order_acquire);
     const ShaderGenerator generator = generator_for(generator_bits);
     const std::string vs_hlsl = generator.generate_vs(entry.vs_key);
-    const std::string ps_hlsl = generator.generate_ps(entry.ps_key);
+    const std::string ps_hlsl = material_ps_hlsl(entry.ps_key);
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
@@ -930,8 +928,7 @@ VkPipeline PipelineCacheVk::build(const Entry& entry) {
     }
     if (pipeline == VK_NULL_HANDLE) {
         // The other form of the TEV stages' zero inputs (DeviceQuirks::tev_zero_from_constant).
-        const std::string other_ps = generator_for(generator_bits ^ kGeneratorTevZeroFromConstant)
-                                         .generate_ps(entry.ps_key);
+        const std::string other_ps = material_ps_hlsl(entry.ps_key);
         if (other_ps != ps_hlsl) {
             VkResult result = VK_SUCCESS;
             pipeline = create_pipeline(rs, vs, module_for(other_ps, vk::ShaderStage::Fragment, dual_source),
@@ -981,7 +978,7 @@ void PipelineCacheVk::classify_refusal(const RenderStateKey& rs, const std::stri
         simple_key.flags |= 0x80u;
     }
     const VkShaderModule simple_vs = module_for(generator.generate_vs(diagnosis_vs_key()), vk::ShaderStage::Vertex, false);
-    const VkShaderModule simple_ps = module_for(generator.generate_ps(simple_key), vk::ShaderStage::Fragment, dual_source);
+    const VkShaderModule simple_ps = module_for(material_ps_hlsl(simple_key), vk::ShaderStage::Fragment, dual_source);
     const VkShaderModule vs = module_for(vs_hlsl, vk::ShaderStage::Vertex, false);
     const VkShaderModule ps = module_for(ps_hlsl, vk::ShaderStage::Fragment, dual_source);
     VkResult vs_result = VK_SUCCESS;
@@ -1105,7 +1102,7 @@ std::size_t PipelineCacheVk::build_shader_seed(const std::filesystem::path& keys
             }
             add(std::move(vs), vk::ShaderStage::Vertex, false);
             const bool dual = (ps_key.flags & 0x80u) != 0u;
-            std::string ps = generator.generate_ps(ps_key);
+            std::string ps = material_ps_hlsl(ps_key);
             if (dual) {
                 add(ps, vk::ShaderStage::Fragment, false);
             }
@@ -1193,7 +1190,7 @@ void PipelineCacheVk::diagnose_uber(const RenderStateKey& render_state, unsigned
     if (dual) {
         ps_key.flags |= 0x80u;
     }
-    const VkShaderModule simple_ps = module_for(generator.generate_ps(ps_key), vk::ShaderStage::Fragment, dual);
+    const VkShaderModule simple_ps = module_for(material_ps_hlsl(ps_key), vk::ShaderStage::Fragment, dual);
     VkResult uber_vs_result = VK_SUCCESS;
     VkResult uber_ps_result = VK_SUCCESS;
     const std::uint32_t compat = device_compat_.load(std::memory_order_acquire);

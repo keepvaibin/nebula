@@ -8610,7 +8610,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
         dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
-        glow_material != glow_material_ || tint_cleared != ps_tint_cleared_) {
+        glow_material != glow_material_ || tint_cleared != ps_tint_cleared_ || !uber_ps_memo_.holds(ps_key_)) {
         enhanced_material_bits_ = enhanced_material_bits;
         glow_material_ = glow_material;
         ps_tint_cleared_ = tint_cleared;

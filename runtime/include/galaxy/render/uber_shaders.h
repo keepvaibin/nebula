@@ -1,14 +1,14 @@
 #pragma once
 
-// Uber pipeline support: the HLSL sources (runtime/src/render/uber_vs.hlsl and
-// uber_ps.hlsl, embedded at configure time) and the per-draw packing of the
-// shader keys into the constant-buffer fields those shaders interpret.
+// The uber vertex shader (runtime/src/render/uber_vs.hlsl, embedded at configure time) and the per-draw packing of the
+// shader keys into the constant-buffer fields the shaders read: the material pixel shader's program
+// (pack_material_program, material_shaders.h) and the uber vertex shader's key.
 //
-// The uber shaders run the same arithmetic as ShaderGenerator's specialized
-// output with every key decision taken at run time, so a draw whose
-// specialized pipeline is still compiling renders with the uber pipeline of
-// its render state instead of stalling the render thread.
+// The uber vertex shader runs the same arithmetic as ShaderGenerator's specialized output with every key decision
+// taken at run time, so a draw whose specialized vertex shader is still compiling renders with the uber pipeline of its
+// render state instead of stalling the render thread.
 
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_keys.h"
 #include "galaxy/render/uber_constants.h"
 
@@ -19,13 +19,48 @@
 namespace galaxy::render {
 
 [[nodiscard]] std::string_view uber_vs_source() noexcept;
-[[nodiscard]] std::string_view uber_ps_source() noexcept;
 
-// Output-signature variants of the uber pixel shader. A key needs exactly one:
-// bit 0 dual-source TEV alpha (SV_Target1), bit 1 depth export (Z texture with
-// late Z), bit 2 early depth test. Depth export never runs with early depth.
-// Variants 6-8: the effects layer (kPsKeyLayer: reactive mask, layer colour and
-// transmittance, never dual-source), late Z, depth export, early Z.
+// The material program's fields of PixelConstants (pack_material_program).
+inline void apply_uber_ps_key(const PixelShaderKey& key, PixelConstants& out) noexcept {
+    pack_material_program(key, out);
+}
+
+// apply_uber_ps_key's fields for the last key packed: draws in a row mostly share their key, and packing reads every
+// stage.
+struct UberPsKeyMemo {
+    PixelShaderKey key{};
+    std::uint32_t stage_config[kMaxTevStages][4]{};
+    std::uint32_t ind_cmd[4][4]{};
+    std::uint32_t ind_misc[4]{};
+    std::uint32_t header[4]{};
+    bool valid = false;
+
+    // Whether the constants last packed hold `next`'s program (RenderCore re-packs its pixel constants otherwise).
+    [[nodiscard]] bool holds(const PixelShaderKey& next) const noexcept {
+        return valid && next == key;
+    }
+
+    void apply(const PixelShaderKey& next, PixelConstants& out) noexcept {
+        if (!valid || !(next == key)) {
+            apply_uber_ps_key(next, out);
+            std::memcpy(stage_config, out.stage_config, sizeof(stage_config));
+            std::memcpy(ind_cmd, out.ind_cmd, sizeof(ind_cmd));
+            std::memcpy(ind_misc, out.ind_misc, sizeof(ind_misc));
+            std::memcpy(header, out.uber_ps_header, sizeof(header));
+            key = next;
+            valid = true;
+            return;
+        }
+        std::memcpy(out.stage_config, stage_config, sizeof(stage_config));
+        std::memcpy(out.ind_cmd, ind_cmd, sizeof(ind_cmd));
+        std::memcpy(out.ind_misc, ind_misc, sizeof(ind_misc));
+        std::memcpy(out.uber_ps_header, header, sizeof(header));
+    }
+};
+
+// The uber pipelines' pixel variants: a stand-in pipeline pairs the uber vertex shader (no lighting or motion outputs)
+// with one of these material pixel variants. Bit 0 dual-source alpha, bit 1 depth export, bit 2 early depth (variants
+// 0-5); 6-8 the effects layer, late, depth export, early.
 inline constexpr unsigned kUberPsVariants = 9u;
 [[nodiscard]] constexpr unsigned uber_ps_variant(const PixelShaderKey& key) noexcept {
     const bool dual_source = (key.flags & 0x80u) != 0u;
@@ -52,65 +87,11 @@ inline constexpr unsigned kUberPsVariants = 9u;
 [[nodiscard]] constexpr bool uber_ps_variant_early_depth(unsigned variant) noexcept {
     return (variant >= 4u && variant < 6u) || variant == 8u;
 }
-
-// The fields of PixelConstants that specialized shaders bake from the key and
-// never read: stage_config, ind_cmd, ind_misc and uber_ps_header.
-inline void apply_uber_ps_key(const PixelShaderKey& key, PixelConstants& out) noexcept {
-    for (unsigned s = 0; s < 16u; ++s) {
-        const KeyStage& stage = key.stages[s];
-        out.stage_config[s][0] = tev_color_bits(stage);
-        out.stage_config[s][1] = tev_alpha_bits(stage);
-        out.stage_config[s][2] = tev_order_bits(stage);
-        out.stage_config[s][3] = tev_select_bits(stage);
-        out.ind_cmd[s / 4u][s & 3u] = ind_command_bits(stage);
-    }
-    out.ind_misc[0] = ind_order_bits(key);
-    out.ind_misc[1] = ind_scale_bits(key, 0u);
-    out.ind_misc[2] = ind_scale_bits(key, 1u);
-    out.ind_misc[3] = key.num_ind_stages;
-    out.uber_ps_header[0] =
-        static_cast<std::uint32_t>(key.num_tev_stages) |
-        (static_cast<std::uint32_t>(key.num_texgens) << 8u) |
-        (static_cast<std::uint32_t>(key.num_chans) << 16u) |
-        (static_cast<std::uint32_t>(key.fog_type) << 24u);
-    out.uber_ps_header[1] =
-        static_cast<std::uint32_t>(key.alpha_comp0) |
-        (static_cast<std::uint32_t>(key.alpha_comp1) << 8u) |
-        (static_cast<std::uint32_t>(key.alpha_logic) << 16u) |
-        (static_cast<std::uint32_t>(key.flags) << 24u);
-    out.uber_ps_header[2] =
-        static_cast<std::uint32_t>(key.output_flags) |
-        (static_cast<std::uint32_t>(key.efb_scale_minus_one) << 16u);
-    out.uber_ps_header[3] = 0u;
+// The material pixel variant (material_shaders.h) of an uber variant: no lighting inputs.
+[[nodiscard]] constexpr unsigned uber_ps_material_variant(unsigned variant) noexcept {
+    constexpr unsigned kOutputs[kUberPsVariants] = {0u, 2u, 4u, 5u, 1u, 3u, 12u, 14u, 13u};
+    return variant < kUberPsVariants ? kOutputs[variant] : 0u;
 }
-
-// apply_uber_ps_key's fields for the last key packed: draws in a row mostly share their key, and packing reads every
-// stage.
-struct UberPsKeyMemo {
-    PixelShaderKey key{};
-    std::uint32_t stage_config[kMaxTevStages][4]{};
-    std::uint32_t ind_cmd[4][4]{};
-    std::uint32_t ind_misc[4]{};
-    std::uint32_t header[4]{};
-    bool valid = false;
-
-    void apply(const PixelShaderKey& next, PixelConstants& out) noexcept {
-        if (!valid || !(next == key)) {
-            apply_uber_ps_key(next, out);
-            std::memcpy(stage_config, out.stage_config, sizeof(stage_config));
-            std::memcpy(ind_cmd, out.ind_cmd, sizeof(ind_cmd));
-            std::memcpy(ind_misc, out.ind_misc, sizeof(ind_misc));
-            std::memcpy(header, out.uber_ps_header, sizeof(header));
-            key = next;
-            valid = true;
-            return;
-        }
-        std::memcpy(out.stage_config, stage_config, sizeof(stage_config));
-        std::memcpy(out.ind_cmd, ind_cmd, sizeof(ind_cmd));
-        std::memcpy(out.ind_misc, ind_misc, sizeof(ind_misc));
-        std::memcpy(out.uber_ps_header, header, sizeof(header));
-    }
-};
 
 // VertexConstants' uber tail is written straight into upload memory, so this
 // takes the destination of each field rather than a whole struct.

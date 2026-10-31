@@ -6,6 +6,7 @@
 // must be row-major as on D3D12.
 
 #include "galaxy/render/renderer_common.h"
+#include "galaxy/render/material_shaders.h"
 #include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/uber_shaders.h"
@@ -367,15 +368,12 @@ int main(int argc, char** argv) {
     expect_semantic_locations();
     expect_row_major_matrices();
     expect("uber vs", uber_vs_source(), ShaderStage::Vertex, gx);
-    // The six output variants, defined as PipelineCacheVk defines them.
-    for (unsigned variant = 0; variant < kUberPsVariants; ++variant) {
-        const std::string label = "uber ps variant " + std::to_string(variant);
-        const bool dual = uber_ps_variant_dual_source(variant);
-        expect(label.c_str(), uber_ps_source(), ShaderStage::Fragment, gx,
-               {dual ? "UBER_DUAL_SRC=1" : "UBER_DUAL_SRC=0",
-                uber_ps_variant_export_depth(variant) ? "UBER_EXPORT_DEPTH=1" : "UBER_EXPORT_DEPTH=0",
-                uber_ps_variant_early_depth(variant) ? "UBER_EARLY_DEPTH=1" : "UBER_EARLY_DEPTH=0"},
-               dual);
+    // Every material pixel variant (material_shaders.h), as PipelineCacheVk compiles them.
+    for (unsigned variant = 0; variant < kMaterialPsVariants; ++variant) {
+        const std::string label = "material ps variant " + std::to_string(variant);
+        const bool dual = material_ps_variant_form(variant).dual;
+        expect(label.c_str(), material_ps_defines(variant) + std::string(material_ps_source()), ShaderStage::Fragment,
+               gx, {}, dual);
     }
     expect("line gs", ShaderGenerator::line_geometry_shader_source(), ShaderStage::Geometry, gx);
     expect("point gs", ShaderGenerator::point_geometry_shader_source(), ShaderStage::Geometry, gx);
@@ -388,23 +386,12 @@ int main(int argc, char** argv) {
     }
 
     const ShaderGenerator generator;
-    // The forms PipelineCacheVk generates: per-component byte masks always, constant TEV zeros on Qualcomm.
-    ShaderGenerator scalar_masks, constant_zero;
-    {
-        ShaderGenOptions options;
-        options.scalar_byte_masks = true;
-        scalar_masks.set_options(options);
-        options.tev_zero_from_constant = true;
-        constant_zero.set_options(options);
-    }
     VertexShaderKey vs{};
     PixelShaderKey ps{};
     expect("generated vs (default key)", generator.generate_vs(vs), ShaderStage::Vertex, gx);
-    expect("generated ps (default key)", generator.generate_ps(ps), ShaderStage::Fragment, gx);
-    expect("generated ps (scalar masks)", scalar_masks.generate_ps(ps), ShaderStage::Fragment, gx);
+    expect("material ps (default key)", material_ps_hlsl(ps), ShaderStage::Fragment, gx);
     expect("generated vs (point size)", with_point_size(generator.generate_vs(vs)), ShaderStage::Vertex, gx);
     expect("uber vs (point size)", with_point_size(uber_vs_source()), ShaderStage::Vertex, gx);
-    expect("generated ps (constant TEV zero)", constant_zero.generate_ps(ps), ShaderStage::Fragment, gx);
 
     // argv[1]: keys a session captured (GALAXY_TEST_SHADER_KEY_CAPTURE): 'V' or 'P', then the key's bytes.
     if (argc > 1) {
@@ -444,14 +431,10 @@ int main(int argc, char** argv) {
                 const std::string label = "captured vs " + std::to_string(vs_count++);
                 expect(label.c_str(), generator.generate_vs(vs), ShaderStage::Vertex, gx);
             } else if (tag == 'P' && std::fread(&ps, sizeof(ps), 1, file) == 1) {
-                dump("ps", ps_count, ShaderGenerator::describe(ps), generator.generate_ps(ps));
+                dump("ps", ps_count, ShaderGenerator::describe(ps), material_ps_hlsl(ps));
                 const std::string label = "captured ps " + std::to_string(ps_count++);
                 const bool dual = (ps.flags & 0x80u) != 0u;
-                expect(label.c_str(), generator.generate_ps(ps), ShaderStage::Fragment, gx, {}, dual);
-                expect((label + " scalar masks").c_str(), scalar_masks.generate_ps(ps), ShaderStage::Fragment, gx,
-                       {}, dual);
-                expect((label + " constant TEV zero").c_str(), constant_zero.generate_ps(ps), ShaderStage::Fragment,
-                       gx, {}, dual);
+                expect(label.c_str(), material_ps_hlsl(ps), ShaderStage::Fragment, gx, {}, dual);
             } else {
                 ++failures;
                 std::printf("FAIL %s is truncated or malformed\n", argv[1]);
