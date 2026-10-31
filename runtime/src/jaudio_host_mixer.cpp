@@ -474,7 +474,8 @@ void JAudioHostMixer::decode_adpcm(std::byte* record, std::int16_t* out,
             }
             // A sample end inside the final block: move its valid tail to
             // the end of the leftover buffer.
-            const std::uint16_t end_low = r16(record, 0x116u);
+            // The end's low 16 bits (the u32 at 0x114 is in host order).
+            const auto end_low = static_cast<std::uint16_t>(r32(record, 0x114u) & 0xFFFFu);
             if (r32(record, 0x074u) == 0u && end_low != 0u) {
                 const std::uint32_t last_valid = (end_low + 15u) & 15u;
                 for (std::uint32_t j = 0; j < remaining && j <= last_valid; ++j) {
