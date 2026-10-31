@@ -29,6 +29,6 @@ static_assert(sizeof(LinePointRasterParams) == 32u);
     float viewport_half_height,
     unsigned efb_scale,
     unsigned fallback_efb_width = 640u,
-    unsigned fallback_efb_height = 528u) noexcept;
+    unsigned fallback_efb_height = 456u) noexcept;
 
 }  // namespace galaxy::render

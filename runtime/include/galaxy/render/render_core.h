@@ -1168,7 +1168,7 @@ private:
     // captured for an earlier binding never answers the new one.
     static constexpr std::uint32_t kAsyncPeekUnbound = 0xFFFFFFFFu;
     struct AsyncPeekFieldState {
-        // Mapped readback bytes of each slot (RGBA8, 640x528), written by the
+        // Mapped readback bytes of each slot (RGBA8, 640x456), written by the
         // render thread before the slot is published.
         std::array<const std::uint8_t*, 3> rgba{};
         // Slot the in-flight field writes and the binding it was captured for; render thread only.

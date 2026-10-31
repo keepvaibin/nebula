@@ -391,8 +391,8 @@ std::optional<EfbCopyRect> efb_identity_copy_rect(
         params.intensity || params.yuv || (params.gamma & 3u) != 0u ||
         params.half_scale || params.scale_y || params.frame_to_field != 0u ||
         params.src_width == 0u || params.src_height == 0u ||
-        static_cast<unsigned>(params.src_x) + params.src_width > kEfbWidth ||
-        static_cast<unsigned>(params.src_y) + params.src_height > kEfbHeight) {
+        static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
+        static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {
         return std::nullopt;
     }
     const unsigned upper = params.filter_upper();

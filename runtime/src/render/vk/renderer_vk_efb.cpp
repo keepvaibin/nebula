@@ -228,8 +228,8 @@ void RendererVk::resolve_efb_depth(VkCommandBuffer commands) {
                   VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, kDepthSampleLayout,
                   VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT, VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
                   VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_ACCESS_SHADER_READ_BIT);
-    const std::uint32_t width = kEfbWidth * efb_scale_;
-    const std::uint32_t height = kEfbHeight * efb_scale_;
+    const std::uint32_t width = kFrameWidth * efb_scale_;
+    const std::uint32_t height = kFrameHeight * efb_scale_;
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = gx_layout_.efb_pass;
     begin.framebuffer = set.resolve_framebuffer;
@@ -289,7 +289,7 @@ bool RendererVk::efb_scale_fits_memory(unsigned scale) const {
     const auto scaled_bytes = [](unsigned s) {
         const double area = static_cast<double>(s) * s;
         return area *
-            (static_cast<double>(kEfbWidth) * kEfbHeight * 8.0 + static_cast<double>(kEfbWidth) * 456.0 * 12.0);
+            (static_cast<double>(kFrameWidth) * kFrameHeight * 8.0 + static_cast<double>(kFrameWidth) * 456.0 * 12.0);
     };
     const double needed = scaled_bytes(scale) - scaled_bytes(efb_scale_);
     return static_cast<double>(usage) + needed <= 0.9 * static_cast<double>(budget);
@@ -335,8 +335,8 @@ void RendererVk::apply_pending_efb_scale() {
         return;
     }
     reset_gx_bindings();
-    std::cout << "[Renderer] internal resolution " << previous << "x -> " << wanted << "x (" << kEfbWidth * wanted
-              << 'x' << kEfbHeight * wanted << ")\n";
+    std::cout << "[Renderer] internal resolution " << previous << "x -> " << wanted << "x (" << kFrameWidth * wanted
+              << 'x' << kFrameHeight * wanted << ")\n";
 }
 
 // After an internal-resolution change the new EFB starts with the previous targets' contents, resampled: the game
@@ -381,10 +381,10 @@ void RendererVk::carry_over_efb_contents() {
     }
     vkUpdateDescriptorSets(vk::Context::get().device(), 2, writes, 0, nullptr);
     begin_efb_pass();
-    const float w = static_cast<float>(kEfbWidth * efb_scale_);
-    const float h = static_cast<float>(kEfbHeight * efb_scale_);
+    const float w = static_cast<float>(kFrameWidth * efb_scale_);
+    const float h = static_cast<float>(kFrameHeight * efb_scale_);
     const VkViewport viewport{0.0f, h, w, -h, 0.0f, 1.0f};
-    const VkRect2D scissor{{0, 0}, {kEfbWidth * efb_scale_, kEfbHeight * efb_scale_}};
+    const VkRect2D scissor{{0, 0}, {kFrameWidth * efb_scale_, kFrameHeight * efb_scale_}};
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, color_carry_pipeline_);
@@ -499,8 +499,8 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         // Scoped to the copy's source rectangle (scaled), as the hardware's copy-clear.
         const ScaledEfbRect scaled = compute_scaled_efb_rect(
             static_cast<std::int32_t>(rect_x), static_cast<std::int32_t>(rect_y),
-            static_cast<std::int32_t>(rect_x + rect_w), static_cast<std::int32_t>(rect_y + rect_h), kEfbWidth,
-            kEfbHeight, efb_scale_);
+            static_cast<std::int32_t>(rect_x + rect_w), static_cast<std::int32_t>(rect_y + rect_h), kFrameWidth,
+            kFrameHeight, efb_scale_);
         if (scaled.right <= scaled.left || scaled.bottom <= scaled.top) {
             return;
         }
@@ -615,7 +615,7 @@ unsigned RendererVk::output_efb_scale_for_window() const {
     if (content.width <= 0 || content.height <= 0) {
         return 0u;
     }
-    const double needed = std::max(content.width / static_cast<double>(kEfbWidth), content.height / 456.0);
+    const double needed = std::max(content.width / static_cast<double>(kFrameWidth), content.height / 456.0);
     return std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
 }
 
@@ -842,19 +842,19 @@ bool RendererVk::enter_output_efb(unsigned scale) {
         }
         alt_efb_scale_ = scale;
         if (!replaying_) {
-            std::cout << "[Renderer] 2D layer at " << scale << "x (" << kEfbWidth * scale << 'x' << kEfbHeight * scale
+            std::cout << "[Renderer] 2D layer at " << scale << "x (" << kFrameWidth * scale << 'x' << kFrameHeight * scale
                       << ")\n";
         }
     }
     EfbCopyParams params{};
-    params.src_width = static_cast<std::uint16_t>(kEfbWidth);
-    params.src_height = static_cast<std::uint16_t>(kEfbHeight);
+    params.src_width = static_cast<std::uint16_t>(kFrameWidth);
+    params.src_height = static_cast<std::uint16_t>(kFrameHeight);
     params.y_scale = 256u;
     params.vfilter[2] = 21u;
     params.vfilter[3] = 22u;
     params.vfilter[4] = 21u;
-    const unsigned width = kEfbWidth * scale;
-    const unsigned height = kEfbHeight * scale;
+    const unsigned width = kFrameWidth * scale;
+    const unsigned height = kFrameHeight * scale;
     const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, width, height, efb_scale_);
     record_conversion_blit(*alt_efb_.color, width, height, params, false, false, true, 15u, sampling.src_x,
                            sampling.src_y, sampling.step_x, sampling.step_y, sampling.filter_row_offset);
@@ -931,7 +931,7 @@ void RendererVk::record_scene_aa() {
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     end_efb_pass();
     const AaRun ran = post_.prepare_scene_aa(
-        commands_, color, color.width, color.height, kEfbWidth * efb_scale_, 456u * efb_scale_,
+        commands_, color, color.width, color.height, kFrameWidth * efb_scale_, kFrameHeight * efb_scale_,
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         allocate);
     begin_efb_pass();
@@ -964,8 +964,8 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
     vk::GameBloomVk::Inputs in{};
     in.color = efb_.color.get();
     in.scale = efb_scale_;
-    in.frame_width = std::min(kEfbWidth * efb_scale_, efb_.color->width);
-    in.frame_height = std::min(kGameFrameHeight * efb_scale_, efb_.color->height);
+    in.frame_width = std::min(kFrameWidth * efb_scale_, efb_.color->width);
+    in.frame_height = std::min(kFrameHeight * efb_scale_, efb_.color->height);
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     end_efb_pass();
     if (bloom.phase == motion::kBloomKeep) {
@@ -1501,7 +1501,7 @@ void RendererVk::draw(const DrawCall& call) {
         call.scissor.top != bound_.scissor_input.top || call.scissor.right != bound_.scissor_input.right ||
         call.scissor.bottom != bound_.scissor_input.bottom) {
         const ScaledEfbRect scaled = compute_scaled_efb_rect(call.scissor.left, call.scissor.top, call.scissor.right,
-                                                             call.scissor.bottom, kEfbWidth, kEfbHeight, efb_scale_);
+                                                             call.scissor.bottom, kFrameWidth, kFrameHeight, efb_scale_);
         if (scaled.empty()) {
             return;
         }
@@ -1671,7 +1671,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &source, 0, nullptr);
     const EfbConversionShaderConstants constants =
         make_efb_conversion_constants(params, is_depth_copy, intensity, keep_alpha, copy_format, src_x, src_y,
-                                      step_x, step_y, filter_row_offset, efb_scale_, kEfbHeight);
+                                      step_x, step_y, filter_row_offset, efb_scale_, kFrameHeight);
     vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
                        constants.values.data());
     vkCmdDraw(commands, 3, 1, 0, 0);
@@ -1862,11 +1862,11 @@ void RendererVk::create_first_use_resources() {
     const VkImageUsageFlags usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
     peek_target_ = context.create_texture(1u, 1u, 1u, VK_FORMAT_R8G8B8A8_UNORM, usage, true, "peek target");
-    field_target_ = context.create_texture(kEfbWidth, kEfbHeight, 1u, VK_FORMAT_R8G8B8A8_UNORM, usage, true,
+    field_target_ = context.create_texture(kFrameWidth, kFrameHeight, 1u, VK_FORMAT_R8G8B8A8_UNORM, usage, true,
                                            "peek field target");
     peek_readback_.buffer = context.create_readback_buffer(4u, "peek readback");
     for (Readback& readback : pointer_depth_ring_) {
-        readback.buffer = context.create_readback_buffer(kEfbWidth * kEfbHeight * 4u, "pointer depth readback");
+        readback.buffer = context.create_readback_buffer(kFrameWidth * kFrameHeight * 4u, "pointer depth readback");
     }
     if (!peek_target_ || !field_target_ || !peek_readback_.buffer) {
         throw std::runtime_error("EFB peek resources unavailable");
@@ -1951,7 +1951,7 @@ bool RendererVk::peek_efb(std::uint16_t x, std::uint16_t y, EfbPeekKind kind, st
     if (pointer_depth_fence_ != 0u) {
         throw std::logic_error("GXPeek resources still own an unpublished pointer field");
     }
-    if (x >= kEfbWidth || y >= kEfbHeight || !peek_target_) {
+    if (x >= kFrameWidth || y >= kFrameHeight || !peek_target_) {
         return false;
     }
     vk::check(vkResetCommandBuffer(utility_commands_, 0), "vkResetCommandBuffer");
@@ -1972,8 +1972,8 @@ bool RendererVk::peek_efb(std::uint16_t x, std::uint16_t y, EfbPeekKind kind, st
 }
 
 bool RendererVk::capture_pointer_depth(std::span<std::uint32_t> pixels) {
-    if (pixels.size() != kEfbWidth * kEfbHeight) {
-        throw std::invalid_argument("pointer depth field requires 640x528 pixels");
+    if (pixels.size() != kFrameWidth * kFrameHeight) {
+        throw std::invalid_argument("pointer depth field requires 640x456 pixels");
     }
     const std::uint64_t fence = submit_pointer_depth_capture();
     if (fence == 0u) {
@@ -2007,7 +2007,7 @@ std::uint64_t RendererVk::submit_pointer_depth_capture() {
     EfbConversionShaderConstants constants =
         make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), EfbPeekKind::Depth);
     constants.values[15] = -1.0f;  // the whole field
-    record_peek_field(utility_commands_, *field_target_, EfbPeekKind::Depth, constants, kEfbWidth, kEfbHeight,
+    record_peek_field(utility_commands_, *field_target_, EfbPeekKind::Depth, constants, kFrameWidth, kFrameHeight,
                       readback.buffer->buffer);
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
@@ -2025,8 +2025,8 @@ bool RendererVk::record_pointer_depth_capture_in_frame() {
     EfbConversionShaderConstants constants =
         make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), EfbPeekKind::Depth);
     constants.values[15] = -1.0f;
-    record_peek_field(commands_, *field_target_, EfbPeekKind::Depth, constants, kEfbWidth,
-                      kEfbHeight, readback.buffer->buffer);
+    record_peek_field(commands_, *field_target_, EfbPeekKind::Depth, constants, kFrameWidth,
+                      kFrameHeight, readback.buffer->buffer);
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
     reset_gx_bindings();
@@ -2067,7 +2067,7 @@ std::uint64_t RendererVk::submit_async_peek_field(std::size_t channel, EfbPeekKi
     EfbConversionShaderConstants constants =
         make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), kind);
     constants.values[15] = -1.0f;
-    record_peek_field(field.commands, *field.target, kind, constants, kEfbWidth, kEfbHeight,
+    record_peek_field(field.commands, *field.target, kind, constants, kFrameWidth, kFrameHeight,
                       field.readbacks[slot].buffer->buffer);
     field.readbacks[slot].fence = submit_one_time(field.commands);
     field.fence = field.readbacks[slot].fence;
@@ -2085,7 +2085,7 @@ bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, EfbPeekKi
     EfbConversionShaderConstants constants =
         make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), kind);
     constants.values[15] = -1.0f;
-    record_peek_field(commands_, *field.target, kind, constants, kEfbWidth, kEfbHeight,
+    record_peek_field(commands_, *field.target, kind, constants, kFrameWidth, kFrameHeight,
                       field.readbacks[slot].buffer->buffer);
     reset_gx_bindings();
     bind_efb(nullptr);
@@ -2108,11 +2108,11 @@ void RendererVk::ensure_async_field(AsyncField& field) {
         alloc.commandBufferCount = 1;
         vk::check(vkAllocateCommandBuffers(device, &alloc, &field.commands), "vkAllocateCommandBuffers");
         field.target = context.create_texture(
-            kEfbWidth, kEfbHeight, 1u, VK_FORMAT_R8G8B8A8_UNORM,
+            kFrameWidth, kFrameHeight, 1u, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, true,
             "async peek field");
         for (Readback& readback : field.readbacks) {
-            readback.buffer = context.create_readback_buffer(kEfbWidth * kEfbHeight * 4u, "async peek field readback");
+            readback.buffer = context.create_readback_buffer(kFrameWidth * kFrameHeight * 4u, "async peek field readback");
             if (!readback.buffer) {
                 throw std::runtime_error("async peek field readback unavailable");
             }
@@ -2151,8 +2151,8 @@ bool RendererVk::debug_copy_efb_to_readback() {
         return false;
     }
     vk::Context& context = vk::Context::get();
-    const unsigned w = kEfbWidth * efb_scale_;
-    const unsigned h = kEfbHeight * efb_scale_;
+    const unsigned w = kFrameWidth * efb_scale_;
+    const unsigned h = kFrameHeight * efb_scale_;
     const std::uint64_t bytes = static_cast<std::uint64_t>(w) * h * 4u;
     if (!efb_capture_.buffer || efb_capture_.buffer->size < bytes) {
         efb_capture_.buffer = context.create_readback_buffer(bytes, "EFB capture");

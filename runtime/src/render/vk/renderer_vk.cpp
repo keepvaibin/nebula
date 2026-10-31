@@ -254,7 +254,7 @@ bool RendererVk::initialize(int window_width, int window_height, unsigned efb_sc
         shutdown();
         return false;
     }
-    std::cout << "[Renderer] Vulkan EFB=" << kEfbWidth * efb_scale_ << 'x' << kEfbHeight * efb_scale_
+    std::cout << "[Renderer] Vulkan EFB=" << kFrameWidth * efb_scale_ << 'x' << kFrameHeight * efb_scale_
               << " depth=" << (depth_format_ == VK_FORMAT_D24_UNORM_S8_UINT ? "D24S8" : "D32F") << '\n';
     return true;
 }
@@ -1294,8 +1294,8 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
             std::fprintf(stderr, "[vk-gpu] frame %.2f ms average, %.2f ms longest; %.1f EFB passes and %.1f EFB copies a "
                          "frame; EFB %ux%u, swap chain %ux%u\n", gpu_window_.ms / frames, gpu_window_.max_ms,
                          static_cast<double>(gpu_window_.passes) / 600.0,
-                         static_cast<double>(gpu_window_.copies) / 600.0, kEfbWidth * efb_scale_,
-                         kEfbHeight * efb_scale_, swapchain_.image.width, swapchain_.image.height);
+                         static_cast<double>(gpu_window_.copies) / 600.0, kFrameWidth * efb_scale_,
+                         kFrameHeight * efb_scale_, swapchain_.image.width, swapchain_.image.height);
         }
         gpu_window_ = GpuWindow{};
     }
@@ -1721,7 +1721,7 @@ void RendererVk::follow_window_and_resize() {
     if (content.width <= 0 || content.height <= 0) {
         return;
     }
-    const double needed = std::max(content.width / static_cast<double>(kEfbWidth), content.height / 456.0);
+    const double needed = std::max(content.width / static_cast<double>(kFrameWidth), content.height / 456.0);
     unsigned scale = std::clamp(static_cast<unsigned>(std::ceil(needed - 1e-6)), 1u, kMaxEfbScale);
     if (gpu_budget_cap_ != 0u) {
         scale = std::min(scale, gpu_budget_cap_);

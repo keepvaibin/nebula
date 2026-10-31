@@ -28,7 +28,7 @@ inline constexpr unsigned kBloomNative = 0;
 inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
-    // EFB resolution multiplier, 1..kMaxEfbScale (2: 1280x1056, supersampling the game's 640x528). 1 is the Wii's
+    // EFB resolution multiplier, 1..kMaxEfbScale (2: 1280x912, supersampling the game's 640x456 frame). 1 is the Wii's
     // own resolution.
     unsigned efb_scale           = 1;
 

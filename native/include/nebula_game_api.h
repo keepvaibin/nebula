@@ -1140,7 +1140,7 @@ typedef struct NebulaHostServices {
     int32_t (*mii_record)(void* user, uint32_t slot, NebulaMii* mii);
     /* The picture's colour and depth where the drawing has reached, kept as `channel`'s. */
     void (*readback_capture)(void* user, uint32_t channel);
-    /* A pixel of `channel`'s latest finished capture, in frame-buffer coordinates (640x528): `depth` 0 its colour
+    /* A pixel of `channel`'s latest finished capture, in the frame's coordinates (640x456): `depth` 0 its colour
        (0xAARRGGBB), 1 its depth (0x00ZZZZZZ); 0 before one has finished. Never waits for the GPU. */
     uint32_t (*readback_pixel)(void* user, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y);
     /* Clears channels (NebulaClearChannels) of the frame's rectangle at `left`, `top` (`width` x `height`, the

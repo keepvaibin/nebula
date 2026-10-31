@@ -152,7 +152,7 @@ inline void fill_vs_constants(
         viewport_half_height,
         efb_scale,
         640u,
-        528u);
+        456u);
     out.line_point_raster[0] = line_point.viewport_width_pixels;
     out.line_point_raster[1] = line_point.viewport_height_pixels;
     out.line_point_raster[2] = line_point.line_width_pixels;

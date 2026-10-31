@@ -25,7 +25,7 @@ cbuffer PostConstants : register(b0) {
     // xy: viewport origin in render-target pixels.
     int4 g_origin;
     // The pass input's picture inside its texture, from its top left (a handed-over EFB holds its 640 x 456 picture
-    // in 528 rows): xy scale a picture coordinate into the texture, zw the texture coordinate of the picture's last
+    // in a taller texture): xy scale a picture coordinate into the texture, zw the texture coordinate of the picture's last
     // texel centre. Zero: the input is all picture.
     float4 g_source;
 };

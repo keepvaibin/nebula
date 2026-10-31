@@ -960,8 +960,8 @@ private:
     unsigned replay_efb_scale_ = 0;
     EfbSet replay_alt_efb_;  // the replay's output EFB
     unsigned replay_alt_scale_ = 0;
-    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kEfbWidth,
-                        unsigned height = kEfbHeight);
+    bool create_efb_set(EfbSet& set, unsigned scale, unsigned samples = 1u, unsigned width = kFrameWidth,
+                        unsigned height = kFrameHeight);
     void destroy_efb_set(EfbSet& set);
     XfbTexture subframe_xfb_;
     bool replaying_ = false;

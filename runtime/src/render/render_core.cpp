@@ -129,7 +129,7 @@ void boot_step(const char* step) noexcept;
 
 namespace {
 
-static_assert(kEfbWidth == 640u && kEfbHeight == 528u);
+static_assert(kFrameWidth == 640u && kFrameHeight == 456u);
 
 // Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
 // TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
@@ -6257,7 +6257,7 @@ bool RenderCore::read_async_peek_field(
     // Same packing the full-field conversion produced: 0x00RRGGBB for depth,
     // 0xAARRGGBB for colour.
     const std::uint8_t* pixel =
-        field + (static_cast<std::size_t>(y) * kEfbWidth + x) * 4u;
+        field + (static_cast<std::size_t>(y) * kFrameWidth + x) * 4u;
     const std::uint32_t rgb = (std::uint32_t{pixel[0]} << 16u) |
         (std::uint32_t{pixel[1]} << 8u) | pixel[2];
     value = kind == EfbPeekKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
@@ -6271,7 +6271,7 @@ bool RenderCore::peek_efb_published(
     EfbPeekKind kind,
     std::uint16_t token,
     std::uint32_t& value) {
-    if (!initialized_ || x >= kEfbWidth || y >= kEfbHeight) {
+    if (!initialized_ || x >= kFrameWidth || y >= kFrameHeight) {
         return false;
     }
     AsyncPeekFieldState& state = async_peek_[async_peek_channel(kind, token)];
@@ -8854,8 +8854,8 @@ bool RenderCore::begin_cached_draw_run(
         cull_all_suppresses_primitive(draw_state_.gen.cull, primitive) ||
         sc.x1 < sc.x0 || sc.y1 < sc.y0 ||
         sc.x1 < 0 || sc.y1 < 0 ||
-        sc.x0 >= static_cast<std::int32_t>(kEfbWidth) ||
-        sc.y0 >= static_cast<std::int32_t>(kEfbHeight);
+        sc.x0 >= static_cast<std::int32_t>(kFrameWidth) ||
+        sc.y0 >= static_cast<std::int32_t>(kFrameHeight);
     cached_draw_run_primitive_ = primitive;
     cached_draw_run_vtxfmt_ = vtxfmt;
     cached_draw_run_primitive_indexed_ =
@@ -9565,8 +9565,8 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
                 const auto scale = renderer_.efb_scale();
                 efb_copies_.adopt_picture(
                     *xfb, renderer_.hand_over_efb_color(efb_copies_.take_idle_texture(
-                              static_cast<std::uint16_t>(kEfbWidth * scale),
-                              static_cast<std::uint16_t>(kEfbHeight * scale))));
+                              static_cast<std::uint16_t>(kFrameWidth * scale),
+                              static_cast<std::uint16_t>(kFrameHeight * scale))));
             } else {
                 renderer_.copy_efb_to_xfb(params, *xfb);
             }
@@ -9587,7 +9587,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
                 if (count<seen.size() && std::find(seen.begin(),seen.begin()+count,current)==seen.begin()+count) {
                     seen[count++]=current;
                     const auto scale=renderer_.efb_scale();
-                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<528u*scale
+                    std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
                         <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
                         <<" scaled-xfb="<<xfb->width<<'x'<<xfb->height<<" guest-stride="<<params.dest_stride

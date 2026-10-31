@@ -1214,8 +1214,8 @@ V main(uint id : SV_VertexID) {
             case 6u: rejected.frame_to_field = 1u; break;
             case 7u: rejected.copy_to_xfb = true; break;
             case 8u: rejected.src_width = 0u; break;
-            case 9u: rejected.src_x = kEfbWidth - 15u; break;
-            case 10u: rejected.src_y = kEfbHeight - 15u; break;
+            case 9u: rejected.src_x = kFrameWidth - 15u; break;
+            case 10u: rejected.src_y = kFrameHeight - 15u; break;
             case 11u: rejected.vfilter[0] |= 1u; break;
             case 12u: rejected.vfilter[5] |= 1u; break;
             case 13u: rejected.vfilter[4] += 1u; break;
@@ -1231,12 +1231,12 @@ V main(uint id : SV_VertexID) {
         // Full EFB extents (up to 16x) stress sampler coordinate precision; only the tested rectangle and its
         // neighbours are uploaded.
         for (const unsigned scale : {1u, 3u, 6u, 16u}) {
-            const UINT source_width = kEfbWidth * scale;
-            const UINT source_height = kEfbHeight * scale;
+            const UINT source_width = kFrameWidth * scale;
+            const UINT source_height = kFrameHeight * scale;
             const UINT size = 16u * scale;
             for (const auto origin : {std::array<unsigned, 2>{0u, 0u},
                     std::array<unsigned, 2>{319u, 255u},
-                    std::array<unsigned, 2>{624u, 512u}}) {
+                    std::array<unsigned, 2>{624u, 440u}}) {
                 params.src_x = static_cast<std::uint16_t>(origin[0]);
                 params.src_y = static_cast<std::uint16_t>(origin[1]);
                 params.clamp_top = params.clamp_bottom = origin[0] != 319u;
@@ -1271,7 +1271,7 @@ V main(uint id : SV_VertexID) {
                 const auto constants = make_efb_conversion_constants(params,
                     false, false, false, 6u, sampling.src_x, sampling.src_y,
                     sampling.step_x, sampling.step_y, sampling.filter_row_offset,
-                    scale, kEfbHeight);
+                    scale, kFrameHeight);
                 const auto reference = run_bytes(kEfbColorFormat, bytes,
                     source_width, source_height, size, constants, nullptr,
                     nullptr, false, nullptr, &upload_box);
