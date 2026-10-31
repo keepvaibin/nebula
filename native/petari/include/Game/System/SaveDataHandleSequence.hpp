@@ -38,12 +38,10 @@ public:
         mWindowFollows = follows;
     }
 #endif
-    void startSaveTotalMailSize();
     void startLoad(int, bool);
     void storeMiiOrIconId(int, const void*, const u32*);
     void storeCopyUserFile(int, int);
     bool tryUnrecoverableError(SaveRequest::Result);
-    void startSystemMemoryErrorFreeze();
     bool isActive() const;
     bool isPermitToReset() const;
     void prepareReset();

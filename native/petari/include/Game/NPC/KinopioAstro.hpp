@@ -5,7 +5,6 @@
 class LayoutActor;
 class LuigiLetter;
 class PeachLetter;
-class ReceiverTagMail;
 
 class KinopioAstro : public Kinopio {
 public:
@@ -31,7 +30,6 @@ public:
     bool dispLetter(LayoutActor*) const;
     bool isDispLetterIcon() const;
     void createLetterIcon(const JMapInfoIter&);
-    bool sendLetter();
     bool branchFunc(u32);
     bool eventFunc(u32);
     void startDemo();
@@ -43,7 +41,4 @@ public:
     /* 0x194 */ bool _194;
     /* 0x195 */ bool _195;
     /* 0x196 */ bool mIsPlayerLuigi;
-    /* 0x197 */ bool _197;
-    /* 0x198 */ ReceiverTagMail* _198;
-    /* 0x19C */ ResourceHolder* _19C;
 };

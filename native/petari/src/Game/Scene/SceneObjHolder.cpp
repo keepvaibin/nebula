@@ -105,7 +105,6 @@
 #include "Game/Screen/LensFlare.hpp"
 #include "Game/Screen/MoviePlayerSimple.hpp"
 #include "Game/Screen/MoviePlayingSequence.hpp"
-#include "Game/Screen/OdhConverter.hpp"
 #include "Game/Screen/PlayerActionGuidance.hpp"
 #include "Game/Screen/SceneWipeHolder.hpp"
 #include "Game/Screen/ScreenAlphaCapture.hpp"
@@ -240,8 +239,6 @@ NameObj* SceneObjHolder::newEachObj(int id) {
         return new InformationObserver();
     case SceneObj_CenterScreenBlur:
         return new CenterScreenBlur();
-    case SceneObj_OdhConverter:
-        return new OdhConverter();
     case SceneObj_CometRetryButton:
         return new CometRetryButton("\203\122\203\201\203\142\203\147\203\212\203\147\203\211\203\103\203\173\203\136\203\223" /* コメットリトライボタン */);
     case SceneObj_AllLiveActorGroup:

@@ -25,9 +25,7 @@ public:
     virtual void appear();
     virtual void control();
 
-    void drawForMessageBoardCapture();
     bool isAppearing() const;
-    bool isExecCapture() const;
     ButtonPaneController* createButtonController(const char*, const char*);
     void resetButtonAll();
     void updateButtonAppearance();
@@ -44,7 +42,6 @@ public:
     void setSeparatorPaneSize();
     
 #if (VERSION == RMGK01)
-    void setTotalPowerStarNumForMessageBoardCapture();
 #endif
 
     void exeAppear();
@@ -52,19 +49,12 @@ public:
     void exeDisappear();
     void exePageNext();
     void exePagePrev();
-    void exeCaptureStart();
-    void exeCaptureConfirm();
-    void exeCaptureWait();
-    void exeCaptureSend();
 
 private:
     /* 0x20 */ ButtonPaneController* mArrowUpButtonCtrl;
     /* 0x24 */ ButtonPaneController* mArrowDownButtonCtrl;
-    /* 0x28 */ ButtonPaneController* mCaptureButtonCtrl;
     /* 0x2C */ SysInfoWindow* mSysInfoWindow;
     /* 0x30 */ s32 mPageNo;
     /* 0x34 */ s32 mPageNum;
     /* 0x38 */ Separator* mSeparatorArray;
-    /* 0x3C */ u32 mMailMessageLength;
-    /* 0x40 */ wchar_t* mMailMessage;
 };

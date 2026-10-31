@@ -2,9 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Map/FileSelectFunc.hpp"
 #include "Game/Map/RaceManager.hpp"
-#include "Game/NWC24/NWC24Messenger.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
-#include "Game/Screen/OdhConverter.hpp"
 #include "Game/Screen/ReplaceTagProcessor.hpp"
 #include "Game/Screen/SysInfoWindow.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
@@ -90,7 +88,6 @@ namespace {
 
     const f32 cSeparatorOffset = 20.0f;
     const f32 cTimePaneDefaultHeight = 72.0f;
-    const char* cMailMessageID = "WiiMessageStarList";
 
     s32 getSortPriority(const GalaxyStatusAccessor* pAccessor) NO_INLINE {
         const char* pName = pAccessor->getName();
@@ -193,15 +190,10 @@ namespace NrvPowerStarList {
     NEW_NERVE(PowerStarListNrvDisappear, PowerStarList, Disappear);
     NEW_NERVE(PowerStarListNrvPageNext, PowerStarList, PageNext);
     NEW_NERVE(PowerStarListNrvPagePrev, PowerStarList, PagePrev);
-    NEW_NERVE(PowerStarListNrvCaptureStart, PowerStarList, CaptureStart);
-    NEW_NERVE(PowerStarListNrvCaptureConfirm, PowerStarList, CaptureConfirm);
-    NEW_NERVE(PowerStarListNrvCaptureWait, PowerStarList, CaptureWait);
-    NEW_NERVE(PowerStarListNrvCaptureSend, PowerStarList, CaptureSend);
 };  // namespace NrvPowerStarList
 
 PowerStarList::PowerStarList()
-    : LayoutActor("\221\123\203\160\203\217\201\133\203\130\203\136\201\133\203\212\203\130\203\147" /* 全パワースターリスト */, true), mArrowUpButtonCtrl(), mArrowDownButtonCtrl(), mCaptureButtonCtrl(), mSysInfoWindow(), mPageNo(),
-      mMailMessageLength(), mMailMessage() {
+    : LayoutActor("\221\123\203\160\203\217\201\133\203\130\203\136\201\133\203\212\203\130\203\147" /* 全パワースターリスト */, true), mArrowUpButtonCtrl(), mArrowDownButtonCtrl(), mSysInfoWindow(), mPageNo() {
     mSeparatorArray = new Separator[4]();
 }
 
@@ -224,11 +216,11 @@ void PowerStarList::init(const JMapInfoIter& rIter) {
         MR::setFollowTypeAdd(this, pPaneName);
     }
 
-    MR::createAdaptorAndConnectToWiiMessageBoard("\221\123\203\160\203\217\201\133\203\130\203\136\201\133\203\212\203\130\203\147(\223\140\214\276\224\302\227\160\225\140\211\346)" /* 全パワースターリスト(伝言板用描画) */, MR::Functor(this, &PowerStarList::drawForMessageBoardCapture));
 
     mArrowUpButtonCtrl = createButtonController("ArrowUpButton", "BoxButton1_00");
     mArrowDownButtonCtrl = createButtonController("ArrowDownButton", "BoxButton1_01");
-    mCaptureButtonCtrl = createButtonController("Capture", "BoxTButton");
+    // The Wii Message Board's capture button: no message board (B-31, Q5).
+    MR::hidePaneRecursive(this, "Capture");
     mSysInfoWindow = MR::createSysInfoWindow();
     MR::connectToSceneLayoutOnPause(mSysInfoWindow);
     MR::setTextBoxGameMessageRecursive(this, "Title", "AllStarList_Title");
@@ -239,11 +231,8 @@ void PowerStarList::init(const JMapInfoIter& rIter) {
     MR::setTextBoxGameMessageRecursive(this, "PageNumber", "AllStarList_Page");
     MR::setTextBoxGameMessageRecursive(this, "Photo", "AllStarList_Page");
     MR::hidePaneRecursive(this, "Photo");
-    MR::createOdhConverter();
     initNerve(GET_NERVE(PowerStarList, PowerStarListNrvWait));
 
-    mMailMessageLength = MR::getStringLengthWithMessageTag(MR::getGameMessageDirect(::cMailMessageID)) + FileSelectFunc::getMiiNameBufferSize();
-    mMailMessage = new wchar_t[mMailMessageLength];
 }
 
 void PowerStarList::calcAnim() {
@@ -258,52 +247,15 @@ void PowerStarList::appear() {
     setNerve(GET_NERVE(PowerStarList, PowerStarListNrvAppear));
 }
 
-void PowerStarList::drawForMessageBoardCapture() {
-    MR::showPaneRecursive(this, "Photo");
-
-    const char* pPaneName = "TxtPhotoPage";
-    MR::setTextBoxArgNumberRecursive(this, pPaneName, mPageNo + 1, 0);
-    MR::setTextBoxArgNumberRecursive(this, pPaneName, mPageNum, 1);
-
-    wchar_t pictureFont[256];
-    MR::addPictureFontTagPlayerIcon(pictureFont);
-    MR::setTextBoxMessageRecursive(this, "BlosBase", pictureFont);
-
-#if (VERSION == RMGK01)
-    setTotalPowerStarNumForMessageBoardCapture();
-#endif
-
-    nw4r::lyt::DrawInfo drawInfo;
-    MR::copyLayoutDrawInfoWithAspect(&drawInfo, this, false);
-    MR::calcAnimLayoutWithDrawInfo(this, drawInfo);
-
-    setSeparatorPaneSize();
-    MR::drawLayoutWithDrawInfoWithoutProjectionSetup(this, drawInfo);
-
-    MR::hidePaneRecursive(this, "Photo");
-
-    calcAnim();
-}
-
 bool PowerStarList::isAppearing() const {
     return isNerve(GET_NERVE(PowerStarList, PowerStarListNrvAppear));
-}
-
-bool PowerStarList::isExecCapture() const {
-    if (MR::isDead(this)) {
-        return false;
-    }
-
-    return isNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureStart)) || isNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureConfirm)) ||
-           isNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureWait)) || isNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureSend));
 }
 
 void PowerStarList::control() {
     mArrowUpButtonCtrl->update();
     mArrowDownButtonCtrl->update();
-    mCaptureButtonCtrl->update();
 
-    if (mArrowUpButtonCtrl->isPointingTrigger() || mArrowDownButtonCtrl->isPointingTrigger() || mCaptureButtonCtrl->isPointingTrigger()) {
+    if (mArrowUpButtonCtrl->isPointingTrigger() || mArrowDownButtonCtrl->isPointingTrigger()) {
         MR::startSystemSE("SE_SY_GALAMAP_CURSOR_ON");
     }
 }
@@ -324,7 +276,6 @@ ButtonPaneController* PowerStarList::createButtonController(const char* pParam1,
 void PowerStarList::resetButtonAll() {
     mArrowUpButtonCtrl->forceToWait();
     mArrowDownButtonCtrl->forceToWait();
-    mCaptureButtonCtrl->forceToWait();
 }
 
 void PowerStarList::updateButtonAppearance() {
@@ -705,32 +656,6 @@ void PowerStarList::setSeparatorPaneSize() {
     }
 }
 
-#if (VERSION == RMGK01)
-void PowerStarList::setTotalPowerStarNumForMessageBoardCapture() {
-    wchar_t message[256];
-    wchar_t* pMessage;
-    pMessage = MR::addPictureFontTag(MR::addPictureFontTag(message, L'7'), L'@');
-
-    s32 powerStarNum = MR::getPowerStarNum();
-    if (MR::getPowerStarNum() >= 100) {
-        pMessage[0] = powerStarNum / 100 + L'0';
-        pMessage++;
-        powerStarNum -= powerStarNum / 100 * 100;
-    }
-
-    if (MR::getPowerStarNum() >= 10) {
-        pMessage[0] = powerStarNum / 10 + L'0';
-        pMessage++;
-        powerStarNum -= powerStarNum / 10 * 10;
-    }
-
-    pMessage[0] = powerStarNum + L'0';
-    pMessage[1] = L'\0';
-
-    MR::setTextBoxMessageRecursive(this, "TxtStarTotal", message);
-}
-#endif
-
 void PowerStarList::exeAppear() {
     ButtonPaneController* pController;
 
@@ -743,10 +668,6 @@ void PowerStarList::exeAppear() {
         pController->appear();
         pController->_24 = false;
 
-        pController = mCaptureButtonCtrl;
-        pController->appear();
-        pController->_24 = false;
-
         updateButtonAppearance();
         MR::startAnim(this, "Appear", 0);
     }
@@ -754,7 +675,6 @@ void PowerStarList::exeAppear() {
     if (MR::isAnimStopped(this, 0)) {
         mArrowUpButtonCtrl->_24 = true;
         mArrowDownButtonCtrl->_24 = true;
-        mCaptureButtonCtrl->_24 = true;
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvWait));
     }
 }
@@ -770,8 +690,6 @@ void PowerStarList::exeWait() {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPageNext));
     } else if (mPageNo > 0 && (mArrowUpButtonCtrl->trySelect() || MR::testCorePadButtonUp(0) || MR::testSubPadStickTriggerUp(0))) {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPagePrev));
-    } else if (mCaptureButtonCtrl->trySelect()) {
-        setNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureStart));
     }
 }
 
@@ -779,7 +697,6 @@ void PowerStarList::exeDisappear() {
     if (MR::isFirstStep(this)) {
         mArrowUpButtonCtrl->_24 = false;
         mArrowDownButtonCtrl->_24 = false;
-        mCaptureButtonCtrl->_24 = false;
 
         updateList(-1, true);
 
@@ -815,66 +732,3 @@ void PowerStarList::exePagePrev() {
     }
 }
 
-void PowerStarList::exeCaptureStart() {
-    if (MR::isFirstStep(this)) {
-        MR::startSystemSE("SE_SY_GALAMAP_CAPTURE");
-    }
-
-    if (mCaptureButtonCtrl->isDecidedWait()) {
-        setNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureConfirm));
-    }
-}
-
-void PowerStarList::exeCaptureConfirm() {
-    if (MR::isFirstStep(this)) {
-        mSysInfoWindow->appear("AllStarList_ConfirmCapture", SysInfoWindow::Type_YesNo, SysInfoWindow::TextPos_Center,
-                               SysInfoWindow::MessageType_System);
-    }
-
-    if (MR::isDead(mSysInfoWindow)) {
-        resetButtonAll();
-
-        if (mSysInfoWindow->isSelectedYes()) {
-            setNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureWait));
-        } else {
-            setNerve(GET_NERVE(PowerStarList, PowerStarListNrvWait));
-        }
-    }
-}
-
-void PowerStarList::exeCaptureWait() {
-    if (MR::isFirstStep(this)) {
-        MR::requestCaptureOdhImage();
-    }
-
-    if (MR::isRequestedCaptureOdhImage()) {
-        return;
-    }
-
-    setNerve(GET_NERVE(PowerStarList, PowerStarListNrvCaptureSend));
-}
-
-void PowerStarList::exeCaptureSend() {
-    if (MR::isFirstStep(this)) {
-        const wchar_t* pUserName = GameDataFunction::getUserName();
-        const wchar_t* pMessage = MR::getGameMessageDirect(::cMailMessageID);
-        ReplaceTagFunction::ReplaceArgs(mMailMessage, mMailMessageLength, pMessage, pUserName);
-#if (VERSION == RMGK01)
-        MR::SendMailObj sendMailObj = MR::SendMailObj("\203\130\203\136\201\133\203\212\203\130\203\147" /* スターリスト */);
-
-        sendMailObj.setMessageDirect(mMailMessage);
-        sendMailObj.setSenderID("WiiMessageTitle");
-        sendMailObj.setImage(MR::getOdhImage(), MR::getOdhImageSize());
-        sendMailObj.setBGDisable();
-        sendMailObj.setLedOff();
-        sendMailObj.send();
-#else
-        MR::sendMail("\203\130\203\136\201\133\203\212\203\130\203\147" /* スターリスト */, mMailMessage, "WiiMessageTitle", MR::getOdhImage(), MR::getOdhImageSize(), false);
-#endif
-    }
-
-    if (MR::isMailSent("\203\130\203\136\201\133\203\212\203\130\203\147" /* スターリスト */)) {
-        MR::termMail("\203\130\203\136\201\133\203\212\203\130\203\147" /* スターリスト */);
-        setNerve(GET_NERVE(PowerStarList, PowerStarListNrvWait));
-    }
-}
