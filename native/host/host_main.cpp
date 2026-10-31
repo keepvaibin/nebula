@@ -2387,15 +2387,6 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
     });
 }
 
-const uint8_t* svc_disc_dol(void*, size_t* size) {
-    if (gMods != nullptr && !gMods->dol.empty()) {
-        *size = gMods->dol.size();
-        return gMods->dol.data();
-    }
-    *size = gPak.dol_size;
-    return gPak.dol;
-}
-
 const char* svc_disc_id(void*) {
     return gPak.id;
 }
@@ -3834,7 +3825,6 @@ int main(int argc, char** argv) {
     services.disc_entry = svc_disc_entry;
     services.disc_child = svc_disc_child;
     services.disc_read = svc_disc_read;
-    services.disc_dol = svc_disc_dol;
     services.disc_id = svc_disc_id;
     services.vi_frame = svc_vi_frame;
     services.save_request = svc_save_request;

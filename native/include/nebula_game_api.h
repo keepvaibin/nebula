@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 58u
+#define NEBULA_GAME_API_VERSION 59u
 
 /* One of JAudio's 64 channels (JASDsp::TChannel, 0x180 bytes, host byte order): the game sets its source, pitch,
    volumes and filters; the host's mixer plays it and advances its playback state. */
@@ -833,9 +833,6 @@ typedef struct NebulaHostServices {
        the end before its length plus 32: the bytes after a file are the disc's); the host calls
        nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
     void (*disc_read)(void* user, int32_t file, uint32_t offset, uint32_t size, void* dst, uint32_t slot);
-    /* The game partition's main.dol as on the disc, valid for the process's life: the module reads the data tables
-       the game keeps in its executable from it at boot (sdk/dol_data.c). */
-    const uint8_t* (*disc_dol)(void* user, size_t* size);
     /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
        whose few differences the module follows (sdk/region.c) and whose save folder the NAND holds. */
     const char* (*disc_id)(void* user);
@@ -1049,9 +1046,6 @@ enum {
     NEBULA_PATCH_MESSENGER_EX_ONE_UPS,       /* value: that supply's 1-ups (20) */
     NEBULA_PATCH_COUNT
 };
-
-/* __NebulaDolTable kinds: 0-5 the Grand galaxies' comet schedules, then: */
-enum { NEBULA_DOL_EVENT_FLAGS = 6 };
 
 enum {
     NEBULA_POWER_SHUTDOWN = 1, /* the console turns off: the game closes */

@@ -23,7 +23,6 @@ NEBULA_GAME_API void nebula_game_run(void) {
     if (sHost == NULL) {
         nebula_fatal("nebula_game_run before nebula_game_attach");
     }
-    nebula_load_dol_data();
     nebula_os_boot(nebula_game_main);
 }
 

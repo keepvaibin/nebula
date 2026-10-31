@@ -1014,8 +1014,8 @@ const NativeCodePatch* native_code_patch(const std::string& game_id, std::uint32
     return nullptr;
 }
 
-// sdk/dol_data.c: the tables the native game reads from main.dol, by release (the USA release's comet schedules and
-// event flags too: __NebulaDolTable).
+// The tables the game reads from main.dol's data (the cooker's NebulaData files, crates/nebula-import/src/cook/dol.rs),
+// by release (the USA release's comet schedules and event flags too).
 std::span<const DolTable> dol_tables(const std::string& game_id) {
     static constexpr DolTable kKorea[] = {{0x8053DC20, 0x1E0}, {0x8053DE00, 0xD20}, {0x8053F5E0, 0x1CAC0}};
     static constexpr DolTable kOthers[] = {{0x8053C620, 0x1E0}, {0x8053C800, 0xD20}, {0x8053DFE0, 0x9AC0}};
@@ -1168,7 +1168,8 @@ static void cook_mod_files(DiscNode& dir, const std::string& path, const std::ui
             cook_mod_files(node, node_path, partition, partition_size, report, cooked);
             continue;
         }
-        if (!node.changed || !cook::cooks(node.name)) continue;
+        // NebulaData's files come from the cooker already (main.dol's tables).
+        if (!node.changed || !cook::cooks(node.name) || node_path.starts_with("/NebulaData/")) continue;
         const bool partial = std::any_of(node.pieces.begin(), node.pieces.end(),
                                          [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; });
         if (partial) {
@@ -1486,7 +1487,27 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
             tables = tables && dol_offset_of(dol, t.address, t.size).has_value();
         }
         if (tables) {
-            active->dol = std::move(dol);
+            // The game reads them as files (B-05): the patched main.dol's, cooked, in the disc's NebulaData folder.
+            unsigned written = 0;
+            for (const char* name : cook::kDolTableFiles) {
+                std::string table_error;
+                const std::optional<std::vector<std::uint8_t>> table =
+                    cook::cook_dol_table(dol, game_id, name, &table_error);
+                if (!table) {
+                    if (!table_error.empty()) report << "  main.dol: " << table_error << '\n';
+                    continue;
+                }
+                const fs::path file = mods_folder() / ".cooked" / ("main.dol-" + std::string(name));
+                std::error_code ec;
+                fs::create_directories(file.parent_path(), ec);
+                if (!io::write_text_file_atomically(file, std::string(table->begin(), table->end()))) continue;
+                DiscNode* node = active->disc.find_path("NebulaData/" + std::string(name), true);
+                if (node == nullptr || node->directory) continue;
+                node->pieces.clear();
+                VirtualDisc::patch(*node, file, table->size(), 0u, 0u, 0u, true);
+                ++written;
+            }
+            report << "  main.dol's data tables from the mods' patches: " << written << " files\n";
         } else {
             report << "  main.dol from a mod lacks the game's data tables: the game's own kept\n";
         }
@@ -1500,7 +1521,6 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
     active->fst = active->disc.build(virtual_base);
     if (active->fst.empty()) {
         report << "mods: the changed disc does not fit the disc's 16 GiB reach; no mod applied\n";
-        active->dol.clear();
         active->files_changed = 0;
     }
     active->report = report.str();

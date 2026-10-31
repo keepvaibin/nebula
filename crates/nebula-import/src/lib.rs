@@ -1102,12 +1102,22 @@ mod tests {
         let mut boot = vec![0u8; BOOT_BIN_SIZE];
         boot[..6].copy_from_slice(b"RMGE01");
         boot[0x420..0x424].copy_from_slice(&(0x2480u32 >> 2).to_be_bytes());
-        boot[0x424..0x428].copy_from_slice(&(0x3000u32 >> 2).to_be_bytes());
+        boot[0x424..0x428].copy_from_slice(&(0x20000u32 >> 2).to_be_bytes());
         let fst_words = (fst.len() as u32 + 3) >> 2;
         fst.resize(fst_words as usize * 4, 0);
         boot[0x428..0x42c].copy_from_slice(&fst_words.to_be_bytes());
         boot[0x42c..0x430].copy_from_slice(&fst_words.to_be_bytes());
-        let system = vec![("boot.bin", 0, boot.into_boxed_slice()), ("fst.bin", 0x3000, fst.into_boxed_slice())];
+        // main.dol: one data section over the tables' addresses (cook/dol.rs), zeros.
+        let mut dol = vec![0u8; 0x100];
+        dol[0x1C..0x20].copy_from_slice(&0x100u32.to_be_bytes());
+        dol[0x48 + 0x1C..0x48 + 0x20].copy_from_slice(&0x8053_A000u32.to_be_bytes());
+        dol[0x90 + 0x1C..0x90 + 0x20].copy_from_slice(&0xE000u32.to_be_bytes());
+        dol.resize(0x100 + 0xE000, 0);
+        let system = vec![
+            ("boot.bin", 0, boot.into_boxed_slice()),
+            ("main.dol", 0x2480, dol.into_boxed_slice()),
+            ("fst.bin", 0x20000, fst.into_boxed_slice()),
+        ];
         folder_partition(data, files, system)
     }
 
@@ -1121,7 +1131,7 @@ mod tests {
         compressed.extend_from_slice(&[0xF0, b'a', b'b', b'c', b'd']);
         let mut partition = table_partition(
             &directory.path().join("data"),
-            &[("LayoutData/FileSelect.arc", 0x4000, b"archive"), ("small.szs", 0x4020, &compressed)],
+            &[("LayoutData/FileSelect.arc", 0x21000, b"archive"), ("small.szs", 0x21020, &compressed)],
         );
         let output = directory.path().join("content");
         partition.write_content(&output, &mut |_, _| true).unwrap();
@@ -1139,9 +1149,12 @@ mod tests {
         };
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
+        // main.dol's tables as files of their own folder (cook/dol.rs).
+        assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
+        assert_eq!(read("NebulaData/GameEventFlags.bin").len(), 4 + 188 * 20);
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
 
-        let mut without_archive = table_partition(&directory.path().join("other"), &[("a.bin", 0x4000, b"x")]);
+        let mut without_archive = table_partition(&directory.path().join("other"), &[("a.bin", 0x21000, b"x")]);
         let failed = directory.path().join("failed");
         assert!(without_archive.write_content(&failed, &mut |_, _| true).is_err());
         assert!(!failed.exists());
