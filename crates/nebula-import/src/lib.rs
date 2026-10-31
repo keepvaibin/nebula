@@ -12,6 +12,7 @@ use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+pub mod cook;
 mod jni;
 
 /// Super Mario Galaxy, North America.
@@ -55,8 +56,6 @@ const RMGE01_PARTITION_DATA_BYTES: u64 = 0xff7c_0000;
 const PARTITION_CLUSTER: u64 = 0x8000;
 const COPY_CHUNK: usize = 1 << 20;
 
-/// The content folder's one file besides game.pak: the settings overlay draws its window frame from this archive.
-const FILE_SELECT_ARCHIVE: &str = "LayoutData/FileSelect.arc";
 
 /// What a disc image is, as Android's setup shows it before importing.
 #[derive(Debug, Clone)]
@@ -788,24 +787,61 @@ impl Partition {
     }
 
     fn write_content_to(&mut self, output: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<u64> {
-        let (offset, length) = self
-            .files
-            .iter()
-            .find(|file| file.path.eq_ignore_ascii_case(FILE_SELECT_ARCHIVE))
-            .map(|file| (file.offset, file.length))
-            .with_context(|| format!("the file table has no {FILE_SELECT_ARCHIVE}"))?;
         let pak = output.join("game.pak");
-        let size = self.write_pak(&pak, progress)?;
-        let mut archive = vec![0u8; length as usize];
-        let mut reader = File::open(&pak).with_context(|| format!("{} cannot be opened", pak.display()))?;
-        reader.seek(SeekFrom::Start(offset))?;
-        reader
-            .read_exact(&mut archive)
-            .with_context(|| format!("{FILE_SELECT_ARCHIVE} cannot be read from game.pak"))?;
-        let target = join_relative(&output.join("files"), FILE_SELECT_ARCHIVE);
-        fs::create_dir_all(target.parent().unwrap())?;
-        fs::write(&target, archive).with_context(|| format!("{} cannot be written", target.display()))?;
+        let (size, _) = self.write_cooked_pak(&pak, progress)?;
+        cook::write_beside_files(&pak, output)?;
         Ok(size)
+    }
+
+    /// Writes the cooked game.pak (cook/mod.rs) at `output`: the files of the partition cooked, after its system
+    /// files. The destination is replaced only when the whole file was written and flushed.
+    pub fn write_cooked_pak(
+        &mut self,
+        output: &Path,
+        progress: &mut dyn FnMut(u64, u64) -> bool,
+    ) -> Result<(u64, cook::Stats)> {
+        if let Some(parent) = output.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("{} cannot be created", parent.display()))?;
+        }
+        let name = output.file_name().context("the destination has no file name")?.to_string_lossy();
+        let temporary = output.with_file_name(format!(".{name}.importing"));
+        let mut area = Vec::new();
+        let (mut fst_offset, mut fst_size) = (0usize, 0usize);
+        for (label, offset, bytes) in &self.system {
+            let end = *offset as usize + bytes.len();
+            if area.len() < end {
+                area.resize(end, 0);
+            }
+            area[*offset as usize..end].copy_from_slice(bytes);
+            if *label == "fst.bin" {
+                (fst_offset, fst_size) = (*offset as usize, bytes.len());
+            }
+        }
+        // The boot header's reserve for a larger file table stays the table's.
+        let fst_max = (read_u32_be(&area, 0x42c)? as usize) << 2;
+        area.resize(area.len().max(fst_offset + fst_max), 0);
+        let system = cook::SystemArea { bytes: area, fst_offset, fst_size };
+        let Partition { files, source, .. } = self;
+        let by_offset: std::collections::HashMap<u64, &GameFile> = files.iter().map(|f| (f.offset, f)).collect();
+        let origin = source.origin();
+        let mut read = |file: &cook::PakFile| -> Result<Vec<u8>> {
+            let game_file = by_offset.get(&file.offset).context("a file the file table lists twice")?;
+            let mut reader = source.open(game_file)?;
+            let mut bytes = vec![0u8; file.length as usize];
+            reader.read_exact(&mut bytes).with_context(|| format!("{} cannot be read from {origin}", file.path))?;
+            Ok(bytes)
+        };
+        let mut stats = cook::Stats::default();
+        let result = cook::write_cooked_pak(&system, &mut read, &temporary, progress, &mut stats);
+        let size = match result {
+            Ok(size) => size,
+            Err(error) => {
+                let _ = fs::remove_file(&temporary);
+                return Err(error);
+            }
+        };
+        fs::rename(&temporary, output).with_context(|| format!("{} cannot be replaced", output.display()))?;
+        Ok((size, stats))
     }
 }
 
@@ -1022,21 +1058,90 @@ mod tests {
         assert_eq!(left.len(), 2, "a temporary file was left: {left:?}");
     }
 
+    /// A partition of a folder whose system files are real enough to cook: boot.bin pointing at a file table that
+    /// lists `files` (`/`-separated paths, one folder level at most) at their offsets.
+    fn table_partition(data: &Path, files: &[(&str, u64, &[u8])]) -> Partition {
+        let mut entries: Vec<(bool, String, u32, u32)> = Vec::new(); // folder, name, offset or parent, length or end
+        let mut folders: Vec<String> = Vec::new();
+        for (path, offset, bytes) in files {
+            match path.split_once('/') {
+                Some((folder, name)) => {
+                    if !folders.iter().any(|f| f == folder) {
+                        folders.push(folder.to_string());
+                        entries.push((true, folder.to_string(), 0, 0));
+                    }
+                    entries.push((false, name.to_string(), (*offset >> 2) as u32, bytes.len() as u32));
+                }
+                None => entries.push((false, path.to_string(), (*offset >> 2) as u32, bytes.len() as u32)),
+            }
+        }
+        let count = entries.len() + 1;
+        // A folder's end: the index after its files (they follow it).
+        for i in 0..entries.len() {
+            if entries[i].0 {
+                let mut end = i + 1;
+                while end < entries.len() && !entries[end].0 && files.iter().any(|(p, _, _)| p.ends_with(&format!("/{}", entries[end].1))) {
+                    end += 1;
+                }
+                entries[i].3 = (end + 1) as u32;
+            }
+        }
+        let mut fst = Vec::new();
+        let mut names = vec![0u8];
+        fst.extend_from_slice(&0x0100_0000u32.to_be_bytes());
+        fst.extend_from_slice(&0u32.to_be_bytes());
+        fst.extend_from_slice(&(count as u32).to_be_bytes());
+        for (folder, name, a, b) in &entries {
+            fst.extend_from_slice(&(((*folder as u32) << 24) | names.len() as u32).to_be_bytes());
+            names.extend_from_slice(name.as_bytes());
+            names.push(0);
+            fst.extend_from_slice(&a.to_be_bytes());
+            fst.extend_from_slice(&b.to_be_bytes());
+        }
+        fst.extend_from_slice(&names);
+        let mut boot = vec![0u8; BOOT_BIN_SIZE];
+        boot[..6].copy_from_slice(b"RMGE01");
+        boot[0x420..0x424].copy_from_slice(&(0x2480u32 >> 2).to_be_bytes());
+        boot[0x424..0x428].copy_from_slice(&(0x3000u32 >> 2).to_be_bytes());
+        let fst_words = (fst.len() as u32 + 3) >> 2;
+        fst.resize(fst_words as usize * 4, 0);
+        boot[0x428..0x42c].copy_from_slice(&fst_words.to_be_bytes());
+        boot[0x42c..0x430].copy_from_slice(&fst_words.to_be_bytes());
+        let system = vec![("boot.bin", 0, boot.into_boxed_slice()), ("fst.bin", 0x3000, fst.into_boxed_slice())];
+        folder_partition(data, files, system)
+    }
+
     #[test]
-    fn content_folder_holds_game_pak_and_file_select_archive() {
+    fn content_folder_holds_the_cooked_game_pak_and_file_select_archive() {
         let directory = tempfile::tempdir().unwrap();
-        let mut partition = folder_partition(
+        // A Yaz0 file of four literal bytes (a code byte, then them): stored expanded.
+        let mut compressed = b"Yaz0".to_vec();
+        compressed.extend_from_slice(&4u32.to_be_bytes());
+        compressed.extend_from_slice(&[0; 8]);
+        compressed.extend_from_slice(&[0xF0, b'a', b'b', b'c', b'd']);
+        let mut partition = table_partition(
             &directory.path().join("data"),
-            &[("LayoutData/FileSelect.arc", 0x20, b"archive")],
-            Vec::new(),
+            &[("LayoutData/FileSelect.arc", 0x4000, b"archive"), ("small.szs", 0x4020, &compressed)],
         );
         let output = directory.path().join("content");
         partition.write_content(&output, &mut |_, _| true).unwrap();
         assert_eq!(fs::read(output.join("files").join("LayoutData").join("FileSelect.arc")).unwrap(), b"archive");
-        assert_eq!(fs::metadata(output.join("game.pak")).unwrap().len(), 0x27);
+        let mut pak = File::open(output.join("game.pak")).unwrap();
+        let system = cook::pak_system_area(&mut pak).unwrap();
+        let files = cook::pak_files(system.fst()).unwrap();
+        let read = |path: &str| {
+            let file = files.iter().find(|f| f.path == path).unwrap();
+            let mut bytes = vec![0u8; file.length as usize];
+            let mut pak = File::open(output.join("game.pak")).unwrap();
+            pak.seek(SeekFrom::Start(file.offset)).unwrap();
+            pak.read_exact(&mut bytes).unwrap();
+            bytes
+        };
+        assert_eq!(read("small.szs"), b"abcd");
+        assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
 
-        let mut without_archive = folder_partition(&directory.path().join("other"), &[("a.bin", 0, b"x")], Vec::new());
+        let mut without_archive = table_partition(&directory.path().join("other"), &[("a.bin", 0x4000, b"x")]);
         let failed = directory.path().join("failed");
         assert!(without_archive.write_content(&failed, &mut |_, _| true).is_err());
         assert!(!failed.exists());

@@ -4,12 +4,14 @@
 //!       One JSON line (InputIdentity::to_json). Exit code 0 when Nebula supports the game, 2 when it does not.
 //!   nebula-import import <disc image or folder> --output <content folder>
 //!       Writes the content folder. Prints `STEP <n>/<count> <text>` before each step and `PROGRESS <done> <total>`
-//!       (bytes) while it copies.
+//!       (bytes) while it copies. The game's files are cooked (nebula_import::cook) as they are packed.
+//!   nebula-import cook <content folder> --output <content folder>
+//!       Cooks a content folder packed before cooking (an update's migration, D-07), with the same output lines.
 //!
 //! A failure prints `Error: <reason>` on stderr and exits with code 1.
 
 use anyhow::{bail, Result};
-use nebula_import::{identify_input, Partition};
+use nebula_import::{cook, identify_input, Partition};
 use std::ffi::OsString;
 use std::path::Path;
 use std::process::ExitCode;
@@ -50,6 +52,22 @@ fn run(arguments: &[OsString]) -> Result<ExitCode> {
             println!("game.pak: {size} bytes");
             Ok(ExitCode::SUCCESS)
         }
-        _ => bail!("usage: nebula-import identify <image> | nebula-import import <image> --output <content folder>"),
+        [command, input, option, output] if command == "cook" && option == "--output" => {
+            println!("STEP 1/1 Cooking the game files");
+            let mut reported = 0u64;
+            let stats = cook::cook_content(Path::new(input), Path::new(output), &mut |done, total| {
+                if done == 0 || done == total || done - reported >= PROGRESS_STEP {
+                    println!("PROGRESS {done} {total}");
+                    reported = done;
+                }
+                true
+            })?;
+            println!("{}", stats.summary());
+            Ok(ExitCode::SUCCESS)
+        }
+        _ => bail!(
+            "usage: nebula-import identify <image> | nebula-import import <image> --output <content folder> | \
+             nebula-import cook <content folder> --output <content folder>"
+        ),
     }
 }

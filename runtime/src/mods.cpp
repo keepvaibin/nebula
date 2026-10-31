@@ -6,6 +6,7 @@
 #include "galaxy/mods.h"
 
 #include "galaxy/atomic_file.h"
+#include "galaxy/cooker_bridge.h"
 #include "galaxy/mod_xml.h"
 
 #include <algorithm>
@@ -1156,6 +1157,53 @@ bool mods_differ_from_session(std::span<const ModInfo> mods) {
     return mods_signature(mods) != mods_signature(s.mods.started_with);
 }
 
+// A mod's files are cooked as the disc's were at import (D-01, D-04): each changed file the cooker reads, made only of
+// the mod's own bytes, is cooked once into the mods folder's .cooked cache (named by its bytes' hash) and read from
+// there. A file a mod patches in part over the game's (cooked) file stays as patched.
+static void cook_mod_files(DiscNode& dir, const std::string& path, const std::uint8_t* partition, std::uint64_t partition_size,
+                    std::ostringstream& report, unsigned& cooked) {
+    for (DiscNode& node : dir.children) {
+        const std::string node_path = path + "/" + node.name;
+        if (node.directory) {
+            cook_mod_files(node, node_path, partition, partition_size, report, cooked);
+            continue;
+        }
+        if (!node.changed || !cook::cooks(node.name)) continue;
+        const bool partial = std::any_of(node.pieces.begin(), node.pieces.end(),
+                                         [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; });
+        if (partial) {
+            report << "  " << node_path << ": patched in part over the game's file, used as patched (not cooked)\n";
+            continue;
+        }
+        const std::vector<std::uint8_t> bytes = VirtualDisc::materialize(node, partition, partition_size);
+        std::uint64_t hash = 0xCBF29CE484222325ull;
+        for (const std::uint8_t b : bytes) hash = (hash ^ b) * 0x100000001B3ull;
+        char name[40];
+        std::snprintf(name, sizeof(name), "%016llx-%zu", static_cast<unsigned long long>(hash), bytes.size());
+        const fs::path cache = mods_folder() / ".cooked" / name;
+        std::error_code ec;
+        if (!fs::is_regular_file(cache, ec)) {
+            std::string error;
+            const std::optional<std::vector<std::uint8_t>> out = cook::cook_file(node_path, bytes, &error);
+            if (!out) {
+                if (!error.empty()) report << "  " << node_path << ": " << error << '\n';
+                continue;
+            }
+            fs::create_directories(cache.parent_path(), ec);
+            const std::string text(out->begin(), out->end());
+            if (!io::write_text_file_atomically(cache, text)) {
+                report << "  " << node_path << ": its cooked copy cannot be written to " << utf8_name(cache) << '\n';
+                continue;
+            }
+        }
+        const std::uint64_t size = fs::file_size(cache, ec);
+        if (ec) continue;
+        node.pieces.clear();
+        VirtualDisc::patch(node, cache, size, 0u, 0u, 0u, true);
+        ++cooked;
+    }
+}
+
 std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_fst,
                                        std::span<const std::uint8_t> partition_dol, std::uint64_t dol_offset,
                                        const std::uint8_t* partition, std::uint64_t partition_size,
@@ -1443,6 +1491,11 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
             report << "  main.dol from a mod lacks the game's data tables: the game's own kept\n";
         }
     }
+    unsigned cooked = 0;
+    if (DiscNode* disc_root = active->disc.find_path("", false)) {
+        cook_mod_files(*disc_root, std::string(), partition, partition_size, report, cooked);
+    }
+    if (cooked != 0u) report << "cooked " << cooked << " of the mods' files\n";
     const std::uint64_t virtual_base = partition_size + 0x100000u;
     active->fst = active->disc.build(virtual_base);
     if (active->fst.empty()) {

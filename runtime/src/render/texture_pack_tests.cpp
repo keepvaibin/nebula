@@ -107,37 +107,6 @@ void test_names() {
     }
 }
 
-void test_tlut_hash() {
-    // TMEM palette: 256 big-endian entries.
-    std::vector<std::uint8_t> palette(512);
-    for (std::size_t i = 0; i < palette.size(); ++i) palette[i] = static_cast<std::uint8_t>(i * 7u + 3u);
-    // C8 8x4 (one tile): indices 3..7.
-    std::vector<std::uint8_t> c8(32, 5u);
-    c8[0] = 3u;
-    c8[31] = 7u;
-    expect(texture_pack_tlut_hash(TexFormat::C8, c8.data(), 8u, 4u, palette.data()) == hash_of(palette.data() + 6u, 10u),
-           "C8 palette hash covers indices 3..7");
-    // C4 8x8 (one tile): nibbles 1..14.
-    std::vector<std::uint8_t> c4(32, 0x55u);
-    c4[3] = 0x1Eu;
-    expect(texture_pack_tlut_hash(TexFormat::C4, c4.data(), 8u, 8u, palette.data()) == hash_of(palette.data() + 2u, 28u),
-           "C4 palette hash covers nibbles 1..14");
-    // C14X2 4x4 (one tile): big-endian indices, top two bits ignored.
-    std::vector<std::uint8_t> c14(32, 0u);
-    for (std::size_t i = 0; i < c14.size(); i += 2u) {
-        c14[i] = 0xC0u;
-        c14[i + 1u] = 0x10u;
-    }
-    c14[1] = 0x12u;
-    std::vector<std::uint8_t> big(32768);
-    for (std::size_t i = 0; i < big.size(); ++i) big[i] = static_cast<std::uint8_t>(i ^ (i >> 8u));
-    expect(texture_pack_tlut_hash(TexFormat::C14X2, c14.data(), 4u, 4u, big.data()) ==
-               hash_of(big.data() + 0x10u * 2u, 3u * 2u),
-           "C14X2 palette hash covers indices 0x10..0x12");
-    expect(texture_pack_tlut_hash(TexFormat::RGBA8, c8.data(), 4u, 4u, palette.data()) == 0u,
-           "direct formats have no palette hash");
-}
-
 void put32(std::vector<std::uint8_t>& v, std::size_t at, std::uint32_t value) { std::memcpy(v.data() + at, &value, 4u); }
 
 std::vector<std::uint8_t> dds_header(std::uint32_t width, std::uint32_t height, std::uint32_t levels,
@@ -638,7 +607,6 @@ int main() {
     std::filesystem::create_directories(root);
     test_hash();
     test_names();
-    test_tlut_hash();
     test_dds(root);
     test_png(root);
     test_sampler_shift();

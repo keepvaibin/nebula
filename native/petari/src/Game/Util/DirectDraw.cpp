@@ -513,32 +513,6 @@ namespace TDDraw {
         u8 tileBuffer[0x800] ATTRIBUTE_ALIGN(32);
     }
 
-    inline void tileConversion8Impl(u8* pTexture, u32 width, u32 height, u8* pTileBuffer) {
-        u8* pDest = pTexture;
-        u8* pBuffer = pTileBuffer;
-        u32 offset, row, y, x, sourceOffset;
-        offset = 0;
-
-        for (y = 0; y < height; y += 4) {
-            for (x = 0; x < width; x += 8) {
-                for (row = 0; row < 4; row++) {
-                    sourceOffset = ((y + row) * width) + x;
-                    *reinterpret_cast< u32* >(&pBuffer[offset]) = *reinterpret_cast< const u32* >(&pTexture[sourceOffset]);
-                    *reinterpret_cast< u32* >(&pBuffer[offset + 4]) = *reinterpret_cast< const u32* >(&pTexture[sourceOffset + 4]);
-                    offset += 8;
-                }
-            }
-
-            MR::copyMemory(pDest, pBuffer, width * 4);
-            pDest += width * 4;
-            offset = 0;
-        }
-    }
-
-    void tileConversion8(u8* pTexture, u32 width, u32 height) {
-        tileConversion8Impl(pTexture, width, height, tileBuffer);
-    }
-
     inline void tileConversion16Impl(u16* pTexture, u32 width, u32 height, u8* pBuffer) {
         u8* pDest = reinterpret_cast< u8* >(pTexture);
         u8* const pBufferLocal = pBuffer;

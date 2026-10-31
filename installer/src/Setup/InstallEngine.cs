@@ -50,8 +50,11 @@ namespace Nebula.Setup
     /// </summary>
     internal sealed class InstallEngine
     {
-        /// <summary>Bump when nebula-import's content folder changes shape.</summary>
-        public const int ContentFormatVersion = 1;
+        /// <summary>Bump when nebula-import's content folder changes shape. 2: the game's files cooked (textures as
+        /// texture records, archives expanded); a format-1 folder is cooked on update without the disc.</summary>
+        public const int ContentFormatVersion = 2;
+        /// <summary>The content format nebula-import's cook command converts from.</summary>
+        private const int CookableContentFormatVersion = 1;
 
         /// <summary>The instruction set NebulaNative.exe and smg_game.dll are built for.</summary>
         private const string NativeIsa = "AVX2";
@@ -59,7 +62,7 @@ namespace Nebula.Setup
         /// <summary>What a version folder holds (each from the package, by its published name).</summary>
         private static readonly string[] NativeFiles =
         {
-            "NebulaNative.exe", "smg_game.dll", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
+            "NebulaNative.exe", "smg_game.dll", "nebula_import.dll", "material-names.tsv", "rt-materials.tsv", "rt-suns.tsv",
             "Nebula.exe", "NebulaSettings.exe", "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md"
         };
 
@@ -183,10 +186,16 @@ namespace Nebula.Setup
         private void Install(InstalledInfo current, Thread dlss)
         {
             bool reuseContent = request.GameInput == null && ContentValid(layout);
-            if (!reuseContent && request.GameInput == null)
+            bool cookContent = request.GameInput == null && !reuseContent && ContentCookable(layout);
+            if (!reuseContent && !cookContent && request.GameInput == null)
                 throw new InvalidOperationException("Choose your Super Mario Galaxy ISO, RVZ or extracted folder.");
-            Log("Reuse the packed game: " + reuseContent);
-            if (!reuseContent)
+            Log("Reuse the packed game: " + reuseContent + "; cook it: " + cookContent);
+            if (cookContent)
+            {
+                Stage(0.00, 0.70, "Converting the game files");
+                Cook(layout.Content, Path.Combine(staging, "content"));
+            }
+            else if (!reuseContent)
             {
                 Stage(0.00, 0.02, "Checking your game");
                 Identify(request.GameInput);
@@ -314,18 +323,53 @@ namespace Nebula.Setup
             if (code != 0) throw new InvalidOperationException("nebula-import import failed (exit " + code + "). See the setup log.");
         }
 
-        /// <summary>The packed game an install keeps is intact, so an update or repair needs no game.</summary>
+        /// <summary>A format-1 content folder cooked into this version's format (D-07): the same output lines as an import.</summary>
+        private void Cook(string content, string output)
+        {
+            int code = RunTool(ImporterPath, new[] { "cook", content, "--output", output }, delegate(string line)
+            {
+                var match = ImportProgress.Match(line);
+                if (match.Success)
+                {
+                    StepProgress(null, double.Parse(match.Groups[1].Value) / Math.Max(1, double.Parse(match.Groups[2].Value)));
+                    return;
+                }
+                if (line.StartsWith("STEP ")) StepProgress(line.Substring(line.IndexOf(' ', 5) + 1), -1);
+                Log(line);
+            });
+            if (code != 0) throw new InvalidOperationException("nebula-import cook failed (exit " + code + "). See the setup log.");
+        }
+
+        /// <summary>The packed game an install keeps is intact (or can be cooked from), so an update or repair needs no game.</summary>
         public static bool RetainedGameValid(InstallLayout layout)
         {
-            return ContentValid(layout);
+            return ContentValid(layout) || ContentCookable(layout);
+        }
+
+        private static long ContentFormatOf(string content)
+        {
+            string marker = Path.Combine(content, "content.json");
+            if (!File.Exists(marker)) return -1;
+            try { return Json.Long(Json.Load(marker), "formatVersion"); }
+            catch (Exception) { return -1; }
+        }
+
+        private static long ContentFormat(InstallLayout layout)
+        {
+            string marker = Path.Combine(layout.Content, "content.json");
+            if (!File.Exists(marker) || !File.Exists(Path.Combine(layout.Content, "game.pak"))) return -1;
+            try { return Json.Long(Json.Load(marker), "formatVersion"); }
+            catch (Exception) { return -1; }
         }
 
         private static bool ContentValid(InstallLayout layout)
         {
-            string marker = Path.Combine(layout.Content, "content.json");
-            if (!File.Exists(marker) || !File.Exists(Path.Combine(layout.Content, "game.pak"))) return false;
-            try { return Json.Long(Json.Load(marker), "formatVersion") == ContentFormatVersion; }
-            catch (Exception) { return false; }
+            return ContentFormat(layout) == ContentFormatVersion;
+        }
+
+        private static bool ContentCookable(InstallLayout layout)
+        {
+            return ContentFormat(layout) == CookableContentFormatVersion;
         }
 
         private void Commit(string app, InstalledInfo current)
@@ -341,6 +385,15 @@ namespace Nebula.Setup
             {
                 Json.Save(Path.Combine(newContent, "content.json"), new Dictionary<string, object> { { "formatVersion", ContentFormatVersion }, { "createdUtc", DateTime.UtcNow.ToString("o") } });
                 Swap(newContent, layout.Content, Path.Combine(staging, "content-old"), Log);
+                // The content the previous version (kept for rollback) reads, when this one cooked it: beside the new.
+                string old = Path.Combine(staging, "content-old");
+                if (ContentFormatOf(old) == CookableContentFormatVersion)
+                {
+                    string kept = layout.Content + "-format" + CookableContentFormatVersion;
+                    TryDeleteTree(kept);
+                    try { FileUtil.MoveDirectoryInPlace(old, kept); Log("Kept the previous content for rollback in " + kept); }
+                    catch (Exception error) { Log("Could not keep " + old + ": " + error.Message); }
+                }
             }
 
             string previous = current != null && current.Version != BuildInfo.Version ? current.Version : (current != null ? current.Previous : null);

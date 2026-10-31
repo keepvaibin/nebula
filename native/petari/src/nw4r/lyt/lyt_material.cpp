@@ -728,33 +728,11 @@ namespace nw4r {
             }
 
             if (mGXMemNum.texMap > 0) {
-                u32 tlutID = GX_TLUT0;
-                u32 bigTlutID = GX_BIGTLUT0;
-
                 const TexMap* const pTexMap = GetTexMapAry();
 
                 for (int i = 0; i < mGXMemNum.texMap; i++) {
-                    const TexMap& rTexMap = pTexMap[i];
-
                     GXTexObj texObj;
-                    rTexMap.Get(&texObj);
-
-                    if (detail::IsCITexelFormat(rTexMap.GetTexelFormat())) {
-                        u32 tlutName;
-                        if (static_cast< int >(rTexMap.GetTexelFormat()) == GX_TF_C14X2) {
-                            tlutName = bigTlutID++;
-                        } else {
-                            tlutName = tlutID++;
-                        }
-
-                        J3DNativeTexture::setTlut(&texObj, tlutName);
-
-                        GXTlutObj tlutObj;
-                        rTexMap.Get(&tlutObj);
-
-                        J3DNativeTexture::loadTlut(&tlutObj, tlutName);
-                    }
-
+                    pTexMap[i].Get(&texObj);
                     J3DNativeTexture::load(&texObj, static_cast< GXTexMapID >(i));
                 }
             }

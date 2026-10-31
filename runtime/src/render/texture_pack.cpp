@@ -25,39 +25,6 @@ bool texture_format_palettized(TexFormat format) noexcept {
     return format == TexFormat::C4 || format == TexFormat::C8 || format == TexFormat::C14X2;
 }
 
-std::uint64_t texture_pack_tlut_hash(TexFormat format, const std::uint8_t* base_level, std::uint32_t width,
-                                     std::uint32_t height, const std::uint8_t* palette) noexcept {
-    if (!texture_format_palettized(format) || base_level == nullptr || palette == nullptr) {
-        return 0u;
-    }
-    const std::size_t bytes = texture_source_bytes(format, width, height, 1u);
-    std::uint32_t lo = 0xFFFFu;
-    std::uint32_t hi = 0u;
-    if (format == TexFormat::C4) {
-        for (std::size_t i = 0; i < bytes; ++i) {
-            const std::uint32_t a = base_level[i] >> 4u;
-            const std::uint32_t b = base_level[i] & 0xFu;
-            lo = std::min({lo, a, b});
-            hi = std::max({hi, a, b});
-        }
-    } else if (format == TexFormat::C8) {
-        for (std::size_t i = 0; i < bytes; ++i) {
-            lo = std::min<std::uint32_t>(lo, base_level[i]);
-            hi = std::max<std::uint32_t>(hi, base_level[i]);
-        }
-    } else {
-        for (std::size_t i = 0; i + 1u < bytes; i += 2u) {
-            const std::uint32_t v = ((static_cast<std::uint32_t>(base_level[i]) << 8u) | base_level[i + 1u]) & 0x3FFFu;
-            lo = std::min(lo, v);
-            hi = std::max(hi, v);
-        }
-    }
-    if (lo > hi) {
-        return 0u;
-    }
-    return texture_pack_hash(palette + lo * 2u, static_cast<std::size_t>(hi - lo + 1u) * 2u);
-}
-
 namespace {
 
 bool parse_hex64(std::string_view text, std::uint64_t& out) noexcept {

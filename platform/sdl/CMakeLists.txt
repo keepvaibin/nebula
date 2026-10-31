@@ -129,6 +129,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/mod_xml.cpp
     ${rt}/virtual_disc.cpp
     ${rt}/mods.cpp
+    ${rt}/cooker_bridge.cpp
     ${rt}/crash_report.cpp
     ${rt}/discord_presence.cpp)
 # Mod import (archives) on the desktop systems; Android and iOS take no mods.
