@@ -1,11 +1,10 @@
-// Policy pieces of the native audio sink (native_host.cpp) that need no audio device: the AI sample layout, the
-// initialization gate, the source voice's frequency ratio and playback lifecycle, and the callback ledger.
+// Policy pieces of the native audio sink (native_audio.cpp) that need no audio device: the initialization gate, the
+// playback lifecycle and the callback ledger.
 #pragma once
 
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <span>
 #include <utility>
 
 namespace galaxy::host {
@@ -32,24 +31,6 @@ observe_callback_buffer_state(ReadCompleted&& read_completed,
     const bool completed = read_completed();
     const bool started = read_started();
     return {completed, started};
-}
-
-// The game's audio interface blocks hold each stereo frame as right, left in host byte order; the output and the WAV
-// writer take left, right. Adapted from WiiCompiled runtime/src/audio_backend.cpp::PushWiiAiSamplesBE16,
-// GPLv3, https://github.com/patchzyy/Wiicompiled/blob/83463764b8acda394e058b0c689a10b8561fc380/runtime/src/audio_backend.cpp
-[[nodiscard]] inline bool native_audio_convert_ai_pcm16(
-    std::span<const std::byte> source,
-    std::span<std::byte> destination) noexcept {
-    if (source.size() != destination.size() || (source.size() & 3u) != 0u) {
-        return false;
-    }
-    for (std::size_t i = 0; i < source.size(); i += 4u) {
-        destination[i] = source[i + 2u];
-        destination[i + 1u] = source[i + 3u];
-        destination[i + 2u] = source[i];
-        destination[i + 3u] = source[i + 1u];
-    }
-    return true;
 }
 
 enum class NativeAudioInitializationState : std::uint8_t {
@@ -90,61 +71,6 @@ private:
     NativeAudioInitializationState state_{
         NativeAudioInitializationState::Uninitialized};
 };
-
-inline constexpr std::uint32_t kNativeAudioVoiceBaseSampleRate = 32'000u;
-inline constexpr float kNativeAudioMaxFrequencyRatio = 1.5f;
-
-struct NativeAudioFrequencyRatioDecision {
-    float ratio{};
-    bool valid{};
-};
-
-// The source voice keeps one 32 kHz PCM format; XAudio2 plays the same samples at 32 or 48 kHz through the frequency
-// ratio. Both ratios are exact binary floats.
-[[nodiscard]] constexpr NativeAudioFrequencyRatioDecision
-native_audio_frequency_ratio_for_sample_rate(
-    std::uint32_t sample_rate) noexcept {
-    switch (sample_rate) {
-    case 32'000u:
-        return {1.0f, true};
-    case 48'000u:
-        return {1.5f, true};
-    default:
-        return {};
-    }
-}
-
-struct NativeAudioFrequencyRatioBoundaryDecision {
-    float ratio{};
-    bool valid{};
-    bool apply_required{};
-};
-
-// `active_sample_rate` zero: no ratio set yet on this voice, so its first buffer sets one explicitly, even the
-// nominal 1.0. Later buffers call XAudio2 only when the rate changes.
-[[nodiscard]] constexpr NativeAudioFrequencyRatioBoundaryDecision
-native_audio_frequency_ratio_at_boundary(
-    std::uint32_t active_sample_rate,
-    std::uint32_t requested_sample_rate) noexcept {
-    const NativeAudioFrequencyRatioDecision requested =
-        native_audio_frequency_ratio_for_sample_rate(requested_sample_rate);
-    return {
-        requested.ratio,
-        requested.valid,
-        requested.valid &&
-            (active_sample_rate == 0u ||
-             active_sample_rate != requested_sample_rate),
-    };
-}
-
-static_assert(
-    static_cast<float>(kNativeAudioVoiceBaseSampleRate) *
-            native_audio_frequency_ratio_for_sample_rate(32'000u).ratio ==
-        32'000.0f);
-static_assert(
-    static_cast<float>(kNativeAudioVoiceBaseSampleRate) *
-            native_audio_frequency_ratio_for_sample_rate(48'000u).ratio ==
-        48'000.0f);
 
 enum class NativeAudioPlaybackState : std::uint8_t {
     Stopped,
@@ -271,16 +197,6 @@ public:
         event_sequence_.fetch_add(1, std::memory_order_release);
     }
 
-    void record_frequency_ratio_apply(bool succeeded, std::int32_t error) noexcept {
-        if (!succeeded) {
-            last_frequency_ratio_apply_error_.store(
-                error, std::memory_order_relaxed);
-            frequency_ratio_apply_errors_.fetch_add(
-                1, std::memory_order_release);
-        }
-        event_sequence_.fetch_add(1, std::memory_order_release);
-    }
-
     [[nodiscard]] std::uint64_t voice_errors() const noexcept {
         return voice_errors_.load(std::memory_order_acquire);
     }
@@ -291,11 +207,6 @@ public:
 
     [[nodiscard]] std::uint64_t callback_wake_errors() const noexcept {
         return callback_wake_errors_.load(std::memory_order_acquire);
-    }
-
-    [[nodiscard]] std::uint64_t frequency_ratio_apply_errors()
-        const noexcept {
-        return frequency_ratio_apply_errors_.load(std::memory_order_acquire);
     }
 
     [[nodiscard]] std::int32_t last_voice_error() const noexcept {
@@ -310,12 +221,6 @@ public:
         return last_callback_wake_error_.load(std::memory_order_acquire);
     }
 
-    [[nodiscard]] std::int32_t last_frequency_ratio_apply_error()
-        const noexcept {
-        return last_frequency_ratio_apply_error_.load(
-            std::memory_order_acquire);
-    }
-
     [[nodiscard]] std::uint64_t empty_buffer_end_boundaries() const noexcept {
         return empty_buffer_end_boundaries_.load(std::memory_order_acquire);
     }
@@ -328,11 +233,9 @@ private:
     std::atomic_uint64_t voice_errors_{0};
     std::atomic_uint64_t engine_critical_errors_{0};
     std::atomic_uint64_t callback_wake_errors_{0};
-    std::atomic_uint64_t frequency_ratio_apply_errors_{0};
     std::atomic<std::int32_t> last_voice_error_{0};
     std::atomic<std::int32_t> last_engine_critical_error_{0};
     std::atomic<std::int32_t> last_callback_wake_error_{0};
-    std::atomic<std::int32_t> last_frequency_ratio_apply_error_{0};
     std::atomic_uint64_t empty_buffer_end_boundaries_{0};
     std::atomic_uint64_t event_sequence_{0};
 };

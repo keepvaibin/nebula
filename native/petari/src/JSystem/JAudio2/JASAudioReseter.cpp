@@ -20,7 +20,7 @@ bool JASAudioReseter::start(u32 time, bool threadStopFlag) {
     }
     mThreadStopFlag = threadStopFlag;
     JASCriticalSection critical;
-    if (!JASDriver::registerDspSyncCallback(callback, this)) {
+    if (!JASDriver::registerSyncCallback(callback, this)) {
         return false;
     } else {
         mDSPLevel = JASDriver::getDSPLevel();

@@ -29,11 +29,8 @@ void JASAudioThread::stop() {
     jamMessageBlock((void*)2);
 }
 
-volatile int JASAudioThread::snIntCount;
-
 void* JASAudioThread::run() {
     JASDriver::initAI(DMACallback);
-    JASDsp::boot();
     JASDsp::initBuffer();
     JASDSPChannel::initAll();
 
@@ -54,19 +51,6 @@ void* JASAudioThread::run() {
             JASDriver::updateDacCallback();
             continue;
 
-        case AUDIOMSG_DSP:
-            snIntCount -= 1;
-            if (snIntCount == 0) {
-                JASProbe::stop(7);
-                JASDriver::finishDSPFrame();
-            } else {
-                JASProbe::start(2, "SFR_DSP");
-                JASDriver::updateDSP();
-                JASProbe::stop(2);
-            }
-
-            continue;
-
         case AUDIOMSG_STOP:
             JASDriver::stopDMA();
             NebulaKernel::exit(nullptr);
@@ -81,10 +65,4 @@ void JASAudioThread::DMACallback() {
     JASProbe::start(4, "UPDATE-DAC");
     if (!pAudioThread->sendMessage((void*)AUDIOMSG_DMA)) {
     }
-}
-
-// The host's mixer finishes a subframe inside JASDsp::releaseHalt, which posts the message the DSP's 0xF355FF00 mail
-// produced on the console.
-void JASAudioThread_postDSPMessage() {
-    JASAudioThread::getInstance()->sendMessage((void*)AUDIOMSG_DSP);
 }

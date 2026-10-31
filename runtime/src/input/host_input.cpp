@@ -5,7 +5,6 @@
 
 #include "galaxy/native_audio_queue.h"
 #include "galaxy/platform_time.h"
-#include "galaxy/jaudio_host_mixer.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/wiimote_hid.h"
 #include "galaxy/input_bindings.h"

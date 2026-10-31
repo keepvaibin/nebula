@@ -38,21 +38,21 @@ void JASDriver::waitSubFrame() {
     } while (r31 == getSubFrameCounter());
 }
 
-JASCallbackMgr JASDriver::sDspSyncCallback;
+JASCallbackMgr JASDriver::sSyncCallback;
 
 JASCallbackMgr JASDriver::sSubFrameCallback;
 
 JASCallbackMgr JASDriver::sUpdateDacCallback;
 
 int JASDriver::rejectCallback(DriverCallback callback, void* param_1) {
-    int r31 = sDspSyncCallback.reject(callback, param_1);
+    int r31 = sSyncCallback.reject(callback, param_1);
     r31 += sSubFrameCallback.reject(callback, param_1);
     r31 += sUpdateDacCallback.reject(callback, param_1);
     return r31;
 }
 
-bool JASDriver::registerDspSyncCallback(DriverCallback callback, void* param_1) {
-    return sDspSyncCallback.regist(callback, param_1);
+bool JASDriver::registerSyncCallback(DriverCallback callback, void* param_1) {
+    return sSyncCallback.regist(callback, param_1);
 }
 
 bool JASDriver::registerSubFrameCallback(DriverCallback callback, void* param_1) {
@@ -63,8 +63,8 @@ void JASDriver::subframeCallback() {
     sSubFrameCallback.callback();
 }
 
-void JASDriver::DSPSyncCallback() {
-    sDspSyncCallback.callback();
+void JASDriver::syncCallback() {
+    sSyncCallback.callback();
 }
 
 void JASDriver::updateDacCallback() {

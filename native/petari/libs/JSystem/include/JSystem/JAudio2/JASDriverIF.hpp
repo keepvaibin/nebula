@@ -13,13 +13,13 @@ namespace JASDriver {
     u32 getOutputMode();
     void waitSubFrame();
     int rejectCallback(DriverCallback, void*);
-    bool registerDspSyncCallback(DriverCallback, void*);
+    bool registerSyncCallback(DriverCallback, void*);
     bool registerSubFrameCallback(DriverCallback, void*);
     void subframeCallback();
-    void DSPSyncCallback();
+    void syncCallback();
     void updateDacCallback();
 
-    extern JASCallbackMgr sDspSyncCallback;
+    extern JASCallbackMgr sSyncCallback;
     extern JASCallbackMgr sSubFrameCallback;
     extern JASCallbackMgr sUpdateDacCallback;
     extern u16 MAX_MIXERLEVEL;

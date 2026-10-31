@@ -6,17 +6,16 @@ enum JASOutputRate {
     OUTPUT_RATE_0,
 };
 
+// The layout of the samples a mix callback returns.
 enum JASMixMode {
-    MIX_MODE_MONO,
-    MIX_MODE_MONO_WIDE,
-    MIX_MODE_EXTRA,
-    MIX_MODE_INTERLEAVE,
+    MIX_MODE_MONO,        // one channel, both sides
+    MIX_MODE_MONO_WIDE,   // one channel, the left side inverted
+    MIX_MODE_EXTRA,       // the left side's samples, then the right's
+    MIX_MODE_INTERLEAVE,  // stereo pairs (right, left)
 };
 
 namespace JASDriver {
     typedef s16* (*MixCallback)(s32);
-    typedef void (*MixFunc)(s16*, u32, MixCallback);
-    typedef void (*DSPBufCallback)(s16*, u32);
 
     void initAI(void (*)(void));
     void startDMA();
@@ -24,34 +23,17 @@ namespace JASDriver {
     void setOutputRate(JASOutputRate);
     void updateDac();
     void updateDSP();
-    void readDspBuffer(s16*, u32);
-    void finishDSPFrame();
     void registerMixCallback(MixCallback, JASMixMode);
-    void registDSPBufCallback(DSPBufCallback);
     f32 getDacRate();
     u32 getSubFrames();
-    u32 getDacSize();
     u32 getFrameSamples();
-    void mixMonoTrack(s16*, u32, MixCallback);
-    void mixMonoTrackWide(s16*, u32, MixCallback);
-    void mixExtraTrack(s16*, u32, MixCallback);
-    void mixInterleaveTrack(s16*, u32, MixCallback);
     u32 getSubFrameCounter();
     void subframeCallback();
-    void DSPSyncCallback();
+    void syncCallback();
 
-    extern const MixFunc sMixFuncs[4];
-    extern s16* sDmaDacBuffer[3];
     extern JASMixMode sMixMode;
     extern f32 sDacRate;
     extern u32 sSubFrames;
-    extern s16** sDspDacBuffer;
-    extern s32 sDspDacWriteBuffer;
-    extern s32 sDspDacReadBuffer;
-    extern s32 sDspStatus;
-    extern DSPBufCallback sDspDacCallback;
-    extern s16* lastRspMadep;
-    extern void (*dacCallbackFunc)(s16*, u32);
     extern MixCallback extMixCallback;
     extern u32 sOutputRate;
     extern volatile u32 sSubFrameCounter;
