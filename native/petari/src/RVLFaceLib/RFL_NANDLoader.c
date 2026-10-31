@@ -19,7 +19,6 @@ void RFLiInitLoader(void) {
 
     loader->cacheSize = 0;
     loader->cache = NULL;
-    loader->cached = FALSE;
     loader->version = 0;
     loader->headerBuf1 = NULL;
     loader->headerBuf2 = NULL;
@@ -239,7 +238,7 @@ static u32 getLength_(u32 arcIdx, u16 fileIdx) {
         return 0;
     }
 
-    return RFLIsResourceCached() ? getCachedLength_(loader, arcIdx, fileIdx) : 0;
+    return getCachedLength_(loader, arcIdx, fileIdx);
 }
 
 static void* getCachedFile_(void* dst, RFLiLoader* loader, u32 arcIdx,
@@ -272,7 +271,7 @@ static void* getFile_(void* dst, u32 arcIdx, u16 fileIdx) {
         return NULL;
     }
 
-    return RFLIsResourceCached() ? getCachedFile_(dst, loader, arcIdx, fileIdx) : NULL;
+    return getCachedFile_(dst, loader, arcIdx, fileIdx);
 }
 
 u32 RFLiGetTexSize(RFLiPartsTex part, u16 file) {
@@ -326,31 +325,3 @@ void* RFLiLoadShape(RFLiPartsShp part, u16 file, void* dst) {
     return getFile_(dst, scParts2Arc[part], file);
 }
 
-BOOL RFLFreeCachedResource(void) {
-    RFLiLoader* loader;
-
-    loader = RFLiGetLoader();
-    if (loader == NULL) {
-        return TRUE;
-    }
-
-    loader->cached = FALSE;
-    loader->cache = NULL;
-    loader->cacheSize = 0;
-    return FALSE;
-}
-
-BOOL RFLIsResourceCached(void) {
-    RFLiLoader* loader;
-
-    if (!RFLAvailable()) {
-        return FALSE;
-    }
-
-    loader = RFLiGetLoader();
-    if (loader == NULL) {
-        return FALSE;
-    }
-
-    return loader->cached;
-}
