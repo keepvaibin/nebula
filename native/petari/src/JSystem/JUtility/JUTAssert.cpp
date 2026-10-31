@@ -3,7 +3,6 @@
 #include "JSystem/JUtility/JUTDbPrint.hpp"
 #include "JSystem/JUtility/JUTFont.hpp"
 #include <cstdio>
-#include <revolution/vi.h>
 #include "Game/System/NebulaFrameClock.hpp"
 
 extern bool sAssertVisible;

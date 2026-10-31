@@ -22,7 +22,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JUtility/JUTVideo.hpp>
-#include <revolution/vi.h>
 
 GameSystemObjHolder::GameSystemObjHolder()
     : mObjHolder(), mParticleResHolder(), mRenderModeObj(), mCaptureScreenDirector(), mScreenPreserver(), mAudioSystem(), mWPadHolder(),

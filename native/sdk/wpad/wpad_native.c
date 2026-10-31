@@ -12,7 +12,6 @@
 
 #include <revolution/kpad.h>
 #include <revolution/os.h>
-#include <revolution/vi.h>
 #include <revolution/wpad.h>
 
 #include <nebula_game_api.h>

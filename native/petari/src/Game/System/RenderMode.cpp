@@ -1,6 +1,5 @@
 #include "Game/System/RenderMode.hpp"
 #include <revolution/gx.h>
-#include <revolution/vi.h>
 #include "Game/System/NebulaSystemSettings.hpp"
 
 const GXRenderModeObj GXNtscIntDf[] = {
