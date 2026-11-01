@@ -8416,7 +8416,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
 
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
-    const std::uint32_t native_texmtx = native_material_ != nullptr ? (matrix_bits >> 1u) & 0xFFu : 0u;
+    // Bit 8: the shape's vertices carry their own position matrix (a multi-matrix shape: skinned models), which the
+    // GX path takes from its vertex shader key (the vertex constants' flags keep bit 0 clear).
+    const std::uint32_t native_texmtx =
+        native_material_ != nullptr ? ((matrix_bits >> 1u) & 0xFFu) | ((matrix_bits & 1u) << 8u) : 0u;
     // The header word as the last upload wrote it (a GX draw's from its key): any change uploads again, or a native
     // draw after a GX one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
