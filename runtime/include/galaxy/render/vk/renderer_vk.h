@@ -183,7 +183,6 @@ public:
     void rt_hold_sun(bool) noexcept {}
     void rt_reset_sky() noexcept {}
     void rt_set_camera(const std::array<float, 12>*) noexcept {}
-    void rt_set_view(const RtView&) noexcept {}
     [[nodiscard]] bool rt_physical() const noexcept { return false; }
     void rt_set_presents(std::uint64_t) noexcept {}
     void rt_set_key_light(bool, const std::array<float, 3>&, const std::array<float, 3>&, float, bool) noexcept {}
@@ -192,7 +191,6 @@ public:
     [[nodiscard]] bool rt_sky_key(std::array<float, 3>&, float&) const noexcept { return false; }
     [[nodiscard]] bool rt_sky_sun(std::array<float, 3>&, std::array<float, 3>&) const noexcept { return false; }
     [[nodiscard]] bool rt_sun_direction(std::array<float, 3>&) const noexcept { return false; }
-    void rt_note_draw(const DrawCall&, const RtDrawInfo&) {}
     [[nodiscard]] float rt_glow_exposure(bool = false) const noexcept { return 1.0f; }
     [[nodiscard]] const void* rt_light_texture() const noexcept { return nullptr; }
     [[nodiscard]] bool rt_light_texture_ready() const noexcept { return false; }

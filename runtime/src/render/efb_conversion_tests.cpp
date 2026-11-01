@@ -34,6 +34,14 @@
 
 namespace {
 
+// An image as these tests describe it before handing its record over.
+struct TestImage {
+    std::uint16_t width;
+    std::uint16_t height;
+    galaxy::render::TexFormat format;
+    std::uint64_t address;
+};
+
 // Hands bytes to the texture cache as the game hands over an image (texture_image).
 void hand_over(galaxy::render::TextureCache& cache, std::uint32_t address, const std::byte* bytes, std::size_t size) {
     cache.register_image(address, std::make_shared<const std::vector<std::byte>>(bytes, bytes + size));
@@ -1071,7 +1079,7 @@ V main(uint id : SV_VertexID) {
         std::vector<std::byte> bytes(kTextures * stride);
         for (unsigned i = 0u; i < kTextures; ++i) bytes[i * stride] = static_cast<std::byte>(i);
         hand_over(cache, address, bytes.data(), bytes.size());
-        TexImage image{};
+        TestImage image{};
         image.address = address;
         image.width = image.height = 1024u;
         image.format = TexFormat::CMPR;
@@ -1180,7 +1188,7 @@ V main(uint id : SV_VertexID) {
             std::vector<TextureHandle> handles;
             std::uint32_t offset = 0u;
             for (const Case& test : cases) {
-                TexImage image{};
+                TestImage image{};
                 image.address = address + offset;
                 image.width = test.width;
                 image.height = test.height;
@@ -1318,7 +1326,7 @@ V main(uint id : SV_VertexID) {
         std::vector<std::byte> bytes(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(8u, 8u, 1u, NEBULA_TEXTURE_RGBA8));
         nebula_texture_init(bytes.data(), 8u, 8u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
         hand_over(cache, address, bytes.data(), bytes.size());
-        TexImage image{};
+        TestImage image{};
         image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGBA8;
@@ -1388,7 +1396,7 @@ V main(uint id : SV_VertexID) {
         };
         const std::vector<std::byte> authored = record_of(8u, 8u, 3u, NEBULA_TEXTURE_RGBA8);
         hand_over(cache, address, authored.data(), authored.size());
-        TexImage image{};
+        TestImage image{};
         image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGBA8;

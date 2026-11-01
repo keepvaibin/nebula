@@ -281,7 +281,6 @@ private:
         bool hidden = false;
         // Hidden but traced: a clear surface the engine traces (the table's `traced`), captured though not drawn.
         bool traced = false;
-        RtDrawInfo rt_info{};
         std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
         // Its indices are a native shape's own, apart from the frame's index ring: nothing extends it.
         bool sealed = false;
@@ -561,12 +560,6 @@ private:
     // The J3D material identity (FNV-1a "model/material") whose shapes draw now, 0 none (GALAXY_RT_LOG_GLOWS).
     std::uint32_t rt_identity_seen_ = 0u;
     std::uint16_t rt_effect_material_ = 0u;
-    // The traced draws' identity from frame to frame (RtDrawInfo.light_key): the last object, model shape, emitter or
-    // particle marker (a particle by its pool node and lifetime), the J3D material's after it, the draws since.
-    std::uint64_t rt_light_object_ = 0u;
-    std::uint32_t rt_light_material_ = 0u;
-    std::uint32_t rt_light_draws_ = 0u;
-    [[nodiscard]] std::uint32_t rt_light_key() noexcept;
     void refresh_rt_material() noexcept {
         current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_
                                : rt_effect_material_ != 0u ? rt_effect_material_
