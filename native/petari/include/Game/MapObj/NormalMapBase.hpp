@@ -21,7 +21,6 @@ public:
     virtual void drawMaterialSetting(J3DMaterial*) const;
     virtual void setTevForObject() const;
     virtual void setTevForObject_Material() const;
-    virtual void setTevForDebug() const;
 
     void setup(const char*);
     void initNormalMap();
@@ -41,15 +40,8 @@ public:
     void swapColorGB(JUTTexture*);
     void loadData(const char*, u32);
 
-    void loadDirectLightTex(GXTexMapID) const;
-
-    void indirectCapture() const;
-
-    void drawSettingForDebug(MtxPtr) const;
-    void drawSettingForCapture(MtxPtr) const;
-
-    void loadDiffuseGradTex(GXTexMapID) const;
-    void loadNormalTex(const JUTTexture*, GXTexMapID) const;
+    void loadDiffuseGradTex(u32 slot) const;
+    void loadNormalTex(const JUTTexture*, u32 slot) const;
 
     /* 0x08C */ u32 _8C;
     /* 0x090 */ JUTTexture* _90;
