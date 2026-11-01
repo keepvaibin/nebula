@@ -14,7 +14,31 @@ namespace {
     u32 sAlphaTest = 0;
     GXColor sAmbient = {0, 0, 0, 0};
     GXColor sMaterial = {255, 255, 255, 255};
+    // The face texture's form and colours (RFLiNativeTextureForm).
+    u32 sTextureForm = 0;
+    GXColor sTextureC0 = {0, 0, 0, 0};
+    GXColor sTextureC1 = {0, 0, 0, 0};
 }  // namespace
+
+extern "C" void RFLiNativeTextureForm(u32 form, GXColor c0, GXColor c1) {
+    sTextureForm = form;
+    sTextureC0 = c0;
+    sTextureC1 = c1;
+}
+
+extern "C" void RFLiNativeTexturePart(const GXTexObj* pTexture) {
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_MII_TEXTURE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                       NEBULA_CULL_NONE);
+    material.blend_op = NEBULA_NATIVE_KEPT;
+    material.depth_test = NEBULA_NATIVE_KEPT;
+    material.cull = NEBULA_NATIVE_KEPT;
+    NativeShader::setColor(material, 0, sTextureC0.r, sTextureC0.g, sTextureC0.b, sTextureC0.a);
+    NativeShader::setColor(material, 4, sTextureC1.r, sTextureC1.g, sTextureC1.b, sTextureC1.a);
+    material.constants[8] = static_cast< f32 >(sTextureForm);
+    NativeShader::setTexObj(material, 0, pTexture);
+    NativeShader::send(material);
+}
 
 extern "C" void RFLiNativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, GXColor ambient,
                                 GXColor material, u32 alphaTest) {
