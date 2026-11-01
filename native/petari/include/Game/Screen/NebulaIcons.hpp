@@ -14,9 +14,9 @@ namespace nw4r {
 // buttons: the host names the style (the controller in use, or the one chosen) and the button each stands for
 // (NebulaHostServices::button_icons). Every text and layout that shows a button through the picture font shows them.
 namespace NebulaIcons {
-    // The stationed GDDR heap's room for our sheets, widths and code map (HeapMemoryWatcher); a font that needs more
-    // keeps its own icons.
-    const u32 cStationedBytes = 0x100000;
+    // The stationed GDDR heap's room for our sheets (RGBA8 records), widths and code map (HeapMemoryWatcher); a font
+    // that needs more keeps its own icons.
+    const u32 cStationedBytes = 0x300000;
     // Once the stationed resources are loaded (the picture font among them), before the stationed heaps shrink to fit:
     // the font's sheets, widths and code map of ours.
     void init();

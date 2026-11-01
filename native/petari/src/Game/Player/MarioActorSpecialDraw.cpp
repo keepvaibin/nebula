@@ -428,11 +428,12 @@ void MarioActor::updateRandomTexture(f32 distance) {
     distance = 1.0f - distance / 1000.0f;
     f32 probability = MR::clamp(distance, 0.0f, 1.0f);
 
+    // LA8 texels in rows: intensity 0, the alpha in 16 levels (level * 17).
     for (u32 y = 0; y < 8; y++) {
-        pixel = image + y * 8;
+        pixel = image + y * 16;
 
         for (u32 x = 0; x < 8; x++) {
-            s32 alpha = *pixel >> 4;
+            s32 alpha = pixel[1] / 17;
 
             if (MR::getRandom() < probability) {
                 alpha += 4;
@@ -441,12 +442,13 @@ void MarioActor::updateRandomTexture(f32 distance) {
             }
 
             s32 clamped = alpha < 0 ? 0 : alpha > 15 ? 15 : alpha;
-            *pixel = (clamped * 16) & 0xF0;
-            pixel++;
+            pixel[0] = 0;
+            pixel[1] = static_cast< u8 >(clamped * 17);
+            pixel += 2;
         }
     }
 
-    J3DNativeTexture::registerImage(image, GX_TF_IA4, 8, 8, 1);
+    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
 }
 
 namespace {
@@ -725,13 +727,10 @@ void MarioActor::initDarkMask() {
     for (u32 texture = 0; texture < 2; texture++) {
         u8* image = mMaskTextures[texture]->mImage;
 
-        for (u32 y = 0; y < 8; y++) {
-            u8* pixel = image + y * 8;
-
-            for (u32 x = 0; x < 8; x++) {
-                pixel[x] = 0;
-            }
+        for (u32 i = 0; i < 8 * 8 * 2; i++) {
+            image[i] = 0;
         }
+        J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     }
 
     _1C3 = true;
@@ -748,10 +747,12 @@ void MarioActor::updateDarkMask(u16 unused) {
     u8* image = mMaskTextures[_B88]->mImage;
     u8 x = MR::getRandom(0L, 8L);
     u8 y = MR::getRandom(0L, 8L);
-    s32 index = x + y * 8;
-    image[index] = 0xF0;
-    previous[index] = 0xF0;
-    J3DNativeTexture::registerImage(image, GX_TF_IA4, 8, 8, 1);
+    s32 index = 2 * (x + y * 8);
+    image[index] = 0;
+    image[index + 1] = 255;
+    previous[index] = 0;
+    previous[index + 1] = 255;
+    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     _1C4++;
 }
 
