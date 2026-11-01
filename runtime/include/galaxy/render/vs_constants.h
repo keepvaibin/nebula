@@ -126,8 +126,8 @@ inline void fill_vs_constants(
 
     refresh_vs_inline_matrices(state, draw, out);
 
-    LinePointValues values{draw.line_point.line_width, draw.line_point.point_size, draw.line_point.line_offset,
-                           draw.line_point.point_offset, 0u, 0u};
+    LinePointValues values{draw.line_point.line_width, draw.line_point.point_size, draw.line_point.line_divisor,
+                           draw.line_point.point_divisor, 0u, 0u};
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
         values.line_coords = static_cast<std::uint8_t>(values.line_coords | (draw.coord[i].line_offset ? 1u : 0u) << i);
         values.point_coords = static_cast<std::uint8_t>(values.point_coords | (draw.coord[i].point_offset ? 1u : 0u) << i);

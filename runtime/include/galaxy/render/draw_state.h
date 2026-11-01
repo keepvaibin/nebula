@@ -54,8 +54,8 @@ struct NativeDrawState {
     // The current matrices: the position/normal matrix row and each texture coordinate's.
     std::uint8_t position_matrix = 0u;
     std::uint8_t texture_matrix[8]{};
-    // Lines and points: width and size (sixths of a pixel), their texture coordinate offsets.
-    struct { std::uint8_t line_width, point_size, line_offset, point_offset; } line_point{};
+    // Lines and points: width and size (pixels), their texture coordinate offsets (1/n texel; 0 none).
+    struct { float line_width, point_size; std::uint8_t line_divisor, point_divisor; } line_point{};
     // Each coordinate's rasterizer scale (s, t: the scale minus one, bias, cylindrical wrap) and its line and point
     // offset enables.
     struct {

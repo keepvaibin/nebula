@@ -477,16 +477,22 @@ void J3DStateList::setIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale s
     r.a[2] = scaleT;
 }
 
+namespace {
+    // GXTexOffset to the n of a 1/n-texel coordinate offset (0: none; 1/16 to 1, then 1).
+    const u8 sTexOffsetDivisor[8] = {0, 16, 8, 4, 2, 1, 1, 1};
+}  // namespace
+
+// GX's widths are sixths of a pixel: the op carries pixels.
 void J3DStateList::setLineWidth(u8 width, GXTexOffset texOffsets) {
     NebulaStateOp& r = add(NEBULA_STATE_LINE_WIDTH);
-    r.a[0] = width;
-    r.a[1] = texOffsets;
+    r.f[0] = width / 6.0f;
+    r.a[1] = sTexOffsetDivisor[texOffsets & 7];
 }
 
 void J3DStateList::setPointSize(u8 size, GXTexOffset texOffsets) {
     NebulaStateOp& r = add(NEBULA_STATE_POINT_SIZE);
-    r.a[0] = size;
-    r.a[1] = texOffsets;
+    r.f[0] = size / 6.0f;
+    r.a[1] = sTexOffsetDivisor[texOffsets & 7];
 }
 
 void J3DStateList::setLight(GXLightID id, const J3DNativeLight& rLight) {

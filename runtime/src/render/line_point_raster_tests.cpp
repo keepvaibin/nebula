@@ -654,7 +654,7 @@ int main() {
     try {
         const galaxy::render::LinePointRasterParams decoded =
             galaxy::render::make_line_point_raster_params(
-                {1u, 255u, 2u, 5u, 0x81u, 0x88u}, 10.0f, -20.0f, 3u);
+                {1.0f / 6.0f, 255.0f / 6.0f, 8u, 1u, 0x81u, 0x88u}, 10.0f, -20.0f, 3u);
         passed &= expect_near(
             decoded.viewport_width_pixels,
             60.0f,
@@ -682,7 +682,7 @@ int main() {
 
         const galaxy::render::LinePointRasterParams fallback =
             galaxy::render::make_line_point_raster_params(
-                {6u, 12u}, 0.0f, 0.0f, 0u);
+                {1.0f, 2.0f}, 0.0f, 0.0f, 0u);
         passed &= expect_near(
             fallback.viewport_width_pixels,
             640.0f,
@@ -693,7 +693,7 @@ int main() {
             "unprogrammed XF viewport uses the 1x frame height");
         const galaxy::render::LinePointRasterParams maximum_scale =
             galaxy::render::make_line_point_raster_params(
-                {6u, 12u}, 32.0f, -32.0f, 99u);
+                {1.0f, 2.0f}, 32.0f, -32.0f, 99u);
         passed &= expect_near(
             maximum_scale.line_width_pixels,
             static_cast<float>(galaxy::render::kMaxEfbScale),
@@ -707,7 +707,7 @@ int main() {
         (void)state.consume_dirty();
         galaxy::render::state::Op line{};
         line.kind = galaxy::render::state::kLineWidth;
-        line.a[0] = 6u;
+        line.f[0] = 1.0f;  // one pixel
         state.apply(line);
         passed &= expect(
             (state.consume_dirty() & galaxy::render::kStateDirtyVertexConstants) != 0u,
@@ -733,7 +733,7 @@ int main() {
              scale <= galaxy::render::kMaxEfbScale; ++scale) {
             const galaxy::render::LinePointRasterParams raster =
                 galaxy::render::make_line_point_raster_params(
-                    {12u, 12u},
+                    {2.0f, 2.0f},
                     32.0f,
                     -32.0f,
                     scale,
@@ -790,7 +790,7 @@ int main() {
 
         const galaxy::render::LinePointRasterParams offset_raster =
             galaxy::render::make_line_point_raster_params(
-                {12u, 12u, 4u, 4u, 1u, 1u},
+                {2.0f, 2.0f, 2u, 2u, 1u, 1u},
                 32.0f,
                 -32.0f,
                 4u,

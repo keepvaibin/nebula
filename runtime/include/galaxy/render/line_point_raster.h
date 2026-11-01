@@ -1,7 +1,7 @@
 #pragma once
 
-// Line and point raster parameters for the line/point geometry shaders: the game gives both widths in sixths of a
-// logical EFB pixel; the expansion works in physical pixels at the EFB scale.
+// Line and point raster parameters for the line/point geometry shaders: the game gives both widths in logical frame
+// pixels; the expansion works in physical pixels at the frame scale.
 
 #include <array>
 #include <cstdint>
@@ -20,13 +20,13 @@ struct LinePointRasterParams {
 };
 static_assert(sizeof(LinePointRasterParams) == 32u);
 
-// The game's line width and point size (sixths of a logical EFB pixel), each one's texture-offset selector (0 none,
-// 1-5: 1/16 to 1 of a texel, 6 and 7 as 5) and the coordinates it offsets (bit n: coordinate n).
+// The game's line width and point size (logical pixels), each one's texture offset (1/n of a texel; 0 none) and the
+// coordinates it offsets (bit n: coordinate n).
 struct LinePointValues {
-    std::uint8_t line_width = 0;
-    std::uint8_t point_size = 0;
-    std::uint8_t line_offset = 0;
-    std::uint8_t point_offset = 0;
+    float line_width = 0.0f;
+    float point_size = 0.0f;
+    std::uint8_t line_divisor = 0;
+    std::uint8_t point_divisor = 0;
     std::uint8_t line_coords = 0;
     std::uint8_t point_coords = 0;
 };

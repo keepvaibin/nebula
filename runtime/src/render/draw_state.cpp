@@ -280,12 +280,12 @@ void NativeDrawState::set_op(const state::Op& op) {
         position_matrix = static_cast<std::uint8_t>(a[0] & 63u);
         break;
     case state::kLineWidth:
-        line_point.line_width = a[0];
-        line_point.line_offset = static_cast<std::uint8_t>(a[1] & 7u);
+        line_point.line_width = op.f[0];
+        line_point.line_divisor = a[1];
         break;
     case state::kPointSize:
-        line_point.point_size = a[0];
-        line_point.point_offset = static_cast<std::uint8_t>(a[1] & 7u);
+        line_point.point_size = op.f[0];
+        line_point.point_divisor = a[1];
         break;
     case state::kTexOffsets:
         coord[a[0] & 7u].line_offset = (a[1] & 1u) != 0u;
