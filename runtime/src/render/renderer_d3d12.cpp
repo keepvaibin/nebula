@@ -1524,7 +1524,7 @@ gpu::TextureRef RendererD3D12::hand_over_efb_color(gpu::TextureRef fresh) {
     write_efb_conversion_views(*table);
     efb_owed_ = picture;
     ++efb_handovers_;
-    bind_efb(nullptr);
+    bind_efb();
     return picture;
 }
 
@@ -4866,7 +4866,7 @@ void RendererD3D12::record_motion_debug_view() {
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 bool RendererD3D12::interpolation_mode() const {
@@ -4918,7 +4918,6 @@ void RendererD3D12::publish_replay_log() {
     std::swap(replay_stripes_, play_stripes_);
     std::swap(replay_ops_, play_ops_);
     std::swap(replay_draws_, play_draws_);
-    std::swap(replay_viewports_, play_viewports_);
     std::swap(replay_clears_, play_clears_);
     std::swap(replay_copies_, play_copies_);
     std::swap(replay_blooms_, play_blooms_);
@@ -4942,7 +4941,6 @@ bool RendererD3D12::start_replay_playback() {
     run_blend_vertices_.clear();
     std::swap(play_ops_, run_ops_);
     std::swap(play_draws_, run_draws_);
-    std::swap(play_viewports_, run_viewports_);
     std::swap(play_clears_, run_clears_);
     std::swap(play_copies_, run_copies_);
     std::swap(play_blooms_, run_blooms_);
@@ -5399,7 +5397,6 @@ void RendererD3D12::begin_replay_record() {
     replay_stripes_.clear();
     replay_ops_.clear();
     replay_draws_.clear();
-    replay_viewports_.clear();
     replay_clears_.clear();
     replay_copies_.clear();
     replay_blooms_.clear();
@@ -6257,7 +6254,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             command_list_->ClearRenderTargetView(reactive_rtv_, zero, 0u, nullptr);
         }
         replay_playing_ = true;
-        bind_efb(nullptr);
+        bind_efb();
         const auto far_values = make_efb_clear_values(0u, 0x00FFFFFFu, 0u);
         // The log before's vertices are gone once its segment came round (a
         // later game frame records there while this sequence still plays).
@@ -6294,11 +6291,9 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                 draw(call);
                 break;
             }
-            case ReplayKind::BindEfb: {
-                const ReplayViewport& viewport = run_viewports_[op.index];
-                bind_efb(viewport.valid ? viewport.values : nullptr);
+            case ReplayKind::BindEfb:
+                bind_efb();
                 break;
-            }
             case ReplayKind::Clear: {
                 const ReplayClear& c = run_clears_[op.index];
                 clear_efb(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
@@ -7254,7 +7249,7 @@ void RendererD3D12::swap_efb_sets() {
     output_efb_active_ = !output_efb_active_;
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 // The EFB and the target passes' set trade places (begin_target_pass): targets, scale and copy sources, the output
@@ -7274,7 +7269,7 @@ void RendererD3D12::swap_target_set() {
     target_pass_active_ = !target_pass_active_;
     invalidate_gx_bindings();
     bound_scissor_input_scale_ = 0u;
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 bool RendererD3D12::begin_target_pass(std::uint64_t key, std::uint16_t width, std::uint16_t height) {
@@ -7824,35 +7819,16 @@ bool RendererD3D12::copy_output_efb_to_texture(const EfbCopyParams& params, Text
     return updated;
 }
 
-void RendererD3D12::bind_efb(const float xf_vp[6]) {
+void RendererD3D12::bind_efb() {
     if (replay_recording_) [[unlikely]] {
-        ReplayViewport viewport{};
-        viewport.valid = xf_vp != nullptr;
-        if (xf_vp != nullptr) std::memcpy(viewport.values, xf_vp, sizeof(viewport.values));
-        replay_ops_.push_back({ReplayKind::BindEfb, static_cast<std::uint32_t>(replay_viewports_.size())});
-        replay_viewports_.push_back(viewport);
+        replay_ops_.push_back({ReplayKind::BindEfb, 0u});
     }
     command_list_->OMSetRenderTargets(1, &efb_rtv_, FALSE, &efb_dsv_);
     bound_rt_aux_ = 0u;
 
-    float vp_x = 0.0f, vp_y = 0.0f;
-    float vp_w = static_cast<float>(kFrameWidth  * efb_scale_);
-    float vp_h = static_cast<float>(kFrameHeight * efb_scale_);
-
-    if (xf_vp) {
-        // GX XF viewport: [xs, xo, ys, yo, zs, zo]
-        // x_center = xo - 342,  half_w = |xs|
-        // y_center = yo - 342,  half_h = |ys|
-        const float xs = xf_vp[0], xo = xf_vp[1];
-        const float ys = xf_vp[2], yo = xf_vp[3];
-        const float scale = static_cast<float>(efb_scale_);
-        const float hw = std::abs(xs) * scale;
-        const float hh = std::abs(ys) * scale;
-        const float cx = (xo - 342.0f) * scale;
-        const float cy = (yo - 342.0f) * scale;
-        vp_x = cx - hw; vp_y = cy - hh;
-        vp_w = hw * 2.0f; vp_h = hh * 2.0f;
-    }
+    const float vp_x = 0.0f, vp_y = 0.0f;
+    const float vp_w = static_cast<float>(kFrameWidth  * efb_scale_);
+    const float vp_h = static_cast<float>(kFrameHeight * efb_scale_);
 
     D3D12_VIEWPORT vp{vp_x, vp_y, vp_w, vp_h, 0.0f, 1.0f};
     D3D12_RECT sci{0, 0, static_cast<LONG>(kFrameWidth * efb_scale_), static_cast<LONG>(kFrameHeight * efb_scale_)};
@@ -7939,7 +7915,7 @@ void RendererD3D12::clear_efb(
 
             command_list_->SetGraphicsRootSignature(root_signature_.Get());
             invalidate_gx_bindings();
-            bind_efb(nullptr);
+            bind_efb();
         }
     }
     if (depth_enable) {
@@ -8077,8 +8053,8 @@ void RendererD3D12::draw(const DrawCall& call) {
     // Composes with the negated projection z (fill_projection): GX near maps to the depth MaxDepth
     // side, GX far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
-        const ScaledGxViewport scaled =
-            compute_scaled_gx_viewport(call.xf_viewport, efb_scale_);
+        const ScaledViewport scaled =
+            compute_scaled_viewport(call.viewport, efb_scale_);
         D3D12_VIEWPORT vp{
             scaled.x,
             scaled.y,
@@ -8339,7 +8315,7 @@ void RendererD3D12::record_conversion_blit(
     // viewport/scissor re-bound; per-draw viewport/scissor follow).
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
@@ -8878,7 +8854,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     // Restore the GX drawing state exactly as record_conversion_blit does.
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
     pointer_depth_in_frame_pending_ = true;
     return true;
 }
@@ -9049,7 +9025,7 @@ bool RendererD3D12::record_async_peek_field_in_frame(
     // Restore the GX drawing state exactly as record_conversion_blit does.
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
     invalidate_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
     field.fence = kAsyncPeekInFrame;  // fenced at end_frame
     return true;
 }

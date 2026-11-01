@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 79u
+#define NEBULA_GAME_API_VERSION 80u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -191,7 +191,7 @@ enum {
     NEBULA_STATE_ALPHA_UPDATE,      /* enable */
     NEBULA_STATE_DITHER,            /* enable */
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
-    NEBULA_STATE_VIEWPORT,          /* f: x scale, y scale, z scale, x origin, y origin, z origin (GX's terms) */
+    NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
     NEBULA_STATE_TEV_KCOLOR,        /* konst register, r, g, b, a */
     NEBULA_STATE_TEV_COLOR_S10,     /* register; size: r, g; f: b, a (signed 10-bit values) */

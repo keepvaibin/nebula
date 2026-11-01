@@ -222,11 +222,9 @@ struct DrawCall {
     std::uint32_t index_count = 0;
     gpu::Topology topology = gpu::kTopologyTriangleList;
     gpu::Rect scissor{};
-    // Raw XF viewport registers 0x101A-0x101F in hardware order:
-    // [0]=wd (w/2), [1]=ht (-h/2), [2]=zRange ((f-n)*(2^24-1)),
-    // [3]=xOrig (cx+342), [4]=yOrig (cy+342), [5]=farZ (f*(2^24-1)).
-    // has_viewport=false (XF regs not yet written) falls back to full EFB.
-    float xf_viewport[6]{};
+    // The game's viewport (draw_state.h: left, top, width, height, near and far depth); has_viewport=false (not set
+    // yet, or empty) falls back to the full frame.
+    float viewport[6]{};
     bool  has_viewport = false;
     // Render target 1 in temporal scenes: 1 the motion target (opaque
     // motion writers), 2 the reactive mask (blended draws), 0 none.

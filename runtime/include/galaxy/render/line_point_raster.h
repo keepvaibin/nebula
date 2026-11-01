@@ -31,12 +31,12 @@ struct LinePointValues {
     std::uint8_t point_coords = 0;
 };
 
-// `viewport_half_width` / `viewport_half_height` are the viewport's half extents (width > 0, height < 0); any other
-// viewport (not yet set) takes the fallback EFB size.
+// `viewport_width` / `viewport_height` are the viewport's size in frame pixels (both > 0); any other viewport (not
+// yet set) takes the fallback frame size.
 [[nodiscard]] LinePointRasterParams make_line_point_raster_params(
     const LinePointValues& values,
-    float viewport_half_width,
-    float viewport_half_height,
+    float viewport_width,
+    float viewport_height,
     unsigned efb_scale,
     unsigned fallback_efb_width = 640u,
     unsigned fallback_efb_height = 456u) noexcept;

@@ -442,29 +442,13 @@ void RendererVk::reset_gx_bindings() noexcept {
     bound_ = Bound{};
 }
 
-void RendererVk::bind_efb(const float xf_vp[6]) {
+void RendererVk::bind_efb() {
     if (logging()) {
-        ReplayViewport viewport{};
-        viewport.valid = xf_vp != nullptr;
-        if (viewport.valid) {
-            std::memcpy(viewport.values, xf_vp, sizeof(viewport.values));
-        }
-        recording_log_.ops.push_back({ReplayKind::BindEfb, static_cast<std::uint32_t>(recording_log_.viewports.size())});
-        recording_log_.viewports.push_back(viewport);
+        recording_log_.ops.push_back({ReplayKind::BindEfb, 0u});
     }
-    float x = 0.0f, y = 0.0f;
-    float w = static_cast<float>(efb_.color->width);
-    float h = static_cast<float>(efb_.color->height);
-    if (xf_vp != nullptr) {
-        // GX XF viewport [xs, xo, ys, yo, zs, zo]: centre (xo - 342, yo - 342), half extents |xs|, |ys|.
-        const float scale = static_cast<float>(efb_scale_);
-        const float hw = std::abs(xf_vp[0]) * scale;
-        const float hh = std::abs(xf_vp[2]) * scale;
-        x = (xf_vp[1] - 342.0f) * scale - hw;
-        y = (xf_vp[3] - 342.0f) * scale - hh;
-        w = hw * 2.0f;
-        h = hh * 2.0f;
-    }
+    const float x = 0.0f, y = 0.0f;
+    const float w = static_cast<float>(efb_.color->width);
+    const float h = static_cast<float>(efb_.color->height);
     bound_.viewport = VkViewport{x, y + h, w, -h, 0.0f, 1.0f};
     bound_.viewport_valid = true;
     bound_.scissor = VkRect2D{{0, 0}, {efb_.color->width, efb_.color->height}};
@@ -535,7 +519,7 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
             vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
             vkCmdDraw(commands, 3, 1, 0, 0);
             reset_gx_bindings();
-            bind_efb(nullptr);
+            bind_efb();
         } else if (color_enable && alpha_enable) {
             VkClearAttachment attachment{};
             attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -553,7 +537,7 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
             vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(float) * 4u, clear.color.data());
             vkCmdDraw(commands, 3, 1, 0, 0);
             reset_gx_bindings();
-            bind_efb(nullptr);
+            bind_efb();
         }
     }
     const VkPipeline depth_clear = depth_enable ? efb_utility_pipeline(EfbUtility::ClearDepth) : VK_NULL_HANDLE;
@@ -567,7 +551,7 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
         vkCmdPushConstants(commands, utility_layout_, kPushStages, 0, sizeof(value), value);
         vkCmdDraw(commands, 3, 1, 0, 0);
         reset_gx_bindings();
-        bind_efb(nullptr);
+        bind_efb();
     } else if (depth_enable) {
         // Reversed-Z: GX's farthest (0xFFFFFF) clears to about 0.
         VkClearAttachment attachment{};
@@ -681,7 +665,7 @@ bool RendererVk::begin_target_pass(std::uint64_t key, std::uint16_t width, std::
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         efb_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
-    bind_efb(nullptr);
+    bind_efb();
     return true;
 }
 
@@ -714,7 +698,7 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureCache& textures) 
         target_free_sources_.push_back({idle.set.color_source, idle.set.depth_source});
         it = target_slots_.erase(it);
     }
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 bool RendererVk::target_picture(std::uint64_t key, TextureHandle& out) const {
@@ -860,7 +844,7 @@ bool RendererVk::enter_output_efb(unsigned scale) {
                   VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
     alt_efb_.color->layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     swap_efb_sets();
-    bind_efb(nullptr);
+    bind_efb();
     clear_efb(0u, 0x00FFFFFFu, false, false, true);
     return true;
 }
@@ -873,7 +857,7 @@ void RendererVk::end_output_efb() {
         recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
     }
     swap_efb_sets();
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 bool RendererVk::copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
@@ -884,13 +868,13 @@ bool RendererVk::copy_output_efb_to_texture(const EfbCopyParams& params, Texture
         recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
     }
     swap_efb_sets();
-    bind_efb(nullptr);
+    bind_efb();
     const bool updated = copy_efb_to_texture(params, textures, false);
     if (logging()) {
         recording_log_.ops.push_back({ReplayKind::SwapEfbSets, 0u});
     }
     swap_efb_sets();
-    bind_efb(nullptr);
+    bind_efb();
     return updated;
 }
 
@@ -1510,10 +1494,10 @@ void RendererVk::draw(const DrawCall& call) {
         bound_.scissor_input = call.scissor;
         bound_.scissor_input_valid = true;
     }
-    // The XF viewport with the GX depth range (reversed-Z, as D3D12: compute_scaled_gx_viewport); y flipped by a
+    // The game's viewport with its depth range (reversed, as D3D12: compute_scaled_viewport); y flipped by a
     // negative height so clip space matches D3D's.
     if (call.has_viewport) {
-        const ScaledGxViewport scaled = compute_scaled_gx_viewport(call.xf_viewport, efb_scale_);
+        const ScaledViewport scaled = compute_scaled_viewport(call.viewport, efb_scale_);
         if (scaled.valid()) {
             const VkViewport viewport{scaled.x, scaled.y + scaled.height, scaled.width, -scaled.height,
                                       scaled.min_depth, scaled.max_depth};
@@ -1525,7 +1509,7 @@ void RendererVk::draw(const DrawCall& call) {
         }
     }
     if (!bound_.viewport_valid) {
-        bind_efb(nullptr);
+        bind_efb();
     }
     if (call.vertex_view.BufferLocation != bound_.vertex_address) {
         const vk::Context::BufferOffset vertices = context.resolve(call.vertex_view.BufferLocation);
@@ -1673,7 +1657,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     transition_efb_to_attachment(commands, is_depth_copy);
     reset_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
 }
 
 void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
@@ -1840,7 +1824,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         texture.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         reset_gx_bindings();
-        bind_efb(nullptr);
+        bind_efb();
         return publish_capture(params, current.texture, is_depth_copy, textures);
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
@@ -2024,7 +2008,7 @@ bool RendererVk::record_pointer_depth_capture_in_frame() {
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
     reset_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
     pointer_depth_in_frame_ = true;  // fenced at end_frame
     return true;
 }
@@ -2082,7 +2066,7 @@ bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, EfbPeekKi
     record_peek_field(commands_, *field.target, kind, constants, kFrameWidth, kFrameHeight,
                       field.readbacks[slot].buffer->buffer);
     reset_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
     field.fence = kAsyncPeekInFrame;  // fenced at end_frame
     field.pending_slot = slot;
     return true;
@@ -2173,7 +2157,7 @@ bool RendererVk::debug_copy_efb_to_readback() {
     efb_capture_width_ = w;
     efb_capture_height_ = h;
     reset_gx_bindings();
-    bind_efb(nullptr);
+    bind_efb();
     return true;
 }
 

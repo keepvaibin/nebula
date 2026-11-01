@@ -522,7 +522,7 @@ private:
     bool ao_scene_applied_ = true;
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
-    [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
+    [[nodiscard]] RtView scene_depth_view(const ScaledViewport& viewport) const;
     void note_interp_rt_projection();
     void note_scene_ao_view(const DrawCall& call);
     // The scene's occlusion, once, before its first translucent phase (or at its end).
