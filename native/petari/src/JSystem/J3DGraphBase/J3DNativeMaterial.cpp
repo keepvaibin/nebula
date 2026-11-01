@@ -625,9 +625,6 @@ namespace {
                 continue;
             }
             material.textures[map].image = rTex.image;
-            material.textures[map].width = rTex.width;
-            material.textures[map].height = rTex.height;
-            material.textures[map].format = rTex.format;
             material.textures[map].repeat_s = rTex.wrap_s;
             material.textures[map].repeat_t = rTex.wrap_t;
             material.textures[map].mag_linear = rTex.mag_filter != 0 ? 1 : 0;
@@ -638,9 +635,6 @@ namespace {
             material.textures[map].lod_bias = rTex.lod_bias;
             material.textures[map].min_lod = rTex.min_lod;
             material.textures[map].max_lod = rTex.max_lod;
-            material.textures[map].palette = rTex.palette;
-            material.textures[map].palette_entries = rTex.palette_entries;
-            material.textures[map].palette_format = rTex.palette_format;
         }
         // Its texgens' post-transform rows (a shape's own texgens replace them at its draw). An instance's differed
         // list loads texgens only when its flags name them (TexGenNum with 0x1000: diffTexGen, as the GX path's
@@ -692,7 +686,6 @@ namespace {
         rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
         rOut.width = pImg->mWidth;
         rOut.height = pImg->mHeight;
-        rOut.format = pImg->mFormat & 0x0F;
         rOut.wrap_s = pImg->mWrapS;
         rOut.wrap_t = pImg->mWrapT;
         rOut.min_filter = pImg->mMinType;
@@ -704,11 +697,6 @@ namespace {
         rOut.min_lod = static_cast< s8 >(pImg->mMinLod) * 0.125f;
         rOut.max_lod = static_cast< s8 >(pImg->mMaxLod) * 0.125f;
         rOut.lod_bias = pImg->mLodBias * 0.01f;
-        if (pImg->mPaletteName == true) {
-            rOut.palette = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mPaletteDataOffset);
-            rOut.palette_entries = pImg->mPaletteNum;
-            rOut.palette_format = pImg->mPaletteFormat;
-        }
         // The texture coordinate scale J3D keeps per map (J3DSys::sTexCoordScaleTable): the image's size.
         pSizes[map * 2] = pImg->mWidth;
         pSizes[map * 2 + 1] = pImg->mHeight;
@@ -1091,9 +1079,6 @@ namespace J3DNativeMaterial {
         pScale[1] = pScale[3] = height;
         memset(&sCurrent.textures[0], 0, sizeof(sCurrent.textures[0]));
         sCurrent.textures[0].image = keyOf(pImage);
-        sCurrent.textures[0].width = width;
-        sCurrent.textures[0].height = height;
-        sCurrent.textures[0].format = GX_TF_RGB565;
         sCurrent.textures[0].repeat_s = 1;
         sCurrent.textures[0].repeat_t = 1;
         sCurrent.textures[0].mag_linear = 1;

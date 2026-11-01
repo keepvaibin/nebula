@@ -715,7 +715,6 @@ namespace nw4r {
                     rTex.image = reinterpret_cast< uintptr_t >(pImage);
                     rTex.width = width;
                     rTex.height = height;
-                    rTex.format = static_cast< u8 >(format & 0x0F);
                     rTex.wrap_s = static_cast< u8 >(wrapS);
                     rTex.wrap_t = static_cast< u8 >(wrapT);
                     rTex.min_filter = static_cast< u8 >(minFilter);

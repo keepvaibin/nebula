@@ -135,7 +135,6 @@ material::Values random_values(Random& r) {
         t.image = 0x10000u + 0x1000u * map + r(16u) * 0x40u;
         t.width = static_cast<std::uint16_t>(8u << r(6u));
         t.height = static_cast<std::uint16_t>(8u << r(6u));
-        t.format = static_cast<std::uint8_t>(r(7u));
         t.wrap_s = static_cast<std::uint8_t>(r(3u));
         t.wrap_t = static_cast<std::uint8_t>(r(3u));
         t.min_filter = static_cast<std::uint8_t>(r(6u));
@@ -165,7 +164,7 @@ bool same_state(const NativeDrawState& a, const NativeDrawState& b) {
         }
     }
     for (unsigned m = 0; m < 8u; ++m) {
-        if (!(a.texture[m].image == b.texture[m].image) || !(a.texture[m].mode == b.texture[m].mode)) return false;
+        if (a.texture[m].texture != b.texture[m].texture || !(a.texture[m].mode == b.texture[m].mode)) return false;
     }
     return true;
 }

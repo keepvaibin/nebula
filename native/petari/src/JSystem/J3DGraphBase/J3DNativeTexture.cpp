@@ -179,16 +179,13 @@ namespace J3DNativeTexture {
 
     void load(const GXTexObj* pObj, GXTexMapID map) {
         const J3DNativeTexObj& rTex = texture(pObj);
-        NebulaStateOp ops[3];
-        J3DStateList list(ops, 3);
+        NebulaStateOp ops[2];
+        J3DStateList list(ops, 2);
         list.setTexLookupMode(map, static_cast< GXTexWrapMode >(rTex.mWrapS), static_cast< GXTexWrapMode >(rTex.mWrapT),
                               static_cast< GXTexFilter >(rTex.mMinFilter), static_cast< GXTexFilter >(rTex.mMagFilter),
                               rTex.mMinLod, rTex.mMaxLod, rTex.mLodBias, rTex.mBiasClamp, rTex.mEdgeLod,
                               static_cast< GXAnisotropy >(rTex.mMaxAniso));
-        // The image's format as the texture unit takes it (a depth texture's low four bits).
-        list.setTexImgAttr(map, rTex.mWidth, rTex.mHeight, static_cast< GXTexFmt >(rTex.mFormat & 0xF));
         list.setTexImgPtr(map, rTex.mImage);
-        ops[2].a[1] = 1;  // GXLoadTexObj's: the coordinate scales follow the texture
         list.send();
     }
 

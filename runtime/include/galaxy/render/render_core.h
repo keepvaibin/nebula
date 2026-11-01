@@ -1355,7 +1355,7 @@ private:
     };
     [[nodiscard]] TextureBindingKey capture_texture_binding_key(
         std::uint8_t map_mask) const;
-    [[nodiscard]] TextureHandleKey texture_handle_key(const TexImage& image, const TexMode& mode) const;
+    [[nodiscard]] TextureHandleKey texture_handle_key(std::uint64_t texture, const TexMode& mode) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
@@ -1453,9 +1453,7 @@ private:
             hash = mix64(hash, key.lit_translucent);
             for (const TextureMap& t : key.maps) {
                 const TexMode& m = t.mode;
-                hash = mix64(hash, t.image.address);
-                hash = mix64(hash, static_cast<std::uint64_t>(t.image.width) | static_cast<std::uint64_t>(t.image.height) << 16u |
-                                       static_cast<std::uint64_t>(t.image.format) << 32u);
+                hash = mix64(hash, t.texture);
                 hash = mix64(hash, static_cast<std::uint64_t>(m.wrap_s) | static_cast<std::uint64_t>(m.wrap_t) << 4u |
                                        static_cast<std::uint64_t>(m.mag_filter) << 8u |
                                        static_cast<std::uint64_t>(m.min_filter) << 12u |

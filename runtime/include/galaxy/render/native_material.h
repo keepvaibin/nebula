@@ -36,13 +36,10 @@ struct TevStage {
 };
 
 struct Texture {
-    std::uint64_t image;  // the game's address of the image (0: no texture)
+    std::uint64_t image;  // the texture: its record's address (0: no texture)
     std::uint16_t width, height;
-    std::uint8_t format, wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy;
+    std::uint8_t wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy, bias_clamp;
     float min_lod, max_lod, lod_bias;
-    std::uint64_t palette;  // the game's address of the palette
-    std::uint16_t palette_entries;
-    std::uint8_t palette_format, bias_clamp;
 };
 
 using Light = NativeLight;  // NebulaLight's layout
@@ -91,15 +88,10 @@ struct Native {
     float constants[128];
     struct {
         std::uint64_t image;
-        std::uint16_t width, height;
-        std::uint8_t format;
         std::uint8_t repeat_s, repeat_t;
         std::uint8_t mag_linear, min_linear, mip_filter, anisotropy, edge_lod;
         float lod_bias, min_lod, max_lod;
-        std::uint64_t palette;
-        std::uint16_t palette_entries;
-        std::uint8_t palette_format;
-        std::uint8_t reserved[5];
+        std::uint8_t reserved[3];
     } textures[8];
     NativeLight light[8];
     std::uint8_t texgen_post[8];

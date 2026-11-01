@@ -119,10 +119,9 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     for (unsigned m = 0; m < 8u; ++m) {
         const TextureMap& t = draw_state_.texture[m];
         std::fprintf(f,
-                     "map[%u] image %llx %ux%u format %u wrap %u,%u filter %u,%u lod_bias %d aniso %u "
+                     "map[%u] texture %llx wrap %u,%u filter %u,%u lod_bias %d aniso %u "
                      "lod %u-%u edge %u\n",
-                     m, static_cast<unsigned long long>(t.image.address), static_cast<unsigned>(t.image.width),
-                     static_cast<unsigned>(t.image.height), static_cast<unsigned>(t.image.format),
+                     m, static_cast<unsigned long long>(t.texture),
                      static_cast<unsigned>(t.mode.wrap_s), static_cast<unsigned>(t.mode.wrap_t),
                      static_cast<unsigned>(t.mode.mag_filter), static_cast<unsigned>(t.mode.min_filter),
                      static_cast<int>(t.mode.lod_bias_x32), static_cast<unsigned>(t.mode.max_aniso),

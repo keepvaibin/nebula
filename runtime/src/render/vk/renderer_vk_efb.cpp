@@ -717,13 +717,12 @@ void RendererVk::end_target_pass(std::uint8_t channels, TextureCache& textures) 
     bind_efb(nullptr);
 }
 
-bool RendererVk::target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
-                                TextureHandle& out) const {
+bool RendererVk::target_picture(std::uint64_t key, TextureHandle& out) const {
     if (pictures_.empty()) {
         return false;
     }
     const auto it = pictures_.find(key);
-    if (it == pictures_.end() || it->second.width != width || it->second.height != height) {
+    if (it == pictures_.end()) {
         return false;
     }
     out = TextureHandle{};
@@ -733,7 +732,7 @@ bool RendererVk::target_picture(std::uint64_t key, std::uint16_t width, std::uin
     out.height = static_cast<std::uint16_t>(it->second.viewed->height);
     out.mip_levels = 1u;
     out.from_efb_copy = true;
-    out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(width) * height * 4u;
+    out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(it->second.width) * it->second.height * 4u;
     return true;
 }
 

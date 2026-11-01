@@ -116,7 +116,6 @@ namespace {
         rTexture.image = reinterpret_cast< uintptr_t >(pImage);
         rTexture.width = width;
         rTexture.height = height;
-        rTexture.format = GX_TF_I8;
         rTexture.wrap_s = rTexture.wrap_t = GX_CLAMP;
         rTexture.min_filter = rTexture.mag_filter = sLinear ? GX_LINEAR : GX_NEAR;
         rTexture.anisotropy = GX_ANISO_1;

@@ -1077,21 +1077,21 @@ V main(uint id : SV_VertexID) {
         image.format = TexFormat::CMPR;
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
-        const auto first = cache.get(image, mode);
+        const auto first = cache.get(image.address, mode);
         const auto desc = first.resource->GetDesc();
         const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
         bool passed = expect(allocation > first.source_bytes &&
             cache.decoded_map_stats().resident_bytes == allocation &&
             cache.decoded_entry_source_bytes() == stride,
             "compressed texture charges device allocation, preserving guest-byte metric");
-        const auto again = cache.get(image, mode);
+        const auto again = cache.get(image.address, mode);
         passed &= expect(again.resource == first.resource &&
             cache.decoded_map_stats().resident_bytes == allocation,
             "ordinary texture hit does not charge allocation twice");
         TextureHandle last{};
         for (unsigned i = 1u; i < kTextures; ++i) {
             image.address = address + i * stride;
-            last = cache.get(image, mode);
+            last = cache.get(image.address, mode);
         }
         const auto stats = cache.decoded_map_stats();
         passed &= expect(stats.budget_bytes == (64ull << 20u) &&
@@ -1115,7 +1115,7 @@ V main(uint id : SV_VertexID) {
         image.format = TexFormat::I4;
         mode.min_filter = TexMinFilter::NearMipNear;
         mode.max_lod_x16 = 7u * 16u;
-        const auto mipped = cache.get(image, mode);
+        const auto mipped = cache.get(image.address, mode);
         const auto mip_desc = mipped.resource->GetDesc();
         const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
         passed &= expect(mip_desc.MipLevels > 1u &&
@@ -1187,7 +1187,7 @@ V main(uint id : SV_VertexID) {
                 image.format = TexFormat::RGBA8;
                 TexMode mode{};
                 mode.min_filter = TexMinFilter::Near;
-                handles.push_back(cache.get(image, mode));
+                handles.push_back(cache.get(image.address, mode));
                 offset += 0x400u;
             }
             cache.set_async_decode_allowed(false);
@@ -1325,8 +1325,8 @@ V main(uint id : SV_VertexID) {
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
         const auto initial_revision = cache.retirement_revision();
-        const auto first = cache.get(image, mode);
-        const auto hit = cache.get(image, mode);
+        const auto first = cache.get(image.address, mode);
+        const auto hit = cache.get(image.address, mode);
         passed &= expect(hit.srv_index == first.srv_index &&
             !cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision,
@@ -1336,14 +1336,14 @@ V main(uint id : SV_VertexID) {
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
         image.address = address + 128u;
-        const auto same_frame = cache.get(image, mode);
+        const auto same_frame = cache.get(image.address, mode);
         passed &= expect(same_frame.srv_index != first.srv_index &&
             !cache.srv_index_retired(same_frame.srv_index) &&
             first.resource->GetDesc().Width == 8u,
             "retired resource and CPU descriptor survive later lookups in the same frame");
         cache.begin_frame(1u, kFramesInFlight);
         image.address = address + 256u;
-        const auto other_slot = cache.get(image, mode);
+        const auto other_slot = cache.get(image.address, mode);
         passed &= expect(other_slot.srv_index != first.srv_index &&
             cache.srv_index_retired(first.srv_index) &&
             !cache.srv_index_retired(other_slot.srv_index),
@@ -1353,7 +1353,7 @@ V main(uint id : SV_VertexID) {
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "reclaimed slot retains its retired identity until allocation");
         image.address = address + 384u;
-        const auto reclaimed = cache.get(image, mode);
+        const auto reclaimed = cache.get(image.address, mode);
         passed &= expect(reclaimed.srv_index == first.srv_index &&
             !cache.srv_index_retired(reclaimed.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
@@ -1395,10 +1395,10 @@ V main(uint id : SV_VertexID) {
         TexMode mode{};
         mode.min_filter = TexMinFilter::NearMipNear;
         mode.max_lod_x16 = 32u;
-        const auto decoded = cache.get(image, mode);
+        const auto decoded = cache.get(image.address, mode);
         passed &= expect(decoded.source_bytes == authored.size() && decoded.mip_levels == 3u,
             "a record's authored levels all upload, the handle sized as the record");
-        const auto reused = cache.get(image, mode);
+        const auto reused = cache.get(image.address, mode);
         passed &= expect(reused.resource == decoded.resource && reused.srv_index == decoded.srv_index,
             "a record's second lookup reuses its resource and descriptor");
         // An 8x8 L8 record with one level serves a sampler that asks for three with its one, its size the record's.
@@ -1407,11 +1407,11 @@ V main(uint id : SV_VertexID) {
         hand_over(cache, record_address, single.data(), single.size());
         auto record_image = image; record_image.address = record_address;
         record_image.format = TexFormat::I8;
-        const auto record = cache.get(record_image, mode);
+        const auto record = cache.get(record_image.address, mode);
         passed &= expect(record.mip_levels == 1u && record.source_bytes == single.size() && record.width == 8u,
             "a texture record uploads the levels it holds and is sized as the record");
 
-        const std::vector<std::byte> wide = record_of(64u, 4u, 1u, NEBULA_TEXTURE_L8);
+        const std::vector<std::byte> wide = record_of(64u, 4u, 1u, NEBULA_TEXTURE_RGBA8);  // a colour record: eligible
         hand_over(cache, address + 0x2000u, wide.data(), wide.size());
         const auto original_config = get_render_config();
         auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
@@ -1423,12 +1423,12 @@ V main(uint id : SV_VertexID) {
         enhanced_mode.wrap_t = TexWrap::Mirror;
         enhanced_mode.min_filter = TexMinFilter::Linear;
         enhanced_mode.mag_filter = TexMagFilter::Linear;
-        const auto no_enhancement = cache.get(enhanced_image, enhanced_mode);
+        const auto no_enhancement = cache.get(enhanced_image.address, enhanced_mode);
         mip_config.enhanced_mipmaps = true; set_render_config(mip_config);
-        const auto enhancement = cache.get(enhanced_image, enhanced_mode);
+        const auto enhancement = cache.get(enhanced_image.address, enhanced_mode);
         TexMode decal_mode = enhanced_mode;
         decal_mode.wrap_t = TexWrap::Clamp;
-        const auto decal = cache.get(enhanced_image, decal_mode);
+        const auto decal = cache.get(enhanced_image.address, decal_mode);
         set_render_config(original_config);
         passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
             enhancement.mip_levels == 7u && enhancement.generated_mips &&

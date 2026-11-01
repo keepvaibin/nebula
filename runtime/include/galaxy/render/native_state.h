@@ -27,7 +27,6 @@ enum Kind : std::uint8_t {
     kAmbientColor,
     kTexCoordGen,
     kTexLookup,
-    kTexImageAttr,
     kTexImage,
     kFog,
     kTevColorIn,
