@@ -4,7 +4,7 @@
 // per-draw texture table.
 //
 // Entries are dropped only explicitly: when the game hands a texture's record over again (register_image), when a
-// capture replaces what its key held (invalidate_range), and when texture packs change (invalidate_all). Pictures the
+// capture replaces what its key held (forget), and when texture packs change (invalidate_all). Pictures the
 // renderer draws
 // (target passes, captures) are the renderer's, looked up before this cache.
 
@@ -16,7 +16,6 @@
 #endif
 
 #include "galaxy/render/gx_bitfields.h"
-#include "galaxy/render/range_envelope.h"
 #include "galaxy/render/gpu_texture_backend.h"
 #include "galaxy/render/shader_keys.h"  // fnv1a64
 #include "galaxy/render/texture_decode_pool.h"
@@ -93,11 +92,6 @@ struct TextureHandle {
 
 class TextureCache {
 public:
-    struct MemoryRange {
-        std::uint64_t address = 0;
-        std::uint32_t size = 0;
-    };
-
     bool initialize(gpu::Device* device);
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
@@ -126,16 +120,12 @@ public:
     // An image's bytes the game handed over (texture_image): textures at `address` decode from this copy from now
     // on; entries decoded from earlier bytes there are retired.
     void register_image(std::uint64_t address, std::shared_ptr<const std::vector<std::byte>> bytes);
-    // Forgets the handed-over images overlapping the ranges (memory the game rewrote without handing it over).
-    void drop_registered_images(std::span<const MemoryRange> ranges);
+    // Forgets what `key` held, a capture having replaced it: the record handed over there and the textures made
+    // from it (retired; the count is returned).
+    std::size_t forget(std::uint64_t key);
     // Images and palettes sampled without having been handed over (each logged).
     [[nodiscard]] std::uint64_t missing_images() const noexcept { return missing_images_; }
 
-    std::size_t invalidate_range(
-        std::uint64_t address,
-        std::uint32_t size);
-    std::size_t invalidate_ranges(
-        std::span<const MemoryRange> sorted_coalesced_ranges);
 
     // The GPU side: views by srv_index, upload staging, textures (gpu_texture_backend.h).
     [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
@@ -258,6 +248,8 @@ private:
         std::uint32_t pack_slot = TexturePacks::kNone;
         bool pack_waiting = false;
     };
+    // Retires the textures made from the record at exactly `key`.
+    std::size_t retire_key(std::uint64_t key);
     void retire(Entry&& entry);
     // An entry that binds a resident replacement (no decode; charges no decoded budget and is never pooled).
     [[nodiscard]] Entry make_replacement_entry(const TextureReplacement& replacement, std::uint32_t slot,
@@ -292,7 +284,6 @@ private:
     [[nodiscard]] std::uint32_t allocate_srv_index();
 
     std::unordered_map<Key, Entry, KeyHasher> entries_;
-    detail::ConservativeRangeEnvelope decoded_envelope_;
     // LRU order of entries_ for the decoded budget (front: most recently used).
     std::list<Key> decoded_lru_;
     std::unordered_map<Key, std::list<Key>::iterator, KeyHasher>

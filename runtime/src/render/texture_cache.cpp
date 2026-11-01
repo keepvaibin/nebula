@@ -59,30 +59,6 @@ bool trace_gx_stalls_enabled() {
     return enabled;
 }
 
-const TextureCache::MemoryRange* first_overlapping_dirty_range(
-    std::span<const TextureCache::MemoryRange> ranges,
-    std::uint64_t target_begin,
-    std::uint64_t target_end) {
-    if (ranges.empty() || target_begin >= target_end) {
-        return nullptr;
-    }
-
-    auto it = std::lower_bound(
-        ranges.begin(),
-        ranges.end(),
-        target_begin,
-        [](const TextureCache::MemoryRange& range,
-           std::uint64_t value) noexcept {
-            return static_cast<std::uint64_t>(range.address) +
-                       static_cast<std::uint64_t>(range.size) <=
-                   value;
-        });
-    for (; it != ranges.end() && it->address < target_end; ++it) {
-        if (it->size != 0u) return &*it;
-    }
-    return nullptr;
-}
-
 std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
     char value[32]{};
     std::size_t length = 0;
@@ -550,8 +526,7 @@ void TextureCache::register_image(std::uint64_t address, std::shared_ptr<const s
     if (bytes == nullptr || bytes->empty()) {
         return;
     }
-    const auto size = static_cast<std::uint32_t>(bytes->size());
-    (void)invalidate_range(address, size);
+    (void)retire_key(address);
     auto& slot = registered_images_[address];
     if (slot != nullptr) {
         replaced_images_.push_back(std::move(slot));
@@ -559,25 +534,17 @@ void TextureCache::register_image(std::uint64_t address, std::shared_ptr<const s
     slot = std::move(bytes);
 }
 
-void TextureCache::drop_registered_images(std::span<const MemoryRange> ranges) {
-    for (const MemoryRange& range : ranges) {
-        const std::uint64_t begin = range.address, end = begin + range.size;
-        auto it = registered_images_.lower_bound(end);
-        while (it != registered_images_.begin()) {
-            --it;
-            if (it->first + it->second->size() <= begin) {
-                break;
-            }
-            static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-            if (log_drops) {
-                std::fprintf(stderr, "[texture] handed-over image dropped: %llX (%zu bytes) by a write at %08llX+%llu\n", static_cast<unsigned long long>(it->first),
-                             it->second->size(), static_cast<unsigned long long>(begin),
-                             static_cast<unsigned long long>(end - begin));
-            }
-            replaced_images_.push_back(std::move(it->second));
-            it = registered_images_.erase(it);
+std::size_t TextureCache::forget(std::uint64_t key) {
+    if (const auto it = registered_images_.find(key); it != registered_images_.end()) {
+        static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
+        if (log_drops) {
+            std::fprintf(stderr, "[texture] handed-over image dropped: %llX (%zu bytes) by a capture\n",
+                         static_cast<unsigned long long>(key), it->second->size());
         }
+        replaced_images_.push_back(std::move(it->second));
+        registered_images_.erase(it);
     }
+    return retire_key(key);
 }
 
 const std::byte* TextureCache::registered_bytes(std::uint64_t address, std::uint32_t size) const {
@@ -831,8 +798,6 @@ void TextureCache::decoded_lru_evict_to_budget() {
         const std::uint64_t victim_bytes = it->second.allocation_bytes;
         decoded_evicted_bytes_ += victim_bytes;
         ++decoded_evicted_entries_;
-        // decoded_envelope_ only widens: an evicted range keeps it conservative (a scan may see a false
-        // "may overlap", never a stale texture) until it is rebuilt when entries_ empties.
         decoded_lru_release(victim, it->second);
         retire(std::move(it->second));
         entries_.erase(it);
@@ -928,7 +893,6 @@ void TextureCache::shutdown() {
                   << " committed-fallbacks=" << heap.committed_fallbacks << '\n';
     }
     entries_.clear();
-    decoded_envelope_.clear();
     decoded_lru_.clear();
     decoded_lru_pos_.clear();
     decoded_srv_keys_ = {};
@@ -1017,7 +981,6 @@ void TextureCache::invalidate_all() {
         retire(std::move(entry));
     }
     entries_.clear();
-    decoded_envelope_.clear();
     decoded_lru_.clear();
     decoded_lru_pos_.clear();
     decoded_srv_keys_ = {};
@@ -1027,25 +990,10 @@ void TextureCache::invalidate_all() {
     // Retired SRV slots return to the free list after their frame-slot fence.
 }
 
-std::size_t TextureCache::invalidate_range(
-    std::uint64_t address,
-    std::uint32_t size) {
-    const MemoryRange range{address, size};
-    return invalidate_ranges(std::span<const MemoryRange>(&range, 1u));
-}
-std::size_t TextureCache::invalidate_ranges(
-    std::span<const MemoryRange> sorted_coalesced_ranges) {
-    if (sorted_coalesced_ranges.empty() ||
-        entries_.empty()) {
-        return 0u;
-    }
-
+std::size_t TextureCache::retire_key(std::uint64_t key) {
     std::size_t evicted = 0;
-    for (auto it = decoded_envelope_.may_overlap(sorted_coalesced_ranges)
-             ? entries_.begin() : entries_.end(); it != entries_.end(); ) {
-        const std::uint64_t tex_begin = it->first.address;
-        const std::uint64_t tex_end = tex_begin + it->second.handle.source_bytes;
-        if (first_overlapping_dirty_range(sorted_coalesced_ranges, tex_begin, tex_end) != nullptr) {
+    for (auto it = entries_.begin(); it != entries_.end();) {
+        if (it->first.address == key) {
             decoded_lru_release(it->first, it->second);
             retire(std::move(it->second));
             it = entries_.erase(it);
@@ -1468,8 +1416,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                 entry.handle.rt_material = rt_material;
                 entry.handle.pack = pack;
                 const TextureHandle handle = entry.handle;
-                if (entries_.empty()) decoded_envelope_.clear();
-                decoded_envelope_.include(image.address, total_source_size);
                 entries_.emplace(key, std::move(entry));
                 decoded_lru_track(key);
                 ++pack_bound_;
@@ -1655,8 +1601,6 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     const auto emplace_start = trace_stalls
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    if (entries_.empty()) decoded_envelope_.clear();
-    decoded_envelope_.include(image.address, total_source_size);
     const auto decoded = entries_.emplace(key, std::move(entry)).first;
     decoded_lru_track(key);
     if (pack_slot != TexturePacks::kNone) {
