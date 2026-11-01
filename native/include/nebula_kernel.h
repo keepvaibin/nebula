@@ -44,6 +44,8 @@ void nebula_kernel_dump(void);
 /* The platform layer provides these (os_native.c). */
 int64_t nebula_time(void);
 void nebula_timer_arm(int64_t deadline);
+/* Deterministic test mode: the kernel moves the clock itself (no host clock runs). */
+void nebula_time_set(int64_t time);
 void nebula_sleep_for_work(void);
 void nebula_wake_simulation(void);
 void* nebula_thread_stack(const void* owner, uint32_t requested, uint32_t* size);

@@ -698,6 +698,18 @@ void end_boot_fast(const char* why) {
     }
 }
 
+// GALAXY_TEST_DETERMINISTIC=1: deterministic test mode. The game's time is its retrace count: the host's retrace and
+// audio clocks do not run; the game takes each retrace when it has nothing to run (test_frame_step), disc reads
+// complete inside their call, and the steady clock counts retraces. Two runs of one build then match frame for frame.
+bool deterministic_mode() {
+    static const bool deterministic = [] {
+        const char* value = std::getenv("GALAXY_TEST_DETERMINISTIC");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    return deterministic;
+}
+std::atomic<uint64_t> gDeterministicRetraces{0};
+
 // True when it waited.
 bool wait_while_suspended() {
     std::unique_lock<std::mutex> lock(gSuspendLock);
@@ -714,6 +726,9 @@ bool wait_while_suspended() {
 // drift apart. It never waits for the device: a clock that stalls leaves the game's sounds playing forever until its
 // sound pools run out. A silent or failed device leaves the clock as it is.
 void ai_thread() {
+    if (deterministic_mode()) {
+        return;  // the audio ticks come with each retrace (svc_test_frame_step)
+    }
     name_thread(L"Nebula Host Audio Clock");
     Clock::time_point next{};
     bool scheduled = false;
@@ -767,6 +782,9 @@ void ai_thread() {
 // retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
 void vi_thread() {
+    if (deterministic_mode()) {
+        return;  // the game takes its retraces (svc_test_frame_step)
+    }
     name_thread(L"Nebula Host VI");
     const auto display_period = std::chrono::nanoseconds(1000000000ull / 60);
     auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootRetrace) : display_period;
@@ -819,6 +837,30 @@ void vi_thread() {
         }
 #endif
     }
+}
+
+// Deterministic mode's retrace: the game has nothing to run. The audio ticks of one retrace's length (the audio clock's
+// period, without the device's correction), then the retrace.
+void svc_test_frame_step(void*) {
+    static double due_ns = 0.0;
+    uint32_t frame_samples = 0;
+    {
+        std::lock_guard<std::mutex> lock(gAiLock);
+        frame_samples = gAiRunning ? gAudioFrameSamples : 0u;
+    }
+    if (frame_samples != 0u) {
+        due_ns += 1e9 / 60.0;
+        const double period_ns = static_cast<double>(frame_samples) * 1e9 / 32000.0;
+        while (due_ns >= period_ns) {
+            due_ns -= period_ns;
+            gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+            gModule.audio_tick();
+        }
+    } else {
+        due_ns = 0.0;
+    }
+    gDeterministicRetraces.fetch_add(1, std::memory_order_relaxed);
+    gModule.vi_retrace();
 }
 
 void svc_log(void*, const char* text) {
@@ -1575,6 +1617,9 @@ void svc_stripe_particle(void*, uint64_t particle, uint32_t age_lifetime, uint8_
 
 // The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
 uint64_t svc_clock_ns(void*) {
+    if (deterministic_mode()) {
+        return gDeterministicRetraces.load(std::memory_order_relaxed) * 1000000000ull / 60u + 1u;
+    }
     static const Clock::time_point start = Clock::now();
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
 }
@@ -1697,7 +1742,76 @@ std::mutex gShapeLock;
 std::vector<galaxy::render::shapes::Record> gShapePending;
 std::atomic<bool> gShapePendingAny{false};
 
+// GALAXY_TEST_FRAME_HASH=<file> (1: frame_hash.txt in GALAXY_PRESENT_SNAPSHOT_DIR): per retrace, a line "retrace records hash reads" for the records the game sent since
+// the last retrace (hash: the sum of each record's kind, matrices, target and clear values, image size, so addresses
+// and the order loading threads interleave in do not count) and the disc reads completed so far. Two runs of one build
+// diffed find the first game frame that differs and what moved (deterministic test mode).
+struct FrameHash {
+    std::FILE* file = nullptr;
+    std::mutex lock;
+    uint64_t sum = 0;
+    uint64_t records = 0;
+    std::atomic<uint64_t> reads{0};
+};
+FrameHash& frame_hash() {
+    static FrameHash h;
+    static const bool opened = [] {
+        const char* path = std::getenv("GALAXY_TEST_FRAME_HASH");
+        if (path != nullptr && path[0] != '\0') {
+            const char* dir = std::getenv("GALAXY_PRESENT_SNAPSHOT_DIR");
+            const std::string file = std::strcmp(path, "1") == 0 && dir != nullptr
+                                         ? std::string(dir) + "\\frame_hash.txt"
+                                         : std::string(path);
+            h.file = std::fopen(file.c_str(), "w");
+        }
+        return true;
+    }();
+    (void)opened;
+    return h;
+}
+uint64_t fnv1a(uint64_t h, const void* data, std::size_t bytes) {
+    const auto* p = static_cast<const uint8_t*>(data);
+    for (std::size_t i = 0; i < bytes; i++) {
+        h = (h ^ p[i]) * 0x100000001B3ull;
+    }
+    return h;
+}
+void frame_hash_record(const galaxy::render::shapes::Record& r) {
+    FrameHash& fh = frame_hash();
+    if (fh.file == nullptr) {
+        return;
+    }
+    uint64_t h = 0xCBF29CE484222325ull;
+    h = fnv1a(h, &r.kind, sizeof(r.kind));
+    for (const auto& m : r.matrices) {
+        h = fnv1a(h, &m.kind, sizeof(m.kind));
+        h = fnv1a(h, m.values.data(), sizeof(m.values));
+    }
+    const uint32_t target[] = {r.target_width, r.target_height, r.target_clear_rgba, r.target_clear_z,
+                               r.target_channels, r.target_x, r.target_y, r.target_flags};
+    h = fnv1a(h, target, sizeof(target));
+    const uint64_t image = r.image != nullptr ? r.image->size() : 0u;
+    h = fnv1a(h, &image, sizeof(image));
+    std::lock_guard guard(fh.lock);
+    fh.sum += h;
+    fh.records++;
+}
+void frame_hash_retrace(uint32_t retrace) {
+    FrameHash& fh = frame_hash();
+    if (fh.file == nullptr) {
+        return;
+    }
+    std::lock_guard guard(fh.lock);
+    std::fprintf(fh.file, "%u %llu %016llx %llu\n", retrace, static_cast<unsigned long long>(fh.records),
+                 static_cast<unsigned long long>(fh.sum),
+                 static_cast<unsigned long long>(fh.reads.load(std::memory_order_relaxed)));
+    std::fflush(fh.file);
+    fh.sum = 0;
+    fh.records = 0;
+}
+
 void queue_shape_record(galaxy::render::shapes::Record record) {
+    frame_hash_record(record);
     std::lock_guard guard(gShapeLock);
     gShapePending.push_back(std::move(record));
     gShapePendingAny.store(true, std::memory_order_release);
@@ -2513,7 +2627,10 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         const char* value = std::getenv("GALAXY_TEST_DISC_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
-    gDisc.post([=] {
+    // Deterministic test mode: the read is done here, on the simulation thread, and completes before the call
+    // returns, so a load finishes at the same point of the game's code every run.
+    const bool deterministic = deterministic_mode();
+    auto read = [=] {
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
@@ -2534,8 +2651,16 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         // The console's disc DMA writes memory the GPU sees.
         mark_written(dst, size);
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+        frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
+#endif
         gModule.disc_complete(slot, (int32_t)size);
-    });
+    };
+    if (deterministic) {
+        read();
+    } else {
+        gDisc.post(read);
+    }
 }
 
 const char* svc_disc_id(void*) {
@@ -2547,6 +2672,9 @@ std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_
 void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     (void)xfb;
     gRetraces.store(retrace, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    frame_hash_retrace(retrace);
+#endif
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_VI_TIMES=1: each retrace's time, where a scripted press begins (press-to-present measurements).
     static const bool trace_vi = [] {
@@ -2565,7 +2693,7 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     {
         // While the start runs ahead, one frame a display period goes to the screen.
         bool present = true;
-        if (gBootFast.load(std::memory_order_relaxed)) {
+        if (gBootFast.load(std::memory_order_relaxed) && !deterministic_mode()) {
             static Clock::time_point shown{};
             const Clock::time_point now = Clock::now();
             present = now - shown >= std::chrono::milliseconds(16);
@@ -2972,6 +3100,9 @@ void svc_input_control(void*, uint32_t player, uint32_t what, uint32_t value) {
 
 #if defined(NEBULA_HOST_RENDERER)
 void input_thread() {
+    if (deterministic_mode()) {
+        return;  // one sample per read, taken by the read (svc_input_read)
+    }
     name_thread(L"Nebula Host Input");
     while (!gInputRead.load(std::memory_order_acquire)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -3930,6 +4061,7 @@ int main(int argc, char** argv) {
     services.material_program = svc_material_program;
     services.material = svc_material;
     services.native_material = svc_native_material;
+    services.test_frame_step = deterministic_mode() ? svc_test_frame_step : nullptr;
     services.state = svc_state;
     services.immediate = svc_immediate;
     services.target_begin = svc_target_begin;

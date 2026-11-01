@@ -144,7 +144,12 @@ static void time_init(void) {
 #endif
 }
 
+/* A clock the kernel sets (nebula_time_set: deterministic test mode); -1 while the host's clock runs. */
+static _Atomic int64_t sSetTime = -1;
+void nebula_time_set(int64_t time) { sSetTime = time; }
+
 int64_t nebula_time_base(void) {
+    if (sSetTime >= 0) return sSetTime;
 #if defined(_WIN32)
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
@@ -346,7 +351,7 @@ int64_t nebula_time(void) {
    kernel re-arms when it finds nothing due. */
 void nebula_timer_arm(int64_t deadline) {
     atomic_store(&sTimerDeadline, deadline);
-    if (deadline < atomic_load(&sClockArmed)) {
+    if (sSetTime < 0 && deadline < atomic_load(&sClockArmed)) {
         clock_rearm();
     }
 }
@@ -454,7 +459,9 @@ void nebula_os_boot(void (*gameMain)(void)) {
     sWake = CreateEventW(NULL, FALSE, FALSE, NULL);
 #endif
     time_init();
-    clock_start();
+    if (nebula_host() == NULL || nebula_host()->test_frame_step == NULL) {
+        clock_start();
+    }
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
