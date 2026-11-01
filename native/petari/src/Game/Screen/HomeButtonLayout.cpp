@@ -142,12 +142,6 @@ void HomeButtonLayout::draw() const {
         return;
     }
 
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setNumTexGens(0);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-
     Mtx44 projectionMtx;
     f32 screenHalfHeight = static_cast< s32 >(JUTGetVideoManager()->getEfbHeight()) / 2.0f;
     f32 screenHalfWidth = MR::getScreenWidth() / 2.0f;

@@ -242,10 +242,6 @@ void SceneFunction::executeDrawListOpa() {
     CategoryList::execute(MR::DrawType_SpaceCocoon);
     CategoryList::execute(MR::DrawType_0x17);
     CategoryList::execute(MR::DrawType_WarpPodPath);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE3);
     CategoryList::execute(MR::DrawType_KirairaChain);
     CategoryList::execute(MR::DrawType_WaterPlant);
     CategoryList::execute(MR::DrawType_BigBubbleGoal);

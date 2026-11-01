@@ -71,29 +71,18 @@ void J2DGrafContext::setPort() {
     J3DNativeView::setViewport(bounds.i.x, bounds.i.y, bounds.getWidth(), bounds.getHeight(), 0.0f, 1.0f);
 }
 
+// The 2D view's fixed state: the panes draw with their own native materials (J2DPicture, J2DMaterial,
+// fillBox's vertex_color), so the TEV program the console reset here has no reader.
 void J2DGrafContext::setup2D() {
-    J3DNativeState::setNumIndStages(0);
-    for (int i = 0; i < GX_MAX_TEVSTAGE; i++) {
-        J3DNativeState::setTevDirect((GXTevStageID)i);
-    }
-
     J3DNativeState::setZCompLoc(GX_FALSE);
     J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
     J3DNativeState::setZMode(GX_FALSE, GX_LEQUAL, GX_FALSE);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setNumTexGens(0);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeShape::setPosition(0, mPosMtx);
     Mtx mtx;
     NebulaMtxIdentity(mtx);
     J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, mtx, 3);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, 0x7D);
     J3DNativeState::setLineWidth(mLineWidth, GX_TO_ZERO);
 }
 
