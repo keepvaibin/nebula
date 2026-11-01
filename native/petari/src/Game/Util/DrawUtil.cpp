@@ -153,22 +153,20 @@ namespace MR {
         Mtx matrix;
         NebulaMtxIdentity(matrix);
         J3DNativeShape::setPosition(0, matrix);
-        J3DNativeState::setNumTexGens(0);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         J3DNativeState::setCoPlanar(GX_FALSE);
         J3DNativeState::setClipMode(GX_CLIP_DISABLE);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-        J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-        J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
-        J3DNativeState::setColorUpdate(GX_FALSE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
+        // runtime/src/render/materials/flat_color.hlsl into the alpha buffer alone: the constant destination alpha.
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.color_write = 0;
+        material.alpha_write = 1;
+        NativeShader::setColor(material, 0, 0, 0, 0, alpha);
         J3DNativeState::setDstAlpha(GX_TRUE, alpha);
+        NativeShader::send(material);
+        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 
         J3DNativeDraw::begin(GX_TRIANGLES, 6, 0);
         J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
@@ -190,22 +188,18 @@ namespace MR {
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getFrameBufferWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-        J3DNativeState::setZMode(GX_FALSE, GX_LEQUAL, GX_FALSE);
-        J3DNativeState::setZCompLoc(GX_FALSE);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
         J3DNativeState::setDither(GX_FALSE);
-        J3DNativeState::setNumTexGens(0);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-        J3DNativeState::setTevColor(GX_TEVREG0, rColor);
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+        // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
+        // the drawing state has (its callers set them).
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
+        NativeShader::send(material);
+        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
     }
 
     void fillScreenArea(const TVec2s& rMin, const TVec2s& rMax) {
@@ -262,39 +256,29 @@ namespace MR {
 
     void fillSilhouetteColor() {
         MR::captureScreenAlpha(0);
-        MR::loadScreenAlphaTexture(0, GX_TEXMAP0);
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
         J3DNativeView::setProjection(projMtx, GX_ORTHOGRAPHIC);
-        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-        J3DNativeState::setNumIndStages(0);
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DNativeState::setCurrentMtx(GX_PNMTX0);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setNumTexGens(1);
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevKColor(GX_KCOLOR0, Color8(0, 0, 0, 1));
-        J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_K0_A);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_KONST, GX_CA_A0, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_COMP_RGB8_GT, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_AND, GX_ALWAYS, 0);
-        J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_FALSE);
-        J3DNativeState::setZCompLoc(GX_FALSE);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
         J3DNativeState::setDither(GX_FALSE);
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
+        // runtime/src/render/materials/clip_fill.hlsl: black at alpha 0x80 where the captured screen alpha is above 1
+        // (GX's A8 compare against konst alpha 1), blended by alpha, depth not tested, the alpha buffer cleared to 0
+        // there (constant destination alpha).
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_CLIP_FILL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.color_write = 1;
+        material.alpha_write = 1;
+        NativeShader::setColor(material, 0, 0, 0, 0, 0x80);
+        material.constants[4] = 1.0f;
+        NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(0));
         J3DNativeState::setDstAlpha(GX_TRUE, 0);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-        J3DNativeState::setTevColor(GX_TEVREG0, Color8(0x00000080));
+        NativeShader::send(material);
+        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
         {
