@@ -952,13 +952,18 @@ namespace nw4r {
                     rProgram.blend.type = type == GX_BM_BLEND ? NEBULA_BLEND_ADD : type == GX_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
                                           : type == GX_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
                 }
-                rProgram.blend.source = pBlendMode->GetSrcFactor();
+                {
+                    // NEBULA_FACTOR_*: GX's source colour factors (2, 3) are the destination's colour.
+                    const u8 src = pBlendMode->GetSrcFactor();
+                    rProgram.blend.source = src == GX_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
+                                            : src == GX_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
+                }
                 rProgram.blend.destination = pBlendMode->GetDstFactor();
                 rProgram.blend.logic_op = pBlendMode->GetOp();
             } else {
                 rProgram.blend.type = NEBULA_BLEND_ADD;
-                rProgram.blend.source = GX_BL_SRCALPHA;
-                rProgram.blend.destination = GX_BL_INVSRCALPHA;
+                rProgram.blend.source = NEBULA_FACTOR_SRC_ALPHA;
+                rProgram.blend.destination = NEBULA_FACTOR_INV_SRC_ALPHA;
                 rProgram.blend.logic_op = GX_LO_SET;
             }
 

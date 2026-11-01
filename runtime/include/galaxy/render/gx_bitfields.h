@@ -12,9 +12,11 @@ enum class CompareFunc : std::uint8_t {
     Never = 0, Less, Equal, LEqual, Greater, NEqual, GEqual, Always,
 };
 
+// NEBULA_FACTOR_*: each colour factor names its own side (DstColor is the destination's colour).
 enum class BlendFactor : std::uint8_t {
     Zero = 0, One, SrcColor, InvSrcColor,
     SrcAlpha, InvSrcAlpha, DstAlpha, InvDstAlpha,
+    DstColor, InvDstColor,
 };
 
 enum class CullMode : std::uint8_t { None = 0, Front, Back, All };

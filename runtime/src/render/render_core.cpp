@@ -5050,7 +5050,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
         const auto reads_efb = [has_alpha = draw_state_.pe.pixel_format == 1u](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
-            return (source && (v == 2u || v == 3u)) || (has_alpha && (v == 6u || v == 7u));
+            (void)source;
+            return v == 8u || v == 9u || (has_alpha && (v == 6u || v == 7u));  // the destination's colour or alpha
         };
         const bool layer = reactive && renderer_.layer_window() &&
                            (blend_mode.subtract ||
@@ -5843,15 +5844,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
     }
     // The pipeline's state in the drawing state's terms (its colour factors name the other side's colour on each
     // side: a source factor 2 is the destination's colour, a destination factor 2 the source's).
-    const auto factor = [](std::uint8_t f, bool source) {
-        if (f == material::kNativeFactorDstColor || f == material::kNativeFactorInvDstColor) {
-            return static_cast<BlendFactor>(source ? f - 6u : 0u);
-        }
-        if (f == material::kNativeFactorSrcColor || f == material::kNativeFactorInvSrcColor) {
-            return static_cast<BlendFactor>(source ? 0u : f);
-        }
-        return static_cast<BlendFactor>(f & 7u);
-    };
+    const auto factor = [](std::uint8_t f, bool) { return static_cast<BlendFactor>(f <= 9u ? f : 0u); };
     BlendMode& blend = draw_state_.blend;
     if (m.blend_op != material::kNativeKept) {
         blend.blend_enable = m.blend_op == material::kNativeBlendAdd || m.blend_op == material::kNativeBlendSubtract;
