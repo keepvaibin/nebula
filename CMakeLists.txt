@@ -485,7 +485,7 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name curved_surfaces native_shapes vs_constants render_config
+foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         sampler_key rt_materials texture_pack movie_replacement
         efb_copy line_point_raster native_settings_overlay post_process
         efb_conversion native_material)

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// Checks VsConstantsCpuCache against a full fill_vs_constants over random GX state changes, and the octahedral
+// Checks VsConstantsCpuCache against a full fill_vs_constants over random drawing-state changes, and the octahedral
 // sky-up encoding.
-#include "galaxy/render/vs_constants.h"
+#include "galaxy/render/draw_constants_fill.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
