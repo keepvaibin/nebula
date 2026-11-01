@@ -903,6 +903,7 @@ namespace J3DNativeMaterial {
         loadRegisters(rProgram, rValues);
         pHost->material(pHost->user, key, &rValues);
         watchMaterial(NULL);
+        dumpTag(shader);
     }
 
     void state(const NebulaStateOp* pOps, u32 count) {
@@ -910,6 +911,22 @@ namespace J3DNativeMaterial {
         for (u32 i = 0; i < count; i++) {
             const NebulaStateOp& rOp = pOps[i];
             if (sCurrentKind != CURRENT_NONE && changesProgram(rOp)) {
+                if (sCurrentKind == CURRENT_SITE) {
+                    // A site's native material ended by a GX program change: its next draws fall back to the drawing
+                    // state's program. Each pair once in the log (every one is a conversion left to finish).
+                    static u32 sLogged[64];
+                    static u32 sLoggedCount = 0;
+                    const u32 pair = sCurrent.shader << 8 | rOp.kind;
+                    bool seen = false;
+                    for (u32 k = 0; k < sLoggedCount; k++) {
+                        seen = seen || sLogged[k] == pair;
+                    }
+                    if (!seen && sLoggedCount < 64) {
+                        sLogged[sLoggedCount++] = pair;
+                        nebula_log("J3DNativeMaterial: native shader %u ended by GX state op %u\n",
+                                   static_cast< u32 >(sCurrent.shader), static_cast< u32 >(rOp.kind));
+                    }
+                }
                 endCurrent();
             }
             changed = setRegister(rOp) || changed;
