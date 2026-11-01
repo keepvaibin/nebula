@@ -1,6 +1,8 @@
 #include "nw4r/lyt/animation.h"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <nebula_game_api.h>
+#include <string.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "nw4r/lyt/layout.h"
 #include "nw4r/lyt/material.h"
@@ -57,74 +59,6 @@ namespace nw4r {
                 pMtx->_21 = 0.0f;
                 pMtx->_22 = 1.0f;
                 pMtx->_23 = 0.0f;
-            }
-
-            void SetIndTexMtx(GXIndTexMtxID id, const f32 mtx[2][3]) {
-                f32 m00, m01, m02, m10, m11, m12;
-                f32 a00, a01, a02, a10, a11, a12;
-
-                s8 scaleExp = 0;
-
-                m00 = mtx[0][0];
-                m01 = mtx[0][1];
-                m02 = mtx[0][2];
-                m10 = mtx[1][0];
-                m11 = mtx[1][1];
-                m12 = mtx[1][2];
-
-                a00 = nw4r::math::FAbs(m00);
-                a01 = nw4r::math::FAbs(m01);
-                a02 = nw4r::math::FAbs(m02);
-                a10 = nw4r::math::FAbs(m10);
-                a11 = nw4r::math::FAbs(m11);
-                a12 = nw4r::math::FAbs(m12);
-
-                if (a00 >= 1.0f || a01 >= 1.0f || a02 >= 1.0f || a10 >= 1.0f || a11 >= 1.0f || a12 >= 1.0f) {
-                    do {
-                        if (scaleExp >= 46) {
-                            break;
-                        }
-
-                        scaleExp++;
-
-                        m00 /= 2.0f;
-                        m01 /= 2.0f;
-                        m02 /= 2.0f;
-                        m10 /= 2.0f;
-                        m11 /= 2.0f;
-                        m12 /= 2.0f;
-
-                        a00 /= 2.0f;
-                        a01 /= 2.0f;
-                        a02 /= 2.0f;
-                        a10 /= 2.0f;
-                        a11 /= 2.0f;
-                        a12 /= 2.0f;
-                    } while (a00 >= 1.0f || a01 >= 1.0f || a02 >= 1.0f || a10 >= 1.0f || a11 >= 1.0f || a12 >= 1.0f);
-
-                } else if (a00 < 0.5f && a01 < 0.5f && a02 < 0.5f && a10 < 0.5f && a11 < 0.5f && a12 < 0.5f) {
-                    do {
-                        scaleExp--;
-
-                        m00 *= 2.0f;
-                        m01 *= 2.0f;
-                        m02 *= 2.0f;
-                        m10 *= 2.0f;
-                        m11 *= 2.0f;
-                        m12 *= 2.0f;
-
-                        a00 *= 2.0f;
-                        a01 *= 2.0f;
-                        a02 *= 2.0f;
-                        a10 *= 2.0f;
-                        a11 *= 2.0f;
-                        a12 *= 2.0f;
-
-                    } while (a00 < 0.5f && a01 < 0.5f && a02 < 0.5f && a10 < 0.5f && a11 < 0.5f && a12 < 0.5f && scaleExp > -17);
-                }
-
-                f32 outMtx[2][3] = {m00, m01, m02, m10, m11, m12};
-                J3DNativeState::setIndTexMtx(id, outMtx, scaleExp);
             }
 
             void CalcIndTexMtx(f32 mtx[2][3], const nw4r::lyt::TexSRT& rSrt) {
@@ -651,24 +585,43 @@ namespace nw4r {
             static GXTevKAlphaSel kAlpSels[GX_MAX_TEXMAP] = {GX_TEV_KASEL_K3_A, GX_TEV_KASEL_K3_B, GX_TEV_KASEL_K3_G, GX_TEV_KASEL_K3_R,
                                                              GX_TEV_KASEL_K2_A, GX_TEV_KASEL_K2_B, GX_TEV_KASEL_K2_G, GX_TEV_KASEL_K2_R};
 
+            // The material as a material program and values (nebula_game_api.h), drawn by its generated native shader
+            // (J3DNativeMaterial::sendWhole). Stored until the next material.
+            static NebulaMaterialProgram sProgram;
+            static NebulaMaterialValues sValues;
+            NebulaMaterialProgram& rProgram = sProgram;
+            NebulaMaterialValues& rValues = sValues;
+            memset(&rProgram, 0, sizeof(rProgram));
+            memset(&rValues, 0, sizeof(rValues));
+            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_TEV_COLOR | NEBULA_MATERIAL_LOADS_KONST_COLOR |
+                             NEBULA_MATERIAL_LOADS_KONST_SELECT | NEBULA_MATERIAL_LOADS_SWAP_TABLE | NEBULA_MATERIAL_LOADS_CHANNELS |
+                             NEBULA_MATERIAL_LOADS_INDIRECT;
+            rProgram.cull = GX_CULL_NONE;
+            rProgram.channels = 1;
+            for (u32 s = 0; s < 16; s++) {
+                rProgram.tev[s].tex_coord = GX_TEXCOORD_NULL;
+                rProgram.tev[s].tex_map = GX_TEXMAP_NULL;
+                rProgram.tev[s].channel = GX_COLOR_NULL;
+                rProgram.tev[s].konst_color = GX_TEV_KCSEL_1_4;
+                rProgram.tev[s].konst_alpha = GX_TEV_KASEL_1;
+            }
+
             bool useVtxColor = true;
             bool useMatColor = false;
 
-            J3DNativeState::setNumChans(1);
-
+            // Channel 0 unlit: its colour and alpha from the material colour or the vertex (GXSetChanCtrl's material
+            // source; the ambient source the register).
+            u8 colorSrc = GX_SRC_VTX;
+            u8 alphaSrc = GX_SRC_VTX;
             if (IsChanCtrlCap()) {
                 const ChanCtrl* const pChanCtrl = GetChanCtrlAry();
-
-                J3DNativeState::setChanCtrl(GX_COLOR0, GX_FALSE, GX_SRC_REG, pChanCtrl->GetColorSrc(), GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-
-                J3DNativeState::setChanCtrl(GX_ALPHA0, GX_FALSE, GX_SRC_REG, pChanCtrl->GetAlphaSrc(), GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-
+                colorSrc = pChanCtrl->GetColorSrc();
+                alphaSrc = pChanCtrl->GetAlphaSrc();
                 useVtxColor = pChanCtrl->GetColorSrc() == GX_SRC_VTX || pChanCtrl->GetAlphaSrc() == GX_SRC_VTX;
-
                 useMatColor = pChanCtrl->GetColorSrc() == GX_SRC_REG || pChanCtrl->GetAlphaSrc() == GX_SRC_REG;
-            } else {
-                J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
             }
+            rProgram.channel[0].material_source = colorSrc;
+            rProgram.channel[1].material_source = alphaSrc;
 
             bool useRasStage = false;
 
@@ -684,9 +637,15 @@ namespace nw4r {
                 }
 
                 matColor = detail::MultipleAlpha(matColor, alpha);
-                J3DNativeState::setChanMatColor(GX_COLOR0A0, matColor);
+                rValues.material_color[0][0] = matColor.r;
+                rValues.material_color[0][1] = matColor.g;
+                rValues.material_color[0][2] = matColor.b;
+                rValues.material_color[0][3] = matColor.a;
 
                 useRasStage = useRasStage || matColor != ut::Color::WHITE;
+            } else {
+                rValues.material_color[0][0] = rValues.material_color[0][1] = rValues.material_color[0][2] =
+                    rValues.material_color[0][3] = 255;
             }
 
             bool setTexMtx = false;
@@ -696,7 +655,9 @@ namespace nw4r {
                 useTexMtx[i] = false;
             }
 
-            J3DNativeState::setNumTexGens(mGXMemNum.texCoordGen);
+            u8 places[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                            GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+            rProgram.tex_gens = mGXMemNum.texCoordGen;
             if (mGXMemNum.texCoordGen > 0) {
                 const TexCoordGen* const pTexCoordGen = GetTexCoordGenAry();
 
@@ -708,8 +669,13 @@ namespace nw4r {
                         setTexMtx = true;
                     }
 
-                    J3DNativeState::setTexCoordGen2(static_cast< GXTexCoordID >(i), pTexCoordGen[i].GetTexGenType(), pTexCoordGen[i].GetTexGenSrc(), texMtx,
-                                      GX_FALSE, 0x7D);
+                    rProgram.tex_gen[i].type = pTexCoordGen[i].GetTexGenType();
+                    rProgram.tex_gen[i].source = pTexCoordGen[i].GetTexGenSrc();
+                    rProgram.tex_gen[i].matrix = static_cast< u8 >(texMtx);
+                    rProgram.tex_gen[i].post_matrix = GX_PTIDENTITY;
+                    if (i < 8) {
+                        places[i] = static_cast< u8 >(texMtx);
+                    }
                 }
             }
 
@@ -730,37 +696,67 @@ namespace nw4r {
             if (mGXMemNum.texMap > 0) {
                 const TexMap* const pTexMap = GetTexMapAry();
 
-                for (int i = 0; i < mGXMemNum.texMap; i++) {
+                for (int i = 0; i < mGXMemNum.texMap && i < 8; i++) {
                     GXTexObj texObj;
                     pTexMap[i].Get(&texObj);
-                    J3DNativeTexture::load(&texObj, static_cast< GXTexMapID >(i));
+                    void* pImage;
+                    u16 width, height;
+                    GXTexFmt format;
+                    GXTexWrapMode wrapS, wrapT;
+                    GXBool mipmap;
+                    J3DNativeTexture::getAll(&texObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
+                    GXTexFilter minFilter, magFilter;
+                    f32 minLod, maxLod, lodBias;
+                    GXBool biasClamp, edgeLod;
+                    GXAnisotropy maxAniso;
+                    J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
+                                                &maxAniso);
+                    NebulaMaterialTexture& rTex = rValues.texture[i];
+                    rTex.image = reinterpret_cast< uintptr_t >(pImage);
+                    rTex.width = width;
+                    rTex.height = height;
+                    rTex.format = static_cast< u8 >(format & 0x0F);
+                    rTex.wrap_s = static_cast< u8 >(wrapS);
+                    rTex.wrap_t = static_cast< u8 >(wrapT);
+                    rTex.min_filter = static_cast< u8 >(minFilter);
+                    rTex.mag_filter = static_cast< u8 >(magFilter);
+                    rTex.mipmaps = mipmap ? 1 : 0;
+                    rTex.edge_lod = edgeLod ? 1 : 0;
+                    rTex.anisotropy = static_cast< u8 >(maxAniso);
+                    rTex.min_lod = minLod;
+                    rTex.max_lod = maxLod;
+                    rTex.lod_bias = lodBias;
                 }
             }
 
-            J3DNativeState::setTevColorS10(GX_TEVREG0, mTevCols[0]);
-            J3DNativeState::setTevColorS10(GX_TEVREG1, mTevCols[1]);
-            J3DNativeState::setTevColorS10(GX_TEVREG2, mTevCols[2]);
-
-            J3DNativeState::setTevKColor(GX_KCOLOR0, mTevKCols[GX_KCOLOR0]);
-            J3DNativeState::setTevKColor(GX_KCOLOR1, mTevKCols[GX_KCOLOR1]);
-            J3DNativeState::setTevKColor(GX_KCOLOR2, mTevKCols[GX_KCOLOR2]);
-            J3DNativeState::setTevKColor(GX_KCOLOR3, mTevKCols[GX_KCOLOR3]);
+            for (u32 r = 0; r < 3; r++) {
+                rValues.tev_color[r][0] = mTevCols[r].r;
+                rValues.tev_color[r][1] = mTevCols[r].g;
+                rValues.tev_color[r][2] = mTevCols[r].b;
+                rValues.tev_color[r][3] = mTevCols[r].a;
+            }
+            for (u32 k = 0; k < 4; k++) {
+                rValues.konst_color[k][0] = mTevKCols[k].r;
+                rValues.konst_color[k][1] = mTevKCols[k].g;
+                rValues.konst_color[k][2] = mTevKCols[k].b;
+                rValues.konst_color[k][3] = mTevKCols[k].a;
+            }
 
             if (IsTevSwapCap()) {
                 const TevSwapMode* const pTevSwap = GetTevSwapAry();
 
                 for (int i = 0; i < GX_MAX_TEVSWAP; i++) {
-                    J3DNativeState::setTevSwapModeTable(static_cast< GXTevSwapSel >(i), pTevSwap[i].GetR(), pTevSwap[i].GetG(), pTevSwap[i].GetB(),
-                                          pTevSwap[i].GetA());
+                    rProgram.swap_table[i][0] = pTevSwap[i].GetR();
+                    rProgram.swap_table[i][1] = pTevSwap[i].GetG();
+                    rProgram.swap_table[i][2] = pTevSwap[i].GetB();
+                    rProgram.swap_table[i][3] = pTevSwap[i].GetA();
                 }
             } else {
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP1, GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP2, GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA);
-
-                J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP3, GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA);
+                static const u8 kSwap[4][4] = {{GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA},
+                                               {GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA},
+                                               {GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA},
+                                               {GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA}};
+                memcpy(rProgram.swap_table, kSwap, sizeof(kSwap));
             }
 
             bool setIndTexMtx = false;
@@ -771,37 +767,48 @@ namespace nw4r {
             }
 
             if (mGXMemNum.tevStage > 0) {
-                J3DNativeState::setNumTevStages(mGXMemNum.tevStage);
+                rProgram.tev_stages = mGXMemNum.tevStage;
 
                 const TevStage* const pTevStage = GetTevStageAry();
 
-                for (int i = 0; i < mGXMemNum.tevStage; i++) {
-                    GXTevStageID tevStage = static_cast< GXTevStageID >(i);
-
-                    J3DNativeState::setTevOrder(tevStage, pTevStage[i].GetTexCoordGen(), pTevStage[i].GetTexMap(), pTevStage[i].GetColorChan());
-
-                    J3DNativeState::setTevSwapMode(tevStage, pTevStage[i].GetRasSwapSel(), pTevStage[i].GetTexSwapSel());
-
-                    J3DNativeState::setTevColorIn(tevStage, pTevStage[i].GetColorInA(), pTevStage[i].GetColorInB(), pTevStage[i].GetColorInC(),
-                                    pTevStage[i].GetColorInD());
-
-                    J3DNativeState::setTevColorOp(tevStage, pTevStage[i].GetColorOp(), pTevStage[i].GetColorBias(), pTevStage[i].GetColorScale(),
-                                    pTevStage[i].IsColorClamp(), pTevStage[i].GetColorOutReg());
-
-                    J3DNativeState::setTevKColorSel(tevStage, pTevStage[i].GetKColorSel());
-
-                    J3DNativeState::setTevAlphaIn(tevStage, pTevStage[i].GetAlphaInA(), pTevStage[i].GetAlphaInB(), pTevStage[i].GetAlphaInC(),
-                                    pTevStage[i].GetAlphaInD());
-
-                    J3DNativeState::setTevAlphaOp(tevStage, pTevStage[i].GetAlphaOp(), pTevStage[i].GetAlphaBias(), pTevStage[i].GetAlphaScale(),
-                                    pTevStage[i].IsAlphaClamp(), pTevStage[i].GetAlphaOutReg());
-
-                    J3DNativeState::setTevKAlphaSel(tevStage, pTevStage[i].GetKAlphaSel());
-                    GXIndTexMtxID indMtx = pTevStage[i].GetIndMtxSel();
-
-                    J3DNativeState::setTevIndirect(tevStage, pTevStage[i].GetIndStage(), pTevStage[i].GetIndFormat(), pTevStage[i].GetIndBiasSel(), indMtx,
-                                     pTevStage[i].GetIndWrapS(), pTevStage[i].GetIndWrapT(), pTevStage[i].IsIndAddPrev(), pTevStage[i].IsIndUtcLod(),
-                                     pTevStage[i].GetIndAlphaSel());
+                for (int i = 0; i < mGXMemNum.tevStage && i < 16; i++) {
+                    NebulaMaterialTevStage& rStage = rProgram.tev[i];
+                    const TevStage& rSrc = pTevStage[i];
+                    rStage.tex_coord = rSrc.GetTexCoordGen();
+                    rStage.tex_map = rSrc.GetTexMap();
+                    rStage.channel = rSrc.GetColorChan();
+                    rStage.ras_swap = rSrc.GetRasSwapSel();
+                    rStage.tex_swap = rSrc.GetTexSwapSel();
+                    rStage.color_in[0] = rSrc.GetColorInA();
+                    rStage.color_in[1] = rSrc.GetColorInB();
+                    rStage.color_in[2] = rSrc.GetColorInC();
+                    rStage.color_in[3] = rSrc.GetColorInD();
+                    rStage.color_op = rSrc.GetColorOp();
+                    rStage.color_bias = rSrc.GetColorBias();
+                    rStage.color_scale = rSrc.GetColorScale();
+                    rStage.color_clamp = rSrc.IsColorClamp() ? 1 : 0;
+                    rStage.color_reg = rSrc.GetColorOutReg();
+                    rStage.konst_color = rSrc.GetKColorSel();
+                    rStage.alpha_in[0] = rSrc.GetAlphaInA();
+                    rStage.alpha_in[1] = rSrc.GetAlphaInB();
+                    rStage.alpha_in[2] = rSrc.GetAlphaInC();
+                    rStage.alpha_in[3] = rSrc.GetAlphaInD();
+                    rStage.alpha_op = rSrc.GetAlphaOp();
+                    rStage.alpha_bias = rSrc.GetAlphaBias();
+                    rStage.alpha_scale = rSrc.GetAlphaScale();
+                    rStage.alpha_clamp = rSrc.IsAlphaClamp() ? 1 : 0;
+                    rStage.alpha_reg = rSrc.GetAlphaOutReg();
+                    rStage.konst_alpha = rSrc.GetKAlphaSel();
+                    GXIndTexMtxID indMtx = rSrc.GetIndMtxSel();
+                    rStage.ind_stage = rSrc.GetIndStage();
+                    rStage.ind_format = rSrc.GetIndFormat();
+                    rStage.ind_bias = rSrc.GetIndBiasSel();
+                    rStage.ind_matrix = indMtx;
+                    rStage.ind_wrap_s = rSrc.GetIndWrapS();
+                    rStage.ind_wrap_t = rSrc.GetIndWrapT();
+                    rStage.ind_prev = rSrc.IsIndAddPrev() ? 1 : 0;
+                    rStage.ind_lod = rSrc.IsIndUtcLod() ? 1 : 0;
+                    rStage.ind_alpha = rSrc.GetIndAlphaSel();
                     if (GX_ITM_0 <= indMtx && indMtx <= GX_ITM_2) {
                         useIndTexMtx[indMtx - 1] = true;
                         setIndTexMtx = true;
@@ -810,80 +817,71 @@ namespace nw4r {
 
                 useRasStage = true;
             } else {
+                // nw4r's stages for a material without its own: the textures blended by the konst selections, the
+                // black/white remap, the vertex colour; each adds into PREV, clamped.
                 u8 tevStageID = GX_TEVSTAGE0;
+                const auto stage = [&rProgram](u8 id, u8 coord, u8 map, u8 channel, u8 ca, u8 cb, u8 cc, u8 cd, u8 aa, u8 ab,
+                                               u8 ac, u8 ad) {
+                    NebulaMaterialTevStage& rStage = rProgram.tev[id];
+                    rStage.tex_coord = coord;
+                    rStage.tex_map = map;
+                    rStage.channel = channel;
+                    rStage.color_in[0] = ca;
+                    rStage.color_in[1] = cb;
+                    rStage.color_in[2] = cc;
+                    rStage.color_in[3] = cd;
+                    rStage.alpha_in[0] = aa;
+                    rStage.alpha_in[1] = ab;
+                    rStage.alpha_in[2] = ac;
+                    rStage.alpha_in[3] = ad;
+                };
 
                 if (mGXMemNum.texMap == 0) {
-                    GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                    J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-                    J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_C1, GX_CC_RASC, GX_CC_ZERO);
-                    J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_A1, GX_CA_RASA, GX_CA_ZERO);
+                    stage(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_CC_ZERO, GX_CC_C1, GX_CC_RASC, GX_CC_ZERO,
+                          GX_CA_ZERO, GX_CA_A1, GX_CA_RASA, GX_CA_ZERO);
 
                     useRasStage = true;
                     tevStageID = GX_TEVSTAGE1;
                 } else {
                     if (mGXMemNum.texMap == 1) {
-                        GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-                        J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-                        J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
+                        stage(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO,
+                              GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
 
                         tevStageID = GX_TEVSTAGE1;
                     } else {
                         if (mGXMemNum.texMap == 2) {
-                            GXTevStageID tevStage = GX_TEVSTAGE0;
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-
-                            tevStage = GX_TEVSTAGE1;
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_TEXC, GX_CC_CPREV, GX_CC_KONST, GX_CC_ZERO);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_TEXA, GX_CA_APREV, GX_CA_KONST, GX_CA_ZERO);
-
-                            J3DNativeState::setTevKColorSel(tevStage, kColSels[GX_TEXMAP0]);
-                            J3DNativeState::setTevKAlphaSel(tevStage, kAlpSels[GX_TEXMAP0]);
+                            stage(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC,
+                                  GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
+                            stage(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL, GX_CC_TEXC, GX_CC_CPREV, GX_CC_KONST, GX_CC_ZERO,
+                                  GX_CA_TEXA, GX_CA_APREV, GX_CA_KONST, GX_CA_ZERO);
+                            rProgram.tev[GX_TEVSTAGE1].konst_color = kColSels[GX_TEXMAP0];
+                            rProgram.tev[GX_TEVSTAGE1].konst_alpha = kAlpSels[GX_TEXMAP0];
 
                             tevStageID = GX_TEVSTAGE2;
                         } else {
                             for (int i = 0; i < mGXMemNum.texMap; i++) {
-                                GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                                J3DNativeState::setTevOrder(tevStage, static_cast< GXTexCoordID >(i), static_cast< GXTexMapID >(i), GX_COLOR_NULL);
-
-                                GXTevColorArg colorD = i == GX_TEXMAP0 ? GX_CC_ZERO : GX_CC_CPREV;
-                                GXTevAlphaArg alphaD = i == GX_TEXMAP0 ? GX_CA_ZERO : GX_CA_APREV;
-
-                                J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_TEXC, GX_CC_KONST, colorD);
-                                J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, alphaD);
-
-                                J3DNativeState::setTevKColorSel(tevStage, kColSels[i]);
-                                J3DNativeState::setTevKAlphaSel(tevStage, kAlpSels[i]);
+                                const u8 colorD = i == GX_TEXMAP0 ? GX_CC_ZERO : GX_CC_CPREV;
+                                const u8 alphaD = i == GX_TEXMAP0 ? GX_CA_ZERO : GX_CA_APREV;
+                                stage(tevStageID, static_cast< u8 >(i), static_cast< u8 >(i), GX_COLOR_NULL, GX_CC_ZERO, GX_CC_TEXC,
+                                      GX_CC_KONST, colorD, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, alphaD);
+                                rProgram.tev[tevStageID].konst_color = kColSels[i];
+                                rProgram.tev[tevStageID].konst_alpha = kAlpSels[i];
 
                                 tevStageID++;
                             }
                         }
 
                         if (mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1])) {
-                            GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                            J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-                            J3DNativeState::setTevColorIn(tevStage, GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO);
-                            J3DNativeState::setTevAlphaIn(tevStage, GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
+                            stage(tevStageID, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL, GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO,
+                                  GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO);
 
                             tevStageID++;
                         }
                     }
 
                     if (useRasStage) {
-                        GXTevStageID tevStage = static_cast< GXTevStageID >(tevStageID);
-
-                        J3DNativeState::setTevOrder(tevStage, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-                        J3DNativeState::setTevColorIn(tevStage, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-                        J3DNativeState::setTevAlphaIn(tevStage, GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
+                        stage(tevStageID, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO,
+                              GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
 
                         tevStageID++;
                     }
@@ -891,61 +889,78 @@ namespace nw4r {
 
                 const u8 tevStageNum = tevStageID;
                 for (u8 id = 0; id < tevStageNum; id++) {
-                    GXTevStageID tevStage = static_cast< GXTevStageID >(id);
-
-                    J3DNativeState::setTevColorOp(tevStage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, TRUE, GX_TEVPREV);
-                    J3DNativeState::setTevAlphaOp(tevStage, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, TRUE, GX_TEVPREV);
-
-                    J3DNativeState::setTevDirect(tevStage);
-                    J3DNativeState::setTevSwapMode(tevStage, GX_TEV_SWAP0, GX_TEV_SWAP0);
+                    NebulaMaterialTevStage& rStage = rProgram.tev[id];
+                    rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
+                    rStage.color_bias = rStage.alpha_bias = GX_TB_ZERO;
+                    rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
+                    rStage.color_clamp = rStage.alpha_clamp = 1;
+                    rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
+                    rStage.ras_swap = rStage.tex_swap = GX_TEV_SWAP0;
                 }
 
-                J3DNativeState::setNumTevStages(tevStageNum);
+                rProgram.tev_stages = tevStageNum;
             }
 
             if (setIndTexMtx) {
                 const TexSRT* const pIndTexSrt = GetIndTexSRTAry();
 
-                for (int i = 0; i < mGXMemNum.indSRT; i++) {
+                for (int i = 0; i < mGXMemNum.indSRT && i < 3; i++) {
                     if (!useIndTexMtx[i]) {
                         continue;
                     }
 
                     f32 mtx[2][3];
                     CalcIndTexMtx(mtx, pIndTexSrt[i]);
-                    SetIndTexMtx(static_cast< GXIndTexMtxID >(GX_ITM_0 + i), mtx);
+                    for (u32 row = 0; row < 2; row++) {
+                        for (u32 c = 0; c < 3; c++) {
+                            rValues.ind_matrix[i].m[row][c] = mtx[row][c];
+                        }
+                    }
                 }
             }
 
-            J3DNativeState::setNumIndStages(mGXMemNum.indStage);
+            rProgram.ind_stages = mGXMemNum.indStage;
             if (mGXMemNum.indStage > 0) {
                 const IndirectStage* const pIndStage = GetIndirectStageAry();
 
-                for (int i = 0; i < mGXMemNum.indStage; i++) {
-                    GXIndTexStageID indStage = static_cast< GXIndTexStageID >(i);
-
-                    J3DNativeState::setIndTexOrder(indStage, pIndStage[i].GetTexCoordGen(), pIndStage[i].GetTexMap());
-
-                    J3DNativeState::setIndTexCoordScale(indStage, pIndStage[i].GetScaleS(), pIndStage[i].GetScaleT());
+                for (int i = 0; i < mGXMemNum.indStage && i < 4; i++) {
+                    rProgram.ind_order[i].coord = pIndStage[i].GetTexCoordGen();
+                    rProgram.ind_order[i].map = pIndStage[i].GetTexMap();
+                    rProgram.ind_order[i].scale_s = pIndStage[i].GetScaleS();
+                    rProgram.ind_order[i].scale_t = pIndStage[i].GetScaleT();
                 }
             }
 
             if (IsAlphaCompareCap()) {
                 const AlphaCompare* const pAlphaComp = GetAlphaComparePtr();
 
-                J3DNativeState::setAlphaCompare(pAlphaComp->GetComp0(), pAlphaComp->GetRef0(), pAlphaComp->GetOp(), pAlphaComp->GetComp1(), pAlphaComp->GetRef1());
+                rProgram.alpha_compare.comp0 = pAlphaComp->GetComp0();
+                rProgram.alpha_compare.op = pAlphaComp->GetOp();
+                rProgram.alpha_compare.comp1 = pAlphaComp->GetComp1();
+                rValues.alpha_ref[0] = pAlphaComp->GetRef0();
+                rValues.alpha_ref[1] = pAlphaComp->GetRef1();
             } else {
-                J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+                rProgram.alpha_compare.comp0 = GX_ALWAYS;
+                rProgram.alpha_compare.op = GX_AOP_AND;
+                rProgram.alpha_compare.comp1 = GX_ALWAYS;
             }
 
             if (IsBlendModeCap()) {
                 const BlendMode* const pBlendMode = GetBlendModePtr();
 
-                J3DNativeState::setBlendMode(pBlendMode->GetType(), pBlendMode->GetSrcFactor(), pBlendMode->GetDstFactor(), pBlendMode->GetOp());
-
+                rProgram.blend.type = pBlendMode->GetType();
+                rProgram.blend.source = pBlendMode->GetSrcFactor();
+                rProgram.blend.destination = pBlendMode->GetDstFactor();
+                rProgram.blend.logic_op = pBlendMode->GetOp();
             } else {
-                J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+                rProgram.blend.type = GX_BM_BLEND;
+                rProgram.blend.source = GX_BL_SRCALPHA;
+                rProgram.blend.destination = GX_BL_INVSRCALPHA;
+                rProgram.blend.logic_op = GX_LO_SET;
             }
+
+            J3DNativeMaterial::sendWhole(rProgram, rValues);
+            J3DNativeShape::setCurrent(GX_PNMTX0, places);
 
             return useRasStage && useVtxColor;
         }

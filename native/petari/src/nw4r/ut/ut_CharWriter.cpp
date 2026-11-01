@@ -1,6 +1,7 @@
 #include "nw4r/ut/CharWriter.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "Game/Util/NativeShader.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/ut/Font.h"
 
@@ -10,6 +11,8 @@ namespace {
     NebulaNativeMaterial sMaterial;
 
     void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
+        static const nw4r::ut::Color fog = 0;
+        J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
         NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         sMaterial.depth_test = NEBULA_NATIVE_KEPT;
