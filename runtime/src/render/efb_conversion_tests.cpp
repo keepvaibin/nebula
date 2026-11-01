@@ -263,9 +263,8 @@ galaxy::render::CaptureRequest make_filter_params(bool filtered) {
     return params;
 }
 
-// Integer oracle based on the GX copy pipeline's byte-domain behavior. Source rows are
-// quantized before the 1/64 filter. Sums shift instead of round, coefficient sums >= 128
-// wrap to nine bits, and alpha is the unfiltered center sample.
+// The capture shader's arithmetic in double: the filter weights the rows, luminance replaces the colour, the target
+// rounds once to the nearest byte; alpha is the line's own.
 Pixel oracle_convert(
     Pixel previous,
     Pixel current,
@@ -279,36 +278,19 @@ Pixel oracle_convert(
         capture_filter_lower(params),
     };
     const auto filtered = [&](std::uint8_t p, std::uint8_t c, std::uint8_t n) {
-        const std::uint32_t value =
-            (static_cast<std::uint32_t>(p) * coefficients[0] +
-             static_cast<std::uint32_t>(c) * coefficients[1] +
-             static_cast<std::uint32_t>(n) * coefficients[2]) >> 6u;
-        return static_cast<std::uint8_t>(std::min(value, 255u));
+        return (static_cast<double>(p) * coefficients[0] + static_cast<double>(c) * coefficients[1] +
+                static_cast<double>(n) * coefficients[2]) / 64.0;
     };
-
-    Pixel raw{
-        filtered(previous.r, current.r, next.r),
-        filtered(previous.g, current.g, next.g),
-        filtered(previous.b, current.b, next.b),
-        current.a,
+    const auto byte = [](double value) {
+        return static_cast<std::uint8_t>(std::lround(std::clamp(value, 0.0, 255.0)));
     };
-
+    const double r = filtered(previous.r, current.r, next.r);
+    const double g = filtered(previous.g, current.g, next.g);
+    const double b = filtered(previous.b, current.b, next.b);
+    Pixel raw{byte(r), byte(g), byte(b), current.a};
     if (intensity) {
-        const int r = raw.r;
-        const int g = raw.g;
-        const int b = raw.b;
-        const std::array<std::uint32_t, 3> numerators{
-            static_cast<std::uint32_t>(66 * r + 129 * g + 25 * b + 4096),
-            static_cast<std::uint32_t>(-38 * r - 74 * g + 112 * b + 32768),
-            static_cast<std::uint32_t>(112 * r - 94 * g - 18 * b + 32768),
-        };
-        const auto round_div_256 = [](std::uint32_t value) {
-            return static_cast<std::uint8_t>(
-                (value >> 8u) + ((value >> 7u) & 1u));
-        };
-        raw.r = round_div_256(numerators[0]);
-        raw.g = round_div_256(numerators[1]);
-        raw.b = round_div_256(numerators[2]);
+        const std::uint8_t y = byte((66.0 * r + 129.0 * g + 25.0 * b) / 256.0 + 16.0);
+        raw.r = raw.g = raw.b = y;
     }
 
     switch (copy_format) {  // the picture layout (efb_copy.h)
@@ -349,6 +331,21 @@ Pixel oracle_from_three_rows(
         params,
         intensity,
         copy_format);
+}
+
+// A depth capture's texel: the game's depth (z24 / 2^24) in every colour channel, rounded to a byte; opaque.
+Pixel depth_pixel(double z24) {
+    const auto v = static_cast<std::uint8_t>(std::lround(std::clamp(z24 / 16777216.0 * 255.0, 0.0, 255.0)));
+    return Pixel{v, v, v, 255u};
+}
+
+// The depth rows 0-2 through the filter inside the rectangle (row 1 converted), as a depth capture's texel.
+Pixel oracle_depth(const std::array<std::uint32_t, 3>& z24_rows, const galaxy::render::CaptureRequest& params) {
+    const int minimum = std::clamp(static_cast<int>(params.src_y), 0, 2);
+    const int maximum = std::clamp(static_cast<int>(params.src_y) + static_cast<int>(params.src_height) - 1, 0, 2);
+    const auto row = [&](int i) { return static_cast<double>(z24_rows[static_cast<std::size_t>(std::clamp(i, minimum, maximum))]); };
+    return depth_pixel((row(0) * capture_filter_upper(params) + row(1) * capture_filter_middle(params) +
+                        row(2) * capture_filter_lower(params)) / 64.0);
 }
 
 Pixel packed_depth(std::uint32_t z24) {
@@ -1822,7 +1819,7 @@ bool test_clear_precision() {
     passed &= expect_pixel(bytes(galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 0u)),
         {19u, 87u, 155u, 255u}, "RGB8 clears preserve each full 8-bit color channel");
     passed &= expect_pixel(bytes(galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 1u)),
-        {16u, 85u, 154u, 125u}, "RGBA6 clears quantize only to the 6-bit lattice");
+        {19u, 87u, 155u, 127u}, "clears of a frame with alpha keep the values as given");
     return passed;
 }
 
@@ -1913,12 +1910,12 @@ bool test_cpu_oracle() {
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{25u, 35u, 45u, 77u},
-        "integer oracle display filter: half the line above");
+        "oracle display filter: half the line above");
     filter = make_filter_params(true);
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{40u, 50u, 60u, 77u},
-        "integer oracle top clamp keeps the line");
+        "oracle filter at the rectangle's top keeps the line");
 
     const std::array<Pixel, 3> red_rows{
         Pixel{0u, 0u, 0u, 1u},
@@ -1929,28 +1926,24 @@ bool test_cpu_oracle() {
     passed &= expect_pixel(
         oracle_from_three_rows(red_rows, identity, true, 3u),
         Pixel{82u, 82u, 82u, 82u},
-        "integer oracle intensity R8 selects Y");
+        "oracle luminance R8 holds Y");
     passed &= expect_pixel(
         oracle_from_three_rows(red_rows, identity, true, 4u),
-        Pixel{90u, 90u, 90u, 90u},
-        "integer oracle intensity G8 selects U");
+        Pixel{82u, 82u, 82u, 82u},
+        "oracle luminance G8 holds Y");
     passed &= expect_pixel(
         oracle_from_three_rows(red_rows, identity, true, 5u),
-        Pixel{240u, 240u, 240u, 240u},
-        "integer oracle intensity B8 selects V");
+        Pixel{82u, 82u, 82u, 82u},
+        "oracle luminance B8 holds Y");
 
-    const std::array<Pixel, 3> depth_rows{
-        packed_depth(0x102030u),
-        packed_depth(0x405060u),
-        packed_depth(0x708090u),
-    };
+    const std::array<std::uint32_t, 3> depth_rows{0x102030u, 0x405060u, 0x708090u};
     galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
     depth_filter.src_y = 0u;
     depth_filter.src_height = 2u;
     passed &= expect_pixel(
-        oracle_from_three_rows(depth_rows, depth_filter, false, 0u),
-        Pixel{40u, 56u, 72u, 255u},
-        "integer oracle filters packed depth bytes");
+        oracle_depth(depth_rows, depth_filter),
+        Pixel{40u, 40u, 40u, 255u},
+        "oracle filters the depth");
     return passed;
 }
 
@@ -1972,11 +1965,6 @@ bool test_warp_against_oracle() {
             0x102030u,
             0x405060u,
             0x708090u,
-        };
-        const std::array<Pixel, 3> packed_depth_rows{
-            packed_depth(z24_rows[0]),
-            packed_depth(z24_rows[1]),
-            packed_depth(z24_rows[2]),
         };
 
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
@@ -2026,7 +2014,7 @@ bool test_warp_against_oracle() {
             std::snprintf(
                 depth_label,
                 sizeof(depth_label),
-                "%ux packed depth vertical filter",
+                "%ux depth vertical filter",
                 scale);
             passed &= expect_uniform_pixels(
                 harness.run_depth(
@@ -2034,8 +2022,7 @@ bool test_warp_against_oracle() {
                     scale,
                     constants_for_case(depth_filter, scale, true, false, 0u)),
                 scale,
-                oracle_from_three_rows(
-                    packed_depth_rows, depth_filter, false, 6u),
+                oracle_depth(z24_rows, depth_filter),
                 depth_label);
         }
 

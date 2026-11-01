@@ -109,12 +109,10 @@ struct EfbClearValues {
     std::array<float, 4> color{};
     float reversed_depth = 0.0f;
 };
+// A clear's values as given; on a frame without alpha (frame_format 0, 1 with alpha) alpha 255.
 [[nodiscard]] EfbClearValues make_efb_clear_values(
     std::uint32_t rgba, std::uint32_t z24,
-    std::uint8_t pixel_format) noexcept;
-// With a frame format (0 no alpha, 1 alpha at 6 bits), clear values as given, not quantized to the format: the 8-bit
-// values a draw stores (alpha 255 on a frame without alpha).
-inline constexpr std::uint8_t kEfbClearExact = 0x80u;
+    std::uint8_t frame_format) noexcept;
 
 // The EFB conversion shader's root constants (16 dwords).
 struct EfbConversionShaderConstants {
@@ -122,7 +120,7 @@ struct EfbConversionShaderConstants {
 };
 
 [[nodiscard]] std::string_view efb_conversion_shader_source() noexcept;
-// A display copy one EFB pixel to one XFB pixel without gamma (efb_conversion_shader_source's arithmetic for it).
+// The frame shown, one frame pixel to one picture pixel (efb_conversion_shader_source's arithmetic for it).
 [[nodiscard]] std::string_view display_filter_shader_source() noexcept;
 
 // The renderers' utility shaders (HLSL; the Vulkan backend annotates and compiles the same source): the

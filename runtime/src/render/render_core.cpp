@@ -5769,17 +5769,12 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         return;
     }
     case shapes::Record::Kind::FrameClear: {
-        // The values a draw would store: 8-bit colour, and on a frame with 6-bit alpha its alpha at 6 bits.
+        // The values as the game gave them (alpha 255 on a frame without alpha).
         flush_pending_draw_batch();
-        std::uint32_t rgba = record.target_clear_rgba;
-        if (draw_state_.frame_alpha) {
-            const std::uint32_t alpha = rgba & 255u;
-            rgba = (rgba & ~255u) | (alpha & 0xFCu) | (alpha >> 6u);
-        }
-        renderer_.clear_efb(rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
+        renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
                             (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
                             record.target_y, record.target_width, record.target_height,
-                            static_cast<std::uint8_t>(frame_format() | kEfbClearExact));
+                            frame_format());
         return;
     }
     case shapes::Record::Kind::TargetClear:

@@ -494,7 +494,7 @@ void RendererVk::clear_efb(std::uint32_t clear_rgba, std::uint32_t clear_z24,
     }
     const EfbClearValues clear = make_efb_clear_values(clear_rgba, clear_z24, pixel_format);
     // The whole EFB, every channel, while the pass is closed (a copy-clear): the pass begins cleared.
-    const bool has_alpha = (pixel_format & ~kEfbClearExact) == 1u;
+    const bool has_alpha = pixel_format == 1u;
     if (!efb_pass_open_ && color_enable && (alpha_enable || !has_alpha) && depth_enable && rect.offset.x == 0 &&
         rect.offset.y == 0 && rect.extent.width == static_cast<std::uint32_t>(efb_w) &&
         rect.extent.height == static_cast<std::uint32_t>(efb_h)) {
