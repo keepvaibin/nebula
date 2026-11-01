@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
@@ -157,16 +158,18 @@ void MarioActor::writeBackScreenBox() const {
     GXTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    TDDraw::setup(1, 0, 2);
     J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
-    J3DNativeTexture::load(&texture, GX_TEXMAP0);
     MR::convertFrameBufferPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertFrameBufferPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_NOOP);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 0, 2);
+    NativeShader::setBlend(material, NEBULA_FACTOR_INV_DST_ALPHA, NEBULA_FACTOR_DST_ALPHA);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, true);
+    material.alpha_write = 1;
+    NativeShader::setTexObj(material, 0, &texture);
     J3DNativeState::setDstAlpha(GX_TRUE, 0);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
+    NativeShader::send(material);
     maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
-    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
     J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
@@ -177,7 +180,6 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
     J3DNativeDraw::texCoord(0.0f, 1.0f);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
     TDDraw::close();
 }
 
@@ -392,12 +394,11 @@ void MarioActor::drawScreenBlend() const {
 
         position = minimum + TVec2f(-10.0f, -10.0f);
         opposite = maximum + TVec2f(10.0f, 10.0f);
-        TDDraw::setup(0, 0, 2);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVDSTALPHA, GX_LO_NOOP);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 0, 2);
+        NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_DST_ALPHA);
         J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        NativeShader::send(material);
         TDDraw::drawFillBox(position, opposite, 0);
         J3DNativeState::setAlphaUpdate(GX_FALSE);
         MR::loadProjectionMtx();
@@ -411,7 +412,9 @@ void MarioActor::drawScreenBlend() const {
             color = 0x00004020;
         }
 
-        TDDraw::setup(0, 1, 2);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 1, 2);
+        NativeShader::send(material);
         TDDraw::drawFillBox(TVec3f(0.0f, 0.0f, 0.0f),
                             TVec3f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()), 0.0f), color);
         TDDraw::close();
@@ -457,14 +460,13 @@ namespace {
 #pragma global_optimizer off
 void MarioActor::drawWallShade(const TVec3f& rPosition, const TVec3f& rNormal, f32 unused) const {
     f32 radius = 100.0f;
-    TDDraw::setup(1, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_GREATER, GX_FALSE);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    mMaskTextures[_B88]->load(GX_TEXMAP0);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 1, 0);
+    material.shader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    material.constants[0] = 0.0f;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, false);
+    NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
+    NativeShader::send(material);
     Mtx rotation;
     TVec3f tangent(0.0f, rNormal.z, -rNormal.y);
 
@@ -498,7 +500,8 @@ void MarioActor::drawColdWaterDamage() const {
     u32 stripHeight = 4;
     GXTexObj textures[2];
     u16 width = MR::getFrameBufferWidth();
-    TDDraw::setup(1, 0, 2);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 0, 2);
     u16 current = 0;
     J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
@@ -514,7 +517,8 @@ void MarioActor::drawColdWaterDamage() const {
     for (u32 y = 0; y < MR::getScreenHeight(); y += 4) {
         next = 1 - current;
         J3DNativeTarget::capture(mRasterBuffers[next], 0, y + 4, width, 4, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
-        J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
+        NativeShader::setTexObj(material, 0, &textures[current]);
+        NativeShader::send(material);
         f32 v = 0.0f;
 
         for (u32 row = y; row < y + 4; row++) {
@@ -569,7 +573,8 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     u32 stripHeight = 4;
     GXTexObj textures[2];
     u16 width = MR::getFrameBufferWidth();
-    TDDraw::setup(1, 0, 2);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 0, 2);
     u16 current = 0;
     J3DNativeTexture::init(&textures[0], _1D8, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
     J3DNativeTexture::init(&textures[1], _1DC, width, 4, GX_TF_RGB565, GX_CLAMP, GX_CLAMP, GX_FALSE);
@@ -582,7 +587,8 @@ void MarioActor::drawRasterScroll(f32 amplitude, s16 period, f32 wavelength) con
     for (u32 y = 0; y < MR::getScreenHeight(); y += 4) {
         next = 1 - current;
         J3DNativeTarget::capture(mRasterBuffers[next], 0, y + 4, width, 4, NEBULA_TARGET_RGB, NEBULA_CAPTURE_FILTERED);
-        J3DNativeTexture::load(&textures[current], GX_TEXMAP0);
+        NativeShader::setTexObj(material, 0, &textures[current]);
+        NativeShader::send(material);
         f32 v = 0.0f;
 
         for (u32 row = y; row < y + 4; row++) {
@@ -654,8 +660,9 @@ void MarioActor::drawSpinEffect() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 2, 0);
+    NativeShader::send(material);
     Mtx rotation;
     TVec3f center = _2A0 + mMario->mHeadVec * _6D8;
     TVec3f direction(mMario->mFrontVec);
@@ -702,11 +709,12 @@ void MarioActor::drawSphereMask() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 2, 0);
     J3DNativeView::setZScaleOffset(1.0f, 0.00001f);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setZMode(GX_TRUE, GX_GREATER, GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+    material.cull = NEBULA_CULL_FRONT;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, true);
+    NativeShader::send(material);
     TVec3f position;
     getRealPos("Spine1", &position);
     TDDraw::drawSphere3D(position, 180.0f, 0xFFFFFF30, 16);
@@ -752,14 +760,14 @@ bool MarioActor::drawDarkMask() const {
         return false;
     }
 
-    TDDraw::setup(1, 0, 2);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    mMaskTextures[_B88]->load(GX_TEXMAP0);
-    J3DNativeState::setZCompLoc(GX_FALSE);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 1, GX_AOP_AND, GX_ALWAYS, 0);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 0, 2);
+    material.color_write = 0;
+    material.alpha_write = 1;
+    material.constants[4] = 1.0f;
+    NativeShader::setTexture(material, 0, mMaskTextures[_B88]);
     J3DNativeState::setDstAlpha(GX_TRUE, 255);
+    NativeShader::send(material);
     TVec3f spine;
     TVec2f center;
     TVec2f screenX;
