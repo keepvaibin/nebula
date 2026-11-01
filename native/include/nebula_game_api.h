@@ -413,7 +413,8 @@ typedef struct NebulaNativeMaterial {
     } textures[8];
     NebulaMaterialLight light[8];
     /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
-       drawing state's until a draw's own texgens replace it (a shape's env map or projection). */
+       drawing state's until a draw's own texgens replace it (a shape's env map or projection); NEBULA_NATIVE_KEPT keeps the
+       draw's (an instance's differed list that loads no texgens). */
     uint8_t texgen_post[8];
     uint32_t constants_only; /* bit 0: only the constants of the material the draws use change (the game folding a state
                                 change of one of its values in); its state, textures and lights stay as set since; bit 1: the first 84 constants are

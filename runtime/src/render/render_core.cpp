@@ -9332,6 +9332,9 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
     // Its texgens' post-transform matrices, as a GX material's texgens set them (a draw's own texgens replace them:
     // apply_record_matrices).
     for (unsigned i = 0; i < 8u; ++i) {
+        if (m.texgen_post[i] == material::kNativeKept) {
+            continue;  // the draw's texgens as they are (an instance's differed list that loads none)
+        }
         draw_state_.post_texgen[i] = XfPostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
                                                   (m.texgen_post[i] & 0x80u) != 0u};
     }

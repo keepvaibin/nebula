@@ -133,16 +133,30 @@ def main():
     gx = parse(sys.argv[2])
     if any(d['path'] != 'native' for d in nat) or any(d['path'] != 'gx' for d in gx):
         print('warning: the first dump must hold native draws and the second GX draws')
+    # Draws pair by their shader sequence (a run may draw a few more or fewer: objects that appear between runs);
+    # unpaired draws are listed, not compared.
+    import difflib
+    pairs = []
+    unpaired = []
+    matcher = difflib.SequenceMatcher(None, [d['shader'] for d in nat], [d['shader'] for d in gx], autojunk=False)
+    for op, a0, a1, b0, b1 in matcher.get_opcodes():
+        if op == 'equal':
+            pairs.extend(zip(range(a0, a1), range(b0, b1)))
+        else:
+            unpaired.append('native draws %d-%d (shaders %s) / gx draws %d-%d (shaders %s)' % (
+                a0 + 1, a1, sorted(set(d['shader'] for d in nat[a0:a1])), b0 + 1, b1,
+                sorted(set(d['shader'] for d in gx[b0:b1]))))
     differing = 0
-    for n, (a, b) in enumerate(zip(nat, gx), 1):
-        out, note = compare(a, b)
-        if a['shader'] != b['shader']:
-            out.insert(0, '  shader                     native %d  gx %d (draws out of step)' % (a['shader'], b['shader']))
+    for i, j in pairs:
+        out, note = compare(nat[i], gx[j])
         if out:
             differing += 1
-            print('draw %d (shader %d):' % (n, a['shader']))
+            print('draw %d / gx %d (shader %d):' % (i + 1, j + 1, nat[i]['shader']))
             print('\n'.join(out + ([note] if note else [])))
-    print('%d draws compared (native %d, gx %d), %d differ' % (min(len(nat), len(gx)), len(nat), len(gx), differing))
+    for u in unpaired:
+        print('unpaired: ' + u)
+    print('%d draws compared (native %d, gx %d), %d differ, %d unpaired runs' % (len(pairs), len(nat), len(gx),
+                                                                                 differing, len(unpaired)))
 
 
 main()
