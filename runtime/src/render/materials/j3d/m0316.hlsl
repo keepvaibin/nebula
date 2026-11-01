@@ -23,8 +23,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 1: type 1, source 4
-        const float4 c = float4(v.uv[0], 1.0, 1.0);
+    {  // coordinate 1: type 1, source 1
+        const float4 c = float4(v.nrm, 1.0);
         float3 res;
         if (((vs_header.w >> 1u) & 1u) != 0u) {
             const uint tm = native_tex_matrix(v, 1u);
@@ -70,8 +70,7 @@ float4 material_color(NativeVaryings i) {
         tevcoord = texel + off;
         const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
-        const float3 rc = saturate((k.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, ras.rgb) - 128.0 / 255.0));
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), j3d_in(r0.rgb), t.rgb)) * 2.0);
         const float ra = saturate((0.0 + lerp(0.0, t.a, ras.a)));
         prev.rgb = rc;
         prev.a = ra;

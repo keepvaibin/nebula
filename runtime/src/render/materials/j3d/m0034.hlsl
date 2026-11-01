@@ -69,8 +69,8 @@ float4 material_color(NativeVaryings i) {
         const float4 r0 = material.reg[1];
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
-        const float ka = 1.0;
-        return j3d_override(t, i.color, 1.0, saturate((ka + lerp(0.0, 0.0, 0.0))), i.pos);
+        const float ka = material.kcolor[0].a;
+        return j3d_override(t, i.color, material.kcolor[0].a, saturate((0.0 + lerp(0.0, t.a, ka))), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -79,27 +79,34 @@ float4 material_color(NativeVaryings i) {
     float2 tevcoord = float2(0.0, 0.0);
     const float3 ind0 = round(tex[2].Sample(samp[2], j3d_texel(i.uv[2], 2u) / float2(1.0, 1.0) / material.tex_scale[2].zw).abg * 255.0);
     {  // stage 0
-        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rrrr;
-        const float4 ras = i.color.rrrr;
-        const float ka = 1.0;
-        const float3 rc = saturate((t.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((ka + lerp(0.0, 0.0, 0.0)));
+        float2 texel = j3d_texel(i.uv[0], 0u);
+        float3 sv = floor(ind0 / 1.0);
+        sv.x += -128.0;
+        sv.y += -128.0;
+        sv.z += -128.0;
+        const float2 off = float2(dot(material.ind_mtx[0].xyz, sv), dot(material.ind_mtx[1].xyz, sv));
+        tevcoord = texel + off;
+        const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale[0].zw).rgba;
+        const float4 ras = i.color.rgba;
+        const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
+        const float ka = material.kcolor[0].a;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)) * 2.0);
+        const float ra = saturate((0.0 + lerp(0.0, t.a, ka)));
         prev.rgb = rc;
         prev.a = ra;
     }
     {  // stage 1
         float2 texel = j3d_texel(i.uv[1], 1u);
-        texel.x = 0.0;
-        texel.y = 0.0;
         float3 sv = floor(ind0 / 1.0);
         sv.x += -128.0;
         sv.y += -128.0;
+        sv.z += -128.0;
         const float2 off = float2(dot(material.ind_mtx[0].xyz, sv), dot(material.ind_mtx[1].xyz, sv));
         tevcoord = texel + off;
-        const float4 t = tex[1].Sample(samp[1], tevcoord / material.tex_scale[1].zw).rrrr;
-        const float4 ras = i.color.rrrr;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((0.0 + lerp(0.0, t.a, ras.a)));
+        const float4 t = tex[1].Sample(samp[1], tevcoord / material.tex_scale[1].zw).rgba;
+        const float4 ras = i.color.rgba;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(r0.rgb), j3d_in(prev.rgb), t.rgb)) * 2.0);
+        const float ra = (0.0 + lerp(ras.a, 0.0, 0.0));
         prev.rgb = rc;
         prev.a = ra;
     }

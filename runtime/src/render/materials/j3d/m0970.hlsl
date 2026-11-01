@@ -48,7 +48,7 @@ float4 material_color(NativeVaryings i) {
         const float4 ras = i.color.rgba;
         const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
         const float ka = material.kcolor[0].a;
-        const float3 rc = saturate((r1.rgb + lerp(k.rgb, j3d_in(r0.rgb), ras.rgb) - 128.0 / 255.0));
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(k.rgb, j3d_in(r0.rgb), ras.rgb)));
         const float ra = saturate((0.0 + lerp(ka, 0.0, ras.a)) * 2.0);
         prev.rgb = rc;
         prev.a = ra;
@@ -62,10 +62,6 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
-    const float a8 = round(prev.a * 255.0);
-    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
-        discard;
-    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

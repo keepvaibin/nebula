@@ -2,7 +2,8 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color = v.color0;
+    o.color.rgb = material.mat_color[0].rgb;
+    o.color.a = material.mat_color[0].a;
     o.color1 = v.color1;
     {  // coordinate 0: type 1, source 1
         const float4 c = float4(v.nrm, 1.0);
