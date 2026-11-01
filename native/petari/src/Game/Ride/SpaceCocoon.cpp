@@ -1,4 +1,5 @@
 #include "Game/Ride/SpaceCocoon.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -866,30 +867,17 @@ void SpaceCocoon::drawPlane(f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color
 
 void SpaceCocoon::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, (GXColor){0xFF, 0x00, 0x00, 0xFF});
-
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 60, GX_FALSE, 125);
-    mTexture->load(GX_TEXMAP0);
-
-    J3DNativeState::setNumIndStages(0);
-
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_RASC, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-
-    J3DNativeState::setZMode(GX_ENABLE, GX_LEQUAL, GX_ENABLE);
-    J3DNativeState::setZCompLoc(GX_ENABLE);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
+    // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, opaque (GX's konst alpha 1); drawn where
+    // the alpha is above 0, depth tested and written, back faces culled.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_BACK);
+    material.early_depth = 1;
+    material.constants[0] = 1.0f;
+    material.constants[1] = 1.0f;
+    NativeShader::setTexture(material, 0, mTexture);
+    NativeShader::send(material);
+    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 }
