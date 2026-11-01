@@ -1,7 +1,6 @@
 #pragma once
 
-// The drawing state's typed values (blend, depth, TEV orders, texture sampling and images, texgens, channels) and
-// their enumerations.
+// The drawing state's typed values (blend, depth, cull, counts, primitives, texgens, channels) and their enumerations.
 
 #include "galaxy/render/texture_sampler.h"
 #include <cstdint>
@@ -21,6 +20,7 @@ enum class BlendFactor : std::uint8_t {
 
 enum class CullMode : std::uint8_t { None = 0, Front, Back, All };
 
+// The disc's texture format codes, as texture pack names carry them (data: tex1_WxH_<hash>_<code>).
 enum class TexFormat : std::uint8_t {
     I4 = 0x0, I8 = 0x1, IA4 = 0x2, IA8 = 0x3,
     RGB565 = 0x4, RGB5A3 = 0x5, RGBA8 = 0x6,

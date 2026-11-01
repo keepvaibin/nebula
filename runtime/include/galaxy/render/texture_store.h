@@ -15,7 +15,7 @@
 #define NOMINMAX
 #endif
 
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 #include "galaxy/render/gpu_texture_backend.h"
 #include "galaxy/render/pso_key.h"  // fnv1a64
 #include "galaxy/render/texture_decode_pool.h"

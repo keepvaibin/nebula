@@ -5,7 +5,7 @@
 #pragma once
 
 #include "galaxy/render/draw_matrices.h"
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 
 #include <cstdint>
 
