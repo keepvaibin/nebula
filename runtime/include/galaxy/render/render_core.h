@@ -544,22 +544,11 @@ private:
     bool ambient_occlusion_ = false;
     bool ao_view_set_ = false;
     bool ao_scene_applied_ = true;
-    [[nodiscard]] bool rt_geometry_draw() const noexcept;
-    [[nodiscard]] bool rt_card_draw() const noexcept;
-    [[nodiscard]] bool rt_alpha_draw() const noexcept;
-    // Texture map `map` of the bound table as the ray tracer copies it (none for an empty map).
-    [[nodiscard]] RtTextureSource rt_texture_source(unsigned map) const noexcept;
     // The loaded stage (note_rt_stage) and its fixed key (aim_rt_scene_lights): decided once per stage.
     std::uint64_t rt_stage_hash_ = 0u;
     std::uint64_t rt_fixed_key_stage_ = ~0ull;
     std::uint32_t rt_fixed_key_scenes_ = 0u;
     bool rt_fixed_key_on_ = false;
-    [[nodiscard]] bool rt_glow_draw() const noexcept;
-    [[nodiscard]] bool rt_late_draw() const noexcept;
-    [[nodiscard]] bool rt_water_draw() const noexcept;
-    [[nodiscard]] bool rt_ocean_water_draw() const noexcept;
-    [[nodiscard]] bool rt_sprite_light_draw() const noexcept;
-    void note_rt_phase(std::uint8_t phase);
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
     [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
@@ -567,33 +556,11 @@ private:
     void note_scene_ao_view(const DrawCall& call);
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
-    void trace_rt_scene();
-    void trace_rt_water();
-    // GALAXY_RT_MATERIALS: the census line of a scene draw (rt_surfaces.h).
-    void note_rt_material();
-    // A stage was loaded: its name and its row of the sun table (rt_materials.h) for the ray tracer.
-    void note_rt_stage();
-    // The current draw is a light effect the traced lighting replaces (rt_materials.h hide).
-    [[nodiscard]] bool rt_hidden_draw() const noexcept;
-    // The draw is a clear surface the engine traces (the table's `traced`): not shown, still captured.
-    [[nodiscard]] bool rt_traced_clear_draw() const noexcept;
-    // The draw is a sprite of the table's `mist` effects while the ray tracer takes them as puffs (note_rt_mist).
-    [[nodiscard]] bool rt_mist_draw() const noexcept;
-    // Its puff for the ray tracer (SceneRayTracer::note_mist).
-    void note_rt_mist(const DrawCall& call);
-    // A traced clear solid's draw (the table's `traced solid`): unseen scene geometry, its game draw hidden.
-    [[nodiscard]] bool rt_traced_solid_draw() const noexcept;
-    // The current object's name (NameObj::mName) into `out`; its address, 0 for none.
-    std::uint64_t rt_object_name(char* out, std::size_t size);
-    [[nodiscard]] static std::uint16_t rt_material_of(std::uint32_t map_mask,
-                                                      const std::array<TextureHandle, kMaxTextureMaps>& handles,
-                                                      unsigned& map) noexcept;
     std::uint64_t rt_object_ = 0u;   // the last NameObj marker's object
     bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
     bool rt_trace_only_ = false;          // trace-only draws (motion::kMarkerTraceOnly): traced, never drawn
     std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
-    bool rt_fake_shadow_object(std::uint64_t object);
     std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
     // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an
     // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
@@ -620,18 +587,6 @@ private:
     // The draws are the game's own shadows (CategoryList::execute of MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27,
     // AlphaShadow 0x29) until the next category marker: hidden under traced lighting (rt_hidden_draw).
     bool rt_fake_shadow_list_ = false;
-    // The texture generator of the first TEV stage sampling texture map `map` (0xFF: none).
-    [[nodiscard]] unsigned rt_texgen_of_map(unsigned map) const noexcept;
-    // A draw of the game's sky lists: its record for the traced sky (kRtDrawSky).
-    void begin_rt_sky_batch(RtDrawInfo& info);
-    // The draw's TEV program, registers, colour channels (lit ones at `facing` of their lights) and textures for ray
-    // hits (RtDrawInfo.tev); its two texture slots.
-    void fill_rt_tev(RtDrawInfo& info, float facing);
-    // The program and its state alone (stages, registers, konstants, colour channels, alpha compare).
-    void build_rt_tev(RtTevMaterial& tev, RtTevStage* stages, float facing) const;
-    // debake_channels (bits 0-3) with each channel's neutral light (bits 8-15, 16-23: rt_tev_neutral_light), cached by
-    // the TEV state.
-    [[nodiscard]] std::uint32_t debake_state();
     std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
     // De-baking by model (apply_debake_model): a model's vertex colours (its CP colour arrays CLR0 / CLR1), sampled the
     // first frame it draws, decide whether they hold baked light (de-baked from the next frame) or paint (kept).
@@ -651,8 +606,6 @@ private:
         bool fitted = false;
     };
     static constexpr std::size_t kDebakeModelSamples = 4096u;
-    // Its baked light as a function of the facing (model.sh, peak, fit_r2) from its samples.
-    static void fit_debake_light(DebakeModel& model);
     static constexpr std::size_t kDebakeModelColours = 4096u;
     std::unordered_map<std::uint64_t, DebakeModel> debake_models_;
     std::uint32_t debake_models_stage_ = 0u;
@@ -663,20 +616,8 @@ private:
     float debake_fit_sh_[7][4]{};
     float debake_fit_peak_[4]{};
     std::vector<std::uint64_t> debake_model_order_;   // GALAXY_RT_DEBAKE_CYCLE: the baked models in decision order
-    // The unlit channels (bits 0-1) of `channels` kept only where the model's colours are baked light.
-    [[nodiscard]] std::uint32_t apply_debake_model(std::uint32_t channels);
-    // A finished batch's vertex colours into its undecided model's sample.
-    void sample_debake_model(std::uint64_t key, const DrawCall& call);
-    // Physical ray tracing: the colour channels whose colour carries the art's baked light, in an opaque scene phase,
-    // outside the sky lists and the material table's emitters (whose colour is their light): unlit and taken from the
-    // vertices (bits 0-1: channel 0, 1), and lit (bits 2-3: their light at full, their vertex colour's shading).
-    // GALAXY_RT_DEBAKE=0: none.
-    [[nodiscard]] std::uint32_t debake_channels() const;
     // Per object name (its address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint64_t, std::uint8_t> rt_named_;
-    // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
-    // the camera (projection and viewport) for rays through EFB pixels.
-    [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
     // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
     // world space (direction towards it), how far the lights are moved to it, its source (1 the
     // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
@@ -717,8 +658,6 @@ private:
     // (aim_rt_scene_lights). rt_player_rig_draw: the draw is lit by it.
     std::array<std::uint32_t, 3> rt_player_rig_{};
     bool rt_player_rig_known_ = false;
-    [[nodiscard]] bool rt_player_rig_draw() const noexcept;
-    void note_rt_world_key() noexcept;
     // A camera cut since the last scene's aim (and the most objects one reported); the game's sun
     // count at the last cut, and whether one arrived since (the ray tracer holds it).
     bool rt_scene_cut_ = false;
@@ -734,9 +673,6 @@ private:
     std::uint64_t rt_light_regions_ = 0;
     std::uint64_t rt_snapshot_count_ = 0;
     std::uint64_t rt_snapshot_cycles_ = 0;
-    void aim_rt_scene_lights(const std::array<float, 12>* view);
-    [[nodiscard]] std::uint32_t rt_aimed_lights() const noexcept;
-    void write_rt_lights(std::uint32_t* palette) noexcept;
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
     // A run of frames that draw no 3D scene (the pause menu over its captured picture): each is recorded as a screen
@@ -1142,8 +1078,6 @@ private:
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
-    // A stage was loaded (another sky and other lights): the tracer's stage state starts over.
-    void begin_rt_stage();
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
     void write_scene_vs_constants(const VertexConstants& cpu, VertexConstants& upload);

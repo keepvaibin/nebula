@@ -28,7 +28,6 @@
 #include "galaxy/host_env.h"
 #include "galaxy/render/dependency_range_memo.h"
 #include "galaxy/render/fifo_cache_fingerprint.h"
-#include "galaxy/render/rt_tev_eval.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/enhanced_lighting.h"
