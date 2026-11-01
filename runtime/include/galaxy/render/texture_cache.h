@@ -90,6 +90,23 @@ struct TextureHandle {
     std::uint64_t pack = 0;
 };
 
+// A texture as its record describes it (nebula_cooked_texture.h): its key, size, whether its texels are colour, its
+// layout, and the disc's format code (texture-pack names; NEBULA_TEXTURE_MADE for one made while running).
+struct TextureInfo {
+    std::uint64_t key = 0u;
+    std::uint16_t width = 1u;
+    std::uint16_t height = 1u;
+    bool colour = false;
+    std::uint8_t layout = 0u;
+    std::uint8_t disc_format = 0u;
+};
+
+// The disc formats whose texels are colour (a generated mip chain is only made for those).
+[[nodiscard]] constexpr bool disc_format_is_colour(std::uint8_t format) noexcept {
+    return format == 4u || format == 5u || format == 6u || format == 8u || format == 9u || format == 10u ||
+           format == 14u;  // RGB565, RGB5A3, RGBA8, C4, C8, C14X2, CMPR
+}
+
 class TextureCache {
 public:
     bool initialize(gpu::Device* device);
@@ -99,9 +116,8 @@ public:
     // The GPU texture for an image, uploaded on first use from the texture record the game handed over, or decoded
     // from the image's bytes (register_image; one never handed over decodes from zeros). Colour-indexed images come
     // as records with their palettes applied: `palette_address` and `palette_format` are not read.
-    // The texture's image as the renderer sizes it: its record's size, levels' format (the disc's, or the linear
-    // layout's) and address; 1x1 without a record.
-    [[nodiscard]] TexImage image_of(std::uint64_t texture) const;
+    // The texture as its record describes it (1x1, no layout, without a record).
+    [[nodiscard]] TextureInfo info_of(std::uint64_t texture) const;
     [[nodiscard]] TextureHandle get(std::uint64_t texture, const TextureSampler& mode);
     // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.

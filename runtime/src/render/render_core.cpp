@@ -272,29 +272,15 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     return levels;
 }
 
-[[nodiscard]] bool snapshot_generated_mips_color_format(TexFormat format) {
-    switch (format) {
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-    case TexFormat::RGBA8:
-    case TexFormat::C4:
-    case TexFormat::C8:
-    case TexFormat::C14X2:
-    case TexFormat::CMPR:
-        return true;
-    default:
-        return false;
-    }
-}
 
 [[nodiscard]] bool snapshot_should_generate_native_mips(
-    const TexImage& image,
+    const TextureInfo& image,
     const TextureSampler& mode) {
     if ((min_filter_code(mode) & 0x3u) != 0u ||
         min_filter_code(mode) != 4u ||
         !mode.mag_linear ||
         (image.width < 64u && image.height < 64u) ||
-        !snapshot_generated_mips_color_format(image.format)) {
+        !image.colour) {
         return false;
     }
     return get_render_config().enhanced_mipmaps;
@@ -4767,7 +4753,7 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
 }
 
 RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t texture, const TextureSampler& mode) const {
-    const TexImage image = texture_cache_.image_of(texture);
+    const TextureInfo image = texture_cache_.info_of(texture);
     unsigned levels = 1u;
     bool generated_mips = false;
     const unsigned mip_mode = min_filter_code(mode) & 0x3u;
@@ -4782,10 +4768,10 @@ RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t textur
         generated_mips = levels > 1u;
     }
     return TextureHandleKey{
-        image.address,
+        image.key,
         image.width,
         image.height,
-        static_cast<std::uint8_t>(image.format),
+        image.layout,
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };

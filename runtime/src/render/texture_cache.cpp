@@ -167,23 +167,9 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
     return levels;
 }
 
-[[nodiscard]] static bool generated_mips_color_format(TexFormat format) {
-    switch (format) {
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-    case TexFormat::RGBA8:
-    case TexFormat::C4:
-    case TexFormat::C8:
-    case TexFormat::C14X2:
-    case TexFormat::CMPR:
-        return true;
-    default:
-        return false;
-    }
-}
 
 [[nodiscard]] static bool should_generate_native_mips(
-    const TexImage& image,
+    const TextureInfo& image,
     const TextureSampler& mode) {
     // Only repeating textures get a generated mip chain: a clamped texture is a decal placed by a texture matrix
     // (eyes, HUD digits) whose small detail blended lower levels would wash out.
@@ -192,7 +178,7 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
         !mode.mag_linear ||
         mode.wrap_s == TexWrap::Clamp || mode.wrap_t == TexWrap::Clamp ||
         (image.width < 64u && image.height < 64u) ||
-        !generated_mips_color_format(image.format)) {
+        !image.colour) {
         return false;
     }
     // The settings (a lock and a copy) are read only once the guest descriptor allows generated mips.
@@ -1273,28 +1259,28 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
     return true;
 }
 
-TexImage TextureCache::image_of(std::uint64_t texture) const {
+TextureInfo TextureCache::info_of(std::uint64_t texture) const {
+    TextureInfo info{};
+    info.key = texture;
     const NebulaTexture* const record = registered_record(texture);
     if (record == nullptr) {
-        return TexImage{1u, 1u, TexFormat::I4, texture};
+        return info;
     }
-    TexFormat format = TexFormat::RGBA8;
-    if (record->disc_format < 16u) {
-        format = static_cast<TexFormat>(record->disc_format);
-    } else if (record->layout == NEBULA_TEXTURE_L8) {
-        format = TexFormat::I8;
-    } else if (record->layout == NEBULA_TEXTURE_LA8) {
-        format = TexFormat::IA8;
-    }
-    return TexImage{record->width, record->height, format, texture};
+    info.width = record->width;
+    info.height = record->height;
+    info.layout = record->layout;
+    info.disc_format = record->disc_format;
+    info.colour = record->disc_format < 16u ? disc_format_is_colour(record->disc_format)
+                                             : record->layout == NEBULA_TEXTURE_RGBA8;
+    return info;
 }
 
 TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mode) {
-    const TexImage image = image_of(texture);
-    if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
+    const TextureInfo image = info_of(texture);
+    if (movie_active_ && image.layout == NEBULA_TEXTURE_L8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {
-            if (image.address == movie_addr_[p] && image.width == movie_source_width_[p] &&
+            if (image.key == movie_addr_[p] && image.width == movie_source_width_[p] &&
                 image.height == movie_source_height_[p]) {
                 return movie_handles_[p];
             }
@@ -1327,7 +1313,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         }
     }
     // A texture record (cooked, or made by the game) holds its levels as texels: nothing is decoded.
-    const NebulaTexture* const record = registered_record(image.address);
+    const NebulaTexture* const record = registered_record(image.key);
     if (record != nullptr && source_levels > record->levels) {
         source_levels = record->levels;
         levels = source_levels;
@@ -1342,14 +1328,14 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
         : std::chrono::steady_clock::time_point{};
 
     Key key{};
-    key.address  = image.address;
+    key.address  = image.key;
     key.width       = image.width;
     key.height      = image.height;
-    key.format      = static_cast<std::uint8_t>(image.format);
+    key.format      = image.layout;
     key.levels      = static_cast<std::uint8_t>(levels);
     key.generated_mips = generated_mips ? 1u : 0u;
     const std::uint32_t total_source_size = record != nullptr ? record->size : 1u;
-    if (image.address + total_source_size < image.address) {
+    if (image.key + total_source_size < image.key) {
         throw std::runtime_error("[TextureCache] texture address overflow");
     }
     const auto key_end = trace_stalls
@@ -1379,19 +1365,19 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (record == nullptr) {
         ++missing_images_;
         std::fprintf(stderr, "[texture] no texture record: %llX %ux%u format %u (drawn blank)\n",
-                     static_cast<unsigned long long>(image.address), image.width, image.height,
-                     static_cast<unsigned>(image.format));
+                     static_cast<unsigned long long>(image.key), image.width, image.height,
+                     static_cast<unsigned>(image.disc_format));
     }
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     // A record carries the disc image's names (pack hash, palette hash, disc format); one the game made has none.
-    const TexFormat source_format = record != nullptr ? static_cast<TexFormat>(record->disc_format) : image.format;
+    const TexFormat source_format = static_cast<TexFormat>(image.disc_format);
     const bool nameless = record != nullptr && record->disc_format == NEBULA_TEXTURE_MADE;
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
     if (rt_materials_loaded() && !nameless) {
         pack = record != nullptr ? record->pack_hash : 0u;
         rt_material = rt_material_index(pack);
-        note_rt_texture(image.address, pack, image.width, image.height, static_cast<std::uint32_t>(source_format));
+        note_rt_texture(image.key, pack, image.width, image.height, static_cast<std::uint32_t>(source_format));
     }
     // Texture packs: the naming convention's hashes of the base level (and of the palette range it uses). A resident
     // replacement binds without a decode; else the original decodes and waits for it.
@@ -1420,7 +1406,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                 decoded_lru_track(key);
                 ++pack_bound_;
                 if (trace_texture_packs_enabled()) {
-                    std::cerr << "[texture-pack] bind addr=" << std::hex << image.address << std::dec << ' '
+                    std::cerr << "[texture-pack] bind addr=" << std::hex << image.key << std::dec << ' '
                               << packs_.file(pack_slot).filename().string() << '\n';
                 }
                 return handle;
@@ -1439,7 +1425,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             elapsed_us(get_start, miss_start);
         if (pre_miss_us >= trace_gx_stall_threshold_us()) {
             std::cerr << "[gx-texture-premiss] addr=0x" << std::hex
-                      << image.address << std::dec
+                      << image.key << std::dec
                       << " size=" << total_source_size
                       << " config-us="
                       << elapsed_us(get_start, config_end)
@@ -1616,7 +1602,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
             elapsed_us(upload_record_end, emplace_end);
         if (post_record_us >= trace_gx_stall_threshold_us()) {
             std::cerr << "[gx-texture-postrecord] addr=0x" << std::hex
-                      << image.address << std::dec
+                      << image.key << std::dec
                       << " entry-us="
                       << elapsed_us(entry_build_start, entry_build_end)
                       << " texdump-us="
@@ -1630,8 +1616,8 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     if (trace_stalls &&
         total_us >= trace_gx_stall_threshold_us()) {
         std::cerr << "[gx-texture-miss] addr=0x" << std::hex
-                  << image.address << std::dec
-                  << " fmt=" << static_cast<unsigned>(image.format)
+                  << image.key << std::dec
+                  << " fmt=" << static_cast<unsigned>(image.disc_format)
                   << " size=" << w << 'x' << h
                   << " levels=" << levels
                   << " native-mips=" << (generated_mips ? 1u : 0u)
