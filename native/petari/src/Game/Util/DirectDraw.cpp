@@ -1,4 +1,5 @@
 #include "Game/Util/DirectDraw.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -146,6 +147,48 @@ namespace TDDraw {
 
         J3DNativeState::setFog(GX_FOG_NONE, 0.0, 0.0, 0.0, 0.0, color);
         J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
+    }
+
+    void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode) {
+        J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+        J3DNativeState::setCoPlanar(0);
+        J3DNativeState::setLineWidth(6, GX_TO_ZERO);
+
+        Mtx mtx;
+        NebulaMtxIdentity(mtx);
+
+        switch (viewMode) {
+        case 0:
+            NebulaMtxCopy(MR::getCameraViewMtx(), ::mViewMtx);
+            J3DNativeShape::setPosition(0, ::mViewMtx);
+            NebulaMtxCopy(::mViewMtx, mtx);
+            break;
+        case 1:
+            MR::loadProjectionMtx();
+            J3DNativeShape::setPosition(0, ::mViewMtx);
+            break;
+        case 2:
+            cameraInit2D();
+            NebulaMtxTrans(mtx, -MR::getScreenWidth() / 2.0f, MR::getScreenHeight() / 2.0f, 0.0f);
+            mtx[1][1] = -1.0f;
+            J3DNativeShape::setPosition(0, mtx);
+            break;
+        }
+
+        J3DNativeShape::setNormal(0, mtx);
+        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+
+        static const NebulaShaderId kShaders[3] = {NEBULA_SHADER_VERTEX_COLOR, NEBULA_SHADER_DD_TEXTURE,
+                                                   NEBULA_SHADER_DD_TEXTURE_COLOR};
+        static const NativeShader::Blend kBlends[3] = {NativeShader::BLEND_OPAQUE, NativeShader::BLEND_ALPHA,
+                                                       NativeShader::BLEND_ADD_ALPHA};
+        NativeShader::init(*pMaterial, kShaders[drawMode], kBlends[blendMode], NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        pMaterial->color_write = 1;
+        pMaterial->alpha_write = 0;
+        pMaterial->constants[4] = -1.0f;
     }
 
     void sendPoint(const TVec3f& rPoint, u32 color) NO_INLINE {

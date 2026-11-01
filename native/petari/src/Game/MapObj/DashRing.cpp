@@ -1,4 +1,5 @@
 #include "Game/MapObj/DashRing.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
@@ -292,9 +293,10 @@ void DashRing::draw() const {
     TPos3f rotMtx;
     NebulaMtxRotAxisRad(rotMtx, axis, TWO_PI / 64.0f);
 
-    TDDraw::setup(0, 1, 0);
-
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     for (u32 idx = 0; idx <= 64; idx++) {
         TVec3f vecB0 = mPosition + subAxis * f2;

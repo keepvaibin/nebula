@@ -1,6 +1,7 @@
 #pragma once
 
 #include <JSystem/JGeometry/TMatrix.hpp>
+#include <nebula_game_api.h>
 #include <revolution/gx.h>
 
 class JUTTexture;
@@ -12,6 +13,10 @@ namespace TDDraw {
     void resetViewMtx();
     void close();
     void setup(u32, u32, u8);
+    // E-04: setup's view, and its draw (0 vertex colour, 1 a texture, 2 a texture plus colour 0) and blend modes (0
+    // none, 1 by alpha, 2 added by alpha) as a native material: depth off, no culling, colour written and alpha not,
+    // passing every alpha. The site adjusts it, sets its textures and colour, then sends it (NativeShader::send).
+    void setupNative(NebulaNativeMaterial* pMaterial, u32 drawMode, u32 blendMode, u8 viewMode);
     void sendPoint(const TVec3f&, u32) NO_INLINE;
     void sendPoint(const TVec3f&) NO_INLINE;
     void drawLine(const TVec3f&, const TVec3f&, u32);

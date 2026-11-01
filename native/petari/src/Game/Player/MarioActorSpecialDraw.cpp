@@ -1,4 +1,5 @@
 #include "Game/LiveActor/HitSensor.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
@@ -392,12 +393,11 @@ void MarioActor::drawScreenBlend() const {
 
         position = minimum + TVec2f(-10.0f, -10.0f);
         opposite = maximum + TVec2f(10.0f, 10.0f);
-        TDDraw::setup(0, 0, 2);
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setAlphaUpdate(GX_FALSE);
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVDSTALPHA, GX_LO_NOOP);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 0, 2);
+        NativeShader::setBlend(material, NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_DST_ALPHA);
         J3DNativeState::setDstAlpha(GX_TRUE, 0);
+        NativeShader::send(material);
         TDDraw::drawFillBox(position, opposite, 0);
         J3DNativeState::setAlphaUpdate(GX_FALSE);
         MR::loadProjectionMtx();
@@ -411,7 +411,9 @@ void MarioActor::drawScreenBlend() const {
             color = 0x00004020;
         }
 
-        TDDraw::setup(0, 1, 2);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 1, 2);
+        NativeShader::send(material);
         TDDraw::drawFillBox(TVec3f(0.0f, 0.0f, 0.0f),
                             TVec3f(static_cast< f32 >(MR::getScreenWidth()), static_cast< f32 >(MR::getScreenHeight()), 0.0f), color);
         TDDraw::close();
@@ -654,8 +656,9 @@ void MarioActor::drawSpinEffect() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 2, 0);
+    NativeShader::send(material);
     Mtx rotation;
     TVec3f center = _2A0 + mMario->mHeadVec * _6D8;
     TVec3f direction(mMario->mFrontVec);
@@ -702,11 +705,12 @@ void MarioActor::drawSphereMask() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 2, 0);
     J3DNativeView::setZScaleOffset(1.0f, 0.00001f);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setZMode(GX_TRUE, GX_GREATER, GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
+    material.cull = NEBULA_CULL_FRONT;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_GREATER, true);
+    NativeShader::send(material);
     TVec3f position;
     getRealPos("Spine1", &position);
     TDDraw::drawSphere3D(position, 180.0f, 0xFFFFFF30, 16);

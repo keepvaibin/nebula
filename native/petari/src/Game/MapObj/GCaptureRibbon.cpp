@@ -1,4 +1,5 @@
 #include "Game/MapObj/GCaptureRibbon.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorLightCtrl.hpp"
@@ -18,10 +19,12 @@ GCaptureRibbon::GCaptureRibbon(const char* pName) : LiveActor(pName), mTexture()
 void GCaptureRibbon::draw() const {
     if (_990 >= 2) {
         TDDraw::cameraInit3D();
-        TDDraw::setup(1, 2, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         f32 width = calcLineWidth();
-        mTexture->load(GX_TEXMAP0);
-        J3DNativeState::setZMode(true, GX_LEQUAL, false);
+        NativeShader::setTexture(material, 0, mTexture);
+        NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+        NativeShader::send(material);
 
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 2 * _990, NEBULA_SHAPE_TEXCOORD0);
         {

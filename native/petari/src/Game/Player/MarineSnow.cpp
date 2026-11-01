@@ -1,4 +1,5 @@
 #include "Game/Player/MarineSnow.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -48,8 +49,10 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     s32 cellZ = static_cast< s32 >((rPosition.z + mCellSize / 2.0f) / mCellSize);
     s32 originZ = cellZ * mCellSize;
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
     J3DNativeState::setPointSize(27, GX_TO_ZERO);
 
     static u8 phase = 0;

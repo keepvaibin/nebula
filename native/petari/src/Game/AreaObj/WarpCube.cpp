@@ -1,4 +1,5 @@
 #include "Game/AreaObj/WarpCube.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
 #include "Game/Scene/SceneFunction.hpp"
@@ -83,9 +84,10 @@ void WarpCube::movement() {
 }
 
 void WarpCube::draw() const {
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     TVec3f cubeRotate;
     TVec3f up(0.0f, 1.0f, 0.0f);
