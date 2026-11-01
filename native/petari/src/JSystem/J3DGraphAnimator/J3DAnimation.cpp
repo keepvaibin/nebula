@@ -219,7 +219,7 @@ void J3DFrameCtrl::update() {
     }
 }
 
-J3DAnmTransform::J3DAnmTransform(s16 frameMax, NEBULA_BE(f32)* pScaleData, NEBULA_BE(s16)* pRotData, NEBULA_BE(f32)* pTransData)
+J3DAnmTransform::J3DAnmTransform(s16 frameMax, f32* pScaleData, s16* pRotData, f32* pTransData)
     : J3DAnmBase(frameMax) {
     mScaleData = pScaleData;
     mRotData = pRotData;
@@ -527,17 +527,6 @@ inline f32 J3DHermiteInterpolationS16Keys(f32 pp1, f32 a, f32 b, f32 c, f32 d, f
     value = value * t + b;
     value = delta * squared + value;
     return value - end;
-}
-
-// The animation files' key arrays, big-endian.
-inline f32 J3DHermiteInterpolation(f32 p1, const BE< f32 >* p2, const BE< f32 >* p3, const BE< f32 >* p4, const BE< f32 >* p5,
-                                   const BE< f32 >* p6, const BE< f32 >* p7) {
-    return JMAHermiteInterpolation(p1, *p2, *p3, *p4, *p5, *p6, *p7);
-}
-
-inline f32 J3DHermiteInterpolation(f32 pp1, const BE< s16 >* pp2, const BE< s16 >* pp3, const BE< s16 >* pp4, const BE< s16 >* pp5,
-                                   const BE< s16 >* pp6, const BE< s16 >* pp7) {
-    return J3DHermiteInterpolationS16Keys(pp1, (s16)*pp2, (s16)*pp3, (s16)*pp4, (s16)*pp5, (s16)*pp6, (s16)*pp7);
 }
 #endif
 
@@ -1392,6 +1381,6 @@ void J3DAnmTevRegKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnimation_FORCE_EMIT(s16 frameMax, NEBULA_BE(f32)* pWeight) {
+void J3DAnimation_FORCE_EMIT(s16 frameMax, f32* pWeight) {
     J3DAnmCluster cluster(frameMax, pWeight);
 }

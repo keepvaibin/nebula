@@ -1113,6 +1113,11 @@ mod tests {
         dol[0x48 + 0x1C..0x48 + 0x20].copy_from_slice(&0x8053_A000u32.to_be_bytes());
         dol[0x90 + 0x1C..0x90 + 0x20].copy_from_slice(&0xE000u32.to_be_bytes());
         dol.resize(0x100 + 0xE000, 0);
+        // The two tables as empty tables (16-byte header: no entries, no fields, data at 16), as the cook reads them.
+        for address in [0x8053_C620u32, 0x8053_C800] {
+            let at = 0x100 + (address - 0x8053_A000) as usize;
+            dol[at + 8..at + 12].copy_from_slice(&16u32.to_be_bytes());
+        }
         let system = vec![
             ("boot.bin", 0, boot.into_boxed_slice()),
             ("main.dol", 0x2480, dol.into_boxed_slice()),
