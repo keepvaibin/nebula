@@ -94,10 +94,6 @@ namespace {
     bool sSiteFollows = false;
     NebulaNativeMaterial sCurrent;
     const NebulaMaterialProgram* sCurrentProgram = NULL;
-    const NebulaMaterialValues* sCurrentValues = NULL;
-    NebulaStateOp sSince[64];
-    u32 sSinceCount = 0;
-    bool sSinceLost = false;
 
     void setColor(f32* pOut, const u8* pColor, u32 count) {
         for (u32 c = 0; c < count; c++) {
@@ -468,34 +464,14 @@ namespace {
     bool sFoldFailed = false;
     bool sFoldCull = false;  // the list set the culling (GXSetGenMode2's)
 
-    // The draws go back to the drawing state: a J3D material's own GX program and values, then the state changes made
-    // since it was sent (as GX had them); a site's material just ends.
+    // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.
     void endCurrent() {
+        static NebulaNativeMaterial sNone;
         const NebulaHostServices* pHost = nebula_host();
-        if (sCurrentKind == CURRENT_J3D) {
-            // The whole material (its values are built whole), also for an instance's differed list: the shared list
-            // that would have set the rest drew natively, so the drawing state holds none of it.
-            static NebulaMaterialProgram sWhole;
-            sWhole = *sCurrentProgram;
-            sWhole.diff_flags = 0;
-            sWhole.origin = 0;
-            const u64 key = static_cast< u64 >(reinterpret_cast< uintptr_t >(&sWhole));
-            pHost->material_program(pHost->user, key, &sWhole);
-            const u32 since = sSinceCount;
-            pHost->material(pHost->user, key, sCurrentValues);
-            if (sSinceLost) {
-                nebula_log("J3DNativeMaterial: more than %u state changes since a native material; the oldest are lost\n",
-                         static_cast< u32 >(sizeof(sSince) / sizeof(sSince[0])));
-            }
-            if (since != 0) {
-                pHost->state(pHost->user, sSince, since);
-            }
-        } else {
-            static NebulaNativeMaterial sNone;
-            pHost->native_material(pHost->user, &sNone);
-        }
+        pHost->native_material(pHost->user, &sNone);
         sCurrentKind = CURRENT_NONE;
     }
+
 
     // Each material the game sends (NativeShader::send, this file's sends; NULL a drawing-state one).
     // The shader of the material watchMaterial last saw (J3DNativeMaterial::currentShader).
@@ -510,8 +486,6 @@ namespace {
         if (sSiteFollows) {
             sSiteRegisters = *pNative;
         }
-        sSinceCount = 0;
-        sSinceLost = false;
     }
 
     // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the draws of the material whose native shader is the asked one (65535:
@@ -548,6 +522,25 @@ namespace {
                           : static_cast< u8 >(gx == 2 ? NEBULA_FACTOR_SRC_COLOR : NEBULA_FACTOR_INV_SRC_COLOR);
         }
         return gx;
+    }
+
+    // A material with no shader in the set (its program registered: a material dump collects it for the generator):
+    // not drawn. Each once in the log.
+    void notDrawn(u32 shader, u64 key) {
+        static u64 sLogged[256];
+        static u32 sLoggedCount = 0;
+        bool seen = false;
+        for (u32 k = 0; k < sLoggedCount; k++) {
+            seen = seen || sLogged[k] == key;
+        }
+        if (!seen && sLoggedCount < 256) {
+            sLogged[sLoggedCount++] = key;
+            nebula_log("J3DNativeMaterial: material %016llx (shader %u) has no native program; not drawn\n",
+                       static_cast< unsigned long long >(key), static_cast< u32 >(shader));
+        }
+        endCurrent();
+        watchMaterial(NULL);
+        dumpTag(shader);
     }
 
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
@@ -681,7 +674,6 @@ namespace {
         watchMaterial(&material);
         dumpTag(shader);
         sCurrentProgram = &rProgram;
-        sCurrentValues = &rValues;
     }
 }  // namespace
 
@@ -1016,9 +1008,9 @@ namespace J3DNativeMaterial {
             rParts.program.diff_flags = diffFlags;
             rParts.program.origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
             rParts.nativeShader = nativeShaderOf(rParts.program);
-            // The program the host has for this list (its GX path, which a native J3D material also takes while the
-            // ray tracer lights the scene): sent when the list's first capture makes it, or when a patch changes it (an
-            // animated material's captures change only its values).
+            // The list's program for the host's material dump (GALAXY_DUMP_MATERIAL_PROGRAMS, the generator's input):
+            // sent when the list's first capture makes it, or when a patch changes it (an animated material's captures
+            // change only its values).
             if (!pList->mNebulaCaptured || memcmp(&sRegistered, &rParts.program, sizeof(sRegistered)) != 0) {
                 const NebulaHostServices* pHost = nebula_host();
                 pHost->material_program(pHost->user, keyOf(pList), &rParts.program);
@@ -1037,10 +1029,7 @@ namespace J3DNativeMaterial {
                 sendNative(rParts.program, rParts.values, rParts.nativeShader);
                 return;
             }
-            loadRegisters(rParts.program, rParts.values);
-            pHost->material(pHost->user, keyOf(pList), &rParts.values);
-            watchMaterial(NULL);
-            dumpTag(rParts.nativeShader);
+            notDrawn(rParts.nativeShader, keyOf(pList));
             return;
         }
         // A list from the model file, which has no snapshot: its material built now, its program with it.
@@ -1050,11 +1039,8 @@ namespace J3DNativeMaterial {
             sendNative(sParts.program, sParts.values, shader);
             return;
         }
-        loadRegisters(sParts.program, sParts.values);
         pHost->material_program(pHost->user, keyOf(&sParts), &sParts.program);
-        pHost->material(pHost->user, keyOf(&sParts), &sParts.values);
-        watchMaterial(NULL);
-        dumpTag(shader);
+        notDrawn(shader, keyOf(pMaterial));
     }
 
     void sendDiffered(J3DDisplayListObj* pList) {
@@ -1067,11 +1053,7 @@ namespace J3DNativeMaterial {
             return;
         }
         J3DNativeShape::flushState();
-        loadRegisters(rParts.program, rParts.values);
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->material(pHost->user, keyOf(pList), &rParts.values);
-        watchMaterial(NULL);
-        dumpTag(rParts.nativeShader);
+        notDrawn(rParts.nativeShader, keyOf(pList));
     }
 
     const f32* registers() {
@@ -1150,10 +1132,7 @@ namespace J3DNativeMaterial {
             sRegistered[slot] = key;
             pHost->material_program(pHost->user, key, &rProgram);
         }
-        loadRegisters(rProgram, rValues);
-        pHost->material(pHost->user, key, &rValues);
-        watchMaterial(NULL);
-        dumpTag(shader);
+        notDrawn(shader, key);
     }
 
     void state(const NebulaStateOp* pOps, u32 count) {
@@ -1189,13 +1168,6 @@ namespace J3DNativeMaterial {
                 endCurrent();
             }
             changed = setRegister(rOp) || changed;
-            if (sCurrentKind == CURRENT_J3D) {
-                if (sSinceCount < sizeof(sSince) / sizeof(sSince[0])) {
-                    sSince[sSinceCount++] = rOp;
-                } else {
-                    sSinceLost = true;
-                }
-            }
         }
         // The folded program: its generated shader with the register file as the list left it; else the GX path as
         // before, the folded program registered so a material dump collects it for the set.
