@@ -6,32 +6,32 @@ class JMapInfo;
 class TalkMessageInfo;
 class TalkNode;
 
-// BMG. The block headers, INF1 items and FLW1 nodes are read big-endian; natively the DAT1 text is converted to
-// host order once at load (MessageData::MessageData), see MessageEditorMessageTag for the tags.
+// BMG, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs); see
+// MessageEditorMessageTag for the tags.
 struct MessageInfoBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
-    /* 0x8 */ NEBULA_BE(u16) mItemCount;
-    /* 0xA */ NEBULA_BE(u16) mItemSize;
-    /* 0xC */ NEBULA_BE(u32) _C;
+    /* 0x0 */ u32 mMagic;
+    /* 0x4 */ u32 mBlockSize;
+    /* 0x8 */ u16 mItemCount;
+    /* 0xA */ u16 mItemSize;
+    /* 0xC */ u32 _C;
 };
 
 struct MessageDataBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
+    /* 0x0 */ u32 mMagic;
+    /* 0x4 */ u32 mBlockSize;
 };
 
 struct MessageFlowBlock {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
-    /* 0x8 */ NEBULA_BE(u16) mNodeCount;
-    /* 0xA */ NEBULA_BE(u16) _A;
-    /* 0xC */ NEBULA_BE(u32) _C;
+    /* 0x0 */ u32 mMagic;
+    /* 0x4 */ u32 mBlockSize;
+    /* 0x8 */ u16 mNodeCount;
+    /* 0xA */ u16 _A;
+    /* 0xC */ u32 _C;
 };
 
 struct MessageFLI1Block {
-    /* 0x0 */ NEBULA_BE(u32) mMagic;
-    /* 0x4 */ NEBULA_BE(u32) mBlockSize;
+    /* 0x0 */ u32 mMagic;
+    /* 0x4 */ u32 mBlockSize;
 };
 
 class MessageData {
@@ -52,7 +52,7 @@ public:
     /* 0x08 */ MessageDataBlock* mDataBlock;
     /* 0x0C */ u32 _C;
     /* 0x10 */ MessageFlowBlock* mFlowBlock;
-    /* 0x14 */ NEBULA_BE(u16)* _14;
+    /* 0x14 */ u16* _14;
     /* 0x18 */ u8* _18;
     /* 0x1C */ MessageFLI1Block* mFLI1Block;
 };
@@ -80,8 +80,8 @@ public:
     struct FlowNodeEvent {
         /* 0x00 */ u8 mFlowType;
         /* 0x01 */ u8 mEventType;
-        /* 0x02 */ NEBULA_BE(u16) mBranchID;
-        /* 0x04 */ NEBULA_BE(u32) mArg;
+        /* 0x02 */ u16 mBranchID;
+        /* 0x04 */ u32 mArg;
     };
 
     static bool getSystemMessageDirect(TalkMessageInfo*, const char*);
