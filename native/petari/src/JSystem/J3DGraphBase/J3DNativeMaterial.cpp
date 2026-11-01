@@ -336,6 +336,14 @@ namespace {
             }
         }
         NebulaNativeMaterial& material = sCurrent;
+        // An instance's differed list loads only the textures it changes (diffTexNo); the others stay as the shared
+        // list that drew just before loaded them: their images and coordinate scales carry over.
+        static NebulaNativeMaterial sShared;
+        const bool keepTextures = differed && sCurrentKind == CURRENT_J3D && sCurrent.shader == shader;
+        if (keepTextures) {
+            memcpy(sShared.textures, material.textures, sizeof(material.textures));
+            memcpy(sShared.constants + 84, material.constants + 84, 32 * sizeof(f32));
+        }
         memset(&material, 0, sizeof(material));
         material.shader = shader;
         const u8 type = rProgram.blend.type;
@@ -366,6 +374,10 @@ namespace {
         for (u32 k = 0; k < 8; k++) {
             f32* pScale = material.constants + 84 + k * 4;
             const NebulaMaterialTexture& rTex = rValues.texture[k];
+            if (keepTextures && rTex.image == 0) {
+                memcpy(pScale, sShared.constants + 84 + k * 4, 4 * sizeof(f32));
+                continue;
+            }
             pScale[2] = rTex.width != 0 ? rTex.width : 1.0f;
             pScale[3] = rTex.height != 0 ? rTex.height : 1.0f;
             pScale[0] = rValues.tex_coord_scale[k].scale_s != 0 ? rValues.tex_coord_scale[k].scale_s : pScale[2];
@@ -374,6 +386,9 @@ namespace {
         for (u32 map = 0; map < 8; map++) {
             const NebulaMaterialTexture& rTex = rValues.texture[map];
             if (rTex.image == 0) {
+                if (keepTextures) {
+                    material.textures[map] = sShared.textures[map];
+                }
                 continue;
             }
             material.textures[map].image = rTex.image;
