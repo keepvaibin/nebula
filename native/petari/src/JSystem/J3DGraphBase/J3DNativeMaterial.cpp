@@ -12,7 +12,6 @@
 #include <string.h>
 
 extern "C" const NebulaHostServices* nebula_host(void);
-extern "C" void nebula_material_watch(void (*watch)(const NebulaNativeMaterial* native));
 extern "C" void nebula_log(const char* format, ...);
 
 // A display list's material: its program and its values (nebula_game_api.h).
@@ -81,7 +80,6 @@ namespace {
     NebulaStateOp sSince[64];
     u32 sSinceCount = 0;
     bool sSinceLost = false;
-    bool sResending = false;
 
     void setColor(f32* pOut, const u8* pColor, u32 count) {
         for (u32 c = 0; c < count; c++) {
@@ -277,11 +275,8 @@ namespace {
         sCurrentKind = CURRENT_NONE;
     }
 
-    // Each material the game sends (sdk/core.c nebula_material_watch).
+    // Each material the game sends (NativeShader::send, this file's sends; NULL a drawing-state one).
     void watchMaterial(const NebulaNativeMaterial* pNative) {
-        if (sResending) {
-            return;
-        }
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
                                                                                 : CURRENT_SITE;
@@ -289,13 +284,8 @@ namespace {
         sSinceLost = false;
     }
 
-    struct MaterialWatch {
-        MaterialWatch() { nebula_material_watch(watchMaterial); }
-    };
-    MaterialWatch sMaterialWatch;
-
     // Whether J3D materials draw as their native shaders now: not while the ray tracer lights the scene (it reads the
-    // drawing state's TEV program for its hit surfaces; E-04 step 3d makes it read the native materials).
+    // drawing state's GX program for its hit surfaces; E-04 step 3d makes it read the native materials).
     bool nativeDrawn(u32 shader) {
         const NebulaHostServices* pHost = nebula_host();
         if (pHost->option(pHost->user, NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
@@ -421,6 +411,7 @@ namespace {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, &material);
+        watchMaterial(&material);
         sCurrentProgram = &rProgram;
         sCurrentValues = &rValues;
     }
@@ -776,6 +767,7 @@ namespace J3DNativeMaterial {
             }
             loadRegisters(rParts.program, rParts.values);
             pHost->material(pHost->user, keyOf(pList), &rParts.values);
+            watchMaterial(NULL);
             return;
         }
         // A list from the model file, which has no snapshot: its material built now, its program with it.
@@ -788,6 +780,7 @@ namespace J3DNativeMaterial {
         loadRegisters(sParts.program, sParts.values);
         pHost->material_program(pHost->user, keyOf(&sParts), &sParts.program);
         pHost->material(pHost->user, keyOf(&sParts), &sParts.values);
+        watchMaterial(NULL);
     }
 
     void sendDiffered(J3DDisplayListObj* pList) {
@@ -803,10 +796,15 @@ namespace J3DNativeMaterial {
         loadRegisters(rParts.program, rParts.values);
         const NebulaHostServices* pHost = nebula_host();
         pHost->material(pHost->user, keyOf(pList), &rParts.values);
+        watchMaterial(NULL);
     }
 
     const f32* registers() {
         return sRegisters;
+    }
+
+    void watch(const NebulaNativeMaterial* pNative) {
+        watchMaterial(pNative);
     }
 
     bool override(u32 mode, f32 a0, f32 a1, f32 ref) {
@@ -820,10 +818,8 @@ namespace J3DNativeMaterial {
         pOverride[2] = a1;
         pOverride[3] = ref;
         sCurrent.constants_only = 1;
-        sResending = true;
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, &sCurrent);
-        sResending = false;
         return true;
     }
 
@@ -853,6 +849,7 @@ namespace J3DNativeMaterial {
         }
         loadRegisters(rProgram, rValues);
         pHost->material(pHost->user, key, &rValues);
+        watchMaterial(NULL);
     }
 
     void state(const NebulaStateOp* pOps, u32 count) {
@@ -876,10 +873,8 @@ namespace J3DNativeMaterial {
         if (changed && sCurrentKind == CURRENT_J3D) {
             memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
             sCurrent.constants_only = 1;
-            sResending = true;
             const NebulaHostServices* pHost = nebula_host();
             pHost->native_material(pHost->user, &sCurrent);
-            sResending = false;
         }
     }
 

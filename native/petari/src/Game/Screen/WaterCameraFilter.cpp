@@ -1,4 +1,5 @@
 #include "Game/Screen/WaterCameraFilter.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -99,6 +100,7 @@ namespace {
         values.tex_coord_scale[1].scale_t = pScreen->getHeight();
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sFilterProgram), &values);
+        J3DNativeMaterial::watch(NULL);
         static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                                       GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
         J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);

@@ -1,4 +1,5 @@
 #include "Game/Screen/BloomEffect.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -138,6 +139,7 @@ namespace {
         values.tex_coord_scale[0].scale_t = pTexture->getHeight();
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
+        J3DNativeMaterial::watch(NULL);
         u8 places[8] = {static_cast< u8 >(rEntry.mProgram.tex_gen[0].matrix), GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                         GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
         J3DNativeShape::setCurrent(GX_PNMTX0, places);
@@ -198,6 +200,7 @@ namespace {
         }
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
+        J3DNativeMaterial::watch(NULL);
         u8 places[8];
         for (u32 i = 0; i < 8; i++) {
             places[i] = static_cast< u8 >(sTexMtxID[i]);

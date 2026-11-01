@@ -1,4 +1,5 @@
 #include "Game/Screen/DepthOfFieldBlur.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -67,6 +68,7 @@ namespace {
         memset(&values, 0, sizeof(values));
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sZAlphaProgram), &values);
+        J3DNativeMaterial::watch(NULL);
     }
 
     // The final blend's material: the sharp picture's colour (texture 0) taken where the depth texture (2, as an
@@ -155,6 +157,7 @@ namespace {
         }
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sFinalProgram), &values);
+        J3DNativeMaterial::watch(NULL);
         static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                                       GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
         J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);

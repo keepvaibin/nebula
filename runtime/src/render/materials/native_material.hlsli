@@ -17,7 +17,7 @@ cbuffer NativeDraw : register(b0) {
     float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
     float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
     float4 line_point_raster : packoffset(c65);  // the viewport's width and height in pixels (xy)
-    uint4 vs_header : packoffset(c67);           // y: the EFB scale; z: the PE word (native_ps); w: the shape's
+    uint4 vs_header : packoffset(c67);           // y: the frame scale; z: the PE word (native_ps); w: the shape's
                                                  // per-vertex texture matrix indices (texgen n's bit)
     uint4 vs_post[2] : packoffset(c70);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
     float4 motion_prev_proj[2] : packoffset(c73);
@@ -287,35 +287,35 @@ struct NativeOut { float4 color : SV_Target0; };
 
 NativeOut native_ps(NativeVaryings i) {
     const float4 c0 = material_color(i);
-    // The pixel engine, as the uber shader writes it: an alpha of 1 blends and writes as 0; an RGBA6 EFB keeps six
-    // bits of colour (after its 2x2 dither when on) and six of alpha, or the constant destination alpha; the blender
-    // reads the 8-bit TEV alpha (SV_Target1 for dual-source blending).
+    // The pixel engine, as the uber shader writes it: an alpha of 1 blends and writes as 0; a six-bits-per-channel
+    // frame keeps six bits of colour (after its 2x2 ordered pattern when on) and six of alpha, or the constant
+    // destination alpha; the blender reads the 8-bit combiner alpha (SV_Target1 for dual-source blending).
     const uint pe = vs_header.z;
-    uint4 efb = uint4(round(saturate(c0) * 255.0));
-    if (efb.a == 1u) {
-        efb.a = 0u;
+    uint4 px = uint4(round(saturate(c0) * 255.0));
+    if (px.a == 1u) {
+        px.a = 0u;
     }
-    const float tev_alpha = float(efb.a) / 255.0;
+    const float stage_alpha = float(px.a) / 255.0;
     float4 c;
     if ((pe & 1u) != 0u) {
-        int3 d = int3(efb.rgb);
+        int3 d = int3(px.rgb);
         if ((pe & 2u) != 0u) {
             const int2 xy = int2(i.pos.xy / float(max(vs_header.y, 1u))) & 1;
             d = (d - (d >> 6)) + (xy.x ^ xy.y) * 2 + xy.y;
         }
         c.rgb = float3(uint3(clamp(d, 0, 255)) >> 2u) / 63.0;
     } else {
-        c.rgb = float3(efb.rgb) / 255.0;
+        c.rgb = float3(px.rgb) / 255.0;
     }
 #if NATIVE_REACTIVE
-    c.a = tev_alpha;
+    c.a = stage_alpha;
 #else
-    c.a = (pe & 0x100u) != 0u ? float(((pe >> 9u) & 0xFFu) >> 2u) / 63.0 : float(efb.a >> 2u) / 63.0;
+    c.a = (pe & 0x100u) != 0u ? float(((pe >> 9u) & 0xFFu) >> 2u) / 63.0 : float(px.a >> 2u) / 63.0;
 #endif
     NativeOut o;
     o.color = c;
 #if NATIVE_DUAL
-    o.color1 = float4(0.0, 0.0, 0.0, tev_alpha);
+    o.color1 = float4(0.0, 0.0, 0.0, stage_alpha);
 #endif
 #if NATIVE_REACTIVE
     o.reactive = min(saturate(c.a), 0.9);
