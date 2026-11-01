@@ -5856,7 +5856,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         draw_state_.z.update_enable = m.depth_write != 0u;
     }
     // The game's faces in its own winding (GX's front faces), the drawing state's culling in the renderer's flipped
-    // one (draw_state.cpp kCull: GX_CULL_BACK is CullMode::Front).
+    // one (drawing_state.cpp kCull: NEBULA_CULL_BACK is CullMode::Front).
     if (m.cull != material::kNativeKept) {
         draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Front
                                : m.cull == material::kNativeCullFront ? CullMode::Back

@@ -220,7 +220,7 @@ struct DrawCall {
     std::uint32_t index_count = 0;
     gpu::Topology topology = gpu::kTopologyTriangleList;
     gpu::Rect scissor{};
-    // The game's viewport (draw_state.h: left, top, width, height, near and far depth); has_viewport=false (not set
+    // The game's viewport (drawing_state.h: left, top, width, height, near and far depth); has_viewport=false (not set
     // yet, or empty) falls back to the full frame.
     float viewport[6]{};
     bool  has_viewport = false;

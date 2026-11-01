@@ -213,7 +213,7 @@ struct ScaledViewport {
     }
 };
 
-// The viewport (draw_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
+// The viewport (drawing_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
 [[nodiscard]] inline ScaledViewport compute_scaled_viewport(
     const float viewport[6],
     unsigned efb_scale) noexcept {

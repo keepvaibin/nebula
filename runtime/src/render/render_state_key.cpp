@@ -2,7 +2,7 @@
 
 #include "galaxy/render/render_state_key.h"
 
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 
 #include <algorithm>
 #include <cstring>

@@ -1,7 +1,7 @@
 // Native materials: a program applied once and then only its values gives the drawing state the whole material gives
 // (RenderCore applies a repeated program's values only, NativeDrawState::apply's `whole` false).
 
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 #include "galaxy/render/native_material.h"
 #include "galaxy/render/pso_key.h"
 

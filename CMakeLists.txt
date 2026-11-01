@@ -322,7 +322,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/curved_surfaces.cpp
     runtime/src/render/native_shapes.cpp
     runtime/src/render/native_material.cpp
-    runtime/src/render/draw_state.cpp
+    runtime/src/render/drawing_state.cpp
     runtime/src/render/draw_matrices.cpp
     runtime/src/render/render_state_key.cpp
     runtime/src/render/capture.cpp
@@ -557,7 +557,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/curved_surfaces.cpp
         runtime/src/render/native_shapes.cpp
         runtime/src/render/native_material.cpp
-        runtime/src/render/draw_state.cpp
+        runtime/src/render/drawing_state.cpp
         runtime/src/render/draw_matrices.cpp
         runtime/src/render/render_state_key.cpp
         runtime/src/render/capture.cpp
