@@ -10,6 +10,9 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color1 = v.color1;
 }
 float4 material_color(NativeVaryings i) {
+    [branch] if (material.ovr.x != 0.0) {
+        return j3d_override(float4(0.0, 0.0, 0.0, 0.0), i.color, material.konst[1].a, i.pos);
+    }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
     float4 r1 = material.reg[2];

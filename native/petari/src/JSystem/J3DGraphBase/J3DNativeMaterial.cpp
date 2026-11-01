@@ -794,6 +794,24 @@ namespace J3DNativeMaterial {
         return sRegisters;
     }
 
+    bool override(u32 mode, f32 a0, f32 a1, f32 ref) {
+        if (sCurrentKind != CURRENT_J3D) {
+            return false;
+        }
+        // j3d_material.hlsli MaterialConstants::ovr, after the register file and the coordinate scales.
+        f32* pOverride = sCurrent.constants + 84 + 32;
+        pOverride[0] = static_cast< f32 >(mode);
+        pOverride[1] = a0;
+        pOverride[2] = a1;
+        pOverride[3] = ref;
+        sCurrent.constants_only = 1;
+        sResending = true;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, &sCurrent);
+        sResending = false;
+        return true;
+    }
+
     void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
         const u32 shader = nativeShaderOf(rProgram);
         if (shader != 0 && nativeDrawn(shader)) {
