@@ -1,21 +1,17 @@
 #include "nw4r/ut/ResFont.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include "nw4r/ut/binaryFileFormat.h"
+#include <JSystem/JUtility/JUTException.hpp>
+#include <stdint.h>
 
 namespace nw4r {
     namespace ut {
         namespace {
-#ifdef TARGET_PC
-            template < typename T >
-            inline void ResolveOffset(SelfRel< T >& rpPtr, void* pBase) {
-                rpPtr.relocateFrom(pBase);
-            }
-#else
+            // A pointer the importer wrote as its target's offset in the file.
             template < typename T >
             inline void ResolveOffset(T*& rpPtr, void* pBase) {
-                rpPtr = reinterpret_cast< T* >(static_cast< char* >(pBase) + reinterpret_cast< s32 >(rpPtr));
+                rpPtr = reinterpret_cast< T* >(static_cast< char* >(pBase) + reinterpret_cast< uintptr_t >(rpPtr));
             }
-#endif
 
         }  // namespace
 
@@ -48,12 +44,15 @@ namespace nw4r {
                     nBlocks++;
                 }
             } else {
+                if (fileHeader->signature == 'RFNT' || fileHeader->signature == 'TNFR') {
+                    JUTException::panic_f(__FILE__, __LINE__, "ResFont: a font not in the native layout (the importer cooks it)");
+                }
                 if (fileHeader->version == 0x104) {
-                    if (!IsValidBinaryFile(fileHeader, 'RFNT', 0x104, 2)) {
+                    if (!IsValidBinaryFile(fileHeader, 'RFNN', 0x104, 2)) {
                         return false;
                     }
                 } else {
-                    if (!IsValidBinaryFile(fileHeader, 'RFNT', 0x102, 2)) {
+                    if (!IsValidBinaryFile(fileHeader, 'RFNN', 0x102, 2)) {
                         return false;
                     }
                 }

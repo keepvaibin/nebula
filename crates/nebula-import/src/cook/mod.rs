@@ -96,7 +96,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if extension(name) == "kcl" {
         Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {
-        Some(formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?)
+        let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
+        Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
     } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {
         Some(formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
     } else if extension(name) == "bti" && !texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {

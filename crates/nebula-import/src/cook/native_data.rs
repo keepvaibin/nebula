@@ -31,7 +31,7 @@
 //!   LOD bias, and a palette header where there is one.
 
 use anyhow::{bail, Context, Result};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_be_bytes(bytes.get(at..at + 4).context("a field past the file's end")?.try_into().unwrap()))
@@ -700,5 +700,127 @@ pub fn tpl_host(bytes: &[u8]) -> Result<Vec<u8>> {
             host32(bytes, &mut out, palette + 8)?; // data offset
         }
     }
+    Ok(out)
+}
+
+/// A font (BRFNT, after cook::formats::font made its sheets records) in the game's native layout: the header and block
+/// kinds as host numbers, each structure with 8-byte pointer slots holding the file offset of what it points to (the
+/// game adds the file's address once, ResFont::Rebuild), numbers in host order, the sheets after the blocks, signature
+/// "RFNN". Old (disc) layouts: FINF {fontType, linefeed, u16 alter, 3-byte widths, encoding, u32 glyph/width/map, height,
+/// width, ascent, pad}, TGLP {4 bytes, u32 sheet size, 6 x u16, u32 image}, CWDH {u16 begin, end, u32 next, 3-byte
+/// widths}, CMAP {u16 begin, end, method, reserved, u32 next, u16 map info}.
+pub fn font_native(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 0x10 || &bytes[0..4] != b"RFNT" {
+        bail!("not a font");
+    }
+    let header = be16(bytes, 0xC)? as usize;
+    let blocks = be16(bytes, 0xE)? as usize;
+    let mut out = vec![0u8; 0x10];
+    out[0..4].copy_from_slice(&u32::from_be_bytes(*b"RFNN").to_le_bytes());
+    out[4..6].copy_from_slice(&0xFEFFu16.to_le_bytes());
+    out[6..8].copy_from_slice(&be16(bytes, 6)?.to_le_bytes());
+    out[0xC..0xE].copy_from_slice(&0x10u16.to_le_bytes());
+    out[0xE..0x10].copy_from_slice(&(blocks as u16).to_le_bytes());
+    let mut moved: HashMap<usize, usize> = HashMap::new(); // a structure's disc offset -> its new offset
+    let mut slots: Vec<(usize, usize)> = Vec::new(); // (new slot offset, disc target offset)
+    let mut sheets: Option<(usize, usize, usize)> = None; // (new TGLP structure, disc image offset, bytes)
+    let put16 = |v: &mut Vec<u8>, x: u16| v.extend_from_slice(&x.to_le_bytes());
+    let put32 = |v: &mut Vec<u8>, x: u32| v.extend_from_slice(&x.to_le_bytes());
+    let mut at = header;
+    for _ in 0..blocks {
+        let kind: [u8; 4] = bytes.get(at..at + 4).context("a block past the file's end")?.try_into().unwrap();
+        let size = be32(bytes, at + 4)? as usize;
+        if size < 8 || at + size > bytes.len() {
+            bail!("block {} at {at:#x}: size {size:#x}", String::from_utf8_lossy(&kind));
+        }
+        let s = at + 8; // the disc structure
+        let block = out.len();
+        put32(&mut out, u32::from_be_bytes(kind));
+        put32(&mut out, 0); // the size, below
+        let n = out.len(); // the new structure
+        moved.insert(s, n);
+        match &kind {
+            b"FINF" => {
+                out.extend_from_slice(&bytes[s..s + 2]);
+                put16(&mut out, be16(bytes, s + 2)?);
+                out.extend_from_slice(&bytes[s + 4..s + 8]);
+                for k in 0..3 {
+                    let target = be32(bytes, s + 8 + 4 * k)? as usize;
+                    slots.push((out.len(), target));
+                    out.extend_from_slice(&[0u8; 8]);
+                }
+                out.extend_from_slice(&bytes[s + 0x14..s + 0x18]);
+                out.resize(out.len() + 4, 0);
+            }
+            b"TGLP" => {
+                out.extend_from_slice(&bytes[s..s + 4]);
+                let sheet_size = be32(bytes, s + 4)?;
+                put32(&mut out, sheet_size);
+                for k in 0..6 {
+                    put16(&mut out, be16(bytes, s + 8 + 2 * k)?);
+                }
+                out.resize(out.len() + 4, 0);
+                let count = be16(bytes, s + 8)? as usize;
+                sheets = Some((out.len(), be32(bytes, s + 0x14)? as usize, count * sheet_size as usize));
+                out.extend_from_slice(&[0u8; 8]);
+            }
+            b"CWDH" => {
+                let begin = be16(bytes, s)?;
+                let end = be16(bytes, s + 2)?;
+                put16(&mut out, begin);
+                put16(&mut out, end);
+                out.resize(out.len() + 4, 0);
+                slots.push((out.len(), be32(bytes, s + 4)? as usize));
+                out.extend_from_slice(&[0u8; 8]);
+                let count = (end as usize + 1).saturating_sub(begin as usize);
+                out.extend_from_slice(bytes.get(s + 8..s + 8 + 3 * count).context("font widths past the block")?);
+            }
+            b"CMAP" => {
+                let begin = be16(bytes, s)?;
+                let end = be16(bytes, s + 2)?;
+                let method = be16(bytes, s + 4)?;
+                put16(&mut out, begin);
+                put16(&mut out, end);
+                put16(&mut out, method);
+                put16(&mut out, be16(bytes, s + 6)?);
+                slots.push((out.len(), be32(bytes, s + 8)? as usize));
+                out.extend_from_slice(&[0u8; 8]);
+                let units = match method {
+                    0 => 1,                                          // direct: the first index
+                    1 => (end as usize + 1).saturating_sub(begin as usize), // table
+                    2 => 1 + 2 * be16(bytes, s + 0xC)? as usize,     // scan: count, then code/index pairs
+                    _ => bail!("code map method {method}"),
+                };
+                for u in 0..units {
+                    put16(&mut out, be16(bytes, s + 0xC + 2 * u)?);
+                }
+            }
+            b"GLGR" => out.extend_from_slice(&bytes[s..at + size]), // glyph groups: the game reads none
+            _ => bail!("unknown font block {}", String::from_utf8_lossy(&kind)),
+        }
+        out.resize((out.len() + 31) & !31, 0);
+        let new_size = (out.len() - block) as u32;
+        out[block + 4..block + 8].copy_from_slice(&new_size.to_le_bytes());
+        at += size;
+    }
+    // The sheets (records), after the blocks.
+    if let Some((slot, image, length)) = sheets {
+        let start = out.len();
+        out.extend_from_slice(bytes.get(image..image + length).context("font sheets past the file's end")?);
+        out.resize((out.len() + 31) & !31, 0);
+        out[slot..slot + 8].copy_from_slice(&(start as u64).to_le_bytes());
+    } else {
+        bail!("a font without sheets");
+    }
+    for (slot, target) in slots {
+        let new = if target == 0 {
+            0
+        } else {
+            *moved.get(&target).with_context(|| format!("a font pointer to {target:#x}, not a structure"))?
+        };
+        out[slot..slot + 8].copy_from_slice(&(new as u64).to_le_bytes());
+    }
+    let size = out.len() as u32;
+    out[8..12].copy_from_slice(&size.to_le_bytes());
     Ok(out)
 }
