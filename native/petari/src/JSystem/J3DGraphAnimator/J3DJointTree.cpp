@@ -70,8 +70,8 @@ void J3DJointTree::findImportantMtxIndex() {
     s32 wEvlpMtxNum = getWEvlpMtxNum();
     u32 tableIdx = 0;
     u16 drawFullWgtMtxNum = getDrawFullWgtMtxNum();
-    NEBULA_BE(u16)* wEvlpMixIndex = getWEvlpMixMtxIndex();
-    NEBULA_BE(f32)* wEvlpMixWeight = getWEvlpMixWeight();
+    u16* wEvlpMixIndex = getWEvlpMixMtxIndex();
+    f32* wEvlpMixWeight = getWEvlpMixWeight();
     u16* wEvlpImportantMtxIdx = getWEvlpImportantMtxIndex();
 
     for (u16 i = 0; i < drawFullWgtMtxNum; i++) {

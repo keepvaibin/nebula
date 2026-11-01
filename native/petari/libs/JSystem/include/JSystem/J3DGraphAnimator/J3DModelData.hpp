@@ -93,10 +93,10 @@ public:
     u16 getWEvlpMtxNum() const {
         return mJointTree.getWEvlpMtxNum();
     }
-    NEBULA_BE(u16)* getWEvlpMixMtxIndex() const {
+    u16* getWEvlpMixMtxIndex() const {
         return mJointTree.getWEvlpMixMtxIndex();
     }
-    NEBULA_BE(f32)* getWEvlpMixWeight() const {
+    f32* getWEvlpMixWeight() const {
         return mJointTree.getWEvlpMixWeight();
     }
     u8 getWEvlpMixMtxNum(u16 idx) const {

@@ -31,7 +31,9 @@
 //!   LOD bias, and a palette header where there is one.
 //! - BRFNT (fonts, after cook::formats::font made the sheets records): the native layout "RFNN" (font_native).
 //! - J3D animations (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA): headers, counts, offsets and the
-//!   16-bit and float arrays by block type (j3d_animation); name tables stay with the models'.
+//!   16-bit and float arrays by block type, the name tables (j3d_animation).
+//! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
+//!   the name tables; VTX1/SHP1/MAT3/MDL3 contents and TEX1 image headers stay big-endian until their steps.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -834,7 +836,7 @@ enum AnmData {
     Halves,    // u16/s16 values or tables made only of them
     Floats,    // f32 values (and texture SRT centres)
     Bytes,     // u8 values, texture matrix indices
-    Names,     // a name table (JUTNameTab): stays big-endian with the models' until the model step
+    Names,     // a name table (JUTNameTab)
     RegTable,  // TRK1 colour register keys: four key tables (12 halves), the register id, three bytes
     Pattern,   // TPT1 tables: max frame, offset, texture map byte, a byte, a half
     VtxIndex,  // VCK1/VCF1 index entries: a count (half), two bytes, a 32-bit index
@@ -932,9 +934,8 @@ pub fn is_j3d_animation(bytes: &[u8]) -> bool {
 /// A J3D animation (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA) in host byte order: the file header's
 /// magic, type, size, block count and sound offset; each block's kind and size, its counts and frames, its offsets;
 /// what each offset points at by its type: 16-bit tables and values, floats (values, texture SRT centres), and the
-/// mixed tables entry by entry (TRK1 register keys, TPT1 patterns, vertex-colour index entries). Bytes stay; the
-/// name tables stay big-endian with the models'. The magic, type and block kinds become host-order numbers (a
-/// cooked file starts "1D3J").
+/// mixed tables entry by entry (TRK1 register keys, TPT1 patterns, vertex-colour index entries), the name tables.
+/// Bytes stay. The magic, type and block kinds become host-order numbers (a cooked file starts "1D3J").
 pub fn j3d_animation(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"1D3J" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1012,7 +1013,8 @@ pub fn j3d_animation(bytes: &[u8]) -> Result<Vec<u8>> {
                         p += 4;
                     }
                 }
-                AnmData::Bytes | AnmData::Names => {}
+                AnmData::Bytes => {}
+                AnmData::Names => host_name_table(bytes, &mut out, from)?,
                 AnmData::RegTable | AnmData::Pattern | AnmData::VtxIndex => {
                     let count = be16(bytes, at + count_at)? as usize;
                     let stride = match data {
@@ -1043,6 +1045,167 @@ pub fn j3d_animation(bytes: &[u8]) -> Result<Vec<u8>> {
                     }
                 }
             }
+        }
+        at += size;
+    }
+    Ok(out)
+}
+
+/// A name table (JUTNameTab: a count, two bytes, then each name's hash and string offset) in host order.
+fn host_name_table(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
+    let count = host16(src, out, at)? as usize;
+    host16(src, out, at + 2)?;
+    for k in 0..count {
+        host16(src, out, at + 4 + 4 * k)?;
+        host16(src, out, at + 6 + 4 * k)?;
+    }
+    Ok(())
+}
+
+/// The model file types (header bytes 4-8) the game loads (J3DModelLoaderDataBase).
+const MODEL_TYPES: [&[u8; 4]; 3] = [b"bmd3", b"bdl4", b"bmt3"];
+
+/// Whether these bytes are a J3D model or material table as the disc has it.
+pub fn is_j3d_model(bytes: &[u8]) -> bool {
+    bytes.len() >= 0x20 && &bytes[0..4] == b"J3D2" && MODEL_TYPES.iter().any(|t| &bytes[4..8] == *t)
+}
+
+/// A J3D model (BMD, BDL) or material table (BMT), after cook::formats::j3d_model, with these parts in host order:
+/// the file header (magic and type become host-order character constants: a cooked file starts "2D3J"), every
+/// block's kind, size, count and offsets; INF1's flags, counts and hierarchy; JNT1's joint data (kind, transform,
+/// radius, bounds) and index table; EVP1's indices, weights and inverse matrices; DRW1's indices; every name table.
+/// What stays big-endian until its own step: VTX1's arrays and format list, SHP1's and MAT3's contents, MDL3's, and
+/// TEX1's image headers.
+pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
+        return Ok(bytes.to_vec()); // cooked already
+    }
+    if !is_j3d_model(bytes) {
+        bail!("not a J3D model");
+    }
+    let mut out = bytes.to_vec();
+    out[0..4].copy_from_slice(&u32::from_be_bytes(*b"J3D2").to_le_bytes());
+    out[4..8].copy_from_slice(&be32(bytes, 4)?.to_le_bytes());
+    host32(bytes, &mut out, 8)?; // file size
+    let blocks = host32(bytes, &mut out, 0xC)? as usize;
+    let mut at = 0x20;
+    for b in 0..blocks {
+        let kind: [u8; 4] = bytes.get(at..at + 4).context("a model block past the file's end")?.try_into().unwrap();
+        let mut size = be32(bytes, at + 4)? as usize;
+        if size < 0xC {
+            bail!("model block {} at {at:#x}: size {size:#x}", String::from_utf8_lossy(&kind));
+        }
+        if at + size > bytes.len() {
+            if b + 1 == blocks {
+                size = bytes.len() - at;
+            } else {
+                bail!("model block {} at {at:#x} runs past the file", String::from_utf8_lossy(&kind));
+            }
+        }
+        out[at..at + 4].copy_from_slice(&u32::from_be_bytes(kind).to_le_bytes());
+        host32(bytes, &mut out, at + 4)?;
+        // (offset fields' range, the name table's field)
+        let (offsets, names): (std::ops::Range<usize>, Option<usize>) = match &kind {
+            b"INF1" => (0x14..0x18, None),
+            b"VTX1" => (0x8..0x40, None),
+            b"EVP1" => (0xC..0x1C, None),
+            b"DRW1" => (0xC..0x14, None),
+            b"JNT1" => (0xC..0x18, Some(0x14)),
+            b"MAT3" => (0xC..0x84, Some(0x14)),
+            b"MDL3" => (0xC..0x24, Some(0x20)),
+            b"SHP1" => (0xC..0x2C, Some(0x14)),
+            b"TEX1" => (0xC..0x14, Some(0x10)),
+            _ => bail!("model block {} at {at:#x}: not one the game reads", String::from_utf8_lossy(&kind)),
+        };
+        if at + offsets.end > at + size {
+            bail!("model block {} at {at:#x}: header past the block", String::from_utf8_lossy(&kind));
+        }
+        if &kind != b"VTX1" {
+            host16(bytes, &mut out, at + 8)?; // the count (INF1: flags)
+        }
+        let mut starts: Vec<usize> = Vec::new();
+        for o in offsets.clone().step_by(4) {
+            let v = host32(bytes, &mut out, at + o)? as usize;
+            if v != 0 {
+                if v > size {
+                    bail!("model block {} at {at:#x}: offset {v:#x} past the block", String::from_utf8_lossy(&kind));
+                }
+                starts.push(v);
+            }
+        }
+        starts.sort_unstable();
+        starts.dedup();
+        let field = |o: usize| -> Result<usize> { Ok(be32(bytes, at + o)? as usize) };
+        let bound = |start: usize| starts.iter().copied().find(|&s| s > start).unwrap_or(size);
+        if let Some(n) = names {
+            let t = field(n)?;
+            // An empty block's table may sit at the block's end (TEX1 without textures): nothing to turn.
+            if t != 0 && t + 4 <= size {
+                host_name_table(bytes, &mut out, at + t)?;
+            }
+        }
+        let halves = |out: &mut Vec<u8>, from: usize, to: usize| -> Result<()> {
+            let mut p = from;
+            while p + 2 <= to {
+                host16(bytes, out, p)?;
+                p += 2;
+            }
+            Ok(())
+        };
+        let words = |out: &mut Vec<u8>, from: usize, to: usize| -> Result<()> {
+            let mut p = from;
+            while p + 4 <= to {
+                host32(bytes, out, p)?;
+                p += 4;
+            }
+            Ok(())
+        };
+        match &kind {
+            b"INF1" => {
+                host32(bytes, &mut out, at + 0xC)?; // packets
+                host32(bytes, &mut out, at + 0x10)?; // vertices
+                let h = field(0x14)?;
+                if h != 0 {
+                    halves(&mut out, at + h, at + size)?; // (type, value) pairs to the end
+                }
+            }
+            b"EVP1" => {
+                let (index, weight, inverse) = (field(0x10)?, field(0x14)?, field(0x18)?);
+                if index != 0 {
+                    halves(&mut out, at + index, at + bound(index))?;
+                }
+                if weight != 0 {
+                    words(&mut out, at + weight, at + bound(weight))?;
+                }
+                if inverse != 0 {
+                    words(&mut out, at + inverse, at + bound(inverse))?;
+                }
+            }
+            b"DRW1" => {
+                let index = field(0x10)?;
+                if index != 0 {
+                    halves(&mut out, at + index, at + bound(index))?;
+                }
+            }
+            b"JNT1" => {
+                let (init, index) = (field(0xC)?, field(0x10)?);
+                if index != 0 {
+                    halves(&mut out, at + index, at + bound(index))?;
+                }
+                if init != 0 {
+                    // 0x40 bytes each: kind, compensation byte, pad; scale, rotation (s16 x3, pad), translation; radius;
+                    // minimum and maximum.
+                    let mut j = at + init;
+                    while j + 0x40 <= at + bound(init) {
+                        host16(bytes, &mut out, j)?;
+                        words(&mut out, j + 4, j + 0x10)?;
+                        halves(&mut out, j + 0x10, j + 0x18)?;
+                        words(&mut out, j + 0x18, j + 0x40)?;
+                        j += 0x40;
+                    }
+                }
+            }
+            _ => {}
         }
         at += size;
     }

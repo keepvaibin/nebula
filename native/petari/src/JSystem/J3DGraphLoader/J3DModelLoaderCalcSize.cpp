@@ -173,7 +173,7 @@ u32 J3DModelLoader::calcSizeInformation(const J3DModelInfoBlock* block, u32 flag
 
 u32 J3DModelLoader::calcSizeJoint(const J3DJointBlock* block) {
     int size = 0;
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         size = 0x10;
     }
     size += (block->mJointNum * sizeof(J3DJoint*));
@@ -195,7 +195,7 @@ u32 J3DModelLoader_v26::calcSizeMaterial(const J3DMaterialBlock* block, u32 flag
     J3DMaterialFactory factory(*block);
     u32 count = block->mMaterialNum;
     int uniqueCount = factory.countUniqueMaterials();
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         padding = 0x10;
     }
     size_t size = padding + (count * sizeof(J3DMaterial*));
@@ -219,7 +219,7 @@ u32 J3DModelLoader::calcSizeShape(const J3DShapeBlock* block, u32 flags) {
     int size = 0;
     J3DShapeFactory factory(*block);
     int count = block->mShapeNum;
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         size = 0x10;
     }
     size += count * sizeof(J3DShape*);
@@ -234,7 +234,7 @@ u32 J3DModelLoader::calcSizeShape(const J3DShapeBlock* block, u32 flags) {
 u32 J3DModelLoader::calcSizeTexture(const J3DTextureBlock* block) {
     // TODO: use sizeofs here.
     int padding = 0;
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         padding = 0x10;
     }
     return padding + 0xC;
@@ -244,7 +244,7 @@ u32 J3DModelLoader_v26::calcSizeMaterialTable(const J3DMaterialBlock* block, u32
     int size = 0;
     u32 count = block->mMaterialNum;
     J3DMaterialFactory factory(*block);
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         size = 0x10;
     }
     size += (count * sizeof(J3DMaterial*));
@@ -258,7 +258,7 @@ u32 J3DModelLoader::calcSizePatchedMaterial(const J3DMaterialBlock* block, u32 f
     int padding = 0;
     u32 count = block->mMaterialNum;
     J3DMaterialFactory factory(*block);
-    if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+    if (block->mpNameTable != 0) {
         padding = 0x10;
     }
     u32 size = padding + (count * sizeof(J3DMaterial*));
@@ -274,7 +274,7 @@ u32 J3DModelLoader::calcSizeMaterialDL(const J3DMaterialDLBlock* block, u32 flag
     ;
     if (!field_0x18) {
         u32 count = block->mMaterialNum;
-        if (JSU_OFFSET_VALUE(block->mpNameTable) != 0) {
+        if (block->mpNameTable != 0) {
             size = 0x10;
         }
         size += count * sizeof(J3DLockedMaterial*);
