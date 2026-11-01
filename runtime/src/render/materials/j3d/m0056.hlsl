@@ -2,8 +2,7 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = v.color0.rgb;
-    o.color.a = v.color0.a;
+    o.color = v.color0;
     o.color1 = v.color1;
     {  // coordinate 0: type 1, source 4
         const float4 c = float4(v.uv[0], 1.0, 1.0);
@@ -33,8 +32,8 @@ float4 material_color(NativeVaryings i) {
         const float4 r0 = material.reg[1];
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
-        const float ka = material.kcolor[3].a;
-        return j3d_override(t, i.color, material.kcolor[3].a, (0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a)), i.pos);
+        const float ka = material.kcolor[0].a;
+        return j3d_override(t, i.color, material.kcolor[0].a, saturate((0.0 + lerp(t.a, 0.0, 0.0))), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -43,8 +42,8 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 rc = (float3(0.0, 0.0, 0.0) + lerp(j3d_in(r0.rgb), j3d_in(r1.rgb), t.rgb));
-        const float ra = (0.0 + lerp(j3d_in(r0.a), j3d_in(r1.a), t.a));
+        const float3 rc = saturate((r0.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, j3d_in(r2.rgb)) - 128.0 / 255.0) * 4.0);
+        const float ra = saturate((0.0 + lerp(t.a, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }

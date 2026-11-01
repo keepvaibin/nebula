@@ -52,7 +52,7 @@ float4 material_color(NativeVaryings i) {
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
         const float ka = material.kcolor[0].a;
-        return j3d_override(t, i.color, material.kcolor[0].a, saturate((0.0 + lerp(0.0, ka, t.a))), i.pos);
+        return j3d_override(t, i.color, material.kcolor[0].a, saturate((0.0 + lerp(t.a, 0.0, 0.0) - 128.0 / 255.0) * 2.0), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -71,9 +71,8 @@ float4 material_color(NativeVaryings i) {
         const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
         const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
-        const float ka = material.kcolor[0].a;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(k.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((0.0 + lerp(0.0, ka, t.a)));
+        const float ra = saturate((0.0 + lerp(t.a, 0.0, 0.0) - 128.0 / 255.0) * 2.0);
         prev.rgb = rc;
         prev.a = ra;
     }
