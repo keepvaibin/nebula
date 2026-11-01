@@ -4,28 +4,18 @@
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#ifdef TARGET_PC
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
-#endif
-
-#ifdef TARGET_PC
-// The disc's release's row (RMGJ01, RMGE01, RMGP01), as its own build picks it.
-#define SCLanguage2GameLanguageTableIndex (NebulaRegion::isJapan() ? 0 : NebulaRegion::isPal() ? 2 : 1)
-#elif (VERSION == RMGJ01)
-#define SCLanguage2GameLanguageTableIndex 0
-#elif (VERSION == RMGE01)
-#define SCLanguage2GameLanguageTableIndex 1
-#elif (VERSION == RMGP01)
-#define SCLanguage2GameLanguageTableIndex 2
-#elif (VERSION == RMGK01)
-#define SCLanguage2GameLanguageTableIndex 4
-#else
-#define SCLanguage2GameLanguageTableIndex -1
-#endif
 
 namespace {
-    const u8 cSCLanguage2GameLanguageTable[][10] = {
+    // The disc's release's row (Japan, the Americas, PAL), as NebulaRegion names it.
+    s32 regionRow() {
+        return NebulaRegion::isJapan() ? 0 : NebulaRegion::isPal() ? 2 : 1;
+    }
+
+    // Each release's game language for the host's language setting (NebulaSystemSettings::language: Japanese,
+    // English, German, French, Spanish, Italian, Dutch, then three that fall back to English).
+    const u8 cLanguageByRegion[][10] = {
         {
             LANGUAGE_JPJAPANESE,
             LANGUAGE_USENGLISH,
@@ -34,15 +24,9 @@ namespace {
             LANGUAGE_EUSPANISH,
             LANGUAGE_EUITALIAN,
             LANGUAGE_EUDUTCH,
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
             LANGUAGE_EUENGLISH,
             LANGUAGE_EUENGLISH,
             LANGUAGE_EUENGLISH,
-#else
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-#endif
         },
         {
             LANGUAGE_JPJAPANESE,
@@ -52,15 +36,9 @@ namespace {
             LANGUAGE_USSPANISH,
             LANGUAGE_EUITALIAN,
             LANGUAGE_EUDUTCH,
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
             LANGUAGE_USENGLISH,
             LANGUAGE_USENGLISH,
             LANGUAGE_USENGLISH,
-#else
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-#endif
         },
         {
             LANGUAGE_JPJAPANESE,
@@ -70,54 +48,10 @@ namespace {
             LANGUAGE_EUSPANISH,
             LANGUAGE_EUITALIAN,
             LANGUAGE_EUDUTCH,
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
             LANGUAGE_EUENGLISH,
             LANGUAGE_EUENGLISH,
             LANGUAGE_EUENGLISH,
-#else
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-#endif
         },
-#if (VERSION == RMGK01)
-        {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_EUFRENCH,
-            LANGUAGE_EUSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-        },
-        {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_EUFRENCH,
-            LANGUAGE_EUSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-        },
-        {
-            LANGUAGE_JPJAPANESE,
-            LANGUAGE_USENGLISH,
-            LANGUAGE_EUGERMAN,
-            LANGUAGE_EUFRENCH,
-            LANGUAGE_EUSPANISH,
-            LANGUAGE_EUITALIAN,
-            LANGUAGE_EUDUTCH,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_CNSIMPCHINESE,
-            LANGUAGE_KRKOREAN,
-        },
-#endif
     };
     const Language cLanguages[] = {
         {LANGUAGE_JPJAPANESE, "JpJapanese"},       {LANGUAGE_USENGLISH, "UsEnglish"},
@@ -125,9 +59,6 @@ namespace {
         {LANGUAGE_EUENGLISH, "EuEnglish"},         {LANGUAGE_EUSPANISH, "EuSpanish"},
         {LANGUAGE_EUFRENCH, "EuFrench"},           {LANGUAGE_EUGERMAN, "EuGerman"},
         {LANGUAGE_EUITALIAN, "EuItalian"},         {LANGUAGE_EUDUTCH, "EuDutch"},
-#if (VERSION == RMGK01)
-        {LANGUAGE_CNSIMPCHINESE, "CnSimpChinese"}, {LANGUAGE_KRKOREAN, "KrKorean"},
-#endif
     };
 };  // namespace
 
@@ -139,7 +70,7 @@ namespace MR {
         if (language < 0) {
             i = 0;
         } else {
-            s32 size = ARRAY_SIZE(::cSCLanguage2GameLanguageTable[SCLanguage2GameLanguageTableIndex]);
+            s32 size = ARRAY_SIZE(::cLanguageByRegion[regionRow()]);
 
             if (language <= size) {
                 i = language;
@@ -148,7 +79,7 @@ namespace MR {
             }
         }
 
-        return ::cSCLanguage2GameLanguageTable[SCLanguage2GameLanguageTableIndex][i];
+        return ::cLanguageByRegion[regionRow()][i];
     }
 
     u32 getLanguage() {
@@ -186,15 +117,6 @@ namespace MR {
         if (MR::isEqualString(prefix, "Eu")) {
             return "Eu";
         }
-#if (VERSION == RMGK01)
-        if (MR::isEqualString(prefix, "Cn")) {
-            return "Cn";
-        }
-
-        if (MR::isEqualString(prefix, "Kr")) {
-            return "Kr";
-        }
-#endif
         return nullptr;
     }
 
