@@ -45,13 +45,13 @@ CShader::~CShader() {
 
 #ifdef TARGET_PC
 namespace {
-    // The model's vertex arrays and the fur positions written for GX are big-endian.
+    // The model's vertex arrays (host order, as the importer cooks VTX1) and the fur positions written for them.
     inline f32 loadF32(const void* pArray, u32 index) {
-        return static_cast< const BE< f32 >* >(pArray)[index];
+        return static_cast< const f32* >(pArray)[index];
     }
 
     inline s16 loadS16(const void* pArray, u32 index) {
-        return static_cast< const BE< s16 >* >(pArray)[index];
+        return static_cast< const s16* >(pArray)[index];
     }
 
     inline void loadVec(TVec3f* pOut, const void* pArray, u32 index, u8 type, u8 frac) {
@@ -188,14 +188,14 @@ void CShader::calc(J3DModel* pModel) {
             case GX_S16: {
                 TVec3s fixed;
                 MR::floatToFixed16(&fixed, result, _21);
-                BE< s16 >* pFixedOutput = static_cast< BE< s16 >* >(pOutput) + offset;
+                s16* pFixedOutput = static_cast< s16* >(pOutput) + offset;
                 pFixedOutput[0] = fixed.x;
                 pFixedOutput[1] = fixed.y;
                 pFixedOutput[2] = fixed.z;
                 break;
             }
             case GX_F32: {
-                BE< f32 >* pFloatOutput = static_cast< BE< f32 >* >(pOutput) + offset;
+                f32* pFloatOutput = static_cast< f32* >(pOutput) + offset;
                 pFloatOutput[0] = result.x;
                 pFloatOutput[1] = result.y;
                 pFloatOutput[2] = result.z;

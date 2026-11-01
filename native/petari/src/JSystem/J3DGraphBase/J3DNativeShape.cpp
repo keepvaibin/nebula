@@ -53,15 +53,18 @@ namespace {
         return static_cast< u16 >((p[0] << 8) | p[1]);
     }
 
-    u32 be32(const u8* p) {
-        return (static_cast< u32 >(p[0]) << 24) | (static_cast< u32 >(p[1]) << 16) | (static_cast< u32 >(p[2]) << 8) | p[3];
-    }
-
     u32 typeBytes(u32 type) {
         return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
     }
 
-    // One component as the arrays hold it (big-endian), times `scale`.
+    // A vertex component as the importer cooks the arrays (host order).
+    u16 host16(const u8* p) {
+        u16 v;
+        memcpy(&v, p, sizeof(v));
+        return v;
+    }
+
+    // One component as the arrays hold it (host order, as the importer cooks VTX1), times `scale`.
     f32 component(const u8* p, u32 type, f32 scale) {
         switch (type) {
         case GX_U8:
@@ -69,13 +72,12 @@ namespace {
         case GX_S8:
             return static_cast< s8 >(p[0]) * scale;
         case GX_U16:
-            return be16(p) * scale;
+            return host16(p) * scale;
         case GX_S16:
-            return static_cast< s16 >(be16(p)) * scale;
+            return static_cast< s16 >(host16(p)) * scale;
         default: {
-            const u32 bits = be32(p);
             f32 value;
-            memcpy(&value, &bits, sizeof(value));
+            memcpy(&value, p, sizeof(value));
             return value;
         }
         }
@@ -85,7 +87,7 @@ namespace {
     u32 color(const u8* p, u32 type) {
         switch (type) {
         case GX_RGB565: {
-            const u32 v = be16(p);
+            const u32 v = host16(p);
             const u32 r = (v >> 11) & 0x1F, g = (v >> 5) & 0x3F, b = v & 0x1F;
             return ((r << 3 | r >> 2) << 24) | ((g << 2 | g >> 4) << 16) | ((b << 3 | b >> 2) << 8) | 0xFF;
         }
@@ -93,7 +95,7 @@ namespace {
         case GX_RGBX8:
             return (static_cast< u32 >(p[0]) << 24) | (static_cast< u32 >(p[1]) << 16) | (static_cast< u32 >(p[2]) << 8) | 0xFF;
         case GX_RGBA4: {
-            const u32 v = be16(p);
+            const u32 v = host16(p);
             const u32 r = (v >> 12) & 0xF, g = (v >> 8) & 0xF, b = (v >> 4) & 0xF, a = v & 0xF;
             return ((r | r << 4) << 24) | ((g | g << 4) << 16) | ((b | b << 4) << 8) | (a | a << 4);
         }
@@ -102,8 +104,8 @@ namespace {
             const u32 r = (v >> 18) & 0x3F, g = (v >> 12) & 0x3F, b = (v >> 6) & 0x3F, a = v & 0x3F;
             return ((r << 2 | r >> 4) << 24) | ((g << 2 | g >> 4) << 16) | ((b << 2 | b >> 4) << 8) | (a << 2 | a >> 4);
         }
-        default:
-            return be32(p);
+        default:  // RGBA8: four bytes
+            return (static_cast< u32 >(p[0]) << 24) | (static_cast< u32 >(p[1]) << 16) | (static_cast< u32 >(p[2]) << 8) | p[3];
         }
     }
 

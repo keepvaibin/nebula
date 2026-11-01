@@ -46,22 +46,22 @@ void MirrorCamera::setMirrorMapInfo(J3DModelData* pModelData) {
     TVec3f normal;
     const GXVtxAttrFmtList* format = ::getVertexFormat(pModelData, GX_VA_POS);
     if (format->type == GX_S16) {
-        // The model's vertex arrays are big-endian.
-        const NEBULA_BE(s16)* data = static_cast< const NEBULA_BE(s16)* >(pModelData->getVtxPosArray());
+        // The model's vertex arrays (host order, as the importer cooks VTX1).
+        const s16* data = static_cast< const s16* >(pModelData->getVtxPosArray());
         TVec3s fixed((s16)data[0], (s16)data[1], (s16)data[2]);
         MR::fixed16ToFloat(&position, fixed, format->frac);
     } else {
-        const NEBULA_BE(f32)* data = static_cast< const NEBULA_BE(f32)* >(pModelData->getVtxPosArray());
+        const f32* data = static_cast< const f32* >(pModelData->getVtxPosArray());
         position.set< f32 >(data[0], data[1], data[2]);
     }
 
     format = ::getVertexFormat(pModelData, GX_VA_NRM);
     if (format->type == GX_S16) {
-        const NEBULA_BE(s16)* data = static_cast< const NEBULA_BE(s16)* >(pModelData->getVtxNrmArray());
+        const s16* data = static_cast< const s16* >(pModelData->getVtxNrmArray());
         TVec3s fixed((s16)data[0], (s16)data[1], (s16)data[2]);
         MR::fixed16ToFloat(&normal, fixed, format->frac);
     } else {
-        const NEBULA_BE(f32)* data = static_cast< const NEBULA_BE(f32)* >(pModelData->getVtxNrmArray());
+        const f32* data = static_cast< const f32* >(pModelData->getVtxNrmArray());
         normal.set< f32 >(data[0], data[1], data[2]);
     }
 

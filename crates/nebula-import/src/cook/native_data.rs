@@ -33,7 +33,8 @@
 //! - J3D animations (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA): headers, counts, offsets and the
 //!   16-bit and float arrays by block type, the name tables (j3d_animation).
 //! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
-//!   the name tables; VTX1/SHP1/MAT3/MDL3 contents and TEX1 image headers stay big-endian until their steps.
+//!   the name tables, VTX1 (format list, arrays by their component type); SHP1/MAT3/MDL3 contents and TEX1 image
+//!   headers stay big-endian until their steps.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1073,8 +1074,9 @@ pub fn is_j3d_model(bytes: &[u8]) -> bool {
 /// A J3D model (BMD, BDL) or material table (BMT), after cook::formats::j3d_model, with these parts in host order:
 /// the file header (magic and type become host-order character constants: a cooked file starts "2D3J"), every
 /// block's kind, size, count and offsets; INF1's flags, counts and hierarchy; JNT1's joint data (kind, transform,
-/// radius, bounds) and index table; EVP1's indices, weights and inverse matrices; DRW1's indices; every name table.
-/// What stays big-endian until its own step: VTX1's arrays and format list, SHP1's and MAT3's contents, MDL3's, and
+/// radius, bounds) and index table; EVP1's indices, weights and inverse matrices; DRW1's indices; every name table;
+/// VTX1's format list and arrays (16-bit and float components by the list's type; 8-bit ones and RGB8/RGBX8/RGBA6/
+/// RGBA8 colours stay bytes). What stays big-endian until its own step: SHP1's and MAT3's contents, MDL3's, and
 /// TEX1's image headers.
 pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
@@ -1179,6 +1181,58 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                 }
                 if inverse != 0 {
                     words(&mut out, at + inverse, at + bound(inverse))?;
+                }
+            }
+            b"VTX1" => {
+                // The format list: (attribute, count, type: 32-bit; fraction byte, three pad) to GX_VA_NULL.
+                let list = field(0x8)?;
+                let mut formats: Vec<(u32, u32)> = Vec::new(); // (attribute, type)
+                if list != 0 {
+                    let mut e = at + list;
+                    loop {
+                        if e + 16 > at + size {
+                            bail!("model block VTX1 at {at:#x}: format list past the block");
+                        }
+                        let attr = host32(bytes, &mut out, e)?;
+                        host32(bytes, &mut out, e + 4)?;
+                        let kind = host32(bytes, &mut out, e + 8)?;
+                        if attr == 0xFF {
+                            break;
+                        }
+                        formats.push((attr, kind));
+                        e += 16;
+                    }
+                }
+                let type_of = |attr: u32, default: u32| formats.iter().find(|f| f.0 == attr).map_or(default, |f| f.1);
+                // (offset field, attribute): position, normal, NBT, colour 0/1, texture coordinates 0-7.
+                let mut arrays: Vec<(usize, u32)> = vec![(0xC, 9), (0x10, 10), (0x14, 25), (0x18, 11), (0x1C, 12)];
+                arrays.extend((0..8).map(|t| (0x20 + 4 * t, 13 + t as u32)));
+                let mut done: HashSet<usize> = HashSet::new();
+                for (o, attr) in arrays {
+                    let start = field(o)?;
+                    if start == 0 || !done.insert(start) {
+                        continue; // none, or an array another attribute shares (turned once)
+                    }
+                    let (from, to) = (at + start, at + bound(start));
+                    let width = if attr == 11 || attr == 12 {
+                        // GX_RGB565 and GX_RGBA4 are 16-bit; the others are bytes.
+                        match type_of(attr, 5) {
+                            0 | 3 => 2,
+                            _ => 1,
+                        }
+                    } else {
+                        let kind = if attr == 25 { type_of(25, type_of(10, 4)) } else { type_of(attr, 4) };
+                        match kind {
+                            0 | 1 => 1, // U8, S8
+                            2 | 3 => 2, // U16, S16
+                            _ => 4,     // F32
+                        }
+                    };
+                    match width {
+                        2 => halves(&mut out, from, to)?,
+                        4 => words(&mut out, from, to)?,
+                        _ => {}
+                    }
                 }
             }
             b"DRW1" => {
