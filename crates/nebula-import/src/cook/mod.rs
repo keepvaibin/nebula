@@ -80,7 +80,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         let textured = formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
         Some(native_data::jpc_host(&textured).with_context(|| format!("{name}: particles (host order)"))?)
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
-        Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
+        let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
+        Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
         Some(native_data::layout(&bytes).with_context(|| format!("{name}: layout"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
