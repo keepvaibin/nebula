@@ -1,22 +1,22 @@
 #include "nw4r/ut/CharWriter.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/ut/Font.h"
 
 namespace {
-    void SetupGXCommon() {
-        static const nw4r::ut::Color fog = 0;
-        J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fog);
-        J3DNativeState::setTevSwapModeTable(GX_TEV_SWAP0, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-        J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z8, 0);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setNumTexGens(1);
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, 0x7D);
-        J3DNativeState::setNumIndStages(0);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+    // The writer's native material (runtime/src/render/materials/font_text.hlsl) as SetupGX set it; each glyph sheet
+    // LoadTexture binds sends it. Blended by alpha; depth, culling and writes as the drawing state has them.
+    NebulaNativeMaterial sMaterial;
+
+    void SetupMaterial(nw4r::ut::Color min, nw4r::ut::Color max, bool intensity) {
+        NativeShader::init(sMaterial, NEBULA_SHADER_FONT_TEXT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        sMaterial.depth_test = NEBULA_NATIVE_KEPT;
+        sMaterial.cull = NEBULA_NATIVE_KEPT;
+        NativeShader::setColor(sMaterial, 0, min.r, min.g, min.b, min.a);
+        NativeShader::setColor(sMaterial, 4, max.r, max.g, max.b, max.a);
+        sMaterial.constants[8] = intensity ? 1.0f : 0.0f;
     }
 };  // namespace
 
@@ -47,7 +47,8 @@ namespace nw4r {
                 J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GX_CLAMP, GX_CLAMP,
                              GX_FALSE);
                 J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GX_DISABLE, GX_DISABLE, GX_ANISO_1);
-                J3DNativeTexture::load(&tobj, slot);
+                NativeShader::setTexObj(sMaterial, slot - GX_TEXMAP0, &tobj);
+                NativeShader::send(sMaterial);
 
                 mLoadingTexture = loadInfo;
             }
@@ -96,25 +97,12 @@ namespace nw4r {
         }
 
         void CharWriter::SetupGXDefault() {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
+            SetupMaterial(0x00000000UL, 0xFFFFFFFFUL, false);
             SetupVertexFormat();
         }
 
         void CharWriter::SetupGXForI() {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(1);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_RASC);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
+            SetupMaterial(0x00000000UL, 0xFFFFFFFFUL, true);
             SetupVertexFormat();
         }
 
@@ -215,25 +203,7 @@ namespace nw4r {
         }
 
         void CharWriter::SetupGXWithColorMapping(Color min, Color max) {
-            SetupGXCommon();
-            J3DNativeState::setNumTevStages(2);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-            J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL);
-            J3DNativeState::setTevColor(GX_TEVREG0, min);
-            J3DNativeState::setTevColor(GX_TEVREG1, max);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXC, GX_CC_ZERO);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_A1, GX_CA_TEXA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-            J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO);
-            J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
+            SetupMaterial(min, max, false);
             SetupVertexFormat();
         }
     };  // namespace ut
