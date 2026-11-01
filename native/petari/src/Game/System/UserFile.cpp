@@ -4,7 +4,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <RVLFaceLib.h>
 
-#define USER_NAME_SIZE (RFL_NAME_LEN + 1)
+#define USER_NAME_SIZE (MII_NAME_LEN + 1)
 
 UserFile::UserFile()
     : mGameDataHolder(nullptr), mConfigDataHolder(nullptr), mIsPlayerMario(true), mIsGameDataCorrupted(false), mIsConfigDataCorrupted(false),

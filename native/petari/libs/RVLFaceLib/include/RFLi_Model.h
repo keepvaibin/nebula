@@ -18,16 +18,16 @@ extern "C" {
 #define VTX_NRM_SIZE (VTX_COORD_SIZE * VTX_COORDS_IN_NRM)
 #define VTX_TXC_SIZE (VTX_COORD_SIZE * VTX_COORDS_IN_TXC)
 
-typedef struct RFLiCoordinateData {
+typedef struct Mii_CoordinateData {
     u8 uOff;   // at 0x0
     u8 fOff;   // at 0x1
     u8 rOff;   // at 0x2
     BOOL uRev; // at 0x4
     BOOL fRev; // at 0x8
     BOOL rRev; // at 0xC
-} RFLiCoordinateData;
+} Mii_CoordinateData;
 
-typedef struct RFLiCharModelRes {
+typedef struct Mii_CharModelRes {
     u8 noseDl[0xC0];     // at 0x0
     u8 capDl[0x560];     // at 0xC0
     u8 faceDl[0x2E0];    // at 0x620
@@ -100,10 +100,10 @@ typedef struct RFLiCharModelRes {
     BOOL flipHair; // at 0x824C
 
     char UNK_0x8250[0x10];
-} RFLiCharModelRes;
+} Mii_CharModelRes;
 
-typedef struct RFLiShapeRes {
-    RFLiPartsShp part; // at 0x0
+typedef struct Mii_ShapeRes {
+    Mii_PartsShp part; // at 0x0
     u16 file;          // at 0x4
     BOOL transform;    // at 0x8
     BOOL flipX;        // at 0xC
@@ -124,36 +124,36 @@ typedef struct RFLiShapeRes {
     Vec* noseTrans;    // at 0x38
     Vec* beardTrans;   // at 0x3C
     Vec* hairTrans;    // at 0x40
-} RFLiShapeRes;
+} Mii_ShapeRes;
 
-typedef struct RFLiCharModel {
+typedef struct Mii_CharModel {
     Mtx posMtx;                       // at 0x0
     Mtx nrmMtx;                       // at 0x30
-    RFLExpression expression;         // at 0x60
-    RFLResolution resolution;         // at 0x64
-    RFLiCharModelRes* res;            // at 0x68
-    GXTexObj* maskTexObj[RFLExp_Max]; // at 0x6C
-} RFLiCharModel;
+    MiiExpression expression;         // at 0x60
+    MiiResolution resolution;         // at 0x64
+    Mii_CharModelRes* res;            // at 0x68
+    GXTexObj* maskTexObj[MiiExp_Max]; // at 0x6C
+} Mii_CharModel;
 
-extern RFLiCoordinateData coordinateData;
+extern Mii_CoordinateData coordinateData;
 
-inline void RFLiSetCoordinateData(const RFLiCoordinateData* data) {
+inline void Mii_SetCoordinateData(const Mii_CoordinateData* data) {
     coordinateData = *data;
 }
 
-inline RFLiCoordinateData* RFLiGetCoordinateData(void) {
+inline Mii_CoordinateData* Mii_GetCoordinateData(void) {
     return &coordinateData;
 }
 
-u32 RFLiGetExpressionNum(u32 exprFlags);
-void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work,
-                       RFLResolution res, u32 exprFlags);
-GXColor RFLiGetFacelineColor(const RFLiCharInfo* info);
-void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info);
-void RFLiInitShapeRes(RFLiShapeRes* shape);
-void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file,
+u32 Mii_GetExpressionNum(u32 exprFlags);
+void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work,
+                       MiiResolution res, u32 exprFlags);
+GXColor Mii_GetFacelineColor(const Mii_CharInfo* info);
+void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
+void Mii_InitShapeRes(Mii_ShapeRes* shape);
+void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file,
                     void* buffer) NO_INLINE;
-void RFLiTransformCoordinate(s16* to, const s16* from);
+void Mii_TransformCoordinate(s16* to, const s16* from);
 
 #ifdef __cplusplus
 }

@@ -20,7 +20,7 @@ MiiFaceParts::~MiiFaceParts() {
 
 void MiiFaceParts::init(const JMapInfoIter& rIter) {
     _90 = new (32) u8[mRecipe->getModelBufferSize()];
-    mCharModel = new RFLCharModel;
+    mCharModel = new MiiCharModel;
     _D1 = true;
 }
 
@@ -43,30 +43,30 @@ void MiiFaceParts::calcViewAndEntry() {
     }
 
     MR::multMtx(viewMtx, _98, j3dSys.mViewMtx);
-    RFLSetMtx(mCharModel, viewMtx);
+    MiiSetMtx(mCharModel, viewMtx);
 }
 
-void MiiFaceParts::drawOpa(const RFLDrawCoreSetting* pSetting) const {
+void MiiFaceParts::drawOpa(const MiiDrawCoreSetting* pSetting) const {
     if (_D1) {
         return;
     }
 
     if (pSetting != nullptr) {
-        RFLDrawOpaCore(mCharModel, pSetting);
+        MiiDrawOpaCore(mCharModel, pSetting);
     } else {
-        RFLDrawOpa(mCharModel);
+        MiiDrawOpa(mCharModel);
     }
 }
 
-void MiiFaceParts::drawXlu(const RFLDrawCoreSetting* pSetting) const {
+void MiiFaceParts::drawXlu(const MiiDrawCoreSetting* pSetting) const {
     if (_D1) {
         return;
     }
 
     if (pSetting != nullptr) {
-        RFLDrawXluCore(mCharModel, pSetting);
+        MiiDrawXluCore(mCharModel, pSetting);
     } else {
-        RFLDrawXlu(mCharModel);
+        MiiDrawXlu(mCharModel);
     }
 }
 
@@ -76,18 +76,18 @@ void MiiFaceParts::initFixedPosition(MtxPtr pParam1, const TVec3f& rParam2, cons
 }
 
 void MiiFaceParts::changeExpressionNormal() {
-    tryChangeExpression(RFLExp_Normal);
+    tryChangeExpression(MiiExp_Normal);
 }
 
 void MiiFaceParts::changeExpressionBlink() {
-    tryChangeExpression(RFLExp_Blink);
+    tryChangeExpression(MiiExp_Blink);
 }
 
 void MiiFaceParts::changeFaceModel(const MiiFaceRecipe& rRecipe) {
     mRecipe->mIndex = rRecipe.mIndex;
     mRecipe->mDataSource = rRecipe.mDataSource;
 
-    if (rRecipe.mDataSource == RFLDataSource_Middle) {
+    if (rRecipe.mDataSource == MiiDataSource_Middle) {
         mRecipe->setDatabase(rRecipe.mMiddleDB);
     }
 
@@ -106,11 +106,11 @@ bool MiiFaceParts::tryChangeExpression(u32 expression) {
         return false;
     }
 
-    if (!mRecipe->hasExpression(RFLExpression(expression))) {
+    if (!mRecipe->hasExpression(MiiExpression(expression))) {
         return false;
     }
 
-    RFLSetExpression(mCharModel, RFLExpression(expression));
+    MiiSetExpression(mCharModel, MiiExpression(expression));
 
     return true;
 }

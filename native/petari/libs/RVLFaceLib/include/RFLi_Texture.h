@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-typedef struct RFLiTexture {
+typedef struct Mii_Texture {
     u8 format;          // at 0x0
     u8 alpha;           // at 0x1
     u16 width;          // at 0x2
@@ -29,9 +29,9 @@ typedef struct RFLiTexture {
     s8 reserved;        // at 0x19
     s16 lodBias;        // at 0x1A
     u32 imageOfs;       // at 0x1C
-} RFLiTexture;
+} Mii_Texture;
 
-inline void* RFLiGetTexImage(const RFLiTexture* tex) {
+inline void* Mii_GetTexImage(const Mii_Texture* tex) {
     return (u8*)tex + tex->imageOfs;
 }
 

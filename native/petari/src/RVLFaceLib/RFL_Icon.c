@@ -11,19 +11,19 @@ inline float atan2f(float x, float y) {
     return atan2(x, y);
 }
 
-RFLErrcode RFLMakeIcon(void* buf, RFLDataSource source, RFLMiddleDB* middleDB, u16 index, RFLExpression expression, const RFLIconSetting* setting) {
-    RFLiCharInfo info;
-    RFLErrcode err = RFLiPickupCharInfo(&info, source, middleDB, index);
+MiiErrcode MiiMakeIcon(void* buf, MiiDataSource source, MiiMiddleDB* middleDB, u16 index, MiiExpression expression, const MiiIconSetting* setting) {
+    Mii_CharInfo info;
+    MiiErrcode err = Mii_PickupCharInfo(&info, source, middleDB, index);
 
-    if (err == RFLErrcode_Success) {
-        RFLiMakeIcon(buf, &info, expression, setting);
+    if (err == MiiErrcode_Success) {
+        Mii_MakeIcon(buf, &info, expression, setting);
     }
 
     return err;
 }
 
-void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const RFLIconSetting* setting) {
-    RFLCharModel model;                // sp+218
+void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const MiiIconSetting* setting) {
+    MiiCharModel model;                // sp+218
     void* modelBuf;                    // sp+84
     f32 vp[6];                         // sp+150
     u32 byteSize;                      // sp+80
@@ -32,11 +32,11 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     u32 scissorOffsetY;                // sp+78
     u32 scissorWidth;                  // sp+74
     u32 scissorHeight;                 // sp+70
-    RFLiCoordinateData iconCoordData;  // sp+118
-    RFLiCoordinateData coordData;      // sp+128
+    Mii_CoordinateData iconCoordData;  // sp+118
+    Mii_CoordinateData coordData;      // sp+128
     u32 bufSize;                       // sp+6C
-    RFLResolution resolution;          // sp+68
-    RFLExpFlag expFlag;                // sp+64
+    MiiResolution resolution;          // sp+68
+    MiiExpFlag expFlag;                // sp+64
     GXColor backColor;                 // sp+60
     Mtx44 projMtx;                     // sp+1A8
     f32 fovy;                          // f31
@@ -46,43 +46,43 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     Vec cameraUp;                      // sp+F4
     GXLightObj light;                  // sp+168
     Vec pos;                           // sp+E8
-    RFLDrawSetting drawSetting;        // sp+138
+    MiiDrawSetting drawSetting;        // sp+138
 
     // buf -> r28
     // info -> r29
     // expression -> r27
     // setting -> r30
 
-    iconCoordData = (RFLiCoordinateData){1, 2, 0, FALSE, FALSE, FALSE};
+    iconCoordData = (Mii_CoordinateData){1, 2, 0, FALSE, FALSE, FALSE};
     byteSize = setting->width * setting->height * sizeof(u16);
-    coordData = *RFLiGetCoordinateData();
-    RFLiSetCoordinateData(&iconCoordData);
+    coordData = *Mii_GetCoordinateData();
+    Mii_SetCoordinateData(&iconCoordData);
 
-    if ((setting->width > 128 || setting->height > 128) && RFLiGetUseDeluxTex()) {
-        resolution = RFLResolution_256;
+    if ((setting->width > 128 || setting->height > 128) && Mii_GetUseDeluxTex()) {
+        resolution = MiiResolution_256;
     } else if (setting->width > 64 || setting->height > 64) {
-        resolution = RFLResolution_128;
+        resolution = MiiResolution_128;
     } else {
-        resolution = RFLResolution_64;
+        resolution = MiiResolution_64;
     }
 
     expFlag = 1 << expression;
-    bufSize = RFLGetModelBufferSize(resolution, expFlag);
-    modelBuf = RFLiAlloc32(bufSize);
-    RFLiInitCharModel(&model, info, modelBuf, resolution, expFlag);
-    RFLSetExpression(&model, expression);
+    bufSize = MiiGetModelBufferSize(resolution, expFlag);
+    modelBuf = Mii_Alloc32(bufSize);
+    Mii_InitCharModel(&model, info, modelBuf, resolution, expFlag);
+    MiiSetExpression(&model, expression);
 
-    if (setting->bgType == RFLIconBG_Direct) {
+    if (setting->bgType == MiiIconBG_Direct) {
         backColor = setting->bgColor;
     } else {
-        backColor = RFLGetFavoriteColor(info->personal.color);
+        backColor = MiiGetFavoriteColor(info->personal.color);
     }
     backColor.a = 0;
 
     J3DNativeViewGetScissor(&scissorOffsetX, &scissorOffsetY, &scissorWidth, &scissorHeight);
     J3DNativeViewSetScissor(0, 0, setting->width, setting->height);
 
-    RFLiBeginTexture(buf, setting->width, setting->height,
+    Mii_BeginTexture(buf, setting->width, setting->height,
                      ((u32)backColor.r << 24) | ((u32)backColor.g << 16) | ((u32)backColor.b << 8) | backColor.a);
 
     J3DNativeViewGetViewportv(vp);
@@ -110,7 +110,7 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     NebulaMtxMultVec(viewMtx, &pos, &pos);
     J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
     J3DNativeStateLoadLightObjImm(&light, GX_LIGHT0);
-    RFLSetMtx(&model, viewMtx);
+    MiiSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;
     drawSetting.lightMask = GX_LIGHT0;
@@ -118,33 +118,33 @@ void RFLiMakeIcon(void* buf, RFLiCharInfo* info, RFLExpression expression, const
     drawSetting.attn = GX_AF_NONE;
     drawSetting.ambColor = (GXColor){160, 160, 160, 255};
     drawSetting.compLoc = 0;
-    RFLLoadDrawSetting(&drawSetting);
+    MiiLoadDrawSetting(&drawSetting);
 
     if (!setting->drawXluOnly) {
         J3DNativeStateSetColorUpdate(TRUE);
         J3DNativeStateSetAlphaUpdate(TRUE);
         J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
-        RFLDrawOpa(&model);
+        MiiDrawOpa(&model);
     }
 
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, FALSE);
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(FALSE);
-    RFLDrawXlu(&model);
+    MiiDrawXlu(&model);
 
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVSRCALPHA, GX_LO_COPY);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetColorUpdate(FALSE);
-    RFLDrawXlu(&model);
+    MiiDrawXlu(&model);
 
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeTargetEnd(buf);
 
-    RFLiFree(modelBuf);
+    Mii_Free(modelBuf);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
     J3DNativeViewSetScissor(scissorOffsetX, scissorOffsetY, scissorWidth, scissorHeight);
-    RFLiSetCoordinateData(&coordData);
+    Mii_SetCoordinateData(&coordData);
 }
 

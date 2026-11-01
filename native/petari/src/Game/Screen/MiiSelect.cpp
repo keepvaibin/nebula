@@ -342,14 +342,14 @@ void MiiSelect::collectValidMiiIndex() {
     mMiiNum = 0;
     sCollectedMiiGeneration = __NebulaMiiGeneration;
 #endif
-    for (u32 i = 0; i < RFL_DB_CHAR_MAX; i++) {
-        if (!RFLIsAvailableOfficialData(i)) {
+    for (u32 i = 0; i < MII_DB_CHAR_MAX; i++) {
+        if (!MiiIsAvailableOfficialData(i)) {
             continue;
         }
 
-        RFLAdditionalInfo additionalInfo;
+        MiiAdditionalInfo additionalInfo;
 
-        if (RFLGetAdditionalInfo(&additionalInfo, RFLDataSource_Official, nullptr, i) != RFLErrcode_Success) {
+        if (MiiGetAdditionalInfo(&additionalInfo, MiiDataSource_Official, nullptr, i) != MiiErrcode_Success) {
             continue;
         }
 
@@ -489,7 +489,7 @@ namespace MiiSelectSub {
     }
 
     inline void setPointedMiiName(MiiSelect* pHost, s32 index) {
-        wchar_t name[RFL_NAME_LEN + 1];
+        wchar_t name[MII_NAME_LEN + 1];
         FileSelectFunc::copyMiiName(reinterpret_cast< u16* >(name), pHost->makeIconID(index));
         MR::setTextBoxMessageRecursive(pHost, "TxtName", name);
     }

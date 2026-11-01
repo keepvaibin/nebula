@@ -19,135 +19,135 @@ extern "C" {
  * Common defines
  */
 
-#define RFL_NAME_LEN 10
-#define RFL_CREATOR_LEN 10
-#define RFL_CREATEID_LEN 8
+#define MII_NAME_LEN 10
+#define MII_CREATOR_LEN 10
+#define MII_CREATEID_LEN 8
 
-#define RFL_CTRL_CHAR_MAX 10
-#define RFL_DB_CHAR_MAX 100
+#define MII_CTRL_CHAR_MAX 10
+#define MII_DB_CHAR_MAX 100
 
 /**
  * Common enums
  */
 
-typedef enum { RFLAge_Child, RFLAge_Adult, RFLAge_Elder, RFLAge_All } RFLAge;
+typedef enum { MiiAge_Child, MiiAge_Adult, MiiAge_Elder, MiiAge_All } MiiAge;
 
 typedef enum {
-    RFLDataSource_Official,
-    RFLDataSource_Hidden,
-    RFLDataSource_Controller1,
-    RFLDataSource_Controller2,
-    RFLDataSource_Controller3,
-    RFLDataSource_Controller4,
-    RFLDataSource_Default,
-    RFLDataSource_Middle,
+    MiiDataSource_Official,
+    MiiDataSource_Hidden,
+    MiiDataSource_Controller1,
+    MiiDataSource_Controller2,
+    MiiDataSource_Controller3,
+    MiiDataSource_Controller4,
+    MiiDataSource_Default,
+    MiiDataSource_Middle,
 
-    RFLDataSource_Max
-} RFLDataSource;
-
-typedef enum {
-    RFLErrcode_Success,
-    RFLErrcode_NotAvailable,
-    RFLErrcode_NANDCommandfail,
-    RFLErrcode_Loadfail,
-    RFLErrcode_Savefail,
-    RFLErrcode_Fatal,
-    RFLErrcode_Busy,
-    RFLErrcode_Broken,
-    RFLErrcode_Exist,
-    RFLErrcode_DBFull,
-    RFLErrcode_DBNodata,
-    RFLErrcode_Controllerfail,
-    RFLErrcode_NWC24Fail,
-    RFLErrcode_MaxFiles,
-    RFLErrcode_MaxBlocks,
-    RFLErrcode_WrongParam,
-    RFLErrcode_NoFriends,
-    RFLErrcode_Isolation,
-
-    RFLErrcode_Unknown = 0xFF
-} RFLErrcode;
+    MiiDataSource_Max
+} MiiDataSource;
 
 typedef enum {
-    RFLExp_Normal,
-    RFLExp_Smile,
-    RFLExp_Anger,
-    RFLExp_Sorrow,
-    RFLExp_Surprise,
-    RFLExp_Blink,
-    RFLExp_OpenMouth,
+    MiiErrcode_Success,
+    MiiErrcode_NotAvailable,
+    MiiErrcode_NANDCommandfail,
+    MiiErrcode_Loadfail,
+    MiiErrcode_Savefail,
+    MiiErrcode_Fatal,
+    MiiErrcode_Busy,
+    MiiErrcode_Broken,
+    MiiErrcode_Exist,
+    MiiErrcode_DBFull,
+    MiiErrcode_DBNodata,
+    MiiErrcode_Controllerfail,
+    MiiErrcode_NWC24Fail,
+    MiiErrcode_MaxFiles,
+    MiiErrcode_MaxBlocks,
+    MiiErrcode_WrongParam,
+    MiiErrcode_NoFriends,
+    MiiErrcode_Isolation,
 
-    RFLExp_Max
-} RFLExpression;
-
-typedef enum {
-    RFLFavoriteColor_Red,
-    RFLFavoriteColor_Orange,
-    RFLFavoriteColor_Yellow,
-    RFLFavoriteColor_YellowGreen,
-    RFLFavoriteColor_Green,
-    RFLFavoriteColor_Blue,
-    RFLFavoriteColor_SkyBlue,
-    RFLFavoriteColor_Pink,
-    RFLFavoriteColor_Purple,
-    RFLFavoriteColor_Brown,
-    RFLFavoriteColor_White,
-    RFLFavoriteColor_Black,
-
-    RFLFavoriteColor_Max
-} RFLFavoriteColor;
+    MiiErrcode_Unknown = 0xFF
+} MiiErrcode;
 
 typedef enum {
-    RFLRace_Black,
-    RFLRace_White,
-    RFLRace_Asian,
-    RFLRace_All
-} RFLRace;
+    MiiExp_Normal,
+    MiiExp_Smile,
+    MiiExp_Anger,
+    MiiExp_Sorrow,
+    MiiExp_Surprise,
+    MiiExp_Blink,
+    MiiExp_OpenMouth,
+
+    MiiExp_Max
+} MiiExpression;
+
+typedef enum {
+    MiiFavoriteColor_Red,
+    MiiFavoriteColor_Orange,
+    MiiFavoriteColor_Yellow,
+    MiiFavoriteColor_YellowGreen,
+    MiiFavoriteColor_Green,
+    MiiFavoriteColor_Blue,
+    MiiFavoriteColor_SkyBlue,
+    MiiFavoriteColor_Pink,
+    MiiFavoriteColor_Purple,
+    MiiFavoriteColor_Brown,
+    MiiFavoriteColor_White,
+    MiiFavoriteColor_Black,
+
+    MiiFavoriteColor_Max
+} MiiFavoriteColor;
+
+typedef enum {
+    MiiRace_Black,
+    MiiRace_White,
+    MiiRace_Asian,
+    MiiRace_All
+} MiiRace;
 
 typedef enum {
     // No mipmap
-    RFLResolution_64 = 64,
-    RFLResolution_128 = 128,
-    RFLResolution_256 = 256,
+    MiiResolution_64 = 64,
+    MiiResolution_128 = 128,
+    MiiResolution_256 = 256,
 
     // Mipmap
-    RFLResolution_64M = 64 | 32,
-    RFLResolution_128M = 128 | 64 | 32,
-    RFLResolution_256M = 256 | 128 | 64 | 32
-} RFLResolution;
+    MiiResolution_64M = 64 | 32,
+    MiiResolution_128M = 128 | 64 | 32,
+    MiiResolution_256M = 256 | 128 | 64 | 32
+} MiiResolution;
 
 typedef enum {
-    RFLExpFlag_Normal = (1 << RFLExp_Normal),
-    RFLExpFlag_Smile = (1 << RFLExp_Smile),
-    RFLExpFlag_Anger = (1 << RFLExp_Anger),
-    RFLExpFlag_Sorrow = (1 << RFLExp_Sorrow),
-    RFLExpFlag_Surprise = (1 << RFLExp_Surprise),
-    RFLExpFlag_Blink = (1 << RFLExp_Blink),
-    RFLExpFlag_OpenMouth = (1 << RFLExp_OpenMouth),
-} RFLExpFlag;
+    MiiExpFlag_Normal = (1 << MiiExp_Normal),
+    MiiExpFlag_Smile = (1 << MiiExp_Smile),
+    MiiExpFlag_Anger = (1 << MiiExp_Anger),
+    MiiExpFlag_Sorrow = (1 << MiiExp_Sorrow),
+    MiiExpFlag_Surprise = (1 << MiiExp_Surprise),
+    MiiExpFlag_Blink = (1 << MiiExp_Blink),
+    MiiExpFlag_OpenMouth = (1 << MiiExp_OpenMouth),
+} MiiExpFlag;
 
-typedef enum { RFLSex_Male, RFLSex_Female, RFLSex_All } RFLSex;
+typedef enum { MiiSex_Male, MiiSex_Female, MiiSex_All } MiiSex;
 
 /**
  * Common typedefs
  */
 
-typedef void (*RFLCallback)(void);
+typedef void (*MiiCallback)(void);
 
 /**
  * Common structs
  */
-typedef struct RFLCreateID {
-    u8 data[RFL_CREATEID_LEN];
-} RFLCreateID;
+typedef struct MiiCreateID {
+    u8 data[MII_CREATEID_LEN];
+} MiiCreateID;
 
-typedef struct RFLCharData {
+typedef struct MiiCharData {
     u8 dummy[0x4A];
-} RFLCharData;
+} MiiCharData;
 
-typedef struct RFLStoreData {
+typedef struct MiiStoreData {
     u8 dummy[0x4C];
-} RFLStoreData;
+} MiiStoreData;
 
 #ifdef __cplusplus
 }

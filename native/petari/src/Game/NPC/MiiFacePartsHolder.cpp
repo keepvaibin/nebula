@@ -22,7 +22,7 @@ MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii\21
 }
 
 MiiFacePartsHolder::~MiiFacePartsHolder() {
-    RFLExit();
+    MiiExit();
     delete _34;
 }
 
@@ -30,7 +30,7 @@ void MiiFacePartsHolder::init(const JMapInfoIter& rIter) {
     JKRMemArchive* pArchive = MR::receiveArchive("/ObjectData/MiiFaceDatabase.arc");
     void* pResBuffer = pArchive->getResource("/RFL_Res.dat");
     u32 resSize = pArchive->getResSize(pResBuffer);
-    _38 = RFLInitRes(pResBuffer, resSize, false);
+    _38 = MiiInitRes(pResBuffer, resSize, false);
 
     MR::connectToScene(this, MR::MovementType_None, MR::CalcAnimType_NPC, MR::DrawBufferType_None, MR::DrawType_MiiFacePartsHolder);
     MR::connectToScene(MR::createDrawAdaptor("Mii\203\202\203\146\203\213\215\304\215\354\220\254" /* Miiモデル再作成 */, MR::Functor(this, &MiiFacePartsHolder::reinitCharModel)), MR::MovementType_None,
@@ -78,7 +78,7 @@ void MiiFacePartsHolder::draw() const {
 void MiiFacePartsHolder::reinitCharModel() {
     MiiFaceParts* pParts;
 
-    if (_38 == RFLErrcode_Success) {
+    if (_38 == MiiErrcode_Success) {
         for (int i = 0; i < getObjNum(); i++) {
             pParts = static_cast< MiiFaceParts* >(getActor(i));
 
@@ -108,7 +108,7 @@ bool MiiFacePartsHolder::isInitEnd() const {
 }
 
 bool MiiFacePartsHolder::isError() const {
-    return _38 != RFLErrcode_Success;
+    return _38 != MiiErrcode_Success;
 }
 
 MiiFaceParts* MiiFacePartsHolder::createPartsFromReceipe(const char* pName, const MiiFaceRecipe& rRecipe) {
@@ -124,10 +124,10 @@ MiiFaceParts* MiiFacePartsHolder::createPartsFromReceipe(const char* pName, cons
 }
 
 MiiFaceParts* MiiFacePartsHolder::createPartsFromDefault(const char* pName, u16 miiIndex) {
-    return createPartsFromReceipe(pName, MiiFaceRecipe(RFLDataSource_Default, miiIndex, RFLResolution_256, RFLExpFlag_Normal | RFLExpFlag_Blink));
+    return createPartsFromReceipe(pName, MiiFaceRecipe(MiiDataSource_Default, miiIndex, MiiResolution_256, MiiExpFlag_Normal | MiiExpFlag_Blink));
 }
 
-void MiiFacePartsHolder::drawEachActor(DrawPartsFuncPtr pDrawFunc, const RFLDrawCoreSetting* pSetting) const {
+void MiiFacePartsHolder::drawEachActor(DrawPartsFuncPtr pDrawFunc, const MiiDrawCoreSetting* pSetting) const {
     MiiFaceParts* pParts;
 
     for (int i = 0; i < getObjNum(); i++) {
@@ -142,7 +142,7 @@ void MiiFacePartsHolder::drawEachActor(DrawPartsFuncPtr pDrawFunc, const RFLDraw
 }
 
 void MiiFacePartsHolder::drawExtra() const {
-    RFLDrawCoreSetting setting;
+    MiiDrawCoreSetting setting;
     setting.matrix = 0;
     setting.reverseCulling = 0;
 
@@ -163,13 +163,13 @@ void MiiFacePartsHolder::drawExtra() const {
 void MiiFacePartsHolder::setTevOpa() const {
     const GXColor material = {165, 165, 165, 255};
     const GXColor ambient = {128, 128, 128, 128};
-    RFLiNativeChain(RFLi_NATIVE_CHAIN_NPC_OPA, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 1);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 1);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }
 
 void MiiFacePartsHolder::setTevXlu() const {
     const GXColor material = {165, 165, 165, 255};
     const GXColor ambient = {128, 128, 128, 128};
-    RFLiNativeChain(RFLi_NATIVE_CHAIN_NPC_XLU, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 0);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 0);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }

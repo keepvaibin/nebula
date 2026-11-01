@@ -53,7 +53,7 @@ public:
     /* 0x1C */ bool mIsCreated;
 
     /// @brief The error status for the creation of the icon texture.
-    /* 0x20 */ RFLErrcode mMakeIconResult;
+    /* 0x20 */ MiiErrcode mMakeIconResult;
 
     /// @brief Determines if a request is open to create the icon texture.
     /* 0x24 */ bool mIsRequestMakeIcon;

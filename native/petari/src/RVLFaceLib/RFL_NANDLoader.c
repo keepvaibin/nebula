@@ -6,12 +6,12 @@
 #define LOADER_HEADER_BUF_1_SIZE 0x100
 #define LOADER_HEADER_BUF_2_SIZE 0x20
 
-void RFLiInitLoader(void) {
-    RFLiLoader* loader;
+void Mii_InitLoader(void) {
+    Mii_Loader* loader;
     int i;
 
-    loader = RFLiGetLoader();
-    for (i = 0; i < RFLiArcID_Max; i++) {
+    loader = Mii_GetLoader();
+    for (i = 0; i < Mii_ArcID_Max; i++) {
         loader->archives[i].numFiles = 0;
         loader->archives[i].biggestSize = 0;
         loader->archives[i].offset = 0;
@@ -56,12 +56,12 @@ static void swap32_(u8* p) {
 
 // One shape file from `p` to `end`: checks it (`apply` FALSE) or converts it.
 static BOOL cookShape_(u8* p, const u8* end, u32 arcIdx, BOOL apply) {
-    const BOOL txc = arcIdx != RFLiArcID_ForeHead && arcIdx != RFLiArcID_Hair && arcIdx != RFLiArcID_Beard &&
-                     arcIdx != RFLiArcID_Nose;
+    const BOOL txc = arcIdx != Mii_ArcID_ForeHead && arcIdx != Mii_ArcID_Hair && arcIdx != Mii_ArcID_Beard &&
+                     arcIdx != Mii_ArcID_Nose;
     int section;
 
     p += 4;  // its tag
-    if (arcIdx == RFLiArcID_Faceline) {
+    if (arcIdx == Mii_ArcID_Faceline) {
         int i;
         if (p + 36 > end) {
             return FALSE;
@@ -106,10 +106,10 @@ static BOOL cookShape_(u8* p, const u8* end, u32 arcIdx, BOOL apply) {
 static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
     u32 arcIdx;
 
-    if (size < (RFLiArcID_Max + 1) * 4) {
+    if (size < (Mii_ArcID_Max + 1) * 4) {
         return FALSE;
     }
-    for (arcIdx = 0; arcIdx < RFLiArcID_Max; arcIdx++) {
+    for (arcIdx = 0; arcIdx < Mii_ArcID_Max; arcIdx++) {
         const u32 section = be32_(res + (arcIdx + 1) * 4);
         u32 numFiles;
         u32 i;
@@ -137,17 +137,17 @@ static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
                 continue;
             }
             switch (arcIdx) {
-            case RFLiArcID_Eye:
-            case RFLiArcID_Eyebrow:
-            case RFLiArcID_FaceTex:
-            case RFLiArcID_GlassTex:
-            case RFLiArcID_Mole:
-            case RFLiArcID_Mouth:
-            case RFLiArcID_Mustache:
-            case RFLiArcID_NlineTex:
-            case RFLiArcID_CapTex:
-                // RFLiTexture: width, height, colour count, palette and image offsets, LOD bias
-                if (next - self < sizeof(RFLiTexture)) {
+            case Mii_ArcID_Eye:
+            case Mii_ArcID_Eyebrow:
+            case Mii_ArcID_FaceTex:
+            case Mii_ArcID_GlassTex:
+            case Mii_ArcID_Mole:
+            case Mii_ArcID_Mouth:
+            case Mii_ArcID_Mustache:
+            case Mii_ArcID_NlineTex:
+            case Mii_ArcID_CapTex:
+                // Mii_Texture: width, height, colour count, palette and image offsets, LOD bias
+                if (next - self < sizeof(Mii_Texture)) {
                     return FALSE;
                 }
                 if (apply) {
@@ -175,7 +175,7 @@ static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
         }
     }
     if (apply) {
-        for (arcIdx = 0; arcIdx < RFLiArcID_Max; arcIdx++) {
+        for (arcIdx = 0; arcIdx < Mii_ArcID_Max; arcIdx++) {
             swap32_(res + (arcIdx + 1) * 4);
         }
         swap16_(res);
@@ -184,7 +184,7 @@ static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
     return TRUE;
 }
 
-BOOL RFLiCookResource(void* res, u32 size) {
+BOOL Mii_CookResource(void* res, u32 size) {
     u8* bytes = (u8*)res;
 
     sHostOrder = TRUE;
@@ -196,12 +196,12 @@ BOOL RFLiCookResource(void* res, u32 size) {
 }
 
 static void parseOnmemoryRes_(void) NO_INLINE {
-    RFLiLoader* loader;
+    Mii_Loader* loader;
     int i;
 
-    loader = RFLiGetLoader();
+    loader = Mii_GetLoader();
     loader->version = *(u16*)((u8*)loader->cache + 2);
-    for (i = 0; i < RFLiArcID_Max; i++) {
+    for (i = 0; i < Mii_ArcID_Max; i++) {
         // Pointer to section offset in header
         u32* offset = (u32*)((u8*)loader->cache + ((i + 1) * 4));
         // Pointer to section
@@ -213,13 +213,13 @@ static void parseOnmemoryRes_(void) NO_INLINE {
     }
 }
 
-// The parts archive's sections (the one RFLInitRes was given).
-void RFLiLoadResourceHeader(void) {
+// The parts archive's sections (the one MiiInitRes was given).
+void Mii_LoadResourceHeader(void) {
     parseOnmemoryRes_();
 }
 
-static u32 getCachedLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
-    RFLiArchive* arc = &loader->archives[arcIdx];
+static u32 getCachedLength_(Mii_Loader* loader, u32 arcIdx, u16 fileIdx) {
+    Mii_Archive* arc = &loader->archives[arcIdx];
     const void* arcBuf = (u8*)loader->cache + arc->offset;
     const u32 next = ((u32*)arcBuf)[fileIdx + 1];
     const u32 self = ((u32*)arcBuf)[fileIdx];
@@ -227,9 +227,9 @@ static u32 getCachedLength_(RFLiLoader* loader, u32 arcIdx, u16 fileIdx) {
 }
 
 static u32 getLength_(u32 arcIdx, u16 fileIdx) {
-    RFLiLoader* loader;
+    Mii_Loader* loader;
 
-    loader = RFLiGetLoader();
+    loader = Mii_GetLoader();
     if (loader == NULL) {
         return 0;
     }
@@ -241,10 +241,10 @@ static u32 getLength_(u32 arcIdx, u16 fileIdx) {
     return getCachedLength_(loader, arcIdx, fileIdx);
 }
 
-static void* getCachedFile_(void* dst, RFLiLoader* loader, u32 arcIdx,
+static void* getCachedFile_(void* dst, Mii_Loader* loader, u32 arcIdx,
                             u16 fileIdx) {
     const u8* cache = (u8*)loader->cache;
-    RFLiArchive* arc = &loader->archives[arcIdx];
+    Mii_Archive* arc = &loader->archives[arcIdx];
     const void* arcBuf = cache + arc->offset;
     const u32 self = ((u32*)arcBuf)[fileIdx];
     const u32 next = ((u32*)arcBuf)[fileIdx + 1];
@@ -256,13 +256,13 @@ static void* getCachedFile_(void* dst, RFLiLoader* loader, u32 arcIdx,
 }
 
 static void* getFile_(void* dst, u32 arcIdx, u16 fileIdx) {
-    RFLiLoader* loader;
+    Mii_Loader* loader;
 
-    if (!RFLAvailable()) {
+    if (!MiiAvailable()) {
         return NULL;
     }
 
-    loader = RFLiGetLoader();
+    loader = Mii_GetLoader();
     if (loader == NULL) {
         return NULL;
     }
@@ -274,54 +274,54 @@ static void* getFile_(void* dst, u32 arcIdx, u16 fileIdx) {
     return getCachedFile_(dst, loader, arcIdx, fileIdx);
 }
 
-u32 RFLiGetTexSize(RFLiPartsTex part, u16 file) {
-    static const u32 scParts2Arc[] = {RFLiArcID_Eye, RFLiArcID_Eyebrow,
-                                      RFLiArcID_Mouth, RFLiArcID_Mustache,
-                                      RFLiArcID_Mole};
+u32 Mii_GetTexSize(Mii_PartsTex part, u16 file) {
+    static const u32 scParts2Arc[] = {Mii_ArcID_Eye, Mii_ArcID_Eyebrow,
+                                      Mii_ArcID_Mouth, Mii_ArcID_Mustache,
+                                      Mii_ArcID_Mole};
     return getLength_(scParts2Arc[part], file);
 }
 
 // A part texture's image handed to the renderer as it loads (its base level).
-static RFLiTexture* handOver(RFLiTexture* tex) {
+static Mii_Texture* handOver(Mii_Texture* tex) {
     if (tex != NULL) {
-        J3DNativeTextureRegisterImage(RFLiGetTexImage(tex), tex->format, tex->width, tex->height, 1);
+        J3DNativeTextureRegisterImage(Mii_GetTexImage(tex), tex->format, tex->width, tex->height, 1);
     }
     return tex;
 }
 
-RFLiTexture* RFLiLoadTexture(RFLiPartsTex part, u16 file, void* dst) {
-    static const u32 scParts2Arc[] = {RFLiArcID_Eye, RFLiArcID_Eyebrow,
-                                      RFLiArcID_Mouth, RFLiArcID_Mustache,
-                                      RFLiArcID_Mole};
-    return handOver((RFLiTexture*)getFile_(dst, scParts2Arc[part], file));
+Mii_Texture* Mii_LoadTexture(Mii_PartsTex part, u16 file, void* dst) {
+    static const u32 scParts2Arc[] = {Mii_ArcID_Eye, Mii_ArcID_Eyebrow,
+                                      Mii_ArcID_Mouth, Mii_ArcID_Mustache,
+                                      Mii_ArcID_Mole};
+    return handOver((Mii_Texture*)getFile_(dst, scParts2Arc[part], file));
 }
 
-u32 RFLiGetShpTexSize(RFLiPartsShpTex part, u16 file) {
-    static const u32 scParts2Arc[] = {RFLiArcID_FaceTex, RFLiArcID_CapTex,
-                                      RFLiArcID_NlineTex, RFLiArcID_GlassTex};
+u32 Mii_GetShpTexSize(Mii_PartsShpTex part, u16 file) {
+    static const u32 scParts2Arc[] = {Mii_ArcID_FaceTex, Mii_ArcID_CapTex,
+                                      Mii_ArcID_NlineTex, Mii_ArcID_GlassTex};
     return getLength_(scParts2Arc[part], file);
 }
 
-RFLiTexture* RFLiLoadShpTexture(RFLiPartsShpTex part, u16 file, void* dst) {
-    static const u32 scParts2Arc[] = {RFLiArcID_FaceTex, RFLiArcID_CapTex,
-                                      RFLiArcID_NlineTex, RFLiArcID_GlassTex};
-    // RFLiInitTexRes copies the image into the model and hands that copy over; this buffer is freed.
-    return (RFLiTexture*)getFile_(dst, scParts2Arc[part], file);
+Mii_Texture* Mii_LoadShpTexture(Mii_PartsShpTex part, u16 file, void* dst) {
+    static const u32 scParts2Arc[] = {Mii_ArcID_FaceTex, Mii_ArcID_CapTex,
+                                      Mii_ArcID_NlineTex, Mii_ArcID_GlassTex};
+    // Mii_InitTexRes copies the image into the model and hands that copy over; this buffer is freed.
+    return (Mii_Texture*)getFile_(dst, scParts2Arc[part], file);
 }
 
-u32 RFLiGetShapeSize(RFLiPartsShp part, u16 file) {
+u32 Mii_GetShapeSize(Mii_PartsShp part, u16 file) {
     static const u32 scParts2Arc[] = {
-        RFLiArcID_Nose,  RFLiArcID_ForeHead, RFLiArcID_Faceline,
-        RFLiArcID_Hair,  RFLiArcID_Cap,      RFLiArcID_Beard,
-        RFLiArcID_Nline, RFLiArcID_Mask,     RFLiArcID_Glass};
+        Mii_ArcID_Nose,  Mii_ArcID_ForeHead, Mii_ArcID_Faceline,
+        Mii_ArcID_Hair,  Mii_ArcID_Cap,      Mii_ArcID_Beard,
+        Mii_ArcID_Nline, Mii_ArcID_Mask,     Mii_ArcID_Glass};
     return getLength_(scParts2Arc[part], file);
 }
 
-void* RFLiLoadShape(RFLiPartsShp part, u16 file, void* dst) {
+void* Mii_LoadShape(Mii_PartsShp part, u16 file, void* dst) {
     static const u32 scParts2Arc[] = {
-        RFLiArcID_Nose,  RFLiArcID_ForeHead, RFLiArcID_Faceline,
-        RFLiArcID_Hair,  RFLiArcID_Cap,      RFLiArcID_Beard,
-        RFLiArcID_Nline, RFLiArcID_Mask,     RFLiArcID_Glass};
+        Mii_ArcID_Nose,  Mii_ArcID_ForeHead, Mii_ArcID_Faceline,
+        Mii_ArcID_Hair,  Mii_ArcID_Cap,      Mii_ArcID_Beard,
+        Mii_ArcID_Nline, Mii_ArcID_Mask,     Mii_ArcID_Glass};
     return getFile_(dst, scParts2Arc[part], file);
 }
 

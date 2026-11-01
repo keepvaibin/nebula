@@ -1,61 +1,61 @@
 #include "RVLFaceLibInternal.h"
 #include <revolution/types.h>
 
-const RFLiCoordinateData scCoordinate = {1, 2, 0, FALSE, FALSE, FALSE};
+const Mii_CoordinateData scCoordinate = {1, 2, 0, FALSE, FALSE, FALSE};
 
-// The library while it runs: the parts archive and the draw callbacks (its blocks are host allocations, RFLiAlloc32).
-static RFLiManager sManager;
-static RFLiManager* sRFLManager = NULL;
+// The library while it runs: the parts archive and the draw callbacks (its blocks are host allocations, Mii_Alloc32).
+static Mii_Manager sManager;
+static Mii_Manager* sRFLManager = NULL;
 
 // Starts the library with the parts archive `resBuffer` (the game's MiiFaceDatabase.arc copy, converted to host order
 // here once). The Miis are the host's (mii_record); nothing loads later, so the library is ready when this returns:
-// RFLErrcode_Success, or RFLErrcode_Fatal for an archive it cannot read.
-RFLErrcode RFLInitRes(void* resBuffer, u32 resSize, BOOL useDeluxTex) {
-    if (resBuffer == NULL || !RFLiCookResource(resBuffer, resSize)) {
-        return RFLErrcode_Fatal;
+// MiiErrcode_Success, or MiiErrcode_Fatal for an archive it cannot read.
+MiiErrcode MiiInitRes(void* resBuffer, u32 resSize, BOOL useDeluxTex) {
+    if (resBuffer == NULL || !Mii_CookResource(resBuffer, resSize)) {
+        return MiiErrcode_Fatal;
     }
     if (sRFLManager != NULL) {
-        return RFLErrcode_Success;
+        return MiiErrcode_Success;
     }
 
     memset(&sManager, 0, sizeof(sManager));
     sRFLManager = &sManager;
     sRFLManager->deluxeTex = useDeluxTex;
 
-    RFLiInitLoader();
-    RFLiSetCoordinateData(&scCoordinate);
+    Mii_InitLoader();
+    Mii_SetCoordinateData(&scCoordinate);
 
-    RFLiLoader* loader = &sRFLManager->loader;
+    Mii_Loader* loader = &sRFLManager->loader;
     loader->cacheSize = resSize;
     loader->cache = resBuffer;
-    RFLiLoadResourceHeader();
-    return RFLErrcode_Success;
+    Mii_LoadResourceHeader();
+    return MiiErrcode_Success;
 }
 
-void RFLExit(void) {
+void MiiExit(void) {
     sRFLManager = NULL;
 }
 
-BOOL RFLAvailable(void) {
+BOOL MiiAvailable(void) {
     return sRFLManager != NULL;
 }
 
-void* RFLiAlloc32(u32 size) {
+void* Mii_Alloc32(u32 size) {
     return NebulaMiiAlloc(size);
 }
 
-void RFLiFree(void* block) {
+void Mii_Free(void* block) {
     NebulaMiiFree(block);
 }
 
-RFLiLoader* RFLiGetLoader(void) {
-    return !RFLAvailable() ? NULL : &RFLiGetManager()->loader;
+Mii_Loader* Mii_GetLoader(void) {
+    return !MiiAvailable() ? NULL : &Mii_GetManager()->loader;
 }
 
-RFLiManager* RFLiGetManager(void) {
+Mii_Manager* Mii_GetManager(void) {
     return sRFLManager;
 }
 
-BOOL RFLiGetUseDeluxTex(void) {
-    return !RFLAvailable() ? FALSE : RFLiGetManager()->deluxeTex;
+BOOL Mii_GetUseDeluxTex(void) {
+    return !MiiAvailable() ? FALSE : Mii_GetManager()->deluxeTex;
 }

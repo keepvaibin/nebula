@@ -4,8 +4,8 @@
 #include <RVLFaceLib.h>
 
 struct MiiDatabaseStoreData {
-    /* 0x00 */ RFLStoreData* mData;
-    /* 0x04 */ MR::AssignableArray< RFLStoreData* > mEntries;
+    /* 0x00 */ MiiStoreData* mData;
+    /* 0x04 */ MR::AssignableArray< MiiStoreData* > mEntries;
 };
 
 void MiiDatabase_FORCE_MATCH(JKRFileFinder* pFinder) {
@@ -18,4 +18,4 @@ MiiDatabase::~MiiDatabase() {
     delete mStoreData;
 }
 
-template MR::AssignableArray< RFLStoreData* >::~AssignableArray();
+template MR::AssignableArray< MiiStoreData* >::~AssignableArray();

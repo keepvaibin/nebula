@@ -9,7 +9,7 @@
 
 MiiFaceIcon::MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName)
     : NameObj(pName), mIndex(), mIsFavoriteColorBG(), mWidth(width), mHeight(height), mRecipe(new MiiFaceRecipe(rRecipe)), mImageBuffer(),
-      mIsCreated(), mMakeIconResult(RFLErrcode_Unknown), mIsRequestMakeIcon() {
+      mIsCreated(), mMakeIconResult(MiiErrcode_Unknown), mIsRequestMakeIcon() {
     createImageBuffer();
     MR::registerMiiFaceIcon(this);
 }
@@ -53,7 +53,7 @@ void MiiFaceIcon::setIndex(u16 index) {
     mIndex = index;
     mRecipe->mIndex = index;
     mIsCreated = false;
-    mMakeIconResult = RFLErrcode_Unknown;
+    mMakeIconResult = MiiErrcode_Unknown;
 }
 
 void MiiFaceIcon::createImageBuffer() {

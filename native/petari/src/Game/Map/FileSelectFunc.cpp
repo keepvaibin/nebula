@@ -14,7 +14,7 @@ namespace {
 
 namespace FileSelectFunc {
     u32 getMiiNameBufferSize() {
-        return RFL_NAME_LEN + 1;
+        return MII_NAME_LEN + 1;
     }
 
     void copyMiiName(u16* pName, const FileSelectIconID& rIcon) {
@@ -24,10 +24,10 @@ namespace FileSelectFunc {
 
             MR::copyMemory(pName, pMessage, getMiiNameBufferSize() * sizeof(wchar_t));
         } else if (rIcon.isMii()) {
-            RFLAdditionalInfo info;
-            RFLErrcode err = RFLGetAdditionalInfo(&info, RFLDataSource_Official, nullptr, rIcon.getMiiIndex());
+            MiiAdditionalInfo info;
+            MiiErrcode err = MiiGetAdditionalInfo(&info, MiiDataSource_Official, nullptr, rIcon.getMiiIndex());
 
-            if (err == RFLErrcode_Success) {
+            if (err == MiiErrcode_Success) {
                 MR::copyMemory(pName, info.name, getMiiNameBufferSize() * sizeof(wchar_t));
             }
         }

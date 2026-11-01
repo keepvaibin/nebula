@@ -10,20 +10,20 @@ extern "C" {
 #endif
 
 typedef enum {
-	RFLIconBG_Favorite = 0,
-	RFLIconBG_Direct
-} RFLIconBGType;
+	MiiIconBG_Favorite = 0,
+	MiiIconBG_Direct
+} MiiIconBGType;
 
 typedef struct {
 	u16				width;
 	u16				height;
-	RFLIconBGType	bgType;
+	MiiIconBGType	bgType;
 	GXColor			bgColor;
 	BOOL			drawXluOnly;
-} RFLIconSetting;
+} MiiIconSetting;
 
-RFLErrcode RFLMakeIcon(void *buf, RFLDataSource source, RFLMiddleDB *middleDB, u16 index, RFLExpression expression, const RFLIconSetting *setting);
-void RFLiMakeIcon(void *buf, RFLiCharInfo* info, RFLExpression expression, const RFLIconSetting *setting);
+MiiErrcode MiiMakeIcon(void *buf, MiiDataSource source, MiiMiddleDB *middleDB, u16 index, MiiExpression expression, const MiiIconSetting *setting);
+void Mii_MakeIcon(void *buf, Mii_CharInfo* info, MiiExpression expression, const MiiIconSetting *setting);
 
 #ifdef __cplusplus
 }

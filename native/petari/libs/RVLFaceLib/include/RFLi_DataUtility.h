@@ -7,14 +7,14 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct RFLMiddleDB;
+typedef struct MiiMiddleDB;
 
-BOOL RFLiCheckValidInfo(const RFLiCharInfo* info);
-BOOL RFLiIsValidOnNAND(const RFLiCharInfo* info);
-BOOL RFLiIsSameFaceCore(const RFLiCharInfo* lhs, const RFLiCharInfo* rhs);
-RFLErrcode RFLiPickupCharInfo(RFLiCharInfo* info, RFLDataSource source,
-                              struct RFLMiddleDB* db, u16 index);
-BOOL RFLiCheckBirthday(u8 month, u8 day);
+BOOL Mii_CheckValidInfo(const Mii_CharInfo* info);
+BOOL Mii_IsValidOnNAND(const Mii_CharInfo* info);
+BOOL Mii_IsSameFaceCore(const Mii_CharInfo* lhs, const Mii_CharInfo* rhs);
+MiiErrcode Mii_PickupCharInfo(Mii_CharInfo* info, MiiDataSource source,
+                              struct MiiMiddleDB* db, u16 index);
+BOOL Mii_CheckBirthday(u8 month, u8 day);
 
 #ifdef __cplusplus
 }

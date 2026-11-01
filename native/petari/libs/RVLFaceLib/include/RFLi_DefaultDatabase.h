@@ -6,7 +6,7 @@
 extern "C" {
 #endif
 
-void RFLiGetDefaultData(RFLiCharInfo* info, u16 index);
+void Mii_GetDefaultData(Mii_CharInfo* info, u16 index);
 
 #ifdef __cplusplus
 }

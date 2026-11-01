@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdio>
 
-_Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel holds an RFLiCharModel");
+_Static_assert(sizeof(MiiCharModel) >= sizeof(Mii_CharModel), "MiiCharModel holds an Mii_CharModel");
 
 #define NUM_VTX_POS(size) ((size) / VTX_POS_SIZE)
 #define SIZE_VTX_POS(count) ((count) * VTX_POS_SIZE)
@@ -18,12 +18,12 @@ _Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel hold
 #define NUM_VTX_TXC(size) ((size) / VTX_TXC_SIZE)
 #define SIZE_VTX_TXC(count) ((count) * VTX_TXC_SIZE)
 
-RFLiCoordinateData coordinateData = {1, 2, 0, FALSE, FALSE, FALSE};
+Mii_CoordinateData coordinateData = {1, 2, 0, FALSE, FALSE, FALSE};
 
-const RFLDrawCoreSetting cDefaultDrawCoreSetting = {0, FALSE};
+const MiiDrawCoreSetting cDefaultDrawCoreSetting = {0, FALSE};
 
 
-static const GXColor cFacelineColor[RFLi_MAX_FACELINE_COLOR + 1] = {
+static const GXColor cFacelineColor[MII_I_MAX_FACELINE_COLOR + 1] = {
     // clang-format off
     {240, 216, 196, 255}, 
     {255, 188, 128, 255}, 
@@ -34,7 +34,7 @@ static const GXColor cFacelineColor[RFLi_MAX_FACELINE_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cHairColor[RFLi_MAX_HAIR_COLOR + 1] = {
+static const GXColor cHairColor[MII_I_MAX_HAIR_COLOR + 1] = {
     // clang-format off
     {30,  26,  24,  255},    
     {56,  32,  21,  255},    
@@ -47,7 +47,7 @@ static const GXColor cHairColor[RFLi_MAX_HAIR_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cBeardColor[RFLi_MAX_BEARD_COLOR + 1] = {
+static const GXColor cBeardColor[MII_I_MAX_BEARD_COLOR + 1] = {
     // clang-format off
     {30,  26,  24,  255},    
     {56,  32,  21,  255},    
@@ -60,7 +60,7 @@ static const GXColor cBeardColor[RFLi_MAX_BEARD_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cGlassColor[RFLi_MAX_GLASS_COLOR + 1] = {
+static const GXColor cGlassColor[MII_I_MAX_GLASS_COLOR + 1] = {
     // clang-format off
     {16,  16, 16, 255},  
     {96,  56, 16, 255},  
@@ -71,30 +71,30 @@ static const GXColor cGlassColor[RFLi_MAX_GLASS_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cFavoriteColor[RFLFavoriteColor_Max] = {
+static const GXColor cFavoriteColor[MiiFavoriteColor_Max] = {
     // clang-format off
-    {184, 64,  48,  255}, //!< RFLFavoriteColor_Red
-    {240, 120, 40,  255}, //!< RFLFavoriteColor_Orange
-    {248, 216, 32,  255}, //!< RFLFavoriteColor_Yellow
-    {128, 200, 40,  255}, //!< RFLFavoriteColor_YellowGreen
-    {0,   116, 40,  255}, //!< RFLFavoriteColor_Green
-    {32,  72,  152, 255}, //!< RFLFavoriteColor_Blue
-    {64,  160, 216, 255}, //!< RFLFavoriteColor_SkyBlue
-    {232, 96,  120, 255}, //!< RFLFavoriteColor_Pink
-    {112, 44,  168, 255}, //!< RFLFavoriteColor_Purple
-    {72,  56,  24,  255}, //!< RFLFavoriteColor_Brown
-    {224, 224, 224, 255}, //!< RFLFavoriteColor_White
-    {24,  24,  20,  255}, //!< RFLFavoriteColor_Black
+    {184, 64,  48,  255}, //!< MiiFavoriteColor_Red
+    {240, 120, 40,  255}, //!< MiiFavoriteColor_Orange
+    {248, 216, 32,  255}, //!< MiiFavoriteColor_Yellow
+    {128, 200, 40,  255}, //!< MiiFavoriteColor_YellowGreen
+    {0,   116, 40,  255}, //!< MiiFavoriteColor_Green
+    {32,  72,  152, 255}, //!< MiiFavoriteColor_Blue
+    {64,  160, 216, 255}, //!< MiiFavoriteColor_SkyBlue
+    {232, 96,  120, 255}, //!< MiiFavoriteColor_Pink
+    {112, 44,  168, 255}, //!< MiiFavoriteColor_Purple
+    {72,  56,  24,  255}, //!< MiiFavoriteColor_Brown
+    {224, 224, 224, 255}, //!< MiiFavoriteColor_White
+    {24,  24,  20,  255}, //!< MiiFavoriteColor_Black
     // clang-format on
 };
 
 static const GXColor cWhite = {255, 255, 255, 255};
 
-static u32 RFLiGetExpressionNum(u32 exprFlags) {
+static u32 Mii_GetExpressionNum(u32 exprFlags) {
     int i;
     u32 num = 0;
 
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             num++;
         }
@@ -103,28 +103,28 @@ static u32 RFLiGetExpressionNum(u32 exprFlags) {
     return num;
 }
 
-u32 RFLGetModelBufferSize(RFLResolution res, u32 exprFlags) {
-    const u32 exprNum = RFLiGetExpressionNum(exprFlags);
-    const s32 texSize = RFLiGetMaskBufSize(res);
+u32 MiiGetModelBufferSize(MiiResolution res, u32 exprFlags) {
+    const u32 exprNum = Mii_GetExpressionNum(exprFlags);
+    const s32 texSize = Mii_GetMaskBufSize(res);
 
-    return ROUND_UP(exprNum * sizeof(GXTexObj), 32) + ROUND_UP(sizeof(RFLiCharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
+    return ROUND_UP(exprNum * sizeof(GXTexObj), 32) + ROUND_UP(sizeof(Mii_CharModelRes), 32) + ROUND_UP(texSize * exprNum, 32);
 }
 
-RFLErrcode RFLInitCharModel(RFLCharModel* model, RFLDataSource src, RFLMiddleDB* db, u16 id, void* work, RFLResolution res, u32 exprFlags) {
-    RFLiCharInfo info;
+MiiErrcode MiiInitCharModel(MiiCharModel* model, MiiDataSource src, MiiMiddleDB* db, u16 id, void* work, MiiResolution res, u32 exprFlags) {
+    Mii_CharInfo info;
 
-    RFLErrcode err = RFLiPickupCharInfo(&info, src, db, id);
-    if (err == RFLErrcode_Success) {
-        RFLiInitCharModel(model, &info, work, res, exprFlags);
+    MiiErrcode err = Mii_PickupCharInfo(&info, src, db, id);
+    if (err == MiiErrcode_Success) {
+        Mii_InitCharModel(model, &info, work, res, exprFlags);
     }
 
     return err;
 }
 
-void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLResolution res, u32 exprFlags) {
-    RFLiCharModel* imodel;
+void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiResolution res, u32 exprFlags) {
+    Mii_CharModel* imodel;
     u32 maskSize;
-    u8* maskImages[RFLExp_Max];
+    u8* maskImages[MiiExp_Max];
     u32 maskRes;
     GXTexObj* exprTexObj;
     u8* image;
@@ -133,16 +133,16 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
     u8 mipmap;
     int i;
 
-    imodel = (RFLiCharModel*)model;
+    imodel = (Mii_CharModel*)model;
 
     imodel->resolution = res;
-    maskSize = RFLiGetMaskBufSize(res);
-    maskRes = RFLiGetMaxMaskRsl(res);
+    maskSize = Mii_GetMaskBufSize(res);
+    maskRes = Mii_GetMaxMaskRsl(res);
     imodel->res = work;
 
     // Expression texobjs
-    exprTexObj = (GXTexObj*)ROUND_UP_PTR((u8*)work + sizeof(RFLiCharModelRes), 32);
-    for (i = 0; i < RFLExp_Max; i++) {
+    exprTexObj = (GXTexObj*)ROUND_UP_PTR((u8*)work + sizeof(Mii_CharModelRes), 32);
+    for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             imodel->maskTexObj[i] = exprTexObj;
             exprTexObj++;
@@ -153,7 +153,7 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
 
     // Expression images
     image = (u8*)ROUND_UP_PTR(exprTexObj, 32);
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (exprFlags & (1 << i)) {
             maskImages[i] = image;
             image = (u8*)image + maskSize;
@@ -162,28 +162,28 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
         }
     }
 
-    RFLiInitCharModelRes(imodel->res, info);
+    Mii_InitCharModelRes(imodel->res, info);
 
     setExpr = FALSE;
     mipmap = FALSE;
     maxLod = 0.0f;
 
     switch (res) {
-    case RFLResolution_64M:
+    case MiiResolution_64M:
         maxLod = 1.0f;
         mipmap = TRUE;
         break;
-    case RFLResolution_128M:
+    case MiiResolution_128M:
         maxLod = 2.0f;
         mipmap = TRUE;
         break;
-    case RFLResolution_256M:
+    case MiiResolution_256M:
         maxLod = 3.0f;
         mipmap = TRUE;
         break;
     }
 
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (imodel->maskTexObj[i] != NULL) {
             J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GX_TF_RGB5A3, GX_CLAMP, GX_CLAMP, mipmap);
 
@@ -194,31 +194,31 @@ void RFLiInitCharModel(RFLCharModel* model, RFLiCharInfo* info, void* work, RFLR
             }
 
             if (!setExpr) {
-                imodel->expression = (RFLExpression)i;
+                imodel->expression = (MiiExpression)i;
                 setExpr = TRUE;
             }
         }
     }
 
-    RFLiMakeTexture(info, maskImages, res);
+    Mii_MakeTexture(info, maskImages, res);
 }
 
-void RFLSetMtx(RFLCharModel* model, const Mtx mvMtx) {
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
+void MiiSetMtx(MiiCharModel* model, const Mtx mvMtx) {
+    Mii_CharModel* imodel = (Mii_CharModel*)model;
     NebulaMtxCopy(mvMtx, imodel->posMtx);
     NebulaMtxInvXpose(mvMtx, imodel->nrmMtx);
 }
 
-void RFLSetExpression(RFLCharModel* model, RFLExpression expr) {
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
+void MiiSetExpression(MiiCharModel* model, MiiExpression expr) {
+    Mii_CharModel* imodel = (Mii_CharModel*)model;
     imodel->expression = expr;
 }
 
-GXColor RFLGetFavoriteColor(RFLFavoriteColor color) {
+GXColor MiiGetFavoriteColor(MiiFavoriteColor color) {
     return cFavoriteColor[color];
 }
 
-GXColor RFLiGetFacelineColor(const RFLiCharInfo* info) {
+GXColor Mii_GetFacelineColor(const Mii_CharInfo* info) {
     int color = 0;
 
     if (info->faceline.color < 6) {
@@ -228,7 +228,7 @@ GXColor RFLiGetFacelineColor(const RFLiCharInfo* info) {
     return cFacelineColor[color];
 }
 
-void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
+void MiiLoadDrawSetting(const MiiDrawSetting* setting) {
     J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
@@ -238,24 +238,24 @@ void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
     J3DNativeStateSetDstAlpha(FALSE, 0);
 
     if (setting->lightEnable) {
-        RFLiNativeChain(RFLi_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
+        Mii_NativeChain(MII_I_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
                         cWhite, 0);
     } else {
-        RFLiNativeChain(RFLi_NATIVE_CHAIN_NONE, 0, GX_DF_NONE, GX_AF_NONE, cWhite, cWhite, 0);
+        Mii_NativeChain(MII_I_NATIVE_CHAIN_NONE, 0, GX_DF_NONE, GX_AF_NONE, cWhite, cWhite, 0);
     }
 }
 
-void RFLDrawOpa(const RFLCharModel* model) {
-    RFLDrawOpaCore(model, &cDefaultDrawCoreSetting);
+void MiiDrawOpa(const MiiCharModel* model) {
+    MiiDrawOpaCore(model, &cDefaultDrawCoreSetting);
 }
 
-void RFLDrawXlu(const RFLCharModel* model) {
-    RFLDrawXluCore(model, &cDefaultDrawCoreSetting);
+void MiiDrawXlu(const MiiCharModel* model) {
+    MiiDrawXluCore(model, &cDefaultDrawCoreSetting);
 }
 
-// A shape's primitives (RFLiInitShapeRes's stream) with its 16-bit fixed-point arrays: positions with 8 fraction bits,
+// A shape's primitives (Mii_InitShapeRes's stream) with its 16-bit fixed-point arrays: positions with 8 fraction bits,
 // normals with 14, texture coordinates with 13.
-static void RFLiDrawShape(const s16* pos, const s16* nrm, const s16* txc, const void* dl, u32 size) {
+static void Mii_DrawShape(const s16* pos, const s16* nrm, const s16* txc, const void* dl, u32 size) {
     const u8* p = (const u8*)dl;
     const u8* end = p + size;
 
@@ -283,9 +283,9 @@ static void RFLiDrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
     }
 }
 
-void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
-    RFLiCharModelRes* res = imodel->res;
+void MiiDrawOpaCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
+    Mii_CharModel* imodel = (Mii_CharModel*)model;
+    Mii_CharModelRes* res = imodel->res;
     const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
     const GXCullMode back = setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT;
 
@@ -294,39 +294,39 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
 
     if (res->beardDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
-        RFLiDrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
+        Mii_DrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
     }
 
     if (res->noseDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], front, NULL);
-        RFLiDrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], front, NULL);
+        Mii_DrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
     }
 
     // A flipped hairstyle draws its forehead and hair with the other side culled.
     const GXCullMode hairCull = res->flipHair ? back : front;
     if (res->foreheadDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], hairCull, NULL);
-        RFLiDrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], hairCull, NULL);
+        Mii_DrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
     }
 
     if (res->hairDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cHairColor[res->hairColor], hairCull, NULL);
-        RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_COLOR, cHairColor[res->hairColor], hairCull, NULL);
+        Mii_DrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
     }
 
     if (res->capDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_CAP, cFavoriteColor[res->favoriteColor], hairCull, &res->capTexObj);
-        RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_CAP, cFavoriteColor[res->favoriteColor], hairCull, &res->capTexObj);
+        Mii_DrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
     }
 
-    RFLiNativePart(RFLi_NATIVE_FORM_FACE, cFacelineColor[res->facelineColor], front, &res->faceTexObj);
-    RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
+    Mii_NativePart(MII_I_NATIVE_FORM_FACE, cFacelineColor[res->facelineColor], front, &res->faceTexObj);
+    Mii_DrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
 }
 
-void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
-    RFLiCharModel* imodel = (RFLiCharModel*)model;
-    RFLiCharModelRes* res = imodel->res;
+void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting) {
+    Mii_CharModel* imodel = (Mii_CharModel*)model;
+    Mii_CharModelRes* res = imodel->res;
     const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
     static const GXColor cBlack = {0, 0, 0, 255};
 
@@ -334,21 +334,21 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
 
-    RFLiNativePart(RFLi_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
-    RFLiDrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
+    Mii_NativePart(MII_I_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
+    Mii_DrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
 
     if (res->noselineDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_NOSELINE, cBlack, front, &res->noseTexObj);
-        RFLiDrawShape(res->noselineVtxPos, res->noselineVtxNrm, res->noselineVtxTxc, res->noselineDl, res->noselineDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_NOSELINE, cBlack, front, &res->noseTexObj);
+        Mii_DrawShape(res->noselineVtxPos, res->noselineVtxNrm, res->noselineVtxTxc, res->noselineDl, res->noselineDlSize);
     }
 
     if (res->glassesDlSize > 0) {
-        RFLiNativePart(RFLi_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GX_CULL_NONE, &res->glassesTexObj);
-        RFLiDrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
+        Mii_NativePart(MII_I_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GX_CULL_NONE, &res->glassesTexObj);
+        Mii_DrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
 
-void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
+void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info) {
     Vec noseTrans;
     Vec beardTrans;
     Vec hairTrans;
@@ -357,8 +357,8 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Faceline shape
      */
     {
-        RFLiShapeRes arg;
-        arg.part = RFLiPartsShp_Faceline;
+        Mii_ShapeRes arg;
+        arg.part = Mii_PartsShp_Faceline;
         arg.file = info->faceline.type;
         arg.vtxPosBuf = res->faceVtxPos;
         arg.vtxNrmBuf = res->faceVtxNrm;
@@ -373,7 +373,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.hairTrans = &hairTrans;
         arg.flipX = FALSE;
         arg.transform = FALSE;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->faceDlSize = arg.dlSize;
     }
@@ -382,8 +382,8 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Cap shape
      */
     {
-        RFLiShapeRes arg;
-        arg.part = RFLiPartsShp_Cap;
+        Mii_ShapeRes arg;
+        arg.part = Mii_PartsShp_Cap;
         arg.file = info->hair.type;
         arg.vtxPosBuf = res->capVtxPos;
         arg.vtxNrmBuf = res->capVtxNrm;
@@ -397,24 +397,24 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.transform = TRUE;
         arg.posScale = 1.0f;
         arg.posTrans = &hairTrans;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->capDlSize = arg.dlSize;
 
         res->hairVtxPos = (s16*)((u8*)res->capVtxPos + (arg.numVtxPos * 4 - arg.numVtxPos) * 2);
         res->hairVtxNrm = (s16*)((u8*)res->capVtxNrm + (arg.numVtxNrm * 4 - arg.numVtxNrm) * 2);
 
-        res->hairDl = res->noseDl + ROUND_UP(arg.dlSize, 32) + offsetof(RFLiCharModelRes, capDl);
+        res->hairDl = res->noseDl + ROUND_UP(arg.dlSize, 32) + offsetof(Mii_CharModelRes, capDl);
     }
 
     /**
      * Hair shape
      */
     {
-        RFLiShapeRes arg;
+        Mii_ShapeRes arg;
         int temp = 4;
 
-        arg.part = RFLiPartsShp_Hair;
+        arg.part = Mii_PartsShp_Hair;
         arg.file = info->hair.type;
         arg.vtxPosBuf = res->hairVtxPos;
         arg.vtxNrmBuf = res->hairVtxNrm;
@@ -432,7 +432,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.transform = TRUE;
         arg.posScale = 1.0f;
         arg.posTrans = &hairTrans;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->hairDlSize = arg.dlSize;
 
@@ -449,8 +449,8 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Forehead shape
      */
     {
-        RFLiShapeRes arg;
-        arg.part = RFLiPartsShp_Forehead;
+        Mii_ShapeRes arg;
+        arg.part = Mii_PartsShp_Forehead;
         arg.file = info->hair.type;
         arg.vtxPosBuf = res->foreheadVtxPos;
         arg.vtxNrmBuf = res->foreheadVtxNrm;
@@ -468,7 +468,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.transform = TRUE;
         arg.posScale = 1.0f;
         arg.posTrans = &hairTrans;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->foreheadDlSize = arg.dlSize;
     }
@@ -477,8 +477,8 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Beard shape
      */
     {
-        RFLiShapeRes arg;
-        arg.part = RFLiPartsShp_Beard;
+        Mii_ShapeRes arg;
+        arg.part = Mii_PartsShp_Beard;
         arg.file = info->beard.type;
         arg.vtxPosBuf = res->beardVtxPos;
         arg.vtxNrmBuf = res->beardVtxNrm;
@@ -490,7 +490,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.transform = TRUE;
         arg.posScale = 1.0f;
         arg.posTrans = &beardTrans;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->beardDlSize = arg.dlSize;
     }
@@ -503,7 +503,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
          * Nose shape
          */
         {
-            RFLiShapeRes arg;
+            Mii_ShapeRes arg;
 
             scale = 0.4f + 0.175f * info->nose.scale;
 
@@ -511,7 +511,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
             trans.y = +noseTrans.y + -1.5f * (info->nose.y - 8);
             trans.z = noseTrans.z;
 
-            arg.part = RFLiPartsShp_Nose;
+            arg.part = Mii_PartsShp_Nose;
             arg.file = info->nose.type;
             arg.vtxPosBuf = res->noseVtxPos;
             arg.vtxNrmBuf = res->noseVtxNrm;
@@ -523,7 +523,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
             arg.transform = TRUE;
             arg.posScale = scale;
             arg.posTrans = &trans;
-            RFLiInitShapeRes(&arg);
+            Mii_InitShapeRes(&arg);
 
             res->noseDlSize = arg.dlSize;
         }
@@ -532,9 +532,9 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
          * Noseline shape
          */
         {
-            RFLiShapeRes arg;
+            Mii_ShapeRes arg;
 
-            arg.part = RFLiPartsShp_Noseline;
+            arg.part = Mii_PartsShp_Noseline;
             arg.file = info->nose.type;
             arg.vtxPosBuf = res->noselineVtxPos;
             arg.vtxNrmBuf = res->noselineVtxNrm;
@@ -548,7 +548,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
             arg.transform = TRUE;
             arg.posScale = scale;
             arg.posTrans = &trans;
-            RFLiInitShapeRes(&arg);
+            Mii_InitShapeRes(&arg);
 
             res->noselineDlSize = arg.dlSize;
         }
@@ -558,8 +558,8 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Mask shape
      */
     {
-        RFLiShapeRes arg;
-        arg.part = RFLiPartsShp_Mask;
+        Mii_ShapeRes arg;
+        arg.part = Mii_PartsShp_Mask;
         arg.file = info->faceline.type;
         arg.vtxPosBuf = res->maskVtxPos;
         arg.vtxNrmBuf = res->maskVtxNrm;
@@ -571,7 +571,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.dlBufSize = sizeof(res->maskDl);
         arg.flipX = FALSE;
         arg.transform = FALSE;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->maskDlSize = arg.dlSize;
     }
@@ -580,7 +580,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
      * Glasses shape
      */
     {
-        RFLiShapeRes arg;
+        Mii_ShapeRes arg;
         f32 scale;
         Vec trans;
 
@@ -590,7 +590,7 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         trans.y = 5.0f + noseTrans.y + -1.5f * (info->glass.y - 11);
         trans.z = 2.0f + noseTrans.z;
 
-        arg.part = RFLiPartsShp_Glass;
+        arg.part = Mii_PartsShp_Glass;
         arg.file = 0;
         arg.vtxPosBuf = res->glassesVtxPos;
         arg.vtxNrmBuf = res->glassesVtxNrm;
@@ -604,22 +604,22 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
         arg.transform = TRUE;
         arg.posScale = scale;
         arg.posTrans = &trans;
-        RFLiInitShapeRes(&arg);
+        Mii_InitShapeRes(&arg);
 
         res->glassesDlSize = arg.dlSize;
     }
 
-    RFLiInitTexRes(&res->faceTexObj, RFLiPartsShpTex_Face, info->faceline.texture, res->faceTex);
+    Mii_InitTexRes(&res->faceTexObj, Mii_PartsShpTex_Face, info->faceline.texture, res->faceTex);
 
     if (res->capDlSize > 0) {
-        RFLiInitTexRes(&res->capTexObj, RFLiPartsShpTex_Cap, info->hair.type, res->capTex);
+        Mii_InitTexRes(&res->capTexObj, Mii_PartsShpTex_Cap, info->hair.type, res->capTex);
     }
 
     if (res->noselineDlSize > 0) {
-        RFLiInitTexRes(&res->noseTexObj, RFLiPartsShpTex_Noseline, info->nose.type, res->noseTex);
+        Mii_InitTexRes(&res->noseTexObj, Mii_PartsShpTex_Noseline, info->nose.type, res->noseTex);
     }
 
-    RFLiInitTexRes(&res->glassesTexObj, RFLiPartsShpTex_Glass, info->glass.type, res->glassesTex);
+    Mii_InitTexRes(&res->glassesTexObj, Mii_PartsShpTex_Glass, info->glass.type, res->glassesTex);
 
     res->facelineColor = info->faceline.color;
     res->hairColor = info->hair.color;
@@ -629,25 +629,25 @@ void RFLiInitCharModelRes(RFLiCharModelRes* res, const RFLiCharInfo* info) {
 
 }
 
-void RFLiInitShapeRes(RFLiShapeRes* shape) {
-    static const u32 csHeader[RFLiPartsShp_Max] = {'nose', 'frhd', 'face', 'hair', 'cap_', 'berd', 'nsln', 'mask', 'glas'};
+void Mii_InitShapeRes(Mii_ShapeRes* shape) {
+    static const u32 csHeader[Mii_PartsShp_Max] = {'nose', 'frhd', 'face', 'hair', 'cap_', 'berd', 'nsln', 'mask', 'glas'};
 
     void* res;
     u8* ptr8;
 
     // Not all shapes have texture coordinates
-    BOOL skipTxc = shape->part == RFLiPartsShp_Forehead || shape->part == RFLiPartsShp_Hair || shape->part == RFLiPartsShp_Beard ||
-                   shape->part == RFLiPartsShp_Nose;
+    BOOL skipTxc = shape->part == Mii_PartsShp_Forehead || shape->part == Mii_PartsShp_Hair || shape->part == Mii_PartsShp_Beard ||
+                   shape->part == Mii_PartsShp_Nose;
 
-    u32 fileSize = RFLiGetShapeSize(shape->part, shape->file);
-    res = RFLiAlloc32(fileSize);
-    RFLiLoadShape(shape->part, shape->file, res);
+    u32 fileSize = Mii_GetShapeSize(shape->part, shape->file);
+    res = Mii_Alloc32(fileSize);
+    Mii_LoadShape(shape->part, shape->file, res);
 
     ptr8 = (u8*)res;
     ptr8 += sizeof(u32);
 
     // Faceline extra data
-    if (shape->part == RFLiPartsShp_Faceline) {
+    if (shape->part == Mii_PartsShp_Faceline) {
         memcpy(shape->noseTrans, ptr8, sizeof(Vec));
         ptr8 += sizeof(Vec);
         memcpy(shape->beardTrans, ptr8, sizeof(Vec));
@@ -665,7 +665,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         shape->numVtxNrm = 0;
         shape->numVtxTxc = 0;
         shape->dlSize = 0;
-        RFLiFree(res);
+        Mii_Free(res);
         return;
     }
 
@@ -695,7 +695,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
                 temp[1] = ty + ((ptr16[1] * s) >> 8);
                 temp[2] = tz + ((ptr16[2] * s) >> 8);
 
-                RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
+                Mii_TransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
                 ptr16 += VTX_COORDS_IN_POS;
             }
 
@@ -707,12 +707,12 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
                 temp[1] = ptr16[1];
                 temp[2] = ptr16[2];
 
-                RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
+                Mii_TransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], temp);
                 ptr16 += VTX_COORDS_IN_POS;
             }
         } else {
             for (i = 0; i < shape->numVtxPos; i++) {
-                RFLiTransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], ptr16);
+                Mii_TransformCoordinate(&shape->vtxPosBuf[i * VTX_COORDS_IN_POS], ptr16);
                 ptr16 += VTX_COORDS_IN_POS;
             }
         }
@@ -740,13 +740,13 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
                 temp[1] = ptr16[1];
                 temp[2] = ptr16[2];
 
-                RFLiTransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], temp);
+                Mii_TransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], temp);
                 ptr16 += VTX_COORDS_IN_NRM;
             }
         } else {
             int i;
             for (i = 0; i < shape->numVtxNrm; i++) {
-                RFLiTransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], ptr16);
+                Mii_TransformCoordinate(&shape->vtxNrmBuf[i * VTX_COORDS_IN_NRM], ptr16);
                 ptr16 += VTX_COORDS_IN_NRM;
             }
         }
@@ -782,7 +782,7 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         int j;
         s32 primitiveNum = *ptr8++;
 
-        // The shape's primitives as RFLiDrawShape reads them: the primitive (bit 0 set when its vertices have
+        // The shape's primitives as Mii_DrawShape reads them: the primitive (bit 0 set when its vertices have
         // texture coordinates), the vertex count (high byte first), then each vertex's position, normal and texture
         // coordinate indices - the size of GX's display list of them.
         u8* out = (u8*)shape->dlBuf;
@@ -805,43 +805,43 @@ void RFLiInitShapeRes(RFLiShapeRes* shape) {
         }
         shape->dlSize = (u32)(out - (u8*)shape->dlBuf);
     }
-    RFLiFree(res);
+    Mii_Free(res);
 }
 
-void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buffer) {
+void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file, void* buffer) {
     u32 texSize;
-    RFLiTexture* tex;
+    Mii_Texture* tex;
 
-    tex = (RFLiTexture*)RFLiAlloc32(RFLiGetShpTexSize(part, file));
-    RFLiLoadShpTexture(part, file, tex);
+    tex = (Mii_Texture*)Mii_Alloc32(Mii_GetShpTexSize(part, file));
+    Mii_LoadShpTexture(part, file, tex);
 
     switch (part) {
-    case RFLiPartsShpTex_Face:
+    case Mii_PartsShpTex_Face:
         texSize = tex->height * tex->width * 2;
         break;
-    case RFLiPartsShpTex_Cap:
-    case RFLiPartsShpTex_Noseline:
+    case Mii_PartsShpTex_Cap:
+    case Mii_PartsShpTex_Noseline:
         texSize = tex->height * tex->width / 2;
         break;
-    case RFLiPartsShpTex_Glass:
+    case Mii_PartsShpTex_Glass:
         texSize = tex->height * tex->width;
         break;
     }
 
     // A cooked part (a record, nebula_cooked_texture.h) is copied whole.
-    if (nebula_texture_record(RFLiGetTexImage(tex)) != NULL) {
-        texSize = nebula_texture_record(RFLiGetTexImage(tex))->size;
+    if (nebula_texture_record(Mii_GetTexImage(tex)) != NULL) {
+        texSize = nebula_texture_record(Mii_GetTexImage(tex))->size;
     }
-    memcpy(buffer, RFLiGetTexImage(tex), texSize);
+    memcpy(buffer, Mii_GetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
     J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
     J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->format, tex->wrapS, tex->wrapT, FALSE);
     J3DNativeTextureInitLOD(texObj, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GX_ANISO_1);
-    RFLiFree(tex);
+    Mii_Free(tex);
 }
 
-static void RFLiTransformCoordinate(s16* to, const s16* from) {
-    // to is one of the shape's arrays RFLiDrawShape reads (host byte order).
+static void Mii_TransformCoordinate(s16* to, const s16* from) {
+    // to is one of the shape's arrays Mii_DrawShape reads (host byte order).
     to[coordinateData.rOff] = coordinateData.rRev ? -from[0] : from[0];
     to[coordinateData.uOff] = coordinateData.uRev ? -from[1] : from[1];
     to[coordinateData.fOff] = coordinateData.fRev ? -from[2] : from[2];

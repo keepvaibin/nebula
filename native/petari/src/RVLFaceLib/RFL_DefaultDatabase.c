@@ -1,7 +1,7 @@
 #include "RVLFaceLibInternal.h"
 
 // The library's default Miis (its guests), as character info.
-static const RFLiCharInfo scDefaultInfo[] = {
+static const Mii_CharInfo scDefaultInfo[] = {
     // "Guest A"
     {
         .faceline = {{.type = 0, .color = 4, .texture = 0}},
@@ -94,6 +94,6 @@ static const RFLiCharInfo scDefaultInfo[] = {
     },
 };
 
-void RFLiGetDefaultData(RFLiCharInfo* info, u16 index) {
+void Mii_GetDefaultData(Mii_CharInfo* info, u16 index) {
     *info = scDefaultInfo[index];
 }

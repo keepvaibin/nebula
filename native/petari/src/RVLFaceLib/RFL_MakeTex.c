@@ -9,7 +9,7 @@
 #include <cmath>
 
 // The drawing state a Mii texture is drawn with.
-void RFLiSetupTextureDraw(void) {
+void Mii_SetupTextureDraw(void) {
     J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
@@ -19,19 +19,19 @@ void RFLiSetupTextureDraw(void) {
 
 // A Mii texture drawn into `buffer` (E-07): a target pass `width` x `height` cleared to `clearRgba` (R << 24 | G << 16 | B << 8 | A); the texture is
 // the renderer's picture of the pass (J3DNativeTargetEnd), sampled where the game names `buffer`.
-void RFLiBeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
-    RFLiSetupTextureDraw();
+void Mii_BeginTexture(void* buffer, u16 width, u16 height, u32 clearRgba) {
+    Mii_SetupTextureDraw();
     J3DNativeTargetBegin(buffer, width, height, clearRgba, 0xFFFFFF);
 }
 
-void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resolution) {
+void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resolution) {
     int i;
-    RFLiCharInfo infos[RFLExp_Max];
-    RFLiFaceParts parts[RFLExp_Max];
-    u8** eyeBuf[RFLExp_Max];
-    u8** mouthBuf[RFLExp_Max];
-    RFLiTexture** eyeTex[RFLExp_Max];
-    RFLiTexture** mouthTex[RFLExp_Max];
+    Mii_CharInfo infos[MiiExp_Max];
+    Mii_FaceParts parts[MiiExp_Max];
+    u8** eyeBuf[MiiExp_Max];
+    u8** mouthBuf[MiiExp_Max];
+    Mii_Texture** eyeTex[MiiExp_Max];
+    Mii_Texture** mouthTex[MiiExp_Max];
 
     u32 eyeSize;
     u32 eyebrowSize;
@@ -53,33 +53,33 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
     u8* eyeBlink;
     u8* mouthOpen;
 
-    RFLiTexture* eyeNormalTex;
-    RFLiTexture* eyebrowNormalTex;
-    RFLiTexture* mouthNormalTex;
-    RFLiTexture* mustacheNormalTex;
-    RFLiTexture* moleNormalTex;
-    RFLiTexture* eyeSmileTex;
-    RFLiTexture* mouthAngerTex;
-    RFLiTexture* eyeSadTex;
-    RFLiTexture* mouthSadTex;
-    RFLiTexture* eyeSurpriseTex;
-    RFLiTexture* eyeBlinkTex;
-    RFLiTexture* mouthOpenTex;
+    Mii_Texture* eyeNormalTex;
+    Mii_Texture* eyebrowNormalTex;
+    Mii_Texture* mouthNormalTex;
+    Mii_Texture* mustacheNormalTex;
+    Mii_Texture* moleNormalTex;
+    Mii_Texture* eyeSmileTex;
+    Mii_Texture* mouthAngerTex;
+    Mii_Texture* eyeSadTex;
+    Mii_Texture* mouthSadTex;
+    Mii_Texture* eyeSurpriseTex;
+    Mii_Texture* eyeBlinkTex;
+    Mii_Texture* mouthOpenTex;
 
     u32 sx;
     u32 sy;
     u32 sw;
     u32 sh;
 
-    RFLi_MASKRSL max;
+    MII_I_MASKRSL max;
     u32 size;
     u8* ptr;
 
-    eyeSize = RFLiGetTexSize(RFLiPartsTex_Eye, 0);
-    eyebrowSize = RFLiGetTexSize(RFLiPartsTex_Eyebrow, 0);
-    mouthSize = RFLiGetTexSize(RFLiPartsTex_Mouth, 0);
-    mustacheSize = RFLiGetTexSize(RFLiPartsTex_Mustache, 0);
-    moleSize = RFLiGetTexSize(RFLiPartsTex_Mole, 0);
+    eyeSize = Mii_GetTexSize(Mii_PartsTex_Eye, 0);
+    eyebrowSize = Mii_GetTexSize(Mii_PartsTex_Eyebrow, 0);
+    mouthSize = Mii_GetTexSize(Mii_PartsTex_Mouth, 0);
+    mustacheSize = Mii_GetTexSize(Mii_PartsTex_Mustache, 0);
+    moleSize = Mii_GetTexSize(Mii_PartsTex_Mole, 0);
 
     eyeNormal = NULL;
     eyebrowNormal = NULL;
@@ -95,21 +95,21 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
     eyeBlink = NULL;
     mouthOpen = NULL;
 
-    eyeBuf[RFLExp_Normal] = &eyeNormal;
-    eyeBuf[RFLExp_Smile] = &eyeSmile;
-    eyeBuf[RFLExp_Anger] = &eyeNormal;
-    eyeBuf[RFLExp_Sorrow] = &eyeSorrow;
-    eyeBuf[RFLExp_Surprise] = &eyeSurprise;
-    eyeBuf[RFLExp_Blink] = &eyeBlink;
-    eyeBuf[RFLExp_OpenMouth] = &eyeNormal;
+    eyeBuf[MiiExp_Normal] = &eyeNormal;
+    eyeBuf[MiiExp_Smile] = &eyeSmile;
+    eyeBuf[MiiExp_Anger] = &eyeNormal;
+    eyeBuf[MiiExp_Sorrow] = &eyeSorrow;
+    eyeBuf[MiiExp_Surprise] = &eyeSurprise;
+    eyeBuf[MiiExp_Blink] = &eyeBlink;
+    eyeBuf[MiiExp_OpenMouth] = &eyeNormal;
 
-    mouthBuf[RFLExp_Normal] = &mouthNormal;
-    mouthBuf[RFLExp_Smile] = &mouthNormal;
-    mouthBuf[RFLExp_Anger] = &mouthAnger;
-    mouthBuf[RFLExp_Sorrow] = &mouthSorrow;
-    mouthBuf[RFLExp_Surprise] = &mouthNormal;
-    mouthBuf[RFLExp_Blink] = &mouthNormal;
-    mouthBuf[RFLExp_OpenMouth] = &mouthOpen;
+    mouthBuf[MiiExp_Normal] = &mouthNormal;
+    mouthBuf[MiiExp_Smile] = &mouthNormal;
+    mouthBuf[MiiExp_Anger] = &mouthAnger;
+    mouthBuf[MiiExp_Sorrow] = &mouthSorrow;
+    mouthBuf[MiiExp_Surprise] = &mouthNormal;
+    mouthBuf[MiiExp_Blink] = &mouthNormal;
+    mouthBuf[MiiExp_OpenMouth] = &mouthOpen;
 
     eyeNormalTex = NULL;
     eyebrowNormalTex = NULL;
@@ -124,55 +124,55 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
     eyeBlinkTex = NULL;
     mouthOpenTex = NULL;
 
-    eyeTex[RFLExp_Normal] = &eyeNormalTex;
-    eyeTex[RFLExp_Smile] = &eyeSmileTex;
-    eyeTex[RFLExp_Anger] = &eyeNormalTex;
-    eyeTex[RFLExp_Sorrow] = &eyeSadTex;
-    eyeTex[RFLExp_Surprise] = &eyeSurpriseTex;
-    eyeTex[RFLExp_Blink] = &eyeBlinkTex;
-    eyeTex[RFLExp_OpenMouth] = &eyeNormalTex;
+    eyeTex[MiiExp_Normal] = &eyeNormalTex;
+    eyeTex[MiiExp_Smile] = &eyeSmileTex;
+    eyeTex[MiiExp_Anger] = &eyeNormalTex;
+    eyeTex[MiiExp_Sorrow] = &eyeSadTex;
+    eyeTex[MiiExp_Surprise] = &eyeSurpriseTex;
+    eyeTex[MiiExp_Blink] = &eyeBlinkTex;
+    eyeTex[MiiExp_OpenMouth] = &eyeNormalTex;
 
-    mouthTex[RFLExp_Normal] = &mouthNormalTex;
-    mouthTex[RFLExp_Smile] = &mouthNormalTex;
-    mouthTex[RFLExp_Anger] = &mouthAngerTex;
-    mouthTex[RFLExp_Sorrow] = &mouthSadTex;
-    mouthTex[RFLExp_Surprise] = &mouthNormalTex;
-    mouthTex[RFLExp_Blink] = &mouthNormalTex;
-    mouthTex[RFLExp_OpenMouth] = &mouthOpenTex;
+    mouthTex[MiiExp_Normal] = &mouthNormalTex;
+    mouthTex[MiiExp_Smile] = &mouthNormalTex;
+    mouthTex[MiiExp_Anger] = &mouthAngerTex;
+    mouthTex[MiiExp_Sorrow] = &mouthSadTex;
+    mouthTex[MiiExp_Surprise] = &mouthNormalTex;
+    mouthTex[MiiExp_Blink] = &mouthNormalTex;
+    mouthTex[MiiExp_OpenMouth] = &mouthOpenTex;
 
-    if (buffers[RFLExp_Normal] != NULL) {
-        infos[RFLExp_Normal] = *info;
+    if (buffers[MiiExp_Normal] != NULL) {
+        infos[MiiExp_Normal] = *info;
     }
 
-    if (buffers[RFLExp_Smile] != NULL) {
+    if (buffers[MiiExp_Smile] != NULL) {
         int changeEyeRot = 0;
-        RFLExpression expr = RFLExp_Smile;
+        MiiExpression expr = MiiExp_Smile;
 
         infos[expr] = *info;
         infos[expr].eye.type = 48;
 
-        changeEyeRot = RFLi_EYE_ROT_OFFSET[info->eye.type] - RFLi_EYE_ROT_OFFSET[infos[expr].eye.type];
+        changeEyeRot = MII_I_EYE_ROT_OFFSET[info->eye.type] - MII_I_EYE_ROT_OFFSET[infos[expr].eye.type];
         if (changeEyeRot + (int)infos[expr].eye.rotate < 0) {
             infos[expr].eye.rotate = 0;
-        } else if (changeEyeRot + (int)infos[expr].eye.rotate > RFLi_MAX_EYE_ROTATE) {
-            infos[expr].eye.rotate = RFLi_MAX_EYE_ROTATE;
+        } else if (changeEyeRot + (int)infos[expr].eye.rotate > MII_I_MAX_EYE_ROTATE) {
+            infos[expr].eye.rotate = MII_I_MAX_EYE_ROTATE;
         } else {
             infos[expr].eye.rotate += changeEyeRot;
         }
     }
 
-    if (buffers[RFLExp_Anger] != NULL) {
+    if (buffers[MiiExp_Anger] != NULL) {
         int changeEyebrowRot = 0;
         int changeEyeRot = 0;
-        RFLExpression expr = RFLExp_Anger;
+        MiiExpression expr = MiiExp_Anger;
 
         infos[expr] = *info;
 
         changeEyebrowRot = 2;
         if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate < 0) {
             infos[expr].eyebrow.rotate = 0;
-        } else if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate > RFLi_MAX_EYEBROW_ROTATE) {
-            infos[expr].eyebrow.rotate = RFLi_MAX_EYEBROW_ROTATE;
+        } else if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate > MII_I_MAX_EYEBROW_ROTATE) {
+            infos[expr].eyebrow.rotate = MII_I_MAX_EYEBROW_ROTATE;
         } else {
             infos[expr].eyebrow.rotate += changeEyebrowRot;
         }
@@ -180,8 +180,8 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         changeEyeRot = 2;
         if (changeEyeRot + (int)infos[expr].eye.rotate < 0) {
             infos[expr].eye.rotate = 0;
-        } else if (changeEyeRot + (int)infos[expr].eye.rotate > RFLi_MAX_EYE_ROTATE) {
-            infos[expr].eye.rotate = RFLi_MAX_EYE_ROTATE;
+        } else if (changeEyeRot + (int)infos[expr].eye.rotate > MII_I_MAX_EYE_ROTATE) {
+            infos[expr].eye.rotate = MII_I_MAX_EYE_ROTATE;
         } else {
             infos[expr].eye.rotate += changeEyeRot;
         }
@@ -189,18 +189,18 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         infos[expr].mouth.type = 10;
     }
 
-    if (buffers[RFLExp_Sorrow] != NULL) {
+    if (buffers[MiiExp_Sorrow] != NULL) {
         int changeEyebrowRot = 0;
         int changeEyeRot = 0;
-        RFLExpression expr = RFLExp_Sorrow;
+        MiiExpression expr = MiiExp_Sorrow;
 
         infos[expr] = *info;
 
         changeEyebrowRot = -2;
         if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate < 0) {
             infos[expr].eyebrow.rotate = 0;
-        } else if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate > RFLi_MAX_EYEBROW_ROTATE) {
-            infos[expr].eyebrow.rotate = RFLi_MAX_EYEBROW_ROTATE;
+        } else if (changeEyebrowRot + (int)infos[expr].eyebrow.rotate > MII_I_MAX_EYEBROW_ROTATE) {
+            infos[expr].eyebrow.rotate = MII_I_MAX_EYEBROW_ROTATE;
         } else {
             infos[expr].eyebrow.rotate += changeEyebrowRot;
         }
@@ -208,8 +208,8 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         changeEyeRot = -2;
         if (changeEyeRot + (int)infos[expr].eye.rotate < 0) {
             infos[expr].eye.rotate = 0;
-        } else if (changeEyeRot + (int)infos[expr].eye.rotate > RFLi_MAX_EYE_ROTATE) {
-            infos[expr].eye.rotate = RFLi_MAX_EYE_ROTATE;
+        } else if (changeEyeRot + (int)infos[expr].eye.rotate > MII_I_MAX_EYE_ROTATE) {
+            infos[expr].eye.rotate = MII_I_MAX_EYE_ROTATE;
         } else {
             infos[expr].eye.rotate += changeEyeRot;
         }
@@ -217,91 +217,91 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
         infos[expr].mouth.type = 12;
     }
 
-    if (buffers[RFLExp_Surprise] != NULL) {
+    if (buffers[MiiExp_Surprise] != NULL) {
         int changeEyeRot = 0;
-        RFLExpression expr = RFLExp_Surprise;
+        MiiExpression expr = MiiExp_Surprise;
 
         infos[expr] = *info;
         infos[expr].eyebrow.y -= 2;
         infos[expr].eye.type = 49;
 
-        changeEyeRot = RFLi_EYE_ROT_OFFSET[info->eye.type] - RFLi_EYE_ROT_OFFSET[infos[expr].eye.type];
+        changeEyeRot = MII_I_EYE_ROT_OFFSET[info->eye.type] - MII_I_EYE_ROT_OFFSET[infos[expr].eye.type];
         if (changeEyeRot + (int)infos[expr].eye.rotate < 0) {
             infos[expr].eye.rotate = 0;
-        } else if (changeEyeRot + (int)infos[expr].eye.rotate > RFLi_MAX_EYE_ROTATE) {
-            infos[expr].eye.rotate = RFLi_MAX_EYE_ROTATE;
+        } else if (changeEyeRot + (int)infos[expr].eye.rotate > MII_I_MAX_EYE_ROTATE) {
+            infos[expr].eye.rotate = MII_I_MAX_EYE_ROTATE;
         } else {
             infos[expr].eye.rotate += changeEyeRot;
         }
     }
 
-    if (buffers[RFLExp_Blink] != NULL) {
+    if (buffers[MiiExp_Blink] != NULL) {
         int changeEyeRot = 0;
-        RFLExpression expr = RFLExp_Blink;
+        MiiExpression expr = MiiExp_Blink;
 
         infos[expr] = *info;
         infos[expr].eye.type = 26;
 
-        changeEyeRot = RFLi_EYE_ROT_OFFSET[info->eye.type] - RFLi_EYE_ROT_OFFSET[infos[expr].eye.type];
+        changeEyeRot = MII_I_EYE_ROT_OFFSET[info->eye.type] - MII_I_EYE_ROT_OFFSET[infos[expr].eye.type];
         if (changeEyeRot + (int)infos[expr].eye.rotate < 0) {
             infos[expr].eye.rotate = 0;
-        } else if (changeEyeRot + (int)infos[expr].eye.rotate > RFLi_MAX_EYE_ROTATE) {
-            infos[expr].eye.rotate = RFLi_MAX_EYE_ROTATE;
+        } else if (changeEyeRot + (int)infos[expr].eye.rotate > MII_I_MAX_EYE_ROTATE) {
+            infos[expr].eye.rotate = MII_I_MAX_EYE_ROTATE;
         } else {
             infos[expr].eye.rotate += changeEyeRot;
         }
     }
 
-    if (buffers[RFLExp_OpenMouth] != NULL) {
-        RFLExpression expr = RFLExp_OpenMouth;
+    if (buffers[MiiExp_OpenMouth] != NULL) {
+        MiiExpression expr = MiiExp_OpenMouth;
 
         infos[expr] = *info;
         infos[expr].mouth.type = 24;
     }
 
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] == NULL) {
             continue;
         }
 
         if (*eyeBuf[i] == NULL) {
-            *eyeBuf[i] = RFLiAlloc32(eyeSize);
+            *eyeBuf[i] = Mii_Alloc32(eyeSize);
         }
 
         if (*mouthBuf[i] == NULL) {
-            *mouthBuf[i] = RFLiAlloc32(mouthSize);
+            *mouthBuf[i] = Mii_Alloc32(mouthSize);
         }
 
         if (eyebrowNormal == NULL) {
-            eyebrowNormal = RFLiAlloc32(eyebrowSize);
+            eyebrowNormal = Mii_Alloc32(eyebrowSize);
         }
 
         if (mustacheNormal == NULL) {
-            mustacheNormal = RFLiAlloc32(mustacheSize);
+            mustacheNormal = Mii_Alloc32(mustacheSize);
         }
 
         if (moleNormal == NULL) {
-            moleNormal = RFLiAlloc32(moleSize);
+            moleNormal = Mii_Alloc32(moleSize);
         }
 
         if (*eyeTex[i] == NULL) {
-            *eyeTex[i] = RFLiLoadTexture(RFLiPartsTex_Eye, infos[i].eye.type, *eyeBuf[i]);
+            *eyeTex[i] = Mii_LoadTexture(Mii_PartsTex_Eye, infos[i].eye.type, *eyeBuf[i]);
         }
 
         if (*mouthTex[i] == NULL) {
-            *mouthTex[i] = RFLiLoadTexture(RFLiPartsTex_Mouth, infos[i].mouth.type, *mouthBuf[i]);
+            *mouthTex[i] = Mii_LoadTexture(Mii_PartsTex_Mouth, infos[i].mouth.type, *mouthBuf[i]);
         }
 
         if (eyebrowNormalTex == NULL) {
-            eyebrowNormalTex = RFLiLoadTexture(RFLiPartsTex_Eyebrow, infos[i].eyebrow.type, eyebrowNormal);
+            eyebrowNormalTex = Mii_LoadTexture(Mii_PartsTex_Eyebrow, infos[i].eyebrow.type, eyebrowNormal);
         }
 
         if (mustacheNormalTex == NULL) {
-            mustacheNormalTex = RFLiLoadTexture(RFLiPartsTex_Mustache, infos[i].beard.mustache, mustacheNormal);
+            mustacheNormalTex = Mii_LoadTexture(Mii_PartsTex_Mustache, infos[i].beard.mustache, mustacheNormal);
         }
 
         if (moleNormalTex == NULL) {
-            moleNormalTex = RFLiLoadTexture(RFLiPartsTex_Mole, infos[i].mole.type, moleNormal);
+            moleNormalTex = Mii_LoadTexture(Mii_PartsTex_Mole, infos[i].mole.type, moleNormal);
         }
 
         parts[i].eyeR.ngtobj.texture = *eyeTex[i];
@@ -317,38 +317,38 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
 
         parts[i].mole.ngtobj.texture = moleNormalTex;
 
-        RFLiInitRFLTexture(&parts[i].eyeR.ngtobj);
-        RFLiInitRFLTexture(&parts[i].eyeL.ngtobj);
+        Mii_InitRFLTexture(&parts[i].eyeR.ngtobj);
+        Mii_InitRFLTexture(&parts[i].eyeL.ngtobj);
 
-        RFLiInitRFLTexture(&parts[i].eyebrowR.ngtobj);
-        RFLiInitRFLTexture(&parts[i].eyebrowL.ngtobj);
+        Mii_InitRFLTexture(&parts[i].eyebrowR.ngtobj);
+        Mii_InitRFLTexture(&parts[i].eyebrowL.ngtobj);
 
-        RFLiInitRFLTexture(&parts[i].mouth.ngtobj);
+        Mii_InitRFLTexture(&parts[i].mouth.ngtobj);
 
-        RFLiInitRFLTexture(&parts[i].mustacheR.ngtobj);
-        RFLiInitRFLTexture(&parts[i].mustacheL.ngtobj);
+        Mii_InitRFLTexture(&parts[i].mustacheR.ngtobj);
+        Mii_InitRFLTexture(&parts[i].mustacheL.ngtobj);
 
-        RFLiInitRFLTexture(&parts[i].mole.ngtobj);
+        Mii_InitRFLTexture(&parts[i].mole.ngtobj);
     }
 
-    max = RFLiGetMaxMaskRsl(resolution);
+    max = Mii_GetMaxMaskRsl(resolution);
 
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] != NULL) {
             break;
         }
     }
 
-    RFLiSetupTextureDraw();
+    Mii_SetupTextureDraw();
 
-    size = RFLiGetMaskBufSize(resolution);
-    for (i = 0; i < RFLExp_Max; i++) {
+    size = Mii_GetMaskBufSize(resolution);
+    for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] != NULL) {
         }
     }
 
     J3DNativeViewGetScissor(&sx, &sy, &sw, &sh);
-    for (i = 0; i < RFLExp_Max; i++) {
+    for (i = 0; i < MiiExp_Max; i++) {
         if (buffers[i] == NULL) {
             continue;
         }
@@ -357,101 +357,101 @@ void RFLiMakeTexture(const RFLiCharInfo* info, u8** buffers, RFLResolution resol
 
         if (resolution & 256) {
             J3DNativeViewSetScissor(0, 0, 256, 256);
-            RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_256);
-            RFLiBeginTexture(ptr, 256, 256, 0x00000000);
-            RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_256);
+            Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_256);
+            Mii_BeginTexture(ptr, 256, 256, 0x00000000);
+            Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_256);
             J3DNativeTargetEnd(ptr);
-            ptr += RFLiGetMaskSize(RFLi_MASKRSL_256);
+            ptr += Mii_GetMaskSize(MII_I_MASKRSL_256);
         }
 
         if (resolution & 128) {
             J3DNativeViewSetScissor(0, 0, 128, 128);
-            RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_128);
-            RFLiBeginTexture(ptr, 128, 128, 0x00000000);
-            RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_128);
+            Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_128);
+            Mii_BeginTexture(ptr, 128, 128, 0x00000000);
+            Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_128);
             J3DNativeTargetEnd(ptr);
-            ptr += RFLiGetMaskSize(RFLi_MASKRSL_128);
+            ptr += Mii_GetMaskSize(MII_I_MASKRSL_128);
         }
 
         if (resolution & 64) {
             J3DNativeViewSetScissor(0, 0, 64, 64);
-            RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_64);
-            RFLiBeginTexture(ptr, 64, 64, 0x00000000);
-            RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_64);
+            Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_64);
+            Mii_BeginTexture(ptr, 64, 64, 0x00000000);
+            Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_64);
             J3DNativeTargetEnd(ptr);
-            ptr += RFLiGetMaskSize(RFLi_MASKRSL_64);
+            ptr += Mii_GetMaskSize(MII_I_MASKRSL_64);
         }
 
         if (resolution & 32) {
             J3DNativeViewSetScissor(0, 0, 32, 32);
-            RFLiSetFaceParts(&infos[i], &parts[i], RFLi_MASKRSL_32);
-            RFLiBeginTexture(ptr, 32, 32, 0x00000000);
-            RFLiCapture(ptr, &infos[i], &parts[i], RFLi_MASKRSL_32);
+            Mii_SetFaceParts(&infos[i], &parts[i], MII_I_MASKRSL_32);
+            Mii_BeginTexture(ptr, 32, 32, 0x00000000);
+            Mii_Capture(ptr, &infos[i], &parts[i], MII_I_MASKRSL_32);
             J3DNativeTargetEnd(ptr);
-            ptr += RFLiGetMaskSize(RFLi_MASKRSL_32);
+            ptr += Mii_GetMaskSize(MII_I_MASKRSL_32);
         }
     }
 
     if (eyeNormal != NULL) {
-        RFLiFree(eyeNormal);
+        Mii_Free(eyeNormal);
     }
 
     if (eyebrowNormal != NULL) {
-        RFLiFree(eyebrowNormal);
+        Mii_Free(eyebrowNormal);
     }
 
     if (mouthNormal != NULL) {
-        RFLiFree(mouthNormal);
+        Mii_Free(mouthNormal);
     }
 
     if (mustacheNormal != NULL) {
-        RFLiFree(mustacheNormal);
+        Mii_Free(mustacheNormal);
     }
 
     if (moleNormal != NULL) {
-        RFLiFree(moleNormal);
+        Mii_Free(moleNormal);
     }
 
     if (eyeSmile != NULL) {
-        RFLiFree(eyeSmile);
+        Mii_Free(eyeSmile);
     }
 
     if (mouthAnger != NULL) {
-        RFLiFree(mouthAnger);
+        Mii_Free(mouthAnger);
     }
 
     if (eyeSorrow != NULL) {
-        RFLiFree(eyeSorrow);
+        Mii_Free(eyeSorrow);
     }
 
     if (mouthSorrow != NULL) {
-        RFLiFree(mouthSorrow);
+        Mii_Free(mouthSorrow);
     }
 
     if (eyeSurprise != NULL) {
-        RFLiFree(eyeSurprise);
+        Mii_Free(eyeSurprise);
     }
 
     if (eyeBlink != NULL) {
-        RFLiFree(eyeBlink);
+        Mii_Free(eyeBlink);
     }
 
     if (mouthOpen != NULL) {
-        RFLiFree(mouthOpen);
+        Mii_Free(mouthOpen);
     }
 
     J3DNativeViewSetScissor(sx, sy, sw, sh);
 }
 
-void RFLiInitRFLTexture(RFLiTexObj* tobj) {
-    RFLiTexture* tex = tobj->texture;
+void Mii_InitRFLTexture(Mii_TexObj* tobj) {
+    Mii_Texture* tex = tobj->texture;
 
-    J3DNativeTextureInit(&tobj->tobj, RFLiGetTexImage(tex), tex->width, tex->height, tex->format, GX_CLAMP, GX_CLAMP, FALSE);
+    J3DNativeTextureInit(&tobj->tobj, Mii_GetTexImage(tex), tex->width, tex->height, tex->format, GX_CLAMP, GX_CLAMP, FALSE);
     J3DNativeTextureInitLOD(&tobj->tobj, tex->minFilt, tex->magFilt, tex->minLOD, tex->maxLOD, tex->lodBias, tex->enableBiasClamp,
                     tex->enableEdgeLOD, tex->enableMaxAniso);
 }
 
-void RFLiSetup2DCameraAndParam(void) {
+void Mii_Setup2DCameraAndParam(void) {
     Mtx44 proj;
 
     NebulaMtxOrtho(proj, 0.0f, 448.0f, 0.0f, 608.0f, 0.0f, 1.0f);
@@ -467,15 +467,15 @@ void RFLiSetup2DCameraAndParam(void) {
 
 // The parts' forms (runtime/src/render/materials/mii_texture.hlsl): GX's stages over the texture's channels as RFL ran
 // them, with their colours.
-void RFLiSetTev4Mole(void) {
-    RFLiNativeTextureForm(0, RFLi_MOLE_COLOR0, RFLi_MOLE_COLOR0);
+void Mii_SetTev4Mole(void) {
+    Mii_NativeTextureForm(0, MII_I_MOLE_COLOR0, MII_I_MOLE_COLOR0);
 }
 
-void RFLiSetTev4Mouth(u32 color) {
-    RFLiNativeTextureForm(1, RFLi_MOUTH_COLOR0[color], RFLi_MOUTH_COLOR1[color]);
+void Mii_SetTev4Mouth(u32 color) {
+    Mii_NativeTextureForm(1, MII_I_MOUTH_COLOR0[color], MII_I_MOUTH_COLOR1[color]);
 }
 
-void RFLiSetTev4Eye(u32 color, u32 type) {
+void Mii_SetTev4Eye(u32 color, u32 type) {
     GXColor color0;
 
     switch (type) {
@@ -490,128 +490,128 @@ void RFLiSetTev4Eye(u32 color, u32 type) {
         break;
     }
 
-    RFLiNativeTextureForm(2, color0, RFLi_EYE_COLOR1[color]);
+    Mii_NativeTextureForm(2, color0, MII_I_EYE_COLOR1[color]);
 }
 
-void RFLiSetTev4Eyebrow(u32 color) {
-    RFLiNativeTextureForm(0, RFLi_EYEBROW_COLOR0[color], RFLi_EYEBROW_COLOR0[color]);
+void Mii_SetTev4Eyebrow(u32 color) {
+    Mii_NativeTextureForm(0, MII_I_EYEBROW_COLOR0[color], MII_I_EYEBROW_COLOR0[color]);
 }
 
-void RFLiSetTev4Mustache(u32 color) {
-    RFLiNativeTextureForm(0, RFLi_BEARD_COLOR0[color], RFLi_BEARD_COLOR0[color]);
+void Mii_SetTev4Mustache(u32 color) {
+    Mii_NativeTextureForm(0, MII_I_BEARD_COLOR0[color], MII_I_BEARD_COLOR0[color]);
 }
 
-void RFLiSetFaceParts(const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRSL resolution) {
-    f32 eyeX = RFLi_TEX_EYE_BASE_X + RFLi_TEX_SCALE_X * info->eye.x;
-    f32 eyeY = RFLi_TEX_EYE_BASE_Y + 1.1600001f * RFLi_TEX_SCALE_Y * info->eye.y;
-    f32 eyeW = RFLi_TEX_EYE_BASE_W * RFLi_TEX_SCALE2DIM(info->eye.scale);
-    f32 eyeH = RFLi_TEX_EYE_BASE_H * RFLi_TEX_SCALE2DIM(info->eye.scale);
-    f32 eyeA = RFLi_TEX_ROTATE2ANG(info->eye.rotate + RFLi_EYE_ROT_OFFSET[info->eye.type]);
+void Mii_SetFaceParts(const Mii_CharInfo* info, Mii_FaceParts* face, MII_I_MASKRSL resolution) {
+    f32 eyeX = MII_I_TEX_EYE_BASE_X + MII_I_TEX_SCALE_X * info->eye.x;
+    f32 eyeY = MII_I_TEX_EYE_BASE_Y + 1.1600001f * MII_I_TEX_SCALE_Y * info->eye.y;
+    f32 eyeW = MII_I_TEX_EYE_BASE_W * MII_I_TEX_SCALE2DIM(info->eye.scale);
+    f32 eyeH = MII_I_TEX_EYE_BASE_H * MII_I_TEX_SCALE2DIM(info->eye.scale);
+    f32 eyeA = MII_I_TEX_ROTATE2ANG(info->eye.rotate + MII_I_EYE_ROT_OFFSET[info->eye.type]);
 
-    f32 eyebrowX = RFLi_TEX_EYEBROW_BASE_X + RFLi_TEX_SCALE_X * info->eyebrow.x;
-    f32 eyebrowY = RFLi_TEX_EYEBROW_BASE_Y + 1.1600001f * RFLi_TEX_SCALE_Y * info->eyebrow.y;
-    f32 eyebrowW = RFLi_TEX_EYEBROW_BASE_W * RFLi_TEX_SCALE2DIM(info->eyebrow.scale);
-    f32 eyebrowH = RFLi_TEX_EYEBROW_BASE_H * RFLi_TEX_SCALE2DIM(info->eyebrow.scale);
-    f32 eyebrowA = RFLi_TEX_ROTATE2ANG(info->eyebrow.rotate + RFLi_EYEBROW_ROT_OFFSET[info->eyebrow.type]);
+    f32 eyebrowX = MII_I_TEX_EYEBROW_BASE_X + MII_I_TEX_SCALE_X * info->eyebrow.x;
+    f32 eyebrowY = MII_I_TEX_EYEBROW_BASE_Y + 1.1600001f * MII_I_TEX_SCALE_Y * info->eyebrow.y;
+    f32 eyebrowW = MII_I_TEX_EYEBROW_BASE_W * MII_I_TEX_SCALE2DIM(info->eyebrow.scale);
+    f32 eyebrowH = MII_I_TEX_EYEBROW_BASE_H * MII_I_TEX_SCALE2DIM(info->eyebrow.scale);
+    f32 eyebrowA = MII_I_TEX_ROTATE2ANG(info->eyebrow.rotate + MII_I_EYEBROW_ROT_OFFSET[info->eyebrow.type]);
 
-    f32 mouthY = RFLi_TEX_MOUTH_BASE_Y + 1.1600001f * RFLi_TEX_SCALE_Y * info->mouth.y;
-    f32 mouthW = RFLi_TEX_MOUTH_BASE_W * RFLi_TEX_SCALE2DIM(info->mouth.scale);
-    f32 mouthH = RFLi_TEX_MOUTH_BASE_H * RFLi_TEX_SCALE2DIM(info->mouth.scale);
+    f32 mouthY = MII_I_TEX_MOUTH_BASE_Y + 1.1600001f * MII_I_TEX_SCALE_Y * info->mouth.y;
+    f32 mouthW = MII_I_TEX_MOUTH_BASE_W * MII_I_TEX_SCALE2DIM(info->mouth.scale);
+    f32 mouthH = MII_I_TEX_MOUTH_BASE_H * MII_I_TEX_SCALE2DIM(info->mouth.scale);
 
-    f32 mustacheY = RFLi_TEX_MUSTACHE_BASE_Y + 1.1600001f * RFLi_TEX_SCALE_Y * info->beard.y;
-    f32 mustacheW = RFLi_TEX_MUSTACHE_BASE_W * RFLi_TEX_SCALE2DIM(info->beard.scale);
-    f32 mustacheH = RFLi_TEX_MUSTACHE_BASE_H * RFLi_TEX_SCALE2DIM(info->beard.scale);
+    f32 mustacheY = MII_I_TEX_MUSTACHE_BASE_Y + 1.1600001f * MII_I_TEX_SCALE_Y * info->beard.y;
+    f32 mustacheW = MII_I_TEX_MUSTACHE_BASE_W * MII_I_TEX_SCALE2DIM(info->beard.scale);
+    f32 mustacheH = MII_I_TEX_MUSTACHE_BASE_H * MII_I_TEX_SCALE2DIM(info->beard.scale);
 
-    f32 moleX = RFLi_TEX_MOLE_BASE_X + 2.0f * RFLi_TEX_SCALE_X * info->mole.x;
-    f32 moleY = RFLi_TEX_MOLE_BASE_Y + 1.1600001f * RFLi_TEX_SCALE_Y * info->mole.y;
-    f32 moleW = RFLi_TEX_MOLE_BASE_W + RFLi_TEX_SCALE2DIM(info->mole.scale);
-    f32 moleH = RFLi_TEX_MOLE_BASE_H + RFLi_TEX_SCALE2DIM(info->mole.scale);
+    f32 moleX = MII_I_TEX_MOLE_BASE_X + 2.0f * MII_I_TEX_SCALE_X * info->mole.x;
+    f32 moleY = MII_I_TEX_MOLE_BASE_Y + 1.1600001f * MII_I_TEX_SCALE_Y * info->mole.y;
+    f32 moleW = MII_I_TEX_MOLE_BASE_W + MII_I_TEX_SCALE2DIM(info->mole.scale);
+    f32 moleH = MII_I_TEX_MOLE_BASE_H + MII_I_TEX_SCALE2DIM(info->mole.scale);
 
-    f32 resolution_ = RFLi_TEX_UNIT(resolution);
+    f32 resolution_ = MII_I_TEX_UNIT(resolution);
 
     face->eyeR.x = resolution_ * (32.0f - eyeX);
     face->eyeR.y = eyeY * resolution_;
     face->eyeR.width = eyeW * resolution_;
     face->eyeR.height = eyeH * resolution_;
     face->eyeR.angle = eyeA;
-    face->eyeR.origin = RFL_ORIGIN_RIGHT;
+    face->eyeR.origin = MII_ORIGIN_RIGHT;
 
     face->eyeL.x = resolution_ * (32.0f + eyeX);
     face->eyeL.y = eyeY * resolution_;
     face->eyeL.width = eyeW * resolution_;
     face->eyeL.height = eyeH * resolution_;
     face->eyeL.angle = 360.0f - eyeA;
-    face->eyeL.origin = RFL_ORIGIN_LEFT;
+    face->eyeL.origin = MII_ORIGIN_LEFT;
 
     face->eyebrowR.x = resolution_ * (32.0f - eyebrowX);
     face->eyebrowR.y = eyebrowY * resolution_;
     face->eyebrowR.width = eyebrowW * resolution_;
     face->eyebrowR.height = eyebrowH * resolution_;
     face->eyebrowR.angle = eyebrowA;
-    face->eyebrowR.origin = RFL_ORIGIN_RIGHT;
+    face->eyebrowR.origin = MII_ORIGIN_RIGHT;
 
     face->eyebrowL.x = resolution_ * (32.0f + eyebrowX);
     face->eyebrowL.y = eyebrowY * resolution_;
     face->eyebrowL.width = eyebrowW * resolution_;
     face->eyebrowL.height = eyebrowH * resolution_;
     face->eyebrowL.angle = 360.0f - eyebrowA;
-    face->eyebrowL.origin = RFL_ORIGIN_LEFT;
+    face->eyebrowL.origin = MII_ORIGIN_LEFT;
 
     face->mouth.x = 32.0f * resolution_;
     face->mouth.y = mouthY * resolution_;
     face->mouth.width = mouthW * resolution_;
     face->mouth.height = mouthH * resolution_;
     face->mouth.angle = 0.0f;
-    face->mouth.origin = RFL_ORIGIN_CENTER;
+    face->mouth.origin = MII_ORIGIN_CENTER;
 
     face->mustacheR.x = 32.0f * resolution_;
     face->mustacheR.y = mustacheY * resolution_;
     face->mustacheR.width = mustacheW * resolution_;
     face->mustacheR.height = mustacheH * resolution_;
     face->mustacheR.angle = 0.0f;
-    face->mustacheR.origin = RFL_ORIGIN_RIGHT;
+    face->mustacheR.origin = MII_ORIGIN_RIGHT;
 
     face->mustacheL.x = 32.0f * resolution_;
     face->mustacheL.y = mustacheY * resolution_;
     face->mustacheL.width = mustacheW * resolution_;
     face->mustacheL.height = mustacheH * resolution_;
     face->mustacheL.angle = 0.0f;
-    face->mustacheL.origin = RFL_ORIGIN_LEFT;
+    face->mustacheL.origin = MII_ORIGIN_LEFT;
 
     face->mole.x = moleX * resolution_;
     face->mole.y = moleY * resolution_;
     face->mole.width = moleW * resolution_;
     face->mole.height = moleH * resolution_;
     face->mole.angle = 0.0f;
-    face->mole.origin = RFL_ORIGIN_CENTER;
+    face->mole.origin = MII_ORIGIN_CENTER;
 }
 
-void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRSL resolution) {
+void Mii_Capture(u8* buffer, const Mii_CharInfo* info, Mii_FaceParts* face, MII_I_MASKRSL resolution) {
     f32 vp[6];
 
     J3DNativeViewGetViewportv(vp);
-    RFLiSetup2DCameraAndParam();
+    Mii_Setup2DCameraAndParam();
 
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_DSTALPHA, GX_LO_SET);
     J3DNativeStateSetColorUpdate(TRUE);
 
-    RFLiSetTev4Mustache(info->beard.color);
-    RFLiDrawFaceParts(&face->mustacheR);
-    RFLiDrawFaceParts(&face->mustacheL);
+    Mii_SetTev4Mustache(info->beard.color);
+    Mii_DrawFaceParts(&face->mustacheR);
+    Mii_DrawFaceParts(&face->mustacheL);
 
-    RFLiSetTev4Mouth(info->mouth.color);
-    RFLiDrawFaceParts(&face->mouth);
+    Mii_SetTev4Mouth(info->mouth.color);
+    Mii_DrawFaceParts(&face->mouth);
 
-    RFLiSetTev4Eyebrow(info->eyebrow.color);
-    RFLiDrawFaceParts(&face->eyebrowR);
-    RFLiDrawFaceParts(&face->eyebrowL);
+    Mii_SetTev4Eyebrow(info->eyebrow.color);
+    Mii_DrawFaceParts(&face->eyebrowR);
+    Mii_DrawFaceParts(&face->eyebrowL);
 
-    RFLiSetTev4Eye(info->eye.color, info->eye.type);
-    RFLiDrawFaceParts(&face->eyeR);
-    RFLiDrawFaceParts(&face->eyeL);
+    Mii_SetTev4Eye(info->eye.color, info->eye.type);
+    Mii_DrawFaceParts(&face->eyeR);
+    Mii_DrawFaceParts(&face->eyeL);
 
-    RFLiSetTev4Mole();
-    RFLiDrawFaceParts(&face->mole);
+    Mii_SetTev4Mole();
+    Mii_DrawFaceParts(&face->mole);
 
     // The parts' colours stay; their alpha is drawn again on a cleared alpha channel (the console's copy cleared
     // alpha only, colour updates being off).
@@ -619,34 +619,34 @@ void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi
     J3DNativeTargetClear(0x00000000, 0xFFFFFF, 2u | 4u);
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_INVDSTALPHA, GX_BL_ONE, GX_LO_SET);
 
-    RFLiSetTev4Mustache(info->beard.color);
-    RFLiDrawFaceParts(&face->mustacheR);
-    RFLiDrawFaceParts(&face->mustacheL);
+    Mii_SetTev4Mustache(info->beard.color);
+    Mii_DrawFaceParts(&face->mustacheR);
+    Mii_DrawFaceParts(&face->mustacheL);
 
-    RFLiSetTev4Mouth(info->mouth.color);
-    RFLiDrawFaceParts(&face->mouth);
+    Mii_SetTev4Mouth(info->mouth.color);
+    Mii_DrawFaceParts(&face->mouth);
 
-    RFLiSetTev4Eyebrow(info->eyebrow.color);
-    RFLiDrawFaceParts(&face->eyebrowR);
-    RFLiDrawFaceParts(&face->eyebrowL);
+    Mii_SetTev4Eyebrow(info->eyebrow.color);
+    Mii_DrawFaceParts(&face->eyebrowR);
+    Mii_DrawFaceParts(&face->eyebrowL);
 
-    RFLiSetTev4Eye(info->eye.color, info->eye.type);
-    RFLiDrawFaceParts(&face->eyeR);
-    RFLiDrawFaceParts(&face->eyeL);
+    Mii_SetTev4Eye(info->eye.color, info->eye.type);
+    Mii_DrawFaceParts(&face->eyeR);
+    Mii_DrawFaceParts(&face->eyeL);
 
-    RFLiSetTev4Mole();
-    RFLiDrawFaceParts(&face->mole);
+    Mii_SetTev4Mole();
+    Mii_DrawFaceParts(&face->mole);
 
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeViewSetViewport(vp[0], vp[1], vp[2], vp[3], vp[4], vp[5]);
 }
 
-void RFLiDrawFaceParts(RFLiPart* part) {
-    RFLiNativeTexturePart(&part->ngtobj.tobj);
-    RFLiDrawQuad(part->x, part->y, part->width, part->height, part->angle, part->origin);
+void Mii_DrawFaceParts(Mii_Part* part) {
+    Mii_NativeTexturePart(&part->ngtobj.tobj);
+    Mii_DrawQuad(part->x, part->y, part->width, part->height, part->angle, part->origin);
 }
 
-void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN origin) {
+void Mii_DrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, MII_ORIGIN origin) {
     Mtx rot;
     Mtx pos;
     f32 baseX;
@@ -657,24 +657,24 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
     NebulaMtxScaleApply(pos, pos, width, height, 1.0f);
     NebulaMtxRotRad(rot, 'z', (3.141592653589793f / 180.0f) * rotZ);
     NebulaMtxConcat(rot, pos, pos);
-    NebulaMtxScaleApply(pos, pos, RFLi_TEX_SCALE_X, RFLi_TEX_SCALE_Y, 1.0f);
+    NebulaMtxScaleApply(pos, pos, MII_I_TEX_SCALE_X, MII_I_TEX_SCALE_Y, 1.0f);
     NebulaMtxTransApply(pos, pos, x, y, 0.0f);
 
     J3DNativeShapeSetPosition(0, pos);
     J3DNativeStateSetCurrentMtx(GX_PNMTX0);
 
     switch (origin) {
-    case RFL_ORIGIN_CENTER:
+    case MII_ORIGIN_CENTER:
         baseX = -0.5f;
         s0 = 256;
         s1 = 0;
         break;
-    case RFL_ORIGIN_RIGHT:
+    case MII_ORIGIN_RIGHT:
         baseX = -1.0f;
         s0 = 256;
         s1 = 0;
         break;
-    case RFL_ORIGIN_LEFT:
+    case MII_ORIGIN_LEFT:
         baseX = 0.0f;
         s0 = 0;
         s1 = 256;
@@ -701,43 +701,43 @@ void RFLiDrawQuad(f32 x, f32 y, f32 width, f32 height, f32 rotZ, RFL_ORIGIN orig
     }
 }
 
-RFLi_MASKRSL RFLiGetMaxMaskRsl(RFLResolution resolution) {
+MII_I_MASKRSL Mii_GetMaxMaskRsl(MiiResolution resolution) {
     switch (resolution) {
-    case RFLResolution_64:
-    case RFLResolution_64M:
-        return RFLi_MASKRSL_64;
-    case RFLResolution_128:
-    case RFLResolution_128M:
-        return RFLi_MASKRSL_128;
-    case RFLResolution_256:
-    case RFLResolution_256M:
-        return RFLi_MASKRSL_256;
+    case MiiResolution_64:
+    case MiiResolution_64M:
+        return MII_I_MASKRSL_64;
+    case MiiResolution_128:
+    case MiiResolution_128M:
+        return MII_I_MASKRSL_128;
+    case MiiResolution_256:
+    case MiiResolution_256M:
+        return MII_I_MASKRSL_256;
     default:
-        return RFLi_MASKRSL_64;
+        return MII_I_MASKRSL_64;
     }
 }
 
-u32 RFLiGetMaskSize(RFLi_MASKRSL resolution) {
+u32 Mii_GetMaskSize(MII_I_MASKRSL resolution) {
     return 2 * (resolution * resolution);
 }
 
-u32 RFLiGetMaskBufSize(RFLResolution resolution) {
+u32 Mii_GetMaskBufSize(MiiResolution resolution) {
     u32 size = 0;
 
     if (resolution & 32) {
-        size += RFLiGetMaskSize(RFLi_MASKRSL_32);
+        size += Mii_GetMaskSize(MII_I_MASKRSL_32);
     }
 
     if (resolution & 64) {
-        size += RFLiGetMaskSize(RFLi_MASKRSL_64);
+        size += Mii_GetMaskSize(MII_I_MASKRSL_64);
     }
 
     if (resolution & 128) {
-        size += RFLiGetMaskSize(RFLi_MASKRSL_128);
+        size += Mii_GetMaskSize(MII_I_MASKRSL_128);
     }
 
     if (resolution & 256) {
-        size += RFLiGetMaskSize(RFLi_MASKRSL_256);
+        size += Mii_GetMaskSize(MII_I_MASKRSL_256);
     }
 
     return size;
