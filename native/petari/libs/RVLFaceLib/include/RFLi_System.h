@@ -11,13 +11,9 @@ extern "C" {
 #endif
 
 typedef struct RFLiManager {
-    void* workBuffer;                      // at 0x0
-    NebulaMiiHeap* rootHeap;
-    NebulaMiiHeap* systemHeap;
-    NebulaMiiHeap* tmpHeap;
-    RFLiLoader loader;                     // at 0xC0
-    BOOL deluxeTex;                        // at 0x1B38
-    RFLiCallback systemCb;                 // at 0x1F10
+    RFLiLoader loader;
+    BOOL deluxeTex;
+    RFLiCallback systemCb;
     char UNK_0x1F1C[0x4];
     u32 _1F20;
 } RFLiManager;

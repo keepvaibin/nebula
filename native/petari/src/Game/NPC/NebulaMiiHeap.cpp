@@ -1,34 +1,28 @@
 #include <RFLi_Heap.h>
 
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#if defined(_WIN32)
+extern "C" void* _aligned_malloc(size_t size, size_t alignment);
+extern "C" void _aligned_free(void* block);
+#else
+extern "C" int posix_memalign(void** block, size_t alignment, size_t size);
+extern "C" void free(void* block);
+#endif
 
-// A NebulaMiiHeap is a JKRExpHeap: created without the out-of-memory handler, so a full heap returns NULL to the Mii
-// library as the SDK's heaps did.
-
-// The buffer's own heap is the parent; it may be one outside the root heap's range (the MEM2 heaps), which only the
-// whole tree's search finds.
-extern "C" NebulaMiiHeap* NebulaMiiHeapCreate(void* buffer, u32 size) {
-    return reinterpret_cast< NebulaMiiHeap* >(JKRExpHeap::create(buffer, size, JKRHeap::findFromRoot(buffer), false));
+// The Mii library's blocks come from the host's allocator, aligned for the texture and vertex data they hold.
+extern "C" void* NebulaMiiAlloc(u32 size) {
+    const size_t bytes = (static_cast< size_t >(size) + 31u) & ~static_cast< size_t >(31u);
+#if defined(_WIN32)
+    return _aligned_malloc(bytes != 0 ? bytes : 32u, 32u);
+#else
+    void* block = nullptr;
+    return posix_memalign(&block, 32u, bytes != 0 ? bytes : 32u) == 0 ? block : nullptr;
+#endif
 }
 
-extern "C" void NebulaMiiHeapDestroy(NebulaMiiHeap* heap) {
-    if (heap != nullptr) {
-        JKRHeap::destroy(reinterpret_cast< JKRExpHeap* >(heap));
-    }
-}
-
-extern "C" void* NebulaMiiHeapAlloc(NebulaMiiHeap* heap, u32 size, s32 alignment) {
-    return reinterpret_cast< JKRExpHeap* >(heap)->alloc(size, alignment);
-}
-
-extern "C" void NebulaMiiHeapFree(NebulaMiiHeap* heap, void* block) {
-    reinterpret_cast< JKRExpHeap* >(heap)->free(block);
-}
-
-// The largest free block less what aligning its start may take: JKR heaps align every block to at least 16 bytes
-// natively, so a request this size succeeds at any alignment up to 16 (the SDK's heaps reported the same, for their
-// alignment).
-extern "C" u32 NebulaMiiHeapLargestFree(NebulaMiiHeap* heap) {
-    const s32 largest = reinterpret_cast< JKRExpHeap* >(heap)->getFreeSize();
-    return largest > 16 ? static_cast< u32 >(largest - 16) & ~3u : 0;
+extern "C" void NebulaMiiFree(void* block) {
+#if defined(_WIN32)
+    _aligned_free(block);
+#else
+    free(block);
+#endif
 }
