@@ -486,7 +486,7 @@ galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gx
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes draw_constants_fill render_config
-        sampler_key rt_materials texture_pack movie_replacement
+        gpu_sampler rt_materials texture_pack movie_replacement
         capture line_point_params native_settings_overlay post_process
         warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
