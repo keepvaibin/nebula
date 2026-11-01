@@ -61,6 +61,7 @@ void DrawMatrices::write(Kind kind, std::uint32_t first, const float* values, st
         if (row != next) {
             row = next;
             changed = true;
+            dirty_groups_ |= 1ull << draw_groups::of_row(first + r);
         }
     }
     if (changed) {
@@ -108,6 +109,7 @@ void DrawMatrices::write_light(unsigned n) {
         if (row != next) {
             row = next;
             changed = true;
+            dirty_groups_ |= 1ull << (draw_groups::kLight + (n & 7u));
         }
     }
     if (changed) {

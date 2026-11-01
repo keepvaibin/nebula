@@ -26,7 +26,8 @@ cbuffer NativeDraw : register(b0) {
     float4 motion_prev_pos[3] : packoffset(c75);
     float4 motion_params : packoffset(c78);
     uint4 motion_ctrl : packoffset(c79);
-    uint4 row_bases : packoffset(c88);
+    uint4 row_bases : packoffset(c88);         // the parked ray tracer's and interpolation's (not filled)
+    uint4 matrix_groups[16] : packoffset(c89); // the draw's matrix rows by 3-row group (draw_matrices.h draw_groups)
 };
 
 cbuffer MaterialBlock : register(b1) {
@@ -39,9 +40,12 @@ SamplerState samp[8] : register(s0);
 // The draw's matrix rows (draw_matrices.h): position rows from pos_base (place k at 3k), texture rows from
 // row_bases.y (rows 30-63), normal rows from row_bases.x, light n's four rows at row_bases.w + 4n.
 StructuredBuffer<float4> mtx_rows : register(t3, space1);
-float4 native_matrix_row(uint r) { return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)]; }
-float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
-float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
+uint native_group(uint g) { return matrix_groups[g >> 2u][g & 3u]; }
+// Row r of a kind whose groups start at group `first` (three rows a group).
+float4 native_group_row(uint first, uint r) { return mtx_rows[native_group(first + r / 3u) + r % 3u]; }
+float4 native_matrix_row(uint r) { return r < 30u ? native_group_row(0u, r) : native_group_row(10u, r - 30u); }
+float4 native_normal_row(uint q) { return native_group_row(22u, q); }
+float4 native_light_row(uint n, uint w) { return mtx_rows[native_group(56u + n) + w]; }
 
 // Light n's contribution to a lit channel, in 0-255 units (rgb, and a for an alpha channel): its colour by its
 // attenuation (1 specular, 2 directional, 3 spot) and diffuse function (0 none, 1 signed, 2 clamped), at the eye-space
@@ -97,7 +101,7 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     }
     return lerp(c, fog_color.rgb, f);
 }
-float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
+float4 native_post_row(uint q) { return native_group_row(34u, q); }
 uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
 
 struct NativeVertexIn {

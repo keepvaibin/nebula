@@ -829,21 +829,6 @@ void gx_topology_for_primitive(
 }
 
 // The kinds of a draw's matrices (draw_matrices.h), in the order their blocks are appended (RenderCore::flush).
-constexpr std::array<DrawMatrices::Kind, 5> kMatrixKinds{DrawMatrices::kPositions, DrawMatrices::kTextures,
-                                                         DrawMatrices::kNormals, DrawMatrices::kPosts,
-                                                         DrawMatrices::kLights};
-constexpr std::size_t kLightKind = 4u;
-constexpr std::uint32_t kAllMatrixKinds = DrawMatrices::kPositions | DrawMatrices::kTextures | DrawMatrices::kNormals |
-                                          DrawMatrices::kPosts | DrawMatrices::kLights;
-// A kind's first row in the draw_rows numbering.
-constexpr std::uint32_t matrix_kind_first_row(DrawMatrices::Kind kind) noexcept {
-    return kind == DrawMatrices::kPositions ? draw_rows::kPosition
-           : kind == DrawMatrices::kTextures ? draw_rows::kTexture
-           : kind == DrawMatrices::kNormals  ? draw_rows::kNormal
-           : kind == DrawMatrices::kPosts    ? draw_rows::kPost
-                                             : draw_rows::kLight;
-}
-
 }  // anonymous namespace
 
 void RenderCore::reset_fifo_session_state() {
@@ -1569,7 +1554,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         apply_scene_jitter(cpu, upload, jitter_ndc);
     }
     // The draw's position rows (motion vectors of the frame after read them as its previous ones).
-    const std::uint32_t palette_offset = current_matrix_palette_ != 0u ? matrix_block_base_[0] : kNoPaletteOffset;
+    const std::uint32_t palette_offset = current_matrix_palette_ != 0u ? matrix_groups_[0] : kNoPaletteOffset;
     temporal_vs_palette_va_ = current_matrix_palette_;
     if (std::exchange(scene_chunk_restart_, false) && interp_recording_ && !motion_scene_ &&
         current_replay_record_ >= 0) [[unlikely]] {
@@ -7819,23 +7804,21 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const auto matrix_start = time_detail
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
-        std::uint32_t kinds = matrices_.changed();
+        std::uint64_t groups = matrices_.dirty_groups();
         if (!matrix_blocks_valid_ || renderer_.matrix_ring().epoch() != matrix_blocks_epoch_) {
-            // Blocks from before the ring's latest rewind are another segment's: every kind is appended again.
-            kinds = kAllMatrixKinds;
+            // Rows from before the ring's latest rewind are another segment's: every group is appended again.
+            groups = ~0ull;
             matrix_blocks_epoch_ = renderer_.matrix_ring().epoch();
         }
-        scene_kinds_pending_ |= kinds;
-        if (kinds != 0u || matrix_blocks_forced_) {
+        // The draw's moved lights (the parked ray tracer's aim) take light groups of their own; the game's stay.
+        const bool moved = rt_draw_lights_ != 0u;
+        if (groups != 0u || matrix_blocks_forced_) {
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
-            // The changed kinds' blocks, then the draw's moved lights (a light block of its own: the game's stay).
-            const bool moved = rt_draw_lights_ != 0u;
             std::uint32_t rows = moved ? draw_rows::kLightRows : 0u;
-            for (const DrawMatrices::Kind kind : kMatrixKinds) {
-                rows += (kinds & kind) != 0u ? DrawMatrices::row_count(kind) : 0u;
+            for (std::uint64_t left = groups; left != 0u; left &= left - 1u) {
+                rows += draw_groups::rows(static_cast<std::uint32_t>(std::countr_zero(left)));
             }
             const std::size_t bytes = static_cast<std::size_t>(rows) * 16u;
-            // The moved lights going back to the game's need no block.
             UploadRing::Allocation mtx_alloc{};
             if (bytes != 0u) {
                 mtx_alloc = renderer_.matrix_ring().allocate(bytes, /*alignment=*/256u);
@@ -7843,25 +7826,38 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             const gpu::Address ring_base = renderer_.matrix_ring().gpu_base();
             std::uint32_t next = bytes != 0u ? static_cast<std::uint32_t>((mtx_alloc.gpu - ring_base) / 16u) : 0u;
             auto* out = reinterpret_cast<std::uint32_t*>(mtx_alloc.cpu);
-            for (std::size_t k = 0; k < kMatrixKinds.size(); ++k) {
-                const DrawMatrices::Kind kind = kMatrixKinds[k];
-                if ((kinds & kind) == 0u) {
-                    continue;
+            // Each written group's rows (its kind's current values), appended once: draws name them by group.
+            InterpScene* const shadow = interp_recording_ && history_scene_ ? &interp_scenes_[interp_scene_] : nullptr;
+            const bool first_shadow = shadow != nullptr && shadow->palette_count == 0u;
+            for (std::uint64_t left = groups; left != 0u; left &= left - 1u) {
+                const auto g = static_cast<std::uint32_t>(std::countr_zero(left));
+                const std::uint32_t first = draw_groups::first_row(g);
+                const std::uint32_t count = draw_groups::rows(g);
+                for (std::uint32_t r = 0; r < count; ++r) {
+                    std::memcpy(out + 4u * r, matrices_.row(first + r).data(), 16u);
                 }
-                const std::uint32_t count = DrawMatrices::row_count(kind);
-                std::memcpy(out, matrices_.rows(kind), count * 16u);
+                if (shadow != nullptr && !first_shadow) [[unlikely]] {
+                    for (std::uint32_t r = 0; r < count && first + r < draw_rows::kRows; ++r) {
+                        scene_row_index_[first + r] = static_cast<std::uint32_t>(shadow->palette_rows.size() / 4u);
+                        shadow->palette_rows.insert(shadow->palette_rows.end(), out + 4u * r, out + 4u * r + 4u);
+                    }
+                }
                 out += 4u * count;
-                matrix_block_base_[k] = next;
+                matrix_groups_[g] = next;
                 next += count;
             }
-            draw_light_base_ = matrix_block_base_[kLightKind];
+            draw_matrix_groups_ = matrix_groups_;
             std::array<std::uint32_t, draw_rows::kLightRows * 4u> moved_lights{};
             if (moved) [[unlikely]] {
                 // The game's light rows with the aim applied, for this draw.
-                std::memcpy(moved_lights.data(), matrices_.rows(DrawMatrices::kLights), sizeof(moved_lights));
+                for (std::uint32_t r = 0; r < draw_rows::kLightRows; ++r) {
+                    std::memcpy(moved_lights.data() + 4u * r, matrices_.row(draw_rows::kLight + r).data(), 16u);
+                }
                 write_rt_lights(moved_lights.data());
                 std::memcpy(out, moved_lights.data(), sizeof(moved_lights));
-                draw_light_base_ = next;
+                for (std::uint32_t n = 0; n < 8u; ++n) {
+                    draw_matrix_groups_[draw_groups::kLight + n] = next + 4u * n;
+                }
                 ++rt_light_uploads_;
             }
             if (snapshot_start != 0u) [[unlikely]] {
@@ -7870,41 +7866,32 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             }
             current_matrix_palette_ = bytes != 0u ? mtx_alloc.gpu : current_matrix_palette_;
             rt_palette_lights_ = rt_draw_lights_;
-            if (interp_recording_ && history_scene_) [[unlikely]] {
-                InterpScene& scene = interp_scenes_[interp_scene_];
-                // The kinds that changed since the scene's last shadow (all of them for its first) join the scene's
-                // rows; the shadow's table names each row's current one.
-                const bool first_shadow = scene.palette_count == 0u;
-                for (const DrawMatrices::Kind kind : kMatrixKinds) {
-                    if (!first_shadow && (scene_kinds_pending_ & kind) == 0u) {
-                        continue;
-                    }
-                    const std::uint32_t first = matrix_kind_first_row(kind);
-                    const std::uint32_t count = DrawMatrices::row_count(kind);
-                    const DrawMatrices::Row* source = matrices_.rows(kind);
-                    for (std::uint32_t r = 0; r < count; ++r) {
-                        scene_row_index_[first + r] = static_cast<std::uint32_t>(scene.palette_rows.size() / 4u);
-                        scene.palette_rows.insert(scene.palette_rows.end(), source[r].begin(), source[r].end());
+            if (shadow != nullptr) [[unlikely]] {
+                // The parked interpolation's shadow: every row for its first, then the rows written since.
+                if (first_shadow) {
+                    for (std::uint32_t r = 0; r < draw_rows::kRows; ++r) {
+                        scene_row_index_[r] = static_cast<std::uint32_t>(shadow->palette_rows.size() / 4u);
+                        const auto& row = matrices_.row(r);
+                        shadow->palette_rows.insert(shadow->palette_rows.end(), row.begin(), row.end());
                     }
                 }
-                scene.palette_tables.insert(scene.palette_tables.end(), scene_row_index_.begin(),
-                                            scene_row_index_.end());
+                shadow->palette_tables.insert(shadow->palette_tables.end(), scene_row_index_.begin(),
+                                              scene_row_index_.end());
                 if (moved) {
-                    // The moved lights' rows: this shadow's own, the game's stay for the next.
-                    std::uint32_t* const table = scene.palette_tables.data() + scene.palette_count * draw_rows::kRows;
+                    std::uint32_t* const table = shadow->palette_tables.data() + shadow->palette_count * draw_rows::kRows;
                     for (std::uint32_t r = 0; r < draw_rows::kLightRows; ++r) {
-                        table[draw_rows::kLight + r] = static_cast<std::uint32_t>(scene.palette_rows.size() / 4u);
-                        scene.palette_rows.insert(scene.palette_rows.end(), moved_lights.data() + 4u * r,
-                                                  moved_lights.data() + 4u * r + 4u);
+                        table[draw_rows::kLight + r] = static_cast<std::uint32_t>(shadow->palette_rows.size() / 4u);
+                        shadow->palette_rows.insert(shadow->palette_rows.end(), moved_lights.data() + 4u * r,
+                                                    moved_lights.data() + 4u * r + 4u);
                     }
                 }
-                scene_kinds_pending_ = 0u;
-                current_palette_shadow_ = static_cast<std::int32_t>(scene.palette_count++);
+                current_palette_shadow_ = static_cast<std::int32_t>(shadow->palette_count++);
             }
             matrix_blocks_valid_ = true;
             matrix_blocks_forced_ = false;
             matrix_bases_changed_ = true;
             matrices_.clear_changed();
+            matrices_.clear_dirty_groups();
             frame_matrix_upload_bytes_ += bytes;
         }
         // Every chunk is valid in this frame slot, so current_matrix_palette_ already points into this
@@ -7917,11 +7904,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     // The rows' binding: the ring from its start (draws name their blocks' rows from it).
     draw_matrix_palette_ = current_matrix_palette_ != 0u ? renderer_.matrix_ring().gpu_base() : 0u;
-    cpu_vs_constants_.pos_base = matrix_block_base_[0];
-    cpu_vs_constants_.row_bases[0] = matrix_block_base_[2];
-    cpu_vs_constants_.row_bases[1] = matrix_block_base_[1];
-    cpu_vs_constants_.row_bases[2] = matrix_block_base_[3];
-    cpu_vs_constants_.row_bases[3] = draw_light_base_;
+    std::memcpy(cpu_vs_constants_.matrix_groups, draw_matrix_groups_.data(), sizeof(cpu_vs_constants_.matrix_groups));
     // The shape's per-vertex position matrix indices (VertexConstants::flags bit 0; the uber shaders take the key's
     // bit): the native vertex shaders and the ray tracer read the constants' bit, so a change uploads them again.
     const std::uint32_t per_vertex = matrix_bits & 1u;

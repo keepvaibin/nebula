@@ -38,6 +38,36 @@ inline constexpr std::uint32_t kLightPositionWord = 10u;
 inline constexpr std::uint32_t kLightDirectionWord = 13u;
 }  // namespace draw_rows
 
+// The rows in 3-row groups, the unit uploaded and named per draw (VertexConstants::matrix_groups): positions 0-9
+// (rows 0-29), textures 10-21 (rows 30-63), normals 22-33 (36 rows), post-transform 34-55 (64 rows), lights 56-63 (a
+// light's 4 rows). A group of three may read past its kind's last row (the next kind's: never read through it).
+namespace draw_groups {
+inline constexpr std::uint32_t kPosition = 0u;
+inline constexpr std::uint32_t kTexture = 10u;
+inline constexpr std::uint32_t kNormal = 22u;
+inline constexpr std::uint32_t kPost = 34u;
+inline constexpr std::uint32_t kLight = 56u;
+inline constexpr std::uint32_t kGroups = 64u;
+// The group holding row `r` (draw_rows numbering), its first row and its row count.
+[[nodiscard]] constexpr std::uint32_t of_row(std::uint32_t r) noexcept {
+    return r < draw_rows::kTexture ? r / 3u
+           : r < draw_rows::kNormal ? kTexture + (r - draw_rows::kTexture) / 3u
+           : r < draw_rows::kPost ? kNormal + (r - draw_rows::kNormal) / 3u
+           : r < draw_rows::kLight ? kPost + (r - draw_rows::kPost) / 3u
+                                   : kLight + (r - draw_rows::kLight) / 4u;
+}
+[[nodiscard]] constexpr std::uint32_t first_row(std::uint32_t g) noexcept {
+    return g < kTexture ? 3u * g
+           : g < kNormal ? draw_rows::kTexture + 3u * (g - kTexture)
+           : g < kPost ? draw_rows::kNormal + 3u * (g - kNormal)
+           : g < kLight ? draw_rows::kPost + 3u * (g - kPost)
+                        : draw_rows::kLight + 4u * (g - kLight);
+}
+[[nodiscard]] constexpr std::uint32_t rows(std::uint32_t g) noexcept { return g < kLight ? 3u : 4u; }
+static_assert(of_row(draw_rows::kLight - 1u) == kLight - 1u && first_row(kLight - 1u) + 3u <= draw_rows::kRows);
+static_assert(of_row(draw_rows::kLight + 4u * 8u - 1u) == kGroups - 1u);  // eight lights (rows past them unused)
+}  // namespace draw_groups
+
 // A light as the game loads it: position and direction (eye space), the angle and distance attenuation terms
 // (a0-a2, k0-k2) and the colour (RGBA).
 struct NativeLight {
@@ -93,6 +123,9 @@ public:
     [[nodiscard]] std::uint32_t changed() const noexcept { return changed_; }
     void clear_changed() noexcept { changed_ = 0u; }
     void mark_all_changed() noexcept { changed_ = kPositions | kTextures | kNormals | kPosts | kLights; }
+    // The groups (draw_groups) written with other values since the consumer last took them (all at the start).
+    [[nodiscard]] std::uint64_t dirty_groups() const noexcept { return dirty_groups_; }
+    void clear_dirty_groups() noexcept { dirty_groups_ = 0u; }
     // Whether a row changed since the last call (all at the start), for the drawing state's dirty flags.
     [[nodiscard]] bool consume_any_change() noexcept {
         const bool c = any_changed_;
@@ -121,6 +154,7 @@ private:
     std::uint32_t writes_ = 0u;
     std::uint32_t changed_ = kPositions | kTextures | kNormals | kPosts | kLights;
     bool any_changed_ = true;
+    std::uint64_t dirty_groups_ = ~0ull;
     bool track_loads_ = false;
 };
 

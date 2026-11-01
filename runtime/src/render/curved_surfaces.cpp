@@ -1170,8 +1170,8 @@ void load_draw_rows(CurveDraw d, uint tid) {
     if ((d.flags & 1u) != 0u) {
         // The position and texture rows from the draw's blocks in the matrix ring (VertexConstants pos_base and
         // row_bases.y).
-        const uint at = tid < 30u ? constant_data.Load(d.constants + CB_POS_BASE) + tid
-                                  : constant_data.Load(d.constants + CB_ROW_BASES + 4u) + (tid - 30u);
+        const uint group = tid < 30u ? tid / 3u : 10u + (tid - 30u) / 3u;
+        const uint at = constant_data.Load(d.constants + CB_GROUPS + 4u * group) + (tid < 30u ? tid : tid - 30u) % 3u;
         draw_rows[8u + tid] = asfloat(palette_data.Load4(16u * at));
     }
     GroupMemoryBarrierWithGroupSync();
@@ -1313,10 +1313,10 @@ std::string curve_sort_source() {
     char defines[256];
     std::snprintf(defines, sizeof(defines),
                   "#define VERTEX_STRIDE %zuu\n#define VERTEX_MTX %zuu\n#define VERTEX_CURVE %zuu\n"
-                  "#define CB_POS_BASE %zuu\n#define CB_ROW_BASES %zuu\n#define CB_INLINE_POS %zuu\n"
+                  "#define CB_GROUPS %zuu\n#define CB_INLINE_POS %zuu\n"
                   "#define CB_RASTER %zuu\n",
                   sizeof(RenderVertex), offsetof(RenderVertex, mtx_indices), offsetof(RenderVertex, curve),
-                  offsetof(VertexConstants, pos_base), offsetof(VertexConstants, row_bases),
+                  offsetof(VertexConstants, matrix_groups),
                   offsetof(VertexConstants, inline_pos_matrix), offsetof(VertexConstants, line_point_raster));
     return std::string("// Curved surfaces' triangles sorted (curve_sort_source).\n") + defines +
            kCurveCodec + kCurveValue + kCurveSort;

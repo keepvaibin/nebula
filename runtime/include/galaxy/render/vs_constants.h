@@ -215,6 +215,8 @@ struct VsConstantsCpuCache {
     // The draw's matrix blocks (VertexConstants::pos_base, row_bases), RenderCore's.
     std::uint32_t pos_base = 0u;
     std::uint32_t row_bases[4]{};
+    // The draw's matrix groups (VertexConstants::matrix_groups), RenderCore's.
+    std::uint32_t matrix_groups[draw_groups::kGroups]{};
     // VertexConstants::flags bit 0: the draw's vertices carry position matrix indices (the shape's attributes, the
     // source of VertexShaderKey::flags bit 0), RenderCore's.
     std::uint32_t per_vertex = 0u;
@@ -238,6 +240,7 @@ struct VsConstantsCpuCache {
         std::memcpy(constants.debake_peak, debake_peak, sizeof(debake_peak));
         constants.pos_base = pos_base;
         std::memcpy(constants.row_bases, row_bases, sizeof(row_bases));
+        std::memcpy(constants.matrix_groups, matrix_groups, sizeof(matrix_groups));
         return constants;
     }
 };

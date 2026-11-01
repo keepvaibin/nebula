@@ -136,6 +136,10 @@ struct alignas(256) VertexConstants {
     // at row_bases[0] + q, texture row r (30-63) at row_bases[1] + r - 30, post-transform row q at row_bases[2] + q,
     // light n's rows at row_bases[3] + 4n.
     std::uint32_t row_bases[4];
+    // The draw's matrix rows by 3-row group (draw_matrices.h draw_groups; E-05): each entry the first row of that
+    // group in the frame's matrix ring. Native shaders read every matrix through it (native_material.hlsli); pos_base
+    // and row_bases above are the parked ray tracer's and interpolation's (not filled since).
+    std::uint32_t matrix_groups[64];
 };
 
 static_assert(offsetof(VertexConstants, projection) == 0);
@@ -160,7 +164,8 @@ inline constexpr std::uint32_t kMotionOwnRows = 0xFFFFFFFFu;
 static_assert(offsetof(VertexConstants, debake_sh) == 1280);
 static_assert(offsetof(VertexConstants, debake_peak) == 1392);
 static_assert(offsetof(VertexConstants, row_bases) == 1408);
-static_assert(sizeof(VertexConstants) == 1536);
+static_assert(offsetof(VertexConstants, matrix_groups) == 1424);
+static_assert(sizeof(VertexConstants) == 1792);
 
 #if defined(_MSC_VER)
 #pragma warning(pop)

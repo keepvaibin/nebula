@@ -1390,14 +1390,14 @@ private:
     // index from the ring's base; positions, textures, normals, post-transform matrices, lights), and the light
     // block the draw reads (the game's, or its moved lights'). They hold once the slot's first draw appended every
     // kind (matrix_blocks_valid_, cleared on the slot rewind and on session reset).
-    std::array<std::uint32_t, 5> matrix_block_base_{};
-    std::uint32_t draw_light_base_ = 0;
+    // The groups' rows in the frame's matrix ring (draw_groups), and this draw's (its moved lights' own).
+    std::array<std::uint32_t, draw_groups::kGroups> matrix_groups_{};
+    std::array<std::uint32_t, draw_groups::kGroups> draw_matrix_groups_{};
     bool matrix_bases_changed_ = true;
     // The recording scene's index (InterpScene::palette_rows) of each row's current value (draw_rows numbering); its
     // first shadow appends every row.
     std::array<std::uint32_t, draw_rows::kRows> scene_row_index_{};
     // Kinds changed since the recording scene's last shadow (uploads between shadows clear the matrices' own mask).
-    std::uint32_t scene_kinds_pending_ = 0;
     bool matrix_blocks_valid_ = false;
     std::uint64_t matrix_blocks_epoch_ = 0;  // the matrix ring's epoch() the blocks were appended in
     bool matrix_blocks_forced_ = true;
