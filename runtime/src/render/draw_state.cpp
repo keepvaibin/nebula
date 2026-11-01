@@ -20,8 +20,8 @@ void set_blend(BlendMode& b, std::uint8_t op, std::uint8_t source, std::uint8_t 
     b.blend_enable = op == 1u || op == 2u;
     b.logic_op_enable = op == 3u;
     b.subtract = op == 2u;
-    b.src_factor = static_cast<BlendFactor>(source & 7u);
-    b.dst_factor = static_cast<BlendFactor>(destination & 7u);
+    b.src_factor = static_cast<BlendFactor>(source <= 9u ? source : 0u);  // NEBULA_FACTOR_*
+    b.dst_factor = static_cast<BlendFactor>(destination <= 9u ? destination : 0u);
     b.logic_mode = static_cast<std::uint8_t>(logic & 15u);
 }
 

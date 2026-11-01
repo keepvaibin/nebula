@@ -45,8 +45,18 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     // An EFB without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
     // mapping to the D3D12 PSO.
-    const auto blend_factor = [has_alpha = pe.pixel_format == 1u](
+    // The pipeline key's three bits per factor are GX's codes, as the pipelines decode them: a colour factor names
+    // the other side's colour (source 2 = destination colour, destination 2 = source colour).
+    const auto key_code = [](BlendFactor factor) {
+        switch (factor) {
+        case BlendFactor::DstColor: return BlendFactor::SrcColor;
+        case BlendFactor::InvDstColor: return BlendFactor::InvSrcColor;
+        default: return factor;
+        }
+    };
+    const auto blend_factor = [has_alpha = pe.pixel_format == 1u, key_code](
                                   BlendFactor factor) {
+        factor = key_code(factor);
         if (!has_alpha) {
             if (factor == BlendFactor::DstAlpha) {
                 return BlendFactor::One;

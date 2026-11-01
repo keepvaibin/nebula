@@ -570,8 +570,8 @@ namespace {
         memset(&material, 0, sizeof(material));
         material.shader = shader;
         material.blend_op = rProgram.blend.type;  // NEBULA_BLEND_*
-        material.blend_src = nativeFactor(rProgram.blend.source, true);
-        material.blend_dst = nativeFactor(rProgram.blend.destination, false);
+        material.blend_src = rProgram.blend.source;  // NEBULA_FACTOR_*
+        material.blend_dst = rProgram.blend.destination;
         material.logic_op = rProgram.blend.logic_op;
         material.depth_test = rProgram.z_mode.enable;
         material.depth_func = rProgram.z_mode.func;
@@ -932,8 +932,8 @@ namespace J3DNativeMaterial {
             pOut->alpha_compare.comp1 = edge ? GX_LEQUAL : GX_ALWAYS;
             pVal->alpha_ref[1] = edge ? 0xFF : 0;
             pOut->blend.type = xlu ? NEBULA_BLEND_ADD : NEBULA_BLEND_REPLACE;
-            pOut->blend.source = xlu ? GX_BL_SRCALPHA : GX_BL_ONE;
-            pOut->blend.destination = xlu ? GX_BL_INVSRCALPHA : GX_BL_ZERO;
+            pOut->blend.source = xlu ? NEBULA_FACTOR_SRC_ALPHA : NEBULA_FACTOR_ONE;
+            pOut->blend.destination = xlu ? NEBULA_FACTOR_INV_SRC_ALPHA : NEBULA_FACTOR_ZERO;
             pOut->blend.logic_op = GX_LO_COPY;
             pOut->z_mode.enable = 1;
             pOut->z_mode.func = GX_LEQUAL;
@@ -969,8 +969,8 @@ namespace J3DNativeMaterial {
             pOut->blend.type = type == GX_BM_BLEND ? NEBULA_BLEND_ADD : type == GX_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
                                : type == GX_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
         }
-        pOut->blend.source = rBlend.mSrcFactor;
-        pOut->blend.destination = rBlend.mDstFactor;
+        pOut->blend.source = nativeFactor(rBlend.mSrcFactor, true);
+        pOut->blend.destination = nativeFactor(rBlend.mDstFactor, false);
         pOut->blend.logic_op = rBlend.mOp;
         const J3DZMode& rZ = *pPE->getZMode();
         pOut->z_mode.enable = rZ.getCompareEnable();
