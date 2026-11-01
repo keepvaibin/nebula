@@ -170,7 +170,8 @@ void J3DModelX::directDraw(J3DModel* model) {
 }
 
 namespace {
-    // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass, `alpha` its
+    // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
+    // colour as the draw's lists left it), `alpha` its
     // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
     struct OverrideColor {
         u8 r, g, b, alpha, a;
@@ -179,7 +180,7 @@ namespace {
         {0, 0, 0, 0, 0},     {0, 0, 0, 64, 1},   {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
         {255, 255, 0, 255, 1}, {0, 0, 0, 0, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
         {0, 0, 0, 252, 1},   {0, 0, 0, 4, 1},    {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
-        {0, 0, 0, 0, 0},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 2},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
     };
 }  // namespace
 
@@ -221,22 +222,6 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
             }
         }
     }
-    if (override >= 0) {
-        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (GX's: one
-        // stage of the colour register, no textures), with the blending, depth and culling the lists set.
-        NebulaNativeMaterial material;
-        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
-                           false, NEBULA_CULL_NONE);
-        material.blend_op = NEBULA_NATIVE_KEPT;
-        material.depth_test = NEBULA_NATIVE_KEPT;
-        material.cull = NEBULA_NATIVE_KEPT;
-        const OverrideColor& rColor = kOverrideColors[override];
-        material.constants[0] = rColor.r / 255.0f;
-        material.constants[1] = rColor.g / 255.0f;
-        material.constants[2] = rColor.b / 255.0f;
-        material.constants[3] = rColor.alpha / 255.0f;
-        NativeShader::send(material);
-    }
 
     if (_1B8) {
         _1B4 = _1B8;
@@ -253,6 +238,29 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     }
     if (_1C4[index]) {
         _1C4[index]->send();
+    }
+    if (override >= 0) {
+        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (GX's: one
+        // stage of the colour register, no textures), with the blending, depth and culling the lists set.
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
+                           false, NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        material.depth_test = NEBULA_NATIVE_KEPT;
+        material.cull = NEBULA_NATIVE_KEPT;
+        const OverrideColor& rColor = kOverrideColors[override];
+        if (rColor.a == 2) {
+            const f32* pRegisters = J3DNativeMaterial::registers();
+            for (u32 c = 0; c < 4; c++) {
+                material.constants[c] = pRegisters[4 + c];
+            }
+        } else {
+            material.constants[0] = rColor.r / 255.0f;
+            material.constants[1] = rColor.g / 255.0f;
+            material.constants[2] = rColor.b / 255.0f;
+            material.constants[3] = rColor.alpha / 255.0f;
+        }
+        NativeShader::send(material);
     }
     if (_120) {
         _120(_128, _1C0);
@@ -400,16 +408,10 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
     storeStateList(list, 11);
 
+    // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_BACK);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setCullMode(GX_CULL_BACK);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP, GX_TRUE, GX_FALSE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ONE, GX_CC_C0, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
     storeStateList(list, 12);
 
     list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
