@@ -289,9 +289,10 @@ struct NativeOut { float4 color : SV_Target0; };
 
 NativeOut native_ps(NativeVaryings i) {
     const float4 c0 = material_color(i);
-    // The pixel engine, as the uber shader writes it: an alpha of 1 blends and writes as 0; a six-bits-per-channel
-    // frame keeps six bits of colour (after its 2x2 ordered pattern when on) and six of alpha, or the constant
-    // destination alpha; the blender reads the 8-bit combiner alpha (SV_Target1 for dual-source blending).
+    // The pixel engine, as the renderer's GX path writes it (build_pixel_shader_key's 8-bit colour): an alpha of 1
+    // blends and writes as 0; the colour keeps 8 bits on every frame (no six-bit colour, no ordered pattern); the
+    // alpha six bits, or the constant destination alpha; the blender reads the 8-bit combiner alpha (SV_Target1 for
+    // dual-source blending).
     const uint pe = vs_header.z;
     uint4 px = uint4(round(saturate(c0) * 255.0));
     if (px.a == 1u) {
@@ -299,16 +300,7 @@ NativeOut native_ps(NativeVaryings i) {
     }
     const float stage_alpha = float(px.a) / 255.0;
     float4 c;
-    if ((pe & 1u) != 0u) {
-        int3 d = int3(px.rgb);
-        if ((pe & 2u) != 0u) {
-            const int2 xy = int2(i.pos.xy / float(max(vs_header.y, 1u))) & 1;
-            d = (d - (d >> 6)) + (xy.x ^ xy.y) * 2 + xy.y;
-        }
-        c.rgb = float3(uint3(clamp(d, 0, 255)) >> 2u) / 63.0;
-    } else {
-        c.rgb = float3(px.rgb) / 255.0;
-    }
+    c.rgb = float3(px.rgb) / 255.0;
 #if NATIVE_REACTIVE
     c.a = stage_alpha;
 #else
