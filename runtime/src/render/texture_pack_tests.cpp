@@ -35,6 +35,14 @@ using namespace galaxy::render;
 
 namespace {
 
+// An image as these tests describe it before handing its record over.
+struct TestImage {
+    std::uint16_t width;
+    std::uint16_t height;
+    galaxy::render::TexFormat format;
+    std::uint64_t address;
+};
+
 int failures = 0;
 
 void expect(bool condition, const char* message) {
@@ -517,7 +525,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     std::vector<std::byte> guest(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(32u, 32u, 1u, NEBULA_TEXTURE_RGBA8));
     nebula_texture_init(guest.data(), 32u, 32u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
     for (std::size_t i = NEBULA_TEXTURE_HEADER; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
-    TexImage image{};
+    TestImage image{};
     image.address = kAddress;
     image.width = 32u;
     image.height = 32u;

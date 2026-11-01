@@ -25,7 +25,6 @@ enum class TexFormat : std::uint8_t {
     C4 = 0x8, C8 = 0x9, C14X2 = 0xA, CMPR = 0xE,
 };
 
-enum class TlutFormat : std::uint8_t { IA8 = 0, RGB565 = 1, RGB5A3 = 2 };
 
 
 enum class FogType : std::uint8_t {
@@ -112,21 +111,7 @@ struct PeControl {
     bool early_z;                   // zcomploc: Z test before texture
 };
 
-struct TexImage {
-    std::uint16_t width;            // texels (register stores size-1)
-    std::uint16_t height;
-    TexFormat format;
-    std::uint64_t address;       // physical byte address (reg value << 5)
 
-    [[nodiscard]] bool operator==(const TexImage&) const = default;
-};
-
-struct TlutRef {
-    std::uint16_t tmem_offset;      // TLUT slot in TMEM high bank
-    TlutFormat format;
-
-    [[nodiscard]] bool operator==(const TlutRef&) const = default;
-};
 
 struct ScissorRect {
     std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space

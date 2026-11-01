@@ -1431,12 +1431,6 @@ std::uint64_t RenderCore::record_identity() noexcept {
     return key != 0u ? key : 1u;
 }
 
-std::uint32_t RenderCore::rt_light_key() noexcept {
-    const std::uint64_t key = mix64(mix64(rt_light_object_, rt_light_material_), rt_light_draws_++);
-    const auto folded = static_cast<std::uint32_t>(key ^ (key >> 32u));
-    return folded != 0u ? folded : 1u;
-}
-
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
     if (kind == motion::kMarkerDumpTag) {
         dump_tag_ = static_cast<std::uint32_t>(a);
@@ -1447,17 +1441,6 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
         flush_pending_draw_batch();
         renderer_.game_bloom(aux, static_cast<std::uint32_t>(a), static_cast<std::uint32_t>(b));
         return;
-    }
-    // The traced draws' identity (rt_light_key): an object, a model's shape, an emitter (its object, then its resource
-    // or shape) or a particle (its pool node, its lifetime: the next particle in the node is another) starts it over.
-    if (kind == motion::kMarkerNameObj || kind == motion::kMarkerShapePacket || kind == motion::kMarkerEmitter ||
-        kind == motion::kMarkerParticle) {
-        rt_light_object_ = mix64(mix64(kind, a), kind == motion::kMarkerParticle ? (b & 0xFFFFu) : b);
-        rt_light_material_ = 0u;
-        rt_light_draws_ = 0u;
-    } else if (kind == motion::kMarkerMaterial) {
-        rt_light_material_ = static_cast<std::uint32_t>(a);
-        rt_light_draws_ = 0u;
     }
     if (kind < identity_markers_by_kind_.size()) {
         if (identity_markers_by_kind_[kind]++ == 0u && rt_log_glows()) [[unlikely]] {
