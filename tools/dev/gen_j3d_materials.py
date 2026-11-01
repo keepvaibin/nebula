@@ -228,6 +228,23 @@ def emit_channels(p, out):
             out.append(f"    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);")
 
 
+def alpha_expression(s):
+    """Stage `s`'s alpha combiner over the names t, ras, ka, prev and r0-r2."""
+    a, b, c, d = (CA[x] for x in s["alpha_in"])
+    a, b, c = (f"j3d_in({x})" if x.split(".")[0] in DEST else x for x in (a, b, c))
+    if s["alpha_op"] <= 1:
+        sign = "-" if s["alpha_op"] == 1 else "+"
+        aexpr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['alpha_bias']]}){SCALE[s['alpha_scale']]}"
+    elif s["alpha_op"] in (14, 15):
+        cmp = ">" if s["alpha_op"] == 14 else "=="
+        aexpr = f"{d} + (round({a} * 255.0) {cmp} round({b} * 255.0) ? {c} : 0.0)"
+    else:
+        raise Unsupported(f"alpha compare op {s['alpha_op']} on colour channels")
+    if s["alpha_clamp"]:
+        aexpr = f"saturate({aexpr})"
+    return aexpr
+
+
 def emit_pixel(p, out):
     out.append("float4 material_color(NativeVaryings i) {")
     # A pass that replaces the stages (j3d_material.hlsli j3d_override): texture 0 at coordinate 0, the channel colour,
@@ -236,7 +253,20 @@ def emit_pixel(p, out):
           else "float4(0.0, 0.0, 0.0, 0.0)")
     k0 = konst_alpha(p["stages"][0]["konst_alpha"]) if p["stages"] else "1.0"
     out.append("    [branch] if (material.ovr.x != 0.0) {")
-    out.append(f"        return j3d_override({t0}, i.color, {k0}, i.pos);")
+    # Stage 0's own alpha over texture 0 at coordinate 0 and no channel (mode 5: J3DModelX list 11, a one-stage
+    # program without channels that keeps the material's stage 0 alpha).
+    a0 = "1.0"
+    if p["stages"]:
+        out.append(f"        const float4 t = {t0};")
+        out.append("        const float4 ras = float4(0.0, 0.0, 0.0, 0.0);")
+        out.append("        const float4 prev = material.reg[0];")
+        out.append("        const float4 r0 = material.reg[1];")
+        out.append("        const float4 r1 = material.reg[2];")
+        out.append("        const float4 r2 = material.reg[3];")
+        out.append(f"        const float ka = {k0};")
+        a0 = alpha_expression(p["stages"][0])
+        t0 = "t"
+    out.append(f"        return j3d_override({t0}, i.color, {k0}, {a0}, i.pos);")
     out.append("    }")
     out.append("    float4 prev = material.reg[0];")
     out.append("    float4 r0 = material.reg[1];")
@@ -317,19 +347,7 @@ def emit_pixel(p, out):
         if s["color_clamp"]:
             expr = f"saturate({expr})"
         out.append(f"        const float3 rc = {expr};")
-        a, b, c, d = (CA[x] for x in s["alpha_in"])
-        a, b, c = (f"j3d_in({x})" if x.split(".")[0] in DEST else x for x in (a, b, c))
-        if s["alpha_op"] <= 1:
-            sign = "-" if s["alpha_op"] == 1 else "+"
-            aexpr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['alpha_bias']]}){SCALE[s['alpha_scale']]}"
-        elif s["alpha_op"] in (14, 15):
-            cmp = ">" if s["alpha_op"] == 14 else "=="
-            aexpr = f"{d} + (round({a} * 255.0) {cmp} round({b} * 255.0) ? {c} : 0.0)"
-        else:
-            raise Unsupported(f"alpha compare op {s['alpha_op']} on colour channels")
-        if s["alpha_clamp"]:
-            aexpr = f"saturate({aexpr})"
-        out.append(f"        const float ra = {aexpr};")
+        out.append(f"        const float ra = {alpha_expression(s)};")
         out.append(f"        {DEST[s['color_reg'] & 3]}.rgb = rc;")
         out.append(f"        {DEST[s['alpha_reg'] & 3]}.a = ra;")
         out.append("    }")

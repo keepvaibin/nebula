@@ -174,6 +174,11 @@ namespace {
     NebulaStateOp sList2ProgramOps[8];
     J3DStateList sList2Program;
     bool sList2ProgramBuilt = false;
+    // List 11's program (the reflection model: texture 0 halved, stage 0's alpha above 0x20, no channels) for a material
+    // the drawing state draws; a native material takes J3DNativeMaterial::override mode 5.
+    NebulaStateOp sList11ProgramOps[8];
+    J3DStateList sList11Program;
+    bool sList11ProgramBuilt = false;
 
     // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
     // colour as the draw's lists left it), `alpha` its
@@ -224,6 +229,9 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
             mStateLists[i].send();
             if (i == 2 && !J3DNativeMaterial::override(1, 0.0f, 0.0f, -1.0f)) {
                 sList2Program.send();
+            }
+            if (i == 11 && !J3DNativeMaterial::override(5, 0.0f, 0.0f, 32.0f)) {
+                sList11Program.send();
             }
             if (kOverrideColors[i].a != 0) {
                 override = static_cast< s32 >(i);
@@ -414,15 +422,25 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setDstAlpha(GX_TRUE, 0);
     storeStateList(list, 10);
 
+    // List 11 (the reflection model): its fixed state here; its program (one stage: texture 0 halved, stage 0's alpha
+    // above 0x20, no channels) is J3DNativeMaterial::override mode 5 on a native material, sList11Program otherwise.
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    list.setAlphaCompare(GX_GREATER, 0x20, GX_AOP_AND, GX_ALWAYS, 0);
+    list.setCullMode(GX_CULL_FRONT);
     list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
     storeStateList(list, 11);
+    if (!sList11ProgramBuilt) {
+        J3DStateList program(sList11ProgramOps, 8);
+        program.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
+        program.setAlphaCompare(GX_GREATER, 0x20, GX_AOP_AND, GX_ALWAYS, 0);
+        program.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+        program.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+        program.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO,
+                                GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
+        program.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1,
+                            GX_COLOR_NULL);
+        sList11Program.copy(program);
+        sList11ProgramBuilt = true;
+    }
 
     // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
