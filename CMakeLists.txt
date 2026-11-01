@@ -534,6 +534,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/interp_gpu.cpp
     runtime/src/render/display_modes.cpp
     runtime/src/render/render_core.cpp
+    runtime/src/render/draw_input_dump.cpp
     runtime/src/frame_telemetry.cpp
     runtime/src/perf_hint.cpp
     runtime/src/render/game_asset_extract.cpp
@@ -770,6 +771,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp
             runtime/src/render/render_core.cpp
+            runtime/src/render/draw_input_dump.cpp
         runtime/src/render/game_lights.cpp
         runtime/src/render/game_objects.cpp
     runtime/src/render/rt_tev_eval.cpp

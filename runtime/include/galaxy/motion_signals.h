@@ -71,6 +71,9 @@ inline constexpr std::uint8_t kMarkerTraceOnly = 14u;
 // green, blue), the tap weight and the intensity, b the ring's vertical radius per unit; kBloomRestore the game's own
 // chain drawing its kept scene back (the kept one instead).
 inline constexpr std::uint8_t kMarkerBloom = 15u;
+// Tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): a the native shader id of the material the draws up to the next
+// material use, on the native and the GX path alike (J3DNativeMaterial), so the two paths' inputs can be compared.
+inline constexpr std::uint8_t kMarkerDumpTag = 17u;
 inline constexpr std::uint16_t kBloomKeep = 1u;
 inline constexpr std::uint16_t kBloomNormal = 2u;
 inline constexpr std::uint16_t kBloomSimple = 3u;

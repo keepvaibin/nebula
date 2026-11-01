@@ -406,6 +406,10 @@ typedef struct NebulaNativeMaterial {
         uint8_t anisotropy;    /* 0 off, 1 two, 2 four samples */
         uint8_t edge_lod;      /* 1 the level from the texel's edges */
         float lod_bias, min_lod, max_lod;
+        uint64_t palette;      /* colour-indexed formats (C4, C8, C14X2): the palette's identity (its address), else 0 */
+        uint16_t palette_entries;
+        uint8_t palette_format; /* GXTlutFmt: IA8, RGB565, RGB5A3 */
+        uint8_t reserved[5];
     } textures[8];
     NebulaMaterialLight light[8];
     /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
@@ -652,6 +656,8 @@ enum {
                                           are built at load and the programs without a native shader registered */
     NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
                                           (from 1) drawn by its native shader, the others by their GX programs; 0 all */
+    NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS, /* tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>): the native shader id whose
+                                            material's draws the game tags on both paths (0 none) */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */

@@ -6,6 +6,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
+#include <JSystem/JUtility/JUTPalette.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <revolution/types.h>
@@ -58,6 +59,14 @@ namespace NativeShader {
         rMaterial.textures[slot].lod_bias = pTexture->mLodBias / 100.0f;
         rMaterial.textures[slot].min_lod = static_cast< s16 >(pTexture->mMinLod) / 8.0f;
         rMaterial.textures[slot].max_lod = static_cast< s16 >(pTexture->mMaxLod) / 8.0f;
+        // A colour-indexed texture's palette (the texture's own, else the one in its resource).
+        const JUTPalette* pPalette = pTexture->mPalette != NULL ? pTexture->mPalette : pTexture->mEmbPalette;
+        const u32 format = pTexture->getFormat() & 0x0F;
+        if (pPalette != NULL && (format == GX_TF_C4 || format == GX_TF_C8 || format == GX_TF_C14X2)) {
+            rMaterial.textures[slot].palette = reinterpret_cast< uintptr_t >(pPalette->mColorTable);
+            rMaterial.textures[slot].palette_entries = pPalette->mLutNum;
+            rMaterial.textures[slot].palette_format = pPalette->mFormat;
+        }
     }
 
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
