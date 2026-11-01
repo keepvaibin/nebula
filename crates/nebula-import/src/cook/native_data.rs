@@ -6,8 +6,12 @@
 //!   a 0x1A escape's length and group bytes stay bytes, its id and parameters are 16-bit units), FLW1's counts, nodes
 //!   (index; an event node's 32-bit value, the others' next index and group) and branch table, FLI1's header. Byte
 //!   0x1F of the header becomes 2.
+//! - KCL (collision): the four offsets and the scalars (0x0-0x38), positions and normals (whole vectors), prisms from
+//!   entry 1 (a height and five indices), and the octree (s32 node words, u16 prism lists; a shared list once). A
+//!   cooked file's first offset reads below 64 KB in host order (the disc's, big-endian, reads at least 64 KB).
 
 use anyhow::{bail, Context, Result};
+use std::collections::HashSet;
 
 fn be32(bytes: &[u8], at: usize) -> Result<u32> {
     Ok(u32::from_be_bytes(bytes.get(at..at + 4).context("a field past the file's end")?.try_into().unwrap()))
@@ -120,4 +124,98 @@ pub fn bmg(bytes: &[u8]) -> Result<Vec<u8>> {
     }
     out[0x1F] = BMG_HOST_ORDER;
     Ok(out)
+}
+
+/// A collision file (KCL) in host byte order.
+pub fn kcl(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 0x38 {
+        bail!("not a collision file");
+    }
+    if u32::from_le_bytes(bytes[0..4].try_into().unwrap()) < 0x10000 {
+        return Ok(bytes.to_vec()); // cooked already
+    }
+    let mut out = bytes.to_vec();
+    let pos = host32(bytes, &mut out, 0x0)? as usize;
+    let norm = host32(bytes, &mut out, 0x4)? as usize;
+    let prism = host32(bytes, &mut out, 0x8)? as usize;
+    let octree = host32(bytes, &mut out, 0xC)? as usize;
+    for at in (0x10..0x38).step_by(4) {
+        host32(bytes, &mut out, at)?;
+    }
+    // Whole vectors (the last one's y and z too); the prisms are 1-based, entry 0 overlapping the normals.
+    let mut at = pos;
+    while at + 12 <= norm {
+        for k in 0..3 {
+            host32(bytes, &mut out, at + 4 * k)?;
+        }
+        at += 12;
+    }
+    let mut at = norm;
+    while at + 12 <= prism + 0x10 {
+        for k in 0..3 {
+            host32(bytes, &mut out, at + 4 * k)?;
+        }
+        at += 12;
+    }
+    let mut at = prism + 0x10;
+    while at + 0x10 <= octree {
+        host32(bytes, &mut out, at)?; // height
+        for k in (4..0x10).step_by(2) {
+            host16(bytes, &mut out, at + k)?; // position, normal, three edges, attribute
+        }
+        at += 0x10;
+    }
+    let shift = be32(bytes, 0x2C)?;
+    let roots = if be32(bytes, 0x34)? as i32 == -1 && be32(bytes, 0x30)? as i32 == -1 {
+        1usize
+    } else {
+        let side = |mask_at: usize| -> Result<usize> { Ok(((!be32(bytes, mask_at)?) >> shift) as usize + 1) };
+        side(0x20)? * side(0x24)? * side(0x28)?
+    };
+    let mut walk = Octree { source: bytes, base: octree, done: HashSet::new() };
+    walk.block(&mut out, 0, roots, 0)?;
+    Ok(out)
+}
+
+/// The octree's walk (as KCollision.cpp's KCLOctreeSwap): a word >= 0 is the offset of 8 child words from its block,
+/// a negative word (low 31 bits) the offset from its block of a u16 list read from its second unit to a 0.
+struct Octree<'a> {
+    source: &'a [u8],
+    base: usize,
+    done: HashSet<usize>,
+}
+
+impl Octree<'_> {
+    fn block(&mut self, out: &mut [u8], offs: usize, count: usize, depth: u32) -> Result<()> {
+        if depth > 64 {
+            bail!("octree deeper than 64 levels at {offs:#x}");
+        }
+        for i in 0..count {
+            let word = self.base + offs + i * 4;
+            let value = be32(self.source, word)? as i32;
+            if self.done.insert((offs + i * 4) >> 1) {
+                host32(self.source, out, word)?;
+            }
+            if value >= 0 {
+                self.block(out, offs + value as usize, 8, depth + 1)?;
+            } else {
+                self.list(out, offs + (value as u32 & 0x7FFF_FFFF) as usize)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn list(&mut self, out: &mut [u8], offs: usize) -> Result<()> {
+        let mut at = offs + 2;
+        loop {
+            let unit = be16(self.source, self.base + at)?;
+            if self.done.insert(at >> 1) {
+                host16(self.source, out, self.base + at)?;
+            }
+            if unit == 0 {
+                return Ok(());
+            }
+            at += 2;
+        }
+    }
 }

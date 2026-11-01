@@ -56,6 +56,26 @@ void CollisionParts::init(const TPos3f& rMatrix, HitSensor* pHitSensor, const vo
     mKeeperIndex = keeperIndex;
 }
 
+void CollisionParts::init(const TPos3f& rMatrix, HitSensor* pHitSensor, KCLFile* pModel, const void* pMapInfo, s32 keeperIndex,
+                          bool useAutoScale) {
+    mServer->initModel(pModel, pMapInfo);
+    mHitSensor = pHitSensor;
+
+    resetAllMtx(rMatrix);
+
+    TVec3f scale;
+    mBaseMatrix.getScale(scale);
+
+    mZone = MR::getCollisionDirector()->getCategoryKeeper(keeperIndex)->getZone(MR::getCurrentPlacementZoneId());
+
+    MR::initCameraCodeCollection(pHitSensor->mHost->mName, mZone->mZoneID);
+    mServer->calcFarthestVertexDistance();
+    MR::termCameraCodeCollection();
+
+    updateBoundingSphereRange(scale);
+    mKeeperIndex = keeperIndex;
+}
+
 void CollisionParts::addToBelongZone() {
     s32 zoneID = mZone->mZoneID;
 

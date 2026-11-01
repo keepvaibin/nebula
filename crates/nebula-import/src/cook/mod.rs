@@ -73,6 +73,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
         Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
+    } else if extension(name) == "kcl" {
+        Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {
         Some(formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?)
     } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {

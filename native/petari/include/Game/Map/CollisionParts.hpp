@@ -8,6 +8,7 @@
 class CollisionZone;
 class HitInfo;
 class HitSensor;
+struct KCLFile;
 class KC_PrismData;
 class KCollisionServer;
 class Triangle;
@@ -19,6 +20,8 @@ public:
 
     TVec3f getTrans();
     void init(const TPos3f&, HitSensor*, const void*, const void*, s32, bool);
+    // A collision model the game built (DynamicCollisionObj), not a file.
+    void init(const TPos3f&, HitSensor*, KCLFile*, const void*, s32, bool);
     void addToBelongZone();
     void removeFromBelongZone();
     void initWithAutoEqualScale(const TPos3f&, HitSensor*, const void*, const void*, s32, bool);
