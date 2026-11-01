@@ -13,6 +13,8 @@
 //!   field table (hash, mask, offset) and each entry's values by their field's type (32-bit integers, floats and
 //!   string offsets, 16-bit integers; bytes and embedded strings stay). A cooked table's field count reads below 64 K
 //!   in host order.
+//! - CANM/CKAN (camera animations): the header's six values, the eight components' counts, offsets (and key types),
+//!   the value block's byte count and its floats. Byte 7 of a cooked file's type ("CANM"/"CKAN") becomes lower case.
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -332,4 +334,36 @@ pub fn bcsv(bytes: &[u8], listed: bool) -> Result<Option<Vec<u8>>> {
         }
     }
     Ok(Some(out))
+}
+
+/// A camera animation (CANM: frames, CKAN: keys) in host byte order.
+pub fn canm(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 0x20 {
+        bail!("not a camera animation");
+    }
+    let key = match &bytes[4..8] {
+        b"CANM" => false,
+        b"CKAN" => true,
+        b"CANm" | b"CKAn" => return Ok(bytes.to_vec()), // cooked already
+        _ => bail!("not a camera animation ({:?})", String::from_utf8_lossy(&bytes[4..8])),
+    };
+    let mut out = bytes.to_vec();
+    for at in (0x8..0x20).step_by(4) {
+        host32(bytes, &mut out, at)?;
+    }
+    let entry = 0x20;
+    let info_words = if key { 24 } else { 16 }; // eight components of three (keys) or two words
+    for w in 0..info_words {
+        host32(bytes, &mut out, entry + 4 * w)?;
+    }
+    let values = entry + be32(bytes, 0x1C)? as usize;
+    let size = host32(bytes, &mut out, values)? as usize;
+    if values + 4 + size > bytes.len() || size % 4 != 0 {
+        bail!("camera animation values ({size:#x} bytes at {values:#x}) outside the file");
+    }
+    for v in 0..size / 4 {
+        host32(bytes, &mut out, values + 4 + 4 * v)?;
+    }
+    out[7] = out[7].to_ascii_lowercase();
+    Ok(out)
 }
