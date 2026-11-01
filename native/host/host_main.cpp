@@ -1991,7 +1991,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
         const char* value = std::getenv("GALAXY_LOG_GUEST_TEXTURES");
         return value != nullptr && value[0] == '1';
     }();
-    if (log_console && !linear && image->format != NEBULA_TEXTURE_IMAGE && image->format != 0xFFu) [[unlikely]] {
+    if (log_console && !linear && image->format != NEBULA_TEXTURE_IMAGE) [[unlikely]] {
         void* frames[16]{};
         const USHORT count = CaptureStackBackTrace(1u, 16u, frames, nullptr);
         const auto game = reinterpret_cast<uintptr_t>(GetModuleHandleW(L"smg_game.dll"));

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 69u
+#define NEBULA_GAME_API_VERSION 70u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -221,8 +221,6 @@ enum {
     NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
                                        table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */
     NEBULA_STATE_FOG_RANGE_TABLE,   /* pair index (0-4); size: the pair's two entries */
-    NEBULA_STATE_TEX_TLUT,          /* map, palette format (GXTlutFmt), palette place (GX's 20 TLUT names) */
-    NEBULA_STATE_TLUT_LOAD,         /* palette place; image: the palette */
     NEBULA_STATE_IND_TEX_ORDER,     /* indirect stage, texture coordinate, map (GXSetIndTexOrder's) */
     NEBULA_STATE_TEX_OFFSETS,       /* texture coordinate, lines offset it, points offset it */
 };

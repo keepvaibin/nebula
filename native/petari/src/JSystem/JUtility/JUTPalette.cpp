@@ -23,12 +23,3 @@ void JUTPalette::storeTLUT(_GXTlut param_0, _GXTlutFmt param_1, JUTTransparency 
     mColorTable = static_cast< ResTLUT* >(param_4);
     J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
 }
-
-bool JUTPalette::load() {
-    bool check = mLutNum != 0;
-    if (check) {
-        J3DNativeTexture::loadTlut(&mObj, mName);
-    }
-
-    return check;
-}

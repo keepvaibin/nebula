@@ -67,8 +67,6 @@ enum Kind : std::uint8_t {
     kZTexture,
     kFogRange,
     kFogRangeTable,
-    kTexTlut,
-    kTlutLoad,
     kIndTexOrder,
     kTexOffsets,
 };
