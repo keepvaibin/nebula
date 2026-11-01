@@ -37,6 +37,8 @@
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
 //!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
+//! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
+//!   counts and values (rfl_res_host).
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1466,6 +1468,85 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
             _ => {}
         }
         at += size;
+    }
+    Ok(out)
+}
+
+/// RFL_Res.dat (the Mii parts, after cook::formats::rfl_res) in host order: the header (two 16-bit fields, one
+/// offset per section), each section's file count, 16-bit field and file offsets, each part texture's header
+/// (host_timg: Mii_Texture has ResTIMG's layout) and each shape's numbers (a face line's nine 32-bit values; then
+/// positions, normals and, but for the forehead, hair, beard and nose, texture coordinates: a count and its 16-bit
+/// values). Texels, palettes and the shapes' primitive bytes stay bytes. The rules are the ones the Mii library
+/// applied at load before (RFL_NANDLoader's former cookArchive_).
+pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
+    const SECTIONS: usize = 18; // Mii_ArcID_Max
+    const TEXTURES: [usize; 9] = [1, 2, 4, 7, 10, 11, 12, 15, 17]; // Eye, Eyebrow, FaceTex, GlassTex, Mole, Mouth, Mustache, NlineTex, CapTex
+    const FACELINE: usize = 3;
+    const NO_COORDINATES: [usize; 4] = [5, 8, 0, 13]; // ForeHead, Hair, Beard, Nose
+    if bytes.len() < (SECTIONS + 1) * 4 {
+        bail!("RFL_Res.dat shorter than its header");
+    }
+    let mut out = bytes.to_vec();
+    host16(bytes, &mut out, 0)?;
+    host16(bytes, &mut out, 2)?;
+    for section in 0..SECTIONS {
+        let at = host32(bytes, &mut out, (section + 1) * 4)? as usize;
+        let count = host16(bytes, &mut out, at)? as usize;
+        host16(bytes, &mut out, at + 2)?;
+        let table = at + 4;
+        let data = table + (count + 1) * 4;
+        if data > bytes.len() {
+            bail!("RFL_Res.dat section {section} past the file's end");
+        }
+        for i in 0..=count {
+            host32(bytes, &mut out, table + 4 * i)?;
+        }
+        for i in 0..count {
+            let start = data + be32(bytes, table + 4 * i)? as usize;
+            let end = data + be32(bytes, table + 4 * i + 4)? as usize;
+            if end < start || end > bytes.len() {
+                bail!("RFL_Res.dat section {section} file {i} outside the file");
+            }
+            if end == start {
+                continue;
+            }
+            if TEXTURES.contains(&section) {
+                if end - start < 0x20 {
+                    bail!("RFL_Res.dat section {section} file {i}: a texture shorter than its header");
+                }
+                host_timg(bytes, &mut out, start)?;
+                continue;
+            }
+            let mut p = start + 4; // its tag
+            if section == FACELINE {
+                if p + 36 > end {
+                    bail!("RFL_Res.dat face line {i} shorter than its values");
+                }
+                for _ in 0..9 {
+                    host32(bytes, &mut out, p)?;
+                    p += 4;
+                }
+            }
+            let parts = if NO_COORDINATES.contains(&section) { 2 } else { 3 };
+            for part in 0..parts {
+                let per = if part == 2 { 2 } else { 3 };
+                if p + 2 > end {
+                    bail!("RFL_Res.dat section {section} file {i}: a count past the file");
+                }
+                let n = host16(bytes, &mut out, p)? as usize;
+                p += 2;
+                if part == 0 && n == 0 {
+                    break;
+                }
+                if p + n * per * 2 > end {
+                    bail!("RFL_Res.dat section {section} file {i}: values past the file");
+                }
+                for _ in 0..n * per {
+                    host16(bytes, &mut out, p)?;
+                    p += 2;
+                }
+            }
+        }
     }
     Ok(out)
 }
