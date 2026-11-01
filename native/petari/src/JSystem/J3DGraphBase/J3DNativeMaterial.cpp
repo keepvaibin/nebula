@@ -65,11 +65,10 @@ namespace {
         // list, each with its dump): drawn by their GX programs until fixed, by program hash (the set's numbers move
         // as it grows). The list is empty before step 4.
         static const u64 kExcluded[] = {
-            0x1489E0EBCCA8038Full,  // the penguin coach (SurfingLv1Galaxy; team/a/ab586): its belly's ambient colour
-            0xE3D6D2F3B6026641ull,  // the same material's second program
+            0,  // none (the penguin coach, 586, was fixed by review-586 1dfec1f5)
         };
         for (u32 i = 0; i < sizeof(kExcluded) / sizeof(kExcluded[0]); i++) {
-            if (hash == kExcluded[i]) {
+            if (kExcluded[i] != 0 && hash == kExcluded[i]) {
                 return 0;
             }
         }
@@ -106,31 +105,37 @@ namespace {
         }
     }
 
-    // The parts `rProgram` loads (NEBULA_MATERIAL_LOADS_*), into the register file.
+    // The parts `rProgram` loads (NEBULA_MATERIAL_LOADS_*), into the register file. An instance's differed list
+    // (diff_flags) loads only the parts its flags name, as J3D's list does and the drawing state takes it
+    // (draw_state.cpp set_material): TEV and konst colours under TevReg, material colours under MatColor, fog under
+    // Fog; never the ambient colours, indirect matrices or alpha references, which stay as the shared list and the
+    // state changes since left them (an actor's light loader sets the ambient colour between the two lists).
     void loadRegisters(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
         f32* pC = sRegisters;
+        const u32 diff = rProgram.diff_flags;
+        const bool whole = diff == 0;
         const u16 loads = rProgram.loads;
-        if ((loads & NEBULA_MATERIAL_LOADS_TEV_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & NEBULA_MATERIAL_LOADS_TEV_COLOR) != 0) {
             for (u32 r = 0; r < 3; r++) {
                 for (u32 c = 0; c < 4; c++) {
                     pC[4 + r * 4 + c] = rValues.tev_color[r][c] / 255.0f;
                 }
             }
         }
-        if ((loads & NEBULA_MATERIAL_LOADS_KONST_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & NEBULA_MATERIAL_LOADS_KONST_COLOR) != 0) {
             for (u32 k = 0; k < 4; k++) {
                 setColor(pC + 16 + k * 4, rValues.konst_color[k], 4);
             }
         }
         for (u32 ch = 0; ch < 2; ch++) {
-            if ((loads & NEBULA_MATERIAL_LOADS_CHANNELS) != 0) {
+            if ((whole || (diff & J3DDiffFlag_MatColor) != 0) && (loads & NEBULA_MATERIAL_LOADS_CHANNELS) != 0) {
                 setColor(pC + 32 + ch * 4, rValues.material_color[ch], 4);
             }
-            if ((loads & NEBULA_MATERIAL_LOADS_AMBIENT) != 0) {
+            if (whole && (loads & NEBULA_MATERIAL_LOADS_AMBIENT) != 0) {
                 setColor(pC + 40 + ch * 4, rValues.ambient_color[ch], 4);
             }
         }
-        if ((loads & NEBULA_MATERIAL_LOADS_INDIRECT) != 0) {
+        if (whole && (loads & NEBULA_MATERIAL_LOADS_INDIRECT) != 0) {
             for (u32 m = 0; m < 3; m++) {
                 f32 scale = 1.0f;
                 for (s32 e = rValues.ind_matrix[m].scale; e > 0; e--) {
@@ -146,7 +151,7 @@ namespace {
                 }
             }
         }
-        if ((loads & NEBULA_MATERIAL_LOADS_FOG) != 0) {
+        if ((whole || (diff & J3DDiffFlag_Fog) != 0) && (loads & NEBULA_MATERIAL_LOADS_FOG) != 0) {
             pC[72] = rValues.fog.start;
             pC[73] = rValues.fog.end;
             pC[74] = rValues.fog.near_z;
@@ -154,8 +159,10 @@ namespace {
             setColor(pC + 76, rValues.fog.color, 3);
             pC[79] = rProgram.fog.type;
         }
-        pC[80] = rValues.alpha_ref[0] / 255.0f;
-        pC[81] = rValues.alpha_ref[1] / 255.0f;
+        if (whole) {
+            pC[80] = rValues.alpha_ref[0] / 255.0f;
+            pC[81] = rValues.alpha_ref[1] / 255.0f;
+        }
     }
 
     // A state change of a register the J3D constants hold, into the register file: whether it was one.
@@ -394,6 +401,16 @@ namespace {
             material.depth_test = NEBULA_NATIVE_KEPT;
             material.cull = NEBULA_NATIVE_KEPT;
         }
+        if (differed) {
+            // An instance's differed list carries no culling, and its blend and depth modes only under Blend
+            // (J3D diffBlend), as the drawing state takes it (draw_state.cpp set_material): the rest stays as the
+            // shared list and the state changes since set it.
+            material.cull = NEBULA_NATIVE_KEPT;
+            if ((rProgram.diff_flags & J3DDiffFlag_Blend) == 0) {
+                material.blend_op = NEBULA_NATIVE_KEPT;
+                material.depth_test = NEBULA_NATIVE_KEPT;
+            }
+        }
         loadRegisters(rProgram, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
         // Each coordinate's GX scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
@@ -448,8 +465,13 @@ namespace {
                                                               (rProgram.tex_gen[i].normalize != 0 ? 0x80 : 0))
                                           : 61;
         }
-        // The lights the material's colour block loads (J3DColorBlockLightOn), as its list loaded them.
-        if ((rProgram.loads & NEBULA_MATERIAL_LOADS_LIGHTS) != 0) {
+        // The lights the material's colour block loads (J3DColorBlockLightOn), as its list loaded them: a whole
+        // material's with its channels, a differed list's under ColorChan or LightObjNum (diffLight), as the drawing
+        // state takes them (native_material.cpp load_matrices).
+        const bool lights = differed ? (rProgram.diff_flags & J3DDiffFlag_ColorChan) != 0 ||
+                                           ((rProgram.diff_flags >> 4) & 15) != 0
+                                     : (rProgram.loads & NEBULA_MATERIAL_LOADS_CHANNELS) != 0;
+        if (lights && (rProgram.loads & NEBULA_MATERIAL_LOADS_LIGHTS) != 0) {
             material.light_mask = rValues.light_mask;
             memcpy(material.light, rValues.light, sizeof(material.light));
         }
