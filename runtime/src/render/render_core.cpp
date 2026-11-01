@@ -878,7 +878,6 @@ void RenderCore::reset_fifo_session_state() {
     current_pso_key_ = {};
     current_pso_key_valid_ = false;
     current_pipeline_ = nullptr;
-    current_pipeline_is_uber_ = false;
     current_vs_constants_ = 0u;
     cpu_vs_constants_ = {};
     current_ps_constants_ = 0u;
@@ -3279,27 +3278,6 @@ void RenderCore::note_rt_material() {
     note.pack = rt_texture_source(map).pack;
     note.material_pack = current_rt_map_ < kMaxTextureMaps ? rt_texture_source(current_rt_map_).pack : 0u;
     galaxy::render::note_rt_material(note);
-}
-
-// A water or clear draw the composites replace (Beach Bowl's ocean, drawn after the game's effects) is in no effects
-// layer: the water's composite goes over it as over the game's water before the effects. Its keys were set before its
-// textures named its material (flush_draw_state), so once its batch knows it is water its call takes the same pipeline
-// without the layer.
-void RenderCore::exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt) {
-    if (call.aux_target != 3u || !rt || (info.surface & kRtDrawWater) == 0u) {
-        return;
-    }
-    PixelShaderKey ps = ps_key_;
-    ps.reserved = static_cast<std::uint8_t>(ps.reserved & ~kPsKeyLayer);
-    RenderStateKey rs = render_state_key_;
-    rs.blend_bits &= ~kRenderStateLayerTarget;
-    const PsoKey key{current_vs_hash_, ps.hash(), rs};
-    gpu::Pipeline* const pipeline = pipeline_cache_.get(key, ps, vs_key_);
-    if (pipeline == nullptr) {
-        return;
-    }
-    call.pipeline = pipeline;
-    call.aux_target = pipeline_cache_.last_get_used_uber() ? 0u : 2u;
 }
 
 bool RenderCore::rt_mist_draw() const noexcept {
@@ -7612,43 +7590,6 @@ std::uint32_t RenderCore::split_curved_triangles(std::span<const RenderVertex> v
     return static_cast<std::uint32_t>(flat_indices);
 }
 
-gpu::Pipeline* RenderCore::resolve_flat_pipeline(const PsoKey& curved_key) {
-    // A triangle a factor-one patch outputs unchanged draws the same pixels in a triangle list, but in another place
-    // in the draw's order: only where that order cannot show. Opaque: no blending or logic op, a depth test that
-    // passes by nearness, written. Or a sum: both factors one, added or subtracted (the shadow volumes' alpha), into a
-    // fixed-point EFB (its clamped sums do not depend on their order; float sums round by it), with depth not written
-    // and no other target.
-    const RenderStateKey& rs = curved_key.render_state;
-    const unsigned depth_func = (rs.zmode_bits >> 1u) & 0x7u;
-    const bool ordered_by_depth = (rs.zmode_bits & 0x11u) == 0x11u &&
-        (depth_func == 1u || depth_func == 3u || depth_func == 4u || depth_func == 6u);
-    const bool opaque = (rs.blend_bits & 0x101u) == 0u && ordered_by_depth;
-    constexpr std::uint32_t kOtherTargets =
-        kRenderStateMotionTarget | kRenderStateReactiveTarget | kRenderStateLayerTarget;
-    const bool sum = (rs.blend_bits & 0x1FDu) == 0x25u && (rs.blend_bits & kOtherTargets) == 0u &&
-                     (rs.samples_log2 & kEfbVariantHdr) == 0u && (rs.zmode_bits & 0x10u) == 0u;
-    if (!opaque && !sum) {
-        return nullptr;
-    }
-    VertexShaderKey vs_key = vs_key_;
-    vs_key.flags = static_cast<std::uint8_t>(vs_key.flags & ~kVsKeyCurved);
-    const PsoKey key{vs_key.hash(), curved_key.ps_hash, flat_render_state(rs)};
-    const std::uint64_t hash = key.hash();
-    PipelineMemoEntry& memo = pipeline_memo_[hash & kPipelineMemoMask];
-    if (memo.hash == hash && memo.pipeline != nullptr && memo.key == key) {
-        return memo.pipeline;
-    }
-    gpu::Pipeline* const pipeline = pipeline_cache_.get_if_ready(key, ps_key_, vs_key);
-    if (pipeline == nullptr) {
-        return nullptr;
-    }
-    describe_pipeline(pipeline, vs_key, ps_key_, key.render_state);
-    memo.hash = hash;
-    memo.key = key;
-    memo.pipeline = pipeline;
-    return pipeline;
-}
-
 gpu::Pipeline* RenderCore::flush_draw_state(
     gpu::TopologyType primitive_topology_type, std::uint8_t vtxfmt) {
     const bool time_detail = frame_time_detail_;
@@ -7706,7 +7647,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         !inline_matrices_stale_ &&
         rt_light_pending_ == 0u &&
         current_pipeline_ != nullptr &&
-        !current_pipeline_is_uber_ &&
         current_vs_constants_ != 0 &&
         current_ps_constants_ != 0 &&
         (current_texture_map_mask_ == 0u ||
@@ -7892,7 +7832,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 }
             }
         }
-        current_pipeline_is_uber_ = false;
         current_pso_key_valid_ = false;
         // A curved native draw goes whole through its patch stages (native_curved.hlsl).
         current_flat_pipeline_ = nullptr;
@@ -7905,7 +7844,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // An effects-layer draw binds the reactive mask and the layer's targets, uber stand-in or not (its variant writes
     // them); other stand-ins stay single-target.
     current_pipeline_aux_ = (render_state_key_.blend_bits & kRenderStateLayerTarget) != 0u ? 3u
-        : current_pipeline_is_uber_ ? 0u
         : (render_state_key_.blend_bits & kRenderStateMotionTarget) != 0u ? 1u
         : (render_state_key_.blend_bits & kRenderStateReactiveTarget) != 0u ? 2u : 0u;
 
@@ -9097,7 +9035,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
-    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
     pending_draw_batch_.debake_model = debake_sample_key_;
@@ -9213,7 +9150,6 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.active = true;
     pending_draw_batch_.call = call;
     pending_draw_batch_.rt = native_material_ == nullptr && begin_rt_batch(call, pending_draw_batch_.rt_info);
-    exclude_layer_water(pending_draw_batch_.call, pending_draw_batch_.rt_info, pending_draw_batch_.rt);
     pending_draw_batch_.hidden = rt_hidden_draw();
     pending_draw_batch_.traced = pending_draw_batch_.hidden && (rt_traced_clear_draw() || rt_trace_only_);
     pending_draw_batch_.debake_model = debake_sample_key_;
