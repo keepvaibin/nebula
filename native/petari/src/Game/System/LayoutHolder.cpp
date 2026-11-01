@@ -52,7 +52,7 @@ void* LayoutHolder::GetResource(u32 resourceKind, const char* pName, u32* pResou
 
     if (pResourceInfo != nullptr) {
         if (pResource != nullptr) {
-            *pResourceInfo = static_cast< NEBULA_BE(u32)* >(pResource)[1];
+            *pResourceInfo = static_cast< u32* >(pResource)[1];
         } else {
             *pResourceInfo = 0;
         }

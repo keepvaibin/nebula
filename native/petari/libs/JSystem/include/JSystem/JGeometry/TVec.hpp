@@ -1361,33 +1361,6 @@ namespace JGeometry {
 
 };  // namespace JGeometry
 
-#ifdef TARGET_PC
-#include "nebula_disc.hpp"
-
-// Vectors in files (JPA blocks): big-endian components.
-template <>
-struct BEData< JGeometry::TVec3< f32 > > {
-    BE< f32 > x, y, z;
-
-    operator JGeometry::TVec3< f32 >() const {
-        JGeometry::TVec3< f32 > v;
-        v.x = x;
-        v.y = y;
-        v.z = z;
-        return v;
-    }
-};
-
-template <>
-struct BEData< JGeometry::TVec3< s16 > > {
-    BE< s16 > x, y, z;
-
-    operator JGeometry::TVec3< s16 >() const {
-        return JGeometry::TVec3< s16 >((s16)x, (s16)y, (s16)z);
-    }
-};
-#endif
-
 typedef JGeometry::TVec2< s16 > TVec2s;
 typedef JGeometry::TVec2< f32 > TVec2f;
 typedef JGeometry::TVec3< f32 > TVec3f;

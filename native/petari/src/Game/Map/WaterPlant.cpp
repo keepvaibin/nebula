@@ -34,7 +34,7 @@ namespace {
 }  // namespace
 namespace {
     // A GX array, in the console's byte order.
-    NEBULA_BE(f32) gxArray[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
+    f32 gxArray[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
     static f32 sHeightTable[] = {150.0f, 200.0f, 300.0f, 250.0f};
     static TVec3f sDrawVec(1.0f, 0.0f, 0.0f);
     static f32 sSwingSpeed = 0.03f;

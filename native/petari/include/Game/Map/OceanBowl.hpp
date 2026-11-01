@@ -52,10 +52,10 @@ public:
     /* 0xA94 */ f32 mTexV2;
     /* 0xA98 */ f32 _A98;
     // Texture coordinate arrays for GX, in the console's byte order.
-    /* 0xA9C */ NEBULA_BE(f32)* mVtxTex0Array;
-    /* 0xAA0 */ NEBULA_BE(f32)* mVtxTex1Array;
-    /* 0xAA4 */ NEBULA_BE(f32)* mVtxTex2Array;
-    /* 0xAA8 */ NEBULA_BE(f32)* mVtxTex3Array;
+    /* 0xA9C */ f32* mVtxTex0Array;
+    /* 0xAA0 */ f32* mVtxTex1Array;
+    /* 0xAA4 */ f32* mVtxTex2Array;
+    /* 0xAA8 */ f32* mVtxTex3Array;
     /* 0xAAC */ JUTTexture* mWaterTex;
     /* 0xAB0 */ JUTTexture* mWaterIndirectTex;
     /* 0xAB4 */ JUTTexture* mMaskTex;
