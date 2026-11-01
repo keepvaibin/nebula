@@ -332,6 +332,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_NONE = 0,
     NEBULA_SHADER_WHIRLPOOL = 1, /* WhirlPool: the swirl over the warped screen behind */
     NEBULA_SHADER_OCEAN_BOWL = 2, /* OceanBowl: Beach Bowl's sea over the warped screen behind */
+    NEBULA_SHADER_MOVIE = 3,      /* MovieDraw (THPDraw): a movie frame's Y, U and V planes to RGB */
     NEBULA_SHADER_COUNT
 } NebulaShaderId;
 
