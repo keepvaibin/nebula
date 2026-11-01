@@ -188,7 +188,7 @@ namespace nw4r {
             u32 resOffs = sizeof(res::Material);
             const res::TexMap* const pResTexMap = detail::ConvertOffsToPtr< res::TexMap >(pRes, resOffs);
             resOffs += sizeof(res::TexMap) * pRes->resNum.GetTexMapNum();
-            const NEBULA_DISC(TexSRT)* const resTexSRTs = detail::ConvertOffsToPtr< NEBULA_DISC(TexSRT) >(pRes, resOffs);
+            const TexSRT* const resTexSRTs = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
             resOffs += sizeof(TexSRT) * pRes->resNum.GetTexSRTNum();
             const TexCoordGen* const resTexCoordGens = detail::ConvertOffsToPtr< TexCoordGen >(pRes, resOffs);
             resOffs += sizeof(TexCoordGen) * pRes->resNum.GetTexCoordGenNum();
@@ -264,7 +264,7 @@ namespace nw4r {
 
                 if (indTexSRTNum > 0) {
                     TexSRT* const indTexSRTs = GetIndTexSRTAry();
-                    const NEBULA_DISC(TexSRT)* const pResIndMtx = detail::ConvertOffsToPtr< NEBULA_DISC(TexSRT) >(pRes, resOffs);
+                    const TexSRT* const pResIndMtx = detail::ConvertOffsToPtr< TexSRT >(pRes, resOffs);
                     for (int i = 0; i < indTexSRTNum; ++i) {
                         indTexSRTs[i] = pResIndMtx[i];
                     }

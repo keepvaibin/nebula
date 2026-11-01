@@ -43,21 +43,6 @@ namespace nw4r {
                 const wchar_t* const pBlockText = detail::ConvertOffsToPtr< wchar_t >(pBlock, pBlock->textStrOffset);
                 const u16 resStrLen = static_cast< u16 >(pBlock->textStrBytes / sizeof(wchar_t) - 1);
                 SetString(pBlockText, 0, resStrLen);
-#ifdef TARGET_PC
-                // The resource's UTF-16 is big-endian: swap the copy, keeping the length/group bytes after each 0x1A
-                // escape as bytes (the form MessageData gives BMG text).
-                for (u16 i = 0; i < mTextLen; i++) {
-                    const u16 unit = __builtin_bswap16(mTextBuf[i]);
-                    mTextBuf[i] = unit;
-                    if (unit == 0x1A && i + 1 < mTextLen) {
-                        const u16 tagUnits = (u16)((reinterpret_cast< const u8* >(&mTextBuf[i + 1])[0] - 2) / 2);
-                        for (u16 j = i + 2; j < i + 1 + tagUnits && j < mTextLen; j++) {
-                            mTextBuf[j] = __builtin_bswap16(mTextBuf[j]);
-                        }
-                        i = (u16)(i + tagUnits);
-                    }
-                }
-#endif
             }
 
             for (int i = 0; i < 2; ++i) {
@@ -91,7 +76,7 @@ namespace nw4r {
 
             void* pMem = Layout::AllocMemory(sizeof(Material));
             if (pMem != nullptr) {
-                const NEBULA_BE(u32)* const matOffsTbl = detail::ConvertOffsToPtr< NEBULA_BE(u32) >(resBlockSet.pMaterialList, sizeof(*resBlockSet.pMaterialList));
+                const u32* const matOffsTbl = detail::ConvertOffsToPtr< u32 >(resBlockSet.pMaterialList, sizeof(*resBlockSet.pMaterialList));
                 const res::Material* const pResMaterial =
                     detail::ConvertOffsToPtr< res::Material >(resBlockSet.pMaterialList, matOffsTbl[pBlock->materialIdx]);
                 mpMaterial = new (pMem) Material(pResMaterial, resBlockSet);

@@ -1,4 +1,5 @@
 #include "nw4r/lyt/common.h"
+#include <JSystem/JUtility/JUTException.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
 #include <revolution/gx/GXEnum.h>
@@ -16,6 +17,10 @@ namespace nw4r {
             }
 
             bool TestFileHeader(const res::BinaryFileHeader& fileHeader, u32 sig) {
+                // A layout the importer cooked reads its byte-order mark as 0xFEFF; a big-endian one as 0xFFFE.
+                if (fileHeader.byteOrder == 0xFFFE) {
+                    JUTException::panic_f(__FILE__, __LINE__, "lyt: a layout not in host order (the importer cooks it)");
+                }
                 return GetSignatureInt(fileHeader.signature) == sig && fileHeader.byteOrder == 0xFEFF;
             }
 
@@ -63,7 +68,7 @@ namespace nw4r {
             void TexCoordAry::Copy(const void* pResTex, u8 texCoordNum) {
                 mNum = ut::Max(mNum, texCoordNum);
                 // The resource's coordinates, big-endian.
-                const NEBULA_DISC(math::VEC2)(*src)[4] = reinterpret_cast< const NEBULA_DISC(math::VEC2)(*)[4] >(pResTex);
+                const math::VEC2(*src)[4] = reinterpret_cast< const math::VEC2(*)[4] >(pResTex);
                 for (int j = 0; j < texCoordNum; j++) {
                     for (int i = 0; i < 4; i++) {
                         mData[j][i] = src[j][i];
