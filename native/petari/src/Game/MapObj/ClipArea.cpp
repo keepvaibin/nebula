@@ -1,4 +1,5 @@
 #include "Game/MapObj/ClipArea.hpp"
+#include "Game/Util/DrawUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/MapObj/ClipAreaHolder.hpp"
 #include "Game/MapObj/ClipAreaShape.hpp"
@@ -31,7 +32,7 @@ void ClipArea::draw() const {
         return;
     }
 
-    J3DNativeState::setTevColor(GX_TEVREG0, ::sShapeColor);
+    MR::setShadowVolumeColor(::sShapeColor);
     J3DNativeState::setColorUpdate(GX_FALSE);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
     J3DNativeState::setCullMode(GX_CULL_FRONT);

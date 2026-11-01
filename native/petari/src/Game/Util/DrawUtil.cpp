@@ -1,4 +1,5 @@
 #include "Game/Util/DrawUtil.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
@@ -230,23 +231,21 @@ namespace MR {
     }
 
     void setupShadowVolumeDraw() {
-        J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-        J3DNativeState::setNumIndStages(0);
-        J3DNativeState::setNumTexGens(0);
-        J3DNativeState::setNumChans(1);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(0));
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+        // The volumes draw in a flat colour each sets (setShadowVolumeColor).
         J3DNativeState::setZCompLoc(GX_FALSE);
         J3DNativeState::setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    }
+
+    void setShadowVolumeColor(const GXColor& rColor) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        material.depth_test = NEBULA_NATIVE_KEPT;
+        material.cull = NEBULA_NATIVE_KEPT;
+        NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
+        NativeShader::send(material);
     }
 
     void drawSimpleModel(J3DModelData* pModelData) {
