@@ -4779,18 +4779,11 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
             continue;
         }
         key.maps[m] = draw_state_.texture[m];
-        key.palettes[m] = palette_address(draw_state_, m);
-        if (key.palettes[m] == 0u) {
-            key.maps[m].tlut = TlutRef{};
-        }
     }
     return key;
 }
 
-RenderCore::TextureHandleKey RenderCore::texture_handle_key(
-    const TexImage& image,
-    const TexMode& mode,
-    std::uint64_t palette_address, TlutFormat palette_format) const {
+RenderCore::TextureHandleKey RenderCore::texture_handle_key(const TexImage& image, const TexMode& mode) const {
     unsigned levels = 1u;
     bool generated_mips = false;
     const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
@@ -4804,15 +4797,11 @@ RenderCore::TextureHandleKey RenderCore::texture_handle_key(
         levels = full_chain;
         generated_mips = levels > 1u;
     }
-    const bool palettized = image.format == TexFormat::C4 ||
-        image.format == TexFormat::C8 || image.format == TexFormat::C14X2;
     return TextureHandleKey{
         image.address,
         image.width,
         image.height,
         static_cast<std::uint8_t>(image.format),
-        static_cast<std::uint8_t>(palettized ? palette_format : TlutFormat{}),
-        palettized ? palette_address : 0u,
         static_cast<std::uint8_t>(std::min<unsigned>(levels, 255u)),
         static_cast<std::uint8_t>(generated_mips ? 1u : 0u),
     };
@@ -5508,10 +5497,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     if ((texture_map_mask & (1u << m)) != 0u) {
                         const TexImage img = draw_state_.texture[m].image;
                         const TexMode mode = draw_state_.texture[m].mode;
-                        const TlutFormat palette_format = draw_state_.texture[m].tlut.format;
-                        const std::uint64_t palette = palette_address(draw_state_, m);
-                        const TextureHandleKey handle_key =
-                            texture_handle_key(img, mode, palette, palette_format);
+                        const TextureHandleKey handle_key = texture_handle_key(img, mode);
                         if (renderer_.target_picture(img.address, img.width, img.height, texture_handles[m])) {
                             // A target pass's picture (E-07), in whatever format the draw names it.
                         } else if (const auto handle_it =
@@ -5527,7 +5513,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                                 const auto get_start = time_detail
                                     ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
-                                texture_handles[m] = texture_cache_.get(img, mode, palette, palette_format);
+                                texture_handles[m] = texture_cache_.get(img, mode);
                                 if (time_detail) {
                                     texture_get_us += elapsed_us(
                                         get_start,
@@ -5893,7 +5879,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             return;  // the game registers every program before its first use
         }
         apply_record_material(*program->second, *record.material);
-        const std::uint32_t palettes = draw_state_.palette_revision;
         const bool whole = applied_program_ != program->second.get();
         draw_state_.apply(*program->second, *record.material, whole);
         applied_program_ = program->second.get();
@@ -5912,9 +5897,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
                              static_cast<unsigned long long>(c.changed));
             }
         }
-        if (draw_state_.palette_revision != palettes) {
-            on_palettes_changed();
-        }
         return;
     }
     case shapes::Record::Kind::State: {
@@ -5924,11 +5906,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
-            const std::uint32_t palettes = draw_state_.palette_revision;
             draw_state_.apply(op);
-            if (draw_state_.palette_revision != palettes) {
-                on_palettes_changed();
-            }
         }
         return;
     }
@@ -6111,39 +6089,6 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         out.mode.max_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.max_lod));
         out.edge_lod = t.edge_lod != 0u;
         out.bias_clamp = false;
-        out.tlut = TlutRef{};
-        if (t.palette != 0u) {
-            // A colour-indexed map's palette, into palette name `map` (as a material's textures load theirs: the
-            // GX path's draw_state textures()), and the map reading it.
-            // GALAXY_LOG_NATIVE_MATERIALS=1: each shader's colour-indexed maps as they first draw (the tour stops that
-            // test native palettes).
-            static const bool log_palettes = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
-            if (log_palettes) [[unlikely]] {
-                static std::set<std::pair<std::uint32_t, std::uint64_t>> logged;
-                if (logged.emplace(m.shader, t.palette).second && logged.size() <= 256u) {
-                    std::fprintf(stderr, "[native-material] palette shader=%u map=%u format=%u palette_format=%u "
-                                         "entries=%u size=%ux%u present=%llu\n",
-                                 m.shader, map, static_cast<unsigned>(t.format), static_cast<unsigned>(t.palette_format),
-                                 static_cast<unsigned>(t.palette_entries), static_cast<unsigned>(t.width),
-                                 static_cast<unsigned>(t.height), static_cast<unsigned long long>(g_snapshot_presents));
-                }
-            }
-            state::Op load{};
-            load.kind = state::kTlutLoad;
-            load.a[0] = static_cast<std::uint8_t>(map);
-            load.image = t.palette;
-            state::Op use{};
-            use.kind = state::kTexTlut;
-            use.a[0] = static_cast<std::uint8_t>(map);
-            use.a[1] = static_cast<std::uint8_t>(t.palette_format & 3u);
-            use.a[2] = static_cast<std::uint8_t>(map);
-            const std::uint32_t palettes = draw_state_.palette_revision;
-            draw_state_.apply(load);
-            draw_state_.apply(use);
-            if (draw_state_.palette_revision != palettes) {
-                on_palettes_changed();
-            }
-        }
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
     // Its texgens' post-transform matrices, as a GX material's texgens set them (a draw's own texgens replace them:
@@ -6697,15 +6642,6 @@ void RenderCore::load_light(const state::Op& op) {
     } else {
         matrices_.set_light_position(n, first, second);
     }
-}
-
-void RenderCore::on_palettes_changed() {
-    // Bindings made before the palette places changed name the earlier palettes.
-    flush_pending_draw_batch();
-    texture_handle_cache_.clear();
-    clear_texture_binding_table_cache();
-    texture_bindings_dirty_ = true;
-    current_texture_binding_key_valid_ = false;
 }
 
 void RenderCore::on_invalidate_vertex_cache() {

@@ -10,13 +10,12 @@
 
 namespace galaxy::render {
 
-// One texture map: its image, sampling (with the edge LOD and bias clamp enables) and palette.
+// One texture map: its image (a texture record's key) and sampling (with the edge LOD and bias clamp enables).
 struct TextureMap {
     TexImage image{1u, 1u, TexFormat::I4, 0u};
     TexMode mode{};
     bool edge_lod = true;
     bool bias_clamp = false;
-    TlutRef tlut{};
 
     [[nodiscard]] bool operator==(const TextureMap&) const = default;
 };
@@ -65,11 +64,6 @@ struct NativeDrawState {
 
     TextureMap texture[8]{};
 
-    // Palettes (GXLoadTlut and J3D's textures): each 512-byte place's source address (0: never loaded), and a
-    // revision that changes whenever a place's address does.
-    std::uint64_t palette_place[1024]{};
-    std::uint32_t palette_revision = 0u;
-
     // The scissor box (the frame's pixels, corners inclusive).
     ScissorRect scissor{0, 0, -1, -1};
 
@@ -101,8 +95,6 @@ public:
 [[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
 
-// Map `map`'s palette address (0 without a palette format or a loaded place).
-[[nodiscard]] std::uint64_t palette_address(const NativeDrawState& state, unsigned map);
 
 // The frame shown (frame_show: its top left `width` x `height`, NebulaCaptureFlags) as the display copy takes it.
 [[nodiscard]] EfbCopyParams frame_show_params(std::uint16_t width, std::uint16_t height, std::uint8_t flags);

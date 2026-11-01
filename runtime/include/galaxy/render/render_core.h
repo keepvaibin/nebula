@@ -242,8 +242,6 @@ private:
     void on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format);
     void on_invalidate_textures();
     void on_invalidate_vertex_cache();
-    // A palette place took another address (NativeDrawState::palette_revision).
-    void on_palettes_changed();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
     void load_light(const state::Op& op);
     void on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b);
@@ -1337,10 +1335,8 @@ private:
     bool current_texture_map_mask_valid_ = false;
 
     struct TextureBindingKey {
-        // The sampled maps (a palette only for a palette format); kLitTranslucentKey when the lit-translucent path
-        // takes map 7.
+        // The sampled maps; kLitTranslucentKey when the lit-translucent path takes map 7.
         std::array<TextureMap, kMaxTextureMaps> maps{};
-        std::array<std::uint64_t, kMaxTextureMaps> palettes{};  // palette_address of each map
         std::uint32_t lit_translucent = 0;
         std::uint8_t map_mask = 0;
 
@@ -1351,8 +1347,6 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
-        std::uint8_t tlut_format = 0;
-        std::uint64_t palette_address = 0;
         std::uint8_t levels = 1;
         std::uint8_t generated_mips = 0;
 
@@ -1361,10 +1355,7 @@ private:
     };
     [[nodiscard]] TextureBindingKey capture_texture_binding_key(
         std::uint8_t map_mask) const;
-    [[nodiscard]] TextureHandleKey texture_handle_key(
-        const TexImage& image,
-        const TexMode& mode,
-        std::uint64_t palette_address, TlutFormat palette_format) const;
+    [[nodiscard]] TextureHandleKey texture_handle_key(const TexImage& image, const TexMode& mode) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
@@ -1450,8 +1441,6 @@ private:
             mix(key.width);
             mix(key.height);
             mix(key.format);
-            mix(key.tlut_format);
-            mix(key.palette_address);
             mix(key.levels);
             mix(key.generated_mips);
             return static_cast<std::size_t>(hash);
@@ -1462,16 +1451,11 @@ private:
             const TextureBindingKey& key) const noexcept {
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
-            for (const std::uint64_t palette : key.palettes) {
-                hash = mix64(hash, palette);
-            }
             for (const TextureMap& t : key.maps) {
                 const TexMode& m = t.mode;
                 hash = mix64(hash, t.image.address);
                 hash = mix64(hash, static_cast<std::uint64_t>(t.image.width) | static_cast<std::uint64_t>(t.image.height) << 16u |
-                                       static_cast<std::uint64_t>(t.image.format) << 32u |
-                                       static_cast<std::uint64_t>(t.tlut.tmem_offset) << 40u |
-                                       static_cast<std::uint64_t>(t.tlut.format) << 56u);
+                                       static_cast<std::uint64_t>(t.image.format) << 32u);
                 hash = mix64(hash, static_cast<std::uint64_t>(m.wrap_s) | static_cast<std::uint64_t>(m.wrap_t) << 4u |
                                        static_cast<std::uint64_t>(m.mag_filter) << 8u |
                                        static_cast<std::uint64_t>(m.min_filter) << 12u |
