@@ -41,12 +41,17 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
         const auto value = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS");
         dump_wanted_ = value ? static_cast<std::uint32_t>(std::strtoul(value->c_str(), nullptr, 10)) : ~0u;
     }
-    // The draws of the one present GALAXY_DUMP_DRAW_INPUTS_FROM names (up to 64), or the run's first 64.
+    // The draws of the one present GALAXY_DUMP_DRAW_INPUTS_FROM names, or the run's first: up to
+    // GALAXY_DUMP_DRAW_INPUTS_MAX (64; a shader many sites share draws more in one present).
     static const std::uint64_t from = [] {
         const auto value = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS_FROM");
         return value ? std::strtoull(value->c_str(), nullptr, 10) : 0ull;
     }();
-    if (dump_tag_ != dump_wanted_ || dump_count_ >= 64u || presents < from || (from != 0u && presents > from)) {
+    static const std::uint32_t most = [] {
+        const auto value = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS_MAX");
+        return value ? static_cast<std::uint32_t>(std::strtoul(value->c_str(), nullptr, 10)) : 64u;
+    }();
+    if (dump_tag_ != dump_wanted_ || dump_count_ >= most || presents < from || (from != 0u && presents > from)) {
         return;
     }
     const auto path = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS_FILE");
@@ -57,6 +62,17 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     ++dump_count_;
     const bool native = native_material_ != nullptr;
     std::fprintf(f, "draw %u shader %u path %s\n", dump_count_, dump_tag_, native ? "native" : "gx");
+    // The render state the draw's pipeline is built for (blend words, depth, culling, topology) and the blend the
+    // drawing state holds (GXSetBlendMode, GXSetDstAlpha).
+    const BlendMode blend = draw_blend();
+    std::fprintf(f, "render_state blend %08x z %x cull %u topology %u efb_format %u\n", render_state_key_.blend_bits,
+                 static_cast<unsigned>(render_state_key_.zmode_bits), static_cast<unsigned>(render_state_key_.cull),
+                 static_cast<unsigned>(render_state_key_.primitive_topology),
+                 static_cast<unsigned>(draw_state_.pe.pixel_format));
+    std::fprintf(f, "blend_mode enable %u subtract %u src %u dst %u color %u alpha %u const_alpha %u,%u\n",
+                 blend.blend_enable ? 1u : 0u, blend.subtract ? 1u : 0u, static_cast<unsigned>(blend.src_factor),
+                 static_cast<unsigned>(blend.dst_factor), blend.color_update ? 1u : 0u, blend.alpha_update ? 1u : 0u,
+                 blend.const_alpha_enable ? 1u : 0u, static_cast<unsigned>(blend.const_alpha));
     // The vertex constants as this draw reads them (the native header words and post rows as flush_draw_state writes
     // them into the uploaded copy).
     VertexConstants vs = cpu_vs_constants_.constants;

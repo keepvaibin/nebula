@@ -16,7 +16,9 @@ cbuffer NativeDraw : register(b0) {
     float4 inline_pos_matrix[3] : packoffset(c14);
     float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
     float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
-    float4 line_point_raster : packoffset(c65);  // the viewport's width and height in pixels (xy)
+    float4 line_point_raster : packoffset(c65);  // the viewport's width and height in pixels (xy), the half line
+                                                 // width and half point size (zw, native_lines.hlsl)
+    uint4 line_point_tex_offsets : packoffset(c66);  // lines' and points' texture coordinate offsets (native_lines.hlsl)
     uint4 vs_header : packoffset(c67);           // y: the frame scale; z: the PE word (native_ps); w: the shape's
                                                  // per-vertex texture matrix indices (texgen n's bit)
     uint4 vs_post[2] : packoffset(c70);          // texgen i's post-transform row (61 the identity), | 0x100 normalize

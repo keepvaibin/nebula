@@ -538,9 +538,16 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
         hs = native_module(hull.data, hull.size, vk::ShaderStage::Hull);
         ds = native_module(domain.data, domain.size, vk::ShaderStage::Domain);
     }
+    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
+    VkShaderModule gs = VK_NULL_HANDLE;
+    const bool point = rs.primitive_topology == gpu::kTopologyTypePointValue;
+    if (point || rs.primitive_topology == gpu::kTopologyTypeLineValue) {
+        const NativeShaderBytes widen = native_line_point_bytes(variant == kNativeVariantMotion, point);
+        gs = native_module(widen.data, widen.size, vk::ShaderStage::Geometry);
+    }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, false, false, compat, result, hs, ds);
+            return create_pipeline(rs, vs, ps, false, false, compat, result, hs, ds, gs);
         };
         pipeline = with_fallbacks(make, applicable_compat(rs, false, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
@@ -551,7 +558,8 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
 
 VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderModule vs, VkShaderModule ps,
                                             bool dual_source, bool export_depth, std::uint32_t compat,
-                                            VkResult& result, VkShaderModule hs, VkShaderModule ds) const {
+                                            VkResult& result, VkShaderModule hs, VkShaderModule ds,
+                                            VkShaderModule gs) const {
     result = VK_ERROR_INITIALIZATION_FAILED;
     if (vs == VK_NULL_HANDLE || ps == VK_NULL_HANDLE) {
         return VK_NULL_HANDLE;
@@ -573,14 +581,16 @@ VkPipeline PipelineCacheVk::create_pipeline(const RenderStateKey& rs, VkShaderMo
     bool expanded = false;
     if (rs.primitive_topology == gpu::kTopologyTypePointValue) {
         topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-        if (point_gs_ != VK_NULL_HANDLE && geometry) {
-            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, point_gs_);
+        const VkShaderModule widen = gs != VK_NULL_HANDLE ? gs : point_gs_;
+        if (widen != VK_NULL_HANDLE && geometry) {
+            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, widen);
             expanded = true;
         }
     } else if (rs.primitive_topology == gpu::kTopologyTypeLineValue) {
         topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-        if (line_gs_ != VK_NULL_HANDLE && geometry) {
-            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, line_gs_);
+        const VkShaderModule widen = gs != VK_NULL_HANDLE ? gs : line_gs_;
+        if (widen != VK_NULL_HANDLE && geometry) {
+            add_stage(VK_SHADER_STAGE_GEOMETRY_BIT, widen);
             expanded = true;
         }
     }
