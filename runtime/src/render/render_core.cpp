@@ -261,20 +261,6 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     return (frame_index + 1u) % period == 0u;
 }
 
-bool dependency_ranges_overlap(
-    std::uint64_t lhs_addr,
-    std::uint32_t lhs_size,
-    std::uint64_t rhs_addr,
-    std::uint32_t rhs_size) noexcept {
-    if (lhs_size == 0u || rhs_size == 0u) {
-        return false;
-    }
-    const std::uint64_t lhs_begin = lhs_addr;
-    const std::uint64_t rhs_begin = rhs_addr;
-    const std::uint64_t lhs_end = lhs_begin + lhs_size;
-    const std::uint64_t rhs_end = rhs_begin + rhs_size;
-    return lhs_begin < rhs_end && rhs_begin < lhs_end;
-}
 
 [[nodiscard]] unsigned snapshot_full_mip_chain_levels(
     std::uint32_t width,
@@ -4843,26 +4829,10 @@ void RenderCore::clear_texture_binding_table_cache() {
 
 void RenderCore::invalidate_texture_handle_cache_dependency(
     const TextureBindingDependency& dependency) {
-    const auto ranges_overlap =
-        [](std::uint64_t a_begin,
-           std::uint64_t a_size,
-           std::uint64_t b_begin,
-           std::uint64_t b_size) noexcept {
-        return a_size != 0u && b_size != 0u &&
-            a_begin < b_begin + b_size &&
-            b_begin < a_begin + a_size;
-    };
-    const std::uint64_t dep_size = dependency.source_bytes;
-    const auto erase_matching =
-        [&dependency, &ranges_overlap, dep_size](auto& cache) {
+    // A texture is its key: the handles made for that key go.
+    const auto erase_matching = [&dependency](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
-            const TextureHandleKey& key = it->first;
-            const std::uint64_t key_size = it->second.source_bytes;
-            if (ranges_overlap(
-                    dependency.address,
-                    dep_size,
-                    key.address,
-                    key_size)) {
+            if (it->first.address == dependency.address) {
                 it = cache.erase(it);
             } else {
                 ++it;
@@ -4873,51 +4843,30 @@ void RenderCore::invalidate_texture_handle_cache_dependency(
     erase_matching(frame_texture_handle_cache_);
 }
 
-void RenderCore::invalidate_texture_binding_cache_range(
-    std::uint64_t address,
-    std::uint32_t size) {
-    if (size == 0u) {
-        return;
-    }
-
-    const auto erase_matching_handles = [&](auto& cache) {
+void RenderCore::invalidate_texture_binding_cache_key(std::uint64_t key) {
+    const auto erase_matching_handles = [key](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
-            const TextureHandleKey& key = it->first;
-            if (dependency_ranges_overlap(
-                    address,
-                    size,
-                    key.address,
-                    it->second.source_bytes)) {
+            if (it->first.address == key) {
                 it = cache.erase(it);
             } else {
                 ++it;
             }
         }
     };
-    const auto erase_matching_tables = [&](auto& cache) {
+    const auto erase_matching_tables = [key](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
             const TextureBindingTables& tables = it->second;
-            bool overlaps = false;
-            for (unsigned i = 0; i < tables.dependency_count; ++i) {
-                const TextureBindingDependency& dependency =
-                    tables.dependencies[i];
-                if (dependency_ranges_overlap(
-                        address,
-                        size,
-                        dependency.address,
-                        dependency.source_bytes)) {
-                    overlaps = true;
-                    break;
-                }
+            bool names_key = false;
+            for (unsigned i = 0; i < tables.dependency_count && !names_key; ++i) {
+                names_key = tables.dependencies[i].address == key;
             }
-            if (overlaps) {
+            if (names_key) {
                 it = cache.erase(it);
             } else {
                 ++it;
             }
         }
     };
-
     erase_matching_handles(texture_handle_cache_);
     erase_matching_handles(frame_texture_handle_cache_);
     erase_matching_tables(frame_texture_binding_tables_);
@@ -4946,17 +4895,8 @@ void RenderCore::prune_dirty_texture_binding_tables() {
     if (dirty_texture_aliases_.empty()) {
         return;
     }
-    const auto dependencies_overlap =
-        [](
-            const TextureBindingDependency& a,
-            const TextureBindingDependency& b) {
-        const std::uint64_t a_size = a.source_bytes;
-        const std::uint64_t b_size = b.source_bytes;
-        return a_size != 0u && b_size != 0u &&
-            static_cast<std::uint64_t>(a.address) <
-                static_cast<std::uint64_t>(b.address) + b_size &&
-            static_cast<std::uint64_t>(b.address) <
-                static_cast<std::uint64_t>(a.address) + a_size;
+    const auto dependencies_overlap = [](const TextureBindingDependency& a, const TextureBindingDependency& b) {
+        return a.address == b.address;  // a texture is its key
     };
     const auto prune_cache = [this, &dependencies_overlap](auto& cache) {
         for (auto it = cache.begin(); it != cache.end();) {
@@ -5908,11 +5848,10 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::TextureImage:
         flush_pending_draw_batch();
         texture_cache_.register_image(record.key, record.image);
-        // New bytes at that address: bindings made from what was there before are out of date too (a buffer the game
+        // New bytes for that key: bindings made from what it held before are out of date too (a buffer the game
         // reuses for its next image, as the Mii library's part textures).
         if (record.image != nullptr) {
-            invalidate_texture_binding_cache_range(record.key,
-                                                   static_cast<std::uint32_t>(record.image->size()));
+            invalidate_texture_binding_cache_key(record.key);
         }
         texture_bindings_dirty_ = true;
         current_texture_binding_key_valid_ = false;

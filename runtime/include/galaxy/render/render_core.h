@@ -1382,9 +1382,7 @@ private:
     };
     void invalidate_texture_handle_cache_dependency(
         const TextureBindingDependency& dependency);
-    void invalidate_texture_binding_cache_range(
-        std::uint64_t address,
-        std::uint32_t size);
+    void invalidate_texture_binding_cache_key(std::uint64_t key);
     struct DirtyTextureAlias {
         TextureBindingDependency dependency{};
     };
