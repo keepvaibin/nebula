@@ -1331,7 +1331,7 @@ V main(uint id : SV_VertexID) {
             !cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision,
             "texture hits do not invalidate cross-frame handles");
-        passed &= expect(cache.invalidate_range(address, 128u) == 1u &&
+        passed &= expect(cache.forget(address) == 1u &&
             cache.srv_index_retired(first.srv_index) &&
             cache.retirement_revision() == initial_revision + 1u,
             "retirement publishes a cross-frame handle lifetime change");
@@ -1447,13 +1447,8 @@ V main(uint id : SV_VertexID) {
         if (WaitForSingleObject(fence_event_, 30000u) != WAIT_OBJECT_0) {
             throw std::runtime_error("texture cache upload fence timeout");
         }
-        passed &= expect(cache.invalidate_range(address + 17u, 0u) == 0u,
-            "zero-byte write inside a texture does not evict it");
-        // A write inside the authored record's lower level retires it; the zero range inside the wide one nothing.
-        const std::array<TextureCache::MemoryRange, 2> mip_dirty{{
-            {address + 160u, 1u}, {address + 0x2005u, 0u}}};
-        passed &= expect(cache.invalidate_ranges(mip_dirty) == 1u,
-            "write confined to a lower level retires the record's resource");
+        passed &= expect(cache.forget(address + 17u) == 0u,
+            "a key that names no texture retires nothing (no memory ranges: a texture is its key)");
 
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();

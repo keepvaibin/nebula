@@ -6529,9 +6529,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
     } else {
         ++frame_tex_copies_;
         // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
-        const TextureCache::MemoryRange copied{params.dest_addr, 1u};
-        texture_cache_.drop_registered_images(std::span<const TextureCache::MemoryRange>(&copied, 1u));
-        const bool decoded_evicted = texture_cache_.invalidate_range(copied.address, copied.size) != 0u;
+        const bool decoded_evicted = texture_cache_.forget(params.dest_addr) != 0u;
         // Depth-source copy when the PE pixel format is Z24 at copy time
         // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
         const bool is_depth_copy = pixel_format == 3u;
