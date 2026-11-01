@@ -1,7 +1,7 @@
 #pragma once
 
-// TextureCache: decodes GX textures from game memory into GPU textures and serves their descriptors to the
-// per-draw texture table.
+// TextureCache: the texture records the game handed over (cooked, made while running) as GPU textures, uploaded on
+// first use, and their descriptors for the per-draw texture table.
 //
 // Entries are dropped only explicitly: when the game hands a texture's record over again (register_image), when a
 // capture replaces what its key held (forget), and when texture packs change (invalidate_all). Pictures the
@@ -113,11 +113,10 @@ public:
     bool preallocate_upload_arenas(unsigned frames_in_flight);
     void shutdown();
 
-    // The GPU texture for an image, uploaded on first use from the texture record the game handed over, or decoded
-    // from the image's bytes (register_image; one never handed over decodes from zeros). Colour-indexed images come
-    // as records with their palettes applied: `palette_address` and `palette_format` are not read.
     // The texture as its record describes it (1x1, no layout, without a record).
     [[nodiscard]] TextureInfo info_of(std::uint64_t texture) const;
+    // The GPU texture for a key, uploaded on first use from the record the game handed over (register_image); a key
+    // with no record draws one blank level.
     [[nodiscard]] TextureHandle get(std::uint64_t texture, const TextureSampler& mode);
     // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.
@@ -129,8 +128,8 @@ public:
     void retire_view(std::uint32_t index, gpu::TextureRef picture) {
         retire(Entry{std::move(picture), TextureHandle{.srv_index = index}}); }
 
-    // GXInvalidateTexAll(): drop every decoded entry. EFB-copy aliases survive, because their
-    // content lives on the GPU, not in game memory.
+    // Drops every entry (texture packs changed: each texture is looked up again). Capture pictures survive: they
+    // are the renderer's.
     void invalidate_all();
 
     // An image's bytes the game handed over (texture_image): textures at `address` decode from this copy from now

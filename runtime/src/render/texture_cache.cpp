@@ -1,4 +1,4 @@
-// GX texture decode from the images the game handed over into GPU textures. An unknown format is fatal.
+// Texture records the game handed over (cooked, made while running) as GPU textures, uploaded on first use.
 // The SRV heap is not shader-visible; the renderer copies its slots into the frame's descriptor ring per draw.
 
 #ifndef WIN32_LEAN_AND_MEAN
@@ -17,7 +17,6 @@
 
 #include <algorithm>
 #include <array>
-#include "galaxy/simd128.h"
 #include <cerrno>
 #include <chrono>
 #include <cstdlib>
@@ -90,73 +89,6 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// SIMD tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64). Each decodes one complete tile with the
-// scalar loops' arithmetic; clipped edge tiles use the scalar loops. RGBA8 is stored as bytes r,g,b,a
-// (little-endian u32 r | g<<8 | b<<16 | a<<24).
-using simd::v128;
-[[nodiscard]] static inline v128 load_tile16(const std::uint8_t* p) noexcept {
-    return simd::load(p);
-}
-static inline void store_pixels4(RGBA8* p, v128 v) noexcept {
-    simd::store(p, v);
-}
-// Bit replication of a narrow channel held in u16 lanes.
-[[nodiscard]] static inline v128 expand5(v128 x) noexcept {
-    return simd::or_(simd::shl16<3>(x), simd::shr16<2>(x));
-}
-[[nodiscard]] static inline v128 expand6(v128 x) noexcept {
-    return simd::or_(simd::shl16<2>(x), simd::shr16<4>(x));
-}
-[[nodiscard]] static inline v128 expand4(v128 x) noexcept {
-    return simd::or_(simd::shl16<4>(x), x);
-}
-// 8 RGB565 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb565x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
-    const v128 m5 = simd::splat16(0x1F);
-    const v128 m6 = simd::splat16(0x3F);
-    const v128 r = expand5(simd::shr16<11>(v));
-    const v128 g = expand6(simd::and_(simd::shr16<5>(v), m6));
-    const v128 b = expand5(simd::and_(v, m5));
-    const v128 rg = simd::or_(r, simd::shl16<8>(g));
-    const v128 ba = simd::or_(b, simd::splat16(0xFF00));
-    store_pixels4(row0, simd::interleave_low16(rg, ba));
-    store_pixels4(row1, simd::interleave_high16(rg, ba));
-}
-// 8 RGB5A3 words (native order) -> two rows of 4 RGBA8 pixels.
-static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
-    const v128 m3 = simd::splat16(0x07);
-    const v128 m4 = simd::splat16(0x0F);
-    const v128 m5 = simd::splat16(0x1F);
-    const v128 opaque = simd::sign_mask16(v);  // bit 15
-    const v128 r555 = expand5(simd::and_(simd::shr16<10>(v), m5));
-    const v128 g555 = expand5(simd::and_(simd::shr16<5>(v), m5));
-    const v128 b555 = expand5(simd::and_(v, m5));
-    const v128 a3 = simd::and_(simd::shr16<12>(v), m3);
-    const v128 r4 = expand4(simd::and_(simd::shr16<8>(v), m4));
-    const v128 g4 = expand4(simd::and_(simd::shr16<4>(v), m4));
-    const v128 b4 = expand4(simd::and_(v, m4));
-    const v128 a8 = simd::or_(
-        simd::or_(simd::shl16<5>(a3), simd::shl16<2>(a3)),
-        simd::shr16<1>(a3));
-    const auto select = [opaque](v128 when_opaque, v128 otherwise) {
-        return simd::or_(simd::and_(opaque, when_opaque),
-                         simd::andnot(opaque, otherwise));
-    };
-    const v128 r = select(r555, r4);
-    const v128 g = select(g555, g4);
-    const v128 b = select(b555, b4);
-    const v128 a = select(simd::splat16(0xFF), a8);
-    const v128 rg = simd::or_(r, simd::shl16<8>(g));
-    const v128 ba = simd::or_(b, simd::shl16<8>(a));
-    store_pixels4(row0, simd::interleave_low16(rg, ba));
-    store_pixels4(row1, simd::interleave_high16(rg, ba));
-}
-
-[[nodiscard]] static inline std::uint16_t read_be16(const std::uint8_t* p) {
-    return static_cast<std::uint16_t>(
-        (static_cast<std::uint16_t>(p[0]) << 8) | p[1]);
-}
-
 [[nodiscard]] static unsigned full_mip_chain_levels(
     std::uint32_t width,
     std::uint32_t height) {
@@ -181,7 +113,7 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
         !image.colour) {
         return false;
     }
-    // The settings (a lock and a copy) are read only once the guest descriptor allows generated mips.
+    // The settings (a lock and a copy) are read only once the sampling allows generated mips.
     return get_render_config().enhanced_mipmaps;
 }
 
