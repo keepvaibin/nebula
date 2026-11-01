@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 67u
+#define NEBULA_GAME_API_VERSION 68u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -1166,6 +1166,11 @@ typedef struct NebulaHostServices {
     int64_t (*calendar_ns)(void* user);
     /* A native material for the draws that follow (NebulaNativeMaterial). */
     void (*native_material)(void* user, const NebulaNativeMaterial* material);
+    /* Deterministic test mode only (NULL otherwise; GALAXY_TEST_DETERMINISTIC): the game's time is its frames. No game
+       thread can run: the host takes the next retrace (nebula_game_vi_retrace, with that retrace's audio ticks) and
+       returns, so frames follow the game's own pace and every run of a build is the same. The game's clock then
+       advances one retrace per call and its alarms fire when that clock passes them. */
+    void (*test_frame_step)(void* user);
 } NebulaHostServices;
 
 
