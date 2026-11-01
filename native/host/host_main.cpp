@@ -1911,6 +1911,12 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
                                 NEBULA_TEXTURE_FILTER_AT_UPLOAD);
         }
         std::memcpy(bytes->data() + header, first, image->size);
+        if (linear) {
+            // Texture packs name it by its own texels (Dolphin's naming, the linear code as the format).
+            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
+            record->disc_format = image->format;
+            record->pack_hash = galaxy::render::texture_pack_hash(reinterpret_cast<const uint8_t*>(first), image->size);
+        }
         last = std::move(bytes);
         copy = last;
     }
@@ -2342,13 +2348,17 @@ uint32_t svc_art_export(void*, const NebulaArtExport* art) {
     };
     std::string line = art->name != nullptr ? art->name : "";
     constexpr uint32_t kRgb5a3 = static_cast<uint32_t>(galaxy::render::TexFormat::RGB5A3);
-    if (art->texels != nullptr && art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u) {
+    const bool linear = art->format >= NEBULA_TEXTURE_LINEAR_L8 && art->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
+    if (art->texels != nullptr && (linear || (art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u))) {
         galaxy::render::TexturePackName name{};
         name.width = static_cast<uint16_t>(art->width);
         name.height = static_cast<uint16_t>(art->height);
         name.format = static_cast<uint8_t>(art->format);
-        name.hash = galaxy::render::texture_pack_hash(static_cast<const uint8_t*>(art->texels),
-                                                  static_cast<std::size_t>(art->width) * art->height * 2u);
+        const std::size_t bytes = linear ? nebula_texture_level_bytes(art->width, art->height, 1u,
+                                                                       nebula_texture_linear_layout(
+                                                                           static_cast<uint8_t>(art->format)))
+                                         : static_cast<std::size_t>(art->width) * art->height * 2u;
+        name.hash = galaxy::render::texture_pack_hash(static_cast<const uint8_t*>(art->texels), bytes);
         const std::string stem = galaxy::render::texture_pack_name(name);
         write(folder / "pack" / "RMG" / (stem + ".png"), art->hd_width, art->hd_height, art->hd);
         line += "\t" + stem;
