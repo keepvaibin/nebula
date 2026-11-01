@@ -32,7 +32,6 @@
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/line_point_raster.h"
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/texture_sampling.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/render_config.h"
@@ -129,55 +128,9 @@ namespace {
 
 static_assert(kFrameWidth == 640u && kFrameHeight == 456u);
 
-// Each texture coordinate's scale (texels per unit, s and t). A material sets them (BP 0x30-0x3F); after the game's own
-// TEV order, indirect order or texture changes (`derive`) a coordinate the stages sample takes the size of the texture
-// sampled with it - indirect stages, then TEV stages, the last one winning - as GX re-derived them then.
-std::array<std::array<std::uint32_t, 2>, 8> coordinate_scales(const NativeDrawState& draw, bool derive) {
-    std::array<std::array<std::uint32_t, 2>, 8> scales{};
-    for (unsigned c = 0; c < 8u; ++c) {
-        scales[c] = {draw.coord[c].size_minus_one[0] + 1u, draw.coord[c].size_minus_one[1] + 1u};
-    }
-    if (!derive) {
-        return scales;
-    }
-    const GenMode gm = draw.gen;
-    for (unsigned i = 0; i < gm.num_ind_stages && i < 4u; ++i) {
-        const TexImage image = draw.texture[draw.ind_order[i].map].image;
-        scales[draw.ind_order[i].coord] = {std::max<std::uint32_t>(image.width, 1u),
-                                                   std::max<std::uint32_t>(image.height, 1u)};
-    }
-    for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        const TevOrder order = draw.tev[s].order;
-        if (order.tex_enable) {
-            const TexImage image = draw.texture[order.texmap].image;
-            scales[order.texcoord & 7u] = {std::max<std::uint32_t>(image.width, 1u),
-                                           std::max<std::uint32_t>(image.height, 1u)};
-        }
-    }
-    return scales;
-}
-
 std::atomic<unsigned> s_layer_2d_scale{0u};
 // The 3D image's scale as shown, at each scene's begin (scene_display_scale).
 std::atomic<unsigned> s_scene_display_scale{0u};
-
-// A TEV colour register (an 8-bit sRGB colour over 255) with `share` of its chroma taken, its luminance kept (linear
-// light, Rec. 709): a clear ice or crystal draw's tint (rt_materials.h kRtIceTintKept). A signed register outside 0..1
-// (a TEV bias) keeps its value.
-void clear_register_tint(float (&c)[4], float share) noexcept {
-    if (!(c[0] >= 0.0f && c[0] <= 1.0f && c[1] >= 0.0f && c[1] <= 1.0f && c[2] >= 0.0f && c[2] <= 1.0f)) {
-        return;
-    }
-    float lin[3];
-    for (unsigned i = 0; i < 3u; ++i) {
-        lin[i] = c[i] <= 0.04045f ? c[i] / 12.92f : std::pow((c[i] + 0.055f) / 1.055f, 2.4f);
-    }
-    const float y = 0.2126f * lin[0] + 0.7152f * lin[1] + 0.0722f * lin[2];
-    for (unsigned i = 0; i < 3u; ++i) {
-        const float l = lin[i] + (y - lin[i]) * share;
-        c[i] = l <= 0.0031308f ? l * 12.92f : 1.055f * std::pow(l, 1.0f / 2.4f) - 0.055f;
-    }
-}
 
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
@@ -328,39 +281,6 @@ bool dependency_ranges_overlap(
     return lhs_begin < rhs_end && rhs_begin < lhs_end;
 }
 
-[[nodiscard]] std::uint32_t snapshot_tex_data_size(
-    TexFormat fmt,
-    std::uint32_t width,
-    std::uint32_t height) {
-    auto blocks = [](std::uint32_t dim, std::uint32_t block) {
-        return (dim + block - 1u) / block;
-    };
-    switch (fmt) {
-    case TexFormat::I4:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    case TexFormat::I8:
-    case TexFormat::IA4:
-        return blocks(width, 8u) * blocks(height, 4u) * 32u;
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-        return blocks(width, 4u) * blocks(height, 4u) * 32u;
-    case TexFormat::RGBA8:
-        return blocks(width, 4u) * blocks(height, 4u) * 64u;
-    case TexFormat::C4:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    case TexFormat::C8:
-        return blocks(width, 8u) * blocks(height, 4u) * 32u;
-    case TexFormat::C14X2:
-        return blocks(width, 4u) * blocks(height, 4u) * 32u;
-    case TexFormat::CMPR:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown texture format");
-    }
-}
-
 [[nodiscard]] unsigned snapshot_full_mip_chain_levels(
     std::uint32_t width,
     std::uint32_t height) {
@@ -397,65 +317,6 @@ bool dependency_ranges_overlap(
         return false;
     }
     return get_render_config().enhanced_mipmaps;
-}
-
-[[nodiscard]] std::uint32_t snapshot_texture_source_size(
-    const TexImage& image,
-    const TexMode& mode) {
-    unsigned source_levels = 1u;
-    const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
-    const unsigned full_chain =
-        snapshot_full_mip_chain_levels(image.width, image.height);
-    if (mip_mode != 0u) {
-        const unsigned wanted =
-            1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
-        source_levels = std::min(wanted, full_chain);
-    }
-    // Host-generated mips read only guest level 0, so no setting changes the footprint.
-
-    std::uint64_t total = 0;
-    for (unsigned level = 0; level < source_levels; ++level) {
-        total += snapshot_tex_data_size(
-            image.format,
-            std::max<std::uint32_t>(1u, image.width >> level),
-            std::max<std::uint32_t>(1u, image.height >> level));
-    }
-    if (total > std::numeric_limits<std::uint32_t>::max()) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: texture source is too large");
-    }
-    return static_cast<std::uint32_t>(total);
-}
-
-struct SnapshotArrayRange {
-    bool used = false;
-    std::uint32_t begin = 0;
-    std::uint64_t end = 0;
-};
-
-void record_indexed_array_access(
-    std::array<SnapshotArrayRange, 12>& array_ranges,
-    unsigned attr_index,
-    std::uint32_t address,
-    std::uint32_t size) {
-    if (attr_index >= array_ranges.size() || size == 0u) {
-        return;
-    }
-    SnapshotArrayRange& range = array_ranges[attr_index];
-    const std::uint64_t end =
-        static_cast<std::uint64_t>(address) + size;
-    if (end > 0x1'0000'0000ull) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: indexed array range overflows");
-    }
-    if (!range.used) {
-        range.used = true;
-        range.begin = address;
-        range.end = end;
-        return;
-    }
-    range.begin = std::min(range.begin, address);
-    range.end = std::max(range.end, end);
 }
 
 // The vblanks per present slot for a rate on a display of `refresh` hertz: a whole number, the rate kept above 60.
@@ -586,106 +447,6 @@ struct ScopedFlushTiming {
     ScopedFlushTiming(const ScopedFlushTiming&) = delete;
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
-
-void fill_ps_constants(const NativeDrawState& draw, PixelConstants& out, bool derive_scales) {
-    std::memset(&out, 0, sizeof(out));
-
-    const GenMode gm = draw.gen;
-
-    // stage_config[s]: colour operation, alpha operation (tev_color_word, tev_alpha_word), TEV order, ksel.
-    for (unsigned s = 0; s < gm.num_tev_stages && s < kMaxTevStages; ++s) {
-        out.stage_config[s][0] = tev_color_word(draw.tev[s]);
-        out.stage_config[s][1] = tev_alpha_word(draw.tev[s]);
-        const TevOrder ord = draw.tev[s].order;
-        out.stage_config[s][2] =
-              (static_cast<std::uint32_t>(ord.texmap)      )
-            | (static_cast<std::uint32_t>(ord.texcoord)  << 3)
-            | (ord.tex_enable ? (1u << 6) : 0u)
-            | (static_cast<std::uint32_t>(ord.ras_channel) << 7);
-        // Ksel: kcsel(4:0) | kasel(9:5).
-        out.stage_config[s][3] =
-              static_cast<std::uint32_t>(draw.tev[s].kcsel)
-            | (static_cast<std::uint32_t>(draw.tev[s].kasel) << 5);
-    }
-
-    // TEV registers PREV, REG0-2 (signed 11-bit per channel); the shader converts them back to
-    // integers for the TEV math.
-    {
-        for (unsigned r = 0; r < 4; ++r) {
-            for (unsigned c = 0; c < 4; ++c) {
-                out.tev_regs[r][c] = static_cast<float>(draw.tev_color[r][c]) / 255.0f;
-            }
-        }
-    }
-
-    // Konst colours K0-K3.
-    for (unsigned k = 0; k < 4; ++k) {
-        for (unsigned c = 0; c < 4; ++c) {
-            out.konst[k][c] = draw.konst[k][c] / 255.0f;
-        }
-    }
-
-    {
-        const AlphaCompare ac = draw.alpha;
-        out.alpha_refs[0] = ac.ref0 / 255.0f;
-        out.alpha_refs[1] = ac.ref1 / 255.0f;
-        // comp0 | comp1 << 3 | logic << 6, passed as the bits of a float.
-        const std::uint32_t packed =
-              static_cast<std::uint32_t>(ac.comp0)
-            | (static_cast<std::uint32_t>(ac.comp1) << 3)
-            | (static_cast<std::uint32_t>(ac.logic) << 6);
-        out.alpha_refs[2] = std::bit_cast<float>(packed);
-
-        // Constant destination alpha (PE_CMODE1).
-        const BlendMode bm = effective_blend(draw.blend, draw.pe.pixel_format == 1u);
-        out.alpha_refs[3] = bm.const_alpha_enable
-            ? (bm.const_alpha / 255.0f)
-            : 0.0f;
-    }
-
-    // Fog A and C as the pixel engine holds them; B's magnitude (u24) and shift (u5) are exact in
-    // float, and the shader reads them back with uint().
-    out.fog_params[0] = draw.fog.a;
-    out.fog_params[1] = static_cast<float>(draw.fog.b_magnitude);
-    out.fog_params[2] = static_cast<float>(draw.fog.b_shift & 0x1Fu);
-    out.fog_params[3] = draw.fog.c;
-    out.fog_params[4] = draw.fog.color[0] / 255.0f;
-    out.fog_params[5] = draw.fog.color[1] / 255.0f;
-    out.fog_params[6] = draw.fog.color[2] / 255.0f;
-    out.fog_params[7] = draw.fog.projection ? 1.0f : 0.0f;  // 1 = orthographic
-
-    // xy: map m's texture size; zw: texture coordinate m's scale (coordinate_scales), which indirect TEV applies
-    // before sampling.
-    const auto scales = coordinate_scales(draw, derive_scales);
-    for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-        const TexImage img = draw.texture[m].image;
-        out.tex_dims[m][0] = static_cast<float>(img.width  > 0 ? img.width  : 1);
-        out.tex_dims[m][1] = static_cast<float>(img.height > 0 ? img.height : 1);
-        out.tex_dims[m][2] = static_cast<float>(scales[m][0]);
-        out.tex_dims[m][3] = static_cast<float>(scales[m][1]);
-    }
-
-    // Z-texture bias (BP 0xF4, 24-bit z24 units), normalized to [0,1).
-    out.ztex_params[0] = static_cast<float>(draw.z_texture.bias) / 16777216.0f;
-
-    // Indirect TEV commands and matrices; matrix rows are {ma,mc,me,17-scale} and
-    // {mb,md,mf,17-scale}, as in Dolphin's pixel constants.
-    for (unsigned word = 0; word < 16; ++word) {
-        out.ind_cmd[word / 4u][word & 3u] = ind_cmd_word(draw.ind[word]);
-    }
-    out.ind_misc[0] = ind_ref_word(draw);
-    out.ind_misc[1] = ind_scale_word(draw, 0u);
-    out.ind_misc[2] = ind_scale_word(draw, 1u);
-    out.ind_misc[3] = gm.num_ind_stages;
-    for (unsigned m = 0; m < 3; ++m) {
-        for (unsigned row = 0; row < 2u; ++row) {
-            for (unsigned c = 0; c < 3u; ++c) {
-                out.ind_mtx[m * 2u + row][c] = draw.ind_matrix[m].m[row][c];
-            }
-            out.ind_mtx[m * 2u + row][3] = -draw.ind_matrix[m].scale;
-        }
-    }
-}
 
 void gx_topology_for_primitive(
     PrimitiveClass primitive,
@@ -6171,14 +5932,6 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::State: {
         // A native material stays through state changes (the game folds a change of its values into it and ends it
         // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
-        // The game's TEV order, indirect order or texture object changes: GX re-derived the coordinate scales then.
-        for (const state::Op& op : record.state) {
-            if (op.kind == state::kTevStageOrder || op.kind == state::kIndTexOrder ||
-                (op.kind == state::kTexImage && op.a[1] != 0u)) {
-                scales_from_textures_ = true;
-                break;
-            }
-        }
         for (const state::Op& op : record.state) {
             if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
@@ -6340,8 +6093,6 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
                                : m.cull == material::kNativeCullFront ? CullMode::Back
                                                                       : CullMode::None;
     }
-    // The shader tests its own alpha.
-    draw_state_.alpha = AlphaCompare{0u, 0u, CompareFunc::Always, CompareFunc::Always, AlphaTestLogic::And};
     native_texture_mask_ = 0u;
     for (unsigned map = 0; map < 8u; ++map) {
         const auto& t = m.textures[map];
@@ -6423,7 +6174,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
             matrices_.set_light(n, m.light[n]);
         }
     }
-    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     native_material_ = std::move(native);
     native_constants_dirty_ = true;
     current_texture_map_mask_valid_ = false;
@@ -6438,7 +6189,7 @@ void RenderCore::end_native_material() {
     // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     applied_program_ = nullptr;
-    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex | kStateDirtyTev | kStateDirtyPixelConstants;
+    draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
@@ -6447,7 +6198,6 @@ void RenderCore::end_native_material() {
 void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
     material::load_matrices(program, values, matrices_);
     // The material wrote its coordinate scales.
-    scales_from_textures_ = false;
 }
 
 void RenderCore::release_record_shape(RecordShape& shape) noexcept {
