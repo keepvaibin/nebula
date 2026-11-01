@@ -443,46 +443,26 @@ void OceanBowl::loadMaterial() const {
 }
 
 void OceanBowl::loadMaterialBloom() const {
+    // runtime/src/render/materials/ocean_bowl_bloom.hlsl: the water texture at its two scrolls times the grey c0 over
+    // the grey c1, alpha the texture's by the vertex alpha at both; blended by its alpha where above zero, depth
+    // tested and written before texturing, no culling.
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX1, GX_TEXMTX1, GX_FALSE, GX_PTIDENTITY);
-
-    TMtx34f mat;
-    mat.identity();
-    mat[0][2] = mTexU0;
-    mat[1][2] = mTexV0;
-    J3DNativeShape::setTexture(0, mat, 2);
-    mat[0][2] = mTexU1;
-    mat[1][2] = mTexV1;
-    J3DNativeShape::setTexture(1, mat, 2);
-    mWaterTex->load(GX_TEXMAP0);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setNumTevStages(2);
-    Color8 c0 = Color8(::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, 255);
-    Color8 c1 = Color8(::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, 255);
-    J3DNativeState::setTevColor(GX_TEVREG0, c0);
-    J3DNativeState::setTevColor(GX_TEVREG1, c1);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_C1);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD1, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_TEXC, GX_CC_C0, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_TEXA, GX_CA_RASA, GX_CA_APREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
+    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_BOWL_BLOOM, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
+    material.early_depth = 1;
+    NativeShader::setColor(material, 0, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V, ::sOceanBowlBloomTevReg0V,
+                           255);
+    NativeShader::setColor(material, 4, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V, ::sOceanBowlBloomTevReg1V,
+                           255);
+    material.constants[8] = mTexU0;
+    material.constants[9] = mTexV0;
+    material.constants[10] = mTexU1;
+    material.constants[11] = mTexV1;
+    NativeShader::setTexture(material, 0, mWaterTex);
+    NativeShader::send(material);
 }

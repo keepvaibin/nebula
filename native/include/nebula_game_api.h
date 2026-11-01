@@ -360,6 +360,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_J2D_PICTURE = 28,          /* J2DPicture: up to four textures blended by constant ratios, remapped */
     NEBULA_SHADER_FUR = 29,                  /* FurDrawer: a fur shell over the body texture, lit */
     NEBULA_SHADER_PARTICLE = 30,             /* JPA particles: the texture by the emitter's colours, its colour mode */
+    NEBULA_SHADER_OCEAN_BOWL_BLOOM = 31,     /* Beach Bowl's sea from under water: the water at two scrolls over grey */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256
