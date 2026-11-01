@@ -5918,7 +5918,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     // stage count, so the root table has a stable size
                     // matching the root signature.
                     current_texture_table_ = renderer_.texture_table_for(
-                        texture_handles.data(), kMaxTextureMaps, texture_cache_, false);
+                        texture_handles.data(), kMaxTextureMaps, texture_cache_);
                     frame_texture_tables_.emplace(table_key, current_texture_table_);
                 }
                 if (time_detail) {

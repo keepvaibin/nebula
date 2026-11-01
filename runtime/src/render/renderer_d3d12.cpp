@@ -738,7 +738,7 @@ bool RendererD3D12::create_efb_targets(unsigned efb_scale) {
 
 unsigned RendererD3D12::wanted_msaa_samples() const {
     const unsigned asked = std::min(get_render_config().msaa_samples, 8u);
-    if (asked <= 1u || !device_ || temporal_mode() || rt_active()) {
+    if (asked <= 1u || !device_ || temporal_mode()) {
         return 1u;
     }
     return std::min(std::bit_floor(asked), msaa_max_samples());
@@ -1485,7 +1485,7 @@ bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, cons
     if (!enabled || (test_ab && (presented_frames_ & 1u) != 0u) || !efb_color_ || efb_owed_ ||
         efb_carry_color_ || replay_recording_ || replay_playing_ || ring_mode_ == RingMode::Interp ||
         frame_generation_running() || output_efb_active_ || efb_msaa_.samples > 1u || efb_hdr_ || scene_temporal_ ||
-        rt_active() || !post_process_.ready() || !post_process_.reads_held_pictures()) {
+        !post_process_.ready() || !post_process_.reads_held_pictures()) {
         return false;
     }
     const unsigned scale = efb_scale_;
@@ -1790,7 +1790,7 @@ bool RendererD3D12::efb_scale_fits_memory(unsigned scale) const {
     // tracing the HDR scene EFB's 12 more) and, at most, the XFB pair plus one
     // full-picture copy (12 bytes per pixel of the 640x456 picture). Everything
     // else is independent of the scale.
-    const double efb_bytes = ray_tracer_->ready() ? 20.0 : 8.0;
+    const double efb_bytes = 8.0;
     const auto scaled_bytes = [efb_bytes](unsigned s) {
         const double area = static_cast<double>(s) * s;
         return area * (static_cast<double>(kFrameWidth) * kFrameHeight * efb_bytes +
@@ -2512,15 +2512,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             return false;
         }
         if (!srv_ring_.initialize(device_.Get(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, kSrvPerFrame, kInterpSegments, kPersistentSrvDescriptors)) return false;
-        {
-            const UINT increment = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            const DescriptorRing::Table views = srv_ring_.allocate_persistent(kRtTextureViews);
-            rt_texture_views_ = {views.cpu, srv_ring_.index_of(views.gpu), increment};
-            ray_tracer_->set_texture_views(rt_texture_views_.cpu, rt_texture_views_.first, rt_texture_views_.increment);
-            const DescriptorRing::Table delight = srv_ring_.allocate_persistent(SceneRayTracer::kDelightViews);
-            rt_delight_views_ = {delight.cpu, srv_ring_.index_of(delight.gpu), increment};
-            ray_tracer_->set_delight_views(rt_delight_views_.cpu, rt_delight_views_.first, rt_delight_views_.increment);
-        }
 
         // Conversion sources occupy the descriptor ring's immutable prefix.
         if (!create_conversion_pipeline()) return false;
@@ -2555,8 +2546,7 @@ void RendererD3D12::attach_texture_uploads(TextureCache& cache) {
     cache.backend().set_upload_list(command_list_.Get());
 }
 
-gpu::Table RendererD3D12::texture_table_for(
-    const TextureHandle* handles, unsigned count, const TextureCache& cache, bool lit_table) {
+gpu::Table RendererD3D12::texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache) {
     DescriptorRing::Table table = srv_ring_.allocate(count);
     D3D12_CPU_DESCRIPTOR_HANDLE sources[kMaxTextureMaps]{};
     const auto heap_start = cache.backend().srv_cpu_base();
@@ -2565,10 +2555,6 @@ gpu::Table RendererD3D12::texture_table_for(
         sources[m] = handles[m].resource != nullptr
             ? D3D12_CPU_DESCRIPTOR_HANDLE{heap_start.ptr + static_cast<SIZE_T>(handles[m].srv_index) * stride}
             : cache.backend().null_srv();
-    }
-    // A lit translucent draw's map 7: the ray tracer's light texture.
-    if (lit_table && count > 7u) {
-        sources[7] = rt_light_texture_srv();
     }
     // CPU-only sources, one contiguous frame-owned table.
     const UINT destination_size = count;
@@ -3713,14 +3699,8 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
         if (hitches && frame_begun_.time_since_epoch().count() != 0) {
             const double ms = std::chrono::duration<double, std::milli>(now - frame_begun_).count();
             if (ms >= 50.0) {
-                std::cerr << "[hitch] " << ms << " ms, ray tracing " << (ray_tracer_ && ray_tracer_->ready() ? "on" : "off")
-                          << '\n';
+                std::cerr << "[hitch] " << ms << " ms\n";
             }
-        }
-        if (rt_takeover_frames_ != 0u) {
-            std::cerr << "[rt] frame " << (11u - rt_takeover_frames_) << " after taking over: "
-                      << std::chrono::duration<double, std::milli>(now - frame_begun_).count() << " ms\n";
-            --rt_takeover_frames_;
         }
         frame_begun_ = now;
     }
@@ -4008,7 +3988,6 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     }
     draw_marks_[frame_slot_].clear();
 
-    ray_tracer_->begin_frame(frame_index_);
 
     const auto reset_start = collect_begin_timing
         ? std::chrono::steady_clock::now()
@@ -4625,7 +4604,6 @@ std::uint64_t RendererD3D12::end_frame(
     const std::uint64_t submitted_frame = frame_index_ + 1u;
     const std::uint64_t submitted_fence = ++next_fence_value_;
     fence_values_[frame_slot_] = submitted_fence;
-    ray_tracer_->note_submission(submitted_fence);
     if (ring_mode_ == RingMode::Interp) {
         ring_segment_fence_[ring_segment_] = submitted_fence;
     } else if (matrix_segments_ != kFramesInFlight) {
@@ -6006,7 +5984,6 @@ void RendererD3D12::record_interp_eval(const SubframeTime& time, const Affine34&
         own_view.z_offset = -p[5] * kFarEps;
         own_view.jitter = {time.jitter_x, time.jitter_y};
     }
-    ray_tracer_->write_reprojection(command_list_.Get(), camera_t, own_known ? &own_view : nullptr);
     const bool last = time.t >= 1.0f;
     InterpEvalFrame frame{};
     std::memcpy(frame.camera, camera_t.data(), sizeof(frame.camera));
@@ -6970,9 +6947,7 @@ bool RendererD3D12::scene_temporal_begin(float& jitter_x, float& jitter_y) {
     jitter_x = 0.0f;
     jitter_y = 0.0f;
     scene_temporal_ = false;
-    // The engine's histories follow what moved by itself through the raster's motion: without a temporal upscaler the
-    // scene still writes it (MSAA is off with ray tracing).
-    scene_motion_ = rt_active() && ray_tracer_->engine_active() && !output_efb_active_;
+    scene_motion_ = false;
     const unsigned rw = kFrameWidth * efb_scale_;
     const unsigned ow = temporal_output_w_;
     // The context is replaced only by begin_frame (prepare_temporal_upscaler).
