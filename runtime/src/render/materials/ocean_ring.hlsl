@@ -17,10 +17,10 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const float4 c1 = float4(v.uv[1], 1.0, 1.0);
     const float4 c2 = float4(v.uv[2], 1.0, 1.0);
     const float4 p = float4(v.pos, 1.0);
-    o.uv[0] = float4(dot(c0, inline_tex_matrices[0]), dot(c0, inline_tex_matrices[1]),
-                     dot(c1, inline_tex_matrices[3]), dot(c1, inline_tex_matrices[4]));
-    o.uv[1] = float4(dot(c2, inline_tex_matrices[6]), dot(c2, inline_tex_matrices[7]), 0.0, 0.0);
-    o.uv[2] = float4(dot(p, inline_tex_matrices[9]), dot(p, inline_tex_matrices[10]), dot(p, inline_tex_matrices[11]), 1.0);
+    o.uv[0] = float4(dot(c0, native_texgen_flat(0)), dot(c0, native_texgen_flat(1)),
+                     dot(c1, native_texgen_flat(3)), dot(c1, native_texgen_flat(4)));
+    o.uv[1] = float4(dot(c2, native_texgen_flat(6)), dot(c2, native_texgen_flat(7)), 0.0, 0.0);
+    o.uv[2] = float4(dot(p, native_texgen_flat(9)), dot(p, native_texgen_flat(10)), dot(p, native_texgen_flat(11)), 1.0);
 }
 
 float4 material_color(NativeVaryings i) {

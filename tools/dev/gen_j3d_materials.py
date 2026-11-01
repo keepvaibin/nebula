@@ -170,9 +170,9 @@ def emit_vertex(p, out):
         # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, which GX takes over
         # the material's texgen id: GX_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
         # by the program's row (GX_PTTEXMTX0's 0 + 3k, 61 the identity).
-        # As the uber shader: the draw's texture matrix rows (inline_tex_matrices: the matrix its current matrix index
+        # As GX: the draw's texture matrix rows (native_texgen_flat: the matrix its current matrix index
         # names) or, where the shape carries per-vertex indices, the vertex's matrix from the matrix rows; then the
-        # post-transform the draw's texgen names (inline_post_matrices: the material's, or a shape's env map or
+        # post-transform the draw's texgen names (native_texgen_post_flat: the material's, or a shape's env map or
         # projection), 61 the identity.
         out.append(f"        float3 res;")
         out.append(f"        if (((vs_header.w >> {i}u) & 1u) != 0u) {{")
@@ -181,7 +181,7 @@ def emit_vertex(p, out):
         third = rows[2] if gen_type == 0 else "1.0"
         out.append(f"            res = float3({rows[0]}, {rows[1]}, {third});")
         out.append("        } else {")
-        irows = [f"dot(c, inline_tex_matrices[{3 * i + r}])" for r in range(3)]
+        irows = [f"dot(c, native_texgen_flat({3 * i + r}u))" for r in range(3)]
         ithird = irows[2] if gen_type == 0 else "1.0"
         out.append(f"            res = float3({irows[0]}, {irows[1]}, {ithird});")
         out.append("        }")
@@ -189,7 +189,7 @@ def emit_vertex(p, out):
         out.append("        const bool posted = (pt & 0x3Fu) != 61u;")
         out.append("        if (posted) {")
         out.append("            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;")
-        prow = [f"dot(float4(res, 1.0), inline_post_matrices[{3 * i + r}])" for r in range(3)]
+        prow = [f"dot(float4(res, 1.0), native_texgen_post_flat({3 * i + r}u))" for r in range(3)]
         out.append(f"            res = float3({prow[0]}, {prow[1]}, {prow[2]});")
         out.append("        }")
         # A projected coordinate's q of 0: GX halves and clamps s and t (as the uber shader and Dolphin).

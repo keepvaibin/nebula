@@ -102,6 +102,22 @@ float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
     return lerp(c, fog_color.rgb, f);
 }
 float4 native_post_row(uint q) { return native_group_row(34u, q); }
+// Texture coordinate i's matrix: the row its current matrix index names (CP MatrixIndexA/B; 61 at most, as the
+// identity's), its rows through the groups. Flat index k = 3i + r, as the inline matrices were laid out.
+uint native_texgen_matrix(uint i) {
+    const uint indices = i < 4u ? draw_indices.x : draw_indices.y;
+    const uint shift = i < 4u ? 6u + 6u * i : 6u * (i - 4u);
+    return min((indices >> shift) & 63u, 61u);
+}
+float4 native_texgen_flat(uint k) { return native_matrix_row(native_texgen_matrix(k / 3u) + k % 3u); }
+// Texture coordinate i's post-transform rows (its vs_post row).
+float4 native_texgen_post_flat(uint k) {
+    const uint i = k / 3u;
+    const uint row = (vs_post[i >> 2u][i & 3u] & 0x3Fu) + k % 3u;
+    return native_post_row(row & 63u);
+}
+// The current position matrix's row r (MatrixIndexA's position index).
+float4 native_pos_row(uint r) { return native_matrix_row(min(draw_indices.x & 63u, 61u) + r); }
 uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
 
 struct NativeVertexIn {
@@ -217,9 +233,9 @@ NativeVsOut native_vs(NativeVertexIn input) {
         m2 = native_matrix_row(v.pn_row + 2u);
     } else {
         v.pn_row = min(draw_indices.x & 0x3Fu, 61u);
-        m0 = inline_pos_matrix[0];
-        m1 = inline_pos_matrix[1];
-        m2 = inline_pos_matrix[2];
+        m0 = native_pos_row(0u);
+        m1 = native_pos_row(1u);
+        m2 = native_pos_row(2u);
     }
     v.eye = float3(dot(m0, p), dot(m1, p), dot(m2, p));
     const float3 n = float3(dot(m0.xyz, input.nrm), dot(m1.xyz, input.nrm), dot(m2.xyz, input.nrm));

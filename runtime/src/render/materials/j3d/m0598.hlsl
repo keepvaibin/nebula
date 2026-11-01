@@ -15,13 +15,13 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
             const uint tm = native_tex_matrix(v, 0u);
             res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
         } else {
-            res = float3(dot(c, inline_tex_matrices[0]), dot(c, inline_tex_matrices[1]), 1.0);
+            res = float3(dot(c, native_texgen_flat(0u)), dot(c, native_texgen_flat(1u)), 1.0);
         }
         const uint pt = native_post(0u);
         const bool posted = (pt & 0x3Fu) != 61u;
         if (posted) {
             if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[0]), dot(float4(res, 1.0), inline_post_matrices[1]), dot(float4(res, 1.0), inline_post_matrices[2]));
+            res = float3(dot(float4(res, 1.0), native_texgen_post_flat(0u)), dot(float4(res, 1.0), native_texgen_post_flat(1u)), dot(float4(res, 1.0), native_texgen_post_flat(2u)));
         }
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
@@ -33,13 +33,13 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
             const uint tm = native_tex_matrix(v, 1u);
             res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), dot(c, native_matrix_row(tm + 2u)));
         } else {
-            res = float3(dot(c, inline_tex_matrices[3]), dot(c, inline_tex_matrices[4]), dot(c, inline_tex_matrices[5]));
+            res = float3(dot(c, native_texgen_flat(3u)), dot(c, native_texgen_flat(4u)), dot(c, native_texgen_flat(5u)));
         }
         const uint pt = native_post(1u);
         const bool posted = (pt & 0x3Fu) != 61u;
         if (posted) {
             if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[3]), dot(float4(res, 1.0), inline_post_matrices[4]), dot(float4(res, 1.0), inline_post_matrices[5]));
+            res = float3(dot(float4(res, 1.0), native_texgen_post_flat(3u)), dot(float4(res, 1.0), native_texgen_post_flat(4u)), dot(float4(res, 1.0), native_texgen_post_flat(5u)));
         }
         if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[1] = float4(res, true ? 1.0 : 0.0);

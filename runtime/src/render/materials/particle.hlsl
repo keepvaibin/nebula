@@ -25,11 +25,11 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     const uint flags = uint(material.params.z);
     if ((flags & 4u) != 0u) {
         const float4 p = float4(v.pos, 1.0);
-        o.uv[0] = float4(dot(p, inline_tex_matrices[0]), dot(p, inline_tex_matrices[1]), dot(p, inline_tex_matrices[2]),
+        o.uv[0] = float4(dot(p, native_texgen_flat(0)), dot(p, native_texgen_flat(1)), dot(p, native_texgen_flat(2)),
                          1.0);
     } else {
         const float4 c = float4(v.uv[0], 1.0, 1.0);
-        o.uv[0] = float4(dot(c, inline_tex_matrices[0]), dot(c, inline_tex_matrices[1]), 1.0, 0.0);
+        o.uv[0] = float4(dot(c, native_texgen_flat(0)), dot(c, native_texgen_flat(1)), 1.0, 0.0);
     }
     o.uv[1] = float4(v.uv[0], 1.0, 0.0);
 }
