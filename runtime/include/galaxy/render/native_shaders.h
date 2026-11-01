@@ -2,7 +2,7 @@
 // The native materials' shaders (E-04; runtime/src/render/materials/<name>.hlsl), compiled at build: DXIL in the
 // D3D12 build, SPIR-V in the Vulkan build (the generated native_shader_table.cpp of each).
 
-#include "galaxy/render/shader_keys.h"
+#include "galaxy/render/pso_key.h"
 
 #include <cstddef>
 #include <cstdint>
