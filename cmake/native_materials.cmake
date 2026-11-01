@@ -8,7 +8,8 @@
 set(galaxy_native_materials whirlpool ocean_bowl screen_blur flat_color clip_fill big_bubble
     whirlpool_accelerator spin_driver_path spider_thread tex_modulate water_plant ocean_ring_pipe_inside ocean_sphere
     ocean_sphere_env ocean_ring ocean_ring_bloom water_road ocean_ring_pipe_outside color_tex_alpha
-    vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp)
+    vertex_color dd_texture dd_texture_color tex_vertex_alpha tex_alpha_lerp
+    trample_star)
 set(galaxy_native_variants base reactive layer motion dual)
 set(galaxy_native_defines_base "")
 set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
