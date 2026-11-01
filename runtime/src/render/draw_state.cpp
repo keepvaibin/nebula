@@ -447,17 +447,6 @@ std::uint32_t rgba_word(const std::uint8_t* c) {
            static_cast<std::uint32_t>(c[2]) << 8u | c[3];
 }
 
-std::uint32_t matrix_index_a(const NativeDrawState& s) {
-    return static_cast<std::uint32_t>(s.position_matrix) | static_cast<std::uint32_t>(s.texture_matrix[0]) << 6u |
-           static_cast<std::uint32_t>(s.texture_matrix[1]) << 12u | static_cast<std::uint32_t>(s.texture_matrix[2]) << 18u |
-           static_cast<std::uint32_t>(s.texture_matrix[3]) << 24u;
-}
-
-std::uint32_t matrix_index_b(const NativeDrawState& s) {
-    return static_cast<std::uint32_t>(s.texture_matrix[4]) | static_cast<std::uint32_t>(s.texture_matrix[5]) << 6u |
-           static_cast<std::uint32_t>(s.texture_matrix[6]) << 12u | static_cast<std::uint32_t>(s.texture_matrix[7]) << 18u;
-}
-
 namespace {
 
 constexpr std::uint8_t kCaptureFiltered = 16u;  // NEBULA_CAPTURE_FILTERED

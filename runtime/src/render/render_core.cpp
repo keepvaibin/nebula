@@ -3009,7 +3009,7 @@ bool RenderCore::render_interp_subframe(float t) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
                 } else if ((now.flags & 0x02u) != 0u) {
-                    const std::uint32_t slot = (now.matrix_index_a & 0x3Fu) / 3u;
+                    const std::uint32_t slot = (now.draw_rows[0][0] & 0x3Fu) / 3u;
                     if (slot < 10u) entry.normal_mask |= static_cast<std::uint16_t>(1u << slot);
                 }
                 motion.palette = index;
@@ -5971,12 +5971,15 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
     }
     if (record.has_current) {
         const auto& c = record.current;
-        const std::uint32_t before_a = matrix_index_a(draw_state_), before_b = matrix_index_b(draw_state_);
+        const std::uint8_t before_position = draw_state_.position_matrix;
+        std::uint8_t before_texture[8];
+        std::memcpy(before_texture, draw_state_.texture_matrix, sizeof(before_texture));
         draw_state_.position_matrix = static_cast<std::uint8_t>(3u * (c[0] % 10u));
         for (unsigned i = 0; i < 8u; ++i) {
             draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(30u + 3u * std::min<unsigned>(c[1u + i], 10u));
         }
-        if (matrix_index_a(draw_state_) != before_a || matrix_index_b(draw_state_) != before_b) {
+        if (draw_state_.position_matrix != before_position ||
+            std::memcmp(before_texture, draw_state_.texture_matrix, sizeof(before_texture)) != 0) {
             draw_state_.dirty |= kStateDirtyVertexConstants;
         }
     }
