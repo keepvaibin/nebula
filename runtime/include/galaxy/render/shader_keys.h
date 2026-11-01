@@ -7,6 +7,7 @@
 // builds keys with the build_* functions; only tests construct them directly.
 
 #include "galaxy/render/draw_state.h"
+#include "galaxy/render/render_state_key.h"
 #include "galaxy/render/gx_bitfields.h"
 
 #include <cstddef>
@@ -178,8 +179,6 @@ inline constexpr std::uint8_t kVsKeyCurved = 0x80u;
 // frames.
 inline constexpr std::uint32_t kVsFeatureVertexBlend = 0x1u;
 inline constexpr std::uint32_t kVsFeatureDebake = 0x2u;
-inline constexpr std::uint8_t kTopologyTypeMask = 0x0Fu;
-inline constexpr std::uint8_t kTopologyPatch = 4u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH
 inline constexpr std::uint8_t kCurvedPerPixel = 0x10u;  // the per-pixel lighting interpolants
 inline constexpr std::uint8_t kCurvedMotion = 0x20u;    // the motion interpolants
 [[nodiscard]] constexpr unsigned curved_variant(std::uint8_t primitive_topology) noexcept {
@@ -318,46 +317,6 @@ static_assert(std::has_unique_object_representations_v<VertexShaderKey>);
                          c.attenuation};
 }
 
-// RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene EFB
-// (RGBA16F) instead of the RGBA8 EFB. Ray tracing runs without MSAA, so the bits never combine.
-inline constexpr std::uint8_t kEfbVariantHdr = 4u;
-inline constexpr std::uint8_t kEfbVariantSamplesMask = 3u;
-
-// Fixed-function pipeline state, kept apart from the shader keys so one compiled shader pair
-// serves every blend and depth variant.
-struct RenderStateKey {
-    std::uint32_t blend_bits;       // see build_render_state_key; bit27 dual-source alpha,
-                                    // bit28 constant EFB alpha overwrite
-    std::uint16_t zmode_bits;       // canonicalized BP 0x40
-    std::uint8_t cull;              // CullMode
-    std::uint8_t pixfmt;            // PeControl pixel format (dst-alpha cap)
-    std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value (bits 0-3; kVsKeyCurved: bits 4-5)
-    std::uint8_t samples_log2;      // the EFB's variant: bits 0-1 its samples per pixel (MSAA) as a power of
-                                    // two (0 for one), bit 2 kEfbVariantHdr
-    std::uint8_t reserved[6];
-
-    // Field-wise, not byte-wise: PsoKey::hash() leaves out `reserved`, and equality must not be
-    // finer than the hash, or an entry could become unreachable.
-    [[nodiscard]] bool operator==(const RenderStateKey& other) const noexcept {
-        return blend_bits == other.blend_bits &&
-            zmode_bits == other.zmode_bits &&
-            cull == other.cull &&
-            pixfmt == other.pixfmt &&
-            primitive_topology == other.primitive_topology &&
-            samples_log2 == other.samples_log2;
-    }
-};
-static_assert(sizeof(RenderStateKey) == 16);
-static_assert(std::has_unique_object_representations_v<RenderStateKey>);
-
-// The render state an uber stand-in draws with: a curved surface's patches as the plain triangles they are (the uber
-// vertex shader writes no curve outputs; RenderCore::draw_topology draws a stand-in's triangles as a list).
-[[nodiscard]] constexpr RenderStateKey flat_render_state(RenderStateKey rs) noexcept {
-    if ((rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch) {
-        rs.primitive_topology = 3u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
-    }
-    return rs;
-}
 
 struct PsoKey {
     std::uint64_t vs_hash;
@@ -434,7 +393,6 @@ struct MemoizedPsoKeyHasher {
 // The same with the vertices' matrix slots given (bit 0 a position matrix per vertex, bits 1-8 texture matrices 0-7:
 // GX's VCD bits 0-8, or a native shape's) in place of the VCD's.
 [[nodiscard]] VertexShaderKey build_vertex_shader_key(const NativeDrawState& state, std::uint32_t matrix_bits);
-[[nodiscard]] RenderStateKey build_render_state_key(const NativeDrawState& state);
 
 // A typed stage in the words the uber pixel shader (stage_config, ind_cmd, ind_misc) and the ray tracer's TEV
 // (RtTevStage, rt_tev.hlsli) decode on the GPU: GX's TEV field positions, until those programs read typed stages.
