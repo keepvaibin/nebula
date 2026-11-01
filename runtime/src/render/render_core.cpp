@@ -7659,22 +7659,14 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
-    // GALAXY_NATIVE_ONLY=1 (E-04 step 4's census): a draw without a native material is not drawn. Each GX pixel
-    // program (its key's hash) once per topology and phase in the log, and a running count of the draws dropped.
-    static const bool native_only = read_env_u64("GALAXY_NATIVE_ONLY", 0u) != 0u;
-    if (native_only && native_material_ == nullptr) [[unlikely]] {
-        static std::unordered_set<std::uint64_t> logged;
+    // Every draw takes its material's native shader (E-04); one without a native material is not drawn. The count of
+    // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
+    if (native_material_ == nullptr) [[unlikely]] {
+        static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
         static std::uint64_t dropped = 0u;
-        const std::uint64_t hash = build_pixel_shader_key(draw_state_, renderer_.efb_scale()).hash();
-        const std::uint64_t entry = hash ^ (static_cast<std::uint64_t>(topology_key) << 56u) ^
-                                    (static_cast<std::uint64_t>(rt_phase_) << 48u);
-        if (logged.size() < 1024u && logged.insert(entry).second) {
-            std::fprintf(stderr, "[native-only] GX draw dropped: ps=%016llx topology=%u phase=%u (draw %llu)\n",
-                         static_cast<unsigned long long>(hash), static_cast<unsigned>(topology_key),
-                         static_cast<unsigned>(rt_phase_), static_cast<unsigned long long>(dropped));
-        }
-        if ((++dropped & 0xFFFFu) == 0u) {
-            std::fprintf(stderr, "[native-only] %llu GX draws dropped\n", static_cast<unsigned long long>(dropped));
+        if (log_native && (dropped++ & 0xFFFFu) == 0u) {
+            std::fprintf(stderr, "[native-material] %llu draws without a native material (not drawn)\n",
+                         static_cast<unsigned long long>(dropped));
         }
         return nullptr;
     }
@@ -7736,18 +7728,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     const bool rs_dirty   = (dirty & kStateDirtyRenderState)  != 0;
     const bool xf_dirty   = (dirty & kStateDirtyVertexShader)    != 0;
     const bool vcd_dirty  = dirty == ~0u;  // the vertex inputs' layout: only after a reset
-    const bool tev_c_dirty = (dirty & kStateDirtyPixelConstants) != 0;
     const bool vs_c_dirty = (dirty & kStateDirtyVertexConstants) != 0;
 
-    // sampled_texture_map_mask walks every TEV stage; only kDirtyTev can move the mask (per-object
-    // matrix loads set kDirtyXfMatrices alone), so it is recomputed only then or after a reset.
-    if (native_material_ != nullptr) {
-        current_texture_map_mask_ = native_texture_mask_;
-        current_texture_map_mask_valid_ = true;
-    } else if (!current_texture_map_mask_valid_ || tev_dirty) {
-        current_texture_map_mask_ = sampled_texture_map_mask(draw_state_);
-        current_texture_map_mask_valid_ = true;
-    }
+    // The maps the native material samples.
+    current_texture_map_mask_ = native_texture_mask_;
+    current_texture_map_mask_valid_ = true;
     const std::uint8_t texture_map_mask = current_texture_map_mask_;
     // TextureBindingKey depends only on the map mask and the sampled maps' images, modes and palettes, whose
     // changes set kDirtyTex, so the last key is reused until one of them changes (dropping the table cache also
@@ -7980,9 +7965,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // A curved draw after another keeps its patch topology (its variant is settled below).
     const bool keep_patch =
         curved && (render_state_key_.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    const bool topology_dirty =
-        (!keep_patch && render_state_key_.primitive_topology != topology_key) ||
-        render_state_key_.samples_log2 != samples_log2;
     if (!keep_patch) {
         render_state_key_.primitive_topology = topology_key;
     }
@@ -8125,8 +8107,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         curved_changed = curved_changed || render_state_key_.primitive_topology != patch;
         render_state_key_.primitive_topology = patch;
     }
-    if (native_material_ != nullptr) {
-        // A native material's pipeline: its build-compiled shaders under the draw's render state.
+    {
+        // The native material's pipeline: its build-compiled shaders under the draw's render state.
         current_pipeline_ = pipeline_cache_.get_native(native_material_->shader, render_state_key_);
         // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's pipelines as draws first take them.
         static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
@@ -8151,101 +8133,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         current_pso_key_valid_ = false;
         // A curved native draw goes whole through its patch stages (native_curved.hlsl).
         current_flat_pipeline_ = nullptr;
-    } else if (current_pipeline_ == nullptr || current_pipeline_is_uber_ ||
-        tev_dirty || xf_dirty || vcd_dirty || rs_dirty || topology_dirty ||
-        motion_key_changed || curved_changed || vs_features_changed) {
-        const PsoKey pso_key{
-            current_vs_hash_,
-            current_ps_hash_,
-            render_state_key_,
-        };
-        const std::uint64_t pso_key_hash = pso_key.hash();
-        const auto pso_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        // Thread cycles of this PSO resolution (GALAXY_GX_PSO_CYCLES), instrumentation included.
-        const ThreadCounterSample pso_cycles_start = pso_cycles_enabled
-            ? thread_cycle_count() : ThreadCounterSample{};
-        // An unchanged key resolves to current_pipeline_: the shader hashes, render state and topology
-        // do not depend on matrices, and the palette uploads by its own stale flag. The hash is
-        // compared first (a different hash proves a different key); an equal hash is confirmed
-        // against the whole key.
-        const bool pso_key_changed =
-            current_pipeline_ == nullptr ||
-            current_pipeline_is_uber_ ||
-            !current_pso_key_valid_ ||
-            current_pso_key_hash_ != pso_key_hash ||
-            !(current_pso_key_ == pso_key);
-        if (pso_key_changed) {
-            // Always counted, so the three routes sum to it.
-            ++frame_pso_resolutions_;
-            // The frame-scoped memo first: the published map cannot change between begin_frame()'s
-            // drain_completions() and the frame's last draw, so a hit returns what get() would.
-            gpu::Pipeline* resolved = nullptr;
-            // One indexed probe. The hash picks the victim; the exact key
-            // confirms the hit, so a collision is a miss, never a wrong
-            // pipeline.
-            PipelineMemoEntry& memo_slot =
-                pipeline_memo_[pso_key_hash & kPipelineMemoMask];
-            const bool memo_hit =
-                memo_slot.hash == pso_key_hash &&
-                memo_slot.pipeline != nullptr &&
-                memo_slot.key == pso_key;
-            bool resolved_uber = false;
-            if (memo_hit) {
-                resolved = memo_slot.pipeline;
-                // Always counted, like the get() calls.
-                ++frame_pso_memo_hits_;
-            } else {
-                ++frame_pso_get_calls_;
-                const auto get_start = time_detail
-                    ? std::chrono::steady_clock::now()
-                    : std::chrono::steady_clock::time_point{};
-                resolved = pipeline_cache_.get(pso_key, ps_key_, vs_key_);
-                resolved_uber = pipeline_cache_.last_get_used_uber();
-                if (time_detail) {
-                    const std::uint64_t get_us =
-                        elapsed_us(get_start, std::chrono::steady_clock::now());
-                    frame_pso_get_us_ += get_us;
-                    frame_pso_get_max_us_ =
-                        std::max(frame_pso_get_max_us_, get_us);
-                }
-                // An uber stand-in is never memoized: the next resolution
-                // should find the specialization once it is published.
-                if (resolved != nullptr && !resolved_uber) {
-                    memo_slot.hash = pso_key_hash;
-                    memo_slot.key = pso_key;
-                    memo_slot.pipeline = resolved;
-                }
-            }
-            current_pipeline_ = resolved;
-            current_pipeline_is_uber_ = resolved_uber;
-            current_pso_key_ = pso_key;
-            current_pso_key_hash_ = pso_key_hash;
-            current_pso_key_valid_ = current_pipeline_ != nullptr;
-            current_flat_pipeline_ = curved && resolved != nullptr && !resolved_uber
-                ? resolve_flat_pipeline(pso_key) : nullptr;
-            if (!resolved_uber) {
-                describe_pipeline(resolved, vs_key_, ps_key_, render_state_key_);
-            }
-        }
-        if (time_detail) {
-            frame_flush_pso_us_ +=
-                elapsed_us(pso_start, std::chrono::steady_clock::now());
-        }
-        if (pso_cycles_enabled) {
-            const ThreadCounterSample interval = thread_counter_interval(
-                pso_cycles_start, thread_cycle_count());
-            if (frame_flush_pso_cycles_valid_ && interval.available &&
-                interval.value <= std::numeric_limits<std::uint64_t>::max() -
-                    frame_flush_pso_cycles_) {
-                frame_flush_pso_cycles_ += interval.value;
-            } else {
-                // An incomplete numerator must not look like a complete total.
-                frame_flush_pso_cycles_ = 0u;
-                frame_flush_pso_cycles_valid_ = false;
-            }
-        }
     }
     if (current_pipeline_ == nullptr) {
         // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
@@ -8263,21 +8150,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // normals, post-transform matrices, lights): a kind's block is appended when its rows changed, and the draw's
     // moved lights (the ray tracer's aim) take a light block of their own. A draw names its blocks by their first rows
     // (VertexConstants::pos_base, row_bases), valid until begin_frame() rewinds the ring.
-    const unsigned active_texgen_mask =
-        vs_key_.num_texgens >= 8u
-            ? 0xFFu
-            : ((1u << vs_key_.num_texgens) - 1u);
-    bool emboss_palette_required = false;
-    for (unsigned texgen = 0; texgen < vs_key_.num_texgens; ++texgen) {
-        emboss_palette_required |= draw_state_.texgen[texgen].type == TexGenType::EmbossMap;
-    }
-    // Enhanced lighting reads the lights in the pixel shader, unlit draws included.
-    // A native material's shader may read any block (palette positions, normals, lights, per-vertex texture
-    // matrices); the GX key it would be judged by is another draw's.
-    const bool palette_required =
-        native_material_ != nullptr || emboss_palette_required ||
-        (vs_key_.flags & (0x03u | kVsKeyEnhancedLighting)) != 0u ||
-        (vs_key_.texmtx_idx_mask & active_texgen_mask) != 0u;
+    // A native material's shader may read any block (palette positions, normals, lights, per-vertex texture matrices).
+    const bool palette_required = true;
     current_palette_required_ = palette_required;
     // Actor lights (actor_lights.h): a lit scene draw's follow-camera lights are moved in its
     // snapshot; one moved otherwise (other lights, another scene's aim) is not reused for it. A
@@ -8439,23 +8313,18 @@ gpu::Pipeline* RenderCore::flush_draw_state(
 
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
-    const std::uint32_t native_texmtx = native_material_ != nullptr ? (matrix_bits >> 1u) & 0xFFu : 0u;
+    const std::uint32_t native_texmtx = (matrix_bits >> 1u) & 0xFFu;
     // The header word as the last upload wrote it (a GX draw's from its key): any change uploads again, or a native
     // draw after a GX one would read that draw's mask.
     // A native draw's pixel engine word (native_material.hlsli native_ps): bit 8 constant destination alpha with the
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
     // frame, as the GX path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
-    std::uint32_t native_pe = 0u;
-    if (native_material_ != nullptr) {
-        const BlendMode& pe_blend = draw_state_.blend;
-        const bool six_bit = draw_state_.pe.pixel_format == 1u;
-        native_pe = six_bit && pe_blend.const_alpha_enable && pe_blend.alpha_update
-                        ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
-                        : 0u;
-    }
-    // (A GX draw's words carry bit 31, so no native draw's can equal them.)
-    const std::uint32_t header_texmtx = native_material_ != nullptr ? native_texmtx | native_pe << 8u
-                                                                    : 0x80000000u | vs_key_.texmtx_idx_mask;
+    const BlendMode& pe_blend = draw_state_.blend;
+    const bool six_bit = draw_state_.pe.pixel_format == 1u;
+    const std::uint32_t native_pe = six_bit && pe_blend.const_alpha_enable && pe_blend.alpha_update
+                                        ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
+                                        : 0u;
+    const std::uint32_t header_texmtx = native_texmtx | native_pe << 8u;
     const bool native_texmtx_changed = std::exchange(native_texmtx_, header_texmtx) != header_texmtx;
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
     if (native_texmtx_changed || per_vertex_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty ||
@@ -8473,9 +8342,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         if (history_scene_) [[unlikely]] {
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
-        apply_uber_vs_key(vs_key_, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
-        if (native_material_ != nullptr) {
-            // A native draw: the per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
+        {
+            // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
             native_vs->uber_vs_header[1] = renderer_.efb_scale();
             native_vs->uber_vs_header[2] = native_pe;
@@ -8699,22 +8567,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
     }
 
-    // Upload PS constants when TEV stage config / fog / alpha / tex dims change, or an enhanced
-    // draw's material table entry does (after the texture binding, which finds it).
-    const std::uint32_t enhanced_material_bits =
-        (ps_key_.reserved & kPsKeyEnhancedLighting) != 0u ? enhanced_table_material(rt_material(current_rt_material_)) : 0u;
-    // A glow's gain follows its material (a light source's radiance): another material is another gain. A lit
-    // translucent's material decides whether it is falling water (its constants' tex_dims[7].w).
-    const std::uint16_t glow_material = (ps_key_.output_flags & 0x60u) != 0u ? current_rt_material_ : 0u;
-    // A clear ice or crystal draw under physical light (rt_materials.h kRtIceTintKept): the share of its art's tint it
-    // loses, in its TEV and konst registers here and its rasterized colours in the pixel shader (ztex_params.w).
-    float tint_cleared = 0.0f;
-    if (const RtMaterial* const tinted = rt_material(current_rt_material_);
-        tinted != nullptr && tinted->tint_kept < 1.0f && scene_phase_ && renderer_.rt_physical()) {
-        tint_cleared = 1.0f - std::clamp(tinted->tint_kept, 0.0f, 1.0f);
-    }
-    if (native_material_ != nullptr) {
-        // A native material's constants (its MaterialConstants), uploaded once per material.
+    {
+        // The native material's constants (its MaterialConstants), uploaded once per material.
         if (native_constants_dirty_ || frame_bindings_dirty_ || current_ps_constants_ == 0u) {
             UploadRing::Allocation alloc =
                 renderer_.constant_ring().allocate(sizeof(native_material_->constants), 256u);
@@ -8722,134 +8576,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             current_ps_constants_ = alloc.gpu;
             current_ps_record_ = -1;
             native_constants_dirty_ = false;
-        }
-    } else if (tev_dirty || tev_c_dirty || tex_dirty || frame_bindings_dirty_ || glow_changed || enhanced_changed ||
-        dirty == ~0u || (ps_record_restart_ && history_scene_) || enhanced_material_bits != enhanced_material_bits_ ||
-        glow_material != glow_material_ || tint_cleared != ps_tint_cleared_) {
-        enhanced_material_bits_ = enhanced_material_bits;
-        glow_material_ = glow_material;
-        ps_tint_cleared_ = tint_cleared;
-        const auto constants_start = time_detail
-            ? std::chrono::steady_clock::now()
-            : std::chrono::steady_clock::time_point{};
-        PixelConstants ps_c{};
-        fill_ps_constants(draw_state_, ps_c, scales_from_textures_);
-        if (tint_cleared > 0.0f) {
-            for (auto& reg : ps_c.tev_regs) {
-                clear_register_tint(reg, tint_cleared);
-            }
-            for (auto& reg : ps_c.konst) {
-                clear_register_tint(reg, tint_cleared);
-            }
-            // Its maps that are textures clear their texels too (a seesaw's blue IceFace01); the screen captures it
-            // shows through it (the ice's and the crystals' refraction, the floors' mirror) keep their colours.
-            // alpha_refs.z bits 8-15, above the alpha test's packed modes.
-            std::uint32_t textures = 0u;
-            for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
-                if ((current_texture_map_mask_ & (1u << m)) != 0u && !current_texture_handles_[m].from_efb_copy) {
-                    textures |= 1u << m;
-                }
-            }
-            ps_c.alpha_refs[2] = std::bit_cast<float>(std::bit_cast<std::uint32_t>(ps_c.alpha_refs[2]) | (textures << 8u));
-        }
-        ps_c.ztex_params[1] = 1.0f / static_cast<float>(renderer_.efb_scale());
-        // A glow's gain (output_flags bit 5): 1 under physical light (the game's additive effects as it drew them;
-        // their light reaches the scene as the engine's emitting geometry), the art model's glow exposure otherwise.
-        ps_c.ztex_params[2] = (ps_key_.output_flags & 0x20u) == 0u ? 0.0f
-                              : renderer_.rt_physical() ? 1.0f
-                                                        : renderer_.rt_glow_exposure(glow_kind_ == 2u);
-        // The lighting texture's scale (bit 6); 0 leaves a lit translucent unlit: a table light source (its own light),
-        // an effect that is light (`luminous`: sparkles, glows, fire; the game draws them unlit, at the brightness they
-        // shine, and lit by the surface behind them a sparkle grew into a flat orange star) or a clear surface (glass,
-        // crystal, ice, water: the lit scene shows through it). Falling water is white water, a foam of bubbles and
-        // drops that scatters what reaches it: it takes the light at its own sheet (rt_engine.hlsl water_light).
-        bool takes_light = (ps_key_.output_flags & 0x40u) != 0u;
-        float recolour = 0.0f;
-        if (const RtMaterial* const m = rt_material(current_rt_material_);
-            m != nullptr && (ps_key_.output_flags & 0x60u) != 0u) {
-            const bool emits = m->emission != RtEmission::None && !m->no_light && !m->hide;
-            const bool clear = (m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                                m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water)) &&
-                               !m->waterfall;
-            takes_light = takes_light && !emits && !clear && !m->luminous;
-            // `recolour`: a light source's sprite in the table's colour rather than the one the game draws its glow
-            // in, as RGB8 + 1, negated.
-            if (emits && m->recolour) {
-                const auto byte = [](float v) {
-                    return static_cast<std::uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 255.0f));
-                };
-                recolour = -static_cast<float>(1u + byte(m->color[0]) + (byte(m->color[1]) << 8u) +
-                                               (byte(m->color[2]) << 16u));
-            }
-        }
-        // Else the tint the draw loses, between -1 and 0 (below any recolour code, which is at most -1). A tinted draw
-        // that takes the light (a translucent of an unclear class) keeps its rasterized colours' tint.
-        ps_c.ztex_params[3] =
-            takes_light ? renderer_.rt_light_texture_scale() : recolour != 0.0f ? recolour : -tint_cleared;
-        // A lit translucent's kind (shader_gen; map 7 is the light texture there, so its texture dimensions are free
-        // and always set here: fill_ps_constants leaves map 7's texcoord scale, at least 1, in them): 0 an effect or
-        // any other translucent, 1 falling water (clear where the art paints its water hue), 2 water, glass or
-        // crystal (the water pass's surfaces). Only 0 covers what lies behind for the water's composites (the
-        // reactive mask).
-        if ((ps_key_.output_flags & 0x40u) != 0u) {
-            float kind = 0.0f;
-            if (const RtMaterial* const m = rt_material(current_rt_material_); m != nullptr) {
-                const bool clear_class = m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Crystal) ||
-                                         m->surface_class == static_cast<std::uint8_t>(RtSurfaceClass::Water);
-                // Falling water: kind 1 plus 0.4 x its aeration (the share of its clear water's light its bubbles
-                // scatter: the table's, else rt_engine.hlsl kFallAeration's 0.36), below 1.5.
-                kind = takes_light && m->waterfall ? 1.0f + 0.4f * (m->aeration >= 0.0f ? m->aeration : 0.36f)
-                       : clear_class               ? 2.0f
-                                                   : 0.0f;
-                // Falling water's clear water colour as the art paints it (the table row's; white: none).
-                if (kind < 1.5f && kind >= 1.0f) {
-                    ps_c.tex_dims[7][0] = m->color[0];
-                    ps_c.tex_dims[7][1] = m->color[1];
-                    ps_c.tex_dims[7][2] = m->color[2];
-                }
-            }
-            ps_c.tex_dims[7][3] = kind;
-        }
-        // GALAXY_RT_LOG_GLOWS=1: each scene draw's material once per phase, glow kind, lighting texture and J3D
-        // material identity (mat_id.py names the material, material_names.py --find the identity).
-        if (scene_phase_ && rt_log_glows()) [[unlikely]] {
-            static std::set<std::uint64_t> logged;
-            const std::uint64_t key = (static_cast<std::uint64_t>(rt_identity_seen_) << 40u) |
-                                      (static_cast<std::uint64_t>(current_rt_material_) << 24u) |
-                                      (static_cast<std::uint64_t>(rt_phase_) << 8u) | glow_kind_ |
-                                      (ps_c.ztex_params[3] > 0.0f ? 0x80u : 0u);
-            if (logged.insert(key).second) {
-                std::fprintf(stderr,
-                             "[rt-draw-material] material=%u phase=%u kind=%u gain=%.2f lit-scale=%.3f identity=%08X\n",
-                             static_cast<unsigned>(current_rt_material_), static_cast<unsigned>(rt_phase_),
-                             static_cast<unsigned>(glow_kind_), ps_c.ztex_params[2], ps_c.ztex_params[3],
-                             rt_identity_seen_);
-            }
-        }
-        uber_ps_memo_.apply(ps_key_, ps_c);
-        if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
-            ps_c.uber_ps_header[3] = enhanced_ps_flags_ | enhanced_material_bits;
-        }
-        if (dump_tag_ != 0u) [[unlikely]] {
-            if (dump_gx_ps_ == nullptr) {
-                dump_gx_ps_ = std::make_unique<PixelConstants>();
-            }
-            *dump_gx_ps_ = ps_c;
-        }
-
-        UploadRing::Allocation ps_alloc =
-            renderer_.constant_ring().allocate(sizeof(PixelConstants), 256u);
-        std::memcpy(ps_alloc.cpu, &ps_c, sizeof(ps_c));
-        current_ps_constants_ = ps_alloc.gpu;
-        if (interp_recording_ && history_scene_) [[unlikely]] {
-            ps_record_restart_ = false;
-            InterpScene& scene = interp_scenes_[interp_scene_];
-            current_ps_record_ = static_cast<std::int32_t>(scene.ps_constants.size());
-            scene.ps_constants.push_back(ps_c);
-        }
-        if (time_detail) {
-            frame_flush_constants_us_ +=
-                elapsed_us(constants_start, std::chrono::steady_clock::now());
         }
     }
 
