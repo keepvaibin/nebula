@@ -1724,7 +1724,76 @@ std::mutex gShapeLock;
 std::vector<galaxy::render::shapes::Record> gShapePending;
 std::atomic<bool> gShapePendingAny{false};
 
+// GALAXY_TEST_FRAME_HASH=<file> (1: frame_hash.txt in GALAXY_PRESENT_SNAPSHOT_DIR): per retrace, a line "retrace records hash reads" for the records the game sent since
+// the last retrace (hash: the sum of each record's kind, matrices, target and clear values, image size, so addresses
+// and the order loading threads interleave in do not count) and the disc reads completed so far. Two runs of one build
+// diffed find the first game frame that differs and what moved (deterministic test mode).
+struct FrameHash {
+    std::FILE* file = nullptr;
+    std::mutex lock;
+    uint64_t sum = 0;
+    uint64_t records = 0;
+    std::atomic<uint64_t> reads{0};
+};
+FrameHash& frame_hash() {
+    static FrameHash h;
+    static const bool opened = [] {
+        const char* path = std::getenv("GALAXY_TEST_FRAME_HASH");
+        if (path != nullptr && path[0] != '\0') {
+            const char* dir = std::getenv("GALAXY_PRESENT_SNAPSHOT_DIR");
+            const std::string file = std::strcmp(path, "1") == 0 && dir != nullptr
+                                         ? std::string(dir) + "\\frame_hash.txt"
+                                         : std::string(path);
+            h.file = std::fopen(file.c_str(), "w");
+        }
+        return true;
+    }();
+    (void)opened;
+    return h;
+}
+uint64_t fnv1a(uint64_t h, const void* data, std::size_t bytes) {
+    const auto* p = static_cast<const uint8_t*>(data);
+    for (std::size_t i = 0; i < bytes; i++) {
+        h = (h ^ p[i]) * 0x100000001B3ull;
+    }
+    return h;
+}
+void frame_hash_record(const galaxy::render::shapes::Record& r) {
+    FrameHash& fh = frame_hash();
+    if (fh.file == nullptr) {
+        return;
+    }
+    uint64_t h = 0xCBF29CE484222325ull;
+    h = fnv1a(h, &r.kind, sizeof(r.kind));
+    for (const auto& m : r.matrices) {
+        h = fnv1a(h, &m.kind, sizeof(m.kind));
+        h = fnv1a(h, m.values.data(), sizeof(m.values));
+    }
+    const uint32_t target[] = {r.target_width, r.target_height, r.target_clear_rgba, r.target_clear_z,
+                               r.target_channels, r.target_x, r.target_y, r.target_flags};
+    h = fnv1a(h, target, sizeof(target));
+    const uint64_t image = r.image != nullptr ? r.image->size() : 0u;
+    h = fnv1a(h, &image, sizeof(image));
+    std::lock_guard guard(fh.lock);
+    fh.sum += h;
+    fh.records++;
+}
+void frame_hash_retrace(uint32_t retrace) {
+    FrameHash& fh = frame_hash();
+    if (fh.file == nullptr) {
+        return;
+    }
+    std::lock_guard guard(fh.lock);
+    std::fprintf(fh.file, "%u %llu %016llx %llu\n", retrace, static_cast<unsigned long long>(fh.records),
+                 static_cast<unsigned long long>(fh.sum),
+                 static_cast<unsigned long long>(fh.reads.load(std::memory_order_relaxed)));
+    std::fflush(fh.file);
+    fh.sum = 0;
+    fh.records = 0;
+}
+
 void queue_shape_record(galaxy::render::shapes::Record record) {
+    frame_hash_record(record);
     std::lock_guard guard(gShapeLock);
     gShapePending.push_back(std::move(record));
     gShapePendingAny.store(true, std::memory_order_release);
@@ -2526,6 +2595,9 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         // The console's disc DMA writes memory the GPU sees.
         mark_written(dst, size);
 #endif
+#if defined(NEBULA_HOST_RENDERER)
+        frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
+#endif
         gModule.disc_complete(slot, (int32_t)size);
     });
 }
@@ -2539,6 +2611,9 @@ std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_
 void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
     (void)xfb;
     gRetraces.store(retrace, std::memory_order_relaxed);
+#if defined(NEBULA_HOST_RENDERER)
+    frame_hash_retrace(retrace);
+#endif
 #if defined(NEBULA_HOST_RENDERER)
     // GALAXY_TRACE_VI_TIMES=1: each retrace's time, where a scripted press begins (press-to-present measurements).
     static const bool trace_vi = [] {
