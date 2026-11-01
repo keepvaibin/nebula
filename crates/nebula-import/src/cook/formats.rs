@@ -93,9 +93,10 @@ pub fn bti(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
 /// buffer the game sizes from the first. The shape parts are copied as they are (the game converts them to host order at load).
 pub fn rfl_res(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
     const PARTS: usize = 18;
-    // Eye, Eyebrow, Mole, Mouth, Mustache (RFLiArcID): the parts the game hands over where they load. FaceTex, GlassTex,
-    // NlineTex and CapTex are copied into the model at their GX size (RFLiInitTexRes) and stay as they are for now.
-    const TEXTURES: [usize; 5] = [1, 2, 10, 11, 12];
+    // Eye, Eyebrow, FaceTex, GlassTex, Mole, Mouth, Mustache, NlineTex, CapTex (RFLiArcID). The shape textures
+    // (FaceTex, GlassTex, NlineTex, CapTex) are copied into the model whole (RFLiInitTexRes; RFLiCharModelRes holds
+    // their RGBA8 records).
+    const TEXTURES: [usize; 9] = [1, 2, 4, 7, 10, 11, 12, 15, 17];
     let header = (PARTS + 1) * 4;
     if bytes.len() < header {
         bail!("a Mii parts file shorter than its header");
