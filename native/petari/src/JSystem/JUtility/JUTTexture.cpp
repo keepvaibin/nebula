@@ -165,8 +165,14 @@ void JUTTexture::initTexObj() {
     }
     u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
     image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
-    J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
-                                    mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
+    // A texture the game made (mFlag bit 0: its own buffer, a capture target or texels it hands over itself) starts
+    // blank; a loaded one hands its image over.
+    if (mFlag & 0x1) {
+        J3DNativeTexture::registerBlank(image, mTIMG->mWidth, mTIMG->mHeight);
+    } else {
+        J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
+                                        mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
+    }
     J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GXTexFmt >(mTIMG->mFormat), static_cast< GXTexWrapMode >(mWrapS),
                  static_cast< GXTexWrapMode >(mWrapT), mipmapEnabled);
 

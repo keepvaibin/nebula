@@ -118,6 +118,21 @@ namespace J3DNativeTexture {
         pHost->texture_image(pHost->user, &image);
     }
 
+    void registerBlank(const void* pImage, u16 width, u16 height) {
+        if (pImage == nullptr || width == 0 || height == 0) {
+            return;
+        }
+        NebulaTextureImage blank;
+        blank.bytes = pImage;
+        blank.size = 0;
+        blank.width = width;
+        blank.height = height;
+        blank.format = NEBULA_TEXTURE_BLANK;
+        blank.levels = 1;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->texture_image(pHost->user, &blank);
+    }
+
     void registerPalette(const void* pPalette, u16 entries) {
         if (pPalette == nullptr || entries == 0) {
             return;

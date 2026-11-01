@@ -1885,10 +1885,25 @@ void svc_shape_draw(void*, uint64_t shape, uint64_t position, uint64_t normal, u
 void svc_texture_image(void*, const NebulaTextureImage* image) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
-    if (image == nullptr || image->bytes == nullptr || image->size == 0u) {
+    if (image == nullptr || image->bytes == nullptr || (image->size == 0u && image->format != NEBULA_TEXTURE_BLANK)) {
         return;
     }
-    const auto* first = static_cast<const std::byte*>(image->bytes);
+    // A blank: transparent black RGBA8 texels of its size (nothing of the game's memory is read).
+    std::vector<std::byte> blank;
+    if (image->format == NEBULA_TEXTURE_BLANK) {
+        if (image->width == 0u || image->height == 0u) {
+            return;
+        }
+        blank.resize(nebula_texture_level_bytes(image->width, image->height, 1u, NEBULA_TEXTURE_RGBA8));
+    }
+    NebulaTextureImage blank_image{};
+    if (!blank.empty()) {
+        blank_image = *image;
+        blank_image.format = NEBULA_TEXTURE_LINEAR_RGBA8;
+        blank_image.size = static_cast<uint32_t>(blank.size());
+        image = &blank_image;
+    }
+    const auto* first = !blank.empty() ? blank.data() : static_cast<const std::byte*>(image->bytes);
     const uint64_t address = reinterpret_cast<uint64_t>(image->bytes);
     // The copies the renderer has (gHanded): an image handed over again unchanged needs nothing. Loading threads hand
     // images over too, so the record joins the stream ahead of the next one, as shape registrations do.
