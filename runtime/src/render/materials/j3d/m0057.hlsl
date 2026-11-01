@@ -23,6 +23,24 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
+    {  // coordinate 1: type 0, source 1
+        const float4 c = float4(v.nrm, 1.0);
+        float3 res;
+        if (((vs_header.w >> 1u) & 1u) != 0u) {
+            const uint tm = native_tex_matrix(v, 1u);
+            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), dot(c, native_matrix_row(tm + 2u)));
+        } else {
+            res = float3(dot(c, inline_tex_matrices[3]), dot(c, inline_tex_matrices[4]), dot(c, inline_tex_matrices[5]));
+        }
+        const uint pt = native_post(1u);
+        const bool posted = (pt & 0x3Fu) != 61u;
+        if (posted) {
+            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
+            res = float3(dot(float4(res, 1.0), inline_post_matrices[3]), dot(float4(res, 1.0), inline_post_matrices[4]), dot(float4(res, 1.0), inline_post_matrices[5]));
+        }
+        if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
+        o.uv[1] = float4(res, true ? 1.0 : 0.0);
+    }
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
@@ -34,11 +52,26 @@ float4 material_color(NativeVaryings i) {
     float4 r2 = material.reg[3];
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rrrr;
-        const float4 ras = i.color.rrrr;
-        const float3 k = float4(float3(1.0, 1.0, 1.0), 0.0).rgb;
+        const float4 ras = float4(0.0, 0.0, 0.0, 0.0).rrrr;
+        const float3 rc = (float3(0.0, 0.0, 0.0) + lerp(t.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0)));
+        const float ra = (0.0 + lerp(t.a, 0.0, 0.0));
+        prev.rgb = rc;
+        prev.a = ra;
+    }
+    {  // stage 1
+        const float4 t = tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rrrr;
+        const float4 ras = float4(0.0, 0.0, 0.0, 0.0).rrrr;
+        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), j3d_in(r0.rgb), t.aaa)));
+        const float ra = (0.0 + lerp(t.a, 0.0, 0.0));
+        prev.rgb = rc;
+        prev.a = ra;
+    }
+    {  // stage 2
+        const float4 t = float4(0.0, 0.0, 0.0, 0.0);
+        const float4 ras = float4(0.0, 0.0, 0.0, 0.0).rrrr;
         const float ka = 1.0;
-        const float3 rc = saturate(float3(0.0, 0.0, 0.0) + float3(round(t.aaa * 255.0) > round(k.rgb * 255.0)) * float3(0.0, 0.0, 0.0));
-        const float ra = saturate(0.0 + (round(t.a * 255.0) > round(ka * 255.0) ? j3d_in(r0.a) : 0.0));
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(prev.rgb), j3d_in(r1.rgb), j3d_in(r1.aaa))));
+        const float ra = (0.0 + lerp(j3d_in(prev.a), ka, j3d_in(r1.a)));
         prev.rgb = rc;
         prev.a = ra;
     }

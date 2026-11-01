@@ -44,24 +44,6 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[1] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 2: type 1, source 4
-        const float4 c = float4(v.uv[0], 1.0, 1.0);
-        float3 res;
-        if (((vs_header.w >> 2u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 2u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
-        } else {
-            res = float3(dot(c, inline_tex_matrices[6]), dot(c, inline_tex_matrices[7]), 1.0);
-        }
-        const uint pt = native_post(2u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[6]), dot(float4(res, 1.0), inline_post_matrices[7]), dot(float4(res, 1.0), inline_post_matrices[8]));
-        }
-        if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[2] = float4(res, posted ? 1.0 : 0.0);
-    }
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
@@ -72,7 +54,7 @@ float4 material_color(NativeVaryings i) {
     float4 r1 = material.reg[2];
     float4 r2 = material.reg[3];
     float2 tevcoord = float2(0.0, 0.0);
-    const float3 ind0 = round(tex[2].Sample(samp[2], j3d_texel(i.uv[2], 2u) / float2(1.0, 1.0) / material.tex_scale[2].zw).abg * 255.0);
+    const float3 ind0 = round(tex[2].Sample(samp[2], j3d_texel(i.uv[0], 0u) / float2(1.0, 1.0) / material.tex_scale[2].zw).abg * 255.0);
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
@@ -101,9 +83,9 @@ float4 material_color(NativeVaryings i) {
         tevcoord = texel + off;
         const float4 t = tex[1].Sample(samp[1], tevcoord / material.tex_scale[1].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 k = float4(material.kcolor[2].rgb, 0.0).rgb;
+        const float3 k = float4(material.kcolor[1].rgb, 0.0).rgb;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), k.rgb, t.rgb)));
-        const float ra = (0.0 + lerp(ras.a, 0.0, 0.0));
+        const float ra = (0.0 + lerp(j3d_in(prev.a), 0.0, 0.0));
         prev.rgb = rc;
         prev.a = ra;
     }

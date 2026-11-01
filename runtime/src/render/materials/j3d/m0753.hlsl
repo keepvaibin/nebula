@@ -47,7 +47,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 0.125, i.pos);
+        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 0.25, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -56,7 +56,7 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = 0.125;
+        const float ka = 0.25;
         const float3 rc = saturate((r0.rgb + lerp(float3(0.0, 0.0, 0.0), j3d_in(r0.rgb), ras.rgb)));
         const float ra = saturate((r0.a + lerp(t.a, ka, ras.a)) * 2.0);
         prev.rgb = rc;
@@ -75,15 +75,11 @@ float4 material_color(NativeVaryings i) {
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((prev.rgb + lerp(j3d_in(r1.rgb), t.rgb, ras.rgb)) * 2.0);
-        const float ra = (prev.a + lerp(0.0, 0.0, 0.0));
+        const float ra = (0.0 + lerp(j3d_in(prev.a), 0.0, 0.0));
         prev.rgb = rc;
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
-    const float a8 = round(prev.a * 255.0);
-    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
-        discard;
-    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

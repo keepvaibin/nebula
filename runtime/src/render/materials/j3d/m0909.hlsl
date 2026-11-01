@@ -2,13 +2,13 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = material.mat_color[0].rgb;
-    o.color.a = material.mat_color[0].a;
+    o.color.rgb = v.color0.rgb;
+    o.color.a = v.color0.a;
     o.color1 = v.color1;
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(float4(0.0, 0.0, 0.0, 0.0), i.color, 1.0, i.pos);
+        return j3d_override(float4(0.0, 0.0, 0.0, 0.0), i.color, material.kcolor[0].a, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -16,9 +16,10 @@ float4 material_color(NativeVaryings i) {
     float4 r2 = material.reg[3];
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 ras = i.color.rrrr;
-        const float3 rc = saturate((ras.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((ras.a + lerp(0.0, 0.0, 0.0)));
+        const float4 ras = i.color.rgba;
+        const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, ras.rgb)));
+        const float ra = saturate((0.0 + lerp(ras.a, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }

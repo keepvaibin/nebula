@@ -2,7 +2,7 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = v.color0.rgb;
+    o.color.rgb = material.mat_color[0].rgb;
     o.color.a = material.mat_color[0].a;
     o.color1 = v.color1;
 }
@@ -18,8 +18,9 @@ float4 material_color(NativeVaryings i) {
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
         const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), k.rgb, ras.rgb)));
-        const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
+        const float ka = material.kcolor[0].a;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), ras.rgb, k.rgb)));
+        const float ra = saturate((0.0 + lerp(0.0, ka, ras.a)));
         prev.rgb = rc;
         prev.a = ra;
     }

@@ -2,8 +2,11 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = v.color0.rgb;
-    o.color.a = material.mat_color[0].a;
+    const uint nq = v.pn_row & 31u;
+    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
+    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
+    o.color.rgb = material.mat_color[0].rgb;
+    o.color.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(2u, 3u, 2u, v.eye, nrm).a) / 255.0);
     o.color1 = v.color1;
     {  // coordinate 0: type 1, source 1
         const float4 c = float4(v.nrm, 1.0);
@@ -44,7 +47,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, material.kcolor[0].a, i.pos);
+        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 0.375, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -62,8 +65,17 @@ float4 material_color(NativeVaryings i) {
         tevcoord = texel + off;
         const float4 t = tex[0].Sample(samp[0], tevcoord / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(ras.rgb, float3(0.0, 0.0, 0.0), j3d_in(r1.rgb))));
-        const float ra = saturate((0.0 + lerp(0.0, ras.a, t.a)));
+        const float ka = 0.375;
+        const float3 rc = saturate((t.rgb + lerp(ras.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
+        const float ra = saturate((r0.a + lerp(t.a, ka, ras.a)) * 2.0);
+        prev.rgb = rc;
+        prev.a = ra;
+    }
+    {  // stage 1
+        const float4 t = float4(0.0, 0.0, 0.0, 0.0);
+        const float4 ras = i.color.rgba;
+        const float3 rc = saturate((prev.aaa + lerp(j3d_in(prev.rgb), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
+        const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }

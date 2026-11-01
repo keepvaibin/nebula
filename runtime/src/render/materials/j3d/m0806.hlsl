@@ -49,19 +49,15 @@ float4 material_color(NativeVaryings i) {
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((prev.aaa + lerp(float3(0.0, 0.0, 0.0), j3d_in(prev.rgb), t.rgb)));
-        const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
-        prev.rgb = rc;
-        prev.a = ra;
-    }
-    {  // stage 2
-        const float4 t = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 ras = i.color.rgba;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
+        const float ra = saturate((0.0 + lerp(t.a, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+    const float a8 = round(prev.a * 255.0);
+    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
+        discard;
+    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

@@ -3,7 +3,7 @@
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = material.mat_color[0].rgb;
-    o.color.a = material.mat_color[0].a;
+    o.color.a = v.color0.a;
     o.color1 = v.color1;
 }
 float4 material_color(NativeVaryings i) {
@@ -17,8 +17,9 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(ras.rgb, float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((0.0 + lerp(ras.a, 0.0, 0.0)));
+        const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(ras.rgb, k.rgb, ras.aaa)));
+        const float ra = saturate((0.0 + lerp(0.0, j3d_in(r0.a), ras.a)));
         prev.rgb = rc;
         prev.a = ra;
     }
