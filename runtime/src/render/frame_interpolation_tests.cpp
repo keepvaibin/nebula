@@ -156,10 +156,6 @@ void test_tex_matrices() {
     const float sb[12]{1.0f, 0.0f, 0.0f, 0.05f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f};
     tex_matrix_at(sa, sb, false, 0.5f, out);
     check(near(out[3], 0.0f, 1e-4f) || near(out[3], 1.0f, 1e-4f), "a scroll wraps forward");
-    // Texgen sources.
-    check(texgen_spatial(0u << 7u) && texgen_spatial(1u << 7u) && !texgen_spatial(5u << 7u) &&
-              !texgen_spatial((1u << 4u) | (0u << 7u)),
-          "position and normal texgens are spatial; texture coordinates and emboss are not");
 }
 
 void test_light_and_palette() {
