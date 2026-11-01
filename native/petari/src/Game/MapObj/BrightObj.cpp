@@ -1,4 +1,5 @@
 #include "Game/MapObj/BrightObj.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
@@ -267,17 +268,22 @@ void BrightObjBase::drawSphere(const TVec3f& rPos, float radius) const {
     mtx.setTrans(rPos);
     mtx.concat(viewMtx, mtx);
 
-    TDDraw::setup(0, 0, 1);
+    // The sun's visibility in the alpha buffer: cleared by a larger sphere over everything, then set where the sun
+    // itself passes the depth test (alpha only).
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 0, 1);
     TDDraw::loadViewMtx(mtx);
 
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_FALSE);
+    material.color_write = 0;
+    material.alpha_write = 1;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_ALWAYS, false);
+    NativeShader::send(material);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius * 1.1f, 0xFF000000, 0x10);
 
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     TDDraw::drawSphere(TVec3f(0, 0, 0), radius, 0x00FF00FF, 0x10);
 

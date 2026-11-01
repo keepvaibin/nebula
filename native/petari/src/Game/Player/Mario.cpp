@@ -1,4 +1,5 @@
 #include "Game/Player/Mario.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "Game/Animation/XanimeCore.hpp"
 #include "Game/Enemy/KarikariDirector.hpp"
 #include "Game/LiveActor/Binder.hpp"
@@ -1264,7 +1265,9 @@ void Mario::forceSetHeadVecKeepSide(const TVec3f& rVec) {
 void Mario::draw() const {
     if (mDrawStates._1) {
         TDDraw::cameraInit3D();
-        TDDraw::setup(0, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 1, 0);
+        NativeShader::send(material);
         TDDraw::drawCylinder(mPosition, mShadowPos - mActor->_2A0, 32.0f, 0xffff0010, 0xff000004, 8);
         TVec3f diff2A0_31C(mActor->_2A0 - mShadowPos);
         f32 diffMag = diff2A0_31C.length();

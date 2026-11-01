@@ -66,6 +66,20 @@ namespace NativeShader {
         rMaterial.constants[at + 3] = a / 255.0f;
     }
 
+    // Depth: tested by `func` (NEBULA_COMPARE_*, GX's order) when `test`, written when `write` (GXSetZMode's terms).
+    inline void setDepth(NebulaNativeMaterial& rMaterial, bool test, u8 func, bool write) {
+        rMaterial.depth_test = test ? 1 : 0;
+        rMaterial.depth_func = test ? func : static_cast< u8 >(NEBULA_COMPARE_ALWAYS);
+        rMaterial.depth_write = test && write ? 1 : 0;
+    }
+
+    // Blending as GXSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, GX's order).
+    inline void setBlend(NebulaNativeMaterial& rMaterial, u8 src, u8 dst) {
+        rMaterial.blend_op = NEBULA_BLEND_ADD;
+        rMaterial.blend_src = src;
+        rMaterial.blend_dst = dst;
+    }
+
     inline void send(const NebulaNativeMaterial& rMaterial) {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();

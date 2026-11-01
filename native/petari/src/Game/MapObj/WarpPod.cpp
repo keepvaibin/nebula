@@ -1,4 +1,5 @@
 #include "Game/MapObj/WarpPod.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/ActorCameraInfo.hpp"
@@ -677,8 +678,10 @@ void WarpPod::draw() const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 0, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::send(material);
 
     for (u32 i = 0; i < _C8; i++) {
         TDDraw::drawCylinder(_C4[i], _C4[i + 1] - _C4[i], 100.0f, 0x40406040, 0x40406040, 8);
