@@ -146,19 +146,20 @@ float4 main(V v) : SV_Target {
         texcol_raw.rgb = (yuv >> 8) + ((yuv >> 7) & 1u);
     }
 
-    // The picture's layout (efb_copy.h): the game's NebulaTargetChannels, 7 a display copy. 8-bit colour.
-    uint layout = uint(filt2.y + 0.5);
-    if (layout == 3u) {          // red (or luminance) in every channel
+    // The picture's channels (efb_copy.h): the game's NebulaTargetChannels, 7 a display copy. 8-bit colour. (Not named
+    // `layout`: glslang's HLSL front end reserves the word.)
+    uint channels = uint(filt2.y + 0.5);
+    if (channels == 3u) {          // red (or luminance) in every channel
         texcol_raw = texcol_raw.rrrr;
-    } else if (layout == 1u) {   // intensity and alpha
+    } else if (channels == 1u) {   // intensity and alpha
         texcol_raw = texcol_raw.rrra;
-    } else if (layout == 6u || layout == 7u) { // colour, opaque
+    } else if (channels == 6u || channels == 7u) { // colour, opaque
         texcol_raw.a = 255u;
-    } else if (layout == 2u) {   // alpha in every channel
+    } else if (channels == 2u) {   // alpha in every channel
         texcol_raw = texcol_raw.aaaa;
-    } else if (layout == 4u) {   // green
+    } else if (channels == 4u) {   // green
         texcol_raw = texcol_raw.gggg;
-    } else if (layout == 5u) {   // blue
+    } else if (channels == 5u) {   // blue
         texcol_raw = texcol_raw.bbbb;
     }
     return float4(texcol_raw) / 255.0;
