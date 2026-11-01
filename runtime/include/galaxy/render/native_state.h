@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Native state changes: drawing state the game sets outside materials (nebula_game_api.h NebulaStateOp, the same
-// layout: the host copies it), applied to the renderer's drawing state (draw_state.h NativeDrawState).
+// layout: the host copies it), applied to the renderer's drawing state (drawing_state.h NativeDrawState).
 #pragma once
 
 #include <cstdint>

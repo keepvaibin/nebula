@@ -73,7 +73,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/curved_surfaces.cpp
     ${rt}/render/native_shapes.cpp
     ${rt}/render/native_material.cpp
-    ${rt}/render/draw_state.cpp
+    ${rt}/render/drawing_state.cpp
     ${rt}/render/draw_matrices.cpp
     ${rt}/render/shader_keys.cpp
     ${rt}/render/capture.cpp

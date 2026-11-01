@@ -30,7 +30,7 @@
 #include "galaxy/render/actor_lights.h"
 #include "galaxy/render/capture.h"
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/movie_replacement.h"
 #include "galaxy/render/native_shapes.h"
@@ -892,7 +892,7 @@ private:
         MonotonicCadenceAccumulator& accumulator) noexcept;
     // The matrices and lights the game loads (E-05 replaces it with a per-frame arena).
     DrawMatrices matrices_;
-    // The drawing state the game's records set, as typed values (draw_state.h).
+    // The drawing state the game's records set, as typed values (drawing_state.h).
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
     [[nodiscard]] BlendMode draw_blend() const {

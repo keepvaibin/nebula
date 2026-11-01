@@ -3,7 +3,7 @@
 
 // VertexConstants filled from the drawing state on the CPU, and a cache of the last fill. Every changed draw still gets a
 // complete constant-ring allocation; nothing here touches GPU upload memory.
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/draw_constants.h"
 #include "galaxy/render/line_point_params.h"

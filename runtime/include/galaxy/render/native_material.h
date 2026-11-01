@@ -115,7 +115,7 @@ inline constexpr std::uint64_t kNativeKeptImage = ~std::uint64_t{0};
 }
 
 // Loads the material's texture matrices and lights as J3D's material display list did (the whole material, or the
-// parts its change flags name); the rest of the material is typed drawing state (draw_state.h).
+// parts its change flags name); the rest of the material is typed drawing state (drawing_state.h).
 void load_matrices(const Program& program, const Values& values, DrawMatrices& matrices);
 
 }  // namespace galaxy::render::material

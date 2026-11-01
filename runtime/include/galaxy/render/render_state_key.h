@@ -4,7 +4,7 @@
 // variant, and the primitive topology. Native materials' shaders are compiled at build; a pipeline is a shader pair
 // under one of these.
 
-#include "galaxy/render/draw_state.h"
+#include "galaxy/render/drawing_state.h"
 
 #include <cstdint>
 #include <cstring>
