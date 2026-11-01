@@ -81,6 +81,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     NebulaNativeMaterial flakes;
     TDDraw::setupNative(&flakes, 1, 1, 0);
     flakes.shader = NEBULA_SHADER_TEX_VERTEX_ALPHA;
+    flakes.constants[0] = 1.0f;
     NativeShader::setDepth(flakes, true, NEBULA_COMPARE_LEQUAL, false);
     NativeShader::setTexture(flakes, 0, mTexture);
     NativeShader::send(flakes);
