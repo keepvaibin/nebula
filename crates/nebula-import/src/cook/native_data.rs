@@ -18,7 +18,7 @@
 //! - JPC (particles, after cook::formats::jpc rewrote its textures): the header's counts and texture offset, each
 //!   resource's index and block count, every block's size and fields (BEM1 dynamics, FLD1 fields, BSP1 base shape and
 //!   its texture-coordinate table and colour keys, ESP1 extra shape, SSP1 child shape, ETX1 indirect matrix, KFA1
-//!   keys, TDB1 texture indices) and the TEX1 blocks' sizes (their ResTIMG stays with the texture headers). Block
+//!   keys, TDB1 texture indices) and the TEX1 blocks' sizes and image headers (ResTIMG, host_timg). Block
 //!   magics stay bytes; byte 3 of a cooked file ("JPAC2-10") becomes 'c'.
 //! - BRLYT/BRLAN (layouts and their animations): the file header's numbers (its byte-order mark reads 0xFEFF in host
 //!   order once cooked), every block's size and numbers: layout size, texture/font name tables, the material list
@@ -35,8 +35,8 @@
 //! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
 //!   the name tables, VTX1 (format list, arrays by their component type), SHP1 (shape data, tables, vertex
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
-//!   tables (its console command lists stay: the game does not read them); TEX1 image headers stay big-endian
-//!   until their step.
+//!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
+//! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -482,9 +482,32 @@ pub fn jpc_host(bytes: &[u8]) -> Result<Vec<u8>> {
         if size < 8 || at + size > bytes.len() {
             bail!("texture block at {at:#x}: size {size:#x}");
         }
+        host_timg(bytes, &mut out, at + 0x20)?; // after the block's kind, size and name
         at += size;
     }
     out[3] = b'c';
+    Ok(out)
+}
+
+/// An image header (ResTIMG) at `at` in host order: width, height, palette count, palette offset, LOD bias, image
+/// offset (the bytes between stay bytes).
+fn host_timg(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
+    host16(src, out, at + 2)?;
+    host16(src, out, at + 4)?;
+    host16(src, out, at + 0xA)?;
+    host32(src, out, at + 0xC)?;
+    host16(src, out, at + 0x1A)?;
+    host32(src, out, at + 0x1C)?;
+    Ok(())
+}
+
+/// A texture file (BTI, after cook::formats::bti) in host order: its image header.
+pub fn bti_host(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 0x20 {
+        bail!("a texture file shorter than its header");
+    }
+    let mut out = bytes.to_vec();
+    host_timg(bytes, &mut out, 0)?;
     Ok(out)
 }
 
@@ -1082,8 +1105,7 @@ pub fn is_j3d_model(bytes: &[u8]) -> bool {
 /// entries, and in its display lists each primitive's count and 16-bit indices (the layout as J3DNativeShape reads
 /// it); MAT3's tables by record (material entries' indices, IDs, cull modes, lights, texture matrices, texture
 /// numbers, TEV colours, fog, NBT scales, indirect matrices; byte records stay); MDL3's list entries, patching
-/// offsets and matrix registers (its command lists stay bytes, unread). TEX1's image headers stay big-endian until
-/// their step.
+/// offsets and matrix registers (its command lists stay bytes, unread); TEX1's image headers (host_timg).
 pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1405,6 +1427,15 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                     for m in 0..materials {
                         let r = at + patching + 0x10 * m;
                         halves(&mut out, r, r + 0xC)?; // six 16-bit offsets, four bytes
+                    }
+                }
+            }
+            b"TEX1" => {
+                let headers = field(0xC)?;
+                let count = be16(bytes, at + 8)? as usize;
+                if headers != 0 {
+                    for i in 0..count {
+                        host_timg(bytes, &mut out, at + headers + 0x20 * i)?;
                     }
                 }
             }

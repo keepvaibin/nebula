@@ -6,23 +6,20 @@
 
 class JUTPalette;
 
+// In host order, as the importer cooks model TEX1 blocks, particle textures and BTI files (native_data.rs host_timg).
 struct ResTIMG {
     /* 0x00 */ u8 mFormat;
     /* 0x01 */ u8 mTransparency;
-    /* 0x02 */ NEBULA_BE(u16) mWidth;
-    /* 0x04 */ NEBULA_BE(u16) mHeight;
+    /* 0x02 */ u16 mWidth;
+    /* 0x04 */ u16 mHeight;
     /* 0x06 */ u8 mWrapS;
     /* 0x07 */ u8 mWrapT;
     /* 0x08 */ u8 mPaletteName;
     /* 0x09 */ u8 mPaletteFormat;
-    /* 0x0A */ NEBULA_BE(u16) mPaletteNum;
-#ifdef TARGET_PC
-    // Signed natively, as the console's 32-bit address arithmetic wrapped: J3DTexture::setResTIMG can point a copied
-    // header back at another header's data.
-    /* 0x0C */ BE< s32 > mPaletteDataOffset;
-#else
-    /* 0x0C */ u32 mPaletteDataOffset;
-#endif
+    /* 0x0A */ u16 mPaletteNum;
+    // Signed, as the console's 32-bit address arithmetic wrapped: J3DTexture::setResTIMG can point a copied header back
+    // at another header's data.
+    /* 0x0C */ s32 mPaletteDataOffset;
     /* 0x10 */ bool mMipmap;
     /* 0x11 */ bool mDoEdgeLod;
     /* 0x12 */ bool mBiasClamp;
@@ -33,12 +30,8 @@ struct ResTIMG {
     /* 0x17 */ u8 mMaxLod;
     /* 0x18 */ u8 mImageNum;
     /* 0x19 */ u8 _19;
-    /* 0x1A */ NEBULA_BE(s16) mLodBias;
-#ifdef TARGET_PC
-    /* 0x1C */ BE< s32 > mImageDataOffset;
-#else
-    /* 0x1C */ u32 mImageDataOffset;
-#endif
+    /* 0x1A */ s16 mLodBias;
+    /* 0x1C */ s32 mImageDataOffset;  // signed, as mPaletteDataOffset
 };
 
 class JUTTexture {
