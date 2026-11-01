@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 76u
+#define NEBULA_GAME_API_VERSION 77u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -157,7 +157,7 @@ enum {
     NEBULA_STATE_Z_MODE,            /* compare, function, update */
     NEBULA_STATE_ALPHA_COMPARE,     /* comparison 0, reference 0, op, comparison 1, reference 1 */
     NEBULA_STATE_DST_ALPHA,         /* enable, alpha */
-    NEBULA_STATE_CULL,              /* mode */
+    NEBULA_STATE_CULL,              /* NEBULA_CULL_* */
     NEBULA_STATE_GEN_MODE,          /* texgens, channels, TEV stages */
     NEBULA_STATE_GEN_MODE2,         /* texgens, channels, TEV stages, indirect stages, cull mode */
     NEBULA_STATE_CHANNEL,           /* channel, enable, ambient source, material source, light mask, diffuse, attenuation */
@@ -387,7 +387,7 @@ enum {
     NEBULA_COMPARE_GREATER, NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_ALWAYS,
 };
 /* Culling of the game's back or front faces, in its own winding (GX's: GX_CULL_BACK is NEBULA_CULL_BACK). */
-enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
+enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2, NEBULA_CULL_ALL = 3 /* draw nothing */ };
 /* blend_op, depth_test or cull: the drawing state's blending, depth or culling as it is (a material that replaces only
    the shader of the draws after the state the game set: J3DModelX's override passes). */
 enum { NEBULA_NATIVE_KEPT = 0xFF };

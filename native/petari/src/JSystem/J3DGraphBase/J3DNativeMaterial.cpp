@@ -577,9 +577,7 @@ namespace {
         material.depth_func = rProgram.z_mode.func;
         material.depth_write = rProgram.z_mode.update;
         material.early_depth = rProgram.z_compare_location;
-        material.cull = rProgram.cull == GX_CULL_BACK ? NEBULA_CULL_BACK
-                        : rProgram.cull == GX_CULL_FRONT ? NEBULA_CULL_FRONT
-                                                         : NEBULA_CULL_NONE;
+        material.cull = rProgram.cull == NEBULA_CULL_ALL ? NEBULA_CULL_NONE : rProgram.cull;  // NEBULA_CULL_*
         material.color_write = 2;
         material.alpha_write = 2;
         if (keepDepthCull) {
@@ -728,7 +726,11 @@ namespace J3DNativeMaterial {
         pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
         pOut->channels = pColor->getColorChanNum();
         pOut->ind_stages = pInd->getIndTexStageNum();
-        pOut->cull = pColor->getCullMode();
+        {
+            const GXCullMode mode = static_cast< GXCullMode >(pColor->getCullMode());
+            pOut->cull = mode == GX_CULL_BACK ? NEBULA_CULL_BACK : mode == GX_CULL_FRONT ? NEBULA_CULL_FRONT
+                         : mode == GX_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
+        }
 
         // The null TEV block writes no textures, orders or stages (its stage count still sets the mode).
         const bool tev = pTev->getTevOrder(0) != NULL;

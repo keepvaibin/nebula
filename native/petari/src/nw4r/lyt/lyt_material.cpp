@@ -596,7 +596,7 @@ namespace nw4r {
             rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_TEV_COLOR | NEBULA_MATERIAL_LOADS_KONST_COLOR |
                              NEBULA_MATERIAL_LOADS_KONST_SELECT | NEBULA_MATERIAL_LOADS_SWAP_TABLE | NEBULA_MATERIAL_LOADS_CHANNELS |
                              NEBULA_MATERIAL_LOADS_INDIRECT;
-            rProgram.cull = GX_CULL_NONE;
+            rProgram.cull = NEBULA_CULL_NONE;
             rProgram.channels = 1;
             for (u32 s = 0; s < 16; s++) {
                 rProgram.tev[s].tex_coord = GX_TEXCOORD_NULL;
