@@ -2170,7 +2170,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             D3D12_FEATURE_DATA_SHADER_MODEL shader_model{D3D_SHADER_MODEL_6_6};
             D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
             const bool offered =
-                dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
+                !kRayTracingParked && dxr_runtime_supported && options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1 &&
                 SUCCEEDED(device_->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shader_model,
                                                        sizeof(shader_model))) &&
                 shader_model.HighestShaderModel >= D3D_SHADER_MODEL_6_6 &&
