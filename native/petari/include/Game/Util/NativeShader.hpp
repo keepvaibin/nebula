@@ -72,37 +72,6 @@ namespace NativeShader {
         }
     }
 
-    // Map `map` of a material program's values (J3DNativeMaterial::sendWhole) from a texture, as it loads itself
-    // (JUTTexture::load: its own wrap, filters and levels over its resource's), with its coordinates' GX scale (the
-    // image's size) for `coord`.
-    inline void setMaterialTexture(NebulaMaterialValues& rValues, u32 map, u32 coord, const JUTTexture* pTexture) {
-        NebulaMaterialTexture& rTex = rValues.texture[map];
-        rTex.image = reinterpret_cast< uintptr_t >(pTexture->mImage);
-        rTex.width = static_cast< u16 >(pTexture->getWidth());
-        rTex.height = static_cast< u16 >(pTexture->getHeight());
-        rTex.format = static_cast< u8 >(pTexture->getFormat() & 0x0F);
-        rTex.wrap_s = pTexture->mWrapS;
-        rTex.wrap_t = pTexture->mWrapT;
-        rTex.min_filter = pTexture->mMinType;
-        rTex.mag_filter = pTexture->mMagType;
-        rTex.mipmaps = pTexture->mTIMG->mImageNum;
-        rTex.edge_lod = pTexture->mTIMG->mDoEdgeLod ? 1 : 0;
-        rTex.bias_clamp = pTexture->mTIMG->mBiasClamp ? 1 : 0;
-        rTex.anisotropy = pTexture->mTIMG->mMaxAnisotropy;
-        rTex.lod_bias = pTexture->mLodBias / 100.0f;
-        rTex.min_lod = static_cast< s16 >(pTexture->mMinLod) / 8.0f;
-        rTex.max_lod = static_cast< s16 >(pTexture->mMaxLod) / 8.0f;
-        const JUTPalette* pPalette = pTexture->mPalette != NULL ? pTexture->mPalette : pTexture->mEmbPalette;
-        const u32 format = pTexture->getFormat() & 0x0F;
-        if (pPalette != NULL && (format == GX_TF_C4 || format == GX_TF_C8 || format == GX_TF_C14X2)) {
-            rTex.palette = reinterpret_cast< uintptr_t >(pPalette->mColorTable);
-            rTex.palette_entries = pPalette->mLutNum;
-            rTex.palette_format = pPalette->mFormat;
-        }
-        rValues.tex_coord_scale[coord].scale_s = rTex.width;
-        rValues.tex_coord_scale[coord].scale_t = rTex.height;
-    }
-
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
     inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const GXTexObj* pObj) {
         void* pImage;
