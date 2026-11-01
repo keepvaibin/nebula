@@ -30,10 +30,8 @@
 #include "galaxy/render/fifo_cache_fingerprint.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/enhanced_lighting.h"
 #include "galaxy/render/line_point_raster.h"
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/rt_surfaces.h"
 #include "galaxy/render/texture_sampling.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/uber_constants.h"
@@ -2305,8 +2303,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
         rt_sky_buffer_ = false;
         rt_sun_buffer_ = false;
         rt_fake_shadow_list_ = false;
-        // No ray-tracing state for the enhanced pipelines (the ray tracer is parked).
-        enhanced_ps_flags_ &= ~(kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical);
     } else {
         if (side_layer_ == kMirrorLayer) {
             end_side_layer();
@@ -4537,7 +4533,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }
-            enhanced_ps_flags_ = 0u;
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         xfb_copied_in_chunk_ = false;

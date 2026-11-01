@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The material and stage sun tables' parsing (rt_materials.h) and the texture-pack hash against XXH64 test vectors.
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/rt_surfaces.h"
 
 #include <cmath>
 #include <cstdint>

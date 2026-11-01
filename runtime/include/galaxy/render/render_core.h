@@ -1291,8 +1291,6 @@ private:
     bool enhanced_lighting_ = false;
     bool enhanced_gate_ = false;
     std::uint32_t enhanced_material_ = 0u;
-    // uber_ps_header[3] flags of enhanced pipelines this frame (shader_keys.h kEnhancedRtReflections).
-    std::uint32_t enhanced_ps_flags_ = 0u;
     // The material table bits (enhanced_table_material) the last uploaded PS constants carry.
     std::uint32_t enhanced_material_bits_ = 0u;
     // The material whose glow gain (output_flags bit 5) or falling water (bit 6) the PS constants hold.

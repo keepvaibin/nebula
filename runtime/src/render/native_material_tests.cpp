@@ -150,12 +150,8 @@ material::Values random_values(Random& r) {
     return v;
 }
 
-// What a draw's pictures follow from: the three keys, and the values the constants and bindings take.
+// What a draw's pictures follow from: the render-state key, and the values the constants and bindings take.
 bool same_state(const NativeDrawState& a, const NativeDrawState& b) {
-    if (!(build_pixel_shader_key(a, 1u) == build_pixel_shader_key(b, 1u)) ||
-        !(build_vertex_shader_key(a, 0u) == build_vertex_shader_key(b, 0u))) {
-        return false;
-    }
     const RenderStateKey ra = build_render_state_key(a), rb = build_render_state_key(b);
     if (!(ra == rb)) return false;
     const auto eq = [](const auto& x, const auto& y) { return std::memcmp(&x, &y, sizeof(x)) == 0; };
@@ -210,17 +206,14 @@ void values_only_marks_no_program_change() {
         const material::Program program = random_program(r);
         NativeDrawState state;
         state.apply(program, random_values(r));
-        const PixelShaderKey ps = build_pixel_shader_key(state, 1u);
-        const VertexShaderKey vs = build_vertex_shader_key(state, 0u);
         const RenderStateKey rs = build_render_state_key(state);
         state.apply(program, random_values(r), false);
-        if (!(build_pixel_shader_key(state, 1u) == ps) || !(build_vertex_shader_key(state, 0u) == vs) ||
-            !(build_render_state_key(state) == rs)) {
-            check(false, "values-only application changes no shader or pipeline key");
+        if (!(build_render_state_key(state) == rs)) {
+            check(false, "values-only application changes no pipeline key");
             return;
         }
     }
-    std::printf("ok: values-only application leaves the shader keys\n");
+    std::printf("ok: values-only application leaves the pipeline key\n");
 }
 
 // A light's words in the light rows, as the shaders read them.

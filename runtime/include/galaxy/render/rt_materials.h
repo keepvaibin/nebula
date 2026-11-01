@@ -50,6 +50,16 @@
 
 namespace galaxy::render {
 
+// A texture-pack material's surface class.
+enum class RtSurfaceClass : std::uint8_t {
+    Diffuse = 0,    // lit by the game's lights
+    Glossy = 1,     // a lit channel with the specular function
+    Metal = 2,      // an environment map
+    Unlit = 3,      // baked or self-lit colour
+    Water = 4,      // opaque surface with indirect texturing
+    Crystal = 7,    // clear dielectric (crystals, ice, gems, glass)
+};
+
 enum class RtEmission : std::uint8_t { None = 0, Point = 1, Area = 2 };
 
 // The share of their art's tint clear ice and the crystal cages keep under physical ray tracing (the owner, 27 October

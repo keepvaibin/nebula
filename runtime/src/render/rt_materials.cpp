@@ -2,7 +2,6 @@
 // The ray tracer's material and stage sun tables (rt_materials.h) and the texture-pack hash.
 #include "galaxy/render/rt_materials.h"
 
-#include "galaxy/render/rt_surfaces.h"
 #include "galaxy/platform_paths.h"
 
 #include <algorithm>
