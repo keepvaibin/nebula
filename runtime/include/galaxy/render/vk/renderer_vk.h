@@ -335,7 +335,7 @@ public:
     [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(efb_.samples));
     }
-    // The pipelines' EFB variant (shader_keys.h RenderStateKey::samples_log2): no HDR scene EFB here.
+    // The pipelines' EFB variant (render_state_key.h RenderStateKey::samples_log2): no HDR scene EFB here.
     [[nodiscard]] std::uint8_t efb_variant() const noexcept { return efb_samples_log2(); }
     [[nodiscard]] const vk::RenderLayout* root_signature() const noexcept { return &gx_layout_; }
     [[nodiscard]] double display_refresh_hz() const noexcept { return display_refresh_hz_; }

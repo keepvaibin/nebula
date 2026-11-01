@@ -17,7 +17,7 @@
 
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/gpu_texture_backend.h"
-#include "galaxy/render/shader_keys.h"  // fnv1a64
+#include "galaxy/render/pso_key.h"  // fnv1a64
 #include "galaxy/render/texture_decode_pool.h"
 #include "galaxy/render/texture_pack.h"
 #include "galaxy/render/movie_replacement.h"

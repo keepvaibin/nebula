@@ -3,7 +3,7 @@
 
 #include "galaxy/render/draw_state.h"
 #include "galaxy/render/native_material.h"
-#include "galaxy/render/shader_keys.h"
+#include "galaxy/render/pso_key.h"
 
 #include <bit>
 #include <cstdio>

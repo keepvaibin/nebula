@@ -38,7 +38,7 @@
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
-#include "galaxy/render/shader_keys.h"
+#include "galaxy/render/pso_key.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/ui_canvas.h"
 #include "galaxy/render/window_owner.h"
@@ -627,7 +627,7 @@ public:
     [[nodiscard]] std::uint8_t efb_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(efb_msaa_.samples));
     }
-    // The live EFB's variant, which its draws' pipelines share (shader_keys.h RenderStateKey::samples_log2): its
+    // The live EFB's variant, which its draws' pipelines share (render_state_key.h RenderStateKey::samples_log2): its
     // samples, and kEfbVariantHdr while the HDR scene EFB stands in.
     [[nodiscard]] std::uint8_t efb_variant() const noexcept {
         return static_cast<std::uint8_t>(efb_samples_log2() | (efb_hdr_ ? kEfbVariantHdr : 0u));
