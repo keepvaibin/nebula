@@ -17,42 +17,6 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
-// Light n's contribution to a lit channel, in 0-255 units (rgb, and a for an alpha channel): its colour by its
-// attenuation (1 specular, 2 directional, 3 spot) and diffuse function (0 none, 1 signed, 2 clamped), at the eye-space
-// position and normal. The light rows hold the colour (raw RGBA8 in row 0's w), the cosine and distance attenuation
-// coefficients, the position and direction.
-float4 j3d_light(uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
-    const uint lcw = asuint(native_light_row(n, 0u).w);
-    const float4 le1 = native_light_row(n, 1u);
-    const float4 le2 = native_light_row(n, 2u);
-    const float4 le3 = native_light_row(n, 3u);
-    const float3 lpos = float3(le2.z, le2.w, le3.x);
-    const float3 ldvec = float3(le3.y, le3.z, le3.w);
-    const float3 cos_a = le1.xyz;
-    const float3 dist_a = float3(le1.w, le2.x, le2.y);
-    const float4 lcol = float4((lcw >> 24u) & 255u, (lcw >> 16u) & 255u, (lcw >> 8u) & 255u, lcw & 255u);
-    const float3 delta = lpos - pos;
-    const float dd = dot(delta, delta);
-    float3 ldir = dd > 0.0 ? delta * rsqrt(dd) : nrm;
-    float attn = 1.0;
-    if (atten == 1u) {
-        attn = dot(nrm, ldir) >= 0.0 ? min(max(0.0, dot(nrm, ldvec)), 1.0e18) : 0.0;
-        const float dad = dot(dist_a, dist_a);
-        const float3 dist_attn = diffuse == 0u ? dist_a : (dad > 0.0 ? dist_a * rsqrt(dad) : dist_a);
-        const float denom = dot(dist_attn, float3(1.0, attn, attn * attn));
-        attn = denom != 0.0 ? max(0.0, dot(cos_a, float3(1.0, attn, attn * attn))) / denom : 0.0;
-    } else if (atten == 3u) {
-        const float dist = min(sqrt(dd), 1.0e18);
-        const float dist2 = min(dd, 1.0e36);
-        ldir = dist > 0.0 ? delta / dist : nrm;
-        attn = min(max(0.0, dot(ldir, ldvec)), 1.0e18);
-        const float denom = dot(dist_a, float3(1.0, dist, dist2));
-        attn = denom != 0.0 ? max(0.0, cos_a.x + cos_a.y * attn + cos_a.z * attn * attn) / denom : 0.0;
-    }
-    const float facing = diffuse == 1u ? dot(ldir, nrm) : diffuse == 2u ? max(0.0, dot(ldir, nrm)) : 1.0;
-    return attn * facing * lcol;
-}
-
 // GX's TEV takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
 // unclamped stage left past 1 or below 0 wraps.
 float j3d_in(float x) { const float v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
