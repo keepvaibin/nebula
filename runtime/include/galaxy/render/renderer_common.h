@@ -7,7 +7,7 @@
 #include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/renderer_api.h"  // ReadbackKind
+#include "galaxy/render_api.h"  // ReadbackKind
 
 #include <array>
 #include <cstddef>

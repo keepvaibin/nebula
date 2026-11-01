@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's object names as the native game reports them (renderer_api.h note_object_name): NameObj::mName by the id
+// The game's object names as the native game reports them (render_api.h note_object_name): NameObj::mName by the id
 // its host markers carry. Simulation thread writes, render thread reads.
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 
 #include <algorithm>
 #include <cstring>

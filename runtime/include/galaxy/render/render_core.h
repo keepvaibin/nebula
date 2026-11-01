@@ -1,7 +1,7 @@
 #pragma once
 
 // RenderCore: owns the GX pipeline's subsystems and runs the per-frame loop behind the galaxy::render
-// API (renderer_api.h, through renderer_api.cpp).
+// API (render_api.h, through render_api.cpp).
 //
 // The simulation thread calls render_frame() once per VI retrace; it copies the frame's FIFO bytes
 // into a bounded queue and returns. The render thread consumes the chunks in order:
@@ -53,7 +53,7 @@
 #include "galaxy/render/draw_constants.h"
 #include "galaxy/render/draw_constants_fill.h"
 #include "galaxy/render/render_vertex.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/render/render_services.h"
 #include "galaxy/frame_telemetry.h"
 

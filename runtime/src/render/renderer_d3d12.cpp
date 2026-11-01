@@ -9,7 +9,7 @@
 
 #include "galaxy/content_viewport.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/render_config.h"

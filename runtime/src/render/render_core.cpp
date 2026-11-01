@@ -1,5 +1,5 @@
 // RenderCore: decodes the game's GX command stream and drives the renderer.
-// renderer_api.cpp exposes it through the galaxy::render API in renderer_api.h.
+// render_api.cpp exposes it through the galaxy::render API in render_api.h.
 
 #if defined(_WIN32)
 #define WIN32_LEAN_AND_MEAN
