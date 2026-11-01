@@ -137,9 +137,6 @@ public:
 [[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
 [[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
 [[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
-[[nodiscard]] std::uint32_t line_point_word(const NativeDrawState& state);
-// Coordinate `c`'s s scale word (with the line and point offsets).
-[[nodiscard]] std::uint32_t coord_s_word(const NativeDrawState& state, unsigned c);
 
 // Map `map`'s palette address (0 without a palette format or a loaded place).
 [[nodiscard]] std::uint64_t palette_address(const NativeDrawState& state, unsigned map);

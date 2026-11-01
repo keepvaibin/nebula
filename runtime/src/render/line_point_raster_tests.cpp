@@ -652,15 +652,9 @@ bool expect_bounds(
 int main() {
     bool passed = true;
     try {
-        const std::uint32_t su_lp_size =
-            1u | (255u << 8u) | (2u << 16u) | (5u << 19u);
-        std::array<std::uint32_t, 8> texcoord_s{};
-        texcoord_s[0] = 1u << 18u;
-        texcoord_s[3] = 1u << 19u;
-        texcoord_s[7] = (1u << 18u) | (1u << 19u);
         const galaxy::render::LinePointRasterParams decoded =
             galaxy::render::make_line_point_raster_params(
-                su_lp_size, texcoord_s, 10.0f, -20.0f, 3u);
+                {1u, 255u, 2u, 5u, 0x81u, 0x88u}, 10.0f, -20.0f, 3u);
         passed &= expect_near(
             decoded.viewport_width_pixels,
             60.0f,
@@ -680,15 +674,15 @@ int main() {
         passed &= expect(
             decoded.line_texcoord_mask == 0x81u &&
                 decoded.point_texcoord_mask == 0x88u,
-            "GX line/point texture-coordinate masks decode independently");
+            "line/point texture-coordinate masks pass through independently");
         passed &= expect(
             decoded.line_texcoord_divisor == 8u &&
                 decoded.point_texcoord_divisor == 1u,
-            "GX line/point texture-coordinate divisors decode exactly");
+            "line/point texture-offset selectors give their divisors");
 
         const galaxy::render::LinePointRasterParams fallback =
             galaxy::render::make_line_point_raster_params(
-                6u | (12u << 8u), {}, 0.0f, 0.0f, 0u);
+                {6u, 12u}, 0.0f, 0.0f, 0u);
         passed &= expect_near(
             fallback.viewport_width_pixels,
             640.0f,
@@ -699,7 +693,7 @@ int main() {
             "unprogrammed XF viewport uses the 1x frame height");
         const galaxy::render::LinePointRasterParams maximum_scale =
             galaxy::render::make_line_point_raster_params(
-                6u | (12u << 8u), {}, 32.0f, -32.0f, 99u);
+                {6u, 12u}, 32.0f, -32.0f, 99u);
         passed &= expect_near(
             maximum_scale.line_width_pixels,
             static_cast<float>(galaxy::render::kMaxEfbScale),
@@ -739,8 +733,7 @@ int main() {
              scale <= galaxy::render::kMaxEfbScale; ++scale) {
             const galaxy::render::LinePointRasterParams raster =
                 galaxy::render::make_line_point_raster_params(
-                    12u | (12u << 8u),
-                    {},
+                    {12u, 12u},
                     32.0f,
                     -32.0f,
                     scale,
@@ -795,12 +788,9 @@ int main() {
                 label);
         }
 
-        std::array<std::uint32_t, 8> offset_texcoord_s{};
-        offset_texcoord_s[0] = (1u << 18u) | (1u << 19u);
         const galaxy::render::LinePointRasterParams offset_raster =
             galaxy::render::make_line_point_raster_params(
-                12u | (12u << 8u) | (4u << 16u) | (4u << 19u),
-                offset_texcoord_s,
+                {12u, 12u, 4u, 4u, 1u, 1u},
                 32.0f,
                 -32.0f,
                 4u,
@@ -827,7 +817,7 @@ int main() {
 
         const galaxy::render::LinePointRasterParams zero_raster =
             galaxy::render::make_line_point_raster_params(
-                0u, {}, 32.0f, -32.0f, 4u, 64u, 64u);
+                {}, 32.0f, -32.0f, 4u, 64u, 64u);
         passed &= expect(
             harness.run(RasterCase::Point, 4u, zero_raster).pixel_count == 0u,
             "zero GX point size emits no fragments");

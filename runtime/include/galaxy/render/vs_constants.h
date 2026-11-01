@@ -140,20 +140,14 @@ inline void fill_vs_constants(
 
     refresh_vs_inline_matrices(state, draw, out);
 
-    std::array<std::uint32_t, kMaxTexGens> texcoord_s_registers{};
+    LinePointValues values{draw.line_point.line_width, draw.line_point.point_size, draw.line_point.line_offset,
+                           draw.line_point.point_offset, 0u, 0u};
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
-        texcoord_s_registers[i] = coord_s_word(draw, i);
+        values.line_coords = static_cast<std::uint8_t>(values.line_coords | (draw.coord[i].line_offset ? 1u : 0u) << i);
+        values.point_coords = static_cast<std::uint8_t>(values.point_coords | (draw.coord[i].point_offset ? 1u : 0u) << i);
     }
-    const float viewport_half_width = draw.viewport[0];
-    const float viewport_half_height = draw.viewport[1];
-    const LinePointRasterParams line_point = make_line_point_raster_params(
-        line_point_word(draw),
-        texcoord_s_registers,
-        viewport_half_width,
-        viewport_half_height,
-        efb_scale,
-        640u,
-        456u);
+    const LinePointRasterParams line_point =
+        make_line_point_raster_params(values, draw.viewport[0], draw.viewport[1], efb_scale, 640u, 456u);
     out.line_point_raster[0] = line_point.viewport_width_pixels;
     out.line_point_raster[1] = line_point.viewport_height_pixels;
     out.line_point_raster[2] = line_point.line_width_pixels;

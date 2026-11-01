@@ -1,5 +1,7 @@
-// Decodes SU_LPSIZE, the texcoord S registers and the XF viewport into LinePointRasterParams.
+// LinePointValues and the viewport as the line/point geometry shaders' parameters.
+
 #include "galaxy/render/line_point_raster.h"
+
 #include "galaxy/render/render_config.h"
 
 #include <algorithm>
@@ -8,8 +10,7 @@
 namespace galaxy::render {
 
 LinePointRasterParams make_line_point_raster_params(
-    std::uint32_t su_lp_size,
-    const std::array<std::uint32_t, 8>& texcoord_s_registers,
+    const LinePointValues& values,
     float viewport_half_width,
     float viewport_half_height,
     unsigned efb_scale,
@@ -27,36 +28,18 @@ LinePointRasterParams make_line_point_raster_params(
         ? -2.0f * viewport_half_height
         : static_cast<float>(std::max(fallback_efb_height, 1u));
     const float physical_scale = static_cast<float>(scale);
-
-    // Bits 18 and 19 of a texcoord's SU_SSIZE register enable the line and point texture offsets.
-    std::uint32_t line_texcoord_mask = 0u;
-    std::uint32_t point_texcoord_mask = 0u;
-    for (unsigned texcoord = 0u; texcoord < texcoord_s_registers.size(); ++texcoord) {
-        const std::uint32_t reg = texcoord_s_registers[texcoord];
-        if ((reg & (1u << 18u)) != 0u) {
-            line_texcoord_mask |= 1u << texcoord;
-        }
-        if ((reg & (1u << 19u)) != 0u) {
-            point_texcoord_mask |= 1u << texcoord;
-        }
-    }
-
-    // Texture-offset selector to the n of its 1/n offset: 0 none, 1-5 give 1/16 to 1, 6 and 7 act as 5.
+    // Texture-offset selector to the n of its 1/n offset.
     static constexpr std::array<std::uint32_t, 8> kTextureOffsetDivisors{
         0u, 16u, 8u, 4u, 2u, 1u, 1u, 1u};
-    const unsigned line_offset = (su_lp_size >> 16u) & 0x7u;
-    const unsigned point_offset = (su_lp_size >> 19u) & 0x7u;
-
     return LinePointRasterParams{
         logical_width * physical_scale,
         logical_height * physical_scale,
-        (static_cast<float>(su_lp_size & 0xFFu) / 6.0f) * physical_scale,
-        (static_cast<float>((su_lp_size >> 8u) & 0xFFu) / 6.0f) *
-            physical_scale,
-        line_texcoord_mask,
-        point_texcoord_mask,
-        kTextureOffsetDivisors[line_offset],
-        kTextureOffsetDivisors[point_offset],
+        (static_cast<float>(values.line_width) / 6.0f) * physical_scale,
+        (static_cast<float>(values.point_size) / 6.0f) * physical_scale,
+        values.line_coords,
+        values.point_coords,
+        kTextureOffsetDivisors[values.line_offset & 7u],
+        kTextureOffsetDivisors[values.point_offset & 7u],
     };
 }
 
