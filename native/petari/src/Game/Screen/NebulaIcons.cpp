@@ -1319,11 +1319,6 @@ namespace {
         *pY = (cell / sFont.mRow) * (sFont.mCellHeight + 1) + 1;
     }
 
-    bool fitsSelfRel(const void* pFrom, const void* pTo) {
-        const s64 d = static_cast< const char* >(pTo) - static_cast< const char* >(pFrom);
-        return d > -0x7FFFFFF0LL && d < 0x7FFFFFF0LL;
-    }
-
     // The picture font gains our sheets, glyph widths and code map, once it is loaded. A font whose sheets are not RGBA8
     // records with cells of a usual size (a mod's, or one not cooked) keeps its own icons.
     s32 install() {
@@ -1334,7 +1329,7 @@ namespace {
         }
         nw4r::ut::FontInformation* pInfo = pFont->mFontInfo;
         nw4r::ut::FontTextureGlyph* pGlyph = pInfo->pGlyph;
-        const NebulaTexture* pSheet = pGlyph != nullptr ? nebula_texture_record(pGlyph->sheetImage.get()) : nullptr;
+        const NebulaTexture* pSheet = pGlyph != nullptr ? nebula_texture_record(pGlyph->sheetImage) : nullptr;
         bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
                       pSheet->width == pGlyph->sheetWidth && pSheet->height == pGlyph->sheetHeight &&
                       static_cast< u32 >(pGlyph->sheetSize) >= pSheet->size && pGlyph->sheetRow > 0 && pGlyph->sheetLine > 0 &&
@@ -1387,8 +1382,8 @@ namespace {
         for (u16 code = cMapFirst; code <= cMapLast; code++) {
             f.mOriginal[code - cMapFirst] = pFont->FindGlyphIndex(code);
         }
-        // One block that lasts the game (the stationed heap's room for it, HeapMemoryWatcher), as near the font as its
-        // offsets need: the sheets, our widths, our code map.
+        // One block that lasts the game (the stationed heap's room for it, HeapMemoryWatcher): the sheets, our widths,
+        // our code maps.
         const u32 sheetsBytes = static_cast< u32 >(sheets * f.mSheetBytes);
         const u32 widthBytes = (sizeof(nw4r::ut::FontWidth) + added * sizeof(nw4r::ut::CharWidths) + 3u) & ~3u;
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
@@ -1398,13 +1393,12 @@ namespace {
         u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
                          ? static_cast< u8* >(JKRHeap::alloc(bytes, 32, pHeap))
                          : nullptr;
-        if (pBlock == nullptr || !fitsSelfRel(pInfo, pBlock) || !fitsSelfRel(pInfo, pBlock + bytes) ||
-            !fitsSelfRel(pBlock, pInfo->pWidth.get()) || !fitsSelfRel(pBlock, pInfo->pMap.get())) {
+        if (pBlock == nullptr) {
             JUTNativeLog("NebulaIcons: no room for the icons (%u bytes, the stationed heap has %d); they stay the Wii's\n", bytes,
                      pHeap != nullptr ? pHeap->getFreeSize() : -1);
             return FontUnusable;
         }
-        memcpy(pBlock, pGlyph->sheetImage.get(), static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
+        memcpy(pBlock, pGlyph->sheetImage, static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
         for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
             initRecord(pBlock + sheet * f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
@@ -1414,7 +1408,7 @@ namespace {
         nw4r::ut::FontWidth* pWidth = reinterpret_cast< nw4r::ut::FontWidth* >(pBlock + sheetsBytes);
         pWidth->indexBegin = static_cast< u16 >(f.mFirstSheet * f.mCells);
         pWidth->indexEnd = static_cast< u16 >(f.mFirstSheet * f.mCells + added - 1);
-        pWidth->pNext = pInfo->pWidth.get();
+        pWidth->pNext = pInfo->pWidth;
         for (s32 i = 0; i < added; i++) {
             pWidth->widthTable[i] = widths;
         }
@@ -1424,7 +1418,7 @@ namespace {
         pKeyMap->ccodeEnd = static_cast< u16 >(NebulaIcons::cKeyCodeFirst + cKeyCells - 1);
         pKeyMap->mappingMethod = 1;
         pKeyMap->reserved = 0;
-        pKeyMap->pNext = pInfo->pMap.get();
+        pKeyMap->pNext = pInfo->pMap;
         for (s32 slot = 0; slot < cKeyCells; slot++) {
             pKeyMap->mapInfo[slot] = static_cast< u16 >(f.mKeyFirstSheet * f.mCells + f.mKeyCell[keyHasCell(slot) ? slot : cKeyNamed]);
         }
