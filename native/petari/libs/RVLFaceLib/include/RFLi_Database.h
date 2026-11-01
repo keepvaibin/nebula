@@ -7,12 +7,12 @@ extern "C" {
 #endif
 
 // The official database: the host's Mii records by slot (RFL_Database.c).
-RFLErrcode RFLiGetCharInfo(RFLiCharInfo* out, u16 index);
-BOOL RFLiIsSameID(const RFLCreateID* id1, const RFLCreateID* id2);
-BOOL RFLiIsValidID(const RFLCreateID* id);
-BOOL RFLiIsSpecialID(const RFLCreateID* id);
-BOOL RFLiIsTemporaryID(const RFLCreateID* id);
-BOOL RFLiIsValidName2(const RFLiCharInfo* info);
+MiiErrcode Mii_GetCharInfo(Mii_CharInfo* out, u16 index);
+BOOL Mii_IsSameID(const MiiCreateID* id1, const MiiCreateID* id2);
+BOOL Mii_IsValidID(const MiiCreateID* id);
+BOOL Mii_IsSpecialID(const MiiCreateID* id);
+BOOL Mii_IsTemporaryID(const MiiCreateID* id);
+BOOL Mii_IsValidName2(const Mii_CharInfo* info);
 
 #ifdef __cplusplus
 }

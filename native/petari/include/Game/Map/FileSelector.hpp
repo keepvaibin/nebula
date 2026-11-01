@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Map/FileSelectIconID.hpp"
 
-struct RFLCreateID;
+struct MiiCreateID;
 
 namespace nw4r {
     namespace ut {
@@ -96,7 +96,7 @@ public:
     bool isUserFileLuigi(s32 id) const;
     void setUserFileMario(s32 id, bool isMario) NO_INLINE;
     void storeSetMiiIdUserFile(s32 id, const FileSelectIconID& rIconId);
-    void getMiiId(RFLCreateID* pCreateId, const FileSelectIconID& rIconId) const;
+    void getMiiId(MiiCreateID* pCreateId, const FileSelectIconID& rIconId) const;
     void getIconId(FileSelectIconID* pIconId, s32 id) const;
     s32 getMissCount(s32 id) const;
     void playSelectedME();
@@ -174,7 +174,7 @@ public:
     /* 0xD0 */ TitleSequenceProduct* mTitle;
     /* 0xD4 */ MiiSelect* mMiiSelect;
     /* 0xD8 */ MiiConfirmIcon* mMiiConfirmIcon;
-    /* 0xDC */ RFLCreateID* mMiiId;
+    /* 0xDC */ MiiCreateID* mMiiId;
     /* 0xE0 */ Manual2P* mManual;
     /* 0xE4 */ bool mIsMiiSelectStartFirst;
     /* 0xE8 */ s32 mBgmState;

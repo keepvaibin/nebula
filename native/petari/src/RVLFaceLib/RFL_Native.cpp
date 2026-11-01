@@ -1,12 +1,12 @@
 // Mii faces as a native material (runtime/src/render/materials/mii_face.hlsl): RFL's part draws (RFL_Model.c) name
-// each part's form, colour, culling and texture; the lit chain after it is RFL's own light (RFLLoadDrawSetting) or the
+// each part's form, colour, culling and texture; the lit chain after it is RFL's own light (MiiLoadDrawSetting) or the
 // stages the game adds for its Mii NPCs (Game/NPC/MiiFacePartsHolder.cpp). The blending and depth stay the drawing
 // state's (the callers set them).
 #include "Game/Util/NativeShader.hpp"
 #include "RFL_Native.h"
 
 namespace {
-    // The chain the next parts draw with (RFLiNativeChain).
+    // The chain the next parts draw with (Mii_NativeChain).
     u32 sChain = 0;
     u32 sLightMask = 0;
     u32 sDiffuse = 0;
@@ -14,19 +14,19 @@ namespace {
     u32 sAlphaTest = 0;
     GXColor sAmbient = {0, 0, 0, 0};
     GXColor sMaterial = {255, 255, 255, 255};
-    // The face texture's form and colours (RFLiNativeTextureForm).
+    // The face texture's form and colours (Mii_NativeTextureForm).
     u32 sTextureForm = 0;
     GXColor sTextureC0 = {0, 0, 0, 0};
     GXColor sTextureC1 = {0, 0, 0, 0};
 }  // namespace
 
-extern "C" void RFLiNativeTextureForm(u32 form, GXColor c0, GXColor c1) {
+extern "C" void Mii_NativeTextureForm(u32 form, GXColor c0, GXColor c1) {
     sTextureForm = form;
     sTextureC0 = c0;
     sTextureC1 = c1;
 }
 
-extern "C" void RFLiNativeTexturePart(const GXTexObj* pTexture) {
+extern "C" void Mii_NativeTexturePart(const GXTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_TEXTURE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        NEBULA_CULL_NONE);
@@ -40,7 +40,7 @@ extern "C" void RFLiNativeTexturePart(const GXTexObj* pTexture) {
     NativeShader::send(material);
 }
 
-extern "C" void RFLiNativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, GXColor ambient,
+extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, GXColor ambient,
                                 GXColor material, u32 alphaTest) {
     sChain = chain;
     sLightMask = lightMask;
@@ -53,7 +53,7 @@ extern "C" void RFLiNativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, G
     sAlphaTest = alphaTest;
 }
 
-extern "C" void RFLiNativePart(u32 form, GXColor color, GXCullMode cull, const GXTexObj* pTexture) {
+extern "C" void Mii_NativePart(u32 form, GXColor color, GXCullMode cull, const GXTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_FACE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        cull == GX_CULL_FRONT  ? NEBULA_CULL_FRONT

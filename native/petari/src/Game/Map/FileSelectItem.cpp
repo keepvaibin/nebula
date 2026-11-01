@@ -202,7 +202,7 @@ void FileSelectItem::forceChange(const FileSelectIconID& rID, bool a2) {
     deleteCompleteEffect();
     mIconID->set(rID);
     if (rID.isMii()) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
         killAllModels();
         mFaceParts->makeActorAppeared();
     } else {
@@ -344,7 +344,7 @@ void FileSelectItem::exeChangeMii() {
     }
 
     if (MR::isStep(this, 39)) {
-        mFaceParts->changeFaceModel(MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+        mFaceParts->changeFaceModel(MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
     if (MR::isStep(this, 40)) {
@@ -431,7 +431,7 @@ void FileSelectItem::createMii() {
         mFaceParts = MiiFacePartsHolder::createPartsFromDefault("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */, 0);
     } else {
         mFaceParts = MiiFacePartsHolder::createPartsFromReceipe("Mii\203\164\203\106\203\103\203\130" /* Miiフェイス */,
-                                                                MiiFaceRecipe(RFLDataSource_Official, mIconID->getMiiIndex(), RFLResolution_256, 33));
+                                                                MiiFaceRecipe(MiiDataSource_Official, mIconID->getMiiIndex(), MiiResolution_256, 33));
     }
 
     mFaceParts->initFixedPosition(_104, TVec3f(0.0f, 0.0f, 0.0f), TVec3f(0.0f, 0.0f, 0.0f));

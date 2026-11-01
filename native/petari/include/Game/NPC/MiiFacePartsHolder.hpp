@@ -7,9 +7,9 @@
 class MiiDatabase;
 class MiiFaceParts;
 class MiiFaceRecipe;
-struct RFLDrawCoreSetting;
+struct MiiDrawCoreSetting;
 
-typedef void (MiiFaceParts::*DrawPartsFuncPtr)(const RFLDrawCoreSetting*) const;
+typedef void (MiiFaceParts::*DrawPartsFuncPtr)(const MiiDrawCoreSetting*) const;
 
 class MiiFacePartsHolder : public LiveActorGroup, JKRDisposer {
 public:
@@ -26,12 +26,12 @@ public:
     bool isError() const;
     static MiiFaceParts* createPartsFromReceipe(const char*, const MiiFaceRecipe&);
     static MiiFaceParts* createPartsFromDefault(const char*, u16);
-    void drawEachActor(DrawPartsFuncPtr, const RFLDrawCoreSetting*) const;
+    void drawEachActor(DrawPartsFuncPtr, const MiiDrawCoreSetting*) const;
     void drawExtra() const;
     void setTevOpa() const;
     void setTevXlu() const;
 
     /* 0x34 */ MiiDatabase* _34;
-    /* 0x38 */ RFLErrcode _38;
+    /* 0x38 */ MiiErrcode _38;
     /* 0x3C */ s32 _3C;
 };

@@ -3,7 +3,7 @@
 
 // For masking out padding when comparing fields
 #define PADMASK(t, size) ((t)(~((1 << size) - 1)))
-// Padding bitmask constants (see RFLiCharInfo structure)
+// Padding bitmask constants (see Mii_CharInfo structure)
 #define FACELINE_PAD_MASK (PADMASK(u16, 6))
 #define HAIR_PAD_MASK (PADMASK(u16, 5))
 #define EYE_PAD_MASK (PADMASK(u32, 5))
@@ -14,216 +14,216 @@
 #define GLASS_PAD_MASK (PADMASK(u16, 1))
 #define MOLE_PAD_MASK (PADMASK(u16, 1))
 
-BOOL RFLiCheckValidInfo(const RFLiCharInfo* info) {
-    if (info->faceline.type > RFLi_MAX_FACELINE_TYPE) {
+BOOL Mii_CheckValidInfo(const Mii_CharInfo* info) {
+    if (info->faceline.type > MII_I_MAX_FACELINE_TYPE) {
         return FALSE;
     }
-    if (info->faceline.color > RFLi_MAX_FACELINE_COLOR) {
+    if (info->faceline.color > MII_I_MAX_FACELINE_COLOR) {
         return FALSE;
     }
-    if (info->faceline.texture > RFLi_MAX_FACELINE_TEXTURE) {
+    if (info->faceline.texture > MII_I_MAX_FACELINE_TEXTURE) {
         return FALSE;
     }
 
-    if (info->hair.type > RFLi_MAX_HAIR_TYPE) {
+    if (info->hair.type > MII_I_MAX_HAIR_TYPE) {
         return FALSE;
     }
-    if (info->hair.color > RFLi_MAX_HAIR_COLOR) {
+    if (info->hair.color > MII_I_MAX_HAIR_COLOR) {
         return FALSE;
     }
     if (info->hair.flip > TRUE) {
         return FALSE;
     }
 
-    if (info->eye.type > RFLi_MAX_EYE_TYPE) {
+    if (info->eye.type > MII_I_MAX_EYE_TYPE) {
         return FALSE;
     }
-    if (info->eye.color > RFLi_MAX_EYE_COLOR) {
+    if (info->eye.color > MII_I_MAX_EYE_COLOR) {
         return FALSE;
     }
-    if (info->eye.scale > RFLi_MAX_EYE_SCALE) {
+    if (info->eye.scale > MII_I_MAX_EYE_SCALE) {
         return FALSE;
     }
-    if (info->eye.rotate > RFLi_MAX_EYE_ROTATE) {
+    if (info->eye.rotate > MII_I_MAX_EYE_ROTATE) {
         return FALSE;
     }
-    if (info->eye.x > RFLi_MAX_EYE_X) {
+    if (info->eye.x > MII_I_MAX_EYE_X) {
         return FALSE;
     }
-    if (info->eye.y > RFLi_MAX_EYE_Y) {
-        return FALSE;
-    }
-
-    if (info->eyebrow.type > RFLi_MAX_EYEBROW_TYPE) {
-        return FALSE;
-    }
-    if (info->eyebrow.color > RFLi_MAX_EYEBROW_COLOR) {
-        return FALSE;
-    }
-    if (info->eyebrow.scale > RFLi_MAX_EYEBROW_SCALE) {
-        return FALSE;
-    }
-    if (info->eyebrow.rotate > RFLi_MAX_EYEBROW_ROTATE) {
-        return FALSE;
-    }
-    if (info->eyebrow.x > RFLi_MAX_EYEBROW_X) {
-        return FALSE;
-    }
-    if (info->eyebrow.y < RFLi_MIN_EYEBROW_Y) {
-        return FALSE;
-    }
-    if (info->eyebrow.y > RFLi_MAX_EYEBROW_Y) {
+    if (info->eye.y > MII_I_MAX_EYE_Y) {
         return FALSE;
     }
 
-    if (info->nose.type > RFLi_MAX_NOSE_TYPE) {
+    if (info->eyebrow.type > MII_I_MAX_EYEBROW_TYPE) {
         return FALSE;
     }
-    if (info->nose.scale > RFLi_MAX_NOSE_SCALE) {
+    if (info->eyebrow.color > MII_I_MAX_EYEBROW_COLOR) {
         return FALSE;
     }
-    if (info->nose.y > RFLi_MAX_NOSE_Y) {
+    if (info->eyebrow.scale > MII_I_MAX_EYEBROW_SCALE) {
         return FALSE;
     }
-
-    if (info->mouth.type > RFLi_MAX_MOUTH_TYPE) {
+    if (info->eyebrow.rotate > MII_I_MAX_EYEBROW_ROTATE) {
         return FALSE;
     }
-    if (info->mouth.color > RFLi_MAX_MOUTH_COLOR) {
+    if (info->eyebrow.x > MII_I_MAX_EYEBROW_X) {
         return FALSE;
     }
-    if (info->mouth.scale > RFLi_MAX_MOUTH_SCALE) {
+    if (info->eyebrow.y < MII_I_MIN_EYEBROW_Y) {
         return FALSE;
     }
-    if (info->mouth.y > RFLi_MAX_MOUTH_Y) {
-        return FALSE;
-    }
-
-    if (info->beard.mustache > RFLi_MAX_BEARD_MUSTACHE) {
-        return FALSE;
-    }
-    if (info->beard.type > RFLi_MAX_BEARD_TYPE) {
-        return FALSE;
-    }
-    if (info->beard.color > RFLi_MAX_BEARD_COLOR) {
-        return FALSE;
-    }
-    if (info->beard.scale > RFLi_MAX_BEARD_SCALE) {
-        return FALSE;
-    }
-    if (info->beard.y > RFLi_MAX_BEARD_Y) {
+    if (info->eyebrow.y > MII_I_MAX_EYEBROW_Y) {
         return FALSE;
     }
 
-    if (info->glass.type > RFLi_MAX_GLASS_TYPE) {
+    if (info->nose.type > MII_I_MAX_NOSE_TYPE) {
         return FALSE;
     }
-    if (info->glass.color > RFLi_MAX_GLASS_COLOR) {
+    if (info->nose.scale > MII_I_MAX_NOSE_SCALE) {
         return FALSE;
     }
-    if (info->glass.scale > RFLi_MAX_GLASS_SCALE) {
-        return FALSE;
-    }
-    if (info->glass.y > RFLi_MAX_GLASS_Y) {
+    if (info->nose.y > MII_I_MAX_NOSE_Y) {
         return FALSE;
     }
 
-    if (info->mole.type > RFLi_MAX_MOLE_TYPE) {
+    if (info->mouth.type > MII_I_MAX_MOUTH_TYPE) {
         return FALSE;
     }
-    if (info->mole.scale > RFLi_MAX_MOLE_SCALE) {
+    if (info->mouth.color > MII_I_MAX_MOUTH_COLOR) {
         return FALSE;
     }
-    if (info->mole.x > RFLi_MAX_MOLE_X) {
+    if (info->mouth.scale > MII_I_MAX_MOUTH_SCALE) {
         return FALSE;
     }
-    if (info->mole.y > RFLi_MAX_MOLE_Y) {
-        return FALSE;
-    }
-
-    if (!RFLiIsValidName2(info)) {
+    if (info->mouth.y > MII_I_MAX_MOUTH_Y) {
         return FALSE;
     }
 
-    if (info->body.height > RFLi_MAX_BODY_HEIGHT) {
+    if (info->beard.mustache > MII_I_MAX_BEARD_MUSTACHE) {
         return FALSE;
     }
-    if (info->body.build > RFLi_MAX_BODY_BUILD) {
+    if (info->beard.type > MII_I_MAX_BEARD_TYPE) {
+        return FALSE;
+    }
+    if (info->beard.color > MII_I_MAX_BEARD_COLOR) {
+        return FALSE;
+    }
+    if (info->beard.scale > MII_I_MAX_BEARD_SCALE) {
+        return FALSE;
+    }
+    if (info->beard.y > MII_I_MAX_BEARD_Y) {
         return FALSE;
     }
 
-    if (info->personal.sex > RFLSex_Female) {
+    if (info->glass.type > MII_I_MAX_GLASS_TYPE) {
         return FALSE;
     }
-    if (!RFLiCheckBirthday(info->personal.bmonth, info->personal.bday)) {
+    if (info->glass.color > MII_I_MAX_GLASS_COLOR) {
         return FALSE;
     }
-    if (info->personal.color >= RFLFavoriteColor_Max) {
+    if (info->glass.scale > MII_I_MAX_GLASS_SCALE) {
+        return FALSE;
+    }
+    if (info->glass.y > MII_I_MAX_GLASS_Y) {
         return FALSE;
     }
 
-    if (RFLiIsSpecialID(&info->createID) && !info->personal.localOnly) {
+    if (info->mole.type > MII_I_MAX_MOLE_TYPE) {
+        return FALSE;
+    }
+    if (info->mole.scale > MII_I_MAX_MOLE_SCALE) {
+        return FALSE;
+    }
+    if (info->mole.x > MII_I_MAX_MOLE_X) {
+        return FALSE;
+    }
+    if (info->mole.y > MII_I_MAX_MOLE_Y) {
+        return FALSE;
+    }
+
+    if (!Mii_IsValidName2(info)) {
+        return FALSE;
+    }
+
+    if (info->body.height > MII_I_MAX_BODY_HEIGHT) {
+        return FALSE;
+    }
+    if (info->body.build > MII_I_MAX_BODY_BUILD) {
+        return FALSE;
+    }
+
+    if (info->personal.sex > MiiSex_Female) {
+        return FALSE;
+    }
+    if (!Mii_CheckBirthday(info->personal.bmonth, info->personal.bday)) {
+        return FALSE;
+    }
+    if (info->personal.color >= MiiFavoriteColor_Max) {
+        return FALSE;
+    }
+
+    if (Mii_IsSpecialID(&info->createID) && !info->personal.localOnly) {
         return FALSE;
     }
 
     return TRUE;
 }
 
-BOOL RFLiIsValidOnNAND(const RFLiCharInfo* info) {
-    return !RFLiIsTemporaryID(&info->createID);
+BOOL Mii_IsValidOnNAND(const Mii_CharInfo* info) {
+    return !Mii_IsTemporaryID(&info->createID);
 }
 
-RFLErrcode RFLiPickupCharInfo(RFLiCharInfo* info, RFLDataSource source,
-                              RFLMiddleDB* db, u16 index) {
-    RFLErrcode err;
+MiiErrcode Mii_PickupCharInfo(Mii_CharInfo* info, MiiDataSource source,
+                              MiiMiddleDB* db, u16 index) {
+    MiiErrcode err;
 
-    if (!RFLAvailable()) {
-        return RFLErrcode_NotAvailable;
+    if (!MiiAvailable()) {
+        return MiiErrcode_NotAvailable;
     }
 
     switch (source) {
-    case RFLDataSource_Official:
-        err = RFLiGetCharInfo(info, index);
+    case MiiDataSource_Official:
+        err = Mii_GetCharInfo(info, index);
         break;
-    case RFLDataSource_Default:
-        RFLiGetDefaultData(info, index);
-        err = RFLErrcode_Success;
+    case MiiDataSource_Default:
+        Mii_GetDefaultData(info, index);
+        err = MiiErrcode_Success;
         break;
     default:
         // The game keeps its Miis in the official database (and the library's defaults): no remote's Miis, no
         // middle database.
         (void)db;
-        err = RFLErrcode_Broken;
+        err = MiiErrcode_Broken;
         break;
     }
 
-    if (err == RFLErrcode_Success) {
-        if (!RFLiIsValidID(&info->createID)) {
-            err = RFLErrcode_Broken;
-        } else if (!RFLiCheckValidInfo(info)) {
-            err = RFLErrcode_Broken;
+    if (err == MiiErrcode_Success) {
+        if (!Mii_IsValidID(&info->createID)) {
+            err = MiiErrcode_Broken;
+        } else if (!Mii_CheckValidInfo(info)) {
+            err = MiiErrcode_Broken;
         }
     }
 
     return err;
 }
 
-static void copyChar2Additional_(RFLAdditionalInfo* dst,
-                                 const RFLiCharInfo* src) {
+static void copyChar2Additional_(MiiAdditionalInfo* dst,
+                                 const Mii_CharInfo* src) {
     u8 height;
     u8 build;
 
-    memcpy(dst->name, src->personal.name, sizeof(wchar_t) * RFL_NAME_LEN);
-    dst->name[RFL_NAME_LEN] = '\0';
+    memcpy(dst->name, src->personal.name, sizeof(wchar_t) * MII_NAME_LEN);
+    dst->name[MII_NAME_LEN] = '\0';
 
     memcpy(dst->creator, src->personal.creator,
-           sizeof(wchar_t) * RFL_CREATOR_LEN);
+           sizeof(wchar_t) * MII_CREATOR_LEN);
     // @bug Copy paste error
-    dst->name[RFL_CREATOR_LEN] = '\0';
+    dst->name[MII_CREATOR_LEN] = '\0';
 
     dst->sex = src->personal.sex;
 
-    if (RFLiCheckBirthday(src->personal.bmonth, src->personal.bday)) {
+    if (Mii_CheckBirthday(src->personal.bmonth, src->personal.bday)) {
         dst->bmonth = src->personal.bmonth;
         dst->bday = src->personal.bday;
     } else {
@@ -238,35 +238,35 @@ static void copyChar2Additional_(RFLAdditionalInfo* dst,
     build = src->body.build;
 
     // @bug Max height is 128, not 127
-    if (height > RFLi_MAX_BODY_HEIGHT - 1) {
-        height = RFLi_MAX_BODY_HEIGHT - 1;
+    if (height > MII_I_MAX_BODY_HEIGHT - 1) {
+        height = MII_I_MAX_BODY_HEIGHT - 1;
     }
     // @bug Max build is 128, not 127
-    if (build > RFLi_MAX_BODY_BUILD - 1) {
-        build = RFLi_MAX_BODY_BUILD - 1;
+    if (build > MII_I_MAX_BODY_BUILD - 1) {
+        build = MII_I_MAX_BODY_BUILD - 1;
     }
 
     dst->height = height;
     dst->build = build;
-    memcpy(&dst->createID, &src->createID, sizeof(RFLCreateID));
+    memcpy(&dst->createID, &src->createID, sizeof(MiiCreateID));
     dst->reserved = 0;
-    dst->skinColor = RFLiGetFacelineColor(src);
+    dst->skinColor = Mii_GetFacelineColor(src);
 }
 
-RFLErrcode RFLGetAdditionalInfo(RFLAdditionalInfo* addi, RFLDataSource source,
-                                RFLMiddleDB* db, u16 index) {
-    RFLiCharInfo info;
-    RFLErrcode err;
+MiiErrcode MiiGetAdditionalInfo(MiiAdditionalInfo* addi, MiiDataSource source,
+                                MiiMiddleDB* db, u16 index) {
+    Mii_CharInfo info;
+    MiiErrcode err;
 
-    err = RFLiPickupCharInfo(&info, source, db, index);
-    if (err == RFLErrcode_Success) {
+    err = Mii_PickupCharInfo(&info, source, db, index);
+    if (err == MiiErrcode_Success) {
         copyChar2Additional_(addi, &info);
     }
 
     return err;
 }
 
-static BOOL RFLiCheckBirthday(u8 month, u8 day) {
+static BOOL Mii_CheckBirthday(u8 month, u8 day) {
     // (One-indexed)
     static const u8 scDayMax[12 + 1] = {0,  31, 29, 31, 30, 31, 30,
                                         31, 31, 30, 31, 30, 31};

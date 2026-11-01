@@ -7,9 +7,9 @@ extern "C" {
 #endif
 
 // Starts the library, ready when it returns (RFL_System.c).
-RFLErrcode RFLInitRes(void* resBuffer, u32 resSize, BOOL deluxeTex);
-void RFLExit(void);
-BOOL RFLAvailable(void);
+MiiErrcode MiiInitRes(void* resBuffer, u32 resSize, BOOL deluxeTex);
+void MiiExit(void);
+BOOL MiiAvailable(void);
 
 #ifdef __cplusplus
 }

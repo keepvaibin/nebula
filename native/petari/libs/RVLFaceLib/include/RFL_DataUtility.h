@@ -9,12 +9,12 @@ extern "C" {
 #endif
 
 // Forward declarations
-typedef struct RFLMiddleDB;
+typedef struct MiiMiddleDB;
 
-typedef struct RFLAdditionalInfo {
-    wchar_t name[RFL_NAME_LEN + 1];       // at 0x0
-    wchar_t creator[RFL_CREATOR_LEN + 1]; // at 0x16
-    RFLCreateID createID;                 // at 0x2C
+typedef struct MiiAdditionalInfo {
+    wchar_t name[MII_NAME_LEN + 1];       // at 0x0
+    wchar_t creator[MII_CREATOR_LEN + 1]; // at 0x16
+    MiiCreateID createID;                 // at 0x2C
 
     // at 0x34
     u32 sex : 1;
@@ -27,10 +27,10 @@ typedef struct RFLAdditionalInfo {
     u32 reserved : 3;
 
     GXColor skinColor; // at 0x38
-} RFLAdditionalInfo;
+} MiiAdditionalInfo;
 
-RFLErrcode RFLGetAdditionalInfo(RFLAdditionalInfo* info, RFLDataSource source,
-                                struct RFLMiddleDB* db, u16 index);
+MiiErrcode MiiGetAdditionalInfo(MiiAdditionalInfo* info, MiiDataSource source,
+                                struct MiiMiddleDB* db, u16 index);
 
 #ifdef __cplusplus
 }

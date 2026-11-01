@@ -9,7 +9,7 @@ const NebulaHostServices* nebula_host(void);
 // Changes each time the host's database changes (MiiSelect reads its icons again).
 u32 __NebulaMiiGeneration = 0;
 
-static void infoFromMii_(const NebulaMii* m, RFLiCharInfo* info) {
+static void infoFromMii_(const NebulaMii* m, Mii_CharInfo* info) {
     u32 i;
 
     memset(info, 0, sizeof(*info));
@@ -63,10 +63,10 @@ static void infoFromMii_(const NebulaMii* m, RFLiCharInfo* info) {
     info->body.height = m->height;
     info->body.build = m->build;
 
-    for (i = 0; i < RFL_NAME_LEN; i++) {
+    for (i = 0; i < MII_NAME_LEN; i++) {
         info->personal.name[i] = (wchar_t)m->name[i];
     }
-    for (i = 0; i < RFL_CREATOR_LEN; i++) {
+    for (i = 0; i < MII_CREATOR_LEN; i++) {
         info->personal.creator[i] = (wchar_t)m->creator[i];
     }
     info->personal.sex = m->sex;
@@ -76,40 +76,40 @@ static void infoFromMii_(const NebulaMii* m, RFLiCharInfo* info) {
     info->personal.favorite = m->favorite;
     info->personal.localOnly = m->local_only;
 
-    memcpy(&info->createID, m->create_id, sizeof(RFLCreateID));
+    memcpy(&info->createID, m->create_id, sizeof(MiiCreateID));
 }
 
 static BOOL officialMii_(u16 index, NebulaMii* m) {
     const NebulaHostServices* host = nebula_host();
-    return index < RFL_DB_CHAR_MAX && host->mii_record(host->user, index, m) != 0;
+    return index < MII_DB_CHAR_MAX && host->mii_record(host->user, index, m) != 0;
 }
 
-RFLErrcode RFLiGetCharInfo(RFLiCharInfo* out, u16 index) {
+MiiErrcode Mii_GetCharInfo(Mii_CharInfo* out, u16 index) {
     NebulaMii m;
 
-    if (out == NULL || index >= RFL_DB_CHAR_MAX) {
-        return RFLErrcode_WrongParam;
+    if (out == NULL || index >= MII_DB_CHAR_MAX) {
+        return MiiErrcode_WrongParam;
     }
     if (!officialMii_(index, &m)) {
-        return RFLErrcode_NotAvailable;
+        return MiiErrcode_NotAvailable;
     }
     infoFromMii_(&m, out);
-    return RFLiCheckValidInfo(out) ? RFLErrcode_Success : RFLErrcode_Broken;
+    return Mii_CheckValidInfo(out) ? MiiErrcode_Success : MiiErrcode_Broken;
 }
 
-BOOL RFLIsAvailableOfficialData(u16 index) {
+BOOL MiiIsAvailableOfficialData(u16 index) {
     return officialMii_(index, NULL);
 }
 
-BOOL RFLSearchOfficialData(const RFLCreateID* id, u16* index) {
+BOOL MiiSearchOfficialData(const MiiCreateID* id, u16* index) {
     NebulaMii m;
     u16 i;
 
-    if (id == NULL || !RFLAvailable()) {
+    if (id == NULL || !MiiAvailable()) {
         return FALSE;
     }
-    for (i = 0; i < RFL_DB_CHAR_MAX; i++) {
-        if (officialMii_(i, &m) && RFLiIsSameID((const RFLCreateID*)m.create_id, id)) {
+    for (i = 0; i < MII_DB_CHAR_MAX; i++) {
+        if (officialMii_(i, &m) && Mii_IsSameID((const MiiCreateID*)m.create_id, id)) {
             if (index != NULL) {
                 *index = i;
             }
@@ -124,7 +124,7 @@ BOOL RFLSearchOfficialData(const RFLCreateID* id, u16* index) {
 #define CREATE_ID_NOT_SPECIAL 0x80
 #define CREATE_ID_TEMPORARY 0x20
 
-BOOL RFLiIsValidID(const RFLCreateID* id) {
+BOOL Mii_IsValidID(const MiiCreateID* id) {
     u32 i;
 
     if (id == NULL) {
@@ -138,33 +138,33 @@ BOOL RFLiIsValidID(const RFLCreateID* id) {
     return FALSE;
 }
 
-BOOL RFLiIsTemporaryID(const RFLCreateID* id) {
-    return RFLiIsValidID(id) && (id->data[0] & CREATE_ID_TEMPORARY) != 0;
+BOOL Mii_IsTemporaryID(const MiiCreateID* id) {
+    return Mii_IsValidID(id) && (id->data[0] & CREATE_ID_TEMPORARY) != 0;
 }
 
-BOOL RFLiIsSpecialID(const RFLCreateID* id) {
-    return RFLiIsValidID(id) && !RFLiIsTemporaryID(id) && (id->data[0] & CREATE_ID_NOT_SPECIAL) == 0;
+BOOL Mii_IsSpecialID(const MiiCreateID* id) {
+    return Mii_IsValidID(id) && !Mii_IsTemporaryID(id) && (id->data[0] & CREATE_ID_NOT_SPECIAL) == 0;
 }
 
-BOOL RFLiIsSameID(const RFLCreateID* id1, const RFLCreateID* id2) {
-    if (!RFLiIsValidID(id1) || !RFLiIsValidID(id2) || RFLiIsTemporaryID(id1) || RFLiIsTemporaryID(id2)) {
+BOOL Mii_IsSameID(const MiiCreateID* id1, const MiiCreateID* id2) {
+    if (!Mii_IsValidID(id1) || !Mii_IsValidID(id2) || Mii_IsTemporaryID(id1) || Mii_IsTemporaryID(id2)) {
         return FALSE;
     }
     return memcmp(id1->data, id2->data, sizeof(id1->data)) == 0;
 }
 
-BOOL RFLiIsValidName2(const RFLiCharInfo* info) {
+BOOL Mii_IsValidName2(const Mii_CharInfo* info) {
     return info != NULL && info->personal.name[0] != L'\0';
 }
 
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii) {
-    RFLiCharInfo info;
+    Mii_CharInfo info;
 
     infoFromMii_(mii, &info);
-    if (!RFLiIsValidID(&info.createID) || RFLiIsTemporaryID(&info.createID)) {
+    if (!Mii_IsValidID(&info.createID) || Mii_IsTemporaryID(&info.createID)) {
         return 0;
     }
-    return RFLiCheckValidInfo(&info) && RFLiIsValidOnNAND(&info) ? 1 : 0;
+    return Mii_CheckValidInfo(&info) && Mii_IsValidOnNAND(&info) ? 1 : 0;
 }
 
 NEBULA_GAME_API void nebula_game_mii_changed(void) {

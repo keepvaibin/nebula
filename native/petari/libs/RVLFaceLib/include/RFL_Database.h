@@ -6,8 +6,8 @@
 extern "C" {
 #endif
 
-BOOL RFLIsAvailableOfficialData(u16 index);
-BOOL RFLSearchOfficialData(const RFLCreateID* id, u16* index);
+BOOL MiiIsAvailableOfficialData(u16 index);
+BOOL MiiSearchOfficialData(const MiiCreateID* id, u16* index);
 
 #ifdef __cplusplus
 }
