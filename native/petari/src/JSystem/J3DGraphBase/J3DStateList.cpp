@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
@@ -194,8 +195,8 @@ void J3DStateList::setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSr
     r.a[2] = ambSrc;
     r.a[3] = matSrc;
     r.a[4] = static_cast< u8 >(lightMask);
-    r.a[5] = diffFn;
-    r.a[6] = attnFn;
+    r.a[5] = J3DNativeChannel::diffuse(diffFn, attnFn);
+    r.a[6] = J3DNativeChannel::attenuation(attnFn);
 }
 
 void J3DStateList::setTevColorCalc(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c,

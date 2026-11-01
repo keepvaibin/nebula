@@ -101,9 +101,21 @@ def native_tex_gen(gx_type, gx_source):
     return kind | projective << 2 | form << 3 | light << 4, row | (emboss & 7) << 4
 
 
+def native_channel(diffuse, attenuation):
+    """GXDiffuseFn and GXAttnFn as the records' encoding (J3DNativeChannel.hpp): diffuse 0 none, 1 signed, 2 clamped
+    (none with specular attenuation); attenuation 0 none, 1 specular, 2 directional, 3 spot."""
+    return (0 if attenuation == 0 else diffuse & 3), (1 if attenuation == 0 else 3 if attenuation == 1 else 2)
+
+
 def to_native(rec):
-    """A dumped record's texgens in the renderer's encoding: those written before it (tex_gen reserved[0] 0)."""
+    """A dumped record in the renderer's encoding: texgens written before it (tex_gen reserved[0] 0) and, when
+    channel[0].reserved[0] is 0, all four channels' lighting."""
     rec = bytearray(rec)
+    if rec[656 + 6] == 0:
+        for c in range(4):
+            base = 656 + 8 * c
+            rec[base + 4], rec[base + 5] = native_channel(rec[base + 4], rec[base + 5])
+        rec[656 + 6] = 1
     for g in range(min(rec[1], 8)):
         base = 592 + 8 * g
         if rec[base + 5] == 0:
@@ -257,8 +269,8 @@ def emit_channels(p, out):
                 out.append(f"    {target}.{part} = {mat};")
                 continue
             amb = f"{vtx}.{part}" if amb_src else f"material.amb_color[{ch}].{part}"
-            xf_atten = {0: 1, 1: 3, 2: 2}[atten]
-            xf_diffuse = 0 if atten == 0 else diffuse
+            xf_atten = atten  # the records' encoding is the renderer's (to_native)
+            xf_diffuse = diffuse
             terms = " + ".join(f"j3d_light({n}u, {xf_atten}u, {xf_diffuse}u, v.eye, nrm).{part}"
                                for n in range(8) if (mask >> n) & 1) or "0.0"
             out.append(f"    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);")

@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
@@ -892,6 +893,8 @@ namespace J3DNativeMaterial {
             pOut->channel[i].diffuse = rChan.getDiffuseFn();
             pOut->channel[i].attenuation = rChan.getAttnFn();
         }
+        // The renderer's lighting encoding for all four (an absent block's zeros too: gen_j3d_materials.py does the same).
+        J3DNativeChannel::toNative(*pOut);
         for (u32 i = 0; i < 2; i++) {
             if (pColor->getMatColor(i) != NULL) {
                 copyColor(pVal->material_color[i], *pColor->getMatColor(i));
