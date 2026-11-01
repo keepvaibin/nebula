@@ -2312,8 +2312,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             end_side_layer();
         }
         apply_scene_ao();
-        // The camera (in rt_capture_picture with the lighting; else here) brings the RGBA8 EFB back.
-        renderer_.end_hdr_scene();
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
