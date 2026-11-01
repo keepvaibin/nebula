@@ -1,0 +1,53 @@
+// Mii faces as a native material (runtime/src/render/materials/mii_face.hlsl): RFL's part draws (RFL_Model.c) name
+// each part's form, colour, culling and texture; the lit chain after it is RFL's own light (RFLLoadDrawSetting) or the
+// stages the game adds for its Mii NPCs (Game/NPC/MiiFacePartsHolder.cpp). The blending and depth stay the drawing
+// state's (the callers set them).
+#include "Game/Util/NativeShader.hpp"
+#include "RFL_Native.h"
+
+namespace {
+    // The chain the next parts draw with (RFLiNativeChain).
+    u32 sChain = 0;
+    u32 sLightMask = 0;
+    u32 sDiffuse = 0;
+    u32 sAtten = 0;
+    u32 sAlphaTest = 0;
+    GXColor sAmbient = {0, 0, 0, 0};
+    GXColor sMaterial = {255, 255, 255, 255};
+}  // namespace
+
+extern "C" void RFLiNativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, GXColor ambient,
+                                GXColor material, u32 alphaTest) {
+    sChain = chain;
+    sLightMask = lightMask;
+    // The light function's forms as the material shaders take them (j3d_light: attenuation 1 specular, 2 none
+    // (directional), 3 spot; diffuse 0 under specular attenuation).
+    sAtten = atten == GX_AF_SPEC ? 1 : atten == GX_AF_SPOT ? 3 : 2;
+    sDiffuse = atten == GX_AF_SPEC ? 0 : static_cast< u32 >(diffuse);
+    sAmbient = ambient;
+    sMaterial = material;
+    sAlphaTest = alphaTest;
+}
+
+extern "C" void RFLiNativePart(u32 form, GXColor color, GXCullMode cull, const GXTexObj* pTexture) {
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_MII_FACE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                       cull == GX_CULL_FRONT  ? NEBULA_CULL_FRONT
+                       : cull == GX_CULL_BACK ? NEBULA_CULL_BACK
+                                              : NEBULA_CULL_NONE);
+    material.blend_op = NEBULA_NATIVE_KEPT;
+    material.depth_test = NEBULA_NATIVE_KEPT;
+    NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
+    material.constants[4] = static_cast< f32 >(form);
+    material.constants[5] = static_cast< f32 >(sChain);
+    material.constants[6] = static_cast< f32 >(sAlphaTest);
+    NativeShader::setColor(material, 8, sMaterial.r, sMaterial.g, sMaterial.b, sMaterial.a);
+    NativeShader::setColor(material, 12, sAmbient.r, sAmbient.g, sAmbient.b, sAmbient.a);
+    material.constants[16] = static_cast< f32 >(sLightMask);
+    material.constants[17] = static_cast< f32 >(sDiffuse);
+    material.constants[18] = static_cast< f32 >(sAtten);
+    if (pTexture != NULL) {
+        NativeShader::setTexObj(material, 0, pTexture);
+    }
+    NativeShader::send(material);
+}
