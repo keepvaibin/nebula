@@ -74,6 +74,10 @@ namespace {
         CURRENT_SITE,
     };
     CurrentKind sCurrentKind = CURRENT_NONE;
+    // A site's material whose constants begin with the register file (constants_only bit 1): its copy, resent with
+    // the register file's values when the game changes one.
+    NebulaNativeMaterial sSiteRegisters;
+    bool sSiteFollows = false;
     NebulaNativeMaterial sCurrent;
     const NebulaMaterialProgram* sCurrentProgram = NULL;
     const NebulaMaterialValues* sCurrentValues = NULL;
@@ -280,6 +284,10 @@ namespace {
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
                                                                                 : CURRENT_SITE;
+        sSiteFollows = sCurrentKind == CURRENT_SITE && (pNative->constants_only & 2) != 0;
+        if (sSiteFollows) {
+            sSiteRegisters = *pNative;
+        }
         sSinceCount = 0;
         sSinceLost = false;
     }
@@ -870,6 +878,12 @@ namespace J3DNativeMaterial {
         }
         // A value the current J3D material takes: the material again with its constants (its state, textures and
         // lights as set since).
+        if (changed && sCurrentKind == CURRENT_SITE && sSiteFollows) {
+            memcpy(sSiteRegisters.constants, sRegisters, sizeof(sRegisters));
+            sSiteRegisters.constants_only = 3;
+            const NebulaHostServices* pHost = nebula_host();
+            pHost->native_material(pHost->user, &sSiteRegisters);
+        }
         if (changed && sCurrentKind == CURRENT_J3D) {
             memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
             sCurrent.constants_only = 1;

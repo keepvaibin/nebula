@@ -223,15 +223,18 @@ void JPACalcColorCopy(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 }
 
 void JPAGenTexCrdMtxIdt(JPAEmitterWorkData* param_0) {
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 }
 
 void JPAGenTexCrdMtxAnm(JPAEmitterWorkData* param_0) {
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
+    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 }
 
 void JPAGenTexCrdMtxPrj(JPAEmitterWorkData* param_0) {
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_POS, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
+    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 }
 
 #pragma push
@@ -262,7 +265,8 @@ void JPAGenCalcTexCrdMtxAnm(JPAEmitterWorkData* work) {
     local_108[2][2] = 1.0f;
     local_108[2][3] = 0.0f;
     J3DNativeShape::setTexture(0, local_108, 2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 0x1e, false, 0x7d);
+    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
 }
 #pragma pop
 
@@ -1110,15 +1114,11 @@ GXTevAlphaArg JPABaseShape::st_aa[2][4] = {
     },
 };
 
+// The shape's blending and depth (the particle material keeps them) and its alpha test's references (the register
+// file the particle material reads); its colour and alpha modes and compares go into the particle material
+// (JPAResource::sendMaterial).
 void JPABaseShape::setGX(JPAEmitterWorkData* work) const {
-    const GXTevColorArg* const colorArg = getTevColorArg();
-    const GXTevAlphaArg* alphaArg = getTevAlphaArg();
     J3DNativeState::setBlendMode(getBlendMode(), getBlendSrc(), getBlendDst(), getLogicOp());
     J3DNativeState::setZMode(getZEnable(), getZCmp(), getZUpd());
     J3DNativeState::setAlphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, colorArg[0], colorArg[1], colorArg[2], colorArg[3]);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, alphaArg[0], alphaArg[1], alphaArg[2], alphaArg[3]);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setZCompLoc(getZCompLoc());
 }

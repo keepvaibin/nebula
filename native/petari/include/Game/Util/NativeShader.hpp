@@ -112,6 +112,18 @@ namespace NativeShader {
         rMaterial.blend_dst = dst;
     }
 
+    // A material whose shader reads the register file (j3d_material.hlsli's first 84 floats: colour and constant
+    // registers, channel colours, indirect matrices, fog, alpha references) in its first constants: they start as the
+    // game's register file and follow its changes (the game's state changes of those values resend them).
+    inline void sendWithRegisters(NebulaNativeMaterial& rMaterial) {
+        memcpy(rMaterial.constants, J3DNativeMaterial::registers(), 84 * sizeof(f32));
+        rMaterial.constants_only |= 2;
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::watch(&rMaterial);
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, &rMaterial);
+    }
+
     inline void send(const NebulaNativeMaterial& rMaterial) {
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
