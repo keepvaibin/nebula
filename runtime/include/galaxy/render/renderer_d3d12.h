@@ -33,7 +33,7 @@
 #include "galaxy/render/ambient_occlusion.h"
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/interp_types.h"
-#include "galaxy/render/ray_tracing.h"
+#include "galaxy/render/rt_types.h"
 #include "galaxy/render/placed_texture_allocator.h"
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/gpu_types.h"

@@ -1275,12 +1275,6 @@ void apply_native_settings_draft() {
     const bool display_changed = display_settings_differ(live, applied);
     const unsigned changes = pending_settings_changes();
     commit_mods_draft();
-    // RAY TRACING turned on before its shaders are prepared starts at the next start, which prepares them first.
-    if (applied.ray_tracing_enabled && !live.ray_tracing_enabled &&
-        host_window::ray_tracing_offered.load(std::memory_order_relaxed) &&
-        !host_window::ray_tracing_prepared.load(std::memory_order_relaxed)) {
-        s_rt_restart_ask.store(true, std::memory_order_release);
-    }
     // The game's settings the menu changed, over the live ones (the controls applied the input mode).
     RuntimeSettings runtime = get_runtime_settings();
     if (runtime_draft_changes(&runtime) != 0u) {
@@ -2657,8 +2651,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
 
     if (rt_offered) {
         rows.push_back({"RAY TRACING", {}, nullptr, {}, true});
-        const bool prepared = host_window::ray_tracing_prepared.load(std::memory_order_relaxed);
-        rows.push_back({"RAY TRACING", !render.ray_tracing_enabled ? "OFF" : prepared ? "ON" : "ON (AFTER RESTART)",
+        rows.push_back({"RAY TRACING", render.ray_tracing_enabled ? "ON" : "OFF",
                         [](RenderConfig& draft, int) { draft.ray_tracing_enabled = !draft.ray_tracing_enabled; },
                         "TRACED SHADOWS, SKY AND BOUNCE LIGHT, GLOWS THAT LIGHT THE WORLD"});
     }
@@ -4187,7 +4180,6 @@ unsigned display_efb_scale_cap() {
 
 // DXR 1.1 with shader model 6.6 and resource binding tier 3 on an adapter with dedicated memory (the RAY TRACING row).
 std::atomic<bool> ray_tracing_offered{false};
-std::atomic<bool> ray_tracing_prepared{false};
 // Queues a save of the settings files when something changed; never waits on the disk.
 bool flush_native_settings_if_dirty() {
     if (!s_native_settings_dirty.load(std::memory_order_acquire)) {

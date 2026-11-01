@@ -13,7 +13,6 @@
 #include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/galaxy_select.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/rt_prepare.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/texture_cache.h"
@@ -561,23 +560,6 @@ bool g_selected_adapter_valid = false;
         shared >= dedicated * 8ull;
 }
 
-// The adapter and its user-mode driver's version, as the ray tracing pipeline library records them (rt_prepare.h).
-rt_prepare::Identity rt_identity(IDXGIAdapter1* adapter, const DXGI_ADAPTER_DESC1& desc) {
-    char text[48]{};
-    std::snprintf(text, sizeof(text), "%04x:%04x:%08x:%02x", static_cast<unsigned>(desc.VendorId & 0xFFFFu),
-                  static_cast<unsigned>(desc.DeviceId & 0xFFFFu), static_cast<unsigned>(desc.SubSysId),
-                  static_cast<unsigned>(desc.Revision & 0xFFu));
-    rt_prepare::Identity identity{text, {}};
-    LARGE_INTEGER umd{};
-    if (adapter != nullptr && SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &umd))) {
-        std::snprintf(text, sizeof(text), "%u.%u.%u.%u", static_cast<unsigned>(HIWORD(umd.HighPart)),
-                      static_cast<unsigned>(LOWORD(umd.HighPart)), static_cast<unsigned>(HIWORD(umd.LowPart)),
-                      static_cast<unsigned>(LOWORD(umd.LowPart)));
-        identity.driver = text;
-    }
-    return identity;
-}
-
 }  // namespace
 
 std::uint64_t RendererD3D12::efb_copy_dest_budget_bytes() {
@@ -596,10 +578,8 @@ static constexpr std::size_t kMatrixRingBytes = 128u * 1024u * 1024u;
 static constexpr unsigned    kSrvPerFrame = 32768u;
 // The descriptor ring's persistent prefix, outside the rewound frame segments: the EFB
 // conversion sources (the EFB's views, the output EFB's, the MSAA depth's, then the HDR scene
-// EFBs', live and sub-frame: 10), the ray-traced scenes' texture views and the de-light views.
-// TextureCache's own SRV indices are independent of this prefix.
-static constexpr unsigned    kRtTextureViews = SceneRayTracer::kTextureViewScenes * SceneRayTracer::kTextureViewsPerScene;
-static constexpr unsigned    kPersistentSrvDescriptors = 10u + kRtTextureViews + SceneRayTracer::kDelightViews;
+// EFBs', live and sub-frame: 10). TextureCache's own SRV indices are independent of this prefix.
+static constexpr unsigned    kPersistentSrvDescriptors = 10u;
 
 void RendererD3D12::wait_for_gpu() {
     const std::uint64_t val = ++next_fence_value_;
@@ -2180,10 +2160,6 @@ bool RendererD3D12::initialize(int window_width, int window_height, unsigned efb
             record_render_adapter(adapter_desc.Description, adapter_desc.VendorId, adapter_desc.DeviceId,
                                   adapter_desc.SubSysId, adapter_preference() == DXGI_GPU_PREFERENCE_MINIMUM_POWER,
                                   offered);
-            if (offered) {
-                rt_prepare::identify(rt_identity(adapter.Get(), adapter_desc));
-                host_window::ray_tracing_prepared.store(rt_prepare::prepared(), std::memory_order_relaxed);
-            }
         }
         RenderFeatureCaps caps{};
         caps.d3d12_device_created = true;

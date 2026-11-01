@@ -8,7 +8,6 @@
 #include <d3d12.h>
 #include <wrl/client.h>
 
-#include "galaxy/render/rt_prepare.h"
 
 #include <cstdint>
 #include <future>
@@ -23,8 +22,7 @@ public:
     PsoJobs& operator=(const PsoJobs&) = delete;
     ~PsoJobs() { wait(); }
 
-    // Starts `out`'s compile (`root` and `code` must outlive wait()); `group` (0-63) names it in wait()'s result. It
-    // loads from the ray tracing pipeline library when the library has it (rt_prepare.h).
+    // Starts `out`'s compile (`root` and `code` must outlive wait()); `group` (0-63) names it in wait()'s result.
     void compute(ID3D12Device* device, ID3D12RootSignature* root, const void* code, std::size_t bytes,
                  Microsoft::WRL::ComPtr<ID3D12PipelineState>& out, unsigned group = 0u) {
         jobs_.push_back({std::async(std::launch::async,
@@ -32,7 +30,7 @@ public:
                                         D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
                                         desc.pRootSignature = root;
                                         desc.CS = {code, bytes};
-                                        return rt_prepare::compute(device, desc, out);
+                                        return SUCCEEDED(device->CreateComputePipelineState(&desc, IID_PPV_ARGS(&out)));
                                     }),
                          group});
     }
