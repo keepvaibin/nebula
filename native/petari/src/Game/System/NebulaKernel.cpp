@@ -7,6 +7,8 @@
 
 #include <stdio.h>
 
+#include <nebula_game_api.h>
+
 #include "nebula_kernel.h"
 #include "nebula_sdk.h"
 
@@ -228,6 +230,35 @@ namespace {
 
     void deliver();
 
+    // Deterministic test mode (the host's test_frame_step): with no thread able to run, the clock moves on by itself,
+    // to the first alarm when it falls before the next frame, else to the next frame (which the host delivers, with
+    // that frame's sound). Two runs of a build then take the same steps. False outside the mode.
+    int64_t sSteppedFrames;
+    bool stepClock() {
+        const NebulaHostServices* host = nebula_host();
+        if (host == nullptr || host->test_frame_step == nullptr) {
+            return false;
+        }
+        const int64_t next = (sSteppedFrames + 1) * NebulaKernel::cTicksPerSecond / 60;
+        if (sAlarmHead != nullptr && sAlarmHead->fire <= next) {
+            if (sAlarmHead->fire > nebula_time()) {
+                nebula_time_set(sAlarmHead->fire);
+            }
+            nebula_note_event(NEBULA_EVENT_TIMER);
+            return true;
+        }
+        sSteppedFrames++;
+        nebula_time_set(next);
+        host->test_frame_step(host->user);
+        return true;
+    }
+
+    void sleepForWork() {
+        if (!stepClock()) {
+            nebula_sleep_for_work();
+        }
+    }
+
     // No thread can run: deliver host events, sleeping until one arrives, until a thread is ready.
     void idle() {
         while (sRunQueueBits == 0) {
@@ -239,7 +270,7 @@ namespace {
             }
             __atomic_store_n(&sSleeping, 1, __ATOMIC_SEQ_CST);
             if ((__atomic_load_n(&sPending, __ATOMIC_SEQ_CST) & sEnabledEvents) == 0) {
-                nebula_sleep_for_work();
+                sleepForWork();
             }
             __atomic_store_n(&sSleeping, 0, __ATOMIC_SEQ_CST);
         }
@@ -882,7 +913,7 @@ namespace NebulaKernel {
         if (!workPending()) {
             __atomic_store_n(&sSleeping, 1, __ATOMIC_SEQ_CST);
             if ((__atomic_load_n(&sPending, __ATOMIC_SEQ_CST) & sEnabledEvents) == 0) {
-                nebula_sleep_for_work();
+                sleepForWork();
             }
             __atomic_store_n(&sSleeping, 0, __ATOMIC_SEQ_CST);
         }

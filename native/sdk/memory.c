@@ -117,11 +117,3 @@ void nebula_memory_guard(void* p, size_t size) {
 #endif
 }
 
-/* The game rewrote memory an image may have been handed over from (NebulaRender::memoryRewritten, DMA copies). */
-void nebula_gpu_coherent(const void* addr, uint32_t nBytes) {
-    const NebulaHostServices* host = nebula_host();
-    if (nBytes == 0 || host == NULL || host->gpu_coherent == NULL) {
-        return;
-    }
-    host->gpu_coherent(host->user, addr, nBytes);
-}
