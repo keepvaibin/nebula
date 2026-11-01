@@ -92,9 +92,9 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     if (native) {
         write_words(f, "material", native_material_->constants, sizeof(native_material_->constants));
     }
-    std::fprintf(f, "position_matrix %u texture_matrix", static_cast<unsigned>(draw_state_.position_matrix));
+    std::fprintf(f, "position_matrix %u texture_matrix", 3u * draw_state_.position_matrix);  // rows
     for (unsigned i = 0; i < 8u; ++i) {
-        std::fprintf(f, " %u", static_cast<unsigned>(draw_state_.texture_matrix[i]));
+        std::fprintf(f, " %u", 3u * draw_state_.texture_matrix[i]);
     }
     std::fprintf(f, "\npost_texgen");
     for (unsigned i = 0; i < 8u; ++i) {

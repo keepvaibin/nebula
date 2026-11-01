@@ -74,7 +74,7 @@ int main() {
     // Without per-corner position matrices, the draw's.
     Geometry plain = g;
     plain.attributes &= ~kPositionMatrix;
-    passed &= expect(expand(plain, arrays, 9u, nullptr, out) && (out[0].mtx_indices[0] & 0xFFu) == 9u,
+    passed &= expect(expand(plain, arrays, 3u, nullptr, out) && (out[0].mtx_indices[0] & 0xFFu) == 9u,
                      "corners without a position matrix take the draw's");
 
     // NBT: normal, tangent and binormal from three entries.

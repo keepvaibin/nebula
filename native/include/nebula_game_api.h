@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 83u
+#define NEBULA_GAME_API_VERSION 84u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -170,7 +170,8 @@ enum {
     NEBULA_STATE_MATERIAL_COLOR,    /* channel (0, 1), r, g, b, a */
     NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
     NEBULA_STATE_TEX_COORD_GEN,     /* coordinate, type and source (NebulaMaterialProgram::tex_gen's encoding), normalize,
-                                       post row; a[5] 1: also the coordinate's matrix row a[6] */
+                                       post row; a[5] 1: also the coordinate's matrix a[6] (a slot: 0-9 position
+                                       matrices, 10-19 texture matrices, 20 identity) */
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t (0 clamp, 1 repeat, 2 mirror), minified linear, magnified
                                        linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
                                        anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
@@ -202,7 +203,7 @@ enum {
     NEBULA_STATE_NUM_TEV_STAGES,    /* count */
     NEBULA_STATE_NUM_IND_STAGES,    /* count */
     NEBULA_STATE_CO_PLANAR,         /* enable */
-    NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix id (GXSetCurrentMtx) */
+    NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix (0-9) */
     NEBULA_STATE_TEV_INDIRECT,      /* TEV stage, indirect stage, format, bias, matrix, wrap s, wrap t, add previous,
                                        unmodified LOD, alpha (GXSetTevIndirect's arguments) */
     NEBULA_STATE_IND_TEX_SCALE,     /* indirect stage, scale s, scale t */

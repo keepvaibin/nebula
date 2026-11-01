@@ -431,7 +431,7 @@ namespace {
             rP.tex_gen[a[0]].post_matrix = a[4];
             rP.tex_gen[a[0]].reserved[0] = 1;
             if (a[5] != 0) {
-                rP.tex_gen[a[0]].matrix = a[6];
+                rP.tex_gen[a[0]].matrix = static_cast< u8 >(3 * a[6]);  // the op's slot as the record's row
             }
             return true;
         case NEBULA_STATE_IND_TEX_SCALE:

@@ -51,7 +51,8 @@ struct NativeDrawState {
     float projection[6]{};
     std::uint8_t projection_type = 0u;
     float viewport[6]{};
-    // The current matrices: the position/normal matrix row and each texture coordinate's.
+    // The current matrices as slots of the matrix arena (0-9 position, 10-19 texture, 20 identity): the position/normal
+    // matrix and each texture coordinate's.
     std::uint8_t position_matrix = 0u;
     std::uint8_t texture_matrix[8]{};
     // Lines and points: width and size (pixels), their texture coordinate offsets (1/n texel; 0 none).
