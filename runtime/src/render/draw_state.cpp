@@ -250,7 +250,7 @@ void NativeDrawState::set_op(const state::Op& op) {
         texgen[a[0] & 7u] = made;
         post_texgen[a[0] & 7u] = material::post_tex_gen(a[4], a[3]);
         if (a[5] != 0u) {
-            texture_matrix[a[0] & 7u] = static_cast<std::uint8_t>(a[6] & 63u);
+            texture_matrix[a[0] & 7u] = static_cast<std::uint8_t>(a[6] <= 20u ? a[6] : 20u);
         }
         break;
     }
@@ -266,7 +266,7 @@ void NativeDrawState::set_op(const state::Op& op) {
         }
         break;
     case state::kCurrentMatrix:
-        position_matrix = static_cast<std::uint8_t>(a[0] & 63u);
+        position_matrix = static_cast<std::uint8_t>(a[0] % 10u);
         break;
     case state::kLineWidth:
         line_point.line_width = op.f[0];

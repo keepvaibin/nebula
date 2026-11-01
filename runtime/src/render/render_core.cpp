@@ -5963,9 +5963,9 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
         const std::uint8_t before_position = draw_state_.position_matrix;
         std::uint8_t before_texture[8];
         std::memcpy(before_texture, draw_state_.texture_matrix, sizeof(before_texture));
-        draw_state_.position_matrix = static_cast<std::uint8_t>(3u * (c[0] % 10u));
+        draw_state_.position_matrix = static_cast<std::uint8_t>(c[0] % 10u);
         for (unsigned i = 0; i < 8u; ++i) {
-            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(30u + 3u * std::min<unsigned>(c[1u + i], 10u));
+            draw_state_.texture_matrix[i] = static_cast<std::uint8_t>(10u + std::min<unsigned>(c[1u + i], 10u));
         }
         if (draw_state_.position_matrix != before_position ||
             std::memcmp(before_texture, draw_state_.texture_matrix, sizeof(before_texture)) != 0) {

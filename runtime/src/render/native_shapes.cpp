@@ -70,7 +70,7 @@ bool expand(const Geometry& geometry, const DrawArrays& arrays, std::uint8_t pos
         std::memset(&v, 0, sizeof(v));
         // Places as matrix rows (three a matrix, texture matrices from row 30).
         const std::uint8_t pn =
-            (a & kPositionMatrix) != 0u ? static_cast<std::uint8_t>(3u * c.position_matrix) : position_matrix;
+            static_cast<std::uint8_t>(3u * ((a & kPositionMatrix) != 0u ? c.position_matrix : position_matrix));
         std::uint8_t tex[8]{};
         for (unsigned t = 0; t < 8u; ++t) {
             if ((a & (kTextureMatrix0 << t)) != 0u) tex[t] = static_cast<std::uint8_t>(30u + 3u * c.texture_matrix[t]);

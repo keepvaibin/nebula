@@ -445,7 +445,8 @@ void J3DStateList::setTexCoordGen2(GXTexCoordID coord, GXTexGenType type, GXTexG
     setTexCoordGen(coord, type, src, normalize, postMtx);
     NebulaStateOp& r = mOps[mCount - 1];
     r.a[5] = 1;
-    r.a[6] = static_cast< u8 >(mtx);
+    // GX's matrix id (three rows a matrix: GX_PNMTX0-9 0-27, GX_TEXMTX0-9 30-57, GX_IDENTITY 60) as its slot.
+    r.a[6] = static_cast< u8 >(mtx / 3);
 }
 
 void J3DStateList::setNumTexGens(u8 count) {
@@ -469,7 +470,7 @@ void J3DStateList::setCoPlanar(GXBool enable) {
 }
 
 void J3DStateList::setCurrentMtx(u32 id) {
-    add(NEBULA_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id);
+    add(NEBULA_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id / 3);  // GX_PNMTXn is 3n
 }
 
 void J3DStateList::setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format,

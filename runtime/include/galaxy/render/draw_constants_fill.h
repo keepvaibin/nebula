@@ -113,9 +113,9 @@ inline void fill_vs_constants(
     out.motion_ctrl[1] = kMotionOwnRows;
 
     // The draw's matrix rows (draw_rows: position, then each texture coordinate's), for vertices without their own.
-    out.draw_rows[0][0] = draw.position_matrix & 0x3Fu;
+    out.draw_rows[0][0] = 3u * draw.position_matrix;  // a slot's first row: three rows a matrix
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
-        out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u] = draw.texture_matrix[i] & 0x3Fu;
+        out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u] = 3u * draw.texture_matrix[i];
     }
 
     refresh_vs_inline_matrices(state, draw, out);
