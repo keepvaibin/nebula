@@ -36,10 +36,12 @@ typedef struct RFLiCharModelRes {
     u8 maskDl[0x380];    // at 0xAC0
     u8 glassesDl[0x40];  // at 0xE40
 
-    u8 faceTex[0x4000];    // at 0xE80
-    u8 capTex[0x400];      // at 0x4E80
-    u8 noseTex[0x400];     // at 0x5280
-    u8 glassesTex[0x1000]; // at 0x5680
+    // The parts' textures as records (nebula_cooked_texture.h): their texels in a native layout (at most four bytes
+    // each: twice the console's 16-bit and four times its 8-bit sizes) after a 64-byte header.
+    u8 faceTex[0x8000 + 0x40];
+    u8 capTex[0x2000 + 0x40];
+    u8 noseTex[0x2000 + 0x40];
+    u8 glassesTex[0x4000 + 0x40];
 
     s16 noseVtxPos[23 * VTX_COORDS_IN_POS]; // at 0x6680
     s16 noseVtxNrm[23 * VTX_COORDS_IN_NRM]; // at 0x670A
