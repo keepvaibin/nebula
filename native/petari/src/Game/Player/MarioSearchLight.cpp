@@ -283,14 +283,8 @@ void MarioActor::drawSearchLight() const {
 
         // The channel colour at alpha A0 (GX: stage 0 passing the colour, alpha register 0).
         const u8 volumeAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightColor[3]));
-        if (!J3DNativeMaterial::override(2, volumeAlpha / 255.0f, 0.0f, -1.0f)) {
-            J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-            GXColorS10 color = {255, 255, 255, volumeAlpha};
-            J3DNativeState::setTevColorS10(GX_TEVREG0, color);
-        }
+        // (The light's model is a native J3D material: J3DNativeMaterial::override draws the pass over it.)
+        J3DNativeMaterial::override(2, volumeAlpha / 255.0f, 0.0f, -1.0f);
 
         // Render intersection of light cone with the scene by subtracting
         // visible back faces from front faces.
@@ -325,15 +319,7 @@ void MarioActor::drawSearchLight() const {
 
         // Colour of the light cone: the channel colour at alpha RASA - K(1 - A0), drawn above 4.
         const u8 coneAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightAlphaLevel));
-        const bool nativeCone = J3DNativeMaterial::override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
-        if (!nativeCone) {
-            J3DNativeState::setAlphaCompare(GX_GREATER, 4, GX_AOP_AND, GX_ALWAYS, 0);
-            J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-            GXColorS10 searchLightCol = {255, 255, 255, coneAlpha};
-            J3DNativeState::setTevColorS10(GX_TEVREG0, searchLightCol);
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_KONST, GX_CA_ZERO, GX_CA_A0, GX_CA_RASA);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_SUB, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        }
+        J3DNativeMaterial::override(3, coneAlpha / 255.0f, 0.0f, 4.0f);
 
         if (res) {
             // Draw central light cone.
@@ -342,23 +328,13 @@ void MarioActor::drawSearchLight() const {
             return;
         }
 
-        if (!nativeCone) {
-            J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_A1, GX_CA_A0, GX_CA_RASA, GX_CA_ZERO);
-            J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, GX_TRUE, GX_TEVPREV);
-        }
-
         // Draw soft falloff outside light cone.
         for (u32 i = 0; i < ARRAY_SIZE(mConst->getTable()->mSearchLightBlurAlpha); i++) {
             model->setDrawView(i + 1);
 
             // Cone falloff colour (A0) and end cap falloff colour (A1): the channel colour at (A1 + (A0 - A1) RASA) / 2.
             const u8 blurAlpha = (u8)(s32)((lightBrightness * mConst->getTable()->mSearchLightBlurAlpha[i]));
-            if (!nativeCone || !J3DNativeMaterial::override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f)) {
-                GXColorS10 color3 = {255, 255, 255, blurAlpha};
-                J3DNativeState::setTevColorS10(GX_TEVREG0, color3);
-                GXColorS10 endCapCol = {255, 255, 255, 4};
-                J3DNativeState::setTevColorS10(GX_TEVREG1, endCapCol);
-            }
+            J3DNativeMaterial::override(4, blurAlpha / 255.0f, 4.0f / 255.0f, 4.0f);
 
             model->simpleDrawShape(material);
         }
