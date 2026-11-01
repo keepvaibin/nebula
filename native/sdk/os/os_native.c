@@ -144,7 +144,20 @@ static void time_init(void) {
 #endif
 }
 
+/* Deterministic test mode (NebulaHostServices::test_frame_step): the kernel's time is the retrace count, and the
+   idle wait takes the next retrace from the host instead of sleeping. */
+static int sDeterministic;
+static _Atomic int64_t sDeterministicTime;
+static int64_t sDeterministicFrames;
+
+static int64_t deterministic_frame_time(int64_t frames) {
+    return frames * (int64_t)OS_TIMER_CLOCK / 60;
+}
+
 int64_t nebula_time_base(void) {
+    if (sDeterministic) {
+        return atomic_load_explicit(&sDeterministicTime, memory_order_relaxed);
+    }
 #if defined(_WIN32)
     LARGE_INTEGER now;
     QueryPerformanceCounter(&now);
@@ -177,7 +190,12 @@ void nebula_wake_simulation(void) {
 #endif
 }
 
+static int deterministic_step(void);
+
 void nebula_sleep_for_work(void) {
+    if (sDeterministic && deterministic_step()) {
+        return;
+    }
 #if defined(_WIN32)
     WaitForSingleObject(sWake, INFINITE);
 #else
@@ -336,6 +354,30 @@ static void clock_rearm(void) {
 }
 #endif
 
+/* Deterministic mode's idle: an alarm due before the next retrace fires at its time, else the clock moves to the next
+   retrace and the host delivers it. False when the host has no step (the wait sleeps as usual). */
+static int deterministic_step(void) {
+    const NebulaHostServices* host = nebula_host();
+    if (host == NULL || host->test_frame_step == NULL) {
+        return 0;
+    }
+    const int64_t next = deterministic_frame_time(sDeterministicFrames + 1);
+    int64_t deadline = atomic_load(&sTimerDeadline);
+    if (deadline <= next) {
+        if (deadline > atomic_load(&sDeterministicTime)) {
+            atomic_store(&sDeterministicTime, deadline);
+        }
+        if (atomic_compare_exchange_strong(&sTimerDeadline, &deadline, INT64_MAX)) {
+            nebula_note_event(NEBULA_EVENT_TIMER);
+        }
+        return 1;
+    }
+    sDeterministicFrames++;
+    atomic_store(&sDeterministicTime, next);
+    host->test_frame_step(host->user);
+    return 1;
+}
+
 /* The kernel's time, ticks since boot (dates are the host's, NebulaCalendar): alarms are set in it. */
 int64_t nebula_time(void) {
     return game_time();
@@ -346,7 +388,7 @@ int64_t nebula_time(void) {
    kernel re-arms when it finds nothing due. */
 void nebula_timer_arm(int64_t deadline) {
     atomic_store(&sTimerDeadline, deadline);
-    if (deadline < atomic_load(&sClockArmed)) {
+    if (!sDeterministic && deadline < atomic_load(&sClockArmed)) {
         clock_rearm();
     }
 }
@@ -454,7 +496,13 @@ void nebula_os_boot(void (*gameMain)(void)) {
     sWake = CreateEventW(NULL, FALSE, FALSE, NULL);
 #endif
     time_init();
-    clock_start();
+    {
+        const NebulaHostServices* host = nebula_host();
+        sDeterministic = host != NULL && host->test_frame_step != NULL;
+    }
+    if (!sDeterministic) {
+        clock_start();
+    }
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
