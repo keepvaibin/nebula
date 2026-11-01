@@ -85,7 +85,6 @@ void J3DSys::drawInit() {
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
 
     reinitTexture();
 
@@ -186,5 +185,4 @@ void J3DSys::reinitPixelProc() {
     J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, ColorBlack);
     J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
 }

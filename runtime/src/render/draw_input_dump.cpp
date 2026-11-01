@@ -68,10 +68,10 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     // The render state the draw's pipeline is built for (blend words, depth, culling, topology) and the blend the
     // drawing state holds (GXSetBlendMode, GXSetDstAlpha).
     const BlendMode blend = draw_blend();
-    std::fprintf(f, "render_state blend %08x z %x cull %u topology %u efb_format %u\n", render_state_key_.blend_bits,
+    std::fprintf(f, "render_state blend %08x z %x cull %u topology %u frame_alpha %u\n", render_state_key_.blend_bits,
                  static_cast<unsigned>(render_state_key_.zmode_bits), static_cast<unsigned>(render_state_key_.cull),
                  static_cast<unsigned>(render_state_key_.primitive_topology),
-                 static_cast<unsigned>(draw_state_.pe.pixel_format));
+                 draw_state_.frame_alpha ? 1u : 0u);
     std::fprintf(f, "blend_mode enable %u subtract %u src %u dst %u color %u alpha %u const_alpha %u,%u\n",
                  blend.blend_enable ? 1u : 0u, blend.subtract ? 1u : 0u, static_cast<unsigned>(blend.src_factor),
                  static_cast<unsigned>(blend.dst_factor), blend.color_update ? 1u : 0u, blend.alpha_update ? 1u : 0u,

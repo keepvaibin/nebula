@@ -158,13 +158,11 @@ void MiiFacePartsHolder::drawExtra() const {
 
     MR::loadLight(1);
     setTevOpa();
-    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setAlphaCompare(GX_NEQUAL, 255, GX_AOP_AND, GX_ALWAYS, GX_LO_CLEAR);
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
     drawEachActor(&MiiFaceParts::drawOpa, &setting);
     setTevXlu();
     J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
-    J3DNativeState::setZCompLoc(GX_FALSE);
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }

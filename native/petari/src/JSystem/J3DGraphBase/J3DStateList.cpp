@@ -466,10 +466,6 @@ void J3DStateList::setCoPlanar(GXBool enable) {
     add(NEBULA_STATE_CO_PLANAR).a[0] = enable;
 }
 
-void J3DStateList::setZCompLoc(GXBool beforeTex) {
-    add(NEBULA_STATE_Z_COMP_LOC).a[0] = beforeTex;
-}
-
 void J3DStateList::setCurrentMtx(u32 id) {
     add(NEBULA_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id);
 }
@@ -543,16 +539,10 @@ void J3DStateList::setLight(GXLightID id, const J3DNativeLight& rLight) {
     }
 }
 
-void J3DStateList::setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed) {
-    // GXSetPixelFmt's table of the hardware's pixel types.
-    static const u8 sHardwareType[8] = {0, 1, 2, 3, 4, 4, 4, 5};
-    NebulaStateOp& r = add(NEBULA_STATE_PIXEL_FORMAT);
+void J3DStateList::setFrameAlpha(bool keepAlpha, bool changed) {
+    NebulaStateOp& r = add(NEBULA_STATE_FRAME_ALPHA);
     r.a[0] = changed;
-    r.a[1] = sHardwareType[format & 7];
-    r.a[2] = zFormat;
-    r.a[3] = format == GX_PF_RGB565_Z16;
-    r.a[4] = sHardwareType[format & 7] == 4;
-    r.a[5] = static_cast< u8 >((format - GX_PF_Y8) & 3);
+    r.a[1] = keepAlpha;
 }
 
 void J3DStateList::setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {

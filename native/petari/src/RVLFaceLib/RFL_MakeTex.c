@@ -460,7 +460,6 @@ void RFLiSetup2DCameraAndParam(void) {
     J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
     J3DNativeStateSetCullMode(GX_CULL_BACK);
     J3DNativeStateSetZMode(FALSE, GX_LEQUAL, FALSE);
-    J3DNativeStateSetZCompLoc(FALSE);
     J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDither(FALSE);

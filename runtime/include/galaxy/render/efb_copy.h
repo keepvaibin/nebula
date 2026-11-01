@@ -28,6 +28,28 @@
 
 namespace galaxy::render {
 
+// A capture of the frame (shapes::Record TargetCapture) or the frame shown (FrameShow), as the game asks for it: the
+// rectangle in logical pixels, the texture the capture becomes and the picture's channels (NebulaTargetChannels), and
+// NebulaCaptureFlags. Every sample stays inside the rectangle.
+struct CaptureRequest {
+    std::uint16_t src_x = 0, src_y = 0;
+    std::uint16_t src_width = 0, src_height = 0;
+    std::uint64_t key = 0;          // the texture (0: the frame shown)
+    std::uint8_t channels = 0;      // NebulaTargetChannels
+    bool display = false;           // the frame shown (frame_show), not a texture
+    bool clear = false;             // the rectangle cleared afterwards (colour and alpha 0, depth far)
+    bool half_scale = false;        // each texel averages 2x2 of the frame's
+    bool luma = false;              // the red channel holds the colour's luminance
+    bool depth = false;             // the red channel holds the depth's high byte
+    // Through the display's vertical filter (NEBULA_CAPTURE_FILTERED): each line half its own colour and half the
+    // line above's, as the game's television modes asked. Otherwise the line alone.
+    bool filtered = false;
+};
+// The filter's weights on the line above, the line and the line below, in 64ths.
+[[nodiscard]] constexpr std::uint32_t capture_filter_upper(const CaptureRequest& r) { return r.filtered ? 32u : 0u; }
+[[nodiscard]] constexpr std::uint32_t capture_filter_middle(const CaptureRequest& r) { return r.filtered ? 32u : 64u; }
+[[nodiscard]] constexpr std::uint32_t capture_filter_lower(const CaptureRequest&) { return 0u; }
+
 struct XfbTexture {
     gpu::TextureRef texture;  // RGBA8
     std::uint32_t slot = 0;  // place in the picture ring
@@ -93,7 +115,7 @@ struct EfbCopySamplingGeometry {
 };
 
 [[nodiscard]] EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
     unsigned efb_scale) noexcept;
@@ -101,7 +123,7 @@ struct EfbCopySamplingGeometry {
 // High-resolution display copies retain GX filter weights but sample adjacent
 // physical source rows. Texture/depth copies keep their logical-row footprint.
 [[nodiscard]] EfbCopySamplingGeometry compute_xfb_sampling_geometry(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
     unsigned efb_scale) noexcept;
@@ -129,7 +151,7 @@ inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
 }
 
 [[nodiscard]] std::optional<EfbCopyRect> efb_identity_copy_rect(
-    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept;
 
 struct ScaledEfbRect {
@@ -246,7 +268,7 @@ public:
     // The next picture of the ring, created or resized to match the copy's size. The caller
     // (renderer) then records the EFB -> picture blit into it, or hands it the EFB's target (adopt_picture).
     XfbTexture* acquire_xfb(
-        const EfbCopyParams& params,
+        const CaptureRequest& params,
         std::uint64_t frame_index);
     void mark_xfb_copied(XfbTexture& texture, std::uint64_t frame_index);
     // Native presentation: `texture` (a handed-over EFB colour target, its picture from the top left, taller than the

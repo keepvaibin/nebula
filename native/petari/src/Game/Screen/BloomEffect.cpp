@@ -249,7 +249,6 @@ void BloomEffect::initDraw() const {
     J3DNativeState::setColorUpdate(GX_TRUE);
     J3DNativeState::setAlphaUpdate(GX_FALSE);
     J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setDither(GX_FALSE);
     sBloomStage = BloomStage_Modulate;
 }

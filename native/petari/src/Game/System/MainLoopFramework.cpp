@@ -58,10 +58,10 @@ void MainLoopFramework::prepareCopyDisp() {
 
 void MainLoopFramework::preGX() {
     if (mUseAlpha) {
-        J3DNativeState::setPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
+        J3DNativeState::setFrameAlpha(true);
         J3DNativeState::setDither(GX_TRUE);
     } else {
-        J3DNativeState::setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+        J3DNativeState::setFrameAlpha(false);
         J3DNativeState::setDither(GX_FALSE);
     }
 }
@@ -129,7 +129,6 @@ void MainLoopFramework::clearEfb(GXColor color) {
     J3DNativeShape::setPosition(0, identity);
     J3DNativeState::setCurrentMtx(GX_PNMTX0);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
     if (mUseAlpha) {
         J3DNativeState::setAlphaUpdate(GX_TRUE);

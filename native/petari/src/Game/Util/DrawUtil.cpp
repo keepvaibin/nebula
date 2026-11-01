@@ -127,7 +127,6 @@ namespace MR {
         J3DNativeShape::setPosition(0, mtxImm);
         J3DNativeState::setCurrentMtx(GX_PNMTX0);
         J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-        J3DNativeState::setZCompLoc(GX_TRUE);
         J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
         J3DNativeState::setAlphaUpdate(GX_FALSE);
         J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
@@ -226,7 +225,6 @@ namespace MR {
 
     void setupShadowVolumeDraw() {
         // The volumes draw in a flat colour each sets (setShadowVolumeColor).
-        J3DNativeState::setZCompLoc(GX_FALSE);
         J3DNativeState::setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }

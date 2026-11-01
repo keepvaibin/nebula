@@ -183,7 +183,7 @@ create_efb_conversion_source_views(
 // Exact color/alpha identity only: rejects filtering, conversion, resampling
 // and any source rectangle that would require shader clamp behavior.
 [[nodiscard]] std::optional<D3D12_BOX> efb_identity_copy_box(
-    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept;
 // Source enters/leaves RENDER_TARGET; destination enters/leaves PSR. Neither
 // the copy nor its barriers changes any graphics binding on the command list.
@@ -259,7 +259,7 @@ public:
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the
     // scene with the 2D layer), which the console's single EFB still holds until something draws.
-    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
+    [[nodiscard]] bool copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures);
     // The scene's anti-aliasing (post_process.h) in the render EFB at the end of the 3D scene,
     // before the 2D layer and begin_output_efb. A temporal upscaler antialiases the scene itself.
     void record_scene_aa();
@@ -533,18 +533,18 @@ public:
     // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
     // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
-    void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
+    void copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest);
     // Native presentation: whether this display copy can take the EFB's colour target instead of copying it
     // (hand_over_efb_color): an exact copy of the EFB's top rows (the identity filter, no gamma or scaling) on the
     // plain path (one sample a pixel, no HDR scene, ray tracing, temporal upscaler, output-resolution 2D layer,
     // interpolation or frame generation, post-processing ready).
-    [[nodiscard]] bool can_hand_over_display_copy(const EfbCopyParams& params, const XfbTexture& dest) const;
+    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const XfbTexture& dest) const;
     // Gives the EFB's colour target (the picture of this display copy, as an XFB keeps it) to the caller and continues
     // the EFB on `fresh` (a released texture of the EFB's description, or null for a new one). The picture is owed to
     // the EFB until a clear covers it (settle_owed_efb).
     [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh);
     [[nodiscard]] bool copy_efb_to_texture(
-        const EfbCopyParams& params,
+        const CaptureRequest& params,
         TextureCache& textures,
         bool is_depth_copy);
 
@@ -823,7 +823,7 @@ private:
         unsigned dest_w,
         unsigned dest_h,
         D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-        const EfbCopyParams& params,
+        const CaptureRequest& params,
         bool is_depth_copy,
         bool intensity,
         bool keep_alpha,
@@ -1026,7 +1026,7 @@ private:
     // must look it up again (a new view, or a capture replacing others).
     bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
-    bool publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+    bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                          TextureCache& textures);
     static constexpr std::uint64_t kTargetIdleFrames = 600u;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
@@ -1058,7 +1058,7 @@ private:
     bool fg_hudless_taken_ = false;              // a picture's HUD-less copy is waiting
     std::uint32_t fg_hudless_slot_ = 0u;         // the picture it went with
     void take_fg_hudless_scene();
-    void copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTexture& dest);
+    void copy_fg_hudless_xfb(const CaptureRequest& params, const XfbTexture& dest);
     void present_fg_hudless(const XfbTexture& source, const D3D12_VIEWPORT& viewport, const D3D12_RECT& scissor);
     unsigned temporal_render_w_ = 0;
     unsigned temporal_render_h_ = 0;
@@ -1082,7 +1082,7 @@ private:
         ID3D12Resource* dest = nullptr;
         unsigned width = 0;
         unsigned height = 0;
-        EfbCopyParams params{};
+        CaptureRequest params{};
         bool depth = false;
         bool intensity = false;
         bool keep_alpha = false;

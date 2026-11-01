@@ -29,7 +29,6 @@ namespace J3DNativeState {
     void setNumTevStages(u8 count);
     void setNumIndStages(u8 count);
     void setCoPlanar(GXBool enable);
-    void setZCompLoc(GXBool beforeTex);
     void setCurrentMtx(u32 id);
     void setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias, GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod, GXIndTexAlphaSel alpha);
     void setTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode, GXIndTexMtxID matrix);
@@ -48,8 +47,8 @@ namespace J3DNativeState {
     void initLightSpot(GXLightObj* pObj, f32 cutoff, GXSpotFn spotFn);
     void initLightDistAttn(GXLightObj* pObj, f32 refDistance, f32 refBrightness, GXDistAttnFn distFn);
     void loadLightObjImm(const GXLightObj* pObj, GXLightID id);
-    // The pixel format (the last one kept here: GXSetPixelFmt changes the hardware only when it differs).
-    void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat);
+    // Whether the frame keeps alpha (the last value kept here: the host changes only when it differs).
+    void setFrameAlpha(bool keepAlpha);
     // The drawing state the game starts from (what GXInit set on the console), sent before anything is drawn.
     void initDefaults();
     // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's
@@ -91,7 +90,6 @@ void J3DNativeStateSetNumChans(u8 count);
 void J3DNativeStateSetNumTevStages(u8 count);
 void J3DNativeStateSetNumIndStages(u8 count);
 void J3DNativeStateSetCoPlanar(GXBool enable);
-void J3DNativeStateSetZCompLoc(GXBool beforeTex);
 void J3DNativeStateSetCurrentMtx(u32 id);
 void J3DNativeStateSetTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias, GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod, GXIndTexAlphaSel alpha);
 void J3DNativeStateSetTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode, GXIndTexMtxID matrix);

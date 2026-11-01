@@ -90,7 +90,6 @@ public:
     void setNumTevStages(u8 count);
     void setNumIndStages(u8 count);
     void setCoPlanar(GXBool enable);
-    void setZCompLoc(GXBool beforeTex);
     void setCurrentMtx(u32 id);
     void setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias,
                         GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod,
@@ -103,8 +102,8 @@ public:
     void setPointSize(u8 size, GXTexOffset texOffsets);
     // A light (GXLoadLightObjImm's: its attenuation and colour, then its position and direction).
     void setLight(GXLightID id, const J3DNativeLight& rLight);
-    // GXSetPixelFmt's change: `changed` when the format or depth format differs from the last one set.
-    void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed);
+    // Whether the frame keeps alpha; `changed` when it differs from the last value set.
+    void setFrameAlpha(bool keepAlpha, bool changed);
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
     // GXSetFogRangeAdj's changes: an enabled one's table pairs, then the centre and enable.
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);

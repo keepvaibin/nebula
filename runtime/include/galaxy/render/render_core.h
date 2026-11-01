@@ -239,7 +239,9 @@ private:
         std::size_t draw_count);
     void end_cached_draw_run();
     // A copy (EFB to texture or display) with the pixel format it reads.
-    void on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format);
+    void on_efb_copy(const CaptureRequest& params);
+    // The frame clears' format byte (make_efb_clear_values): 1 a frame keeping alpha, 0 one without.
+    [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
     void on_invalidate_vertex_cache();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
     void load_light(const state::Op& op);
@@ -894,7 +896,7 @@ private:
     NativeDrawState draw_state_;
     // The blend the pixel engine performs (effective_blend: one that writes the source unchanged is none).
     [[nodiscard]] BlendMode draw_blend() const {
-        return effective_blend(draw_state_.blend, draw_state_.pe.pixel_format == 1u);
+        return effective_blend(draw_state_.blend, draw_state_.frame_alpha);
     }
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
@@ -1228,7 +1230,7 @@ private:
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
-    void mark_texture_binding_alias_dirty(const EfbCopyParams& params);
+    void mark_texture_binding_alias_dirty(const CaptureRequest& params);
     void prune_dirty_texture_binding_tables();
     void clear_frame_texture_binding_table_cache();
     void clear_texture_binding_table_cache();

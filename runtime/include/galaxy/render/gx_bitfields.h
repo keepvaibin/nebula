@@ -107,38 +107,8 @@ inline constexpr std::uint8_t kLogicCopy = 3u;
     return b;
 }
 
-struct PeControl {
-    std::uint8_t pixel_format;      // 0=RGB8_Z24, 1=RGBA6_Z24, 2=RGB565_Z16, ...
-    std::uint8_t z_format;
-    bool early_z;                   // zcomploc: Z test before texture
-};
-
-
-
 struct ScissorRect {
     std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space
-};
-
-struct EfbCopyParams {
-    std::uint16_t src_x, src_y;
-    std::uint16_t src_width, src_height;
-    std::uint64_t dest_addr;        // the destination's address
-    std::uint8_t channels;          // the layout the picture is read as (efb_copy.h: NebulaTargetChannels)
-    bool clamp_top, clamp_bottom;
-    bool half_scale;                // vertical 2x downsample
-    bool clear;                     // clear EFB rect after copy
-    bool copy_to_xfb;               // true = display copy, false = texture copy
-    bool intensity;                 // intensity conversion (I and IA texture copies)
-    std::uint8_t clear_color[4];    // red, green, blue, alpha
-    std::uint32_t clear_z;          // 24-bit depth
-    // Through the display's vertical filter (NEBULA_CAPTURE_FILTERED, frame_show): each line half its own colour and
-    // half the line above's, as the game's television modes asked. Otherwise the line alone.
-    bool filtered;
-
-    // The filter's weights on the line above, the line and the line below, in 64ths.
-    [[nodiscard]] constexpr std::uint32_t filter_upper() const { return filtered ? 32u : 0u; }
-    [[nodiscard]] constexpr std::uint32_t filter_middle() const { return filtered ? 32u : 64u; }
-    [[nodiscard]] constexpr std::uint32_t filter_lower() const { return 0u; }
 };
 
 struct XfTexGen {

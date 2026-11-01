@@ -780,7 +780,7 @@ bool RendererVk::publish_picture(std::uint64_t key, std::uint16_t width, std::ui
     return true;
 }
 
-bool RendererVk::publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+bool RendererVk::publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                           TextureCache& textures) {
     const auto size = [&](std::uint16_t extent) {
         return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
@@ -788,7 +788,7 @@ bool RendererVk::publish_capture(const EfbCopyParams& params, gpu::TextureRef te
     // A one-channel destination's own view repeats its channel (Context::grey_view), and sub-frames redirect draws by
     // that view (redirect_), so the picture is read through it, unswizzled.
     (void)is_depth_copy;
-    return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture), 0u,
+    return publish_picture(params.key, size(params.src_width), size(params.src_height), std::move(texture), 0u,
                            0u, textures);
 }
 
@@ -829,7 +829,7 @@ bool RendererVk::enter_output_efb(unsigned scale) {
                       << ")\n";
         }
     }
-    EfbCopyParams params{};
+    CaptureRequest params{};
     params.src_width = static_cast<std::uint16_t>(kFrameWidth);
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
     const unsigned width = kFrameWidth * scale;
@@ -860,7 +860,7 @@ void RendererVk::end_output_efb() {
     bind_efb();
 }
 
-bool RendererVk::copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
+bool RendererVk::copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures) {
     if (output_efb_active_ || !alt_efb_.color) {
         return copy_efb_to_texture(params, textures, false);
     }
@@ -1620,7 +1620,7 @@ void RendererVk::transition_efb_to_attachment(VkCommandBuffer commands, bool dep
 // The conversion blit (efb_conversion_shader_source): a full-screen triangle into `dest`, sampling the EFB colour
 // or depth. The EFB leaves its attachment layout for the read and returns; `dest` ends shader-readable.
 void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h,
-                                        const EfbCopyParams& params, bool is_depth_copy, bool intensity,
+                                        const CaptureRequest& params, bool is_depth_copy, bool intensity,
                                         bool keep_alpha, std::uint8_t copy_format, float src_x, float src_y,
                                         float step_x, float step_y, float filter_row_offset) {
     end_efb_pass();
@@ -1660,7 +1660,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     bind_efb();
 }
 
-void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
+void RendererVk::copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest) {
     const GpuPassScope pass{*this, GpuPass::XfbCopy};
     if (!dest.texture) {
         throw std::runtime_error("XFB copy has no destination texture");
@@ -1701,7 +1701,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
     }
 }
 
-bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+bool RendererVk::copy_efb_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {
     const GpuPassScope pass{*this, GpuPass::EfbCopy};
     ++gpu_window_.copies;
     // The game composites its picture from EFB->texture copies; half_scale halves both dimensions (a 2x2 box).
@@ -1716,8 +1716,8 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         return false;
     }
     // Keyed by address, format and source: one address alternates between formats and copies of each.
-    const std::uint64_t dest_key = static_cast<std::uint64_t>(params.dest_addr) |
-        (static_cast<std::uint64_t>(params.channels) << 48u) | (params.intensity ? (1ull << 52u) : 0ull) | (is_depth_copy ? (1ull << 56u) : 0ull) |
+    const std::uint64_t dest_key = static_cast<std::uint64_t>(params.key) |
+        (static_cast<std::uint64_t>(params.channels) << 48u) | (params.luma ? (1ull << 52u) : 0ull) | (is_depth_copy ? (1ull << 56u) : 0ull) |
         (native ? (1ull << 57u) : 0ull);  // addresses stay below 2^48
     EfbCopyDest& dest = efb_copy_dests_[dest_key];
     dest.last_used = ++efb_copy_dests_tick_;
@@ -1829,7 +1829,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
     const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
-    record_conversion_blit(texture, w, h, params, is_depth_copy, params.intensity, keep_alpha, params.channels,
+    record_conversion_blit(texture, w, h, params, is_depth_copy, params.luma, keep_alpha, params.channels,
                            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                            sampling.filter_row_offset);
     return publish_capture(params, current.texture, is_depth_copy, textures);

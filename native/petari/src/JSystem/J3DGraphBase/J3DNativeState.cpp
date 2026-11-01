@@ -10,10 +10,9 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GXInit's cull mode and pixel format.
+    // GXInit's cull mode and frame (no alpha).
     GXCullMode sCullMode = GX_CULL_BACK;
-    GXPixelFmt sPixelFormat = GX_PF_RGB8_Z24;
-    GXZFmt16 sZFormat = GX_ZC_LINEAR;
+    bool sFrameAlpha = false;
 
     static_assert(sizeof(J3DNativeLight) <= sizeof(GXLightObj), "a GXLightObj holds a J3DNativeLight");
 
@@ -259,13 +258,6 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setZCompLoc(GXBool beforeTex) {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.setZCompLoc(beforeTex);
-        list.send();
-    }
-
     void setCurrentMtx(u32 id) {
         J3DNativeShape::setCurrentPosition(id / 3);
         NebulaStateOp op;
@@ -449,15 +441,12 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat) {
-        // GXSetPixelFmt compares the hardware's type, which three YUV formats share.
-        static const u8 sHardwareType[8] = {0, 1, 2, 3, 4, 4, 4, 5};
-        const bool changed = sHardwareType[format & 7] != sHardwareType[sPixelFormat & 7] || zFormat != sZFormat;
-        sPixelFormat = format;
-        sZFormat = zFormat;
+    void setFrameAlpha(bool keepAlpha) {
+        const bool changed = keepAlpha != sFrameAlpha;
+        sFrameAlpha = keepAlpha;
         NebulaStateOp op;
         J3DStateList list(&op, 1);
-        list.setPixelFmt(format, zFormat, changed);
+        list.setFrameAlpha(keepAlpha, changed);
         list.send();
     }
 
@@ -554,10 +543,9 @@ namespace J3DNativeState {
         setColorUpdate(GX_TRUE);
         setAlphaUpdate(GX_TRUE);
         setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-        setZCompLoc(GX_TRUE);
         setDither(GX_TRUE);
         setDstAlpha(GX_FALSE, 0);
-        setPixelFmt(GX_PF_RGB8_Z24, GX_ZC_LINEAR);
+        setFrameAlpha(false);
     }
 
     void showFrame(u16 width, u16 height, bool filtered) {
@@ -640,10 +628,6 @@ void J3DNativeStateSetNumIndStages(u8 count) {
 
 void J3DNativeStateSetCoPlanar(GXBool enable) {
     J3DNativeState::setCoPlanar(enable);
-}
-
-void J3DNativeStateSetZCompLoc(GXBool beforeTex) {
-    J3DNativeState::setZCompLoc(beforeTex);
 }
 
 void J3DNativeStateSetCurrentMtx(u32 id) {

@@ -143,7 +143,7 @@ gpu::TextureRef EfbCopyManager::acquire_idle_texture(
 // GX BP 0x4E is the nine-bit inverse vertical step consumed by the RVL SDK's
 // __GXGetNumXfbLines calculation. PE_COPY_EXECUTE bit 10 controls whether that
 // calculation is applied at all. The source-size register stores height - 1;
-// EfbCopyParams stores the decoded height, so the base result is
+// CaptureRequest stores the decoded height, so the base result is
 // 1 + floor((height - 1) * 256 / y_scale_raw).
 ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     std::uint16_t logical_width,
@@ -163,7 +163,7 @@ ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
 }
 
 EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
     unsigned efb_scale) noexcept {
@@ -187,7 +187,7 @@ EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
 }
 
 EfbCopySamplingGeometry compute_xfb_sampling_geometry(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
     unsigned efb_scale) noexcept {
@@ -225,7 +225,7 @@ void EfbCopyManager::set_efb_scale(unsigned efb_scale) noexcept {
 }
 
 XfbTexture* EfbCopyManager::acquire_xfb(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     std::uint64_t frame_index) {
     // The ring moves on when a picture is published (mark_xfb_copied).
     const std::uint32_t slot = next_slot_;
@@ -322,10 +322,10 @@ const XfbTexture* EfbCopyManager::picture(std::uint32_t slot) const {
 
 
 std::optional<EfbCopyRect> efb_identity_copy_rect(
-    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
-    if (is_depth_copy || params.copy_to_xfb || params.channels != kCopyLayoutRgba ||
-        params.intensity || params.half_scale ||
+    if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
+        params.luma || params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||
         static_cast<unsigned>(params.src_y) + params.src_height > kFrameHeight) {

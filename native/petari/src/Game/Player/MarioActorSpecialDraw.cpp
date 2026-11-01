@@ -811,7 +811,6 @@ bool MarioActor::drawDarkMask() const {
     J3DNativeDraw::texCoord(0.0f, 4.0f);
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
     J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     TDDraw::close();
     return true;

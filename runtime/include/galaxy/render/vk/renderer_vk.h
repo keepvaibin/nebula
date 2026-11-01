@@ -206,7 +206,7 @@ public:
     // The 3D image's scale over the Wii's 640 x 456 as it is shown (no temporal upscaler here: the EFB's).
     [[nodiscard]] unsigned scene_display_scale() const noexcept { return efb_scale_; }
     // A copy right after the display copy, from the output EFB the 2D layer drew in (the EFB itself without one).
-    [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
+    [[nodiscard]] bool copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures);
 
     [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     void attach_texture_uploads(TextureCache& cache);
@@ -238,11 +238,11 @@ public:
     // device memory where the device maps it (vk::BufferPlace::DeviceMapped).
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
     void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
-    void copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest);
+    void copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest);
     // Native presentation (renderer_d3d12.h): not yet on Vulkan, whose display copies stay copies.
-    [[nodiscard]] bool can_hand_over_display_copy(const EfbCopyParams&, const XfbTexture&) const { return false; }
+    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest&, const XfbTexture&) const { return false; }
     [[nodiscard]] gpu::TextureRef hand_over_efb_color(gpu::TextureRef fresh) { return fresh; }
-    [[nodiscard]] bool copy_efb_to_texture(const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy);
+    [[nodiscard]] bool copy_efb_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy);
     // `black`: the frame is presented black (the pass clears; the XFB is not drawn).
     bool present(const XfbTexture* source, bool capture_backbuffer = false, bool black = false);
 
@@ -460,7 +460,7 @@ private:
     [[nodiscard]] VkDescriptorSet constants_set(VkBuffer b0, VkBuffer b1, VkBuffer palette, VkDeviceSize palette_offset,
                                                 VkDeviceSize palette_range, VkBuffer earlier);
     [[nodiscard]] VkSampler sampler_for(std::uint32_t key, const RenderConfig& cfg);
-    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const EfbCopyParams& params,
+    void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const CaptureRequest& params,
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
                                 float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
     void record_peek_field(VkCommandBuffer commands, vk::Texture& target, EfbPeekKind kind,
@@ -557,7 +557,7 @@ private:
     // must look it up again (a new view, or a capture replacing others).
     bool publish_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height, gpu::TextureRef texture,
                          std::uint8_t channels, std::uint32_t bytes, TextureCache& textures);
-    bool publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+    bool publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                          TextureCache& textures);
     static constexpr std::uint64_t kTargetIdleFrames = 600u;
     std::unordered_map<std::uint64_t, TargetSlot> target_slots_;
@@ -723,7 +723,7 @@ private:
         std::uint8_t format = 0;
     };
     struct ReplayCopy {
-        EfbCopyParams params{};
+        CaptureRequest params{};
         bool depth = false;
         bool display = false;            // the display copy (closes the log)
         std::uint64_t dest_key = 0;      // a texture copy's destination (efb_copy_dests_)

@@ -23,14 +23,14 @@ namespace {
 }
 
 [[nodiscard]] bool needs_dual_src_alpha(
-    const PeControl& pe,
+    bool frame_alpha,
     const BlendMode& bm) {
     if (!blend_reads_src_alpha(bm)) {
         return false;
     }
     const bool dst_alpha =
-        (pe.pixel_format == 1u) && bm.const_alpha_enable && bm.alpha_update;
-    return dst_alpha || pe.pixel_format == 1u;
+        frame_alpha && bm.const_alpha_enable && bm.alpha_update;
+    return dst_alpha || frame_alpha;
 }
 
 }  // namespace
@@ -39,8 +39,8 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     RenderStateKey key{};
     std::memset(&key, 0, sizeof(key));
 
-    const PeControl pe = state.pe;
-    const BlendMode bm = effective_blend(state.blend, pe.pixel_format == 1u);
+    const bool frame_alpha = state.frame_alpha;
+    const BlendMode bm = effective_blend(state.blend, frame_alpha);
 
     // An EFB without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
@@ -54,7 +54,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
         default: return factor;
         }
     };
-    const auto blend_factor = [has_alpha = pe.pixel_format == 1u, key_code](
+    const auto blend_factor = [has_alpha = frame_alpha, key_code](
                                   BlendFactor factor) {
         factor = key_code(factor);
         if (!has_alpha) {
@@ -88,19 +88,19 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     if (bm.color_update) {
         key.blend_bits |= (1u << 25u);
     }
-    if (bm.alpha_update && pe.pixel_format == 1u) {
+    if (bm.alpha_update && frame_alpha) {
         key.blend_bits |= (1u << 26u);
     }
     // bit27 = dual-source TEV alpha. The PSO uses
     // SRC1_ALPHA/INV_SRC1_ALPHA in place of SrcAlpha/InvSrcAlpha, so the blender reads TEV alpha
     // while color0.a stays the physical EFB alpha.
-    if (needs_dual_src_alpha(pe, bm)) {
+    if (needs_dual_src_alpha(frame_alpha, bm)) {
         key.blend_bits |= (1u << 27u);
     }
     // Constant EFB alpha replacement is independent of source-alpha routing.
     // The pipeline reads this bit only inside its blend-enabled branch; the
     // pixel shader applies constant destination alpha itself.
-    if (bm.blend_enable && pe.pixel_format == 1u && bm.const_alpha_enable &&
+    if (bm.blend_enable && frame_alpha && bm.const_alpha_enable &&
         bm.alpha_update) {
         key.blend_bits |= (1u << 28u);
     }
@@ -116,9 +116,8 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
 
     key.cull = static_cast<std::uint8_t>(state.gen.cull);
 
-    // The pipeline only distinguishes RGBA6 (has destination alpha) from the
-    // other formats.
-    key.pixfmt = pe.pixel_format == 1u ? 1u : 0u;
+    // The frame keeps alpha (destination alpha) or not.
+    key.pixfmt = frame_alpha ? 1u : 0u;
     // The backend overwrites this per draw before the PSO lookup. Triangle is the safe default for
     // tests and callers that build only render-state keys.
     key.primitive_topology = 3u; // D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE

@@ -112,8 +112,8 @@ struct EfbClearValues {
 [[nodiscard]] EfbClearValues make_efb_clear_values(
     std::uint32_t rgba, std::uint32_t z24,
     std::uint8_t pixel_format) noexcept;
-// With an EFB pixel format (0-2), clear values as given, not quantized to the format: the 8-bit values a draw stores
-// (alpha 255 on a format without alpha).
+// With a frame format (0 no alpha, 1 alpha at 6 bits), clear values as given, not quantized to the format: the 8-bit
+// values a draw stores (alpha 255 on a frame without alpha).
 inline constexpr std::uint8_t kEfbClearExact = 0x80u;
 
 // The EFB conversion shader's root constants (16 dwords).
@@ -150,7 +150,7 @@ struct UiSolidQuadConstants {
 };
 static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 [[nodiscard]] EfbConversionShaderConstants make_efb_conversion_constants(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     bool is_depth_copy,
     bool intensity,
     bool keep_alpha,
