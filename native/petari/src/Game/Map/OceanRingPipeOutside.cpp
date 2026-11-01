@@ -21,7 +21,7 @@ namespace {
     const f32 sIndirectScale = 0.15f;
     const f32 sEnvMapScale = 0.6f;
 
-    static GXColor sTevReg0 = {0x14, 0x65, 0xFF, 0xB9};
+    static NebulaColor8 sTevReg0 = {0x14, 0x65, 0xFF, 0xB9};
 };  // namespace
 
 OceanRingPipeOutside::OceanRingPipeOutside(const OceanRingPipe* pPipe)
@@ -57,7 +57,7 @@ void OceanRingPipeOutside::draw() const {
     mMesh.draw();
 }
 
-const GXColor sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor8 sFogCol = {0xFF, 0xFF, 0xFF, 0xFF};
 
 void OceanRingPipeOutside::loadMaterial() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());

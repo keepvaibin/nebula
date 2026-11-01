@@ -8,8 +8,8 @@
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
-GXColor sWhirlPoolTevReg1 = {0x28, 0x28, 0x28, 0x14};
-GXColor sWhirlPoolTevReg2 = {0x55, 0x96, 0xBE, 0xFF};
+NebulaColor8 sWhirlPoolTevReg1 = {0x28, 0x28, 0x28, 0x14};
+NebulaColor8 sWhirlPoolTevReg2 = {0x55, 0x96, 0xBE, 0xFF};
 
 WhirlPool::WhirlPool(const char* pName)
     : LiveActor(pName), mRadius(100.0f), mHeight(100.0f), mAxis(0.0f, 1.0f, 0.0f), mPointCount(), mPoints(), mRotation(), mTexOffsetU0(),

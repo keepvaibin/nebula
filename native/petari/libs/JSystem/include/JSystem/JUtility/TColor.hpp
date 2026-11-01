@@ -4,7 +4,7 @@
 #include <revolution/gx.h>
 
 namespace JUtility {
-    struct TColor : public GXColor {
+    struct TColor : public NebulaColor8 {
     public:
         TColor(u8 r, u8 g, u8 b, u8 a);
         TColor() {
@@ -15,7 +15,7 @@ namespace JUtility {
             set(u32Color);
         }
 
-        TColor(GXColor color) {
+        TColor(NebulaColor8 color) {
             set(color);
         }
 
@@ -56,8 +56,8 @@ namespace JUtility {
         }
 #endif
 
-        void set(GXColor gxColor) {
-            GXColor* temp = this;
+        void set(NebulaColor8 gxColor) {
+            NebulaColor8* temp = this;
             *temp = gxColor;
         }
     } ATTRIBUTE_ALIGN(4);

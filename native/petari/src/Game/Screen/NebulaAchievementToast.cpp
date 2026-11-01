@@ -185,7 +185,7 @@ void NebulaAchievementToast::init(const JMapInfoIter& rIter) {
         }
         for (u32 i = 0; i < materialNum; i++) {
             if (pMaterials[i] != nullptr) {
-                GXColorS10 color = pMaterials[i]->GetTevColor(1);
+                NebulaColor16 color = pMaterials[i]->GetTevColor(1);
                 color.a = 235;
                 pMaterials[i]->SetTevColor(1, color);
             }

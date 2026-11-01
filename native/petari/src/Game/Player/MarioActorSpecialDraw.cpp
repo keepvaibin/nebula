@@ -266,7 +266,7 @@ void MarioActor::resetFog() {
 void MarioActor::updateAlphaDL(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    GXColor color = {0, 0, 0, 255};
+    NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
     list.setTevColor(GX_TEVREG2, color);
     list.setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
@@ -291,7 +291,7 @@ void MarioActor::updateSimpleAlphaDL(u8 alpha) {
 void MarioActor::updateReflectAlphaDL(u8 alpha) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    GXColor color = {0, 0, 0, 255};
+    NebulaColor8 color = {0, 0, 0, 255};
     color.a = alpha;
     list.setTevColor(GX_TEVREG2, color);
     list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
@@ -302,16 +302,16 @@ void MarioActor::updateReflectAlphaDL(u8 alpha) {
 void MarioActor::updateLightDL(const Color8& rAmbient, const Color8& rMaterial, const Color8& rFog, f32 strength) {
     NebulaStateOp storage[16];
     J3DStateList list(storage, 16);
-    GXColor ambientColor = rAmbient.mGXColor;
+    NebulaColor8 ambientColor = rAmbient.mGXColor;
     list.setChanAmbColor(GX_COLOR0A0, ambientColor);
-    GXColor materialColor = rMaterial.mGXColor;
+    NebulaColor8 materialColor = rMaterial.mGXColor;
     list.setChanMatColor(GX_COLOR0A0, materialColor);
     list.setChanCtrl(GX_COLOR1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_CLAMP, GX_AF_NONE);
 
     if (!MR::isNearZero(strength)) {
         f32 nearZ = MR::getNearZ();
         f32 farZ = MR::getFarZ();
-        GXColor color = rFog.mGXColor;
+        NebulaColor8 color = rFog.mGXColor;
         f32 start;
         f32 end;
         MR::calcFogStartEnd(mPosition, strength, &start, &end);
@@ -329,7 +329,7 @@ void MarioActor::createRainbowDL() {
     for (u32 alpha = 0; alpha < 8; alpha++) {
         for (u32 index = 0; index < 8; index++) {
             _94[alpha * 8 + index] = new DLchanger(1, 1);
-            GXColor color = {0, 0, 0, 0};
+            NebulaColor8 color = {0, 0, 0, 0};
 
             if (index & 1) {
                 color.r = 255;

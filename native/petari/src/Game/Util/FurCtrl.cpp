@@ -148,7 +148,7 @@ void FurCtrl::drawFur() {
     }
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
-    GXColor fogColor = {0, 0, 0, 0};
+    NebulaColor8 fogColor = {0, 0, 0, 0};
     J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }

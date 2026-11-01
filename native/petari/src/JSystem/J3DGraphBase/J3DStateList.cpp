@@ -11,7 +11,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    void setColor(u8* pOut, const GXColor& rColor) {
+    void setColor(u8* pOut, const NebulaColor8& rColor) {
         pOut[0] = rColor.r;
         pOut[1] = rColor.g;
         pOut[2] = rColor.b;
@@ -251,19 +251,19 @@ void J3DStateList::setTevOrder(GXTevStageID evenStage, GXTexCoordID coord0, GXTe
     r.a[6] = color1;
 }
 
-void J3DStateList::setTevColor(GXTevRegID reg, GXColor color) {
+void J3DStateList::setTevColor(GXTevRegID reg, NebulaColor8 color) {
     NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR);
     r.a[0] = reg;
     setColor(r.a + 1, color);
 }
 
-void J3DStateList::setChanMatColor(GXChannelID chan, GXColor color) {
+void J3DStateList::setChanMatColor(GXChannelID chan, NebulaColor8 color) {
     NebulaStateOp& r = add(NEBULA_STATE_MATERIAL_COLOR);
     r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
 }
 
-void J3DStateList::setChanAmbColor(GXChannelID chan, GXColor color) {
+void J3DStateList::setChanAmbColor(GXChannelID chan, NebulaColor8 color) {
     NebulaStateOp& r = add(NEBULA_STATE_AMBIENT_COLOR);
     r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
@@ -303,7 +303,7 @@ void J3DStateList::setTexImgPtr(GXTexMapID map, const void* pImage) {
     r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pImage));
 }
 
-void J3DStateList::setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
+void J3DStateList::setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
     NebulaStateOp& r = add(NEBULA_STATE_FOG);
     r.a[0] = type;
     setColor(r.a + 1, color);
@@ -393,7 +393,7 @@ void J3DStateList::setDither(GXBool enable) {
     add(NEBULA_STATE_DITHER).a[0] = enable;
 }
 
-void J3DStateList::setTevKColor(GXTevKColorID id, GXColor color) {
+void J3DStateList::setTevKColor(GXTevKColorID id, NebulaColor8 color) {
     NebulaStateOp& r = add(NEBULA_STATE_TEV_KCOLOR);
     r.a[0] = id;
     setColor(r.a + 1, color);
@@ -589,7 +589,7 @@ void J3DStateList::setClipMode(GXClipMode mode) {
     add(NEBULA_STATE_CLIP_MODE).a[0] = mode;
 }
 
-void J3DStateList::setTevColorS10(GXTevRegID id, GXColorS10 color) {
+void J3DStateList::setTevColorS10(GXTevRegID id, NebulaColor16 color) {
     NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR_S10);
     r.a[0] = id;
     r.size[0] = static_cast< u16 >(color.r);

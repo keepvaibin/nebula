@@ -31,13 +31,13 @@ namespace MR {
     void clearZBuffer();
     void clearAlphaBuffer(u8);
     void clearAlphaBuffer(u8, const TVec2f&, const TVec2f&);
-    void fillScreenSetup(const GXColor&);
+    void fillScreenSetup(const NebulaColor8&);
     void fillScreenArea(const TVec2s&, const TVec2s&);
-    void fillScreen(const GXColor&);
+    void fillScreen(const NebulaColor8&);
     void setupShadowVolumeDraw();
     // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
     // writes as the drawing state has them (each pass sets them).
-    void setShadowVolumeColor(const GXColor& rColor);
+    void setShadowVolumeColor(const NebulaColor8& rColor);
     void drawSimpleModel(J3DModelData*);
     void fillSilhouetteColor();
     const JUTTexture* getMarioShadowTex();

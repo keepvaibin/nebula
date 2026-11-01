@@ -24,7 +24,7 @@ void LogoFader::draw() const {
         J3DNativeState::setColorUpdate(GX_TRUE);
         J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
 
-        GXColor fillColor = {0, 0, 0, (s32)(mRate * 255.0f)};
+        NebulaColor8 fillColor = {0, 0, 0, (s32)(mRate * 255.0f)};
         MR::fillScreen(fillColor);
     }
 }

@@ -24,7 +24,7 @@
 namespace {
     static const s16 sCinemaFrameHeightTop = 44;
     static const s16 sCinemaFrameHeightBottom = 412;
-    static const GXColor sCinemaFrameColor = {0, 0, 0, 255};
+    static const NebulaColor8 sCinemaFrameColor = {0, 0, 0, 255};
 };  // namespace
 
 namespace {
@@ -69,7 +69,7 @@ void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
 
 void MoviePlayerSimple::draw() const {
     if (!isNerve(GET_NERVE_ANON(MoviePlayerSimplePlaying)) && !isNerve(GET_NERVE_ANON(MoviePlayerSimpleSuspend))) {
-        GXColor fillColor;
+        NebulaColor8 fillColor;
         fillColor.r = 0;
         fillColor.g = 0;
         fillColor.b = 0;

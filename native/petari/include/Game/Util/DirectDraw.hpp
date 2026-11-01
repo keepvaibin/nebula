@@ -46,7 +46,7 @@ namespace TDDraw {
     void project2D(TVec2f*, const TVec3f&);
     void fix2Dpos(TVec3f*);
 
-    inline void setGXColor(u32 color, GXColor* pColor) NO_INLINE {
+    inline void setGXColor(u32 color, NebulaColor8* pColor) NO_INLINE {
         pColor->r = (color >> 24) & 0xFF;
         pColor->g = (color >> 16) & 0xFF;
         pColor->b = (color >> 8) & 0xFF;

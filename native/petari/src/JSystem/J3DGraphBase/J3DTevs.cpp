@@ -249,7 +249,7 @@ J3DTexMtxInfo const j3dDefaultTexMtxInfo = {
 
 J3DIndTexMtxInfo const j3dDefaultIndTexMtxInfo = {0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f, 1};
 
-const GXColorS10 j3dDefaultTevColor = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor16 j3dDefaultTevColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DTevStageInfo const j3dDefaultTevStageInfo = {
     0x04, 0x0A, 0x0F, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x05, 0x07, 0x07, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
@@ -346,9 +346,9 @@ void makeTevSwapTable() {
 
 
 
-const GXColor j3dDefaultColInfo = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor8 j3dDefaultColInfo = {0xFF, 0xFF, 0xFF, 0xFF};
 
-const GXColor j3dDefaultAmbInfo = {0x32, 0x32, 0x32, 0x32};
+const NebulaColor8 j3dDefaultAmbInfo = {0x32, 0x32, 0x32, 0x32};
 
 const u8 j3dDefaultNumChans = 1;
 
@@ -356,7 +356,7 @@ const J3DTevOrderInfo j3dDefaultTevOrderInfoNull = {0xFF, 0xFF, 0xFF, 0x00};
 
 const J3DIndTexOrderInfo j3dDefaultIndTexOrderNull = {0xFF, 0xFF, 0x00, 0x00};
 
-const GXColor j3dDefaultTevKColor = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor8 j3dDefaultTevKColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 const J3DIndTexCoordScaleInfo j3dDefaultIndTexCoordScaleInfo = {};
 

@@ -169,10 +169,10 @@ public:
     u8 getGlobalAlpha() const {
         return mGlobalPrmClr.a;
     }
-    void getGlobalPrmColor(GXColor& color) {
+    void getGlobalPrmColor(NebulaColor8& color) {
         color = mGlobalPrmClr;
     }
-    void getGlobalPrmColor(_GXColor* color) const {
+    void getGlobalPrmColor(NebulaColor8* color) const {
         *color = mGlobalPrmClr;
     }
     void setGlobalPrmColor(u8 r, u8 g, u8 b) {
@@ -363,8 +363,8 @@ public:
     /* 0x98 */ JGeometry::TVec3< f32 > mGlobalScl;
     /* 0xA4 */ JGeometry::TVec3< f32 > mGlobalTrs;
     /* 0xB0 */ JGeometry::TVec2< f32 > mGlobalPScl;
-    /* 0xB8 */ GXColor mGlobalPrmClr;
-    /* 0xBC */ GXColor mGlobalEnvClr;
+    /* 0xB8 */ NebulaColor8 mGlobalPrmClr;
+    /* 0xBC */ NebulaColor8 mGlobalEnvClr;
 #ifdef TARGET_PC
     /* 0xC0 */ uintptr_t mpUserWork;  // a pointer natively too (EffectSystemUtil's SingleEmitter)
 #else
@@ -384,8 +384,8 @@ public:
     /* 0x100 */ u32 mTick;
     /* 0x104 */ s16 mWaitTime;
     /* 0x106 */ s16 mRateStepTimer;
-    /* 0x108 */ GXColor mPrmClr;
-    /* 0x10C */ GXColor mEnvClr;
+    /* 0x108 */ NebulaColor8 mPrmClr;
+    /* 0x10C */ NebulaColor8 mEnvClr;
     /* 0x110 */ u8 mDrawTimes;
     /* 0x111 */ u8 mTexAnmIdx;
     /* 0x112 */ u8 mGroupID;

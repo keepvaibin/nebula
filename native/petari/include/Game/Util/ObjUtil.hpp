@@ -134,7 +134,7 @@ namespace MR {
     void getCsvDataF32(f32*, const JMapInfo*, const char*, s32);
     void getCsvDataBool(bool*, const JMapInfo*, const char*, s32);
     void getCsvDataVec(Vec*, const JMapInfo*, const char*, s32);
-    void getCsvDataColor(GXColor*, const JMapInfo*, const char*, s32);
+    void getCsvDataColor(NebulaColor8*, const JMapInfo*, const char*, s32);
     bool isStageStateScenarioOpeningCamera();
     bool isStageStatePowerStarAppeared();
     void declarePowerStar(const NameObj*);

@@ -35,20 +35,20 @@ namespace {
     const f32 mPictureFontOffset = -2.0f;
     const f32 mOffsetOffset = 0.0f;
 
-    GXColor sTextColor[] = {{255, 255, 255, 255}, {220, 130, 130, 255}, {80, 170, 80, 255},   {80, 140, 210, 255},
+    NebulaColor8 sTextColor[] = {{255, 255, 255, 255}, {220, 130, 130, 255}, {80, 170, 80, 255},   {80, 140, 210, 255},
                             {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 190, 190, 255}, {110, 243, 70, 255},
                             {120, 255, 255, 255}, {255, 255, 80, 255},  {251, 188, 250, 255}, {190, 190, 200, 255}};
 
 #if (VERSION == RMGK01)
-    GXColor sTextColorKorean[] = {{255, 255, 255, 255}, {230, 160, 0, 255},   {80, 170, 80, 255},   {80, 140, 210, 255},
+    NebulaColor8 sTextColorKorean[] = {{255, 255, 255, 255}, {230, 160, 0, 255},   {80, 170, 80, 255},   {80, 140, 210, 255},
                                   {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 210, 80, 255},  {110, 243, 70, 255},
                                   {120, 255, 255, 255}, {255, 255, 80, 255},  {251, 188, 250, 255}, {190, 190, 200, 255}};
 #endif
 
     u8 clampU8(s32 value) NO_INLINE;
 
-    GXColor setGXColor(GXColorS10 color) {
-        GXColor result;
+    NebulaColor8 setGXColor(NebulaColor16 color) {
+        NebulaColor8 result;
         result.r = clampU8(color.r);
         result.g = clampU8(color.g);
         result.b = clampU8(color.b);
@@ -61,17 +61,17 @@ namespace {
     }
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
-    const GXColor& getTextColor(s32 index) {
+    const NebulaColor8& getTextColor(s32 index) {
         return ::sTextColor[index];
     }
 #else
-    const GXColor& getTextColor(s32 index) NO_INLINE {
+    const NebulaColor8& getTextColor(s32 index) NO_INLINE {
         return MR::getLanguage() == LANGUAGE_KRKOREAN ? ::sTextColorKorean[index] : ::sTextColor[index];
     }
 #endif
 
     void setTextColor(nw4r::ut::TextWriterBase< wchar_t >* writer, s32 index) {
-        GXColor color = getTextColor(index);
+        NebulaColor8 color = getTextColor(index);
         color.a = writer->GetTextColor().a;
         writer->SetTextColor(color);
     }
@@ -680,7 +680,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeSystemGroupColor(nw4r::ut::
         if (index == 0) {
             context->writer->SetColorMapping(mColorMappingMin, mColorMappingMax);
         } else {
-            GXColor color = ::getTextColor(index);
+            NebulaColor8 color = ::getTextColor(index);
             color.a = mColorMappingMin.a;
             context->writer->SetColorMapping(color, ::getTextColor(index));
         }

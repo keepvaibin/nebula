@@ -18,7 +18,7 @@ typedef struct {
 	u16				width;
 	u16				height;
 	MiiIconBGType	bgType;
-	GXColor			bgColor;
+	NebulaColor8			bgColor;
 	BOOL			drawXluOnly;
 } MiiIconSetting;
 

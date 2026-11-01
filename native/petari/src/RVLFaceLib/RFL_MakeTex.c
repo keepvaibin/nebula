@@ -10,7 +10,7 @@
 
 // The drawing state a Mii texture is drawn with.
 void Mii_SetupTextureDraw(void) {
-    J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (GXColor){0, 0, 0, 0});
+    J3DNativeStateSetFog(GX_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (NebulaColor8){0, 0, 0, 0});
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDstAlpha(FALSE, 0);
@@ -476,17 +476,17 @@ void Mii_SetTev4Mouth(u32 color) {
 }
 
 void Mii_SetTev4Eye(u32 color, u32 type) {
-    GXColor color0;
+    NebulaColor8 color0;
 
     switch (type) {
     case 9:
-        color0 = (GXColor){255, 130, 0, 255};
+        color0 = (NebulaColor8){255, 130, 0, 255};
         break;
     case 20:
-        color0 = (GXColor){0, 255, 255, 255};
+        color0 = (NebulaColor8){0, 255, 255, 255};
         break;
     default:
-        color0 = (GXColor){0, 0, 0, 255};
+        color0 = (NebulaColor8){0, 0, 0, 255};
         break;
     }
 

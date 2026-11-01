@@ -19,7 +19,7 @@ void IntermissionScene::update() {
 void IntermissionScene::draw() const {
     J2DOrthoGraphSimple graph;
     graph.setPort();
-    graph.setColor(static_cast< const GXColor& >(GXColor(Color8(0, 0, 0, 255))));
+    graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, 255))));
 
     f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
     f32 width = MR::getScreenWidth();

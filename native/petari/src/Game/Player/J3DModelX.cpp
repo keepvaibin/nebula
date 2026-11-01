@@ -374,8 +374,8 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setTexCoordGen(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_NRM, GX_TRUE, GX_IDENTITY);
     storeStateList(list, 6);
 
-    GXColor ambientColor = {0, 0, 0, 0};
-    GXColor materialColor = {0, 0, 0, 255};
+    NebulaColor8 ambientColor = {0, 0, 0, 0};
+    NebulaColor8 materialColor = {0, 0, 0, 255};
     list.setChanAmbColor(GX_ALPHA0, ambientColor);
     list.setChanMatColor(GX_ALPHA0, materialColor);
     list.setBlendModeEtc(GX_BM_NONE, GX_BL_ONE, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);

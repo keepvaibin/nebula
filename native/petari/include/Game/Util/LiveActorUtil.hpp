@@ -257,7 +257,7 @@ namespace MR {
     void loadActorLight(const LiveActor*);
     void calcLightPos0(TVec3f*, const LiveActor*);
     void calcLightPos1(TVec3f*, const LiveActor*);
-    const GXColor* getLightAmbientColor(const LiveActor*);
+    const NebulaColor8* getLightAmbientColor(const LiveActor*);
     ActorLightCtrl* getLightCtrl(const LiveActor*);
 
     bool isStep(const LiveActor*, s32) NO_INLINE;

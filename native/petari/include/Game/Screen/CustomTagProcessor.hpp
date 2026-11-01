@@ -80,8 +80,8 @@ public:
     /* 0x30 */ u8 mPlayedSounds;
     /* 0x31 */ u8 mSoundIndex;
     /* 0x32 */ u8 mColorIndex;
-    /* 0x33 */ GXColor mColorMappingMin;
-    /* 0x37 */ GXColor mColorMappingMax;
+    /* 0x33 */ NebulaColor8 mColorMappingMin;
+    /* 0x37 */ NebulaColor8 mColorMappingMax;
     /* 0x40 */ f32 mRubyFontWidth;
     /* 0x44 */ f32 mRubyFontHeight;
     /* 0x48 */ f32 mFontWidth;
@@ -97,8 +97,8 @@ public:
     /* 0x31 */ u8 mSoundIndex;
     /* 0x32 */ u8 mColorIndex;
     /* 0x34 */ u16 mPreviousChar;
-    /* 0x36 */ GXColor mColorMappingMin;
-    /* 0x3A */ GXColor mColorMappingMax;
+    /* 0x36 */ NebulaColor8 mColorMappingMin;
+    /* 0x3A */ NebulaColor8 mColorMappingMax;
     /* 0x40 */ f32 mRubyFontWidth;
     /* 0x44 */ f32 mRubyFontHeight;
     /* 0x48 */ f32 mFontWidth;

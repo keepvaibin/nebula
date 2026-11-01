@@ -64,7 +64,7 @@ namespace {
     }
 };  // namespace
 
-static GXColor sDefaultColor;
+static NebulaColor8 sDefaultColor;
 
 WaterCameraFilter::WaterCameraFilter()
     : LiveActor("\220\205\222\206\203\112\203\201\203\211\203\164\203\102\203\213\203\136\201\133" /* 水中カメラフィルター */), mWaterAlpha(), mWavePhase(), mWaterColor(::sDefaultColor), mScreenTex(), mFilterTex() {
@@ -115,7 +115,7 @@ void WaterCameraFilter::exeWaterToAir() {
     }
 }
 
-static GXColor sWaterColor = {0x32, 0x32, 0, 0};
+static NebulaColor8 sWaterColor = {0x32, 0x32, 0, 0};
 
 void WaterCameraFilter::control() {
     if (MR::isCameraInWater()) {

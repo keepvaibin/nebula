@@ -16,20 +16,20 @@
 #include "nw4r/ut/inlines.h"
 #include <cstdio>
 
-const GXColorS10 DefaultBlackColor = {0, 0, 0, 0};
+const NebulaColor16 DefaultBlackColor = {0, 0, 0, 0};
 
 namespace nw4r {
     namespace lyt {
         namespace {
-            bool IsWhiteColor(const GXColorS10& color) {
+            bool IsWhiteColor(const NebulaColor16& color) {
                 return color.r == 255 && color.g == 255 && color.b == 255 && color.a == 255;
             }
 
-            bool operator==(const GXColorS10& rLhs, const GXColorS10& rRhs) {
+            bool operator==(const NebulaColor16& rLhs, const NebulaColor16& rRhs) {
                 return rLhs.r == rRhs.r && rLhs.g == rRhs.g && rLhs.b == rRhs.b && rLhs.a == rRhs.a;
             }
 
-            bool operator!=(const GXColorS10& rLhs, const GXColorS10& rRhs) {
+            bool operator!=(const NebulaColor16& rLhs, const NebulaColor16& rRhs) {
                 return !(rLhs == rRhs);
             }
 

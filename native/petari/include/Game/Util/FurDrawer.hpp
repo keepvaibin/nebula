@@ -45,7 +45,7 @@ public:
     /* 0x5C */ f32 mThickness[4];
     /* 0x6C */ u8 mLengthMap[4];
     /* 0x70 */ CLayerParam mColorBlend;
-    /* 0x7C */ GXColor mColor;
+    /* 0x7C */ NebulaColor8 mColor;
     /* 0x80 */ u8 mCullMode;
     /* 0x81 */ u8 mMatIntensity;
     /* 0x82 */ u8 mAmbIntensity;

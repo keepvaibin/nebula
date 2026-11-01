@@ -26,8 +26,8 @@ namespace NebulaUi {
         pText->SetTextColor(1, color(bottom));
     }
 
-    GXColorS10 tevColor(u32 rgba, bool alpha) {
-        GXColorS10 c;
+    NebulaColor16 tevColor(u32 rgba, bool alpha) {
+        NebulaColor16 c;
         c.r = static_cast< s16 >((rgba >> 24) & 0xFF);
         c.g = static_cast< s16 >((rgba >> 16) & 0xFF);
         c.b = static_cast< s16 >((rgba >> 8) & 0xFF);

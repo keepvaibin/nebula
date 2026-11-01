@@ -12,14 +12,14 @@ namespace J3DNativeState {
     void setZMode(GXBool compare, GXCompare func, GXBool update);
     void setAlphaCompare(GXCompare comp0, u8 ref0, GXAlphaOp op, GXCompare comp1, u8 ref1);
     void setDstAlpha(GXBool enable, u8 alpha);
-    void setTevColor(GXTevRegID id, GXColor color);
-    void setTevKColor(GXTevKColorID id, GXColor color);
-    void setTevColorS10(GXTevRegID id, GXColorS10 color);
+    void setTevColor(GXTevRegID id, NebulaColor8 color);
+    void setTevKColor(GXTevKColorID id, NebulaColor8 color);
+    void setTevColorS10(GXTevRegID id, NebulaColor16 color);
     void setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask,
                      GXDiffuseFn diffFn, GXAttnFn attnFn);
     void setTevDirect(GXTevStageID stage);
     // GXSetFog's writes (a projected type sends its second and third words without their register id, as it does).
-    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color);
+    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     void setClipMode(GXClipMode mode);
     void setIndTexMtx(GXIndTexMtxID id, const f32 offset[2][3], s8 scaleExp);
     // Partial setters: each changes only its own fields of the register it shares.
@@ -36,7 +36,7 @@ namespace J3DNativeState {
     void setLineWidth(u8 width, GXTexOffset texOffsets);
     void setPointSize(u8 size, GXTexOffset texOffsets);
     // Lights: a GXLightObj holds a J3DNativeLight; the GXInitLight* functions' arithmetic, then the light sent.
-    void initLightColor(GXLightObj* pObj, GXColor color);
+    void initLightColor(GXLightObj* pObj, NebulaColor8 color);
     void initLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z);
     void initLightDir(GXLightObj* pObj, f32 nx, f32 ny, f32 nz);
     // A specular light: its direction as a light at infinity, with the half-angle vector (computed for a viewer down
@@ -64,8 +64,8 @@ namespace J3DNativeState {
     // The cull mode (kept here: the game reads it back), GX's mapping.
     void setCullMode(GXCullMode mode);
     void getCullMode(GXCullMode* pMode);
-    void setChanMatColor(GXChannelID chan, GXColor color);
-    void setChanAmbColor(GXChannelID chan, GXColor color);
+    void setChanMatColor(GXChannelID chan, NebulaColor8 color);
+    void setChanAmbColor(GXChannelID chan, NebulaColor8 color);
     void setBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op);
     void setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d);
     void setTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d);
@@ -96,7 +96,7 @@ void J3DNativeStateSetTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, G
 void J3DNativeStateSetIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale scaleS, GXIndTexScale scaleT);
 void J3DNativeStateSetLineWidth(u8 width, GXTexOffset texOffsets);
 void J3DNativeStateSetPointSize(u8 size, GXTexOffset texOffsets);
-void J3DNativeStateInitLightColor(GXLightObj* pObj, GXColor color);
+void J3DNativeStateInitLightColor(GXLightObj* pObj, NebulaColor8 color);
 void J3DNativeStateInitLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z);
 void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id);
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
@@ -104,16 +104,16 @@ void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXT
 void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);
 void J3DNativeStateSetCullMode(GXCullMode mode);
 void J3DNativeStateGetCullMode(GXCullMode* pMode);
-void J3DNativeStateSetChanMatColor(GXChannelID chan, GXColor color);
-void J3DNativeStateSetChanAmbColor(GXChannelID chan, GXColor color);
+void J3DNativeStateSetChanMatColor(GXChannelID chan, NebulaColor8 color);
+void J3DNativeStateSetChanAmbColor(GXChannelID chan, NebulaColor8 color);
 void J3DNativeStateSetZMode(GXBool compare, GXCompare func, GXBool update);
 void J3DNativeStateSetAlphaCompare(GXCompare comp0, u8 ref0, GXAlphaOp op, GXCompare comp1, u8 ref1);
 void J3DNativeStateSetDstAlpha(GXBool enable, u8 alpha);
-void J3DNativeStateSetTevColor(GXTevRegID id, GXColor color);
-void J3DNativeStateSetTevKColor(GXTevKColorID id, GXColor color);
+void J3DNativeStateSetTevColor(GXTevRegID id, NebulaColor8 color);
+void J3DNativeStateSetTevKColor(GXTevKColorID id, NebulaColor8 color);
 void J3DNativeStateSetChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask, GXDiffuseFn diffFn, GXAttnFn attnFn);
 void J3DNativeStateSetTevDirect(GXTevStageID stage);
-void J3DNativeStateSetFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color);
+void J3DNativeStateSetFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
 void J3DNativeStateSetBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op);
 void J3DNativeStateSetTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d);
 void J3DNativeStateSetTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d);

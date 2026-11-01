@@ -38,7 +38,7 @@ void WarpPod_FORCE_MATCH_SDATA2() {
     (void)100.0f;
 }
 
-GXColor gGlowEffectEnvColor[] = {
+NebulaColor8 gGlowEffectEnvColor[] = {
     {0, 100, 200}, {44, 255, 42}, {255, 60, 60}, {196, 166, 0}, {0, 255, 0}, {255, 0, 255}, {255, 255, 0}, {255, 255, 255},
 };
 
@@ -539,7 +539,7 @@ void WarpPod::drawCylinder(u32) const {
     MR::ddSetVtxFormat(2);
     material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
-    const GXColor& glow = ::gGlowEffectEnvColor[mGlowColorIndex];
+    const NebulaColor8& glow = ::gGlowEffectEnvColor[mGlowColorIndex];
     NativeShader::setColor(material, 0, glow.r, glow.g, glow.b, glow.a);
     NativeShader::setColor(material, 4, 255, 255, 255, 255);
     material.constants[10] = 1.0f;

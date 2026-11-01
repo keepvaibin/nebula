@@ -26,7 +26,7 @@ void J3DMaterialAnm::initialize() {
 void J3DMaterialAnm::calc(J3DMaterial* pMaterial) const {
     for (u32 i = 0; i < ARRAY_SIZE(mMatColorAnm); i++) {
         if (mMatColorAnm[i].getAnmFlag()) {
-            GXColor* color = pMaterial->mColorBlock->getMatColor(i);
+            NebulaColor8* color = pMaterial->mColorBlock->getMatColor(i);
             mMatColorAnm[i].calc(color);
         }
     }
@@ -41,14 +41,14 @@ void J3DMaterialAnm::calc(J3DMaterial* pMaterial) const {
 
     for (u32 i = 0; i < 3; i++) {
         if (mTevColorAnm[i].getAnmFlag()) {
-            GXColorS10* color = pMaterial->mTevBlock->getTevColor(i);
+            NebulaColor16* color = pMaterial->mTevBlock->getTevColor(i);
             mTevColorAnm[i].calc(color);
         }
     }
 
     for (u32 i = 0; i < ARRAY_SIZE(mTevKColorAnm); i++) {
         if (mTevKColorAnm[i].getAnmFlag()) {
-            GXColor* color = pMaterial->mTevBlock->getTevKColor(i);
+            NebulaColor8* color = pMaterial->mTevBlock->getTevKColor(i);
             mTevKColorAnm[i].calc(color);
         }
     }

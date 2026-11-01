@@ -4,7 +4,7 @@
 
 namespace nw4r {
     namespace ut {
-        struct Color : public GXColor {
+        struct Color : public NebulaColor8 {
         public:
             static const int ALPHA_MAX = 255;
 
@@ -18,7 +18,7 @@ namespace nw4r {
                 *this = color;
             }
 
-            Color(const GXColor& color) {
+            Color(const NebulaColor8& color) {
                 *this = color;
             }
 
@@ -33,7 +33,7 @@ namespace nw4r {
                 return *this;
             }
 
-            Color& operator=(const GXColor& color) {
+            Color& operator=(const NebulaColor8& color) {
                 r = color.r;
                 g = color.g;
                 b = color.b;
@@ -53,7 +53,7 @@ namespace nw4r {
                 return *this;
             }
 
-            Color& operator=(const GXColor& color) {
+            Color& operator=(const NebulaColor8& color) {
                 return operator=(*reinterpret_cast< const u32* >(&color));
             }
 

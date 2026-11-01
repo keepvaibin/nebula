@@ -1094,13 +1094,13 @@ namespace MR {
         return (s32)(JGeometry::TUtil< f32 >::clamp(start + (end - start) * t, 0.0f, 255.0f));
     }
 
-    GXColor lerp(GXColor start, GXColor end, f32 t) {
+    NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t) {
         u8 a = lerp(start.a, end.a, t);
         u8 b = lerp(start.b, end.b, t);
         u8 g = lerp(start.g, end.b, t);
         u8 r = lerp(start.r, end.r, t);
 
-        GXColor color = {r, g, b, a};
+        NebulaColor8 color = {r, g, b, a};
 
         return color;
     }
@@ -1332,7 +1332,7 @@ namespace MR {
         return;
     }
 
-    void blendColor(GXColor* pDst, const GXColor& rStart, const GXColor& rEnd, f32 t) {
+    void blendColor(NebulaColor8* pDst, const NebulaColor8& rStart, const NebulaColor8& rEnd, f32 t) {
         pDst->r = (s32)(getInterpolateValue(t, rStart.r, rEnd.r));
         pDst->g = (s32)(getInterpolateValue(t, rStart.g, rEnd.g));
         pDst->b = (s32)(getInterpolateValue(t, rStart.b, rEnd.b));

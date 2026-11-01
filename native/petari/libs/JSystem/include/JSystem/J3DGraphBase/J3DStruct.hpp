@@ -7,23 +7,23 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-struct J3DGXColor : public GXColor {
+struct J3DGXColor : public NebulaColor8 {
     J3DGXColor() {
     }
 
-    J3DGXColor(const J3DGXColor& other) : GXColor(other) {
+    J3DGXColor(const J3DGXColor& other) : NebulaColor8(other) {
     }
 
-    J3DGXColor(const GXColor color) : GXColor(color) {
+    J3DGXColor(const NebulaColor8 color) : NebulaColor8(color) {
     }
 
-    J3DGXColor& operator=(const GXColor color) {
-        *(GXColor*)this = color;
+    J3DGXColor& operator=(const NebulaColor8 color) {
+        *(NebulaColor8*)this = color;
         return *this;
     }
 
     J3DGXColor& operator=(const J3DGXColor& other) {
-        GXColor::operator=(other);
+        NebulaColor8::operator=(other);
         return *this;
     }
 };
@@ -45,7 +45,7 @@ struct J3DFogInfo {
     /* 0x08 */ f32 mEndZ;
     /* 0x0C */ f32 mNearZ;
     /* 0x10 */ f32 mFarZ;
-    /* 0x14 */ GXColor mColor;
+    /* 0x14 */ NebulaColor8 mColor;
     /* 0x18 */ GXFogAdjTable mFogAdjTable;
 };  // Size: 0x2C
 
@@ -59,7 +59,7 @@ struct BEData< J3DFogInfo > {
     BE< f32 > mEndZ;
     BE< f32 > mNearZ;
     BE< f32 > mFarZ;
-    GXColor mColor;
+    NebulaColor8 mColor;
     BE< u16 > mFogAdjTable[10];
 
     operator J3DFogInfo() const {
@@ -182,7 +182,7 @@ class J3DLightInfo {
 public:
     /* 0x00 */ Vec mLightPosition;
     /* 0x0C */ Vec mLightDirection;
-    /* 0x18 */ GXColor mColor;
+    /* 0x18 */ NebulaColor8 mColor;
     /* 0x1C */ Vec mCosAtten;
     /* 0x28 */ Vec mDistAtten;
 };
@@ -215,7 +215,7 @@ template <>
 struct BEData< J3DLightInfo > {
     BEData< Vec > mLightPosition;
     BEData< Vec > mLightDirection;
-    GXColor mColor;
+    NebulaColor8 mColor;
     BEData< Vec > mCosAtten;
     BEData< Vec > mDistAtten;
 
@@ -404,18 +404,18 @@ struct J3DAlphaCompInfo {
     }
 };
 
-struct J3DGXColorS10 : public GXColorS10 {
+struct J3DGXColorS10 : public NebulaColor16 {
     J3DGXColorS10() {
     }
 
-    J3DGXColorS10(const J3DGXColorS10& other) : GXColorS10(other) {
+    J3DGXColorS10(const J3DGXColorS10& other) : NebulaColor16(other) {
     }
 
-    J3DGXColorS10(const GXColorS10& color) : GXColorS10(color) {
+    J3DGXColorS10(const NebulaColor16& color) : NebulaColor16(color) {
     }
 
-    J3DGXColorS10& operator=(const GXColorS10& color) NO_INLINE {
-        __memcpy(this, &color, sizeof(GXColorS10));
+    J3DGXColorS10& operator=(const NebulaColor16& color) NO_INLINE {
+        __memcpy(this, &color, sizeof(NebulaColor16));
         return *this;
     }
 };

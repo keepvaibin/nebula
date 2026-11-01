@@ -6,7 +6,7 @@
 #include <revolution/os.h>
 
 struct LightInfo {
-    /* 0x00 */ GXColor mColor;
+    /* 0x00 */ NebulaColor8 mColor;
     /* 0x04 */ Vec mPos;
     /* 0x10 */ bool mIsFollowCamera;
 };
@@ -14,7 +14,7 @@ struct LightInfo {
 struct LightInfoCoin {
     /* 0x00 */ LightInfo base;
     struct {
-        /* 0x14 */ GXColor _14;
+        /* 0x14 */ NebulaColor8 _14;
         /* 0x18 */ f32 _18;
     };
 };
@@ -23,7 +23,7 @@ struct ActorLightInfo {
     /* 0x00 */ LightInfo mInfo0;
     /* 0x14 */ LightInfo mInfo1;
     /* 0x28 */ u8 mAlpha2;
-    /* 0x29 */ GXColor mColor;
+    /* 0x29 */ NebulaColor8 mColor;
 };
 
 struct AreaLightInfo {

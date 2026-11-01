@@ -54,8 +54,8 @@ void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile
 namespace {
     // The draws' mode (runtime/src/render/materials/image_effect.hlsl params.x) and the colours the fall-out passes give.
     u32 sMode = 0;
-    GXColor sKonst = {0, 0, 0, 0};
-    GXColor sEdge = {0, 0, 0, 0};
+    NebulaColor8 sKonst = {0, 0, 0, 0};
+    NebulaColor8 sEdge = {0, 0, 0, 0};
 
     // runtime/src/render/materials/image_effect.hlsl for a screen tile: texture 0 at its own coordinates (moved by the
     // blur's offset) in the mode, the material colour the intensity (draw type 2: its alpha), blended by the draw type
@@ -89,7 +89,7 @@ void ImageEffectLocalUtil::setStage(EStage stage) {
     sMode = stage == Stage_Threshold ? 1 : 0;
 }
 
-void ImageEffectLocalUtil::setMode(EMode mode, const GXColor& rKonst, const GXColor& rEdge) {
+void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge) {
     sMode = static_cast< u32 >(mode);
     sKonst = rKonst;
     sEdge = rEdge;

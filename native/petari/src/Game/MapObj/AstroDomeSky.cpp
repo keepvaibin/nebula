@@ -21,8 +21,8 @@ namespace {
     const s32 cRotateAppearBrkFrame = 59;
     const f32 cAppearanceRotateSpeed = 0.1f;
 
-    const GXColor sColor1 = {0x00, 0x00, 0x00, 0xFF};
-    const GXColor sColor2 = {0x00, 0x00, 0x00, 0xFF};
+    const NebulaColor8 sColor1 = {0x00, 0x00, 0x00, 0xFF};
+    const NebulaColor8 sColor2 = {0x00, 0x00, 0x00, 0xFF};
 };  // namespace
 
 namespace NrvAstroDomeSky {

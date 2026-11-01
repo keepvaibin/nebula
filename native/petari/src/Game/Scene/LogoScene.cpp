@@ -118,7 +118,7 @@ void LogoScene::draw() const {
 #endif
     MR::drawInit();
 
-    GXColor color;
+    NebulaColor8 color;
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     color.r = 0;
     color.g = 0;

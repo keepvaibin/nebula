@@ -20,7 +20,7 @@ namespace {
     // const f32 sAccel = 0.0f;
     // const f32 sSpeedMax = 0.0f;
 
-    const GXColor color = {170, 170, 255, 140};
+    const NebulaColor8 color = {170, 170, 255, 140};
 };  // namespace
 
 namespace NrvGravityLight {

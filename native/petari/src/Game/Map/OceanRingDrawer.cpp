@@ -37,8 +37,8 @@ namespace {
     const f32 sBloomCameraDepthMin = 0.0f;
     const f32 sBloomCameraDepthMax = 0.0f;
 
-    static GXColor color1 = {0x28, 0x28, 0x28, 0x14};
-    static GXColor color2 = {0x76, 0xD7, 0xFF, 0xFF};
+    static NebulaColor8 color1 = {0x28, 0x28, 0x28, 0x14};
+    static NebulaColor8 color2 = {0x76, 0xD7, 0xFF, 0xFF};
     static u8 unknownVal = 1;
 };  // namespace
 

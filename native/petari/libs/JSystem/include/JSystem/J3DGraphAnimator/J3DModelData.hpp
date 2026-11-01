@@ -117,7 +117,7 @@ public:
     void* getVtxNrmArray() const {
         return mVertexData.getVtxNrmArray();
     }
-    GXColor* getVtxColorArray(u8 idx) const {
+    NebulaColor8* getVtxColorArray(u8 idx) const {
         return mVertexData.getVtxColorArray(idx);
     }
     bool checkFlag(u32 flag) const {

@@ -89,11 +89,11 @@ struct BEData< S16Vec > {
 };
 
 template <>
-struct BEData< GXColorS10 > {
+struct BEData< NebulaColor16 > {
     BE< s16 > r, g, b, a;
 
-    operator GXColorS10() const {
-        GXColorS10 c = {r, g, b, a};
+    operator NebulaColor16() const {
+        NebulaColor16 c = {r, g, b, a};
         return c;
     }
 };

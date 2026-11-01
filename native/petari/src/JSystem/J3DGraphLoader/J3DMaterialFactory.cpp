@@ -14,10 +14,10 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     }
 
     mpCullMode = JSUConvertOffsetToPtr< NEBULA_BE(GXCullMode) >(&i_block, i_block.mpCullMode);
-    mpMatColor = JSUConvertOffsetToPtr< GXColor >(&i_block, i_block.mpMatColor);
+    mpMatColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpMatColor);
     mpColorChanNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpColorChanNum);
     mpColorChanInfo = JSUConvertOffsetToPtr< J3DColorChanInfo >(&i_block, i_block.mpColorChanInfo);
-    mpAmbColor = JSUConvertOffsetToPtr< GXColor >(&i_block, i_block.mpAmbColor);
+    mpAmbColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpAmbColor);
     mpLightInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DLightInfo) >(&i_block, i_block.mpLightInfo);
     mpTexGenNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpTexGenNum);
     mpTexCoordInfo = JSUConvertOffsetToPtr< J3DTexCoordInfo >(&i_block, i_block.mpTexCoordInfo);
@@ -26,8 +26,8 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     field_0x34 = JSUConvertOffsetToPtr< NEBULA_DISC(J3DTexMtxInfo) >(&i_block, i_block.field_0x44);
     mpTexNo = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&i_block, i_block.mpTexNo);
     mpTevOrderInfo = JSUConvertOffsetToPtr< J3DTevOrderInfo >(&i_block, i_block.mpTevOrderInfo);
-    mpTevColor = JSUConvertOffsetToPtr< NEBULA_DISC(GXColorS10) >(&i_block, i_block.mpTevColor);
-    mpTevKColor = JSUConvertOffsetToPtr< GXColor >(&i_block, i_block.mpTevKColor);
+    mpTevColor = JSUConvertOffsetToPtr< NEBULA_DISC(NebulaColor16) >(&i_block, i_block.mpTevColor);
+    mpTevKColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpTevKColor);
     mpTevStageNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpTevStageNum);
     mpTevStageInfo = JSUConvertOffsetToPtr< J3DTevStageInfo >(&i_block, i_block.mpTevStageInfo);
     mpTevSwapModeInfo = JSUConvertOffsetToPtr< J3DTevSwapModeInfo >(&i_block, i_block.mpTevSwapModeInfo);
@@ -475,7 +475,7 @@ u32 J3DMaterialFactory::calcSizeLockedMaterial(J3DMaterial* i_material, int i_id
 }
 
 J3DGXColor J3DMaterialFactory::newMatColor(int i_idx, int i_no) const {
-    J3DGXColor dflt = (GXColor){0xff, 0xff, 0xff, 0xff};
+    J3DGXColor dflt = (NebulaColor8){0xff, 0xff, 0xff, 0xff};
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mMatColorIdx[i_no] != 0xffff) {
         return mpMatColor[mtl_init_data->mMatColorIdx[i_no]];
@@ -504,7 +504,7 @@ J3DColorChan J3DMaterialFactory::newColorChan(int i_idx, int i_no) const {
 }
 
 J3DGXColor J3DMaterialFactory::newAmbColor(int i_idx, int i_no) const {
-    J3DGXColor dflt = (GXColor){0x32, 0x32, 0x32, 0x32};
+    J3DGXColor dflt = (NebulaColor8){0x32, 0x32, 0x32, 0x32};
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mAmbColorIdx[i_no] != 0xffff) {
         return mpAmbColor[mtl_init_data->mAmbColorIdx[i_no]];
@@ -571,7 +571,7 @@ J3DTevOrder J3DMaterialFactory::newTevOrder(int i_idx, int i_no) const {
 }
 
 J3DGXColorS10 J3DMaterialFactory::newTevColor(int i_idx, int i_no) const {
-    GXColorS10 _dflt = {0, 0, 0, 0};
+    NebulaColor16 _dflt = {0, 0, 0, 0};
     J3DGXColorS10 dflt = _dflt;
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mTevColorIdx[i_no] != 0xffff) {
@@ -582,7 +582,7 @@ J3DGXColorS10 J3DMaterialFactory::newTevColor(int i_idx, int i_no) const {
 }
 
 J3DGXColor J3DMaterialFactory::newTevKColor(int i_idx, int i_no) const {
-    J3DGXColor dflt = (GXColor){0xff, 0xff, 0xff, 0xff};
+    J3DGXColor dflt = (NebulaColor8){0xff, 0xff, 0xff, 0xff};
     J3DMaterialInitData* mtl_init_data = &mpMaterialInitData[mpMaterialID[i_idx]];
     if (mtl_init_data->mTevKColorIdx[i_no] != 0xffff) {
         return mpTevKColor[mtl_init_data->mTevKColorIdx[i_no]];

@@ -11,7 +11,7 @@ ShadowSurfaceDrawInit::ShadowSurfaceDrawInit(const char* pName) : NameObj(pName)
     MR::registerPreDrawFunction(MR::Functor(&ShadowSurfaceDrawInit::initDraw), MR::DrawType_ShadowSurface);
 }
 
-void ShadowSurfaceDrawInit::sendColor(const GXColor& rColor) {
+void ShadowSurfaceDrawInit::sendColor(const NebulaColor8& rColor) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, false,
                        NEBULA_CULL_BACK);

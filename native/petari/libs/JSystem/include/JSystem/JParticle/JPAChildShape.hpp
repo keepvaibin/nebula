@@ -21,8 +21,8 @@ struct JPAChildShapeData {
     /* 0x28 */ NEBULA_BE(f32) mInheritScale;
     /* 0x2C */ NEBULA_BE(f32) mInheritAlpha;
     /* 0x30 */ NEBULA_BE(f32) mInheritRGB;
-    /* 0x34 */ GXColor mPrmClr;
-    /* 0x38 */ GXColor mEnvClr;
+    /* 0x34 */ NebulaColor8 mPrmClr;
+    /* 0x38 */ NebulaColor8 mEnvClr;
     /* 0x3C */ NEBULA_BE(f32) mTiming;
     /* 0x40 */ NEBULA_BE(s16) mLife;
     /* 0x42 */ NEBULA_BE(s16) mRate;
@@ -65,13 +65,13 @@ public:
     f32 getColorInhRate() const {
         return mpData->mInheritRGB;
     }
-    void getPrmClr(GXColor* dst) const {
+    void getPrmClr(NebulaColor8* dst) const {
         *dst = mpData->mPrmClr;
     }
     u8 getPrmAlpha() const {
         return mpData->mPrmClr.a;
     }
-    void getEnvClr(GXColor* dst) const {
+    void getEnvClr(NebulaColor8* dst) const {
         *dst = mpData->mEnvClr;
     }
     f32 getTiming() const {

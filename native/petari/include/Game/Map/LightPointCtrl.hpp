@@ -11,7 +11,7 @@ class LiveActor;
 
 struct PointLightInfo {
     /* 0x00 */ Vec mPos;
-    /* 0x0C */ GXColor mColor;
+    /* 0x0C */ NebulaColor8 mColor;
     /* 0x10 */ f32 mRefDistance;
     /* 0x14 */ f32 mRefBrightness;
     /* 0x18 */ GXDistAttnFn mDistAttnFn;

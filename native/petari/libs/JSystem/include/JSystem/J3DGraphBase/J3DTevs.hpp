@@ -34,10 +34,10 @@ namespace J3DTevsDefault {
 extern const J3DFogInfo j3dDefaultFogInfo;
 extern const J3DNBTScaleInfo j3dDefaultNBTScaleInfo;
 
-extern const GXColor j3dDefaultColInfo;
-extern const GXColor j3dDefaultAmbInfo;
-extern const GXColorS10 j3dDefaultTevColor;
-extern const GXColor j3dDefaultTevKColor;
+extern const NebulaColor8 j3dDefaultColInfo;
+extern const NebulaColor8 j3dDefaultAmbInfo;
+extern const NebulaColor16 j3dDefaultTevColor;
+extern const NebulaColor8 j3dDefaultTevKColor;
 extern u8 j3dAlphaCmpTable[768];
 extern const u8 j3dDefaultNumChans;
 

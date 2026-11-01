@@ -596,7 +596,7 @@ void GameScene::drawMirror() const {
         MotionSignal::mirror(false);
 #endif
         MR::clearZBuffer();
-        GXColor c = {0, 0, 255, 0};
+        NebulaColor8 c = {0, 0, 255, 0};
         MR::fillScreen(c);
     }
 }

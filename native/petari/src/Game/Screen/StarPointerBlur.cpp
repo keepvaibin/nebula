@@ -140,7 +140,7 @@ void StarPointerBlur::draw() const {
     initDraw();
     switch (::sDrawMode) {
     case 0:
-        draw0((GXColor){0, 0, 0, 0});  // NOTE: indicated by debug symbols, color is a dummy
+        draw0((NebulaColor8){0, 0, 0, 0});  // NOTE: indicated by debug symbols, color is a dummy
         break;
     case 1:
         draw1();  // NOTE: indicated by debug symbols

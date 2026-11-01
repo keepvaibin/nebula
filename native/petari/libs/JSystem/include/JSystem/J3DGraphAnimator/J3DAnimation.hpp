@@ -43,8 +43,8 @@ struct J3DAnmTransform_ANK1 {
     /* 0x20 */ NEBULA_BE(u32) translation_data_offset;
 };
 
-typedef struct _GXColor GXColor;
-typedef struct _GXColorS10 GXColorS10;
+#include <nebula_color.h>
+typedef struct NebulaColor16 NebulaColor16;
 
 #ifdef TARGET_PC
 // A Vec in animation data (texture SRT centres).
@@ -592,7 +592,7 @@ public:
     virtual s32 getKind() const {
         return 7;
     }
-    virtual void getColor(u8, u16, GXColor*) const {
+    virtual void getColor(u8, u16, NebulaColor8*) const {
     }
 
     /* 0x0C */ u16 mAnmTableNum[2];
@@ -607,7 +607,7 @@ public:
     virtual s32 getKind() const {
         return 14;
     }
-    virtual void getColor(u8, u16, GXColor*) const;
+    virtual void getColor(u8, u16, NebulaColor8*) const;
 
     /* 0x18 */ J3DAnmColorFullTable* mpTable[2];
     /* 0x20 */ u8* mColorR;
@@ -624,7 +624,7 @@ public:
     virtual s32 getKind() const {
         return 15;
     }
-    virtual void getColor(u8, u16, GXColor*) const;
+    virtual void getColor(u8, u16, NebulaColor8*) const;
 
     /* 0x18 */ J3DAnmColorKeyTable* mpTable[2];
     /* 0x20 */ NEBULA_BE(s16)* mColorR;
@@ -643,7 +643,7 @@ public:
     virtual s32 getKind() const {
         return 1;
     }
-    virtual void getColor(u16, GXColor*) const {
+    virtual void getColor(u16, NebulaColor8*) const {
     }
 
     u16 getUpdateMaterialNum() const {
@@ -673,7 +673,7 @@ public:
     virtual s32 getKind() const {
         return 10;
     }
-    virtual void getColor(u16, GXColor*) const;
+    virtual void getColor(u16, NebulaColor8*) const;
 
     /* 0x2C */ u8* mColorR;
     /* 0x30 */ u8* mColorG;
@@ -690,7 +690,7 @@ public:
     virtual s32 getKind() const {
         return 11;
     }
-    virtual void getColor(u16, GXColor*) const;
+    virtual void getColor(u16, NebulaColor8*) const;
 
     /* 0x2C */ NEBULA_BE(s16)* mColorR;
     /* 0x30 */ NEBULA_BE(s16)* mColorG;
@@ -701,8 +701,8 @@ public:
 class J3DAnmTevRegKey : public J3DAnmBase {
 public:
     J3DAnmTevRegKey();
-    void getTevColorReg(u16, _GXColorS10*) const;
-    void getTevKonstReg(u16, _GXColor*) const;
+    void getTevColorReg(u16, NebulaColor16*) const;
+    void getTevKonstReg(u16, NebulaColor8*) const;
     void searchUpdateMaterialID(J3DMaterialTable*);
     void searchUpdateMaterialID(J3DModelData*);
 

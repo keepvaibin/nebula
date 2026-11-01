@@ -122,23 +122,23 @@ static const u8 MII_I_EYEBROW_ROT_OFFSET[MII_I_MAX_EYEBROW_TYPE + 1] = {
 /**
  * Colors for TEV
  */
-static const GXColor MII_I_MOLE_COLOR0 = {18, 15, 15, 255};
+static const NebulaColor8 MII_I_MOLE_COLOR0 = {18, 15, 15, 255};
 
-static const GXColor MII_I_EYE_COLOR1[MII_I_MAX_EYE_COLOR + 1] = {
+static const NebulaColor8 MII_I_EYE_COLOR1[MII_I_MAX_EYE_COLOR + 1] = {
     {0, 0, 0, 255},      {124, 128, 128, 255}, {112, 80, 64, 255},
     {112, 110, 64, 255}, {88, 104, 184, 255},  {72, 128, 104, 255}};
 
-static const GXColor MII_I_EYEBROW_COLOR0[MII_I_MAX_EYEBROW_COLOR + 1] = {
+static const NebulaColor8 MII_I_EYEBROW_COLOR0[MII_I_MAX_EYEBROW_COLOR + 1] = {
     {30, 26, 24, 255},  {56, 32, 21, 255},    {85, 38, 23, 255},
     {112, 64, 36, 255}, {114, 114, 120, 255}, {73, 54, 26, 255},
     {122, 89, 40, 255}, {193, 159, 100, 255}};
 
-static const GXColor MII_I_MOUTH_COLOR0[MII_I_MAX_MOUTH_COLOR + 1] = {
+static const NebulaColor8 MII_I_MOUTH_COLOR0[MII_I_MAX_MOUTH_COLOR + 1] = {
     {190, 78, 38, 255}, {216, 48, 40, 255}, {207, 68, 71, 255}};
-static const GXColor MII_I_MOUTH_COLOR1[MII_I_MAX_MOUTH_COLOR + 1] = {
+static const NebulaColor8 MII_I_MOUTH_COLOR1[MII_I_MAX_MOUTH_COLOR + 1] = {
     {113, 42, 4, 255}, {120, 21, 16, 255}, {126, 37, 40, 255}};
 
-static const GXColor MII_I_BEARD_COLOR0[MII_I_MAX_BEARD_COLOR + 1] = {
+static const NebulaColor8 MII_I_BEARD_COLOR0[MII_I_MAX_BEARD_COLOR + 1] = {
     {30, 26, 24, 255},  {56, 32, 21, 255},    {85, 38, 23, 255},
     {112, 64, 36, 255}, {114, 114, 120, 255}, {73, 54, 26, 255},
     {122, 89, 40, 255}, {193, 159, 100, 255}};

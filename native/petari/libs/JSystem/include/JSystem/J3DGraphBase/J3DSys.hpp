@@ -56,7 +56,7 @@ public:
     /* 0x108 */ Mtx33* mModelNrmMtx;
     /* 0x10C */ void* mVtxPos;
     /* 0x110 */ void* mVtxNrm;
-    /* 0x114 */ GXColor* mVtxCol;
+    /* 0x114 */ NebulaColor8* mVtxCol;
     /* 0x118 */ Vec* mNBTScale;
 
     J3DSys();
@@ -111,7 +111,7 @@ public:
     void* getVtxCol() {
         return mVtxCol;
     }
-    void setVtxCol(GXColor* pVtxCol) {
+    void setVtxCol(NebulaColor8* pVtxCol) {
         mVtxCol = pVtxCol;
     }
 

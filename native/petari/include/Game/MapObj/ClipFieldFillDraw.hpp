@@ -14,7 +14,7 @@ public:
 
     void setModeSubColor();
     void setUpFillScreen() const;
-    void sendFillScreen(GXColor) const;
+    void sendFillScreen(NebulaColor8) const;
 
     // The fill's blend (nebula_game_api.h NEBULA_BLEND_* and NEBULA_FACTOR_*).
     u8 mFillBlendOp;

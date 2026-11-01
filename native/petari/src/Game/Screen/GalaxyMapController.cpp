@@ -189,7 +189,7 @@ void GalaxyMapController::drawForCapture() {
     mMap->drawForCapture(drawInfo);
 }
 
-static const GXColor sWipeColor = {0, 0, 0, 255};
+static const NebulaColor8 sWipeColor = {0, 0, 0, 255};
 
 void GalaxyMapController::startGalaxyMap() {
     appear();
@@ -245,7 +245,7 @@ void GalaxyMapController::startNewDomeDiscover() {
     setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeinModeMap));
 }
 
-static const GXColor sTicoCometPrayWipeColor = {255, 255, 255, 255};
+static const NebulaColor8 sTicoCometPrayWipeColor = {255, 255, 255, 255};
 
 void GalaxyMapController::startTicoCometPray() {
     appear();
@@ -625,7 +625,7 @@ void GalaxyMapController::setNerveAccordingToNextModeFromMap() {
     }
 }
 
-void GalaxyMapController::setFaderParam(GXColor color, int frame) {
+void GalaxyMapController::setFaderParam(NebulaColor8 color, int frame) {
     mWipe->setColor(color);
     mWipeFrame = frame;
 }

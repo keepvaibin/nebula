@@ -121,7 +121,7 @@ namespace nw4r {
                 return GetTexMapAry()[texMapIdx];
             }
 
-            void SetTevColor(u32 idx, const GXColorS10& color) {
+            void SetTevColor(u32 idx, const NebulaColor16& color) {
                 mTevCols[idx] = color;
             }
 
@@ -165,7 +165,7 @@ namespace nw4r {
                 *GetBlendModePtr() = value;
             }
 
-            const GXColorS10 GetTevColor(u32 idx) const {
+            const NebulaColor16 GetTevColor(u32 idx) const {
                 return mTevCols[idx];
             }
 
@@ -189,7 +189,7 @@ namespace nw4r {
             void AddAnimationLink(AnimationLink*);
 
             AnimationList mAnimList;
-            GXColorS10 mTevCols[3];
+            NebulaColor16 mTevCols[3];
             ut::Color mTevKCols[4];
             detail::BitGXNums mGXMemCap;
             detail::BitGXNums mGXMemNum;

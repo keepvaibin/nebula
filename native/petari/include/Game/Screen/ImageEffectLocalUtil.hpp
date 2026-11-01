@@ -34,7 +34,7 @@ namespace ImageEffectLocalUtil {
         Mode_Alpha = 4,
         Mode_Edge = 5,
     };
-    void setMode(EMode mode, const GXColor& rKonst, const GXColor& rEdge);
+    void setMode(EMode mode, const NebulaColor8& rKonst, const NebulaColor8& rEdge);
     void setupDrawTexture();
     void drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType);
     void sendTextureVertex(s32 divisions, s32 tile);

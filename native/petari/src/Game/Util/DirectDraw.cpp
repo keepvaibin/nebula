@@ -60,7 +60,7 @@ namespace TDDraw {
     }
 
     void setup(u32 drawMode, u32 blendMode, u8 viewMode) {
-        GXColor color = {0, 0, 0, 0};
+        NebulaColor8 color = {0, 0, 0, 0};
 
         J3DNativeState::setCullMode(GX_CULL_NONE);
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
@@ -539,7 +539,7 @@ namespace TDDraw {
     void mixFogColor(TVec3f position, f32 radius, u32 packedColor) {
         f32 nearZ = MR::getNearZ();
         f32 farZ = MR::getFarZ();
-        GXColor color;
+        NebulaColor8 color;
         setGXColor(packedColor, &color);
         f32 start;
         f32 end;

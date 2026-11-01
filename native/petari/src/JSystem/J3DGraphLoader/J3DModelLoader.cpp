@@ -319,7 +319,7 @@ void J3DModelLoader::readVertex(J3DVertexBlock const* i_block) {
     vertex_data.mVtxNrmArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNrmArray);
     vertex_data.mVtxNBTArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNBTArray);
     for (int i = 0; i < 2; i++) {
-        vertex_data.mVtxColorArray[i] = (GXColor*)JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxColorArray[i]);
+        vertex_data.mVtxColorArray[i] = (NebulaColor8*)JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxColorArray[i]);
     }
     for (int i = 0; i < 8; i++) {
         vertex_data.mVtxTexCoordArray[i] = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxTexCoordArray[i]);

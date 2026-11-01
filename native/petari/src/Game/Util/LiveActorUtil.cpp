@@ -1774,7 +1774,7 @@ namespace MR {
         LightFunction::calcLightWorldPos(pPos, pActor->mActorLightCtrl->getActorLight()->mInfo1);
     }
 
-    const GXColor* getLightAmbientColor(const LiveActor* pActor) {
+    const NebulaColor8* getLightAmbientColor(const LiveActor* pActor) {
         return &pActor->mActorLightCtrl->getActorLight()->mColor;
     }
 
