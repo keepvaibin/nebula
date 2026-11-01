@@ -511,10 +511,6 @@ private:
     TransformHistory screen_history_;
     TransformHistory mirror_history_;
     unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
-    // Ray tracing: the 3D scene's SceneFunction phase (motion::ScenePhase, from the phase
-    // markers), whether the draw state is traceable geometry (unblended, colour- and
-    // depth-writing perspective triangles; flush_draw_state) and whether the scene was traced.
-    std::uint8_t rt_phase_ = 0xFFu;
     bool rt_state_eligible_ = false;
     // The same, alpha-tested: traced as foliage cards where the material table names foliage.
     bool rt_card_eligible_ = false;
@@ -529,8 +525,6 @@ private:
     bool rt_water_eligible_ = false;
     bool rt_sprite_eligible_ = false;   // alpha-blended translucent triangles (light sprites, rt_sprite_light_draw)
     bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
-    bool rt_scene_traced_ = true;
-    bool rt_view_set_ = false;
     // Ambient occlusion (RenderConfig::ambient_occlusion, without traced lighting), sampled at each frame start; the
     // scene's view is set (note_scene_ao_view) and the occlusion drawn (apply_scene_ao).
     bool ambient_occlusion_ = false;
@@ -552,26 +546,6 @@ private:
     bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
     std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
-    std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
-    // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an
-    // emitter's particles its effect's (motion::kMarkerEffect; 0: none) over the textures'.
-    std::uint16_t texture_rt_material_ = 0u;
-    std::uint16_t rt_material_identity_ = 0u;
-    // The J3D material identity (FNV-1a "model/material") whose shapes draw now, 0 none (GALAXY_RT_LOG_GLOWS).
-    std::uint32_t rt_identity_seen_ = 0u;
-    std::uint16_t rt_effect_material_ = 0u;
-    void refresh_rt_material() noexcept {
-        current_rt_material_ = rt_material_identity_ != 0u ? rt_material_identity_
-                               : rt_effect_material_ != 0u ? rt_effect_material_
-                                                           : texture_rt_material_;
-    }
-    unsigned current_rt_map_ = 0xFFu;  // its texture map (else the first bound one; 0xFF none)
-    std::uint32_t rt_draw_buffer_ = 0xFFFFu;   // the last draw buffer marker's type (bit 16: translucent)
-    bool rt_sky_buffer_ = false;  // the draws are the game's sky lists' (kRtDrawSky) until the next category marker
-    bool rt_sun_buffer_ = false;   // the game's sun list (Sun 3): neither sky nor scene under physical light
-    // The draws are the game's own shadows (CategoryList::execute of MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27,
-    // AlphaShadow 0x29) until the next category marker: hidden under traced lighting (rt_hidden_draw).
-    bool rt_fake_shadow_list_ = false;
     std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
     // De-baking by model (apply_debake_model): a model's vertex colours (its CP colour arrays CLR0 / CLR1), sampled the
     // first frame it draws, decide whether they hold baked light (de-baked from the next frame) or paint (kept).
@@ -603,25 +577,6 @@ private:
     std::vector<std::uint64_t> debake_model_order_;   // GALAXY_RT_DEBAKE_CYCLE: the baked models in decision order
     // Per object name (its address) the class its name gives (rt_named_class), + 1.
     std::unordered_map<std::uint64_t, std::uint8_t> rt_named_;
-    // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
-    // world space (direction towards it), how far the lights are moved to it, its source (1 the
-    // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
-    // colour (RGBA8); whether the scene is followed (the ray tracer lights it and its camera is
-    // known) and that camera; GX lights 0 and 1: those the hooked light loads left (known) and of
-    // them those following the camera, those whose loaded positions (rt_light_positions_) the next
-    // draw takes; the moved lights of the palette snapshot in use and of the flushed draw (serial
-    // << 8 | light bits).
-    ActorLightAim rt_light_aim_{};
-    std::uint32_t rt_light_serial_ = 0;
-    std::array<float, 3> rt_light_world_{};
-    float rt_light_blend_ = 0.0f;
-    std::uint8_t rt_key_source_ = 0;
-    std::uint32_t rt_light_key_color_ = 0;
-    bool rt_light_tracking_ = false;
-    std::array<float, 12> rt_scene_view_{};
-    std::uint8_t rt_known_lights_ = 0;
-    std::uint8_t rt_follow_lights_ = 0;
-    std::uint8_t rt_light_pending_ = 0;
     std::array<std::array<float, 3>, 2> rt_light_positions_{};
     std::uint32_t rt_palette_lights_ = 0;
     std::uint32_t rt_draw_lights_ = 0;

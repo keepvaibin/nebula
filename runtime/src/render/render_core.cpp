@@ -1447,59 +1447,13 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
             std::fprintf(stderr, "[rt-identity] first marker of kind %u\n", static_cast<unsigned>(kind));
         }
     }
-    // The J3D material whose shapes draw next: the table's row for it, where it has one, over its texture's.
-    if (kind == motion::kMarkerMaterial) {
-        rt_material_identity_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
-        rt_identity_seen_ = static_cast<std::uint32_t>(a);
-        // GALAXY_RT_LOG_GLOWS=1: each identity the first time it is seen, and the row it found.
-        if (rt_log_glows()) [[unlikely]] {
-            static std::unordered_set<std::uint32_t> logged;
-            if (logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
-                std::fprintf(stderr, "[rt-identity] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
-                             static_cast<unsigned>(rt_material_identity_));
-            }
-        }
-        refresh_rt_material();
-        return;
-    }
-    // The effect an emitter's particles belong to (its marker follows the emitter's): its table row, where it has one,
-    // over their textures' (a fire's light by its name, whatever its sprites' textures).
-    if (kind == motion::kMarkerEffect) {
-        rt_effect_material_ = rt_material_by_identity(static_cast<std::uint32_t>(a));
-        if (rt_log_glows()) [[unlikely]] {
-            static std::unordered_set<std::uint32_t> logged;
-            if (a != 0u && logged.size() < 4096u && logged.insert(static_cast<std::uint32_t>(a)).second) {
-                std::fprintf(stderr, "[rt-effect] seen %08X -> material %u\n", static_cast<std::uint32_t>(a),
-                             static_cast<unsigned>(rt_effect_material_));
-            }
-        }
-        refresh_rt_material();
+    // Materials and effects name nothing the renderer keeps (the ray tracer's material rows went with it).
+    if (kind == motion::kMarkerMaterial || kind == motion::kMarkerEffect) {
         return;
     }
     if (kind >= motion::kMarkerCategory) {
-        // A draw list or phase begins: no emitter's particles until the next emitter.
-        if (rt_effect_material_ != 0u) {
-            rt_effect_material_ = 0u;
-            refresh_rt_material();
-        }
         on_motion_marker(kind, aux, a, b);
         return;
-    }
-    // The drawing object for the material census and the named classes: a NameObj's draws follow
-    // its marker; emitters and particles are none.
-    if (kind != motion::kMarkerShapePacket && kind != motion::kMarkerMaterial) {
-        rt_identity_seen_ = 0u;
-    }
-    if (kind != motion::kMarkerShapePacket && rt_material_identity_ != 0u) {
-        // A NameObj's own draws, emitters and particles: no J3D material.
-        rt_material_identity_ = 0u;
-        refresh_rt_material();
-    }
-    // A particle keeps its emitter's effect; anything else (a new emitter, before its effect marker; an object; a
-    // model's shape) ends it.
-    if (kind != motion::kMarkerParticle && rt_effect_material_ != 0u) {
-        rt_effect_material_ = 0u;
-        refresh_rt_material();
     }
     if (kind == motion::kMarkerNameObj) {
         rt_object_ = a;
@@ -1540,24 +1494,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     switch (kind) {
     case motion::kMarkerCategory: {
         ++motion_category_markers_;
-        // The game's sky lists (MR::DrawBufferType Sky 1, Air 2, AstroDomeSky 0x23) until the next list, draw type or
-        // phase. The sun list (Sun 3: its disc and glow) is neither sky nor scene: the sun is the key light, and its glow
-        // in the sky's light would count it twice and, the sky's level being its mean, darken the rest of the sky.
-        const bool list = aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu;
-        rt_sky_buffer_ = list && ((a & 0xFFFFu) == 1u || (a & 0xFFFFu) == 2u || (a & 0xFFFFu) == 0x23u);
-        rt_sun_buffer_ = list && (a & 0xFFFFu) == 3u;
-        // The game's shadow lists (MR::DrawType ShadowSurface 0x26, ShadowVolume 0x27, AlphaShadow 0x29).
-        rt_fake_shadow_list_ = aux == motion::kCategoryDrawType &&
-                               ((a & 0xFFFFu) == 0x26u || (a & 0xFFFFu) == 0x27u || (a & 0xFFFFu) == 0x29u);
-        if (aux == motion::kCategoryPhase) {
-            rt_phase_ = static_cast<std::uint8_t>(a);
-        }
-        if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
-            // The draw buffer (MR::DrawBufferType) the next draws come from (the census, the de-baking).
-            rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
-        } else if (aux == motion::kCategoryDrawType) {
-            rt_draw_buffer_ = 0xFFFFu;   // a draw type's list (plants, oceans, ropes): no buffer
-        }
         if (!history_scene_) {
             return;
         }
@@ -1598,15 +1534,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         return;
     case motion::kMarkerLight: {
         ++motion_light_markers_;
-        const ActorLightLoad load = actor_light_load(aux, static_cast<std::uint32_t>(b));
-        // GX lights 0 and 1 of an ActorLightInfo or coin load (LightFunction::loadLightInfo).
-        const auto hooked = static_cast<std::uint8_t>(
-            aux <= static_cast<std::uint16_t>(motion::LightSite::Coin) ? load.written & 0x03u : 0u);
-        rt_known_lights_ = static_cast<std::uint8_t>((rt_known_lights_ & ~load.written) | hooked);
-        rt_follow_lights_ = static_cast<std::uint8_t>((rt_follow_lights_ & ~load.written) | load.follow);
-        if (rt_light_tracking_) {
-            rt_light_pending_ = static_cast<std::uint8_t>((rt_light_pending_ & ~load.written) | hooked);
-        }
         return;
     }
     case motion::kMarkerLayoutPane:
@@ -1938,12 +1865,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
         }
         rt_mirror_pass_ = false;
         renderer_.set_scene_view(view);
-        rt_phase_ = 0xFFu;
-        rt_view_set_ = false;
-        rt_scene_traced_ = true;
-        rt_sky_buffer_ = false;
-        rt_sun_buffer_ = false;
-        rt_fake_shadow_list_ = false;
     } else {
         if (side_layer_ == kMirrorLayer) {
             end_side_layer();
@@ -5009,7 +4930,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         !frame_bindings_dirty_ &&
         (!matrix_palette_stale_ || !current_palette_required_) &&
         !inline_matrices_stale_ &&
-        rt_light_pending_ == 0u &&
         current_pipeline_ != nullptr &&
         current_vs_constants_ != 0 &&
         current_ps_constants_ != 0 &&
