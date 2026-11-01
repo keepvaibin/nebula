@@ -61,6 +61,7 @@
 #include <optional>
 #include <fstream>
 #include <set>
+#include <tuple>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -8248,8 +8249,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         emboss_palette_required |= draw_state_.texgen[texgen].type == TexGenType::EmbossMap;
     }
     // Enhanced lighting reads the lights in the pixel shader, unlit draws included.
+    // A native material's shader may read any block (palette positions, normals, lights, per-vertex texture
+    // matrices); the GX key it would be judged by is another draw's.
     const bool palette_required =
-        emboss_palette_required ||
+        native_material_ != nullptr || emboss_palette_required ||
         (vs_key_.flags & (0x03u | kVsKeyEnhancedLighting)) != 0u ||
         (vs_key_.texmtx_idx_mask & active_texgen_mask) != 0u;
     current_palette_required_ = palette_required;
@@ -8407,8 +8410,29 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     cpu_vs_constants_.row_bases[2] = matrix_block_base_[3];
     cpu_vs_constants_.row_bases[3] = draw_light_base_;
 
+    // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
+    // native_tex_matrix reads the vertex's index for those texgens).
+    const std::uint32_t native_texmtx = native_material_ != nullptr ? (matrix_bits >> 1u) & 0xFFu : 0u;
+    // The header word as the last upload wrote it (a GX draw's from its key): any change uploads again, or a native
+    // draw after a GX one would read that draw's mask.
+    // A native draw's pixel engine word (native_material.hlsli native_ps): bit 0 an RGBA6 EFB, bit 1 its dither, bit 8
+    // constant destination alpha with the alpha at bits 9-16 (as the uber shader's output flags and dst-alpha flag).
+    std::uint32_t native_pe = 0u;
+    if (native_material_ != nullptr) {
+        const BlendMode& pe_blend = draw_state_.blend;
+        const bool rgba6 = draw_state_.pe.pixel_format == 1u;
+        native_pe = (rgba6 ? 1u : 0u) | (rgba6 && pe_blend.dither ? 2u : 0u) |
+                    (rgba6 && pe_blend.const_alpha_enable && pe_blend.alpha_update
+                         ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
+                         : 0u);
+    }
+    // (A GX draw's words carry bit 31, so no native draw's can equal them.)
+    const std::uint32_t header_texmtx = native_material_ != nullptr ? native_texmtx | native_pe << 8u
+                                                                    : 0x80000000u | vs_key_.texmtx_idx_mask;
+    const bool native_texmtx_changed = std::exchange(native_texmtx_, header_texmtx) != header_texmtx;
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
-    if (std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty || inline_matrices_stale_ ||
+    if (native_texmtx_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty ||
+        inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail
@@ -8423,6 +8447,17 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             write_scene_vs_constants(vs_c, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
         }
         apply_uber_vs_key(vs_key_, *reinterpret_cast<VertexConstants*>(vs_alloc.cpu));
+        if (native_material_ != nullptr) {
+            // A native draw: the per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
+            auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
+            native_vs->uber_vs_header[1] = renderer_.efb_scale();
+            native_vs->uber_vs_header[2] = native_pe;
+            native_vs->uber_vs_header[3] = native_texmtx;
+            for (unsigned i = 0; i < 8u; ++i) {
+                native_vs->uber_post_texgen[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
+                                                 (draw_state_.post_texgen[i].normalize ? 0x100u : 0u);
+            }
+        }
         current_vs_constants_ = vs_alloc.gpu;
         inline_matrices_stale_ = false;
         if (time_detail) {
@@ -8592,6 +8627,28 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             }
         }
         current_texture_map_mask_ = texture_map_mask;
+        // GALAXY_LOG_NATIVE_MATERIALS=1: each native shader's maps as the texture cache resolved them (once per map
+        // and image).
+        if (native_material_ != nullptr && read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u) [[unlikely]] {
+            static std::set<std::tuple<std::uint32_t, unsigned, std::uint64_t>> logged;
+            for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
+                if ((texture_map_mask & (1u << m)) == 0u ||
+                    !logged.emplace(native_material_->shader, m, native_material_->textures[m].image).second) {
+                    continue;
+                }
+                const TextureHandle& h = current_texture_handles_[m];
+                std::fprintf(stderr,
+                             "[native-material] shader=%u map=%u image=%llx asked %ux%u fmt %u -> resource=%d %ux%u "
+                             "efb=%d\n",
+                             native_material_->shader, m,
+                             static_cast<unsigned long long>(native_material_->textures[m].image),
+                             static_cast<unsigned>(native_material_->textures[m].width),
+                             static_cast<unsigned>(native_material_->textures[m].height),
+                             static_cast<unsigned>(native_material_->textures[m].format), h.resource != nullptr ? 1 : 0,
+                             static_cast<unsigned>(h.width), static_cast<unsigned>(h.height),
+                             h.from_efb_copy ? 1 : 0);
+            }
+        }
         current_texture_binding_key_ = texture_binding_key;
         current_texture_binding_key_valid_ = true;
         current_texture_binding_key_mask_ = texture_map_mask;
@@ -9177,8 +9234,10 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
     draw_state_.z.test_enable = m.depth_test != 0u;
     draw_state_.z.func = static_cast<CompareFunc>(m.depth_func & 7u);
     draw_state_.z.update_enable = m.depth_write != 0u;
-    draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Back
-                           : m.cull == material::kNativeCullFront ? CullMode::Front
+    // The game's faces in its own winding (GX's front faces), the drawing state's culling in the renderer's flipped
+    // one (draw_state.cpp kCull: GX_CULL_BACK is CullMode::Front).
+    draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Front
+                           : m.cull == material::kNativeCullFront ? CullMode::Back
                                                                   : CullMode::None;
     // The shader tests its own alpha.
     draw_state_.alpha = AlphaCompare{0u, 0u, CompareFunc::Always, CompareFunc::Always, AlphaTestLogic::And};
@@ -9210,6 +9269,13 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         out.tlut = TlutRef{};
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
+    // Its texgens' post-transform matrices, as a GX material's texgens set them (a draw's own texgens replace them:
+    // apply_record_matrices).
+    for (unsigned i = 0; i < 8u; ++i) {
+        draw_state_.post_texgen[i] = XfPostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
+                                                  (m.texgen_post[i] & 0x80u) != 0u};
+    }
+    draw_state_.dirty |= kStateDirtyVertexConstants;
     // The material's own lights (a J3D colour block that loads them) into the light rows its shader reads.
     for (unsigned n = 0; n < 8u; ++n) {
         if ((m.light_mask & (1u << n)) != 0u) {

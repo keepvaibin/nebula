@@ -13,7 +13,7 @@ extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace NativeShader {
     // Blend presets for hand-written sites.
-    enum Blend { BLEND_OPAQUE, BLEND_ALPHA, BLEND_ADD_ALPHA, BLEND_SUBTRACT };
+    enum Blend { BLEND_OPAQUE, BLEND_ALPHA, BLEND_ADD_ALPHA, BLEND_SUBTRACT, BLEND_ADD };
 
     // `depthFunc` NEBULA_COMPARE_* (NEBULA_COMPARE_ALWAYS with no write: depth off).
     inline void init(NebulaNativeMaterial& rMaterial, NebulaShaderId shader, Blend blend, u8 depthFunc,
@@ -23,8 +23,9 @@ namespace NativeShader {
         rMaterial.blend_op = blend == BLEND_OPAQUE ? NEBULA_BLEND_REPLACE
                              : blend == BLEND_SUBTRACT ? NEBULA_BLEND_SUBTRACT
                                                        : NEBULA_BLEND_ADD;
-        rMaterial.blend_src = blend == BLEND_OPAQUE || blend == BLEND_SUBTRACT ? NEBULA_FACTOR_ONE
-                                                                                : NEBULA_FACTOR_SRC_ALPHA;
+        rMaterial.blend_src = blend == BLEND_OPAQUE || blend == BLEND_SUBTRACT || blend == BLEND_ADD
+                                  ? NEBULA_FACTOR_ONE
+                                  : NEBULA_FACTOR_SRC_ALPHA;
         rMaterial.blend_dst = blend == BLEND_ALPHA ? NEBULA_FACTOR_INV_SRC_ALPHA
                               : blend == BLEND_OPAQUE ? NEBULA_FACTOR_ZERO
                                                       : NEBULA_FACTOR_ONE;

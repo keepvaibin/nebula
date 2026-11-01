@@ -71,10 +71,10 @@ def shader_key(p):
         lit.append(c)
     return (
         tuple(stages),
-        tuple(p["tex_gen"][:p["tex_gens"]]),
+        # The texgens' types and sources only (the shader takes the draw's matrix indices and post-transforms).
+        tuple((t[0], t[1]) for t in p["tex_gen"][:p["tex_gens"]]),
         tuple(p["ind_order"][:p["ind_stages"]]),
         tuple(lit),
-        p["fog_type"],
         p["alpha_compare"],
     )
 
@@ -141,6 +141,8 @@ def swizzle(table):
 
 def emit_vertex(p, out):
     out.append("void material_vertex(NativeVertex v, inout NativeVaryings o) {")
+    # The channels first: a colour texgen (SRTG) reads channel 0's result.
+    emit_channels(p, out)
     for i, (gen_type, source, matrix, normalize, post) in enumerate(p["tex_gen"][:p["tex_gens"]]):
         if gen_type == 10:
             out.append(f"    o.uv[{i}] = float4(o.color.rg, 1.0, 0.0);")
@@ -152,30 +154,49 @@ def emit_vertex(p, out):
         elif source == 1:
             coord = "float4(v.nrm, 1.0)"
         elif source == 2:
-            coord = "float4(v.binormal, 1.0)"
+            coord = "float4(v.tangent, 1.0)"  # GX_TG_BINRM: XF row 3 (Dolphin BinormalT), as the uber shader reads it
         elif source == 3:
-            coord = "float4(v.tangent, 1.0)"
+            coord = "float4(v.binormal, 1.0)"  # GX_TG_TANGENT: XF row 4 (BinormalB)
         elif 4 <= source <= 11:
             coord = f"float4(v.uv[{source - 4}], 1.0, 1.0)"
         else:
             raise Unsupported(f"texgen source {source}")
-        out.append(f"    {{  // coordinate {i}: type {gen_type}, source {source}, matrix {matrix}")
+        out.append(f"    {{  // coordinate {i}: type {gen_type}, source {source}")
         out.append(f"        const float4 c = {coord};")
-        if matrix == 60:
-            out.append("        float3 res = c.xyz;" if gen_type == 0 else "        float3 res = float3(c.xy, 1.0);")
-        else:
-            rows = [f"dot(c, inline_tex_matrices[{3 * i + r}])" for r in range(3)]
-            third = rows[2] if gen_type == 0 else "1.0"
-            out.append(f"        float3 res = float3({rows[0]}, {rows[1]}, {third});")
-        if post != 125:
-            if normalize:
-                out.append("        res = dot(res, res) > 0.0 ? normalize(res) : res;")
-            prow = [f"dot(float4(res, 1.0), inline_post_matrices[{3 * i + r}])" for r in range(3)]
-            out.append(f"        res = float3({prow[0]}, {prow[1]}, {prow[2]});")
-            out.append(f"        o.uv[{i}] = float4(res, 1.0);")
-        else:
-            out.append(f"        o.uv[{i}] = float4(res, {'1.0' if gen_type == 0 else '0.0'});")
+        # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, which GX takes over
+        # the material's texgen id: GX_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
+        # by the program's row (GX_PTTEXMTX0's 0 + 3k, 61 the identity).
+        # As the uber shader: the draw's texture matrix rows (inline_tex_matrices: the matrix its current matrix index
+        # names) or, where the shape carries per-vertex indices, the vertex's matrix from the matrix rows; then the
+        # post-transform the draw's texgen names (inline_post_matrices: the material's, or a shape's env map or
+        # projection), 61 the identity.
+        out.append(f"        float3 res;")
+        out.append(f"        if (((vs_header.w >> {i}u) & 1u) != 0u) {{")
+        out.append(f"            const uint tm = native_tex_matrix(v, {i}u);")
+        rows = [f"dot(c, native_matrix_row(tm + {r}u))" for r in range(3)]
+        third = rows[2] if gen_type == 0 else "1.0"
+        out.append(f"            res = float3({rows[0]}, {rows[1]}, {third});")
+        out.append("        } else {")
+        irows = [f"dot(c, inline_tex_matrices[{3 * i + r}])" for r in range(3)]
+        ithird = irows[2] if gen_type == 0 else "1.0"
+        out.append(f"            res = float3({irows[0]}, {irows[1]}, {ithird});")
+        out.append("        }")
+        out.append(f"        const uint pt = native_post({i}u);")
+        out.append("        const bool posted = (pt & 0x3Fu) != 61u;")
+        out.append("        if (posted) {")
+        out.append("            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;")
+        prow = [f"dot(float4(res, 1.0), inline_post_matrices[{3 * i + r}])" for r in range(3)]
+        out.append(f"            res = float3({prow[0]}, {prow[1]}, {prow[2]});")
+        out.append("        }")
+        # A projected coordinate's q of 0: GX halves and clamps s and t (as the uber shader and Dolphin).
+        projected = "true" if gen_type == 0 else "posted"
+        out.append(f"        if ({projected} && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);")
+        out.append(f"        o.uv[{i}] = float4(res, {projected} ? 1.0 : 0.0);")
         out.append("    }")
+    out.append("}")
+
+
+def emit_channels(p, out):
     chans = p["channels"]
     lit_any = any(p["channel"][k][0] for k in range(2 * min(chans, 2)))
     if lit_any:
@@ -201,7 +222,6 @@ def emit_vertex(p, out):
             terms = " + ".join(f"j3d_light({n}u, {xf_atten}u, {xf_diffuse}u, v.eye, nrm).{part}"
                                for n in range(8) if (mask >> n) & 1) or "0.0"
             out.append(f"    {target}.{part} = {mat} * saturate(({amb} * 255.0 + {terms}) / 255.0);")
-    out.append("}")
 
 
 def emit_pixel(p, out):
@@ -215,20 +235,20 @@ def emit_pixel(p, out):
         out.append("    float2 tevcoord = float2(0.0, 0.0);")
         for n, (coord, imap, scale_s, scale_t) in enumerate(p["ind_order"][:p["ind_stages"]]):
             out.append(f"    const float3 ind{n} = round(tex[{imap}].Sample(samp[{imap}], "
-                       f"j3d_coord(i.uv[{coord}]) / float2({1 << scale_s}.0, {1 << scale_t}.0)).abg * 255.0);")
+                       f"j3d_texel(i.uv[{coord}], {coord}u) / float2({1 << scale_s}.0, {1 << scale_t}.0) / "
+                       f"material.tex_scale[{imap}].zw).abg * 255.0);")
     for n, s in enumerate(p["stages"]):
         out.append(f"    {{  // stage {n}")
         uses_tex = s["map"] != 0xFF and (8 in s["color_in"] or 9 in s["color_in"] or 4 in s["alpha_in"])
         ind = s["ind"]
         if uses_tex:
-            coord = f"j3d_coord(i.uv[{s['coord']}])"
+            coord = f"j3d_texel(i.uv[{s['coord']}], {s['coord']}u) / material.tex_scale[{s['map']}].zw"
+            texel_coord = f"j3d_texel(i.uv[{s['coord']}], {s['coord']}u)"
             if ind_used and any(ind):
                 ind_stage, fmt, bias, matrix, wrap_s, wrap_t, add_prev, lod, ind_alpha = ind
                 if ind_alpha:
                     raise Unsupported("bump alpha")
-                out.append("        float tw, th;")
-                out.append(f"        tex[{s['map']}].GetDimensions(tw, th);")
-                out.append(f"        float2 texel = {coord} * float2(tw, th);")
+                out.append(f"        float2 texel = {texel_coord};")
                 for axis, wrap in (("x", wrap_s), ("y", wrap_t)):
                     if wrap == 6:
                         out.append(f"        texel.{axis} = 0.0;")
@@ -252,7 +272,7 @@ def emit_pixel(p, out):
                 else:
                     out.append("        const float2 off = float2(0.0, 0.0);")
                 out.append("        tevcoord = " + ("tevcoord + " if add_prev else "") + "texel + off;")
-                coord = "tevcoord / float2(tw, th)"
+                coord = f"tevcoord / material.tex_scale[{s['map']}].zw"
             out.append(f"        const float4 t = tex[{s['map']}].Sample(samp[{s['map']}], {coord})"
                        f".{swizzle(p['swap'][s['tex_swap'] & 3])};")
         else:
@@ -267,6 +287,7 @@ def emit_pixel(p, out):
         if 6 in s["alpha_in"]:
             out.append(f"        const float ka = {konst_alpha(s['konst_alpha'])};")
         a, b, c, d = (CC[x] for x in s["color_in"])
+        a, b, c = (f"j3d_in({x})" if x.split(".")[0] in DEST else x for x in (a, b, c))
         if s["color_op"] <= 1:
             sign = "-" if s["color_op"] == 1 else "+"
             expr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['color_bias']]}){SCALE[s['color_scale']]}"
@@ -285,6 +306,7 @@ def emit_pixel(p, out):
             expr = f"saturate({expr})"
         out.append(f"        const float3 rc = {expr};")
         a, b, c, d = (CA[x] for x in s["alpha_in"])
+        a, b, c = (f"j3d_in({x})" if x.split(".")[0] in DEST else x for x in (a, b, c))
         if s["alpha_op"] <= 1:
             sign = "-" if s["alpha_op"] == 1 else "+"
             aexpr = f"({d} {sign} lerp({a}, {b}, {c}){BIAS[s['alpha_bias']]}){SCALE[s['alpha_scale']]}"
@@ -299,28 +321,37 @@ def emit_pixel(p, out):
         out.append(f"        {DEST[s['color_reg'] & 3]}.rgb = rc;")
         out.append(f"        {DEST[s['alpha_reg'] & 3]}.a = ra;")
         out.append("    }")
+    # What reaches the PE: the last stage's destination registers (whichever it wrote), their low 8 bits.
+    if p["stages"]:
+        last = p["stages"][-1]
+        out.append(f"    prev = j3d_out(float4({DEST[last['color_reg'] & 3]}.rgb, {DEST[last['alpha_reg'] & 3]}.a));")
+    else:
+        out.append("    prev = j3d_out(prev);")
     comp0, op, comp1 = p["alpha_compare"]
     if not (comp0 == 7 and comp1 == 7) and not (op == 1 and (comp0 == 7 or comp1 == 7)):
         logic = ["&&", "||", "!=", "=="][op & 3]
         c0 = COMPARE[comp0 & 7].replace("r8", "round(material.alpha_ref.x * 255.0)")
         c1 = COMPARE[comp1 & 7].replace("r8", "round(material.alpha_ref.y * 255.0)")
-        out.append("    const float a8 = round(saturate(prev.a) * 255.0);")
+        out.append("    const float a8 = round(prev.a * 255.0);")
         out.append(f"    if (!(({c0}) {logic} ({c1}))) {{")
         out.append("        discard;")
         out.append("    }")
-    fog = p["fog_type"]
-    if fog:
-        out.append("    const float ze = i.pos.w;")
-        out.append("    float f = saturate((ze - material.fog.x) / max(material.fog.y - material.fog.x, 1.0e-6));")
-        curve = {2: "", 4: "f = 1.0 - exp2(-8.0 * f);", 5: "f = 1.0 - exp2(-8.0 * f * f);",
-                 6: "f = exp2(-8.0 * (1.0 - f));", 7: "f = 1.0 - f; f = exp2(-8.0 * f * f);"}.get(fog & 7)
-        if curve is None:
-            raise Unsupported(f"fog type {fog}")
-        if curve:
-            out.append("    " + curve)
-        out.append("    prev.rgb = lerp(saturate(prev.rgb), material.fog_color.rgb, f);")
-    out.append("    return saturate(prev);")
+    out.append("    prev.rgb = j3d_fog(prev.rgb, i.pos);")
+    out.append("    return prev;")
     out.append("}")
+
+
+def write_if_changed(path, text):
+    """Writes `path` only when its content differs, so the build recompiles only the shaders that changed."""
+    try:
+        with open(path, "r", encoding="utf-8", newline="") as f:
+            if f.read() == text:
+                return False
+    except FileNotFoundError:
+        pass
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+    return True
 
 
 def emit(paths, out_dir):
@@ -344,10 +375,9 @@ def emit(paths, out_dir):
             continue
         made += 1
         ident = made
-        with open(os.path.join(out_dir, f"m{ident:04d}.hlsl"), "w", encoding="utf-8", newline="\n") as f:
-            f.write(f"// J3D material {ident} (tools/dev/gen_j3d_materials.py from the game's material set; E-04)\n")
-            f.write('#include "j3d_material.hlsli"\n\n')
-            f.write("\n".join(lines) + "\n")
+        write_if_changed(os.path.join(out_dir, f"m{ident:04d}.hlsl"),
+                         f"// J3D material {ident} (tools/dev/gen_j3d_materials.py from the game's material set; E-04)\n"
+                         '#include "j3d_material.hlsli"\n\n' + "\n".join(lines) + "\n")
         table.append((ident, key))
     print(f"distinct keys {len(keys)}, emitted {made}, unsupported {sum(failed.values())}: {dict(failed)}")
     return table, programs
@@ -373,32 +403,39 @@ def fnv1a64(data):
     return h
 
 
-def generate(repo, paths):
+def generate(repo, paths, subset=None):
     """The material set in the repository: runtime/src/render/materials/j3d/m<NNNN>.hlsl, its CMake list, and the
-    game's table (each dumped program's FNV-1a hash -> its material's index, 1-based)."""
+    game's table (each dumped program's FNV-1a hash -> its material's index, 1-based). Files are written only when
+    their content changed. `subset` (dump files): the build list and the game's table hold only the materials those
+    programs use (numbered as in the whole set), the others staying on the GX path: the probe loop's build."""
     import glob
     import os
     out_dir = os.path.join(repo, "runtime", "src", "render", "materials", "j3d")
-    for old in glob.glob(os.path.join(out_dir, "m*.hlsl")):
-        os.remove(old)
     table, programs = emit(paths, out_dir)
+    keep = {f"m{ident:04d}.hlsl" for ident, _ in table}
+    for old in glob.glob(os.path.join(out_dir, "m*.hlsl")):
+        if os.path.basename(old) not in keep:
+            os.remove(old)
     index_of = {key: ident for ident, key in table}
-    with open(os.path.join(out_dir, "list.cmake"), "w", encoding="utf-8", newline="\n") as f:
-        f.write("# Generated by tools/dev/gen_j3d_materials.py: the J3D material set (NebulaShaderId J3D_FIRST + n - 1).\n")
-        f.write("set(galaxy_j3d_materials\n" + "".join(f"    m{ident:04d}\n" for ident, _ in table) + ")\n")
+    chosen = None
+    if subset:
+        chosen = {index_of.get(shader_key(parse(r))) for r in read(subset)} - {None}
+    listed = [ident for ident, _ in table if chosen is None or ident in chosen]
+    write_if_changed(os.path.join(out_dir, "list.cmake"),
+                     "# Generated by tools/dev/gen_j3d_materials.py: the J3D material set (NebulaShaderId J3D_FIRST + n - 1).\n"
+                     "set(galaxy_j3d_materials\n" + "".join(f"    m{ident:04d}\n" for ident in listed) + ")\n")
     pairs = {}
     for rec in programs:
         ident = index_of.get(shader_key(parse(rec)))
-        if ident is not None:
+        if ident is not None and (chosen is None or ident in chosen):
             pairs[fnv1a64(lookup_bytes(rec))] = ident
     pairs = sorted(pairs.items())
     inc = os.path.join(repo, "native", "petari", "src", "JSystem", "J3DGraphBase", "J3DMaterialShaders.inc")
-    with open(inc, "w", encoding="utf-8", newline="\n") as f:
-        f.write("// Generated by tools/dev/gen_j3d_materials.py: a material program's FNV-1a hash -> its J3D material (1-based;\n")
-        f.write("// NebulaShaderId NEBULA_SHADER_J3D_FIRST + n - 1). Sorted by hash.\n")
-        for h, ident in pairs:
-            f.write(f"    {{0x{h:016X}ull, {ident}u}},\n")
-    print(f"table: {len(pairs)} programs -> {len(table)} materials")
+    write_if_changed(inc,
+                     "// Generated by tools/dev/gen_j3d_materials.py: a material program's FNV-1a hash -> its J3D material (1-based;\n"
+                     "// NebulaShaderId NEBULA_SHADER_J3D_FIRST + n - 1). Sorted by hash.\n" +
+                     "".join(f"    {{0x{h:016X}ull, {ident}u}},\n" for h, ident in pairs))
+    print(f"table: {len(pairs)} programs -> {len(listed)} of {len(table)} materials")
 
 
 def main():
@@ -407,7 +444,11 @@ def main():
     elif len(sys.argv) >= 4 and sys.argv[1] == "emit":
         emit(sys.argv[3:], sys.argv[2])
     elif len(sys.argv) >= 4 and sys.argv[1] == "generate":
-        generate(sys.argv[2], sys.argv[3:])
+        # generate REPO DUMP... [--subset DUMP...]
+        args = sys.argv[3:]
+        subset = args[args.index("--subset") + 1:] if "--subset" in args else None
+        dumps = args[:args.index("--subset")] if "--subset" in args else args
+        generate(sys.argv[2], dumps, subset)
     else:
         raise SystemExit(__doc__)
 

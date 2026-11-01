@@ -2700,6 +2700,16 @@ uint32_t svc_option(void*, uint32_t what) {
         }();
         return dump ? 1u : 0u;
     }
+    case NEBULA_OPTION_TEST_NATIVE_J3D: {
+        static const uint32_t range = [] {
+            const char* value = std::getenv("GALAXY_TEST_NATIVE_J3D");
+            unsigned lo = 0, hi = 0;
+            return value != nullptr && std::sscanf(value, "%u-%u", &lo, &hi) == 2 && lo != 0u && hi >= lo
+                       ? (std::min(lo, 0xFFFFu) << 16u) | std::min(hi, 0xFFFFu)
+                       : 0u;
+        }();
+        return range;
+    }
     case NEBULA_OPTION_TEST_MATERIAL_SWEEP: {
         static const bool sweep = [] {
             const char* value = std::getenv("GALAXY_DUMP_MATERIAL_PROGRAMS");

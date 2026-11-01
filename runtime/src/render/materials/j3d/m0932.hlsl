@@ -15,10 +15,12 @@ float4 material_color(NativeVaryings i) {
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
         const float ka = 0.25;
-        const float3 rc = saturate((r0.rgb + lerp(r1.rgb, float3(1.0, 1.0, 1.0), r0.rgb)) * 2.0);
+        const float3 rc = saturate((r0.rgb + lerp(j3d_in(r1.rgb), float3(1.0, 1.0, 1.0), j3d_in(r0.rgb))) * 2.0);
         const float ra = saturate((r0.a + lerp(ras.a, ka, ras.a)) * 2.0);
         prev.rgb = rc;
         prev.a = ra;
     }
-    return saturate(prev);
+    prev = j3d_out(float4(prev.rgb, prev.a));
+    prev.rgb = j3d_fog(prev.rgb, i.pos);
+    return prev;
 }

@@ -13,11 +13,13 @@ float4 material_color(NativeVaryings i) {
     float4 r2 = material.reg[3];
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 ras = i.color.rgba;
+        const float4 ras = float4(0.0, 0.0, 0.0, 0.0).rgba;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
         const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }
-    return saturate(prev);
+    prev = j3d_out(float4(prev.rgb, prev.a));
+    prev.rgb = j3d_fog(prev.rgb, i.pos);
+    return prev;
 }
