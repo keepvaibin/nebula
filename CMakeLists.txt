@@ -499,7 +499,6 @@ add_library(galaxy_gx STATIC
     runtime/src/render/ray_tracing.cpp
     runtime/src/render/game_lights.cpp
     runtime/src/render/game_objects.cpp
-    runtime/src/render/rt_tev_eval.cpp
     runtime/src/render/ray_tracing_camera.cpp
     runtime/src/render/ray_tracing_engine.cpp
     runtime/src/render/ray_tracing_reflections.cpp
@@ -661,7 +660,7 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
+foreach(name curved_surfaces native_shapes simd_kernel vs_constants render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
         efb_copy line_point_raster native_settings_overlay post_process
         efb_conversion native_material)
@@ -745,7 +744,6 @@ if(NEBULA_VULKAN)
             runtime/src/render/draw_input_dump.cpp
         runtime/src/render/game_lights.cpp
         runtime/src/render/game_objects.cpp
-    runtime/src/render/rt_tev_eval.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/interp_gpu.cpp
