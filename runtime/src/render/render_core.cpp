@@ -617,9 +617,9 @@ bool RenderCore::initialize(int w, int h) {
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
         try {
             frame_telemetry_ = std::make_unique<galaxy::telemetry::Publisher>([this] {
-                const auto stats = xfb_present_stats();
+                const auto stats = display_present_stats();
                 return galaxy::telemetry::Counts{
-                    xfb_copy_count(), stats.first_serial_presentations, stats.presented,
+                    display_copy_count(), stats.first_serial_presentations, stats.presented,
                     stats.repeated_or_stale_serial_requests, stats.last_presented_copy_serial,
                     stats.last_presented_frame_stamp, stats.last_presented_slot,
                     xfb_copy_production_cadence_.published_last_sample_ns.load(std::memory_order_relaxed),
@@ -641,16 +641,16 @@ bool RenderCore::quit_requested() const noexcept {
     return initialized_ && renderer_.quit_requested();
 }
 
-std::uint64_t RenderCore::xfb_copy_count() const noexcept {
+std::uint64_t RenderCore::display_copy_count() const noexcept {
     return stat_xfb_copies_.load(std::memory_order_relaxed);
 }
 
-XfbPresentStats RenderCore::xfb_present_stats() const noexcept {
+DisplayPresentStats RenderCore::display_present_stats() const noexcept {
     const std::uint64_t last_stamp =
         last_presented_xfb_stamp_.load(std::memory_order_relaxed);
     const std::uint64_t last_serial =
         last_presented_xfb_serial_.load(std::memory_order_relaxed);
-    return XfbPresentStats{
+    return DisplayPresentStats{
         stat_xfb_present_requests_.load(std::memory_order_relaxed),
         stat_xfb_present_presented_.load(std::memory_order_relaxed),
         stat_xfb_first_serial_presentations_.load(std::memory_order_relaxed),
@@ -1545,12 +1545,12 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     }
 }
 
-// GameScene::draw2D's entry (FifoMarker::Scene2DBegin).
+// GameScene::draw2D's entry (SceneMarker::Scene2DBegin).
 void RenderCore::on_scene_2d_begin() {
     if (scene_phase_) {
         // GameScene::draw3D returned before its clearZBuffer (movie, nerve):
         // the scene ends here.
-        on_fifo_marker(FifoMarker::SceneEnd, nullptr);
+        on_scene_marker(SceneMarker::SceneEnd, nullptr);
     }
     ++window_2d_scenes_;
 }
@@ -1826,10 +1826,10 @@ void RenderCore::apply_scene_ao() {
     renderer_.record_scene_ao();
 }
 
-void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
+void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>* view, std::uint32_t sky_up,
                                bool sky_up_known, const SceneStage* stage) {
     flush_pending_draw_batch();
-    if (marker == FifoMarker::SceneBegin) {
+    if (marker == SceneMarker::SceneBegin) {
         end_side_layer();
         // A frame recorded as screen-only (its frame before drew no scene) draws one after all: the scene's record
         // replaces it.
@@ -1838,8 +1838,8 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             cancel_screen_frame();
         }
     }
-    scene_phase_ = marker == FifoMarker::SceneBegin;
-    if (marker == FifoMarker::SceneBegin) {
+    scene_phase_ = marker == SceneMarker::SceneBegin;
+    if (marker == SceneMarker::SceneBegin) {
         ao_view_set_ = false;
         ao_scene_applied_ = !ambient_occlusion_;
         // The game names its stage: a new one starts the tracer's stage state over.
@@ -1863,7 +1863,7 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
     }
     const bool was_temporal = temporal_scene_;
     const bool was_motion = motion_scene_;
-    if (marker == FifoMarker::SceneBegin) {
+    if (marker == SceneMarker::SceneBegin) {
         temporal_scene_ = renderer_.scene_temporal_begin(
             scene_jitter_px_[0], scene_jitter_px_[1]);
         // A temporal scene writes the motion, and so does one the ray tracing engine lights (its histories follow
@@ -1949,7 +1949,7 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
     // scene that begins before a display copy restores the render EFB.
     bool switched = false;
     display_copy_on_output_ = false;
-    if (marker == FifoMarker::SceneEnd) {
+    if (marker == SceneMarker::SceneEnd) {
         renderer_.record_scene_aa();
         switched = renderer_.begin_output_efb();
     } else if (renderer_.output_efb_active()) {
@@ -1960,11 +1960,11 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
         efb_copies_.set_efb_scale(renderer_.efb_scale());
         frame_bindings_dirty_ = true;
     }
-    if (marker == FifoMarker::SceneEnd) {
+    if (marker == SceneMarker::SceneEnd) {
         s_layer_2d_scale.store(renderer_.efb_scale(), std::memory_order_relaxed);
         begin_side_layer(kScreenLayer);
     }
-    if (marker == FifoMarker::SceneBegin) {
+    if (marker == SceneMarker::SceneBegin) {
         s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
     }
 }
@@ -3614,7 +3614,7 @@ void RenderCore::render_thread_main() {
 }
 
 std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
-    const std::uint32_t key = async_peek_key(EfbPeekKind::Color, token);
+    const std::uint32_t key = async_peek_key(ReadbackKind::Color, token);
     for (const AsyncPeekFieldState& state : async_peek_) {
         if (state.key.load(std::memory_order_acquire) == key) {
             return state.publications.load(std::memory_order_acquire);
@@ -3623,7 +3623,7 @@ std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
     return 0u;
 }
 
-std::size_t RenderCore::async_peek_channel(EfbPeekKind kind, std::uint16_t token) {
+std::size_t RenderCore::async_peek_channel(ReadbackKind kind, std::uint16_t token) {
     const std::uint32_t key = async_peek_key(kind, token);
     std::size_t oldest = 0;
     for (std::size_t index = 0; index < async_peek_.size(); ++index) {
@@ -3642,7 +3642,7 @@ std::size_t RenderCore::async_peek_channel(EfbPeekKind kind, std::uint16_t token
 }
 
 bool RenderCore::read_async_peek_field(
-    AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
+    AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value) {
     const std::uint64_t published = state.published.load(std::memory_order_acquire);
     if ((published & 0xFFFFFFFFu) == 0u ||
         (published >> 32u) != state.generation.load(std::memory_order_acquire)) {
@@ -3658,15 +3658,15 @@ bool RenderCore::read_async_peek_field(
         field + (static_cast<std::size_t>(y) * kFrameWidth + x) * 4u;
     const std::uint32_t rgb = (std::uint32_t{pixel[0]} << 16u) |
         (std::uint32_t{pixel[1]} << 8u) | pixel[2];
-    value = kind == EfbPeekKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
+    value = kind == ReadbackKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
     state.published_answers.fetch_add(1u, std::memory_order_relaxed);
     return true;
 }
 
-bool RenderCore::peek_efb_published(
+bool RenderCore::readback_published(
     std::uint16_t x,
     std::uint16_t y,
-    EfbPeekKind kind,
+    ReadbackKind kind,
     std::uint16_t token,
     std::uint32_t& value) {
     if (!initialized_ || x >= kFrameWidth || y >= kFrameHeight) {
@@ -4269,12 +4269,12 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                     on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
                 } else if (split.marker < 0) {
                     record_pointer_depth_capture_in_frame(chunk);
-                } else if (split.marker == static_cast<int>(FifoMarker::Scene2DBegin)) {
+                } else if (split.marker == static_cast<int>(SceneMarker::Scene2DBegin)) {
                     on_scene_2d_begin();
-                } else if (split.marker != static_cast<int>(FifoMarker::Scene2DEnd)) {
+                } else if (split.marker != static_cast<int>(SceneMarker::Scene2DEnd)) {
                     const auto index = static_cast<std::size_t>(split.view);
                     const bool sky_up = split.view >= 0 && (chunk.fifo_marker_sky_up_mask & (1u << index)) != 0u;
-                    on_fifo_marker(static_cast<FifoMarker>(split.marker),
+                    on_scene_marker(static_cast<SceneMarker>(split.marker),
                         split.view >= 0 &&
                                 (chunk.fifo_marker_view_mask & (1u << index)) != 0u
                             ? &chunk.fifo_marker_views[index]

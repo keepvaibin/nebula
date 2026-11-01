@@ -1,6 +1,6 @@
 #pragma once
 
-// The renderer API the host calls (D3D12 or Vulkan behind one RenderCore): window, GX FIFO submission and
+// The renderer API the host calls (D3D12 or Vulkan behind one RenderCore): window, the game's records and
 // presentation, the game's scene and light reports, and the native settings overlay.
 
 #include "galaxy/render/native_shapes.h"
@@ -51,18 +51,18 @@ struct HostClientExtent {
 // extent limited to 4:3..32:9, or the chosen ratio.
 [[nodiscard]] HostClientExtent aspect_latch_extent() noexcept;
 
-// Guest scene boundaries the simulation thread marks in the GX stream:
+// Scene boundaries the simulation thread marks in the record stream:
 // GameScene::draw3D's entry and its closing MR::clearZBuffer call; the 2D
 // layer, GameScene::draw2D's entry and epilogue (layouts, camera cover,
 // pause, 2D models, wipes).
-enum class FifoMarker : std::uint8_t {
+enum class SceneMarker : std::uint8_t {
     SceneBegin,
     SceneEnd,
     Scene2DBegin,
     Scene2DEnd,
 };
 
-enum class EfbPeekKind : std::uint8_t {
+enum class ReadbackKind : std::uint8_t {
     Color,
     Depth,
 };
@@ -94,8 +94,8 @@ void wait_for_render_idle();
 
 
 // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
-void attach_fifo_marker(FifoMarker marker) noexcept;
-// Simulation thread, before attach_fifo_marker(SceneBegin): the game camera's
+void attach_scene_marker(SceneMarker marker) noexcept;
+// Simulation thread, before attach_scene_marker(SceneBegin): the game camera's
 // world-to-eye matrix (row-major 3x4) for that scene, the player's up in the
 // world (null when unknown: the enhanced sky then takes the view's up), and
 // the stage being played (null when the game does not say).
@@ -121,7 +121,7 @@ void set_star_core(const std::array<float, 3>& position, float scale) noexcept;
 // Number of set_game_sun calls so far.
 [[nodiscard]] std::uint64_t game_sun_updates() noexcept;
 // Simulation thread: the game's lights as it loads them for drawing. A point light
-// (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its GX
+// (LightFunction::loadPointLightInfo: world position, colour 0-1, the distance at which its
 // distance attenuation halves it, 0 without attenuation) and a world-fixed light of an
 // ActorLightInfo (follow-camera off: its far position names its direction).
 void note_game_point_light(std::uint64_t info, const std::array<float, 3>& position,
@@ -179,11 +179,11 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 void set_safety_scene_surround(float intensity) noexcept;
 
 // A peek made in draw-sync token `token`'s callback: the field captured where the stream reached that
-// token (RenderCore::peek_efb_published).
-[[nodiscard]] bool peek_efb_published(
+// token (RenderCore::readback_published).
+[[nodiscard]] bool readback_published(
     std::uint16_t x,
     std::uint16_t y,
-    EfbPeekKind kind,
+    ReadbackKind kind,
     std::uint16_t token,
     std::uint32_t& value);
 
@@ -226,7 +226,7 @@ struct NativeSettingsLayout {
     int footer_y = 0;
 };
 
-struct XfbPresentStats {
+struct DisplayPresentStats {
     std::uint64_t requests = 0;
     std::uint64_t presented = 0;
     // Game-timed presents of a new XfbTexture::copy_serial, each counted once at its first presentation.
@@ -372,8 +372,8 @@ struct NativeSettingsView {
 enum class NativeSettingsInput : unsigned { Open = 1, Close, SelectPage, SelectRow, Change, Apply, Revert, Press, MoveMod, SetValue };
 void native_settings_input(NativeSettingsInput input, int arg);
 
-// Number of EFB display copies submitted to XFB textures by the active backend.
-[[nodiscard]] std::uint64_t xfb_copy_count() noexcept;
-[[nodiscard]] XfbPresentStats xfb_present_stats() noexcept;
+// The frames the game has shown (display copies) and how the presents met them.
+[[nodiscard]] std::uint64_t display_copy_count() noexcept;
+[[nodiscard]] DisplayPresentStats display_present_stats() noexcept;
 
 }  // namespace galaxy::render

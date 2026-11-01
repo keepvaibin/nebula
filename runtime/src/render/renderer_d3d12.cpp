@@ -4316,8 +4316,8 @@ void RendererD3D12::present_to_swap_chain() {
 
         if (telemetry_window_start_qpc_ == 0) {
             telemetry_window_start_qpc_ = present_end.QuadPart;
-            telemetry_first_serial_start_ = xfb_present_stats().first_serial_presentations;
-            telemetry_xfb_copy_start_ = xfb_copy_count();
+            telemetry_first_serial_start_ = display_present_stats().first_serial_presentations;
+            telemetry_xfb_copy_start_ = display_copy_count();
         }
         if (last_present_qpc_ != 0) {
             const double interval_ms =
@@ -4337,8 +4337,8 @@ void RendererD3D12::present_to_swap_chain() {
                 present_end.QuadPart - telemetry_window_start_qpc_) /
             static_cast<double>(qpc_frequency_.QuadPart);
         if (elapsed_seconds >= 2.0) {
-            const auto progress = xfb_present_stats();
-            const auto produced_copies = xfb_copy_count();
+            const auto progress = display_present_stats();
+            const auto produced_copies = display_copy_count();
             const double present_fps =
                 static_cast<double>(telemetry_present_count_) /
                 elapsed_seconds;
@@ -8728,7 +8728,7 @@ bool RendererD3D12::ensure_peek_resources() {
 }
 
 bool RendererD3D12::peek_efb(
-    std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
+    std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value) {
     return read_efb_pixels(x, y, kind, value, {});
 }
 
@@ -8827,7 +8827,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
     const EfbPeekSamplingGeometry sampling =
         compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_);
     EfbConversionShaderConstants constants =
-        make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth);
+        make_efb_peek_conversion_constants(sampling, ReadbackKind::Depth);
     constants.values[15] = -1.0f;
     command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
     command_list_->SetGraphicsRootDescriptorTable(1, conv_efb_depth_srv_);
@@ -8864,12 +8864,12 @@ bool RendererD3D12::capture_pointer_depth(std::span<std::uint32_t> pixels) {
         throw std::invalid_argument("pointer depth field requires 640x456 pixels");
     }
     std::uint32_t unused{};
-    return read_efb_pixels(0u, 0u, EfbPeekKind::Depth, unused, pixels);
+    return read_efb_pixels(0u, 0u, ReadbackKind::Depth, unused, pixels);
 }
 
 std::uint64_t RendererD3D12::submit_pointer_depth_capture() {
     std::uint32_t unused{};
-    if (!read_efb_pixels(0u, 0u, EfbPeekKind::Depth, unused, {}, true)) {
+    if (!read_efb_pixels(0u, 0u, ReadbackKind::Depth, unused, {}, true)) {
         return 0u;
     }
     return pointer_depth_capture_fence_;
@@ -8893,7 +8893,7 @@ bool RendererD3D12::try_complete_pointer_depth_capture_in_place(
 }
 
 bool RendererD3D12::ensure_async_peek_field_resources(
-    AsyncPeekField& field, EfbPeekKind kind) {
+    AsyncPeekField& field, ReadbackKind kind) {
     if (field.allocator && field.command_list && field.target &&
         field.readbacks[0] && field.rtv_heap) {
         return true;
@@ -8903,7 +8903,7 @@ bool RendererD3D12::ensure_async_peek_field_resources(
     if (!ensure_peek_resources()) {
         return false;
     }
-    const bool is_depth = kind == EfbPeekKind::Depth;
+    const bool is_depth = kind == ReadbackKind::Depth;
     d3d_check(
         device_->CreateCommandAllocator(
             D3D12_COMMAND_LIST_TYPE_DIRECT,
@@ -8985,7 +8985,7 @@ bool RendererD3D12::ensure_async_peek_field_resources(
 }
 
 std::uint64_t RendererD3D12::submit_async_peek_field(
-    std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    std::size_t channel, ReadbackKind kind, std::size_t slot) {
     AsyncPeekField& field = async_peek_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return 0u;
@@ -9015,7 +9015,7 @@ std::uint64_t RendererD3D12::submit_async_peek_field(
 }
 
 bool RendererD3D12::record_async_peek_field_in_frame(
-    std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+    std::size_t channel, ReadbackKind kind, std::size_t slot) {
     AsyncPeekField& field = async_peek_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots ||
         !ensure_async_peek_field_resources(field, kind)) {
@@ -9031,9 +9031,9 @@ bool RendererD3D12::record_async_peek_field_in_frame(
 }
 
 void RendererD3D12::record_async_peek_field_commands(
-    ID3D12GraphicsCommandList* list, AsyncPeekField& field, EfbPeekKind kind, std::size_t slot) {
+    ID3D12GraphicsCommandList* list, AsyncPeekField& field, ReadbackKind kind, std::size_t slot) {
     settle_owed_efb();
-    const bool is_depth = kind == EfbPeekKind::Depth;
+    const bool is_depth = kind == ReadbackKind::Depth;
     resolve_efb_on(list, !is_depth, is_depth);
     constexpr UINT width = kFrameWidth;
     constexpr UINT height = kFrameHeight;
@@ -9114,7 +9114,7 @@ const std::uint8_t* RendererD3D12::async_peek_field_rgba(
 }
 
 bool RendererD3D12::read_efb_pixels(
-    std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
+    std::uint16_t x, std::uint16_t y, ReadbackKind kind,
     std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
     bool defer_pointer_depth) {
     settle_owed_efb();
@@ -9141,7 +9141,7 @@ bool RendererD3D12::read_efb_pixels(
     // Every earlier peek completed at its fence before this one could start,
     // so the descriptor can be rewritten.
     device_->CreateRenderTargetView(target, nullptr, peek_rtv_);
-    const bool is_depth = kind == EfbPeekKind::Depth;
+    const bool is_depth = kind == ReadbackKind::Depth;
     ID3D12Resource* src = is_depth ? efb_depth_.Get() : efb_color_.Get();
 
     d3d_check(peek_allocator_->Reset(), "GXPeek allocator reset");

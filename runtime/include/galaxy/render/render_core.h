@@ -124,19 +124,19 @@ public:
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
     using SceneStage = std::array<char, 48>;
     // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
-    void attach_fifo_marker(FifoMarker marker) noexcept {
+    void attach_scene_marker(SceneMarker marker) noexcept {
         if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
             const std::uint8_t index = producer_fifo_marker_count_++;
             producer_fifo_markers_[index] = marker;
             producer_fifo_marker_serials_[index] = producer_shape_record_serial_;
             producer_fifo_marker_views_[index] = producer_scene_view_;
             producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
-            if (producer_scene_view_valid_ && marker == FifoMarker::SceneBegin) {
+            if (producer_scene_view_valid_ && marker == SceneMarker::SceneBegin) {
                 producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
             } else {
                 producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
             }
-            if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == FifoMarker::SceneBegin) {
+            if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == SceneMarker::SceneBegin) {
                 producer_fifo_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
             } else {
                 producer_fifo_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
@@ -216,18 +216,18 @@ public:
     // peeked); the field a frame earlier, as the capture completes asynchronously. Until that
     // channel has a field, and for token 0, the latest field of the kind answers. The request is
     // recorded so the render thread keeps producing fields while peeks continue.
-    [[nodiscard]] bool peek_efb_published(
+    [[nodiscard]] bool readback_published(
         std::uint16_t x,
         std::uint16_t y,
-        EfbPeekKind kind,
+        ReadbackKind kind,
         std::uint16_t token,
         std::uint32_t& value);
     // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
     [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
-    [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;
-    [[nodiscard]] XfbPresentStats xfb_present_stats() const noexcept;
+    [[nodiscard]] std::uint64_t display_copy_count() const noexcept;
+    [[nodiscard]] DisplayPresentStats display_present_stats() const noexcept;
 
 private:
 
@@ -300,7 +300,7 @@ private:
     struct EfbPeekRequest {
         std::uint16_t x = 0;
         std::uint16_t y = 0;
-        EfbPeekKind kind = EfbPeekKind::Color;
+        ReadbackKind kind = ReadbackKind::Color;
         std::span<std::uint32_t> depth_pixels;
         std::uint32_t value = 0;
         bool success = false;
@@ -329,7 +329,7 @@ private:
         // In-frame pointer field: recorded before the chunk's records.
         bool pointer_depth_in_frame = false;
         // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
-        std::array<FifoMarker, kFifoMarkersPerChunk> fifo_markers{};
+        std::array<SceneMarker, kFifoMarkersPerChunk> fifo_markers{};
         // Per marker: how many shape records the game had made before it (their order at one offset).
         std::array<std::uint64_t, kFifoMarkersPerChunk> fifo_marker_serials{};
         std::uint8_t fifo_marker_count = 0;
@@ -384,14 +384,14 @@ private:
     bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
-    std::array<FifoMarker, kFifoMarkersPerChunk> producer_fifo_markers_{};
+    std::array<SceneMarker, kFifoMarkersPerChunk> producer_fifo_markers_{};
     std::array<std::uint64_t, kFifoMarkersPerChunk> producer_fifo_marker_serials_{};
     // Shape records made so far (attach_shape_record): each record's and marker's place among them.
     std::uint64_t producer_shape_record_serial_ = 0;
     // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
     struct StreamSplit {
         std::uint64_t serial;
-        int marker;  // a FifoMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
+        int marker;  // a SceneMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
         int view;    // the marker's index (its camera) or the record's, -1 none
     };
     static constexpr int kSplitShapeRecord = -2;
@@ -474,7 +474,7 @@ private:
     std::uint64_t motion_light_markers_ = 0;
     std::uint64_t motion_mirror_markers_ = 0;
     std::uint64_t motion_stripe_marks_ = 0;
-    // GameScene::draw2D began (FifoMarker::Scene2DBegin); 2D layers in the report window.
+    // GameScene::draw2D began (SceneMarker::Scene2DBegin); 2D layers in the report window.
     void on_scene_2d_begin();
     std::uint64_t window_2d_scenes_ = 0;
     std::uint64_t identity_signature_rejected_ = 0;
@@ -940,7 +940,7 @@ private:
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_fifo_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
-    void on_fifo_marker(FifoMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
+    void on_scene_marker(SceneMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
     // Temporal scene: jitter, palette base, transform record and motion
     // fields of a VS constant upload (`upload` is write-combined memory).
@@ -973,15 +973,15 @@ private:
         std::uint64_t last_request = 0;  // simulation thread
         std::uint64_t completed = 0;
     };
-    static constexpr std::uint32_t async_peek_key(EfbPeekKind kind, std::uint16_t token) noexcept {
-        return (kind == EfbPeekKind::Depth ? 0u : 0x10000u) | token;
+    static constexpr std::uint32_t async_peek_key(ReadbackKind kind, std::uint16_t token) noexcept {
+        return (kind == ReadbackKind::Depth ? 0u : 0x10000u) | token;
     }
-    static constexpr EfbPeekKind async_peek_key_kind(std::uint32_t key) noexcept {
-        return (key & 0x10000u) == 0u ? EfbPeekKind::Depth : EfbPeekKind::Color;
+    static constexpr ReadbackKind async_peek_key_kind(std::uint32_t key) noexcept {
+        return (key & 0x10000u) == 0u ? ReadbackKind::Depth : ReadbackKind::Color;
     }
-    [[nodiscard]] std::size_t async_peek_channel(EfbPeekKind kind, std::uint16_t token);
+    [[nodiscard]] std::size_t async_peek_channel(ReadbackKind kind, std::uint16_t token);
     [[nodiscard]] static bool read_async_peek_field(
-        AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value);
+        AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
     std::array<AsyncPeekFieldState, Renderer::kAsyncPeekFieldChannels> async_peek_{};
     std::uint64_t async_peek_requests_ = 0;  // simulation thread
     // Render owner: records the fields of channels bound to `token` where the stream reaches it.

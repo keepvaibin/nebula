@@ -1593,11 +1593,11 @@ void svc_scene_marker(void*, uint32_t marker, const float* view) {
         galaxy::render::attach_scene_view(view, view[15] != 0.0f ? view + 12 : nullptr,
                                       gSceneStage.empty() ? nullptr : gSceneStage.c_str());
     }
-    static constexpr galaxy::render::FifoMarker kMarkers[] = {
-        galaxy::render::FifoMarker::SceneBegin, galaxy::render::FifoMarker::SceneEnd,
-        galaxy::render::FifoMarker::Scene2DBegin, galaxy::render::FifoMarker::Scene2DEnd};
+    static constexpr galaxy::render::SceneMarker kMarkers[] = {
+        galaxy::render::SceneMarker::SceneBegin, galaxy::render::SceneMarker::SceneEnd,
+        galaxy::render::SceneMarker::Scene2DBegin, galaxy::render::SceneMarker::Scene2DEnd};
     if (marker < std::size(kMarkers)) {
-        galaxy::render::attach_fifo_marker(kMarkers[marker]);
+        galaxy::render::attach_scene_marker(kMarkers[marker]);
     }
 #else
     (void)marker;
@@ -2244,8 +2244,8 @@ void svc_frame_end(void*) {
 uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x, uint32_t y) {
 #if defined(NEBULA_HOST_RENDERER)
     uint32_t value = 0;
-    const auto kind = depth != 0u ? galaxy::render::EfbPeekKind::Depth : galaxy::render::EfbPeekKind::Color;
-    if (!galaxy::render::peek_efb_published(static_cast<uint16_t>(x), static_cast<uint16_t>(y), kind,
+    const auto kind = depth != 0u ? galaxy::render::ReadbackKind::Depth : galaxy::render::ReadbackKind::Color;
+    if (!galaxy::render::readback_published(static_cast<uint16_t>(x), static_cast<uint16_t>(y), kind,
                                         static_cast<uint16_t>(channel), value)) {
         return 0;
     }

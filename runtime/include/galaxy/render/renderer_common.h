@@ -7,7 +7,7 @@
 #include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/renderer_api.h"  // EfbPeekKind
+#include "galaxy/renderer_api.h"  // ReadbackKind
 
 #include <array>
 #include <cstddef>
@@ -167,7 +167,7 @@ static_assert(sizeof(UiSolidQuadConstants) == 13u * sizeof(std::uint32_t));
 // physical texel recorded in EfbPeekSamplingGeometry.
 [[nodiscard]] EfbConversionShaderConstants make_efb_peek_conversion_constants(
     const EfbPeekSamplingGeometry& sampling,
-    EfbPeekKind kind) noexcept;
+    ReadbackKind kind) noexcept;
 
 // The EFB-copy destination cache's byte budget, 192 MiB. The cache grows with the internal resolution squared while
 // the budget stays fixed, so it is the one resolution-scaled GPU pool that is neither a render target nor visible in
