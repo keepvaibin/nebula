@@ -4752,7 +4752,7 @@ void RenderCore::invalidate_texture_binding_cache_key(std::uint64_t key) {
 }
 
 void RenderCore::mark_texture_binding_alias_dirty(
-    const EfbCopyParams& params) {
+    const CaptureRequest& params) {
     const std::uint16_t alias_width = static_cast<std::uint16_t>(
         params.half_scale
             ? std::max<std::uint16_t>(1u, params.src_width / 2u)
@@ -4762,7 +4762,7 @@ void RenderCore::mark_texture_binding_alias_dirty(
             ? std::max<std::uint16_t>(1u, params.src_height / 2u)
             : params.src_height);
     DirtyTextureAlias dirty{};
-    dirty.dependency.address = params.dest_addr;
+    dirty.dependency.address = params.key;
     dirty.dependency.width = alias_width;
     dirty.dependency.height = alias_height;
     dirty.dependency.source_bytes = 1u;  // the picture is found by its key (the capture buffer) alone
@@ -5008,7 +5008,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool single_source =
             blend_mode.blend_enable && !blend_mode.subtract &&
             (src_alpha_factor(blend_mode.src_factor) || src_alpha_factor(blend_mode.dst_factor)) &&
-            draw_state_.pe.pixel_format == 1u && (!constant_alpha || blend_mode.const_alpha == 0u);
+            draw_state_.frame_alpha && (!constant_alpha || blend_mode.const_alpha == 0u);
         const std::uint32_t dual_bit = motion_scene_ && single_source ? 0u : (1u << 27);
         std::uint32_t bb = render_state_key_.blend_bits;
         const bool candidate = motion_scene_ &&
@@ -5032,7 +5032,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
         // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
-        const auto reads_efb = [has_alpha = draw_state_.pe.pixel_format == 1u](BlendFactor f, bool source) {
+        const auto reads_efb = [has_alpha = draw_state_.frame_alpha](BlendFactor f, bool source) {
             const auto v = static_cast<std::uint32_t>(f);
             (void)source;
             return v == 8u || v == 9u || (has_alpha && (v == 6u || v == 7u));  // the destination's colour or alpha
@@ -5212,8 +5212,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // alpha at bits 9-16, on a frame with alpha (as the uber shader's dst-alpha flag). Colour keeps 8 bits on every
     // frame, as the GX path's keys (build_pixel_shader_key: no six-bit colour or ordered pattern).
     const BlendMode& pe_blend = draw_state_.blend;
-    const bool six_bit = draw_state_.pe.pixel_format == 1u;
-    const std::uint32_t native_pe = six_bit && pe_blend.const_alpha_enable && pe_blend.alpha_update
+    const bool frame_alpha = draw_state_.frame_alpha;
+    const std::uint32_t native_pe = frame_alpha && pe_blend.const_alpha_enable && pe_blend.alpha_update
                                         ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
                                         : 0u;
     const std::uint32_t header_texmtx = native_texmtx | native_pe << 8u;
@@ -5744,27 +5744,42 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         end_target_pass(record);
         return;
     case shapes::Record::Kind::TargetCapture: {
-        const std::uint16_t rect[4] = {record.target_x, record.target_y, record.target_width, record.target_height};
-        on_efb_copy(capture_copy_params(record.key, rect, record.target_channels, record.target_flags),
-                    (record.target_flags & 8u) != 0u ? 3u : draw_state_.pe.pixel_format);
+        CaptureRequest request{};
+        request.src_x = record.target_x;
+        request.src_y = record.target_y;
+        request.src_width = record.target_width;
+        request.src_height = record.target_height;
+        request.key = record.key;
+        request.channels = record.target_channels < 7u ? record.target_channels : 0u;
+        request.clear = (record.target_flags & 1u) != 0u;       // NEBULA_CAPTURE_CLEAR
+        request.half_scale = (record.target_flags & 2u) != 0u;  // NEBULA_CAPTURE_HALF
+        request.luma = (record.target_flags & 4u) != 0u;        // NEBULA_CAPTURE_LUMA
+        request.depth = (record.target_flags & 8u) != 0u;       // NEBULA_CAPTURE_DEPTH
+        request.filtered = (record.target_flags & 16u) != 0u;   // NEBULA_CAPTURE_FILTERED
+        on_efb_copy(request);
         return;
     }
-    case shapes::Record::Kind::FrameShow:
-        on_efb_copy(frame_show_params(record.target_width, record.target_height, record.target_flags),
-                    draw_state_.pe.pixel_format);
+    case shapes::Record::Kind::FrameShow: {
+        CaptureRequest request{};
+        request.src_width = static_cast<std::uint16_t>(((record.target_width - 1u) & 0x3FFu) + 1u);
+        request.src_height = static_cast<std::uint16_t>(((record.target_height - 1u) & 0x3FFu) + 1u);
+        request.display = true;
+        request.filtered = (record.target_flags & 16u) != 0u;  // NEBULA_CAPTURE_FILTERED
+        on_efb_copy(request);
         return;
+    }
     case shapes::Record::Kind::FrameClear: {
         // The values a draw would store: 8-bit colour, and on a frame with 6-bit alpha its alpha at 6 bits.
         flush_pending_draw_batch();
         std::uint32_t rgba = record.target_clear_rgba;
-        if (draw_state_.pe.pixel_format == 1u) {
+        if (draw_state_.frame_alpha) {
             const std::uint32_t alpha = rgba & 255u;
             rgba = (rgba & ~255u) | (alpha & 0xFCu) | (alpha >> 6u);
         }
         renderer_.clear_efb(rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
                             (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, record.target_x,
                             record.target_y, record.target_width, record.target_height,
-                            static_cast<std::uint8_t>(draw_state_.pe.pixel_format | kEfbClearExact));
+                            static_cast<std::uint8_t>(frame_format() | kEfbClearExact));
         return;
     }
     case shapes::Record::Kind::TargetClear:
@@ -5772,7 +5787,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
             flush_pending_draw_batch();
             renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, (record.target_channels & 1u) != 0u,
                                 (record.target_channels & 2u) != 0u, (record.target_channels & 4u) != 0u, 0u, 0u,
-                                target_pass_size_[0], target_pass_size_[1], draw_state_.pe.pixel_format);
+                                target_pass_size_[0], target_pass_size_[1], frame_format());
         }
         return;
     }
@@ -5794,7 +5809,7 @@ void RenderCore::begin_target_pass(const shapes::Record& record) {
     target_pass_size_ = {record.target_width, record.target_height};
     frame_bindings_dirty_ = true;
     renderer_.clear_efb(record.target_clear_rgba, record.target_clear_z, true, true, true, 0u, 0u,
-                        record.target_width, record.target_height, draw_state_.pe.pixel_format);
+                        record.target_width, record.target_height, frame_format());
 }
 
 // The pass's end: its picture, at full precision, becomes the texture at its key, then the frame's targets come
@@ -6262,9 +6277,9 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.sealed = false;
 }
 
-void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format) {
+void RenderCore::on_efb_copy(const CaptureRequest& params) {
     flush_pending_draw_batch();
-    if (params.copy_to_xfb) {
+    if (params.display) {
         galaxy::timeline::record(galaxy::timeline::Event::XfbCopy, stat_xfb_copies_);
         xfb_copied_in_chunk_ = true;
     }
@@ -6274,7 +6289,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
         : std::chrono::steady_clock::time_point{};
 
 
-    if (params.copy_to_xfb) {
+    if (params.display) {
         XfbTexture* xfb = efb_copies_.acquire_xfb(params, frame_index_);
         if (xfb != nullptr) {
             end_side_layer();
@@ -6329,10 +6344,8 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
     } else {
         ++frame_tex_copies_;
         // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
-        const bool decoded_evicted = texture_cache_.forget(params.dest_addr) != 0u;
-        // Depth-source copy when the PE pixel format is Z24 at copy time
-        // (Dolphin BPStructs: is_depth_copy = zcontrol.pixel_format == Z24).
-        const bool is_depth_copy = pixel_format == 3u;
+        const bool decoded_evicted = texture_cache_.forget(params.key) != 0u;
+        const bool is_depth_copy = params.depth;
         // A colour copy right after a display copy takes the picture it showed (with the 2D layer), as the
         // console's single EFB holds it, not the scene the output-resolution 2D layer was drawn over.
         const bool from_display = display_copy_on_output_ && !is_depth_copy && !params.clear;
@@ -6359,12 +6372,12 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
     // own clear settings leave those enables as they were.
     if (params.clear) {
         renderer_.clear_efb(
-            rgba_word(params.clear_color),
-            params.clear_z,
+            0u,
+            0x00FFFFFFu,
             draw_state_.blend.color_update, draw_state_.blend.alpha_update, draw_state_.z.update_enable,
             params.src_x, params.src_y,
             params.src_width, params.src_height,
-            pixel_format);
+            static_cast<std::uint8_t>(params.depth ? 0u : frame_format()));
     }
     const std::uint64_t copy_us = time_copy
         ? elapsed_us(copy_start, std::chrono::steady_clock::now())
@@ -6375,10 +6388,10 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
     if (trace_gx_stalls_enabled() &&
         copy_us >= trace_gx_stall_threshold_us()) {
         std::cerr << "[gx-efb-copy-timing] frame=" << frame_index_
-                  << " kind=" << (params.copy_to_xfb ? "xfb" : "tex")
+                  << " kind=" << (params.display ? "xfb" : "tex")
                   << " us=" << copy_us
                   << " src=" << params.src_width << 'x' << params.src_height
-                  << " dst=0x" << std::hex << params.dest_addr << std::dec
+                  << " dst=0x" << std::hex << params.key << std::dec
                   << " clear=" << (params.clear ? 1 : 0) << '\n';
     }
 }

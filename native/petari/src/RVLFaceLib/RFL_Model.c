@@ -232,7 +232,6 @@ void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
     J3DNativeStateSetAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_NEVER, 0);
     J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
     J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
-    J3DNativeStateSetZCompLoc(setting->compLoc);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetDither(FALSE);

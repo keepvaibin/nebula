@@ -1449,7 +1449,7 @@ void RendererD3D12::write_efb_conversion_views(const DescriptorRing::Table& tabl
     conv_efb_depth_srv_ = depth_gpu;
 }
 
-bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, const XfbTexture& dest) const {
+bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, const XfbTexture& dest) const {
     static const bool enabled = [] {
         char value[8]{};
         std::size_t length = 0;
@@ -1469,7 +1469,7 @@ bool RendererD3D12::can_hand_over_display_copy(const EfbCopyParams& params, cons
         return false;
     }
     const unsigned scale = efb_scale_;
-    return !params.filtered && !params.intensity && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
+    return !params.filtered && !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
            dest.width == kFrameWidth * scale && dest.height == params.src_height * scale;
 }
@@ -7398,14 +7398,14 @@ bool RendererD3D12::publish_picture(std::uint64_t key, std::uint16_t width, std:
     return true;
 }
 
-bool RendererD3D12::publish_capture(const EfbCopyParams& params, gpu::TextureRef texture, bool is_depth_copy,
+bool RendererD3D12::publish_capture(const CaptureRequest& params, gpu::TextureRef texture, bool is_depth_copy,
                           TextureCache& textures) {
     const auto size = [&](std::uint16_t extent) {
         return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
     };
     // A one-channel conversion is read in every channel (NEBULA_TARGET_RED).
     const std::uint8_t channels = efb_copy_single_channel(params.channels, is_depth_copy) ? 3u : 0u;
-    return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture),
+    return publish_picture(params.key, size(params.src_width), size(params.src_height), std::move(texture),
                            channels, 0u, textures);
 }
 
@@ -7447,7 +7447,7 @@ void RendererD3D12::take_fg_hudless_scene() {
 }
 
 // The display copy of the taken scene: the same copy into the HUD-less XFB.
-void RendererD3D12::copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTexture& dest) {
+void RendererD3D12::copy_fg_hudless_xfb(const CaptureRequest& params, const XfbTexture& dest) {
     const bool taken = fg_hudless_scene_;
     fg_hudless_scene_ = false;
     if (!taken || replay_recording_ || fg_hudless_efb_.scale != efb_scale_ || !dest.texture) {
@@ -7754,7 +7754,7 @@ bool RendererD3D12::begin_output_efb() {
     }
     // The whole scene EFB, resampled into the output target with the display
     // copy's identity settings (no filter, gamma 1.0, alpha kept).
-    EfbCopyParams params{};
+    CaptureRequest params{};
     params.src_width = static_cast<std::uint16_t>(kFrameWidth);
     params.src_height = static_cast<std::uint16_t>(kFrameHeight);
     const unsigned w = kFrameWidth * scale;
@@ -7809,7 +7809,7 @@ void RendererD3D12::end_output_efb() {
     }
 }
 
-bool RendererD3D12::copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures) {
+bool RendererD3D12::copy_output_efb_to_texture(const CaptureRequest& params, TextureCache& textures) {
     if (output_efb_active_ || !alt_efb_.color) {
         return copy_efb_to_texture(params, textures, false);
     }
@@ -8163,7 +8163,7 @@ void RendererD3D12::draw(const DrawCall& call) {
 }
 
 std::optional<D3D12_BOX> detail::efb_identity_copy_box(
-    const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
+    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
     const std::optional<EfbCopyRect> rect =
         efb_identity_copy_rect(params, is_depth_copy, efb_scale, dest_width, dest_height);
@@ -8221,7 +8221,7 @@ void RendererD3D12::record_conversion_blit(
     unsigned dest_w,
     unsigned dest_h,
     D3D12_CPU_DESCRIPTOR_HANDLE dest_rtv,
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     bool is_depth_copy,
     bool intensity,
     bool keep_alpha,
@@ -8318,7 +8318,7 @@ void RendererD3D12::record_conversion_blit(
     bind_efb();
 }
 
-void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) {
+void RendererD3D12::copy_efb_to_xfb(const CaptureRequest& params, XfbTexture& dest) {
     settle_owed_efb();
     const GpuPassScope pass{*this, GpuPass::XfbCopy};
     // The caller publishes a new XFB serial after this returns, so a missing
@@ -8404,7 +8404,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
 }
 
 bool RendererD3D12::copy_efb_to_texture(
-    const EfbCopyParams& params, TextureCache& textures, bool is_depth_copy) {
+    const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {
     settle_owed_efb();
     const GpuPassScope pass{*this, GpuPass::EfbCopy};
     // SMG composites its visible frame from EFB-to-texture captures (the scene
@@ -8437,9 +8437,9 @@ bool RendererD3D12::copy_efb_to_texture(
     // Keyed by (addr, format, depth-source): SMG reuses one address with
     // different copy formats and each needs its own converted texture.
     const std::uint64_t dest_key =
-        static_cast<std::uint64_t>(params.dest_addr) |
+        static_cast<std::uint64_t>(params.key) |
         (static_cast<std::uint64_t>(params.channels) << 48) |  // addresses stay below 2^48
-        (params.intensity ? (1ull << 52) : 0ull) |
+        (params.luma ? (1ull << 52) : 0ull) |
         (is_depth_copy ? (1ull << 56) : 0ull) |
         // One address alternates between early scaled masks and the
         // final native bloom composite. Cache both resources to avoid
@@ -8519,7 +8519,7 @@ bool RendererD3D12::copy_efb_to_texture(
             if (reported.fetch_add(1u, std::memory_order_relaxed) < 8u) {
                 std::cerr << "[efb-copy] dest texture allocation failed hr=0x"
                           << std::hex << static_cast<unsigned long>(create_hr)
-                          << " addr=0x" << params.dest_addr << std::dec
+                          << " addr=0x" << params.key << std::dec
                           << " size=" << w << 'x' << h << "; copy skipped\n";
             }
             return false;
@@ -8611,7 +8611,7 @@ bool RendererD3D12::copy_efb_to_texture(
         copy.height = h;
         copy.params = params;
         copy.depth = is_depth_copy;
-        copy.intensity = params.intensity;
+        copy.intensity = params.luma;
         copy.keep_alpha = keep_alpha;
         copy.format = params.channels;
         copy.geometry[0] = sampling.src_x;
@@ -8625,7 +8625,7 @@ bool RendererD3D12::copy_efb_to_texture(
     }
     record_conversion_blit(
         dest.texture.Get(), w, h, dest.rtv, params,
-        is_depth_copy, params.intensity, keep_alpha,
+        is_depth_copy, params.luma, keep_alpha,
         params.channels,
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,

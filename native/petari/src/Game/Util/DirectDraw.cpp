@@ -66,7 +66,6 @@ namespace TDDraw {
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
         J3DNativeState::setCoPlanar(0);
         J3DNativeState::setZMode(0, GX_ALWAYS, 0);
-        J3DNativeState::setZCompLoc(0);
         J3DNativeState::setColorUpdate(GX_TRUE);
         J3DNativeState::setAlphaUpdate(0);
         J3DNativeState::setLineWidth(6, GX_TO_ZERO);

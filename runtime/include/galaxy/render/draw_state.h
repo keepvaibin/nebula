@@ -36,7 +36,7 @@ struct NativeDrawState {
     GenMode gen{0u, 0u, 1u, CullMode::None, 0u, false};
     ZMode z{false, CompareFunc::Never, false};
     BlendMode blend{false, false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
-    PeControl pe{0u, 0u, false};
+    bool frame_alpha = false;  // the frame keeps alpha (NEBULA_STATE_FRAME_ALPHA)
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
     // colours (RGBA) of channels 0 and 1.
@@ -88,17 +88,5 @@ private:
     void set_material(const material::Program& program, const material::Values& values, bool apply_program);
 public:
 };
-
-// The shaders' packed forms of the vertex state (their constants and keys).
-[[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
-
-
-// The frame shown (frame_show: its top left `width` x `height`, NebulaCaptureFlags) as the display copy takes it.
-[[nodiscard]] EfbCopyParams frame_show_params(std::uint16_t width, std::uint16_t height, std::uint8_t flags);
-// A capture (target_capture: key, rectangle left/top/width/height, NebulaTargetChannels, NebulaCaptureFlags) as the
-// conversion takes it.
-[[nodiscard]] EfbCopyParams capture_copy_params(std::uint64_t key, const std::uint16_t rect[4], std::uint8_t channels,
-                                                std::uint8_t flags);
-
 
 }  // namespace galaxy::render

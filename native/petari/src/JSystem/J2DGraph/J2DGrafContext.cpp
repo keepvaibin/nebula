@@ -74,7 +74,6 @@ void J2DGrafContext::setPort() {
 // The 2D view's fixed state: the panes draw with their own native materials (J2DPicture, J2DMaterial,
 // fillBox's vertex_color), so the TEV program the console reset here has no reader.
 void J2DGrafContext::setup2D() {
-    J3DNativeState::setZCompLoc(GX_FALSE);
     J3DNativeState::setAlphaCompare(GX_GREATER, 0, GX_AOP_OR, GX_GREATER, 0);
     J3DNativeState::setZMode(GX_FALSE, GX_LEQUAL, GX_FALSE);
     J3DNativeState::setCullMode(GX_CULL_NONE);

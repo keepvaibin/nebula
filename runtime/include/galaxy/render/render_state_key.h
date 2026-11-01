@@ -27,7 +27,7 @@ struct RenderStateKey {
                                     // bit28 constant EFB alpha overwrite
     std::uint16_t zmode_bits;       // canonicalized BP 0x40
     std::uint8_t cull;              // CullMode
-    std::uint8_t pixfmt;            // PeControl pixel format (dst-alpha cap)
+    std::uint8_t pixfmt;            // 1: the frame keeps alpha (destination alpha)
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value (bits 0-3; kVsKeyCurved: bits 4-5)
     std::uint8_t samples_log2;      // the EFB's variant: bits 0-1 its samples per pixel (MSAA) as a power of
                                     // two (0 for one), bit 2 kEfbVariantHdr

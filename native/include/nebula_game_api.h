@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 80u
+#define NEBULA_GAME_API_VERSION 81u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -204,7 +204,6 @@ enum {
     NEBULA_STATE_NUM_TEV_STAGES,    /* count */
     NEBULA_STATE_NUM_IND_STAGES,    /* count */
     NEBULA_STATE_CO_PLANAR,         /* enable */
-    NEBULA_STATE_Z_COMP_LOC,        /* before texturing */
     NEBULA_STATE_CURRENT_MATRIX,    /* position/normal matrix id (GXSetCurrentMtx) */
     NEBULA_STATE_TEV_INDIRECT,      /* TEV stage, indirect stage, format, bias, matrix, wrap s, wrap t, add previous,
                                        unmodified LOD, alpha (GXSetTevIndirect's arguments) */
@@ -213,9 +212,7 @@ enum {
     NEBULA_STATE_POINT_SIZE,        /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     NEBULA_STATE_LIGHT_ATTENUATION, /* light (0-7), r, g, b, a; f: angle attenuation a0-a2, distance k0-k2 */
     NEBULA_STATE_LIGHT_POSITION,    /* light (0-7); f: position x, y, z, direction x, y, z */
-    NEBULA_STATE_PIXEL_FORMAT,      /* changed (the format and depth format are new), pixel type (the hardware's:
-                                       GXSetPixelFmt's table), depth format, antialiasing, YUV (a Y8/U8/V8 format),
-                                       YUV component */
+    NEBULA_STATE_FRAME_ALPHA,       /* changed (differs from the last one), the frame keeps alpha (1) or not (0) */
     NEBULA_STATE_Z_TEXTURE,         /* operation (GXZTexOp), format (GXTexFmt), bias (24 bits, a[2..4] low first) */
     NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
                                        table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */

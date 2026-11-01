@@ -50,10 +50,10 @@ bool test_scaled_xfb_resource_allocation() {
         return expect(false, "3x EFB copy manager initialization");
     }
     manager.begin_frame(0u, 2u);
-    galaxy::render::EfbCopyParams params{};
+    galaxy::render::CaptureRequest params{};
     params.src_width = 640u;
     params.src_height = 456u;
-    params.copy_to_xfb = true;
+    params.display = true;
     galaxy::render::XfbTexture* xfb = manager.acquire_xfb(params, 1u);
     const bool allocated = xfb != nullptr && xfb->texture != nullptr;
     const D3D12_RESOURCE_DESC desc =
@@ -143,7 +143,7 @@ int main() {
     }
 
     {
-        galaxy::render::EfbCopyParams bloom{};
+        galaxy::render::CaptureRequest bloom{};
         bloom.src_x = 480u;
         bloom.src_width = 160u;
         bloom.src_height = 114u;
@@ -183,7 +183,7 @@ int main() {
             "scaled XFB extent clamps scale to 1-6 and D3D12 dimensions");
     }
     {
-        galaxy::render::EfbCopyParams params{};
+        galaxy::render::CaptureRequest params{};
         params.src_x = 10u;
         params.src_y = 20u;
         params.src_width = 640u;

@@ -112,7 +112,6 @@ void ImageEffectLocalUtil::setupDrawTexture() {
     J3DNativeState::setColorUpdate(GX_TRUE);
     J3DNativeState::setAlphaUpdate(GX_FALSE);
     J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     J3DNativeState::setDither(GX_FALSE);
     sMode = 0;

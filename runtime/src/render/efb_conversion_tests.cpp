@@ -254,8 +254,8 @@ bool test_remove_texel_checker() {
     return expect(untouched && same, "only texel-scale detail in one checker phase is removed");
 }
 
-galaxy::render::EfbCopyParams make_filter_params(bool filtered) {
-    galaxy::render::EfbCopyParams params{};
+galaxy::render::CaptureRequest make_filter_params(bool filtered) {
+    galaxy::render::CaptureRequest params{};
     params.src_y = 1u;
     params.src_width = 1u;
     params.src_height = 1u;
@@ -270,13 +270,13 @@ Pixel oracle_convert(
     Pixel previous,
     Pixel current,
     Pixel next,
-    const galaxy::render::EfbCopyParams& params,
+    const galaxy::render::CaptureRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
     const std::array<std::uint32_t, 3> coefficients{
-        params.filter_upper(),
-        params.filter_middle(),
-        params.filter_lower(),
+        capture_filter_upper(params),
+        capture_filter_middle(params),
+        capture_filter_lower(params),
     };
     const auto filtered = [&](std::uint8_t p, std::uint8_t c, std::uint8_t n) {
         const std::uint32_t value =
@@ -336,11 +336,12 @@ Pixel oracle_convert(
 
 Pixel oracle_from_three_rows(
     const std::array<Pixel, 3>& rows,
-    const galaxy::render::EfbCopyParams& params,
+    const galaxy::render::CaptureRequest& params,
     bool intensity,
     std::uint8_t copy_format) {
-    const int minimum = params.clamp_top ? 1 : 0;
-    const int maximum = params.clamp_bottom ? 1 : 2;
+    // Rows 0-2 are logical rows 0-2 and row 1 is converted; every sample stays inside the copy rectangle.
+    const int minimum = std::clamp(static_cast<int>(params.src_y), 0, 2);
+    const int maximum = std::clamp(static_cast<int>(params.src_y) + static_cast<int>(params.src_height) - 1, 0, 2);
     return oracle_convert(
         rows[static_cast<std::size_t>(std::clamp(0, minimum, maximum))],
         rows[1],
@@ -836,9 +837,9 @@ V main(uint id : SV_VertexID) {
             auto rejected = params;
             switch (flag) {
             case 0u: rejected.channels = 6u; break;
-            case 1u: rejected.intensity = true; break;
+            case 1u: rejected.luma = true; break;
             case 2u: rejected.half_scale = true; break;
-            case 3u: rejected.copy_to_xfb = true; break;
+            case 3u: rejected.display = true; break;
             case 4u: rejected.src_width = 0u; break;
             case 5u: rejected.src_x = kFrameWidth - 15u; break;
             case 6u: rejected.src_y = kFrameHeight - 15u; break;
@@ -863,7 +864,6 @@ V main(uint id : SV_VertexID) {
                     std::array<unsigned, 2>{624u, 440u}}) {
                 params.src_x = static_cast<std::uint16_t>(origin[0]);
                 params.src_y = static_cast<std::uint16_t>(origin[1]);
-                params.clamp_top = params.clamp_bottom = origin[0] != 319u;
                 const auto box = detail::efb_identity_copy_box(params, false,
                     scale, size, size);
                 if (!expect(box.has_value(), "bounded scaled identity copy admitted")) return false;
@@ -982,9 +982,9 @@ V main(uint id : SV_VertexID) {
         if (!manager.initialize(device_.Get(), 1u)) {
             throw std::runtime_error("initialize XFB rollback manager");
         }
-        EfbCopyParams params{};
+        CaptureRequest params{};
         params.src_width = params.src_height = 8u;
-        params.copy_to_xfb = true;
+        params.display = true;
         // Three published pictures fill the ring; the next acquire is the first again.
         XfbTexture* shown = nullptr;
         for (std::uint64_t frame = 1u; frame <= 3u; ++frame) {
@@ -1020,9 +1020,9 @@ V main(uint id : SV_VertexID) {
             throw std::runtime_error("initialize XFB pool manager");
         }
         manager.begin_frame(0u, kFramesInFlight);
-        EfbCopyParams params{};
+        CaptureRequest params{};
         params.src_height = 8u;
-        params.copy_to_xfb = true;
+        params.display = true;
         // Eight one-off sizes fill the idle pool; the ninth is the current XFB.
         for (unsigned i = 0; i < 9u; ++i) {
             params.src_width = static_cast<std::uint16_t>(32u + i);
@@ -1823,15 +1823,11 @@ bool test_clear_precision() {
         {19u, 87u, 155u, 255u}, "RGB8 clears preserve each full 8-bit color channel");
     passed &= expect_pixel(bytes(galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 1u)),
         {16u, 85u, 154u, 125u}, "RGBA6 clears quantize only to the 6-bit lattice");
-    const auto rgb565 = galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 2u);
-    passed &= expect_pixel(bytes(rgb565), {16u, 85u, 156u, 255u}, "RGB565 clears use 5/6/5 precision");
-    passed &= expect(rgb565.reversed_depth == 1.0f - 0x123412u / 16777216.0f,
-        "RGB565 Z16 clear expands the high sixteen depth bits to Z24");
     return passed;
 }
 
 galaxy::render::EfbConversionShaderConstants constants_for_case(
-    const galaxy::render::EfbCopyParams& params,
+    const galaxy::render::CaptureRequest& params,
     unsigned scale,
     bool is_depth,
     bool intensity,
@@ -1893,10 +1889,11 @@ bool test_scaled_xfb_filter() {
             sampling.step_x, sampling.step_y, sampling.filter_row_offset, scale, 3u);
         const auto result = harness.run_color(rows, scale, constants);
         for (unsigned y = 0; y < scale; ++y) {
-            const auto red = static_cast<std::uint8_t>(((y == 0 ? 0u : 255u) * 32u + 255u * 32u) >> 6u);
+            // The rectangle starts at logical row 1: its first physical row reads itself as the row above.
+            const auto red = static_cast<std::uint8_t>((255u * 32u + 255u * 32u) >> 6u);
             for (unsigned x = 0; x < scale; ++x) {
                 passed &= expect_pixel(result[y * scale + x], {red, 0u, 0u, 255u},
-                    "scaled XFB filter affects adjacent edge rows, retaining brightness and opaque XFB alpha");
+                    "scaled display filter stays inside its rectangle, keeping brightness and opaque alpha");
             }
         }
     }
@@ -1910,12 +1907,14 @@ bool test_cpu_oracle() {
         Pixel{40u, 50u, 60u, 77u},
         Pixel{70u, 80u, 90u, 100u},
     };
-    galaxy::render::EfbCopyParams filter = make_filter_params(true);
+    galaxy::render::CaptureRequest filter = make_filter_params(true);
+    filter.src_y = 0u;
+    filter.src_height = 2u;
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{25u, 35u, 45u, 77u},
         "integer oracle display filter: half the line above");
-    filter.clamp_top = true;
+    filter = make_filter_params(true);
     passed &= expect_pixel(
         oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{40u, 50u, 60u, 77u},
@@ -1926,7 +1925,7 @@ bool test_cpu_oracle() {
         Pixel{255u, 0u, 0u, 77u},
         Pixel{0u, 0u, 0u, 2u},
     };
-    const galaxy::render::EfbCopyParams identity = make_filter_params(false);
+    const galaxy::render::CaptureRequest identity = make_filter_params(false);
     passed &= expect_pixel(
         oracle_from_three_rows(red_rows, identity, true, 3u),
         Pixel{82u, 82u, 82u, 82u},
@@ -1945,8 +1944,11 @@ bool test_cpu_oracle() {
         packed_depth(0x405060u),
         packed_depth(0x708090u),
     };
+    galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
+    depth_filter.src_y = 0u;
+    depth_filter.src_height = 2u;
     passed &= expect_pixel(
-        oracle_from_three_rows(depth_rows, make_filter_params(true), false, 0u),
+        oracle_from_three_rows(depth_rows, depth_filter, false, 0u),
         Pixel{40u, 56u, 72u, 255u},
         "integer oracle filters packed depth bytes");
     return passed;
@@ -1978,20 +1980,16 @@ bool test_warp_against_oracle() {
         };
 
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {
-            for (unsigned clamp_case = 0u; clamp_case < 4u; ++clamp_case) {
-                galaxy::render::EfbCopyParams params = make_filter_params(true);
-                params.clamp_top = (clamp_case & 1u) != 0u;
-                params.clamp_bottom = (clamp_case & 2u) != 0u;
+            {
+                galaxy::render::CaptureRequest params = make_filter_params(true);
                 const Pixel expected =
                     oracle_from_three_rows(rows, params, false, 0u);
                 char label[96]{};
                 std::snprintf(
                     label,
                     sizeof(label),
-                    "%ux color filter clamp_top=%u clamp_bottom=%u",
-                    scale,
-                    params.clamp_top ? 1u : 0u,
-                    params.clamp_bottom ? 1u : 0u);
+                    "%ux color filter inside its rectangle",
+                    scale);
                 passed &= expect_uniform_pixels(
                     harness.run_color(
                         rows,
@@ -2002,7 +2000,7 @@ bool test_warp_against_oracle() {
                     label);
             }
 
-            const galaxy::render::EfbCopyParams identity = make_filter_params(false);
+            const galaxy::render::CaptureRequest identity = make_filter_params(false);
             constexpr std::array<std::uint8_t, 3> kIntensityFormats{
                 3u, 4u, 5u};
             for (const std::uint8_t format : kIntensityFormats) {
@@ -2023,7 +2021,7 @@ bool test_warp_against_oracle() {
                     intensity_label);
             }
 
-            const galaxy::render::EfbCopyParams depth_filter = make_filter_params(true);
+            const galaxy::render::CaptureRequest depth_filter = make_filter_params(true);
             char depth_label[64]{};
             std::snprintf(
                 depth_label,

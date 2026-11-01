@@ -76,14 +76,14 @@ struct Group {
 };
 #define NEBULA_GROUP(field, flags) Group{offsetof(NativeDrawState, field), sizeof(NativeDrawState::field), flags}
 enum : unsigned {
-    kGen, kZ, kBlend, kPe, kChannel, kMaterialColor, kAmbientColor, kTexgen, kPostTexgen, kProjection,
+    kGen, kZ, kBlend, kFrame, kChannel, kMaterialColor, kAmbientColor, kTexgen, kPostTexgen, kProjection,
     kProjectionType, kViewport, kPositionMatrix, kTextureMatrix, kLinePoint, kCoord, kTexture, kGroupCount
 };
 const Group kGroups[kGroupCount] = {
     NEBULA_GROUP(gen, kStateDirtyVertexShader | kStateDirtyRenderState | kStateDirtyVertexConstants),
     NEBULA_GROUP(z, kStateDirtyRenderState),
     NEBULA_GROUP(blend, kStateDirtyRenderState),
-    NEBULA_GROUP(pe, kStateDirtyRenderState),
+    NEBULA_GROUP(frame_alpha, kStateDirtyRenderState),
     NEBULA_GROUP(channel, kStateDirtyVertexShader | kStateDirtyVertexConstants),
     NEBULA_GROUP(material_color, kStateDirtyVertexConstants),
     NEBULA_GROUP(ambient_color, kStateDirtyVertexConstants),
@@ -123,7 +123,7 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kFog: return bit(kGen);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
     case state::kViewport: return bit(kViewport);
-    case state::kZCompLoc: case state::kPixelFormat: return bit(kPe);
+    case state::kFrameAlpha: return bit(kFrame);
     case state::kCurrentMatrix: return bit(kPositionMatrix);
     case state::kLineWidth: case state::kPointSize: return bit(kLinePoint);
     case state::kTexOffsets: return bit(kCoord);
@@ -157,7 +157,7 @@ void NativeDrawState::apply(const state::Op& op) {
 }
 
 void NativeDrawState::apply(const material::Program& m, const material::Values& v, bool program) {
-    constexpr std::uint32_t kMaterialGroups = bit(kGen) | bit(kZ) | bit(kBlend) | bit(kPe) | bit(kChannel) |
+    constexpr std::uint32_t kMaterialGroups = bit(kGen) | bit(kZ) | bit(kBlend) | bit(kChannel) |
                                               bit(kMaterialColor) | bit(kAmbientColor) | bit(kTexgen) |
                                               bit(kPostTexgen) | bit(kCoord) | bit(kTexture);
     constexpr std::uint32_t kValueGroups = bit(kMaterialColor) | bit(kAmbientColor) | bit(kCoord) | bit(kTexture);
@@ -207,14 +207,10 @@ void NativeDrawState::set_op(const state::Op& op) {
     case state::kDither:
         blend.dither = a[0] != 0u;
         break;
-    case state::kPixelFormat:
+    case state::kFrameAlpha:
         if (a[0] != 0u) {
-            pe.pixel_format = static_cast<std::uint8_t>(a[1] & 7u);
-            pe.z_format = static_cast<std::uint8_t>(a[2] & 7u);
+            frame_alpha = a[1] != 0u;
         }
-        break;
-    case state::kZCompLoc:
-        pe.early_z = (a[0] & 1u) != 0u;
         break;
     case state::kNumTexGens:
         gen.num_texgens = static_cast<std::uint8_t>(a[0] & 15u);
@@ -434,57 +430,11 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
         return;
     }
     blend_and_z();
-    pe.early_z = (m.z_compare_location & 1u) != 0u;
     gen.num_texgens = static_cast<std::uint8_t>(m.tex_gens & 15u);
     gen.num_color_chans = static_cast<std::uint8_t>(m.channels & 7u);
     gen.num_tev_stages = static_cast<std::uint8_t>(((m.tev_stages - 1u) & 15u) + 1u);
     gen.cull = kCull[m.cull & 3u];
     gen.num_ind_stages = static_cast<std::uint8_t>(m.ind_stages & 7u);
-}
-
-std::uint32_t rgba_word(const std::uint8_t* c) {
-    return static_cast<std::uint32_t>(c[0]) << 24u | static_cast<std::uint32_t>(c[1]) << 16u |
-           static_cast<std::uint32_t>(c[2]) << 8u | c[3];
-}
-
-namespace {
-
-constexpr std::uint8_t kCaptureFiltered = 16u;  // NEBULA_CAPTURE_FILTERED
-
-void set_filter(EfbCopyParams& p, std::uint8_t flags) {
-    p.filtered = (flags & kCaptureFiltered) != 0u;
-}
-
-}  // namespace
-
-EfbCopyParams frame_show_params(std::uint16_t width, std::uint16_t height, std::uint8_t flags) {
-    EfbCopyParams p{};
-    p.src_width = static_cast<std::uint16_t>(((width - 1u) & 0x3FFu) + 1u);
-    p.src_height = static_cast<std::uint16_t>(((height - 1u) & 0x3FFu) + 1u);
-    p.clamp_top = true;
-    p.clamp_bottom = true;
-    p.copy_to_xfb = true;
-    set_filter(p, flags);
-    return p;
-}
-
-EfbCopyParams capture_copy_params(std::uint64_t key, const std::uint16_t rect[4],
-                                  std::uint8_t channels, std::uint8_t flags) {
-    EfbCopyParams p{};
-    p.src_x = rect[0];
-    p.src_y = rect[1];
-    p.src_width = rect[2];
-    p.src_height = rect[3];
-    p.dest_addr = key;
-    p.clamp_top = true;
-    p.clamp_bottom = true;
-    p.clear = (flags & 1u) != 0u;
-    p.half_scale = (flags & 2u) != 0u;
-    p.intensity = (flags & 4u) != 0u;
-    p.channels = channels < 7u ? channels : 0u;  // NebulaTargetChannels
-    p.clear_z = 0xFFFFFFu;  // NEBULA_CAPTURE_CLEAR: colour 0, depth far
-    set_filter(p, flags);
-    return p;
 }
 
 }  // namespace galaxy::render

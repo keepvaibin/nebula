@@ -365,7 +365,7 @@ std::string_view display_filter_shader_source() noexcept {
 }
 
 EfbConversionShaderConstants make_efb_conversion_constants(
-    const EfbCopyParams& params,
+    const CaptureRequest& params,
     bool is_depth_copy,
     bool intensity,
     bool keep_alpha,
@@ -380,20 +380,17 @@ EfbConversionShaderConstants make_efb_conversion_constants(
     unsigned reduction_width) noexcept {
     const float scale = static_cast<float>(
         std::clamp(efb_scale, 1u, kMaxEfbScale));
-    const float fw_up = static_cast<float>(params.filter_upper());
-    const float fw_mid = static_cast<float>(params.filter_middle());
-    const float fw_low = static_cast<float>(params.filter_lower());
+    const float fw_up = static_cast<float>(capture_filter_upper(params));
+    const float fw_mid = static_cast<float>(capture_filter_middle(params));
+    const float fw_low = static_cast<float>(capture_filter_lower(params));
 
     const float copy_y0 = static_cast<float>(params.src_y) * scale;
     const float copy_y1 =
         copy_y0 + static_cast<float>(params.src_height) * scale;
     const float full_y1 =
         static_cast<float>(std::max(logical_efb_height, 1u)) * scale;
-    const float clamp_y_min =
-        (params.clamp_top ? copy_y0 : 0.0f) + 0.5f;
-    const float clamp_y_max = std::max(
-        clamp_y_min,
-        (params.clamp_bottom ? copy_y1 : full_y1) - 0.5f);
+    const float clamp_y_min = copy_y0 + 0.5f;
+    const float clamp_y_max = std::max(clamp_y_min, std::min(copy_y1, full_y1) - 0.5f);
 
     return EfbConversionShaderConstants{{
         src_x, src_y, step_x, step_y,
@@ -444,7 +441,6 @@ EfbClearValues make_efb_clear_values(std::uint32_t rgba,
     std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
     std::uint32_t b = (rgba >> 8u) & 255u, a = rgba & 255u;
     const auto expand6 = [](std::uint32_t v) { return (v & 0xfcu) | (v >> 6u); };
-    const auto expand5 = [](std::uint32_t v) { return (v & 0xf8u) | (v >> 5u); };
     const bool exact = (pixel_format & kEfbClearExact) != 0u;
     pixel_format &= static_cast<std::uint8_t>(~kEfbClearExact);
     if (exact) {
@@ -452,11 +448,9 @@ EfbClearValues make_efb_clear_values(std::uint32_t rgba,
     } else if (pixel_format == 1u) {
         r = expand6(r); g = expand6(g); b = expand6(b); a = expand6(a);
     } else {
-        if (pixel_format == 2u) { r = expand5(r); g = expand6(g); b = expand5(b); }
         a = 255u;
     }
     z24 &= 0xffffffu;
-    if (pixel_format == 2u) z24 = (z24 & 0xffff00u) | (z24 >> 16u);
     return {{{static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
               static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f}},
             1.0f - static_cast<float>(z24) / 16777216.0f};
