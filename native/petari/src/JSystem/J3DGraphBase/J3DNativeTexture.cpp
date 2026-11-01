@@ -107,6 +107,11 @@ namespace J3DNativeTexture {
             pHost->texture_image(pHost->user, &record);
             return;
         }
+        // Linear texels the game wrote (nebula_cooked_texture.h) go as they are. Console-format bytes go nowhere: the
+        // renderer draws texture records only (cooked, linear, or a capture's picture under its key).
+        if (format < NEBULA_TEXTURE_LINEAR_L8 || format > NEBULA_TEXTURE_LINEAR_RGBA8) {
+            return;
+        }
         NebulaTextureImage image;
         image.bytes = pImage;
         image.size = imageSize(format, width, height, levels);
