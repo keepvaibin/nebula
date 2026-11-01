@@ -47,9 +47,18 @@ fn extension(name: &str) -> String {
     name.rsplit_once('.').map_or(String::new(), |(_, e)| e.to_ascii_lowercase())
 }
 
+/// A name the stages' placement tables take: no extension, or a numeric one (commonpathpointinfo.2).
+fn placement_table_name(name: &str) -> bool {
+    let file = name.rsplit('/').next().unwrap_or(name);
+    match file.rsplit_once('.') {
+        None => true,
+        Some((_, ext)) => !ext.is_empty() && ext.bytes().all(|b| b.is_ascii_digit()),
+    }
+}
+
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "tpl" | "brfnt" | "jpc")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -73,6 +82,11 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
     } else if bytes.starts_with(b"MESGbmg1") {
         Some(native_data::bmg(&bytes).with_context(|| format!("{name}: messages"))?)
+    } else if matches!(extension(name).as_str(), "bcsv" | "tbl" | "pa" | "bcam" | "banmt") {
+        native_data::bcsv(&bytes, true).with_context(|| format!("{name}: table"))?
+    } else if placement_table_name(name) && native_data::bcsv(&bytes, false).ok().flatten().is_some()
+    {
+        native_data::bcsv(&bytes, false)?
     } else if extension(name) == "kcl" {
         Some(native_data::kcl(&bytes).with_context(|| format!("{name}: collision"))?)
     } else if bytes.starts_with(b"RFNT") {
