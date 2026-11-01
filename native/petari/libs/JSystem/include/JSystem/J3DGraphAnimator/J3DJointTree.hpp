@@ -9,8 +9,8 @@ class J3DMtxBuffer;
 class JUTNameTab;
 
 struct J3DModelHierarchy {
-    /* 0x0 */ NEBULA_BE(u16) mType;
-    /* 0x2 */ NEBULA_BE(u16) mValue;
+    /* 0x0 */ u16 mType;
+    /* 0x2 */ u16 mValue;
 };
 
 class J3DJoint;
@@ -61,10 +61,10 @@ public:
     u16* getWEvlpImportantMtxIndex() const {
         return mWEvlpImportantMtxIdx;
     }
-    NEBULA_BE(u16)* getWEvlpMixMtxIndex() const {
+    u16* getWEvlpMixMtxIndex() const {
         return mWEvlpMixMtxIndex;
     }
-    NEBULA_BE(f32)* getWEvlpMixWeight() const {
+    f32* getWEvlpMixWeight() const {
         return mWEvlpMixWeight;
     }
     u16 getDrawFullWgtMtxNum() const {
@@ -110,9 +110,9 @@ public:
     /* 0x1C */ u16 mJointNum;
     /* 0x1E */ u16 mWEvlpMtxNum;
     /* 0x20 */ u8* mWEvlpMixMtxNum;
-    // In the file, except mInvJointMtx: a native copy on native builds (J3DModelLoader::readEnvelop).
-    /* 0x24 */ NEBULA_BE(u16)* mWEvlpMixMtxIndex;
-    /* 0x28 */ NEBULA_BE(f32)* mWEvlpMixWeight;
+    // In the file (host order, as the importer cooks EVP1).
+    /* 0x24 */ u16* mWEvlpMixMtxIndex;
+    /* 0x28 */ f32* mWEvlpMixWeight;
     /* 0x2C */ Mtx* mInvJointMtx;
     /* 0x30 */ u16* mWEvlpImportantMtxIdx;
     /* 0x34 */ J3DDrawMtxData mDrawMtxData;

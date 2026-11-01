@@ -18,13 +18,13 @@ enum {
 };
 
 J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
-    mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, JSU_OFFSET_VALUE(block.mpShapeInitData));
-    mIndexTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, JSU_OFFSET_VALUE(block.mpIndexTable));
-    mVtxDescList = JSUConvertOffsetToPtr< NEBULA_DISC(GXVtxDescList) >(&block, JSU_OFFSET_VALUE(block.mpVtxDescList)),
-    mMtxTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, JSU_OFFSET_VALUE(block.mpMtxTable));
-    mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, JSU_OFFSET_VALUE(block.mpDisplayListData)),
-    mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, JSU_OFFSET_VALUE(block.mpMtxInitData)),
-    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, JSU_OFFSET_VALUE(block.mpDrawInitData));
+    mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
+    mIndexTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, block.mpIndexTable);
+    mVtxDescList = JSUConvertOffsetToPtr< NEBULA_DISC(GXVtxDescList) >(&block, block.mpVtxDescList),
+    mMtxTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, block.mpMtxTable);
+    mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, block.mpDisplayListData),
+    mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
+    mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
 
 #ifdef TARGET_PC

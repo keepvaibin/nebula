@@ -26,7 +26,7 @@ public:
     /* 0x0 */ u16 mEntryNum;
     /* 0x2 */ u16 mDrawFullWgtMtxNum;
     /* 0x4 */ u8* mDrawMtxFlag;
-    /* 0x8 */ NEBULA_BE(u16)* mDrawMtxIndex;
+    /* 0x8 */ u16* mDrawMtxIndex;
 };
 
 class J3DVertexData {

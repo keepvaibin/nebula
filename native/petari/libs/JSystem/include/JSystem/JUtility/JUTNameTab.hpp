@@ -4,13 +4,14 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
+// In host order as the importer cooks models and animations.
 struct ResNTAB {
-    /* 0x0 */ NEBULA_BE(u16) mEntryNum;
-    /* 0x2 */ NEBULA_BE(u16) _2;
+    /* 0x0 */ u16 mEntryNum;
+    /* 0x2 */ u16 _2;
 
     /* 0x4 */ struct Entry {
-        NEBULA_BE(u16) mKeyCode;
-        NEBULA_BE(u16) mOffs;
+        u16 mKeyCode;
+        u16 mOffs;
     } mEntries[1];
 };
 

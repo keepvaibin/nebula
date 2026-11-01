@@ -183,8 +183,8 @@ static f32 J3DUnit01[] = {0.0f, 1.0f};
 void J3DMtxBuffer::calcWeightEnvelopeMtx() {
     const int max = mJointTree->getWEvlpMtxNum();
     // The model file's mix tables.
-    const BE< u16 >* indices = mJointTree->getWEvlpMixMtxIndex();
-    const BE< f32 >* weights = mJointTree->getWEvlpMixWeight();
+    const u16* indices = mJointTree->getWEvlpMixMtxIndex();
+    const f32* weights = mJointTree->getWEvlpMixWeight();
 
     for (int i = 0; i < max; i++) {
         u8* pScale = &mpEvlpScaleFlagArr[i];
