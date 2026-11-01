@@ -358,6 +358,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_TEX_CONST_ALPHA = 26,      /* a texture's colour at a constant alpha (FullScreenBlur) */
     NEBULA_SHADER_FONT_TEXT = 27,            /* nw4r CharWriter: glyphs mapped between two colours, by the vertex colour */
     NEBULA_SHADER_J2D_PICTURE = 28,          /* J2DPicture: up to four textures blended by konst ratios, remapped */
+    NEBULA_SHADER_FUR = 29,                  /* FurDrawer: a fur shell over the body texture, lit */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256

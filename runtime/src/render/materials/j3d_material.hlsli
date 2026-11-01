@@ -26,23 +26,9 @@ float3 j3d_in(float3 x) { const float3 v = round(x * 255.0); return (v - 256.0 *
 // The final result as the pixel engine takes it: its low 8 bits (the uber shader's tev_wrap).
 float4 j3d_out(float4 x) { const float4 v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
 
-// GX fog over the colour: its type (fog_color.w: GX_FOG_* - perspective 2-7 by the eye depth, orthographic 10-15
-// by the depth between near and far), the range start-end, its curve.
+// GX fog over the colour (native_material.hlsli native_fog) with the material's fog values.
 float3 j3d_fog(float3 c, float4 pos) {
-    const uint type = uint(material.fog_color.w);
-    if (type == 0u) {
-        return c;
-    }
-    const float ze = (type & 8u) != 0u ? lerp(material.fog.z, material.fog.w, pos.z) : pos.w;
-    float f = saturate((ze - material.fog.x) / max(material.fog.y - material.fog.x, 1.0e-6));
-    switch (type & 7u) {
-    case 4u: f = 1.0 - exp2(-8.0 * f); break;
-    case 5u: f = 1.0 - exp2(-8.0 * f * f); break;
-    case 6u: f = exp2(-8.0 * (1.0 - f)); break;
-    case 7u: f = 1.0 - f; f = exp2(-8.0 * f * f); break;
-    default: break;
-    }
-    return lerp(c, material.fog_color.rgb, f);
+    return native_fog(c, pos, material.fog, material.fog_color);
 }
 
 // A texture coordinate's projection: s and t over q where its generation made three.
