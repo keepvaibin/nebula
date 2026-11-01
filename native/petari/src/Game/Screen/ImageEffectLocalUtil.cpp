@@ -1,4 +1,5 @@
 #include "Game/Screen/ImageEffectLocalUtil.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -19,10 +20,13 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
+    // The texture draws' coordinate offset (the blur's samples).
+    f32 sTransX = 0.0f;
+    f32 sTransY = 0.0f;
+
     void setTextureTrans(f32 x, f32 y) {
-        TPos3f transMtx;
-        transMtx.makeTrans(x, y, 0.0f);
-        J3DNativeShape::setTexture(0, transMtx.toMtxPtr(), 2);
+        sTransX = x;
+        sTransY = y;
     }
 
 };  // namespace
@@ -48,138 +52,47 @@ void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile
 
 
 namespace {
-    ImageEffectLocalUtil::EStage sStage = ImageEffectLocalUtil::Stage_Modulate;
+    // The draws' mode (runtime/src/render/materials/image_effect.hlsl params.x) and the colours the fall-out passes give.
+    u32 sMode = 0;
+    GXColor sKonst = {0, 0, 0, 0};
+    GXColor sEdge = {0, 0, 0, 0};
 
-    // The texture draws' programs (nebula_game_api.h NebulaMaterialProgram), by stage and draw type, registered when
-    // first used: setupDrawTexture's state (no fog, alpha test or depth, no dither, no culling, the material colour
-    // from its register) with the stage and the draw type's blend.
-    struct DrawProgram {
-        NebulaMaterialProgram mProgram;
-        bool mRegistered;
-    };
-    DrawProgram sDrawPrograms[2][4];
-    // Caller-described stages (setCallerStage): the programs of each, by draw type.
-    struct CallerPrograms {
-        const NebulaMaterialTevStage* mStage;
-        DrawProgram mPrograms[4];
-    };
-    CallerPrograms sCallerPrograms[8];
-    const NebulaMaterialTevStage* sCallerStage = nullptr;
-
-    DrawProgram& drawProgram(u32 type) {
-        if (sCallerStage == nullptr) {
-            return sDrawPrograms[sStage][type];
+    // runtime/src/render/materials/image_effect.hlsl for a screen tile: texture 0 at its own coordinates (moved by the
+    // blur's offset) in the mode, the material colour the intensity (draw type 2: its alpha), blended by the draw type
+    // (0 replace, 1 added, 2 by its alpha, 3 the frame times it), no depth or culling; the colour and alpha writes the
+    // caller set.
+    void sendDrawMaterial(JUTTexture* pTexture, u8 intensity, u32 type) {
+        NebulaNativeMaterial material;
+        static const NativeShader::Blend kBlends[4] = {NativeShader::BLEND_OPAQUE, NativeShader::BLEND_ADD,
+                                                       NativeShader::BLEND_ALPHA, NativeShader::BLEND_OPAQUE};
+        NativeShader::init(material, NEBULA_SHADER_IMAGE_EFFECT, kBlends[type], NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        if (type == ImageEffectLocalUtil::TexDrawType_3) {
+            NativeShader::setBlend(material, NEBULA_FACTOR_DST_COLOR, NEBULA_FACTOR_ZERO);
         }
-        for (u32 i = 0; i < 8; i++) {
-            if (sCallerPrograms[i].mStage == sCallerStage || sCallerPrograms[i].mStage == nullptr) {
-                sCallerPrograms[i].mStage = sCallerStage;
-                return sCallerPrograms[i].mPrograms[type];
-            }
-        }
-        return sCallerPrograms[7].mPrograms[type];
-    }
-
-    void sendDrawProgram(JUTTexture* pTexture, u8 intensity, u32 type) {
-        DrawProgram& rEntry = drawProgram(type);
-        const NebulaHostServices* pHost = nebula_host();
-        if (!rEntry.mRegistered) {
-            NebulaMaterialProgram& rProgram = rEntry.mProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD0;
-            rStage.tex_map = GX_TEXMAP0;
-            rStage.channel = GX_COLOR0A0;
-            if (sCallerStage != nullptr) {
-                rStage = *sCallerStage;
-            } else if (sStage == ImageEffectLocalUtil::Stage_Threshold) {
-                rStage.color_in[0] = GX_CC_TEXC;
-                rStage.color_in[1] = GX_CC_RASC;
-                rStage.color_in[2] = GX_CC_ONE;
-                rStage.color_in[3] = GX_CC_ZERO;
-                rStage.color_op = GX_TEV_COMP_R8_GT;
-                rStage.alpha_in[0] = rStage.alpha_in[1] = rStage.alpha_in[2] = GX_CA_ZERO;
-                rStage.alpha_in[3] = GX_CA_KONST;
-            } else {
-                rStage.color_in[0] = GX_CC_ZERO;
-                rStage.color_in[1] = GX_CC_TEXC;
-                rStage.color_in[2] = GX_CC_RASC;
-                rStage.color_in[3] = GX_CC_ZERO;
-                rStage.color_op = GX_TEV_ADD;
-                rStage.alpha_in[0] = GX_CA_ZERO;
-                rStage.alpha_in[1] = GX_CA_TEXA;
-                rStage.alpha_in[2] = GX_CA_RASA;
-                rStage.alpha_in[3] = GX_CA_ZERO;
-            }
-            if (sCallerStage == nullptr) {
-                rStage.alpha_op = GX_TEV_ADD;
-                rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-                rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-                rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            }
-            rProgram.tex_gen[0].type = GX_TG_MTX2x4;
-            rProgram.tex_gen[0].source = GX_TG_TEX0;
-            rProgram.tex_gen[0].matrix = GX_TEXMTX0;
-            rProgram.tex_gen[0].post_matrix = GX_PTIDENTITY;
-            for (u32 c = 0; c < 2; c++) {
-                rProgram.channel[c].material_source = GX_SRC_REG;
-                rProgram.channel[c].ambient_source = GX_SRC_REG;
-                rProgram.channel[c].diffuse = GX_DF_NONE;
-                rProgram.channel[c].attenuation = GX_AF_NONE;
-            }
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.dither = GX_FALSE;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_CHANNELS | NEBULA_MATERIAL_LOADS_AMBIENT |
-                             NEBULA_MATERIAL_LOADS_FOG | NEBULA_MATERIAL_LOADS_DITHER;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            static const u8 kBlend[4][3] = {{GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO},
-                                            {GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE},
-                                            {GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA},
-                                            {GX_BM_BLEND, GX_BL_SRCCLR, GX_BL_ZERO}};
-            rProgram.blend.type = kBlend[type][0];
-            rProgram.blend.source = kBlend[type][1];
-            rProgram.blend.destination = kBlend[type][2];
-            rProgram.blend.logic_op = GX_LO_CLEAR;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &rProgram);
-            rEntry.mRegistered = true;
-        }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
         if (type == ImageEffectLocalUtil::TexDrawType_2) {
-            values.material_color[0][0] = values.material_color[0][1] = values.material_color[0][2] = 255;
-            values.material_color[0][3] = intensity;
+            NativeShader::setColor(material, 0, 255, 255, 255, intensity);
         } else {
-            values.material_color[0][0] = values.material_color[0][1] = values.material_color[0][2] = intensity;
-            values.material_color[0][3] = 255;
+            NativeShader::setColor(material, 0, intensity, intensity, intensity, 255);
         }
-        values.ambient_color[0][3] = 255;
-        values.tex_coord_scale[0].scale_s = pTexture->getWidth();
-        values.tex_coord_scale[0].scale_t = pTexture->getHeight();
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
-        J3DNativeMaterial::watch(NULL);
-        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        NativeShader::setColor(material, 4, sKonst.r, sKonst.g, sKonst.b, sKonst.a);
+        NativeShader::setColor(material, 8, sEdge.r, sEdge.g, sEdge.b, sEdge.a);
+        material.constants[12] = static_cast< f32 >(sMode);
+        material.constants[14] = sTransX;
+        material.constants[15] = sTransY;
+        NativeShader::setTexture(material, 0, pTexture);
+        NativeShader::send(material);
     }
 }  // namespace
 
 void ImageEffectLocalUtil::setStage(EStage stage) {
-    sStage = stage;
-    sCallerStage = nullptr;
+    sMode = stage == Stage_Threshold ? 1 : 0;
 }
 
-void ImageEffectLocalUtil::setCallerStage(const NebulaMaterialTevStage* pStage) {
-    sStage = Stage_Modulate;
-    sCallerStage = pStage;
+void ImageEffectLocalUtil::setMode(EMode mode, const GXColor& rKonst, const GXColor& rEdge) {
+    sMode = static_cast< u32 >(mode);
+    sKonst = rKonst;
+    sEdge = rEdge;
 }
 
 void ImageEffectLocalUtil::setupDrawTexture() {
@@ -196,38 +109,17 @@ void ImageEffectLocalUtil::setupDrawTexture() {
 
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeShape::setTexture(0, posMtx.toMtxPtr(), 2);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
-    J3DNativeState::setZTexture(GX_ZT_DISABLE, GX_TF_Z24X8, 0);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE3);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE4);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE5);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE6);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE7);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
     J3DNativeState::setColorUpdate(GX_TRUE);
     J3DNativeState::setAlphaUpdate(GX_FALSE);
     J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
     J3DNativeState::setZCompLoc(GX_TRUE);
     J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     J3DNativeState::setDither(GX_FALSE);
-    sStage = Stage_Modulate;
-    sCallerStage = nullptr;
+    sMode = 0;
 }
 
 void ImageEffectLocalUtil::drawTexture(JUTTexture* pTexture, s32 divisions, s32 tile, u8 intensity, ETexDrawType texDrawType) {
-    pTexture->load(GX_TEXMAP0);
-    sendDrawProgram(pTexture, intensity, static_cast< u32 >(texDrawType) & 3u);
+    sendDrawMaterial(pTexture, intensity, static_cast< u32 >(texDrawType) & 3u);
     sendTextureVertex(divisions, tile);
 }
 
