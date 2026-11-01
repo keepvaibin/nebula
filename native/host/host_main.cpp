@@ -2574,7 +2574,13 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         const char* value = std::getenv("GALAXY_TEST_DISC_DELAY_US");
         return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
     }();
-    gDisc.post([=] {
+    // GALAXY_TEST_DETERMINISTIC=1: the read is done here, on the simulation thread, and completes before the call
+    // returns, so a load finishes at the same point of the game's code every run (deterministic test mode).
+    static const bool deterministic = [] {
+        const char* value = std::getenv("GALAXY_TEST_DETERMINISTIC");
+        return value != nullptr && value[0] != '\0' && value[0] != '0';
+    }();
+    auto read = [=] {
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
@@ -2599,7 +2605,12 @@ void svc_disc_read(void*, int32_t file, uint32_t file_offset, uint32_t size, voi
         frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
 #endif
         gModule.disc_complete(slot, (int32_t)size);
-    });
+    };
+    if (deterministic) {
+        read();
+    } else {
+        gDisc.post(read);
+    }
 }
 
 const char* svc_disc_id(void*) {
