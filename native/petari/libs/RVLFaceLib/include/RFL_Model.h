@@ -40,16 +40,11 @@ typedef struct RFLDrawSetting {
     u8 compLoc;          // at 0x14
 } RFLDrawSetting;
 
+// How a head draws: the position/normal matrix slot it loads its matrices into (0-9) and whether its faces cull the
+// other way.
 typedef struct RFLDrawCoreSetting {
-    u8 txcGenNum;              // at 0x0
-    GXTexCoordID txcID;        // at 0x4
-    GXTexMapID texMapID;       // at 0x8
-    u8 tevStageNum;            // at 0xC
-    GXTevSwapSel tevSwapTable; // at 0x10
-    GXTevKColorID tevKColorID; // at 0x14
-    GXTevRegID tevOutRegID;    // at 0x18
-    GXPosNrmMtx posNrmMtxID;   // at 0x1C
-    u8 reverseCulling;         // at 0x20
+    u8 matrix;
+    u8 reverseCulling;
 } RFLDrawCoreSetting;
 
 u32 RFLGetModelBufferSize(RFLResolution res, u32 exprFlags);
