@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
@@ -425,11 +426,12 @@ namespace {
             if (a[0] >= 8) {
                 return false;
             }
+            // The op carries the generation in the record's encoding (J3DNativeTexGen) and the post row.
             rP.tex_gen[a[0]].type = a[1];
             rP.tex_gen[a[0]].source = a[2];
             rP.tex_gen[a[0]].normalize = a[3];
-            // The post-transform matrix as the record keeps it (GX_PTTEXMTX0 + 3k as 3k, GX_PTIDENTITY as 61).
-            rP.tex_gen[a[0]].post_matrix = a[4] >= 64 ? static_cast< u8 >(a[4] - 64) : a[4];
+            rP.tex_gen[a[0]].post_matrix = a[4];
+            rP.tex_gen[a[0]].reserved[0] = 1;
             if (a[5] != 0) {
                 rP.tex_gen[a[0]].matrix = a[6];
             }
@@ -855,8 +857,9 @@ namespace J3DNativeMaterial {
 
         for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
             const J3DTexCoord& rCoord = *pTexGen->getTexCoord(i);
-            pOut->tex_gen[i].type = rCoord.getTexGenType();
-            pOut->tex_gen[i].source = rCoord.getTexGenSrc();
+            pOut->tex_gen[i].type = J3DNativeTexGen::kind(rCoord.getTexGenType(), rCoord.getTexGenSrc());
+            pOut->tex_gen[i].source = J3DNativeTexGen::source(rCoord.getTexGenSrc());
+            pOut->tex_gen[i].reserved[0] = 1;  // the renderer's encoding (gen_j3d_materials.py converts unmarked ones)
             pOut->tex_gen[i].matrix = static_cast< u8 >(rCoord.getTexMtxReg());
             // The post-transform matrix loadTexCoordGens names (identity unless j3dSys asks for post matrices).
             pOut->tex_gen[i].post_matrix =

@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "nw4r/lyt/animation.h"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <nebula_game_api.h>
@@ -669,8 +670,10 @@ namespace nw4r {
                         setTexMtx = true;
                     }
 
-                    rProgram.tex_gen[i].type = pTexCoordGen[i].GetTexGenType();
-                    rProgram.tex_gen[i].source = pTexCoordGen[i].GetTexGenSrc();
+                    rProgram.tex_gen[i].type =
+                        J3DNativeTexGen::kind(pTexCoordGen[i].GetTexGenType(), pTexCoordGen[i].GetTexGenSrc());
+                    rProgram.tex_gen[i].source = J3DNativeTexGen::source(pTexCoordGen[i].GetTexGenSrc());
+                    rProgram.tex_gen[i].reserved[0] = 1;
                     rProgram.tex_gen[i].matrix = static_cast< u8 >(texMtx);
                     rProgram.tex_gen[i].post_matrix = GX_PTIDENTITY;
                     if (i < 8) {

@@ -8,7 +8,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = v.color0.rgb;
     o.color.a = v.color0.a * saturate((material.amb_color[0].a * 255.0 + j3d_light(2u, 3u, 2u, v.eye, nrm).a) / 255.0);
     o.color1 = v.color1;
-    {  // coordinate 0: type 1, source 4
+    {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 0u) & 1u) != 0u) {
@@ -26,7 +26,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 1: type 1, source 4
+    {  // coordinate 1: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 1u) & 1u) != 0u) {
@@ -44,7 +44,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[1] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 2: type 1, source 1
+    {  // coordinate 2: kind 0, projective 0, row 1
         const float4 c = float4(v.nrm, 1.0);
         float3 res;
         if (((vs_header.w >> 2u) & 1u) != 0u) {

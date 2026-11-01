@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 77u
+#define NEBULA_GAME_API_VERSION 78u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -169,8 +169,8 @@ enum {
     NEBULA_STATE_MATERIAL_COLOR,    /* channel, r, g, b, a, GXSetChan*Color's form (1: a colour channel sets only
                                        r, g, b, an alpha channel only a; 0: GDSetChan*Color's, the whole word) */
     NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
-    NEBULA_STATE_TEX_COORD_GEN,     /* coord, type, source, normalize, post-transform matrix id, GXSetTexCoordGen2's
-                                       form (1: also the coordinate's matrix index, a[6]; 0: GDSetTexCoordGen's) */
+    NEBULA_STATE_TEX_COORD_GEN,     /* coordinate, type and source (NebulaMaterialProgram::tex_gen's encoding), normalize,
+                                       post row; a[5] 1: also the coordinate's matrix row a[6] */
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t (0 clamp, 1 repeat, 2 mirror), minified linear, magnified
                                        linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
                                        anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
@@ -263,8 +263,8 @@ typedef struct NebulaImmediate {
     uint32_t reserved3;
 } NebulaImmediate;
 
-/* A texture coordinate a shape draw generates differently from its material (shape_draw): GXSetTexCoordGen's values
-   (type, source, normalize, post-transform matrix id). */
+/* A texture coordinate a shape draw generates differently from its material (shape_draw): type and source as
+   NebulaMaterialProgram::tex_gen encodes them, normalize, the post-transform row. */
 typedef struct NebulaShapeTexGen {
     uint8_t coord, type, source, normalize, post_matrix;
     uint8_t reserved[3];
@@ -434,6 +434,9 @@ typedef struct NebulaMaterialProgram {
     NebulaMaterialTevStage tev[16];
     uint8_t swap_table[4][4];
     struct { uint8_t coord, map, scale_s, scale_t; } ind_order[4];
+    /* type: J3DNativeTexGen::kind (bits 0-1 matrix/emboss/colour 0/colour 1, bit 2 projective, bit 3 implicit w,
+       bits 4-6 emboss light); source: J3DNativeTexGen::source (bits 0-3 row, 4-6 emboss coordinate); post_matrix a row
+       (61 the identity); reserved[0] 1: written in this encoding. */
     struct { uint8_t type, source, matrix, normalize, post_matrix, reserved[3]; } tex_gen[8];
     struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
     struct { uint8_t type, adjust_enable; uint16_t adjust_center; uint16_t adjust[10]; } fog;
