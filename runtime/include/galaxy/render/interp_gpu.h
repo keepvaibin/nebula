@@ -99,8 +99,6 @@ static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u &&
 
 // Word offsets inside the blocks.
 inline constexpr std::uint32_t kVsProjection = offsetof(VertexConstants, projection) / 4u;
-inline constexpr std::uint32_t kVsAmbient = offsetof(VertexConstants, chan_ambient) / 4u;
-inline constexpr std::uint32_t kVsMaterial = offsetof(VertexConstants, chan_material) / 4u;
 inline constexpr std::uint32_t kVsPosBase = offsetof(VertexConstants, pos_base) / 4u;
 inline constexpr std::uint32_t kVsRowBases = offsetof(VertexConstants, row_bases) / 4u;
 inline constexpr std::uint32_t kVsPosition = offsetof(VertexConstants, inline_pos_matrix) / 4u;
@@ -157,8 +155,6 @@ public:
     // One GX light (16 words at dst) as light_at; a may be null.
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
-    // Channel colours of a VS block (dst: the block's first word) as channel_colours_at.
-    void channel_colours(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Projection of a VS block as the sub-frame lerp of render_interp_subframe.
     void projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Its GX parameters A..D (motion_prev_proj) the same way.

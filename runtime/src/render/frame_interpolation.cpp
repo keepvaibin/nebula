@@ -373,17 +373,6 @@ Affine34 normal_at(const NormalMotion& m, const CameraMotion& camera, const Affi
     out[3] = out[7] = out[11] = 0.0f;
     return out;
 }
-bool texgen_spatial(std::uint32_t texgen) noexcept {
-    const std::uint32_t type = (texgen >> 4u) & 7u;
-    const std::uint32_t source = (texgen >> 7u) & 0x1Fu;
-    return type == 0u && (source == 0u || source == 1u || source == 3u || source == 4u);
-}
-
-bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept {
-    return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
-           std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
-}
-
 void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
               const Affine34& camera_t, float t, bool split, std::uint32_t* out) noexcept {
     constexpr unsigned kColor = draw_rows::kLightColorWord, kAngle = draw_rows::kLightAngleWord,
@@ -463,39 +452,6 @@ void light_at(const std::uint32_t* a, const std::uint32_t* b, const CameraMotion
         out[kDirection + i] = float_word(d[i]);
     }
 }
-void channel_colours_at(const VertexConstants& a, const VertexConstants& b, float t, VertexConstants& out) noexcept {
-    if (t >= 1.0f) {
-        return;
-    }
-    for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            const float am = a.chan_ambient[ch][c], bm = b.chan_ambient[ch][c];
-            const float ma = a.chan_material[ch][c], mb = b.chan_material[ch][c];
-            out.chan_ambient[ch][c] = std::isfinite(am) && std::isfinite(bm) ? am + (bm - am) * t : bm;
-            out.chan_material[ch][c] = std::isfinite(ma) && std::isfinite(mb) ? ma + (mb - ma) * t : mb;
-        }
-    }
-}
-std::uint8_t used_lights(const VertexConstants& constants) noexcept {
-    std::uint32_t mask = 0u;
-    const std::uint32_t channels = std::min<std::uint32_t>(constants.uber_vs_header[1], 2u);
-    for (std::uint32_t ch = 0; ch < channels; ++ch) {
-        for (const std::uint32_t control : {constants.uber_channel[ch], constants.uber_channel[2u + ch]}) {
-            if ((control & 2u) != 0u) {
-                mask |= ((control >> 2u) & 0xFu) | (((control >> 11u) & 0xFu) << 4u);
-            }
-        }
-    }
-    const std::uint32_t texgens = std::min<std::uint32_t>(constants.uber_vs_header[0], kMaxTexGens);
-    for (std::uint32_t i = 0; i < texgens; ++i) {
-        const std::uint32_t texgen = constants.uber_texgen[i];
-        if (((texgen >> 4u) & 7u) == 1u) {
-            mask |= 1u << ((texgen >> 15u) & 7u);
-        }
-    }
-    return static_cast<std::uint8_t>(mask);
-}
-
 namespace {
 // Row numbers of the palette's parts (XF words / 4).
 constexpr unsigned kNormalRow = kNormalBase / 4u;

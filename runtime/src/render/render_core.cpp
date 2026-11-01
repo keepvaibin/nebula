@@ -273,6 +273,32 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
 }
 
 
+// A draw's facts the frame interpolation needs (InterpScene::spatial_texgens, light_masks), from its drawing state:
+// a regular texgen from position, normal or a binormal (rows 0, 1, 3, 4) maps space; lit channels and emboss texgens
+// name their lights.
+[[nodiscard]] std::pair<std::uint8_t, std::uint8_t> interp_draw_facts(const NativeDrawState& s) noexcept {
+    std::uint32_t spatial = 0u;
+    std::uint32_t lights = 0u;
+    for (unsigned i = 0; i < s.gen.num_texgens && i < 8u; ++i) {
+        const XfTexGen& g = s.texgen[i];
+        if (g.type == TexGenType::Regular &&
+            (g.source_row == 0u || g.source_row == 1u || g.source_row == 3u || g.source_row == 4u)) {
+            spatial |= 1u << i;
+        }
+        if (g.type == TexGenType::EmbossMap) {
+            lights |= 1u << (g.emboss_light & 7u);
+        }
+    }
+    for (unsigned ch = 0; ch < s.gen.num_color_chans && ch < 2u; ++ch) {
+        for (const XfChannelCtrl& control : {s.channel[ch], s.channel[2u + ch]}) {
+            if (control.lighting_enable) {
+                lights |= control.light_mask;
+            }
+        }
+    }
+    return {static_cast<std::uint8_t>(spatial), static_cast<std::uint8_t>(lights)};
+}
+
 [[nodiscard]] bool snapshot_should_generate_native_mips(
     const TextureInfo& image,
     const TextureSampler& mode) {
@@ -1265,6 +1291,9 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         // the palette too: their snapshot is interpolated like a skinned one.
         scene.palette.push_back(record.palette || current_palette_required_ ? current_palette_shadow_ : -1);
         scene.per_vertex.push_back(record.palette ? 1u : 0u);
+        const auto [spatial, lights] = interp_draw_facts(draw_state_);
+        scene.spatial_texgens.push_back(spatial);
+        scene.light_masks.push_back(lights);
         scene.category.push_back(record.category);
     }
     if (!motion_scene_) {
@@ -3037,7 +3066,6 @@ bool RenderCore::render_interp_subframe(float t) {
                 interp_snapped_ += motion.position.snapped ? 1u : 0u;
             }
             if (before != nullptr && !(camera.known && camera.cut)) {
-                motion.colour_moves = channel_colours_move(*before, now);
                 motion.tex_moves =
                     std::memcmp(before->inline_tex_matrices, now.inline_tex_matrices,
                                 sizeof(now.inline_tex_matrices)) != 0 ||
@@ -3072,7 +3100,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 // matrix index when it is lit; the lights its channels and
                 // emboss texgens evaluate (texture rows are taken whole).
                 InterpPaletteMotion& entry = interp_palette_motions_[static_cast<std::size_t>(index)];
-                entry.light_mask |= used_lights(now);
+                entry.light_mask |= scene.light_masks[r];
                 if (scene.per_vertex[r] != 0u) {
                     entry.position_mask = kAllPaletteSlots;
                     entry.normal_mask = kAllPaletteSlots;
@@ -3083,7 +3111,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 motion.palette = index;
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.colour_moves || motion.palette >= 0) {
+                motion.palette >= 0) {
                 interp_pending_.push_back(motion);
             }
         }
@@ -3103,7 +3131,7 @@ bool RenderCore::render_interp_subframe(float t) {
                 motion.palette = -1;
             }
             if (motion.position_moves || motion.tex_moves || motion.projection_moves ||
-                motion.colour_moves || motion.palette >= 0) {
+                motion.palette >= 0) {
                 interp_moving_.push_back(motion);
             }
         }
@@ -3238,16 +3266,13 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             // Per texgen: projection and environment maps lerp whole; texture
             // coordinate matrices scroll (wrap-aware) or step.
             for (unsigned i = 0; i < kMaxTexGens; ++i) {
-                const bool spatial = texgen_spatial(recorded.texgen_config[i][0]);
+                const bool spatial = ((scene.spatial_texgens[moving.record] >> i) & 1u) != 0u;
                 interp_program_.tex_matrix(base + interp_gpu::kVsTex + 12u * i, &before->inline_tex_matrices[i][0][0],
                                            &recorded.inline_tex_matrices[i][0][0], spatial);
                 interp_program_.tex_matrix(base + interp_gpu::kVsPost + 12u * i,
                                            &before->inline_post_matrices[i][0][0],
                                            &recorded.inline_post_matrices[i][0][0], spatial);
             }
-        }
-        if (moving.colour_moves && before != nullptr) {
-            interp_program_.channel_colours(base, *before, recorded);
         }
         if (moving.projection_moves && before != nullptr) {
             interp_program_.projection(base, *before, recorded);

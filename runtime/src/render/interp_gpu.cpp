@@ -423,24 +423,6 @@ void Program::palette_positions(std::uint32_t dst, const PaletteMotion& m, RowVi
     }
 }
 
-void Program::channel_colours(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
-    const auto block = [&](std::uint32_t at, const float (*x)[4], const float (*y)[4]) {
-        float from[8], to[8];
-        bool moves = false;
-        for (unsigned ch = 0; ch < kMaxColorChannels; ++ch) {
-            for (unsigned c = 0; c < 4u; ++c) {
-                const float fx = x[ch][c], fy = y[ch][c];
-                from[ch * 4u + c] = std::isfinite(fx) && std::isfinite(fy) ? fx : fy;
-                to[ch * 4u + c] = fy;
-                moves = moves || from[ch * 4u + c] != fy;
-            }
-        }
-        if (moves) lerp(dst + at, from, to, 4u * kMaxColorChannels);
-    };
-    block(kVsAmbient, a.chan_ambient, b.chan_ambient);
-    block(kVsMaterial, a.chan_material, b.chan_material);
-}
-
 void Program::projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b) {
     float from[16], to[16];
     const float* x = &a.projection[0][0];
