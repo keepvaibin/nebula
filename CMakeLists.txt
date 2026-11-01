@@ -663,10 +663,27 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
-        efb_copy native_settings_overlay post_process
+        efb_copy line_point_raster native_settings_overlay post_process
         efb_conversion native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
+# line_point_raster_tests' own vertex and pixel stages, DXIL as the native stages they share pipelines with.
+set(galaxy_line_point_test_headers "")
+foreach(galaxy_lp_stage vs ps)
+    string(TOUPPER "${galaxy_lp_stage}" galaxy_lp_upper)
+    string(SUBSTRING "${galaxy_lp_upper}" 0 1 galaxy_lp_first)
+    string(SUBSTRING "${galaxy_lp_stage}" 1 -1 galaxy_lp_rest)
+    set(galaxy_lp_out "${CMAKE_CURRENT_BINARY_DIR}/generated/line_point_test_${galaxy_lp_stage}.h")
+    add_custom_command(OUTPUT "${galaxy_lp_out}"
+        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_lp_stage}_6_0 -E test_${galaxy_lp_stage} -O3 -WX -Qstrip_debug
+                -Vn kLinePointTest${galaxy_lp_first}${galaxy_lp_rest} -Fh "${galaxy_lp_out}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_raster_tests.hlsl"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_raster_tests.hlsl"
+        VERBATIM)
+    list(APPEND galaxy_line_point_test_headers "${galaxy_lp_out}")
+endforeach()
+target_sources(galaxy_line_point_raster_tests PRIVATE ${galaxy_line_point_test_headers})
+target_include_directories(galaxy_line_point_raster_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # The game's text table: every text the settings menu shows has its entry.
 target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
     NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
