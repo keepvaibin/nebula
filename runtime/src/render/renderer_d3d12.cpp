@@ -6047,7 +6047,7 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
     const std::uint64_t constants_bytes = constant_ring_.total_bytes();
     const std::uint64_t matrices_bytes = matrix_ring_.total_bytes();
     interp_copies_.clear();
-    interp_copied_.assign(static_cast<std::size_t>(layout.vs_count) + layout.ps_count, 0u);
+    interp_copied_.assign(static_cast<std::size_t>(layout.vs_count), 0u);
     const auto copy_block = [&](D3D12_GPU_VIRTUAL_ADDRESS va, std::uint32_t bytes, std::uint32_t dst) {
         if (va < constants_base || va + bytes > constants_base + constants_bytes) {
             return false;
@@ -6063,18 +6063,6 @@ bool RendererD3D12::begin_replay_sequence(const ReplaySequence& sequence) {
                 interp_copied_[static_cast<std::size_t>(slot)] = 1u;
                 if (!copy_block(call.vs_constants, interp_gpu::kVsBytes,
                                 layout.vs_offset(static_cast<std::uint32_t>(slot)))) {
-                    replay_failure_ = 9u;
-                    return false;
-                }
-            }
-        }
-        if (call.ps_record >= 0 && static_cast<std::size_t>(call.ps_record) < sequence.ps_slot.size()) {
-            const std::int32_t slot = sequence.ps_slot[static_cast<std::size_t>(call.ps_record)];
-            const std::size_t seen = layout.vs_count + static_cast<std::size_t>(slot);
-            if (slot >= 0 && interp_copied_[seen] == 0u) {
-                interp_copied_[seen] = 1u;
-                if (!copy_block(call.ps_constants, interp_gpu::kPsBytes,
-                                layout.ps_offset(static_cast<std::uint32_t>(slot)))) {
                     replay_failure_ = 9u;
                     return false;
                 }
@@ -6293,12 +6281,6 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                         call.matrix_palette = output + layout.palette_offset(
                                                            static_cast<std::uint32_t>(sequence.record_palette_slot[record]));
                         call.matrix_rows = output + layout.palette_base();
-                    }
-                }
-                if (call.ps_record >= 0 && static_cast<std::size_t>(call.ps_record) < sequence.ps_slot.size()) {
-                    if (const std::int32_t slot = sequence.ps_slot[static_cast<std::size_t>(call.ps_record)];
-                        slot >= 0) {
-                        call.ps_constants = output + layout.ps_offset(static_cast<std::uint32_t>(slot));
                     }
                 }
                 if (blend && run_blend_vertices_[op.index].vertices != 0u) {

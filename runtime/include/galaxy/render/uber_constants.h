@@ -25,53 +25,6 @@ inline constexpr unsigned kMaxColorChannels = 2;
 #pragma warning(disable : 4324)  // structure padded due to alignment specifier
 #endif
 
-// Pixel-stage constants (root CBV b1).
-struct alignas(256) PixelConstants {
-    // Typed stages as words (tev_color_bits and the rest, shader_keys.h), read only by the uber pixel shader.
-    std::uint32_t stage_config[kMaxTevStages][4];
-    // TEV color registers PREV, REG0-2 as signed values divided by 255.
-    float tev_regs[4][4];
-    // Konstant color bank K0-K3.
-    float konst[4][4];
-    // x = alpha ref0 / 255, y = alpha ref1 / 255,
-    // z = packed comp0|comp1|logic (uber only), w = constant dst alpha.
-    float alpha_refs[4];
-    // a, b_magnitude, b_shift, c, color.rgb, proj flag.
-    float fog_params[8];
-    // Per map: texture width and height, and the GX texcoord S/T scale (BP 0x30-0x3F scale_minus_1 + 1). Pixel
-    // shaders take rasterized texcoords through GX fixed-point space with zw, then normalize samples by xy.
-    float tex_dims[kMaxTextureMaps][4];
-    // x = Z-texture bias (BP 0xF4, 24-bit) / 2^24;
-    // y = reciprocal physical EFB scale for RGBA6 dithering;
-    // z = a light source's glow gain in linear light (output_flags bit 5: its radiance times the exposure);
-    // w = the lighting texture's texels per EFB pixel (bit 6: lit translucents).
-    float ztex_params[4];
-    // Indirect TEV state: commands are raw BP 0x10-0x1F words grouped as
-    // uint4s; matrices are decoded as six int4 rows where .w is 17 - scale;
-    // ind_misc = BP 0x27, BP 0x25, BP 0x26, num_ind_stages.
-    std::uint32_t ind_cmd[4][4];
-    std::int32_t ind_mtx[6][4];
-    std::uint32_t ind_misc[4];
-    // Uber pixel shader only; specialized shaders bake these from the key:
-    // x num_tev_stages | num_texgens << 8 | num_chans << 16 | fog_type << 24,
-    // y alpha_comp0 | alpha_comp1 << 8 | alpha_logic << 16 | flags << 24,
-    // z output_flags | efb_scale_minus_one << 16, w zero.
-    std::uint32_t uber_ps_header[4];
-};
-
-static_assert(offsetof(PixelConstants, stage_config) == 0);
-static_assert(offsetof(PixelConstants, tev_regs) == 256);
-static_assert(offsetof(PixelConstants, konst) == 320);
-static_assert(offsetof(PixelConstants, alpha_refs) == 384);
-static_assert(offsetof(PixelConstants, fog_params) == 400);
-static_assert(offsetof(PixelConstants, tex_dims) == 432);
-static_assert(offsetof(PixelConstants, ztex_params) == 560);
-static_assert(offsetof(PixelConstants, ind_cmd) == 576);
-static_assert(offsetof(PixelConstants, ind_mtx) == 640);
-static_assert(offsetof(PixelConstants, ind_misc) == 736);
-static_assert(offsetof(PixelConstants, uber_ps_header) == 752);
-static_assert(sizeof(PixelConstants) == 768);
-
 // Vertex-stage constants (root CBV b0). The XF matrix palette is a structured buffer (root SRV) instead: it is
 // large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
 struct alignas(256) VertexConstants {

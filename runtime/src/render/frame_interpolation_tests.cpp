@@ -397,39 +397,9 @@ void test_sky_sun() {
     check(held.valid && same_direction(held.direction, other, 1e-3f), "a brighter sun elsewhere replaces it");
 }
 
-void test_colours() {
-    PixelConstants a{}, b{}, out{};
-    a.tev_regs[0][0] = 0.0f;
-    b.tev_regs[0][0] = 1.0f;
-    a.konst[1][3] = 0.2f;
-    b.konst[1][3] = 0.6f;
-    a.fog_params[4] = 0.0f;
-    b.fog_params[4] = 0.5f;
-    a.ind_mtx[0][0] = 100;
-    b.ind_mtx[0][0] = 200;
-    a.ind_mtx[0][3] = b.ind_mtx[0][3] = 7;
-    check(ps_colours_move(a, b), "a colour change interpolates");
-    ps_colours_at(a, b, 0.5f, out);
-    check(near(out.tev_regs[0][0], 0.5f) && near(out.konst[1][3], 0.4f) && near(out.fog_params[4], 0.25f),
-          "TEV, konst and fog colours lerp");
-    check(out.ind_mtx[0][0] == 150, "indirect matrix rows lerp");
-    ps_colours_at(a, b, 1.0f, out);
-    check(std::memcmp(&out, &b, sizeof(out)) == 0, "t=1 is b exactly");
-    PixelConstants c = b;
-    c.stage_config[0][0] = 1u;
-    check(!ps_colours_move(a, c), "another TEV program is a discrete change");
-    VertexConstants va{}, vb{}, vout{};
-    vb.chan_material[0][0] = 1.0f;
-    check(channel_colours_move(va, vb), "a material colour change interpolates");
-    vout = vb;
-    channel_colours_at(va, vb, 0.25f, vout);
-    check(near(vout.chan_material[0][0], 0.25f), "material colour lerps");
-}
-
 }  // namespace
 
 int main() {
-    test_colours();
     test_tex_matrices();
     test_camera_endpoints_and_arc();
     test_camera_cut();
