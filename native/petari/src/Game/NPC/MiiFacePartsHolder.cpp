@@ -1,4 +1,5 @@
 #include "Game/NPC/MiiFacePartsHolder.hpp"
+#include "RFL_Native.h"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/NPC/MiiDatabase.hpp"
@@ -155,8 +156,6 @@ void MiiFacePartsHolder::drawExtra() const {
     setting.posNrmMtxID = GX_PNMTX0;
     setting.reverseCulling = 0;
 
-    RFLLoadVertexSetting(&setting);
-    RFLLoadMaterialSetting(&setting);
     MR::loadLight(1);
     setTevOpa();
     J3DNativeState::setZCompLoc(GX_TRUE);
@@ -170,62 +169,19 @@ void MiiFacePartsHolder::drawExtra() const {
     drawEachActor(&MiiFaceParts::drawXlu, &setting);
 }
 
-namespace {
-    static const GXColorS10 sTevColor0 = {0, 0, 0, -89};
-    const GXColorS10 sTevColor1 = {0, 0, 0, 246};
-};  // namespace
-
+// The game's Mii NPC stages after each part (runtime/src/render/materials/mii_face.hlsl chains 2 and 3): the colour lit
+// by lights 0 and 1 (clamped diffuse, no attenuation) over the material grey 165 and ambient 128; the opaque pass adds
+// the rim from the alpha channel lit by light 2 (signed diffuse) and draws where the alpha is not 255.
 void MiiFacePartsHolder::setTevOpa() const {
-    GXColorS10 color0 = sTevColor0;
-    J3DNativeState::setTevColorS10(GX_TEVREG0, color0);
-    GXColorS10 color1 = sTevColor1;
-    J3DNativeState::setTevColorS10(GX_TEVREG1, color1);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE1, GX_TEV_KASEL_1_4);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_C1, GX_CC_CPREV, GX_CC_RASC, GX_CC_C0);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_A1, GX_CA_KONST, GX_CA_RASA, GX_CA_A0);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE2, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevKAlphaSel(GX_TEVSTAGE2, GX_TEV_KASEL_1_4);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_RASC, GX_CC_APREV, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-    GXColor material = {165, 165, 165, 255};
-    GXColor ambient = {128, 128, 128, 128};
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_ALPHA0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT2, GX_DF_SIGN, GX_AF_NONE);
-    J3DNativeState::setChanAmbColor(GX_COLOR0A0, ambient);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, material);
+    const GXColor material = {165, 165, 165, 255};
+    const GXColor ambient = {128, 128, 128, 128};
+    RFLiNativeChain(RFLi_NATIVE_CHAIN_NPC_OPA, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 1);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }
 
 void MiiFacePartsHolder::setTevXlu() const {
-    GXColorS10 color0 = sTevColor0;
-    J3DNativeState::setTevColorS10(GX_TEVREG0, color0);
-    GXColorS10 color1 = sTevColor1;
-    J3DNativeState::setTevColorS10(GX_TEVREG1, color1);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE1, GX_CC_C1, GX_CC_CPREV, GX_CC_RASC, GX_CC_C0);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE2);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE2, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE2, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_CPREV);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE2, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE2, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    GXColor material = {165, 165, 165, 255};
-    GXColor ambient = {128, 128, 128, 128};
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0, GX_TRUE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE);
-    J3DNativeState::setChanAmbColor(GX_COLOR0A0, ambient);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, material);
+    const GXColor material = {165, 165, 165, 255};
+    const GXColor ambient = {128, 128, 128, 128};
+    RFLiNativeChain(RFLi_NATIVE_CHAIN_NPC_XLU, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 0);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }

@@ -1,4 +1,5 @@
 #include "RVLFaceLibInternal.h"
+#include "RFL_Native.h"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -21,7 +22,6 @@ RFLiCoordinateData coordinateData = {1, 2, 0, FALSE, FALSE, FALSE};
 
 const RFLDrawCoreSetting cDefaultDrawCoreSetting2Tev = {1, GX_TEXCOORD0, GX_TEXMAP0, 2, GX_TEV_SWAP0, GX_KCOLOR0, GX_TEVPREV, GX_PNMTX0, FALSE};
 
-const RFLDrawCoreSetting cDefaultDrawCoreSetting1Tev = {1, GX_TEXCOORD0, GX_TEXMAP0, 1, GX_TEV_SWAP0, GX_KCOLOR0, GX_TEVPREV, GX_PNMTX0, FALSE};
 
 static const GXColor cFacelineColor[RFLi_MAX_FACELINE_COLOR + 1] = {
     // clang-format off
@@ -239,26 +239,10 @@ void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
     J3DNativeStateSetDstAlpha(FALSE, 0);
 
     if (setting->lightEnable) {
-        J3DNativeStateSetTevDirect(GX_TEVSTAGE1);
-        J3DNativeStateSetTevSwapMode(GX_TEVSTAGE1, GX_TEV_SWAP0, GX_TEV_SWAP0);
-        J3DNativeStateSetTevOrder(GX_TEVSTAGE1, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        J3DNativeStateSetTevColorIn(GX_TEVSTAGE1, GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO);
-        J3DNativeStateSetTevColorOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-        J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE1, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_APREV);
-        J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE1, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, GX_TEVPREV);
-
-        RFLLoadMaterialSetting(&cDefaultDrawCoreSetting2Tev);
-        RFLLoadVertexSetting(&cDefaultDrawCoreSetting2Tev);
-        J3DNativeStateSetNumChans(1);
-
-        J3DNativeStateSetChanCtrl(GX_COLOR0, TRUE, GX_SRC_REG, GX_SRC_REG, setting->lightMask, setting->diffuse, setting->attn);
-        J3DNativeStateSetChanCtrl(GX_ALPHA0, FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-        J3DNativeStateSetChanAmbColor(GX_COLOR0, setting->ambColor);
-        J3DNativeStateSetChanMatColor(GX_COLOR0, cWhite);
+        RFLiNativeChain(RFLi_NATIVE_CHAIN_LIGHT, setting->lightMask, setting->diffuse, setting->attn, setting->ambColor,
+                        cWhite, 0);
     } else {
-        RFLLoadMaterialSetting(&cDefaultDrawCoreSetting1Tev);
-        RFLLoadVertexSetting(&cDefaultDrawCoreSetting1Tev);
-        J3DNativeStateSetNumChans(0);
+        RFLiNativeChain(RFLi_NATIVE_CHAIN_NONE, 0, GX_DF_NONE, GX_AF_NONE, cWhite, cWhite, 0);
     }
 }
 
@@ -300,121 +284,67 @@ static void RFLiDrawShape(const s16* pos, const s16* nrm, const s16* txc, const 
     }
 }
 
-void RFLLoadVertexSetting(const RFLDrawCoreSetting* setting) {
-    J3DNativeStateSetNumTexGens(setting->txcGenNum);
-}
-
-void RFLLoadMaterialSetting(const RFLDrawCoreSetting* setting) {
-    J3DNativeStateSetTevSwapModeTable(setting->tevSwapTable, GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
-    J3DNativeStateSetTevSwapModeTable(setting->tevSwapTable + 1, GX_CH_RED, GX_CH_ALPHA, GX_CH_BLUE, GX_CH_GREEN);
-    J3DNativeStateSetNumTevStages(setting->tevStageNum);
-    J3DNativeStateSetTevDirect(GX_TEVSTAGE0);
-    J3DNativeStateSetTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
-    J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
-    J3DNativeStateSetTevKColorSel(GX_TEVSTAGE0, (GXTevKColorSel)(setting->tevKColorID + GX_TEV_KCSEL_K0));
-    J3DNativeStateSetTevKAlphaSel(GX_TEVSTAGE0, GX_TEV_KASEL_8_8);
-}
-
 void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     RFLiCharModelRes* res = imodel->res;
-
-    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_KONST);
-
-    // @bug Copy-paste error
-    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
-    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
-
-    J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
+    const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
+    const GXCullMode back = setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT;
 
     J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
-    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_POS, 60, 0, 0x7D);
-    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL);
-    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_KONST);
-
     if (res->beardDlSize > 0) {
-        J3DNativeStateSetTevKColor(setting->tevKColorID, cBeardColor[res->beardColor]);
+        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
         RFLiDrawShape(res->beardVtxPos, res->beardVtxNrm, NULL, res->beardDl, res->beardDlSize);
     }
 
-    J3DNativeStateSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
-
     if (res->noseDlSize > 0) {
+        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], front, NULL);
         RFLiDrawShape(res->noseVtxPos, res->noseVtxNrm, NULL, res->noseDl, res->noseDlSize);
     }
 
-    if (res->flipHair) {
-        J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT);
-    }
-
+    // A flipped hairstyle draws its forehead and hair with the other side culled.
+    const GXCullMode hairCull = res->flipHair ? back : front;
     if (res->foreheadDlSize > 0) {
+        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cFacelineColor[res->facelineColor], hairCull, NULL);
         RFLiDrawShape(res->foreheadVtxPos, res->foreheadVtxNrm, NULL, res->foreheadDl, res->foreheadDlSize);
     }
 
     if (res->hairDlSize > 0) {
-        J3DNativeStateSetTevKColor(setting->tevKColorID, cHairColor[res->hairColor]);
+        RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cHairColor[res->hairColor], hairCull, NULL);
         RFLiDrawShape(res->hairVtxPos, res->hairVtxNrm, NULL, res->hairDl, res->hairDlSize);
     }
 
-    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
-    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
-
     if (res->capDlSize > 0) {
-        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_KONST);
-        J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_DIVIDE_2, 1, setting->tevOutRegID);
-        J3DNativeStateSetTevKColor(setting->tevKColorID, cFavoriteColor[res->favoriteColor]);
-
-        J3DNativeTextureLoad(&res->capTexObj, setting->texMapID);
+        RFLiNativePart(RFLi_NATIVE_FORM_CAP, cFavoriteColor[res->favoriteColor], hairCull, &res->capTexObj);
         RFLiDrawShape(res->capVtxPos, res->capVtxNrm, res->capVtxTxc, res->capDl, res->capDlSize);
-
-        J3DNativeStateSetTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, 1, setting->tevOutRegID);
     }
 
-    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_KONST, GX_CC_TEXC, GX_CC_TEXA, GX_CC_ZERO);
-    J3DNativeStateSetTevKColor(setting->tevKColorID, cFacelineColor[res->facelineColor]);
-    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, (GXTevSwapSel)(setting->tevSwapTable + 1));
-
-    if (res->flipHair) {
-        J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
-    }
-
-    J3DNativeTextureLoad(&res->faceTexObj, setting->texMapID);
+    RFLiNativePart(RFLi_NATIVE_FORM_FACE, cFacelineColor[res->facelineColor], front, &res->faceTexObj);
     RFLiDrawShape(res->faceVtxPos, res->faceVtxNrm, res->faceVtxTxc, res->faceDl, res->faceDlSize);
 }
 
 void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting) {
     RFLiCharModel* imodel = (RFLiCharModel*)model;
     RFLiCharModelRes* res = imodel->res;
-
-    J3DNativeStateSetTevOrder(GX_TEVSTAGE0, setting->txcID, setting->texMapID, GX_COLOR_NULL);
-    J3DNativeStateSetTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_TEXA);
-    J3DNativeStateSetTevSwapMode(GX_TEVSTAGE0, setting->tevSwapTable, setting->tevSwapTable);
+    const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
+    static const GXColor cBlack = {0, 0, 0, 255};
 
     J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
     J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
 
-    J3DNativeStateSetTexCoordGen2(setting->txcID, GX_TG_MTX2x4, GX_TG_TEX0, 60, 0, 0x7D);
-    J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_TEXC);
-    J3DNativeStateSetCullMode(setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK);
-
-    J3DNativeTextureLoad(imodel->maskTexObj[imodel->expression], setting->texMapID);
+    RFLiNativePart(RFLi_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
     RFLiDrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
 
     if (res->noselineDlSize > 0) {
-        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-        J3DNativeTextureLoad(&res->noseTexObj, setting->texMapID);
+        RFLiNativePart(RFLi_NATIVE_FORM_NOSELINE, cBlack, front, &res->noseTexObj);
         RFLiDrawShape(res->noselineVtxPos, res->noselineVtxNrm, res->noselineVtxTxc, res->noselineDl, res->noselineDlSize);
     }
 
     if (res->glassesDlSize > 0) {
-        J3DNativeStateSetTevKColor(setting->tevKColorID, cGlassColor[res->glassesColor]);
-        J3DNativeStateSetCullMode(GX_CULL_NONE);
-        J3DNativeStateSetTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_KONST, GX_CC_TEXC, GX_CC_ZERO);
-        J3DNativeTextureLoad(&res->glassesTexObj, setting->texMapID);
+        RFLiNativePart(RFLi_NATIVE_FORM_GLASSES, cGlassColor[res->glassesColor], GX_CULL_NONE, &res->glassesTexObj);
         RFLiDrawShape(res->glassesVtxPos, res->glassesVtxNrm, res->glassesVtxTxc, res->glassesDl, res->glassesDlSize);
     }
 }
