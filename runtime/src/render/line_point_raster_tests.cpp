@@ -666,11 +666,11 @@ int main() {
         passed &= expect_near(
             decoded.line_width_pixels,
             0.5f,
-            "GX line width preserves sixth-pixel precision");
+            "line width keeps sixth-of-a-pixel values");
         passed &= expect_near(
             decoded.point_size_pixels,
             127.5f,
-            "GX point size preserves sixth-pixel precision");
+            "point size keeps sixth-of-a-pixel values");
         passed &= expect(
             decoded.line_texcoord_mask == 0x81u &&
                 decoded.point_texcoord_mask == 0x88u,
@@ -805,26 +805,26 @@ int main() {
             RasterCase::VerticalLine, 4u, offset_raster);
         passed &= expect(
             vertical_offset.right_red > vertical_offset.left_red,
-            "vertical GX line applies S offset to the screen-right edge");
+            "vertical line applies the S offset to the screen-right edge");
         const RasterBounds point_offset = harness.run(
             RasterCase::Point, 4u, offset_raster);
         passed &= expect(
             point_offset.right_red > point_offset.left_red,
-            "GX point applies S offset toward the screen-right edge");
+            "point applies the S offset toward the screen-right edge");
         passed &= expect(
             point_offset.bottom_green > point_offset.top_green,
-            "GX point applies T offset toward the screen-bottom edge");
+            "point applies the T offset toward the screen-bottom edge");
 
         const galaxy::render::LinePointRasterParams zero_raster =
             galaxy::render::make_line_point_raster_params(
                 {}, 64.0f, 64.0f, 4u, 64u, 64u);
         passed &= expect(
             harness.run(RasterCase::Point, 4u, zero_raster).pixel_count == 0u,
-            "zero GX point size emits no fragments");
+            "zero point size emits no fragments");
         passed &= expect(
             harness.run(
                 RasterCase::HorizontalLine, 4u, zero_raster).pixel_count == 0u,
-            "zero GX line width emits no fragments");
+            "zero line width emits no fragments");
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAILED: unexpected exception: %s\n", error.what());
         passed = false;
