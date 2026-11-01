@@ -89,13 +89,12 @@ inline constexpr std::uint32_t kPaletteRows = draw_rows::kRows;
 inline constexpr std::uint32_t kPaletteWords = (kPaletteRows * 5u + 63u) & ~63u;
 inline constexpr std::uint32_t kPaletteBytes = kPaletteWords * 4u;
 inline constexpr std::uint32_t kVsBytes = sizeof(VertexConstants);
-inline constexpr std::uint32_t kPsBytes = sizeof(PixelConstants);
 // The rows a motion vector reads from a palette at the frame presented before
 // (position and texture matrices, rows 0-63), after 16 unused float4.
 inline constexpr std::uint32_t kPrevPaletteRows = 64u;
 inline constexpr std::uint32_t kPrevPaletteWords = kPrevPaletteRows * 5u;
 inline constexpr std::uint32_t kPrevPaletteBytes = kPrevPaletteWords * 4u;
-static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u && kPsBytes % 256u == 0u &&
+static_assert(kPaletteBytes % 256u == 0u && kVsBytes % 256u == 0u &&
               kPrevPaletteBytes % 256u == 0u);
 
 // Word offsets inside the blocks.
@@ -110,18 +109,12 @@ inline constexpr std::uint32_t kVsPost = offsetof(VertexConstants, inline_post_m
 inline constexpr std::uint32_t kVsMotionPrevProj = offsetof(VertexConstants, motion_prev_proj) / 4u;
 inline constexpr std::uint32_t kVsMotionPrevPos = offsetof(VertexConstants, motion_prev_pos) / 4u;
 inline constexpr std::uint32_t kVsMotionCtrl = offsetof(VertexConstants, motion_ctrl) / 4u;
-inline constexpr std::uint32_t kPsTevRegs = offsetof(PixelConstants, tev_regs) / 4u;
-inline constexpr std::uint32_t kPsKonst = offsetof(PixelConstants, konst) / 4u;
-inline constexpr std::uint32_t kPsAlphaRefs = offsetof(PixelConstants, alpha_refs) / 4u;
-inline constexpr std::uint32_t kPsFog = offsetof(PixelConstants, fog_params) / 4u;
-inline constexpr std::uint32_t kPsIndMtx = offsetof(PixelConstants, ind_mtx) / 4u;
 
 // Output buffer: VS blocks, palettes, the palettes' rows at the frame presented
-// before (motion vectors), then PS blocks (each 256-byte aligned).
+// before (motion vectors), each 256-byte aligned.
 struct Layout {
     std::uint32_t vs_count = 0;
     std::uint32_t palette_count = 0;
-    std::uint32_t ps_count = 0;
     std::uint32_t prev_palette_count = 0;  // 0, or palette_count with motion vectors
     [[nodiscard]] std::uint32_t vs_offset(std::uint32_t slot) const noexcept { return slot * kVsBytes; }
     [[nodiscard]] std::uint32_t palette_base() const noexcept { return vs_count * kVsBytes; }
@@ -131,11 +124,9 @@ struct Layout {
     [[nodiscard]] std::uint32_t prev_palette_offset(std::uint32_t slot) const noexcept {
         return palette_base() + palette_count * kPaletteBytes + slot * kPrevPaletteBytes;
     }
-    [[nodiscard]] std::uint32_t ps_base() const noexcept {
+    [[nodiscard]] std::uint32_t bytes() const noexcept {
         return palette_base() + palette_count * kPaletteBytes + prev_palette_count * kPrevPaletteBytes;
     }
-    [[nodiscard]] std::uint32_t ps_offset(std::uint32_t slot) const noexcept { return ps_base() + slot * kPsBytes; }
-    [[nodiscard]] std::uint32_t bytes() const noexcept { return ps_base() + ps_count * kPsBytes; }
 };
 
 class Program {
@@ -172,8 +163,6 @@ public:
     void projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
     // Its GX parameters A..D (motion_prev_proj) the same way.
     void projection_params(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
-    // Pixel-stage colours of a PS block (dst: its first word) as ps_colours_at.
-    void ps_colours(std::uint32_t dst, const PixelConstants& a, const PixelConstants& b);
 
     std::vector<Op> ops;
     std::vector<std::uint32_t> payload;

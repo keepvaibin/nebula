@@ -150,13 +150,6 @@ void palette_motion(RowView a, RowView b, const CameraMotion& camera,
 void palette_at(const PaletteMotion& m, RowView a, RowView b,
                 const CameraMotion& camera, const Affine34& camera_t, float t,
                 std::uint32_t* out) noexcept;
-// Pixel-stage colours of one draw state between two frames: TEV registers,
-// konstant colours, alpha-test references, fog colour (and range when its
-// shift is unchanged) and indirect matrices (rows of equal scale). Only when
-// the TEV program, texture setup and indirect commands are the same; any
-// other difference is a discrete change and shows b.
-[[nodiscard]] bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept;
-void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept;
 // Channel ambient and material colours (vertex stage).
 [[nodiscard]] bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept;
 

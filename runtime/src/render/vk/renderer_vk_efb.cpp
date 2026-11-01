@@ -1184,7 +1184,7 @@ VkDescriptorSet RendererVk::constants_set(VkBuffer b0, VkBuffer b1, VkBuffer pal
     // The rows (binding 5) are in the palette's buffer from the same offset: the ring's start, or a replay's palettes.
     const VkDescriptorBufferInfo infos[6] = {
         {b0, 0, sizeof(VertexConstants)},
-        {b1, 0, sizeof(PixelConstants)},
+        {b1, 0, 128u * sizeof(float)},  // a native material's constants (MaterialBlock)
         {palette, palette_offset, palette_range},
         {earlier, 0, VK_WHOLE_SIZE},
         {blend_verdicts_->buffer, 0, VK_WHOLE_SIZE},

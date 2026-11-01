@@ -724,7 +724,6 @@ private:
             return {palette_tables.data() + shadow * draw_rows::kRows, palette_rows.data()};
         }
         // Pixel-stage constants per upload in the scene (draws carry the index).
-        std::vector<PixelConstants> ps_constants;
         Affine34 camera{};
         // The game camera (world to eye) of the scene.
         Affine34 view{};
@@ -758,7 +757,6 @@ private:
             constants.clear(); prev_index.clear();
             palette.clear(); per_vertex.clear(); palette_tables.clear(); palette_rows.clear(); palette_count = 0;
             valid = false; serial = 0;
-            ps_constants.clear();
             category.clear(); camera_epoch_known = false;
             rt_projection_known = false;
             layers = {};
@@ -935,15 +933,12 @@ private:
     interp_gpu::Layout interp_layout_{};
     std::vector<std::int32_t> interp_vs_slot_;             // per record
     std::vector<std::int32_t> interp_record_palette_slot_;  // per record
-    std::vector<std::int32_t> interp_ps_slot_;             // per pixel-constant record
     std::vector<std::int32_t> interp_palette_slot_;        // per interp_palette_motions_ entry
     std::vector<std::int32_t> interp_palette_entry_;       // per palette slot: its entry
     std::vector<std::array<std::uint32_t, 5>> interp_palette_source_;  // per palette slot: its draw's blocks
     bool prepare_interp_sequence(const InterpScene& scene, const InterpScene& before_scene, bool before_valid);
     // Pixel-constant records of the playing scene whose colours change
     // (record, matched record of the scene before), and their sub-frame uploads.
-    std::vector<std::array<std::uint32_t, 2>> interp_ps_moving_;
-    std::uint64_t interp_ps_moving_total_ = 0;   // summed per sub-frame
     std::uint64_t interp_presented_ = 0;
     std::uint64_t interp_dropped_ = 0;
     std::uint64_t interp_failed_ = 0;     // sub-frames that could not be recorded

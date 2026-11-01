@@ -2864,9 +2864,6 @@ void RenderCore::report_interp_stats() {
             << " gpu-phase-ms(eval/replay/present)=" << gpu_phase[0] / gpu_divisor << '/'
             << gpu_phase[1] / gpu_divisor << '/' << gpu_phase[2] / gpu_divisor
             << " chunk-continued-records=" << std::exchange(interp_chunk_continues_, 0u)
-            << " colour-records-per-subframe="
-            << (interp_presented_ != 0u
-                    ? static_cast<double>(std::exchange(interp_ps_moving_total_, 0u)) / presented : 0.0)
             << " vertex-blend-draws-per-subframe="
             << (interp_presented_ != 0u
                     ? static_cast<double>(renderer_.take_vertex_blend_draws()) / presented : 0.0)
@@ -3117,20 +3114,6 @@ bool RenderCore::render_interp_subframe(float t) {
                                            ? std::span<const std::int32_t>(prev_index)
                                            : std::span<const std::int32_t>{});
         const auto colours_start = std::chrono::steady_clock::now();
-        // Pixel-constant records pair through the paired draws.
-        interp_ps_moving_.clear();
-        if (before_valid && !(interp_camera_.known && interp_camera_.cut)) {
-            const std::span<const std::int32_t> pairs = renderer_.ps_record_pairs();
-            const std::size_t records = std::min(pairs.size(), scene.ps_constants.size());
-            for (std::size_t p = 0; p < records; ++p) {
-                const std::int32_t q = pairs[p];
-                if (q >= 0 && static_cast<std::size_t>(q) < before_scene.ps_constants.size() &&
-                    ps_colours_move(before_scene.ps_constants[static_cast<std::size_t>(q)],
-                                    scene.ps_constants[p])) {
-                    interp_ps_moving_.push_back({static_cast<std::uint32_t>(p), static_cast<std::uint32_t>(q)});
-                }
-            }
-        }
         const auto program_start = std::chrono::steady_clock::now();
         interp_sequence_.ready = prepare_interp_sequence(scene, before_scene, before_valid);
         const auto prepare_end = std::chrono::steady_clock::now();
@@ -3149,7 +3132,6 @@ bool RenderCore::render_interp_subframe(float t) {
     }
     const Affine34 camera_t = camera_at(interp_camera_, t);
     interp_moving_records_ += interp_moving_.size();
-    interp_ps_moving_total_ += interp_ps_moving_.size();
     // The frame presented before: earlier in this sequence; this sequence's t = 0 when it was the scene before at
     // t = 1; or the last sub-frame of the scene before's sequence, at t' of that pair, when the scene arrived first
     // (on the display's vblanks every sequence ends so: no slot meets t = 1). That frame sits at t' - 1 on this
@@ -3217,7 +3199,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     interp_program_.set_endpoint_cameras(camera_at(interp_camera_, 0.0f), camera_at(interp_camera_, 1.0f));
     interp_vs_slot_.assign(count, -1);
     interp_record_palette_slot_.assign(count, -1);
-    interp_ps_slot_.assign(scene.ps_constants.size(), -1);
     interp_palette_slot_.assign(interp_palette_motions_.size(), -1);
     interp_palette_source_.clear();
     interp_palette_entry_.clear();
@@ -3238,7 +3219,6 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
     const bool motion = renderer_.temporal_interpolation();
     interp_layout_ = {static_cast<std::uint32_t>(interp_moving_.size()),
                       static_cast<std::uint32_t>(interp_palette_source_.size()),
-                      static_cast<std::uint32_t>(interp_ps_moving_.size()),
                       motion ? static_cast<std::uint32_t>(interp_palette_source_.size()) : 0u};
     const interp_gpu::Layout& layout = interp_layout_;
     for (std::size_t s = 0; s < interp_moving_.size(); ++s) {
@@ -3325,19 +3305,12 @@ bool RenderCore::prepare_interp_sequence(const InterpScene& scene, const InterpS
             interp_program_.at_previous(false);
         }
     }
-    for (std::size_t k = 0; k < interp_ps_moving_.size(); ++k) {
-        const auto [p, q] = interp_ps_moving_[k];
-        interp_ps_slot_[p] = static_cast<std::int32_t>(k);
-        interp_program_.ps_colours(layout.ps_offset(static_cast<std::uint32_t>(k)) / 4u,
-                                   before_scene.ps_constants[q], scene.ps_constants[p]);
-    }
     interp_program_ops_ += interp_program_.ops.size();
     interp_program_words_ += interp_program_.payload.size();
     Renderer::ReplaySequence sequence{};
     sequence.layout = layout;
     sequence.record_vs_slot = interp_vs_slot_;
     sequence.record_palette_slot = interp_record_palette_slot_;
-    sequence.ps_slot = interp_ps_slot_;
     sequence.palette_source = interp_palette_source_;
     sequence.program = &interp_program_;
     sequence.vertex_blend = true;

@@ -379,59 +379,6 @@ bool texgen_spatial(std::uint32_t texgen) noexcept {
     return type == 0u && (source == 0u || source == 1u || source == 3u || source == 4u);
 }
 
-bool ps_colours_move(const PixelConstants& a, const PixelConstants& b) noexcept {
-    if (std::memcmp(a.stage_config, b.stage_config, sizeof(a.stage_config)) != 0 ||
-        std::memcmp(a.uber_ps_header, b.uber_ps_header, sizeof(a.uber_ps_header)) != 0 ||
-        std::memcmp(a.ind_cmd, b.ind_cmd, sizeof(a.ind_cmd)) != 0 ||
-        std::memcmp(a.ind_misc, b.ind_misc, sizeof(a.ind_misc)) != 0 ||
-        std::memcmp(a.tex_dims, b.tex_dims, sizeof(a.tex_dims)) != 0 ||
-        std::memcmp(&a.alpha_refs[2], &b.alpha_refs[2], sizeof(float)) != 0 ||
-        std::memcmp(&a.fog_params[7], &b.fog_params[7], sizeof(float)) != 0) {
-        return false;
-    }
-    return std::memcmp(a.tev_regs, b.tev_regs, sizeof(a.tev_regs)) != 0 ||
-           std::memcmp(a.konst, b.konst, sizeof(a.konst)) != 0 ||
-           std::memcmp(a.alpha_refs, b.alpha_refs, sizeof(a.alpha_refs)) != 0 ||
-           std::memcmp(a.fog_params, b.fog_params, sizeof(a.fog_params)) != 0 ||
-           std::memcmp(a.ind_mtx, b.ind_mtx, sizeof(a.ind_mtx)) != 0;
-}
-
-void ps_colours_at(const PixelConstants& a, const PixelConstants& b, float t, PixelConstants& out) noexcept {
-    out = b;
-    if (t >= 1.0f) {
-        return;
-    }
-    const auto lerp = [t](float x, float y) {
-        return std::isfinite(x) && std::isfinite(y) ? x + (y - x) * t : y;
-    };
-    for (unsigned r = 0; r < 4u; ++r) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            out.tev_regs[r][c] = lerp(a.tev_regs[r][c], b.tev_regs[r][c]);
-            out.konst[r][c] = lerp(a.konst[r][c], b.konst[r][c]);
-        }
-    }
-    // Alpha-test references and the constant destination alpha; [2] packs the
-    // compare modes.
-    out.alpha_refs[0] = lerp(a.alpha_refs[0], b.alpha_refs[0]);
-    out.alpha_refs[1] = lerp(a.alpha_refs[1], b.alpha_refs[1]);
-    out.alpha_refs[3] = lerp(a.alpha_refs[3], b.alpha_refs[3]);
-    // Fog: a, b magnitude, b shift, c, colour, projection.
-    for (unsigned i = 4u; i < 7u; ++i) out.fog_params[i] = lerp(a.fog_params[i], b.fog_params[i]);
-    if (a.fog_params[2] == b.fog_params[2]) {
-        out.fog_params[0] = lerp(a.fog_params[0], b.fog_params[0]);
-        out.fog_params[1] = lerp(a.fog_params[1], b.fog_params[1]);
-        out.fog_params[3] = lerp(a.fog_params[3], b.fog_params[3]);
-    }
-    // Indirect matrices: integer mantissas per row, w = 17 - scale.
-    for (unsigned r = 0; r < 6u; ++r) {
-        if (a.ind_mtx[r][3] != b.ind_mtx[r][3]) continue;
-        for (unsigned c = 0; c < 3u; ++c) {
-            const float x = static_cast<float>(a.ind_mtx[r][c]);
-            const float y = static_cast<float>(b.ind_mtx[r][c]);
-            out.ind_mtx[r][c] = static_cast<std::int32_t>(std::lround(x + (y - x) * t));
-        }
-    }
-}
 bool channel_colours_move(const VertexConstants& a, const VertexConstants& b) noexcept {
     return std::memcmp(a.chan_ambient, b.chan_ambient, sizeof(a.chan_ambient)) != 0 ||
            std::memcmp(a.chan_material, b.chan_material, sizeof(a.chan_material)) != 0;
