@@ -7659,6 +7659,25 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
     const auto topology_key =
         static_cast<std::uint8_t>(primitive_topology_type);
+    // GALAXY_NATIVE_ONLY=1 (E-04 step 4's census): a draw without a native material is not drawn. Each GX pixel
+    // program (its key's hash) once per topology and phase in the log, and a running count of the draws dropped.
+    static const bool native_only = read_env_u64("GALAXY_NATIVE_ONLY", 0u) != 0u;
+    if (native_only && native_material_ == nullptr) [[unlikely]] {
+        static std::unordered_set<std::uint64_t> logged;
+        static std::uint64_t dropped = 0u;
+        const std::uint64_t hash = build_pixel_shader_key(draw_state_, renderer_.efb_scale()).hash();
+        const std::uint64_t entry = hash ^ (static_cast<std::uint64_t>(topology_key) << 56u) ^
+                                    (static_cast<std::uint64_t>(rt_phase_) << 48u);
+        if (logged.size() < 1024u && logged.insert(entry).second) {
+            std::fprintf(stderr, "[native-only] GX draw dropped: ps=%016llx topology=%u phase=%u (draw %llu)\n",
+                         static_cast<unsigned long long>(hash), static_cast<unsigned>(topology_key),
+                         static_cast<unsigned>(rt_phase_), static_cast<unsigned long long>(dropped));
+        }
+        if ((++dropped & 0xFFFFu) == 0u) {
+            std::fprintf(stderr, "[native-only] %llu GX draws dropped\n", static_cast<unsigned long long>(dropped));
+        }
+        return nullptr;
+    }
     const bool curved = primitive_topology_type == gpu::kTopologyTypeTriangle && curved_draw(vtxfmt);
     // Consume once, propagating upload invalidation before considering reuse.
     // What changed: the typed state's flags, the register file's for matrix memory (until the matrix arena).
