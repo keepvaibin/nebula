@@ -98,10 +98,18 @@ NebulaStateOp& J3DStateList::add(u8 kind) {
     return rOp;
 }
 
+namespace {
+    // GXBlendMode as the blend the renderer performs (NEBULA_BLEND_*).
+    u8 nativeBlendOp(GXBlendMode type) {
+        return type == GX_BM_BLEND ? NEBULA_BLEND_ADD : type == GX_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+           : type == GX_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+    }
+}  // namespace
+
 void J3DStateList::setBlendModeEtc(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op,
                                    GXBool colorUpdate, GXBool alphaUpdate, GXBool dither) {
     NebulaStateOp& r = add(NEBULA_STATE_BLEND_ETC);
-    r.a[0] = type;
+    r.a[0] = nativeBlendOp(type);
     r.a[1] = src;
     r.a[2] = dst;
     r.a[3] = op;
@@ -112,7 +120,7 @@ void J3DStateList::setBlendModeEtc(GXBlendMode type, GXBlendFactor src, GXBlendF
 
 void J3DStateList::setBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op) {
     NebulaStateOp& r = add(NEBULA_STATE_BLEND);
-    r.a[0] = type;
+    r.a[0] = nativeBlendOp(type);
     r.a[1] = src;
     r.a[2] = dst;
     r.a[3] = op;

@@ -947,12 +947,16 @@ namespace nw4r {
             if (IsBlendModeCap()) {
                 const BlendMode* const pBlendMode = GetBlendModePtr();
 
-                rProgram.blend.type = pBlendMode->GetType();
+                {
+                    const u8 type = pBlendMode->GetType();
+                    rProgram.blend.type = type == GX_BM_BLEND ? NEBULA_BLEND_ADD : type == GX_BM_SUBTRACT ? NEBULA_BLEND_SUBTRACT
+                                          : type == GX_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
+                }
                 rProgram.blend.source = pBlendMode->GetSrcFactor();
                 rProgram.blend.destination = pBlendMode->GetDstFactor();
                 rProgram.blend.logic_op = pBlendMode->GetOp();
             } else {
-                rProgram.blend.type = GX_BM_BLEND;
+                rProgram.blend.type = NEBULA_BLEND_ADD;
                 rProgram.blend.source = GX_BL_SRCALPHA;
                 rProgram.blend.destination = GX_BL_INVSRCALPHA;
                 rProgram.blend.logic_op = GX_LO_SET;

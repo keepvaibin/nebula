@@ -15,10 +15,11 @@ namespace {
 constexpr CullMode kCull[4] = {CullMode::None, CullMode::Back, CullMode::Front, CullMode::All};
 
 // GXBlendMode: NONE 0, BLEND 1, LOGIC 2, SUBTRACT 3.
-void set_blend(BlendMode& b, std::uint8_t type, std::uint8_t source, std::uint8_t destination, std::uint8_t logic) {
-    b.blend_enable = type == 1u || type == 3u;
-    b.logic_op_enable = type == 2u;
-    b.subtract = type == 3u;
+// `op` NEBULA_BLEND_*: replace 0, add 1, subtract 2, logic 3.
+void set_blend(BlendMode& b, std::uint8_t op, std::uint8_t source, std::uint8_t destination, std::uint8_t logic) {
+    b.blend_enable = op == 1u || op == 2u;
+    b.logic_op_enable = op == 3u;
+    b.subtract = op == 2u;
     b.src_factor = static_cast<BlendFactor>(source & 7u);
     b.dst_factor = static_cast<BlendFactor>(destination & 7u);
     b.logic_mode = static_cast<std::uint8_t>(logic & 15u);
