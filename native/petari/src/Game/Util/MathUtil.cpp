@@ -8,7 +8,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <revolution/mtx.h>
 
-extern "C" int __fpclassifyf(f32);
 
 void MathUtil_FORCE_MATCH_SDATA2() {
     (void)1.0f;
@@ -1586,7 +1585,8 @@ namespace MR {
     }
 
     bool isNan(const TVec3f& rVec) {
-        if (__fpclassifyf(rVec.x) == 1 || __fpclassifyf(rVec.y) == 1 || __fpclassifyf(rVec.z) == 1) {
+        // NaN in any component (MSL's __fpclassifyf answered 1 for NaN alone).
+        if (__builtin_isnan(rVec.x) || __builtin_isnan(rVec.y) || __builtin_isnan(rVec.z)) {
             return true;
         }
 
