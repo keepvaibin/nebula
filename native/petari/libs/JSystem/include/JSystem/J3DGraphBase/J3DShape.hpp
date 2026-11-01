@@ -27,21 +27,6 @@ public:
     /* 0x04 */ u32 mMtxIdxRegB;
 };
 
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DCurrentMtxInfo > {
-    BE< u32 > mMtxIdxRegA;
-    BE< u32 > mMtxIdxRegB;
-
-    operator J3DCurrentMtxInfo() const {
-        J3DCurrentMtxInfo info;
-        info.mMtxIdxRegA = mMtxIdxRegA;
-        info.mMtxIdxRegB = mMtxIdxRegB;
-        return info;
-    }
-};
-#endif
-
 // The matrices a shape's corners take when they carry none: its position matrix's id and texture coordinates 0-7's
 // (GX_IDENTITY where a coordinate has no matrix).
 class J3DCurrentMtx {

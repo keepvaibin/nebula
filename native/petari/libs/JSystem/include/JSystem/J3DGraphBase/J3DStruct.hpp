@@ -49,37 +49,6 @@ struct J3DFogInfo {
     /* 0x18 */ GXFogAdjTable mFogAdjTable;
 };  // Size: 0x2C
 
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DFogInfo > {
-    u8 mType;
-    u8 mAdjEnable;
-    BE< u16 > mCenter;
-    BE< f32 > mStartZ;
-    BE< f32 > mEndZ;
-    BE< f32 > mNearZ;
-    BE< f32 > mFarZ;
-    NebulaColor8 mColor;
-    BE< u16 > mFogAdjTable[10];
-
-    operator J3DFogInfo() const {
-        J3DFogInfo info;
-        info.mType = mType;
-        info.mAdjEnable = mAdjEnable;
-        info.mCenter = mCenter;
-        info.mStartZ = mStartZ;
-        info.mEndZ = mEndZ;
-        info.mNearZ = mNearZ;
-        info.mFarZ = mFarZ;
-        info.mColor = mColor;
-        for (int i = 0; i < 10; i++) {
-            info.mFogAdjTable.r[i] = mFogAdjTable[i];
-        }
-        return info;
-    }
-};
-#endif
-
 struct J3DBlendInfo {
     void operator=(J3DBlendInfo const& other) {
         __memcpy(this, &other, sizeof(J3DBlendInfo));
@@ -129,27 +98,6 @@ struct J3DTextureSRTInfo {
     }
 };  // Size: 0x14
 
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DTextureSRTInfo > {
-    BE< f32 > mScaleX;
-    BE< f32 > mScaleY;
-    BE< s16 > mRotation;
-    BE< f32 > mTranslationX;
-    BE< f32 > mTranslationY;
-
-    operator J3DTextureSRTInfo() const {
-        J3DTextureSRTInfo info;
-        info.mScaleX = mScaleX;
-        info.mScaleY = mScaleY;
-        info.mRotation = mRotation;
-        info.mTranslationX = mTranslationX;
-        info.mTranslationY = mTranslationY;
-        return info;
-    }
-};
-#endif
-
 enum J3DTexMtxMode {
     J3DTexMtxMode_None,
     J3DTexMtxMode_EnvmapBasic,
@@ -187,50 +135,6 @@ public:
     /* 0x28 */ Vec mDistAtten;
 };
 
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DTexMtxInfo > {
-    u8 mProjection;
-    u8 mInfo;
-    u8 field_0x2;
-    u8 field_0x3;
-    BEData< Vec > mCenter;
-    BEData< J3DTextureSRTInfo > mSRT;
-    BEData< Mtx44 > mEffectMtx;
-
-    operator J3DTexMtxInfo() const {
-        J3DTexMtxInfo info;
-        info.mProjection = mProjection;
-        info.mInfo = mInfo;
-        info.field_0x2 = field_0x2;
-        info.field_0x3 = field_0x3;
-        info.mCenter = mCenter;
-        info.mSRT = mSRT;
-        mEffectMtx.copyTo(info.mEffectMtx);
-        return info;
-    }
-};
-
-template <>
-struct BEData< J3DLightInfo > {
-    BEData< Vec > mLightPosition;
-    BEData< Vec > mLightDirection;
-    NebulaColor8 mColor;
-    BEData< Vec > mCosAtten;
-    BEData< Vec > mDistAtten;
-
-    operator J3DLightInfo() const {
-        J3DLightInfo info;
-        info.mLightPosition = mLightPosition;
-        info.mLightDirection = mLightDirection;
-        info.mColor = mColor;
-        info.mCosAtten = mCosAtten;
-        info.mDistAtten = mDistAtten;
-        return info;
-    }
-};
-#endif
-
 struct J3DColorChanInfo {
     /* 0x0 */ u8 mEnable;
     /* 0x1 */ u8 mMatSrc;
@@ -263,21 +167,6 @@ struct J3DNBTScaleInfo {
     /* 0x0 */ u8 mbHasScale;
     /* 0x4 */ Vec mScale;
 };  // Size: 0x10
-
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DNBTScaleInfo > {
-    u8 mbHasScale;
-    BEData< Vec > mScale;
-
-    operator J3DNBTScaleInfo() const {
-        J3DNBTScaleInfo info;
-        info.mbHasScale = mbHasScale;
-        info.mScale = mScale;
-        return info;
-    }
-};
-#endif
 
 struct J3DTevOrderInfo {
     void operator=(const J3DTevOrderInfo& other) {
@@ -356,21 +245,6 @@ struct J3DIndTexMtxInfo {
     /* 0x00 */ Mtx23 field_0x0;
     /* 0x18 */ u8 field_0x18;
 };  // Size: 0x1C
-
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DIndTexMtxInfo > {
-    BEData< Mtx23 > field_0x0;
-    u8 field_0x18;
-
-    operator J3DIndTexMtxInfo() const {
-        J3DIndTexMtxInfo info;
-        field_0x0.copyTo(info.field_0x0);
-        info.field_0x18 = field_0x18;
-        return info;
-    }
-};
-#endif
 
 struct J3DIndTexCoordScaleInfo {
     /* 0x0 */ u8 mScaleS;

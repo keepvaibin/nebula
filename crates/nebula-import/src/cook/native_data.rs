@@ -34,8 +34,9 @@
 //!   16-bit and float arrays by block type, the name tables (j3d_animation).
 //! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
 //!   the name tables, VTX1 (format list, arrays by their component type), SHP1 (shape data, tables, vertex
-//!   descriptors, display lists' counts and 16-bit indices); MAT3/MDL3 contents and TEX1 image headers stay
-//!   big-endian until their steps.
+//!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
+//!   tables (its console command lists stay: the game does not read them); TEX1 image headers stay big-endian
+//!   until their step.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1079,7 +1080,10 @@ pub fn is_j3d_model(bytes: &[u8]) -> bool {
 /// VTX1's format list and arrays (16-bit and float components by the list's type; 8-bit ones and RGB8/RGBX8/RGBA6/
 /// RGBA8 colours stay bytes); SHP1's shape data, index and matrix tables, vertex descriptors, matrix and draw
 /// entries, and in its display lists each primitive's count and 16-bit indices (the layout as J3DNativeShape reads
-/// it). What stays big-endian until its own step: MAT3's and MDL3's contents, and TEX1's image headers.
+/// it); MAT3's tables by record (material entries' indices, IDs, cull modes, lights, texture matrices, texture
+/// numbers, TEV colours, fog, NBT scales, indirect matrices; byte records stay); MDL3's list entries, patching
+/// offsets and matrix registers (its command lists stay bytes, unread). TEX1's image headers stay big-endian until
+/// their step.
 pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1349,6 +1353,58 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                                 p += count * stride;
                             }
                         }
+                    }
+                }
+            }
+            b"MAT3" => {
+                // (offset field, record size, the record's parts: (from, to, width) with width 2 or 4)
+                const TEX_MTX: &[(usize, usize, usize)] = &[(0x4, 0x18, 4), (0x18, 0x1A, 2), (0x1C, 0x64, 4)];
+                let tables: [(usize, usize, &[(usize, usize, usize)]); 11] = [
+                    (0xC, 0x14C, &[(0x8, 0x9C, 2), (0xBC, 0x14C, 2)]), // material entries: table indices
+                    (0x10, 2, &[(0, 2, 2)]),                           // material IDs
+                    (0x18, 0x138, &[(0x14, 0x2C, 4), (0x30, 0x48, 4), (0x4C, 0x64, 4)]), // indirect: matrices
+                    (0x1C, 4, &[(0, 4, 4)]),                           // cull modes
+                    (0x30, 0x34, &[(0, 0x18, 4), (0x1C, 0x34, 4)]),    // lights (the colour stays bytes)
+                    (0x40, 0x64, TEX_MTX),                             // texture matrices
+                    (0x44, 0x64, TEX_MTX),                             // post-transform texture matrices
+                    (0x48, 2, &[(0, 2, 2)]),                           // texture numbers
+                    (0x50, 8, &[(0, 8, 2)]),                           // TEV colours (s16 x4)
+                    (0x68, 0x2C, &[(0x2, 0x4, 2), (0x4, 0x14, 4), (0x18, 0x2C, 2)]), // fog
+                    (0x80, 0x10, &[(0x4, 0x10, 4)]),                   // NBT scales
+                ];
+                for (o, record, parts) in tables {
+                    let start = field(o)?;
+                    if start == 0 {
+                        continue;
+                    }
+                    let end = at + bound(start);
+                    let mut r = at + start;
+                    while r + record <= end {
+                        for &(from, to, width) in parts {
+                            if width == 2 {
+                                halves(&mut out, r + from, r + to)?;
+                            } else {
+                                words(&mut out, r + from, r + to)?;
+                            }
+                        }
+                        r += record;
+                    }
+                }
+            }
+            b"MDL3" => {
+                // One entry per material each (the command lists between them stay bytes).
+                let materials = be16(bytes, at + 8)? as usize;
+                let (lists, patching, registers) = (field(0xC)?, field(0x10)?, field(0x14)?);
+                if lists != 0 {
+                    words(&mut out, at + lists, at + lists + 8 * materials)?; // (offset, size)
+                }
+                if registers != 0 {
+                    words(&mut out, at + registers, at + registers + 8 * materials)?; // two matrix index registers
+                }
+                if patching != 0 {
+                    for m in 0..materials {
+                        let r = at + patching + 0x10 * m;
+                        halves(&mut out, r, r + 0xC)?; // six 16-bit offsets, four bytes
                     }
                 }
             }
