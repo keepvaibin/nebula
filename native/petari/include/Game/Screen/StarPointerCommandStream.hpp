@@ -19,7 +19,7 @@ public:
     void exeSignal();
     f32 calcLineWidth(f32) const;
 
-    inline void setPortAndColor(s32 padChannel, const GXColor* color) {
+    inline void setPortAndColor(s32 padChannel, const NebulaColor8* color) {
         mPadChannel = padChannel;
         mColor = color;
     }
@@ -31,5 +31,5 @@ public:
     /* 0x30 */ const TVec3f* mWorldPos;
     /* 0x34 */ TVec2f mFollowPos;
     /* 0x3C */ s32 mPadChannel;
-    /* 0x40 */ const GXColor* mColor;
+    /* 0x40 */ const NebulaColor8* mColor;
 };

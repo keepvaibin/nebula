@@ -77,7 +77,7 @@ namespace NebulaUi {
 
     nw4r::ut::Color color(u32 rgba);
     void setTextColor(TextBox* pText, u32 top, u32 bottom);
-    GXColorS10 tevColor(u32 rgba, bool alpha);
+    NebulaColor16 tevColor(u32 rgba, bool alpha);
     // A window's fill and ring: its content and frame mix colour 0 (the ring) to colour 1 (the fill) by their texture.
     void paint(Window* pWindow, u32 fill, u32 ring);
     // A rounded box `w` x `h` centred on (x, y) with corners of `radius`.

@@ -12,15 +12,15 @@ namespace {
     u32 sDiffuse = 0;
     u32 sAtten = 0;
     u32 sAlphaTest = 0;
-    GXColor sAmbient = {0, 0, 0, 0};
-    GXColor sMaterial = {255, 255, 255, 255};
+    NebulaColor8 sAmbient = {0, 0, 0, 0};
+    NebulaColor8 sMaterial = {255, 255, 255, 255};
     // The face texture's form and colours (Mii_NativeTextureForm).
     u32 sTextureForm = 0;
-    GXColor sTextureC0 = {0, 0, 0, 0};
-    GXColor sTextureC1 = {0, 0, 0, 0};
+    NebulaColor8 sTextureC0 = {0, 0, 0, 0};
+    NebulaColor8 sTextureC1 = {0, 0, 0, 0};
 }  // namespace
 
-extern "C" void Mii_NativeTextureForm(u32 form, GXColor c0, GXColor c1) {
+extern "C" void Mii_NativeTextureForm(u32 form, NebulaColor8 c0, NebulaColor8 c1) {
     sTextureForm = form;
     sTextureC0 = c0;
     sTextureC1 = c1;
@@ -40,8 +40,8 @@ extern "C" void Mii_NativeTexturePart(const GXTexObj* pTexture) {
     NativeShader::send(material);
 }
 
-extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, GXColor ambient,
-                                GXColor material, u32 alphaTest) {
+extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn atten, NebulaColor8 ambient,
+                                NebulaColor8 material, u32 alphaTest) {
     sChain = chain;
     sLightMask = lightMask;
     // The light function's forms as the material shaders take them (j3d_light: attenuation 1 specular, 2 none
@@ -53,7 +53,7 @@ extern "C" void Mii_NativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, G
     sAlphaTest = alphaTest;
 }
 
-extern "C" void Mii_NativePart(u32 form, GXColor color, GXCullMode cull, const GXTexObj* pTexture) {
+extern "C" void Mii_NativePart(u32 form, NebulaColor8 color, GXCullMode cull, const GXTexObj* pTexture) {
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_MII_FACE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                        cull == GX_CULL_FRONT  ? NEBULA_CULL_FRONT

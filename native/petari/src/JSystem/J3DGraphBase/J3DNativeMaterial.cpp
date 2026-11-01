@@ -666,7 +666,7 @@ namespace {
         return static_cast< u64 >(reinterpret_cast< uintptr_t >(p));
     }
 
-    void copyColor(u8* pOut, const GXColor& rColor) {
+    void copyColor(u8* pOut, const NebulaColor8& rColor) {
         pOut[0] = rColor.r;
         pOut[1] = rColor.g;
         pOut[2] = rColor.b;

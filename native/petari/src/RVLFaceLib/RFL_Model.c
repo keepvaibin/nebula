@@ -23,7 +23,7 @@ Mii_CoordinateData coordinateData = {1, 2, 0, FALSE, FALSE, FALSE};
 const MiiDrawCoreSetting cDefaultDrawCoreSetting = {0, FALSE};
 
 
-static const GXColor cFacelineColor[MII_I_MAX_FACELINE_COLOR + 1] = {
+static const NebulaColor8 cFacelineColor[MII_I_MAX_FACELINE_COLOR + 1] = {
     // clang-format off
     {240, 216, 196, 255}, 
     {255, 188, 128, 255}, 
@@ -34,7 +34,7 @@ static const GXColor cFacelineColor[MII_I_MAX_FACELINE_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cHairColor[MII_I_MAX_HAIR_COLOR + 1] = {
+static const NebulaColor8 cHairColor[MII_I_MAX_HAIR_COLOR + 1] = {
     // clang-format off
     {30,  26,  24,  255},    
     {56,  32,  21,  255},    
@@ -47,7 +47,7 @@ static const GXColor cHairColor[MII_I_MAX_HAIR_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cBeardColor[MII_I_MAX_BEARD_COLOR + 1] = {
+static const NebulaColor8 cBeardColor[MII_I_MAX_BEARD_COLOR + 1] = {
     // clang-format off
     {30,  26,  24,  255},    
     {56,  32,  21,  255},    
@@ -60,7 +60,7 @@ static const GXColor cBeardColor[MII_I_MAX_BEARD_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cGlassColor[MII_I_MAX_GLASS_COLOR + 1] = {
+static const NebulaColor8 cGlassColor[MII_I_MAX_GLASS_COLOR + 1] = {
     // clang-format off
     {16,  16, 16, 255},  
     {96,  56, 16, 255},  
@@ -71,7 +71,7 @@ static const GXColor cGlassColor[MII_I_MAX_GLASS_COLOR + 1] = {
     // clang-format on
 };
 
-static const GXColor cFavoriteColor[MiiFavoriteColor_Max] = {
+static const NebulaColor8 cFavoriteColor[MiiFavoriteColor_Max] = {
     // clang-format off
     {184, 64,  48,  255}, //!< MiiFavoriteColor_Red
     {240, 120, 40,  255}, //!< MiiFavoriteColor_Orange
@@ -88,7 +88,7 @@ static const GXColor cFavoriteColor[MiiFavoriteColor_Max] = {
     // clang-format on
 };
 
-static const GXColor cWhite = {255, 255, 255, 255};
+static const NebulaColor8 cWhite = {255, 255, 255, 255};
 
 static u32 Mii_GetExpressionNum(u32 exprFlags) {
     int i;
@@ -214,11 +214,11 @@ void MiiSetExpression(MiiCharModel* model, MiiExpression expr) {
     imodel->expression = expr;
 }
 
-GXColor MiiGetFavoriteColor(MiiFavoriteColor color) {
+NebulaColor8 MiiGetFavoriteColor(MiiFavoriteColor color) {
     return cFavoriteColor[color];
 }
 
-GXColor Mii_GetFacelineColor(const Mii_CharInfo* info) {
+NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info) {
     int color = 0;
 
     if (info->faceline.color < 6) {
@@ -328,7 +328,7 @@ void MiiDrawXluCore(const MiiCharModel* model, const MiiDrawCoreSetting* setting
     Mii_CharModel* imodel = (Mii_CharModel*)model;
     Mii_CharModelRes* res = imodel->res;
     const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
-    static const GXColor cBlack = {0, 0, 0, 255};
+    static const NebulaColor8 cBlack = {0, 0, 0, 255};
 
     J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
     J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);

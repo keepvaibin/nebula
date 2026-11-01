@@ -331,7 +331,7 @@ namespace MR {
     /// @param end The ending color.
     /// @param t The linear interpolant.
     /// @return The result of linear interpolation.
-    GXColor lerp(GXColor start, GXColor end, f32 t);
+    NebulaColor8 lerp(NebulaColor8 start, NebulaColor8 end, f32 t);
 
     void sortSmall(s32 length, f32* pSortArray, s32* pIndexArray);
     void sortSmall(s32 length, u32* pSortArray, s32* pIndexArray);
@@ -349,7 +349,7 @@ namespace MR {
     /// @param[in] rStart A reference to the starting color.
     /// @param[in] rEnd A reference to the ending color.
     /// @param t The linear interpolant.
-    void blendColor(GXColor* pDst, const GXColor& rStart, const GXColor& rEnd, f32 t);
+    void blendColor(NebulaColor8* pDst, const NebulaColor8& rStart, const NebulaColor8& rEnd, f32 t);
 
     /// @brief Computes unclamped linear interpolation between two three-dimensional vectors.
     /// @param[out] pDst A pointer to the three-dimensional vector to initialize.

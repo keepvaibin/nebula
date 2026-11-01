@@ -575,7 +575,7 @@ void StaffRoll::draw() const {
         return;
     }
 
-    GXColor fillColor = {0, 0, 0, 0};
+    NebulaColor8 fillColor = {0, 0, 0, 0};
 
     MR::fillScreen(fillColor);
     mInfo->draw();

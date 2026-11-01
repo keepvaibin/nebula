@@ -41,7 +41,7 @@ public:
     /// @retval MiiErrcode_Success The function was executed successfully.
     /// @retval MiiErrcode_NotAvailable The function is not ready to be executed.
     /// @retval MiiErrcode_Broken The Mii data is corrupted.
-    MiiErrcode makeIcon(void* pBuffer, int width, int height, GXColor bgColor) const;
+    MiiErrcode makeIcon(void* pBuffer, int width, int height, NebulaColor8 bgColor) const;
 
     /// @brief Creates the icon texture with the background colored using the Mii character's favorite color.
     /// @param pBuffer The output pointer for the texture data buffer.

@@ -924,12 +924,12 @@ namespace {
     // env carry over from one emitter to the next, as GX's colour registers did.
     NebulaNativeMaterial sParticle;
     bool sParticleSent = false;
-    GXColor sPrm = {0, 0, 0, 0};
-    GXColor sEnv = {0, 0, 0, 0};
+    NebulaColor8 sPrm = {0, 0, 0, 0};
+    NebulaColor8 sEnv = {0, 0, 0, 0};
     // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
     f32 sIndirect[2][4];
 
-    void putColor(f32* pOut, const GXColor& rColor) {
+    void putColor(f32* pOut, const NebulaColor8& rColor) {
         pOut[0] = rColor.r / 255.0f;
         pOut[1] = rColor.g / 255.0f;
         pOut[2] = rColor.b / 255.0f;
@@ -1010,17 +1010,17 @@ namespace {
 }  // namespace
 
 namespace JPANativeColor {
-    void prm(const GXColor& rColor) {
+    void prm(const NebulaColor8& rColor) {
         sPrm = rColor;
         colorsChanged();
     }
 
-    void env(const GXColor& rColor) {
+    void env(const NebulaColor8& rColor) {
         sEnv = rColor;
         colorsChanged();
     }
 
-    void prmEnv(const GXColor& rPrm, const GXColor& rEnv) {
+    void prmEnv(const NebulaColor8& rPrm, const NebulaColor8& rEnv) {
         sPrm = rPrm;
         sEnv = rEnv;
         colorsChanged();

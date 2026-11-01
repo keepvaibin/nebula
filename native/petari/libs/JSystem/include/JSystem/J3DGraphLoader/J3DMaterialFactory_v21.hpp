@@ -77,7 +77,7 @@ public:
     /* 0x00 */ u16 mMaterialNum;
     /* 0x04 */ J3DMaterialInitData_v21* mpMaterialInitData;
     /* 0x08 */ NEBULA_BE(u16)* mpMaterialID;
-    /* 0x0C */ GXColor* mpMatColor;
+    /* 0x0C */ NebulaColor8* mpMatColor;
     /* 0x10 */ u8* mpColorChanNum;
     /* 0x14 */ J3DColorChanInfo* mpColorChanInfo;
     /* 0x18 */ u8* mpTexGenNum;
@@ -88,8 +88,8 @@ public:
     /* 0x2C */ NEBULA_BE(u16)* mpTexNo;
     /* 0x30 */ NEBULA_BE(GXCullMode)* mpCullMode;
     /* 0x34 */ J3DTevOrderInfo* mpTevOrderInfo;
-    /* 0x38 */ NEBULA_DISC(GXColorS10)* mpTevColor;
-    /* 0x3C */ GXColor* mpTevKColor;
+    /* 0x38 */ NEBULA_DISC(NebulaColor16)* mpTevColor;
+    /* 0x3C */ NebulaColor8* mpTevKColor;
     /* 0x40 */ u8* mpTevStageNum;
     /* 0x44 */ J3DTevStageInfo* mpTevStageInfo;
     /* 0x48 */ J3DTevSwapModeInfo* mpTevSwapModeInfo;

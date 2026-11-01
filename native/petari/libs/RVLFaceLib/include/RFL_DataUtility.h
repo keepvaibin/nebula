@@ -26,7 +26,7 @@ typedef struct MiiAdditionalInfo {
     u32 build : 7;
     u32 reserved : 3;
 
-    GXColor skinColor; // at 0x38
+    NebulaColor8 skinColor; // at 0x38
 } MiiAdditionalInfo;
 
 MiiErrcode MiiGetAdditionalInfo(MiiAdditionalInfo* info, MiiDataSource source,

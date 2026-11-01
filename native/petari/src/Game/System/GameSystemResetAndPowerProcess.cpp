@@ -47,7 +47,7 @@ void GameSystemResetAndPowerProcess::draw() const {
     graph.setPort();
 
     u8 alpha = MR::lerp(255, 0, mFadeinoutControl->getValue());
-    graph.setColor(static_cast< const GXColor& >(GXColor(Color8(0, 0, 0, alpha))));
+    graph.setColor(static_cast< const NebulaColor8& >(NebulaColor8(Color8(0, 0, 0, alpha))));
 
     f32 height = static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
     f32 width = MR::getScreenWidth();

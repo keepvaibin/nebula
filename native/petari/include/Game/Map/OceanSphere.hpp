@@ -86,8 +86,8 @@ public:
     /* 0xF4 */ f32 mTexOffs1Y;
     /* 0xF8 */ JUTTexture* mWaterTex;
     /* 0xFC */ JUTTexture* mWaterEnvTex;
-    /* 0x100 */ GXColor mTevReg1Front;
-    /* 0x104 */ GXColor mTevReg1Back;
+    /* 0x100 */ NebulaColor8 mTevReg1Front;
+    /* 0x104 */ NebulaColor8 mTevReg1Back;
     /* 0x108 */ bool mUseDisplayList;
     /* 0x109 */ u8 _109;
     /* 0x10A */ u8 _10A;

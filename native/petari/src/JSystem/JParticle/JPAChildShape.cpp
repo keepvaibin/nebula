@@ -8,7 +8,7 @@
 void JPARegistChildPrmEnv(JPAEmitterWorkData* work) {
     JPAChildShape* csp = work->mpRes->getCsp();
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm, env;
+    NebulaColor8 prm, env;
     csp->getPrmClr(&prm);
     csp->getEnvClr(&env);
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);

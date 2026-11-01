@@ -37,8 +37,8 @@ namespace {
     const f32 sClippingDistance = 1000.0f;
     const f32 sPointIntervalHalf = ::sPointInterval / 2.0f;
 
-    static GXColor sOceanBowlTevReg0 = {40, 40, 40, 20};
-    static GXColor sOceanBowlTevReg1 = {200, 230, 210, 255};
+    static NebulaColor8 sOceanBowlTevReg0 = {40, 40, 40, 20};
+    static NebulaColor8 sOceanBowlTevReg1 = {200, 230, 210, 255};
     static u8 sOceanBowlBloomTevReg0V = 95;
     static u8 sOceanBowlBloomTevReg1V = 50;
 };  // namespace

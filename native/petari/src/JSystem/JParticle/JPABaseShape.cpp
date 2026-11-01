@@ -29,7 +29,7 @@ void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = emtr->mPrmClr;
+    NebulaColor8 prm = emtr->mPrmClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -39,7 +39,7 @@ void JPARegistPrm(JPAEmitterWorkData* work) {
 
 void JPARegistEnv(JPAEmitterWorkData* work) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor env = emtr->mEnvClr;
+    NebulaColor8 env = emtr->mEnvClr;
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
@@ -48,8 +48,8 @@ void JPARegistEnv(JPAEmitterWorkData* work) {
 
 void JPARegistPrmEnv(JPAEmitterWorkData* work) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = emtr->mPrmClr;
-    GXColor env = emtr->mEnvClr;
+    NebulaColor8 prm = emtr->mPrmClr;
+    NebulaColor8 env = emtr->mEnvClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -62,7 +62,7 @@ void JPARegistPrmEnv(JPAEmitterWorkData* work) {
 
 void JPARegistAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = emtr->mPrmClr;
+    NebulaColor8 prm = emtr->mPrmClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -73,7 +73,7 @@ void JPARegistAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 
 void JPARegistPrmAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = ptcl->mPrmClr;
+    NebulaColor8 prm = ptcl->mPrmClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -84,8 +84,8 @@ void JPARegistPrmAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 
 void JPARegistPrmAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = ptcl->mPrmClr;
-    GXColor env = ptcl->mEnvClr;
+    NebulaColor8 prm = ptcl->mPrmClr;
+    NebulaColor8 env = ptcl->mEnvClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -99,8 +99,8 @@ void JPARegistPrmAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 
 void JPARegistAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor prm = emtr->mPrmClr;
-    GXColor env = ptcl->mEnvClr;
+    NebulaColor8 prm = emtr->mPrmClr;
+    NebulaColor8 env = ptcl->mEnvClr;
     prm.r = COLOR_MULTI(prm.r, emtr->mGlobalPrmClr.r);
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
@@ -114,7 +114,7 @@ void JPARegistAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
 
 void JPARegistEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPABaseEmitter* emtr = work->mpEmtr;
-    GXColor env = ptcl->mEnvClr;
+    NebulaColor8 env = ptcl->mEnvClr;
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
@@ -949,8 +949,8 @@ void JPADrawParticleCallBack(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     work->mpEmtr->mpPtclCallBack->draw(work->mpEmtr, ptcl);
 }
 
-static void makeColorTable(GXColor** o_color_table, JPAClrAnmKeyData const* i_data, u8 param_2, s16 i_size, JKRHeap* i_heap) {
-    GXColor* color_table = (GXColor*)JKRAllocFromHeap(i_heap, (i_size + 1) * 4, 4);
+static void makeColorTable(NebulaColor8** o_color_table, JPAClrAnmKeyData const* i_data, u8 param_2, s16 i_size, JKRHeap* i_heap) {
+    NebulaColor8* color_table = (NebulaColor8*)JKRAllocFromHeap(i_heap, (i_size + 1) * 4, 4);
     f32 next_r, next_g, next_b, next_a;
     f32 r_step, g_step, b_step, a_step, base_step;
     r_step = g_step = b_step = a_step = 0.0f;

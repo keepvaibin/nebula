@@ -7,14 +7,11 @@ extern "C" {
 
 #include "revolution/gx/GXEnum.h"
 #include "revolution/types.h"
+#include <nebula_color.h>
 
-typedef struct _GXColor {
-    u8 r, g, b, a;
-} GXColor;
-
-typedef struct _GXColorS10 {
-    s16 r, g, b, a;
-} GXColorS10;
+// The game's colours are the native types (nebula_color.h); these names remain for the SDK's own prototypes.
+typedef NebulaColor8 GXColor;
+typedef NebulaColor16 GXColorS10;
 
 typedef struct _GXTexObj {
 #ifdef TARGET_PC

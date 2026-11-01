@@ -18,8 +18,8 @@ namespace {
         return u8(colVal < 0 ? 0 : (colVal > 255 ? 255 : colVal));
     }
 
-    ut::Color GetColor(const GXColorS10& src) {
-        GXColor dst;
+    ut::Color GetColor(const NebulaColor16& src) {
+        NebulaColor8 dst;
         dst.r = ClampColor(src.r);
         dst.g = ClampColor(src.g);
         dst.b = ClampColor(src.b);

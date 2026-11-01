@@ -8,7 +8,7 @@ public:
     Color8() : mColor(-1) {
     }
 
-    Color8(GXColor color) {
+    Color8(NebulaColor8 color) {
         set(color);
     }
 
@@ -20,7 +20,7 @@ public:
         mColor = color;
     }
 
-    inline operator GXColor() const {
+    inline operator NebulaColor8() const {
         return mGXColor;
     }
 
@@ -28,7 +28,7 @@ public:
         return mColor;
     }
 
-    inline const Color8& operator=(const GXColor& rOther) {
+    inline const Color8& operator=(const NebulaColor8& rOther) {
         mGXColor = rOther;
         return *this;
     }
@@ -48,8 +48,8 @@ public:
         a = _a;
     }
 
-    void set(GXColor color) {
-        GXColor* const pColor = &mGXColor;
+    void set(NebulaColor8 color) {
+        NebulaColor8* const pColor = &mGXColor;
         *pColor = color;
     }
 
@@ -61,7 +61,7 @@ public:
             u8 a;
         };
         u32 mColor;
-        GXColor mGXColor;
+        NebulaColor8 mGXColor;
     };
 };
 
@@ -70,7 +70,7 @@ public:
     Color10() : r(0x3FF), g(0x3FF), b(0x3FF), a(0x3FF) {
     }
 
-    operator GXColorS10() const {
+    operator NebulaColor16() const {
         return mColor;
     }
 
@@ -81,6 +81,6 @@ public:
             u16 b;
             u16 a;
         };
-        GXColorS10 mColor;
+        NebulaColor16 mColor;
     };
 };

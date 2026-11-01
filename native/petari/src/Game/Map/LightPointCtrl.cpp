@@ -83,7 +83,7 @@ void LightPointCtrl::clearPointLight(PointLightInfo* pInfo) {
     pos.z = 0.0f;
     pInfo->mPos = pos;
 
-    GXColor color;
+    NebulaColor8 color;
     color.r = 0;
     color.g = 0;
     color.b = 0;

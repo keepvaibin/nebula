@@ -52,16 +52,16 @@ public:
     void setTevDirect(GXTevStageID stage);
     void setTevOrder(GXTevStageID evenStage, GXTexCoordID coord0, GXTexMapID map0, GXChannelID color0,
                      GXTexCoordID coord1, GXTexMapID map1, GXChannelID color1);
-    void setTevColor(GXTevRegID reg, GXColor color);
-    void setChanMatColor(GXChannelID chan, GXColor color);
-    void setChanAmbColor(GXChannelID chan, GXColor color);
+    void setTevColor(GXTevRegID reg, NebulaColor8 color);
+    void setChanMatColor(GXChannelID chan, NebulaColor8 color);
+    void setChanAmbColor(GXChannelID chan, NebulaColor8 color);
     void setTexCoordGen(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, GXBool normalize, u32 postMtx);
     void setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWrapMode wrapT, GXTexFilter minFilter,
                           GXTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GXBool biasClamp,
                           GXBool edgeLod, GXAnisotropy maxAniso);
     void setTexImgPtr(GXTexMapID map, const void* pImage);
     // A colour-indexed texture's palette: its format and place (a GX TLUT name).
-    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color);
+    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     // Changes of some fields of a register, its others as they are (GX's partial setters).
     void setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d);
     void setTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d);
@@ -76,8 +76,8 @@ public:
     void setColorUpdate(GXBool enable);
     void setAlphaUpdate(GXBool enable);
     void setDither(GXBool enable);
-    void setTevKColor(GXTevKColorID id, GXColor color);
-    void setTevColorS10(GXTevRegID id, GXColorS10 color);
+    void setTevKColor(GXTevKColorID id, NebulaColor8 color);
+    void setTevColorS10(GXTevRegID id, NebulaColor16 color);
     void setClipMode(GXClipMode mode);
     void setTevSwapModeTable(GXTevSwapSel table, GXTevColorChan red, GXTevColorChan green, GXTevColorChan blue,
                              GXTevColorChan alpha);

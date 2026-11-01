@@ -643,7 +643,7 @@ void MR::getCsvDataVec(Vec* pOut, const JMapInfo* pMapInfo, const char* pKey, s3
     getCsvDataF32(&pOut->z, pMapInfo, key, idx);
 }
 
-void MR::getCsvDataColor(GXColor* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
+void MR::getCsvDataColor(NebulaColor8* pOut, const JMapInfo* pMapInfo, const char* pKey, s32 idx) {
     char key[256];
     snprintf(key, sizeof(key), "%sR", pKey);
     getCsvDataU8(&pOut->r, pMapInfo, key, idx);

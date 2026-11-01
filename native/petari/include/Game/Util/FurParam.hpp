@@ -23,7 +23,7 @@ public:
     /* 0x34 */ f32 mSkinAlphaCurve;
     /* 0x38 */ f32 mFurUVScale;
     /* 0x3C */ f32 mBodyUVScale;
-    /* 0x40 */ GXColor mColor;
+    /* 0x40 */ NebulaColor8 mColor;
     /* 0x44 */ f32 mDensity[4];
     /* 0x54 */ f32 mThickness[4];
     /* 0x64 */ u8 mLengthMap[4];

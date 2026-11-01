@@ -29,9 +29,9 @@ static Mtx23 IndMtx = {
 
 u32 j3dDefaultViewNo;
 
-static GXColor ColorBlack = {0x00, 0x00, 0x00, 0x00};
+static NebulaColor8 ColorBlack = {0x00, 0x00, 0x00, 0x00};
 
-static GXColor ColorWhite = {0xFF, 0xFF, 0xFF, 0xFF};
+static NebulaColor8 ColorWhite = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DSys::J3DSys() {
     makeTexCoordTable();

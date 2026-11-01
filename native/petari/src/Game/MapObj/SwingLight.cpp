@@ -30,7 +30,7 @@ namespace {
 LightCylinder::LightCylinder(const char* pName, MtxPtr pHostMtx, const Color8& rColor)
     : MapObjActor(pName), mHostMtx(pHostMtx), mLightVolume(), mColor() {
     if (rColor == 0) {
-        GXColor color = {255, 218, 100, 160};
+        NebulaColor8 color = {255, 218, 100, 160};
         mColor.set(color);
     } else {
         mColor.set(rColor);

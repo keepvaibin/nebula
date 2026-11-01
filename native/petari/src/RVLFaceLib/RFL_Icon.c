@@ -37,7 +37,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     u32 bufSize;                       // sp+6C
     MiiResolution resolution;          // sp+68
     MiiExpFlag expFlag;                // sp+64
-    GXColor backColor;                 // sp+60
+    NebulaColor8 backColor;                 // sp+60
     Mtx44 projMtx;                     // sp+1A8
     f32 fovy;                          // f31
     f32 aspect;                        // f30
@@ -103,7 +103,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     cameraUp = (Vec){0.0f, 1.0f, 0.0f};
 
     NebulaMtxLookAt(viewMtx, &cameraPos, &cameraUp, &target);
-    J3DNativeStateInitLightColor(&light, (GXColor){255, 255, 255, 255});
+    J3DNativeStateInitLightColor(&light, (NebulaColor8){255, 255, 255, 255});
 
     pos = (Vec){1600.0f, 1500.0f, 6000.0f};
 
@@ -116,7 +116,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     drawSetting.lightMask = GX_LIGHT0;
     drawSetting.diffuse = GX_DF_CLAMP;
     drawSetting.attn = GX_AF_NONE;
-    drawSetting.ambColor = (GXColor){160, 160, 160, 255};
+    drawSetting.ambColor = (NebulaColor8){160, 160, 160, 255};
     drawSetting.compLoc = 0;
     MiiLoadDrawSetting(&drawSetting);
 

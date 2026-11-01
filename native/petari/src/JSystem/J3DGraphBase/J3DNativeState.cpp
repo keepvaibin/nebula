@@ -43,21 +43,21 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setTevColor(GXTevRegID id, GXColor color) {
+    void setTevColor(GXTevRegID id, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setTevColor(id, color);
         list.send();
     }
 
-    void setTevKColor(GXTevKColorID id, GXColor color) {
+    void setTevKColor(GXTevKColorID id, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setTevKColor(id, color);
         list.send();
     }
 
-    void setTevColorS10(GXTevRegID id, GXColorS10 color) {
+    void setTevColorS10(GXTevRegID id, NebulaColor16 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setTevColorS10(id, color);
@@ -79,7 +79,7 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
+    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setFog(type, start, end, nearZ, farZ, color);
@@ -200,7 +200,7 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setChanMatColor(GXChannelID chan, GXColor color) {
+    void setChanMatColor(GXChannelID chan, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setChanMatColor(chan, color);
@@ -208,7 +208,7 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void setChanAmbColor(GXChannelID chan, GXColor color) {
+    void setChanAmbColor(GXChannelID chan, NebulaColor8 color) {
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setChanAmbColor(chan, color);
@@ -301,7 +301,7 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void initLightColor(GXLightObj* pObj, GXColor color) {
+    void initLightColor(GXLightObj* pObj, NebulaColor8 color) {
         J3DNativeLight& rLight = light(pObj);
         rLight.mColor[0] = color.r;
         rLight.mColor[1] = color.g;
@@ -466,8 +466,8 @@ namespace J3DNativeState {
     const u16 cDefaultHeight = 480;
 
     void initDefaults() {
-        const GXColor black = {0, 0, 0, 0};
-        const GXColor white = {255, 255, 255, 255};
+        const NebulaColor8 black = {0, 0, 0, 0};
+        const NebulaColor8 white = {255, 255, 255, 255};
 
         for (u32 i = 0; i < 8; i++) {
             setTexCoordGen2(static_cast< GXTexCoordID >(i), GX_TG_MTX2x4, static_cast< GXTexGenSrc >(GX_TG_TEX0 + i),
@@ -654,7 +654,7 @@ void J3DNativeStateSetPointSize(u8 size, GXTexOffset texOffsets) {
     J3DNativeState::setPointSize(size, texOffsets);
 }
 
-void J3DNativeStateInitLightColor(GXLightObj* pObj, GXColor color) {
+void J3DNativeStateInitLightColor(GXLightObj* pObj, NebulaColor8 color) {
     J3DNativeState::initLightColor(pObj, color);
 }
 
@@ -686,11 +686,11 @@ void J3DNativeStateGetCullMode(GXCullMode* pMode) {
     J3DNativeState::getCullMode(pMode);
 }
 
-void J3DNativeStateSetChanMatColor(GXChannelID chan, GXColor color) {
+void J3DNativeStateSetChanMatColor(GXChannelID chan, NebulaColor8 color) {
     J3DNativeState::setChanMatColor(chan, color);
 }
 
-void J3DNativeStateSetChanAmbColor(GXChannelID chan, GXColor color) {
+void J3DNativeStateSetChanAmbColor(GXChannelID chan, NebulaColor8 color) {
     J3DNativeState::setChanAmbColor(chan, color);
 }
 
@@ -706,11 +706,11 @@ void J3DNativeStateSetDstAlpha(GXBool enable, u8 alpha) {
     J3DNativeState::setDstAlpha(enable, alpha);
 }
 
-void J3DNativeStateSetTevColor(GXTevRegID id, GXColor color) {
+void J3DNativeStateSetTevColor(GXTevRegID id, NebulaColor8 color) {
     J3DNativeState::setTevColor(id, color);
 }
 
-void J3DNativeStateSetTevKColor(GXTevKColorID id, GXColor color) {
+void J3DNativeStateSetTevKColor(GXTevKColorID id, NebulaColor8 color) {
     J3DNativeState::setTevKColor(id, color);
 }
 
@@ -722,7 +722,7 @@ void J3DNativeStateSetTevDirect(GXTevStageID stage) {
     J3DNativeState::setTevDirect(stage);
 }
 
-void J3DNativeStateSetFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
+void J3DNativeStateSetFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
     J3DNativeState::setFog(type, start, end, nearZ, farZ, color);
 }
 

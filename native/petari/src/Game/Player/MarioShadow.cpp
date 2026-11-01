@@ -652,7 +652,7 @@ void CollisionShadow::createDL() {
     _344.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
     _344.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
                                 GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
-    GXColor color = {0, 0, 0, 4};
+    NebulaColor8 color = {0, 0, 0, 4};
     _344.setTevColor(GX_TEVREG0, color);
 }
 

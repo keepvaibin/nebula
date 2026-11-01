@@ -49,7 +49,7 @@ void ClipFieldFillDraw::setUpFillScreen() const {
     J3DNativeState::setAlphaUpdate(GX_FALSE);
 }
 
-void ClipFieldFillDraw::sendFillScreen(GXColor color) const {
+void ClipFieldFillDraw::sendFillScreen(NebulaColor8 color) const {
     // runtime/src/render/materials/clip_fill.hlsl: the colour where the screen alpha mask is set (_25: or clear),
     // drawn where its alpha is above zero, depth neither tested nor written, back faces culled.
     NebulaNativeMaterial material;

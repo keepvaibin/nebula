@@ -21,7 +21,7 @@ void MiiFaceRecipe::initFaceModel(MiiCharModel* pCharModel, void* pBuffer) const
     MiiInitCharModel(pCharModel, mDataSource, mMiddleDB, mIndex, pBuffer, mResolution, mExpressionFlag);
 }
 
-MiiErrcode MiiFaceRecipe::makeIcon(void* pBuffer, int width, int height, GXColor bgColor) const {
+MiiErrcode MiiFaceRecipe::makeIcon(void* pBuffer, int width, int height, NebulaColor8 bgColor) const {
     MiiIconSetting setting;
 
     setting.width = width;

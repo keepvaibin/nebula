@@ -142,7 +142,7 @@ namespace GameLightSignal {
             half = k2 > 0.0f ? (-k1 + __builtin_sqrtf(k1 * k1 + 4.0f * k2)) / (2.0f * k2) : 1.0f / k1;
         }
         const Vec& p = pInfo->mPos;
-        const GXColor& c = pInfo->mColor;
+        const NebulaColor8& c = pInfo->mColor;
         const f32 values[7] = {p.x, p.y, p.z, channel(c.r), channel(c.g), channel(c.b), half};
         NebulaHost::gameLight(NEBULA_LIGHT_POINT, NebulaHost::objectId(pInfo), values);
     }

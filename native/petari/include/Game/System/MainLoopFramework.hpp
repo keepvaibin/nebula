@@ -33,7 +33,7 @@ public:
     void endRender();
     void endFrame();
     void waitBlanking(int);
-    void clearEfb(GXColor);
+    void clearEfb(NebulaColor8);
     static void setForOSResetSystem();
 
     /* 0x00 */ Color8 mClearColor;

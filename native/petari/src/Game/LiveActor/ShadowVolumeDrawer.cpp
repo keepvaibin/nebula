@@ -82,7 +82,7 @@ bool ShadowVolumeDrawer::isDraw() const {
 void ShadowVolumeDrawer::draw() const {
     if (isDraw()) {
         loadModelDrawMtx();
-        GXColor shapeColor = reinterpret_cast< GXColor& >(::sShapeColor);
+        NebulaColor8 shapeColor = reinterpret_cast< NebulaColor8& >(::sShapeColor);
         MR::setShadowVolumeColor(shapeColor);
         J3DNativeState::setColorUpdate(0);
         J3DNativeState::setDstAlpha(0, 0);

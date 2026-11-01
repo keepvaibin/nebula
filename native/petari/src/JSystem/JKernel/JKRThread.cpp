@@ -97,7 +97,7 @@ JKRThread* JKRThreadSwitch::enter(JKRThread* pThread, int a2) {
 }
 
 JUtility::TColor& JUtility::TColor::operator=(const TColor& rColor) {
-    static_cast< GXColor& >(*this) = rColor;
+    static_cast< NebulaColor8& >(*this) = rColor;
     return *this;
 }
 

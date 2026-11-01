@@ -28,8 +28,8 @@ struct JPABaseShapeData {
     /* 0x22 */ u8 mClrPrmKeyNum;
     /* 0x23 */ u8 mClrEnvKeyNum;
     /* 0x24 */ NEBULA_BE(s16) mClrAnmFrmMax;
-    /* 0x26 */ GXColor mClrPrm;
-    /* 0x2A */ GXColor mClrEnv;
+    /* 0x26 */ NebulaColor8 mClrPrm;
+    /* 0x2A */ NebulaColor8 mClrEnv;
     /* 0x2E */ u8 mAnmRndm;
     /* 0x2F */ u8 mClrAnmRndmMask;
     /* 0x30 */ u8 mTexAnmRndmMask;
@@ -162,16 +162,16 @@ public:
     s16 getClrAnmMaxFrm() const {
         return mpData->mClrAnmFrmMax;
     }
-    void getPrmClr(GXColor* dst) {
+    void getPrmClr(NebulaColor8* dst) {
         *dst = mpData->mClrPrm;
     }
-    void getPrmClr(s16 idx, GXColor* dst) {
+    void getPrmClr(s16 idx, NebulaColor8* dst) {
         *dst = mpPrmClrAnmTbl[idx];
     }
-    void getEnvClr(GXColor* dst) {
+    void getEnvClr(NebulaColor8* dst) {
         *dst = mpData->mClrEnv;
     }
-    void getEnvClr(s16 idx, GXColor* dst) {
+    void getEnvClr(s16 idx, NebulaColor8* dst) {
         *dst = mpEnvClrAnmTbl[idx];
     }
 
@@ -248,13 +248,13 @@ public:
     /* 0x00 */ const JPABaseShapeData* mpData;
     /* 0x04 */ const void* mpTexCrdMtxAnmTbl;
     /* 0x08 */ const u8* mpTexIdxAnimTbl;
-    /* 0x0C */ GXColor* mpPrmClrAnmTbl;
-    /* 0x10 */ GXColor* mpEnvClrAnmTbl;
+    /* 0x0C */ NebulaColor8* mpPrmClrAnmTbl;
+    /* 0x10 */ NebulaColor8* mpEnvClrAnmTbl;
 };
 
 struct JPAClrAnmKeyData {
     /* 0x0 */ NEBULA_BE(s16) index;
-    /* 0x2 */ GXColor color;
+    /* 0x2 */ NebulaColor8 color;
 };
 
 // The quad arrays the particles drawn next read (JPAResource's), and a particle's quad from them (type 1: crossed).

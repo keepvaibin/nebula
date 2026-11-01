@@ -18,8 +18,8 @@ public:
     virtual bool isWipeIn() const;
     virtual bool isWipeOut() const;
 
-    void setColor(GXColor color) {
-        GXColor copy = color;
+    void setColor(NebulaColor8 color) {
+        NebulaColor8 copy = color;
         mFillColor = copy;
     }
 
@@ -27,5 +27,5 @@ private:
     /* 0x20 */ bool mIsWipeIn;
     /* 0x24 */ s32 mFrame;
     /* 0x28 */ s32 mStep;
-    /* 0x2C */ GXColor mFillColor;
+    /* 0x2C */ NebulaColor8 mFillColor;
 };

@@ -856,7 +856,7 @@ J3DAnmVtxColorFull::J3DAnmVtxColorFull() {
     }
 }
 
-void J3DAnmVtxColorFull::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
+void J3DAnmVtxColorFull::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) const {
     J3DAnmColorFullTable* entry = &mpTable[tableNo][index];
 
     if (mFrame < 0.0f) {
@@ -904,7 +904,7 @@ J3DAnmVtxColorKey::J3DAnmVtxColorKey() {
     }
 }
 
-void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, GXColor* pColor) const {
+void J3DAnmVtxColorKey::getColor(u8 tableNo, u16 index, NebulaColor8* pColor) const {
     J3DAnmColorKeyTable* entry = &mpTable[tableNo][index];
 
     f32 col;
@@ -1007,7 +1007,7 @@ J3DAnmColorFull::J3DAnmColorFull() {
     mAnmTable = nullptr;
 }
 
-void J3DAnmColorFull::getColor(u16 index, GXColor* pColor) const {
+void J3DAnmColorFull::getColor(u16 index, NebulaColor8* pColor) const {
     J3DAnmColorFullTable* entry = &mAnmTable[index];
 
     if (mFrame < 0.0f) {
@@ -1057,7 +1057,7 @@ J3DAnmColorKey::J3DAnmColorKey() {
     mAnmTable = nullptr;
 }
 
-void J3DAnmColorKey::getColor(u16 index, GXColor* pColor) const {
+void J3DAnmColorKey::getColor(u16 index, NebulaColor8* pColor) const {
     J3DAnmColorKeyTable* entry = &mAnmTable[index];
 
     f32 col;
@@ -1214,7 +1214,7 @@ void J3DAnmTextureSRTKey::searchUpdateMaterialID(J3DModelData* pModelData) {
     searchUpdateMaterialID(&pModelData->getMaterialTable());
 }
 
-void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
+void J3DAnmTevRegKey::getTevColorReg(u16 index, NebulaColor16* pColor) const {
     J3DAnmCRegKeyTable* entry = &mAnmCRegKeyTable[index];
 
     f32 col;
@@ -1291,7 +1291,7 @@ void J3DAnmTevRegKey::getTevColorReg(u16 index, GXColorS10* pColor) const {
     }
 }
 
-void J3DAnmTevRegKey::getTevKonstReg(u16 index, GXColor* pColor) const {
+void J3DAnmTevRegKey::getTevKonstReg(u16 index, NebulaColor8* pColor) const {
     J3DAnmKRegKeyTable* entry = &mAnmKRegKeyTable[index];
 
     f32 col;

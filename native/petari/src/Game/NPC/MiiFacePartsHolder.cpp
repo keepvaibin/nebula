@@ -161,15 +161,15 @@ void MiiFacePartsHolder::drawExtra() const {
 // by lights 0 and 1 (clamped diffuse, no attenuation) over the material grey 165 and ambient 128; the opaque pass adds
 // the rim from the alpha channel lit by light 2 (signed diffuse) and draws where the alpha is not 255.
 void MiiFacePartsHolder::setTevOpa() const {
-    const GXColor material = {165, 165, 165, 255};
-    const GXColor ambient = {128, 128, 128, 128};
+    const NebulaColor8 material = {165, 165, 165, 255};
+    const NebulaColor8 ambient = {128, 128, 128, 128};
     Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 1);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }
 
 void MiiFacePartsHolder::setTevXlu() const {
-    const GXColor material = {165, 165, 165, 255};
-    const GXColor ambient = {128, 128, 128, 128};
+    const NebulaColor8 material = {165, 165, 165, 255};
+    const NebulaColor8 ambient = {128, 128, 128, 128};
     Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, GX_LIGHT0 | GX_LIGHT1, GX_DF_CLAMP, GX_AF_NONE, ambient, material, 0);
     J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
 }

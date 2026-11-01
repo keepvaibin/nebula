@@ -6,7 +6,7 @@
 // register 1 slot). The emitter and per-particle colour functions set them; the material in use takes them at once
 // (a constants-only resend) and the next emitter's material starts from them, as the colours carried over on GX.
 namespace JPANativeColor {
-    void prm(const GXColor& rColor);
-    void env(const GXColor& rColor);
-    void prmEnv(const GXColor& rPrm, const GXColor& rEnv);
+    void prm(const NebulaColor8& rColor);
+    void env(const NebulaColor8& rColor);
+    void prmEnv(const NebulaColor8& rPrm, const NebulaColor8& rEnv);
 }  // namespace JPANativeColor

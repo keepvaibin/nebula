@@ -328,8 +328,8 @@ namespace nw4r {
 
             struct Material {
                 char name[20];
-                NEBULA_DISC(GXColorS10) tevCols[3];
-                GXColor tevKCols[4];
+                NEBULA_DISC(NebulaColor16) tevCols[3];
+                NebulaColor8 tevKCols[4];
                 MaterialResourceNum resNum;
             };
 

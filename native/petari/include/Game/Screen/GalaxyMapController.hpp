@@ -48,7 +48,7 @@ public:
     bool tryAppearGalaxyMap();
     bool tryDisplayAndKeyWait();
     void setNerveAccordingToNextModeFromMap();
-    void setFaderParam(GXColor, int);
+    void setFaderParam(NebulaColor8, int);
     void capture();
 
     void exeReadyModeMap();

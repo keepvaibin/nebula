@@ -31,7 +31,7 @@ public:
         return mAnmFlag;
     }
 
-    void calc(GXColor* pColor) const {
+    void calc(NebulaColor8* pColor) const {
         mAnmColor->getColor(field_0x0, pColor);
     }
 
@@ -143,7 +143,7 @@ public:
         return mAnmFlag;
     }
 
-    void calc(GXColorS10* pColor) const {
+    void calc(NebulaColor16* pColor) const {
         mAnmTevReg->getTevColorReg(field_0x0, pColor);
     }
 
@@ -179,7 +179,7 @@ public:
         return mAnmFlag;
     }
 
-    void calc(GXColor* pColor) const {
+    void calc(NebulaColor8* pColor) const {
         mAnmTevReg->getTevKonstReg(field_0x0, pColor);
     }
 

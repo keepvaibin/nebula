@@ -138,8 +138,8 @@ public:
     /* 0x84 */ f32 mTime;
     /* 0x88 */ s16 mRotateAngle;
     /* 0x8A */ s16 mRotateSpeed;
-    /* 0x8C */ GXColor mPrmClr;
-    /* 0x90 */ GXColor mEnvClr;
+    /* 0x8C */ NebulaColor8 mPrmClr;
+    /* 0x90 */ NebulaColor8 mEnvClr;
     /* 0x94 */ u8 mTexAnmIdx;
     /* 0x95 */ u8 mAnmRandom;
     /* 0x96 */ u8 mPrmColorAlphaAnm;

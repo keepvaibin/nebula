@@ -179,7 +179,7 @@ namespace MR {
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 
-    void fillScreenSetup(const GXColor& rColor) {
+    void fillScreenSetup(const NebulaColor8& rColor) {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
@@ -216,7 +216,7 @@ namespace MR {
         }
     }
 
-    void fillScreen(const GXColor& color) {
+    void fillScreen(const NebulaColor8& color) {
         fillScreenSetup(color);
         u16 width = getFrameBufferWidth();
         u16 height = getScreenHeight();
@@ -229,7 +229,7 @@ namespace MR {
         J3DNativeState::setClipMode(GX_CLIP_ENABLE);
     }
 
-    void setShadowVolumeColor(const GXColor& rColor) {
+    void setShadowVolumeColor(const NebulaColor8& rColor) {
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);

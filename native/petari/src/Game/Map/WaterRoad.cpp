@@ -68,8 +68,8 @@ namespace {
     static const f32 sDistanceToLow = 10000.0f;
     static const f32 sTexSpeedU2 = 0.0f;
 
-    static GXColor sTevColor1 = {0x28, 0x28, 0x28, 0x14};
-    static GXColor sTevColor2 = {0x55, 0x96, 0xBE, 0xFF};
+    static NebulaColor8 sTevColor1 = {0x28, 0x28, 0x28, 0x14};
+    static NebulaColor8 sTevColor2 = {0x55, 0x96, 0xBE, 0xFF};
 
     inline s32 calcNumDrawLinePoints(WaterRoad* pRoad, f32 dotPointCreate) {
         MR::moveCoordToStartPos(pRoad);

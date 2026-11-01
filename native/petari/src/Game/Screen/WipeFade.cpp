@@ -39,7 +39,7 @@ void WipeFade::draw() const {
     J3DNativeState::setColorUpdate(GX_TRUE);
     J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
 
-    GXColor fillColor;
+    NebulaColor8 fillColor;
     fillColor.r = mFillColor.r;
     fillColor.g = mFillColor.g;
     fillColor.b = mFillColor.b;

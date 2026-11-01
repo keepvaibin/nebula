@@ -25,7 +25,7 @@ namespace {
 };  // namespace
 
 void MainLoopFramework::ctor_subroutine(bool useAlpha) {
-    mClearColor = (GXColor){0, 0, 0, 0};
+    mClearColor = (NebulaColor8){0, 0, 0, 0};
     mRetraceCount = 1;
     mUseAlpha = useAlpha;
     mUseVFilter = true;
@@ -116,7 +116,7 @@ void MainLoopFramework::waitBlanking(int tickCount) {
 
 // The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
 // pixel state the frame's first draws start from.
-void MainLoopFramework::clearEfb(GXColor color) {
+void MainLoopFramework::clearEfb(NebulaColor8 color) {
     u16 fbWidth = JUTVideo::getManager()->getFbWidth();
     u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
     Mtx44 proj;

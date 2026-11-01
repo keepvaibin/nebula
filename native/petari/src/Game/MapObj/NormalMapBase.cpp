@@ -433,7 +433,7 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
     ambient.set(mAmbColor, mAmbColor, mAmbColor, mAmbAlpha);
     material.set(mMatColor, mMatColor, mMatColor, mMatAlpha);
     if (mUseModelLightReg & 1) {
-        GXColor* pColor = pMaterial->getColorBlock()->getAmbColor(0);
+        NebulaColor8* pColor = pMaterial->getColorBlock()->getAmbColor(0);
         ambient.r = pColor->r;
         ambient.g = pColor->g;
         ambient.b = pColor->b;
@@ -444,7 +444,7 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
     }
 
     if (mUseModelLightReg & 4) {
-        GXColor* pColor = pMaterial->getColorBlock()->getMatColor(0);
+        NebulaColor8* pColor = pMaterial->getColorBlock()->getMatColor(0);
         material.r = pColor->r;
         material.g = pColor->g;
         material.b = pColor->b;
@@ -456,10 +456,10 @@ void NormalMapBase::drawMaterialSetting(J3DMaterial* pMaterial) const {
 
     NativeShader::setColor(sNormalMap, 0, material.r, material.g, material.b, material.a);
     NativeShader::setColor(sNormalMap, 4, ambient.r, ambient.g, ambient.b, ambient.a);
-    const GXColorS10& rColor0 = mUseModelTevReg ? static_cast< const GXColorS10& >(*pMaterial->getTevBlock()->getTevColor(0))
-                                                : static_cast< const GXColorS10& >(mTevColor0);
-    const GXColorS10& rColor1 = mUseModelTevReg ? static_cast< const GXColorS10& >(*pMaterial->getTevBlock()->getTevColor(1))
-                                                : static_cast< const GXColorS10& >(mTevColor1);
+    const NebulaColor16& rColor0 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getTevBlock()->getTevColor(0))
+                                                : static_cast< const NebulaColor16& >(mTevColor0);
+    const NebulaColor16& rColor1 = mUseModelTevReg ? static_cast< const NebulaColor16& >(*pMaterial->getTevBlock()->getTevColor(1))
+                                                : static_cast< const NebulaColor16& >(mTevColor1);
     // C0 and C1 as the combiner takes a register (its low 8 bits).
     sNormalMap.constants[8] = static_cast< u8 >(rColor0.r) / 255.0f;
     sNormalMap.constants[9] = static_cast< u8 >(rColor0.g) / 255.0f;

@@ -27,7 +27,7 @@ void FallOutFieldDraw_FORCE_MATCH_SDATA2() {
 }
 
 namespace {
-    inline void drawFillScreen(GXColor color) {
+    inline void drawFillScreen(NebulaColor8 color) {
         ImageEffectLocalUtil::sendTextureVertex(1, 0);
     }
 };  // namespace
@@ -128,8 +128,8 @@ void FallOutFieldDraw::draw() const {
     J3DNativeState::setDstAlpha(GX_FALSE, 0);
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1 (GX: konst 0's alpha compared).
-    const GXColor konst = {0, 0, 0, 1};
-    const GXColor white = {255, 255, 255, 255};
+    const NebulaColor8 konst = {0, 0, 0, 1};
+    const NebulaColor8 white = {255, 255, 255, 255};
     ImageEffectLocalUtil::setMode(_C ? ImageEffectLocalUtil::Mode_MaskAbove : ImageEffectLocalUtil::Mode_MaskBelow, konst,
                                   white);
 

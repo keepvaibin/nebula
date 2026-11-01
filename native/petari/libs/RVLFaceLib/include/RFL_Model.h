@@ -36,7 +36,7 @@ typedef struct MiiDrawSetting {
     GXLightID lightMask; // at 0x4
     GXDiffuseFn diffuse; // at 0x8
     GXAttnFn attn;       // at 0xC
-    GXColor ambColor;    // at 0x10
+    NebulaColor8 ambColor;    // at 0x10
     u8 compLoc;          // at 0x14
 } MiiDrawSetting;
 
@@ -53,7 +53,7 @@ MiiErrcode MiiInitCharModel(MiiCharModel* model, MiiDataSource src,
                             MiiResolution res, u32 exprFlags);
 void MiiSetMtx(MiiCharModel* model, const Mtx mvMtx);
 void MiiSetExpression(MiiCharModel* model, MiiExpression expr);
-GXColor MiiGetFavoriteColor(MiiFavoriteColor color);
+NebulaColor8 MiiGetFavoriteColor(MiiFavoriteColor color);
 void MiiLoadDrawSetting(const MiiDrawSetting* setting);
 void MiiDrawOpa(const MiiCharModel* model);
 void MiiDrawXlu(const MiiCharModel* model);

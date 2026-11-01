@@ -43,7 +43,7 @@ public:
         return mVtxNrmArray;
     }
 
-    GXColor* getVtxColorArray(u8 idx) const {
+    NebulaColor8* getVtxColorArray(u8 idx) const {
         return mVtxColorArray[idx];
     }
 
@@ -111,7 +111,7 @@ public:
     /* 0x18 */ void* mVtxPosArray;
     /* 0x1C */ void* mVtxNrmArray;
     /* 0x20 */ void* mVtxNBTArray;
-    /* 0x24 */ GXColor* mVtxColorArray[2];
+    /* 0x24 */ NebulaColor8* mVtxColorArray[2];
     /* 0x2C */ void* mVtxTexCoordArray[8];
     /* 0x4C */ u8 mVtxPosFrac;
     /* 0x50 */ GXCompType mVtxPosType;
@@ -171,7 +171,7 @@ public:
         return mCurrentVtxNrm;
     }
 
-    void setCurrentVtxCol(GXColor* pVtxCol) {
+    void setCurrentVtxCol(NebulaColor8* pVtxCol) {
         mCurrentVtxCol = pVtxCol;
     }
 
@@ -228,10 +228,10 @@ public:
     /* 0x00 */ J3DVertexData* mVtxData;
     /* 0x04 */ void* mVtxPosArray[2];
     /* 0x0C */ void* mVtxNrmArray[2];
-    /* 0x14 */ GXColor* mVtxColArray[2];
+    /* 0x14 */ NebulaColor8* mVtxColArray[2];
     /* 0x1C */ void* mTransformedVtxPosArray[2];
     /* 0x24 */ void* mTransformedVtxNrmArray[2];
     /* 0x2C */ void* mCurrentVtxPos;
     /* 0x30 */ void* mCurrentVtxNrm;
-    /* 0x34 */ GXColor* mCurrentVtxCol;
+    /* 0x34 */ NebulaColor8* mCurrentVtxCol;
 };

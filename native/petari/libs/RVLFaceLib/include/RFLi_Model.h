@@ -148,7 +148,7 @@ inline Mii_CoordinateData* Mii_GetCoordinateData(void) {
 u32 Mii_GetExpressionNum(u32 exprFlags);
 void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work,
                        MiiResolution res, u32 exprFlags);
-GXColor Mii_GetFacelineColor(const Mii_CharInfo* info);
+NebulaColor8 Mii_GetFacelineColor(const Mii_CharInfo* info);
 void Mii_InitCharModelRes(Mii_CharModelRes* res, const Mii_CharInfo* info);
 void Mii_InitShapeRes(Mii_ShapeRes* shape);
 void Mii_InitTexRes(GXTexObj* texObj, Mii_PartsShpTex part, u16 file,
