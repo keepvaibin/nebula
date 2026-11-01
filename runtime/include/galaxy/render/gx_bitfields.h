@@ -235,8 +235,7 @@ struct EfbCopyParams {
     std::uint16_t src_x, src_y;
     std::uint16_t src_width, src_height;
     std::uint64_t dest_addr;        // the destination's address
-    std::uint32_t dest_stride;      // bytes (reg << 5)
-    std::uint8_t target_format;     // copy pixel format
+    std::uint8_t channels;          // the layout the picture is read as (efb_copy.h: NebulaTargetChannels)
     bool clamp_top, clamp_bottom;
     bool half_scale;                // vertical 2x downsample
     bool clear;                     // clear EFB rect after copy

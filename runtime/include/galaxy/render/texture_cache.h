@@ -85,18 +85,11 @@ void decode_cmpr_tiles(const std::uint8_t* src, std::uint32_t width,
                        std::uint32_t height, RGBA8* out);
 }  // namespace detail
 
-[[nodiscard]] std::uint8_t efb_copy_alias_texture_format(
-    std::uint8_t copy_format);
-
 // GX block-rounded guest footprint of `source_levels` contiguous authored levels (1 for a generated chain).
 // Throws on invalid dimensions, formats or level counts.
 [[nodiscard]] std::uint32_t texture_source_bytes(
     TexFormat format, std::uint32_t width, std::uint32_t height,
     unsigned source_levels = 1u);
-// Bounding span of the actual tiled block rows written by a texture copy.
-// Includes stride gaps for conservative invalidation, but does not imply that
-// a strided/subregion copy can be sampled as a packed GPU texture alias.
-[[nodiscard]] std::uint32_t efb_copy_source_bytes(const EfbCopyParams& params);
 
 // What a draw needs to bind one texture map.
 struct TextureHandle {

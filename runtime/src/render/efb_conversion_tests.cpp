@@ -592,32 +592,26 @@ Pixel oracle_convert(
         raw.b = round_div_256(numerators[2]);
     }
 
-    switch (copy_format) {
-    case 1u:
-    case 8u:
-        return Pixel{raw.r, raw.r, raw.r, raw.r};
+    switch (copy_format) {  // the picture layout (efb_copy.h)
     case 3u:
+        return Pixel{raw.r, raw.r, raw.r, raw.r};
+    case 1u:
         return Pixel{raw.r, raw.r, raw.r, raw.a};
-    case 4u:
-        raw.r = static_cast<std::uint8_t>((raw.r & 0xf8u) | (raw.r >> 5u));
-        raw.g = static_cast<std::uint8_t>((raw.g & 0xfcu) | (raw.g >> 6u));
-        raw.b = static_cast<std::uint8_t>((raw.b & 0xf8u) | (raw.b >> 5u));
-        raw.a = 255u;
-        return raw;
-    case 6u:
+    case 0u:
     case 255u:
         return raw;
-    case 7u:
+    case 2u:
         return Pixel{raw.a, raw.a, raw.a, raw.a};
-    case 9u:
+    case 4u:
         return Pixel{raw.g, raw.g, raw.g, raw.g};
-    case 10u:
+    case 5u:
         return Pixel{raw.b, raw.b, raw.b, raw.b};
-    case 15u:
+    case 6u:
+    case 7u:
         raw.a = 255u;
         return raw;
     default:
-        throw std::runtime_error("oracle received an invalid EFB copy format");
+        throw std::runtime_error("oracle received an invalid picture layout");
     }
 }
 
@@ -1116,13 +1110,13 @@ V main(uint id : SV_VertexID) {
         auto params = make_filter_params(false);
         params.src_x = params.src_y = 0u;
         params.src_width = params.src_height = 16u;
-        params.target_format = 6u;
+        params.channels = 0u;
         bool passed = expect(detail::efb_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
         for (unsigned flag = 0u; flag < 8u; ++flag) {
             auto rejected = params;
             switch (flag) {
-            case 0u: rejected.target_format = 4u; break;
+            case 0u: rejected.channels = 6u; break;
             case 1u: rejected.intensity = true; break;
             case 2u: rejected.half_scale = true; break;
             case 3u: rejected.copy_to_xfb = true; break;
@@ -1180,7 +1174,7 @@ V main(uint id : SV_VertexID) {
                 }
                 const auto sampling = compute_efb_copy_sampling_geometry(params, size, size, scale);
                 const auto constants = make_efb_conversion_constants(params,
-                    false, false, false, 6u, sampling.src_x, sampling.src_y,
+                    false, false, false, 0u, sampling.src_x, sampling.src_y,
                     sampling.step_x, sampling.step_y, sampling.filter_row_offset,
                     scale, kFrameHeight);
                 const auto reference = run_bytes(kEfbColorFormat, bytes,
@@ -2186,7 +2180,7 @@ bool test_scaled_xfb_filter() {
             texture.filter_row_offset == static_cast<float>(scale),
             "display filter footprint leaves source mapping and texture copies intact");
         const auto constants = galaxy::render::make_efb_conversion_constants(
-            params, false, false, true, 15u, sampling.src_x, sampling.src_y,
+            params, false, false, true, 7u, sampling.src_x, sampling.src_y,
             sampling.step_x, sampling.step_y, sampling.filter_row_offset, scale, 3u);
         const auto result = harness.run_color(rows, scale, constants);
         for (unsigned y = 0; y < scale; ++y) {
@@ -2209,12 +2203,12 @@ bool test_cpu_oracle() {
     };
     galaxy::render::EfbCopyParams filter = make_filter_params(true);
     passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 6u),
+        oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{25u, 35u, 45u, 77u},
         "integer oracle display filter: half the line above");
     filter.clamp_top = true;
     passed &= expect_pixel(
-        oracle_from_three_rows(rows, filter, false, 6u),
+        oracle_from_three_rows(rows, filter, false, 0u),
         Pixel{40u, 50u, 60u, 77u},
         "integer oracle top clamp keeps the line");
 
@@ -2225,15 +2219,15 @@ bool test_cpu_oracle() {
     };
     const galaxy::render::EfbCopyParams identity = make_filter_params(false);
     passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 8u),
+        oracle_from_three_rows(red_rows, identity, true, 3u),
         Pixel{82u, 82u, 82u, 82u},
         "integer oracle intensity R8 selects Y");
     passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 9u),
+        oracle_from_three_rows(red_rows, identity, true, 4u),
         Pixel{90u, 90u, 90u, 90u},
         "integer oracle intensity G8 selects U");
     passed &= expect_pixel(
-        oracle_from_three_rows(red_rows, identity, true, 10u),
+        oracle_from_three_rows(red_rows, identity, true, 5u),
         Pixel{240u, 240u, 240u, 240u},
         "integer oracle intensity B8 selects V");
 
@@ -2243,7 +2237,7 @@ bool test_cpu_oracle() {
         packed_depth(0x708090u),
     };
     passed &= expect_pixel(
-        oracle_from_three_rows(depth_rows, make_filter_params(true), false, 6u),
+        oracle_from_three_rows(depth_rows, make_filter_params(true), false, 0u),
         Pixel{40u, 56u, 72u, 255u},
         "integer oracle filters packed depth bytes");
     return passed;
@@ -2280,7 +2274,7 @@ bool test_warp_against_oracle() {
                 params.clamp_top = (clamp_case & 1u) != 0u;
                 params.clamp_bottom = (clamp_case & 2u) != 0u;
                 const Pixel expected =
-                    oracle_from_three_rows(rows, params, false, 6u);
+                    oracle_from_three_rows(rows, params, false, 0u);
                 char label[96]{};
                 std::snprintf(
                     label,
@@ -2293,7 +2287,7 @@ bool test_warp_against_oracle() {
                     harness.run_color(
                         rows,
                         scale,
-                        constants_for_case(params, scale, false, false, 6u)),
+                        constants_for_case(params, scale, false, false, 0u)),
                     scale,
                     expected,
                     label);
@@ -2301,7 +2295,7 @@ bool test_warp_against_oracle() {
 
             const galaxy::render::EfbCopyParams identity = make_filter_params(false);
             constexpr std::array<std::uint8_t, 3> kIntensityFormats{
-                8u, 9u, 10u};
+                3u, 4u, 5u};
             for (const std::uint8_t format : kIntensityFormats) {
                 char intensity_label[64]{};
                 std::snprintf(
@@ -2331,7 +2325,7 @@ bool test_warp_against_oracle() {
                 harness.run_depth(
                     z24_rows,
                     scale,
-                    constants_for_case(depth_filter, scale, true, false, 6u)),
+                    constants_for_case(depth_filter, scale, true, false, 0u)),
                 scale,
                 oracle_from_three_rows(
                     packed_depth_rows, depth_filter, false, 6u),

@@ -106,25 +106,6 @@ std::uint64_t trace_gx_stall_threshold_us() {
     return threshold;
 }
 
-[[nodiscard]] std::uint8_t efb_copy_alias_texture_format_impl(
-    std::uint8_t format) {
-    switch (format) {
-    case 1u:
-    case 7u:
-    case 8u:
-    case 9u:
-    case 10u:
-        return static_cast<std::uint8_t>(TexFormat::I8);
-    case 4u:
-        return static_cast<std::uint8_t>(TexFormat::RGB565);
-    case 6u:
-        return static_cast<std::uint8_t>(TexFormat::RGBA8);
-    default:
-        throw std::runtime_error(
-            "[TextureCache] unsupported EFB copy alias format");
-    }
-}
-
 std::uint64_t elapsed_us(
     std::chrono::steady_clock::time_point start,
     std::chrono::steady_clock::time_point end) {
@@ -1051,10 +1032,6 @@ static void write_staging_levels(
 
 } // anonymous namespace
 
-std::uint8_t efb_copy_alias_texture_format(std::uint8_t copy_format) {
-    return efb_copy_alias_texture_format_impl(copy_format);
-}
-
 std::uint32_t texture_source_bytes(
     TexFormat format, std::uint32_t width, std::uint32_t height,
     unsigned source_levels) {
@@ -1071,27 +1048,6 @@ std::uint32_t texture_source_bytes(
         throw std::runtime_error("[TextureCache] game texture footprint overflow");
     }
     return static_cast<std::uint32_t>(total);
-}
-
-std::uint32_t efb_copy_source_bytes(const EfbCopyParams& params) {
-    if (params.copy_to_xfb || params.src_width == 0u || params.src_height == 0u ||
-        params.src_width > 1024u || params.src_height > 1024u) {
-        throw std::runtime_error("[TextureCache] invalid texture-copy extent");
-    }
-    const std::uint32_t width = params.half_scale
-        ? std::max(1u, static_cast<unsigned>(params.src_width) / 2u) : params.src_width;
-    const std::uint32_t height = params.half_scale
-        ? std::max(1u, static_cast<unsigned>(params.src_height) / 2u) : params.src_height;
-    const auto format = static_cast<TexFormat>(efb_copy_alias_texture_format(params.target_format));
-    const unsigned block_height = format == TexFormat::I4 ? 8u : 4u;
-    const std::uint32_t row_bytes = texture_source_bytes(format, width, 1u);
-    const std::uint32_t rows = (height + block_height - 1u) / block_height;
-    const std::uint64_t span = row_bytes +
-        static_cast<std::uint64_t>(rows - 1u) * params.dest_stride;
-    if (span > UINT32_MAX) {
-        throw std::runtime_error("[TextureCache] texture-copy footprint overflow");
-    }
-    return static_cast<std::uint32_t>(span);
 }
 
 bool TextureCache::initialize(gpu::Device* device) {

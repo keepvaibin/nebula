@@ -1084,14 +1084,14 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
     }
     if (copy.display) {
         // Display copies never convert to intensity; gamma and the copy filter apply.
-        record_conversion_blit(target, copy.width, copy.height, copy.params, false, false, true, 15u, copy.geometry[0],
+        record_conversion_blit(target, copy.width, copy.height, copy.params, false, false, true, kCopyLayoutDisplay, copy.geometry[0],
                                copy.geometry[1], copy.geometry[2], copy.geometry[3], copy.geometry[4]);
         return;
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
-    const bool keep_alpha = copy.params.target_format == 2u || copy.params.target_format == 3u;
+    const bool keep_alpha = copy.params.channels == kCopyLayoutIntensityAlpha;
     record_conversion_blit(target, copy.width, copy.height, copy.params, copy.depth, copy.params.intensity, keep_alpha,
-                           copy.params.target_format, copy.geometry[0], copy.geometry[1], copy.geometry[2],
+                           copy.params.channels, copy.geometry[0], copy.geometry[1], copy.geometry[2],
                            copy.geometry[3], copy.geometry[4]);
 }
 

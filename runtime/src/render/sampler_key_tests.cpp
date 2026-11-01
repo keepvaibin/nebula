@@ -305,20 +305,6 @@ int main() {
         galaxy::render::TexFormat::RGBA8, 8u, 8u, 33u); }
     catch (const std::runtime_error&) { bad_levels = true; }
     passed &= expect(bad_levels, "invalid mip count rejected before shifts");
-    galaxy::render::EfbCopyParams copy{};
-    copy.src_width = copy.src_height = 8u;
-    copy.target_format = 6u; // Two 64-byte RGBA blocks per block row.
-    copy.dest_stride = 512u;
-    passed &= expect(galaxy::render::efb_copy_source_bytes(copy) == 640u,
-        "strided copy span reaches last block row without trailing padding");
-    copy.dest_stride = 0u;
-    passed &= expect(galaxy::render::efb_copy_source_bytes(copy) == 128u,
-        "zero stride overlapping rows have one-row bounding footprint");
-    copy.dest_stride = UINT32_MAX;
-    bool overflow = false;
-    try { (void)galaxy::render::efb_copy_source_bytes(copy); }
-    catch (const std::runtime_error&) { overflow = true; }
-    passed &= expect(overflow, "public copy stride overflow is explicit");
 
     if (!passed) {
         return 1;

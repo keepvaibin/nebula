@@ -5490,7 +5490,7 @@ void RendererD3D12::execute_replay_copy(const ReplayCopy& copy, ID3D12Resource* 
     if (copy.mode == 2u) {
         record_conversion_blit(
             alt_efb_.color.Get(), copy.width, copy.height, {}, copy.params,
-            false, false, true, 15u, copy.geometry[0], copy.geometry[1],
+            false, false, true, kCopyLayoutDisplay, copy.geometry[0], copy.geometry[1],
             copy.geometry[2], copy.geometry[3], copy.geometry[4]);
         return;
     }
@@ -7428,9 +7428,9 @@ bool RendererD3D12::publish_capture(const EfbCopyParams& params, gpu::TextureRef
         return static_cast<std::uint16_t>(params.half_scale ? std::max(1, extent / 2) : extent);
     };
     // A one-channel conversion is read in every channel (NEBULA_TARGET_RED).
-    const std::uint8_t channels = efb_copy_single_channel(params.target_format, is_depth_copy) ? 3u : 0u;
+    const std::uint8_t channels = efb_copy_single_channel(params.channels, is_depth_copy) ? 3u : 0u;
     return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture),
-                           channels, efb_copy_source_bytes(params), textures);
+                           channels, 0u, textures);
 }
 
 // DLSS Frame Generation's HUD-less picture (fg_hudless_*): the output EFB right after the
@@ -7508,7 +7508,7 @@ void RendererD3D12::copy_fg_hudless_xfb(const EfbCopyParams& params, const XfbTe
     swap_efb_with(fg_hudless_efb_);
     record_conversion_blit(fg_hudless_xfb_.texture.Get(), dest.width, dest.height, fg_hudless_xfb_.rtv, params,
                            /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-                           /*copy_format=*/15u, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
+                           /*layout=*/kCopyLayoutDisplay, sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                            sampling.filter_row_offset);
     swap_efb_with(fg_hudless_efb_);
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
@@ -7791,7 +7791,7 @@ bool RendererD3D12::begin_output_efb() {
         copy.height = h;
         copy.params = params;
         copy.keep_alpha = true;
-        copy.format = 15u;
+        copy.format = kCopyLayoutDisplay;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
@@ -7805,7 +7805,7 @@ bool RendererD3D12::begin_output_efb() {
         record_conversion_blit(
             alt_efb_.color.Get(), w, h, {}, params,
             /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-            /*copy_format=*/15u,
+            /*layout=*/kCopyLayoutDisplay,
             sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
             sampling.filter_row_offset);
         replay_recording_ = recording;
@@ -7815,7 +7815,7 @@ bool RendererD3D12::begin_output_efb() {
         record_conversion_blit(
             alt_efb_.color.Get(), w, h, {}, params,
             /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-            /*copy_format=*/15u,
+            /*layout=*/kCopyLayoutDisplay,
             sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
             sampling.filter_row_offset);
         swap_efb_sets();
@@ -8321,7 +8321,7 @@ void RendererD3D12::record_conversion_blit(
         return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_DISPLAY_FILTER_AB") == 0 && length > 1u &&
                value[0] == '1';
     }();
-    const bool display_filter = !(filter_ab && (presented_frames_ & 1u) != 0u) && copy_format == 15u && keep_alpha &&
+    const bool display_filter = !(filter_ab && (presented_frames_ & 1u) != 0u) && copy_format == kCopyLayoutDisplay && keep_alpha &&
                                 !intensity && !is_depth_copy && step_x == 1.0f &&
                                 step_y == 1.0f &&
                                 display_filter_pipeline_ != nullptr && dest->GetDesc().Format == kEfbColorFormat;
@@ -8394,7 +8394,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
         copy.height = dest.height;
         copy.params = params;
         copy.keep_alpha = true;
-        copy.format = 15u;
+        copy.format = kCopyLayoutDisplay;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
@@ -8411,7 +8411,7 @@ void RendererD3D12::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& des
     record_conversion_blit(
         dest.texture.Get(), dest.width, dest.height, dest.rtv, params,
         /*is_depth_copy=*/false, /*intensity=*/false, /*keep_alpha=*/true,
-        /*copy_format=*/15u,
+        /*layout=*/kCopyLayoutDisplay,
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);
@@ -8481,7 +8481,8 @@ bool RendererD3D12::copy_efb_to_texture(
     // different copy formats and each needs its own converted texture.
     const std::uint64_t dest_key =
         static_cast<std::uint64_t>(params.dest_addr) |
-        (static_cast<std::uint64_t>(params.target_format) << 48) |  // addresses stay below 2^48
+        (static_cast<std::uint64_t>(params.channels) << 48) |  // addresses stay below 2^48
+        (params.intensity ? (1ull << 52) : 0ull) |
         (is_depth_copy ? (1ull << 56) : 0ull) |
         // One address alternates between early scaled masks and the
         // final native bloom composite. Cache both resources to avoid
@@ -8521,7 +8522,7 @@ bool RendererD3D12::copy_efb_to_texture(
         rd.Height           = h;
         rd.DepthOrArraySize = 1;
         rd.MipLevels        = 1;
-        rd.Format           = efb_copy_single_channel(params.target_format, is_depth_copy) ? DXGI_FORMAT_R8_UNORM
+        rd.Format           = efb_copy_single_channel(params.channels, is_depth_copy) ? DXGI_FORMAT_R8_UNORM
                                                                                             : kEfbColorFormat;
         rd.SampleDesc.Count = 1;
         rd.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
@@ -8642,11 +8643,8 @@ bool RendererD3D12::copy_efb_to_texture(
     const EfbCopySamplingGeometry sampling =
         compute_efb_copy_sampling_geometry(params, w, h, efb_scale_);
 
-    // Intensity copies to the RA4/RA8 (-> IA4/IA8) formats keep the source
-    // alpha; pure-I formats replicate Y into alpha, matching the texture
-    // decoder's I-format convention.
-    const bool keep_alpha =
-        params.target_format == 2u || params.target_format == 3u;
+    // The intensity-and-alpha layout keeps the source alpha; the one-channel layouts read their channel in alpha too.
+    const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
 
     const bool recording = replay_recording_;
     if (recording) [[unlikely]] {
@@ -8658,7 +8656,7 @@ bool RendererD3D12::copy_efb_to_texture(
         copy.depth = is_depth_copy;
         copy.intensity = params.intensity;
         copy.keep_alpha = keep_alpha;
-        copy.format = params.target_format;
+        copy.format = params.channels;
         copy.geometry[0] = sampling.src_x;
         copy.geometry[1] = sampling.src_y;
         copy.geometry[2] = sampling.step_x;
@@ -8671,7 +8669,7 @@ bool RendererD3D12::copy_efb_to_texture(
     record_conversion_blit(
         dest.texture.Get(), w, h, dest.rtv, params,
         is_depth_copy, params.intensity, keep_alpha,
-        params.target_format,
+        params.channels,
         sampling.src_x, sampling.src_y,
         sampling.step_x, sampling.step_y,
         sampling.filter_row_offset);

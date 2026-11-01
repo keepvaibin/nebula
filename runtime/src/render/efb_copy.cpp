@@ -324,7 +324,7 @@ const XfbTexture* EfbCopyManager::picture(std::uint32_t slot) const {
 std::optional<EfbCopyRect> efb_identity_copy_rect(
     const EfbCopyParams& params, bool is_depth_copy, unsigned efb_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
-    if (is_depth_copy || params.copy_to_xfb || params.target_format != 6u ||
+    if (is_depth_copy || params.copy_to_xfb || params.channels != kCopyLayoutRgba ||
         params.intensity || params.half_scale ||
         params.src_width == 0u || params.src_height == 0u ||
         static_cast<unsigned>(params.src_x) + params.src_width > kFrameWidth ||

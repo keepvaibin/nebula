@@ -146,24 +146,19 @@ float4 main(V v) : SV_Target {
         texcol_raw.rgb = (yuv >> 8) + ((yuv >> 7) & 1u);
     }
 
-    // The GPU alias represents the texture after the EFB copy bytes are
-    // decoded again, not the unencoded render target: the copy format's
-    // channels and precision, so direct aliases match a RAM roundtrip. The
-    // 16-bit colour formats keep 8-bit colour: the game's bloom, depth of field
-    // and screen captures copy at RGB565, and 5-6 bits band every soft glow,
-    // blur and frozen backdrop at a raised resolution.
-    uint fmt = uint(filt2.y + 0.5);
-    if (fmt == 1u || fmt == 8u) { // red (or luminance) in every channel
+    // The picture's layout (efb_copy.h): the game's NebulaTargetChannels, 7 a display copy. 8-bit colour.
+    uint layout = uint(filt2.y + 0.5);
+    if (layout == 3u) {          // red (or luminance) in every channel
         texcol_raw = texcol_raw.rrrr;
-    } else if (fmt == 3u) {      // intensity and alpha
+    } else if (layout == 1u) {   // intensity and alpha
         texcol_raw = texcol_raw.rrra;
-    } else if (fmt == 4u || fmt == 15u) { // colour, opaque (8-bit colour kept)
+    } else if (layout == 6u || layout == 7u) { // colour, opaque
         texcol_raw.a = 255u;
-    } else if (fmt == 7u) {      // alpha in every channel
+    } else if (layout == 2u) {   // alpha in every channel
         texcol_raw = texcol_raw.aaaa;
-    } else if (fmt == 9u) {      // green
+    } else if (layout == 4u) {   // green
         texcol_raw = texcol_raw.gggg;
-    } else if (fmt == 10u) {     // blue
+    } else if (layout == 5u) {   // blue
         texcol_raw = texcol_raw.bbbb;
     }
     return float4(texcol_raw) / 255.0;

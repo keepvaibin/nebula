@@ -971,7 +971,6 @@ EfbCopyParams frame_show_params(std::uint16_t width, std::uint16_t height, std::
     p.clamp_top = true;
     p.clamp_bottom = true;
     p.copy_to_xfb = true;
-    p.dest_stride = ((p.src_width * 2u) >> 5u) << 5u;
     set_filter(p, flags);
     return p;
 }
@@ -989,12 +988,7 @@ EfbCopyParams capture_copy_params(std::uint64_t key, const std::uint16_t rect[4]
     p.clear = (flags & 1u) != 0u;
     p.half_scale = (flags & 2u) != 0u;
     p.intensity = (flags & 4u) != 0u;
-    // The conversion's channel layouts (the texture format the picture is read as).
-    static constexpr std::uint8_t kLayout[7] = {6u, 3u, 7u, 8u, 9u, 10u, 4u};
-    p.target_format = channels == 3u && (flags & 12u) != 0u ? 1u : kLayout[channels < 7u ? channels : 0u];
-    const std::uint32_t w = p.half_scale ? std::max(1u, p.src_width / 2u) : p.src_width;
-    const bool wide = p.target_format == 3u || p.target_format == 4u || p.target_format == 6u;
-    p.dest_stride = ((((w + (wide ? 3u : 7u)) >> (wide ? 2u : 3u)) * (p.target_format == 6u ? 2u : 1u)) & 0x3FFu) << 5u;
+    p.channels = channels < 7u ? channels : 0u;  // NebulaTargetChannels
     p.clear_z = 0xFFFFFFu;  // NEBULA_CAPTURE_CLEAR: colour 0, depth far
     set_filter(p, flags);
     return p;
