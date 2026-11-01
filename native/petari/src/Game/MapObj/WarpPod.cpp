@@ -532,19 +532,19 @@ void WarpPod::drawCylinder(u32) const {
         return;
     }
 
-    TDDraw::setup(0, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+    // runtime/src/render/materials/tex_alpha_lerp.hlsl: the glow colour to white by the texture's alpha, opaque
+    // (GX's alpha (texA * konst + 1/2) * 2 is 1 for every konst), added; depth tested.
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 2, 0);
     MR::ddSetVtxFormat(2);
-    MR::ddLightingOff();
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ONE, GX_CC_TEXA, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_CC_APREV, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_KONST, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TB_ADDHALF, GX_TEVPREV);
-    J3DNativeState::setTevColor(GX_TEVREG0, ::gGlowEffectEnvColor[mGlowColorIndex]);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-
-    _D4->load(GX_TEXMAP0);
-    _D8->load(GX_TEXMAP1);
+    material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    const GXColor& glow = ::gGlowEffectEnvColor[mGlowColorIndex];
+    NativeShader::setColor(material, 0, glow.r, glow.g, glow.b, glow.a);
+    NativeShader::setColor(material, 4, 255, 255, 255, 255);
+    material.constants[10] = 1.0f;
+    NativeShader::setTexture(material, 0, _D4);
+    NativeShader::send(material);
 
     s32 val1 = _A6;
     u32 val2 = _C8;

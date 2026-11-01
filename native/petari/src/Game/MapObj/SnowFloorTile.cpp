@@ -1,4 +1,5 @@
 #include "Game/MapObj/SnowFloorTile.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -408,17 +409,18 @@ void SnowFloorTile::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 void SnowFloorTile::draw() const {
     MR::reinitGX();
     J3DNativeState::invalidateTexAll();
-    TDDraw::setup(1, 1, false);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setAlphaCompare(GX_GREATER, 1, GX_AOP_AND, GX_ALWAYS, 0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_C1, GX_CC_ONE, GX_CC_ZERO);
+    // runtime/src/render/materials/color_tex_alpha.hlsl: each layer its colour at the snow texture's alpha, drawn
+    // where that is above the layer's threshold; blended by alpha, back faces culled, depth tested and written.
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 1, 1, false);
+    material.shader = NEBULA_SHADER_COLOR_TEX_ALPHA;
+    material.cull = NEBULA_CULL_BACK;
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, true);
+    NativeShader::setTexture(material, 0, mTexture);
 
     for (u32 i = 0; i < static_cast< u32 >(::sLayerCount); i++) {
         u8 threshold = i * (240 / ::sLayerCount) + 1;
-        Color8 alpha(threshold, threshold, threshold, threshold);
-        J3DNativeState::setTevColor(GX_TEVREG0, alpha);
-        J3DNativeState::setAlphaCompare(GX_GREATER, threshold, GX_AOP_AND, GX_ALWAYS, 0);
+        material.constants[4] = threshold;
         s32 r = ::sColorR + i * ::sColorStepR;
         s32 g = ::sColorG + i * ::sColorStepG;
         s32 b = ::sColorB + i * ::sColorStepB;
@@ -428,13 +430,13 @@ void SnowFloorTile::draw() const {
         MR::clamp(static_cast< s32 >(b), 0L, 255L);
         MR::clamp(static_cast< s32 >(a), 0L, 255L);
         Color8 color(r, g, b, a);
-        J3DNativeState::setTevColor(GX_TEVREG1, color);
+        NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
+        NativeShader::send(material);
         drawLayer(i);
     }
 }
 
 void SnowFloorTile::drawLayer(s32 layer) const {
-    mTexture->load(GX_TEXMAP0);
     TVec3f p3, p2, p1, p0;
     p0 = -mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;
     p1 = mRight * mTextureSize * mCellSize - mForward * mTextureSize * mCellSize;

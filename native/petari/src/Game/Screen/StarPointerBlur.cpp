@@ -221,6 +221,7 @@ void StarPointerBlur::initDraw() const {
     NativeShader::init(material, NEBULA_SHADER_COLOR_TEX_ALPHA, NativeShader::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);
     NativeShader::setColor(material, 0, mMainColor->r, mMainColor->g, mMainColor->b, mMainColor->a);
+    material.constants[4] = -1.0f;
     NativeShader::setTexture(material, 0, mTexture);
     NativeShader::send(material);
 }
