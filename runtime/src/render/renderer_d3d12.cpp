@@ -1193,8 +1193,7 @@ D3D12_SAMPLER_DESC build_sampler_desc_from_key(
     const float max_lod =
         static_cast<float>((key >> 24) & 0xFFu) / 16.0f;
 
-    // TexMinFilter: 0 Near, 1 NearMipNear, 2 NearMipLinear,
-    //               4 Linear, 5 LinearMipNear, 6 LinearMipLinear.
+    // The minified filter (texture_sampler.h min_filter_code): 4 linear, plus 1 the nearest level or 2 between levels.
     const bool min_linear = (minf >= 4u);
     // 0 none, 1 point, 2 linear, 3 linear without anisotropy (pack_sampler_key's arbitrary levels).
     const bool no_anisotropy = (minf & 0x3u) == 3u;
@@ -1292,8 +1291,9 @@ void RendererD3D12::reset_sampler_frame() {
 }
 
 // Packed sampler key layout (must match pack_sampler_key in render_core.cpp):
-//   bits 0-1  wrap_s (GX TexWrap)        bits 2-3  wrap_t
-//   bit  4    mag linear                 bits 5-7  min filter (TexMinFilter)
+//   bits 0-1  wrap_s (TexWrap)           bits 2-3  wrap_t
+//   bit  4    mag linear                 bits 5-7  min filter (min_filter_code; 3 in the low two bits:
+//                                        arbitrary levels, no anisotropy)
 //   bits 8-15  lod_bias  (s8, 1/32 LOD units)
 //   bits 16-23 min_lod_x16
 //   bits 24-31 max_lod_x16

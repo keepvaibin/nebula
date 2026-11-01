@@ -1045,7 +1045,7 @@ gpu::Table RendererVk::texture_table_for(const TextureHandle* handles, unsigned 
     return gpu::Table{reinterpret_cast<std::uint64_t>(set)};
 }
 
-// The GX sampler a packed key describes (layout: pack_sampler_key in render_core.cpp; the D3D12 renderer's
+// The sampler a packed key describes (layout: pack_sampler_key in render_core.cpp; the D3D12 renderer's
 // build_sampler_desc_from_key).
 VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
     const std::uint64_t cache_key = (static_cast<std::uint64_t>(key) << 32u) | sampler_config_key(cfg);
@@ -1067,7 +1067,7 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
     const float lod_bias = static_cast<float>(static_cast<std::int8_t>((key >> 8u) & 0xffu)) / 32.0f;
     const float min_lod = static_cast<float>((key >> 16u) & 0xffu) / 16.0f;
     const float max_lod = static_cast<float>((key >> 24u) & 0xffu) / 16.0f;
-    // TexMinFilter: 0 near, 1 near-mip-near, 2 near-mip-linear, 4 linear, 5 linear-mip-near, 6 linear-mip-linear.
+    // The minified filter (texture_sampler.h min_filter_code): 4 linear, plus 1 the nearest level or 2 between levels.
     const bool min_linear = minf >= 4u;
     // 3: linear without anisotropy (pack_sampler_key's arbitrary levels).
     const bool no_anisotropy = (minf & 3u) == 3u;
@@ -1096,7 +1096,7 @@ VkSampler RendererVk::sampler_for(std::uint32_t key, const RenderConfig& cfg) {
         info.maxLod = max_lod > min_lod ? max_lod : min_lod;
     }
     VkSampler sampler = VK_NULL_HANDLE;
-    vk::check(vkCreateSampler(context.device(), &info, nullptr, &sampler), "GX sampler");
+    vk::check(vkCreateSampler(context.device(), &info, nullptr, &sampler), "sampler");
     samplers_.emplace(cache_key, sampler);
     return sampler;
 }

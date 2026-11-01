@@ -98,15 +98,15 @@ int main() {
     passed &= expect(
         aniso_desc.AddressU == D3D12_TEXTURE_ADDRESS_MODE_CLAMP &&
             aniso_desc.AddressV == D3D12_TEXTURE_ADDRESS_MODE_WRAP,
-        "sampler descriptor maps GX wrap modes to D3D12 address modes");
+        "sampler descriptor maps wrap modes to D3D12 address modes");
     passed &= expect_near(
         aniso_desc.MipLODBias,
         1.375f,
-        "sampler descriptor combines GX LOD bias with native LOD bias");
+        "sampler descriptor combines the material's LOD bias with the configured bias");
     passed &= expect_near(
         aniso_desc.MinLOD,
         0.0f,
-        "sampler descriptor maps GX minimum LOD");
+        "sampler descriptor maps the minimum LOD");
     passed &= expect_near(
         aniso_desc.MaxLOD,
         5.0f,
