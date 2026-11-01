@@ -46,14 +46,16 @@ pub fn bmg(bytes: &[u8]) -> Result<Vec<u8>> {
     host32(bytes, &mut out, 0x8)?; // file size
     let blocks = host32(bytes, &mut out, 0xC)?;
     let mut at = 0x20usize;
-    for _ in 0..blocks {
+    for block in 0..blocks {
         let magic: [u8; 4] = bytes.get(at..at + 4).context("a block past the file's end")?.try_into().unwrap();
         host32(bytes, &mut out, at)?;
         let size = host32(bytes, &mut out, at + 4)? as usize;
-        if size < 8 || at + size > bytes.len() {
+        // The last block's size may count padding the archive does not store (the disc's FLI1 blocks).
+        let last = block + 1 == blocks;
+        if size < 8 || (at + size > bytes.len() && !last) {
             bail!("block {} at {at:#x}: size {size:#x} outside the file", String::from_utf8_lossy(&magic));
         }
-        let end = at + size;
+        let end = (at + size).min(bytes.len());
         match &magic {
             b"INF1" => {
                 let count = host16(bytes, &mut out, at + 8)? as usize;
