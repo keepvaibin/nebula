@@ -33,25 +33,6 @@ struct J3DTransformInfo {
 #endif
 };
 
-#ifdef TARGET_PC
-template <>
-struct BEData< J3DTransformInfo > {
-    BEData< Vec > mScale;
-    BEData< S16Vec > mRotation;
-    BE< u16 > _12;
-    BEData< Vec > mTranslate;
-
-    operator J3DTransformInfo() const {
-        J3DTransformInfo info;
-        info.mScale = mScale;
-        info.mRotation = mRotation;
-        info._12 = _12;
-        info.mTranslate = mTranslate;
-        return info;
-    }
-};
-#endif
-
 struct J3DTextureSRTInfo;
 
 extern J3DTransformInfo const j3dDefaultTransformInfo;

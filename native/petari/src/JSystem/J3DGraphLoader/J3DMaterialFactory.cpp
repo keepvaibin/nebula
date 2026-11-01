@@ -6,39 +6,39 @@
 J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     mMaterialNum = i_block.mMaterialNum;
     mpMaterialInitData = JSUConvertOffsetToPtr< J3DMaterialInitData >(&i_block, i_block.mpMaterialInitData);
-    mpMaterialID = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&i_block, i_block.mpMaterialID);
+    mpMaterialID = JSUConvertOffsetToPtr< u16 >(&i_block, i_block.mpMaterialID);
     if (i_block.mpIndInitData != 0 && i_block.mpIndInitData - i_block.mpNameTable > 4) {
         mpIndInitData = JSUConvertOffsetToPtr< J3DIndInitData >(&i_block, i_block.mpIndInitData);
     } else {
         mpIndInitData = nullptr;
     }
 
-    mpCullMode = JSUConvertOffsetToPtr< NEBULA_BE(GXCullMode) >(&i_block, i_block.mpCullMode);
+    mpCullMode = JSUConvertOffsetToPtr< GXCullMode >(&i_block, i_block.mpCullMode);
     mpMatColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpMatColor);
     mpColorChanNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpColorChanNum);
     mpColorChanInfo = JSUConvertOffsetToPtr< J3DColorChanInfo >(&i_block, i_block.mpColorChanInfo);
     mpAmbColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpAmbColor);
-    mpLightInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DLightInfo) >(&i_block, i_block.mpLightInfo);
+    mpLightInfo = JSUConvertOffsetToPtr< J3DLightInfo >(&i_block, i_block.mpLightInfo);
     mpTexGenNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpTexGenNum);
     mpTexCoordInfo = JSUConvertOffsetToPtr< J3DTexCoordInfo >(&i_block, i_block.mpTexCoordInfo);
     mpTexCoord2Info = JSUConvertOffsetToPtr< J3DTexCoord2Info >(&i_block, i_block.mpTexCoord2Info);
-    mpTexMtxInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DTexMtxInfo) >(&i_block, i_block.mpTexMtxInfo);
-    field_0x34 = JSUConvertOffsetToPtr< NEBULA_DISC(J3DTexMtxInfo) >(&i_block, i_block.field_0x44);
-    mpTexNo = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&i_block, i_block.mpTexNo);
+    mpTexMtxInfo = JSUConvertOffsetToPtr< J3DTexMtxInfo >(&i_block, i_block.mpTexMtxInfo);
+    field_0x34 = JSUConvertOffsetToPtr< J3DTexMtxInfo >(&i_block, i_block.field_0x44);
+    mpTexNo = JSUConvertOffsetToPtr< u16 >(&i_block, i_block.mpTexNo);
     mpTevOrderInfo = JSUConvertOffsetToPtr< J3DTevOrderInfo >(&i_block, i_block.mpTevOrderInfo);
-    mpTevColor = JSUConvertOffsetToPtr< NEBULA_DISC(NebulaColor16) >(&i_block, i_block.mpTevColor);
+    mpTevColor = JSUConvertOffsetToPtr< NebulaColor16 >(&i_block, i_block.mpTevColor);
     mpTevKColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpTevKColor);
     mpTevStageNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpTevStageNum);
     mpTevStageInfo = JSUConvertOffsetToPtr< J3DTevStageInfo >(&i_block, i_block.mpTevStageInfo);
     mpTevSwapModeInfo = JSUConvertOffsetToPtr< J3DTevSwapModeInfo >(&i_block, i_block.mpTevSwapModeInfo);
     mpTevSwapModeTableInfo = JSUConvertOffsetToPtr< J3DTevSwapModeTableInfo >(&i_block, i_block.mpTevSwapModeTableInfo);
-    mpFogInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DFogInfo) >(&i_block, i_block.mpFogInfo);
+    mpFogInfo = JSUConvertOffsetToPtr< J3DFogInfo >(&i_block, i_block.mpFogInfo);
     mpAlphaCompInfo = JSUConvertOffsetToPtr< J3DAlphaCompInfo >(&i_block, i_block.mpAlphaCompInfo);
     mpBlendInfo = JSUConvertOffsetToPtr< J3DBlendInfo >(&i_block, i_block.mpBlendInfo);
     mpZModeInfo = JSUConvertOffsetToPtr< J3DZModeInfo >(&i_block, i_block.mpZModeInfo);
     mpZCompLoc = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpZCompLoc);
     mpDither = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpDither);
-    mpNBTScaleInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DNBTScaleInfo) >(&i_block, i_block.mpNBTScaleInfo);
+    mpNBTScaleInfo = JSUConvertOffsetToPtr< J3DNBTScaleInfo >(&i_block, i_block.mpNBTScaleInfo);
     mpDisplayListInit = nullptr;
     mpPatchingInfo = nullptr;
     mpCurrentMtxInfo = nullptr;
@@ -50,7 +50,7 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialDLBlock const& i_block) {
     mpMaterialInitData = nullptr;
     mpDisplayListInit = JSUConvertOffsetToPtr< J3DDisplayListInit >(&i_block, i_block.mpDisplayListInit);
     mpPatchingInfo = JSUConvertOffsetToPtr< J3DPatchingInfo >(&i_block, i_block.mpPatchingInfo);
-    mpCurrentMtxInfo = JSUConvertOffsetToPtr< NEBULA_DISC(J3DCurrentMtxInfo) >(&i_block, i_block.mpCurrentMtxInfo);
+    mpCurrentMtxInfo = JSUConvertOffsetToPtr< J3DCurrentMtxInfo >(&i_block, i_block.mpCurrentMtxInfo);
     mpMaterialMode = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpMaterialMode);
 }
 

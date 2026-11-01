@@ -3,6 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
 
+// MAT3 and MDL3 records in host order, as the importer cooks them (native_data.rs j3d_model).
 struct J3DMaterialInitData {
     /* 0x000 */ u8 mMaterialMode;
     /* 0x001 */ u8 mCullModeIdx;
@@ -12,28 +13,28 @@ struct J3DMaterialInitData {
     /* 0x005 */ u8 mZCompLocIdx;
     /* 0x006 */ u8 mZModeIdx;
     /* 0x007 */ u8 mDitherIdx;
-    /* 0x008 */ NEBULA_BE(u16) mMatColorIdx[2];
-    /* 0x00C */ NEBULA_BE(u16) mColorChanIdx[4];
-    /* 0x014 */ NEBULA_BE(u16) mAmbColorIdx[2];
+    /* 0x008 */ u16 mMatColorIdx[2];
+    /* 0x00C */ u16 mColorChanIdx[4];
+    /* 0x014 */ u16 mAmbColorIdx[2];
     /* 0x018 */ u8 field_0x018[0x10];
-    /* 0x028 */ NEBULA_BE(u16) mTexCoordIdx[8];
+    /* 0x028 */ u16 mTexCoordIdx[8];
     /* 0x038 */ u8 field_0x038[0x10];
-    /* 0x048 */ NEBULA_BE(u16) mTexMtxIdx[8];
+    /* 0x048 */ u16 mTexMtxIdx[8];
     /* 0x058 */ u8 field_0x058[0x2c];
-    /* 0x084 */ NEBULA_BE(u16) mTexNoIdx[8];
-    /* 0x094 */ NEBULA_BE(u16) mTevKColorIdx[4];
+    /* 0x084 */ u16 mTexNoIdx[8];
+    /* 0x094 */ u16 mTevKColorIdx[4];
     /* 0x09C */ u8 mTevKColorSel[0x10];
     /* 0x0AC */ u8 mTevKAlphaSel[0x10];
-    /* 0x0BC */ NEBULA_BE(u16) mTevOrderIdx[0x10];
-    /* 0x0DC */ NEBULA_BE(u16) mTevColorIdx[4];
-    /* 0x0E4 */ NEBULA_BE(u16) mTevStageIdx[0x10];
-    /* 0x104 */ NEBULA_BE(u16) mTevSwapModeIdx[0x10];
-    /* 0x124 */ NEBULA_BE(u16) mTevSwapModeTableIdx[4];
+    /* 0x0BC */ u16 mTevOrderIdx[0x10];
+    /* 0x0DC */ u16 mTevColorIdx[4];
+    /* 0x0E4 */ u16 mTevStageIdx[0x10];
+    /* 0x104 */ u16 mTevSwapModeIdx[0x10];
+    /* 0x124 */ u16 mTevSwapModeTableIdx[4];
     /* 0x12C */ u8 field_0x12c[0x18];
-    /* 0x144 */ NEBULA_BE(u16) mFogIdx;
-    /* 0x146 */ NEBULA_BE(u16) mAlphaCompIdx;
-    /* 0x148 */ NEBULA_BE(u16) mBlendIdx;
-    /* 0x14A */ NEBULA_BE(u16) mNBTScaleIdx;
+    /* 0x144 */ u16 mFogIdx;
+    /* 0x146 */ u16 mAlphaCompIdx;
+    /* 0x148 */ u16 mBlendIdx;
+    /* 0x14A */ u16 mNBTScaleIdx;
 };  // size 0x14C
 
 struct J3DIndInitData {
@@ -42,25 +43,25 @@ struct J3DIndInitData {
     /* 0x002 */ u8 field_0x002[2];
     /* 0x004 */ J3DIndTexOrderInfo mIndTexOrderInfo[3];
     /* 0x010 */ u8 field_0x010[4];
-    /* 0x014 */ NEBULA_DISC(J3DIndTexMtxInfo) mIndTexMtxInfo[3];
+    /* 0x014 */ J3DIndTexMtxInfo mIndTexMtxInfo[3];
     /* 0x068 */ J3DIndTexCoordScaleInfo mIndTexCoordScaleInfo[3];
     /* 0x074 */ u8 field_0x074[4];
     /* 0x078 */ J3DIndTevStageInfo mIndTevStageInfo[0x10];
 };  // size 0x138
 
 struct J3DPatchingInfo {
-    /* 0x0 */ NEBULA_BE(u16) mMatColorOffset;
-    /* 0x2 */ NEBULA_BE(u16) mColorChanOffset;
-    /* 0x4 */ NEBULA_BE(u16) mTexMtxOffset;
-    /* 0x6 */ NEBULA_BE(u16) mTexNoOffset;
-    /* 0x8 */ NEBULA_BE(u16) mTevRegOffset;
-    /* 0xA */ NEBULA_BE(u16) mFogOffset;
+    /* 0x0 */ u16 mMatColorOffset;
+    /* 0x2 */ u16 mColorChanOffset;
+    /* 0x4 */ u16 mTexMtxOffset;
+    /* 0x6 */ u16 mTexNoOffset;
+    /* 0x8 */ u16 mTevRegOffset;
+    /* 0xA */ u16 mFogOffset;
     /* 0xC */ u8 field_0xc[4];
 };  // size 0x10
 
 struct J3DDisplayListInit {
-    /* 0x0 */ NEBULA_BE(u32) mOffset;
-    /* 0x4 */ NEBULA_BE(u32) field_0x4;
+    /* 0x0 */ u32 mOffset;
+    /* 0x4 */ u32 field_0x4;
 };  // size 8
 
 struct J3DTexCoord2Info;
@@ -126,36 +127,36 @@ public:
 
     /* 0x00 */ u16 mMaterialNum;
     /* 0x04 */ J3DMaterialInitData* mpMaterialInitData;
-    /* 0x08 */ NEBULA_BE(u16)* mpMaterialID;
+    /* 0x08 */ u16* mpMaterialID;
     /* 0x0C */ J3DIndInitData* mpIndInitData;
     /* 0x10 */ NebulaColor8* mpMatColor;
     /* 0x14 */ u8* mpColorChanNum;
     /* 0x18 */ J3DColorChanInfo* mpColorChanInfo;
     /* 0x1C */ NebulaColor8* mpAmbColor;
-    /* 0x20 */ NEBULA_DISC(J3DLightInfo)* mpLightInfo;
+    /* 0x20 */ J3DLightInfo* mpLightInfo;
     /* 0x24 */ u8* mpTexGenNum;
     /* 0x28 */ J3DTexCoordInfo* mpTexCoordInfo;
     /* 0x2C */ J3DTexCoord2Info* mpTexCoord2Info;
-    /* 0x30 */ NEBULA_DISC(J3DTexMtxInfo)* mpTexMtxInfo;
-    /* 0x34 */ NEBULA_DISC(J3DTexMtxInfo)* field_0x34;
-    /* 0x38 */ NEBULA_BE(u16)* mpTexNo;
-    /* 0x3C */ NEBULA_BE(GXCullMode)* mpCullMode;
+    /* 0x30 */ J3DTexMtxInfo* mpTexMtxInfo;
+    /* 0x34 */ J3DTexMtxInfo* field_0x34;
+    /* 0x38 */ u16* mpTexNo;
+    /* 0x3C */ GXCullMode* mpCullMode;
     /* 0x40 */ J3DTevOrderInfo* mpTevOrderInfo;
-    /* 0x44 */ NEBULA_DISC(NebulaColor16)* mpTevColor;
+    /* 0x44 */ NebulaColor16* mpTevColor;
     /* 0x48 */ NebulaColor8* mpTevKColor;
     /* 0x4C */ u8* mpTevStageNum;
     /* 0x50 */ J3DTevStageInfo* mpTevStageInfo;
     /* 0x54 */ J3DTevSwapModeInfo* mpTevSwapModeInfo;
     /* 0x58 */ J3DTevSwapModeTableInfo* mpTevSwapModeTableInfo;
-    /* 0x5C */ NEBULA_DISC(J3DFogInfo)* mpFogInfo;
+    /* 0x5C */ J3DFogInfo* mpFogInfo;
     /* 0x60 */ J3DAlphaCompInfo* mpAlphaCompInfo;
     /* 0x64 */ J3DBlendInfo* mpBlendInfo;
     /* 0x68 */ J3DZModeInfo* mpZModeInfo;
     /* 0x6C */ u8* mpZCompLoc;
     /* 0x70 */ u8* mpDither;
-    /* 0x74 */ NEBULA_DISC(J3DNBTScaleInfo)* mpNBTScaleInfo;
+    /* 0x74 */ J3DNBTScaleInfo* mpNBTScaleInfo;
     /* 0x78 */ J3DDisplayListInit* mpDisplayListInit;
     /* 0x7C */ J3DPatchingInfo* mpPatchingInfo;
-    /* 0x80 */ NEBULA_DISC(J3DCurrentMtxInfo)* mpCurrentMtxInfo;
+    /* 0x80 */ J3DCurrentMtxInfo* mpCurrentMtxInfo;
     /* 0x84 */ u8* mpMaterialMode;
 };
