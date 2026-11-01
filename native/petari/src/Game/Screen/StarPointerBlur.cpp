@@ -1,4 +1,5 @@
 #include "Game/Screen/StarPointerBlur.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "Game/System/NebulaInput.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -208,35 +209,18 @@ void StarPointerBlur::draw2() const {
 }
 
 void StarPointerBlur::initDraw() const {
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX3x4, GX_TG_TEX0, 60, GX_FALSE, 125);
-    mTexture->load(GX_TEXMAP0);
-
     TPos3f mtx;
     mtx.identity();
     J3DNativeShape::setPosition(0, mtx);
-    J3DNativeState::setCurrentMtx(0);
-
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_DISABLE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-
-    J3DNativeState::setNumIndStages(0);
-
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO);
-    J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-    J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_TEXA, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO);
-    J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_FALSE, GX_TEVPREV);
-
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
-    J3DNativeState::setZCompLoc(GX_FALSE);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-
-    J3DNativeState::setAlphaCompare(GX_LEQUAL, 255, GX_AOP_OR, GX_LESS, 255);
-
-    J3DNativeState::setTevColor(GX_TEVREG0, *mMainColor);
+    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    // runtime/src/render/materials/color_tex_alpha.hlsl: mMainColor at the trail texture's alpha, added by it; depth
+    // tested and written, no culling.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_COLOR_TEX_ALPHA, NativeShader::BLEND_ADD_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                       NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, mMainColor->r, mMainColor->g, mMainColor->b, mMainColor->a);
+    NativeShader::setTexture(material, 0, mTexture);
+    NativeShader::send(material);
 }
