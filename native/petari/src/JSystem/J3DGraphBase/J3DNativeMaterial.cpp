@@ -627,9 +627,9 @@ namespace {
             material.textures[map].image = rTex.image;
             material.textures[map].repeat_s = rTex.wrap_s;
             material.textures[map].repeat_t = rTex.wrap_t;
-            material.textures[map].mag_linear = rTex.mag_filter != 0 ? 1 : 0;
-            material.textures[map].min_linear = rTex.min_filter == 1 || rTex.min_filter == 3 || rTex.min_filter == 5;
-            material.textures[map].mip_filter = rTex.min_filter < 2 ? 0 : rTex.min_filter < 4 ? 1 : 2;
+            material.textures[map].mag_linear = rTex.mag_linear;
+            material.textures[map].min_linear = rTex.min_linear;
+            material.textures[map].mip_filter = rTex.mip_filter;
             material.textures[map].anisotropy = rTex.anisotropy;
             material.textures[map].edge_lod = rTex.edge_lod;
             material.textures[map].lod_bias = rTex.lod_bias;
@@ -688,9 +688,10 @@ namespace {
         rOut.height = pImg->mHeight;
         rOut.wrap_s = pImg->mWrapS;
         rOut.wrap_t = pImg->mWrapT;
-        rOut.min_filter = pImg->mMinType;
-        rOut.mag_filter = pImg->mMagType;
-        rOut.mipmaps = pImg->mImageNum;
+        // GXTexFilter: near 0, linear 1, then by level near/linear: 2-3 the nearest level, 4-5 between levels.
+        rOut.min_linear = pImg->mMinType == 1 || pImg->mMinType == 3 || pImg->mMinType == 5;
+        rOut.mag_linear = pImg->mMagType != 0;
+        rOut.mip_filter = pImg->mMinType < 2 ? 0 : pImg->mMinType < 4 ? 1 : 2;
         rOut.edge_lod = pImg->mDoEdgeLod;
         rOut.bias_clamp = pImg->mBiasClamp;
         rOut.anisotropy = pImg->mMaxAnisotropy;

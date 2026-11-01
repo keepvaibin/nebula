@@ -717,9 +717,9 @@ namespace nw4r {
                     rTex.height = height;
                     rTex.wrap_s = static_cast< u8 >(wrapS);
                     rTex.wrap_t = static_cast< u8 >(wrapT);
-                    rTex.min_filter = static_cast< u8 >(minFilter);
-                    rTex.mag_filter = static_cast< u8 >(magFilter);
-                    rTex.mipmaps = mipmap ? 1 : 0;
+                    rTex.min_linear = minFilter == GX_LINEAR || minFilter == GX_LIN_MIP_NEAR || minFilter == GX_LIN_MIP_LIN;
+                    rTex.mag_linear = magFilter != GX_NEAR;
+                    rTex.mip_filter = minFilter < GX_NEAR_MIP_NEAR ? 0 : minFilter < GX_NEAR_MIP_LIN ? 1 : 2;
                     rTex.edge_lod = edgeLod ? 1 : 0;
                     rTex.anisotropy = static_cast< u8 >(maxAniso);
                     rTex.min_lod = minLod;

@@ -117,7 +117,8 @@ namespace {
         rTexture.width = width;
         rTexture.height = height;
         rTexture.wrap_s = rTexture.wrap_t = GX_CLAMP;
-        rTexture.min_filter = rTexture.mag_filter = sLinear ? GX_LINEAR : GX_NEAR;
+        rTexture.min_linear = rTexture.mag_linear = sLinear ? 1 : 0;
+        rTexture.mip_filter = 0;
         rTexture.anisotropy = GX_ANISO_1;
     }
 }  // namespace

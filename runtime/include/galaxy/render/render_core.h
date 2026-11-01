@@ -86,7 +86,7 @@ namespace galaxy::render {
 // (efb_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
-    const TexMode& mode,
+    const TextureSampler& mode,
     bool generated_mips,
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16 = 0u,
@@ -1355,7 +1355,7 @@ private:
     };
     [[nodiscard]] TextureBindingKey capture_texture_binding_key(
         std::uint8_t map_mask) const;
-    [[nodiscard]] TextureHandleKey texture_handle_key(std::uint64_t texture, const TexMode& mode) const;
+    [[nodiscard]] TextureHandleKey texture_handle_key(std::uint64_t texture, const TextureSampler& mode) const;
     [[nodiscard]] std::array<std::uint32_t, kMaxTextureMaps> capture_sampler_keys(
         std::uint8_t map_mask,
         const std::array<TextureHandle, kMaxTextureMaps>& handles) const;
@@ -1452,15 +1452,15 @@ private:
             std::uint64_t hash = mix64(kMix64OffsetBasis, key.map_mask);
             hash = mix64(hash, key.lit_translucent);
             for (const TextureMap& t : key.maps) {
-                const TexMode& m = t.mode;
+                const TextureSampler& m = t.mode;
                 hash = mix64(hash, t.texture);
                 hash = mix64(hash, static_cast<std::uint64_t>(m.wrap_s) | static_cast<std::uint64_t>(m.wrap_t) << 4u |
-                                       static_cast<std::uint64_t>(m.mag_filter) << 8u |
-                                       static_cast<std::uint64_t>(m.min_filter) << 12u |
-                                       static_cast<std::uint64_t>(static_cast<std::uint16_t>(m.lod_bias_x32)) << 16u |
-                                       static_cast<std::uint64_t>(m.max_aniso) << 32u |
-                                       static_cast<std::uint64_t>(m.min_lod_x16) << 40u |
-                                       static_cast<std::uint64_t>(m.max_lod_x16) << 48u |
+                                       static_cast<std::uint64_t>(m.mag_linear) << 8u |
+                                       static_cast<std::uint64_t>(min_filter_code(m)) << 12u |
+                                       static_cast<std::uint64_t>(static_cast<std::uint16_t>(lod_bias_x32(m.lod_bias))) << 16u |
+                                       static_cast<std::uint64_t>(m.anisotropy) << 32u |
+                                       static_cast<std::uint64_t>(lod_x16(m.min_lod)) << 40u |
+                                       static_cast<std::uint64_t>(lod_x16(m.max_lod)) << 48u |
                                        static_cast<std::uint64_t>(t.edge_lod) << 56u |
                                        static_cast<std::uint64_t>(t.bias_clamp) << 57u);
             }

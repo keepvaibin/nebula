@@ -30,14 +30,14 @@ std::uint32_t field(std::uint32_t value, unsigned shift, std::uint32_t mask) {
 int main() {
     bool passed = true;
 
-    galaxy::render::TexMode authored{};
+    galaxy::render::TextureSampler authored{};
     authored.wrap_s = galaxy::render::TexWrap::Repeat;
     authored.wrap_t = galaxy::render::TexWrap::Mirror;
-    authored.mag_filter = galaxy::render::TexMagFilter::Linear;
-    authored.min_filter = galaxy::render::TexMinFilter::LinearMipNear;
-    authored.lod_bias_x32 = -32;
-    authored.min_lod_x16 = 2;
-    authored.max_lod_x16 = 96;
+    authored.mag_linear = true;
+    authored.min_linear = true, authored.mip = 1u;
+    authored.lod_bias = (-32) / 32.0f;
+    authored.min_lod = (2) / 16.0f;
+    authored.max_lod = (96) / 16.0f;
 
     const std::uint32_t authored_key =
         galaxy::render::pack_sampler_key(authored, false, 1);
@@ -54,7 +54,7 @@ int main() {
     passed &= expect(
         field(authored_key, 5, 0x7u) ==
             static_cast<std::uint32_t>(
-                galaxy::render::TexMinFilter::LinearMipNear),
+                5u),
         "sampler key preserves authored min filter");
     passed &= expect(field(authored_key, 8, 0xFFu) == 0xE0u,
         "sampler key sign-packs negative LOD bias");
@@ -63,21 +63,21 @@ int main() {
     passed &= expect(field(authored_key, 24, 0xFFu) == 96u,
         "sampler key packs max LOD");
 
-    galaxy::render::TexMode generated{};
+    galaxy::render::TextureSampler generated{};
     generated.wrap_s = galaxy::render::TexWrap::Clamp;
     generated.wrap_t = galaxy::render::TexWrap::Repeat;
-    generated.mag_filter = galaxy::render::TexMagFilter::Linear;
-    generated.min_filter = galaxy::render::TexMinFilter::Linear;
-    generated.lod_bias_x32 = 12;
-    generated.min_lod_x16 = 0;
-    generated.max_lod_x16 = 0;
+    generated.mag_linear = true;
+    generated.min_linear = true, generated.mip = 0u;
+    generated.lod_bias = (12) / 32.0f;
+    generated.min_lod = (0) / 16.0f;
+    generated.max_lod = (0) / 16.0f;
 
     const std::uint32_t generated_key =
         galaxy::render::pack_sampler_key(generated, true, 6);
     passed &= expect(
         field(generated_key, 5, 0x7u) ==
             static_cast<std::uint32_t>(
-                galaxy::render::TexMinFilter::LinearMipLinear),
+                6u),
         "generated mip chains upgrade linear minification to trilinear");
     passed &= expect(field(generated_key, 24, 0xFFu) == 80u,
         "generated mip chains expand max LOD to the generated level count");
@@ -130,16 +130,16 @@ int main() {
     passed &= expect(field(clamped_generated_key, 24, 0xFFu) == 0xFFu,
         "generated mip max LOD clamps to the packed byte range");
 
-    galaxy::render::TexMode nearest = generated;
-    nearest.mag_filter = galaxy::render::TexMagFilter::Near;
+    galaxy::render::TextureSampler nearest = generated;
+    nearest.mag_linear = false;
     const std::uint32_t nearest_key =
         galaxy::render::pack_sampler_key(nearest, true, 6);
     passed &= expect(
         field(nearest_key, 5, 0x7u) ==
-            static_cast<std::uint32_t>(galaxy::render::TexMinFilter::Linear),
+            4u,
         "generated mip rewrite requires linear magnification");
     passed &= expect(field(nearest_key, 24, 0xFFu) == 0u,
-        "non-rewritten sampler preserves TexMode max LOD");
+        "non-rewritten sampler preserves TextureSampler max LOD");
 
     // One bucket for every key: equality must compare all eight slots and the host
     // configuration, not just a fingerprint.

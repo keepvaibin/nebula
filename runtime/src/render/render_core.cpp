@@ -64,34 +64,34 @@
 namespace galaxy::render {
 
 std::uint32_t pack_sampler_key(
-    const TexMode& mode,
+    const TextureSampler& mode,
     bool generated_mips,
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16,
     bool arbitrary,
     std::uint8_t efb_scale_log2_x32) noexcept {
     std::uint32_t min_filter =
-        static_cast<std::uint32_t>(mode.min_filter) & 0x7u;
+        min_filter_code(mode) & 0x7u;
     std::uint32_t min_lod =
-        static_cast<std::uint32_t>(mode.min_lod_x16) & 0xFFu;
+        static_cast<std::uint32_t>(lod_x16(mode.min_lod)) & 0xFFu;
     std::uint32_t max_lod =
-        static_cast<std::uint32_t>(mode.max_lod_x16) & 0xFFu;
+        static_cast<std::uint32_t>(lod_x16(mode.max_lod)) & 0xFFu;
     const bool source_mips = (min_filter & 0x3u) != 0u;
     bool full_chain = false;
     if (generated_mips && mip_levels > 1u &&
-        min_filter == static_cast<std::uint32_t>(TexMinFilter::Linear) &&
-        mode.mag_filter == TexMagFilter::Linear) {
+        min_filter == 4u &&
+        mode.mag_linear) {
         min_filter =
-            static_cast<std::uint32_t>(TexMinFilter::LinearMipLinear);
+            6u;
         max_lod = std::min<std::uint32_t>(
             0xFFu,
             static_cast<std::uint32_t>(mip_levels - 1u) * 16u);
         full_chain = true;
     }
     std::uint32_t lod_bias =
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(mode.lod_bias_x32)) & 0xFFu;
+        static_cast<std::uint32_t>(static_cast<std::uint8_t>(lod_bias_x32(mode.lod_bias))) & 0xFFu;
     if (arbitrary && source_mips) {
-        const int bias = static_cast<int>(static_cast<std::int8_t>(mode.lod_bias_x32)) +
+        const int bias = static_cast<int>(static_cast<std::int8_t>(lod_bias_x32(mode.lod_bias))) +
                          static_cast<int>(efb_scale_log2_x32) - 2 * static_cast<int>(lod_shift_x16);
         lod_bias = static_cast<std::uint32_t>(static_cast<std::uint8_t>(
             static_cast<std::int8_t>(std::clamp(bias, -128, 127))));
@@ -102,10 +102,7 @@ std::uint32_t pack_sampler_key(
             min_lod = min_lod == 0u ? 0u : std::min<std::uint32_t>(0xFFu, min_lod + lod_shift_x16);
             max_lod = std::min<std::uint32_t>(0xFFu, max_lod + lod_shift_x16);
         } else if (!full_chain) {
-            min_filter = static_cast<std::uint32_t>(
-                min_filter >= static_cast<std::uint32_t>(TexMinFilter::Linear)
-                    ? TexMinFilter::LinearMipLinear
-                    : TexMinFilter::NearMipNear);
+            min_filter = min_filter >= 4u ? 6u : 1u;  // between levels if linear, else the nearest level
             min_lod = 0u;
             max_lod = lod_shift_x16;
         }
@@ -113,7 +110,7 @@ std::uint32_t pack_sampler_key(
     return
           (static_cast<std::uint32_t>(mode.wrap_s) & 0x3u)
         | ((static_cast<std::uint32_t>(mode.wrap_t) & 0x3u) << 2)
-        | ((static_cast<std::uint32_t>(mode.mag_filter) & 0x1u) << 4)
+        | (((mode.mag_linear ? 1u : 0u) & 0x1u) << 4)
         | (min_filter << 5)
         | (lod_bias << 8)
         | (min_lod << 16)
@@ -306,10 +303,10 @@ bool dependency_ranges_overlap(
 
 [[nodiscard]] bool snapshot_should_generate_native_mips(
     const TexImage& image,
-    const TexMode& mode) {
-    if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
-        mode.min_filter != TexMinFilter::Linear ||
-        mode.mag_filter != TexMagFilter::Linear ||
+    const TextureSampler& mode) {
+    if ((min_filter_code(mode) & 0x3u) != 0u ||
+        min_filter_code(mode) != 4u ||
+        !mode.mag_linear ||
         (image.width < 64u && image.height < 64u) ||
         !snapshot_generated_mips_color_format(image.format)) {
         return false;
@@ -4783,16 +4780,16 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
     return key;
 }
 
-RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t texture, const TexMode& mode) const {
+RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t texture, const TextureSampler& mode) const {
     const TexImage image = texture_cache_.image_of(texture);
     unsigned levels = 1u;
     bool generated_mips = false;
-    const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
+    const unsigned mip_mode = min_filter_code(mode) & 0x3u;
     const unsigned full_chain =
         snapshot_full_mip_chain_levels(image.width, image.height);
     if (mip_mode != 0u) {
         const unsigned wanted =
-            1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
+            1u + (static_cast<unsigned>(lod_x16(mode.max_lod)) + 15u) / 16u;
         levels = std::min(wanted, full_chain);
     } else if (snapshot_should_generate_native_mips(image, mode)) {
         levels = full_chain;
@@ -5497,7 +5494,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
                     if ((texture_map_mask & (1u << m)) != 0u) {
                         const std::uint64_t texture = draw_state_.texture[m].texture;
-                        const TexMode mode = draw_state_.texture[m].mode;
+                        const TextureSampler mode = draw_state_.texture[m].mode;
                         const TextureHandleKey handle_key = texture_handle_key(texture, mode);
                         if (renderer_.target_picture(texture, texture_handles[m])) {
                             // A target pass's picture (E-07) under its key.
@@ -6073,15 +6070,13 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         out.texture = t.image;
         out.mode.wrap_s = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_s, 2u));
         out.mode.wrap_t = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_t, 2u));
-        out.mode.mag_filter = t.mag_linear != 0u ? TexMagFilter::Linear : TexMagFilter::Near;
-        out.mode.min_filter = t.mip_filter == 0u ? (t.min_linear != 0u ? TexMinFilter::Linear : TexMinFilter::Near)
-                              : t.mip_filter == 1u
-                                  ? (t.min_linear != 0u ? TexMinFilter::LinearMipNear : TexMinFilter::NearMipNear)
-                                  : (t.min_linear != 0u ? TexMinFilter::LinearMipLinear : TexMinFilter::NearMipLinear);
-        out.mode.lod_bias_x32 = static_cast<std::int8_t>(static_cast<std::int32_t>(32.0f * t.lod_bias));
-        out.mode.max_aniso = static_cast<std::uint8_t>(t.anisotropy & 3u);
-        out.mode.min_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.min_lod));
-        out.mode.max_lod_x16 = static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * t.max_lod));
+        out.mode.mag_linear = t.mag_linear != 0u;
+        out.mode.min_linear = t.min_linear != 0u;
+        out.mode.mip = static_cast<std::uint8_t>(std::min<std::uint8_t>(t.mip_filter, 2u));
+        out.mode.lod_bias = t.lod_bias;
+        out.mode.anisotropy = static_cast<std::uint8_t>(t.anisotropy & 3u);
+        out.mode.min_lod = t.min_lod;
+        out.mode.max_lod = t.max_lod;
         out.edge_lod = t.edge_lod != 0u;
         out.bias_clamp = false;
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));

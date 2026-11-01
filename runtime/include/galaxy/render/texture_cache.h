@@ -107,7 +107,7 @@ public:
     // The texture's image as the renderer sizes it: its record's size, levels' format (the disc's, or the linear
     // layout's) and address; 1x1 without a record.
     [[nodiscard]] TexImage image_of(std::uint64_t texture) const;
-    [[nodiscard]] TextureHandle get(std::uint64_t texture, const TexMode& mode);
+    [[nodiscard]] TextureHandle get(std::uint64_t texture, const TextureSampler& mode);
     // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);

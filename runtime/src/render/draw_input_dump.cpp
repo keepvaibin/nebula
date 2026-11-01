@@ -119,14 +119,12 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     for (unsigned m = 0; m < 8u; ++m) {
         const TextureMap& t = draw_state_.texture[m];
         std::fprintf(f,
-                     "map[%u] texture %llx wrap %u,%u filter %u,%u lod_bias %d aniso %u "
-                     "lod %u-%u edge %u\n",
+                     "map[%u] texture %llx wrap %u,%u linear %u,%u mip %u lod_bias %g aniso %u lod %g-%g edge %u\n",
                      m, static_cast<unsigned long long>(t.texture),
                      static_cast<unsigned>(t.mode.wrap_s), static_cast<unsigned>(t.mode.wrap_t),
-                     static_cast<unsigned>(t.mode.mag_filter), static_cast<unsigned>(t.mode.min_filter),
-                     static_cast<int>(t.mode.lod_bias_x32), static_cast<unsigned>(t.mode.max_aniso),
-                     static_cast<unsigned>(t.mode.min_lod_x16), static_cast<unsigned>(t.mode.max_lod_x16),
-                     t.edge_lod ? 1u : 0u);
+                     t.mode.mag_linear ? 1u : 0u, t.mode.min_linear ? 1u : 0u, static_cast<unsigned>(t.mode.mip),
+                     static_cast<double>(t.mode.lod_bias), static_cast<unsigned>(t.mode.anisotropy),
+                     static_cast<double>(t.mode.min_lod), static_cast<double>(t.mode.max_lod), t.edge_lod ? 1u : 0u);
     }
     for (unsigned c = 0; c < 8u; ++c) {
         const auto& s = draw_state_.coord[c];

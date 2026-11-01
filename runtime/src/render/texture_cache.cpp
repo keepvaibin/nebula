@@ -208,12 +208,12 @@ static inline void rgb5a3x8_to_rgba(v128 v, RGBA8* row0, RGBA8* row1) noexcept {
 
 [[nodiscard]] static bool should_generate_native_mips(
     const TexImage& image,
-    const TexMode& mode) {
+    const TextureSampler& mode) {
     // Only repeating textures get a generated mip chain: a clamped texture is a decal placed by a texture matrix
     // (eyes, HUD digits) whose small detail blended lower levels would wash out.
-    if ((static_cast<unsigned>(mode.min_filter) & 0x3u) != 0u ||
-        mode.min_filter != TexMinFilter::Linear ||
-        mode.mag_filter != TexMagFilter::Linear ||
+    if ((min_filter_code(mode) & 0x3u) != 0u ||
+        min_filter_code(mode) != 4u ||
+        !mode.mag_linear ||
         mode.wrap_s == TexWrap::Clamp || mode.wrap_t == TexWrap::Clamp ||
         (image.width < 64u && image.height < 64u) ||
         !generated_mips_color_format(image.format)) {
@@ -1341,7 +1341,7 @@ TexImage TextureCache::image_of(std::uint64_t texture) const {
     return TexImage{record->width, record->height, format, texture};
 }
 
-TextureHandle TextureCache::get(std::uint64_t texture, const TexMode& mode) {
+TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mode) {
     const TexImage image = image_of(texture);
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
@@ -1364,12 +1364,12 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TexMode& mode) {
     bool generated_mips = false;
     {
         const unsigned mip_mode =
-            static_cast<unsigned>(mode.min_filter) & 0x3u;
+            min_filter_code(mode) & 0x3u;
         const unsigned full_chain =
             full_mip_chain_levels(image.width, image.height);
         if (mip_mode != 0u) {
             const unsigned wanted =
-                1u + (static_cast<unsigned>(mode.max_lod_x16) + 15u) / 16u;
+                1u + (static_cast<unsigned>(lod_x16(mode.max_lod)) + 15u) / 16u;
             levels = std::min(wanted, full_chain);
             source_levels = levels;
         } else if (should_generate_native_mips(image, mode)) {

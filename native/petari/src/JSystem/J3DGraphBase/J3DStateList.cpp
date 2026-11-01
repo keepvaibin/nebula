@@ -257,11 +257,12 @@ void J3DStateList::setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWr
     r.a[0] = map;
     r.a[1] = wrapS;
     r.a[2] = wrapT;
-    r.a[3] = minFilter;
-    r.a[4] = magFilter;
-    r.a[5] = biasClamp;
-    r.a[6] = edgeLod;
-    r.a[7] = maxAniso;
+    r.a[3] = minFilter == GX_LINEAR || minFilter == GX_LIN_MIP_NEAR || minFilter == GX_LIN_MIP_LIN;
+    r.a[4] = magFilter != GX_NEAR;
+    r.a[5] = minFilter < GX_NEAR_MIP_NEAR ? 0 : minFilter < GX_NEAR_MIP_LIN ? 1 : 2;
+    r.a[6] = biasClamp;
+    r.a[7] = edgeLod;
+    r.a[8] = maxAniso;
     r.f[0] = minLod;
     r.f[1] = maxLod;
     r.f[2] = lodBias;

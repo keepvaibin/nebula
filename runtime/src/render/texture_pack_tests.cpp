@@ -212,43 +212,43 @@ void test_png(const std::filesystem::path& root) {
 }
 
 void test_sampler_shift() {
-    TexMode mode{};
+    TextureSampler mode{};
     mode.wrap_s = TexWrap::Repeat;
     mode.wrap_t = TexWrap::Repeat;
-    mode.mag_filter = TexMagFilter::Linear;
-    mode.min_filter = TexMinFilter::Linear;
-    mode.min_lod_x16 = 0;
-    mode.max_lod_x16 = 0;
+    mode.mag_linear = true;
+    mode.min_linear = true, mode.mip = 0u;
+    mode.min_lod = (0) / 16.0f;
+    mode.max_lod = (0) / 16.0f;
     // A 4x replacement of a mip-less texture: levels 0..2 of the replacement (the game's base size).
     const std::uint32_t key = pack_sampler_key(mode, false, 9u, 32u);
-    expect(((key >> 5u) & 0x7u) == static_cast<std::uint32_t>(TexMinFilter::LinearMipLinear),
+    expect(((key >> 5u) & 0x7u) == 6u,
            "mip-less guest sampler gains a mip filter for a replacement");
     expect(((key >> 16u) & 0xFFu) == 0u && ((key >> 24u) & 0xFFu) == 32u, "LOD range 0..2 for a 4x replacement");
     // Authored mips: the range moves by the shift.
-    mode.min_filter = TexMinFilter::LinearMipLinear;
-    mode.min_lod_x16 = 8;
-    mode.max_lod_x16 = 48;
+    mode.min_linear = true, mode.mip = 2u;
+    mode.min_lod = (8) / 16.0f;
+    mode.max_lod = (48) / 16.0f;
     const std::uint32_t authored = pack_sampler_key(mode, false, 9u, 32u);
     expect(((authored >> 16u) & 0xFFu) == 40u && ((authored >> 24u) & 0xFFu) == 80u,
            "authored LOD range shifts by log2(scale)");
     expect(pack_sampler_key(mode, false, 4u, 0u) == pack_sampler_key(mode, false, 4u),
            "no shift leaves the key unchanged");
     // A range from its base level: close up the replacement's own base level shows.
-    mode.min_lod_x16 = 0;
+    mode.min_lod = (0) / 16.0f;
     const std::uint32_t from_base = pack_sampler_key(mode, false, 9u, 32u);
     expect(((from_base >> 16u) & 0xFFu) == 0u && ((from_base >> 24u) & 0xFFu) == 80u,
            "a range from level 0 keeps the replacement's level 0");
     // Arbitrary levels at 4x internal resolution with an 8x replacement: bias +2 - 3 = -1 LOD, whole chain, mip mode 3.
-    mode.lod_bias_x32 = 0;
+    mode.lod_bias = (0) / 32.0f;
     const std::uint32_t arbitrary = pack_sampler_key(mode, false, 11u, 48u, true, 64u);
     expect(static_cast<std::int8_t>((arbitrary >> 8u) & 0xFFu) == -32 && ((arbitrary >> 16u) & 0xFFu) == 0u &&
                ((arbitrary >> 24u) & 0xFFu) == 0xFFu && ((arbitrary >> 5u) & 0x7u) == 7u,
            "arbitrary levels pair with the game's by index");
     // Near filtering stays near.
-    mode.min_filter = TexMinFilter::Near;
-    mode.mag_filter = TexMagFilter::Near;
+    mode.min_linear = false, mode.mip = 0u;
+    mode.mag_linear = false;
     const std::uint32_t nearest = pack_sampler_key(mode, false, 9u, 16u);
-    expect(((nearest >> 5u) & 0x7u) == static_cast<std::uint32_t>(TexMinFilter::NearMipNear),
+    expect(((nearest >> 5u) & 0x7u) == 1u,
            "nearest guest sampler keeps nearest filtering");
 }
 
@@ -522,11 +522,11 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     image.width = 32u;
     image.height = 32u;
     image.format = TexFormat::RGBA8;
-    TexMode mode{};
+    TextureSampler mode{};
     mode.wrap_s = TexWrap::Repeat;
     mode.wrap_t = TexWrap::Repeat;
-    mode.mag_filter = TexMagFilter::Linear;
-    mode.min_filter = TexMinFilter::Linear;
+    mode.mag_linear = true;
+    mode.min_linear = true, mode.mip = 0u;
     TexturePackName name{};
     name.width = 32u;
     name.height = 32u;
