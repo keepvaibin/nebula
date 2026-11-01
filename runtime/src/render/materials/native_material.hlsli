@@ -3,7 +3,7 @@
 // MaterialConstants (its NebulaNativeMaterial::constants, floats in order), `void material_vertex(NativeVertex v,
 // inout NativeVaryings o)` (its texture coordinates) and `float4 material_color(NativeVaryings i)` (its colour, alpha
 // tested by the material itself), and is compiled at build for D3D12 (DXIL) and Vulkan (SPIR-V) in the output variants
-// below. Bindings are the draw's: b0 the draw constants (uber_constants.h VertexConstants, the fields read here), b1
+// below. Bindings are the draw's: b0 the draw constants (draw_constants.h VertexConstants, the fields read here), b1
 // the material's constants, t0-t7/s0-s7 its textures, t3 space1 the matrix rows.
 //
 // Output variants (defines): NATIVE_REACTIVE (SV_Target1: the reactive mask), NATIVE_LAYER (with NATIVE_REACTIVE: the

@@ -16,7 +16,7 @@
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/streamline_bridge.h"
 #include "galaxy/render/texture_cache.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/motion_signals.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"

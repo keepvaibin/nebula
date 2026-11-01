@@ -6,7 +6,7 @@
 #include <cstdio>
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/render_vertex.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 
 #include "galaxy/windows_power.h"
 

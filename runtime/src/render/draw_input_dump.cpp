@@ -80,11 +80,11 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     // them into the uploaded copy).
     VertexConstants vs = cpu_vs_constants_.constants;
     if (native) {
-        vs.uber_vs_header[1] = renderer_.efb_scale();
-        vs.uber_vs_header[2] = native_pe;
-        vs.uber_vs_header[3] = native_texmtx;
+        vs.draw_header[1] = renderer_.efb_scale();
+        vs.draw_header[2] = native_pe;
+        vs.draw_header[3] = native_texmtx;
         for (unsigned i = 0; i < 8u; ++i) {
-            vs.uber_post_texgen[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
+            vs.post_rows[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
                                      (draw_state_.post_texgen[i].normalize ? 0x100u : 0u);
         }
     }

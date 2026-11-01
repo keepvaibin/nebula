@@ -50,7 +50,7 @@
 #include "galaxy/render/frame_interpolation.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/transform_history.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/render/vs_constants.h"
 #include "galaxy/render/render_vertex.h"
 #include "galaxy/renderer_api.h"

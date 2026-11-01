@@ -5,7 +5,7 @@
 // complete constant-ring allocation; nothing here touches GPU upload memory.
 #include "galaxy/render/draw_state.h"
 #include "galaxy/render/draw_matrices.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/render/line_point_raster.h"
 #include <algorithm>
 #include <array>
@@ -114,20 +114,6 @@ inline void fill_vs_constants(
     // (per_vertex, RenderCore's): native_material.hlsli native_vs and ray_tracing.hlsl transform_vertex read it; the
     // uber shaders read the key's copy (VertexShaderKey::flags bit 0).
     out.flags  = lighting ? 2u : 0u;
-
-    // Texgen config words (each coordinate's generation and post-transform, texgen_word and post_texgen_word).
-    for (unsigned i = 0; i < kMaxTexGens; ++i) {
-        out.texgen_config[i][0] = texgen_word(draw.texgen[i]);
-        out.texgen_config[i][1] = post_texgen_word(draw.post_texgen[i]);
-    }
-
-    // Ambient and material colours as 0..1 float[4].
-    for (unsigned i = 0; i < kMaxColorChannels; ++i) {
-        for (unsigned c = 0; c < 4u; ++c) {
-            out.chan_ambient[i][c] = draw.ambient_color[i][c] / 255.0f;
-            out.chan_material[i][c] = draw.material_color[i][c] / 255.0f;
-        }
-    }
 
     // Previous rows: the draw's own (no motion of its own) unless a motion scene names other position rows.
     out.motion_ctrl[1] = kMotionOwnRows;

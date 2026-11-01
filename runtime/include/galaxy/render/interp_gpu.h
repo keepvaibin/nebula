@@ -14,7 +14,7 @@
 // No Windows/D3D12 includes (unit-tested offline).
 
 #include "galaxy/render/frame_interpolation.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 
 #include <cstddef>
 #include <cstdint>

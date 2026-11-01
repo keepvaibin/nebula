@@ -31,7 +31,7 @@
 #include "galaxy/render/line_point_raster.h"
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -5353,11 +5353,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         {
             // The per-vertex texture matrix bits and each texgen's post-transform row (| 0x100 normalize).
             auto* native_vs = reinterpret_cast<VertexConstants*>(vs_alloc.cpu);
-            native_vs->uber_vs_header[1] = renderer_.efb_scale();
-            native_vs->uber_vs_header[2] = native_pe;
-            native_vs->uber_vs_header[3] = native_texmtx;
+            native_vs->draw_header[1] = renderer_.efb_scale();
+            native_vs->draw_header[2] = native_pe;
+            native_vs->draw_header[3] = native_texmtx;
             for (unsigned i = 0; i < 8u; ++i) {
-                native_vs->uber_post_texgen[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
+                native_vs->post_rows[i] = (draw_state_.post_texgen[i].matrix_index & 0x3Fu) |
                                                  (draw_state_.post_texgen[i].normalize ? 0x100u : 0u);
             }
         }

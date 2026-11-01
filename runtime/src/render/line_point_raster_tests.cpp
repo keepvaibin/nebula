@@ -17,7 +17,7 @@
 #include "galaxy/render/native_shaders.h"
 #include "line_point_test_vs.h"
 #include "line_point_test_ps.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/render/render_vertex.h"
 
 #include <algorithm>

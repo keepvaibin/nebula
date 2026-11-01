@@ -440,16 +440,6 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
     gen.num_ind_stages = static_cast<std::uint8_t>(m.ind_stages & 7u);
 }
 
-std::uint32_t texgen_word(const XfTexGen& g) {
-    return static_cast<std::uint32_t>(g.generate_stq) << 1u | static_cast<std::uint32_t>(g.input_form_abc1) << 2u |
-           static_cast<std::uint32_t>(g.type) << 4u | static_cast<std::uint32_t>(g.source_row) << 7u |
-           static_cast<std::uint32_t>(g.emboss_source) << 12u | static_cast<std::uint32_t>(g.emboss_light) << 15u;
-}
-
-std::uint32_t post_texgen_word(const XfPostTexGen& p) {
-    return static_cast<std::uint32_t>(p.matrix_index) | static_cast<std::uint32_t>(p.normalize) << 8u;
-}
-
 std::uint32_t rgba_word(const std::uint8_t* c) {
     return static_cast<std::uint32_t>(c[0]) << 24u | static_cast<std::uint32_t>(c[1]) << 16u |
            static_cast<std::uint32_t>(c[2]) << 8u | c[3];
