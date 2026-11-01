@@ -4,7 +4,7 @@
 #include <cstring>
 #include <stdint.h>
 
-// Display lists are big-endian (GX reads them as the file has them).
+// Display lists in host order, as the importer cooks SHP1 (each primitive's count, 16-bit indices).
 u32 J3DShapeDraw::countVertex(u32 stride) {
     u32 count = 0;
     u8* dlStart = static_cast< u8* >(getDisplayList());
@@ -14,7 +14,7 @@ u32 J3DShapeDraw::countVertex(u32 stride) {
         dl++;
         if (cmd != GX_TRIANGLEFAN && cmd != GX_TRIANGLESTRIP)
             break;
-        int vtxNum = *reinterpret_cast< NEBULA_BE(u16)* >(dl);
+        int vtxNum = *reinterpret_cast< u16* >(dl);
         dl += 2;
         count += vtxNum;
         dl = static_cast< u8* >(dl) + stride * vtxNum;
@@ -40,9 +40,9 @@ void J3DShapeDraw::addTexMtxIndexInDL(u32 stride, u32 attrOffs, u32 valueBase) {
             break;
 
         // Copy count
-        int vtxNum = *reinterpret_cast< NEBULA_BE(u16)* >(oldDL);
+        int vtxNum = *reinterpret_cast< u16* >(oldDL);
         oldDL += 2;
-        *reinterpret_cast< NEBULA_BE(u16)* >(newDL) = vtxNum;
+        *reinterpret_cast< u16* >(newDL) = vtxNum;
         newDL += 2;
 
         for (int i = 0; i < vtxNum; i++) {

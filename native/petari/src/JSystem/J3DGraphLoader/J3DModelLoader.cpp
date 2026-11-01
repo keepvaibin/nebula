@@ -242,7 +242,7 @@ void J3DModelLoader::setupBBoardInfo() {
         J3DMaterial* mesh = mpModelData->getJointNodePointer(i)->getMesh();
         if (mesh != NULL) {
             u32 shape_index = mesh->getShape()->getIndex();
-            NEBULA_BE(u16)* index_table = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(mpShapeBlock, mpShapeBlock->mpIndexTable);
+            u16* index_table = JSUConvertOffsetToPtr< u16 >(mpShapeBlock, mpShapeBlock->mpIndexTable);
             J3DShapeInitData* shape_init_data = JSUConvertOffsetToPtr< J3DShapeInitData >(mpShapeBlock, mpShapeBlock->mpShapeInitData);
             J3DJoint* joint;
             switch (shape_init_data[index_table[shape_index]].mShapeMtxType) {
@@ -487,12 +487,7 @@ void J3DModelLoader::readShape(J3DShapeBlock const* i_block, u32 i_flags) {
     for (; hierarchy_entry->mType != 0; hierarchy_entry++) {
         if (hierarchy_entry->mType == 0x12) {
             shape_table->mShapeNodePointer[hierarchy_entry->mValue] = factory.create(hierarchy_entry->mValue, i_flags, vtx_desc_list);
-#ifdef TARGET_PC
-            // The list the shape now owns (getVtxDescList copies natively).
-            vtx_desc_list = shape_table->mShapeNodePointer[hierarchy_entry->mValue]->getVtxDesc();
-#else
             vtx_desc_list = factory.getVtxDescList(hierarchy_entry->mValue);
-#endif
         }
     }
 }

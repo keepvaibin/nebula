@@ -39,14 +39,6 @@ namespace {
         }
     };
 
-    u16 be16(const u8* p) {
-        return static_cast< u16 >((p[0] << 8) | p[1]);
-    }
-
-    u32 be32(const u8* p) {
-        return (static_cast< u32 >(p[0]) << 24) | (static_cast< u32 >(p[1]) << 16) | (static_cast< u32 >(p[2]) << 8) | p[3];
-    }
-
     struct Format {
         GXCompCnt mCount;
         GXCompType mType;
@@ -69,7 +61,7 @@ namespace {
         return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
     }
 
-    // A vertex component as the importer cooks the arrays (host order).
+    // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
     u16 host16(const u8* p) {
         u16 v;
         memcpy(&v, p, sizeof(v));
@@ -145,7 +137,7 @@ namespace {
     }
 
     u16 indexAt(const u8* pVertex, u32 offset, u32 bytes) {
-        return bytes == 1 ? pVertex[offset] : be16(pVertex + offset);
+        return bytes == 1 ? pVertex[offset] : host16(pVertex + offset);
     }
 
     // The triangles of a display list (quads, strips and fans split), as position and normal index pairs.
@@ -154,23 +146,8 @@ namespace {
         u32 at = 0;
         while (at < size) {
             const u8 op = pList[at++];
-            if (op == 0x00 || op == 0x48) {
-                continue;  // NOP, vertex cache invalidation
-            }
-            if (op == 0x08) {
-                at += 5;  // CP register
-                continue;
-            }
-            if (op == 0x61 || op == 0x20 || op == 0x28 || op == 0x30 || op == 0x38) {
-                at += 4;  // BP register, indexed XF loads
-                continue;
-            }
-            if (op == 0x10) {
-                if (at + 4 > size) {
-                    return false;
-                }
-                at += 4 + 4 * ((be32(pList + at) >> 16) + 1);  // XF registers
-                continue;
+            if (op == 0x00) {
+                continue;  // padding (the importer finds only primitives and padding in SHP1 lists)
             }
             const u8 primitive = op & 0xF8;
             if (primitive != GX_QUADS && primitive != GX_TRIANGLES && primitive != GX_TRIANGLESTRIP &&
@@ -183,7 +160,7 @@ namespace {
             if (at + 2 > size) {
                 return false;
             }
-            const u32 count = be16(pList + at);
+            const u32 count = host16(pList + at);
             at += 2;
             if (at + count * rLayout.mStride > size) {
                 return false;
