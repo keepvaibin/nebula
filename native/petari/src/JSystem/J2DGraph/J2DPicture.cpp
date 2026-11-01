@@ -4,38 +4,10 @@
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "JSystem/J2DGraph/J2DScreen.hpp"
 #include "JSystem/JUtility/JUTPalette.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
 #include <string.h>
 
-extern "C" const NebulaHostServices* nebula_host(void);
-
-namespace {
-    // The picture's TEV programs (nebula_game_api.h NebulaMaterialProgram), one per shape of its stages: the
-    // textures' count (1-4), which of them take their alpha from the texture, the black and white remap, the
-    // vertex colours. Each is registered with the host when first drawn; its key is its entry here.
-    struct PictureProgram {
-        NebulaMaterialProgram mProgram;
-        bool mRegistered;
-    };
-    PictureProgram sPrograms[4 * 16 * 2 * 2];
-
-    // A stage that adds its inputs (a + (b - a) c + d, no bias, scale 1, clamped) into the previous colour.
-    void addStage(NebulaMaterialTevStage& rStage, u8 coord, u8 map, u8 channel, const u8 (&color)[4],
-                  const u8 (&alpha)[4]) {
-        rStage.tex_coord = coord;
-        rStage.tex_map = map;
-        rStage.channel = channel;
-        for (u32 k = 0; k < 4; k++) {
-            rStage.color_in[k] = color[k];
-            rStage.alpha_in[k] = alpha[k];
-        }
-        rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-        rStage.color_bias = rStage.alpha_bias = GX_TB_ZERO;
-        rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-        rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-        rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-    }
-}  // namespace
 
 J2DPicture::J2DPicture(JUTTexture* texture) {
     for (u32 i = 0; i < 4; i++) {
@@ -349,11 +321,7 @@ void J2DPicture::drawFullSet(f32 param_0, f32 param_1, f32 param_2, f32 param_3,
 
 void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mirrorY, bool rotate90) {
     if (isVisible() && mTextureNum != 0 && mTexture[0] != NULL) {
-        for (u8 i = 0; i < mTextureNum; i++) {
-            load(i);
-        }
 
-        J3DNativeState::setNumTexGens(mTextureNum);
         mColorAlpha = mAlpha;
         JUtility::TColor color[4];
         getNewColor(color);
@@ -383,25 +351,16 @@ void J2DPicture::draw(f32 x, f32 y, f32 width, f32 height, bool mirrorX, bool mi
         J3DNativeDraw::color(color[2]);
         J3DNativeDraw::texCoord(static_cast< s16 >(coords[2].x) / 256.0f, static_cast< s16 >(coords[2].y) / 256.0f);
 
-        J3DNativeState::setNumTexGens(0);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
 
         Mtx m;
         NebulaMtxIdentity(m);
         J3DNativeShape::setPosition(0, m);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     }
 }
 
 void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2< f32 > const& texRect) {
     if (isVisible() && mTextureNum != 0 && mTexture[0] != NULL) {
-        for (u8 i = 0; i < mTextureNum; i++) {
-            load(i);
-        }
 
-        J3DNativeState::setNumTexGens(mTextureNum);
 
         f32 s0 = (posBox.i.x - texRect.i.x) / texRect.getWidth();
         f32 s1 = (posBox.f.x - texRect.f.x) / texRect.getWidth() + 1.0f;
@@ -431,25 +390,16 @@ void J2DPicture::drawOut(JGeometry::TBox2< f32 > const& posBox, JGeometry::TBox2
         J3DNativeDraw::color(color[2]);
         J3DNativeDraw::texCoord(s0, t1);
 
-        J3DNativeState::setNumTexGens(0);
-        J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_PASSCLR);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
-        J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
     }
 }
 
 void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3, s16 param_4, s16 param_5, s16 param_6, s16 param_7, s16 param_8,
                               s16 param_9, s16 param_10, s16 param_11, Mtx* param_12) {
     if (mTextureNum != 0) {
-        for (u8 i = 0; i < mTextureNum; i++) {
-            load(i);
-        }
 
         f32 tmp1 = param_0 + param_2;
         f32 tmp2 = param_1 + param_3;
 
-        J3DNativeState::setNumTexGens(mTextureNum);
 
         JUtility::TColor black[4];
 
@@ -482,113 +432,32 @@ void J2DPicture::drawTexCoord(f32 param_0, f32 param_1, f32 param_2, f32 param_3
     }
 }
 
-// The picture's stages as a native material: texture 0's colour (its alpha, or register 2's), each further texture
-// blended in by its konst colour and alpha (konst 0 and 2, by the selections the stage's place names), then the black
-// and white remap and the vertex colours when they change anything. The registers and konst colours stay state.
+// The picture as a native material (runtime/src/render/materials/j2d_picture.hlsl) with its textures, blended by
+// alpha with no depth test or culling (J2DGrafContext::setup2D's): texture 0's colour, each further texture blended in
+// by its konst ratios, the black and white remap and the vertex colours.
 void J2DPicture::setTevMode() {
-    const bool remap = mBlack != 0 || mWhite != 0xFFFFFFFF;
-    const bool vertexColours = mColorAlpha != 0xFF || mCornerColor[0] != 0xFFFFFFFF || mCornerColor[1] != 0xFFFFFFFF ||
-                               mCornerColor[2] != 0xFFFFFFFF || mCornerColor[3] != 0xFFFFFFFF;
     u32 textureAlpha = 0;
     for (u8 i = 0; i < mTextureNum; i++) {
         textureAlpha |= mTexture[i] != NULL && mTexture[i]->getTransparency() ? 1u << i : 0u;
     }
-    const u32 shape = (((static_cast< u32 >(mTextureNum - 1) & 3u) * 16u + textureAlpha) * 2u + (remap ? 1u : 0u)) * 2u +
-                      (vertexColours ? 1u : 0u);
-    PictureProgram& rEntry = sPrograms[shape];
-    if (!rEntry.mRegistered) {
-        NebulaMaterialProgram& rProgram = rEntry.mProgram;
-        memset(&rProgram, 0, sizeof(rProgram));
-        // Stages that read no konst colour keep the selections J3D's drawing state starts with.
-        for (u32 s = 0; s < 16; s++) {
-            rProgram.tev[s].konst_color = GX_TEV_KCSEL_1_4;
-            rProgram.tev[s].konst_alpha = GX_TEV_KASEL_1;
-        }
-        u8 i = 0;
-        for (; i < mTextureNum; i++) {
-            const u8 alpha = (textureAlpha & (1u << i)) != 0 ? GX_CA_TEXA : GX_CA_A2;
-            if (i == 0) {
-                const u8 color[4] = {GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO};
-                const u8 alphaIn[4] = {alpha, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO};
-                addStage(rProgram.tev[i], i, i, GX_COLOR_NULL, color, alphaIn);
-            } else {
-                const u8 color[4] = {GX_CC_CPREV, GX_CC_TEXC, GX_CC_KONST, GX_CC_ZERO};
-                const u8 alphaIn[4] = {GX_CA_APREV, alpha, GX_CA_KONST, GX_CA_ZERO};
-                addStage(rProgram.tev[i], i, i, GX_COLOR_NULL, color, alphaIn);
-                rProgram.tev[i].konst_color = static_cast< u8 >(0x20 - i * 4);
-                rProgram.tev[i].konst_alpha = static_cast< u8 >(0x22 - i * 4);
-            }
-        }
-        if (remap) {
-            const u8 color[4] = {GX_CC_C0, GX_CC_C1, GX_CC_CPREV, GX_CC_ZERO};
-            const u8 alphaIn[4] = {GX_CA_A0, GX_CA_A1, GX_CA_APREV, GX_CA_ZERO};
-            addStage(rProgram.tev[i++], GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR_NULL, color, alphaIn);
-        }
-        if (vertexColours) {
-            const u8 color[4] = {GX_CC_ZERO, GX_CC_CPREV, GX_CC_RASC, GX_CC_ZERO};
-            const u8 alphaIn[4] = {GX_CA_ZERO, GX_CA_APREV, GX_CA_RASA, GX_CA_ZERO};
-            addStage(rProgram.tev[i++], GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, color, alphaIn);
-        }
-        // The swap tables as J3D's drawing state starts them.
-        static const u8 kSwap[4][4] = {{GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA},
-                                       {GX_CH_RED, GX_CH_RED, GX_CH_RED, GX_CH_ALPHA},
-                                       {GX_CH_GREEN, GX_CH_GREEN, GX_CH_GREEN, GX_CH_ALPHA},
-                                       {GX_CH_BLUE, GX_CH_BLUE, GX_CH_BLUE, GX_CH_ALPHA}};
-        memcpy(rProgram.swap_table, kSwap, sizeof(kSwap));
-        rProgram.tev_stages = i;
-        rProgram.tex_gens = mTextureNum;
-        rProgram.channels = 1;
-        rProgram.cull = GX_CULL_NONE;
-        rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_KONST_SELECT;
-        for (u8 t = 0; t < mTextureNum; t++) {
-            rProgram.tex_gen[t].type = GX_TG_MTX2x4;
-            rProgram.tex_gen[t].source = GX_TG_TEX0;
-            rProgram.tex_gen[t].matrix = GX_IDENTITY;
-            rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
-        }
-        // J2DGrafContext::setup2D's alpha test and depth, the picture's blend.
-        rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
-        rProgram.alpha_compare.op = GX_AOP_OR;
-        rProgram.blend.type = GX_BM_BLEND;
-        rProgram.blend.source = GX_BL_SRCALPHA;
-        rProgram.blend.destination = GX_BL_INVSRCALPHA;
-        rProgram.blend.logic_op = GX_LO_SET;
-        rProgram.z_mode.enable = GX_FALSE;
-        rProgram.z_mode.func = GX_LEQUAL;
-        rProgram.z_mode.update = GX_FALSE;
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &rProgram);
-        rEntry.mRegistered = true;
-    }
-
-    // Values: each texture's coordinate scale (its size, as GX derives it for a normalized coordinate).
-    NebulaMaterialValues values;
-    memset(&values, 0, sizeof(values));
-    for (u8 t = 0; t < mTextureNum; t++) {
-        if (mTexture[t] != NULL) {
-            values.tex_coord_scale[t].scale_s = mTexture[t]->getWidth();
-            values.tex_coord_scale[t].scale_t = mTexture[t]->getHeight();
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                       NEBULA_CULL_NONE);
+    NativeShader::setColor(material, 0, mBlendKonstColor.r, mBlendKonstColor.g, mBlendKonstColor.b, mBlendKonstColor.a);
+    NativeShader::setColor(material, 4, mBlendKonstAlpha.r, mBlendKonstAlpha.g, mBlendKonstAlpha.b, mBlendKonstAlpha.a);
+    NativeShader::setColor(material, 8, mBlack.r, mBlack.g, mBlack.b, mBlack.a);
+    NativeShader::setColor(material, 12, mWhite.r, mWhite.g, mWhite.b, mWhite.a);
+    material.constants[16] = mTextureNum;
+    material.constants[17] = static_cast< f32 >(textureAlpha);
+    for (u8 i = 0; i < mTextureNum && i < 4; i++) {
+        if (mTexture[i] != NULL) {
+            NativeShader::setTexture(material, i, mTexture[i]);
         }
     }
-    J3DNativeShape::flushState();
-    const NebulaHostServices* pHost = nebula_host();
-    pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
-    // The coordinates' texture matrices: none (the identity's place), as GXSetTexCoordGen2's matrix sets them.
+    NativeShader::send(material);
     static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                                     GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
     J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
-
-    J3DNativeState::setTevColor(GX_TEVREG2, JUtility::TColor(0xFFFFFFFF));
-    J3DNativeState::setTevKColor(GX_KCOLOR0, mBlendKonstColor);
-    J3DNativeState::setTevKColor(GX_KCOLOR2, mBlendKonstAlpha);
-    if (remap) {
-        J3DNativeState::setTevColor(GX_TEVREG0, mBlack);
-        J3DNativeState::setTevColor(GX_TEVREG1, mWhite);
-    }
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_DISABLE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    for (int i = GX_TEVSTAGE0; i < GX_MAX_TEVSTAGE; i++) {
-        J3DNativeState::setTevDirect((GXTevStageID)i);
-    }
 }
 
 void J2DPicture::swap(f32& lhs, f32& rhs) {

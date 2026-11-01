@@ -1,4 +1,5 @@
 #include "JSystem/J2DGraph/J2DGrafContext.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
@@ -121,8 +122,22 @@ void J2DGrafContext::place(JGeometry::TBox2< f32 > const& rBounds) {
 }
 
 void J2DGrafContext::fillBox(JGeometry::TBox2< f32 > const& rBox) {
-    J3DNativeState::setBlendMode((GXBlendMode)mBoxPart.mType, (GXBlendFactor)mBoxPart.mSrcFactor, (GXBlendFactor)mBoxPart.mDestFactor, GX_LO_SET);
+    // runtime/src/render/materials/vertex_color.hlsl: the corners' colours where their alpha is above 0 (setup2D's
+    // test), the box's blending, no depth test or culling.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_VERTEX_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                       NEBULA_CULL_NONE);
+    if (mBoxPart.mType == GX_BM_BLEND) {
+        NativeShader::setBlend(material, mBoxPart.mSrcFactor, mBoxPart.mDestFactor);
+    } else if (mBoxPart.mType == GX_BM_SUBTRACT) {
+        material.blend_op = NEBULA_BLEND_SUBTRACT;
+    }
+    material.constants[4] = 0.0f;
     J3DNativeShape::setPosition(0, mPosMtx);
+    static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
+                                    GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kIdentity);
+    NativeShader::send(material);
     J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0);
     J3DNativeDraw::position(rBox.i.x, rBox.i.y, 0);
     J3DNativeDraw::color(mColorTL);
