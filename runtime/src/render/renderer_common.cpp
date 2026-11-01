@@ -139,7 +139,7 @@ float4 main(V v) : SV_Target {
         c.rgb = float3(y, y, y);
     }
 
-    // The picture's channels (efb_copy.h): the game's NebulaTargetChannels, 7 the frame shown. (Not named `layout`:
+    // The picture's channels (capture.h): the game's NebulaTargetChannels, 7 the frame shown. (Not named `layout`:
     // glslang's HLSL front end reserves the word.)
     uint channels = uint(filt2.y + 0.5);
     if (channels == 3u) {          // red (or luminance) in every channel

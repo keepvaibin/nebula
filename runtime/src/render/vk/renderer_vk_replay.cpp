@@ -8,7 +8,7 @@
 
 #include "renderer_vk_internal.h"
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/texture_store.h"

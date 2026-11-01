@@ -85,7 +85,7 @@ FIFO bytes --> FifoParser --(FifoSink callbacks)--> GxBackend
 | `shader_gen.h` | HLSL generation from keys |
 | `pipeline_cache.h` | Pipeline cache and the completion queue for worker compiles |
 | `texture_cache.h` | Texture format decoding, palettes, EFB copy aliases, invalidation |
-| `efb_copy.h` | XFB registry and copy geometry |
+| `capture.h` | Capture requests, the frame-shown picture ring, capture and viewport geometry |
 | `renderer_d3d12.h` | Device, swap chain, EFB targets, upload rings, draw submission |
 | `render_core.h` | `GxBackend`, which implements `FifoSink` |
 

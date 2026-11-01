@@ -15,7 +15,7 @@
 // unavailable.
 #pragma once
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/interp_types.h"

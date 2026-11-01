@@ -1,7 +1,7 @@
 // EfbCopyManager, the XFB texture registry for display copies (render thread only), and the EFB-copy geometry
 // helpers.
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/renderer_common.h"
 

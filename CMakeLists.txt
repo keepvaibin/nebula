@@ -325,7 +325,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/draw_state.cpp
     runtime/src/render/draw_matrices.cpp
     runtime/src/render/render_state_key.cpp
-    runtime/src/render/efb_copy.cpp
+    runtime/src/render/capture.cpp
     runtime/src/render/line_point_raster.cpp
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/post_process.cpp
@@ -487,8 +487,8 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         sampler_key rt_materials texture_pack movie_replacement
-        efb_copy line_point_raster native_settings_overlay post_process
-        efb_conversion native_material)
+        capture line_point_raster native_settings_overlay post_process
+        warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
 # line_point_raster_tests' own vertex and pixel stages, DXIL as the native stages they share pipelines with.
@@ -513,9 +513,9 @@ target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
     NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
 add_test(NAME galaxy_post_process_tests_held_no_deband COMMAND galaxy_post_process_tests --held-no-deband)
 # Texture records (nebula_cooked_texture.h) in the texture cache's suite.
-target_include_directories(galaxy_efb_conversion_tests PRIVATE native/include)
+target_include_directories(galaxy_warp_capture_store_tests PRIVATE native/include)
 foreach(mode content-key-hash oversized-content-cache decoded-allocation-budget)
-    add_test(NAME galaxy_efb_conversion_tests_${mode} COMMAND galaxy_efb_conversion_tests --${mode})
+    add_test(NAME galaxy_warp_capture_store_tests_${mode} COMMAND galaxy_warp_capture_store_tests --${mode})
 endforeach()
 
 if(MSVC)
@@ -560,7 +560,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/draw_state.cpp
         runtime/src/render/draw_matrices.cpp
         runtime/src/render/render_state_key.cpp
-        runtime/src/render/efb_copy.cpp
+        runtime/src/render/capture.cpp
         runtime/src/render/line_point_raster.cpp
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/transform_history.cpp
