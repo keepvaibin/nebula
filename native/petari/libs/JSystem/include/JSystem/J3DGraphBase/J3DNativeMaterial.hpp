@@ -9,6 +9,8 @@ class J3DModelData;
 class J3DTexture;
 class J3DDisplayListObj;
 struct NebulaMaterialParts;
+struct NebulaMaterialProgram;
+struct NebulaMaterialValues;
 struct NebulaStateOp;
 
 // A J3D material as the renderer takes it (nebula_game_api.h NebulaMaterialProgram and NebulaMaterialValues): every
@@ -37,4 +39,8 @@ namespace J3DNativeMaterial {
     // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: TEV registers, konst, material and
     // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
     const f32* registers();
+    // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
+    // until the next material: its generated native shader when the material set has its program (depth and culling
+    // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.
+    void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues);
 };  // namespace J3DNativeMaterial

@@ -317,7 +317,8 @@ namespace {
     }
 
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
-    void sendNative(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues, u32 shader) {
+    void sendNative(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues, u32 shader,
+                    bool keepDepthCull = false) {
         // Texture matrices into their places (as the material's display list loads them).
         const bool differed = rProgram.diff_flags != 0;
         if (!differed || ((rProgram.diff_flags >> 8) & 15) != 0) {
@@ -354,6 +355,10 @@ namespace {
                                                          : NEBULA_CULL_NONE;
         material.color_write = 2;
         material.alpha_write = 2;
+        if (keepDepthCull) {
+            material.depth_test = NEBULA_NATIVE_KEPT;
+            material.cull = NEBULA_NATIVE_KEPT;
+        }
         loadRegisters(rProgram, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
         // Each coordinate's GX scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
@@ -787,6 +792,34 @@ namespace J3DNativeMaterial {
 
     const f32* registers() {
         return sRegisters;
+    }
+
+    void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
+        const u32 shader = nativeShaderOf(rProgram);
+        if (shader != 0 && nativeDrawn(shader)) {
+            sendNative(rProgram, rValues, shader, true);
+            return;
+        }
+        // The program's identity: its bytes' FNV-1a hash (the host keeps one registration per key).
+        const u8* pBytes = reinterpret_cast< const u8* >(&rProgram);
+        u64 key = 0xCBF29CE484222325ull;
+        for (u32 i = 0; i < sizeof(rProgram); i++) {
+            key = (key ^ pBytes[i]) * 0x100000001B3ull;
+        }
+        key |= 1ull << 63;  // apart from the game's addresses, the other materials' keys
+        static u64 sRegistered[2048];
+        u32 slot = static_cast< u32 >(key) & 2047;
+        while (sRegistered[slot] != 0 && sRegistered[slot] != key) {
+            slot = (slot + 1) & 2047;
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        J3DNativeShape::flushState();
+        if (sRegistered[slot] != key) {
+            sRegistered[slot] = key;
+            pHost->material_program(pHost->user, key, &rProgram);
+        }
+        loadRegisters(rProgram, rValues);
+        pHost->material(pHost->user, key, &rValues);
     }
 
     void state(const NebulaStateOp* pOps, u32 count) {
