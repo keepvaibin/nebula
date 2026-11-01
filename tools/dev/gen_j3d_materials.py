@@ -226,6 +226,14 @@ def emit_channels(p, out):
 
 def emit_pixel(p, out):
     out.append("float4 material_color(NativeVaryings i) {")
+    # A pass that replaces the stages (j3d_material.hlsli j3d_override): texture 0 at coordinate 0, the channel colour,
+    # stage 0's konst alpha.
+    t0 = ("tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw)" if p["tex_gens"] > 0
+          else "float4(0.0, 0.0, 0.0, 0.0)")
+    k0 = konst_alpha(p["stages"][0]["konst_alpha"]) if p["stages"] else "1.0"
+    out.append("    [branch] if (material.ovr.x != 0.0) {")
+    out.append(f"        return j3d_override({t0}, i.color, {k0}, i.pos);")
+    out.append("    }")
     out.append("    float4 prev = material.reg[0];")
     out.append("    float4 r0 = material.reg[1];")
     out.append("    float4 r1 = material.reg[2];")
