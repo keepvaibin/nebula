@@ -14,6 +14,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <nebula_cooked_texture.h>
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/material.h>
@@ -24,14 +25,15 @@
 
 // Nebula's icons are textures of its own, never the game's: the picture font gains sheets after its own (each
 // controller family's icons, one to a cell) and a code map before its own that sends each icon's code to the glyph the
-// controller shows; the A bubble's two pictures are ours only while it draws. The game's textures keep their bytes (a
-// texture pack's replacements of them still apply) and ours are the same every run, so a pack can name them too
-// (GALAXY_EXPORT_ART writes one, eight times their size).
+// controller shows; the A bubble's two pictures are ours only while it draws. Every picture of ours is a texture record
+// (nebula_cooked_texture.h) of RGBA8 rows, as the cooked picture font's sheets are. The game's textures keep their
+// names (a texture pack's replacements of them still apply) and ours are the same every run, so a pack names them by
+// their texels too (GALAXY_EXPORT_ART writes one, eight times their size).
 namespace {
-    // Glyph sheets (RGB5A3) handed to the renderer after they are painted, one image each.
+    // Glyph sheets (texture records) handed to the renderer after they are painted, one image each.
     void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
         for (s32 i = 0; i < count; i++) {
-            J3DNativeTexture::registerImage(pFirst + i * sheetBytes, GX_TF_RGB5A3, static_cast< u16 >(width),
+            J3DNativeTexture::registerImage(pFirst + i * sheetBytes, GX_TF_RGBA8, static_cast< u16 >(width),
                                             static_cast< u16 >(height), 1);
         }
     }
@@ -677,15 +679,6 @@ namespace {
         return c;
     }
 
-    Rgba decodeTexel(u16 texel) {
-        if ((texel & 0x8000) != 0) {
-            const Rgba c = {(texel >> 10 & 31) / 31.0f, (texel >> 5 & 31) / 31.0f, (texel & 31) / 31.0f, 1.0f};
-            return c;
-        }
-        const Rgba c = {(texel >> 8 & 15) / 15.0f, (texel >> 4 & 15) / 15.0f, (texel & 15) / 15.0f, (texel >> 12 & 7) / 7.0f};
-        return c;
-    }
-
     // How an icon is drawn: in text (its font cell), or as the A bubble's two frames, as the console's own two pictures:
     // the button up (a 39-pixel button at (4, 4) of 48, lit from above, its shadow down and right) and pressed (36 of
     // 40, centred, its shading reversed).
@@ -1191,46 +1184,40 @@ namespace {
         return slot != NEBULA_KEY_OTHER;
     }
 
-    u16 encode(const Rgba& rColor) {
-        const f32 a = NebulaUi::clamp(rColor.a, 0.0f, 1.0f);
-        const f32 r = NebulaUi::clamp(rColor.r, 0.0f, 1.0f);
-        const f32 g = NebulaUi::clamp(rColor.g, 0.0f, 1.0f);
-        const f32 b = NebulaUi::clamp(rColor.b, 0.0f, 1.0f);
-        if (a >= 0.94f) {
-            return static_cast< u16 >(0x8000 | static_cast< u32 >(r * 31.0f + 0.5f) << 10 | static_cast< u32 >(g * 31.0f + 0.5f) << 5 |
-                                      static_cast< u32 >(b * 31.0f + 0.5f));
-        }
-        if (a < 1.0f / 14.0f) {
-            return 0;  // clear: the same bytes wherever nothing is drawn
-        }
-        return static_cast< u16 >(static_cast< u32 >(a * 7.0f + 0.5f) << 12 | static_cast< u32 >(r * 15.0f + 0.5f) << 8 |
-                                  static_cast< u32 >(g * 15.0f + 0.5f) << 4 | static_cast< u32 >(b * 15.0f + 0.5f));
+    // A picture of ours: a texture record (one level of RGBA8 rows) `width` x `height`, its texels cleared.
+    void initRecord(u8* pRecord, s32 width, s32 height) {
+        nebula_texture_init(pRecord, static_cast< u16 >(width), static_cast< u16 >(height), 1, NEBULA_TEXTURE_RGBA8,
+                            NEBULA_TEXTURE_FILTER_AT_UPLOAD);
+        memset(pRecord + NEBULA_TEXTURE_HEADER, 0, static_cast< size_t >(width) * height * 4);
     }
 
-    u8* texelAt(u8* pPicture, s32 pictureWidth, s32 x, s32 y) {
-        return pPicture + (((y / 4) * (pictureWidth / 4) + x / 4) * 16 + (y % 4) * 4 + x % 4) * 2;
+    // A record's texels (RGBA8 rows).
+    u8* texelsOf(u8* pRecord) {
+        return pRecord + NEBULA_TEXTURE_HEADER;
     }
 
-    // The canvas into a picture `pictureWidth` wide (RGB5A3, 4x4 tiles of big-endian texels) at (x, y); `dither`
-    // spreads a gradient's steps (ordered, 4 x 4) so its 5 bits a channel show no bands.
-    void encodeInto(const Canvas& rCanvas, u8* pPicture, s32 pictureWidth, s32 x, s32 y, bool dither = false) {
-        static const u8 cBayer[16] = {0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5};
+    // The canvas into a record's texels (`width` wide) at (x, y); a clear texel is all zero (the same bytes wherever
+    // nothing is drawn).
+    void paintInto(const Canvas& rCanvas, u8* pRecord, s32 width, s32 x, s32 y) {
+        u8* pTexels = texelsOf(pRecord);
         for (s32 py = 0; py < rCanvas.mHeight; py++) {
             for (s32 px = 0; px < rCanvas.mWidth; px++) {
-                u8* pTexel = texelAt(pPicture, pictureWidth, x + px, y + py);
-                Rgba c = rCanvas.mPixels[py * rCanvas.mWidth + px];
-                if (dither) {
-                    const f32 step = (cBayer[(py & 3) * 4 + (px & 3)] + 0.5f) / 16.0f - 0.5f;
-                    const f32 levels = c.a >= 0.94f ? 31.0f : 15.0f;
-                    c.r += step / levels;
-                    c.g += step / levels;
-                    c.b += step / levels;
-                }
-                const u16 texel = encode(c);
-                pTexel[0] = static_cast< u8 >(texel >> 8);
-                pTexel[1] = static_cast< u8 >(texel);
+                const Rgba& c = rCanvas.mPixels[py * rCanvas.mWidth + px];
+                u8* pOut = pTexels + ((y + py) * width + x + px) * 4;
+                const u8 a = static_cast< u8 >(NebulaUi::clamp(c.a, 0.0f, 1.0f) * 255.0f + 0.5f);
+                pOut[0] = a == 0 ? 0 : static_cast< u8 >(NebulaUi::clamp(c.r, 0.0f, 1.0f) * 255.0f + 0.5f);
+                pOut[1] = a == 0 ? 0 : static_cast< u8 >(NebulaUi::clamp(c.g, 0.0f, 1.0f) * 255.0f + 0.5f);
+                pOut[2] = a == 0 ? 0 : static_cast< u8 >(NebulaUi::clamp(c.b, 0.0f, 1.0f) * 255.0f + 0.5f);
+                pOut[3] = a;
             }
         }
+    }
+
+    // A record's texel (x, y) of a picture `width` wide.
+    Rgba texelOf(u8* pRecord, s32 width, s32 x, s32 y) {
+        const u8* pTexel = texelsOf(pRecord) + (y * width + x) * 4;
+        const Rgba c = {pTexel[0] / 255.0f, pTexel[1] / 255.0f, pTexel[2] / 255.0f, pTexel[3] / 255.0f};
+        return c;
     }
 
     // The canvas as RGBA8 into an image `imageWidth` wide at (x, y).
@@ -1243,21 +1230,6 @@ namespace {
                 pOut[1] = static_cast< u8 >(NebulaUi::clamp(c.g, 0.0f, 1.0f) * 255.0f + 0.5f);
                 pOut[2] = static_cast< u8 >(NebulaUi::clamp(c.b, 0.0f, 1.0f) * 255.0f + 0.5f);
                 pOut[3] = static_cast< u8 >(NebulaUi::clamp(c.a, 0.0f, 1.0f) * 255.0f + 0.5f);
-            }
-        }
-    }
-
-    // A picture of ours (RGB5A3) as RGBA8.
-    void pictureToRgba8(const u8* pPicture, s32 width, s32 height, u8* pImage) {
-        for (s32 y = 0; y < height; y++) {
-            for (s32 x = 0; x < width; x++) {
-                const u8* pTexel = texelAt(const_cast< u8* >(pPicture), width, x, y);
-                const Rgba c = decodeTexel(static_cast< u16 >(pTexel[0] << 8 | pTexel[1]));
-                u8* pOut = pImage + (y * width + x) * 4;
-                pOut[0] = static_cast< u8 >(c.r * 255.0f + 0.5f);
-                pOut[1] = static_cast< u8 >(c.g * 255.0f + 0.5f);
-                pOut[2] = static_cast< u8 >(c.b * 255.0f + 0.5f);
-                pOut[3] = static_cast< u8 >(c.a * 255.0f + 0.5f);
             }
         }
     }
@@ -1301,7 +1273,7 @@ namespace {
     struct Font {
         nw4r::ut::ResFont* mFont;
         nw4r::ut::FontCodeMap* mMap;  // ours, before the font's own
-        u8* mSheets;                  // the font's sheets (their bytes as they were), then ours
+        u8* mSheets;                  // the font's sheets (their records as they were), then ours: records mSheetBytes apart
         s32 mSheetBytes;
         s32 mSheetWidth;
         s32 mSheetHeight;
@@ -1352,8 +1324,8 @@ namespace {
         return d > -0x7FFFFFF0LL && d < 0x7FFFFFF0LL;
     }
 
-    // The picture font gains our sheets, glyph widths and code map, once it is loaded. A font whose icons are not RGB5A3
-    // cells of a usual size (a mod's) keeps its own icons.
+    // The picture font gains our sheets, glyph widths and code map, once it is loaded. A font whose sheets are not RGBA8
+    // records with cells of a usual size (a mod's, or one not cooked) keeps its own icons.
     s32 install() {
         GameSystem* pSystem = SingletonHolder< GameSystem >::get();
         nw4r::ut::ResFont* pFont = pSystem != nullptr && pSystem->mFontHolder != nullptr ? pSystem->mFontHolder->mPictureFont : nullptr;
@@ -1362,16 +1334,18 @@ namespace {
         }
         nw4r::ut::FontInformation* pInfo = pFont->mFontInfo;
         nw4r::ut::FontTextureGlyph* pGlyph = pInfo->pGlyph;
-        bool usable = pGlyph != nullptr && pGlyph->sheetFormat == GX_TF_RGB5A3 && pGlyph->sheetRow > 0 && pGlyph->sheetLine > 0 &&
-                      pGlyph->cellWidth <= cCellMax && pGlyph->cellHeight <= cCellMax && pGlyph->sheetImage.get() != nullptr &&
+        const NebulaTexture* pSheet = pGlyph != nullptr ? nebula_texture_record(pGlyph->sheetImage.get()) : nullptr;
+        bool usable = pSheet != nullptr && pSheet->layout == NEBULA_TEXTURE_RGBA8 && pSheet->levels == 1 &&
+                      pSheet->width == pGlyph->sheetWidth && pSheet->height == pGlyph->sheetHeight &&
+                      static_cast< u32 >(pGlyph->sheetSize) >= pSheet->size && pGlyph->sheetRow > 0 && pGlyph->sheetLine > 0 &&
+                      pGlyph->cellWidth <= cCellMax && pGlyph->cellHeight <= cCellMax &&
                       (pGlyph->cellWidth + 1) * pGlyph->sheetRow <= pGlyph->sheetWidth &&
-                      (pGlyph->cellHeight + 1) * pGlyph->sheetLine <= pGlyph->sheetHeight &&
-                      static_cast< u32 >(pGlyph->sheetSize) == static_cast< u32 >(pGlyph->sheetWidth) * pGlyph->sheetHeight * 2u;
+                      (pGlyph->cellHeight + 1) * pGlyph->sheetLine <= pGlyph->sheetHeight;
         for (s32 i = 0; i < NEBULA_BUTTON_ICONS && usable; i++) {
             usable = pFont->HasGlyph(cCodes[i]);
         }
         if (!usable) {
-            JUTNativeLog("NebulaIcons: the picture font's icons are not RGB5A3 cells; they stay the Wii's\n");
+            JUTNativeLog("NebulaIcons: the picture font's sheets are not RGBA8 records of usual cells; its icons stay the Wii's\n");
             return FontUnusable;
         }
         Font& f = sFont;
@@ -1432,6 +1406,9 @@ namespace {
         }
         memcpy(pBlock, pGlyph->sheetImage.get(), static_cast< size_t >(f.mFirstSheet) * f.mSheetBytes);
         memset(pBlock + f.mFirstSheet * f.mSheetBytes, 0, sheetsBytes - f.mFirstSheet * f.mSheetBytes);
+        for (s32 sheet = f.mFirstSheet; sheet < sheets; sheet++) {
+            initRecord(pBlock + sheet * f.mSheetBytes, f.mSheetWidth, f.mSheetHeight);
+        }
         f.mSheets = pBlock;
 
         nw4r::ut::FontWidth* pWidth = reinterpret_cast< nw4r::ut::FontWidth* >(pBlock + sheetsBytes);
@@ -1482,7 +1459,7 @@ namespace {
                 u8* pSheet;
                 s32 x, y;
                 cellOf(atlasGlyph(family, k), &pSheet, &x, &y);
-                encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
+                paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
         }
         handOverSheets(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets) * sFont.mSheetBytes, sFont.mFamilySheets,
@@ -1507,7 +1484,7 @@ namespace {
                 u8* pSheet;
                 s32 x, y;
                 cellOf(keyGlyph(slot), &pSheet, &x, &y);
-                encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
+                paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
             }
             sFont.mKeysDrawn = true;
             handOverSheets(sFont.mSheets + sFont.mKeyFirstSheet * sFont.mSheetBytes, sFont.mKeySheets, sFont.mSheetBytes, sFont.mSheetWidth,
@@ -1532,7 +1509,7 @@ namespace {
             u8* pSheet;
             s32 x, y;
             cellOf(keyGlyph(slot), &pSheet, &x, &y);
-            encodeInto(canvas, pSheet, sFont.mSheetWidth, x, y);
+            paintInto(canvas, pSheet, sFont.mSheetWidth, x, y);
         }
         memcpy(sFont.mKeyLayout, pShownLayout, sizeof(sFont.mKeyLayout));
         memcpy(sFont.mKeyPad, pShownPad, sizeof(sFont.mKeyPad));
@@ -1569,13 +1546,14 @@ namespace {
     }
 
     // The A button over people and signs: IconAButton's two pictures (the button up, 48 pixels square, and pressed, 40;
-    // IA4) give way to ours, drawn as the font's A is, while it draws.
+    // IA4) give way to ours (records), drawn as the font's A is, while it draws.
     struct Picture {
-        alignas(32) u8 mTexels[cCellMax * cCellMax * 2];
+        alignas(32) u8 mRecord[NEBULA_TEXTURE_HEADER + cCellMax * cCellMax * 4];
     };
     const s32 cPictureSizes[2] = {48, 40};
     const s32 cPictureLooks[2] = {LookUp, LookPressed};
     Picture sPictures[2];
+    Picture sExportPicture;  // GALAXY_EXPORT_ART's A bubble picture
     bool sPicturesShown = false;
 
     // The font's glyph `glyph` scaled into the canvas (an icon the style borrows from the Wii's).
@@ -1592,8 +1570,7 @@ namespace {
                 const s32 sx = static_cast< s32 >((x + 0.5f) * scale - (rCanvas.mWidth * scale - width) * 0.5f);
                 const s32 sy = static_cast< s32 >((y + 0.5f) * scale - (rCanvas.mHeight * scale - height) * 0.5f);
                 if (sx >= 0 && sy >= 0 && sx < width && sy < height) {
-                    const u8* pTexel = texelAt(pSheet, sFont.mSheetWidth, cellX + sx, cellY + sy);
-                    rCanvas.mPixels[y * rCanvas.mWidth + x] = decodeTexel(static_cast< u16 >(pTexel[0] << 8 | pTexel[1]));
+                    rCanvas.mPixels[y * rCanvas.mWidth + x] = texelOf(pSheet, sFont.mSheetWidth, cellX + sx, cellY + sy);
                 }
             }
         }
@@ -1609,8 +1586,9 @@ namespace {
         } else if (!paint(canvas, family + 1, glyph, place, cPictureLooks[k])) {
             paintFromGlyph(canvas, shownGlyph(family, 0, glyph, place));
         }
-        encodeInto(canvas, sPictures[k].mTexels, cPictureSizes[k], 0, 0);
-        J3DNativeTexture::registerImage(sPictures[k].mTexels, GX_TF_RGB5A3, cPictureSizes[k], cPictureSizes[k], 1);
+        initRecord(sPictures[k].mRecord, cPictureSizes[k], cPictureSizes[k]);
+        paintInto(canvas, sPictures[k].mRecord, cPictureSizes[k], 0, 0);
+        J3DNativeTexture::registerImage(sPictures[k].mRecord, GX_TF_RGBA8, cPictureSizes[k], cPictureSizes[k], 1);
     }
 
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
@@ -1623,9 +1601,8 @@ namespace {
         const s32 scale = cHdScale;
         const s32 hdSheetWidth = sFont.mSheetWidth * scale;
         const s32 hdSheetHeight = sFont.mSheetHeight * scale;
-        // The game's size of a sheet, an icon or an A bubble picture (the largest of them).
-        const s32 sheetPixels = sFont.mSheetWidth * sFont.mSheetHeight;
-        const s32 imagePixels = sheetPixels > cCellMax * cCellMax ? sheetPixels : cCellMax * cCellMax;
+        // An icon alone at the game's size (sheets and A bubble pictures export their own records' texels).
+        const s32 imagePixels = cCellMax * cCellMax;
         Rgba* pHdPixels = static_cast< Rgba* >(malloc(sizeof(Rgba) * hdIcon * hdIcon));
         u8* pHdImage = static_cast< u8* >(malloc(static_cast< size_t >(hdIcon) * hdIcon * 4));
         u8* pImage = static_cast< u8* >(malloc(static_cast< size_t >(imagePixels) * 4));
@@ -1659,15 +1636,14 @@ namespace {
                     canvasToRgba8(native, pImage, native.mWidth, 0, 0);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                     snprintf(name, sizeof(name), "%s/%s", cFamilyNames[family], cAtlas[k].mName);
-                    NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), GX_TF_RGB5A3,
+                    NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                            pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     NebulaHost::artExport(&art);
                 }
-                const u8* pTexels = sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets + sheet) * sFont.mSheetBytes;
-                pictureToRgba8(pTexels, sFont.mSheetWidth, sFont.mSheetHeight, pImage);
+                const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mFirstSheet + family * sFont.mFamilySheets + sheet) * sFont.mSheetBytes);
                 snprintf(name, sizeof(name), "%s/sheet-%d", cFamilyNames[family], static_cast< int >(sheet + 1));
-                NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), GX_TF_RGB5A3,
-                                       pImage, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
+                NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+                                       pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
                 NebulaHost::artExport(&art);
             }
             // The A bubble as each icon (A's code can show any of them).
@@ -1676,15 +1652,15 @@ namespace {
                     const s32 size = cPictureSizes[look];
                     Canvas native = {sCanvasPixels, size, size, 1.0f};
                     paint(native, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look]);
-                    Picture picture;
-                    encodeInto(native, picture.mTexels, size, 0, 0);
-                    pictureToRgba8(picture.mTexels, size, size, pImage);
+                    initRecord(sExportPicture.mRecord, size, size);
+                    paintInto(native, sExportPicture.mRecord, size, 0, 0);
                     Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
                     paint(hd, family + 1, cAtlas[k].mGlyph, cAtlas[k].mPlace, cPictureLooks[look]);
                     canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                     snprintf(name, sizeof(name), "%s/bubble-%s-%s", cFamilyNames[family], cAtlas[k].mName, look == 0 ? "up" : "pressed");
-                    NebulaArtExport art = {name, picture.mTexels, static_cast< u32 >(size), static_cast< u32 >(size), GX_TF_RGB5A3,
-                                           pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
+                    const u8* pTexels = texelsOf(sExportPicture.mRecord);
+                    NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
+                                           pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                     NebulaHost::artExport(&art);
                 }
             }
@@ -1714,15 +1690,14 @@ namespace {
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
                 snprintf(name, sizeof(name), "Keyboard/%s", keyText);
-                NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), GX_TF_RGB5A3,
+                NebulaArtExport art = {name, nullptr, static_cast< u32 >(native.mWidth), static_cast< u32 >(native.mHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
                                        pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
             }
-            const u8* pTexels = sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes;
-            pictureToRgba8(pTexels, sFont.mSheetWidth, sFont.mSheetHeight, pImage);
+            const u8* pTexels = texelsOf(sFont.mSheets + (sFont.mKeyFirstSheet + sheet) * sFont.mSheetBytes);
             snprintf(name, sizeof(name), "Keyboard/sheet-%d", static_cast< int >(sheet + 1));
-            NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), GX_TF_RGB5A3,
-                                   pImage, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
+            NebulaArtExport art = {name, pTexels, static_cast< u32 >(sFont.mSheetWidth), static_cast< u32 >(sFont.mSheetHeight), NEBULA_TEXTURE_LINEAR_RGBA8,
+                                   pTexels, pHdSheet, static_cast< u32 >(hdSheetWidth), static_cast< u32 >(hdSheetHeight)};
             NebulaHost::artExport(&art);
         }
         for (s32 slot = 0; slot < NEBULA_KEYS; slot++) {
@@ -1730,16 +1705,16 @@ namespace {
                 const s32 size = cPictureSizes[look];
                 Canvas native = {sCanvasPixels, size, size, 1.0f};
                 paintKey(native, slot, cPictureLooks[look], cUs, cArrowKeys);
-                Picture picture;
-                encodeInto(native, picture.mTexels, size, 0, 0);
-                pictureToRgba8(picture.mTexels, size, size, pImage);
+                initRecord(sExportPicture.mRecord, size, size);
+                paintInto(native, sExportPicture.mRecord, size, 0, 0);
                 Canvas hd = {pHdPixels, size * cHdScale, size * cHdScale, static_cast< f32 >(cHdScale)};
                 paintKey(hd, slot, cPictureLooks[look], cUs, cArrowKeys);
                 canvasToRgba8(hd, pHdImage, hd.mWidth, 0, 0);
                 keyName(slot, keyText, sizeof(keyText));
                 snprintf(name, sizeof(name), "Keyboard/bubble-%s-%s", keyText, look == 0 ? "up" : "pressed");
-                NebulaArtExport art = {name, picture.mTexels, static_cast< u32 >(size), static_cast< u32 >(size), GX_TF_RGB5A3,
-                                       pImage, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
+                const u8* pTexels = texelsOf(sExportPicture.mRecord);
+                NebulaArtExport art = {name, pTexels, static_cast< u32 >(size), static_cast< u32 >(size), NEBULA_TEXTURE_LINEAR_RGBA8,
+                                       pTexels, pHdImage, static_cast< u32 >(hd.mWidth), static_cast< u32 >(hd.mHeight)};
                 NebulaHost::artExport(&art);
             }
         }
@@ -1750,7 +1725,7 @@ namespace {
         JUTNativeLog("NebulaIcons: exported the icons\n");
     }
 
-    // The Pair Joy-Con picture: each half a texture of Nebula's own (RGB5A3): a Joy-Con's front drawn simply, in the
+    // The Pair Joy-Con picture: each half a texture of Nebula's own (a record of RGBA8 rows): a Joy-Con's front drawn simply, in the
     // owner's drawing's style (thin dark outlines, its colour, dark grey parts: its rail, its shoulder over the top
     // curve, its stick, four plain buttons, Minus or Plus, Capture or HOME), a little raised off the page (a soft shadow
     // under it and its buttons, a highlight down its round side). A half's body is 12.07 x 37.1 units in the middle of
@@ -1790,7 +1765,7 @@ namespace {
     f32 sJoyConPixelsX = 0.0f;
     f32 sJoyConPixelsY = 0.0f;
     s32 sJoyConAsked = 0;  // the frames running it has been asked for
-    alignas(32) u8 sJoyConTexels[2][cJcPictures * cJcMaxTexels * 2];
+    alignas(32) u8 sJoyConTexels[2][cJcPictures * (NEBULA_TEXTURE_HEADER + cJcMaxTexels * 4)];
     Rgba sJoyConBand[cJcMaxSide * cJcBand];
 
     // Where a band of a half's picture is painted: pixels per unit on each axis, the pixels per unit an edge is smoothed
@@ -1996,14 +1971,15 @@ namespace {
         }
     }
 
-    // Set `index` made ready for the density asked for, its pictures unpainted (each a whole number of 32-byte
-    // blocks: whole 4 x 4 tiles).
+    // Set `index` made ready for the density asked for, its pictures unpainted records (each 32-byte aligned).
     void startJoyConSet(s32 index) {
         JoyConSet& rSet = sJoyConSets[index];
         memset(&rSet, 0, sizeof(rSet));
-        const u32 bytes = static_cast< u32 >(sJoyConWidth * sJoyConHeight * 2);
+        const u32 bytes = (NEBULA_TEXTURE_HEADER + static_cast< u32 >(sJoyConWidth * sJoyConHeight * 4) + 31u) & ~31u;
         for (s32 i = 0; i < cJcPictures; i++) {
-            rSet.mTexels[i % 2][cJcOrder[i / 2]] = sJoyConTexels[index] + bytes * i;
+            u8* pRecord = sJoyConTexels[index] + bytes * i;
+            initRecord(pRecord, sJoyConWidth, sJoyConHeight);
+            rSet.mTexels[i % 2][cJcOrder[i / 2]] = pRecord;
         }
         rSet.mWidth = sJoyConWidth;
         rSet.mHeight = sJoyConHeight;
@@ -2024,17 +2000,17 @@ namespace {
                                (rSet.mHeight / rSet.mPixelsY - cJcBodyHeight) * 0.5f,
                                rSet.mRow};
         paintJoyCon(canvas, frame, half, look);
-        u8* pTexels = rSet.mTexels[half][look];
-        encodeInto(canvas, pTexels, rSet.mWidth, 0, rSet.mRow, true);
+        u8* pRecord = rSet.mTexels[half][look];
+        paintInto(canvas, pRecord, rSet.mWidth, 0, rSet.mRow);
         rSet.mRow += rows;
         if (rSet.mRow < rSet.mHeight) {
             return;
         }
-        J3DNativeTexture::registerImage(pTexels, GX_TF_RGB5A3, rSet.mWidth, rSet.mHeight, 1);
+        J3DNativeTexture::registerImage(pRecord, GX_TF_RGBA8, rSet.mWidth, rSet.mHeight, 1);
         nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
-        rMap.SetImage(pTexels);
+        rMap.SetImage(pRecord);
         rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));
-        rMap.SetTexelFormat(GX_TF_RGB5A3);
+        rMap.SetTexelFormat(GX_TF_RGBA8);
         rMap.SetWrapMode(GX_CLAMP, GX_CLAMP);
         rMap.SetMipMap(false);
         rMap.SetFilter(GX_LINEAR, GX_LINEAR);
@@ -2060,8 +2036,8 @@ namespace {
                     rSwaps.mMaps[rSwaps.mCount] = &rMap;
                     rSwaps.mSaved[rSwaps.mCount] = rMap;
                     rSwaps.mCount++;
-                    rMap.SetImage(sPictures[k].mTexels);
-                    rMap.SetTexelFormat(GX_TF_RGB5A3);
+                    rMap.SetImage(sPictures[k].mRecord);
+                    rMap.SetTexelFormat(GX_TF_RGBA8);
                     rMap.SetMipMap(false);
                     rMap.SetLOD(0.0f, 0.0f);
                     break;

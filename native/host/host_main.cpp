@@ -1897,11 +1897,19 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     // Linear texels the game wrote (nebula_cooked_texture.h): kept as a texture record, its header first.
     const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
     const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
+    // A record the game made (NEBULA_TEXTURE_MADE) in rows of texels: named below by them, as linear texels are; its
+    // header in our copy differs from the game's, so only its texels are compared.
+    const NebulaTexture* made = image->format == NEBULA_TEXTURE_IMAGE ? nebula_texture_record(image->bytes) : nullptr;
+    if (made != nullptr && (made->disc_format != NEBULA_TEXTURE_MADE || made->layout == NEBULA_TEXTURE_BLOCK4 ||
+                            image->size < NEBULA_TEXTURE_HEADER)) {
+        made = nullptr;
+    }
+    const std::size_t same_from = made != nullptr ? NEBULA_TEXTURE_HEADER : 0u;
     {
         std::lock_guard guard(gHandedLock);
         auto& last = gHanded[address];
         if (last != nullptr && last->size() == header + image->size &&
-            std::memcmp(last->data() + header, first, image->size) == 0) {
+            std::memcmp(last->data() + header + same_from, first + same_from, image->size - same_from) == 0) {
             return;
         }
         auto bytes = std::make_shared<std::vector<std::byte>>(header + image->size);
@@ -1916,6 +1924,13 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
             auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
             record->disc_format = image->format;
             record->pack_hash = galaxy::render::texture_pack_hash(reinterpret_cast<const uint8_t*>(first), image->size);
+        } else if (made != nullptr) {
+            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
+            record->disc_format = nebula_texture_linear_code(made->layout);
+            record->pack_hash = galaxy::render::texture_pack_hash(
+                reinterpret_cast<const uint8_t*>(first + NEBULA_TEXTURE_HEADER),
+                std::min<std::size_t>(image->size - NEBULA_TEXTURE_HEADER,
+                                      nebula_texture_level_bytes(made->width, made->height, 1u, made->layout)));
         }
         last = std::move(bytes);
         copy = last;

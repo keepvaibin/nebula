@@ -51,12 +51,6 @@ pub fn cooks(name: &str) -> bool {
     matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "tpl" | "brfnt" | "jpc")
 }
 
-/// The picture font keeps its sheets as the disc has them: Nebula's controller icons extend it with sheets painted in
-/// the same format (Game/Screen/NebulaIcons.cpp), until they are painted as texture records.
-fn is_picture_font(name: &str) -> bool {
-    name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("PictureFont.brfnt"))
-}
-
 /// One file cooked: Some(new bytes), or None when it stays as it is.
 pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option<Vec<u8>>> {
     let mut changed = false;
@@ -76,7 +70,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?)
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
-    } else if bytes.starts_with(b"RFNT") && !is_picture_font(name) {
+    } else if bytes.starts_with(b"RFNT") {
         Some(formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?)
     } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {
         Some(formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
