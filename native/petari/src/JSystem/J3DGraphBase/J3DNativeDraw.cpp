@@ -105,7 +105,33 @@ namespace J3DNativeDraw {
         if (count > kMaxVertices) {
             fail("more vertices in one primitive than kMaxVertices");
         }
-        sPrimitive = static_cast< u8 >(primitive);
+        // GXBegin's primitive as the host's grouping (NebulaPrimitive).
+        switch (primitive) {
+        case GX_QUADS:
+        case 0x88:  // GX's second quads opcode
+            sPrimitive = NEBULA_PRIMITIVE_QUADS;
+            break;
+        case GX_TRIANGLES:
+            sPrimitive = NEBULA_PRIMITIVE_TRIANGLES;
+            break;
+        case GX_TRIANGLESTRIP:
+            sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_STRIP;
+            break;
+        case GX_TRIANGLEFAN:
+            sPrimitive = NEBULA_PRIMITIVE_TRIANGLE_FAN;
+            break;
+        case GX_LINES:
+            sPrimitive = NEBULA_PRIMITIVE_LINES;
+            break;
+        case GX_LINESTRIP:
+            sPrimitive = NEBULA_PRIMITIVE_LINE_STRIP;
+            break;
+        case GX_POINTS:
+            sPrimitive = NEBULA_PRIMITIVE_POINTS;
+            break;
+        default:
+            fail("a primitive of no kind the host draws");
+        }
         sAttributes = attributes;
         sCount = count;
         sVertex = 0;
