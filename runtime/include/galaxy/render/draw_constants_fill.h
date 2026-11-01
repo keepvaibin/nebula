@@ -6,7 +6,7 @@
 #include "galaxy/render/draw_state.h"
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/draw_constants.h"
-#include "galaxy/render/line_point_raster.h"
+#include "galaxy/render/line_point_params.h"
 #include <algorithm>
 #include <array>
 #include <bit>

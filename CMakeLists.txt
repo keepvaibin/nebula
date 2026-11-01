@@ -326,7 +326,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/draw_matrices.cpp
     runtime/src/render/render_state_key.cpp
     runtime/src/render/capture.cpp
-    runtime/src/render/line_point_raster.cpp
+    runtime/src/render/line_point_params.cpp
     runtime/src/render/pipeline_cache.cpp
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
@@ -487,11 +487,11 @@ set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         sampler_key rt_materials texture_pack movie_replacement
-        capture line_point_raster native_settings_overlay post_process
+        capture line_point_params native_settings_overlay post_process
         warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
-# line_point_raster_tests' own vertex and pixel stages, DXIL as the native stages they share pipelines with.
+# line_point_params_tests' own vertex and pixel stages, DXIL as the native stages they share pipelines with.
 set(galaxy_line_point_test_headers "")
 foreach(galaxy_lp_stage vs ps)
     string(TOUPPER "${galaxy_lp_stage}" galaxy_lp_upper)
@@ -501,13 +501,13 @@ foreach(galaxy_lp_stage vs ps)
     add_custom_command(OUTPUT "${galaxy_lp_out}"
         COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_lp_stage}_6_0 -E test_${galaxy_lp_stage} -O3 -WX -Qstrip_debug
                 -Vn kLinePointTest${galaxy_lp_first}${galaxy_lp_rest} -Fh "${galaxy_lp_out}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_raster_tests.hlsl"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_raster_tests.hlsl"
+                "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_params_tests.hlsl"
+        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_params_tests.hlsl"
         VERBATIM)
     list(APPEND galaxy_line_point_test_headers "${galaxy_lp_out}")
 endforeach()
-target_sources(galaxy_line_point_raster_tests PRIVATE ${galaxy_line_point_test_headers})
-target_include_directories(galaxy_line_point_raster_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+target_sources(galaxy_line_point_params_tests PRIVATE ${galaxy_line_point_test_headers})
+target_include_directories(galaxy_line_point_params_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 # The game's text table: every text the settings menu shows has its entry.
 target_compile_definitions(galaxy_native_settings_overlay_tests PRIVATE
     NEBULA_TEXT_TABLE="${CMAKE_CURRENT_SOURCE_DIR}/localization/NebulaText.tsv")
@@ -561,7 +561,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/draw_matrices.cpp
         runtime/src/render/render_state_key.cpp
         runtime/src/render/capture.cpp
-        runtime/src/render/line_point_raster.cpp
+        runtime/src/render/line_point_params.cpp
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp
