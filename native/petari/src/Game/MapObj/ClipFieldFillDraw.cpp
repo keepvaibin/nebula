@@ -98,9 +98,11 @@ void ClipFieldFillDraw::draw() const {
     J3DNativeState::setColorUpdate(GX_TRUE);
 
     if (_24) {
-        TDDraw::setup(0, 1, 0);
-        J3DNativeState::setCullMode(GX_CULL_FRONT);
-        J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 0, 1, 0);
+        material.cull = NEBULA_CULL_FRONT;
+        NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+        NativeShader::send(material);
     }
 }
 
