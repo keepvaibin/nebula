@@ -534,7 +534,7 @@ float4 main(PSIn input) : SV_Target {
         line_state.primitive_topology = static_cast<std::uint8_t>(
             D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE);
         const D3D12_GRAPHICS_PIPELINE_STATE_DESC line_desc =
-            galaxy::render::make_gx_pso_desc(
+            galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 line_state,
                 vertex_shader.Get(),
@@ -554,7 +554,7 @@ float4 main(PSIn input) : SV_Target {
         point_state.primitive_topology = static_cast<std::uint8_t>(
             D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT);
         const D3D12_GRAPHICS_PIPELINE_STATE_DESC point_desc =
-            galaxy::render::make_gx_pso_desc(
+            galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 point_state,
                 vertex_shader.Get(),
@@ -574,7 +574,7 @@ float4 main(PSIn input) : SV_Target {
         triangle_state.primitive_topology = static_cast<std::uint8_t>(
             D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
         const D3D12_GRAPHICS_PIPELINE_STATE_DESC triangle_desc =
-            galaxy::render::make_gx_pso_desc(
+            galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 triangle_state,
                 vertex_shader.Get(),
@@ -586,7 +586,7 @@ float4 main(PSIn input) : SV_Target {
 
         bool line_missing_hard_fails = false;
         try {
-            (void)galaxy::render::make_gx_pso_desc(
+            (void)galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 line_state,
                 vertex_shader.Get(),
@@ -598,7 +598,7 @@ float4 main(PSIn input) : SV_Target {
         }
         bool point_missing_hard_fails = false;
         try {
-            (void)galaxy::render::make_gx_pso_desc(
+            (void)galaxy::render::make_pso_desc(
                 root_signature_.Get(),
                 point_state,
                 vertex_shader.Get(),

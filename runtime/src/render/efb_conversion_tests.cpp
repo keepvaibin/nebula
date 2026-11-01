@@ -1823,7 +1823,7 @@ PSIn main(uint id : SV_VertexID) {
 })HLSL";
             const auto vs = compile_shader(kGxVs, "vs_5_1");
             const auto ps = compile_shader(galaxy::render::ShaderGenerator{}.generate_ps(gx->shader), "ps_5_1");
-            auto desc = galaxy::render::make_gx_pso_desc(gx_root.Get(), gx->state,
+            auto desc = galaxy::render::make_pso_desc(gx_root.Get(), gx->state,
                 vs.Get(), ps.Get(), nullptr, nullptr);
             // The fixture VS emits a full-screen triangle using SV_VertexID.
             desc.InputLayout = {};

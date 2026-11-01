@@ -300,10 +300,6 @@ private:
         bool lhs_indexed,
         bool rhs_indexed) noexcept;
     void flush_pending_draw_batch();
-    // Shader and PSO cache coverage, printed once per frame when the on-disk coverage changed.
-    void ReportPipelineCoverage();
-    std::size_t last_reported_shader_records_ = 0;
-    std::size_t last_reported_pso_records_ = 0;
 
 
 
@@ -1376,21 +1372,6 @@ private:
     PsoKey current_pso_key_{};
     bool current_pso_key_valid_ = false;
     gpu::Pipeline* current_pipeline_ = nullptr;
-    // Frame-scoped memo of PsoKey -> pipeline resolutions: a frame resolves the same few hundred keys many
-    // times. PipelineCache::published_ changes only on this thread (get(), and drain_completions() in
-    // begin_frame()), so a result holds for the rest of the frame; cleared at begin_frame(). Direct-mapped
-    // on the key hash; a collision falls through to the full resolution.
-    static constexpr std::size_t kPipelineMemoSlots = 512u;
-    static_assert(
-        (kPipelineMemoSlots & (kPipelineMemoSlots - 1u)) == 0u,
-        "the memo index masks the low hash bits, so the slot count is a power of two");
-    static constexpr std::size_t kPipelineMemoMask = kPipelineMemoSlots - 1u;
-    struct PipelineMemoEntry {
-        std::uint64_t hash = 0u;
-        gpu::Pipeline* pipeline = nullptr;
-        PsoKey key{};
-    };
-    std::array<PipelineMemoEntry, kPipelineMemoSlots> pipeline_memo_{};
     // Hash of `current_pso_key_`, kept beside it so the memo probe never
     // re-derives the fold for a key it already hashed once.
     std::uint64_t current_pso_key_hash_ = 0u;
@@ -1693,8 +1674,6 @@ private:
     // FXC microseconds this frame.
     std::uint64_t frame_blob_compile_us_ = 0;
     std::uint64_t frame_blobs_from_cache_ = 0;
-    // Baseline for the deltas above, captured in the per-frame reset block.
-    PipelineCache::CompileStats frame_compile_stats_baseline_{};
     std::uint64_t frame_flush_constants_us_ = 0;
     std::uint64_t frame_flush_texture_us_ = 0;
     std::uint64_t frame_vertex_load_us_ = 0;
