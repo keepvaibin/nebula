@@ -28,7 +28,7 @@
 #include "galaxy/host_env.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
-#include "galaxy/render/line_point_raster.h"
+#include "galaxy/render/line_point_params.h"
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/curved_surfaces.h"
 #include "galaxy/render/draw_constants.h"

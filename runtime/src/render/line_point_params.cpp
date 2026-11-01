@@ -1,6 +1,6 @@
 // LinePointValues and the viewport as the line/point geometry shaders' parameters.
 
-#include "galaxy/render/line_point_raster.h"
+#include "galaxy/render/line_point_params.h"
 
 #include "galaxy/render/render_config.h"
 

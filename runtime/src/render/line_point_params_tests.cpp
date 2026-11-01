@@ -11,7 +11,7 @@
 #pragma warning(pop)
 
 #include "galaxy/render/draw_state.h"
-#include "galaxy/render/line_point_raster.h"
+#include "galaxy/render/line_point_params.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/native_shaders.h"
@@ -481,7 +481,7 @@ private:
     }
 
     void create_pipelines() {
-        // The test's stages (line_point_raster_tests.hlsl, DXIL compiled at build) beside the build's native ones.
+        // The test's stages (line_point_params_tests.hlsl, DXIL compiled at build) beside the build's native ones.
         const auto bytes_blob = [](const unsigned char* data, std::size_t size) {
             ComPtr<ID3DBlob> b;
             check_hr(D3DCreateBlob(size, &b), "D3DCreateBlob");

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// line_point_raster_tests' own vertex and pixel stages, compiled at build as the native stages are (DXIL: they share a
+// line_point_params_tests' own vertex and pixel stages, compiled at build as the native stages are (DXIL: they share a
 // pipeline with native_lines.hlsl's geometry stages). The vertex stage passes clip-space positions in the native vertex
 // stage's output layout (native_material.hlsli NativeVsOut, without motion vectors); the pixel stage writes texture
 // coordinate 0 as red and green, so a test can see which edges the geometry stage moved.
