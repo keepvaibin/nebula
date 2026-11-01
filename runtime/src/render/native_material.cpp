@@ -33,10 +33,9 @@ void lights(const Program& m, const Values& v, DrawMatrices& matrices) {
 }  // namespace
 
 // The record's encoding (nebula_game_api.h NebulaMaterialProgram::tex_gen, J3DNativeTexGen).
-XfTexGen tex_gen(std::uint8_t kind, std::uint8_t source) {
-    return XfTexGen{((kind >> 2u) & 1u) != 0u, ((kind >> 3u) & 1u) != 0u, static_cast<TexGenType>(kind & 3u),
-                    static_cast<std::uint8_t>(source & 15u), static_cast<std::uint8_t>((source >> 4u) & 7u),
-                    static_cast<std::uint8_t>((kind >> 4u) & 7u)};
+TexGen tex_gen(std::uint8_t kind, std::uint8_t source) {
+    return TexGen{static_cast<TexGenType>(kind & 3u), static_cast<std::uint8_t>(source & 15u),
+                  static_cast<std::uint8_t>((source >> 4u) & 7u), static_cast<std::uint8_t>((kind >> 4u) & 7u)};
 }
 
 void load_matrices(const Program& m, const Values& v, DrawMatrices& memory) {
