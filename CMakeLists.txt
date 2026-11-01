@@ -825,7 +825,4 @@ if(NEBULA_VULKAN)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
 
-    # The Android app's precompiled shaders (platform/android/vk_seed_shaders.bin) from its seed keys.
-    add_executable(vk_shader_seed tools/dev/vk_shader_seed.cpp)
-    target_link_libraries(vk_shader_seed PRIVATE galaxy_gx_vk)
 endif()
