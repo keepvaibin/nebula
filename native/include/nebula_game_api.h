@@ -364,6 +364,8 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_BLOOM_BLUR = 35,           /* the game's bloom blur: up to eight offset samples summed */
     NEBULA_SHADER_DOF_FINAL = 36,            /* the game's depth of field: blurred over sharp by the depth's ramp */
     NEBULA_SHADER_NORMAL_MAP = 37,           /* NormalMapBase: a normal-mapped shape lit through a light gradient */
+    NEBULA_SHADER_MOVIE = 38,      /* MovieDraw (THPDraw): a movie frame's Y, U and V planes to RGB */
+    NEBULA_SHADER_WATER_CAMERA = 39, /* WaterCameraFilter: the screen warped and darkened under water */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256

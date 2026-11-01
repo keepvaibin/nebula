@@ -22,86 +22,28 @@
 #include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/gx/GXEnum.h>
 #include <revolution/gx/GXStruct.h>
+#include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
-#include <cstring>
-
-extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // The filter's material (nebula_game_api.h NebulaMaterialProgram): the screen texture (1, coordinate 1) offset by
-    // the filter texture (0, coordinate 0 through texture matrix 0) as a signed indirect warp, minus register 0's
-    // colour; blended by register 0's alpha where it is above zero, depth neither tested nor written.
-    NebulaMaterialProgram sFilterProgram;
-    bool sFilterRegistered = false;
-
-    void sendFilterProgram(JUTTexture* pFilter, JUTTexture* pScreen) {
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sFilterRegistered) {
-            NebulaMaterialProgram& rProgram = sFilterProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD1;
-            rStage.tex_map = GX_TEXMAP1;
-            rStage.channel = GX_COLOR_NULL;
-            rStage.color_in[0] = GX_CC_C0;
-            rStage.color_in[1] = rStage.color_in[2] = GX_CC_ZERO;
-            rStage.color_in[3] = GX_CC_TEXC;
-            rStage.color_op = GX_TEV_SUB;
-            rStage.alpha_in[0] = GX_CA_A0;
-            rStage.alpha_in[1] = rStage.alpha_in[2] = rStage.alpha_in[3] = GX_CA_ZERO;
-            rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rStage.ind_stage = GX_INDTEXSTAGE0;
-            rStage.ind_format = GX_ITF_8;
-            rStage.ind_bias = GX_ITB_STU;
-            rStage.ind_matrix = GX_ITM_0;
-            rStage.ind_wrap_s = rStage.ind_wrap_t = GX_ITW_OFF;
-            rStage.ind_alpha = GX_ITBA_OFF;
-            rProgram.ind_order[0].coord = GX_TEXCOORD0;
-            rProgram.ind_order[0].map = GX_TEXMAP0;
-            rProgram.ind_order[0].scale_s = rProgram.ind_order[0].scale_t = GX_ITS_1;
-            rProgram.tex_gen[0].type = GX_TG_MTX3x4;
-            rProgram.tex_gen[0].source = GX_TG_TEX0;
-            rProgram.tex_gen[0].matrix = GX_TEXMTX0;
-            rProgram.tex_gen[0].post_matrix = GX_PTIDENTITY;
-            rProgram.tex_gen[1].type = GX_TG_MTX3x4;
-            rProgram.tex_gen[1].source = GX_TG_TEX1;
-            rProgram.tex_gen[1].matrix = GX_IDENTITY;
-            rProgram.tex_gen[1].post_matrix = GX_PTIDENTITY;
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 2;
-            rProgram.ind_stages = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.z_compare_location = 0;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_INDIRECT;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_BLEND;
-            rProgram.blend.source = GX_BL_SRCALPHA;
-            rProgram.blend.destination = GX_BL_INVSRCALPHA;
-            rProgram.blend.logic_op = GX_LO_NOOP;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sFilterProgram), &rProgram);
-            sFilterRegistered = true;
+    // runtime/src/render/materials/water_camera.hlsl: the screen (texture 1) warped by the filter texture (texture 0,
+    // turned by `rFilterMtx`) 0.05 screen texels per indirect step, less the water's colour; blended by the filter's
+    // alpha where above zero, depth neither tested nor written.
+    void sendFilterMaterial(JUTTexture* pFilter, JUTTexture* pScreen, const TMtx34f& rFilterMtx, const Color8& rWater) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_WATER_CAMERA, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        NativeShader::setColor(material, 0, rWater.r, rWater.g, rWater.b, rWater.a);
+        for (u32 row = 0; row < 2; row++) {
+            for (u32 column = 0; column < 4; column++) {
+                material.constants[4 + row * 4 + column] = rFilterMtx.mMtx[row][column];
+            }
         }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.ind_matrix[0].m[0][0] = 0.05f;
-        values.ind_matrix[0].m[1][1] = 0.05f;
-        values.tex_coord_scale[0].scale_s = pFilter->getWidth();
-        values.tex_coord_scale[0].scale_t = pFilter->getHeight();
-        values.tex_coord_scale[1].scale_s = pScreen->getWidth();
-        values.tex_coord_scale[1].scale_t = pScreen->getHeight();
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sFilterProgram), &values);
-        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        material.constants[12] = 0.05f / pScreen->getWidth();
+        material.constants[13] = 0.05f / pScreen->getHeight();
+        NativeShader::setTexture(material, 0, pFilter);
+        NativeShader::setTexture(material, 1, pScreen);
+        NativeShader::send(material);
     }
 }  // namespace
 
@@ -242,8 +184,6 @@ void WaterCameraFilter::loadMaterial() const {
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
     TVec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;
@@ -263,11 +203,8 @@ void WaterCameraFilter::loadMaterial() const {
     MR::multMtx(textureMtx, translation, rotation);
     translation.setTrans(TVec3f(0.5f, 0.5f, 0.0f));
     MR::multMtx(textureMtx, textureMtx, translation);
-    J3DNativeShape::setTexture(0, textureMtx, 3);
-    mFilterTex->load(GX_TEXMAP0);
-    mScreenTex->load(GX_TEXMAP1);
-    sendFilterProgram(mFilterTex, mScreenTex);
-    J3DNativeState::setTevColor(GX_TEVREG0, Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
+    sendFilterMaterial(mFilterTex, mScreenTex, textureMtx,
+                       Color8(mWaterColor.r, mWaterColor.g, mWaterColor.b, (s32)(mWaterAlpha)));
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }
 
