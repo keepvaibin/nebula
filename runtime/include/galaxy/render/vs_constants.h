@@ -65,14 +65,9 @@ inline void refresh_vs_inline_matrices(const DrawMatrices& state, const NativeDr
         }
     };
 
-    copy_matrix(out.matrix_index_a & 0x3Fu, out.inline_pos_matrix);
+    copy_matrix(out.draw_rows[0][0], out.inline_pos_matrix);
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
-        const unsigned shift = i < 4u ? 6u + 6u * i : 6u * (i - 4u);
-        const std::uint32_t indices =
-            i < 4u ? out.matrix_index_a : out.matrix_index_b;
-        copy_matrix(
-            (indices >> shift) & 0x3Fu,
-            out.inline_tex_matrices[i]);
+        copy_matrix(out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u], out.inline_tex_matrices[i]);
 
         const XfPostTexGen post = draw.post_texgen[i];
         const unsigned post_row = post.matrix_index & 0x3Fu;
@@ -118,11 +113,11 @@ inline void fill_vs_constants(
     // Previous rows: the draw's own (no motion of its own) unless a motion scene names other position rows.
     out.motion_ctrl[1] = kMotionOwnRows;
 
-    // Default matrix indices (CP MatrixIndexA/B). The VS resolves them per texgen when the
-    // vertex stream has no per-vertex index. Dolphin resolves the same registers on the CPU
-    // into I_TEXMATRICES.
-    out.matrix_index_a = matrix_index_a(draw);
-    out.matrix_index_b = matrix_index_b(draw);
+    // The draw's matrix rows (draw_rows: position, then each texture coordinate's), for vertices without their own.
+    out.draw_rows[0][0] = draw.position_matrix & 0x3Fu;
+    for (unsigned i = 0; i < kMaxTexGens; ++i) {
+        out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u] = draw.texture_matrix[i] & 0x3Fu;
+    }
 
     refresh_vs_inline_matrices(state, draw, out);
 

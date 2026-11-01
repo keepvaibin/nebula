@@ -12,7 +12,8 @@
 cbuffer NativeDraw : register(b0) {
     row_major float4x4 projection : packoffset(c0);  // row-major, as every draw constant (VertexConstants)
     uint4 draw_counts : packoffset(c12);      // num_texgens, num_chans, flags, pos_base
-    uint4 draw_indices : packoffset(c13);     // matrix_index_a, matrix_index_b, sky_up, sky_up_known
+    uint4 draw_rows[3] : packoffset(c4);      // the draw's matrix rows: [0].x position, then coordinate i's at 1 + i
+    uint4 draw_indices : packoffset(c13);     // zw: sky_up, sky_up_known
     float4 inline_pos_matrix[3] : packoffset(c14);
     float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
     float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
@@ -183,11 +184,11 @@ float4 native_unpack_color(uint c) {
 void material_vertex(NativeVertex v, inout NativeVaryings o);
 
 // Texture coordinate i's matrix: the vertex's own index where the shape carries one (vs_header.w bit i: skinned
-// shapes' per-vertex texture matrices), else the draw's (draw_indices.xy: the matrix indices the shape loads, as
+// shapes' per-vertex texture matrices), else the draw's (draw_rows: the rows the shape loads, as
 // refresh_vs_inline_matrices reads them); its rows through native_matrix_row (60: the identity).
 uint native_tex_matrix(NativeVertex v, uint i) {
     if (((vs_header.w >> i) & 1u) == 0u) {
-        return i < 4u ? (draw_indices.x >> (6u + 6u * i)) & 0x3Fu : (draw_indices.y >> (6u * (i - 4u))) & 0x3Fu;
+        return draw_rows[(i + 1u) >> 2u][(i + 1u) & 3u];
     }
     const uint packed = i < 3u ? v.mtx_idx.x : i < 7u ? v.mtx_idx.y : v.mtx_idx.z;
     const uint shift = i < 3u ? 8u + 8u * i : i < 7u ? 8u * (i - 3u) : 0u;
@@ -212,7 +213,7 @@ NativeVsOut native_vs(NativeVertexIn input) {
         m1 = native_matrix_row(v.pn_row + 1u);
         m2 = native_matrix_row(v.pn_row + 2u);
     } else {
-        v.pn_row = min(draw_indices.x & 0x3Fu, 61u);
+        v.pn_row = min(draw_rows[0].x, 61u);
         m0 = inline_pos_matrix[0];
         m1 = inline_pos_matrix[1];
         m2 = inline_pos_matrix[2];

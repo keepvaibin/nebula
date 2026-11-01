@@ -26,7 +26,10 @@ inline constexpr unsigned kMaxColorChannels = 2;
 // large and is snapshotted again whenever LOAD_INDX changes it mid-frame.
 struct alignas(256) VertexConstants {
     float projection[4][4];
-    std::uint32_t reserved_c4[8][4];  // c4-c11: read by no shader
+    // c4-c6 (native_material.hlsli draw_rows): the draw's matrix rows, entry k of the flat twelve: 0 the position
+    // matrix, 1 + i texture coordinate i's (60: the identity).
+    std::uint32_t draw_rows[3][4];
+    std::uint32_t reserved_c7[5][4];  // c7-c11: read by no shader
     std::uint32_t num_texgens;
     std::uint32_t num_chans;
     // Bit 0 per-vertex posmtx, bit 1 lighting enable. Physical ray tracing (the art's baked light removed): bits 2-3
@@ -36,13 +39,7 @@ struct alignas(256) VertexConstants {
     std::uint32_t flags;
     // The first row of the draw's position block in the bound matrix rows (position place k at pos_base + 3k).
     std::uint32_t pos_base;
-    // CP MatrixIndexA/B: default (non-per-vertex) matrix indices.
-    //   A: bits 0-5 pos/normal, 6-11 tex0, 12-17 tex1, 18-23 tex2, 24-29 tex3
-    //   B: bits 0-5 tex4, 6-11 tex5, 12-17 tex6, 18-23 tex7
-    // Dolphin resolves these in VertexShaderManager into I_TEXMATRICES. Here the
-    // vertex shader resolves them, so the palette snapshot stays the only matrix upload.
-    std::uint32_t matrix_index_a;
-    std::uint32_t matrix_index_b;
+    std::uint32_t reserved_c13[2];  // c13.xy: read by no shader
     // Enhanced lighting's sky: the player's up in eye space (octahedral, vs_constants.h
     // encode_octahedral), and nonzero when known (else the view's up).
     std::uint32_t sky_up;
@@ -86,9 +83,9 @@ struct alignas(256) VertexConstants {
 };
 
 static_assert(offsetof(VertexConstants, projection) == 0);
-static_assert(offsetof(VertexConstants, reserved_c4) == 64);
+static_assert(offsetof(VertexConstants, draw_rows) == 64);
 static_assert(offsetof(VertexConstants, num_texgens) == 192);
-static_assert(offsetof(VertexConstants, matrix_index_a) == 208);
+static_assert(offsetof(VertexConstants, reserved_c13) == 208);
 static_assert(offsetof(VertexConstants, inline_pos_matrix) == 224);
 static_assert(offsetof(VertexConstants, inline_tex_matrices) == 272);
 static_assert(offsetof(VertexConstants, inline_post_matrices) == 656);

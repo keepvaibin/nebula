@@ -91,8 +91,6 @@ public:
 
 // The shaders' packed forms of the vertex state (their constants and keys).
 [[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
-[[nodiscard]] std::uint32_t matrix_index_a(const NativeDrawState& state);
-[[nodiscard]] std::uint32_t matrix_index_b(const NativeDrawState& state);
 
 
 // The frame shown (frame_show: its top left `width` x `height`, NebulaCaptureFlags) as the display copy takes it.
