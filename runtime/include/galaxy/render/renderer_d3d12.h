@@ -35,7 +35,7 @@
 #include "galaxy/render/interp_types.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/gpu_placed_textures.h"
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/render/pso_key.h"

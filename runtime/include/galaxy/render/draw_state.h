@@ -3,7 +3,7 @@
 // The drawing state the game's records set, as typed values: the material record's and the state ops' (requirement
 // E-02: the renderer reads no register words), with what each change invalidates.
 
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 #include "galaxy/render/native_material.h"
 #include "galaxy/render/native_state.h"
 

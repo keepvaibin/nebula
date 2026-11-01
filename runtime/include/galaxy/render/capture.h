@@ -14,7 +14,7 @@
 #define NOMINMAX
 #endif
 #include "galaxy/render/gpu_types.h"
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 #include "galaxy/render/pointer_response.h"
 #include "galaxy/render/render_config.h"
 

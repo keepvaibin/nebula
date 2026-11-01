@@ -15,7 +15,7 @@
 // through its own staging and backend (any GPU API). Render thread only, except where noted.
 
 #include "galaxy/render/gpu_types.h"
-#include "galaxy/render/gx_bitfields.h"
+#include "galaxy/render/draw_types.h"
 #include "galaxy/render/gpu_texture_backend.h"
 
 #include <array>

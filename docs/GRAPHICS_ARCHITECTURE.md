@@ -31,7 +31,7 @@ The parser reads an opcode-dispatched, big-endian byte stream:
 | `0x61` | LOAD_BP_REG | u32: register in bits 31-24, value in bits 23-0 |
 | `0x80`-`0xBF` | DRAW | primitive in bits 7-3, vertex format in bits 2-0; u16 count and the vertex data |
 
-BP register numbers are named in `gx_bitfields.h` (`namespace bp`). Display lists (`0x40`) are no longer sent: the game's
+Display lists (`0x40`) are no longer sent: the game's
 geometry arrives as records, and the parser treats `0x40` as an unknown command.
 
 ## Native record stream
@@ -76,7 +76,7 @@ FIFO bytes --> FifoParser --(FifoSink callbacks)--> GxBackend
 
 | Header | Responsibility |
 |---|---|
-| `gx_bitfields.h` | Register decoding for CP, XF and BP |
+| `draw_types.h` | The drawing state's typed values (blend, depth, cull, counts, primitives, texgens, channels) |
 | `gx_state.h` | Register files, decoded views and dirty bits |
 | `fifo_parser.h` | `FifoParser`, `FifoSink`, `GxFatalError`, byte-swap kernels |
 | `vertex_loader.h` | Any vertex descriptor and format to the canonical vertex, indexed triangle lists |
