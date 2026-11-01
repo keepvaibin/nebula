@@ -630,7 +630,7 @@ TextureCache::DecodedMapStats TextureCache::decoded_map_stats() const noexcept {
 }
 
 void TextureCache::touch_cached_handle(const TextureHandle& handle) {
-    if (handle.resource == nullptr || handle.from_efb_copy ||
+    if (handle.resource == nullptr || handle.from_capture ||
         handle.srv_index >= decoded_srv_keys_.size()) return;
     const auto& key = decoded_srv_keys_[handle.srv_index];
     if (!key) return;
@@ -725,7 +725,7 @@ void TextureCache::decoded_lru_evict_to_budget() {
 // Called from begin_frame for a slot whose fence has been waited on: the
 // texture is GPU-idle and still in the shader-resource state.
 void TextureCache::pool_retired_texture(Entry& entry) {
-    if (!entry.texture || entry.handle.from_efb_copy || entry.allocation_bytes == 0u) {
+    if (!entry.texture || entry.handle.from_capture || entry.allocation_bytes == 0u) {
         return;
     }
     if (texture_pool_bytes_ + entry.allocation_bytes > kTexturePoolCapBytes) {
@@ -904,7 +904,7 @@ void TextureCache::invalidate_all() {
     decoded_srv_keys_ = {};
     decoded_resident_bytes_ = 0;
     decoded_source_bytes_ = 0;
-    // EFB aliases are kept: their content lives on the GPU.
+    // Capture pictures are kept: they are the renderer's.
     // Retired SRV slots return to the free list after their frame-slot fence.
 }
 
@@ -947,7 +947,7 @@ TextureCache::Entry TextureCache::make_replacement_entry(const TextureReplacemen
     entry.handle.width = width;
     entry.handle.height = height;
     entry.handle.mip_levels = static_cast<std::uint8_t>(std::min(replacement.levels, 255u));
-    entry.handle.from_efb_copy = false;
+    entry.handle.from_capture = false;
     entry.handle.generated_mips = generated_mips;
     entry.handle.lod_shift_x16 = replacement.lod_shift_x16;
     entry.handle.lod_arbitrary = replacement.arbitrary;
@@ -1174,7 +1174,7 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
     }
     movie_addr_ = addresses;
     for (unsigned p = 0; p < 3u; ++p) {
-        // GX's sizes: U and V are the Y size shifted down (THPGXYuv2RgbDraw).
+        // The movie's chroma planes are half the luma plane's size each way.
         movie_source_width_[p] = static_cast<std::uint16_t>(p == 0u ? mark.width : mark.width >> 1u);
         movie_source_height_[p] = static_cast<std::uint16_t>(p == 0u ? mark.height : mark.height >> 1u);
         const MoviePlane& plane = movie_ring_[movie_ring_at_][p];
@@ -1490,7 +1490,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
     handle.width         = static_cast<std::uint16_t>(w);
     handle.height        = static_cast<std::uint16_t>(h);
     handle.mip_levels    = static_cast<std::uint8_t>(levels);
-    handle.from_efb_copy = false;
+    handle.from_capture = false;
     handle.generated_mips = generated_mips;
     handle.source_bytes = total_source_size;
     handle.rt_material = rt_material;
@@ -1553,7 +1553,7 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
                   << " size=" << w << 'x' << h
                   << " levels=" << levels
                   << " native-mips=" << (generated_mips ? 1u : 0u)
-                  << " guest-bytes=" << total_source_size
+                  << " record-bytes=" << total_source_size
                   << " staging-bytes=" << staging_size
                   << " srv=" << srv_idx
                   << " async-decode=" << (async_decode ? 1u : 0u)

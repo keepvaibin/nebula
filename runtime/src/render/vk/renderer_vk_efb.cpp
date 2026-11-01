@@ -731,7 +731,7 @@ bool RendererVk::target_picture(std::uint64_t key, TextureHandle& out) const {
     out.width = static_cast<std::uint16_t>(it->second.viewed->width);
     out.height = static_cast<std::uint16_t>(it->second.viewed->height);
     out.mip_levels = 1u;
-    out.from_efb_copy = true;
+    out.from_capture = true;
     out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(it->second.width) * it->second.height * 4u;
     return true;
 }

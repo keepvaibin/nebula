@@ -77,7 +77,7 @@ struct TextureHandle {
     std::uint16_t width = 0;
     std::uint16_t height = 0;
     std::uint8_t mip_levels = 1;
-    bool from_efb_copy = false;
+    bool from_capture = false;
     bool generated_mips = false;
     // A texture-pack replacement: width/height stay the game texture's, the resource is larger by
     // 2^(lod_shift_x16 / 16) and samplers shift their LOD range by that much.
@@ -85,7 +85,7 @@ struct TextureHandle {
     bool lod_arbitrary = false;  // its levels pair with the game's by index (pack_sampler_key)
     std::uint32_t source_bytes = 0;
     // The ray tracer's material table entry of its base level (rt_materials.h; 0: none), and that level's
-    // texture-pack key (0: not computed, an EFB copy).
+    // texture-pack key (0: not computed, a capture's picture).
     std::uint16_t rt_material = 0;
     std::uint64_t pack = 0;
 };
@@ -118,8 +118,7 @@ public:
     // The GPU texture for a key, uploaded on first use from the record the game handed over (register_image); a key
     // with no record draws one blank level.
     [[nodiscard]] TextureHandle get(std::uint64_t texture, const TextureSampler& mode);
-    // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
-    // handles are ignored.
+    // Render thread only: marks a cached handle used (LRU). Retired handles and capture pictures are ignored.
     void touch_cached_handle(const TextureHandle& handle);
 
 
@@ -192,9 +191,9 @@ public:
         return count;
     }
 
-    // Asynchronous first-use decode. While allowed, a miss creates the texture and records its staging copy and SRV
-    // on this thread, and only the decode into the staging memory runs on a worker. The caller guarantees the guest
-    // bytes passed to get() stay unchanged until finish_pending_decodes() (true for a sealed frame memory snapshot),
+    // Asynchronous first-use upload. While allowed, a miss creates the texture and records its staging copy and SRV
+    // on this thread, and only the copy of the record's texels into the staging memory runs on a worker. The record
+    // copies stay alive until finish_pending_decodes() (replaced ones are held until then),
     // which must run before the upload command list executes and rethrows the first decode failure. Texture-pack
     // dumps, which read the decoded pixels, stay synchronous.
     void set_async_decode_allowed(bool allowed) noexcept {
