@@ -960,18 +960,7 @@ bool RenderCore::initialize(int w, int h) {
     renderer_.create_first_use_resources();
     boot_step("first-use resources");
 
-    const std::filesystem::path cache_dir = shader_cache_directory();
-
-    // Few compile workers on small CPUs; more on large ones, to warm cached PSOs early.
-    const unsigned logical_cores = std::thread::hardware_concurrency();
-    const unsigned worker_count =
-        (logical_cores > 8u) ? 4u : (logical_cores > 4u) ? 2u : 1u;
-
-    if (!pipeline_cache_.initialize(
-            renderer_.device(),
-            renderer_.root_signature(),
-            cache_dir,
-            worker_count)) {
+    if (!pipeline_cache_.initialize(renderer_.device(), renderer_.root_signature())) {
         std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
         efb_copies_.shutdown();
@@ -6590,17 +6579,12 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     frame_flush_calls_ = 0;
     frame_pso_resolutions_ = 0;
     frame_pso_route_early_ = 0;
-    // Baseline for the per-frame pipeline-compile deltas on the [gx-frame-timing] line.
-    frame_compile_stats_baseline_ = pipeline_cache_.compile_stats();
     frame_replay_prepared_batches_ = 0;
     frame_replay_packet_batches_ = 0;
     frame_native_shape_draws_ = 0;
     frame_native_shape_misses_ = 0;
     frame_replay_simple_batches_ = 0;
     frame_replay_generic_draws_ = 0;
-    for (PipelineMemoEntry& entry : pipeline_memo_) {
-        entry.hash = 0u;
-    }
     frame_flush_matrix_us_ = 0;
     frame_matrix_upload_bytes_ = 0;
     frame_flush_constants_us_ = 0;
@@ -6732,14 +6716,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             seen_texture_retirement_revision_ = retirement_revision;
         }
         clear_frame_texture_binding_table_cache();
-        pipeline_cache_.drain_completions();
-        // Publish point for PipelineCache::published_. Every pipeline the memo
-        // can hold is either already visible here or is resolved by get() on
-        // this same thread later in the frame, so the memo stays valid until
-        // this clear runs again at the start of the next frame.
-        for (PipelineMemoEntry& entry : pipeline_memo_) {
-            entry.hash = 0u;
-        }
         // New decoded textures upload through this frame's command list.
         renderer_.attach_texture_uploads(texture_cache_);
         {
@@ -7081,18 +7057,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     const auto render_end = frame_timing_enabled
         ? std::chrono::steady_clock::now()
         : std::chrono::steady_clock::time_point{};
-    // Per-frame pipeline-compile counts for the [gx-frame-timing] line. CompileStats counters only
-    // grow within a session (PipelineCache::shutdown() ends it), so the subtraction cannot underflow.
-    {
-        const PipelineCache::CompileStats now = pipeline_cache_.compile_stats();
-        const PipelineCache::CompileStats& was = frame_compile_stats_baseline_;
-        frame_pso_compiles_ = now.pso_compiles - was.pso_compiles;
-        frame_pso_library_loads_ = now.pso_library_loads - was.pso_library_loads;
-        frame_shader_pair_compiles_ =
-            now.shader_pair_compiles - was.shader_pair_compiles;
-        frame_blobs_from_cache_ = now.blobs_from_cache - was.blobs_from_cache;
-        frame_blob_compile_us_ = now.blob_compile_us - was.blob_compile_us;
-    }
 
     // Capture beside the wall endpoint, before diagnostic formatting/logging.
     const ThreadCounterSample frame_cpu_interval = thread_counter_interval(
@@ -7251,40 +7215,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         }
     }
 
-    // Retire completed pipeline-cache writes without waiting on disk I/O.
-    pipeline_cache_.poll_disk_flush();
-    if (pipeline_cache_.has_unsaved_records()) {
-        // Preserve learned configurations during play without serializing cache
-        // validation, reflection or replacement writes with frame submission.
-        static auto last_unsaved_flush = std::chrono::steady_clock::now();
-        const auto now = std::chrono::steady_clock::now();
-        if (now - last_unsaved_flush >= std::chrono::seconds(20)) {
-            last_unsaved_flush = now;
-            pipeline_cache_.flush_disk_async();
-        }
-    }
-    ReportPipelineCoverage();
-}
-
-// Pipeline-cache coverage, printed only when the on-disk coverage changes. While
-// shader-records-on-disk keeps up with shader-records, the remaining misses are new configurations.
-void RenderCore::ReportPipelineCoverage() {
-    const PipelineCache::CompileStats stats = pipeline_cache_.compile_stats();
-    if (stats.shader_records_on_disk == last_reported_shader_records_ &&
-        stats.pso_keys_on_disk == last_reported_pso_records_) {
-        return;
-    }
-    last_reported_shader_records_ = stats.shader_records_on_disk;
-    last_reported_pso_records_ = stats.pso_keys_on_disk;
-    std::cerr << "[pso-cache-coverage] frame=" << (frame_index_ + 1u)
-              << " shader-records=" << stats.shader_records
-              << " shader-records-on-disk=" << stats.shader_records_on_disk
-              << " pso-keys=" << stats.pso_keys
-              << " pso-keys-on-disk=" << stats.pso_keys_on_disk
-              << " pso-compiles=" << stats.pso_compiles
-              << " pso-library-loads=" << stats.pso_library_loads
-              << " shader-pair-compiles=" << stats.shader_pair_compiles
-              << " blobs-from-cache=" << stats.blobs_from_cache << '\n';
 }
 
 RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(

@@ -695,10 +695,6 @@ target_include_directories(galaxy_efb_conversion_tests PRIVATE native/include)
 foreach(mode content-key-hash oversized-content-cache decoded-allocation-budget)
     add_test(NAME galaxy_efb_conversion_tests_${mode} COMMAND galaxy_efb_conversion_tests --${mode})
 endforeach()
-# Cache file recovery through the real loader and writer, with fault injection compiled into this test's own copy.
-galaxy_test(galaxy_pipeline_cache_persistence_tests SOURCES ${gxs}/pipeline_cache_persistence_tests.cpp
-    ${gxs}/pipeline_cache.cpp LIBS galaxy_gx)
-target_compile_definitions(galaxy_pipeline_cache_persistence_tests PRIVATE GALAXY_PIPELINE_CACHE_PERSISTENCE_TEST_IO=1)
 
 if(MSVC)
     foreach(target galaxy_gx galaxy_runtime_settings galaxy_atomic_file galaxy_frame_cadence_diagnostics
