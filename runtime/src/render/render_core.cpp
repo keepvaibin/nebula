@@ -5417,7 +5417,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                              static_cast<unsigned long long>(native_material_->textures[m].image),
                              h.resource != nullptr ? 1 : 0,
                              static_cast<unsigned>(h.width), static_cast<unsigned>(h.height),
-                             h.from_efb_copy ? 1 : 0);
+                             h.from_capture ? 1 : 0);
             }
         }
         current_texture_binding_key_ = texture_binding_key;

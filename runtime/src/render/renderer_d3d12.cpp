@@ -2542,7 +2542,7 @@ gpu::Table RendererD3D12::texture_table_for(const TextureHandle* handles, unsign
         ID3D12Resource* copies[kMaxTextureMaps]{};
         bool names_copy = false;
         for (unsigned m = 0; m < count; ++m) {
-            if (handles[m].resource != nullptr && handles[m].from_efb_copy) {
+            if (handles[m].resource != nullptr && handles[m].from_capture) {
                 copies[m] = handles[m].resource;
                 names_copy = true;
             }
@@ -7350,7 +7350,7 @@ bool RendererD3D12::target_picture(std::uint64_t key, TextureHandle& out) const 
     out.width = static_cast<std::uint16_t>(it->second.viewed->GetDesc().Width);
     out.height = static_cast<std::uint16_t>(it->second.viewed->GetDesc().Height);
     out.mip_levels = 1u;
-    out.from_efb_copy = true;
+    out.from_capture = true;
     out.source_bytes = it->second.bytes != 0u ? it->second.bytes : static_cast<std::uint32_t>(it->second.width) * it->second.height * 4u;
     return true;
 }
