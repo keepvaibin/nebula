@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// A texture (0, the first coordinate) times the vertex colour, its alpha times a constant alpha; drawn where the
-// result's alpha is above zero (Flag).
+// A texture (0, the first coordinate) times the vertex colour, its alpha times a constant alpha (or the constant alpha
+// alone); drawn where the result's alpha is above zero (Flag, the ropes, vines and stalks, SpaceCocoon).
 struct MaterialConstants {
-    float4 params;  // x: the constant alpha (0-1)
+    float4 params;  // x: the constant alpha (0-1), y: 1 the constant alone (the texture's alpha unused)
 };
 
 #include "native_material.hlsli"
@@ -14,7 +14,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 
 float4 material_color(NativeVaryings i) {
     const float4 t = tex[0].Sample(samp[0], i.uv[0].xy);
-    const float a = t.a * i.color.a;
+    const float a = material.params.y != 0.0 ? i.color.a : t.a * i.color.a;
     if (round(a * 255.0) <= 0.0) {
         discard;
     }
