@@ -310,15 +310,15 @@ add_library(galaxy_gx STATIC
     runtime/src/render/vblank_clock_win32.cpp
     runtime/src/render/renderer_d3d12.cpp
     runtime/src/render/renderer_common.cpp
-    runtime/src/render/upload_ring.cpp
+    runtime/src/render/gpu_upload_ring.cpp
     runtime/src/render/galaxy_select.cpp
     runtime/src/render/window_owner.cpp
     runtime/src/render/texture_cache.cpp
     runtime/src/render/texture_pack.cpp
     runtime/src/render/texture_pack_codecs.cpp
     runtime/src/render/movie_replacement.cpp
-    runtime/src/render/texture_backend_d3d12.cpp
-    runtime/src/render/placed_texture_allocator.cpp
+    runtime/src/render/gpu_texture_backend_d3d12.cpp
+    runtime/src/render/gpu_placed_textures.cpp
     runtime/src/render/curved_surfaces.cpp
     runtime/src/render/native_shapes.cpp
     runtime/src/render/native_material.cpp
@@ -553,7 +553,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/host_window_win32.cpp
         runtime/src/render/vblank_clock_win32.cpp
         runtime/src/render/renderer_common.cpp
-        runtime/src/render/upload_ring.cpp
+        runtime/src/render/gpu_upload_ring.cpp
         runtime/src/render/window_owner.cpp
         runtime/src/render/texture_cache.cpp
         runtime/src/render/texture_pack.cpp

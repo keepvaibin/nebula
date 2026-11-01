@@ -26,7 +26,7 @@
 #include "galaxy/render/transform_history.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/ui_canvas.h"
-#include "galaxy/render/upload_ring.h"
+#include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"

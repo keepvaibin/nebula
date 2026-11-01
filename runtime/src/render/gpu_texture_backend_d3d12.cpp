@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's D3D12 side (texture_backend.h): the view heap, upload staging, placed textures and upload copies.
+// TextureCache's D3D12 side (gpu_texture_backend.h): the view heap, upload staging, placed textures and upload copies.
 
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 
 #include <bit>
 #include <sstream>

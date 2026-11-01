@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's Vulkan side (texture_backend.h).
+// TextureCache's Vulkan side (gpu_texture_backend.h).
 
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 
 #include <algorithm>
 #include <stdexcept>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// TextureCache's Vulkan side (texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
+// TextureCache's Vulkan side (gpu_texture_backend.h): image views by srv_index, mapped staging buffers, RGBA8 images and
 // the recorded upload of their levels.
 #pragma once
 
