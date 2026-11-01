@@ -1913,14 +1913,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         if (aux == motion::kCategoryPhase) {
             rt_phase_ = static_cast<std::uint8_t>(a);
         }
-        // The game's effects begin (its ShadowSurface draw type 0x26, the first list after the translucent ones in
-        // GameScene::draw3D): the effects layer opens while the water's composite is still to come, so that composite
-        // goes under what they draw.
-        if (aux == motion::kCategoryDrawType && (a & 0xFFFFu) == 0x26u && scene_phase_ && motion_scene_ &&
-            renderer_.rt_water_open()) {
-            flush_pending_draw_batch();
-            renderer_.begin_layer_window();
-        }
         if (aux == motion::kCategoryBufferOpa || aux == motion::kCategoryBufferXlu) {
             // The draw buffer (MR::DrawBufferType) the next draws come from (the census, the de-baking).
             rt_draw_buffer_ = (a & 0xFFFFu) | (aux == motion::kCategoryBufferXlu ? 0x10000u : 0u);
@@ -1958,10 +1950,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
     case motion::kMarkerPass:
         ++motion_mirror_markers_;
         rt_mirror_pass_ = aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin);
-        if (rt_mirror_pass_) {
-            // The frame's A/B state before its scene begins (rt_hidden_draw reads it for the mirror's draws).
-            renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
-        }
         if (aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin)) {
             end_side_layer();
             begin_side_layer(kMirrorLayer);
@@ -2302,13 +2290,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             scene_stage_ = *stage;
             scene_stage_known_ = true;
         }
-        // The file select stays the game's own picture: there is no stage light or world to trace, and its menu
-        // lights colour the heads.
-        {
-            static constexpr char kFileSelect[] = "FileSelect";
-            renderer_.rt_set_scene_untraced(scene_stage_known_ &&
-                                            std::strncmp(scene_stage_.data(), kFileSelect, sizeof(kFileSelect)) == 0);
-        }
         // The enhanced sky's up for the scene's draws (the view's up without a player).
         const std::uint32_t known = sky_up_known ? 1u : 0u;
         if (cpu_vs_constants_.sky_up != sky_up || cpu_vs_constants_.sky_up_known != known) {
@@ -2316,45 +2297,18 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             cpu_vs_constants_.sky_up_known = known;
             sky_up_dirty_ = true;
         }
-        // The same up for the ray tracer's physical camera (the ground under the player).
-        {
-            float up[3] = {0.0f, 1.0f, 0.0f};
-            if (sky_up_known) {
-                decode_octahedral(sky_up, up);
-            }
-            renderer_.rt_set_scene_up({up[0], up[1], up[2]});
-        }
         rt_mirror_pass_ = false;
         rt_trace_only_ = false;
         renderer_.set_scene_view(view);
-        // GALAXY_RT_AB: the game's own picture on odd presents (the snapshots' numbering).
-        renderer_.rt_set_ab_original(((g_snapshot_presents + 1u) & 1u) != 0u);
-        renderer_.rt_set_presents(g_snapshot_presents + 1u);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
-        rt_scene_traced_ = !renderer_.rt_active() || renderer_.rt_scene_untraced();
+        rt_scene_traced_ = true;
         rt_sky_buffer_ = false;
         rt_sun_buffer_ = false;
         rt_fake_shadow_list_ = false;
-        if (!rt_scene_traced_) {
-            renderer_.rt_begin_scene();
-            renderer_.rt_begin_sky();
-            renderer_.rt_set_camera(view);
-        }
-        // This scene's ray-tracing state for the enhanced pipelines (and the de-lit draws: under
-        // traced lighting every lit and environment-mapped scene draw takes the enhanced path).
-        enhanced_ps_flags_ = (enhanced_ps_flags_ & ~(kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical)) |
-                             (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                             (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u) |
-                             (renderer_.rt_physical() ? kEnhancedRtPhysical : 0u);
+        // No ray-tracing state for the enhanced pipelines (the ray tracer is parked).
+        enhanced_ps_flags_ &= ~(kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical);
     } else {
-        {
-            if (renderer_.rt_log_seq()) {
-                std::fprintf(stderr, "[rt-seq] scene-end layer=%u scene-phase=%d traced=%d water-open=%d\n",
-                             side_layer_, scene_phase_ ? 1 : 0, rt_scene_traced_ ? 1 : 0,
-                             renderer_.rt_water_open() ? 1 : 0);
-            }
-        }
         if (side_layer_ == kMirrorLayer) {
             end_side_layer();
         }
@@ -2467,11 +2421,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
     }
     if (marker == FifoMarker::SceneBegin) {
         s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
-    }
-    // While ray tracing runs the scene layer draws into the HDR scene EFB (renderer_d3d12 begin_hdr_scene): from here,
-    // with the render EFB back.
-    if (marker == FifoMarker::SceneBegin && renderer_.rt_active()) {
-        renderer_.begin_hdr_scene();
     }
 }
 
@@ -4573,11 +4522,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // GALAXY_RT_AB), set for all its chunks before anything asks rt_effect_on.
             set_rt_effect_frame(g_snapshot_presents + 1u);
             const RenderConfig render = get_render_config();
-            // Under ray-traced lighting the traced light replaces enhanced lighting (de-lit characters relit by
-            // the trace wash out), and the draws it does not relight (water, glass) are lit per pixel: the
-            // ray-traced picture is tuned with it, and the menu hides LIGHTING while ray tracing is on.
-            const bool enhanced = render.enhanced_lighting && !renderer_.rt_lighting();
-            const bool per_pixel = render.per_pixel_lighting || renderer_.rt_lighting();
+            const bool enhanced = render.enhanced_lighting;
+            const bool per_pixel = render.per_pixel_lighting;
             // GALAXY_TEST_CURVED_AB=1: curved surfaces off in frames that end in an odd present (same-run pictures).
             static const bool curved_ab = read_env_u64("GALAXY_TEST_CURVED_AB", 0u) != 0u;
             curved_surfaces_ = render.curved_surfaces && curved_surfaces_offered() &&
@@ -4585,9 +4531,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             // GALAXY_TEST_CURVED_SPLIT_AB=1: a curved draw's flat triangles stay patches in those frames.
             static const bool split_ab = read_env_u64("GALAXY_TEST_CURVED_SPLIT_AB", 0u) != 0u;
             curved_split_ = !(split_ab && ((g_snapshot_presents + 1u) & 1u) != 0u);
-            rt_water_wanted_ = rt_effect_on(render, RtEffect::Water);
             ambient_occlusion_ =
-                render.ambient_occlusion && !renderer_.rt_lighting() && renderer_.ambient_occlusion_ready();
+                render.ambient_occlusion && renderer_.ambient_occlusion_ready();
             // A lighting-mode change re-keys every lit draw's pipeline.
             if (per_pixel != per_pixel_lighting_ || enhanced != enhanced_lighting_) {
                 per_pixel_lighting_ = per_pixel;
@@ -4595,8 +4540,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 shader_key_hashes_valid_ = false;
                 current_pipeline_ = nullptr;
             }
-            enhanced_ps_flags_ = (renderer_.rt_reflections_active() ? kEnhancedRtReflections : 0u) |
-                                 (renderer_.rt_lighting() ? kEnhancedRtLighting : 0u);
+            enhanced_ps_flags_ = 0u;
         }
         renderer_.begin_frame(chunk.present_swap_chain);
         xfb_copied_in_chunk_ = false;
@@ -4617,7 +4561,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 interp_shown_scene_ = -1;
             }
             const bool wanted =
-                interp_recording_ || renderer_.temporal_mode() || renderer_.rt_active();
+                interp_recording_ || renderer_.temporal_mode();
             if (draw_identity_wanted_.load(std::memory_order_relaxed) != wanted) {
                 draw_identity_wanted_.store(wanted, std::memory_order_relaxed);
             }
@@ -4630,10 +4574,8 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                                    : get_render_config().bloom_mode == kBloomEnhanced ? 2u
                                                                                        : 1u;
             bloom_route_.store(route, std::memory_order_relaxed);
-            // The game draws for traced light: the whole stage at full detail, and out-of-view shadow casters and
-            // light sources (NEBULA_OPTION_RT_SHADOW_CASTERS; GALAXY_RT_OFFSCREEN_CASTERS=0: as without it).
-            static const bool offscreen_casters = read_env_u64("GALAXY_RT_OFFSCREEN_CASTERS", 1u) != 0u;
-            rt_shadow_casters_wanted_.store(offscreen_casters && renderer_.rt_lighting(), std::memory_order_relaxed);
+            // No traced light: the game draws its stage as without the ray tracer (NEBULA_OPTION_RT_SHADOW_CASTERS).
+            rt_shadow_casters_wanted_.store(false, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the EFB
@@ -5563,30 +5505,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     TextureBindingKey texture_binding_key = texture_binding_key_fresh
         ? current_texture_binding_key_
         : capture_texture_binding_key(texture_map_mask);
-    // Lit translucents: blended (not additive) scene draws of the translucent phases while the ray
-    // tracer's lighting texture is ready, with map 7 free for it.
-    {
-        const BlendMode b = draw_blend();
-        using motion::ScenePhase;
-        const bool blended =
-            b.blend_enable && !b.logic_op_enable && !b.subtract && b.color_update && b.dst_factor != BlendFactor::One &&
-            b.src_factor != BlendFactor::SrcColor && b.src_factor != BlendFactor::InvSrcColor &&
-            b.dst_factor != BlendFactor::SrcColor && b.dst_factor != BlendFactor::InvSrcColor &&
-            (rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Xlu) ||
-             rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListXlu));
-        // GALAXY_RT_LIT_LATE=1: the opaque draws after the screen capture take the light texture too. Off by
-        // default: those draws turn see-through and dark with it.
-        static const bool lit_late = read_env_u64("GALAXY_RT_LIT_LATE", 0u) != 0u;
-        const bool late = lit_late && !b.blend_enable && !b.logic_op_enable && b.color_update &&
-                          rt_phase_ == static_cast<std::uint8_t>(ScenePhase::AfterIndirect);
-        lit_translucent_ = scene_phase_ && side_layer_ == kSceneLayer && (texture_map_mask & 0x80u) == 0u &&
-                           (blended || late) && renderer_.rt_light_texture_ready() &&
-                           renderer_.rt_light_texture() != nullptr;
-        lit_late_ = lit_translucent_ && !blended;
-        if ((texture_map_mask & 0x80u) == 0u) {
-            texture_binding_key.lit_translucent = lit_translucent_ ? kLitTranslucentKey : 0u;
-        }
-    }
+    lit_translucent_ = false;
+    lit_late_ = false;
     // A dirty BP input requires a fresh capture, but writes to unused maps,
     // image1/2 or restored register values can leave the effective key equal.
     // Explicit frame/resource invalidation still forces work through tex_dirty.
@@ -5989,12 +5909,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     table_key.widths[m] = th.width;
                     table_key.heights[m] = th.height;
                 }
-                const bool lit_table = lit_translucent_ && texture_handles[7].resource == nullptr;
-                if (lit_table) {
-                    table_key.resources[7] = reinterpret_cast<std::uintptr_t>(renderer_.rt_light_texture());
-                    table_key.srv_indices[7] = 0xFFFFFFFFu;
-                }
-
                 const auto table_start = time_detail
                     ? std::chrono::steady_clock::now()
                     : std::chrono::steady_clock::time_point{};
@@ -6007,7 +5921,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                     // stage count, so the root table has a stable size
                     // matching the root signature.
                     current_texture_table_ = renderer_.texture_table_for(
-                        texture_handles.data(), kMaxTextureMaps, texture_cache_, lit_table);
+                        texture_handles.data(), kMaxTextureMaps, texture_cache_, false);
                     frame_texture_tables_.emplace(table_key, current_texture_table_);
                 }
                 if (time_detail) {
@@ -6159,11 +6073,6 @@ void RenderCore::flush_pending_draw_batch() {
     if (!pending_stripe_vertices_.empty()) [[unlikely]] {
         renderer_.note_stripe_vertices(pending_stripe_vertices_);
         pending_stripe_vertices_.clear();
-    }
-    // A hidden draw stays out of the picture and of the traced scene, unless the engine traces it (clear glass whose
-    // game draw paints a fake reflection: hidden, its geometry the engine's glass) or it is trace-only.
-    if (pending_draw_batch_.rt && (!pending_draw_batch_.hidden || pending_draw_batch_.traced)) {
-        renderer_.rt_note_draw(pending_draw_batch_.call, pending_draw_batch_.rt_info);
     }
     if (!pending_draw_batch_.hidden) {
         const DrawCall& call = pending_draw_batch_.call;
