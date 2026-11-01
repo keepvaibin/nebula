@@ -29,6 +29,9 @@
 //! - TPL (layout textures, after cook::formats::tpl rewrote the images): the version (2142000 reads in host order
 //!   once cooked), the image count and table, each image header's size, format, data offset, wraps, filters and
 //!   LOD bias, and a palette header where there is one.
+//! - BRFNT (fonts, after cook::formats::font made the sheets records): the native layout "RFNN" (font_native).
+//! - J3D animations (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA): headers, counts, offsets and the
+//!   16-bit and float arrays by block type (j3d_animation); name tables stay with the models'.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -823,4 +826,268 @@ pub fn font_native(bytes: &[u8]) -> Result<Vec<u8>> {
     let size = out.len() as u32;
     out[8..12].copy_from_slice(&size.to_le_bytes());
     Ok(out)
+}
+
+/// What an offset field of a J3D animation block points at.
+#[derive(Clone, Copy, PartialEq)]
+enum AnmData {
+    Halves,    // u16/s16 values or tables made only of them
+    Floats,    // f32 values (and texture SRT centres)
+    Bytes,     // u8 values, texture matrix indices
+    Names,     // a name table (JUTNameTab): stays big-endian with the models' until the model step
+    RegTable,  // TRK1 colour register keys: four key tables (12 halves), the register id, three bytes
+    Pattern,   // TPT1 tables: max frame, offset, texture map byte, a byte, a half
+    VtxIndex,  // VCK1/VCF1 index entries: a count (half), two bytes, a 32-bit index
+}
+
+/// One J3D animation block's layout: its 16-bit fields, 32-bit fields, and offsets with what they point at; the
+/// entry count for the mixed tables is a 16-bit field of the block.
+struct AnmBlock {
+    halves: &'static [usize],
+    words: &'static [usize],
+    offsets: &'static [(usize, AnmData, usize)],
+}
+
+fn anm_block(kind: &[u8]) -> Option<AnmBlock> {
+    use AnmData::*;
+    Some(match kind {
+        // Transform keys (BCK) and frames (BCA): frames, joints, scale/rotation/translation counts.
+        b"ANK1" | b"ANF1" => AnmBlock {
+            halves: &[0xA, 0xC, 0xE, 0x10, 0x12],
+            words: &[],
+            offsets: &[(0x14, Halves, 0), (0x18, Floats, 0), (0x1C, Halves, 0), (0x20, Floats, 0)],
+        },
+        // Texture SRT keys (BTK), then the post-texture-matrix set.
+        b"TTK1" => AnmBlock {
+            halves: &[0xA, 0xC, 0xE, 0x10, 0x12, 0x34, 0x36, 0x38, 0x3A],
+            words: &[0x5C],
+            offsets: &[
+                (0x14, Halves, 0), (0x18, Halves, 0), (0x1C, Names, 0), (0x20, Bytes, 0), (0x24, Floats, 0),
+                (0x28, Floats, 0), (0x2C, Halves, 0), (0x30, Floats, 0),
+                (0x3C, Halves, 0), (0x40, Halves, 0), (0x44, Names, 0), (0x48, Bytes, 0), (0x4C, Floats, 0),
+                (0x50, Floats, 0), (0x54, Halves, 0), (0x58, Floats, 0),
+            ],
+        },
+        // Material colour keys (BPK): s16 values; frames (BPA): byte values.
+        b"PAK1" | b"PAF1" => {
+            let values = if kind == b"PAK1" { Halves } else { Bytes };
+            AnmBlock {
+                halves: &[0xC, 0xE, 0x10, 0x12, 0x14, 0x16],
+                words: &[],
+                offsets: if values == Halves {
+                    &[(0x18, Halves, 0), (0x1C, Halves, 0), (0x20, Names, 0), (0x24, Halves, 0), (0x28, Halves, 0), (0x2C, Halves, 0), (0x30, Halves, 0)]
+                } else {
+                    &[(0x18, Halves, 0), (0x1C, Halves, 0), (0x20, Names, 0), (0x24, Bytes, 0), (0x28, Bytes, 0), (0x2C, Bytes, 0), (0x30, Bytes, 0)]
+                },
+            }
+        }
+        // TEV register keys (BRK): colour and constant register sets.
+        b"TRK1" => AnmBlock {
+            halves: &[0xA, 0xC, 0xE, 0x10, 0x12, 0x14, 0x16, 0x18, 0x1A, 0x1C, 0x1E],
+            words: &[],
+            offsets: &[
+                (0x20, RegTable, 0xC), (0x24, RegTable, 0xE), (0x28, Halves, 0), (0x2C, Halves, 0), (0x30, Names, 0),
+                (0x34, Names, 0), (0x38, Halves, 0), (0x3C, Halves, 0), (0x40, Halves, 0), (0x44, Halves, 0),
+                (0x48, Halves, 0), (0x4C, Halves, 0), (0x50, Halves, 0), (0x54, Halves, 0),
+            ],
+        },
+        // Texture patterns (BTP).
+        b"TPT1" => AnmBlock {
+            halves: &[0xA, 0xC, 0xE],
+            words: &[],
+            offsets: &[(0x10, Pattern, 0xC), (0x14, Halves, 0), (0x18, Halves, 0), (0x1C, Names, 0)],
+        },
+        // Shape visibility (BVA).
+        b"VAF1" => AnmBlock { halves: &[0xA, 0xC, 0xE], words: &[], offsets: &[(0x10, Halves, 0), (0x14, Bytes, 0)] },
+        // Cluster weights, keys (BLK) and frames (BLA).
+        b"CLK1" | b"CLF1" => AnmBlock { halves: &[0xA], words: &[0xC], offsets: &[(0x10, Halves, 0), (0x14, Floats, 0)] },
+        // Vertex colours, keys (BXK, s16 values) and frames (BXA, byte values).
+        b"VCK1" | b"VCF1" => {
+            let values = if kind == b"VCK1" { Halves } else { Bytes };
+            AnmBlock {
+                halves: &[0xA, 0xC, 0xE],
+                words: &[],
+                offsets: if values == Halves {
+                    &[(0x18, Halves, 0), (0x1C, Halves, 0), (0x20, VtxIndex, 0xC), (0x24, VtxIndex, 0xE), (0x28, Halves, 0), (0x2C, Halves, 0),
+                      (0x30, Halves, 0), (0x34, Halves, 0), (0x38, Halves, 0), (0x3C, Halves, 0)]
+                } else {
+                    &[(0x18, Halves, 0), (0x1C, Halves, 0), (0x20, VtxIndex, 0xC), (0x24, VtxIndex, 0xE), (0x28, Halves, 0), (0x2C, Halves, 0),
+                      (0x30, Bytes, 0), (0x34, Bytes, 0), (0x38, Bytes, 0), (0x3C, Bytes, 0)]
+                },
+            }
+        }
+        _ => return None,
+    })
+}
+
+/// The J3D animation types (file header bytes 4-8) the game loads (J3DAnmLoaderDataBase::load).
+const ANM_TYPES: [&[u8; 4]; 12] =
+    [b"bck1", b"bpk1", b"blk1", b"btk1", b"brk1", b"bxk1", b"bca1", b"bpa1", b"btp1", b"bva1", b"bla1", b"bxa1"];
+
+/// Whether these bytes are a J3D animation as the disc has it.
+pub fn is_j3d_animation(bytes: &[u8]) -> bool {
+    bytes.len() >= 0x20 && &bytes[0..4] == b"J3D1" && ANM_TYPES.iter().any(|t| &bytes[4..8] == *t)
+}
+
+/// A J3D animation (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA) in host byte order: the file header's
+/// magic, type, size, block count and sound offset; each block's kind and size, its counts and frames, its offsets;
+/// what each offset points at by its type: 16-bit tables and values, floats (values, texture SRT centres), and the
+/// mixed tables entry by entry (TRK1 register keys, TPT1 patterns, vertex-colour index entries). Bytes stay; the
+/// name tables stay big-endian with the models'. The magic, type and block kinds become host-order numbers (a
+/// cooked file starts "1D3J").
+pub fn j3d_animation(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() >= 8 && &bytes[0..4] == b"1D3J" {
+        return Ok(bytes.to_vec()); // cooked already
+    }
+    if !is_j3d_animation(bytes) {
+        bail!("not a J3D animation");
+    }
+    let mut out = bytes.to_vec();
+    out[0..4].copy_from_slice(&u32::from_be_bytes(*b"J3D1").to_le_bytes());
+    out[4..8].copy_from_slice(&be32(bytes, 4)?.to_le_bytes());
+    host32(bytes, &mut out, 8)?; // file size
+    let blocks = host32(bytes, &mut out, 0xC)? as usize;
+    host32(bytes, &mut out, 0x1C)?; // sound animation offset
+    let mut at = 0x20;
+    for b in 0..blocks {
+        let kind: [u8; 4] = bytes.get(at..at + 4).context("an animation block past the file's end")?.try_into().unwrap();
+        let mut size = be32(bytes, at + 4)? as usize;
+        if size < 8 {
+            bail!("animation block {} at {at:#x}: size {size:#x}", String::from_utf8_lossy(&kind));
+        }
+        if at + size > bytes.len() {
+            if b + 1 == blocks {
+                size = bytes.len() - at; // the last block's size may count padding the file does not have
+            } else {
+                bail!("animation block {} at {at:#x} runs past the file", String::from_utf8_lossy(&kind));
+            }
+        }
+        out[at..at + 4].copy_from_slice(&u32::from_be_bytes(kind).to_le_bytes());
+        host32(bytes, &mut out, at + 4)?;
+        let spec = anm_block(&kind).with_context(|| format!("unknown animation block {}", String::from_utf8_lossy(&kind)))?;
+        let end = at + size;
+        let header_end = spec.offsets.iter().map(|o| o.0 + 4).chain(spec.words.iter().map(|w| w + 4)).max().unwrap_or(8);
+        if at + header_end > end {
+            bail!("animation block {} at {at:#x}: header past the block", String::from_utf8_lossy(&kind));
+        }
+        for &h in spec.halves {
+            host16(bytes, &mut out, at + h)?;
+        }
+        for &w in spec.words {
+            host32(bytes, &mut out, at + w)?;
+        }
+        // Each array runs to the next offset in the block (or the block's end).
+        let mut starts: Vec<usize> = Vec::new();
+        for &(o, _, _) in spec.offsets {
+            let v = host32(bytes, &mut out, at + o)? as usize;
+            if v != 0 {
+                if v < header_end || v > size {
+                    bail!("animation block {} at {at:#x}: offset {v:#x} at {o:#x} outside the block", String::from_utf8_lossy(&kind));
+                }
+                starts.push(v);
+            }
+        }
+        starts.sort_unstable();
+        starts.dedup();
+        let mut done: HashSet<usize> = HashSet::new();
+        for &(o, data, count_at) in spec.offsets {
+            let start = be32(bytes, at + o)? as usize;
+            if start == 0 || !done.insert(start) {
+                continue;
+            }
+            let bound = starts.iter().copied().find(|&s| s > start).unwrap_or(size);
+            let (from, to) = (at + start, at + bound);
+            match data {
+                AnmData::Halves => {
+                    let mut p = from;
+                    while p + 2 <= to {
+                        host16(bytes, &mut out, p)?;
+                        p += 2;
+                    }
+                }
+                AnmData::Floats => {
+                    let mut p = from;
+                    while p + 4 <= to {
+                        host32(bytes, &mut out, p)?;
+                        p += 4;
+                    }
+                }
+                AnmData::Bytes | AnmData::Names => {}
+                AnmData::RegTable | AnmData::Pattern | AnmData::VtxIndex => {
+                    let count = be16(bytes, at + count_at)? as usize;
+                    let stride = match data {
+                        AnmData::RegTable => 0x1C,
+                        _ => 8,
+                    };
+                    if from + count * stride > to {
+                        bail!("animation block {} at {at:#x}: {count} table entries past {bound:#x}", String::from_utf8_lossy(&kind));
+                    }
+                    for e in 0..count {
+                        let p = from + e * stride;
+                        match data {
+                            AnmData::RegTable => {
+                                for k in 0..12 {
+                                    host16(bytes, &mut out, p + 2 * k)?;
+                                }
+                            }
+                            AnmData::Pattern => {
+                                host16(bytes, &mut out, p)?;
+                                host16(bytes, &mut out, p + 2)?;
+                                host16(bytes, &mut out, p + 6)?;
+                            }
+                            _ => {
+                                host16(bytes, &mut out, p)?;
+                                host32(bytes, &mut out, p + 4)?;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        at += size;
+    }
+    Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A BCK of one ANK1 block: the header, counts, table and arrays turn host order; the magic reads "1D3J".
+    #[test]
+    fn j3d_animation_turns_a_bck_host_order() {
+        let mut f = b"J3D1bck1".to_vec();
+        f.extend_from_slice(&0x60u32.to_be_bytes()); // file size
+        f.extend_from_slice(&1u32.to_be_bytes()); // blocks
+        f.extend_from_slice(b"SVR1");
+        f.extend_from_slice(&[0xFF; 8]);
+        f.extend_from_slice(&u32::MAX.to_be_bytes()); // no sound animation
+        let block = f.len();
+        f.extend_from_slice(b"ANK1");
+        f.extend_from_slice(&0x40u32.to_be_bytes());
+        f.extend_from_slice(&[1, 2]); // loop, rotation shift
+        for v in [30u16, 1, 1, 1, 1] {
+            f.extend_from_slice(&v.to_be_bytes()); // frames, joints, scale/rotation/translation counts
+        }
+        for v in [0x24u32, 0x38, 0x3C, 0x3E] {
+            f.extend_from_slice(&v.to_be_bytes()); // table, scale, rotation, translation
+        }
+        for v in [7u16; 9] {
+            f.extend_from_slice(&v.to_be_bytes()); // the first nine halves of the joint's key tables
+        }
+        f.resize(block + 0x38, 0);
+        f.extend_from_slice(&1.5f32.to_be_bytes());
+        f.extend_from_slice(&(-3i16).to_be_bytes());
+        f.extend_from_slice(&[0x40, 0x00]); // translation: the block ends inside it (two bytes only)
+        let out = j3d_animation(&f).unwrap();
+        assert_eq!(u32::from_le_bytes(out[0..4].try_into().unwrap()), u32::from_be_bytes(*b"J3D1"));
+        assert_eq!(u32::from_le_bytes(out[4..8].try_into().unwrap()), u32::from_be_bytes(*b"bck1"));
+        assert_eq!(u32::from_le_bytes(out[block..block + 4].try_into().unwrap()), u32::from_be_bytes(*b"ANK1"));
+        assert_eq!(u16::from_le_bytes(out[block + 0xA..block + 0xC].try_into().unwrap()), 30);
+        assert_eq!(u32::from_le_bytes(out[block + 0x18..block + 0x1C].try_into().unwrap()), 0x38);
+        assert_eq!(u16::from_le_bytes(out[block + 0x24..block + 0x26].try_into().unwrap()), 7);
+        assert_eq!(f32::from_le_bytes(out[block + 0x38..block + 0x3C].try_into().unwrap()), 1.5);
+        assert_eq!(i16::from_le_bytes(out[block + 0x3C..block + 0x3E].try_into().unwrap()), -3);
+        assert_eq!(j3d_animation(&out).unwrap(), out); // cooked already
+    }
 }

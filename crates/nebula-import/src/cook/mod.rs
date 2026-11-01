@@ -58,7 +58,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -76,6 +76,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         })?)
     } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
         Some(formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?)
+    } else if native_data::is_j3d_animation(&bytes) {
+        Some(native_data::j3d_animation(&bytes).with_context(|| format!("{name}: animation"))?)
     } else if bytes.starts_with(b"JPAC2-10") {
         let textured = formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
         Some(native_data::jpc_host(&textured).with_context(|| format!("{name}: particles (host order)"))?)
