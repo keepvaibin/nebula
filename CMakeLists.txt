@@ -324,7 +324,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/native_material.cpp
     runtime/src/render/draw_state.cpp
     runtime/src/render/draw_matrices.cpp
-    runtime/src/render/shader_keys.cpp
+    runtime/src/render/render_state_key.cpp
     runtime/src/render/efb_copy.cpp
     runtime/src/render/line_point_raster.cpp
     runtime/src/render/pipeline_cache.cpp
@@ -338,9 +338,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/temporal_upscaler.cpp
     runtime/src/render/game_lights.cpp
     runtime/src/render/game_objects.cpp
-    runtime/src/render/rt_surfaces.cpp
     runtime/src/render/rt_materials.cpp
-    runtime/src/render/enhanced_lighting.cpp
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/transform_history.cpp
     runtime/src/render/frame_interpolation.cpp
@@ -493,7 +491,7 @@ galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gx
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes simd_kernel vs_constants render_config
-        sampler_key rt_surfaces rt_materials texture_pack movie_replacement
+        sampler_key rt_materials texture_pack movie_replacement
         efb_copy line_point_raster native_settings_overlay post_process
         efb_conversion native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
@@ -566,7 +564,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/native_material.cpp
         runtime/src/render/draw_state.cpp
         runtime/src/render/draw_matrices.cpp
-        runtime/src/render/shader_keys.cpp
+        runtime/src/render/render_state_key.cpp
         runtime/src/render/efb_copy.cpp
         runtime/src/render/line_point_raster.cpp
         runtime/src/render/post_process_settings.cpp
@@ -579,9 +577,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/interp_gpu.cpp
-        runtime/src/render/rt_surfaces.cpp
         runtime/src/render/rt_materials.cpp
-        runtime/src/render/enhanced_lighting.cpp
         runtime/src/render/streamline_bridge.cpp
         runtime/src/frame_telemetry.cpp
         runtime/src/perf_hint.cpp
