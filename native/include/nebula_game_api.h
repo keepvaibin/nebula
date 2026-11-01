@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 81u
+#define NEBULA_GAME_API_VERSION 82u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -160,14 +160,14 @@ enum {
     NEBULA_STATE_CULL,              /* NEBULA_CULL_* */
     NEBULA_STATE_GEN_MODE,          /* texgens, channels, TEV stages */
     NEBULA_STATE_GEN_MODE2,         /* texgens, channels, TEV stages, indirect stages, cull mode */
-    NEBULA_STATE_CHANNEL,           /* channel, enable, ambient source, material source, light mask, diffuse, attenuation */
+    NEBULA_STATE_CHANNEL,           /* channel (0, 1), enable, ambient source, material source, light mask, diffuse,
+                                       attenuation, what it sets (1 the colour, 2 the alpha, 3 both) */
     NEBULA_STATE_TEV_COLOR_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output */
     NEBULA_STATE_TEV_ALPHA_CALC,    /* stage, a, b, c, d, op, bias, scale, clamp, output, raster swap, texture swap */
     NEBULA_STATE_TEV_DIRECT,        /* stage */
     NEBULA_STATE_TEV_ORDER,         /* even stage, coord 0, map 0, channel 0, coord 1, map 1, channel 1 */
     NEBULA_STATE_TEV_COLOR,         /* register, r, g, b, a */
-    NEBULA_STATE_MATERIAL_COLOR,    /* channel, r, g, b, a, GXSetChan*Color's form (1: a colour channel sets only
-                                       r, g, b, an alpha channel only a; 0: GDSetChan*Color's, the whole word) */
+    NEBULA_STATE_MATERIAL_COLOR,    /* channel (0, 1), r, g, b, a */
     NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
     NEBULA_STATE_TEX_COORD_GEN,     /* coordinate, type and source (NebulaMaterialProgram::tex_gen's encoding), normalize,
                                        post row; a[5] 1: also the coordinate's matrix row a[6] */
@@ -175,9 +175,7 @@ enum {
                                        linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
                                        anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
     NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
-    NEBULA_STATE_FOG,               /* type, r, g, b, a, GXSetFog's form (1: a projected type writes its second and
-                                       third words with register id 0, as GXSetFog does; 0: GDSetFog's); f: start,
-                                       end, near, far */
+    NEBULA_STATE_FOG,               /* type, r, g, b, a; f: start, end, near, far */
     /* Changes of some fields of a register, the others as they are (GX's partial setters): */
     NEBULA_STATE_TEV_COLOR_IN,      /* stage, a, b, c, d */
     NEBULA_STATE_TEV_ALPHA_IN,      /* stage, a, b, c, d */

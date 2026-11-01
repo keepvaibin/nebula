@@ -120,7 +120,6 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
     case state::kTexLookup: case state::kTexImage:
         return bit(kTexture);
-    case state::kFog: return bit(kGen);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
     case state::kViewport: return bit(kViewport);
     case state::kFrameAlpha: return bit(kFrame);
@@ -224,30 +223,22 @@ void NativeDrawState::set_op(const state::Op& op) {
     case state::kNumIndStages:
         gen.num_ind_stages = static_cast<std::uint8_t>(a[0] & 7u);
         break;
-    case state::kFog:
-        // GXSetFog leaves B's two words without their register id for a projected fog: the generation mode takes them
-        // (cleared). The fog itself is the native materials' own.
-        if (((a[0] >> 3u) & 1u) != 0u && a[5] != 0u) {
-            gen = GenMode{0u, 0u, 1u, CullMode::None, 0u, false};
-        }
-        break;
     case state::kChannel: {
+        // Channel 0 or 1; a[7]: 1 its colour (channel[n]), 2 its alpha (channel[2 + n]).
         const XfChannelCtrl channel_ctrl = make_channel(a[3], a[1], a[4], a[2], a[5], a[6]);
-        channel[a[0] & 3u] = channel_ctrl;
-        if (a[0] == 4u || a[0] == 5u) {  // GX_COLOR0A0, GX_COLOR1A1: the alpha channel too
-            channel[a[0] - 2u] = channel_ctrl;
+        if ((a[7] & 1u) != 0u) {
+            channel[a[0] & 1u] = channel_ctrl;
+        }
+        if ((a[7] & 2u) != 0u) {
+            channel[2u + (a[0] & 1u)] = channel_ctrl;
         }
         break;
     }
     case state::kMaterialColor:
     case state::kAmbientColor: {
         std::uint8_t* colour = op.kind == state::kMaterialColor ? material_color[a[0] & 1u] : ambient_color[a[0] & 1u];
-        // GXSetChan*Color: GX_COLOR0/1 keep the alpha, GX_ALPHA0/1 keep the colour.
-        const bool keep = a[5] != 0u && a[0] < 4u;
-        for (unsigned c = 0; c < 4u; ++c) {
-            if (!keep || (a[0] < 2u) == (c < 3u)) {
-                colour[c] = a[1u + c];
-            }
+        for (unsigned c = 0; c < 4u; ++c) {  // the channel's whole colour
+            colour[c] = a[1u + c];
         }
         break;
     }

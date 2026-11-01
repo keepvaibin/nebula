@@ -190,7 +190,9 @@ void J3DStateList::setGenMode2(u8 texGens, u8 chans, u8 tevs, u8 inds, GXCullMod
 void J3DStateList::setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask,
                                GXDiffuseFn diffFn, GXAttnFn attnFn) {
     NebulaStateOp& r = add(NEBULA_STATE_CHANNEL);
-    r.a[0] = chan;
+    // The channel (0 or 1) and what it sets: 1 its colour, 2 its alpha, 3 both (GX_COLOR0A0, GX_COLOR1A1).
+    r.a[0] = static_cast< u8 >(chan & 1);
+    r.a[7] = chan < GX_ALPHA0 ? 1 : chan < GX_COLOR0A0 ? 2 : chan <= GX_COLOR1A1 ? 3 : 0;
     r.a[1] = enable;
     r.a[2] = ambSrc;
     r.a[3] = matSrc;
@@ -257,13 +259,13 @@ void J3DStateList::setTevColor(GXTevRegID reg, GXColor color) {
 
 void J3DStateList::setChanMatColor(GXChannelID chan, GXColor color) {
     NebulaStateOp& r = add(NEBULA_STATE_MATERIAL_COLOR);
-    r.a[0] = chan;
+    r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
 }
 
 void J3DStateList::setChanAmbColor(GXChannelID chan, GXColor color) {
     NebulaStateOp& r = add(NEBULA_STATE_AMBIENT_COLOR);
-    r.a[0] = chan;
+    r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
 }
 
