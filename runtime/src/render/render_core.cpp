@@ -9218,10 +9218,14 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         return static_cast<BlendFactor>(f & 7u);
     };
     BlendMode& blend = draw_state_.blend;
-    blend.blend_enable = m.blend_op == material::kNativeBlendAdd || m.blend_op == material::kNativeBlendSubtract;
-    blend.logic_op_enable = m.blend_op == material::kNativeBlendLogic;
-    blend.logic_mode = static_cast<std::uint8_t>(m.logic_op & 15u);
-    blend.subtract = m.blend_op == material::kNativeBlendSubtract;
+    if (m.blend_op != material::kNativeKept) {
+        blend.blend_enable = m.blend_op == material::kNativeBlendAdd || m.blend_op == material::kNativeBlendSubtract;
+        blend.logic_op_enable = m.blend_op == material::kNativeBlendLogic;
+        blend.logic_mode = static_cast<std::uint8_t>(m.logic_op & 15u);
+        blend.subtract = m.blend_op == material::kNativeBlendSubtract;
+        blend.src_factor = factor(m.blend_src, true);
+        blend.dst_factor = factor(m.blend_dst, false);
+    }
     // Colour and alpha writes: 0 off, 1 on, 2 as they were.
     if (m.color_write != 2u) {
         blend.color_update = m.color_write != 0u;
@@ -9229,16 +9233,18 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
     if (m.alpha_write != 2u) {
         blend.alpha_update = m.alpha_write != 0u;
     }
-    blend.src_factor = factor(m.blend_src, true);
-    blend.dst_factor = factor(m.blend_dst, false);
-    draw_state_.z.test_enable = m.depth_test != 0u;
-    draw_state_.z.func = static_cast<CompareFunc>(m.depth_func & 7u);
-    draw_state_.z.update_enable = m.depth_write != 0u;
+    if (m.depth_test != material::kNativeKept) {
+        draw_state_.z.test_enable = m.depth_test != 0u;
+        draw_state_.z.func = static_cast<CompareFunc>(m.depth_func & 7u);
+        draw_state_.z.update_enable = m.depth_write != 0u;
+    }
     // The game's faces in its own winding (GX's front faces), the drawing state's culling in the renderer's flipped
     // one (draw_state.cpp kCull: GX_CULL_BACK is CullMode::Front).
-    draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Front
-                           : m.cull == material::kNativeCullFront ? CullMode::Back
-                                                                  : CullMode::None;
+    if (m.cull != material::kNativeKept) {
+        draw_state_.gen.cull = m.cull == material::kNativeCullBack    ? CullMode::Front
+                               : m.cull == material::kNativeCullFront ? CullMode::Back
+                                                                      : CullMode::None;
+    }
     // The shader tests its own alpha.
     draw_state_.alpha = AlphaCompare{0u, 0u, CompareFunc::Always, CompareFunc::Always, AlphaTestLogic::And};
     native_texture_mask_ = 0u;

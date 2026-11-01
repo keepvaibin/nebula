@@ -378,6 +378,9 @@ enum {
 };
 /* Culling of the game's back or front faces, in its own winding (GX's: GX_CULL_BACK is NEBULA_CULL_BACK). */
 enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
+/* blend_op, depth_test or cull: the drawing state's blending, depth or culling as it is (a material that replaces only
+   the shader of the draws after the state the game set: J3DModelX's override passes). */
+enum { NEBULA_NATIVE_KEPT = 0xFF };
 
 typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */

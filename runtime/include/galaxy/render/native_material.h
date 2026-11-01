@@ -105,6 +105,8 @@ inline constexpr std::uint8_t kNativeBlendReplace = 0u, kNativeBlendAdd = 1u, kN
 inline constexpr std::uint8_t kNativeFactorSrcColor = 2u, kNativeFactorInvSrcColor = 3u, kNativeFactorDstColor = 8u,
                               kNativeFactorInvDstColor = 9u;
 inline constexpr std::uint8_t kNativeCullNone = 0u, kNativeCullBack = 1u, kNativeCullFront = 2u;
+// blend_op, depth_test, cull: the drawing state's as it is (nebula_game_api.h NEBULA_NATIVE_KEPT).
+inline constexpr std::uint8_t kNativeKept = 0xFFu;
 
 // GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
 [[nodiscard]] std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source);
