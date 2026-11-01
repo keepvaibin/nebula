@@ -50,8 +50,6 @@ namespace J3DNativeState {
     void loadLightObjImm(const GXLightObj* pObj, GXLightID id);
     // The pixel format (the last one kept here: GXSetPixelFmt changes the hardware only when it differs).
     void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat);
-    // Textures in memory changed.
-    void invalidateTexAll();
     // The drawing state the game starts from (what GXInit set on the console), sent before anything is drawn.
     void initDefaults();
     // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's
@@ -103,7 +101,6 @@ void J3DNativeStateSetPointSize(u8 size, GXTexOffset texOffsets);
 void J3DNativeStateInitLightColor(GXLightObj* pObj, GXColor color);
 void J3DNativeStateInitLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z);
 void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id);
-void J3DNativeStateInvalidateTexAll(void);
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
 void J3DNativeStateSetIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
 void J3DNativeStateEnableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);

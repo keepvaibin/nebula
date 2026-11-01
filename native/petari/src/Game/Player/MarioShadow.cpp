@@ -487,7 +487,6 @@ void CollisionShadow::drawAndCaptureTex(J3DModelX* pModel, const TVec3f& rPositi
         const ResTIMG* image = _300->getTexInfo();
         void* destination = const_cast< u8* >(reinterpret_cast< const u8* >(image) + image->mImageDataOffset);
         JUTTexture::captureDolTexture(destination, _2FC, _2FE, 608 - _2FC, 0, false, GX_CTF_A8);
-        J3DNativeState::invalidateTexAll();
     }
 
     J3DNativeState::setAlphaUpdate(GX_FALSE);

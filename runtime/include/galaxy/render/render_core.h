@@ -240,7 +240,6 @@ private:
     void end_cached_draw_run();
     // A copy (EFB to texture or display) with the pixel format it reads.
     void on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_format);
-    void on_invalidate_textures();
     void on_invalidate_vertex_cache();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
     void load_light(const state::Op& op);

@@ -461,13 +461,6 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void invalidateTexAll() {
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.invalidateTexAll();
-        list.send();
-    }
-
     // The texture every map holds until the game loads its own: 4x4 opaque white, a texture record
     // (nebula_cooked_texture.h).
     static struct {
@@ -519,7 +512,6 @@ namespace J3DNativeState {
         setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_VTX, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
         setChanAmbColor(GX_COLOR1A1, black);
         setChanMatColor(GX_COLOR1A1, white);
-        invalidateTexAll();
 
         static GXTexObj sDefaultTexture;
         J3DNativeTexture::registerImage(&sDefaultTexData, GX_TF_IA8, 4, 4, 1);
@@ -688,10 +680,6 @@ void J3DNativeStateInitLightPos(GXLightObj* pObj, f32 x, f32 y, f32 z) {
 
 void J3DNativeStateLoadLightObjImm(const GXLightObj* pObj, GXLightID id) {
     J3DNativeState::loadLightObjImm(pObj, id);
-}
-
-void J3DNativeStateInvalidateTexAll(void) {
-    J3DNativeState::invalidateTexAll();
 }
 
 void J3DNativeStateSetTevOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color) {

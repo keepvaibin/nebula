@@ -147,7 +147,6 @@ namespace MovieDraw {
         J3DNativeState::setColorUpdate(GX_TRUE);
         J3DNativeState::setAlphaUpdate(GX_FALSE);
         J3DNativeState::setNumChans(0);
-        J3DNativeState::invalidateTexAll();
 
         // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);

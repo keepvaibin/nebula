@@ -151,9 +151,6 @@ void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
 
 void NativeDrawState::apply(const state::Op& op) {
     std::uint32_t groups = op_groups(op.kind);
-    if (op.kind == state::kInvalidateTextures) {
-        dirty |= kStateDirtyTex;  // the texture bindings are captured again
-    }
     tracked(*this, groups, [&] { set_op(op); });
 }
 

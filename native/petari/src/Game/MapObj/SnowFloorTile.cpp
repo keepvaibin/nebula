@@ -408,7 +408,6 @@ void SnowFloorTile::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
 
 void SnowFloorTile::draw() const {
     MR::reinitGX();
-    J3DNativeState::invalidateTexAll();
     // runtime/src/render/materials/color_tex_alpha.hlsl: each layer its colour at the snow texture's alpha, drawn
     // where that is above the layer's threshold; blended by alpha, back faces culled, depth tested and written.
     NebulaNativeMaterial material;

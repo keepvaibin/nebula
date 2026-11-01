@@ -3,8 +3,9 @@
 // TextureCache: decodes GX textures from game memory into GPU textures and serves their descriptors to the
 // per-draw texture table.
 //
-// Entries are dropped only explicitly: on GXInvalidateTexAll() (FifoSink::on_invalidate_textures ->
-// invalidate_all()) and on a write overlapping a cached range (invalidate_range). Pictures the renderer draws
+// Entries are dropped only explicitly: when the game hands a texture's record over again (register_image), when a
+// capture replaces what its key held (invalidate_range), and when texture packs change (invalidate_all). Pictures the
+// renderer draws
 // (target passes, captures) are the renderer's, looked up before this cache.
 
 #ifndef WIN32_LEAN_AND_MEAN
