@@ -17,6 +17,9 @@ cbuffer NativeDraw : register(b0) {
     float4 inline_tex_matrices[24] : packoffset(c17);   // texture coordinate i's matrix rows at 3i (the draw's places)
     float4 inline_post_matrices[24] : packoffset(c41);  // and its post-transform rows
     float4 line_point_raster : packoffset(c65);  // the viewport's width and height in pixels (xy)
+    uint4 vs_header : packoffset(c67);           // y: the EFB scale; z: the PE word (native_ps); w: the shape's
+                                                 // per-vertex texture matrix indices (texgen n's bit)
+    uint4 vs_post[2] : packoffset(c70);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
     float4 motion_prev_proj[2] : packoffset(c73);
     float4 motion_prev_pos[3] : packoffset(c75);
     float4 motion_params : packoffset(c78);
@@ -37,6 +40,8 @@ StructuredBuffer<float4> mtx_rows : register(t3, space1);
 float4 native_matrix_row(uint r) { return mtx_rows[r < 30u ? draw_counts.w + r : row_bases.y + (r - 30u)]; }
 float4 native_normal_row(uint q) { return mtx_rows[row_bases.x + q]; }
 float4 native_light_row(uint n, uint w) { return mtx_rows[row_bases.w + 4u * n + w]; }
+float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
+uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
 
 struct NativeVertexIn {
     float3 pos : POSITION;
@@ -119,6 +124,18 @@ float4 native_unpack_color(uint c) {
 }
 
 void material_vertex(NativeVertex v, inout NativeVaryings o);
+
+// Texture coordinate i's matrix: the vertex's own index where the shape carries one (vs_header.w bit i: skinned
+// shapes' per-vertex texture matrices), else the draw's (draw_indices.xy: the matrix indices the shape loads, as
+// refresh_vs_inline_matrices reads them); its rows through native_matrix_row (60: the identity).
+uint native_tex_matrix(NativeVertex v, uint i) {
+    if (((vs_header.w >> i) & 1u) == 0u) {
+        return i < 4u ? (draw_indices.x >> (6u + 6u * i)) & 0x3Fu : (draw_indices.y >> (6u * (i - 4u))) & 0x3Fu;
+    }
+    const uint packed = i < 3u ? v.mtx_idx.x : i < 7u ? v.mtx_idx.y : v.mtx_idx.z;
+    const uint shift = i < 3u ? 8u + 8u * i : i < 7u ? 8u * (i - 3u) : 0u;
+    return min((packed >> shift) & 0xFFu, 61u);
+}
 float4 material_color(NativeVaryings i);
 
 NativeVsOut native_vs(NativeVertexIn input) {
@@ -207,22 +224,44 @@ struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; float
 struct NativeOut { float4 color : SV_Target0; float reactive : SV_Target1; };
 #elif NATIVE_MOTION
 struct NativeOut { float4 color : SV_Target0; float2 motion : SV_Target1; };
+#elif NATIVE_DUAL
+struct NativeOut { float4 color : SV_Target0; float4 color1 : SV_Target1; };
 #else
 struct NativeOut { float4 color : SV_Target0; };
 #endif
 
 NativeOut native_ps(NativeVaryings i) {
-    float4 c = material_color(i);
-    // The EFB holds eight bits a colour channel and six of alpha (a reactive draw blends at the eight-bit alpha).
-    const uint4 efb = uint4(round(saturate(c) * 255.0));
-    c.rgb = float3(efb.rgb) / 255.0;
+    const float4 c0 = material_color(i);
+    // The pixel engine, as the uber shader writes it: an alpha of 1 blends and writes as 0; an RGBA6 EFB keeps six
+    // bits of colour (after its 2x2 dither when on) and six of alpha, or the constant destination alpha; the blender
+    // reads the 8-bit TEV alpha (SV_Target1 for dual-source blending).
+    const uint pe = vs_header.z;
+    uint4 efb = uint4(round(saturate(c0) * 255.0));
+    if (efb.a == 1u) {
+        efb.a = 0u;
+    }
+    const float tev_alpha = float(efb.a) / 255.0;
+    float4 c;
+    if ((pe & 1u) != 0u) {
+        int3 d = int3(efb.rgb);
+        if ((pe & 2u) != 0u) {
+            const int2 xy = int2(i.pos.xy / float(max(vs_header.y, 1u))) & 1;
+            d = (d - (d >> 6)) + (xy.x ^ xy.y) * 2 + xy.y;
+        }
+        c.rgb = float3(uint3(clamp(d, 0, 255)) >> 2u) / 63.0;
+    } else {
+        c.rgb = float3(efb.rgb) / 255.0;
+    }
 #if NATIVE_REACTIVE
-    c.a = float(efb.a) / 255.0;
+    c.a = tev_alpha;
 #else
-    c.a = float(efb.a >> 2u) / 63.0;
+    c.a = (pe & 0x100u) != 0u ? float(((pe >> 9u) & 0xFFu) >> 2u) / 63.0 : float(efb.a >> 2u) / 63.0;
 #endif
     NativeOut o;
     o.color = c;
+#if NATIVE_DUAL
+    o.color1 = float4(0.0, 0.0, 0.0, tev_alpha);
+#endif
 #if NATIVE_REACTIVE
     o.reactive = min(saturate(c.a), 0.9);
 #endif

@@ -1335,6 +1335,7 @@ private:
     // The native material the draws use (null: the GX state's), whether its constants are not yet uploaded, and the
     // texture maps it binds.
     std::shared_ptr<const material::Native> native_material_;
+    std::uint32_t native_texmtx_ = 0x80000000u;  // the header words as last uploaded (bit 31: a GX draw's)
     bool native_constants_dirty_ = false;
     std::uint8_t native_texture_mask_ = 0u;
     // GALAXY_TEST_MATERIAL_CENSUS=1: programs registered (and re-registered with other content), distinct programs,

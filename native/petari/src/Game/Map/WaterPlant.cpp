@@ -1,4 +1,5 @@
 #include "Game/Map/WaterPlant.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -15,72 +16,22 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // The plants' material (nebula_game_api.h NebulaMaterialProgram): the plant texture, drawn where its alpha is above
-    // 50 and blended by it, depth tested and written, no culling, linear fog (values: the water's start, end and blue).
-    NebulaMaterialProgram sPlantProgram;
-    bool sPlantRegistered = false;
-
-    void sendPlantProgram(JUTTexture* pTexture, f32 fogStart, f32 fogEnd) {
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sPlantRegistered) {
-            NebulaMaterialProgram& rProgram = sPlantProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD0;
-            rStage.tex_map = GX_TEXMAP0;
-            rStage.channel = GX_COLOR_NULL;
-            rStage.color_in[0] = GX_CC_TEXC;
-            rStage.color_in[1] = rStage.color_in[2] = rStage.color_in[3] = GX_CC_ZERO;
-            rStage.alpha_in[0] = GX_CA_TEXA;
-            rStage.alpha_in[1] = rStage.alpha_in[2] = rStage.alpha_in[3] = GX_CA_ZERO;
-            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rProgram.tex_gen[0].type = GX_TG_MTX2x4;
-            rProgram.tex_gen[0].source = GX_TG_TEX0;
-            rProgram.tex_gen[0].matrix = GX_IDENTITY;
-            rProgram.tex_gen[0].post_matrix = GX_PTIDENTITY;
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.z_compare_location = 0;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_FOG;
-            rProgram.fog.type = GX_FOG_LIN;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_GREATER;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_BLEND;
-            rProgram.blend.source = GX_BL_SRCALPHA;
-            rProgram.blend.destination = GX_BL_INVSRCALPHA;
-            rProgram.blend.logic_op = GX_LO_NOOP;
-            rProgram.z_mode.enable = GX_TRUE;
-            rProgram.z_mode.func = GX_LEQUAL;
-            rProgram.z_mode.update = GX_TRUE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sPlantProgram), &rProgram);
-            sPlantRegistered = true;
-        }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.alpha_ref[0] = values.alpha_ref[1] = 50;
-        values.fog.start = fogStart;
-        values.fog.end = fogEnd;
-        values.fog.near_z = MR::getNearZ();
-        values.fog.far_z = MR::getFarZ();
-        values.fog.color[0] = 0x32;
-        values.fog.color[1] = 0x32;
-        values.fog.color[2] = 0x96;
-        values.fog.color[3] = 0xFF;
-        values.tex_coord_scale[0].scale_s = pTexture->getWidth();
-        values.tex_coord_scale[0].scale_t = pTexture->getHeight();
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sPlantProgram), &values);
+    // runtime/src/render/materials/water_plant.hlsl: the plant texture where its alpha is above 50, blended by it,
+    // depth tested and written, no culling, fogged linearly toward the water's blue between `fogStart` and `fogEnd`.
+    void sendPlantMaterial(JUTTexture* pTexture, f32 fogStart, f32 fogEnd) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_WATER_PLANT, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
+                           NEBULA_CULL_NONE);
+        material.constants[0] = fogStart;
+        material.constants[1] = fogEnd;
+        NativeShader::setColor(material, 4, 0x32, 0x32, 0x96, 0xFF);
+        NativeShader::setTexture(material, 0, pTexture);
+        NativeShader::send(material);
         static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                                       GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
         J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
     }
 }  // namespace
-
 namespace {
     // A GX array, in the console's byte order.
     NEBULA_BE(f32) gxArray[] = {0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.2f, 1.0f, 0.2f, 0.0f, 0.5f, 1.0f, 0.5f, 0.0f, 1.0f, 1.0f, 1.0f};
@@ -388,22 +339,8 @@ void WaterPlantDrawInit::movement() {
 }
 
 void WaterPlantDrawInit::loadTex(int tex) {
-    if (tex == 1) {
-        mPlantBTex->load(GX_TEXMAP0);
-        return;
-    }
-
-    if (tex == 2) {
-        mPlantCTex->load(GX_TEXMAP0);
-        return;
-    }
-
-    if (tex == 3) {
-        mPlantDTex->load(GX_TEXMAP0);
-        return;
-    }
-
-    mPlantATex->load(GX_TEXMAP0);
+    JUTTexture* pTexture = tex == 1 ? mPlantBTex : tex == 2 ? mPlantCTex : tex == 3 ? mPlantDTex : mPlantATex;
+    sendPlantMaterial(pTexture, ::sFogStartZ, ::sFogEndZ);
 }
 
 void WaterPlantDrawInit::updateSwingPos() {
@@ -420,8 +357,6 @@ void WaterPlantDrawInit::updateSwingPos() {
 void WaterPlantDrawInit::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_NONE, GX_AF_NONE);
-    sendPlantProgram(mPlantATex, ::sFogStartZ, ::sFogEndZ);
+    sendPlantMaterial(mPlantATex, ::sFogStartZ, ::sFogEndZ);
 }
 #pragma pop

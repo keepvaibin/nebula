@@ -1,4 +1,5 @@
 #include "Game/Map/OceanRingPipeInside.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include "Game/Map/OceanRingPipe.hpp"
@@ -14,89 +15,6 @@
 #include <cstring>
 
 extern "C" const NebulaHostServices* nebula_host(void);
-
-namespace {
-    // The pipe's inside (nebula_game_api.h NebulaMaterialProgram): the pipe texture (coordinate 0, texture matrix 0)
-    // warped by itself (coordinate 1, texture matrix 1) as a signed indirect offset, register 0 to register 1 by its
-    // colour and its alpha doubled, both scaled by four; blended by alpha, depth tested and not written, back faces
-    // culled, fog off, no channels.
-    NebulaMaterialProgram sInsideProgram;
-    bool sInsideRegistered = false;
-
-    void sendInsideProgram(JUTTexture* pTexture, f32 indirectScale) {
-        const NebulaHostServices* pHost = nebula_host();
-        if (!sInsideRegistered) {
-            NebulaMaterialProgram& rProgram = sInsideProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD0;
-            rStage.tex_map = GX_TEXMAP0;
-            rStage.channel = GX_COLOR_NULL;
-            rStage.color_in[0] = GX_CC_C0;
-            rStage.color_in[1] = GX_CC_C1;
-            rStage.color_in[2] = GX_CC_TEXC;
-            rStage.color_in[3] = GX_CC_ZERO;
-            rStage.alpha_in[0] = GX_CA_ZERO;
-            rStage.alpha_in[1] = GX_CA_TEXA;
-            rStage.alpha_in[2] = GX_CA_TEXA;
-            rStage.alpha_in[3] = GX_CA_ZERO;
-            rStage.color_op = rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_4;
-            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rStage.ind_stage = GX_INDTEXSTAGE0;
-            rStage.ind_format = GX_ITF_8;
-            rStage.ind_bias = GX_ITB_STU;
-            rStage.ind_matrix = GX_ITM_0;
-            rStage.ind_wrap_s = rStage.ind_wrap_t = GX_ITW_OFF;
-            rStage.ind_alpha = GX_ITBA_OFF;
-            rProgram.ind_order[0].coord = GX_TEXCOORD1;
-            rProgram.ind_order[0].map = GX_TEXMAP0;
-            rProgram.ind_order[0].scale_s = rProgram.ind_order[0].scale_t = GX_ITS_1;
-            for (u32 t = 0; t < 2; t++) {
-                rProgram.tex_gen[t].type = GX_TG_MTX2x4;
-                rProgram.tex_gen[t].source = static_cast< u8 >(GX_TG_TEX0 + t);
-                rProgram.tex_gen[t].matrix = static_cast< u8 >(GX_TEXMTX0 + t * 3);
-                rProgram.tex_gen[t].post_matrix = GX_PTIDENTITY;
-            }
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 2;
-            rProgram.ind_stages = 1;
-            rProgram.channels = 0;
-            rProgram.cull = GX_CULL_BACK;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_INDIRECT | NEBULA_MATERIAL_LOADS_FOG;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_OR;
-            rProgram.blend.type = GX_BM_BLEND;
-            rProgram.blend.source = GX_BL_SRCALPHA;
-            rProgram.blend.destination = GX_BL_INVSRCALPHA;
-            rProgram.blend.logic_op = GX_LO_COPY;
-            rProgram.z_mode.enable = GX_TRUE;
-            rProgram.z_mode.func = GX_LEQUAL;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&sInsideProgram), &rProgram);
-            sInsideRegistered = true;
-        }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.ind_matrix[0].m[0][0] = indirectScale;
-        values.ind_matrix[0].m[1][1] = indirectScale;
-        values.fog.near_z = MR::getNearZ();
-        values.fog.far_z = MR::getFarZ();
-        memset(values.fog.color, 0xFF, sizeof(values.fog.color));
-        for (u32 c = 0; c < 2; c++) {
-            values.tex_coord_scale[c].scale_s = pTexture->getWidth();
-            values.tex_coord_scale[c].scale_t = pTexture->getHeight();
-        }
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sInsideProgram), &values);
-        static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
-    }
-}  // namespace
 
 namespace {
     const f32 sTexRateU0 = 0.08f;
@@ -163,10 +81,22 @@ void OceanRingPipeInside::loadMaterial() const {
     mtx.mMtx[1][2] = mTexV1;
     J3DNativeShape::setTexture(1, mtx.toMtxPtr(), 2);
 
-    mWaterPipeInsideTex->load(GX_TEXMAP0);
-    sendInsideProgram(mWaterPipeInsideTex, ::sIndirectScale);
-    J3DNativeState::setTevColor(GX_TEVREG0, ::sTevReg0);
-    J3DNativeState::setTevColor(GX_TEVREG1, ::sTevReg1);
+    // runtime/src/render/materials/ocean_ring_pipe_inside.hlsl: the texture warped by itself (sIndirectScale texels a
+    // step), sTevReg0 toward sTevReg1 by its colour, its alpha squared, both times four; blended by alpha, depth tested
+    // and not written, back faces culled, no fog.
+    NebulaNativeMaterial material;
+    NativeShader::init(material, NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL,
+                       false, NEBULA_CULL_BACK);
+    NativeShader::setColor(material, 0, ::sTevReg0.r, ::sTevReg0.g, ::sTevReg0.b, ::sTevReg0.a);
+    NativeShader::setColor(material, 4, ::sTevReg1.r, ::sTevReg1.g, ::sTevReg1.b, ::sTevReg1.a);
+    material.constants[8] = ::sIndirectScale;
+    material.constants[10] = static_cast< f32 >(mWaterPipeInsideTex->getWidth());
+    material.constants[11] = static_cast< f32 >(mWaterPipeInsideTex->getHeight());
+    NativeShader::setTexture(material, 0, mWaterPipeInsideTex);
+    NativeShader::send(material);
+    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
+                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
 }
 

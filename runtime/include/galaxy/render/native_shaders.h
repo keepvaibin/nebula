@@ -24,13 +24,15 @@ enum NativeShaderVariant : unsigned {
     kNativeVariantReactive = 1u,  // + the reactive mask
     kNativeVariantLayer = 2u,     // + the reactive mask and the effects layer's targets
     kNativeVariantMotion = 3u,    // + the motion vector
-    kNativeVariants = 4u,
+    kNativeVariantDual = 4u,      // + the TEV alpha for dual-source blending (render state bit 27)
+    kNativeVariants = 5u,
 };
 
 [[nodiscard]] constexpr unsigned native_shader_variant(std::uint32_t blend_bits) noexcept {
     return (blend_bits & kRenderStateLayerTarget) != 0u      ? kNativeVariantLayer
            : (blend_bits & kRenderStateMotionTarget) != 0u   ? kNativeVariantMotion
            : (blend_bits & kRenderStateReactiveTarget) != 0u ? kNativeVariantReactive
+           : (blend_bits & (1u << 27u)) != 0u                ? kNativeVariantDual
                                                              : kNativeVariantBase;
 }
 
@@ -41,9 +43,9 @@ enum NativeShaderVariant : unsigned {
 // whether the output layout carries motion vectors (kNativeVariantMotion).
 [[nodiscard]] NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept;
 
-// A native pipeline's render state: the draw's, without dual-source blending (a native shader writes one colour).
+// A native pipeline's render state: the draw's (its dual-source and constant-alpha bits the shader's dual variant
+// and PE word serve).
 [[nodiscard]] inline RenderStateKey native_render_state(RenderStateKey rs) noexcept {
-    rs.blend_bits &= ~((1u << 27u) | (1u << 28u));
     std::memset(rs.reserved, 0, sizeof(rs.reserved));
     return rs;
 }

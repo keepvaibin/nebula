@@ -135,6 +135,7 @@ namespace {
             pC[74] = rValues.fog.near_z;
             pC[75] = rValues.fog.far_z;
             setColor(pC + 76, rValues.fog.color, 3);
+            pC[79] = rProgram.fog.type;
         }
         pC[80] = rValues.alpha_ref[0] / 255.0f;
         pC[81] = rValues.alpha_ref[1] / 255.0f;
@@ -177,6 +178,7 @@ namespace {
             pC[74] = rOp.f[2];
             pC[75] = rOp.f[3];
             setColor(pC + 76, a + 1, 3);
+            pC[79] = a[0];  // the fog type (j3d_material.hlsli j3d_fog): a value every J3D shader takes
             return true;
         case NEBULA_STATE_ALPHA_COMPARE:
             pC[80] = a[1] / 255.0f;
@@ -237,8 +239,6 @@ namespace {
         case NEBULA_STATE_IND_TEX_ORDER:
         case NEBULA_STATE_Z_TEXTURE:
             return true;
-        case NEBULA_STATE_FOG:
-            return sCurrentKind == CURRENT_J3D && rOp.a[0] != sCurrentProgram->fog.type;
         case NEBULA_STATE_ALPHA_COMPARE:
             return sCurrentKind == CURRENT_J3D &&
                    (rOp.a[0] != sCurrentProgram->alpha_compare.comp0 || rOp.a[2] != sCurrentProgram->alpha_compare.op ||
@@ -253,8 +253,14 @@ namespace {
     void endCurrent() {
         const NebulaHostServices* pHost = nebula_host();
         if (sCurrentKind == CURRENT_J3D) {
-            const u64 key = static_cast< u64 >(reinterpret_cast< uintptr_t >(sCurrentProgram));
-            pHost->material_program(pHost->user, key, sCurrentProgram);
+            // The whole material (its values are built whole), also for an instance's differed list: the shared list
+            // that would have set the rest drew natively, so the drawing state holds none of it.
+            static NebulaMaterialProgram sWhole;
+            sWhole = *sCurrentProgram;
+            sWhole.diff_flags = 0;
+            sWhole.origin = 0;
+            const u64 key = static_cast< u64 >(reinterpret_cast< uintptr_t >(&sWhole));
+            pHost->material_program(pHost->user, key, &sWhole);
             const u32 since = sSinceCount;
             pHost->material(pHost->user, key, sCurrentValues);
             if (sSinceLost) {
@@ -287,6 +293,19 @@ namespace {
         MaterialWatch() { nebula_material_watch(watchMaterial); }
     };
     MaterialWatch sMaterialWatch;
+
+    // Whether J3D materials draw as their native shaders now: not while the ray tracer lights the scene (it reads the
+    // drawing state's TEV program for its hit surfaces; E-04 step 3d makes it read the native materials).
+    bool nativeDrawn(u32 shader) {
+        const NebulaHostServices* pHost = nebula_host();
+        if (pHost->option(pHost->user, NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
+            return false;
+        }
+        // Tests: only a range of the J3D materials (GALAXY_TEST_NATIVE_J3D).
+        static const u32 sRange = pHost->option(pHost->user, NEBULA_OPTION_TEST_NATIVE_J3D);
+        const u32 number = shader - NEBULA_SHADER_J3D_FIRST + 1;
+        return sRange == 0 || (number >= (sRange >> 16) && number <= (sRange & 0xFFFF));
+    }
 
     u8 nativeFactor(u8 gx, bool source) {
         // GX's colour factors name the other side's colour (a source factor 2 is the destination's colour).
@@ -337,6 +356,16 @@ namespace {
         material.alpha_write = 2;
         loadRegisters(rProgram, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
+        // Each coordinate's GX scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
+        // of map m at c's scale over m's size, as GX scales coordinates per coordinate.
+        for (u32 k = 0; k < 8; k++) {
+            f32* pScale = material.constants + 84 + k * 4;
+            const NebulaMaterialTexture& rTex = rValues.texture[k];
+            pScale[2] = rTex.width != 0 ? rTex.width : 1.0f;
+            pScale[3] = rTex.height != 0 ? rTex.height : 1.0f;
+            pScale[0] = rValues.tex_coord_scale[k].scale_s != 0 ? rValues.tex_coord_scale[k].scale_s : pScale[2];
+            pScale[1] = rValues.tex_coord_scale[k].scale_t != 0 ? rValues.tex_coord_scale[k].scale_t : pScale[3];
+        }
         for (u32 map = 0; map < 8; map++) {
             const NebulaMaterialTexture& rTex = rValues.texture[map];
             if (rTex.image == 0) {
@@ -356,6 +385,13 @@ namespace {
             material.textures[map].lod_bias = rTex.lod_bias;
             material.textures[map].min_lod = rTex.min_lod;
             material.textures[map].max_lod = rTex.max_lod;
+        }
+        // Its texgens' post-transform rows (a shape's own texgens replace them at its draw).
+        for (u32 i = 0; i < 8; i++) {
+            material.texgen_post[i] = i < rProgram.tex_gens
+                                          ? static_cast< u8 >((rProgram.tex_gen[i].post_matrix & 0x3F) |
+                                                              (rProgram.tex_gen[i].normalize != 0 ? 0x80 : 0))
+                                          : 61;
         }
         // The lights the material's colour block loads (J3DColorBlockLightOn), as its list loaded them.
         if ((rProgram.loads & NEBULA_MATERIAL_LOADS_LIGHTS) != 0) {
@@ -697,10 +733,10 @@ namespace J3DNativeMaterial {
             rParts.program.diff_flags = diffFlags;
             rParts.program.origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
             rParts.nativeShader = nativeShaderOf(rParts.program);
-            // The program the host has for this list (GX path only): sent when the list's first capture makes it, or
-            // when a patch changes it (an animated material's captures change only its values).
-            if (rParts.nativeShader == 0 &&
-                (!pList->mNebulaCaptured || memcmp(&sRegistered, &rParts.program, sizeof(sRegistered)) != 0)) {
+            // The program the host has for this list (its GX path, which a native J3D material also takes while the
+            // ray tracer lights the scene): sent when the list's first capture makes it, or when a patch changes it (an
+            // animated material's captures change only its values).
+            if (!pList->mNebulaCaptured || memcmp(&sRegistered, &rParts.program, sizeof(sRegistered)) != 0) {
                 const NebulaHostServices* pHost = nebula_host();
                 pHost->material_program(pHost->user, keyOf(pList), &rParts.program);
             }
@@ -714,7 +750,7 @@ namespace J3DNativeMaterial {
         const NebulaHostServices* pHost = nebula_host();
         if (pList != NULL && pList->mNebulaCaptured) {
             const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
-            if (rParts.nativeShader != 0) {
+            if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
                 sendNative(rParts.program, rParts.values, rParts.nativeShader);
                 return;
             }
@@ -724,7 +760,8 @@ namespace J3DNativeMaterial {
         }
         // A list from the model file, which has no snapshot: its material built now, its program with it.
         build(pMaterial, pTexture, &sParts);
-        if (const u32 shader = nativeShaderOf(sParts.program)) {
+        const u32 shader = nativeShaderOf(sParts.program);
+        if (shader != 0 && nativeDrawn(shader)) {
             sendNative(sParts.program, sParts.values, shader);
             return;
         }
@@ -738,7 +775,7 @@ namespace J3DNativeMaterial {
             return;
         }
         const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
-        if (rParts.nativeShader != 0) {
+        if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
             sendNative(rParts.program, rParts.values, rParts.nativeShader);
             return;
         }

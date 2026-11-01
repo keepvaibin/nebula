@@ -19,5 +19,7 @@ float4 material_color(NativeVaryings i) {
         prev.rgb = rc;
         prev.a = ra;
     }
-    return saturate(prev);
+    prev = j3d_out(float4(prev.rgb, prev.a));
+    prev.rgb = j3d_fog(prev.rgb, i.pos);
+    return prev;
 }

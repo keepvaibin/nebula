@@ -16,10 +16,10 @@ public:
     void setUpFillScreen() const;
     void sendFillScreen(GXColor) const;
 
-    /* 0x0C */ GXBlendMode mFillBlendMode;
-    /* 0x10 */ GXBlendFactor mFillSrcFactor;
-    /* 0x14 */ GXBlendFactor mFillDstFactor;
-    /* 0x18 */ GXLogicOp mFillLogicOp;
+    // The fill's blend (nebula_game_api.h NEBULA_BLEND_* and NEBULA_FACTOR_*).
+    u8 mFillBlendOp;
+    u8 mFillSrcFactor;
+    u8 mFillDstFactor;
     /* 0x1C */ Color8 _1C;
     /* 0x20 */ Color8 _20;
     /* 0x24 */ bool _24;

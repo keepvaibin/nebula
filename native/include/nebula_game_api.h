@@ -332,6 +332,16 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_NONE = 0,
     NEBULA_SHADER_WHIRLPOOL = 1, /* WhirlPool: the swirl over the warped screen behind */
     NEBULA_SHADER_OCEAN_BOWL = 2, /* OceanBowl: Beach Bowl's sea over the warped screen behind */
+    NEBULA_SHADER_SCREEN_BLUR = 3, /* ScreenBlurEffect: the blurred scene where its depth lies beyond a threshold */
+    NEBULA_SHADER_FLAT_COLOR = 4,  /* a flat colour (constants: rgba) */
+    NEBULA_SHADER_CLIP_FILL = 5,   /* ClipFieldFillDraw: a colour where the screen alpha mask is set (or clear) */
+    NEBULA_SHADER_BIG_BUBBLE = 6,  /* BigBubbleDrawer: the rainbow bubble over its environment map */
+    NEBULA_SHADER_WHIRLPOOL_ACCELERATOR = 7, /* WhirlPoolAccelerator: two colours mixed by the stream's texture */
+    NEBULA_SHADER_SPIN_DRIVER_PATH = 8,      /* SpinDriverPathDrawer: a launch star path's colour under its mask */
+    NEBULA_SHADER_SPIDER_THREAD = 9,         /* SpiderThread: the web's thread warped by its indirect texture */
+    NEBULA_SHADER_TEX_MODULATE = 10,         /* a texture times the vertex colour, its alpha times a constant */
+    NEBULA_SHADER_WATER_PLANT = 11,          /* WaterPlant: the plant texture, alpha-tested, in the water's fog */
+    NEBULA_SHADER_OCEAN_RING_PIPE_INSIDE = 12, /* OceanRingPipeInside: the pipe's inside, warped by its own texture */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256
@@ -352,6 +362,7 @@ enum {
     NEBULA_COMPARE_NEVER = 0, NEBULA_COMPARE_LESS, NEBULA_COMPARE_EQUAL, NEBULA_COMPARE_LEQUAL,
     NEBULA_COMPARE_GREATER, NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_ALWAYS,
 };
+/* Culling of the game's back or front faces, in its own winding (GX's: GX_CULL_BACK is NEBULA_CULL_BACK). */
 enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
 
 typedef struct NebulaNativeMaterial {
@@ -360,7 +371,7 @@ typedef struct NebulaNativeMaterial {
     uint8_t depth_test, depth_func, depth_write, early_depth; /* depth_func NEBULA_COMPARE_* */
     uint8_t cull, color_write, alpha_write; /* writes: 0 off, 1 on, 2 as they were */
     uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */
-    float constants[96];
+    float constants[128];
     struct {
         uint64_t image;        /* the texture's identity: the game's address of its image (or a capture's) */
         uint16_t width, height;
@@ -374,6 +385,9 @@ typedef struct NebulaNativeMaterial {
         float lod_bias, min_lod, max_lod;
     } textures[8];
     NebulaMaterialLight light[8];
+    /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
+       drawing state's until a draw's own texgens replace it (a shape's env map or projection). */
+    uint8_t texgen_post[8];
     uint32_t constants_only; /* 1: only the constants of the material the draws use change (the game folding a state
                                 change of one of its values in); its state, textures and lights stay as set since */
 } NebulaNativeMaterial;
@@ -612,6 +626,8 @@ enum {
                                           going back */
     NEBULA_OPTION_TEST_MATERIAL_SWEEP, /* tests (GALAXY_DUMP_MATERIAL_PROGRAMS set): 1 every loaded model's materials
                                           are built at load and the programs without a native shader registered */
+    NEBULA_OPTION_TEST_NATIVE_J3D,     /* tests (GALAXY_TEST_NATIVE_J3D=lo-hi): first << 16 | last J3D material number
+                                          (from 1) drawn by its native shader, the others by their GX programs; 0 all */
 };
 
 /* game_light: the game's lights, from the objects that own them; `values` per kind. */
