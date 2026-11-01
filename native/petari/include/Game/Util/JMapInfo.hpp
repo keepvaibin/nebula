@@ -17,19 +17,20 @@
 class JMapInfoIter;
 
 struct JMapItem {
-    /* 0x00 */ NEBULA_BE(u32) mHash;
-    /* 0x04 */ NEBULA_BE(u32) mMask;
-    /* 0x08 */ NEBULA_BE(u16) mOffsData;
+    /* 0x00 */ u32 mHash;
+    /* 0x04 */ u32 mMask;
+    /* 0x08 */ u16 mOffsData;
     /* 0x0A */ u8 mShift;
     /* 0x0B */ u8 mType;
 };
 
-// BCSV: the header and field table big-endian, and each entry's values (JMapInfo::getValueFast reads them).
+// BCSV, in host order as the importer cooks it (crates/nebula-import cook/native_data.rs): the header, the field
+// table and each entry's values (JMapInfo::getValueFast reads them).
 struct JMapData {
-    /* 0x00 */ NEBULA_BE(s32) mNumEntries;
-    /* 0x04 */ NEBULA_BE(s32) mNumFields;
-    /* 0x08 */ NEBULA_BE(s32) mDataOffset;
-    /* 0x0C */ NEBULA_BE(u32) mEntrySize;
+    /* 0x00 */ s32 mNumEntries;
+    /* 0x04 */ s32 mNumFields;
+    /* 0x08 */ s32 mDataOffset;
+    /* 0x0C */ u32 mEntrySize;
     /* 0x10 */ const JMapItem mItems[];
 };
 
@@ -79,13 +80,13 @@ public:
     bool getValueFast(int entryIndex, int itemIndex, f32* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = *reinterpret_cast< const NEBULA_BE(f32)* >(pValue);
+        *pValueOut = *reinterpret_cast< const f32* >(pValue);
         return true;
     }
     bool getValueFast(int entryIndex, int itemIndex, bool* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = (*reinterpret_cast< const NEBULA_BE(u32)* >(pValue) & pItem->mMask) != 0;
+        *pValueOut = (*reinterpret_cast< const u32* >(pValue) & pItem->mMask) != 0;
         return true;
     }
 

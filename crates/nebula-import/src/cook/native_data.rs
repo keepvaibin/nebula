@@ -9,6 +9,10 @@
 //! - KCL (collision): the four offsets and the scalars (0x0-0x38), positions and normals (whole vectors), prisms from
 //!   entry 1 (a height and five indices), and the octree (s32 node words, u16 prism lists; a shared list once). A
 //!   cooked file's first offset reads below 64 KB in host order (the disc's, big-endian, reads at least 64 KB).
+//! - BCSV (tables: .bcsv, .tbl, .pa, .bcam, .banmt and the stages' extensionless placement tables): the header, the
+//!   field table (hash, mask, offset) and each entry's values by their field's type (32-bit integers, floats and
+//!   string offsets, 16-bit integers; bytes and embedded strings stay). A cooked table's field count reads below 64 K
+//!   in host order.
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -218,4 +222,114 @@ impl Octree<'_> {
             at += 2;
         }
     }
+}
+
+/// The bytes a BCSV field of `kind` occupies and swaps (0: none).
+fn bcsv_width(kind: u8) -> Option<usize> {
+    match kind {
+        0 | 2 | 3 | 6 => Some(4), // long, float, long 2, string offset
+        4 => Some(2),             // short
+        1 | 5 => Some(0),         // embedded string, byte
+        _ => None,
+    }
+}
+
+/// A big-endian BCSV's layout (entries, fields, data offset, entry size) when every part lies in the file.
+fn bcsv_layout(bytes: &[u8]) -> Option<(usize, usize, usize, usize)> {
+    if bytes.len() < 16 {
+        return None;
+    }
+    let entries = be32(bytes, 0).ok()? as i32;
+    let fields = be32(bytes, 4).ok()? as usize;
+    let data = be32(bytes, 8).ok()? as usize;
+    let size = be32(bytes, 12).ok()? as usize;
+    // An empty table (no fields, no entries) is a header alone.
+    let empty = fields == 0 && entries == 0;
+    if entries < 0 || fields > 1024 || data != 16 + 12 * fields || size > 0x10000 || (!empty && (fields == 0 || size == 0)) {
+        return None;
+    }
+    let end = data.checked_add((entries as usize).checked_mul(size)?)?;
+    if end > bytes.len() {
+        return None;
+    }
+    let strings = bytes.len() - end;
+    for f in 0..fields {
+        let at = 16 + 12 * f;
+        let offset = be16(bytes, at + 8).ok()? as usize;
+        let kind = bytes[at + 11];
+        let width = bcsv_width(kind)?;
+        if bytes[at + 10] >= 32 || offset + width.max(1) > size {
+            return None;
+        }
+        if kind == 6 {
+            for e in 0..entries as usize {
+                if be32(bytes, data + e * size + offset).ok()? as usize >= strings.max(1) {
+                    return None;
+                }
+            }
+        }
+    }
+    Some((entries as usize, fields, data, size))
+}
+
+/// A table (BCSV) in host byte order: Some(cooked) for a table, None for a file that is not one (or is cooked
+/// already). `listed`: the name says it is a table, so one that does not read as one stops the cook.
+pub fn bcsv(bytes: &[u8], listed: bool) -> Result<Option<Vec<u8>>> {
+    let le = |at: usize| bytes.get(at..at + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()));
+    if let (Some(fields), Some(data)) = (le(4), le(8)) {
+        if fields < 0x10000 && data as usize == 16 + 12 * fields as usize && bcsv_layout(bytes).is_none() {
+            return Ok(None); // cooked already
+        }
+    }
+    let Some((entries, fields, data, size)) = bcsv_layout(bytes) else {
+        if listed {
+            bail!("a table that does not read as one");
+        }
+        return Ok(None);
+    };
+    let mut out = bytes.to_vec();
+    for at in (0..16).step_by(4) {
+        host32(bytes, &mut out, at)?;
+    }
+    let mut columns = Vec::with_capacity(fields);
+    for f in 0..fields {
+        let at = 16 + 12 * f;
+        host32(bytes, &mut out, at)?; // hash
+        host32(bytes, &mut out, at + 4)?; // mask
+        let offset = host16(bytes, &mut out, at + 8)? as usize;
+        columns.push((offset, bcsv_width(bytes[at + 11]).unwrap()));
+    }
+    // Fields packed into one word share its offset: each place is swapped once, at one width.
+    // Widest first at each offset, so the place keeps the width it is swapped at.
+    columns.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+    columns.dedup();
+    // A field inside another's swapped word at another offset would move with the swap.
+    for (i, a) in columns.iter().enumerate() {
+        for b in &columns[i + 1..] {
+            if a.1 > 0 && b.0 != a.0 && b.0 < a.0 + a.1 {
+                bail!("a field at {:#x} lies inside the {}-byte field at {:#x}", b.0, a.1, a.0);
+            }
+        }
+    }
+    for pair in columns.windows(2) {
+        if pair[0].0 == pair[1].0 && pair[0].1 != pair[1].1 && pair[0].1 != 0 && pair[1].1 != 0 {
+            bail!("fields at offset {:#x} read at {} and {} bytes", pair[0].0, pair[0].1, pair[1].1);
+        }
+    }
+    columns.dedup_by_key(|c| c.0);
+    for e in 0..entries {
+        let entry = data + e * size;
+        for &(offset, width) in &columns {
+            match width {
+                4 => {
+                    host32(bytes, &mut out, entry + offset)?;
+                }
+                2 => {
+                    host16(bytes, &mut out, entry + offset)?;
+                }
+                _ => {}
+            }
+        }
+    }
+    Ok(Some(out))
 }
