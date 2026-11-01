@@ -127,11 +127,6 @@ void LodCtrl::update() {
         f32 lowDistance = _4;
         f32 middleDistance = _0;
 #ifdef TARGET_PC
-        // Ray-traced light shows every model at full detail: the middle and low models (a planet's few hundred
-        // triangles) light and shadow as the coarse shapes they are. The game's own choices below still hold.
-        if (NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
-            middleDistance = lowDistance = 3.4e38f;
-        }
         // Tests (GALAXY_TEST_LOD): a model chosen for every actor, or the high and middle models in turn.
         static const u32 sTestLod = NebulaHost::option(NEBULA_OPTION_TEST_LOD);
         if (sTestLod != 0 && !*_28) {

@@ -1284,32 +1284,6 @@ void svc_object_name(void*, uint64_t id, const char* name) {
 #endif
 }
 
-float svc_light_reach(void*, const char* model, float radius) {
-#if defined(NEBULA_HOST_RENDERER)
-    return galaxy::render::rt_light_reach(model, radius);
-#else
-    (void)model;
-    (void)radius;
-    return 0.0f;
-#endif
-}
-
-int svc_traced_sun(void*, float* direction) {
-#if defined(NEBULA_HOST_RENDERER)
-    std::array<float, 3> sun{};
-    if (direction == nullptr || !galaxy::render::traced_sun(sun, 500u)) {
-        return 0;
-    }
-    direction[0] = sun[0];
-    direction[1] = sun[1];
-    direction[2] = sun[2];
-    return 1;
-#else
-    (void)direction;
-    return 0;
-#endif
-}
-
 // The Discord application Nebula's status shows under ("Super Mario Galaxy"; GALAXY_DISCORD_CLIENT_ID replaces it).
 constexpr const char* kDiscordClientId = "1562359210463727617";
 
@@ -2704,12 +2678,6 @@ uint32_t svc_option(void*, uint32_t what) {
 #else
         return 0;
 #endif
-    case NEBULA_OPTION_RT_SHADOW_CASTERS:
-#if defined(NEBULA_HOST_RENDERER)
-        return galaxy::render::rt_shadow_casters_wanted() ? 1u : 0u;
-#else
-        return 0;
-#endif
     case NEBULA_OPTION_LOD_SCALE:
 #if defined(NEBULA_HOST_RENDERER)
         return galaxy::render::scene_display_scale();
@@ -3999,8 +3967,6 @@ int main(int argc, char** argv) {
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
     services.object_name = svc_object_name;
-    services.light_reach = svc_light_reach;
-    services.traced_sun = svc_traced_sun;
 #if defined(NEBULA_HOST_RENDERER)
     // The display configuration (GALAXY_RENDER_CONFIG_PATH in tests), loaded before the window; the settings overlay
     // reads its frame art from the game files.

@@ -60,9 +60,6 @@ bool draw_identity_wanted() noexcept {
     return backend().draw_identity_wanted();
 }
 
-bool rt_shadow_casters_wanted() noexcept {
-    return backend().rt_shadow_casters_wanted();
-}
 
 unsigned bloom_route() noexcept {
     return backend().bloom_route();

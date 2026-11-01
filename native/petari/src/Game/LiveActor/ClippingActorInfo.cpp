@@ -17,10 +17,6 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
     mFarClipLevel = 6;
     _12 = -1;
     _14 = 0;
-#ifdef TARGET_PC
-    mKeptForLight = false;
-    mLightReach = -1.0f;
-#endif
     setTypeToSphere(300.0f, 0);
 }
 
@@ -44,41 +40,8 @@ bool ClippingActorInfo::isJudgedToClip() const {
 
     f32 val = _8;
     ClippingJudge* judge = MR::getClippingJudge();
-#ifdef TARGET_PC
-    // Ray-traced light draws the whole stage to the camera's far plane: an actor's own draw distance (5,000 to 60,000
-    // units by its clip level) was the console's budget, and with it objects stood in the sky without the planet they
-    // sit on, and the traced light lost whatever lay beyond.
-    if (judge->isLightSourcesWanted()) {
-        farClipLevel = 0;
-    }
-    if (!judge->isJudgedToClipFrustum(*_4, val, farClipLevel)) {
-        mKeptForLight = false;
-        return false;
-    }
-    // Ray-traced light: an actor out of view whose shadow, or whose light, reaches it stays unclipped. Drawn while
-    // clipped it showed frozen where the game stopped it, or in its bind pose if it never moved (a Toad standing in a
-    // T-pose in the light of the plaza).
-    mKeptForLight = isWantedForLight(farClipLevel);
-    return !mKeptForLight;
-#else
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
-#endif
 }
-
-#ifdef TARGET_PC
-bool ClippingActorInfo::isWantedForLight(s32 farClipLevel) const {
-    const ClippingJudge* judge = MR::getClippingJudge();
-    if (!judge->isLightSourcesWanted() || MR::isDead(mActor) || MR::isNoEntryDrawBuffer(mActor)) {
-        return false;
-    }
-    if (mLightReach < 0.0f) {
-        // Asked once, while ray-traced light is on: the reach of the model's light (0: none).
-        mLightReach = mActor->mModelManager != nullptr ? NebulaHost::lightReach(MR::getModelResName(mActor), _8) : 0.0f;
-    }
-    return judge->isShadowCasterInView(*_4, _8, farClipLevel) ||
-           (mLightReach > 0.0f && judge->isLightInView(*_4, _8 + mLightReach));
-}
-#endif
 
 bool ClippingActorInfo::isGroupClipping() const {
     return mInfo;

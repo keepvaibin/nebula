@@ -375,16 +375,14 @@ void GameScene::draw() const {
                     continue;
                 }
                 // With the animation it plays (none: no BCK started), its frame and rate; whether its model is shown;
-                // whether the game clips it, and whether out of view it is kept unclipped for ray-traced light
-                // (ClippingActorInfo::isWantedForLight).
+                // whether the game clips it.
                 const char* pBck = MR::getPlayingBckName(pActor);
                 const ClippingActorInfo* pInfo = MR::getClippingDirector()->mActorHolder->find(pActor);
-                JUTNativeLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d caster=%d\n",
+                JUTNativeLog("actor %s %.0f %.0f %.0f bck=%s frame=%.1f rate=%.2f stopped=%d hidden=%d clipped=%d\n",
                          MR::getModelResName(pActor), pActor->mPosition.x, pActor->mPosition.y, pActor->mPosition.z,
                          pBck != nullptr ? pBck : "none", pBck != nullptr ? MR::getBckFrame(pActor) : 0.0f,
                          pBck != nullptr ? MR::getBckRate(pActor) : 0.0f, pBck != nullptr && MR::isBckStopped(pActor) ? 1 : 0,
-                         MR::isHiddenModel(pActor) ? 1 : 0, MR::isClipped(pActor) ? 1 : 0,
-                         pInfo != nullptr && pInfo->mKeptForLight ? 1 : 0);
+                         MR::isHiddenModel(pActor) ? 1 : 0, MR::isClipped(pActor) ? 1 : 0);
             }
         } else if (action.kind == NEBULA_TEST_KILL_ACTOR) {
             // Killed as their defeat ends (LiveActor::kill): what they leave appears, a KuriboChief's key.

@@ -502,13 +502,9 @@ namespace {
         }
     }
 
-    // Whether J3D materials draw as their native shaders now: not while the ray tracer lights the scene (it reads the
-    // drawing state's GX program for its hit surfaces; E-04 step 3d makes it read the native materials).
+    // Whether J3D materials draw as their native shaders (tests can limit them to a range).
     bool nativeDrawn(u32 shader) {
         const NebulaHostServices* pHost = nebula_host();
-        if (pHost->option(pHost->user, NEBULA_OPTION_RT_SHADOW_CASTERS) != 0) {
-            return false;
-        }
         // Tests: only a range of the J3D materials (GALAXY_TEST_NATIVE_J3D).
         static const u32 sRange = pHost->option(pHost->user, NEBULA_OPTION_TEST_NATIVE_J3D);
         const u32 number = shader - NEBULA_SHADER_J3D_FIRST + 1;

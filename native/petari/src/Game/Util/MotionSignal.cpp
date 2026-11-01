@@ -43,7 +43,6 @@ namespace {
         Kind_StarPointer = 11,
         Kind_Material = 12,
         Kind_Effect = 13,
-        Kind_TraceOnly = 14,
     };
 
     enum {
@@ -227,14 +226,6 @@ namespace MotionSignal {
 
     void mirror(bool begin) {
         NebulaRender::hostMarker(Kind_Pass, begin ? Pass_MirrorBegin : Pass_MirrorEnd, 0, 0);
-    }
-
-    bool traceOnlyWanted() {
-        return NebulaRender::sDrawIdentities != 0 && NebulaHost::option(NEBULA_OPTION_RT_SHADOW_CASTERS) != 0;
-    }
-
-    void traceOnly(bool begin) {
-        NebulaRender::hostMarker(Kind_TraceOnly, begin ? 1 : 0, 0, 0);
     }
 
     void lightImpl(u16 site, const void* pInfo, u32 followCamera) {
