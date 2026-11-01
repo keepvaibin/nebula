@@ -306,26 +306,8 @@ static _GXCompType getFmtType(_GXVtxAttrFmtList* i_fmtList, _GXAttr i_attr) {
 
 void J3DModelLoader::readVertex(J3DVertexBlock const* i_block) {
     J3DVertexData& vertex_data = mpModelData->getVertexData();
-#ifdef TARGET_PC
-    {
-        // GX and J3DShape read the list natively: copy it, through its GX_VA_NULL terminator.
-        const BEData< GXVtxAttrFmtList >* src = JSUConvertOffsetToPtr< BEData< GXVtxAttrFmtList > >(i_block, i_block->mpVtxAttrFmtList);
-        GXVtxAttrFmtList* list = NULL;
-        if (src != NULL) {
-            int num = 0;
-            while (src[num].attr != GX_VA_NULL) {
-                num++;
-            }
-            list = new GXVtxAttrFmtList[num + 1];
-            for (int i = 0; i <= num; i++) {
-                list[i] = src[i];
-            }
-        }
-        vertex_data.mVtxAttrFmtList = list;
-    }
-#else
+    // The list in the file (host order, as the importer cooks VTX1).
     vertex_data.mVtxAttrFmtList = JSUConvertOffsetToPtr< GXVtxAttrFmtList >(i_block, i_block->mpVtxAttrFmtList);
-#endif
     vertex_data.mVtxPosArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxPosArray);
     vertex_data.mVtxNrmArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNrmArray);
     vertex_data.mVtxNBTArray = JSUConvertOffsetToPtr< void >(i_block, i_block->mpVtxNBTArray);

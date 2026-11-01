@@ -69,7 +69,14 @@ namespace {
         return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
     }
 
-    // One component as GX dequantises it (big-endian).
+    // A vertex component as the importer cooks the arrays (host order).
+    u16 host16(const u8* p) {
+        u16 v;
+        memcpy(&v, p, sizeof(v));
+        return v;
+    }
+
+    // One component as GX dequantises it (the arrays in host order, as the importer cooks VTX1).
     f32 component(const u8* p, GXCompType type, f32 scale) {
         switch (type) {
         case GX_U8:
@@ -77,13 +84,12 @@ namespace {
         case GX_S8:
             return static_cast< s8 >(p[0]) * scale;
         case GX_U16:
-            return be16(p) * scale;
+            return host16(p) * scale;
         case GX_S16:
-            return static_cast< s16 >(be16(p)) * scale;
+            return static_cast< s16 >(host16(p)) * scale;
         default: {
-            const u32 bits = be32(p);
             f32 value;
-            memcpy(&value, &bits, sizeof(value));
+            memcpy(&value, p, sizeof(value));
             return value;
         }
         }

@@ -491,8 +491,8 @@ namespace MR {
             vtxAttrFmtList++;
         }
 
-        // The model's positions, big-endian (GX reads them).
-        NEBULA_BE(s16)* vertexPosArray = static_cast< NEBULA_BE(s16)* >(pModelData->getVertexData().getVtxPosArray());
+        // The model's positions (host order, as the importer cooks VTX1).
+        s16* vertexPosArray = static_cast< s16* >(pModelData->getVertexData().getVtxPosArray());
         for (u32 i = 0; i < vtxNum * 3; i++) {
             vertexPosArray[i] >>= 1;
         }
