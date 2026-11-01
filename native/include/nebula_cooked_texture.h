@@ -26,9 +26,6 @@ extern "C" {
 #define NEBULA_TEXTURE_LINEAR_L8 0x41u
 #define NEBULA_TEXTURE_LINEAR_LA8 0x42u
 #define NEBULA_TEXTURE_LINEAR_RGBA8 0x43u
-/* NebulaTextureImage.format of a blank the game made (a capture target or a buffer it fills later): width x height
-   transparent black, keyed by `bytes` (never read); size 0. */
-#define NEBULA_TEXTURE_BLANK 0x44u
 /* disc_format of a record the game made while running. */
 #define NEBULA_TEXTURE_MADE 0xFFu
 
