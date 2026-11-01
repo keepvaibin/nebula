@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/System/FileHolder.hpp"
-#include "Game/System/OSThreadWrapper.hpp"
+#include "Game/System/GameThread.hpp"
 
 struct RequestFileInfo {
     /* 0x00 */ u32 _0;
@@ -11,7 +11,7 @@ struct RequestFileInfo {
     /* 0x8C */ FileHolderFileEntry* mFileEntry;
 };
 
-class FileLoaderThread : public OSThreadWrapper {
+class FileLoaderThread : public GameThread {
 public:
     FileLoaderThread(int, int, JKRHeap*);
 
