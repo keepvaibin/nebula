@@ -20,8 +20,7 @@ cbuffer NativeDraw : register(b0) {
                                                  // width and half point size (zw, native_lines.hlsl)
     uint4 line_point_tex_offsets : packoffset(c66);  // lines' and points' texture coordinate offsets (native_lines.hlsl)
     uint4 vs_header : packoffset(c67);           // y: the frame scale; z: the PE word (native_ps); w: the shape's
-                                                 // per-vertex texture matrix indices (texgen n's bit), bit 8 its
-                                                 // per-vertex position matrix indices
+                                                 // per-vertex texture matrix indices (texgen n's bit)
     uint4 vs_post[2] : packoffset(c70);          // texgen i's post-transform row (61 the identity), | 0x100 normalize
     float4 motion_prev_proj[2] : packoffset(c73);
     float4 motion_prev_pos[3] : packoffset(c75);
@@ -207,7 +206,7 @@ NativeVsOut native_vs(NativeVertexIn input) {
     // else the draw's (inline).
     const float4 p = float4(input.pos, 1.0);
     float4 m0, m1, m2;
-    if ((vs_header.w & 0x100u) != 0u) {
+    if ((draw_counts.z & 1u) != 0u) {
         v.pn_row = min(input.mtx_idx.x & 0x3Fu, 61u);
         m0 = native_matrix_row(v.pn_row);
         m1 = native_matrix_row(v.pn_row + 1u);
@@ -232,7 +231,7 @@ NativeVsOut native_vs(NativeVertexIn input) {
     // Motion vectors (temporal scenes): this frame's clip position without the jitter, and the previous frame's (the
     // camera delta applied to the eye position).
     float3 prev_eye;
-    if ((vs_header.w & 0x100u) != 0u && motion_ctrl.x == 0u) {
+    if ((draw_counts.z & 1u) != 0u && motion_ctrl.x == 0u) {
         // The vertex's position rows of the previous frame (motion_ctrl.y: their base, or kMotionOwnRows).
         const uint base = motion_ctrl.y;
         const uint r = v.pn_row;
@@ -241,7 +240,7 @@ NativeVsOut native_vs(NativeVertexIn input) {
                           dot(base == 0xFFFFFFFFu ? native_matrix_row(r + 2u) : mtx_rows[base + r + 2u], p));
     } else {
         // The camera's move applied to the eye position (palette draws), or the previous position matrix (inline).
-        const float4 q = (vs_header.w & 0x100u) != 0u ? float4(v.eye, 1.0) : p;
+        const float4 q = (draw_counts.z & 1u) != 0u ? float4(v.eye, 1.0) : p;
         prev_eye = float3(dot(motion_prev_pos[0], q), dot(motion_prev_pos[1], q), dot(motion_prev_pos[2], q));
     }
     const float4 pp0 = motion_prev_proj[0];
