@@ -436,9 +436,14 @@ namespace {
             material.textures[map].palette_entries = rTex.palette_entries;
             material.textures[map].palette_format = rTex.palette_format;
         }
-        // Its texgens' post-transform rows (a shape's own texgens replace them at its draw).
+        // Its texgens' post-transform rows (a shape's own texgens replace them at its draw). An instance's differed
+        // list loads texgens only when its flags name them (TexGenNum with 0x1000: diffTexGen, as the GX path's
+        // differed records): otherwise the texgens stay as the draw has them (a shape's own, ShapePacketUserData's
+        // environment maps, set before the packet's differed list).
+        const bool keepTexGens = differed && !(((rProgram.diff_flags >> 8) & 15) != 0 && (rProgram.diff_flags & 0x1000) != 0);
         for (u32 i = 0; i < 8; i++) {
-            material.texgen_post[i] = i < rProgram.tex_gens
+            material.texgen_post[i] = keepTexGens ? static_cast< u8 >(NEBULA_NATIVE_KEPT)
+                                      : i < rProgram.tex_gens
                                           ? static_cast< u8 >((rProgram.tex_gen[i].post_matrix & 0x3F) |
                                                               (rProgram.tex_gen[i].normalize != 0 ? 0x80 : 0))
                                           : 61;
