@@ -7,61 +7,8 @@
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-// BRLYT/BRLAN, read in place: big-endian fields; the vector, size and SRT values the layout copies into its panes and
-// materials are NEBULA_DISC twins.
-#ifdef TARGET_PC
-template <>
-struct BEData< nw4r::math::VEC2 > {
-    BE< f32 > x, y;
-
-    operator nw4r::math::VEC2() const {
-        return nw4r::math::VEC2(x, y);
-    }
-};
-
-template <>
-struct BEData< nw4r::math::VEC3 > {
-    BE< f32 > x, y, z;
-
-    operator nw4r::math::VEC3() const {
-        return nw4r::math::VEC3(x, y, z);
-    }
-};
-
-template <>
-struct BEData< nw4r::lyt::Size > {
-    BE< f32 > width, height;
-
-    operator nw4r::lyt::Size() const {
-        return nw4r::lyt::Size(width, height);
-    }
-};
-
-template <>
-struct BEData< nw4r::lyt::InflationLRTB > {
-    BE< f32 > l, r, t, b;
-
-    operator nw4r::lyt::InflationLRTB() const {
-        nw4r::lyt::InflationLRTB v = {l, r, t, b};
-        return v;
-    }
-};
-
-template <>
-struct BEData< nw4r::lyt::TexSRT > {
-    BEData< nw4r::math::VEC2 > translate;
-    BE< f32 > rotate;
-    BEData< nw4r::math::VEC2 > scale;
-
-    operator nw4r::lyt::TexSRT() const {
-        nw4r::lyt::TexSRT v;
-        v.translate = translate;
-        v.rotate = rotate;
-        v.scale = scale;
-        return v;
-    }
-};
-#endif
+// BRLYT/BRLAN, read in place in host order as the importer cooks them (crates/nebula-import
+// cook/native_data.rs layout).
 
 namespace nw4r {
     namespace lyt {
@@ -106,46 +53,46 @@ namespace nw4r {
 
             struct BinaryFileHeader {
                 char signature[4];
-                NEBULA_BE(u16) byteOrder;
-                NEBULA_BE(u16) version;
-                NEBULA_BE(u32) fileSize;
-                NEBULA_BE(u16) headerSize;
-                NEBULA_BE(u16) dataBlocks;
+                u16 byteOrder;
+                u16 version;
+                u32 fileSize;
+                u16 headerSize;
+                u16 dataBlocks;
             };
 
             struct DataBlockHeader {
                 char kind[4];
-                NEBULA_BE(u32) size;
+                u32 size;
             };
 
             struct Layout {
                 DataBlockHeader blockHeader;
                 u8 originType;
                 u8 padding[3];
-                NEBULA_DISC(Size) layoutSize;
+                Size layoutSize;
             };
 
             struct Font {
-                NEBULA_BE(u32) nameStrOffset;
+                u32 nameStrOffset;
                 u8 type;
                 u8 padding[3];
             };
 
             struct FontList {
                 DataBlockHeader blockHeader;
-                NEBULA_BE(u16) fontNum;
+                u16 fontNum;
                 u8 padding[2];
             };
 
             struct Texture {
-                NEBULA_BE(u32) nameStrOffset;
+                u32 nameStrOffset;
                 u8 type;
                 u8 padding[3];
             };
 
             struct TextureList {
                 DataBlockHeader blockHeader;
-                NEBULA_BE(u16) texNum;
+                u16 texNum;
                 u8 padding[2];
             };
 
@@ -193,14 +140,14 @@ namespace nw4r {
                     detail::SetBits(&wrapTflt, 2, bitLen, bitData);
                 }
 
-                NEBULA_BE(u16) texIdx;
+                u16 texIdx;
                 u8 wrapSflt;
                 u8 wrapTflt;
             };
 
             struct MaterialList {
                 DataBlockHeader blockHeader;
-                NEBULA_BE(u16) materialNum;
+                u16 materialNum;
                 u8 padding[2];
             };
 
@@ -212,55 +159,55 @@ namespace nw4r {
                 u8 padding;
                 char name[16];
                 char userData[8];
-                NEBULA_DISC(math::VEC3) translate;
-                NEBULA_DISC(math::VEC3) rotate;
-                NEBULA_DISC(math::VEC2) scale;
-                NEBULA_DISC(Size) size;
+                math::VEC3 translate;
+                math::VEC3 rotate;
+                math::VEC2 scale;
+                Size size;
             };
 
             struct Picture : Pane {
-                NEBULA_BE(u32) vtxCols[4];
-                NEBULA_BE(u16) materialIdx;
+                u32 vtxCols[4];
+                u16 materialIdx;
                 u8 texCoordNum;
                 u8 padding[1];
             };
 
             struct TextBox : Pane {
-                NEBULA_BE(u16) textBufBytes;
-                NEBULA_BE(u16) textStrBytes;
-                NEBULA_BE(u16) materialIdx;
-                NEBULA_BE(u16) fontIdx;
+                u16 textBufBytes;
+                u16 textStrBytes;
+                u16 materialIdx;
+                u16 fontIdx;
                 u8 textPosition;
                 u8 textAlignment;
                 u8 padding[2];
-                NEBULA_BE(u32) textStrOffset;
-                NEBULA_BE(u32) textCols[2];
-                NEBULA_DISC(Size) fontSize;
-                NEBULA_BE(f32) charSpace;
-                NEBULA_BE(f32) lineSpace;
+                u32 textStrOffset;
+                u32 textCols[2];
+                Size fontSize;
+                f32 charSpace;
+                f32 lineSpace;
             };
 
             struct WindowFrame {
-                NEBULA_BE(u16) materialIdx;
+                u16 materialIdx;
                 u8 textureFlip;
                 u8 padding1;
             };
 
             struct WindowContent {
-                NEBULA_BE(u32) vtxCols[4];
-                NEBULA_BE(u16) materialIdx;
+                u32 vtxCols[4];
+                u16 materialIdx;
                 u8 texCoordNum;
                 u8 padding[1];
             };
 
             struct Window : Pane {
-                NEBULA_DISC(InflationLRTB) inflation;
+                InflationLRTB inflation;
                 u8 frameNum;
                 u8 padding1;
                 u8 padding2;
                 u8 padding3;
-                NEBULA_BE(u32) contentOffset;
-                NEBULA_BE(u32) frameOffsetTableOffset;
+                u32 contentOffset;
+                u32 frameOffsetTableOffset;
             };
 
             struct Bounding : Pane {};
@@ -274,7 +221,7 @@ namespace nw4r {
             struct Group {
                 DataBlockHeader blockHeader;
                 char name[16];
-                NEBULA_BE(u16) paneNum;
+                u16 paneNum;
                 u8 padding[2];
             };
 
@@ -323,12 +270,12 @@ namespace nw4r {
                     return u8(detail::GetBits(u32(bits), 27, 1));
                 }
 
-                NEBULA_BE(u32) bits;
+                u32 bits;
             };
 
             struct Material {
                 char name[20];
-                NEBULA_DISC(NebulaColor16) tevCols[3];
+                NebulaColor16 tevCols[3];
                 NebulaColor8 tevKCols[4];
                 MaterialResourceNum resNum;
             };
@@ -354,12 +301,12 @@ namespace nw4r {
 
             struct AnimationBlock {
                 DataBlockHeader blockHeader;
-                NEBULA_BE(u16) frameSize;
+                u16 frameSize;
                 u8 loop;
                 u8 padding1;
-                NEBULA_BE(u16) fileNum;
-                NEBULA_BE(u16) animContNum;
-                NEBULA_BE(u32) animContOffsetsOffset;
+                u16 fileNum;
+                u16 animContNum;
+                u32 animContOffsetsOffset;
             };
 
             struct AnimationContent {
@@ -371,7 +318,7 @@ namespace nw4r {
             };
 
             struct AnimationInfo {
-                NEBULA_BE(u32) kind;
+                u32 kind;
 
                 u8 num;
                 u8 padding[3];
@@ -383,22 +330,22 @@ namespace nw4r {
                 u8 curveType;
                 u8 padding1;
 
-                NEBULA_BE(u16) keyNum;
+                u16 keyNum;
                 u8 padding2[2];
 
-                NEBULA_BE(u32) keysOffset;
+                u32 keysOffset;
             };
 
             struct HermiteKey {
-                NEBULA_BE(f32) frame;
-                NEBULA_BE(f32) value;
-                NEBULA_BE(f32) slope;
+                f32 frame;
+                f32 value;
+                f32 slope;
             };
 
             struct StepKey {
-                NEBULA_BE(f32) frame;
-                NEBULA_BE(u16) value;
-                NEBULA_BE(u16) pad;
+                f32 frame;
+                u16 value;
+                u16 pad;
             };
         };  // namespace res
     };  // namespace lyt

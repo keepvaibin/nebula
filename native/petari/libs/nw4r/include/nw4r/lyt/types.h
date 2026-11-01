@@ -25,11 +25,11 @@ namespace nw4r {
                 *pBits |= (val ? 1 : 0) << pos;
             }
 
-            // Resource fields: big-endian natively.
-            typedef NEBULA_BE(s16) ResS16;
-            typedef NEBULA_BE(u16) ResU16;
-            typedef NEBULA_BE(s32) ResS32;
-            typedef NEBULA_BE(u32) ResU32;
+            // Resource fields (host order, as the importer cooks layouts).
+            typedef s16 ResS16;
+            typedef u16 ResU16;
+            typedef s32 ResS32;
+            typedef u32 ResU32;
 
             template < typename T >
             inline const T* ConvertOffsToPtr(const void* baseAddr, unsigned int offs) {

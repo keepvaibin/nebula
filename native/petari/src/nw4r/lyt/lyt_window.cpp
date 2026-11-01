@@ -123,7 +123,7 @@ namespace nw4r {
         Window::Window(const res::Window* pRes, const ResBlockSet& rBlockSet) : Pane(pRes) {
             mContentInflation = pRes->inflation;
 
-            const NEBULA_BE(u32)* const pMatOffsetTbl = detail::ConvertOffsToPtr< NEBULA_BE(u32) >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
+            const u32* const pMatOffsetTbl = detail::ConvertOffsToPtr< u32 >(rBlockSet.pMaterialList, sizeof(res::MaterialList));
 
             const res::WindowContent* pResContent = detail::ConvertOffsToPtr< res::WindowContent >(pRes, pRes->contentOffset);
 
@@ -158,7 +158,7 @@ namespace nw4r {
                 if (mFrames != NULL) {
                     mFrameNum = pRes->frameNum;
 
-                    const NEBULA_BE(u32)* const pFrmOffsetTbl = detail::ConvertOffsToPtr< NEBULA_BE(u32) >(pRes, pRes->frameOffsetTableOffset);
+                    const u32* const pFrmOffsetTbl = detail::ConvertOffsToPtr< u32 >(pRes, pRes->frameOffsetTableOffset);
 
                     for (int i = 0; i < mFrameNum; i++) {
                         const res::WindowFrame* const pResFrame = detail::ConvertOffsToPtr< res::WindowFrame >(pRes, pFrmOffsetTbl[i]);

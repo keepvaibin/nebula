@@ -51,12 +51,7 @@ namespace nw4r {
             };
 
             inline const char* GetStrTableStr(const void* pTable, int idx) {
-#ifdef TARGET_PC
-                // The table is the resource's: big-endian offsets.
-                const NEBULA_BE(u32)* offs = static_cast< const NEBULA_BE(u32)* >(pTable);
-#else
                 const u32* offs = static_cast< const u32* >(pTable);
-#endif
                 const char* pool = static_cast< const char* >(pTable);
                 return &pool[offs[idx]];
             }
@@ -87,7 +82,9 @@ namespace nw4r {
             }
 
             inline s32 GetSignatureInt(const char sig[4]) {
-                return *reinterpret_cast< const NEBULA_BE(s32)* >(sig);
+                // The block kind's four characters, first character highest.
+                const u8* p = reinterpret_cast< const u8* >(sig);
+                return s32((u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3]);
             }
 
             inline u8 GetVtxColorElement(const ut::Color* pColors, u32 idx) {
