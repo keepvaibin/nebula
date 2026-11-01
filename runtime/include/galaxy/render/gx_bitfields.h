@@ -29,11 +29,6 @@ enum class TexFormat : std::uint8_t {
 
 
 
-enum class FogType : std::uint8_t {
-    Off = 0, Linear = 2, Exp = 4, Exp2 = 5, RevExp = 6, RevExp2 = 7,
-};
-
-// Draw opcode bits 7:3.
 // How a draw's vertices group: NebulaPrimitive's values.
 enum class Primitive : std::uint8_t {
     Quads = 0, Triangles, TriangleStrip, TriangleFan, Lines, LineStrip, Points,
@@ -43,13 +38,13 @@ enum class TexGenType : std::uint8_t {
     Regular = 0, EmbossMap = 1, Color0 = 2, Color1 = 3,
 };
 
-struct GenMode {
+// A draw's counts (texture coordinates, colour channels, shader stages, indirect stages) and its cull.
+struct DrawCounts {
     std::uint8_t num_texgens;       // 0-8
     std::uint8_t num_color_chans;   // 0-2
-    std::uint8_t num_tev_stages;    // 1-16 (register stores count-1)
+    std::uint8_t num_tev_stages;    // 1-16
     CullMode cull;
     std::uint8_t num_ind_stages;    // 0-4
-    bool z_freeze;
 };
 
 struct ZMode {
@@ -67,17 +62,16 @@ struct BlendMode {
     BlendFactor dst_factor;
     BlendFactor src_factor;
     bool subtract;
-    std::uint8_t logic_mode;        // 4-bit GX logic op
-    bool const_alpha_enable;        // PE_CMODE1
+    std::uint8_t logic_mode;        // VkLogicOp's order (clear, and, reverse and, copy, ..., set)
+    bool const_alpha_enable;        // the frame's alpha written as const_alpha
     std::uint8_t const_alpha;
 };
 
-// GX logic op 3: the source unchanged.
+// Logic op 3 (copy): the source unchanged.
 inline constexpr std::uint8_t kLogicCopy = 3u;
 
 // The blend the pixel engine performs, as the draw's result shows it: a blend that writes the fragment's colour unchanged
-// is no blend. The pixel engine blends (or subtracts) where blending is on, else applies the logic op where that is on
-// (Dolphin's BlendingState). A blend of ONE and ZERO, and the logic op COPY, write the source exactly as an unblended draw
+// is no blend. The draw blends (or subtracts) where blending is on, else applies the logic op where that is on. A blend of ONE and ZERO, and the logic op COPY, write the source exactly as an unblended draw
 // does; so does DSTALPHA and INVDSTALPHA where the EFB has no alpha (`efb_has_alpha` false: its alpha reads as one). The
 // game draws opaque surfaces with such states (the far side of Bonefin's ocean sphere: BLEND ONE ZERO, depth written),
 // and whatever tells translucent draws from opaque ones (the pipeline's blend key, the motion target, the ray tracer's
@@ -110,32 +104,33 @@ struct ScissorRect {
     std::int32_t x0, y0, x1, y1;    // inclusive, screen pixel space
 };
 
-struct XfTexGen {
-    bool generate_stq;              // false = ST output
-    bool input_form_abc1;           // input has implicit w=1
+// A texture coordinate's generation (J3DNativeTexGen): its kind, the input row it reads (position, normal, binormal,
+// tangent, coordinates), and for an emboss coordinate the coordinate it offsets and the light.
+struct TexGen {
     TexGenType type;
-    std::uint8_t source_row;        // position/normal/color/tex0-7 input row
+    std::uint8_t source_row;
     std::uint8_t emboss_source;
     std::uint8_t emboss_light;
 
-    [[nodiscard]] bool operator==(const XfTexGen&) const = default;
+    [[nodiscard]] bool operator==(const TexGen&) const = default;
 };
 
-struct XfPostTexGen {
-    std::uint8_t matrix_index;      // post-transform matrix row
+// A texture coordinate's second matrix (its row) and whether the coordinate is normalized before it.
+struct PostTexGen {
+    std::uint8_t matrix_index;
     bool normalize;
 
-    [[nodiscard]] bool operator==(const XfPostTexGen&) const = default;
+    [[nodiscard]] bool operator==(const PostTexGen&) const = default;
 };
 
-struct XfChannelCtrl {
-    bool material_from_vertex;      // matsource
+// A colour channel's lighting (J3DNativeChannel).
+struct ChannelControl {
+    bool material_from_vertex;
     bool lighting_enable;
     std::uint8_t light_mask;        // 8 lights
-    bool ambient_from_vertex;       // ambsource
-    std::uint8_t diffuse_func;      // 0=none, 1=signed, 2=clamped
-    std::uint8_t atten_func;        // Dolphin XFMemory.h AttenuationFunc:
-                                    // 0=none, 1=specular, 2=dir, 3=spot
+    bool ambient_from_vertex;
+    std::uint8_t diffuse_func;      // 0 none, 1 signed, 2 clamped
+    std::uint8_t atten_func;        // 0 none, 1 specular, 2 directional, 3 spot
 };
 
 [[nodiscard]] constexpr bool cull_all_suppresses_primitive(
@@ -146,7 +141,8 @@ struct XfChannelCtrl {
          primitive == Primitive::TriangleFan ||
          primitive == Primitive::Quads);
 }
-[[nodiscard]] constexpr std::uint8_t cmpr_interpolated_channel(
+// A block record's third and fourth colours (nebula_cooked_texture.h NEBULA_TEXTURE_BLOCK4): 5/8 and 3/8.
+[[nodiscard]] constexpr std::uint8_t block4_interpolated_channel(
     std::uint8_t primary, std::uint8_t secondary) {
     return static_cast<std::uint8_t>((5u * primary + 3u * secondary) >> 3u);
 }

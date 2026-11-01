@@ -1201,7 +1201,7 @@ private:
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
     std::uint8_t current_texture_map_mask_ = 0;
-    // sampled_texture_map_mask(draw_state_) reads GenMode, the TEV order, indirect-command and IND_REF registers,
+    // sampled_texture_map_mask(draw_state_) reads DrawCounts, the TEV order, indirect-command and IND_REF registers,
     // all of which set kDirtyTev; invalidated wherever the BP register file resets.
     bool current_texture_map_mask_valid_ = false;
 

@@ -55,9 +55,9 @@ void set_texture_address(TextureMap& t, std::uint64_t image) {
 
 // GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel's diffuse function only with an attenuation). The channel's
 // attenuation: 1 specular, 2 directional (none), 3 spotlight.
-XfChannelCtrl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
+ChannelControl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
                            std::uint8_t ambient_source, std::uint8_t diffuse, std::uint8_t attenuation) {
-    return XfChannelCtrl{(material_source & 1u) != 0u,
+    return ChannelControl{(material_source & 1u) != 0u,
                          (enable & 1u) != 0u,
                          light_mask,
                          (ambient_source & 1u) != 0u,
@@ -225,7 +225,7 @@ void NativeDrawState::set_op(const state::Op& op) {
         break;
     case state::kChannel: {
         // Channel 0 or 1; a[7]: 1 its colour (channel[n]), 2 its alpha (channel[2 + n]).
-        const XfChannelCtrl channel_ctrl = make_channel(a[3], a[1], a[4], a[2], a[5], a[6]);
+        const ChannelControl channel_ctrl = make_channel(a[3], a[1], a[4], a[2], a[5], a[6]);
         if ((a[7] & 1u) != 0u) {
             channel[a[0] & 1u] = channel_ctrl;
         }
@@ -243,7 +243,7 @@ void NativeDrawState::set_op(const state::Op& op) {
         break;
     }
     case state::kTexCoordGen: {
-        XfTexGen made = material::tex_gen(a[1], a[2]);
+        TexGen made = material::tex_gen(a[1], a[2]);
         if (a[5] != 0u && made.type != TexGenType::EmbossMap) {
             made.emboss_source = 0u;  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
         }
@@ -338,7 +338,7 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
     const auto tex_gens = [&] {
         for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
             texgen[i] = material::tex_gen(m.tex_gen[i].type, m.tex_gen[i].source);
-            post_texgen[i] = XfPostTexGen{static_cast<std::uint8_t>(m.tex_gen[i].post_matrix & 63u), false};
+            post_texgen[i] = PostTexGen{static_cast<std::uint8_t>(m.tex_gen[i].post_matrix & 63u), false};
         }
     };
     // Channel controls (J3D orders colour 0, alpha 0, colour 1, alpha 1).

@@ -380,7 +380,7 @@ enum {
     NEBULA_BLEND_REPLACE = 0,  /* blend_op: the source replaces */
     NEBULA_BLEND_ADD = 1,      /* source * blend_src + destination * blend_dst */
     NEBULA_BLEND_SUBTRACT = 2, /* destination - source */
-    NEBULA_BLEND_LOGIC = 3,    /* logic_op (NEBULA_LOGIC_*: GX's order: clear, and, ..., set) */
+    NEBULA_BLEND_LOGIC = 3,    /* logic_op (VkLogicOp's order: clear, and, reverse and, copy, ..., set) */
 };
 enum {
     NEBULA_FACTOR_ZERO = 0, NEBULA_FACTOR_ONE, NEBULA_FACTOR_SRC_COLOR, NEBULA_FACTOR_INV_SRC_COLOR,
@@ -448,7 +448,7 @@ typedef struct NebulaMaterialProgram {
     struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
     struct { uint8_t type, adjust_enable; uint16_t adjust_center; uint16_t adjust[10]; } fog;
     struct { uint8_t comp0, op, comp1, reserved; } alpha_compare;
-    struct { uint8_t type, source, destination, logic_op; } blend;  /* type NEBULA_BLEND_*, factors NEBULA_FACTOR_*, logic op NEBULA_LOGIC_* */
+    struct { uint8_t type, source, destination, logic_op; } blend;  /* type NEBULA_BLEND_*, factors NEBULA_FACTOR_*, logic op as NEBULA_BLEND_LOGIC */
     struct { uint8_t enable, func, update, reserved; } z_mode;
     /* Texgen i's texture matrix (J3DTexMtx), when the material has one: `id` GX's matrix id (a post-transform one from
        64), `rows` 2 or 3, `listed` whether the material's list loads it (its texgen's matrix is not the identity; a

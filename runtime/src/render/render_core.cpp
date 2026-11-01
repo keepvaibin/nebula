@@ -280,7 +280,7 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
     std::uint32_t spatial = 0u;
     std::uint32_t lights = 0u;
     for (unsigned i = 0; i < s.gen.num_texgens && i < 8u; ++i) {
-        const XfTexGen& g = s.texgen[i];
+        const TexGen& g = s.texgen[i];
         if (g.type == TexGenType::Regular &&
             (g.source_row == 0u || g.source_row == 1u || g.source_row == 3u || g.source_row == 4u)) {
             spatial |= 1u << i;
@@ -290,7 +290,7 @@ bool frame_gx_timing_sample_enabled(std::uint64_t frame_index) {
         }
     }
     for (unsigned ch = 0; ch < s.gen.num_color_chans && ch < 2u; ++ch) {
-        for (const XfChannelCtrl& control : {s.channel[ch], s.channel[2u + ch]}) {
+        for (const ChannelControl& control : {s.channel[ch], s.channel[2u + ch]}) {
             if (control.lighting_enable) {
                 lights |= control.light_mask;
             }
@@ -5895,7 +5895,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         if (m.texgen_post[i] == material::kNativeKept) {
             continue;  // the draw's texgens as they are (an instance's differed list that loads none)
         }
-        draw_state_.post_texgen[i] = XfPostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
+        draw_state_.post_texgen[i] = PostTexGen{static_cast<std::uint8_t>(m.texgen_post[i] & 0x3Fu),
                                                   (m.texgen_post[i] & 0x80u) != 0u};
     }
     draw_state_.dirty |= kStateDirtyVertexConstants;
@@ -5973,8 +5973,8 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
         }
     }
     for (const auto& g : record.texgens) {
-        const XfTexGen gen = material::tex_gen(g[1], g[2]);
-        const XfPostTexGen post = material::post_tex_gen(g[4], g[3]);
+        const TexGen gen = material::tex_gen(g[1], g[2]);
+        const PostTexGen post = material::post_tex_gen(g[4], g[3]);
         if (!(draw_state_.texgen[g[0] & 7u] == gen) || !(draw_state_.post_texgen[g[0] & 7u] == post)) {
             draw_state_.texgen[g[0] & 7u] = gen;
             draw_state_.post_texgen[g[0] & 7u] = post;

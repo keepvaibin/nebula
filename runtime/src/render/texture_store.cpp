@@ -319,10 +319,10 @@ void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, s
                 const RGBA8 b = widen(c1);
                 RGBA8 entries[4] = {a, b, {}, {}};
                 if (c0 > c1) {
-                    entries[2] = {cmpr_interpolated_channel(a.r, b.r), cmpr_interpolated_channel(a.g, b.g),
-                                  cmpr_interpolated_channel(a.b, b.b), 0xFFu};
-                    entries[3] = {cmpr_interpolated_channel(b.r, a.r), cmpr_interpolated_channel(b.g, a.g),
-                                  cmpr_interpolated_channel(b.b, a.b), 0xFFu};
+                    entries[2] = {block4_interpolated_channel(a.r, b.r), block4_interpolated_channel(a.g, b.g),
+                                  block4_interpolated_channel(a.b, b.b), 0xFFu};
+                    entries[3] = {block4_interpolated_channel(b.r, a.r), block4_interpolated_channel(b.g, a.g),
+                                  block4_interpolated_channel(b.b, a.b), 0xFFu};
                 } else {
                     entries[2] = {static_cast<std::uint8_t>((a.r + b.r) / 2u), static_cast<std::uint8_t>((a.g + b.g) / 2u),
                                   static_cast<std::uint8_t>((a.b + b.b) / 2u), 0xFFu};

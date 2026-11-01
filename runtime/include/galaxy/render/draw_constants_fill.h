@@ -69,7 +69,7 @@ inline void refresh_vs_inline_matrices(const DrawMatrices& state, const NativeDr
     for (unsigned i = 0; i < kMaxTexGens; ++i) {
         copy_matrix(out.draw_rows[(i + 1u) / 4u][(i + 1u) % 4u], out.inline_tex_matrices[i]);
 
-        const XfPostTexGen post = draw.post_texgen[i];
+        const PostTexGen post = draw.post_texgen[i];
         const unsigned post_row = post.matrix_index & 0x3Fu;
         for (unsigned r = 0; r < 3; ++r) {
             for (unsigned c = 0; c < 4; ++c) {
@@ -92,7 +92,7 @@ inline void fill_vs_constants(
 
     fill_vs_projection(draw, out.projection);
 
-    const GenMode gm = draw.gen;
+    const DrawCounts gm = draw.gen;
     out.num_texgens = gm.num_texgens;
     out.num_chans   = gm.num_color_chans;
 

@@ -33,19 +33,19 @@ struct NativeDrawState {
     // Fixed-function state: the counts and cull of the generation mode, depth, blend (as the game set it; the
     // pixel engine's effective blend is effective_blend's) and the pixel format. The shader tests its own alpha,
     // combines its own colours and applies its own fog (native materials).
-    GenMode gen{0u, 0u, 1u, CullMode::None, 0u, false};
+    DrawCounts gen{0u, 0u, 1u, CullMode::None, 0u};
     ZMode z{false, CompareFunc::Never, false};
     BlendMode blend{false, false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
     bool frame_alpha = false;  // the frame keeps alpha (NEBULA_STATE_FRAME_ALPHA)
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
     // colours (RGBA) of channels 0 and 1.
-    XfChannelCtrl channel[4]{};
+    ChannelControl channel[4]{};
     std::uint8_t material_color[2][4]{};
     std::uint8_t ambient_color[2][4]{};
     // Texture coordinate generation and each coordinate's post-transform matrix.
-    XfTexGen texgen[8]{};
-    XfPostTexGen post_texgen[8]{};
+    TexGen texgen[8]{};
+    PostTexGen post_texgen[8]{};
     // The projection's six terms and type (0 perspective), the viewport (left, top, width, height in frame pixels,
     // near and far depth 0-1).
     float projection[6]{};
