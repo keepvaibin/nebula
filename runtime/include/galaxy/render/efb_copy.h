@@ -120,8 +120,8 @@ struct EfbCopySamplingGeometry {
     unsigned dest_height,
     unsigned efb_scale) noexcept;
 
-// High-resolution display copies retain GX filter weights but sample adjacent
-// physical source rows. Texture/depth copies keep their logical-row footprint.
+// The frame shown at a high resolution keeps the filter's weights but samples adjacent physical rows; captures
+// keep their logical-row footprint.
 [[nodiscard]] EfbCopySamplingGeometry compute_xfb_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
