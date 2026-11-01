@@ -1,4 +1,5 @@
 #include "Game/Player/J3DModelX.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "Game/System/ShapePacketUserData.hpp"
 #include "Game/Util/DirectDraw.hpp"
@@ -168,6 +169,20 @@ void J3DModelX::directDraw(J3DModel* model) {
     }
 }
 
+namespace {
+    // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass, `alpha` its
+    // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
+    struct OverrideColor {
+        u8 r, g, b, alpha, a;
+    };
+    const OverrideColor kOverrideColors[16] = {
+        {0, 0, 0, 0, 0},     {0, 0, 0, 64, 1},   {0, 0, 0, 0, 0},  {0, 0, 0, 64, 1},
+        {255, 255, 0, 255, 1}, {0, 0, 0, 0, 1},  {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 252, 1},   {0, 0, 0, 4, 1},    {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+        {0, 0, 0, 0, 0},     {35, 25, 25, 5, 1}, {0, 0, 0, 0, 0},  {0, 0, 0, 0, 0},
+    };
+}  // namespace
+
 void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* model) {
     if (!material) {
         return;
@@ -197,10 +212,30 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         MR::getJ3DShapePacketUserData(packet)->load();
     }
 
+    s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             mStateLists[i].send();
+            if (kOverrideColors[i].a != 0) {
+                override = static_cast< s32 >(i);
+            }
         }
+    }
+    if (override >= 0) {
+        // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (GX's: one
+        // stage of the colour register, no textures), with the blending, depth and culling the lists set.
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_FLAT_COLOR, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
+                           false, NEBULA_CULL_NONE);
+        material.blend_op = NEBULA_NATIVE_KEPT;
+        material.depth_test = NEBULA_NATIVE_KEPT;
+        material.cull = NEBULA_NATIVE_KEPT;
+        const OverrideColor& rColor = kOverrideColors[override];
+        material.constants[0] = rColor.r / 255.0f;
+        material.constants[1] = rColor.g / 255.0f;
+        material.constants[2] = rColor.b / 255.0f;
+        material.constants[3] = rColor.alpha / 255.0f;
+        NativeShader::send(material);
     }
 
     if (_1B8) {
@@ -286,15 +321,12 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setCullMode(GX_CULL_FRONT);
     storeStateList(list, 0);
 
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
+    // Lists 1, 3, 4, 5, 8, 9 and 13 replace the material's program with a flat colour (kOverrideColors, drawn by
+    // drawIn as a native material); they hold the pass's fixed state.
     list.setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setCullMode(GX_CULL_BACK);
     list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
     list.setDstAlpha(GX_TRUE, 0xFF);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 1);
 
     list.setCullMode(GX_CULL_FRONT);
@@ -309,39 +341,20 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
                              GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 2);
 
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setCullMode(GX_CULL_BACK);
     list.setBlendModeEtc(GX_BM_NONE, GX_BL_ZERO, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_FALSE, GX_TRUE, GX_FALSE);
     list.setDstAlpha(GX_TRUE, 0x90);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 3);
 
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setCullMode(GX_CULL_FRONT);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    static GXColor highlightColor = {255, 255, 0, 255};
-    list.setTevColor(GX_TEVREG0, highlightColor);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_C0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 4);
 
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_FRONT);
+    list.setCullMode(GX_CULL_FRONT);
     list.setBlendModeEtc(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_FALSE, GX_FALSE, GX_FALSE);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_VTX, GX_SRC_VTX, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0);
     storeStateList(list, 5);
 
     list.setTexLookupMode(GX_TEXMAP0, GX_REPEAT, GX_REPEAT, GX_LINEAR, GX_LINEAR, 0.0f, 0.0f, 0.0f, GX_FALSE, GX_FALSE, GX_ANISO_1);
@@ -364,22 +377,12 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
 
     list.setCullMode(GX_CULL_FRONT);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GXColor subtractColor = {0, 0, 0, 252};
-    list.setTevColor(GX_TEVREG0, subtractColor);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 8);
 
     list.setCullMode(GX_CULL_BACK);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_NOOP, GX_FALSE, GX_TRUE, GX_FALSE);
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    GXColor addColor = {0, 0, 0, 4};
-    list.setTevColor(GX_TEVREG0, addColor);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_A0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 9);
 
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_INVDSTALPHA, GX_LO_NOOP, GX_TRUE, GX_TRUE, GX_FALSE);
@@ -409,17 +412,9 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
     storeStateList(list, 12);
 
-    list.setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
     list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
-    list.setGenMode2(0, 1, 1, 0, GX_CULL_BACK);
-    list.setTevDirect(GX_TEVSTAGE0);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+    list.setCullMode(GX_CULL_BACK);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_ONE, GX_BL_SRCALPHA, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    static GXColor tintColor = {35, 25, 25, 5};
-    list.setTevColor(GX_TEVREG0, tintColor);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_C0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_A0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV,
-                             GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 13);
 
     list.setDstAlpha(GX_TRUE, 0x40);
