@@ -11,11 +11,9 @@
 namespace galaxy::render {
 namespace {
 
-// GXCullMode to the generation mode's cull field (front and back swap).
 // NEBULA_CULL_* (the game's winding) as the renderer's flipped one: the game's back faces are the renderer's front.
 constexpr CullMode kCull[4] = {CullMode::None, CullMode::Front, CullMode::Back, CullMode::All};
 
-// GXBlendMode: NONE 0, BLEND 1, LOGIC 2, SUBTRACT 3.
 // `op` NEBULA_BLEND_*: replace 0, add 1, subtract 2, logic 3.
 void set_blend(BlendMode& b, std::uint8_t op, std::uint8_t source, std::uint8_t destination, std::uint8_t logic) {
     b.blend_enable = op == 1u || op == 2u;
@@ -53,8 +51,7 @@ void set_texture_address(TextureMap& t, std::uint64_t image) {
     t.texture = image;
 }
 
-// GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel's diffuse function only with an attenuation). The channel's
-// attenuation: 1 specular, 2 directional (none), 3 spotlight.
+// A channel as the op or record states it (J3DNativeChannel): attenuation 1 specular, 2 directional (none), 3 spot.
 ChannelControl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
                            std::uint8_t ambient_source, std::uint8_t diffuse, std::uint8_t attenuation) {
     return ChannelControl{(material_source & 1u) != 0u,
@@ -69,7 +66,7 @@ ChannelControl make_channel(std::uint8_t material_source, std::uint8_t enable, s
 
 namespace {
 
-// Field groups and what a change in each invalidates (at least what the register file's dirty bits did).
+// Field groups and what a change in each invalidates.
 struct Group {
     std::size_t offset, size;
     std::uint32_t dirty;
@@ -245,7 +242,7 @@ void NativeDrawState::set_op(const state::Op& op) {
     case state::kTexCoordGen: {
         TexGen made = material::tex_gen(a[1], a[2]);
         if (a[5] != 0u && made.type != TexGenType::EmbossMap) {
-            made.emboss_source = 0u;  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
+            made.emboss_source = 0u;  // a coordinate that is not embossed has no emboss source
         }
         texgen[a[0] & 7u] = made;
         post_texgen[a[0] & 7u] = material::post_tex_gen(a[4], a[3]);
@@ -322,7 +319,7 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
         out.bias[1] = ((tw >> 16u) & 1u) != 0u;
         out.wrap[1] = ((tw >> 17u) & 1u) != 0u;
     };
-    // J3D's texture (J3DTexture::loadGX; a colour-indexed one is cooked with its palette applied).
+    // The record's textures (a colour-indexed one is cooked with its palette applied).
     const auto textures = [&] {
         for (unsigned map = 0; map < 8u; ++map) {
             const material::Texture& t = v.texture[map];

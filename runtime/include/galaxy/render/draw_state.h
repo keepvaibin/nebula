@@ -72,7 +72,7 @@ struct NativeDrawState {
     // What changed since the last consume_dirty (kStateDirty*; all at the start).
     std::uint32_t dirty = ~0u;
 
-    // A state op (galaxy/render/native_state.h), as the GX function it names sets the state.
+    // A state op (galaxy/render/native_state.h, nebula_game_api.h NEBULA_STATE_*).
     void apply(const state::Op& op);
     // A material record: the whole material, or (diff_flags) the parts J3D's change flags name.
     // `whole` false: the state already holds this program (the same one, nothing set in between); only the
