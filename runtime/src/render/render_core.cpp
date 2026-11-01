@@ -8413,6 +8413,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     cpu_vs_constants_.row_bases[1] = matrix_block_base_[1];
     cpu_vs_constants_.row_bases[2] = matrix_block_base_[3];
     cpu_vs_constants_.row_bases[3] = draw_light_base_;
+    // The shape's per-vertex position matrix indices (VertexConstants::flags bit 0; the uber shaders take the key's
+    // bit): the native vertex shaders and the ray tracer read the constants' bit, so a change uploads them again.
+    const std::uint32_t per_vertex = matrix_bits & 1u;
+    const bool per_vertex_changed = std::exchange(cpu_vs_constants_.per_vertex, per_vertex) != per_vertex;
 
     // A native material's draw: the shape's per-vertex texture matrix indices (texgen n's bit; native_material.hlsli
     // native_tex_matrix reads the vertex's index for those texgens).
@@ -8435,8 +8439,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                                                                     : 0x80000000u | vs_key_.texmtx_idx_mask;
     const bool native_texmtx_changed = std::exchange(native_texmtx_, header_texmtx) != header_texmtx;
     // Upload VS constants when scalar state, fixed inline matrices or the matrix blocks change.
-    if (native_texmtx_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty || xf_dirty || vcd_dirty ||
-        inline_matrices_stale_ ||
+    if (native_texmtx_changed || per_vertex_changed || std::exchange(sky_up_dirty_, false) || vs_c_dirty ||
+        xf_dirty || vcd_dirty || inline_matrices_stale_ ||
         frame_bindings_dirty_ || dirty == ~0u || std::exchange(matrix_bases_changed_, false) ||
         (history_scene_ && current_matrix_palette_ != temporal_vs_palette_va_)) {
         const auto constants_start = time_detail

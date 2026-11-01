@@ -110,8 +110,9 @@ inline void fill_vs_constants(
             break;
         }
     }
-    // Bit 0 (a per-vertex position matrix index) stays clear: the vertex shader key carries the vertices' matrix
-    // indices (VertexShaderKey::flags).
+    // Bit 0 (the shape's vertices carry their own position matrix index) is merged in by VsConstantsCpuCache::update
+    // (per_vertex, RenderCore's): native_material.hlsli native_vs and ray_tracing.hlsl transform_vertex read it; the
+    // uber shaders read the key's copy (VertexShaderKey::flags bit 0).
     out.flags  = lighting ? 2u : 0u;
 
     // Texgen config words (each coordinate's generation and post-transform, texgen_word and post_texgen_word).
@@ -214,6 +215,9 @@ struct VsConstantsCpuCache {
     // The draw's matrix blocks (VertexConstants::pos_base, row_bases), RenderCore's.
     std::uint32_t pos_base = 0u;
     std::uint32_t row_bases[4]{};
+    // VertexConstants::flags bit 0: the draw's vertices carry position matrix indices (the shape's attributes, the
+    // source of VertexShaderKey::flags bit 0), RenderCore's.
+    std::uint32_t per_vertex = 0u;
 
     const VertexConstants& update(const DrawMatrices& state, const NativeDrawState& draw, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
@@ -229,7 +233,7 @@ struct VsConstantsCpuCache {
         }
         constants.sky_up = sky_up;
         constants.sky_up_known = sky_up_known;
-        constants.flags = (constants.flags & 0x3u) | debake;
+        constants.flags = (constants.flags & 0x2u) | (per_vertex & 1u) | debake;
         std::memcpy(constants.debake_sh, debake_sh, sizeof(debake_sh));
         std::memcpy(constants.debake_peak, debake_peak, sizeof(debake_peak));
         constants.pos_base = pos_base;
