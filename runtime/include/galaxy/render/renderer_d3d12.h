@@ -25,7 +25,7 @@
 #include <dxgi1_4.h>
 #include <wrl/client.h>
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/temporal_upscaler.h"
 #include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/interp_gpu.h"

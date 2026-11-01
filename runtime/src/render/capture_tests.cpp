@@ -1,6 +1,6 @@
 // Picture serial accounting, the EFB conversion shader, and EFB-copy geometry tests.
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/texture_store.h"
 

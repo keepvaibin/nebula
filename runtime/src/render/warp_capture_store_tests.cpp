@@ -10,7 +10,7 @@
 #include <wrl/client.h>
 #pragma warning(pop)
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/draw_constants.h"
@@ -292,7 +292,7 @@ Pixel oracle_convert(
         raw.r = raw.g = raw.b = y;
     }
 
-    switch (copy_format) {  // the picture layout (efb_copy.h)
+    switch (copy_format) {  // the picture layout (capture.h)
     case 3u:
         return Pixel{raw.r, raw.r, raw.r, raw.r};
     case 1u:
@@ -378,7 +378,7 @@ ComPtr<ID3DBlob> compile_shader(
     const HRESULT result = D3DCompile(
         source.data(),
         source.size(),
-        "efb_conversion_tests",
+        "warp_capture_store_tests",
         nullptr,
         nullptr,
         "main",

@@ -76,7 +76,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/draw_state.cpp
     ${rt}/render/draw_matrices.cpp
     ${rt}/render/shader_keys.cpp
-    ${rt}/render/efb_copy.cpp
+    ${rt}/render/capture.cpp
     ${rt}/render/line_point_raster.cpp
     ${rt}/render/shader_gen.cpp
     ${rt}/render/uber_shaders.cpp

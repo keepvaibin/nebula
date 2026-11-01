@@ -28,7 +28,7 @@
 // frozen display.
 
 #include "galaxy/render/actor_lights.h"
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/draw_state.h"
 #include "galaxy/render/draw_matrices.h"

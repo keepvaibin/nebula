@@ -4,7 +4,7 @@
 // What both GX renderers share (renderer_d3d12.h, vk/renderer_vk.h): frame and ring counts, the EFB's logical
 // size, one resolved draw, clear values, the EFB conversion shader and its constants, and the sampler-table cache.
 
-#include "galaxy/render/efb_copy.h"
+#include "galaxy/render/capture.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/renderer_api.h"  // EfbPeekKind
