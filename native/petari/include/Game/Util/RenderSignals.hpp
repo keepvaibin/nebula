@@ -50,6 +50,13 @@ namespace NebulaRender {
         marker(kMarkerBloom, phase, a, b);
     }
 
+    // Tests (GALAXY_DUMP_DRAW_INPUTS): the native shader id of the material the next draws use (motion_signals.h
+    // kMarkerDumpTag).
+    enum { kMarkerDumpTag = 17 };
+
+    inline void dumpTag(uint32_t shader) {
+        marker(kMarkerDumpTag, 0, shader, 0);
+    }
 
     // A scene bound (NEBULA_SCENE_*); the 3D scene's begin carries the camera (world to eye, 3x4) and the player's up.
     void sceneMarker(uint32_t marker, const float (*view)[4]);

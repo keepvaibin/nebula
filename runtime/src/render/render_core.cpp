@@ -1812,6 +1812,10 @@ std::uint32_t RenderCore::rt_light_key() noexcept {
 }
 
 void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint64_t a, std::uint64_t b) {
+    if (kind == motion::kMarkerDumpTag) {
+        dump_tag_ = static_cast<std::uint32_t>(a);
+        return;
+    }
     // The game's bloom, drawn by the renderer at this point of the stream (game_bloom.h).
     if (kind == motion::kMarkerBloom) {
         flush_pending_draw_batch();
@@ -8803,6 +8807,12 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         if ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) {
             ps_c.uber_ps_header[3] = enhanced_ps_flags_ | enhanced_material_bits;
         }
+        if (dump_tag_ != 0u) [[unlikely]] {
+            if (dump_gx_ps_ == nullptr) {
+                dump_gx_ps_ = std::make_unique<PixelConstants>();
+            }
+            *dump_gx_ps_ = ps_c;
+        }
 
         UploadRing::Allocation ps_alloc =
             renderer_.constant_ring().allocate(sizeof(PixelConstants), 256u);
@@ -8820,6 +8830,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         }
     }
 
+    if (dump_tag_ != 0u) [[unlikely]] {
+        dump_draw_inputs(native_pe, native_texmtx, g_snapshot_presents);
+    }
     frame_bindings_dirty_ = false;
     texture_bindings_dirty_ = false;
     // The frame's detail flag guards both endpoints. A zero on an ordinary
@@ -9046,6 +9059,7 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         apply_native_material(record.native);
         return;
     case shapes::Record::Kind::Material: {
+        dump_tag_ = 0u;
         end_native_material();
         const auto program = material_programs_.find(record.key);
         if (program == material_programs_.end()) {
@@ -9201,6 +9215,9 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         return;
     }
     const material::Native& m = *native;
+    if ((m.constants_only & 1u) == 0u) {
+        dump_tag_ = 0u;
+    }
     if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
         native_material_ = std::move(native);
         native_constants_dirty_ = true;
@@ -9278,6 +9295,25 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         out.edge_lod = t.edge_lod != 0u;
         out.bias_clamp = false;
         out.tlut = TlutRef{};
+        if (t.palette != 0u) {
+            // A colour-indexed map's palette, into palette name `map` (as a material's textures load theirs: the
+            // GX path's draw_state textures()), and the map reading it.
+            state::Op load{};
+            load.kind = state::kTlutLoad;
+            load.a[0] = static_cast<std::uint8_t>(map);
+            load.image = t.palette;
+            state::Op use{};
+            use.kind = state::kTexTlut;
+            use.a[0] = static_cast<std::uint8_t>(map);
+            use.a[1] = static_cast<std::uint8_t>(t.palette_format & 3u);
+            use.a[2] = static_cast<std::uint8_t>(map);
+            const std::uint32_t palettes = draw_state_.palette_revision;
+            draw_state_.apply(load);
+            draw_state_.apply(use);
+            if (draw_state_.palette_revision != palettes) {
+                on_palettes_changed();
+            }
+        }
         native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
     }
     // Its texgens' post-transform matrices, as a GX material's texgens set them (a draw's own texgens replace them:

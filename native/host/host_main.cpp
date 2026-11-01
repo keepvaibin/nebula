@@ -2700,6 +2700,13 @@ uint32_t svc_option(void*, uint32_t what) {
         }();
         return dump ? 1u : 0u;
     }
+    case NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS: {
+        static const uint32_t shader = [] {
+            const char* value = std::getenv("GALAXY_DUMP_DRAW_INPUTS");
+            return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
+        }();
+        return shader;
+    }
     case NEBULA_OPTION_TEST_NATIVE_J3D: {
         static const uint32_t range = [] {
             const char* value = std::getenv("GALAXY_TEST_NATIVE_J3D");

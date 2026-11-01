@@ -58,7 +58,20 @@ namespace {
                 hi = mid;
             }
         }
-        return sJ3DShaders[lo].hash == hash ? NEBULA_SHADER_J3D_FIRST + sJ3DShaders[lo].material - 1 : 0;
+        if (sJ3DShaders[lo].hash != hash) {
+            return 0;
+        }
+        // Materials whose native draws still differ after the A/B input dump (E04-NATIVE-SHADERS-PLAN.md exclusion
+        // list, each with its dump): drawn by their GX programs until fixed. The list is empty before step 4.
+        static const u16 kExcluded[] = {
+            586,  // the penguin coach's belly samples another texture region (team/a/ab586)
+        };
+        for (u32 i = 0; i < sizeof(kExcluded) / sizeof(kExcluded[0]); i++) {
+            if (sJ3DShaders[lo].material == kExcluded[i]) {
+                return 0;
+            }
+        }
+        return NEBULA_SHADER_J3D_FIRST + sJ3DShaders[lo].material - 1;
     }
 
     // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
@@ -292,6 +305,19 @@ namespace {
         sSinceLost = false;
     }
 
+    // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the draws of the material whose native shader is the asked one, on either
+    // path, for the renderer's input dump.
+    void dumpTag(u32 shader) {
+        static s32 sWanted = -1;
+        if (sWanted < 0) {
+            const NebulaHostServices* pHost = nebula_host();
+            sWanted = static_cast< s32 >(pHost->option(pHost->user, NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS));
+        }
+        if (sWanted != 0 && shader == static_cast< u32 >(sWanted)) {
+            NebulaRender::dumpTag(shader);
+        }
+    }
+
     // Whether J3D materials draw as their native shaders now: not while the ray tracer lights the scene (it reads the
     // drawing state's GX program for its hit surfaces; E-04 step 3d makes it read the native materials).
     bool nativeDrawn(u32 shader) {
@@ -403,6 +429,9 @@ namespace {
             material.textures[map].lod_bias = rTex.lod_bias;
             material.textures[map].min_lod = rTex.min_lod;
             material.textures[map].max_lod = rTex.max_lod;
+            material.textures[map].palette = rTex.palette;
+            material.textures[map].palette_entries = rTex.palette_entries;
+            material.textures[map].palette_format = rTex.palette_format;
         }
         // Its texgens' post-transform rows (a shape's own texgens replace them at its draw).
         for (u32 i = 0; i < 8; i++) {
@@ -420,6 +449,7 @@ namespace {
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, &material);
         watchMaterial(&material);
+        dumpTag(shader);
         sCurrentProgram = &rProgram;
         sCurrentValues = &rValues;
     }
@@ -776,6 +806,7 @@ namespace J3DNativeMaterial {
             loadRegisters(rParts.program, rParts.values);
             pHost->material(pHost->user, keyOf(pList), &rParts.values);
             watchMaterial(NULL);
+            dumpTag(rParts.nativeShader);
             return;
         }
         // A list from the model file, which has no snapshot: its material built now, its program with it.
@@ -789,6 +820,7 @@ namespace J3DNativeMaterial {
         pHost->material_program(pHost->user, keyOf(&sParts), &sParts.program);
         pHost->material(pHost->user, keyOf(&sParts), &sParts.values);
         watchMaterial(NULL);
+        dumpTag(shader);
     }
 
     void sendDiffered(J3DDisplayListObj* pList) {
@@ -805,6 +837,7 @@ namespace J3DNativeMaterial {
         const NebulaHostServices* pHost = nebula_host();
         pHost->material(pHost->user, keyOf(pList), &rParts.values);
         watchMaterial(NULL);
+        dumpTag(rParts.nativeShader);
     }
 
     const f32* registers() {

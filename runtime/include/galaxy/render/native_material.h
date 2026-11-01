@@ -95,6 +95,10 @@ struct Native {
         std::uint8_t repeat_s, repeat_t;
         std::uint8_t mag_linear, min_linear, mip_filter, anisotropy, edge_lod;
         float lod_bias, min_lod, max_lod;
+        std::uint64_t palette;
+        std::uint16_t palette_entries;
+        std::uint8_t palette_format;
+        std::uint8_t reserved[5];
     } textures[8];
     NativeLight light[8];
     std::uint8_t texgen_post[8];
