@@ -13,7 +13,6 @@
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
-#include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
 #include "galaxy/render/texture_cache.h"
 #include "nebula_cooked_texture.h"
@@ -51,16 +50,6 @@ struct Pixel {
     bool operator==(const Pixel&) const = default;
 };
 
-#pragma warning(push)
-#pragma warning(disable : 4324)
-struct PixelCase {
-    galaxy::render::PixelShaderKey shader{};
-    galaxy::render::RenderStateKey state{};
-    galaxy::render::PixelConstants constants{};
-    Pixel texture{18u, 52u, 86u, 120u};
-};
-#pragma warning(pop)
-struct PixelResult { Pixel color{}; float depth = 0.0f; };
 
 bool expect(bool condition, const char* message) {
     if (!condition) {
@@ -864,22 +853,6 @@ V main(uint id : SV_VertexID) {
         }
     }
 
-    PixelResult run_gx(const PixelCase& input) {
-        const std::vector<std::uint8_t> bytes{
-            input.texture.r, input.texture.g, input.texture.b, input.texture.a};
-        PixelResult result;
-        result.color = run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes,
-            1u, 1u, 1u, {}, &input, &result.depth).front();
-        return result;
-    }
-
-    std::vector<Pixel> run_gx_grid(const PixelCase& input, UINT size) {
-        const std::vector<std::uint8_t> bytes{
-            input.texture.r, input.texture.g, input.texture.b, input.texture.a};
-        return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes,
-            1u, 1u, size, {}, &input);
-    }
-
     std::vector<Pixel> run_color(
         const std::array<Pixel, 3>& rows,
         unsigned scale,
@@ -1118,7 +1091,7 @@ V main(uint id : SV_VertexID) {
         const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
         bool passed = expect_pixel(run_bytes(kEfbColorFormat, color, 1u, 1u,
             1u, make_efb_peek_conversion_constants(sampling, EfbPeekKind::Color),
-            nullptr, nullptr, true).front(), {18u, 52u, 86u, 120u},
+            true).front(), {18u, 52u, 86u, 120u},
             "persistent color source survives frame descriptor overwrite/rewind");
         // Native R24/X8 views, not the R32 float fixture used by the broader
         // shader oracle. Endpoints are exact under both UNORM and reversed Z.
@@ -1131,7 +1104,7 @@ V main(uint id : SV_VertexID) {
             passed &= expect_pixel(run_bytes(kEfbDepthResourceFormat, bytes,
                 1u, 1u, 1u,
                 make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth),
-                nullptr, nullptr, true).front(),
+                true).front(),
                 {expected, expected, expected, 255u},
                 "persistent native depth view survives frame descriptor overwrite/rewind");
         }
@@ -1211,11 +1184,11 @@ V main(uint id : SV_VertexID) {
                     sampling.step_x, sampling.step_y, sampling.filter_row_offset,
                     scale, kFrameHeight);
                 const auto reference = run_bytes(kEfbColorFormat, bytes,
-                    source_width, source_height, size, constants, nullptr,
-                    nullptr, false, nullptr, &upload_box);
+                    source_width, source_height, size, constants,
+                    false, nullptr, &upload_box);
                 const auto copied = run_bytes(kEfbColorFormat, bytes,
-                    source_width, source_height, size, constants, nullptr,
-                    nullptr, false, &*box, &upload_box);
+                    source_width, source_height, size, constants,
+                    false, &*box, &upload_box);
                 for (unsigned y = 0u; y < size; ++y) {
                     for (unsigned x = 0u; x < size; ++x) {
                         const auto expected = source_pixel(box->left + x, box->top + y);
@@ -1795,7 +1768,6 @@ private:
         UINT source_height,
         UINT dest_size,
         const galaxy::render::EfbConversionShaderConstants& constants,
-        const PixelCase* gx = nullptr, float* depth_result = nullptr,
         bool persistent_source = false, const D3D12_BOX* identity_box = nullptr,
         const D3D12_BOX* source_upload_box = nullptr) {
         const D3D12_HEAP_PROPERTIES default_heap =
@@ -1808,37 +1780,6 @@ private:
         ComPtr<ID3D12RootSignature> gx_root;
         ComPtr<ID3D12PipelineState> gx_pipeline;
         ComPtr<ID3D12Resource> gx_constants;
-        if (gx != nullptr) {
-            check_hr(galaxy::render::create_gx_root_signature(device_.Get(), &gx_root), "Create GX test root");
-            static constexpr char kGxVs[] = R"HLSL(
-struct PSIn { float4 pos : SV_Position; float4 col0 : COLOR0;
-              float4 col1 : COLOR1; float3 uv[8] : TEXCOORD; };
-PSIn main(uint id : SV_VertexID) {
-    float2 uv = float2((id << 1) & 2, id & 2);
-    PSIn p;
-    p.pos = float4(uv * float2(2,-2) + float2(-1,1), 0.75, 1);
-    p.col0 = p.col1 = float4(1,0,0,0.5);
-    [unroll] for (uint i=0; i<8; ++i) p.uv[i] = float3(0.5,0.5,1);
-    return p;
-})HLSL";
-            const auto vs = compile_shader(kGxVs, "vs_5_1");
-            const auto ps = compile_shader(galaxy::render::ShaderGenerator{}.generate_ps(gx->shader), "ps_5_1");
-            auto desc = galaxy::render::make_pso_desc(gx_root.Get(), gx->state,
-                vs.Get(), ps.Get(), nullptr, nullptr);
-            // The fixture VS emits a full-screen triangle using SV_VertexID.
-            desc.InputLayout = {};
-            check_hr(device_->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(&gx_pipeline)), "Create generated GX test PSO");
-            const auto desc_constants = buffer_desc(sizeof(gx->constants));
-            check_hr(device_->CreateCommittedResource(&upload_heap, D3D12_HEAP_FLAG_NONE,
-                &desc_constants, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
-                IID_PPV_ARGS(&gx_constants)), "Create GX constants");
-            void* mapped = nullptr;
-            const D3D12_RANGE no_read{0u, 0u};
-            check_hr(gx_constants->Map(0u, &no_read, &mapped), "Map GX constants");
-            std::memcpy(mapped, &gx->constants, sizeof(gx->constants));
-            gx_constants->Unmap(0u, nullptr);
-        }
-
         const bool native_depth = source_format == galaxy::render::kEfbDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
             source_width, source_height, native_depth
@@ -1945,32 +1886,9 @@ PSIn main(uint id : SV_VertexID) {
         ComPtr<ID3D12DescriptorHeap> dsv_heap;
         D3D12_CPU_DESCRIPTOR_HANDLE dsv{};
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT depth_footprint{};
-        if (gx != nullptr) {
-            const auto depth_desc = texture_desc(galaxy::render::kEfbDepthResourceFormat,
-                dest_size, dest_size, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-            check_hr(device_->CreateCommittedResource(&default_heap, D3D12_HEAP_FLAG_NONE,
-                &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, nullptr, IID_PPV_ARGS(&depth)), "Create GX depth");
-            D3D12_DESCRIPTOR_HEAP_DESC heap{};
-            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-            heap.NumDescriptors = 1u;
-            check_hr(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&dsv_heap)), "Create GX DSV heap");
-            dsv = dsv_heap->GetCPUDescriptorHandleForHeapStart();
-            D3D12_DEPTH_STENCIL_VIEW_DESC view{};
-            view.Format = galaxy::render::kEfbDepthFormat;
-            view.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-            device_->CreateDepthStencilView(depth.Get(), &view, dsv);
-            UINT64 bytes = 0u;
-            device_->GetCopyableFootprints(&depth_desc, 0u, 1u, 0u,
-                &depth_footprint, nullptr, nullptr, &bytes);
-            const auto desc_readback = buffer_desc(bytes);
-            check_hr(device_->CreateCommittedResource(&readback_heap, D3D12_HEAP_FLAG_NONE,
-                &desc_readback, D3D12_RESOURCE_STATE_COPY_DEST, nullptr,
-                IID_PPV_ARGS(&depth_readback)), "Create GX depth readback");
-        }
-
         D3D12_DESCRIPTOR_HEAP_DESC srv_heap_desc{};
         srv_heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        srv_heap_desc.NumDescriptors = gx != nullptr ? 8u : 1u;
+        srv_heap_desc.NumDescriptors = 1u;
         srv_heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
         ComPtr<ID3D12DescriptorHeap> srv_heap;
         galaxy::render::DescriptorRing source_ring;
@@ -1982,7 +1900,7 @@ PSIn main(uint id : SV_VertexID) {
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Texture2D.MipLevels = 1u;
         if (persistent_source) {
-            if (gx != nullptr || !source_ring.initialize(device_.Get(),
+            if (!source_ring.initialize(device_.Get(),
                 D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 4u, 2u, 2u)) {
                 throw std::runtime_error("Create persistent source test ring");
             }
@@ -2019,31 +1937,6 @@ PSIn main(uint id : SV_VertexID) {
             source_gpu = srv_heap->GetGPUDescriptorHandleForHeapStart();
         }
         ComPtr<ID3D12DescriptorHeap> sampler_heap;
-        if (gx != nullptr) {
-            auto srv = srv_heap->GetCPUDescriptorHandleForHeapStart();
-            const UINT stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-            for (unsigned i = 1u; i < 8u; ++i) {
-                srv.ptr += stride;
-                device_->CreateShaderResourceView(source.Get(), &srv_desc, srv);
-            }
-            D3D12_DESCRIPTOR_HEAP_DESC heap{};
-            heap.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-            heap.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-            heap.NumDescriptors = 8u;
-            check_hr(device_->CreateDescriptorHeap(&heap, IID_PPV_ARGS(&sampler_heap)), "Create GX sampler heap");
-            D3D12_SAMPLER_DESC sampler{};
-            sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
-            sampler.AddressU = sampler.AddressV = sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_CLAMP;
-            sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-            sampler.MaxLOD = D3D12_FLOAT32_MAX;
-            auto handle = sampler_heap->GetCPUDescriptorHandleForHeapStart();
-            const UINT sampler_stride = device_->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-            for (unsigned i = 0u; i < 8u; ++i) {
-                device_->CreateSampler(&sampler, handle);
-                handle.ptr += sampler_stride;
-            }
-        }
-
         D3D12_PLACED_SUBRESOURCE_FOOTPRINT dest_footprint{};
         UINT dest_rows = 0u;
         UINT64 dest_row_size = 0u;
@@ -2126,26 +2019,14 @@ PSIn main(uint id : SV_VertexID) {
         };
         command_list->RSSetViewports(1u, &viewport);
         command_list->RSSetScissorRects(1u, &scissor);
-        command_list->OMSetRenderTargets(1u, &rtv, FALSE, gx != nullptr ? &dsv : nullptr);
-        if (gx != nullptr) {
-            const float background[4]{0.0f, 0.0f, 1.0f, 0.25f};
-            command_list->ClearRenderTargetView(rtv, background, 0u, nullptr);
-            command_list->ClearDepthStencilView(dsv, D3D12_CLEAR_FLAG_DEPTH, 0.25f, 0u, 0u, nullptr);
-            command_list->SetGraphicsRootSignature(gx_root.Get());
-            command_list->SetPipelineState(gx_pipeline.Get());
-            ID3D12DescriptorHeap* heaps[]{srv_heap.Get(), sampler_heap.Get()};
-            command_list->SetDescriptorHeaps(2u, heaps);
-            command_list->SetGraphicsRootConstantBufferView(1u, gx_constants->GetGPUVirtualAddress());
-            command_list->SetGraphicsRootDescriptorTable(2u, srv_heap->GetGPUDescriptorHandleForHeapStart());
-            command_list->SetGraphicsRootDescriptorTable(3u, sampler_heap->GetGPUDescriptorHandleForHeapStart());
-        } else {
-            command_list->SetGraphicsRootSignature(root_signature_.Get());
-            command_list->SetPipelineState(pipeline_.Get());
-            ID3D12DescriptorHeap* descriptor_heaps[] = {srv_heap.Get()};
-            command_list->SetDescriptorHeaps(1u, descriptor_heaps);
-            command_list->SetGraphicsRoot32BitConstants(0u, 16u, constants.values.data(), 0u);
-            command_list->SetGraphicsRootDescriptorTable(1u, source_gpu);
-        }
+        command_list->OMSetRenderTargets(1u, &rtv, FALSE, nullptr);
+        command_list->SetGraphicsRootSignature(root_signature_.Get());
+        command_list->SetPipelineState(pipeline_.Get());
+        ID3D12DescriptorHeap* descriptor_heaps[] = {srv_heap.Get()};
+        command_list->SetDescriptorHeaps(1u, descriptor_heaps);
+        command_list->SetGraphicsRoot32BitConstants(0u, 16u, constants.values.data(), 0u);
+        command_list->SetGraphicsRootDescriptorTable(1u, source_gpu);
+    
         command_list->IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         if (identity_box != nullptr) {
@@ -2178,22 +2059,6 @@ PSIn main(uint id : SV_VertexID) {
             0u,
             &dest_texture_location,
             nullptr);
-        if (gx != nullptr) {
-            D3D12_RESOURCE_BARRIER barrier{};
-            barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-            barrier.Transition.pResource = depth.Get();
-            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-            barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_COPY_SOURCE;
-            barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-            command_list->ResourceBarrier(1u, &barrier);
-            D3D12_TEXTURE_COPY_LOCATION texture{}, buffer{};
-            texture.pResource = depth.Get();
-            texture.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-            buffer.pResource = depth_readback.Get();
-            buffer.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-            buffer.PlacedFootprint = depth_footprint;
-            command_list->CopyTextureRegion(&buffer, 0u, 0u, 0u, &texture, nullptr);
-        }
         check_hr(command_list->Close(), "Close command list");
         ID3D12CommandList* lists[] = {command_list.Get()};
         queue_->ExecuteCommandLists(1u, lists);
@@ -2231,15 +2096,6 @@ PSIn main(uint id : SV_VertexID) {
         }
         const D3D12_RANGE no_write{0u, 0u};
         readback->Unmap(0u, &no_write);
-        if (depth_result != nullptr) {
-            void* depth_mapping = nullptr;
-            const D3D12_RANGE range{0u, 4u};
-            check_hr(depth_readback->Map(0u, &range, &depth_mapping), "Map GX depth readback");
-            std::uint32_t encoded = 0u;
-            std::memcpy(&encoded, static_cast<const std::uint8_t*>(depth_mapping) + depth_footprint.Offset, sizeof(encoded));
-            *depth_result = static_cast<float>(encoded & 0xffffffu) / 16777215.0f;
-            depth_readback->Unmap(0u, &no_write);
-        }
         return pixels;
     }
 
@@ -2251,192 +2107,6 @@ PSIn main(uint id : SV_VertexID) {
     HANDLE fence_event_ = nullptr;
     UINT64 fence_value_ = 0u;
 };
-
-PixelCase gx_pixel_fixture() {
-    PixelCase input;
-    input.shader.num_tev_stages = 1u;
-    input.shader.num_texgens = 1u;
-    input.shader.num_chans = 1u;
-    input.shader.alpha_comp0 = input.shader.alpha_comp1 = 7u;
-    input.shader.flags = 1u; // Late testing unless a case explicitly selects early.
-    auto& stage = input.shader.stages[0];
-    // D = raster, A/B/C = zero, clamped.
-    stage.color_in[0] = stage.color_in[1] = stage.color_in[2] = 15u;
-    stage.color_in[3] = 10u;
-    stage.color_clamp = 1u;
-    stage.alpha_in[0] = stage.alpha_in[1] = stage.alpha_in[2] = 7u;
-    stage.alpha_in[3] = 5u;
-    stage.alpha_clamp = 1u;
-    stage.tex_enable = 1u;
-    // Identity raster swizzle; a texel swizzle (r, b, r, a) that the depth cases do not read.
-    const std::uint8_t ras[4] = {0u, 1u, 2u, 3u};
-    const std::uint8_t tex[4] = {0u, 2u, 0u, 3u};
-    std::memcpy(stage.ras_swizzle, ras, sizeof(ras));
-    std::memcpy(stage.tex_swizzle, tex, sizeof(tex));
-    input.state.primitive_topology = 3u;
-    input.state.blend_bits = (1u << 25u) | (1u << 26u);
-    input.state.zmode_bits = 31u; // Enable, ALWAYS, update.
-    for (auto& dims : input.constants.tex_dims) std::fill(std::begin(dims), std::end(dims), 1.0f);
-    return input;
-}
-
-bool test_uniform_dither_readbacks() {
-    bool passed = true;
-    try {
-        WarpConversionHarness harness;
-        std::size_t checked = 0u;
-        for (unsigned scale = 1u; scale <= galaxy::render::kMaxEfbScale; ++scale) {
-            for (bool fog : {false, true}) {
-                auto input = gx_pixel_fixture();
-                input.texture = {2u, 65u, 126u, 120u};
-                input.shader.stages[0].color_in[3] = 8u; // D = texture.
-                input.shader.stages[0].alpha_in[3] = 4u;
-                // Identity texture swap (RGBA), which this colour oracle needs and the depth fixture does not set.
-                for (std::uint8_t c = 0; c < 4u; ++c) input.shader.stages[0].tex_swizzle[c] = c;
-                input.state.pixfmt = 1u;
-                input.shader.output_flags = 1u | 8u;
-                input.shader.efb_scale_minus_one = static_cast<std::uint8_t>(scale - 1u);
-                input.constants.ztex_params[1] = 1.0f / static_cast<float>(scale);
-                if (fog) {
-                    input.shader.fog_type = 2u;
-                    input.constants.fog_params[0] = 1.0f;
-                    input.constants.fog_params[5] = 1.0f;
-                    input.constants.fog_params[7] = 1.0f;
-                }
-                // Four logical pixels per axis test both pattern phases,
-                // every subpixel, and multiple boundaries for odd scales.
-                const unsigned size = 4u * scale;
-                const auto legacy = harness.run_gx_grid(input, size);
-                input.shader.efb_scale_minus_one = 0xffu;
-                const auto uniform = harness.run_gx_grid(input, size);
-                passed &= expect(legacy == uniform,
-                    "uniform dither matches every legacy GPU pixel, including fog and alpha");
-                checked += uniform.size();
-                if (!fog) {
-                    bool oracle_matches = true;
-                    for (unsigned y = 0u; y < size; ++y) {
-                        for (unsigned x = 0u; x < size; ++x) {
-                            const unsigned dx = (x / scale) & 1u;
-                            const unsigned dy = (y / scale) & 1u;
-                            const unsigned d = (dx ^ dy) * 2u + dy;
-                            const auto channel = [d](unsigned value) {
-                                return static_cast<std::uint8_t>(std::lround(
-                                    static_cast<double>((value - (value >> 6u) + d) >> 2u) * 255.0 / 63.0));
-                            };
-                            const Pixel expected{channel(2u), channel(65u), channel(126u), 121u};
-                            const auto actual = uniform[static_cast<std::size_t>(y) * size + x];
-                            if (oracle_matches && actual != expected) {
-                                std::fprintf(stderr, "dither oracle scale=%u pixel=%u,%u\n", scale, x, y);
-                                expect_pixel(actual, expected, "first dither oracle mismatch");
-                            }
-                            oracle_matches &= actual == expected;
-                        }
-                    }
-                    passed &= expect(oracle_matches,
-                        "GPU RGBA6 dither agrees with independent integer Bayer/quantization oracle");
-                }
-            }
-        }
-        std::printf("uniform dither WARP: %zu pixels across all scales/fog states: %s\n",
-            checked, passed ? "PASS" : "FAIL");
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "FAILED: WARP uniform dither: %s\n", e.what());
-        passed = false;
-    }
-    return passed;
-}
-
-bool test_gx_pixel_readbacks() {
-    bool passed = true;
-    try {
-        WarpConversionHarness harness;
-        auto input = gx_pixel_fixture();
-        input.shader.alpha_comp0 = 4u; // Greater than 3/4 fails for alpha=1/2.
-        input.constants.alpha_refs[0] = 0.75f;
-        for (bool early : {true, false}) {
-            input.shader.flags = early ? 0u : 1u;
-            const auto output = harness.run_gx(input);
-            passed &= expect_pixel(output.color, {0u, 0u, 255u, 64u},
-                "alpha-discard leaves the cleared color untouched");
-            passed &= expect(std::abs(output.depth - (early ? 0.75f : 0.25f)) < 2.0f / 16777216.0f,
-                "early alpha failure writes geometric depth while late failure preserves depth");
-        }
-
-        // All formats use bytes from the unmodified, last enabled texture. The raw source has unequal
-        // channels, so swizzle and format mistakes show up.
-        constexpr std::uint32_t depths[]{120u, 30738u, 0x123456u};
-        for (unsigned format = 0u; format < 3u; ++format) {
-            for (bool disabled_tail : {false, true}) {
-                input = gx_pixel_fixture();
-                input.shader.flags = static_cast<std::uint8_t>(1u | 2u | (2u << 3u) | (format << 5u));
-                // A reversed TEV texture swap, which the Z texture must ignore.
-                const std::uint8_t reversed[4] = {2u, 1u, 3u, 0u};
-                std::memcpy(input.shader.stages[0].tex_swizzle, reversed, sizeof(reversed));
-                if (disabled_tail) {
-                    input.shader.num_tev_stages = 2u;
-                    input.shader.stages[1] = input.shader.stages[0];
-                    auto& tail = input.shader.stages[1];
-                    tail.tex_map = tail.tex_coord = tail.tex_enable = tail.channel = 0u;
-                }
-                const auto output = harness.run_gx(input);
-                const float expected = 1.0f - static_cast<float>(depths[format]) / 16777216.0f;
-                passed &= expect(std::abs(output.depth - expected) < 2.0f / 16777216.0f,
-                    "late Z8/Z16/Z24 depth preserves raw sample across swaps and disabled tail");
-            }
-        }
-        input = gx_pixel_fixture();
-        input.shader.flags = 1u | 2u | (2u << 3u); // Z8 replace.
-        input.constants.ztex_params[0] = static_cast<float>(0xfffff0u) / 16777216.0f;
-        passed &= expect(std::abs(harness.run_gx(input).depth -
-            (1.0f - 104.0f / 16777216.0f)) < 2.0f / 16777216.0f,
-            "Z texture plus bias wraps modulo 24 bits instead of saturating");
-        input.shader.flags = 1u | 2u | (1u << 3u); // Z8 add to geometric z=0x400000.
-        passed &= expect(std::abs(harness.run_gx(input).depth -
-            (1.0f - static_cast<float>(0x400068u) / 16777216.0f)) < 2.0f / 16777216.0f,
-            "additive Z texture includes geometric depth in the 24-bit wrapped sum");
-
-        input = gx_pixel_fixture();
-        input.texture = {128u, 0u, 0u, 32u};
-        input.shader.flags = 2u | (2u << 3u) | (2u << 5u); // Early Z24 replace.
-        input.shader.fog_type = 2u;
-        input.constants.fog_params[0] = 1.0f;
-        input.constants.fog_params[5] = 1.0f; // Green fog.
-        input.constants.fog_params[7] = 1.0f; // Orthographic.
-        const auto fog = harness.run_gx(input);
-        // Fog blends in float (half the colour, half the fog) and the output rounds: red and green 128.
-        passed &= expect_pixel(fog.color, {128u, 128u, 0u, 130u},
-            "early Z-texture modifies the fog colour before output quantization");
-        passed &= expect(std::abs(fog.depth - 0.75f) < 2.0f / 16777216.0f,
-            "early Z-texture fog retains geometric depth in the EFB");
-
-        for (bool overwrite : {false, true}) {
-            input = gx_pixel_fixture();
-            input.state.pixfmt = input.shader.output_flags = 1u;
-            input.shader.flags = static_cast<std::uint8_t>(1u | 128u | (overwrite ? 4u : 0u));
-            input.constants.alpha_refs[3] = 64.0f / 255.0f;
-            input.state.blend_bits |= 1u | (4u << 2u) | (5u << 5u) | (1u << 27u) |
-                (overwrite ? (1u << 28u) : 0u);
-            const auto output = harness.run_gx(input);
-            passed &= expect(std::abs(static_cast<int>(output.color.r) - 128) <= 1 &&
-                std::abs(static_cast<int>(output.color.b) - 127) <= 1,
-                "dual-source RGB blending consumes original TEV alpha in both overwrite states");
-            passed &= expect(std::abs(static_cast<int>(output.color.a) - (overwrite ? 65 : 98)) <= 1,
-                "constant EFB alpha overwrite is independent of dual-source routing");
-        }
-        input = gx_pixel_fixture();
-        input.state.pixfmt = input.shader.output_flags = 1u;
-        input.shader.flags = 1u | 4u; // Constant alpha without dual-source routing.
-        input.constants.alpha_refs[3] = 64.0f / 255.0f;
-        input.state.blend_bits |= 1u | (1u << 2u) | (1u << 28u); // ONE/ZERO RGB.
-        const auto constant_only = harness.run_gx(input);
-        passed &= expect_pixel(constant_only.color, {255u, 0u, 0u, 65u},
-            "constant alpha overwrite works independently when RGB needs no SRC1 alpha");
-    } catch (const std::exception& e) {
-        std::fprintf(stderr, "FAILED: WARP GX pixel semantics: %s\n", e.what());
-        passed = false;
-    }
-    return passed;
-}
 
 bool test_clear_precision() {
     bool passed = true;
@@ -2825,8 +2495,6 @@ int main(int argc, char** argv) {
     passed &= test_cmpr_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
-    passed &= test_gx_pixel_readbacks();
-    passed &= test_uniform_dither_readbacks();
     try {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();

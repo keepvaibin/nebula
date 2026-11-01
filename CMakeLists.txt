@@ -168,22 +168,6 @@ target_link_libraries(galaxy_native_host
 )
 galaxy_host_options(galaxy_native_host)
 
-# Uber shader sources (runtime/src/render/uber_*.hlsl) become NUL-terminated char
-# arrays in a generated translation unit. Editing a source re-runs configure.
-set(galaxy_uber_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/uber_shader_embed.cpp")
-set(galaxy_uber_embed_body "")
-foreach(galaxy_uber_stage vs ps)
-    set(galaxy_uber_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/uber_${galaxy_uber_stage}.hlsl")
-    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${galaxy_uber_hlsl}")
-    file(READ "${galaxy_uber_hlsl}" galaxy_uber_hex HEX)
-    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "0x\\1," galaxy_uber_hex "${galaxy_uber_hex}")
-    string(APPEND galaxy_uber_embed_body
-        "extern const char galaxy_uber_${galaxy_uber_stage}_hlsl[] = {${galaxy_uber_hex}0x00};\n")
-endforeach()
-file(CONFIGURE OUTPUT "${galaxy_uber_embed_cpp}"
-    CONTENT "namespace galaxy::render {\n${galaxy_uber_embed_body}}\n"
-    @ONLY)
-
 # The same passes for the Vulkan renderer, compiled on the device (cmake/post_shader_sources.cmake).
 include(cmake/post_shader_sources.cmake)
 set(galaxy_post_embed_cpp "${CMAKE_CURRENT_BINARY_DIR}/generated/post_shader_embed.cpp")
@@ -504,9 +488,6 @@ add_library(galaxy_gx STATIC
     runtime/src/render/efb_copy.cpp
     runtime/src/render/line_point_raster.cpp
     runtime/src/render/pipeline_cache.cpp
-    runtime/src/render/shader_gen.cpp
-    runtime/src/render/uber_shaders.cpp
-    ${galaxy_uber_embed_cpp}
     runtime/src/render/post_process.cpp
     runtime/src/render/post_process_settings.cpp
     ${galaxy_post_headers}
@@ -680,9 +661,9 @@ galaxy_test(galaxy_interp_gpu_tests SOURCES ${gxs}/interp_gpu_tests.cpp ${gxs}/i
 galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gxs}/window_owner.cpp)
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
-foreach(name shader_gen curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
+foreach(name curved_surfaces native_shapes simd_kernel vs_constants rt_tev_eval render_config
         sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
-        efb_copy line_point_raster xf_lighting native_settings_overlay post_process
+        efb_copy native_settings_overlay post_process
         efb_conversion native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
@@ -718,26 +699,6 @@ if(NEBULA_VULKAN)
     target_link_libraries(galaxy_native_spirv PRIVATE nebula_vulkan_deps)
     galaxy_native_material_sources(galaxy_native_spirv_sources spirv)
 
-    add_executable(galaxy_vk_shader_tests
-        runtime/src/render/vk/shader_compile_vk_tests.cpp
-        runtime/src/render/vk/shader_compile_vk.cpp
-        runtime/src/render/vk/vk_context.cpp
-        runtime/src/render/vk/device_quirks_vk.cpp
-        runtime/src/render/vk/vk_libraries.cpp
-        runtime/src/render/shader_gen.cpp
-        runtime/src/render/enhanced_lighting.cpp
-        runtime/src/render/rt_materials.cpp
-        runtime/src/render/rt_surfaces.cpp
-        runtime/src/render/uber_shaders.cpp
-        ${galaxy_uber_embed_cpp}
-        ${galaxy_post_embed_cpp}
-        runtime/src/render/renderer_common.cpp
-        runtime/src/render/efb_copy.cpp
-        runtime/src/render/render_config.cpp)
-    target_include_directories(galaxy_vk_shader_tests PRIVATE runtime/include)
-    target_compile_features(galaxy_vk_shader_tests PRIVATE cxx_std_20)
-    target_link_libraries(galaxy_vk_shader_tests PRIVATE nebula_vulkan_deps galaxy_runtime_abi galaxy_runtime_settings)
-    add_test(NAME galaxy_vk_shader_tests COMMAND galaxy_vk_shader_tests)
 
     # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
     add_library(galaxy_gx_vk STATIC
@@ -760,9 +721,6 @@ if(NEBULA_VULKAN)
         runtime/src/render/shader_keys.cpp
         runtime/src/render/efb_copy.cpp
         runtime/src/render/line_point_raster.cpp
-        runtime/src/render/shader_gen.cpp
-        runtime/src/render/uber_shaders.cpp
-        ${galaxy_uber_embed_cpp}
         runtime/src/render/post_process_settings.cpp
         runtime/src/render/transform_history.cpp
         runtime/src/render/display_modes.cpp

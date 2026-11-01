@@ -11,7 +11,6 @@
 
 #include "galaxy/render/draw_matrices.h"
 #include "galaxy/render/native_shaders.h"
-#include "galaxy/render/uber_shaders.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -80,7 +79,6 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     // The vertex constants as this draw reads them (the native header words and post rows as flush_draw_state writes
     // them into the uploaded copy).
     VertexConstants vs = cpu_vs_constants_.constants;
-    apply_uber_vs_key(vs_key_, vs);
     if (native) {
         vs.uber_vs_header[1] = renderer_.efb_scale();
         vs.uber_vs_header[2] = native_pe;
