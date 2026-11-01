@@ -38,7 +38,6 @@ namespace {
 struct TestImage {
     std::uint16_t width;
     std::uint16_t height;
-    galaxy::render::TexFormat format;
     std::uint64_t address;
 };
 
@@ -170,7 +169,7 @@ bool test_flatten_texel_checker() {
         }
         return pixels;
     };
-    // The sky's DotNoise (I4 238/255) becomes one level of 247.
+    // The sky's DotNoise (4-bit intensity, 238/255) becomes one level of 247.
     auto dots = checker(128u, 128u, {238, 238, 238, 238}, {255, 255, 255, 255});
     if (!expect(galaxy::render::detail::flatten_texel_checker(dots, 128u, 128u), "a one-texel checker is a dither")) return false;
     for (const RGBA8& pixel : dots) {
@@ -1068,18 +1067,25 @@ V main(uint id : SV_VertexID) {
         check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create allocation budget list");
         cache.backend().set_upload_list(list.Get());
-        // 1024x1024 CMPR: 512 KiB of source bytes and 4 MiB decoded, so 18 of them exceed the 64 MiB budget while
-        // their source bytes stay far below it.
+        // 1024x1024 block records (the disc's compressed textures, nebula_cooked_texture.h) of 512 KiB that take
+        // 4 MiB on the device, so 18 of them exceed the 64 MiB budget while their record bytes stay far below it.
+        const auto record_of = [](std::uint16_t w, std::uint16_t h, std::uint8_t levels, std::uint8_t layout) {
+            std::vector<std::byte> r(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(w, h, levels, layout));
+            nebula_texture_init(r.data(), w, h, levels, layout, 0u);
+            return r;
+        };
         constexpr std::uint32_t address = 0x10000000u;
-        constexpr std::uint32_t stride = 512u * 1024u;
+        constexpr std::uint32_t stride = 1024u * 1024u;  // the records' keys apart
         constexpr unsigned kTextures = 18u;
-        std::vector<std::byte> bytes(kTextures * stride);
-        for (unsigned i = 0u; i < kTextures; ++i) bytes[i * stride] = static_cast<std::byte>(i);
-        hand_over(cache, address, bytes.data(), bytes.size());
+        std::vector<std::byte> block = record_of(1024u, 1024u, 1u, NEBULA_TEXTURE_BLOCK4);
+        const std::size_t record_bytes = block.size();
+        for (unsigned i = 0u; i < kTextures; ++i) {
+            block[NEBULA_TEXTURE_HEADER] = static_cast<std::byte>(i);
+            hand_over(cache, address + i * stride, block.data(), block.size());
+        }
         TestImage image{};
         image.address = address;
         image.width = image.height = 1024u;
-        image.format = TexFormat::CMPR;
         TextureSampler mode{};
         mode.min_linear = false, mode.mip = 0u;
         const auto first = cache.get(image.address, mode);
@@ -1087,8 +1093,8 @@ V main(uint id : SV_VertexID) {
         const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
         bool passed = expect(allocation > first.source_bytes &&
             cache.decoded_map_stats().resident_bytes == allocation &&
-            cache.decoded_entry_source_bytes() == stride,
-            "compressed texture charges device allocation, preserving guest-byte metric");
+            cache.decoded_entry_source_bytes() == record_bytes,
+            "a texture charges its device allocation, keeping the record-byte metric");
         const auto again = cache.get(image.address, mode);
         passed &= expect(again.resource == first.resource &&
             cache.decoded_map_stats().resident_bytes == allocation,
@@ -1104,20 +1110,21 @@ V main(uint id : SV_VertexID) {
             stats.resident_bytes == stats.entries * allocation &&
             stats.evicted_bytes == stats.evicted_entries * allocation &&
             stats.entries == stats.lru_entries && cache.srv_index_retired(first.srv_index),
-            "allocation budget evicts compressed entries before source bytes reach the bound");
+            "allocation budget evicts entries before record bytes reach the bound");
         passed &= expect(first.resource->GetDesc().Width == 1024u &&
             first.srv_index != last.srv_index,
             "budget eviction keeps the old resource and descriptor alive for this frame");
         cache.invalidate_all();
         passed &= expect(cache.decoded_map_stats().resident_bytes == 0u &&
             cache.decoded_entry_source_bytes() == 0u && cache.decoded_map_stats().lru_entries == 0u,
-            "invalidation clears allocation and guest-byte accounting together");
+            "invalidation clears allocation and record-byte accounting together");
         cache.begin_frame(1u, kFramesInFlight);
         passed &= expect(cache.srv_index_retired(first.srv_index),
             "another frame slot cannot reclaim a budget-evicted descriptor");
-        image.address = address + 16384u;
+        const std::vector<std::byte> mip_record = record_of(128u, 128u, 8u, NEBULA_TEXTURE_L8);
+        hand_over(cache, address + kTextures * stride, mip_record.data(), mip_record.size());
+        image.address = address + kTextures * stride;
         image.width = image.height = 128u;
-        image.format = TexFormat::I4;
         mode.min_linear = false, mode.mip = 1u;
         mode.max_lod = (7u * 16u) / 16.0f;
         const auto mipped = cache.get(image.address, mode);
@@ -1125,9 +1132,9 @@ V main(uint id : SV_VertexID) {
         const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
         passed &= expect(mip_desc.MipLevels > 1u &&
             cache.decoded_map_stats().resident_bytes == mip_allocation,
-            "mipped compressed texture charges its complete allocation");
+            "a mipped texture charges its complete allocation");
         std::printf("Decoded allocation budget: source=%u allocation=%llu live=%llu evicted=%llu\n",
-            stride, static_cast<unsigned long long>(allocation),
+            static_cast<unsigned>(record_bytes), static_cast<unsigned long long>(allocation),
             static_cast<unsigned long long>(stats.resident_bytes),
             static_cast<unsigned long long>(stats.evicted_bytes));
         // No list is submitted; in the renderer each begin_frame follows its slot's fence wait.
@@ -1189,7 +1196,6 @@ V main(uint id : SV_VertexID) {
                 image.address = address + offset;
                 image.width = test.width;
                 image.height = test.height;
-                image.format = TexFormat::RGBA8;
                 TextureSampler mode{};
                 mode.min_linear = false, mode.mip = 0u;
                 handles.push_back(cache.get(image.address, mode));
@@ -1326,7 +1332,6 @@ V main(uint id : SV_VertexID) {
         TestImage image{};
         image.address = address;
         image.width = image.height = 8u;
-        image.format = TexFormat::RGBA8;
         TextureSampler mode{};
         mode.min_linear = false, mode.mip = 0u;
         const auto initial_revision = cache.retirement_revision();
@@ -1371,7 +1376,7 @@ V main(uint id : SV_VertexID) {
     bool test_texture_cache_ranges() {
         using namespace galaxy::render;
         bool passed = true;
-        // On the heap: the cache embeds all of TMEM, too large for the default stack.
+        // On the heap: the store is too large for the default stack.
         auto cache_owner = std::make_unique<TextureCache>();
         TextureCache& cache = *cache_owner;
         if (!cache.initialize(device_.Get())) throw std::runtime_error("initialize WARP texture cache");
@@ -1396,7 +1401,6 @@ V main(uint id : SV_VertexID) {
         TestImage image{};
         image.address = address;
         image.width = image.height = 8u;
-        image.format = TexFormat::RGBA8;
         TextureSampler mode{};
         mode.min_linear = false, mode.mip = 1u;
         mode.max_lod = (32u) / 16.0f;
@@ -1411,7 +1415,6 @@ V main(uint id : SV_VertexID) {
         constexpr auto record_address = address + 0x9000u;
         hand_over(cache, record_address, single.data(), single.size());
         auto record_image = image; record_image.address = record_address;
-        record_image.format = TexFormat::I8;
         const auto record = cache.get(record_image.address, mode);
         passed &= expect(record.mip_levels == 1u && record.source_bytes == single.size() && record.width == 8u,
             "a texture record uploads the levels it holds and is sized as the record");
@@ -2026,7 +2029,7 @@ bool test_warp_against_oracle() {
                 depth_label);
         }
 
-        // GXPeekZ reads one EFB pixel: at a scaled resolution one fixed physical texel, never a blend. Four logical
+        // A depth peek reads one pixel: at a scaled resolution one fixed physical texel, never a blend. Four logical
         // pixels cover both edges and the z24 endpoints; every other subpixel holds a different depth.
         constexpr std::array<std::uint32_t, 4> kPeekDepths{
             0x000000u,
@@ -2084,7 +2087,7 @@ bool test_warp_against_oracle() {
             const auto field=harness.run_depth_field(depth_grid,width,height,scale,2u);
             for (std::size_t i=0; i<kPeekDepths.size(); ++i) {
                 passed &= expect_pixel(field.at(i),packed_depth(kPeekDepths[i]),
-                    "whole pointer depth field preserves exact GXPeekZ pixel and z24");
+                    "whole pointer depth field keeps each peek's exact pixel and z24");
             }
 
             // Color peeks keep their full NxN box reduction. The center and corner deltas cancel only when
@@ -2119,7 +2122,7 @@ bool test_warp_against_oracle() {
                 kColorMean,
                 color_label);
 
-            // The whole colour field (GXPeekARGB from a draw-sync token's field): every logical pixel is its own
+            // The whole colour field (colour peeks from a draw-sync token's field): every logical pixel is its own
             // block's reduction, as a single peek of that pixel. The lens flare's visibility test reads its alpha.
             constexpr std::array<Pixel, 4> kFieldColors{
                 Pixel{64u, 96u, 128u, 255u}, Pixel{200u, 40u, 80u, 0u},

@@ -140,11 +140,7 @@ gpu::TextureRef EfbCopyManager::acquire_idle_texture(
     return {};
 }
 
-// GX BP 0x4E is the nine-bit inverse vertical step consumed by the RVL SDK's
-// __GXGetNumXfbLines calculation. PE_COPY_EXECUTE bit 10 controls whether that
-// calculation is applied at all. The source-size register stores height - 1;
-// CaptureRequest stores the decoded height, so the base result is
-// 1 + floor((height - 1) * 256 / y_scale_raw).
+// A capture's size at the frame scale, within the largest texture the device makes.
 ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
@@ -180,8 +176,7 @@ EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
         ? 0.0f
         : static_cast<float>(params.src_height) * scale /
               static_cast<float>(dest_height);
-    // GX copy-filter taps are one logical EFB row apart. At Nx internal
-    // resolution that separation is N physical source texels.
+    // The filter's taps are one logical row apart: at Nx, N physical rows.
     geometry.filter_row_offset = scale;
     return geometry;
 }
@@ -193,8 +188,7 @@ EfbCopySamplingGeometry compute_xfb_sampling_geometry(
     unsigned efb_scale) noexcept {
     auto geometry = compute_efb_copy_sampling_geometry(
         params, dest_width, dest_height, efb_scale);
-    // Display copies filter adjacent physical rows, as Dolphin's TextureCacheBase::CopyEFBToCacheEntry does with
-    // its scaled pixel_height; only the tap spacing differs from texture copies.
+    // The frame shown filters adjacent physical rows; only the tap spacing differs from captures.
     geometry.filter_row_offset = 1.0f;
     return geometry;
 }
