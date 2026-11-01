@@ -26,8 +26,6 @@
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/host_env.h"
-#include "galaxy/render/dependency_range_memo.h"
-#include "galaxy/render/fifo_cache_fingerprint.h"
 
 #include "galaxy/frame_cadence_diagnostics.h"
 #include "galaxy/render/line_point_raster.h"

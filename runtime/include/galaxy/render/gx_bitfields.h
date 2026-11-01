@@ -7,37 +7,9 @@
 
 namespace galaxy::render {
 
-[[nodiscard]] constexpr std::uint32_t bits(
-    std::uint32_t value,
-    unsigned lo,
-    unsigned width) {
-    return (value >> lo) & ((1u << width) - 1u);
-}
-
-[[nodiscard]] constexpr bool bit(std::uint32_t value, unsigned index) {
-    return ((value >> index) & 1u) != 0u;
-}
-
-enum class TevColorArg : std::uint8_t {
-    CPrev = 0, APrev, C0, A0, C1, A1, C2, A2,
-    TexColor, TexAlpha, RasColor, RasAlpha, One, Half, Konst, Zero,
-};
-
-enum class TevAlphaArg : std::uint8_t {
-    APrev = 0, A0, A1, A2, TexAlpha, RasAlpha, Konst, Zero,
-};
-
-// bias == Compare turns the stage into a comparator; the comparison width is
-// then derived from (scale << 1) | op and the comparison itself from op.
-enum class TevBias : std::uint8_t { Zero = 0, AddHalf, SubHalf, Compare };
-enum class TevScale : std::uint8_t { X1 = 0, X2, X4, Half };
-enum class TevCompareKind : std::uint8_t { R8 = 0, GR16, BGR24, RGB8 };
-
 enum class CompareFunc : std::uint8_t {
     Never = 0, Less, Equal, LEqual, Greater, NEqual, GEqual, Always,
 };
-
-enum class AlphaTestLogic : std::uint8_t { And = 0, Or, Xor, Xnor };
 
 enum class BlendFactor : std::uint8_t {
     Zero = 0, One, SrcColor, InvSrcColor,
@@ -72,14 +44,6 @@ enum class PrimitiveClass : std::uint8_t {
     Quads = 0x10, Quads2 = 0x11, Triangles = 0x12,
     TriangleStrip = 0x13, TriangleFan = 0x14,
     Lines = 0x15, LineStrip = 0x16, Points = 0x17,
-};
-
-enum class VcdType : std::uint8_t { None = 0, Direct, Index8, Index16 };
-
-enum class ComponentFormat : std::uint8_t { U8 = 0, S8, U16, S16, F32 };
-
-enum class ColorComponentFormat : std::uint8_t {
-    RGB565 = 0, RGB888, RGBX8888, RGBA4444, RGBA6666, RGBA8888,
 };
 
 enum class TexGenType : std::uint8_t {
@@ -153,49 +117,6 @@ struct PeControl {
     std::uint8_t pixel_format;      // 0=RGB8_Z24, 1=RGBA6_Z24, 2=RGB565_Z16, ...
     std::uint8_t z_format;
     bool early_z;                   // zcomploc: Z test before texture
-};
-
-// One TREF register holds the order for two stages; `half` selects which.
-struct TevOrder {
-    std::uint8_t texmap;            // 0-7
-    std::uint8_t texcoord;          // 0-7
-    bool tex_enable;
-    std::uint8_t ras_channel;       // BP-mapped: 0/1 color, 5=alpha bump,
-                                    // 6=normalized alpha bump, 7=zero.
-};
-
-// One TEV stage, the unit of shader keying.
-struct TevStageConfig {
-    // Color env (BP 0xC0 + 2*stage).
-    TevColorArg color_a, color_b, color_c, color_d;
-    TevBias color_bias;
-    bool color_sub;                 // op bit (add/sub, or compare op selector)
-    bool color_clamp;
-    TevScale color_scale;
-    std::uint8_t color_dest;        // 0=PREV, 1-3=REG0-2
-    // Alpha env (BP 0xC1 + 2*stage).
-    TevAlphaArg alpha_a, alpha_b, alpha_c, alpha_d;
-    TevBias alpha_bias;
-    bool alpha_sub;
-    bool alpha_clamp;
-    TevScale alpha_scale;
-    std::uint8_t alpha_dest;
-    std::uint8_t ras_swap;          // swap table selects (alpha env low bits)
-    std::uint8_t tex_swap;
-    // Order (TREF half).
-    TevOrder order;
-    // Konstant selects (KSEL half), 5-bit each.
-    std::uint8_t kcsel;
-    std::uint8_t kasel;
-
-};
-
-struct AlphaCompare {
-    std::uint8_t ref0;
-    std::uint8_t ref1;
-    CompareFunc comp0;
-    CompareFunc comp1;
-    AlphaTestLogic logic;
 };
 
 struct TexImage {
@@ -281,7 +202,6 @@ struct XfChannelCtrl {
                                     // 0=none, 1=specular, 2=dir, 3=spot
 };
 
-inline constexpr std::uint32_t kTmemBytes = 0x100000u;
 [[nodiscard]] constexpr bool cull_all_suppresses_primitive(
     CullMode cull, PrimitiveClass primitive) noexcept {
     return cull == CullMode::All &&
