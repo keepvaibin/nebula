@@ -1325,14 +1325,8 @@ bool TextureCache::set_movie_override(const MovieFrameMark& mark, const MovieRep
     return true;
 }
 
-TextureHandle TextureCache::get(
-    const TexImage& image,
-    const TexMode& mode,
-    std::uint64_t palette_address,
-    TlutFormat palette_format) {
+TextureHandle TextureCache::get(const TexImage& image, const TexMode& mode) {
     // Colour-indexed images reach the renderer cooked, their palettes applied (nebula_cooked_texture.h).
-    (void)palette_address;
-    (void)palette_format;
     if (movie_active_ && image.format == TexFormat::I8) [[unlikely]] {
         // A replacement movie's plane in place of the THP's (set_movie_override).
         for (unsigned p = 0; p < 3u; ++p) {

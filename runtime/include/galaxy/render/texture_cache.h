@@ -104,11 +104,7 @@ public:
     // The GPU texture for an image, uploaded on first use from the texture record the game handed over, or decoded
     // from the image's bytes (register_image; one never handed over decodes from zeros). Colour-indexed images come
     // as records with their palettes applied: `palette_address` and `palette_format` are not read.
-    [[nodiscard]] TextureHandle get(
-        const TexImage& image,
-        const TexMode& mode,
-        std::uint64_t palette_address,
-        TlutFormat palette_format);
+    [[nodiscard]] TextureHandle get(const TexImage& image, const TexMode& mode);
     // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);

@@ -33,11 +33,6 @@ void set_z(ZMode& z, std::uint8_t enable, std::uint8_t func, std::uint8_t update
 // GXTexFilter to the min filter field (near, linear, then the mip combinations).
 constexpr std::uint8_t kFilter[6] = {0x00, 0x04, 0x01, 0x05, 0x02, 0x06};
 
-// GXTlut names to their place in TMEM's palette half (512-byte units): 16 of 256 entries, then 4 of 1024.
-std::uint16_t tlut_offset(std::uint8_t name) {
-    return static_cast<std::uint16_t>(name < 16u ? 0x200u + 0x10u * name : 0x300u + 0x40u * ((name - 16u) & 3u));
-}
-
 // A texture's sampling as GXInitTexObjLOD and GXInitTexObj set it, each field at the width the hardware holds it.
 void set_texture_mode(TextureMap& t, std::uint8_t wrap_s, std::uint8_t wrap_t, bool mag_linear, std::uint8_t min_filter,
                       bool edge_lod, float lod_bias, std::uint8_t anisotropy, std::uint8_t bias_clamp, float min_lod,
@@ -61,20 +56,6 @@ void set_texture_size(TextureMap& t, std::uint32_t width, std::uint32_t height, 
     t.image.width = static_cast<std::uint16_t>(((width - 1u) & 1023u) + 1u);
     t.image.height = static_cast<std::uint16_t>(((height - 1u) & 1023u) + 1u);
     t.image.format = static_cast<TexFormat>(format & 15u);
-}
-
-// A palette load from `source` (the palette's address) of `bytes` into TMEM's palette half from `place` (512-byte
-// units): each place it fills reads from the matching part of the source.
-void load_palette(NativeDrawState& s, std::uint64_t source, std::uint32_t place, std::uint32_t bytes) {
-    const std::uint32_t destination = (place & 0x3FFu) << 9u;
-    for (std::uint32_t offset = 0; offset < bytes; offset += 512u) {
-        const std::uint32_t at = ((destination + offset) >> 9u) & 1023u;
-        const std::uint64_t address = source + offset;
-        if (s.palette_place[at] != address) {
-            s.palette_place[at] = address;
-            ++s.palette_revision;
-        }
-    }
 }
 
 void set_texture_address(TextureMap& t, std::uint64_t image) {
@@ -146,7 +127,7 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kMaterialColor: return bit(kMaterialColor);
     case state::kAmbientColor: return bit(kAmbientColor);
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
-    case state::kTexLookup: case state::kTexImageAttr: case state::kTexImage: case state::kTexTlut:
+    case state::kTexLookup: case state::kTexImageAttr: case state::kTexImage:
         return bit(kTexture);
     case state::kFog: return bit(kGen);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
@@ -168,7 +149,6 @@ void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
         const Group& group = kGroups[std::countr_zero(g)];
         std::memcpy(before + group.offset, self + group.offset, group.size);
     }
-    const std::uint32_t palettes = s.palette_revision;
     change();
     for (std::uint32_t g = groups; g != 0u; g &= g - 1u) {
         const Group& group = kGroups[std::countr_zero(g)];
@@ -176,16 +156,13 @@ void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
             s.dirty |= group.dirty;
         }
     }
-    if (s.palette_revision != palettes) {
-        s.dirty |= kStateDirtyTex;
-    }
 }
 
 }  // namespace
 
 void NativeDrawState::apply(const state::Op& op) {
     std::uint32_t groups = op_groups(op.kind);
-    if (op.kind == state::kInvalidateTextures || op.kind == state::kTlutLoad) {
+    if (op.kind == state::kInvalidateTextures) {
         dirty |= kStateDirtyTex;  // the texture bindings are captured again
     }
     tracked(*this, groups, [&] { set_op(op); });
@@ -346,13 +323,6 @@ void NativeDrawState::set_op(const state::Op& op) {
     case state::kTexImage:
         set_texture_address(texture[a[0] & 7u], op.image);
         break;
-    case state::kTlutLoad:
-        // GXLoadTlut: 16 places' worth for the 256-entry names, 64 for the big ones.
-        load_palette(*this, op.image, tlut_offset(a[0]), a[0] < 16u ? 512u : 2048u);
-        break;
-    case state::kTexTlut:
-        texture[a[0] & 7u].tlut = TlutRef{tlut_offset(a[2]), static_cast<TlutFormat>(a[1] & 3u)};
-        break;
     default:
         break;
     }
@@ -380,7 +350,7 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
         out.bias[1] = ((tw >> 16u) & 1u) != 0u;
         out.wrap[1] = ((tw >> 17u) & 1u) != 0u;
     };
-    // J3D's texture (J3DTexture::loadGX, its palette into the map's own TMEM place).
+    // J3D's texture (J3DTexture::loadGX; a colour-indexed one is cooked with its palette applied).
     const auto textures = [&] {
         for (unsigned map = 0; map < 8u; ++map) {
             const material::Texture& t = v.texture[map];
@@ -392,13 +362,6 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
             set_texture_size(out, t.width, t.height, t.format);
             set_texture_mode(out, t.wrap_s, t.wrap_t, t.mag_filter == 1u, t.min_filter, t.edge_lod != 0u, t.lod_bias,
                              t.anisotropy, t.bias_clamp, t.min_lod, t.max_lod);
-            if (t.palette != 0u) {
-                const std::uint32_t tmem = (map << 13u) + 0xF0000u;
-                const std::uint32_t size = t.palette_entries > 16u ? 256u : 16u;  // GXTlutSize: entries / 16
-                load_palette(*this, t.palette, (tmem - 0x80000u) >> 9u, 2u * size);
-                out.tlut = TlutRef{static_cast<std::uint16_t>(((tmem - 0x80000u) >> 9u) & 0x3FFu),
-                                   static_cast<TlutFormat>(t.palette_format & 3u)};
-            }
         }
     };
     const auto tex_gens = [&] {
@@ -559,14 +522,6 @@ EfbCopyParams capture_copy_params(std::uint64_t key, const std::uint16_t rect[4]
     p.clear_z = 0xFFFFFFu;  // NEBULA_CAPTURE_CLEAR: colour 0, depth far
     set_filter(p, flags);
     return p;
-}
-
-std::uint64_t palette_address(const NativeDrawState& state, unsigned map) {
-    const TextureMap& t = state.texture[map & 7u];
-    if (t.image.format != TexFormat::C4 && t.image.format != TexFormat::C8 && t.image.format != TexFormat::C14X2) {
-        return 0u;
-    }
-    return state.palette_place[t.tlut.tmem_offset & 1023u];
 }
 
 }  // namespace galaxy::render
