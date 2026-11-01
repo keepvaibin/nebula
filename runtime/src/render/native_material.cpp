@@ -32,7 +32,7 @@ void lights(const Program& m, const Values& v, DrawMatrices& matrices) {
 
 }  // namespace
 
-std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source) {
+XfTexGen tex_gen(std::uint8_t type, std::uint8_t source) {
     std::uint32_t form = 0, proj = 0, row = 5, emboss_row = 5, emboss_lit = 0, tg = 0;
     switch (source) {
     case 0: row = 0; form = 1; break;   // POS
@@ -51,7 +51,8 @@ std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source) {
     case 10: tg = source == 19 ? 2u : 3u; break;  // SRTG
     default: break;
     }
-    return proj << 1u | form << 2u | tg << 4u | row << 7u | emboss_row << 12u | emboss_lit << 15u;
+    return XfTexGen{proj != 0u, form != 0u, static_cast<TexGenType>(tg), static_cast<std::uint8_t>(row & 31u),
+                    static_cast<std::uint8_t>(emboss_row & 7u), static_cast<std::uint8_t>(emboss_lit & 7u)};
 }
 
 void load_matrices(const Program& m, const Values& v, DrawMatrices& memory) {

@@ -53,7 +53,7 @@ int main() {
             for(unsigned c=0;c<4u;++c)draw.ambient_color[0][c]=static_cast<std::uint8_t>(words[0]>>(24u-8u*c));
             typed=true;
             break;
-        case 8: draw.post_texgen[next()%8u]=decode_xf_post_texgen(next()&0x3Fu);typed=true;break;
+        case 8: draw.post_texgen[next()%8u]=XfPostTexGen{static_cast<std::uint8_t>(next()&0x3Fu),false};typed=true;break;
         case 9: {
             const std::uint32_t w=next()&0x3FFFFFu;
             draw.line_point={static_cast<std::uint8_t>(w),static_cast<std::uint8_t>(w>>8u),

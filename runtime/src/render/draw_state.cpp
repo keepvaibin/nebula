@@ -131,43 +131,40 @@ std::uint16_t tlut_offset(std::uint8_t name) {
     return static_cast<std::uint16_t>(name < 16u ? 0x200u + 0x10u * name : 0x300u + 0x40u * ((name - 16u) & 3u));
 }
 
-// A texture's sampling as GXInitTexObjLOD and GXInitTexObj set it (mode words built as the hardware holds them,
-// then read back: out-of-range values land where the hardware would put them).
+// A texture's sampling as GXInitTexObjLOD and GXInitTexObj set it, each field at the width the hardware holds it.
 void set_texture_mode(TextureMap& t, std::uint8_t wrap_s, std::uint8_t wrap_t, bool mag_linear, std::uint8_t min_filter,
                       bool edge_lod, float lod_bias, std::uint8_t anisotropy, std::uint8_t bias_clamp, float min_lod,
                       float max_lod) {
-    const std::uint32_t mode0 =
-        (static_cast<std::uint32_t>(wrap_s) | static_cast<std::uint32_t>(wrap_t) << 2u |
-         static_cast<std::uint32_t>(mag_linear) << 4u | static_cast<std::uint32_t>(kFilter[min_filter % 6u]) << 5u |
-         static_cast<std::uint32_t>(!edge_lod) << 8u |
-         static_cast<std::uint32_t>(static_cast<std::uint8_t>(static_cast<std::int32_t>(32.0f * lod_bias))) << 9u |
-         static_cast<std::uint32_t>(anisotropy) << 19u | static_cast<std::uint32_t>(bias_clamp) << 21u) &
-        0xFFFFFFu;
-    const std::uint32_t mode1 =
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * min_lod))) |
-        static_cast<std::uint32_t>(static_cast<std::uint8_t>(static_cast<std::int32_t>(16.0f * max_lod))) << 8u;
-    t.mode = decode_tex_mode(mode0, mode1);
-    t.edge_lod = ((mode0 >> 8u) & 1u) == 0u;
-    t.bias_clamp = ((mode0 >> 21u) & 1u) != 0u;
+    const auto lod8 = [](float lod, float units) {
+        return static_cast<std::uint8_t>(static_cast<std::int32_t>(units * lod));
+    };
+    t.mode = TexMode{static_cast<TexWrap>(wrap_s & 3u),
+                     static_cast<TexWrap>(wrap_t & 3u),
+                     mag_linear ? TexMagFilter::Linear : TexMagFilter::Near,
+                     static_cast<TexMinFilter>(kFilter[min_filter % 6u]),
+                     static_cast<std::int16_t>(static_cast<std::int8_t>(lod8(lod_bias, 32.0f))),
+                     static_cast<std::uint8_t>(anisotropy & 3u),
+                     lod8(min_lod, 16.0f),
+                     lod8(max_lod, 16.0f)};
+    t.edge_lod = edge_lod;
+    t.bias_clamp = (bias_clamp & 1u) != 0u;
 }
 
 void set_texture_size(TextureMap& t, std::uint32_t width, std::uint32_t height, std::uint8_t format) {
-    const std::uint32_t word = ((width - 1u) | (height - 1u) << 10u | static_cast<std::uint32_t>(format) << 20u) & 0xFFFFFFu;
-    const TexImage image = decode_tex_image(word, 0u);
-    t.image.width = image.width;
-    t.image.height = image.height;
-    t.image.format = image.format;
+    t.image.width = static_cast<std::uint16_t>(((width - 1u) & 1023u) + 1u);
+    t.image.height = static_cast<std::uint16_t>(((height - 1u) & 1023u) + 1u);
+    t.image.format = static_cast<TexFormat>(format & 15u);
 }
 
-// A palette transfer from `source` (the palette's address) to a place and size in 32-byte units (GXLoadTlut's BP 0x65
-// word): each place it fills reads from the matching part of the source.
-void load_palette(NativeDrawState& s, std::uint64_t source, std::uint32_t place_word) {
-    const TlutTransfer transfer = decode_wii_tlut_transfer(0u, place_word);
-    for (std::uint32_t offset = 0; offset < transfer.byte_count; offset += 512u) {
-        const std::uint32_t place = ((transfer.destination_offset + offset) >> 9u) & 1023u;
+// A palette load from `source` (the palette's address) of `bytes` into TMEM's palette half from `place` (512-byte
+// units): each place it fills reads from the matching part of the source.
+void load_palette(NativeDrawState& s, std::uint64_t source, std::uint32_t place, std::uint32_t bytes) {
+    const std::uint32_t destination = (place & 0x3FFu) << 9u;
+    for (std::uint32_t offset = 0; offset < bytes; offset += 512u) {
+        const std::uint32_t at = ((destination + offset) >> 9u) & 1023u;
         const std::uint64_t address = source + offset;
-        if (s.palette_place[place] != address) {
-            s.palette_place[place] = address;
+        if (s.palette_place[at] != address) {
+            s.palette_place[at] = address;
             ++s.palette_revision;
         }
     }
@@ -177,17 +174,16 @@ void set_texture_address(TextureMap& t, std::uint64_t image) {
     t.image.address = image;
 }
 
-// GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel control's diffuse function only with an attenuation).
+// GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel's diffuse function only with an attenuation). The channel's
+// attenuation: 1 specular, 2 directional (none), 3 spotlight.
 XfChannelCtrl make_channel(std::uint8_t material_source, std::uint8_t enable, std::uint8_t light_mask,
                            std::uint8_t ambient_source, std::uint8_t diffuse, std::uint8_t attenuation) {
-    const std::uint32_t word = static_cast<std::uint32_t>(material_source) | static_cast<std::uint32_t>(enable) << 1u |
-                               static_cast<std::uint32_t>(light_mask & 15u) << 2u |
-                               static_cast<std::uint32_t>(ambient_source) << 6u |
-                               (attenuation == 0u ? 0u : static_cast<std::uint32_t>(diffuse)) << 7u |
-                               static_cast<std::uint32_t>(attenuation != 2u) << 9u |
-                               static_cast<std::uint32_t>(attenuation != 0u) << 10u |
-                               static_cast<std::uint32_t>(light_mask >> 4u) << 11u;
-    return decode_xf_channel_ctrl(word);
+    return XfChannelCtrl{(material_source & 1u) != 0u,
+                         (enable & 1u) != 0u,
+                         light_mask,
+                         (ambient_source & 1u) != 0u,
+                         static_cast<std::uint8_t>(attenuation == 0u ? 0u : diffuse & 3u),
+                         static_cast<std::uint8_t>((attenuation != 2u ? 1u : 0u) | (attenuation != 0u ? 2u : 0u))};
 }
 
 void set_rgba(std::uint8_t* out, std::uint32_t word) {
@@ -512,13 +508,12 @@ void NativeDrawState::set_op(const state::Op& op) {
         break;
     }
     case state::kTexCoordGen: {
-        std::uint32_t word = material::tex_gen_word(a[1], a[2]);
+        XfTexGen made = material::tex_gen(a[1], a[2]);
         if (a[5] != 0u && (a[1] < 2u || a[1] > 9u)) {
-            word &= ~(0x7u << 12u);  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
+            made.emboss_source = 0u;  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
         }
-        texgen[a[0] & 7u] = decode_xf_texgen(word);
-        post_texgen[a[0] & 7u] = decode_xf_post_texgen(
-            static_cast<std::uint32_t>(static_cast<std::int32_t>(a[4]) - 64) | static_cast<std::uint32_t>(a[3]) << 8u);
+        texgen[a[0] & 7u] = made;
+        post_texgen[a[0] & 7u] = material::post_tex_gen(a[4], a[3]);
         if (a[5] != 0u) {
             texture_matrix[a[0] & 7u] = static_cast<std::uint8_t>(a[6] & 63u);
         }
@@ -570,8 +565,7 @@ void NativeDrawState::set_op(const state::Op& op) {
         break;
     case state::kTlutLoad:
         // GXLoadTlut: 16 places' worth for the 256-entry names, 64 for the big ones.
-        load_palette(*this, op.image,
-                     tlut_offset(a[0]) | static_cast<std::uint32_t>(a[0] < 16u ? 16u : 64u) << 10u);
+        load_palette(*this, op.image, tlut_offset(a[0]), a[0] < 16u ? 512u : 2048u);
         break;
     case state::kTexTlut:
         texture[a[0] & 7u].tlut = TlutRef{tlut_offset(a[2]), static_cast<TlutFormat>(a[1] & 3u)};
@@ -716,8 +710,7 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
             if (t.palette != 0u) {
                 const std::uint32_t tmem = (map << 13u) + 0xF0000u;
                 const std::uint32_t size = t.palette_entries > 16u ? 256u : 16u;  // GXTlutSize: entries / 16
-                load_palette(*this, t.palette,
-                             ((tmem - 0x80000u) >> 9u) | (size / 16u) << 10u);
+                load_palette(*this, t.palette, (tmem - 0x80000u) >> 9u, 2u * size);
                 out.tlut = TlutRef{static_cast<std::uint16_t>(((tmem - 0x80000u) >> 9u) & 0x3FFu),
                                    static_cast<TlutFormat>(t.palette_format & 3u)};
             }
@@ -725,8 +718,8 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
     };
     const auto tex_gens = [&] {
         for (unsigned i = 0; i < m.tex_gens && i < 8u; ++i) {
-            texgen[i] = decode_xf_texgen(material::tex_gen_word(m.tex_gen[i].type, m.tex_gen[i].source));
-            post_texgen[i] = decode_xf_post_texgen(m.tex_gen[i].post_matrix);
+            texgen[i] = material::tex_gen(m.tex_gen[i].type, m.tex_gen[i].source);
+            post_texgen[i] = XfPostTexGen{static_cast<std::uint8_t>(m.tex_gen[i].post_matrix & 63u), false};
         }
     };
     // Channel controls (J3D orders colour 0, alpha 0, colour 1, alpha 1).

@@ -5,6 +5,7 @@
 #pragma once
 
 #include "galaxy/render/draw_matrices.h"
+#include "galaxy/render/gx_bitfields.h"
 
 #include <cstdint>
 
@@ -115,7 +116,11 @@ inline constexpr std::uint8_t kNativeKept = 0xFFu;
 inline constexpr std::uint64_t kNativeKeptImage = ~std::uint64_t{0};
 
 // GXSetTexCoordGen's texgen word for `type` and `source` (J3DGDSetTexCoordGen's packing).
-[[nodiscard]] std::uint32_t tex_gen_word(std::uint8_t type, std::uint8_t source);
+[[nodiscard]] XfTexGen tex_gen(std::uint8_t type, std::uint8_t source);
+// A texgen's post-transform: GX_PTTEXMTX0 + 3n / GX_PTIDENTITY as its matrix row, and its normalize flag.
+[[nodiscard]] inline XfPostTexGen post_tex_gen(std::uint32_t post_matrix, std::uint32_t normalize) {
+    return XfPostTexGen{static_cast<std::uint8_t>((post_matrix - 64u) & 63u), (normalize & 1u) != 0u};
+}
 
 // Loads the material's texture matrices and lights as J3D's material display list did (the whole material, or the
 // parts its change flags name); the rest of the material is typed drawing state (draw_state.h).
