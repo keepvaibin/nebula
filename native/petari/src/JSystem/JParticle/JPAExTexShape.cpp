@@ -1,21 +1,18 @@
 #include "JSystem/JParticle/JPAExTexShape.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
 
+// The indirect map (texture map 2) and the second texture (map 3). Their coordinates are the particle's own texture
+// coordinates, which the native particle shader reads directly (runtime/src/render/materials/particle.hlsl: uv[1]).
 void JPALoadExTex(JPAEmitterWorkData* work) {
     JPAExTexShape* ets = work->mpRes->getEts();
 
-    GXTexCoordID secTexCoordID = GX_TEXCOORD1;
     if (ets->isUseIndirect()) {
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
         u8 texIdx = ets->getIndTexIdx();
         work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GX_TEXMAP2);
-        secTexCoordID = GX_TEXCOORD2;
     }
 
     if (ets->isUseSecTex()) {
-        J3DNativeState::setTexCoordGen2(secTexCoordID, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
         u8 texIdx = ets->getSecTexIdx();
         work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GX_TEXMAP3);
     }

@@ -38,6 +38,9 @@ namespace NativeShader {
         rMaterial.cull = cull;
         rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
         rMaterial.alpha_write = 2;
+        for (u32 i = 0; i < 8; i++) {
+            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GX_PTIDENTITY), GX's texgens' default
+        }
     }
 
     // Texture `slot` (the shader's t<slot>): the texture's image, size, format, wrap and filtering.
@@ -131,6 +134,7 @@ namespace NativeShader {
         J3DNativeMaterial::watch(&rMaterial);
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, &rMaterial);
+        J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 
     inline void send(const NebulaNativeMaterial& rMaterial) {

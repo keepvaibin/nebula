@@ -80,7 +80,9 @@ def compare(nat, gx):
     mask = 0
     for line in nat['lines'].get('map_mask', []):
         mask = int(line.split()[1], 16)
-    for i in range(8):
+    # A hand-written shader (ids below 256) keeps its own constants after the register file (84 on): no coordinate
+    # scales to compare there; the register file (sendWithRegisters) maps as above.
+    for i in range(8 if nat['shader'] >= 256 else 0):
         if not mask & (1 << i):
             continue
         field('tex_scale[%d].xy / tex_dims.zw' % i, vec(nat, 'material', 84 + 4 * i, 2), vec(gx, 'ps', 110 + 4 * i, 2),
