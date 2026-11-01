@@ -593,7 +593,7 @@ public:
 
     void draw(const DrawCall& call);
 
-    // Curved surfaces sorted on the GPU before the command list runs (ShaderGenerator::curve_sort_source): of a split
+    // Curved surfaces sorted on the GPU before the command list runs (curve_sort_source): of a split
     // draw's triangles after its flat ones, those the hull shader would leave whole this frame draw after the flat
     // ones as a triangle list. The vertices are resident, the indices (those triangles') in the index ring, the
     // constants and palette the draw's. Returns the draw's DrawCall::curve_sort, -1 where it cannot be sorted (no
