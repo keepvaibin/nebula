@@ -302,7 +302,11 @@ namespace {
     }
 
     // Each material the game sends (NativeShader::send, this file's sends; NULL a drawing-state one).
+    // The shader of the material watchMaterial last saw (J3DNativeMaterial::currentShader).
+    u32 sWatchedShader = 0;
+
     void watchMaterial(const NebulaNativeMaterial* pNative) {
+        sWatchedShader = pNative != NULL ? pNative->shader : 0;
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
                                                                                 : CURRENT_SITE;
@@ -880,6 +884,10 @@ namespace J3DNativeMaterial {
 
     void watch(const NebulaNativeMaterial* pNative) {
         watchMaterial(pNative);
+    }
+
+    u32 currentShader() {
+        return sCurrentKind != CURRENT_NONE ? sWatchedShader : 0;
     }
 
     bool override(u32 mode, f32 a0, f32 a1, f32 ref) {

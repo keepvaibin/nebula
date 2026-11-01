@@ -1,4 +1,5 @@
 #include "JSystem/JParticle/JPABaseShape.hpp"
+#include "JSystem/JParticle/JPANativeColor.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
@@ -33,7 +34,7 @@ void JPARegistPrm(JPAEmitterWorkData* work) {
     prm.g = COLOR_MULTI(prm.g, emtr->mGlobalPrmClr.g);
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
     prm.a = COLOR_MULTI(prm.a, emtr->mGlobalPrmClr.a);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
+    JPANativeColor::prm(prm);
 }
 
 void JPARegistEnv(JPAEmitterWorkData* work) {
@@ -42,7 +43,7 @@ void JPARegistEnv(JPAEmitterWorkData* work) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::env(env);
 }
 
 void JPARegistPrmEnv(JPAEmitterWorkData* work) {
@@ -56,8 +57,7 @@ void JPARegistPrmEnv(JPAEmitterWorkData* work) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::prmEnv(prm, env);
 }
 
 void JPARegistAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -68,7 +68,7 @@ void JPARegistAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
     prm.a = COLOR_MULTI(prm.a, emtr->mGlobalPrmClr.a);
     prm.a = COLOR_MULTI(prm.a, ptcl->mPrmColorAlphaAnm);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
+    JPANativeColor::prm(prm);
 }
 
 void JPARegistPrmAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -79,7 +79,7 @@ void JPARegistPrmAlpha(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     prm.b = COLOR_MULTI(prm.b, emtr->mGlobalPrmClr.b);
     prm.a = COLOR_MULTI(prm.a, emtr->mGlobalPrmClr.a);
     prm.a = COLOR_MULTI(prm.a, ptcl->mPrmColorAlphaAnm);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
+    JPANativeColor::prm(prm);
 }
 
 void JPARegistPrmAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -94,8 +94,7 @@ void JPARegistPrmAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::prmEnv(prm, env);
 }
 
 void JPARegistAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -110,8 +109,7 @@ void JPARegistAlphaEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG0, prm);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::prmEnv(prm, env);
 }
 
 void JPARegistEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
@@ -120,7 +118,7 @@ void JPARegistEnv(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     env.r = COLOR_MULTI(env.r, emtr->mGlobalEnvClr.r);
     env.g = COLOR_MULTI(env.g, emtr->mGlobalEnvClr.g);
     env.b = COLOR_MULTI(env.b, emtr->mGlobalEnvClr.b);
-    J3DNativeState::setTevColor(GX_TEVREG1, env);
+    JPANativeColor::env(env);
 }
 
 void JPACalcClrIdxNormal(JPAEmitterWorkData* work) {

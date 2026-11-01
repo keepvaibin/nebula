@@ -2,6 +2,9 @@
 #define JPA_FIELD_BLOCK_DEFER_INLINE
 #include "JSystem/JParticle/JPAResource.hpp"
 #include "Game/Util/NativeShader.hpp"
+#include "JSystem/JParticle/JPANativeColor.hpp"
+#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #ifdef TARGET_PC
 #include "Game/Util/MotionSignal.hpp"
@@ -917,8 +920,49 @@ namespace {
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
     // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
+    // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
+    // env carry over from one emitter to the next, as GX's colour registers did.
+    NebulaNativeMaterial sParticle;
+    bool sParticleSent = false;
+    GXColor sPrm = {0, 0, 0, 0};
+    GXColor sEnv = {0, 0, 0, 0};
+    // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
+    f32 sIndirect[2][4];
+
+    void putColor(f32* pOut, const GXColor& rColor) {
+        pOut[0] = rColor.r / 255.0f;
+        pOut[1] = rColor.g / 255.0f;
+        pOut[2] = rColor.b / 255.0f;
+        pOut[3] = rColor.a / 255.0f;
+    }
+
+    // The material with the game's register file in its first constants (fog), then its own values over it: prm and
+    // env (register slots 1 and 2), the indirect matrix (rows 0-1), the alpha test's references.
+    void sendParticle(bool constantsOnly) {
+        NebulaNativeMaterial& rMaterial = sParticle;
+        memcpy(rMaterial.constants, J3DNativeMaterial::registers(), 84 * sizeof(f32));
+        putColor(rMaterial.constants + 4, sPrm);
+        putColor(rMaterial.constants + 8, sEnv);
+        for (u32 row = 0; row < 2; row++) {
+            for (u32 c = 0; c < 4; c++) {
+                rMaterial.constants[48 + row * 4 + c] = sIndirect[row][c];
+            }
+        }
+        rMaterial.constants[80] = rMaterial.constants[88 + 4] / 255.0f;
+        rMaterial.constants[81] = rMaterial.constants[88 + 5] / 255.0f;
+        rMaterial.constants_only = constantsOnly ? 3 : 2;
+        J3DNativeShape::flushState();
+        J3DNativeMaterial::watch(&rMaterial);
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, &rMaterial);
+        J3DNativeMaterial::dumpTag(rMaterial.shader);
+    }
+
+    // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
+    // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
+    // shape and the manager set; its colours from JPANativeColor.
     void sendParticleMaterial(const JPABaseShape* pShape, u32 flags) {
-        NebulaNativeMaterial material;
+        NebulaNativeMaterial& material = sParticle;
         NativeShader::init(material, NEBULA_SHADER_PARTICLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
         material.blend_op = NEBULA_NATIVE_KEPT;
@@ -931,12 +975,57 @@ namespace {
         material.constants[88] = static_cast< f32 >(pShape->getAlphaCmp0());
         material.constants[89] = static_cast< f32 >(pShape->getAlphaCmp1());
         material.constants[90] = static_cast< f32 >(pShape->getAlphaOp());
+        // The references (whole values; sendParticle scales them into the alpha test's slots).
+        material.constants[92] = static_cast< f32 >(pShape->getAlphaRef0());
+        material.constants[93] = static_cast< f32 >(pShape->getAlphaRef1());
         for (u32 map = 0; map < 4; map++) {
             material.textures[map].image = NEBULA_NATIVE_KEPT_IMAGE;
         }
-        NativeShader::sendWithRegisters(material);
+        sParticleSent = true;
+        sendParticle(false);
+    }
+
+    void setIndirect(const f32 (*pMtx)[3], s8 scaleExp) {
+        f32 scale = 1.0f;
+        for (s32 e = scaleExp; e > 0; e--) {
+            scale *= 2.0f;
+        }
+        for (s32 e = scaleExp; e < 0; e++) {
+            scale *= 0.5f;
+        }
+        for (u32 row = 0; row < 2; row++) {
+            for (u32 c = 0; c < 3; c++) {
+                sIndirect[row][c] = pMtx[row][c] * scale;
+            }
+            sIndirect[row][3] = 0.0f;
+        }
+    }
+
+    // A colour change: the material in use takes it at once (a constants-only resend).
+    void colorsChanged() {
+        if (sParticleSent && J3DNativeMaterial::currentShader() == NEBULA_SHADER_PARTICLE) {
+            sendParticle(true);
+        }
     }
 }  // namespace
+
+namespace JPANativeColor {
+    void prm(const GXColor& rColor) {
+        sPrm = rColor;
+        colorsChanged();
+    }
+
+    void env(const GXColor& rColor) {
+        sEnv = rColor;
+        colorsChanged();
+    }
+
+    void prmEnv(const GXColor& rPrm, const GXColor& rEnv) {
+        sPrm = rPrm;
+        sEnv = rEnv;
+        colorsChanged();
+    }
+}  // namespace JPANativeColor
 
 void JPAResource::setPTev() {
     u32 flags = 0;
@@ -955,7 +1044,7 @@ void JPAResource::setPTev() {
         if (mpExTexShape->isUseIndirect()) {
             f32 indTexMtx[2][3];
             mpExTexShape->getIndTexMtx(indTexMtx);
-            J3DNativeState::setIndTexMtx(GX_ITM_0, indTexMtx, mpExTexShape->getExpScale());
+            setIndirect(indTexMtx, mpExTexShape->getExpScale());
             flags |= 1;
         }
         if (mpExTexShape->isUseSecTex()) {
