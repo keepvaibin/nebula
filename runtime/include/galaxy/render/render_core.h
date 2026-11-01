@@ -281,7 +281,6 @@ private:
         bool hidden = false;
         // Hidden but traced: a clear surface the engine traces (the table's `traced`), captured though not drawn.
         bool traced = false;
-        std::uint64_t debake_model = 0u;   // an undecided model whose vertex colours this batch samples
         // Its indices are a native shape's own, apart from the frame's index ring: nothing extends it.
         bool sealed = false;
     };
@@ -426,8 +425,6 @@ private:
     // Render thread -> simulation thread: emit draw-identity markers.
     std::atomic<bool> draw_identity_wanted_{false};
     std::atomic<unsigned> bloom_route_{0u};
-    // RenderConfig::rt_water this render chunk: water draws join the traced water (rt_water_draw).
-    bool rt_water_wanted_ = true;
     // Draw identity (on_host_marker): the key of the marker in force in the
     // open scene and the matrix-write count at it. A transform record's
     // identity is that key with the matrix writes since. Repeated markers of
@@ -511,30 +508,18 @@ private:
     TransformHistory screen_history_;
     TransformHistory mirror_history_;
     unsigned side_layer_ = 0u;                 // kScreenLayer or kMirrorLayer while one records
-    bool rt_state_eligible_ = false;
-    // The same, alpha-tested: traced as foliage cards where the material table names foliage.
-    bool rt_card_eligible_ = false;
-    // Additive blended triangles (glows) under a perspective projection.
-    bool rt_glow_eligible_ = false;
     // The glow exposure the PS constants carry: 0 none, 1 sprite, 2 model.
     std::uint8_t glow_kind_ = 0u;
     // Blended scene draws of the translucent phases under ray-traced lighting take its texture in
     // map 7 (output_flags bit 6); the texture binding key marks them in map 7's TEX_MODE0 word.
     bool lit_translucent_ = false;
     static constexpr std::uint32_t kLitTranslucentKey = 0x4C495431u;
-    bool rt_water_eligible_ = false;
-    bool rt_sprite_eligible_ = false;   // alpha-blended translucent triangles (light sprites, rt_sprite_light_draw)
     bool lit_late_ = false;             // a lit late opaque draw (output_flags bit 7: its light at most 1.15)
     // Ambient occlusion (RenderConfig::ambient_occlusion, without traced lighting), sampled at each frame start; the
     // scene's view is set (note_scene_ao_view) and the occlusion drawn (apply_scene_ao).
     bool ambient_occlusion_ = false;
     bool ao_view_set_ = false;
     bool ao_scene_applied_ = true;
-    // The loaded stage (note_rt_stage) and its fixed key (aim_rt_scene_lights): decided once per stage.
-    std::uint64_t rt_stage_hash_ = 0u;
-    std::uint64_t rt_fixed_key_stage_ = ~0ull;
-    std::uint32_t rt_fixed_key_scenes_ = 0u;
-    bool rt_fixed_key_on_ = false;
     // The view of a perspective scene draw for ambient occlusion: its projection with the upscaler's jitter, depth
     // range and viewport (the ray tracer's RtView).
     [[nodiscard]] RtView scene_depth_view(const ScaledGxViewport& viewport) const;
@@ -542,44 +527,6 @@ private:
     void note_scene_ao_view(const DrawCall& call);
     // The scene's occlusion, once, before its first translucent phase (or at its end).
     void apply_scene_ao();
-    std::uint64_t rt_object_ = 0u;   // the last NameObj marker's object
-    bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
-    bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
-    std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
-    std::unordered_map<std::uint64_t, std::uint32_t> debake_levels_;
-    // De-baking by model (apply_debake_model): a model's vertex colours (its CP colour arrays CLR0 / CLR1), sampled the
-    // first frame it draws, decide whether they hold baked light (de-baked from the next frame) or paint (kept).
-    struct DebakeModel {
-        std::uint64_t frame = 0u;   // the frame (frame_index_ + 1) it first drew in
-        bool decided = false;
-        bool baked = false;
-        std::uint8_t level = 0u;    // its brightest vertex's value (0-255): the colour it is de-baked to
-        std::uint32_t vertices = 0u;
-        std::unordered_set<std::uint32_t> colours;   // distinct RGB8, at most kDebakeModelColours
-        // The light baked into its colours as a function of the surface's facing (fit_debake_light): its sampled
-        // vertices with a normal (object space) and their colours, at most kDebakeModelSamples.
-        std::vector<std::array<float, 6>> samples;
-        std::array<float, 27> sh{};      // the fitted light, nine spherical harmonics a channel (r, g, b)
-        std::array<float, 3> peak{};     // the fitted light at the most lit sampled facing
-        float fit_r2 = 0.0f;             // the share of the colours' luminance variance the facing explains
-        bool fitted = false;
-    };
-    static constexpr std::size_t kDebakeModelSamples = 4096u;
-    static constexpr std::size_t kDebakeModelColours = 4096u;
-    std::unordered_map<std::uint64_t, DebakeModel> debake_models_;
-    std::uint32_t debake_models_stage_ = 0u;
-    std::uint64_t debake_sample_key_ = 0u;   // the current state's undecided model: its batches are sampled
-    std::uint8_t debake_model_level_ = 0u;   // the current state's baked model's level (0: the program's neutral)
-    // The current state's model's facing fit (VertexConstants::debake_sh, debake_peak): the shaders de-bake by it.
-    bool debake_fit_active_ = false;
-    float debake_fit_sh_[7][4]{};
-    float debake_fit_peak_[4]{};
-    std::vector<std::uint64_t> debake_model_order_;   // GALAXY_RT_DEBAKE_CYCLE: the baked models in decision order
-    // Per object name (its address) the class its name gives (rt_named_class), + 1.
-    std::unordered_map<std::uint64_t, std::uint8_t> rt_named_;
-    std::array<std::array<float, 3>, 2> rt_light_positions_{};
-    std::uint32_t rt_palette_lights_ = 0;
-    std::uint32_t rt_draw_lights_ = 0;
     // The open scene's candidate key lights: the world-fixed GX light 0 of its lit draws, by world
     // direction and colour, with the draws using each and the sum of their ambient registers (0-1)
     // over those taking it from the register (traced).
@@ -590,29 +537,6 @@ private:
         std::array<float, 3> ambient{};
         std::uint32_t ambient_draws = 0;
     };
-    std::array<RtWorldKey, 8> rt_world_keys_{};
-    std::uint32_t rt_world_key_count_ = 0;
-    // The stage's last world key (none: no draws), until a stage load.
-    RtWorldKey rt_world_held_{};
-    // The game's player light rig as its draws load it (XF words, RGB): ambient, lights 0 and 1; per scene
-    // (aim_rt_scene_lights). rt_player_rig_draw: the draw is lit by it.
-    std::array<std::uint32_t, 3> rt_player_rig_{};
-    bool rt_player_rig_known_ = false;
-    // A camera cut since the last scene's aim (and the most objects one reported); the game's sun
-    // count at the last cut, and whether one arrived since (the ray tracer holds it).
-    bool rt_scene_cut_ = false;
-    std::uint32_t rt_cut_objects_ = 0;
-    std::uint64_t rt_sun_cut_updates_ = 0;
-    bool rt_sun_held_ = false;
-    // GALAXY_TRACE_LIGHTS: snapshots with moved lights, snapshots added for them, TSC cycles of
-    // the actor-light work and its timed regions, and palette snapshots with the cycles of their
-    // allocation and copy.
-    std::uint64_t rt_light_uploads_ = 0;
-    std::uint64_t rt_light_forced_ = 0;
-    std::uint64_t rt_light_cycles_ = 0;
-    std::uint64_t rt_light_regions_ = 0;
-    std::uint64_t rt_snapshot_count_ = 0;
-    std::uint64_t rt_snapshot_cycles_ = 0;
     bool scene_3d_recorded_ = false;           // this frame's 3D scene took records
     bool mirror_opened_scene_ = false;         // this frame's InterpScene began at its mirror pass
     // A run of frames that draw no 3D scene (the pause menu over its captured picture): each is recorded as a screen
