@@ -117,8 +117,6 @@ void BloomEffectSimple::draw() const {
     ImageEffectLocalUtil::setStage(ImageEffectLocalUtil::Stage_Modulate);
     ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, true, 0);
     J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
     ImageEffectLocalUtil::setupDrawTexture();
     texSpec.set(_24, 8, 0, GX_TF_RGB565);
     ImageEffectLocalUtil::blurTexture(texSpec._0, texSpec._4, texSpec._8, 8, 0.009f, 1.0f);
