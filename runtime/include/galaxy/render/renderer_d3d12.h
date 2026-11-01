@@ -586,11 +586,11 @@ public:
     // Captures the field into readback `slot` (0..2). Completion leaves it
     // there; async_peek_field_rgba names the mapped bytes (RGBA8, 640x456).
     [[nodiscard]] std::uint64_t submit_async_peek_field(
-        std::size_t channel, EfbPeekKind kind, std::size_t slot);
+        std::size_t channel, ReadbackKind kind, std::size_t slot);
     // The same capture recorded in the open frame where the stream is now
     // (a draw-sync token); fenced when the frame is submitted.
     [[nodiscard]] bool record_async_peek_field_in_frame(
-        std::size_t channel, EfbPeekKind kind, std::size_t slot);
+        std::size_t channel, ReadbackKind kind, std::size_t slot);
     [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
     [[nodiscard]] const std::uint8_t* async_peek_field_rgba(
         std::size_t channel, std::size_t slot) const noexcept;
@@ -606,7 +606,7 @@ public:
     [[nodiscard]] bool peek_efb(
         std::uint16_t x,
         std::uint16_t y,
-        EfbPeekKind kind,
+        ReadbackKind kind,
         std::uint32_t& value);
     bool debug_copy_efb_to_readback();
     void debug_log_readback();
@@ -1801,10 +1801,10 @@ private:
     std::array<AsyncPeekField, kAsyncPeekFieldChannels> async_peek_fields_{};
     // AsyncPeekField::fence of a field recorded in the open frame.
     static constexpr std::uint64_t kAsyncPeekInFrame = ~std::uint64_t{0};
-    bool ensure_async_peek_field_resources(AsyncPeekField& field, EfbPeekKind kind);
+    bool ensure_async_peek_field_resources(AsyncPeekField& field, ReadbackKind kind);
     void record_async_peek_field_commands(
-        ID3D12GraphicsCommandList* list, AsyncPeekField& field, EfbPeekKind kind, std::size_t slot);
-    bool read_efb_pixels(std::uint16_t x, std::uint16_t y, EfbPeekKind kind,
+        ID3D12GraphicsCommandList* list, AsyncPeekField& field, ReadbackKind kind, std::size_t slot);
+    bool read_efb_pixels(std::uint16_t x, std::uint16_t y, ReadbackKind kind,
         std::uint32_t& value, std::span<std::uint32_t> depth_pixels,
         bool defer_pointer_depth = false);
     static const std::uint8_t* pin_readback_mapping(ID3D12Resource* readback);

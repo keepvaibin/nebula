@@ -642,7 +642,7 @@ V main(uint id : SV_VertexID) {
             height,
             1u,
             galaxy::render::make_efb_peek_conversion_constants(
-                sampling, galaxy::render::EfbPeekKind::Color));
+                sampling, galaxy::render::ReadbackKind::Color));
         if (result.size() != 1u) {
             throw std::runtime_error("color peek returned a non-1x1 result");
         }
@@ -678,7 +678,7 @@ V main(uint id : SV_VertexID) {
             height,
             1u,
             galaxy::render::make_efb_peek_conversion_constants(
-                sampling, galaxy::render::EfbPeekKind::Depth));
+                sampling, galaxy::render::ReadbackKind::Depth));
         if (result.size() != 1u) {
             throw std::runtime_error("depth peek returned a non-1x1 result");
         }
@@ -697,7 +697,7 @@ V main(uint id : SV_VertexID) {
         }
         auto constants = galaxy::render::make_efb_peek_conversion_constants(
             galaxy::render::compute_efb_peek_sampling_geometry(0, 0, scale),
-            galaxy::render::EfbPeekKind::Color);
+            galaxy::render::ReadbackKind::Color);
         constants.values[15] = -1.0f;
         return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes, width, height, logical_size, constants);
     }
@@ -712,7 +712,7 @@ V main(uint id : SV_VertexID) {
         }
         auto constants=galaxy::render::make_efb_peek_conversion_constants(
             galaxy::render::compute_efb_peek_sampling_geometry(0,0,scale),
-            galaxy::render::EfbPeekKind::Depth);
+            galaxy::render::ReadbackKind::Depth);
         constants.values[15]=-1.0f;
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
     }
@@ -800,7 +800,7 @@ V main(uint id : SV_VertexID) {
         const auto sampling = compute_efb_peek_sampling_geometry(0u, 0u, 1u);
         const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
         bool passed = expect_pixel(run_bytes(kEfbColorFormat, color, 1u, 1u,
-            1u, make_efb_peek_conversion_constants(sampling, EfbPeekKind::Color),
+            1u, make_efb_peek_conversion_constants(sampling, ReadbackKind::Color),
             true).front(), {18u, 52u, 86u, 120u},
             "persistent color source survives frame descriptor overwrite/rewind");
         // Native R24/X8 views, not the R32 float fixture used by the broader
@@ -813,7 +813,7 @@ V main(uint id : SV_VertexID) {
             const std::uint8_t expected = depth == 0u ? 255u : 0u;
             passed &= expect_pixel(run_bytes(kEfbDepthResourceFormat, bytes,
                 1u, 1u, 1u,
-                make_efb_peek_conversion_constants(sampling, EfbPeekKind::Depth),
+                make_efb_peek_conversion_constants(sampling, ReadbackKind::Depth),
                 true).front(),
                 {expected, expected, expected, 255u},
                 "persistent native depth view survives frame descriptor overwrite/rewind");

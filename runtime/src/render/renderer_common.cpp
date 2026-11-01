@@ -400,8 +400,8 @@ EfbConversionShaderConstants make_efb_conversion_constants(
 
 EfbConversionShaderConstants make_efb_peek_conversion_constants(
     const EfbPeekSamplingGeometry& sampling,
-    EfbPeekKind kind) noexcept {
-    const bool is_depth = kind == EfbPeekKind::Depth;
+    ReadbackKind kind) noexcept {
+    const bool is_depth = kind == ReadbackKind::Depth;
     const float src_x = is_depth
         ? static_cast<float>(sampling.depth_texel_x)
         : sampling.src_x;

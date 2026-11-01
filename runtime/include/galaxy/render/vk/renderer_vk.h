@@ -298,16 +298,16 @@ public:
     [[nodiscard]] std::uint64_t frame_index() const noexcept { return frame_index_; }
 
     // GXPeek and the pointer's depth field (separate submissions; they read the EFB as last submitted).
-    [[nodiscard]] bool peek_efb(std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value);
+    [[nodiscard]] bool peek_efb(std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
     [[nodiscard]] bool capture_pointer_depth(std::span<std::uint32_t> pixels);
     [[nodiscard]] std::uint64_t submit_pointer_depth_capture();
     [[nodiscard]] bool record_pointer_depth_capture_in_frame();
     [[nodiscard]] std::uint64_t pointer_depth_capture_fence() const noexcept { return pointer_depth_fence_; }
     [[nodiscard]] bool try_complete_pointer_depth_capture_in_place(const std::uint8_t*& rgba);
     // Asynchronous EFB fields, one per channel (RenderCore binds a channel to a peek kind and draw-sync token).
-    [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    [[nodiscard]] std::uint64_t submit_async_peek_field(std::size_t channel, ReadbackKind kind, std::size_t slot);
     // The same capture recorded in the open frame where the stream is now (a draw-sync token); fenced at end_frame.
-    [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, EfbPeekKind kind, std::size_t slot);
+    [[nodiscard]] bool record_async_peek_field_in_frame(std::size_t channel, ReadbackKind kind, std::size_t slot);
     [[nodiscard]] bool try_complete_async_peek_field(std::size_t channel);
     [[nodiscard]] const std::uint8_t* async_peek_field_rgba(std::size_t channel, std::size_t slot) const noexcept;
     [[nodiscard]] bool async_peek_field_pending(std::size_t channel) const noexcept {
@@ -463,7 +463,7 @@ private:
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const CaptureRequest& params,
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
                                 float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
-    void record_peek_field(VkCommandBuffer commands, vk::Texture& target, EfbPeekKind kind,
+    void record_peek_field(VkCommandBuffer commands, vk::Texture& target, ReadbackKind kind,
                            const EfbConversionShaderConstants& constants, unsigned width, unsigned height,
                            VkBuffer readback);
     void transition_efb_for_sampling(VkCommandBuffer commands, bool depth);

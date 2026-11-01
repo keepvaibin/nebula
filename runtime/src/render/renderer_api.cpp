@@ -48,8 +48,8 @@ void attach_movie_frame(const char* name, std::int32_t frame, float frame_rate, 
 bool movie_replacement_showing() noexcept { return MovieReplacements::showing(); }
 void set_safety_scene_surround(float intensity) noexcept { backend().set_safety_scene_surround(intensity); }
 
-void attach_fifo_marker(FifoMarker marker) noexcept {
-    backend().attach_fifo_marker(marker);
+void attach_scene_marker(SceneMarker marker) noexcept {
+    backend().attach_scene_marker(marker);
 }
 
 void attach_scene_view(const float view[12], const float* up, const char* stage) noexcept {
@@ -74,13 +74,13 @@ void attach_shape_record(shapes::Record&& record) {
     backend().attach_shape_record(std::move(record));
 }
 
-bool peek_efb_published(
+bool readback_published(
     std::uint16_t x,
     std::uint16_t y,
-    EfbPeekKind kind,
+    ReadbackKind kind,
     std::uint16_t token,
     std::uint32_t& value) {
-    return backend().peek_efb_published(x, y, kind, token, value);
+    return backend().readback_published(x, y, kind, token, value);
 }
 
 std::uint32_t readback_serial(std::uint16_t token) noexcept {
@@ -95,12 +95,12 @@ bool quit_requested() noexcept {
     return backend().quit_requested();
 }
 
-std::uint64_t xfb_copy_count() noexcept {
-    return backend().xfb_copy_count();
+std::uint64_t display_copy_count() noexcept {
+    return backend().display_copy_count();
 }
 
-XfbPresentStats xfb_present_stats() noexcept {
-    return backend().xfb_present_stats();
+DisplayPresentStats display_present_stats() noexcept {
+    return backend().display_present_stats();
 }
 
 }  // namespace galaxy::render

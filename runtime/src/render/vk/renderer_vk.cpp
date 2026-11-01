@@ -1464,8 +1464,8 @@ void RendererVk::report_present_stats() {
     }
     static std::uint64_t first_serial_start = 0;
     static std::uint64_t copies_start = 0;
-    const XfbPresentStats progress = xfb_present_stats();
-    const std::uint64_t copies = xfb_copy_count();
+    const DisplayPresentStats progress = display_present_stats();
+    const std::uint64_t copies = display_copy_count();
     const double presents = static_cast<double>(stats_.presents);
     std::ostringstream message;
     message << "[present-stats] fps=" << presents / seconds << " new-serial-hz="

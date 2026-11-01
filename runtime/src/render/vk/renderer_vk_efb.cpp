@@ -1853,10 +1853,10 @@ void RendererVk::create_first_use_resources() {
 
 // The conversion draw into `target` (sampling the EFB as last submitted, in its own command buffer, or mid-frame)
 // and the copy of its texels to `readback`.
-void RendererVk::record_peek_field(VkCommandBuffer commands, vk::Texture& target, EfbPeekKind kind,
+void RendererVk::record_peek_field(VkCommandBuffer commands, vk::Texture& target, ReadbackKind kind,
                                   const EfbConversionShaderConstants& constants, unsigned width, unsigned height,
                                   VkBuffer readback) {
-    const bool depth = kind == EfbPeekKind::Depth;
+    const bool depth = kind == ReadbackKind::Depth;
     transition_efb_for_sampling(commands, depth);
     VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
     begin.renderPass = color_pass_;
@@ -1924,7 +1924,7 @@ std::uint64_t RendererVk::submit_one_time(VkCommandBuffer commands) {
     return vk::Context::get().submit(commands);
 }
 
-bool RendererVk::peek_efb(std::uint16_t x, std::uint16_t y, EfbPeekKind kind, std::uint32_t& value) {
+bool RendererVk::peek_efb(std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value) {
     value = 0u;
     if (pointer_depth_fence_ != 0u) {
         throw std::logic_error("GXPeek resources still own an unpublished pointer field");
@@ -1945,7 +1945,7 @@ bool RendererVk::peek_efb(std::uint16_t x, std::uint16_t y, EfbPeekKind kind, st
     const auto* rgba = reinterpret_cast<const std::uint8_t*>(peek_readback_.buffer->mapped);
     const std::uint32_t rgb = (static_cast<std::uint32_t>(rgba[0]) << 16u) |
         (static_cast<std::uint32_t>(rgba[1]) << 8u) | rgba[2];
-    value = kind == EfbPeekKind::Depth ? rgb : (static_cast<std::uint32_t>(rgba[3]) << 24u) | rgb;
+    value = kind == ReadbackKind::Depth ? rgb : (static_cast<std::uint32_t>(rgba[3]) << 24u) | rgb;
     return true;
 }
 
@@ -1983,9 +1983,9 @@ std::uint64_t RendererVk::submit_pointer_depth_capture() {
     begin.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     vk::check(vkBeginCommandBuffer(utility_commands_, &begin), "vkBeginCommandBuffer");
     EfbConversionShaderConstants constants =
-        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), EfbPeekKind::Depth);
+        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), ReadbackKind::Depth);
     constants.values[15] = -1.0f;  // the whole field
-    record_peek_field(utility_commands_, *field_target_, EfbPeekKind::Depth, constants, kFrameWidth, kFrameHeight,
+    record_peek_field(utility_commands_, *field_target_, ReadbackKind::Depth, constants, kFrameWidth, kFrameHeight,
                       readback.buffer->buffer);
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
@@ -2001,9 +2001,9 @@ bool RendererVk::record_pointer_depth_capture_in_frame() {
     pointer_depth_next_ = (pointer_depth_next_ + 1u) % kPointerDepthRing;
     end_efb_pass();
     EfbConversionShaderConstants constants =
-        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), EfbPeekKind::Depth);
+        make_efb_peek_conversion_constants(compute_efb_peek_sampling_geometry(0u, 0u, efb_scale_), ReadbackKind::Depth);
     constants.values[15] = -1.0f;
-    record_peek_field(commands_, *field_target_, EfbPeekKind::Depth, constants, kFrameWidth,
+    record_peek_field(commands_, *field_target_, ReadbackKind::Depth, constants, kFrameWidth,
                       kFrameHeight, readback.buffer->buffer);
     pointer_depth_rgba_ = reinterpret_cast<const std::uint8_t*>(readback.buffer->mapped);
     pointer_depth_readback_ = readback.buffer.get();
@@ -2032,7 +2032,7 @@ bool RendererVk::try_complete_pointer_depth_capture_in_place(const std::uint8_t*
     return true;
 }
 
-std::uint64_t RendererVk::submit_async_peek_field(std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+std::uint64_t RendererVk::submit_async_peek_field(std::size_t channel, ReadbackKind kind, std::size_t slot) {
     AsyncField& field = async_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return 0u;
@@ -2053,7 +2053,7 @@ std::uint64_t RendererVk::submit_async_peek_field(std::size_t channel, EfbPeekKi
     return field.fence;
 }
 
-bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, EfbPeekKind kind, std::size_t slot) {
+bool RendererVk::record_async_peek_field_in_frame(std::size_t channel, ReadbackKind kind, std::size_t slot) {
     AsyncField& field = async_fields_[channel];
     if (field.fence != 0u || slot >= kAsyncPeekFieldSlots) {
         return false;
