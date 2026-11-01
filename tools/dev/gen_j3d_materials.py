@@ -197,6 +197,7 @@ def emit_vertex(p, out):
         out.append(f"        if ({projected} && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);")
         out.append(f"        o.uv[{i}] = float4(res, {projected} ? 1.0 : 0.0);")
         out.append("    }")
+    out.append("    j3d_vertex_override(v, o);")
     out.append("}")
 
 

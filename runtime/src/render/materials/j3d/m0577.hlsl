@@ -62,6 +62,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[2] = float4(res, true ? 1.0 : 0.0);
     }
+    j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {

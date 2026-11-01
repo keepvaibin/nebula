@@ -8,6 +8,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = material.mat_color[0].rgb;
     o.color.a = material.mat_color[0].a * saturate((material.amb_color[0].a * 255.0 + j3d_light(2u, 3u, 2u, v.eye, nrm).a) / 255.0);
     o.color1 = v.color1;
+    j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {

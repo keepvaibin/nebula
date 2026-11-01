@@ -906,6 +906,30 @@ namespace J3DNativeMaterial {
         return true;
     }
 
+    bool overrideCoordinate(const void* pImage, u16 width, u16 height) {
+        if (sCurrentKind != CURRENT_J3D) {
+            return false;
+        }
+        // j3d_material.hlsli MaterialConstants::ovr_coord, after ovr; coordinate 0's scale as the new map's size.
+        sCurrent.constants[84 + 32 + 4] = 1.0f;
+        f32* pScale = sCurrent.constants + 84;
+        pScale[0] = pScale[2] = width;
+        pScale[1] = pScale[3] = height;
+        memset(&sCurrent.textures[0], 0, sizeof(sCurrent.textures[0]));
+        sCurrent.textures[0].image = keyOf(pImage);
+        sCurrent.textures[0].width = width;
+        sCurrent.textures[0].height = height;
+        sCurrent.textures[0].format = GX_TF_RGB565;
+        sCurrent.textures[0].repeat_s = 1;
+        sCurrent.textures[0].repeat_t = 1;
+        sCurrent.textures[0].mag_linear = 1;
+        sCurrent.textures[0].min_linear = 1;
+        sCurrent.constants_only = 0;
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->native_material(pHost->user, &sCurrent);
+        return true;
+    }
+
     void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
         const u32 shader = nativeShaderOf(rProgram);
         if (shader != 0 && nativeDrawn(shader)) {
@@ -954,6 +978,21 @@ namespace J3DNativeMaterial {
                     if (!seen && sLoggedCount < 64) {
                         sLogged[sLoggedCount++] = pair;
                         nebula_log("J3DNativeMaterial: native shader %u ended by GX state op %u\n",
+                                   static_cast< u32 >(sCurrent.shader), static_cast< u32 >(rOp.kind));
+                    }
+                } else if (sCurrentKind == CURRENT_J3D) {
+                    // A J3D material's draws handed to the GX path by a list that changes its program (J3DModelX's
+                    // lists, Mario's dynamic lists): each material and op once in the log (step 4 needs none).
+                    static u32 sJ3DLogged[256];
+                    static u32 sJ3DLoggedCount = 0;
+                    const u32 pair = sCurrent.shader << 8 | rOp.kind;
+                    bool seen = false;
+                    for (u32 k = 0; k < sJ3DLoggedCount; k++) {
+                        seen = seen || sJ3DLogged[k] == pair;
+                    }
+                    if (!seen && sJ3DLoggedCount < 256) {
+                        sJ3DLogged[sJ3DLoggedCount++] = pair;
+                        nebula_log("J3DNativeMaterial: J3D shader %u ended by GX state op %u\n",
                                    static_cast< u32 >(sCurrent.shader), static_cast< u32 >(rOp.kind));
                     }
                 }

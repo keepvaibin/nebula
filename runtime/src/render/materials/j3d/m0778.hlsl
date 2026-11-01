@@ -5,6 +5,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = material.mat_color[0].rgb;
     o.color.a = v.color0.a;
     o.color1 = v.color1;
+    j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
