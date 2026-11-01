@@ -21,12 +21,6 @@ public:
     void setFarClipLevel(s32 level) {
         mFarClipLevel = level;
     }
-#ifdef TARGET_PC
-    // Nebula, ray-traced shadows and light: whether ray-traced light wants this actor though the view would clip it (its
-    // shadow, or its light as a light source, reaches the view). isJudgedToClip keeps such an actor unclipped, so it
-    // moves, animates and is drawn as a visible one is.
-    bool isWantedForLight(s32 farClipLevel) const;
-#endif
 
     /* 0x00 */ LiveActor* mActor;
     /* 0x04 */ const TVec3f* _4;
@@ -35,10 +29,6 @@ public:
     /* 0x10 */ s16 mFarClipLevel;
     /* 0x12 */ s16 _12;
     /* 0x14 */ ViewGroupCtrlDataEntry* _14;
-#ifdef TARGET_PC
-    mutable bool mKeptForLight;  // the last clipping judgement kept it unclipped for ray-traced light
-    mutable f32 mLightReach;     // how far its traced light reaches (0: no light source; < 0: not asked yet)
-#endif
 };
 
 class ClippingActorInfoList {

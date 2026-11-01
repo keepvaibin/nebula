@@ -206,9 +206,6 @@ public:
     void initSearchLight();
     void initThrowing();
     void drawMarioModel() const;
-#ifdef TARGET_PC
-    void drawTracedBody(J3DModelX* pModel) const;
-#endif
 
     // Called by drawMarioModel
     void calcViewSearchLight();

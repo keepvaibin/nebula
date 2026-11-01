@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 67u
+#define NEBULA_GAME_API_VERSION 68u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -644,9 +644,6 @@ enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
-    NEBULA_OPTION_RT_SHADOW_CASTERS, /* 1 while the ray tracer lights the scene: actors are drawn to the camera's far
-                                        plane at full detail (LodCtrl), and out-of-view ones whose shadow or light
-                                        reaches the view stay unclipped (ClippingActorInfo::isWantedForLight) */
     NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
                                         before the first scene): LodCtrl's switch distances grow by it */
     NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
@@ -1100,12 +1097,6 @@ typedef struct NebulaHostServices {
     /* A game object's name (NameObj::mName, Shift-JIS as the game spells it) when it is made or renamed; `id` is the
        object's address, as the host markers name it. */
     void (*object_name)(void* user, uint64_t id, const char* name);
-    /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: how far (world units) the traced light of a model (its resource name,
-       MR::getModelResName) reaches from a ball of `radius` around it; 0 when the model is no light source. */
-    float (*light_reach)(void* user, const char* model, float radius);
-    /* While NEBULA_OPTION_RT_SHADOW_CASTERS is 1: the world direction towards the sun the ray tracer lights the scene
-       from (3 floats, unit length): 1, or 0 without one. */
-    int (*traced_sun)(void* user, float* direction);
     /* A THP movie (THPSimplePlayerWrapper): its disc path and NEBULA_MOVIE_OPENING when it opens, each frame it draws
        (the frame within the movie, its frame rate and the physical addresses of its I8 Y, U and V planes, `width` x
        `height` for Y and half each way for U and V), NEBULA_MOVIE_NONE when it closes. The host may show a replacement

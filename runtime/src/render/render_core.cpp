@@ -1495,13 +1495,6 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
         refresh_rt_material();
         return;
     }
-    // Draws the traced scene takes and the picture never shows (the player's body in the first-person view). The
-    // batch before them is drawn as it was.
-    if (kind == motion::kMarkerTraceOnly) {
-        flush_pending_draw_batch();
-        rt_trace_only_ = aux != 0u;
-        return;
-    }
     if (kind >= motion::kMarkerCategory) {
         // A draw list or phase begins: no emitter's particles until the next emitter.
         if (rt_effect_material_ != 0u) {
@@ -1963,7 +1956,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             sky_up_dirty_ = true;
         }
         rt_mirror_pass_ = false;
-        rt_trace_only_ = false;
         renderer_.set_scene_view(view);
         rt_phase_ = 0xFFu;
         rt_view_set_ = false;
@@ -4234,8 +4226,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                                    : get_render_config().bloom_mode == kBloomEnhanced ? 2u
                                                                                        : 1u;
             bloom_route_.store(route, std::memory_order_relaxed);
-            // No traced light: the game draws its stage as without the ray tracer (NEBULA_OPTION_RT_SHADOW_CASTERS).
-            rt_shadow_casters_wanted_.store(false, std::memory_order_relaxed);
             interp_scenes_in_chunk_ = 0u;
         }
         // begin_frame() applies a pending internal-resolution change, so copies take the scale the EFB

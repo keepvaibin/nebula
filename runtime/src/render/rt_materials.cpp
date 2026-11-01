@@ -673,24 +673,4 @@ const RtMaterial* rt_material(std::uint16_t index) noexcept {
     return table().material(index);
 }
 
-float rt_light_reach(const char* model, float radius) noexcept {
-    if (model == nullptr || !(radius > 0.0f)) {
-        return 0.0f;
-    }
-    // The model's resource name ("Tico.bdl", maybe with a folder): its name alone.
-    std::string_view name(model);
-    if (const std::size_t slash = name.find_last_of("/\\"); slash != std::string_view::npos) {
-        name.remove_prefix(slash + 1u);
-    }
-    name = name.substr(0u, name.find('.'));
-    const float light = table().model_light(name);
-    if (!(light > 0.0f)) {
-        return 0.0f;
-    }
-    // A ball of radius r and radiance L lights a surface facing it at distance d with L (r / d)^2 of a white
-    // surface's full light. Below 1/4096 of it (under one level of 255 once sRGB-encoded) it shows nothing: it reaches
-    // r sqrt(4096 L).
-    return std::min(radius * 64.0f * std::sqrt(light), 1.0e5f);
-}
-
 }  // namespace galaxy::render

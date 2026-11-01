@@ -145,9 +145,6 @@ public:
         }
         producer_scene_view_valid_ = false;
     }
-    [[nodiscard]] bool rt_shadow_casters_wanted() const noexcept {
-        return rt_shadow_casters_wanted_.load(std::memory_order_relaxed);
-    }
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
     }
@@ -435,7 +432,6 @@ private:
     std::atomic<unsigned> bloom_route_{0u};
     // RenderConfig::rt_water this render chunk: water draws join the traced water (rt_water_draw).
     bool rt_water_wanted_ = true;
-    std::atomic<bool> rt_shadow_casters_wanted_{false};
     // Draw identity (on_host_marker): the key of the marker in force in the
     // open scene and the matrix-write count at it. A transform record's
     // identity is that key with the matrix writes since. Repeated markers of
@@ -559,7 +555,6 @@ private:
     std::uint64_t rt_object_ = 0u;   // the last NameObj marker's object
     bool rt_object_fake_shadow_ = false;  // it is one of the game's shadow drawers (rt_fake_shadow_object)
     bool rt_mirror_pass_ = false;         // the game's mirror pass is drawing (motion::PassMarker)
-    bool rt_trace_only_ = false;          // trace-only draws (motion::kMarkerTraceOnly): traced, never drawn
     std::unordered_map<std::uint64_t, bool> rt_fake_shadow_cache_;
     std::uint16_t current_rt_material_ = 0u;  // the draw's material table entry (rt_materials.h)
     // Its parts: the bound textures' entry, the J3D material's (motion::kMarkerMaterial; 0: none) over it, and for an

@@ -45,14 +45,6 @@ namespace NebulaHost {
         nebula_host()->game_stage(nebula_host()->user, pName);
     }
 
-    inline f32 lightReach(const char* pModel, f32 radius) {
-        return nebula_host()->light_reach(nebula_host()->user, pModel, radius);
-    }
-
-    inline int tracedSun(f32* pDirection) {
-        return nebula_host()->traced_sun(nebula_host()->user, pDirection);
-    }
-
     inline void presence(const u16* pGalaxy, const u16* pStar, s32 powerStars) {
         nebula_host()->presence(nebula_host()->user, pGalaxy, pStar, powerStars);
     }
