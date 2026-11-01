@@ -53,6 +53,14 @@ static inline uint8_t nebula_texture_linear_layout(uint8_t format) {
                                                  : (uint8_t)NEBULA_TEXTURE_RGBA8;
 }
 
+/* The NEBULA_TEXTURE_LINEAR_* code of a layout of texels (RGBA8, L8, LA8): texture packs name a record the game made by
+   it and its texels. */
+static inline uint8_t nebula_texture_linear_code(uint8_t layout) {
+    return layout == NEBULA_TEXTURE_L8    ? (uint8_t)NEBULA_TEXTURE_LINEAR_L8
+           : layout == NEBULA_TEXTURE_LA8 ? (uint8_t)NEBULA_TEXTURE_LINEAR_LA8
+                                          : (uint8_t)NEBULA_TEXTURE_LINEAR_RGBA8;
+}
+
 typedef struct NebulaTexture {
     char magic[8];          /* NEBULA_TEXTURE_MAGIC, no terminator */
     uint32_t version;       /* NEBULA_TEXTURE_VERSION */
@@ -60,7 +68,8 @@ typedef struct NebulaTexture {
     uint16_t width, height; /* level 0, in texels */
     uint8_t levels;         /* 1 .. NEBULA_TEXTURE_MAX_LEVELS */
     uint8_t layout;         /* NEBULA_TEXTURE_RGBA8, _L8 or _LA8 */
-    uint8_t disc_format;    /* the GX format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE */
+    uint8_t disc_format;    /* the GX format the disc stored it in (texture-pack names), NEBULA_TEXTURE_MADE (the host
+                               names one by nebula_texture_linear_code and its level-0 texels) */
     uint8_t flags;          /* NEBULA_TEXTURE_FILTER_AT_UPLOAD */
     /* Texture packs name a texture by these (Dolphin's convention): xxh64 of the disc's level-0 bytes, and of the
        palette entries a colour-indexed one used (0 for the others). 0 and 0 for an image the game makes. */
