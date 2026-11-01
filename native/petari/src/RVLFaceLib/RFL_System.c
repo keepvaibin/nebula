@@ -7,11 +7,11 @@ const Mii_CoordinateData scCoordinate = {1, 2, 0, FALSE, FALSE, FALSE};
 static Mii_Manager sManager;
 static Mii_Manager* sRFLManager = NULL;
 
-// Starts the library with the parts archive `resBuffer` (the game's MiiFaceDatabase.arc copy, converted to host order
-// here once). The Miis are the host's (mii_record); nothing loads later, so the library is ready when this returns:
+// Starts the library with the parts archive `resBuffer` (the game's MiiFaceDatabase.arc copy, in host order as the
+// importer cooks it). The Miis are the host's (mii_record); nothing loads later, so the library is ready when this returns:
 // MiiErrcode_Success, or MiiErrcode_Fatal for an archive it cannot read.
 MiiErrcode MiiInitRes(void* resBuffer, u32 resSize, BOOL useDeluxTex) {
-    if (resBuffer == NULL || !Mii_CookResource(resBuffer, resSize)) {
+    if (resBuffer == NULL || !Mii_CheckResource(resBuffer, resSize)) {
         return MiiErrcode_Fatal;
     }
     if (sRFLManager != NULL) {

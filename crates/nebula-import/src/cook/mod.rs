@@ -104,7 +104,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         let textured = formats::font(&bytes, stats).with_context(|| format!("{name}: font"))?;
         Some(native_data::font_native(&textured).with_context(|| format!("{name}: font (native layout)"))?)
     } else if name.rsplit('/').next().is_some_and(|file| file.eq_ignore_ascii_case("RFL_Res.dat")) {
-        Some(formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?)
+        let textured = formats::rfl_res(&bytes, stats).with_context(|| format!("{name}: Mii parts"))?;
+        Some(native_data::rfl_res_host(&textured).with_context(|| format!("{name}: Mii parts (host order)"))?)
     } else if extension(name) == "bti" {
         // A texture file whose image is a record already keeps it; every one's header turns host order.
         let textured = if texture::is_record(bytes.get(0x20..).unwrap_or(&[])) {

@@ -24,68 +24,42 @@ void Mii_InitLoader(void) {
     loader->headerBuf2 = NULL;
 }
 
-// RFL_Res.dat (the game's MiiFaceDatabase.arc hands it over) in host byte order: its header and section tables, the
-// part textures' headers and the shapes' counts, translations and arrays. Texels, palettes and the shapes' primitive
-// bytes stay as they are. A scene can hand the same archive over again: one whose layout checks out in host byte
-// order is converted already. FALSE when it checks out in neither order.
-static BOOL sHostOrder;  // which order the reads below take
-
-static u16 be16_(const u8* p) {
-    return sHostOrder ? (u16)(p[1] << 8 | p[0]) : (u16)(p[0] << 8 | p[1]);
+// RFL_Res.dat as the importer cooks it (crates/nebula-import cook/native_data.rs rfl_res_host): host order. The check
+// below walks its layout once: FALSE for an archive that does not read as one (not cooked, or damaged).
+static u16 rd16_(const u8* p) {
+    u16 v;
+    memcpy(&v, p, sizeof(v));
+    return v;
 }
 
-static u32 be32_(const u8* p) {
-    return sHostOrder ? (u32)p[3] << 24 | (u32)p[2] << 16 | (u32)p[1] << 8 | p[0]
-                      : (u32)p[0] << 24 | (u32)p[1] << 16 | (u32)p[2] << 8 | p[3];
+static u32 rd32_(const u8* p) {
+    u32 v;
+    memcpy(&v, p, sizeof(v));
+    return v;
 }
 
-static void swap16_(u8* p) {
-    const u8 b = p[0];
-    p[0] = p[1];
-    p[1] = b;
-}
-
-static void swap32_(u8* p) {
-    u8 b = p[0];
-    p[0] = p[3];
-    p[3] = b;
-    b = p[1];
-    p[1] = p[2];
-    p[2] = b;
-}
-
-// One shape file from `p` to `end`: checks it (`apply` FALSE) or converts it.
-static BOOL cookShape_(u8* p, const u8* end, u32 arcIdx, BOOL apply) {
+// One shape file from `p` to `end`: its tag, a face line's nine values, then positions, normals and (but for the
+// forehead, hair, beard and nose) texture coordinates, each a count and its values.
+static BOOL checkShape_(const u8* p, const u8* end, u32 arcIdx) {
     const BOOL txc = arcIdx != Mii_ArcID_ForeHead && arcIdx != Mii_ArcID_Hair && arcIdx != Mii_ArcID_Beard &&
                      arcIdx != Mii_ArcID_Nose;
     int section;
 
-    p += 4;  // its tag
+    p += 4;
     if (arcIdx == Mii_ArcID_Faceline) {
-        int i;
         if (p + 36 > end) {
             return FALSE;
         }
-        for (i = 0; i < 9; i++) {
-            if (apply) {
-                swap32_(p);
-            }
-            p += 4;
-        }
+        p += 36;
     }
-    // positions (3 values), normals (3), texture coordinates (2): a count, then the values
     for (section = 0; section < (txc ? 3 : 2); section++) {
         const u32 per = section == 2 ? 2 : 3;
         u32 count;
-        u32 i;
 
         if (p + 2 > end) {
             return FALSE;
         }
-        count = be16_(p);
-        if (apply) {
-            swap16_(p);
-        }
+        count = rd16_(p);
         p += 2;
         if (section == 0 && count == 0) {
             return TRUE;
@@ -93,42 +67,36 @@ static BOOL cookShape_(u8* p, const u8* end, u32 arcIdx, BOOL apply) {
         if (p + count * per * 2 > end) {
             return FALSE;
         }
-        for (i = 0; i < count * per; i++) {
-            if (apply) {
-                swap16_(p);
-            }
-            p += 2;
-        }
+        p += count * per * 2;
     }
     return TRUE;
 }
 
-static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
+static BOOL checkArchive_(const u8* res, u32 size) {
     u32 arcIdx;
 
     if (size < (Mii_ArcID_Max + 1) * 4) {
         return FALSE;
     }
     for (arcIdx = 0; arcIdx < Mii_ArcID_Max; arcIdx++) {
-        const u32 section = be32_(res + (arcIdx + 1) * 4);
+        const u32 section = rd32_(res + (arcIdx + 1) * 4);
         u32 numFiles;
         u32 i;
-        u8* table;
-        u8* data;
+        const u8* table;
+        const u8* data;
 
         if (section + 4 > size) {
             return FALSE;
         }
-        numFiles = be16_(res + section);
+        numFiles = rd16_(res + section);
         table = res + section + 4;
         data = table + (numFiles + 1) * 4;
         if ((u32)(data - res) > size) {
             return FALSE;
         }
         for (i = 0; i < numFiles; i++) {
-            const u32 self = be32_(table + i * 4);
-            const u32 next = be32_(table + i * 4 + 4);
-            u8* file = data + self;
+            const u32 self = rd32_(table + i * 4);
+            const u32 next = rd32_(table + i * 4 + 4);
 
             if (next < self || (u32)(data - res) + next > size) {
                 return FALSE;
@@ -146,53 +114,23 @@ static BOOL cookArchive_(u8* res, u32 size, BOOL apply) {
             case Mii_ArcID_Mustache:
             case Mii_ArcID_NlineTex:
             case Mii_ArcID_CapTex:
-                // Mii_Texture: width, height, colour count, palette and image offsets, LOD bias
                 if (next - self < sizeof(Mii_Texture)) {
                     return FALSE;
                 }
-                if (apply) {
-                    swap16_(file + 0x2);
-                    swap16_(file + 0x4);
-                    swap16_(file + 0xA);
-                    swap32_(file + 0xC);
-                    swap16_(file + 0x1A);
-                    swap32_(file + 0x1C);
-                }
                 break;
             default:
-                if (!cookShape_(file, data + next, arcIdx, apply)) {
+                if (!checkShape_(data + self, data + next, arcIdx)) {
                     return FALSE;
                 }
                 break;
             }
         }
-        if (apply) {
-            for (i = 0; i <= numFiles; i++) {
-                swap32_(table + i * 4);
-            }
-            swap16_(res + section);
-            swap16_(res + section + 2);
-        }
-    }
-    if (apply) {
-        for (arcIdx = 0; arcIdx < Mii_ArcID_Max; arcIdx++) {
-            swap32_(res + (arcIdx + 1) * 4);
-        }
-        swap16_(res);
-        swap16_(res + 2);
     }
     return TRUE;
 }
 
-BOOL Mii_CookResource(void* res, u32 size) {
-    u8* bytes = (u8*)res;
-
-    sHostOrder = TRUE;
-    if (cookArchive_(bytes, size, FALSE)) {
-        return TRUE;  // converted already
-    }
-    sHostOrder = FALSE;
-    return cookArchive_(bytes, size, FALSE) && cookArchive_(bytes, size, TRUE);
+BOOL Mii_CheckResource(const void* res, u32 size) {
+    return checkArchive_((const u8*)res, size);
 }
 
 static void parseOnmemoryRes_(void) NO_INLINE {

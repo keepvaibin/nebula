@@ -27,7 +27,7 @@ typedef struct Mii_Loader {
 
 void Mii_InitLoader(void);
 // The archive MiiInitRes is given, in host byte order (converted once); FALSE when it is not one.
-BOOL Mii_CookResource(void* res, u32 size);
+BOOL Mii_CheckResource(const void* res, u32 size);
 void Mii_LoadResourceHeader(void);
 u32 Mii_GetTexSize(Mii_PartsTex part, u16 file);
 struct Mii_Texture* Mii_LoadTexture(Mii_PartsTex part, u16 file, void* dst);
