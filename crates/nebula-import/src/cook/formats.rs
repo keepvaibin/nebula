@@ -86,6 +86,83 @@ pub fn bti(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// RFL_Res.dat (the Mii library's parts, a member of MiiFaceDatabase.arc), big-endian: a u16 pair, the 18 parts' section
+/// offsets, then per section a u16 file count, a u16, the files' offsets (count + 1, from the end of the table) and the
+/// files. The handed-over texture parts' files are ResTIMG headers with their palette and image: each is cooked as a
+/// .bti is (a texture record after its header), padded to the section's largest so every file of a part fits the
+/// buffer the game sizes from the first. The shape parts are copied as they are (the game converts them to host order at load).
+pub fn rfl_res(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
+    const PARTS: usize = 18;
+    // Eye, Eyebrow, Mole, Mouth, Mustache (RFLiArcID): the parts the game hands over where they load. FaceTex, GlassTex,
+    // NlineTex and CapTex are copied into the model at their GX size (RFLiInitTexRes) and stay as they are for now.
+    const TEXTURES: [usize; 5] = [1, 2, 10, 11, 12];
+    let header = (PARTS + 1) * 4;
+    if bytes.len() < header {
+        bail!("a Mii parts file shorter than its header");
+    }
+    let mut sections = Vec::with_capacity(PARTS);
+    for part in 0..PARTS {
+        let at = be32(bytes, (part + 1) * 4)? as usize;
+        let count = be16(bytes, at)? as usize;
+        let table = at + 4;
+        let data = table + (count + 1) * 4;
+        let mut files = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = data + be32(bytes, table + i * 4)? as usize;
+            let end = data + be32(bytes, table + i * 4 + 4)? as usize;
+            if end < start || end > bytes.len() {
+                bail!("Mii part {part} file {i} out of the file");
+            }
+            files.push(bytes[start..end].to_vec());
+        }
+        if TEXTURES.contains(&part) {
+            let mut cooked = Vec::with_capacity(count);
+            for file in &files {
+                cooked.push(if file.is_empty() { Vec::new() } else { bti(file, stats)? });
+            }
+            let largest = cooked.iter().map(Vec::len).max().unwrap_or(0).next_multiple_of(32);
+            for file in &mut cooked {
+                if !file.is_empty() {
+                    file.resize(largest, 0);
+                }
+            }
+            files = cooked;
+        }
+        sections.push((be16(bytes, at + 2)?, files));
+    }
+    let mut out = bytes[..4].to_vec();
+    out.resize(header, 0);
+    for (part, (flags, files)) in sections.iter().enumerate() {
+        pad32(&mut out);
+        let at = out.len();
+        out[(part + 1) * 4..(part + 2) * 4].copy_from_slice(&(at as u32).to_be_bytes());
+        out.extend_from_slice(&(files.len() as u16).to_be_bytes());
+        out.extend_from_slice(&flags.to_be_bytes());
+        let table = out.len();
+        out.resize(table + (files.len() + 1) * 4, 0);
+        // The files start 32-aligned in the file (the data's offsets are from the end of the table).
+        let data = table + (files.len() + 1) * 4;
+        let mut offset = 0usize;
+        let mut body = Vec::new();
+        for (i, file) in files.iter().enumerate() {
+            if !file.is_empty() {
+                while (data + offset) % 32 != 0 {
+                    body.push(0);
+                    offset += 1;
+                }
+            }
+            out[table + i * 4..table + i * 4 + 4].copy_from_slice(&(offset as u32).to_be_bytes());
+            body.extend_from_slice(file);
+            offset += file.len();
+        }
+        let end = table + files.len() * 4;
+        out[end..end + 4].copy_from_slice(&(offset as u32).to_be_bytes());
+        out.extend_from_slice(&body);
+    }
+    pad32(&mut out);
+    Ok(out)
+}
+
 /// A ResTIMG array's records (images shared by several headers cooked once), appended to `out` from its length; the
 /// headers in `out` at `headers[i]` point at them.
 fn timg_array(source: &[u8], source_headers: &[usize], out: &mut Vec<u8>, headers: &[usize], stats: &mut Stats) -> Result<()> {
