@@ -78,7 +78,7 @@ public:
     /* 0x110 */ f32 mLightColorMin;
     /* 0x114 */ Color8* mColors;
     // A GX array, in the console's byte order.
-    /* 0x118 */ NEBULA_BE(f32)* mTexST;
+    /* 0x118 */ f32* mTexST;
     /* 0x11C */ JUTTexture* mTexture;
     /* 0x120 */ bool mUseAlpha;
     /* 0x121 */ u8 mAlpha;

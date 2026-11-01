@@ -147,7 +147,7 @@ void Flag::init(const JMapInfoIter& rIter) {
         mColors[idx].set(0xFF, 0xFF, 0xFF, 0xFF);
     }
 
-    mTexST = new NEBULA_BE(f32)[mNumPointsV * (mNumPointsU + 1) * 2];
+    mTexST = new f32[mNumPointsV * (mNumPointsU + 1) * 2];
     s32 idx = 0;
     for (s32 idxV = 0; idxV < mNumPointsV; idxV++) {
         f32 texV = static_cast< f32 >(idxV) / static_cast< f32 >(mNumPointsV - 1);
