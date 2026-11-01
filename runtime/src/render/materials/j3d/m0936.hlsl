@@ -11,7 +11,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(float4(0.0, 0.0, 0.0, 0.0), i.color, 0.25, i.pos);
+        return j3d_override(float4(0.0, 0.0, 0.0, 0.0), i.color, 64.0 / 255.0, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -20,7 +20,7 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float ka = 0.25;
+        const float ka = 64.0 / 255.0;
         const float3 rc = saturate((r0.rgb + lerp(j3d_in(r1.rgb), ras.rgb, ras.rgb)));
         const float ra = saturate((r0.a + lerp(ras.a, ka, ras.a)) * 2.0);
         prev.rgb = rc;
@@ -29,7 +29,7 @@ float4 material_color(NativeVaryings i) {
     {  // stage 1
         const float4 t = float4(0.0, 0.0, 0.0, 0.0);
         const float4 ras = i.color.rgba;
-        const float ka = 0.25;
+        const float ka = 64.0 / 255.0;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), ras.rgb, j3d_in(prev.aaa))) * 2.0);
         const float ra = saturate((r0.a + lerp(0.0, ka, ras.a)) * 2.0);
         prev.rgb = rc;

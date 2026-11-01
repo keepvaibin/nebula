@@ -55,7 +55,7 @@ float4 material_color(NativeVaryings i) {
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
         const float3 rc = saturate((prev.rgb + lerp(j3d_in(r0.rgb), j3d_in(prev.aaa), j3d_in(r2.rgb))));
-        const float ra = saturate((prev.a + lerp(t.a, 0.0, 0.0) - 0.5) * 2.0);
+        const float ra = saturate((prev.a + lerp(t.a, 0.0, 0.0) - 128.0 / 255.0) * 2.0);
         prev.rgb = rc;
         prev.a = ra;
     }

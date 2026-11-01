@@ -107,10 +107,14 @@ class Unsupported(Exception):
 
 
 CC = ["prev.rgb", "prev.aaa", "r0.rgb", "r0.aaa", "r1.rgb", "r1.aaa", "r2.rgb", "r2.aaa", "t.rgb", "t.aaa",
-      "ras.rgb", "ras.aaa", "float3(1.0, 1.0, 1.0)", "float3(0.5, 0.5, 0.5)", "k.rgb", "float3(0.0, 0.0, 0.0)"]
+      "ras.rgb", "ras.aaa", "float3(1.0, 1.0, 1.0)", "float3(128.0, 128.0, 128.0) / 255.0", "k.rgb",
+      "float3(0.0, 0.0, 0.0)"]
 CA = ["prev.a", "r0.a", "r1.a", "r2.a", "t.a", "ras.a", "ka", "0.0"]
-FRACTION = ["1.0", "0.875", "0.75", "0.625", "0.5", "0.375", "0.25", "0.125"]
-BIAS = ["", " + 0.5", " - 0.5"]
+# GX's fixed constant selections (1, 7/8 ... 1/8 as the combiner's 8-bit values 255, 223 ... 32), its HALF input (128)
+# and its bias (+-128), on the 0-1 scale.
+FRACTION = ["1.0", "223.0 / 255.0", "191.0 / 255.0", "159.0 / 255.0", "128.0 / 255.0", "96.0 / 255.0", "64.0 / 255.0",
+            "32.0 / 255.0"]
+BIAS = ["", " + 128.0 / 255.0", " - 128.0 / 255.0"]
 SCALE = ["", " * 2.0", " * 4.0", " * 0.5"]
 DEST = ["prev", "r0", "r1", "r2"]
 COMPARE = ["false", "a8 < r8", "a8 == r8", "a8 <= r8", "a8 > r8", "a8 != r8", "a8 >= r8", "true"]

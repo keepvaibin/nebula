@@ -41,7 +41,7 @@ float4 material_color(NativeVaryings i) {
         const float3 k = float4(material.kcolor[0].rgb, 0.0).rgb;
         const float ka = material.kcolor[0].a;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(k.rgb, j3d_in(r0.rgb), ras.rgb)));
-        const float ra = saturate((ras.a - lerp(j3d_in(r1.a), 0.0, ka) - 0.5) * 0.5);
+        const float ra = saturate((ras.a - lerp(j3d_in(r1.a), 0.0, ka) - 128.0 / 255.0) * 0.5);
         prev.rgb = rc;
         prev.a = ra;
     }

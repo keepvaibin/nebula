@@ -65,7 +65,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 0.375, i.pos);
+        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 96.0 / 255.0, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -76,8 +76,8 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = 0.375;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(r1.rgb), j3d_in(r0.rgb), ras.rgb) - 0.5) * 4.0);
+        const float ka = 96.0 / 255.0;
+        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(j3d_in(r1.rgb), j3d_in(r0.rgb), ras.rgb) - 128.0 / 255.0) * 4.0);
         const float ra = saturate((r0.a + lerp(t.a, ka, ras.a)) * 4.0);
         prev.rgb = rc;
         prev.a = ra;
@@ -100,7 +100,7 @@ float4 material_color(NativeVaryings i) {
         tevcoord = texel + off;
         const float4 t = tex[2].Sample(samp[2], tevcoord / material.tex_scale[2].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.5, 0.5, 0.5), t.rgb, t.rgb) - 0.5));
+        const float3 rc = saturate((prev.rgb + lerp(float3(128.0, 128.0, 128.0) / 255.0, t.rgb, t.rgb) - 128.0 / 255.0));
         const float ra = (0.0 + lerp(ras.a, 0.0, 0.0));
         prev.rgb = rc;
         prev.a = ra;
