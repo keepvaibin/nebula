@@ -52,14 +52,8 @@ void set_texture_mode(TextureMap& t, std::uint8_t wrap_s, std::uint8_t wrap_t, b
     t.bias_clamp = (bias_clamp & 1u) != 0u;
 }
 
-void set_texture_size(TextureMap& t, std::uint32_t width, std::uint32_t height, std::uint8_t format) {
-    t.image.width = static_cast<std::uint16_t>(((width - 1u) & 1023u) + 1u);
-    t.image.height = static_cast<std::uint16_t>(((height - 1u) & 1023u) + 1u);
-    t.image.format = static_cast<TexFormat>(format & 15u);
-}
-
 void set_texture_address(TextureMap& t, std::uint64_t image) {
-    t.image.address = image;
+    t.texture = image;
 }
 
 // GXAttnFn: SPEC 0, SPOT 1, NONE 2 (the channel's diffuse function only with an attenuation). The channel's
@@ -127,7 +121,7 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kMaterialColor: return bit(kMaterialColor);
     case state::kAmbientColor: return bit(kAmbientColor);
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
-    case state::kTexLookup: case state::kTexImageAttr: case state::kTexImage:
+    case state::kTexLookup: case state::kTexImage:
         return bit(kTexture);
     case state::kFog: return bit(kGen);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
@@ -317,9 +311,6 @@ void NativeDrawState::set_op(const state::Op& op) {
         set_texture_mode(texture[a[0] & 7u], a[1], a[2], a[4] == 1u, a[3], a[6] != 0u, op.f[2], a[7], a[5], op.f[0],
                          op.f[1]);
         break;
-    case state::kTexImageAttr:
-        set_texture_size(texture[a[0] & 7u], op.size[0], op.size[1], a[1]);
-        break;
     case state::kTexImage:
         set_texture_address(texture[a[0] & 7u], op.image);
         break;
@@ -359,7 +350,6 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
             }
             TextureMap& out = texture[map];
             set_texture_address(out, t.image);
-            set_texture_size(out, t.width, t.height, t.format);
             set_texture_mode(out, t.wrap_s, t.wrap_t, t.mag_filter == 1u, t.min_filter, t.edge_lod != 0u, t.lod_bias,
                              t.anisotropy, t.bias_clamp, t.min_lod, t.max_lod);
         }

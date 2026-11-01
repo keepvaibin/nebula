@@ -43,12 +43,9 @@ namespace NativeShader {
         }
     }
 
-    // Texture `slot` (the shader's t<slot>): the texture's image, size, format, wrap and filtering.
+    // Texture `slot` (the shader's t<slot>): the texture (its record has size and format), wrap and filtering.
     inline void setTexture(NebulaNativeMaterial& rMaterial, u32 slot, const JUTTexture* pTexture) {
         rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pTexture->mImage);
-        rMaterial.textures[slot].width = static_cast< u16 >(pTexture->getWidth());
-        rMaterial.textures[slot].height = static_cast< u16 >(pTexture->getHeight());
-        rMaterial.textures[slot].format = static_cast< u8 >(pTexture->getFormat() & 0x0F);
         rMaterial.textures[slot].repeat_s = pTexture->mWrapS;
         rMaterial.textures[slot].repeat_t = pTexture->mWrapT;
         // The texture's filters as it loads them (its resource's, GXTexFilter: near 0, linear 1, then by mip level
@@ -62,14 +59,6 @@ namespace NativeShader {
         rMaterial.textures[slot].lod_bias = pTexture->mLodBias / 100.0f;
         rMaterial.textures[slot].min_lod = static_cast< s16 >(pTexture->mMinLod) / 8.0f;
         rMaterial.textures[slot].max_lod = static_cast< s16 >(pTexture->mMaxLod) / 8.0f;
-        // A colour-indexed texture's palette (the texture's own, else the one in its resource).
-        const JUTPalette* pPalette = pTexture->mPalette != NULL ? pTexture->mPalette : pTexture->mEmbPalette;
-        const u32 format = pTexture->getFormat() & 0x0F;
-        if (pPalette != NULL && (format == GX_TF_C4 || format == GX_TF_C8 || format == GX_TF_C14X2)) {
-            rMaterial.textures[slot].palette = reinterpret_cast< uintptr_t >(pPalette->mColorTable);
-            rMaterial.textures[slot].palette_entries = pPalette->mLutNum;
-            rMaterial.textures[slot].palette_format = pPalette->mFormat;
-        }
     }
 
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
@@ -87,9 +76,6 @@ namespace NativeShader {
         J3DNativeTexture::getLODAll(pObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
                                     &maxAniso);
         rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pImage);
-        rMaterial.textures[slot].width = width;
-        rMaterial.textures[slot].height = height;
-        rMaterial.textures[slot].format = static_cast< u8 >(format & 0x0F);
         rMaterial.textures[slot].repeat_s = static_cast< u8 >(wrapS);
         rMaterial.textures[slot].repeat_t = static_cast< u8 >(wrapT);
         rMaterial.textures[slot].mag_linear = magFilter != GX_NEAR ? 1 : 0;

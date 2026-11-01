@@ -59,7 +59,6 @@ public:
     void setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWrapMode wrapT, GXTexFilter minFilter,
                           GXTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GXBool biasClamp,
                           GXBool edgeLod, GXAnisotropy maxAniso);
-    void setTexImgAttr(GXTexMapID map, u16 width, u16 height, GXTexFmt format);
     void setTexImgPtr(GXTexMapID map, const void* pImage);
     // A colour-indexed texture's palette: its format and place (a GX TLUT name).
     void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color);

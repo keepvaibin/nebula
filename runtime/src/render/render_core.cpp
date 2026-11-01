@@ -4783,7 +4783,8 @@ RenderCore::TextureBindingKey RenderCore::capture_texture_binding_key(
     return key;
 }
 
-RenderCore::TextureHandleKey RenderCore::texture_handle_key(const TexImage& image, const TexMode& mode) const {
+RenderCore::TextureHandleKey RenderCore::texture_handle_key(std::uint64_t texture, const TexMode& mode) const {
+    const TexImage image = texture_cache_.image_of(texture);
     unsigned levels = 1u;
     bool generated_mips = false;
     const unsigned mip_mode = static_cast<unsigned>(mode.min_filter) & 0x3u;
@@ -5495,11 +5496,11 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 table_key.map_mask = texture_map_mask;
                 for (unsigned m = 0; m < kMaxTextureMaps; ++m) {
                     if ((texture_map_mask & (1u << m)) != 0u) {
-                        const TexImage img = draw_state_.texture[m].image;
+                        const std::uint64_t texture = draw_state_.texture[m].texture;
                         const TexMode mode = draw_state_.texture[m].mode;
-                        const TextureHandleKey handle_key = texture_handle_key(img, mode);
-                        if (renderer_.target_picture(img.address, img.width, img.height, texture_handles[m])) {
-                            // A target pass's picture (E-07), in whatever format the draw names it.
+                        const TextureHandleKey handle_key = texture_handle_key(texture, mode);
+                        if (renderer_.target_picture(texture, texture_handles[m])) {
+                            // A target pass's picture (E-07) under its key.
                         } else if (const auto handle_it =
                                 frame_texture_handle_cache_.find(handle_key);
                             handle_it != frame_texture_handle_cache_.end()) {
@@ -5513,7 +5514,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                                 const auto get_start = time_detail
                                     ? std::chrono::steady_clock::now()
                                     : std::chrono::steady_clock::time_point{};
-                                texture_handles[m] = texture_cache_.get(img, mode);
+                                texture_handles[m] = texture_cache_.get(texture, mode);
                                 if (time_detail) {
                                     texture_get_us += elapsed_us(
                                         get_start,
@@ -5531,10 +5532,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                         binding_tables.dependencies[
                             binding_tables.dependency_count++] =
                             TextureBindingDependency{
-                                img.address,
-                                img.width,
-                                img.height,
-                                static_cast<std::uint8_t>(img.format),
+                                texture,
+                                texture_handles[m].width,
+                                texture_handles[m].height,
+                                0u,
                                 texture_handles[m].source_bytes,
                             };
                     }
@@ -5605,13 +5606,10 @@ gpu::Pipeline* RenderCore::flush_draw_state(
                 }
                 const TextureHandle& h = current_texture_handles_[m];
                 std::fprintf(stderr,
-                             "[native-material] shader=%u map=%u image=%llx asked %ux%u fmt %u -> resource=%d %ux%u "
-                             "efb=%d\n",
+                             "[native-material] shader=%u map=%u image=%llx -> resource=%d %ux%u efb=%d\n",
                              native_material_->shader, m,
                              static_cast<unsigned long long>(native_material_->textures[m].image),
-                             static_cast<unsigned>(native_material_->textures[m].width),
-                             static_cast<unsigned>(native_material_->textures[m].height),
-                             static_cast<unsigned>(native_material_->textures[m].format), h.resource != nullptr ? 1 : 0,
+                             h.resource != nullptr ? 1 : 0,
                              static_cast<unsigned>(h.width), static_cast<unsigned>(h.height),
                              h.from_efb_copy ? 1 : 0);
             }
@@ -6072,10 +6070,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         }
         // The map as the native material names it: its image, size and format, and its sampling.
         TextureMap& out = draw_state_.texture[map];
-        out.image.address = t.image;
-        out.image.width = t.width;
-        out.image.height = t.height;
-        out.image.format = static_cast<TexFormat>(t.format & 15u);
+        out.texture = t.image;
         out.mode.wrap_s = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_s, 2u));
         out.mode.wrap_t = static_cast<TexWrap>(std::min<std::uint8_t>(t.repeat_t, 2u));
         out.mode.mag_filter = t.mag_linear != 0u ? TexMagFilter::Linear : TexMagFilter::Near;

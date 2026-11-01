@@ -104,7 +104,10 @@ public:
     // The GPU texture for an image, uploaded on first use from the texture record the game handed over, or decoded
     // from the image's bytes (register_image; one never handed over decodes from zeros). Colour-indexed images come
     // as records with their palettes applied: `palette_address` and `palette_format` are not read.
-    [[nodiscard]] TextureHandle get(const TexImage& image, const TexMode& mode);
+    // The texture's image as the renderer sizes it: its record's size, levels' format (the disc's, or the linear
+    // layout's) and address; 1x1 without a record.
+    [[nodiscard]] TexImage image_of(std::uint64_t texture) const;
+    [[nodiscard]] TextureHandle get(std::uint64_t texture, const TexMode& mode);
     // Render thread only: marks a cached handle used (LRU) without reading game memory. Retired and EFB-alias
     // handles are ignored.
     void touch_cached_handle(const TextureHandle& handle);

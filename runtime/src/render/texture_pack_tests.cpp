@@ -566,13 +566,13 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
         if (cache.texture_pack_stats().names == 0u) std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
     expect(cache.texture_pack_stats().names == 1u, "cache publishes the pack index");
-    const TextureHandle original = cache.get(image, mode);
+    const TextureHandle original = cache.get(image.address, mode);
     expect(original.resource != nullptr && original.resource->GetDesc().Width == 32u && original.lod_shift_x16 == 0u,
            "the original shows while its replacement loads");
     TextureHandle replaced{};
     for (int i = 0; i < 400; ++i) {
         next_frame();
-        replaced = cache.get(image, mode);
+        replaced = cache.get(image.address, mode);
         if (replaced.resource != nullptr && replaced.resource->GetDesc().Width == 96u) break;
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
@@ -581,7 +581,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
            "the replacement takes the original's place (source size kept, 3x shift)");
     cache.invalidate_all();
     next_frame();
-    const TextureHandle bound = cache.get(image, mode);
+    const TextureHandle bound = cache.get(image.address, mode);
     expect(bound.resource == replaced.resource, "a resident replacement binds again without a decode");
     next_frame();
     expect(gpu.device->GetDeviceRemovedReason() == S_OK, "device alive with the replacement");
@@ -591,7 +591,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     settings.dump = true;
     cache.configure_texture_packs(settings);
     next_frame();
-    const TextureHandle back = cache.get(image, mode);
+    const TextureHandle back = cache.get(image.address, mode);
     expect(back.resource != nullptr && back.resource->GetDesc().Width == 32u, "packs off: the original again");
     const std::filesystem::path dumped =
         settings.dumps / TexturePacks::kGameId / (texture_pack_name(name) + ".png");

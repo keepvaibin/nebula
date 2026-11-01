@@ -254,8 +254,7 @@ public:
     // precision, in any format, through `channels`: NebulaTargetChannels).
     void end_target_pass(std::uint8_t channels, TextureCache& textures);
     // The picture of target `key` when it is `width` x `height`: its texture and view.
-    [[nodiscard]] bool target_picture(std::uint64_t key, std::uint16_t width, std::uint16_t height,
-                                      TextureHandle& out) const;
+    [[nodiscard]] bool target_picture(std::uint64_t key, TextureHandle& out) const;
     [[nodiscard]] bool target_pass_active() const noexcept { return target_pass_active_; }
     void end_output_efb();
     // An EFB-to-texture copy from the output EFB after end_output_efb: the picture its display copy took (the

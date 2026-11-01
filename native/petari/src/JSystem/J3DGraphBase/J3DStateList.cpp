@@ -267,14 +267,6 @@ void J3DStateList::setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWr
     r.f[2] = lodBias;
 }
 
-void J3DStateList::setTexImgAttr(GXTexMapID map, u16 width, u16 height, GXTexFmt format) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEX_IMAGE_ATTR);
-    r.a[0] = map;
-    r.a[1] = format;
-    r.size[0] = width;
-    r.size[1] = height;
-}
-
 void J3DStateList::setTexImgPtr(GXTexMapID map, const void* pImage) {
     NebulaStateOp& r = add(NEBULA_STATE_TEX_IMAGE);
     r.a[0] = map;

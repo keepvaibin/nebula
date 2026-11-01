@@ -10,9 +10,10 @@
 
 namespace galaxy::render {
 
-// One texture map: its image (a texture record's key) and sampling (with the edge LOD and bias clamp enables).
+// One texture map: its texture (a record's address or a capture's key; the record or picture has the size) and
+// sampling (with the edge LOD and bias clamp enables).
 struct TextureMap {
-    TexImage image{1u, 1u, TexFormat::I4, 0u};
+    std::uint64_t texture = 0u;
     TexMode mode{};
     bool edge_lod = true;
     bool bias_clamp = false;

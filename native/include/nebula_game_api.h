@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 70u
+#define NEBULA_GAME_API_VERSION 71u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -173,7 +173,6 @@ enum {
                                        form (1: also the coordinate's matrix index, a[6]; 0: GDSetTexCoordGen's) */
     NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t, min filter, mag filter, bias clamp, edge LOD, anisotropy;
                                        f: min LOD, max LOD, LOD bias */
-    NEBULA_STATE_TEX_IMAGE_ATTR,    /* map, format; size: width, height */
     NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
     NEBULA_STATE_FOG,               /* type, r, g, b, a, GXSetFog's form (1: a projected type writes its second and
                                        third words with register id 0, as GXSetFog does; 0: GDSetFog's); f: start,
@@ -307,13 +306,10 @@ typedef struct NebulaMaterialTevStage {
 } NebulaMaterialTevStage;
 
 typedef struct NebulaMaterialTexture {
-    uint64_t image;               /* the texture's identity: the game's address of its image (0: no texture) */
-    uint16_t width, height;
-    uint8_t format, wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy;
+    uint64_t image;               /* the texture: its record's address (0: no texture) */
+    uint16_t width, height;       /* its size (the material's coordinate scales) */
+    uint8_t wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy, bias_clamp;
     float min_lod, max_lod, lod_bias;
-    uint64_t palette;             /* colour-indexed formats: the palette's identity, else 0 */
-    uint16_t palette_entries;
-    uint8_t palette_format, bias_clamp;
 } NebulaMaterialTexture;
 
 typedef struct NebulaMaterialLight {
@@ -401,9 +397,7 @@ typedef struct NebulaNativeMaterial {
     uint8_t light_mask;        /* the lights below the material sets (the others keep what was set before) */
     float constants[128];
     struct {
-        uint64_t image;        /* the texture's identity: the game's address of its image (or a capture's) */
-        uint16_t width, height;
-        uint8_t format;        /* the cooked image's format (as NebulaMaterialTexture::format) */
+        uint64_t image;        /* the texture: its record's address (or a capture's key); the record has its size */
         uint8_t repeat_s, repeat_t; /* 0 clamp, 1 repeat, 2 mirror */
         uint8_t mag_linear;    /* magnified: 1 linear, 0 nearest */
         uint8_t min_linear;    /* minified within a level: 1 linear, 0 nearest */
@@ -411,10 +405,7 @@ typedef struct NebulaNativeMaterial {
         uint8_t anisotropy;    /* 0 off, 1 two, 2 four samples */
         uint8_t edge_lod;      /* 1 the level from the texel's edges */
         float lod_bias, min_lod, max_lod;
-        uint64_t palette;      /* colour-indexed formats (C4, C8, C14X2): the palette's identity (its address), else 0 */
-        uint16_t palette_entries;
-        uint8_t palette_format; /* GXTlutFmt: IA8, RGB565, RGB5A3 */
-        uint8_t reserved[5];
+        uint8_t reserved[3];
     } textures[8];
     NebulaMaterialLight light[8];
     /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the

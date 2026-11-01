@@ -7,7 +7,7 @@
 #include <revolution/os.h>
 
 // A texture as the game sets it up (GXTexObj's values, held in a GXTexObj): GXInitTexObj*'s settings, loaded as state
-// records (nebula_game_api.h NEBULA_STATE_TEX_LOOKUP, _TEX_IMAGE_ATTR, _TEX_IMAGE, _TEX_TLUT).
+// records (nebula_game_api.h NEBULA_STATE_TEX_LOOKUP, _TEX_IMAGE: the image names its texture record).
 struct J3DNativeTexObj {
     const void* mImage;
     u16 mWidth;
