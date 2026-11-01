@@ -1896,6 +1896,37 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     // Linear texels the game wrote (nebula_cooked_texture.h): kept as a texture record, its header first.
     const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
     const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
+#if defined(_WIN32)
+    // GALAXY_LOG_GUEST_TEXTURES=1: where each console-format image comes from (E-02: the GX tile decoders go once no
+    // game site hands one over). The game module's return offsets, for llvm-symbolizer against its PDB.
+    static const bool log_console = [] {
+        const char* value = std::getenv("GALAXY_LOG_GUEST_TEXTURES");
+        return value != nullptr && value[0] == '1';
+    }();
+    if (log_console && !linear && image->format != NEBULA_TEXTURE_IMAGE && image->format != 0xFFu) [[unlikely]] {
+        void* frames[16]{};
+        const USHORT count = CaptureStackBackTrace(1u, 16u, frames, nullptr);
+        const auto game = reinterpret_cast<uintptr_t>(GetModuleHandleW(L"smg_game.dll"));
+        std::string from;
+        for (USHORT i = 0; i < count; ++i) {
+            const auto at = reinterpret_cast<uintptr_t>(frames[i]);
+            HMODULE owner = nullptr;
+            if (game != 0u && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                                 reinterpret_cast<LPCWSTR>(frames[i]), &owner) &&
+                reinterpret_cast<uintptr_t>(owner) == game) {
+                char part[24];
+                std::snprintf(part, sizeof(part), " +%llx", static_cast<unsigned long long>(at - game));
+                from += part;
+            }
+        }
+        char line[160];
+        std::snprintf(line, sizeof(line), "[texture] console image handed over: %llX %ux%u format %u from",
+                      static_cast<unsigned long long>(address), image->width, image->height,
+                      static_cast<unsigned>(image->format));
+        std::fprintf(stderr, "%s%s\n", line, from.c_str());
+    }
+#endif
     {
         std::lock_guard guard(gHandedLock);
         auto& last = gHanded[address];
