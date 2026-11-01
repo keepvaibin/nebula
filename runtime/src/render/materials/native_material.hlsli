@@ -76,6 +76,25 @@ float4 j3d_light(uint n, uint atten, uint diffuse, float3 pos, float3 nrm) {
     const float facing = diffuse == 1u ? dot(ldir, nrm) : diffuse == 2u ? max(0.0, dot(ldir, nrm)) : 1.0;
     return attn * facing * lcol;
 }
+
+// GX fog over the colour, from its values (fog: start, end, near, far; fog_color: rgb, w the GX fog type): its type (fog_color.w: GX_FOG_* - perspective 2-7 by the eye depth, orthographic 10-15
+// by the depth between near and far), the range start-end, its curve.
+float3 native_fog(float3 c, float4 pos, float4 fog, float4 fog_color) {
+    const uint type = uint(fog_color.w);
+    if (type == 0u) {
+        return c;
+    }
+    const float ze = (type & 8u) != 0u ? lerp(fog.z, fog.w, pos.z) : pos.w;
+    float f = saturate((ze - fog.x) / max(fog.y - fog.x, 1.0e-6));
+    switch (type & 7u) {
+    case 4u: f = 1.0 - exp2(-8.0 * f); break;
+    case 5u: f = 1.0 - exp2(-8.0 * f * f); break;
+    case 6u: f = exp2(-8.0 * (1.0 - f)); break;
+    case 7u: f = 1.0 - f; f = exp2(-8.0 * f * f); break;
+    default: break;
+    }
+    return lerp(c, fog_color.rgb, f);
+}
 float4 native_post_row(uint q) { return mtx_rows[row_bases.z + q]; }
 uint native_post(uint i) { return vs_post[i >> 2u][i & 3u]; }
 
