@@ -12,7 +12,8 @@ namespace galaxy::render {
 namespace {
 
 // GXCullMode to the generation mode's cull field (front and back swap).
-constexpr CullMode kCull[4] = {CullMode::None, CullMode::Back, CullMode::Front, CullMode::All};
+// NEBULA_CULL_* (the game's winding) as the renderer's flipped one: the game's back faces are the renderer's front.
+constexpr CullMode kCull[4] = {CullMode::None, CullMode::Front, CullMode::Back, CullMode::All};
 
 // GXBlendMode: NONE 0, BLEND 1, LOGIC 2, SUBTRACT 3.
 // `op` NEBULA_BLEND_*: replace 0, add 1, subtract 2, logic 3.

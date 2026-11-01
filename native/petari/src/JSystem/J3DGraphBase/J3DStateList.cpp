@@ -157,8 +157,16 @@ void J3DStateList::setDstAlpha(GXBool enable, u8 alpha) {
     r.a[1] = alpha;
 }
 
+namespace {
+    // GXCullMode as the renderer's (NEBULA_CULL_*: the game's own winding).
+    u8 nativeCull(GXCullMode mode) {
+        return mode == GX_CULL_BACK ? NEBULA_CULL_BACK : mode == GX_CULL_FRONT ? NEBULA_CULL_FRONT
+           : mode == GX_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
+    }
+}  // namespace
+
 void J3DStateList::setCullMode(GXCullMode mode) {
-    add(NEBULA_STATE_CULL).a[0] = mode;
+    add(NEBULA_STATE_CULL).a[0] = nativeCull(mode);
 }
 
 void J3DStateList::setGenMode(u8 texGens, u8 chans, u8 tevs) {
@@ -174,7 +182,7 @@ void J3DStateList::setGenMode2(u8 texGens, u8 chans, u8 tevs, u8 inds, GXCullMod
     r.a[1] = chans;
     r.a[2] = tevs;
     r.a[3] = inds;
-    r.a[4] = cull;
+    r.a[4] = nativeCull(cull);
 }
 
 void J3DStateList::setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask,
