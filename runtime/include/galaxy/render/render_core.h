@@ -46,7 +46,7 @@
 #include "galaxy/render/rt_sky_sun.h"
 #include "galaxy/render/rt_types.h"
 #include "galaxy/render/pso_key.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/render/frame_interpolation.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/transform_history.h"

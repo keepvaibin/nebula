@@ -2,7 +2,7 @@
 
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/renderer_d3d12.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 
 #include <dxgi1_4.h>
 

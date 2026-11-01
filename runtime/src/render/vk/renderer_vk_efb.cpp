@@ -12,7 +12,7 @@
 #include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/draw_matrices.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/render/draw_constants.h"
 
 #include <vk_mem_alloc.h>

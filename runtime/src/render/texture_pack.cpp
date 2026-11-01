@@ -7,7 +7,7 @@
 
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/windows_power.h"
 
 #include <algorithm>

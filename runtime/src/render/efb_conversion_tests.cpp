@@ -14,7 +14,7 @@
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
 #include "galaxy/render/draw_constants.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "nebula_cooked_texture.h"
 
 #include <algorithm>

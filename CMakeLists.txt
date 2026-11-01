@@ -313,7 +313,7 @@ add_library(galaxy_gx STATIC
     runtime/src/render/gpu_upload_ring.cpp
     runtime/src/render/galaxy_select.cpp
     runtime/src/render/window_owner.cpp
-    runtime/src/render/texture_cache.cpp
+    runtime/src/render/texture_store.cpp
     runtime/src/render/texture_pack.cpp
     runtime/src/render/texture_pack_codecs.cpp
     runtime/src/render/movie_replacement.cpp
@@ -550,7 +550,7 @@ if(NEBULA_VULKAN)
         runtime/src/render/renderer_common.cpp
         runtime/src/render/gpu_upload_ring.cpp
         runtime/src/render/window_owner.cpp
-        runtime/src/render/texture_cache.cpp
+        runtime/src/render/texture_store.cpp
         runtime/src/render/texture_pack.cpp
         runtime/src/render/texture_pack_codecs.cpp
         runtime/src/render/movie_replacement.cpp
