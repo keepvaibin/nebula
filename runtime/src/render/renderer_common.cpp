@@ -23,18 +23,18 @@
 
 namespace galaxy::render {
 
-// EFB-copy conversion pixel shader (captures, the display picture, peeks). Operation order: quantize
-// source samples to bytes -> integer 3-row filter -> optional luminance (RGB-to-YUV) -> the channels
-// the picture carries. The filter applies to color and packed depth RGB alike; alpha is always the
-// unfiltered center sample. The depth buffer is reversed, so guest z24 is reconstructed from
-// 1 - sampled depth before filtering its three bytes.
+// The capture shader (captures, the frame shown, peeks). A capture samples the frame inside its rectangle, through
+// the display's vertical filter when the game asked for it (the line above and the line, weighted), takes the colour's
+// luminance or the depth when asked, and writes the channels the picture carries. Colour stays in floating point; the
+// target's format rounds it once. A peek reads one logical pixel (colour averaged over its scaled block, depth as the
+// 24-bit value the game reads, in three bytes).
 //
 // Root constants (b0):
-//   src_xform = src origin.xy, src texels per dest pixel .zw (scaled EFB px)
-//   modes     = intensity, unused, is_depth, keep_alpha
-//   filt      = integer filter upper/middle/lower (1/64 units), clamp_y min
-//   filt2     = clamp_y max, decoded EFB-copy format (15 = XFB), scaled
-//               one-logical-row filter offset, EFB-peek reduction width
+//   src_xform = src origin.xy, src texels per dest pixel .zw (scaled frame px)
+//   modes     = luminance, unused, depth, keep_alpha
+//   filt      = filter weights above/line/below (64ths), clamp_y min
+//   filt2     = clamp_y max, picture channels (7 the frame shown), the scaled one-logical-row filter offset, the
+//               peek reduction width
 static constexpr char kConvPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
@@ -55,10 +55,10 @@ uint4 pack_depth(float depth_sample) {
         z24 & 255u,
         255u);
 }
-uint4 sample_efb(float2 sample_pos, float2 inv) {
+float4 sample_frame(float2 sample_pos, float2 inv) {
     // A destination texel covering more than 2x2 source texels (a native-size
-    // effect copy of a scaled EFB) averages the central half of its
-    // footprint. At 1x each EFB pixel is one sample at its centre; when the
+    // effect capture of a scaled frame) averages the central half of its
+    // footprint. At 1x each frame pixel is one sample at its centre; when the
     // game minifies a texture 4:1 into the bloom workspace that sample is a
     // bilinear 2x2 of each 4x4 block, and the bloom threshold that follows is
     // tuned to that sparse coverage. The central half reproduces it (a full
@@ -83,9 +83,11 @@ uint4 sample_efb(float2 sample_pos, float2 inv) {
         tex_sample = srctex.SampleLevel(s_lin, sample_pos * inv, 0);
     }
     if (modes.z != 0.0) {
-        return pack_depth(tex_sample.r);
+        // The depth buffer is reversed: the game's depth is one minus it.
+        const float depth = saturate(1.0 - tex_sample.r);
+        return float4(depth, depth, depth, 1.0);
     }
-    return uint4(saturate(tex_sample) * 255.0);
+    return saturate(tex_sample);
 }
 float4 main(V v) : SV_Target {
     float2 dims;
@@ -93,16 +95,16 @@ float4 main(V v) : SV_Target {
     float2 inv = 1.0 / dims;
     float2 sp = src_xform.xy + v.pos.xy * src_xform.zw;
     uint reduction_width = filt2.w < 0.0 ? 1u : uint(filt2.w + 0.5);
-    uint4 texcol_raw;
+    float4 c;
     if (reduction_width != 0u || filt2.w < 0.0) {
         if (modes.z != 0.0) {
             // Depth peeks are point reads of the physical texel the CPU
             // geometry selected (src_xform.xy); Load avoids a multi-texel
-            // blend at scaled EFB sizes.
-            texcol_raw = pack_depth(
+            // blend at scaled frame sizes.
+            c = float4(pack_depth(
                 srctex.Load(int3(
                     filt2.w < 0.0 ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw)
-                                 : int2(src_xform.xy), 0)).r);
+                                 : int2(src_xform.xy), 0)).r)) / 255.0;
         } else {
             // Color peeks reduce the complete scaled logical-pixel block; a whole field (filt2.w < 0)
             // reduces each destination pixel's block.
@@ -115,60 +117,51 @@ float4 main(V v) : SV_Target {
                     sum += srctex.Load(int3(origin + int2(px, py), 0));
                 }
             }
-            float4 reduced = sum / float(block * block);
-            texcol_raw = uint4(round(saturate(reduced) * 255.0));
+            c = saturate(sum / float(block * block));
         }
     } else {
         float ylo = filt.w, yhi = filt2.x;
         float filter_offset = max(filt2.z, 1.0);
-        uint3 coefficients = uint3(filt.xyz + 0.5);
-        uint4 current_row = sample_efb(
-            float2(sp.x, clamp(sp.y, ylo, yhi)), inv);
-        uint3 combined_rows = current_row.rgb * coefficients.y;
-        [branch] if (coefficients.x != 0u) {
-            uint4 prev_row = sample_efb(
-                float2(sp.x, clamp(sp.y - filter_offset, ylo, yhi)), inv);
-            combined_rows += prev_row.rgb * coefficients.x;
+        const float3 weights = filt.xyz / 64.0;
+        const float4 line_sample = sample_frame(float2(sp.x, clamp(sp.y, ylo, yhi)), inv);
+        float3 rgb = line_sample.rgb * weights.y;
+        [branch] if (weights.x != 0.0) {
+            rgb += sample_frame(float2(sp.x, clamp(sp.y - filter_offset, ylo, yhi)), inv).rgb * weights.x;
         }
-        [branch] if (coefficients.z != 0u) {
-            uint4 next_row = sample_efb(
-                float2(sp.x, clamp(sp.y + filter_offset, ylo, yhi)), inv);
-            combined_rows += next_row.rgb * coefficients.z;
+        [branch] if (weights.z != 0.0) {
+            rgb += sample_frame(float2(sp.x, clamp(sp.y + filter_offset, ylo, yhi)), inv).rgb * weights.z;
         }
-        texcol_raw = min(uint4(combined_rows >> 6, current_row.a), uint4(255u, 255u, 255u, 255u));
+        c = float4(saturate(rgb), line_sample.a);
     }
     if (modes.x != 0.0) {
-        int3 rgb = int3(texcol_raw.rgb);
-        uint3 yuv = uint3(
-            66 * rgb.r + 129 * rgb.g + 25 * rgb.b + 4096,
-            -38 * rgb.r - 74 * rgb.g + 112 * rgb.b + 32768,
-            112 * rgb.r - 94 * rgb.g - 18 * rgb.b + 32768);
-        texcol_raw.rgb = (yuv >> 8) + ((yuv >> 7) & 1u);
+        // Luminance (BT.601, studio range), as the game's effects expect it.
+        const float y = dot(c.rgb, float3(66.0, 129.0, 25.0) / 256.0) + 16.0 / 255.0;
+        c.rgb = float3(y, y, y);
     }
 
-    // The picture's channels (efb_copy.h): the game's NebulaTargetChannels, 7 a display copy. 8-bit colour. (Not named
-    // `layout`: glslang's HLSL front end reserves the word.)
+    // The picture's channels (efb_copy.h): the game's NebulaTargetChannels, 7 the frame shown. (Not named `layout`:
+    // glslang's HLSL front end reserves the word.)
     uint channels = uint(filt2.y + 0.5);
     if (channels == 3u) {          // red (or luminance) in every channel
-        texcol_raw = texcol_raw.rrrr;
+        c = c.rrrr;
     } else if (channels == 1u) {   // intensity and alpha
-        texcol_raw = texcol_raw.rrra;
+        c = c.rrra;
     } else if (channels == 6u || channels == 7u) { // colour, opaque
-        texcol_raw.a = 255u;
+        c.a = 1.0;
     } else if (channels == 2u) {   // alpha in every channel
-        texcol_raw = texcol_raw.aaaa;
+        c = c.aaaa;
     } else if (channels == 4u) {   // green
-        texcol_raw = texcol_raw.gggg;
+        c = c.gggg;
     } else if (channels == 5u) {   // blue
-        texcol_raw = texcol_raw.bbbb;
+        c = c.bbbb;
     }
-    return float4(texcol_raw) / 255.0;
+    return c;
 }
 )HLSL";
 
-// A display copy one EFB pixel to one XFB pixel without gamma: kConvPs's arithmetic for it alone. Each of the filter's
-// rows (the copy rect's clamp, one physical row apart) truncated to 8 bits, weighted, shifted down by six; opaque. The
-// same constants as kConvPs; its rows are loads, which is what its bilinear taps at texel centres return.
+// The frame shown, one frame pixel to one picture pixel: kConvPs's arithmetic for it alone. The filter's rows (inside
+// the rectangle, one physical row apart) weighted; opaque. The same constants as kConvPs; its rows are loads, which is
+// what its bilinear taps at texel centres return.
 static constexpr char kDisplayFilterPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
@@ -177,23 +170,22 @@ cbuffer C : register(b0) {
     float4 filt2;
 };
 Texture2D srctex : register(t0);
-uint3 row(int x, int y, int lo, int hi) {
-    return uint3(saturate(srctex.Load(int3(x, clamp(y, lo, hi), 0)).rgb) * 255.0);
+float3 row(int x, int y, int lo, int hi) {
+    return saturate(srctex.Load(int3(x, clamp(y, lo, hi), 0)).rgb);
 }
 float4 main(float4 pos : SV_Position) : SV_Target {
     const int2 p = int2(src_xform.xy) + int2(pos.xy);
     const int lo = int(filt.w);
     const int hi = int(filt2.x);
-    const uint3 weights = uint3(filt.xyz + 0.5);
-    uint3 sum = row(p.x, p.y, lo, hi) * weights.y;
-    [branch] if (weights.x != 0u) {
+    const float3 weights = filt.xyz / 64.0;
+    float3 sum = row(p.x, p.y, lo, hi) * weights.y;
+    [branch] if (weights.x != 0.0) {
         sum += row(p.x, p.y - 1, lo, hi) * weights.x;
     }
-    [branch] if (weights.z != 0u) {
+    [branch] if (weights.z != 0.0) {
         sum += row(p.x, p.y + 1, lo, hi) * weights.z;
     }
-    uint3 rgb = sum >> 6;
-    return float4(float3(min(rgb, uint3(255u, 255u, 255u))) / 255.0, 1.0);
+    return float4(saturate(sum), 1.0);
 }
 )HLSL";
 
@@ -437,19 +429,10 @@ EfbConversionShaderConstants make_efb_peek_conversion_constants(
 }
 
 EfbClearValues make_efb_clear_values(std::uint32_t rgba,
-    std::uint32_t z24, std::uint8_t pixel_format) noexcept {
-    std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
-    std::uint32_t b = (rgba >> 8u) & 255u, a = rgba & 255u;
-    const auto expand6 = [](std::uint32_t v) { return (v & 0xfcu) | (v >> 6u); };
-    const bool exact = (pixel_format & kEfbClearExact) != 0u;
-    pixel_format &= static_cast<std::uint8_t>(~kEfbClearExact);
-    if (exact) {
-        if (pixel_format != 1u) a = 255u;
-    } else if (pixel_format == 1u) {
-        r = expand6(r); g = expand6(g); b = expand6(b); a = expand6(a);
-    } else {
-        a = 255u;
-    }
+    std::uint32_t z24, std::uint8_t frame_format) noexcept {
+    const std::uint32_t r = rgba >> 24u, g = (rgba >> 16u) & 255u;
+    const std::uint32_t b = (rgba >> 8u) & 255u;
+    const std::uint32_t a = (frame_format & 1u) != 0u ? rgba & 255u : 255u;
     z24 &= 0xffffffu;
     return {{{static_cast<float>(r) / 255.0f, static_cast<float>(g) / 255.0f,
               static_cast<float>(b) / 255.0f, static_cast<float>(a) / 255.0f}},

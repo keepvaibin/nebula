@@ -7888,12 +7888,12 @@ void RendererD3D12::clear_efb(
     }
 
     if (efb_owed_ && pass_list_open_) [[unlikely]] {
-        const bool rgba = color_enable && (alpha_enable || (pixel_format & ~kEfbClearExact) != 1u);
+        const bool rgba = color_enable && (alpha_enable || pixel_format != 1u);
         restore_owed_efb(rgba ? &rect : nullptr);
     }
     const auto clear = make_efb_clear_values(clear_rgba, clear_z24, pixel_format);
     if (color_enable || alpha_enable) {
-        if ((pixel_format & ~kEfbClearExact) != 1u) alpha_enable = true;
+        if (pixel_format != 1u) alpha_enable = true;
         const float* col = clear.color.data();
         if (color_enable && alpha_enable) {
             command_list_->ClearRenderTargetView(rtv, col, num_rects, rects);
