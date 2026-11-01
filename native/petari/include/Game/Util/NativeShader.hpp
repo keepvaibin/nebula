@@ -138,5 +138,6 @@ namespace NativeShader {
         J3DNativeMaterial::watch(&rMaterial);
         const NebulaHostServices* pHost = nebula_host();
         pHost->native_material(pHost->user, &rMaterial);
+        J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 }  // namespace NativeShader

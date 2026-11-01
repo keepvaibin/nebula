@@ -9298,6 +9298,19 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         if (t.palette != 0u) {
             // A colour-indexed map's palette, into palette name `map` (as a material's textures load theirs: the
             // GX path's draw_state textures()), and the map reading it.
+            // GALAXY_LOG_NATIVE_MATERIALS=1: each shader's colour-indexed maps as they first draw (the tour stops that
+            // test native palettes).
+            static const bool log_palettes = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
+            if (log_palettes) [[unlikely]] {
+                static std::set<std::pair<std::uint32_t, std::uint64_t>> logged;
+                if (logged.emplace(m.shader, t.palette).second && logged.size() <= 256u) {
+                    std::fprintf(stderr, "[native-material] palette shader=%u map=%u format=%u palette_format=%u "
+                                         "entries=%u size=%ux%u present=%llu\n",
+                                 m.shader, map, static_cast<unsigned>(t.format), static_cast<unsigned>(t.palette_format),
+                                 static_cast<unsigned>(t.palette_entries), static_cast<unsigned>(t.width),
+                                 static_cast<unsigned>(t.height), static_cast<unsigned long long>(g_snapshot_presents));
+                }
+            }
             state::Op load{};
             load.kind = state::kTlutLoad;
             load.a[0] = static_cast<std::uint8_t>(map);

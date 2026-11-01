@@ -507,6 +507,10 @@ namespace {
 }  // namespace
 
 namespace J3DNativeMaterial {
+    void dumpTag(u32 shader) {
+        ::dumpTag(shader);
+    }
+
     void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pParts) {
         memset(pParts, 0, sizeof(*pParts));
         NebulaMaterialProgram* pOut = &pParts->program;

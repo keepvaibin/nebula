@@ -43,6 +43,8 @@ namespace J3DNativeMaterial {
     // A material another part of the game sends (NativeShader::send; NULL a drawing-state one: a registered program's
     // values): the draws after it no longer use the current J3D material.
     void watch(const NebulaNativeMaterial* pNative);
+    // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the next draws when `shader` is the asked native shader.
+    void dumpTag(u32 shader);
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
     // until the next material: its generated native shader when the material set has its program (depth and culling
     // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.

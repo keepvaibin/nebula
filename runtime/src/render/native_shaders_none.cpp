@@ -13,4 +13,8 @@ NativeShaderBytes native_curved_bytes(bool, bool) noexcept {
     return {};
 }
 
+NativeShaderBytes native_line_point_bytes(bool, bool) noexcept {
+    return {};
+}
+
 }  // namespace galaxy::render

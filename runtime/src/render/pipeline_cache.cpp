@@ -628,9 +628,15 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
     const bool motion = variant == kNativeVariantMotion;
     const Microsoft::WRL::ComPtr<ID3DBlob> hs = curved ? blob(native_curved_bytes(motion, false)) : nullptr;
     const Microsoft::WRL::ComPtr<ID3DBlob> ds = curved ? blob(native_curved_bytes(motion, true)) : nullptr;
-    if (vs && ps && (!curved || (hs && ds))) {
-        pso = create_gx_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), nullptr, nullptr, hs.Get(),
-                            ds.Get());
+    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
+    const auto topology = static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(rs.primitive_topology & kTopologyTypeMask);
+    const bool line = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+    const bool point = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+    const Microsoft::WRL::ComPtr<ID3DBlob> gs =
+        line || point ? blob(native_line_point_bytes(motion, point)) : nullptr;
+    if (vs && ps && (!curved || (hs && ds)) && (!(line || point) || gs)) {
+        pso = create_gx_pso(device_.Get(), root_signature_.Get(), rs, vs.Get(), ps.Get(), line ? gs.Get() : nullptr,
+                            point ? gs.Get() : nullptr, hs.Get(), ds.Get());
     }
     bucket.emplace_back(std::make_pair(id, rs), pso);
     return pso.Get();
