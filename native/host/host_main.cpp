@@ -27,7 +27,7 @@
 #if defined(NEBULA_HOST_RENDERER)
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/frame_timeline.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/native_audio.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"

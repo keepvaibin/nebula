@@ -1,6 +1,6 @@
-// Implements the galaxy::render public API (renderer_api.h) over a single RenderCore.
+// Implements the galaxy::render public API (render_api.h) over a single RenderCore.
 
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 
 #include <atomic>
 

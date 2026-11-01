@@ -62,7 +62,7 @@ galaxy_embed_post_sources("${galaxy_post_embed_cpp}" "${nebula_root}")
 
 set(rt "${nebula_root}/runtime/src")
 add_library(galaxy_gx_vk STATIC
-    ${rt}/render/renderer_api.cpp
+    ${rt}/render/render_api.cpp
     ${rt}/render/render_config.cpp
     ${rt}/render/renderer_common.cpp
     ${rt}/render/gpu_upload_ring.cpp

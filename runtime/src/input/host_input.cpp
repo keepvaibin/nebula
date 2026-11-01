@@ -15,7 +15,7 @@
 #include "galaxy/tilt.h"
 #include "galaxy/diagnostic_stick_lease.h"
 #include "galaxy/experimental_ultrawide_aspect.h"
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/runtime_settings.h"
 #include "galaxy/scope_exit.h"
 

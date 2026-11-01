@@ -304,7 +304,7 @@ include(cmake/native_materials.cmake)
 galaxy_native_material_sources(galaxy_native_dxil dxil)
 
 add_library(galaxy_gx STATIC
-    runtime/src/render/renderer_api.cpp
+    runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
     runtime/src/render/host_window_win32.cpp
     runtime/src/render/vblank_clock_win32.cpp
@@ -543,7 +543,7 @@ if(NEBULA_VULKAN)
 
     # galaxy_gx on Vulkan: the API-neutral GX sources with the Vulkan renderer, pipeline cache and texture backend.
     add_library(galaxy_gx_vk STATIC
-        runtime/src/render/renderer_api.cpp
+        runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
         runtime/src/render/host_window_win32.cpp
         runtime/src/render/vblank_clock_win32.cpp

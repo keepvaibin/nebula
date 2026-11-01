@@ -1,4 +1,4 @@
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 #include "galaxy/render/host_window_win32.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/render/temporal_upscaler.h"

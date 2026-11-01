@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The game's lights as its hooks report them (renderer_api.h): the sun, the Comet Observatory's star core, point and
+// The game's lights as its hooks report them (render_api.h): the sun, the Comet Observatory's star core, point and
 // world lights. Simulation thread writes, render thread reads.
-#include "galaxy/renderer_api.h"
+#include "galaxy/render_api.h"
 
 #include <algorithm>
 #include <array>
