@@ -961,19 +961,6 @@ std::uint32_t matrix_index_b(const NativeDrawState& s) {
            static_cast<std::uint32_t>(s.texture_matrix[6]) << 12u | static_cast<std::uint32_t>(s.texture_matrix[7]) << 18u;
 }
 
-std::uint32_t line_point_word(const NativeDrawState& s) {
-    return static_cast<std::uint32_t>(s.line_point.line_width) | static_cast<std::uint32_t>(s.line_point.point_size) << 8u |
-           static_cast<std::uint32_t>(s.line_point.line_offset) << 16u |
-           static_cast<std::uint32_t>(s.line_point.point_offset) << 19u;
-}
-
-std::uint32_t coord_s_word(const NativeDrawState& s, unsigned c) {
-    const auto& k = s.coord[c & 7u];
-    return static_cast<std::uint32_t>(k.size_minus_one[0]) | static_cast<std::uint32_t>(k.bias[0]) << 16u |
-           static_cast<std::uint32_t>(k.wrap[0]) << 17u | static_cast<std::uint32_t>(k.line_offset) << 18u |
-           static_cast<std::uint32_t>(k.point_offset) << 19u;
-}
-
 namespace {
 
 constexpr std::uint8_t kCaptureFiltered = 16u;  // NEBULA_CAPTURE_FILTERED

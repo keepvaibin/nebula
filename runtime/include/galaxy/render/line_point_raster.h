@@ -1,7 +1,7 @@
 #pragma once
 
-// GX line and point raster parameters for the line/point geometry shaders. BP 0x22 (SU_LPSIZE) gives both
-// widths in sixths of a logical EFB pixel; the expansion works in physical pixels at the EFB scale.
+// Line and point raster parameters for the line/point geometry shaders: the game gives both widths in sixths of a
+// logical EFB pixel; the expansion works in physical pixels at the EFB scale.
 
 #include <array>
 #include <cstdint>
@@ -20,11 +20,21 @@ struct LinePointRasterParams {
 };
 static_assert(sizeof(LinePointRasterParams) == 32u);
 
-// `viewport_half_width` / `viewport_half_height` are the raw XF viewport wd/ht; a valid GX viewport has wd > 0
-// and ht < 0. Any other viewport (not yet programmed) takes the fallback EFB size.
+// The game's line width and point size (sixths of a logical EFB pixel), each one's texture-offset selector (0 none,
+// 1-5: 1/16 to 1 of a texel, 6 and 7 as 5) and the coordinates it offsets (bit n: coordinate n).
+struct LinePointValues {
+    std::uint8_t line_width = 0;
+    std::uint8_t point_size = 0;
+    std::uint8_t line_offset = 0;
+    std::uint8_t point_offset = 0;
+    std::uint8_t line_coords = 0;
+    std::uint8_t point_coords = 0;
+};
+
+// `viewport_half_width` / `viewport_half_height` are the viewport's half extents (width > 0, height < 0); any other
+// viewport (not yet set) takes the fallback EFB size.
 [[nodiscard]] LinePointRasterParams make_line_point_raster_params(
-    std::uint32_t su_lp_size,
-    const std::array<std::uint32_t, 8>& texcoord_s_registers,
+    const LinePointValues& values,
     float viewport_half_width,
     float viewport_half_height,
     unsigned efb_scale,
