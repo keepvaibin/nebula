@@ -170,6 +170,11 @@ void J3DModelX::directDraw(J3DModel* model) {
 }
 
 namespace {
+    // List 2's GX program, for a material the drawing state draws (J3DModelX::drawIn).
+    NebulaStateOp sList2ProgramOps[8];
+    J3DStateList sList2Program;
+    bool sList2ProgramBuilt = false;
+
     // The flat passes' colours by list (GX's colour register 0 with one stage): `a` marks a flat pass (2: register 0's
     // colour as the draw's lists left it), `alpha` its
     // alpha (list 1 and 3: (0 + 1/2) / 2; their destination alpha is the list's constant); list 5 writes depth only.
@@ -217,6 +222,9 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             mStateLists[i].send();
+            if (i == 2 && !J3DNativeMaterial::override(1, 0.0f, 0.0f, -1.0f)) {
+                sList2Program.send();
+            }
             if (kOverrideColors[i].a != 0) {
                 override = static_cast< s32 >(i);
             }
@@ -337,17 +345,25 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     list.setDstAlpha(GX_TRUE, 0xFF);
     storeStateList(list, 1);
 
+    // List 2: texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1 on a native material; sList2Program
+    // for one the drawing state draws).
     list.setCullMode(GX_CULL_FRONT);
     list.setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
     list.setBlendModeEtc(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_CLEAR, GX_TRUE, GX_FALSE, GX_FALSE);
-    list.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
-    list.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
-    list.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
-    list.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-    list.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2, GX_TRUE,
-                             GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
     storeStateList(list, 2);
+    if (!sList2ProgramBuilt) {
+        J3DStateList program(sList2ProgramOps, 8);
+        program.setGenMode2(1, 0, 1, 0, GX_CULL_FRONT);
+        program.setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+        program.setChanCtrl(GX_COLOR1A1, GX_FALSE, GX_SRC_REG, GX_SRC_REG, 0, GX_DF_CLAMP, GX_AF_NONE);
+        program.setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR_NULL, GX_TEXCOORD1, GX_TEXMAP1, GX_COLOR_NULL);
+        program.setTevColorCalc(GX_TEVSTAGE0, GX_CC_TEXC, GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE,
+                                GX_TEVPREV);
+        program.setTevAlphaCalcAndSwap(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_TEV_ADD, GX_TB_ADDHALF, GX_CS_DIVIDE_2,
+                                       GX_TRUE, GX_TEVPREV, GX_TEV_SWAP0, GX_TEV_SWAP0);
+        sList2Program.copy(program);
+        sList2ProgramBuilt = true;
+    }
 
     list.setZMode(GX_TRUE, GX_GEQUAL, GX_FALSE);
     list.setCullMode(GX_CULL_BACK);
