@@ -198,8 +198,8 @@ void set_safety_scene_surround(float intensity) noexcept;
     std::uint16_t token,
     std::uint32_t& value);
 
-// How many captures of readback channel `token`'s colour have finished (RenderCore::readback_serial).
-[[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) noexcept;
+// How many captures of readback channel `token`'s colour (or depth) have finished (RenderCore::readback_serial).
+[[nodiscard]] std::uint32_t readback_serial(std::uint16_t token, EfbPeekKind kind = EfbPeekKind::Color) noexcept;
 
 
 // Pumps window messages; the host's main loop calls it periodically.

@@ -2200,9 +2200,15 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
 #endif
 }
 
+// Deterministic test mode: the captures the game asked of each readback channel (a peek reads the one before).
+std::array<std::atomic<uint32_t>, 64> gReadbackRequests{};
+
 void svc_readback_capture(void*, uint32_t channel) {
 #if defined(NEBULA_HOST_RENDERER)
     namespace shapes = galaxy::render::shapes;
+    if (deterministic_mode()) {
+        gReadbackRequests[channel & 63u].fetch_add(1u, std::memory_order_relaxed);
+    }
     shapes::Record record;
     record.kind = shapes::Record::Kind::Readback;
     attach_pending_records();
@@ -2239,6 +2245,24 @@ uint32_t svc_readback_pixel(void*, uint32_t channel, uint32_t depth, uint32_t x,
 #if defined(NEBULA_HOST_RENDERER)
     uint32_t value = 0;
     const auto kind = depth != 0u ? galaxy::render::EfbPeekKind::Depth : galaxy::render::EfbPeekKind::Color;
+    // Deterministic test mode: the capture before the game's latest request, whatever the GPU's pace (a published
+    // field otherwise depends on how far the render thread got: render work then reaches game state through the
+    // star pointer's depth peek). The previous capture was submitted with its frame, so it finishes.
+    if (deterministic_mode()) {
+        const uint32_t requested = gReadbackRequests[channel & 63u].load(std::memory_order_relaxed);
+        if (requested > 1u) {
+            const auto wanted = requested - 1u;
+            const auto start = std::chrono::steady_clock::now();
+            while (galaxy::render::readback_serial(static_cast<uint16_t>(channel), kind) < wanted) {
+                if (std::chrono::steady_clock::now() - start > std::chrono::seconds(2)) {
+                    std::fprintf(stderr, "[deterministic] readback channel %u: capture %u not published in 2 s\n",
+                                 channel, wanted);
+                    break;
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(200));
+            }
+        }
+    }
     if (!galaxy::render::peek_efb_published(static_cast<uint16_t>(x), static_cast<uint16_t>(y), kind,
                                         static_cast<uint16_t>(channel), value)) {
         return 0;

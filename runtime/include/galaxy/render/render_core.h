@@ -226,8 +226,10 @@ public:
         EfbPeekKind kind,
         std::uint16_t token,
         std::uint32_t& value);
-    // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
-    [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
+    // Simulation thread: how many captures of channel `token`'s colour (or depth) have finished since it was bound
+    // (0: none).
+    [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token,
+                                                EfbPeekKind kind = EfbPeekKind::Color) const noexcept;
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
     [[nodiscard]] std::uint64_t xfb_copy_count() const noexcept;

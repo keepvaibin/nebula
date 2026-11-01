@@ -6215,8 +6215,8 @@ void RenderCore::render_thread_main() {
     }
 }
 
-std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
-    const std::uint32_t key = async_peek_key(EfbPeekKind::Color, token);
+std::uint32_t RenderCore::readback_serial(std::uint16_t token, EfbPeekKind kind) const noexcept {
+    const std::uint32_t key = async_peek_key(kind, token);
     for (const AsyncPeekFieldState& state : async_peek_) {
         if (state.key.load(std::memory_order_acquire) == key) {
             return state.publications.load(std::memory_order_acquire);
