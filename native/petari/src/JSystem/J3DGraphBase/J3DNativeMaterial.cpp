@@ -785,6 +785,10 @@ namespace J3DNativeMaterial {
         pHost->material(pHost->user, keyOf(pList), &rParts.values);
     }
 
+    const f32* registers() {
+        return sRegisters;
+    }
+
     void state(const NebulaStateOp* pOps, u32 count) {
         bool changed = false;
         for (u32 i = 0; i < count; i++) {

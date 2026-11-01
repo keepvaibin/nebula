@@ -82,4 +82,6 @@ public:
     /* 0x18 */ f32* mRailCoords;
     // The tube as the renderer draws it (its points and normals by index, texture coordinates its own).
     NativeMesh mMesh;
+    // The road whose textures it draws with.
+    const WaterRoad* mRoad;
 };
