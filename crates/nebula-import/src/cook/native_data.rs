@@ -26,6 +26,9 @@
 //!   texture coordinates, a text box's numbers and its UTF-16 text as messages' (tags kept), a window's inflation,
 //!   content and frame table), groups, and the animation tag/share/animation blocks down to their keys. Block
 //!   kinds and names stay characters.
+//! - TPL (layout textures, after cook::formats::tpl rewrote the images): the version (2142000 reads in host order
+//!   once cooked), the image count and table, each image header's size, format, data offset, wraps, filters and
+//!   LOD bias, and a palette header where there is one.
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -667,4 +670,35 @@ fn animation(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// A layout texture file (TPL) in host byte order.
+pub fn tpl_host(bytes: &[u8]) -> Result<Vec<u8>> {
+    const VERSION: u32 = 2_142_000;
+    if bytes.len() < 12 {
+        bail!("not a texture palette file");
+    }
+    if u32::from_le_bytes(bytes[0..4].try_into().unwrap()) == VERSION {
+        return Ok(bytes.to_vec()); // cooked already
+    }
+    if be32(bytes, 0)? != VERSION {
+        bail!("not a texture palette file");
+    }
+    let mut out = bytes.to_vec();
+    host32(bytes, &mut out, 0)?;
+    let count = host32(bytes, &mut out, 4)? as usize;
+    let table = host32(bytes, &mut out, 8)? as usize;
+    for i in 0..count {
+        let image = host32(bytes, &mut out, table + 8 * i)? as usize;
+        let palette = host32(bytes, &mut out, table + 8 * i + 4)? as usize;
+        host16(bytes, &mut out, image)?; // height
+        host16(bytes, &mut out, image + 2)?; // width
+        host_floats(bytes, &mut out, image + 4, 7)?; // format, data offset, wrap s/t, min/mag filter, LOD bias
+        if palette != 0 {
+            host16(bytes, &mut out, palette)?; // entries (then two bytes)
+            host32(bytes, &mut out, palette + 4)?; // format
+            host32(bytes, &mut out, palette + 8)?; // data offset
+        }
+    }
+    Ok(out)
 }

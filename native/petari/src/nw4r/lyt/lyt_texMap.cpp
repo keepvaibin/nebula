@@ -50,17 +50,17 @@ namespace nw4r {
         void TexMap::ReplaceImage(const void* pTplFile, u32 id) {
             const u8* const file = static_cast< const u8* >(pTplFile);
             const u32 cVersion = 2142000;
-            if (nebula_load_be32(file) != cVersion) {
-                JUTException::panic_f(__FILE__, __LINE__, "invalid version number for texture palette");
+            if (*reinterpret_cast< const u32* >(file) != cVersion) {
+                JUTException::panic_f(__FILE__, __LINE__, "invalid version number for texture palette (the importer cooks it to host order)");
             }
-            const u32 count = nebula_load_be32(file + 4);
-            const u8* const descriptor = file + nebula_load_be32(file + 8) + (id % count) * 8;
+            const u32 count = *reinterpret_cast< const u32* >(file + 4);
+            const u8* const descriptor = file + *reinterpret_cast< const u32* >(file + 8) + (id % count) * 8;
 
-            const u8* const header = file + nebula_load_be32(descriptor);
-            const u16 height = nebula_load_be16(header);
-            const u16 width = nebula_load_be16(header + 2);
-            const u32 format = nebula_load_be32(header + 4);
-            void* const image = const_cast< u8* >(file + nebula_load_be32(header + 8));
+            const u8* const header = file + *reinterpret_cast< const u32* >(descriptor);
+            const u16 height = *reinterpret_cast< const u16* >(header);
+            const u16 width = *reinterpret_cast< const u16* >(header + 2);
+            const u32 format = *reinterpret_cast< const u32* >(header + 4);
+            void* const image = const_cast< u8* >(file + *reinterpret_cast< const u32* >(header + 8));
             const u8 maxLOD = header[34];
             mImage = image;
             J3DNativeTexture::registerImage(image, static_cast< u8 >(format), width, height, static_cast< u8 >(maxLOD + 1));
