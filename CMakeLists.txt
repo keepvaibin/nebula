@@ -291,173 +291,13 @@ foreach(galaxy_bloom_pass down_cs:DownCS:cs_5_0 box_cs:BoxCS:cs_5_0 blur_cs:Blur
     list(APPEND galaxy_bloom_headers "${galaxy_bloom_header}")
 endforeach()
 
-# Ray-tracing compute shaders (runtime/src/render/ray_tracing.hlsl: DXR 1.1 inline ray queries,
-# shader model 6.5) are compiled by the Windows SDK's DXC at build time into signed DXIL headers.
+# dxc (the Windows SDK's), for the shaders compiled at build.
 find_program(GALAXY_DXC dxc
     HINTS "$ENV{WindowsSdkVerBinPath}x64" "$ENV{WindowsSdkBinPath}x64"
     NO_DEFAULT_PATH)
 if(NOT GALAXY_DXC)
     find_program(GALAXY_DXC dxc REQUIRED)
 endif()
-set(galaxy_rt_dir "${CMAKE_CURRENT_BINARY_DIR}/generated/rt_shaders")
-file(MAKE_DIRECTORY "${galaxy_rt_dir}")
-set(galaxy_rt_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/ray_tracing.hlsl")
-set(galaxy_rt_headers "")
-foreach(galaxy_rt_pass geometry:GeometryCS validate:ValidateCS)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}_cs.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_5 -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug -Qstrip_reflect
-            -Vn g_rt_${galaxy_rt_name}_cs -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_hlsl}"
-        DEPENDS "${galaxy_rt_hlsl}"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# Ray-traced lighting passes, the picture capture and the EFB composite
-# (runtime/src/render/rt_lighting.hlsl).
-set(galaxy_rt_light_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_lighting.hlsl")
-foreach(galaxy_rt_pass capture_cs:CaptureCS:cs_6_5 sky_state_cs:SkyStateCS:cs_6_5 glow_base_cs:GlowBaseCS:cs_6_5
-        sky_light_map_cs:SkyLightMapCS:cs_6_5 sky_light_sh_cs:SkyLightShCS:cs_6_5
-        surface_emit_cs:SurfaceEmitCS:cs_6_5
-        glow_emit_cs:GlowEmitCS:cs_6_5 authored_emit_cs:AuthoredEmitCS:cs_6_5 emit_merge_cs:EmitMergeCS:cs_6_5
-        star_sphere_cs:StarSphereCS:cs_6_5 sky_trace_sh_cs:SkyTraceShCS:cs_6_5
-        composite_vs:CompositeVS:vs_6_0
-        composite_ps:CompositePS:ps_6_0 clear_composite_ps:ClearCompositePS:ps_6_0
-        mist_composite_ps:MistCompositePS:ps_6_0 light_texture_ps:LightTexturePS:ps_6_0)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_light_hlsl}"
-        DEPENDS "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# The camera of the ray-traced picture: bloom and the tone curve from the HDR scene EFB (runtime/src/render/rt_camera.hlsl).
-set(galaxy_rt_camera_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_camera.hlsl")
-foreach(galaxy_rt_pass camera_down_cs:CameraDownCS:cs_6_5 camera_up_cs:CameraUpCS:cs_6_5 camera_vs:CameraVS:vs_6_0
-        camera_ps:CameraPS:ps_6_0 camera_widen_ps:CameraWidenPS:ps_6_0 camera_shafts_cs:CameraShaftsCS:cs_6_0)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_camera_hlsl}"
-        DEPENDS "${galaxy_rt_camera_hlsl}"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# Ray-traced reflections and their EFB composite (runtime/src/render/rt_reflections.hlsl).
-set(galaxy_rt_reflect_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_reflections.hlsl")
-foreach(galaxy_rt_pass reflect_memory_cs:ReflectMemoryCS:cs_6_5 reflect_trace_cs:ReflectTraceCS:cs_6_5
-        reflect_sky_cs:SkyCaptureCS:cs_6_5 reflect_draw_clear_cs:DrawLightClearCS:cs_6_5
-        reflect_draw_cs:DrawLightCS:cs_6_5
-        reflect_temporal_cs:ReflectTemporalCS:cs_6_5 reflect_filter_a_cs:ReflectFilterACS:cs_6_5
-        reflect_filter_cs:ReflectFilterCS:cs_6_5
-        reflect_composite_vs:ReflectCompositeVS:vs_6_0 reflect_composite_ps:ReflectCompositePS:ps_6_0
-        water_trace_cs:WaterTraceCS:cs_6_5 water_composite_ps:WaterCompositePS:ps_6_0
-        underwater_ps:UnderwaterPS:ps_6_0)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    list(GET galaxy_rt_pair 2 galaxy_rt_profile)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_rt_profile} -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_reflect_hlsl}"
-        DEPENDS "${galaxy_rt_reflect_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# High quality's traces: the hits' textures straight from the descriptor heap (shader model 6.6).
-foreach(galaxy_rt_pass reflect_trace_tex_cs:ReflectTraceCS water_trace_tex_cs:WaterTraceCS)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_reflect_hlsl}"
-        DEPENDS "${galaxy_rt_reflect_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-
-# The passes reading textures and TEV records straight from the descriptor heap (shader model 6.6): the traced sky,
-# the emitting triangles and the glow light sources.
-foreach(galaxy_rt_pass sky_probe_tex_cs:SkyProbeCS emit_triangle_cs:EmitTriangleCS emit_scan_cs:EmitScanCS
-        glow_emitter_cs:GlowEmitterCS)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_light_hlsl}"
-        DEPENDS "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-
-# The ray tracing engine (runtime/src/render/rt_engine.hlsl, including rt_lighting.hlsl; shader model 6.6).
-set(galaxy_rt_engine_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_engine.hlsl")
-foreach(galaxy_rt_pass engine_paint_clear_cs:EnginePaintClearCS engine_paint_cs:EnginePaintCS
-        engine_gbuffer_cs:EngineGBufferCS engine_direct_cs:EngineDirectCS
-        engine_light_grid_cs:EngineLightGridCS engine_cache_cs:EngineCacheCS
-        engine_direct_spatial_cs:EngineDirectSpatialCS
-        engine_shadow_blur_cs:EngineShadowBlurCS
-        engine_shadow_post_cs:EngineShadowPostCS engine_shadow_stabilize_cs:EngineShadowStabilizeCS
-        engine_indirect_cs:EngineIndirectCS
-        engine_indirect_spatial_cs:EngineIndirectSpatialCS engine_specular_cs:EngineSpecularCS
-        engine_temporal_cs:EngineTemporalCS engine_atrous_cs:EngineAtrousCS engine_final_cs:EngineFinalCS
-        engine_clear_cs:EngineClearCS engine_mist_cs:MistLightCS engine_reference_cs:EngineReferenceCS)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -D RT_TEXTURED=1 -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_engine_hlsl}"
-        DEPENDS "${galaxy_rt_engine_hlsl}" "${galaxy_rt_light_hlsl}" "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_tev.hlsli"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-
-# Texture de-lighting for the physical lighting (runtime/src/render/rt_delight.hlsl; textures from the descriptor heap).
-set(galaxy_rt_delight_hlsl "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/rt_delight.hlsl")
-foreach(galaxy_rt_pass delight_cs:DelightCS delight_mip_cs:DelightMipCS)
-    string(REPLACE ":" ";" galaxy_rt_pair "${galaxy_rt_pass}")
-    list(GET galaxy_rt_pair 0 galaxy_rt_name)
-    list(GET galaxy_rt_pair 1 galaxy_rt_entry)
-    set(galaxy_rt_header "${galaxy_rt_dir}/rt_${galaxy_rt_name}.h")
-    add_custom_command(OUTPUT "${galaxy_rt_header}" "${galaxy_rt_header}.dxil"
-        COMMAND "${GALAXY_DXC}" -nologo -T cs_6_6 -E ${galaxy_rt_entry} -O3 -WX -Qstrip_debug
-            -Qstrip_reflect -Vn g_rt_${galaxy_rt_name} -Fh "${galaxy_rt_header}" -Fo "${galaxy_rt_header}.dxil" "${galaxy_rt_delight_hlsl}"
-        DEPENDS "${galaxy_rt_delight_hlsl}"
-        VERBATIM)
-    list(APPEND galaxy_rt_headers "${galaxy_rt_header}")
-endforeach()
-# The shaders' manifest (tools/rt_shader_manifest.cmake: each one's size and DXIL digest, the set's fingerprint) for the
-# start's shader preparation (runtime/src/render/rt_prepare.cpp), from the binaries dxc writes beside the headers.
-set(galaxy_rt_manifest "${galaxy_rt_dir}/rt_shader_manifest.h")
-set(galaxy_rt_binaries "")
-foreach(galaxy_rt_header IN LISTS galaxy_rt_headers)
-    list(APPEND galaxy_rt_binaries "${galaxy_rt_header}.dxil")
-endforeach()
-string(REPLACE ";" "|" galaxy_rt_binary_arg "${galaxy_rt_binaries}")
-add_custom_command(OUTPUT "${galaxy_rt_manifest}"
-    COMMAND "${CMAKE_COMMAND}" "-DOUT=${galaxy_rt_manifest}" "-DBINARIES=${galaxy_rt_binary_arg}"
-        -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/rt_shader_manifest.cmake"
-    DEPENDS ${galaxy_rt_binaries} "${CMAKE_CURRENT_SOURCE_DIR}/tools/rt_shader_manifest.cmake"
-    VERBATIM)
-list(APPEND galaxy_rt_headers "${galaxy_rt_manifest}")
 
 # The native materials' shaders (E-04), compiled by dxc at build (cmake/native_materials.cmake).
 include(cmake/native_materials.cmake)
@@ -496,18 +336,11 @@ add_library(galaxy_gx STATIC
     runtime/src/render/game_bloom.cpp
     ${galaxy_bloom_headers}
     runtime/src/render/temporal_upscaler.cpp
-    runtime/src/render/ray_tracing.cpp
     runtime/src/render/game_lights.cpp
     runtime/src/render/game_objects.cpp
-    runtime/src/render/ray_tracing_camera.cpp
-    runtime/src/render/ray_tracing_engine.cpp
-    runtime/src/render/ray_tracing_reflections.cpp
-    runtime/src/render/ray_tracing_water.cpp
-    runtime/src/render/rt_prepare.cpp
     runtime/src/render/rt_surfaces.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/enhanced_lighting.cpp
-    ${galaxy_rt_headers}
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/transform_history.cpp
     runtime/src/render/frame_interpolation.cpp
@@ -553,7 +386,6 @@ target_compile_definitions(
 target_include_directories(galaxy_gx
     PRIVATE
         "${galaxy_post_dir}"
-        "${galaxy_rt_dir}"
         "${CMAKE_CURRENT_SOURCE_DIR}/third_party/smaa"
         "${CMAKE_CURRENT_SOURCE_DIR}/native/include"
 )
@@ -661,7 +493,7 @@ galaxy_test(galaxy_window_owner_tests SOURCES ${gxs}/window_owner_tests.cpp ${gx
 set_tests_properties(galaxy_window_owner_tests PROPERTIES TIMEOUT 20)
 # Tests of the renderer library.
 foreach(name curved_surfaces native_shapes simd_kernel vs_constants render_config
-        sampler_key rt_surfaces rt_materials rt_prepare texture_pack movie_replacement
+        sampler_key rt_surfaces rt_materials texture_pack movie_replacement
         efb_copy line_point_raster native_settings_overlay post_process
         efb_conversion native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)

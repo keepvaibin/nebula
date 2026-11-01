@@ -51,7 +51,6 @@
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/texture_pack.h"
 #if defined(NEBULA_HOST_D3D12)
-#include "galaxy/render/rt_prepare.h"
 #endif
 
 #if defined(_WIN32)
@@ -2678,21 +2677,9 @@ uint32_t svc_option(void*, uint32_t what) {
         return 0;
 #endif
     case NEBULA_OPTION_RT_PREPARATION:
-#if defined(NEBULA_HOST_D3D12)
-        switch (galaxy::render::rt_prepare::first_start()) {
-        case galaxy::render::rt_prepare::FirstStart::Opening: return 1u;
-        case galaxy::render::rt_prepare::FirstStart::Compiling: return 2u;
-        default: return 0u;
-        }
-#else
-        return 0;
-#endif
     case NEBULA_OPTION_RT_PREPARE_PROGRESS:
-#if defined(NEBULA_HOST_D3D12)
-        return static_cast<uint32_t>(galaxy::render::rt_prepare::progress() * 10000.0f + 0.5f);
-#else
+        // The ray tracer is parked (no shaders to prepare): the game's preparation screen never shows.
         return 0;
-#endif
     case NEBULA_OPTION_TEST_DUMP_LAYOUTS: {
         static const bool dump = [] {
             const char* value = std::getenv("GALAXY_TEST_DUMP_LAYOUTS");
