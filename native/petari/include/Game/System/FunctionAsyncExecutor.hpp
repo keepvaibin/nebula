@@ -1,6 +1,6 @@
 #pragma once
 
-#include "Game/System/OSThreadWrapper.hpp"
+#include "Game/System/GameThread.hpp"
 #include "Game/System/NebulaKernel.hpp"
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
@@ -32,7 +32,7 @@ public:
     /* 0x30 */ void* mMessage;
 };
 
-class FunctionAsyncExecutorThread : public OSThreadWrapper {
+class FunctionAsyncExecutorThread : public GameThread {
 public:
     FunctionAsyncExecutorThread(JKRHeap*);
 

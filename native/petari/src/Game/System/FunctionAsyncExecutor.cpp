@@ -27,7 +27,7 @@ void FunctionAsyncExecInfo::execute() {
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
-    : OSThreadWrapper(0x10000, 4, 1, pHeap), mIsSuspended(false), mName(nullptr) {
+    : GameThread(0x10000, 4, 1, pHeap), mIsSuspended(false), mName(nullptr) {
 }
 
 void* FunctionAsyncExecutorThread::run() {
