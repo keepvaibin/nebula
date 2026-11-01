@@ -5,7 +5,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = v.color0.rgb;
     o.color.a = v.color0.a;
     o.color1 = v.color1;
-    {  // coordinate 0: type 1, source 4
+    {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 0u) & 1u) != 0u) {
@@ -50,10 +50,6 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
-    const float a8 = round(prev.a * 255.0);
-    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
-        discard;
-    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

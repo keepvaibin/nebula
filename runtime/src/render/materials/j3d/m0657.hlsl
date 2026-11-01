@@ -8,7 +8,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color.rgb = v.color0.rgb;
     o.color.a = v.color0.a * saturate((material.amb_color[0].a * 255.0 + j3d_light(0u, 3u, 2u, v.eye, nrm).a + j3d_light(2u, 3u, 2u, v.eye, nrm).a) / 255.0);
     o.color1 = v.color1;
-    {  // coordinate 0: type 1, source 4
+    {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 0u) & 1u) != 0u) {

@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
@@ -598,10 +599,10 @@ namespace J3DNativeShape {
         }
         NebulaShapeTexGen& rOut = sTexGens[sTexGenCount++];
         rOut.coord = coord;
-        rOut.type = type;
-        rOut.source = source;
+        rOut.type = J3DNativeTexGen::kind(type, source);
+        rOut.source = J3DNativeTexGen::source(source);
         rOut.normalize = normalize ? 1 : 0;
-        rOut.post_matrix = postMatrix;
+        rOut.post_matrix = J3DNativeTexGen::post(postMatrix);
         rOut.reserved[0] = rOut.reserved[1] = rOut.reserved[2] = 0;
     }
 

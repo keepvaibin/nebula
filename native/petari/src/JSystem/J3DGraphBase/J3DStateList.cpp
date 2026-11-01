@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
@@ -269,10 +270,10 @@ void J3DStateList::setTexCoordGen(GXTexCoordID coord, GXTexGenType type, GXTexGe
                                   u32 postMtx) {
     NebulaStateOp& r = add(NEBULA_STATE_TEX_COORD_GEN);
     r.a[0] = coord;
-    r.a[1] = type;
-    r.a[2] = src;
+    r.a[1] = J3DNativeTexGen::kind(type, src);
+    r.a[2] = J3DNativeTexGen::source(src);
     r.a[3] = normalize;
-    r.a[4] = static_cast< u8 >(postMtx);
+    r.a[4] = J3DNativeTexGen::post(postMtx);
 }
 
 void J3DStateList::setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWrapMode wrapT, GXTexFilter minFilter,

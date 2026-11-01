@@ -79,13 +79,46 @@ def shader_key(p):
     )
 
 
+def native_tex_gen(gx_type, gx_source):
+    """GX's texgen type and source as the records' encoding (J3DNativeTexGen.hpp kind/source): kind bits 0-1 (0 a
+    matrix, 1 emboss, 2/3 colour 0/1), bit 2 projective, bit 3 implicit w, bits 4-6 emboss light; source bits 0-3 the
+    row (0 position, 1 normal, 2 colour, 3 binormal, 4 tangent, 5 + n coordinate n), bits 4-6 emboss coordinate."""
+    row, emboss, kind, light = 5, 5, 0, 0
+    if gx_source <= 3:
+        row = (0, 1, 3, 4)[gx_source]
+    elif 4 <= gx_source <= 11:
+        row = 5 + gx_source - 4
+    elif 12 <= gx_source <= 18:
+        emboss = gx_source - 12
+    elif gx_source in (19, 20):
+        row = 2
+    if 2 <= gx_type <= 9:
+        kind, light = 1, gx_type - 2
+    elif gx_type == 10:
+        kind = 2 if gx_source == 19 else 3
+    projective = 1 if gx_type == 0 else 0
+    form = 1 if gx_source <= 3 else 0
+    return kind | projective << 2 | form << 3 | light << 4, row | (emboss & 7) << 4
+
+
+def to_native(rec):
+    """A dumped record's texgens in the renderer's encoding: those written before it (tex_gen reserved[0] 0)."""
+    rec = bytearray(rec)
+    for g in range(min(rec[1], 8)):
+        base = 592 + 8 * g
+        if rec[base + 5] == 0:
+            rec[base], rec[base + 1] = native_tex_gen(rec[base], rec[base + 1])
+            rec[base + 5] = 1
+    return bytes(rec)
+
+
 def read(paths):
     records = []
     for path in paths:
         data = open(path, "rb").read()
         if len(data) % RECORD:
             raise SystemExit(f"{path}: {len(data)} bytes is not a whole number of {RECORD}-byte records")
-        records += [data[i:i + RECORD] for i in range(0, len(data), RECORD)]
+        records += [to_native(data[i:i + RECORD]) for i in range(0, len(data), RECORD)]
     return records
 
 
@@ -147,25 +180,27 @@ def emit_vertex(p, out):
     out.append("void material_vertex(NativeVertex v, inout NativeVaryings o) {")
     # The channels first: a colour texgen (SRTG) reads channel 0's result.
     emit_channels(p, out)
-    for i, (gen_type, source, matrix, normalize, post) in enumerate(p["tex_gen"][:p["tex_gens"]]):
-        if gen_type == 10:
+    for i, (gen_kind, source, matrix, normalize, post) in enumerate(p["tex_gen"][:p["tex_gens"]]):
+        kind, projective, row = gen_kind & 3, (gen_kind >> 2) & 1, source & 15
+        if kind in (2, 3):
             out.append(f"    o.uv[{i}] = float4(o.color.rg, 1.0, 0.0);")
             continue
-        if gen_type not in (0, 1):
-            raise Unsupported(f"texgen type {gen_type} (bump)")
-        if source == 0:
+        if kind != 0:
+            raise Unsupported(f"texgen kind {kind} (emboss)")
+        if row == 0:
             coord = "float4(v.pos, 1.0)"
-        elif source == 1:
+        elif row == 1:
             coord = "float4(v.nrm, 1.0)"
-        elif source == 2:
-            coord = "float4(v.tangent, 1.0)"  # GX_TG_BINRM: XF row 3 (Dolphin BinormalT), as the uber shader reads it
-        elif source == 3:
-            coord = "float4(v.binormal, 1.0)"  # GX_TG_TANGENT: XF row 4 (BinormalB)
-        elif 4 <= source <= 11:
-            coord = f"float4(v.uv[{source - 4}], 1.0, 1.0)"
+        elif row == 3:
+            coord = "float4(v.tangent, 1.0)"  # the binormal row (Dolphin BinormalT), as the uber shader read it
+        elif row == 4:
+            coord = "float4(v.binormal, 1.0)"  # the tangent row (BinormalB)
+        elif 5 <= row <= 12:
+            coord = f"float4(v.uv[{row - 5}], 1.0, 1.0)"
         else:
-            raise Unsupported(f"texgen source {source}")
-        out.append(f"    {{  // coordinate {i}: type {gen_type}, source {source}")
+            raise Unsupported(f"texgen source row {row}")
+        gen_type = 0 if projective else 1  # three outputs or two
+        out.append(f"    {{  // coordinate {i}: kind {kind}, projective {projective}, row {row}")
         out.append(f"        const float4 c = {coord};")
         # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, which GX takes over
         # the material's texgen id: GX_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix

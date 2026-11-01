@@ -4,7 +4,7 @@
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
     o.color = v.color0;
     o.color1 = v.color1;
-    {  // coordinate 0: type 1, source 4
+    {  // coordinate 0: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 0u) & 1u) != 0u) {
@@ -22,7 +22,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 1: type 0, source 0
+    {  // coordinate 1: kind 0, projective 1, row 0
         const float4 c = float4(v.pos, 1.0);
         float3 res;
         if (((vs_header.w >> 1u) & 1u) != 0u) {
@@ -40,7 +40,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[1] = float4(res, true ? 1.0 : 0.0);
     }
-    {  // coordinate 2: type 1, source 4
+    {  // coordinate 2: kind 0, projective 0, row 5
         const float4 c = float4(v.uv[0], 1.0, 1.0);
         float3 res;
         if (((vs_header.w >> 2u) & 1u) != 0u) {

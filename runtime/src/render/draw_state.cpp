@@ -257,7 +257,7 @@ void NativeDrawState::set_op(const state::Op& op) {
     }
     case state::kTexCoordGen: {
         XfTexGen made = material::tex_gen(a[1], a[2]);
-        if (a[5] != 0u && (a[1] < 2u || a[1] > 9u)) {
+        if (a[5] != 0u && made.type != TexGenType::EmbossMap) {
             made.emboss_source = 0u;  // GXSetTexCoordGen2 sets the bump source only for a bump texgen.
         }
         texgen[a[0] & 7u] = made;
