@@ -7,10 +7,10 @@ class JPAEmitterWorkData;
 struct JPAExTexShapeData {
     // Common header.
     /* 0x00 */ u8 mMagic[4];
-    /* 0x04 */ NEBULA_BE(u32) mSize;
+    /* 0x04 */ u32 mSize;
 
-    /* 0x08 */ NEBULA_BE(u32) mFlags;
-    /* 0x0C */ NEBULA_BE(f32) mIndTexMtx[2][3];
+    /* 0x08 */ u32 mFlags;
+    /* 0x0C */ f32 mIndTexMtx[2][3];
     /* 0x24 */ s8 mExpScale;
     /* 0x25 */ s8 mIndTexIdx;
     /* 0x26 */ s8 mSecTexIdx;

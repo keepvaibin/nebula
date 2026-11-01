@@ -15,6 +15,11 @@
 //!   in host order.
 //! - CANM/CKAN (camera animations): the header's six values, the eight components' counts, offsets (and key types),
 //!   the value block's byte count and its floats. Byte 7 of a cooked file's type ("CANM"/"CKAN") becomes lower case.
+//! - JPC (particles, after cook::formats::jpc rewrote its textures): the header's counts and texture offset, each
+//!   resource's index and block count, every block's size and fields (BEM1 dynamics, FLD1 fields, BSP1 base shape and
+//!   its texture-coordinate table and colour keys, ESP1 extra shape, SSP1 child shape, ETX1 indirect matrix, KFA1
+//!   keys, TDB1 texture indices) and the TEX1 blocks' sizes (their ResTIMG stays with the texture headers). Block
+//!   magics stay bytes; byte 3 of a cooked file ("JPAC2-10") becomes 'c'.
 
 use anyhow::{bail, Context, Result};
 use std::collections::HashSet;
@@ -365,5 +370,103 @@ pub fn canm(bytes: &[u8]) -> Result<Vec<u8>> {
         host32(bytes, &mut out, values + 4 + 4 * v)?;
     }
     out[7] = out[7].to_ascii_lowercase();
+    Ok(out)
+}
+
+/// The 32-bit words at [from, to) of a block at `at`.
+fn host_words(src: &[u8], out: &mut [u8], at: usize, from: usize, to: usize) -> Result<()> {
+    for o in (from..to).step_by(4) {
+        host32(src, out, at + o)?;
+    }
+    Ok(())
+}
+
+/// The 16-bit values at [from, to) of a block at `at`.
+fn host_halves(src: &[u8], out: &mut [u8], at: usize, from: usize, to: usize) -> Result<()> {
+    for o in (from..to).step_by(2) {
+        host16(src, out, at + o)?;
+    }
+    Ok(())
+}
+
+/// A particle file (JPC) in host byte order.
+pub fn jpc_host(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.starts_with(b"JPAc2-10") {
+        return Ok(bytes.to_vec());
+    }
+    if !bytes.starts_with(b"JPAC2-10") {
+        bail!("not a particle file");
+    }
+    let mut out = bytes.to_vec();
+    let resources = host16(bytes, &mut out, 8)? as usize;
+    let textures = host16(bytes, &mut out, 0xA)? as usize;
+    let tex_offset = host32(bytes, &mut out, 0xC)? as usize;
+    let mut at = 0x10;
+    for _ in 0..resources {
+        host16(bytes, &mut out, at)?; // user index
+        let blocks = host16(bytes, &mut out, at + 2)? as usize;
+        at += 8;
+        for _ in 0..blocks {
+            let magic: [u8; 4] = bytes.get(at..at + 4).context("a block past the file's end")?.try_into().unwrap();
+            let size = host32(bytes, &mut out, at + 4)? as usize;
+            if size < 8 || at + size > bytes.len() {
+                bail!("block {} at {at:#x}: size {size:#x}", String::from_utf8_lossy(&magic));
+            }
+            match &magic {
+                b"BEM1" => {
+                    host_words(bytes, &mut out, at, 0x8, 0x68)?; // flags, user work, three vectors, thirteen floats
+                    host_halves(bytes, &mut out, at, 0x68, 0x78)?; // rotation, frames, life, volume size, divisions
+                }
+                b"FLD1" => host_words(bytes, &mut out, at, 0x8, 0x40)?,
+                b"BSP1" => {
+                    let flags = host32(bytes, &mut out, at + 0x8)?;
+                    let prm = host16(bytes, &mut out, at + 0xC)? as usize;
+                    let env = host16(bytes, &mut out, at + 0xE)? as usize;
+                    host_words(bytes, &mut out, at, 0x10, 0x18)?; // base size x, y
+                    host16(bytes, &mut out, at + 0x18)?; // blend mode
+                    host16(bytes, &mut out, at + 0x24)?; // colour animation's last frame
+                    if flags & 0x0100_0000 != 0 {
+                        host_words(bytes, &mut out, at, 0x34, 0x34 + 0x28)?; // texture-coordinate animation table
+                    }
+                    let tables = [(bytes[at + 0x21] & 0x02 != 0, prm, bytes[at + 0x22]), (bytes[at + 0x21] & 0x08 != 0, env, bytes[at + 0x23])];
+                    for (on, offset, keys) in tables {
+                        if on {
+                            for k in 0..keys as usize {
+                                host16(bytes, &mut out, at + offset + 6 * k)?; // key frame; the colour is bytes
+                            }
+                        }
+                    }
+                }
+                b"ESP1" => {
+                    host_words(bytes, &mut out, at, 0x8, 0x28)?;
+                    host_halves(bytes, &mut out, at, 0x28, 0x2C)?;
+                    host_words(bytes, &mut out, at, 0x2C, 0x60)?;
+                }
+                b"SSP1" => {
+                    host_words(bytes, &mut out, at, 0x8, 0x34)?;
+                    host32(bytes, &mut out, at + 0x3C)?; // timing (the two colours are bytes)
+                    host_halves(bytes, &mut out, at, 0x40, 0x44)?; // life, rate
+                    host16(bytes, &mut out, at + 0x46)?; // rotation speed
+                }
+                b"ETX1" => host_words(bytes, &mut out, at, 0x8, 0x24)?,
+                b"KFA1" => {
+                    let keys = bytes[at + 9] as usize;
+                    host_words(bytes, &mut out, at, 0xC, 0xC + 16 * keys)?;
+                }
+                b"TDB1" => host_halves(bytes, &mut out, at, 0x8, size & !1)?,
+                _ => bail!("unknown block {} at {at:#x}", String::from_utf8_lossy(&magic)),
+            }
+            at += size;
+        }
+    }
+    let mut at = tex_offset;
+    for _ in 0..textures {
+        let size = host32(bytes, &mut out, at + 4)? as usize;
+        if size < 8 || at + size > bytes.len() {
+            bail!("texture block at {at:#x}: size {size:#x}");
+        }
+        at += size;
+    }
+    out[3] = b'c';
     Ok(out)
 }
