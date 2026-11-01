@@ -806,7 +806,7 @@ bool RendererVk::publish_capture(const EfbCopyParams& params, gpu::TextureRef te
     // that view (redirect_), so the picture is read through it, unswizzled.
     (void)is_depth_copy;
     return publish_picture(params.dest_addr, size(params.src_width), size(params.src_height), std::move(texture), 0u,
-                           efb_copy_source_bytes(params), textures);
+                           0u, textures);
 }
 
 bool RendererVk::begin_output_efb() {
@@ -852,7 +852,7 @@ bool RendererVk::enter_output_efb(unsigned scale) {
     const unsigned width = kFrameWidth * scale;
     const unsigned height = kFrameHeight * scale;
     const EfbCopySamplingGeometry sampling = compute_xfb_sampling_geometry(params, width, height, efb_scale_);
-    record_conversion_blit(*alt_efb_.color, width, height, params, false, false, true, 15u, sampling.src_x,
+    record_conversion_blit(*alt_efb_.color, width, height, params, false, false, true, kCopyLayoutDisplay, sampling.src_x,
                            sampling.src_y, sampling.step_x, sampling.step_y, sampling.filter_row_offset);
     end_efb_pass();
     image_barrier(commands_, alt_efb_.color->image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -1655,7 +1655,7 @@ void RendererVk::record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsi
     vkCmdSetViewport(commands, 0, 1, &viewport);
     vkCmdSetScissor(commands, 0, 1, &scissor);
     // A display copy one EFB pixel to one XFB pixel without gamma: its filter alone (display_filter_shader_source).
-    const bool display_filter = copy_format == 15u && keep_alpha && !intensity && !is_depth_copy && !grey &&
+    const bool display_filter = copy_format == kCopyLayoutDisplay && keep_alpha && !intensity && !is_depth_copy && !grey &&
                                 step_x == 1.0f && step_y == 1.0f &&
                                 display_filter_pipeline_ != VK_NULL_HANDLE;
     vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS,
@@ -1704,7 +1704,7 @@ void RendererVk::copy_efb_to_xfb(const EfbCopyParams& params, XfbTexture& dest) 
     }
     {
         const LogPause pause{*this};
-        record_conversion_blit(*dest.texture, dest.width, dest.height, params, false, false, true, 15u,
+        record_conversion_blit(*dest.texture, dest.width, dest.height, params, false, false, true, kCopyLayoutDisplay,
                                sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                                sampling.filter_row_offset);
     }
@@ -1734,7 +1734,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
     }
     // Keyed by address, format and source: one address alternates between formats and copies of each.
     const std::uint64_t dest_key = static_cast<std::uint64_t>(params.dest_addr) |
-        (static_cast<std::uint64_t>(params.target_format) << 48u) | (is_depth_copy ? (1ull << 56u) : 0ull) |
+        (static_cast<std::uint64_t>(params.channels) << 48u) | (params.intensity ? (1ull << 52u) : 0ull) | (is_depth_copy ? (1ull << 56u) : 0ull) |
         (native ? (1ull << 57u) : 0ull);  // addresses stay below 2^48
     EfbCopyDest& dest = efb_copy_dests_[dest_key];
     dest.last_used = ++efb_copy_dests_tick_;
@@ -1743,7 +1743,7 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
             retire(std::move(dest.texture));
             efb_copy_dests_bytes_ -= std::min(efb_copy_dests_bytes_, dest.bytes);
         }
-        const bool grey = efb_copy_single_channel(params.target_format, is_depth_copy);
+        const bool grey = efb_copy_single_channel(params.channels, is_depth_copy);
         dest.texture = vk::Context::get().create_texture(
             w, h, 1u, grey ? VK_FORMAT_R8_UNORM : VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -1845,8 +1845,8 @@ bool RendererVk::copy_efb_to_texture(const EfbCopyParams& params, TextureCache& 
         return publish_capture(params, current.texture, is_depth_copy, textures);
     }
     // Intensity copies to RA4/RA8 (IA4/IA8) keep the source alpha; pure-I formats replicate Y into alpha.
-    const bool keep_alpha = params.target_format == 2u || params.target_format == 3u;
-    record_conversion_blit(texture, w, h, params, is_depth_copy, params.intensity, keep_alpha, params.target_format,
+    const bool keep_alpha = params.channels == kCopyLayoutIntensityAlpha;
+    record_conversion_blit(texture, w, h, params, is_depth_copy, params.intensity, keep_alpha, params.channels,
                            sampling.src_x, sampling.src_y, sampling.step_x, sampling.step_y,
                            sampling.filter_row_offset);
     return publish_capture(params, current.texture, is_depth_copy, textures);

@@ -5201,7 +5201,7 @@ void RenderCore::mark_texture_binding_alias_dirty(
     dirty.dependency.address = params.dest_addr;
     dirty.dependency.width = alias_width;
     dirty.dependency.height = alias_height;
-    dirty.dependency.source_bytes = efb_copy_source_bytes(params);
+    dirty.dependency.source_bytes = 1u;  // the picture is found by its key (the capture buffer) alone
     dirty_texture_aliases_.push_back(dirty);
     invalidate_texture_handle_cache_dependency(dirty.dependency);
 }
@@ -6841,7 +6841,7 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
                         <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
-                        <<" scaled-xfb="<<xfb->width<<'x'<<xfb->height<<" guest-stride="<<params.dest_stride
+                        <<" scaled-xfb="<<xfb->width<<'x'<<xfb->height
                         <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<xfb->copy_serial<<'\n';
                 }
             }
@@ -6855,11 +6855,8 @@ void RenderCore::on_efb_copy(const EfbCopyParams& params, std::uint8_t pixel_for
         }
     } else {
         ++frame_tex_copies_;
-        // The copy overwrites its destination: an image handed over there (memory the game freed and reused, as
-        // the Mii library's face masks reuse its part textures' buffers) no longer describes those bytes. The
-        // extent is the destination's tile rows (4 lines each, the shortest tile) over the source height.
-        const TextureCache::MemoryRange copied{
-            params.dest_addr, params.dest_stride * ((static_cast<std::uint32_t>(params.src_height) + 3u) / 4u)};
+        // The capture replaces what its buffer (the key) held: an image handed over there no longer describes it.
+        const TextureCache::MemoryRange copied{params.dest_addr, 1u};
         texture_cache_.drop_registered_images(std::span<const TextureCache::MemoryRange>(&copied, 1u));
         const bool decoded_evicted = texture_cache_.invalidate_range(copied.address, copied.size) != 0u;
         // Depth-source copy when the PE pixel format is Z24 at copy time

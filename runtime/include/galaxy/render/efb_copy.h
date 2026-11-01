@@ -116,8 +116,16 @@ struct EfbCopyRect {
 };
 // A colour copy whose texture is one channel (I4, or I8 from R, G, B or A): the conversion writes (i, i, i, i), so
 // its destination holds the one byte (R8, viewed as R in every channel, as decoded I8 textures are).
-[[nodiscard]] constexpr bool efb_copy_single_channel(std::uint8_t target_format, bool is_depth_copy) noexcept {
-    return !is_depth_copy && (target_format <= 1u || (target_format >= 7u && target_format <= 10u));
+// A copy's picture layout: the game's NebulaTargetChannels (0 RGBA, 1 intensity and alpha, 2 alpha, 3 red, 4 green,
+// 5 blue, 6 colour with alpha one) for captures; kCopyLayoutDisplay for display copies (opaque colour through the
+// display filter).
+inline constexpr std::uint8_t kCopyLayoutRgba = 0u;
+inline constexpr std::uint8_t kCopyLayoutIntensityAlpha = 1u;
+inline constexpr std::uint8_t kCopyLayoutDisplay = 7u;
+
+// One channel read in every channel (alpha, red, green or blue): an R8 picture.
+[[nodiscard]] constexpr bool efb_copy_single_channel(std::uint8_t channels, bool is_depth_copy) noexcept {
+    return !is_depth_copy && channels >= 2u && channels <= 5u;
 }
 
 [[nodiscard]] std::optional<EfbCopyRect> efb_identity_copy_rect(

@@ -53,7 +53,6 @@ bool test_scaled_xfb_resource_allocation() {
     galaxy::render::EfbCopyParams params{};
     params.src_width = 640u;
     params.src_height = 456u;
-    params.dest_stride = 1280u;
     params.copy_to_xfb = true;
     galaxy::render::XfbTexture* xfb = manager.acquire_xfb(params, 1u);
     const bool allocated = xfb != nullptr && xfb->texture != nullptr;
@@ -365,9 +364,9 @@ int main() {
             "EFB peek geometry clamps unsupported scales before selecting a texel");
     }
     passed &= expect(
-        galaxy::render::efb_copy_alias_texture_format(7u) ==
-            static_cast<std::uint8_t>(galaxy::render::TexFormat::I8),
-        "A8 screen-alpha EFB copies alias as I8 textures");
+        galaxy::render::efb_copy_single_channel(2u, false) && !galaxy::render::efb_copy_single_channel(2u, true) &&
+            !galaxy::render::efb_copy_single_channel(galaxy::render::kCopyLayoutIntensityAlpha, false),
+        "alpha captures are one-channel pictures; depth and intensity-alpha ones are not");
 
     if (!passed) {
         return 1;
