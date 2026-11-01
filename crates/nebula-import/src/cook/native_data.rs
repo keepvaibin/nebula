@@ -33,8 +33,9 @@
 //! - J3D animations (BCK, BCA, BTK, BRK, BPK, BPA, BTP, BVA, BLK, BLA, BXK, BXA): headers, counts, offsets and the
 //!   16-bit and float arrays by block type, the name tables (j3d_animation).
 //! - J3D models and material tables (BMD, BDL, BMT; j3d_model): headers, block headers, INF1, JNT1, EVP1, DRW1 and
-//!   the name tables, VTX1 (format list, arrays by their component type); SHP1/MAT3/MDL3 contents and TEX1 image
-//!   headers stay big-endian until their steps.
+//!   the name tables, VTX1 (format list, arrays by their component type), SHP1 (shape data, tables, vertex
+//!   descriptors, display lists' counts and 16-bit indices); MAT3/MDL3 contents and TEX1 image headers stay
+//!   big-endian until their steps.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1076,8 +1077,9 @@ pub fn is_j3d_model(bytes: &[u8]) -> bool {
 /// block's kind, size, count and offsets; INF1's flags, counts and hierarchy; JNT1's joint data (kind, transform,
 /// radius, bounds) and index table; EVP1's indices, weights and inverse matrices; DRW1's indices; every name table;
 /// VTX1's format list and arrays (16-bit and float components by the list's type; 8-bit ones and RGB8/RGBX8/RGBA6/
-/// RGBA8 colours stay bytes). What stays big-endian until its own step: SHP1's and MAT3's contents, MDL3's, and
-/// TEX1's image headers.
+/// RGBA8 colours stay bytes); SHP1's shape data, index and matrix tables, vertex descriptors, matrix and draw
+/// entries, and in its display lists each primitive's count and 16-bit indices (the layout as J3DNativeShape reads
+/// it). What stays big-endian until its own step: MAT3's and MDL3's contents, and TEX1's image headers.
 pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 8 && &bytes[0..4] == b"2D3J" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1090,6 +1092,8 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
     out[4..8].copy_from_slice(&be32(bytes, 4)?.to_le_bytes());
     host32(bytes, &mut out, 8)?; // file size
     let blocks = host32(bytes, &mut out, 0xC)? as usize;
+    // VTX1's normal format count (GX_NRM_XYZ unless listed; an NBT entry counts as the normal's), for SHP1's layouts.
+    let mut normal_count = 0u32;
     let mut at = 0x20;
     for b in 0..blocks {
         let kind: [u8; 4] = bytes.get(at..at + 4).context("a model block past the file's end")?.try_into().unwrap();
@@ -1199,6 +1203,9 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                         if attr == 0xFF {
                             break;
                         }
+                        if attr == 10 || attr == 25 {
+                            normal_count = be32(bytes, e + 4)?;
+                        }
                         formats.push((attr, kind));
                         e += 16;
                     }
@@ -1232,6 +1239,116 @@ pub fn j3d_model(bytes: &[u8]) -> Result<Vec<u8>> {
                         2 => halves(&mut out, from, to)?,
                         4 => words(&mut out, from, to)?,
                         _ => {}
+                    }
+                }
+            }
+            b"SHP1" => {
+                let (init, index, descs, table, lists, mtx, draw) =
+                    (field(0xC)?, field(0x10)?, field(0x18)?, field(0x1C)?, field(0x20)?, field(0x24)?, field(0x28)?);
+                for t in [index, table] {
+                    if t != 0 {
+                        halves(&mut out, at + t, at + bound(t))?;
+                    }
+                }
+                for t in [descs, draw] {
+                    if t != 0 {
+                        words(&mut out, at + t, at + bound(t))?; // (attribute, type) pairs; (size, offset) pairs
+                    }
+                }
+                if mtx != 0 {
+                    // (matrix index, count: 16-bit; first table entry: 32-bit)
+                    let mut m = at + mtx;
+                    while m + 8 <= at + bound(mtx) {
+                        host16(bytes, &mut out, m)?;
+                        host16(bytes, &mut out, m + 2)?;
+                        host32(bytes, &mut out, m + 4)?;
+                        m += 8;
+                    }
+                }
+                if init != 0 {
+                    let mut done: HashSet<usize> = HashSet::new();
+                    let mut e = at + init;
+                    // 0x28 bytes each: matrix type, pad, group count, descriptor/matrix/draw indices (16-bit), pad,
+                    // radius, minimum, maximum.
+                    while e + 0x28 <= at + bound(init) {
+                        halves(&mut out, e + 2, e + 0xA)?;
+                        words(&mut out, e + 0xC, e + 0x28)?;
+                        let groups = be16(bytes, e + 2)? as usize;
+                        let desc = be16(bytes, e + 4)? as usize;
+                        let first_draw = be16(bytes, e + 8)? as usize;
+                        e += 0x28;
+                        if descs == 0 || draw == 0 || lists == 0 {
+                            continue;
+                        }
+                        // The vertex layout: attributes in GX's order, NBT as the normal; matrix indices one byte,
+                        // indices one or two (three normal indices for an NBT3 shape).
+                        let mut kinds = [0u32; 21];
+                        let mut nbt = normal_count != 0;
+                        let mut d = at + descs + desc;
+                        loop {
+                            let attr = be32(bytes, d)?;
+                            if attr == 0xFF {
+                                break;
+                            }
+                            let kind = be32(bytes, d + 4)?;
+                            let slot = if attr == 25 { 10 } else { attr };
+                            nbt |= attr == 25;
+                            if slot <= 20 && kind != 0 {
+                                if slot >= 9 && kind == 1 {
+                                    bail!("model block SHP1 at {at:#x}: a shape with direct vertex values");
+                                }
+                                kinds[slot as usize] = kind;
+                            }
+                            d += 8;
+                        }
+                        let mut stride = 0usize;
+                        let mut wide: Vec<usize> = Vec::new(); // offsets of 16-bit indices in a vertex
+                        for (attr, &kind) in kinds.iter().enumerate() {
+                            if kind == 0 {
+                                continue;
+                            }
+                            let one = if attr < 9 || kind == 2 { 1 } else { 2 };
+                            let n = if attr == 10 && nbt && normal_count == 2 { 3 } else { 1 };
+                            if one == 2 {
+                                wide.extend((0..n).map(|k| stride + 2 * k));
+                            }
+                            stride += one * n;
+                        }
+                        for g in 0..groups {
+                            let entry = at + draw + 8 * (first_draw + g);
+                            let length = be32(bytes, entry)? as usize;
+                            let offset = be32(bytes, entry + 4)? as usize;
+                            let from = at + lists + offset;
+                            if !done.insert(from) {
+                                continue;
+                            }
+                            let to = from + length;
+                            if to > at + bound(lists) {
+                                bail!("model block SHP1 at {at:#x}: a display list past the block");
+                            }
+                            let mut p = from;
+                            while p < to {
+                                let op = bytes[p];
+                                p += 1;
+                                if op == 0 {
+                                    continue;
+                                }
+                                if op & 0x80 == 0 {
+                                    bail!("model block SHP1 at {at:#x}: display list command {op:#04x} at {:#x}", p - 1 - at);
+                                }
+                                let count = host16(bytes, &mut out, p)? as usize;
+                                p += 2;
+                                if p + count * stride > to {
+                                    bail!("model block SHP1 at {at:#x}: {count} vertices past the display list");
+                                }
+                                for v in 0..count {
+                                    for &w in &wide {
+                                        host16(bytes, &mut out, p + v * stride + w)?;
+                                    }
+                                }
+                                p += count * stride;
+                            }
+                        }
                     }
                 }
             }

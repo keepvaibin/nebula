@@ -49,15 +49,11 @@ namespace {
         return static_cast< u64 >(reinterpret_cast< uintptr_t >(p));
     }
 
-    u16 be16(const u8* p) {
-        return static_cast< u16 >((p[0] << 8) | p[1]);
-    }
-
     u32 typeBytes(u32 type) {
         return type == GX_U8 || type == GX_S8 ? 1 : type == GX_U16 || type == GX_S16 ? 2 : 4;
     }
 
-    // A vertex component as the importer cooks the arrays (host order).
+    // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
     u16 host16(const u8* p) {
         u16 v;
         memcpy(&v, p, sizeof(v));
@@ -278,7 +274,7 @@ namespace {
         const u8* p = pVertex + rLayout.mOffset[attr];
         const u32 width = attr == GX_VA_NRM && rLayout.mNbtThree && rLayout.mNbt ? rLayout.mBytes[attr] / 3 : rLayout.mBytes[attr];
         p += which * width;
-        return width == 1 ? p[0] : be16(p);
+        return width == 1 ? p[0] : host16(p);
     }
 
     // Distinct corners by their bytes (open addressing over indices into the corner array).
@@ -403,7 +399,7 @@ namespace {
                 primitive == GX_POINTS || at + 2 > size) {
                 return false;
             }
-            const u32 count = be16(pList + at);
+            const u32 count = host16(pList + at);
             at += 2;
             if (at + count * rLayout.mStride > size) {
                 return false;

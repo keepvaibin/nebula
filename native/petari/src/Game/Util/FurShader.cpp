@@ -368,9 +368,9 @@ void CShader::setup(J3DModelData* pData) {
 }
 
 namespace {
-    // Display lists are big-endian.
+    // Display lists in host order, as the importer cooks SHP1.
     inline s32 getCount(u8* pRead) {
-        return *reinterpret_cast< NEBULA_BE(u16)* >(pRead + 1);
+        return *reinterpret_cast< u16* >(pRead + 1);
     }
 };  // namespace
 
@@ -427,9 +427,9 @@ void CShader::makeIndexData(J3DShape* pShape) const {
 
             for (s32 i = 0; i < count; i++) {
                 u8* pVertex = pRead + 3 + stride * i;
-                u16 pos = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + posOffset);
-                u16 nrm = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + nrmOffset);
-                u16 tex = *reinterpret_cast< NEBULA_BE(u16)* >(pVertex + texOffset);
+                u16 pos = *reinterpret_cast< u16* >(pVertex + posOffset);
+                u16 nrm = *reinterpret_cast< u16* >(pVertex + nrmOffset);
+                u16 tex = *reinterpret_cast< u16* >(pVertex + texOffset);
                 mIndexArray[pos]._0 = nrm;
                 mIndexArray[pos]._2 = tex;
             }
@@ -484,10 +484,10 @@ void CShader::checkBorderVtx(J3DModelData* pData, u32 shapeIndex) {
                     break;
                 }
 
-                s32 count = *reinterpret_cast< NEBULA_BE(u16)* >(pRead + 1);
+                s32 count = *reinterpret_cast< u16* >(pRead + 1);
 
                 for (s32 i = 0; i < count; i++) {
-                    u16 pos = *reinterpret_cast< NEBULA_BE(u16)* >((pRead + stride * i) + (posOffset + 3));
+                    u16 pos = *reinterpret_cast< u16* >((pRead + stride * i) + (posOffset + 3));
                     mIndexArray[pos]._0 = 0xFFFF;
                     mIndexArray[pos]._2 = 0xFFFF;
                 }

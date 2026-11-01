@@ -19,29 +19,13 @@ enum {
 
 J3DShapeFactory::J3DShapeFactory(J3DShapeBlock const& block) {
     mShapeInitData = JSUConvertOffsetToPtr< J3DShapeInitData >(&block, block.mpShapeInitData);
-    mIndexTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, block.mpIndexTable);
-    mVtxDescList = JSUConvertOffsetToPtr< NEBULA_DISC(GXVtxDescList) >(&block, block.mpVtxDescList),
-    mMtxTable = JSUConvertOffsetToPtr< NEBULA_BE(u16) >(&block, block.mpMtxTable);
+    mIndexTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpIndexTable);
+    mVtxDescList = JSUConvertOffsetToPtr< GXVtxDescList >(&block, block.mpVtxDescList),
+    mMtxTable = JSUConvertOffsetToPtr< u16 >(&block, block.mpMtxTable);
     mDisplayListData = JSUConvertOffsetToPtr< u8 >(&block, block.mpDisplayListData),
     mMtxInitData = JSUConvertOffsetToPtr< J3DShapeMtxInitData >(&block, block.mpMtxInitData),
     mDrawInitData = JSUConvertOffsetToPtr< J3DShapeDrawInitData >(&block, block.mpDrawInitData);
 }
-
-#ifdef TARGET_PC
-GXVtxDescList* J3DShapeFactory::getVtxDescList(int no) const {
-    const BEData< GXVtxDescList >* src =
-        (const BEData< GXVtxDescList >*)((const u8*)mVtxDescList + mShapeInitData[mIndexTable[no]].mVtxDescListIndex);
-    int num = 0;
-    while (src[num].attr != GX_VA_NULL) {
-        num++;
-    }
-    GXVtxDescList* list = new GXVtxDescList[num + 1];
-    for (int i = 0; i <= num; i++) {
-        list[i] = src[i];
-    }
-    return list;
-}
-#endif
 
 J3DShape* J3DShapeFactory::create(int no, u32 flag, GXVtxDescList* vtxDesc) {
     J3DShape* shape = new J3DShape;
