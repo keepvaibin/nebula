@@ -37,9 +37,7 @@
 #include "galaxy/render/rt_surfaces.h"
 #include "galaxy/render/texture_sampling.h"
 #include "galaxy/render/curved_surfaces.h"
-#include "galaxy/render/shader_gen.h"
 #include "galaxy/render/uber_constants.h"
-#include "galaxy/render/uber_shaders.h"
 #include "galaxy/render/render_config.h"
 #include "galaxy/windows_power.h"
 #include "galaxy/frame_timeline.h"
@@ -1586,7 +1584,6 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
             VertexConstants probe = cpu;
             probe.pos_base = scene.constants[r].pos_base;
             std::memcpy(probe.row_bases, scene.constants[r].row_bases, sizeof(probe.row_bases));
-            apply_uber_vs_key(vs_key_, probe);
             // Derived from the fields compared (write_scene_vs_constants).
             std::memcpy(probe.motion_prev_proj, scene.constants[r].motion_prev_proj,
                         offsetof(VertexConstants, motion_ctrl) + sizeof(probe.motion_ctrl) -
@@ -1651,9 +1648,6 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
         // Not read back from `upload`: the ring is write-combined memory. Its matrix bases are the sequence's
         // palette source.
         scene.constants.push_back(cpu);
-        // Uber pipelines read the key from the constants: a sub-frame's copy
-        // needs it as the frame's upload has it.
-        apply_uber_vs_key(vs_key_, scene.constants.back());
         const std::int32_t m = history.current_matches().back();
         scene.prev_index.push_back(m);
         // Inline draws read normals, lights and indexed texture matrices from
@@ -7471,19 +7465,6 @@ bool RenderCore::draw_positions_indexed() const noexcept {
 
 namespace {
 
-// GALAXY_GPU_DRAWS=1: each pipeline's keys once, to name the renderer's [gpu-draws] lines.
-void describe_pipeline(const gpu::Pipeline* pipeline, const VertexShaderKey& vs, const PixelShaderKey& ps,
-                       const RenderStateKey& rs) {
-    static const bool enabled = read_env_u64("GALAXY_GPU_DRAWS", 0u) != 0u;
-    static std::unordered_set<const gpu::Pipeline*> described;
-    if (!enabled || pipeline == nullptr || !described.insert(pipeline).second) {
-        return;
-    }
-    std::fprintf(stderr, "[pso-desc] pso=%p %s %s blend=0x%08x z=0x%x cull=%u topo=0x%02x\n",
-                 static_cast<const void*>(pipeline), ShaderGenerator::describe(vs).c_str(),
-                 ShaderGenerator::describe(ps).c_str(), rs.blend_bits, static_cast<unsigned>(rs.zmode_bits),
-                 static_cast<unsigned>(rs.cull), static_cast<unsigned>(rs.primitive_topology));
-}
 
 }  // namespace
 

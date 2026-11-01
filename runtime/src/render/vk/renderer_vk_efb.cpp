@@ -8,7 +8,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/shader_gen.h"
+#include "galaxy/render/curved_surfaces.h"
 #include "galaxy/motion_signals.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/render/draw_matrices.h"
@@ -1241,7 +1241,7 @@ bool RendererVk::ensure_curve_sort() {
     pool_info.poolSizeCount = 1;
     pool_info.pPoolSizes = &size;
     vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &curve_pool_), "curve sort descriptor pool");
-    const std::string source = ShaderGenerator::curve_sort_source();
+    const std::string source = curved::curve_sort_source();
     for (const auto& [entry, pipeline] : {std::pair{"classify", &curve_classify_}, std::pair{"offsets", &curve_offsets_},
                                           std::pair{"scatter", &curve_scatter_}}) {
         std::string error;
