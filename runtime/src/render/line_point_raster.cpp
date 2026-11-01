@@ -28,18 +28,15 @@ LinePointRasterParams make_line_point_raster_params(
         ? -2.0f * viewport_half_height
         : static_cast<float>(std::max(fallback_efb_height, 1u));
     const float physical_scale = static_cast<float>(scale);
-    // Texture-offset selector to the n of its 1/n offset.
-    static constexpr std::array<std::uint32_t, 8> kTextureOffsetDivisors{
-        0u, 16u, 8u, 4u, 2u, 1u, 1u, 1u};
     return LinePointRasterParams{
         logical_width * physical_scale,
         logical_height * physical_scale,
-        (static_cast<float>(values.line_width) / 6.0f) * physical_scale,
-        (static_cast<float>(values.point_size) / 6.0f) * physical_scale,
+        values.line_width * physical_scale,
+        values.point_size * physical_scale,
         values.line_coords,
         values.point_coords,
-        kTextureOffsetDivisors[values.line_offset & 7u],
-        kTextureOffsetDivisors[values.point_offset & 7u],
+        values.line_divisor,
+        values.point_divisor,
     };
 }
 

@@ -56,8 +56,9 @@ int main() {
         case 8: draw.post_texgen[next()%8u]=XfPostTexGen{static_cast<std::uint8_t>(next()&0x3Fu),false};typed=true;break;
         case 9: {
             const std::uint32_t w=next()&0x3FFFFFu;
-            draw.line_point={static_cast<std::uint8_t>(w),static_cast<std::uint8_t>(w>>8u),
-                             static_cast<std::uint8_t>((w>>16u)&7u),static_cast<std::uint8_t>((w>>19u)&7u)};
+            static constexpr std::uint8_t kDivisor[8]={0u,16u,8u,4u,2u,1u,1u,1u};
+            draw.line_point={static_cast<float>(w&0xFFu)/6.0f,static_cast<float>((w>>8u)&0xFFu)/6.0f,
+                             kDivisor[(w>>16u)&7u],kDivisor[(w>>19u)&7u]};
             typed=true;
             break;
         }
