@@ -184,13 +184,10 @@ namespace {
             return true;
         case NEBULA_STATE_MATERIAL_COLOR:
         case NEBULA_STATE_AMBIENT_COLOR: {
-            // GXSetChan*Color: a colour channel sets r, g, b, an alpha channel a; GDSetChan*Color the whole colour.
+            // The channel's whole colour.
             f32* pColor = pC + (rOp.kind == NEBULA_STATE_MATERIAL_COLOR ? 32 : 40) + (a[0] & 1) * 4;
-            const bool partial = a[5] != 0 && a[0] < 4;
             for (u32 c = 0; c < 4; c++) {
-                if (!partial || (a[0] < 2) == (c < 3)) {
-                    pColor[c] = a[1 + c] / 255.0f;
-                }
+                pColor[c] = a[1 + c] / 255.0f;
             }
             return true;
         }
@@ -301,13 +298,13 @@ namespace {
             rP.ind_stages = a[0];
             return true;
         case NEBULA_STATE_CHANNEL: {
-            // GXChannelID to the record's order (COLOR0, ALPHA0, COLOR1, ALPHA1); the pairs set both.
-            static const s8 kFirst[6] = {0, 2, 1, 3, 0, 2};
-            static const s8 kSecond[6] = {-1, -1, -1, -1, 1, 3};
-            if (a[0] >= 6) {
+            // The record's order is COLOR0, ALPHA0, COLOR1, ALPHA1: the channel's colour, then its alpha.
+            if ((a[7] & 3) == 0) {
                 return false;
             }
-            const s8 places[2] = {kFirst[a[0]], kSecond[a[0]]};
+            const s8 place = static_cast< s8 >(2 * (a[0] & 1));
+            const s8 places[2] = {(a[7] & 1) != 0 ? place : static_cast< s8 >(-1),
+                                  (a[7] & 2) != 0 ? static_cast< s8 >(place + 1) : static_cast< s8 >(-1)};
             for (u32 k = 0; k < 2; k++) {
                 if (places[k] < 0) {
                     continue;
