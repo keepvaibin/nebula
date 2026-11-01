@@ -51,6 +51,9 @@ namespace J3DNativeMaterial {
     // until the next material: its generated native shader when the material set has its program (depth and culling
     // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.
     void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues);
+    // The current J3D material with coordinate 0 its vertices' normals and texture 0 `pImage` (a `width` x `height`
+    // RGB565 image, repeated, linear): J3DModelX list 6. False when the current material is not a native J3D one.
+    bool overrideCoordinate(const void* pImage, u16 width, u16 height);
     // A pass over the current J3D material's draws that replaces its stages (j3d_material.hlsli j3d_override: `mode`
     // 1-4, alphas A0 and A1, drawn above `ref`, -1 always): whether the material draws natively and took it (else the
     // caller loads its GX program). Mode 0 ends it.

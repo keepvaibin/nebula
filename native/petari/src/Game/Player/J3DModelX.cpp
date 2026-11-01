@@ -226,6 +226,11 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
+            if (i == 6 && J3DNativeMaterial::overrideCoordinate(
+                              reinterpret_cast< const u8* >(MR::getScreenResTIMG()) + MR::getScreenResTIMG()->mImageDataOffset,
+                              MR::getScreenWidth(), JUTVideo::getManager()->getEfbHeight())) {
+                continue;
+            }
             mStateLists[i].send();
             if (i == 2 && !J3DNativeMaterial::override(1, 0.0f, 0.0f, -1.0f)) {
                 sList2Program.send();

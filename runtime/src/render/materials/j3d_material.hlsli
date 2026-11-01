@@ -15,6 +15,7 @@ struct MaterialConstants {
     float4 tex_scale[8];  // xy: texture coordinate i's GX scale (texels per unit), zw: map i's size (texels)
     float4 ovr;           // a pass that replaces the material's colour (j3d_override): x the mode (0 none), y and z
                           // alphas A0 and A1 (0-1), w the alpha reference (drawn above it; -1 always)
+    float4 ovr_coord;     // x: coordinate 0 replaced (j3d_vertex_override; 0 none, 1 the vertex's normal)
 };
 
 #include "native_material.hlsli"
@@ -39,6 +40,15 @@ float2 j3d_coord(float4 uv) {
 // Coordinate `coord` in texels of its GX scale (the size of the map its last stage reads, as GX scales it).
 float2 j3d_texel(float4 uv, uint coord) {
     return j3d_coord(uv) * material.tex_scale[coord].xy;
+}
+
+// Coordinate 0 replaced over the material's own stages (J3DNativeMaterial::overrideCoordinate): 1 the vertex's normal
+// (GX_TG_NRM through the identity, 2x4, normalized: J3DModelX list 6, the ghost's shell over the screen's copy).
+void j3d_vertex_override(NativeVertex v, inout NativeVaryings o) {
+    if (material.ovr_coord.x == 1.0) {
+        const float3 n = dot(v.nrm, v.nrm) > 0.0 ? normalize(v.nrm) : v.nrm;
+        o.uv[0] = float4(n.xy, 1.0, 0.0);
+    }
 }
 
 // A pass over the material's own geometry, channels and textures that replaces its stages (J3DNativeMaterial::
