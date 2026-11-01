@@ -1,4 +1,5 @@
 #include "Game/System/MessageHolder.hpp"
+#include <JSystem/JUtility/JUTException.hpp>
 #include "Game/NPC/TalkMessageInfo.hpp"
 #include "Game/NPC/TalkNodeCtrl.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
@@ -15,57 +16,27 @@
 
 namespace {
     u8* getBlock(u32 magic, u8* pData) {
-        u32 numBlocks = *reinterpret_cast< NEBULA_BE(u32)* >(pData + 0xc);
+        u32 numBlocks = *reinterpret_cast< u32* >(pData + 0xc);
         pData += 0x20;
 
         for (u32 i = 0; i < numBlocks; i++) {
-            u32 blockMagic = *reinterpret_cast< NEBULA_BE(u32)* >(pData);
+            u32 blockMagic = *reinterpret_cast< u32* >(pData);
 
             if (blockMagic == magic) {
                 return pData;
             }
 
-            u32 blockSize = *reinterpret_cast< NEBULA_BE(u32)* >(pData + 4);
+            u32 blockSize = *reinterpret_cast< u32* >(pData + 4);
             pData += blockSize;
         }
 
         return nullptr;
     }
 
-#ifdef TARGET_PC
-    // The last byte of the header's padding, set once the text is in host order.
-    const u32 cTextConvertedMarkOffset = 0x1F;
-
-    // DAT1 to host-order UTF-16, in place: every 16-bit unit, except the unit after each 0x1A escape, which holds the
-    // tag's length and group bytes (read as bytes, MessageEditorMessageTag). The tag id and parameters are swapped as
-    // 16-bit units like the text around them, the form the game's own tags take (MR::addNumberFontTag).
-    void convertMessageText(u8* pData, MessageDataBlock* pBlock) {
-        if (pData[cTextConvertedMarkOffset] != 0) {
-            return;
-        }
-        pData[cTextConvertedMarkOffset] = 1;
-
-        u8* pText = reinterpret_cast< u8* >(pBlock + 1);
-        u8* pEnd = reinterpret_cast< u8* >(pBlock) + pBlock->mBlockSize;
-        while (pText + 2 <= pEnd) {
-            const u16 unit = nebula_load_be16(pText);
-            memcpy(pText, &unit, 2);
-            pText += 2;
-            if (unit != 0x1A || pText + 2 > pEnd) {
-                continue;
-            }
-
-            const u32 tagLength = pText[0];
-            u8* pTagEnd = pText - 2 + tagLength;
-            pTagEnd = pTagEnd > pEnd ? pEnd : pTagEnd;
-            for (pText += 2; pText + 2 <= pTagEnd; pText += 2) {
-                const u16 value = nebula_load_be16(pText);
-                memcpy(pText, &value, 2);
-            }
-            pText = pTagEnd;
-        }
-    }
-#endif
+    // The importer's mark (crates/nebula-import cook/native_data.rs BMG_HOST_ORDER): the whole file is in host
+    // order, in the header's last padding byte.
+    const u32 cHostOrderMarkOffset = 0x1F;
+    const u8 cHostOrderMark = 2;
 };  // namespace
 
 bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pMessage) const {
@@ -97,8 +68,8 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
 
 bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u16, u16 infoToolIndex) const {
     u8* pInfoTool = getMessageInfoTool(infoToolIndex);
-    pMessageInfo->_0 = reinterpret_cast< u8* >(mDataBlock + 1) + *reinterpret_cast< NEBULA_BE(u32)* >(pInfoTool);
-    pMessageInfo->mCameraSetID = *reinterpret_cast< NEBULA_BE(u16)* >(pInfoTool + 4);
+    pMessageInfo->_0 = reinterpret_cast< u8* >(mDataBlock + 1) + *reinterpret_cast< u32* >(pInfoTool);
+    pMessageInfo->mCameraSetID = *reinterpret_cast< u16* >(pInfoTool + 4);
     pMessageInfo->_6 = *(pInfoTool + 6);
     pMessageInfo->mCameraType = *(pInfoTool + 7);
     pMessageInfo->mTalkType = *(pInfoTool + 8);
@@ -178,17 +149,16 @@ MessageData::MessageData(const char* pArchiveName)
     mIDTable = new JMapInfo();
     mIDTable->attach(mapData);
 
+    if (msgData[cHostOrderMarkOffset] != cHostOrderMark) {
+        JUTException::panic_f(__FILE__, __LINE__, "%s: Message.bmg is not in host order (the importer cooks it)",
+                              pArchiveName);
+    }
     mInfoBlock = (MessageInfoBlock*)::getBlock('INF1', msgData);
     mDataBlock = (MessageDataBlock*)::getBlock('DAT1', msgData);
-#ifdef TARGET_PC
-    if (mDataBlock != nullptr) {
-        convertMessageText(msgData, mDataBlock);
-    }
-#endif
     mFlowBlock = (MessageFlowBlock*)::getBlock('FLW1', msgData);
 
     if (mFlowBlock != nullptr) {
-        _14 = reinterpret_cast< NEBULA_BE(u16)* >(reinterpret_cast< TalkNode* >(mFlowBlock + 1) + mFlowBlock->mNodeCount);
+        _14 = reinterpret_cast< u16* >(reinterpret_cast< TalkNode* >(mFlowBlock + 1) + mFlowBlock->mNodeCount);
         _18 = reinterpret_cast< u8* >(_14 + mFlowBlock->_A);
     }
 

@@ -14,15 +14,15 @@ public:
 
 class TalkNode {
 public:
-    // A BMG FLW1 node, read in place (big-endian).
+    // A BMG FLW1 node, read in place (host order, as the importer cooks it).
     /* 0x0 */ u8 mNodeType;
     /* 0x1 */ u8 mGroupID;
-    /* 0x2 */ NEBULA_BE(u16) mIndex;
+    /* 0x2 */ u16 mIndex;
     union {
-        /* 0x4 */ NEBULA_BE(u32) mUnknown;
+        /* 0x4 */ u32 mUnknown;
         struct {
-            /* 0x4 */ NEBULA_BE(u16) mNextIdx;
-            /* 0x6 */ NEBULA_BE(u16) mNextGroup;
+            /* 0x4 */ u16 mNextIdx;
+            /* 0x6 */ u16 mNextGroup;
         };
     };
 };
