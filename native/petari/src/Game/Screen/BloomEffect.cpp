@@ -1,4 +1,5 @@
 #include "Game/Screen/BloomEffect.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -38,174 +39,49 @@ namespace {
         {0.07f, 0.0f},
         {0.09f, 0.0f},
     };
-    static const GXTexMtx sTexMtxID[] = {
-        GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_TEXMTX3, GX_TEXMTX4, GX_TEXMTX5, GX_TEXMTX6, GX_TEXMTX7,
-    };
     static const u32 sL1RoundPoints = 6;
 
-    // The blur's programs (nebula_game_api.h NebulaMaterialProgram), by stage count (1-8) and blend: stage i adds the
-    // texture through texture coordinate i (its own offset matrix) times the material colour; the first draw of a
-    // blur replaces, the later ones add. Registered with the host when first used; the key is the entry.
-    struct BlurProgram {
-        NebulaMaterialProgram mProgram;
-        bool mRegistered;
-    };
-    BlurProgram sBlurPrograms[8][2];
     bool sBlurAdditive = false;
 
     // The stage the chain's texture draws use: modulate (texture matrix 0, initDraw's), modulate after a blur (the
     // identity matrix), or the brightness threshold (red above the material colour's: konst alpha).
     enum BloomStage { BloomStage_Modulate, BloomStage_ModulateIdentity, BloomStage_Threshold };
     BloomStage sBloomStage = BloomStage_Modulate;
-    struct DrawProgram {
-        NebulaMaterialProgram mProgram;
-        bool mRegistered;
-    };
-    DrawProgram sDrawPrograms[3][3];
-
-    // A texture draw's program and values: `type` 0 replaces, 1 adds, 2 multiplies by the source colour.
-    void sendDrawProgram(JUTTexture* pTexture, u8 intensity, u32 type) {
-        DrawProgram& rEntry = sDrawPrograms[sBloomStage][type];
-        const NebulaHostServices* pHost = nebula_host();
-        if (!rEntry.mRegistered) {
-            NebulaMaterialProgram& rProgram = rEntry.mProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            NebulaMaterialTevStage& rStage = rProgram.tev[0];
-            rStage.tex_coord = GX_TEXCOORD0;
-            rStage.tex_map = GX_TEXMAP0;
-            rStage.channel = GX_COLOR0A0;
-            if (sBloomStage == BloomStage_Threshold) {
-                rStage.color_in[0] = GX_CC_TEXC;
-                rStage.color_in[1] = GX_CC_RASC;
-                rStage.color_in[2] = GX_CC_ONE;
-                rStage.color_in[3] = GX_CC_ZERO;
-                rStage.color_op = GX_TEV_COMP_R8_GT;
-                rStage.alpha_in[0] = rStage.alpha_in[1] = rStage.alpha_in[2] = GX_CA_ZERO;
-                rStage.alpha_in[3] = GX_CA_KONST;
-            } else {
-                rStage.color_in[0] = GX_CC_ZERO;
-                rStage.color_in[1] = GX_CC_TEXC;
-                rStage.color_in[2] = GX_CC_RASC;
-                rStage.color_in[3] = GX_CC_ZERO;
-                rStage.color_op = GX_TEV_ADD;
-                rStage.alpha_in[0] = GX_CA_ZERO;
-                rStage.alpha_in[1] = GX_CA_TEXA;
-                rStage.alpha_in[2] = GX_CA_RASA;
-                rStage.alpha_in[3] = GX_CA_ZERO;
-            }
-            rStage.alpha_op = GX_TEV_ADD;
-            rStage.color_scale = rStage.alpha_scale = GX_CS_SCALE_1;
-            rStage.color_clamp = rStage.alpha_clamp = GX_TRUE;
-            rStage.color_reg = rStage.alpha_reg = GX_TEVPREV;
-            rProgram.tex_gen[0].type = GX_TG_MTX2x4;
-            rProgram.tex_gen[0].source = GX_TG_TEX0;
-            rProgram.tex_gen[0].matrix = sBloomStage == BloomStage_ModulateIdentity ? GX_IDENTITY : GX_TEXMTX0;
-            rProgram.tex_gen[0].post_matrix = GX_PTIDENTITY;
-            for (u32 c = 0; c < 2; c++) {
-                rProgram.channel[c].material_source = GX_SRC_REG;
-                rProgram.channel[c].ambient_source = GX_SRC_REG;
-                rProgram.channel[c].diffuse = GX_DF_NONE;
-                rProgram.channel[c].attenuation = GX_AF_NONE;
-            }
-            rProgram.tev_stages = 1;
-            rProgram.tex_gens = 1;
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.dither = GX_FALSE;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV | NEBULA_MATERIAL_LOADS_CHANNELS | NEBULA_MATERIAL_LOADS_FOG |
-                             NEBULA_MATERIAL_LOADS_DITHER;
-            rProgram.fog.type = GX_FOG_NONE;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_AND;
-            static const u8 kBlend[3][3] = {{GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO},
-                                            {GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE},
-                                            {GX_BM_BLEND, GX_BL_SRCCLR, GX_BL_ZERO}};
-            rProgram.blend.type = kBlend[type][0];
-            rProgram.blend.source = kBlend[type][1];
-            rProgram.blend.destination = kBlend[type][2];
-            rProgram.blend.logic_op = GX_LO_CLEAR;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &rProgram);
-            rEntry.mRegistered = true;
+    // runtime/src/render/materials/image_effect.hlsl for a texture draw: modulate (the intensity) or the threshold
+    // (white where the texture's red is above it), blended by `type`: 0 replaces, 1 adds, 2 multiplies the frame by
+    // it; no depth or culling.
+    void sendDrawMaterial(JUTTexture* pTexture, u8 intensity, u32 type) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_IMAGE_EFFECT,
+                           type == 1 ? NativeShader::BLEND_ADD : NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        if (type == 2) {
+            NativeShader::setBlend(material, NEBULA_FACTOR_DST_COLOR, NEBULA_FACTOR_ZERO);
         }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        values.material_color[0][0] = values.material_color[0][1] = values.material_color[0][2] = intensity;
-        values.material_color[0][3] = 255;
-        values.tex_coord_scale[0].scale_s = pTexture->getWidth();
-        values.tex_coord_scale[0].scale_t = pTexture->getHeight();
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
-        J3DNativeMaterial::watch(NULL);
-        u8 places[8] = {static_cast< u8 >(rEntry.mProgram.tex_gen[0].matrix), GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                        GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, places);
+        NativeShader::setColor(material, 0, intensity, intensity, intensity, 255);
+        material.constants[12] = sBloomStage == BloomStage_Threshold ? 1.0f : 0.0f;
+        NativeShader::setTexture(material, 0, pTexture);
+        NativeShader::send(material);
     }
-    u16 sBlurTextureSize[2] = {0, 0};
+    // The blur's texture and intensity (initBlur).
+    JUTTexture* sBlurTexture = nullptr;
+    u8 sBlurIntensity = 0;
 
-    void sendBlurProgram(u32 count) {
-        BlurProgram& rEntry = sBlurPrograms[count - 1][sBlurAdditive ? 1 : 0];
-        const NebulaHostServices* pHost = nebula_host();
-        if (!rEntry.mRegistered) {
-            NebulaMaterialProgram& rProgram = rEntry.mProgram;
-            memset(&rProgram, 0, sizeof(rProgram));
-            for (u32 i = 0; i < count; i++) {
-                NebulaMaterialTevStage& rStage = rProgram.tev[i];
-                rStage.tex_coord = static_cast< u8 >(i);
-                rStage.tex_map = GX_TEXMAP0;
-                rStage.channel = GX_COLOR0A0;
-                rStage.color_in[0] = GX_CC_ZERO;
-                rStage.color_in[1] = GX_CC_TEXC;
-                rStage.color_in[2] = GX_CC_RASC;
-                rStage.color_in[3] = i == 0 ? GX_CC_ZERO : GX_CC_CPREV;
-                rStage.color_op = GX_TEV_ADD;
-                rStage.color_scale = GX_CS_SCALE_1;
-                rStage.color_reg = GX_TEVPREV;
-                rStage.alpha_in[0] = rStage.alpha_in[1] = rStage.alpha_in[2] = GX_CA_ZERO;
-                rStage.alpha_in[3] = GX_CA_KONST;
-                rStage.alpha_op = GX_TEV_ADD;
-                rStage.alpha_scale = GX_CS_SCALE_1;
-                rStage.alpha_reg = GX_TEVPREV;
-                rProgram.tex_gen[i].type = GX_TG_MTX3x4;
-                rProgram.tex_gen[i].source = GX_TG_TEX0;
-                rProgram.tex_gen[i].matrix = static_cast< u8 >(sTexMtxID[i]);
-                rProgram.tex_gen[i].post_matrix = GX_PTIDENTITY;
-            }
-            rProgram.tev_stages = static_cast< u8 >(count);
-            rProgram.tex_gens = static_cast< u8 >(count);
-            rProgram.channels = 1;
-            rProgram.cull = GX_CULL_NONE;
-            rProgram.z_compare_location = 1;
-            rProgram.loads = NEBULA_MATERIAL_LOADS_TEV;
-            rProgram.alpha_compare.comp0 = rProgram.alpha_compare.comp1 = GX_ALWAYS;
-            rProgram.alpha_compare.op = GX_AOP_AND;
-            rProgram.blend.type = sBlurAdditive ? GX_BM_BLEND : GX_BM_NONE;
-            rProgram.blend.source = sBlurAdditive ? GX_BL_ONE : GX_BL_ZERO;
-            rProgram.blend.destination = sBlurAdditive ? GX_BL_ONE : GX_BL_ZERO;
-            rProgram.blend.logic_op = GX_LO_CLEAR;
-            rProgram.z_mode.enable = GX_FALSE;
-            rProgram.z_mode.func = GX_ALWAYS;
-            rProgram.z_mode.update = GX_FALSE;
-            pHost->material_program(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &rProgram);
-            rEntry.mRegistered = true;
+    // runtime/src/render/materials/bloom_blur.hlsl: `count` samples of the blur's texture at the matrices' offsets
+    // summed, replacing the tile the first time, added after.
+    void sendBlurMaterial(u32 count, Mtx* pMtx) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_BLOOM_BLUR,
+                           sBlurAdditive ? NativeShader::BLEND_ADD : NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS,
+                           false, NEBULA_CULL_NONE);
+        NativeShader::setColor(material, 0, sBlurIntensity, sBlurIntensity, sBlurIntensity, 255);
+        for (u32 s = 0; s < count; s++) {
+            material.constants[4 + s * 2] = pMtx[s][0][3];
+            material.constants[4 + s * 2 + 1] = pMtx[s][1][3];
         }
-        NebulaMaterialValues values;
-        memset(&values, 0, sizeof(values));
-        for (u32 i = 0; i < count; i++) {
-            values.tex_coord_scale[i].scale_s = sBlurTextureSize[0];
-            values.tex_coord_scale[i].scale_t = sBlurTextureSize[1];
-        }
-        J3DNativeShape::flushState();
-        pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&rEntry), &values);
-        J3DNativeMaterial::watch(NULL);
-        u8 places[8];
-        for (u32 i = 0; i < 8; i++) {
-            places[i] = static_cast< u8 >(sTexMtxID[i]);
-        }
-        J3DNativeShape::setCurrent(GX_PNMTX0, places);
+        material.constants[20] = static_cast< f32 >(count);
+        NativeShader::setTexture(material, 0, sBlurTexture);
+        NativeShader::send(material);
     }
     static const u32 sL2RoundPoints = 12;
     // static const f32 sBloomIntensity = _;
@@ -315,9 +191,6 @@ void BloomEffect::postDraw() const {
     drawTexture(_40, 4, 2, _20, DrawType_2);
     sBloomStage = BloomStage_Modulate;
 
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_CLEAR);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
     ImageEffectLocalUtil::capture(_44, 4, 2, GX_TF_RGB565, false, 0);
     blurTexture(_44, _48, 4, 3, 6, _18, 2, &::sL1RadAndOfs[0]._0);
 
@@ -373,17 +246,6 @@ void BloomEffect::initDraw() const {
 
     J3DNativeState::setCullMode(GX_CULL_NONE);
     J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setNumChans(1);
-    J3DNativeState::setChanCtrl(GX_COLOR0A0, GX_FALSE, GX_SRC_REG, GX_SRC_REG, GX_LIGHT_NULL, GX_DF_NONE, GX_AF_NONE);
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_TEXMTX0, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeShape::setTexture(0, posMtx.toMtxPtr(), 2);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
-    J3DNativeState::setNumIndStages(0);
-    J3DNativeState::setTevDirect(GX_TEVSTAGE0);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
     J3DNativeState::setColorUpdate(GX_TRUE);
     J3DNativeState::setAlphaUpdate(GX_FALSE);
     J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
@@ -393,8 +255,7 @@ void BloomEffect::initDraw() const {
 }
 
 void BloomEffect::drawTexture(JUTTexture* pTexture, s32 param2, s32 param3, u8 intensity, BLOOM_TEX_DRAW_TYPE param5) const {
-    pTexture->load(GX_TEXMAP0);
-    sendDrawProgram(pTexture, intensity, static_cast< u32 >(param5) < 3 ? static_cast< u32 >(param5) : 0);
+    sendDrawMaterial(pTexture, intensity, static_cast< u32 >(param5) < 3 ? static_cast< u32 >(param5) : 0);
 
     s32 row = param3 / param2;
     s32 column = param3 % param2;
@@ -428,12 +289,6 @@ void BloomEffect::blurTexture(JUTTexture* pTexture, Mtx* pMtx, s32 param3, s32 p
         drawBlur(param3, param4, &pMtx[i * param5], 8, param5);
     }
     sBloomStage = BloomStage_ModulateIdentity;
-
-    J3DNativeState::setNumTexGens(1);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
-    J3DNativeState::setNumTevStages(1);
-    J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-    J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
 }
 
 void BloomEffect::initBlurMtx(Mtx* pMtx, u32 count, f32 radius, f32 offset) const {
@@ -447,13 +302,11 @@ void BloomEffect::initBlurMtx(Mtx* pMtx, u32 count, f32 radius, f32 offset) cons
 
 }
 
-// The blur's texture and colour; its stages are the blur programs drawBlur sends (sendBlurProgram).
+// The blur's texture and intensity (drawBlur's materials, sendBlurMaterial).
 void BloomEffect::initBlur(JUTTexture* pTexture, u32 param2, f32 intensity) const {
     (void)param2;
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8((s32)(intensity * 255.0f), (s32)(intensity * 255.0f), (s32)(intensity * 255.0f), 255));
-    pTexture->load(GX_TEXMAP0);
-    sBlurTextureSize[0] = pTexture->getWidth();
-    sBlurTextureSize[1] = pTexture->getHeight();
+    sBlurIntensity = static_cast< u8 >(static_cast< s32 >(intensity * 255.0f));
+    sBlurTexture = pTexture;
     sBlurAdditive = false;
 }
 
@@ -472,11 +325,7 @@ void BloomEffect::drawBlur(s32 divisions, s32 tile, Mtx* pMtx, u32 stageCount, u
         if (remaining < stageCount) {
             stageCount = remaining;
         }
-        sendBlurProgram(stageCount);
-
-        for (u32 j = 0; j < stageCount; j++) {
-            J3DNativeShape::setTexture((::sTexMtxID[j] - GX_TEXMTX0) / 3, pMtx[i + j], 3);
-        }
+        sendBlurMaterial(stageCount, &pMtx[i]);
 
         J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(left, bottom, -1.0f);
