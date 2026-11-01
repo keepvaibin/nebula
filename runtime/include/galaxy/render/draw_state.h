@@ -14,7 +14,7 @@ namespace galaxy::render {
 // sampling (with the edge LOD and bias clamp enables).
 struct TextureMap {
     std::uint64_t texture = 0u;
-    TexMode mode{};
+    TextureSampler mode{};
     bool edge_lod = true;
     bool bias_clamp = false;
 

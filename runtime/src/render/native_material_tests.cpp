@@ -137,8 +137,9 @@ material::Values random_values(Random& r) {
         t.height = static_cast<std::uint16_t>(8u << r(6u));
         t.wrap_s = static_cast<std::uint8_t>(r(3u));
         t.wrap_t = static_cast<std::uint8_t>(r(3u));
-        t.min_filter = static_cast<std::uint8_t>(r(6u));
-        t.mag_filter = static_cast<std::uint8_t>(r(2u));
+        t.min_linear = static_cast<std::uint8_t>(r(2u));
+        t.mip_filter = static_cast<std::uint8_t>(r(3u));
+        t.mag_linear = static_cast<std::uint8_t>(r(2u));
         t.max_lod = static_cast<float>(r(8u));
     }
     v.fog.start = r.real(0.0f, 1000.0f);

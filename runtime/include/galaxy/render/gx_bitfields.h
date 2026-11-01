@@ -3,6 +3,7 @@
 // The drawing state's typed values (blend, depth, TEV orders, texture sampling and images, texgens, channels) and
 // their enumerations.
 
+#include "galaxy/render/texture_sampler.h"
 #include <cstdint>
 
 namespace galaxy::render {
@@ -26,14 +27,6 @@ enum class TexFormat : std::uint8_t {
 
 enum class TlutFormat : std::uint8_t { IA8 = 0, RGB565 = 1, RGB5A3 = 2 };
 
-enum class TexWrap : std::uint8_t { Clamp = 0, Repeat, Mirror };
-
-enum class TexMagFilter : std::uint8_t { Near = 0, Linear };
-
-enum class TexMinFilter : std::uint8_t {
-    Near = 0, NearMipNear, NearMipLinear,
-    Linear = 4, LinearMipNear, LinearMipLinear,
-};
 
 enum class FogType : std::uint8_t {
     Off = 0, Linear = 2, Exp = 4, Exp2 = 5, RevExp = 6, RevExp2 = 7,
@@ -126,19 +119,6 @@ struct TexImage {
     std::uint64_t address;       // physical byte address (reg value << 5)
 
     [[nodiscard]] bool operator==(const TexImage&) const = default;
-};
-
-struct TexMode {
-    TexWrap wrap_s;
-    TexWrap wrap_t;
-    TexMagFilter mag_filter;
-    TexMinFilter min_filter;
-    std::int16_t lod_bias_x32;      // signed, 1/32 LOD units
-    std::uint8_t max_aniso;         // 0=1x, 1=2x, 2=4x
-    std::uint8_t min_lod_x16;       // unsigned, 1/16 LOD units
-    std::uint8_t max_lod_x16;
-
-    [[nodiscard]] bool operator==(const TexMode&) const = default;
 };
 
 struct TlutRef {

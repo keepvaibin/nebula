@@ -1075,8 +1075,8 @@ V main(uint id : SV_VertexID) {
         image.address = address;
         image.width = image.height = 1024u;
         image.format = TexFormat::CMPR;
-        TexMode mode{};
-        mode.min_filter = TexMinFilter::Near;
+        TextureSampler mode{};
+        mode.min_linear = false, mode.mip = 0u;
         const auto first = cache.get(image.address, mode);
         const auto desc = first.resource->GetDesc();
         const auto allocation = device_->GetResourceAllocationInfo(0u, 1u, &desc).SizeInBytes;
@@ -1113,8 +1113,8 @@ V main(uint id : SV_VertexID) {
         image.address = address + 16384u;
         image.width = image.height = 128u;
         image.format = TexFormat::I4;
-        mode.min_filter = TexMinFilter::NearMipNear;
-        mode.max_lod_x16 = 7u * 16u;
+        mode.min_linear = false, mode.mip = 1u;
+        mode.max_lod = (7u * 16u) / 16.0f;
         const auto mipped = cache.get(image.address, mode);
         const auto mip_desc = mipped.resource->GetDesc();
         const auto mip_allocation = device_->GetResourceAllocationInfo(0u, 1u, &mip_desc).SizeInBytes;
@@ -1185,8 +1185,8 @@ V main(uint id : SV_VertexID) {
                 image.width = test.width;
                 image.height = test.height;
                 image.format = TexFormat::RGBA8;
-                TexMode mode{};
-                mode.min_filter = TexMinFilter::Near;
+                TextureSampler mode{};
+                mode.min_linear = false, mode.mip = 0u;
                 handles.push_back(cache.get(image.address, mode));
                 offset += 0x400u;
             }
@@ -1322,8 +1322,8 @@ V main(uint id : SV_VertexID) {
         image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGBA8;
-        TexMode mode{};
-        mode.min_filter = TexMinFilter::Near;
+        TextureSampler mode{};
+        mode.min_linear = false, mode.mip = 0u;
         const auto initial_revision = cache.retirement_revision();
         const auto first = cache.get(image.address, mode);
         const auto hit = cache.get(image.address, mode);
@@ -1392,9 +1392,9 @@ V main(uint id : SV_VertexID) {
         image.address = address;
         image.width = image.height = 8u;
         image.format = TexFormat::RGBA8;
-        TexMode mode{};
-        mode.min_filter = TexMinFilter::NearMipNear;
-        mode.max_lod_x16 = 32u;
+        TextureSampler mode{};
+        mode.min_linear = false, mode.mip = 1u;
+        mode.max_lod = (32u) / 16.0f;
         const auto decoded = cache.get(image.address, mode);
         passed &= expect(decoded.source_bytes == authored.size() && decoded.mip_levels == 3u,
             "a record's authored levels all upload, the handle sized as the record");
@@ -1418,15 +1418,15 @@ V main(uint id : SV_VertexID) {
         set_render_config(mip_config);
         auto enhanced_image = image; enhanced_image.address = address + 0x2000u;
         enhanced_image.width = 64u; enhanced_image.height = 4u;
-        TexMode enhanced_mode{};
+        TextureSampler enhanced_mode{};
         enhanced_mode.wrap_s = TexWrap::Repeat;
         enhanced_mode.wrap_t = TexWrap::Mirror;
-        enhanced_mode.min_filter = TexMinFilter::Linear;
-        enhanced_mode.mag_filter = TexMagFilter::Linear;
+        enhanced_mode.min_linear = true, enhanced_mode.mip = 0u;
+        enhanced_mode.mag_linear = true;
         const auto no_enhancement = cache.get(enhanced_image.address, enhanced_mode);
         mip_config.enhanced_mipmaps = true; set_render_config(mip_config);
         const auto enhancement = cache.get(enhanced_image.address, enhanced_mode);
-        TexMode decal_mode = enhanced_mode;
+        TextureSampler decal_mode = enhanced_mode;
         decal_mode.wrap_t = TexWrap::Clamp;
         const auto decal = cache.get(enhanced_image.address, decal_mode);
         set_render_config(original_config);

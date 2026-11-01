@@ -38,7 +38,7 @@ struct TevStage {
 struct Texture {
     std::uint64_t image;  // the texture: its record's address (0: no texture)
     std::uint16_t width, height;
-    std::uint8_t wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy, bias_clamp;
+    std::uint8_t wrap_s, wrap_t, min_linear, mag_linear, mip_filter, edge_lod, anisotropy, bias_clamp;
     float min_lod, max_lod, lod_bias;
 };
 

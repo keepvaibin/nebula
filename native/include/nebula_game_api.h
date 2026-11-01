@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 71u
+#define NEBULA_GAME_API_VERSION 72u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -171,8 +171,9 @@ enum {
     NEBULA_STATE_AMBIENT_COLOR,     /* as NEBULA_STATE_MATERIAL_COLOR */
     NEBULA_STATE_TEX_COORD_GEN,     /* coord, type, source, normalize, post-transform matrix id, GXSetTexCoordGen2's
                                        form (1: also the coordinate's matrix index, a[6]; 0: GDSetTexCoordGen's) */
-    NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t, min filter, mag filter, bias clamp, edge LOD, anisotropy;
-                                       f: min LOD, max LOD, LOD bias */
+    NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t (0 clamp, 1 repeat, 2 mirror), minified linear, magnified
+                                       linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
+                                       anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
     NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
     NEBULA_STATE_FOG,               /* type, r, g, b, a, GXSetFog's form (1: a projected type writes its second and
                                        third words with register id 0, as GXSetFog does; 0: GDSetFog's); f: start,
@@ -308,7 +309,10 @@ typedef struct NebulaMaterialTevStage {
 typedef struct NebulaMaterialTexture {
     uint64_t image;               /* the texture: its record's address (0: no texture) */
     uint16_t width, height;       /* its size (the material's coordinate scales) */
-    uint8_t wrap_s, wrap_t, min_filter, mag_filter, mipmaps, edge_lod, anisotropy, bias_clamp;
+    uint8_t wrap_s, wrap_t;       /* 0 clamp, 1 repeat, 2 mirror */
+    uint8_t min_linear, mag_linear; /* minified within a level / magnified: 1 linear, 0 nearest */
+    uint8_t mip_filter;           /* 0 the first level only, 1 the nearest level, 2 between levels */
+    uint8_t edge_lod, anisotropy, bias_clamp;
     float min_lod, max_lod, lod_bias;
 } NebulaMaterialTexture;
 

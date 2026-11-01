@@ -30,26 +30,21 @@ void set_z(ZMode& z, std::uint8_t enable, std::uint8_t func, std::uint8_t update
     z.update_enable = (update & 1u) != 0u;
 }
 
-// GXTexFilter to the min filter field (near, linear, then the mip combinations).
-constexpr std::uint8_t kFilter[6] = {0x00, 0x04, 0x01, 0x05, 0x02, 0x06};
-
-// A texture's sampling as GXInitTexObjLOD and GXInitTexObj set it, each field at the width the hardware holds it.
-void set_texture_mode(TextureMap& t, std::uint8_t wrap_s, std::uint8_t wrap_t, bool mag_linear, std::uint8_t min_filter,
-                      bool edge_lod, float lod_bias, std::uint8_t anisotropy, std::uint8_t bias_clamp, float min_lod,
-                      float max_lod) {
-    const auto lod8 = [](float lod, float units) {
-        return static_cast<std::uint8_t>(static_cast<std::int32_t>(units * lod));
-    };
-    t.mode = TexMode{static_cast<TexWrap>(wrap_s & 3u),
-                     static_cast<TexWrap>(wrap_t & 3u),
-                     mag_linear ? TexMagFilter::Linear : TexMagFilter::Near,
-                     static_cast<TexMinFilter>(kFilter[min_filter % 6u]),
-                     static_cast<std::int16_t>(static_cast<std::int8_t>(lod8(lod_bias, 32.0f))),
-                     static_cast<std::uint8_t>(anisotropy & 3u),
-                     lod8(min_lod, 16.0f),
-                     lod8(max_lod, 16.0f)};
+// A texture's sampling as the lookup op or the material record states it (texture_sampler.h).
+void set_texture_mode(TextureMap& t, std::uint8_t wrap_s, std::uint8_t wrap_t, bool min_linear, bool mag_linear,
+                      std::uint8_t mip, bool edge_lod, float lod_bias, std::uint8_t anisotropy, bool bias_clamp,
+                      float min_lod, float max_lod) {
+    t.mode = TextureSampler{static_cast<TexWrap>(wrap_s > 2u ? 2u : wrap_s),
+                            static_cast<TexWrap>(wrap_t > 2u ? 2u : wrap_t),
+                            mag_linear,
+                            min_linear,
+                            static_cast<std::uint8_t>(mip > 2u ? 2u : mip),
+                            static_cast<std::uint8_t>(anisotropy & 3u),
+                            lod_bias,
+                            min_lod,
+                            max_lod};
     t.edge_lod = edge_lod;
-    t.bias_clamp = (bias_clamp & 1u) != 0u;
+    t.bias_clamp = bias_clamp;
 }
 
 void set_texture_address(TextureMap& t, std::uint64_t image) {
@@ -308,8 +303,8 @@ void NativeDrawState::set_op(const state::Op& op) {
         break;
     }
     case state::kTexLookup:
-        set_texture_mode(texture[a[0] & 7u], a[1], a[2], a[4] == 1u, a[3], a[6] != 0u, op.f[2], a[7], a[5], op.f[0],
-                         op.f[1]);
+        set_texture_mode(texture[a[0] & 7u], a[1], a[2], a[3] != 0u, a[4] != 0u, a[5], a[7] != 0u, op.f[2], a[8],
+                         a[6] != 0u, op.f[0], op.f[1]);
         break;
     case state::kTexImage:
         set_texture_address(texture[a[0] & 7u], op.image);
@@ -350,8 +345,8 @@ void NativeDrawState::set_material(const material::Program& m, const material::V
             }
             TextureMap& out = texture[map];
             set_texture_address(out, t.image);
-            set_texture_mode(out, t.wrap_s, t.wrap_t, t.mag_filter == 1u, t.min_filter, t.edge_lod != 0u, t.lod_bias,
-                             t.anisotropy, t.bias_clamp, t.min_lod, t.max_lod);
+            set_texture_mode(out, t.wrap_s, t.wrap_t, t.min_linear != 0u, t.mag_linear != 0u, t.mip_filter, t.edge_lod != 0u,
+                             t.lod_bias, t.anisotropy, t.bias_clamp != 0u, t.min_lod, t.max_lod);
         }
     };
     const auto tex_gens = [&] {
