@@ -3,7 +3,7 @@
 
 // TextureCache's GPU side: shader views by slot, mapped upload staging, textures, and the recorded upload of a
 // texture's levels. The cache's logic (keys, maps, aliases, eviction, retirement) is shared; each API implements
-// this class (texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
+// this class (gpu_texture_backend_d3d12.cpp, vk/texture_backend_vk.cpp).
 
 #include "galaxy/render/gpu_types.h"
 
@@ -12,7 +12,7 @@
 #if defined(NEBULA_GPU_VULKAN)
 #include "galaxy/render/vk/texture_backend_vk.h"
 #else
-#include "galaxy/render/placed_texture_allocator.h"
+#include "galaxy/render/gpu_placed_textures.h"
 
 namespace galaxy::render {
 

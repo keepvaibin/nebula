@@ -65,7 +65,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/renderer_api.cpp
     ${rt}/render/render_config.cpp
     ${rt}/render/renderer_common.cpp
-    ${rt}/render/upload_ring.cpp
+    ${rt}/render/gpu_upload_ring.cpp
     ${rt}/render/texture_cache.cpp
     ${rt}/render/texture_pack.cpp
     ${rt}/render/texture_pack_codecs.cpp

@@ -16,7 +16,7 @@
 
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/range_envelope.h"
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 #include "galaxy/render/shader_keys.h"  // fnv1a64
 #include "galaxy/render/texture_decode_pool.h"
 #include "galaxy/render/texture_pack.h"
@@ -160,7 +160,7 @@ public:
     std::size_t invalidate_ranges(
         std::span<const MemoryRange> sorted_coalesced_ranges);
 
-    // The GPU side: views by srv_index, upload staging, textures (texture_backend.h).
+    // The GPU side: views by srv_index, upload staging, textures (gpu_texture_backend.h).
     [[nodiscard]] const TextureBackend& backend() const noexcept { return backend_; }
     [[nodiscard]] TextureBackend& backend() noexcept { return backend_; }
     // Render-thread-only lifetime epoch. Raw handles remain valid for this
@@ -390,7 +390,7 @@ private:
     std::vector<std::uint32_t> level_pitches_scratch_;
     unsigned current_frame_slot_ = 0;
 
-    // Decoded textures are placed in shared heaps (placed_texture_allocator.h).
+    // Decoded textures are placed in shared heaps (gpu_placed_textures.h).
     TextureBackend backend_;
     std::uint32_t next_srv_index_ = 0;
     std::vector<std::uint32_t> free_srv_indices_;

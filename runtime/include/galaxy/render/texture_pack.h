@@ -16,7 +16,7 @@
 
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/gx_bitfields.h"
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 
 #include <array>
 #include <condition_variable>

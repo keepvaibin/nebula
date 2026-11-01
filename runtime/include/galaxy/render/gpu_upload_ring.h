@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
-// The per-frame upload rings both GX renderers allocate draw data from (vertices, indices, constants, matrix
+// The per-frame upload rings both renderers allocate draw data from (vertices, indices, constants, matrix
 // palettes), over upload memory from gpu::create_upload_memory.
 
 #include "galaxy/render/gpu_types.h"

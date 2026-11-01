@@ -10,7 +10,7 @@
 // Files: <folder>/<name>.<ext> for the disc's /MovieData/<name>.thp, from the folders configure() gives (a later folder
 // wins). Decoding runs on its own thread a few frames ahead into upload buffers; the render thread only records copies.
 
-#include "galaxy/render/texture_backend.h"
+#include "galaxy/render/gpu_texture_backend.h"
 
 #include <array>
 #include <atomic>

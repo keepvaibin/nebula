@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // UploadRing, and gpu::create_upload_memory for D3D12.
-#include "galaxy/render/upload_ring.h"
+#include "galaxy/render/gpu_upload_ring.h"
 
 #include <algorithm>
 #include <atomic>

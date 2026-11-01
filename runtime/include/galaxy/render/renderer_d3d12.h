@@ -27,14 +27,14 @@
 
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/temporal_upscaler.h"
-#include "galaxy/render/upload_ring.h"
+#include "galaxy/render/gpu_upload_ring.h"
 #include "galaxy/render/interp_gpu.h"
 #include "galaxy/render/post_process.h"
 #include "galaxy/render/ambient_occlusion.h"
 #include "galaxy/render/game_bloom.h"
 #include "galaxy/render/interp_types.h"
 #include "galaxy/render/rt_types.h"
-#include "galaxy/render/placed_texture_allocator.h"
+#include "galaxy/render/gpu_placed_textures.h"
 #include "galaxy/render/gx_bitfields.h"
 #include "galaxy/render/gpu_types.h"
 #include "galaxy/render/renderer_common.h"
@@ -1554,7 +1554,7 @@ private:
     GameBloom game_bloom_;
     RtView scene_ao_view_{};
     // EFB-copy destination textures (render targets) are placed in shared
-    // heaps rather than committed one by one (placed_texture_allocator.h).
+    // heaps rather than committed one by one (gpu_placed_textures.h).
     PlacedTextureAllocator efb_copy_heap_{
         D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES, 128ull << 20};
 

@@ -1,6 +1,6 @@
-// PlacedTextureAllocator (placed_texture_allocator.h): first-fit ranges in D3D12 heaps, committed fallback.
+// PlacedTextureAllocator (gpu_placed_textures.h): first-fit ranges in D3D12 heaps, committed fallback.
 
-#include "galaxy/render/placed_texture_allocator.h"
+#include "galaxy/render/gpu_placed_textures.h"
 
 #include <atomic>
 #include <map>
