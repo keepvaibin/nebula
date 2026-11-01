@@ -77,7 +77,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
     } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
         Some(formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?)
     } else if bytes.starts_with(b"JPAC2-10") {
-        Some(formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?)
+        let textured = formats::jpc(&bytes, stats).with_context(|| format!("{name}: particles"))?;
+        Some(native_data::jpc_host(&textured).with_context(|| format!("{name}: particles (host order)"))?)
     } else if bytes.starts_with(&[0x00, 0x20, 0xAF, 0x30]) {
         Some(formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?)
     } else if bytes.starts_with(b"MESGbmg1") {

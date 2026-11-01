@@ -74,7 +74,7 @@ public:
     /* 0x30 */ JPAFieldBlock** mpFieldBlocks;
     /* 0x34 */ JPAKeyBlock** mpKeyBlocks;
     // The resource's texture index table (big-endian).
-    /* 0x38 */ NEBULA_BE(u16) const* mpTDB1;
+    /* 0x38 */ u16 const* mpTDB1;
     /* 0x3C */ u16 mUsrIdx;
     /* 0x3E */ u8 mFieldBlockNum;
     /* 0x3F */ u8 mKeyBlockNum;

@@ -1,4 +1,6 @@
 #include "JSystem/JParticle/JPAResourceLoader.hpp"
+#include <JSystem/JUtility/JUTException.hpp>
+#include <string.h>
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JParticle/JPABaseShape.hpp"
 #include "JSystem/JParticle/JPAChildShape.hpp"
@@ -11,15 +13,18 @@
 #include "JSystem/JParticle/JPAResourceManager.hpp"
 
 JPAResourceLoader::JPAResourceLoader(u8 const* data, JPAResourceManager* mgr) {
-    if (*(NEBULA_BE(u32)*)(data + 4) == '2-10') {
+    // As the importer cooks it (crates/nebula-import cook/native_data.rs jpc_host): host order, "JPAc2-10".
+    if (memcmp(data, "JPAc2-10", 8) == 0) {
         load_jpc(data, mgr);
+    } else if (memcmp(data, "JPAC2-10", 8) == 0) {
+        JUTException::panic_f(__FILE__, __LINE__, "JPAResourceLoader: a particle file not in host order (the importer cooks it)");
     }
 }
 
-// JPC, big-endian.
+// JPC, in host order as the importer cooks it.
 struct JPAResourceHeader {
-    /* 0x0 */ NEBULA_BE(u16) mUsrIdx;
-    /* 0x2 */ NEBULA_BE(u16) mBlockNum;
+    /* 0x0 */ u16 mUsrIdx;
+    /* 0x2 */ u16 mBlockNum;
     /* 0x4 */ u8 mFieldBlockNum;
     /* 0x5 */ u8 mKeyBlockNum;
     /* 0x6 */ u8 mTDB1Num;
@@ -27,13 +32,13 @@ struct JPAResourceHeader {
 
 void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
     JKRHeap* heap = mgr->mpHeap;
-    mgr->mResMax = *(NEBULA_BE(u16)*)(data + 8);
-    mgr->mTexMax = *(NEBULA_BE(u16)*)(data + 0xA);
+    mgr->mResMax = *(u16*)(data + 8);
+    mgr->mTexMax = *(u16*)(data + 0xA);
     mgr->mpResArr = new (heap, 0) JPAResource*[mgr->mResMax];
     mgr->mpTexArr = new (heap, 0) JPATexture*[mgr->mTexMax];
 
     u32 offset = 0x10;
-    for (int i = 0; i < *(NEBULA_BE(u16)*)(data + 8); i++) {
+    for (int i = 0; i < *(u16*)(data + 8); i++) {
         JPAResourceHeader* header = (JPAResourceHeader*)(data + offset);
         JPAResource* res = new (heap, 0) JPAResource();
         res->mFieldBlockNum = header->mFieldBlockNum;
@@ -49,8 +54,10 @@ void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
         u32 key_idx = 0;
 
         for (int j = 0; j < header->mBlockNum; j++) {
-            u32 magic = *(NEBULA_BE(u32)*)(data + offset);
-            u32 size = *(NEBULA_BE(u32)*)(data + offset + 4);
+            // The block's tag, four characters.
+            const u8* pTag = data + offset;
+            u32 magic = (u32)pTag[0] << 24 | (u32)pTag[1] << 16 | (u32)pTag[2] << 8 | pTag[3];
+            u32 size = *(u32*)(data + offset + 4);
             switch (magic) {
             case 'FLD1':
                 res->mpFieldBlocks[field_idx] = new (heap, 0) JPAFieldBlock(data + offset, heap);
@@ -76,7 +83,7 @@ void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
                 res->mpExTexShape = new (heap, 0) JPAExTexShape(data + offset);
                 break;
             case 'TDB1':
-                res->mpTDB1 = (const NEBULA_BE(u16)*)(data + offset + 8);
+                res->mpTDB1 = (const u16*)(data + offset + 8);
                 break;
             }
             offset += size;
@@ -86,9 +93,9 @@ void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
         mgr->registRes(res);
     }
 
-    offset = *(NEBULA_BE(u32)*)(data + 0xC);
-    for (int i = 0; i < *(NEBULA_BE(u16)*)(data + 0xA); i++) {
-        u32 size = *(NEBULA_BE(u32)*)(data + offset + 4);
+    offset = *(u32*)(data + 0xC);
+    for (int i = 0; i < *(u16*)(data + 0xA); i++) {
+        u32 size = *(u32*)(data + offset + 4);
         JPATexture* tex = new (heap, 0) JPATexture(data + offset);
         mgr->registTex(tex);
         offset += size;
