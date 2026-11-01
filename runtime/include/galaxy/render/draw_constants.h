@@ -37,7 +37,7 @@ struct alignas(256) VertexConstants {
     // The first row of the draw's position block in the bound matrix rows (position place k at pos_base + 3k).
     std::uint32_t pos_base;
     std::uint32_t reserved_c13[2];  // c13.xy: read by no shader
-    // Enhanced lighting's sky: the player's up in eye space (octahedral, vs_constants.h
+    // Enhanced lighting's sky: the player's up in eye space (octahedral, draw_constants_fill.h
     // encode_octahedral), and nonzero when known (else the view's up).
     std::uint32_t sky_up;
     std::uint32_t sky_up_known;
