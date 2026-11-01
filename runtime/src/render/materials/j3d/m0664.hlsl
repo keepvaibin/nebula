@@ -26,60 +26,6 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 1: type 0, source 1
-        const float4 c = float4(v.nrm, 1.0);
-        float3 res;
-        if (((vs_header.w >> 1u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 1u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), dot(c, native_matrix_row(tm + 2u)));
-        } else {
-            res = float3(dot(c, inline_tex_matrices[3]), dot(c, inline_tex_matrices[4]), dot(c, inline_tex_matrices[5]));
-        }
-        const uint pt = native_post(1u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[3]), dot(float4(res, 1.0), inline_post_matrices[4]), dot(float4(res, 1.0), inline_post_matrices[5]));
-        }
-        if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[1] = float4(res, true ? 1.0 : 0.0);
-    }
-    {  // coordinate 2: type 0, source 0
-        const float4 c = float4(v.pos, 1.0);
-        float3 res;
-        if (((vs_header.w >> 2u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 2u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), dot(c, native_matrix_row(tm + 2u)));
-        } else {
-            res = float3(dot(c, inline_tex_matrices[6]), dot(c, inline_tex_matrices[7]), dot(c, inline_tex_matrices[8]));
-        }
-        const uint pt = native_post(2u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[6]), dot(float4(res, 1.0), inline_post_matrices[7]), dot(float4(res, 1.0), inline_post_matrices[8]));
-        }
-        if (true && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[2] = float4(res, true ? 1.0 : 0.0);
-    }
-    {  // coordinate 3: type 1, source 4
-        const float4 c = float4(v.uv[0], 1.0, 1.0);
-        float3 res;
-        if (((vs_header.w >> 3u) & 1u) != 0u) {
-            const uint tm = native_tex_matrix(v, 3u);
-            res = float3(dot(c, native_matrix_row(tm + 0u)), dot(c, native_matrix_row(tm + 1u)), 1.0);
-        } else {
-            res = float3(dot(c, inline_tex_matrices[9]), dot(c, inline_tex_matrices[10]), 1.0);
-        }
-        const uint pt = native_post(3u);
-        const bool posted = (pt & 0x3Fu) != 61u;
-        if (posted) {
-            if ((pt & 0x100u) != 0u) res = dot(res, res) > 0.0 ? normalize(res) : res;
-            res = float3(dot(float4(res, 1.0), inline_post_matrices[9]), dot(float4(res, 1.0), inline_post_matrices[10]), dot(float4(res, 1.0), inline_post_matrices[11]));
-        }
-        if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
-        o.uv[3] = float4(res, posted ? 1.0 : 0.0);
-    }
     j3d_vertex_override(v, o);
 }
 float4 material_color(NativeVaryings i) {
@@ -90,8 +36,8 @@ float4 material_color(NativeVaryings i) {
         const float4 r0 = material.reg[1];
         const float4 r1 = material.reg[2];
         const float4 r2 = material.reg[3];
-        const float ka = 32.0 / 255.0;
-        return j3d_override(t, i.color, 32.0 / 255.0, saturate((r0.a + lerp(t.a, ka, ras.a)) * 2.0), i.pos);
+        const float ka = 64.0 / 255.0;
+        return j3d_override(t, i.color, 64.0 / 255.0, saturate((r0.a + lerp(t.a, ka, ras.a)) * 2.0), i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -100,47 +46,25 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = 32.0 / 255.0;
+        const float ka = 64.0 / 255.0;
         const float3 rc = saturate((r0.rgb + lerp(j3d_in(r1.rgb), t.rgb, ras.rgb)));
         const float ra = saturate((r0.a + lerp(t.a, ka, ras.a)) * 2.0);
         prev.rgb = rc;
         prev.a = ra;
     }
     {  // stage 1
-        const float4 t = tex[3].Sample(samp[3], j3d_texel(i.uv[3], 3u) / material.tex_scale[3].zw).rgba;
+        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float3 rc = saturate((t.rgb + lerp(float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0), float3(0.0, 0.0, 0.0))));
-        const float ra = saturate((0.0 + lerp(0.0, 0.0, 0.0)));
-        r2.rgb = rc;
-        r2.a = ra;
-    }
-    {  // stage 2
-        const float4 t = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 ras = i.color.rgba;
-        const float ka = 64.0 / 255.0;
         const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), ras.rgb, j3d_in(prev.aaa))) * 2.0);
-        const float ra = (r0.a + lerp(0.0, ka, ras.a)) * 2.0;
-        prev.rgb = rc;
-        prev.a = ra;
-    }
-    {  // stage 3
-        const float4 t = tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rgba;
-        const float4 ras = i.color.rgba;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, j3d_in(r2.rgb))));
-        const float ra = (0.0 + lerp(j3d_in(prev.a), 0.0, 0.0));
-        prev.rgb = rc;
-        prev.a = ra;
-    }
-    {  // stage 4
-        const float4 t = tex[2].Sample(samp[2], j3d_texel(i.uv[2], 2u) / material.tex_scale[2].zw).rgba;
-        const float4 ras = i.color.rgba;
-        const float ka = 1.0;
-        const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(t.rgb, j3d_in(prev.rgb), j3d_in(r1.aaa))));
-        const float ra = (0.0 + lerp(0.0, ka, j3d_in(prev.a)));
+        const float ra = saturate((t.a + lerp(0.0, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+    const float a8 = round(prev.a * 255.0);
+    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
+        discard;
+    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }
