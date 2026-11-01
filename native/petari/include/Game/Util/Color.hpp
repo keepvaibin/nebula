@@ -16,8 +16,11 @@ public:
         set(r, g, b, a);
     }
 
+    // The word as the console holds a colour: red in the top byte, alpha in the bottom (r << 24 | g << 16 | b << 8 | a),
+    // whatever the host's byte order.
     Color8(u32 color) {
-        mColor = color;
+        set(static_cast< u8 >(color >> 24), static_cast< u8 >(color >> 16), static_cast< u8 >(color >> 8),
+            static_cast< u8 >(color));
     }
 
     inline operator GXColor() const {
@@ -25,7 +28,7 @@ public:
     }
 
     inline operator u32() const {
-        return mColor;
+        return static_cast< u32 >(r) << 24 | static_cast< u32 >(g) << 16 | static_cast< u32 >(b) << 8 | a;
     }
 
     inline const Color8& operator=(const GXColor& rOther) {
