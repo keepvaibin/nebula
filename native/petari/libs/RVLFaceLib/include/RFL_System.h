@@ -6,10 +6,8 @@
 extern "C" {
 #endif
 
-u32 RFLGetWorkSize(BOOL deluxeTex);
 // Starts the library, ready when it returns (RFL_System.c).
-RFLErrcode RFLInitRes(void* workBuffer, void* resBuffer, u32 resSize,
-                      BOOL deluxeTex);
+RFLErrcode RFLInitRes(void* resBuffer, u32 resSize, BOOL deluxeTex);
 void RFLExit(void);
 BOOL RFLAvailable(void);
 
