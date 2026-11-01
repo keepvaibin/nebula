@@ -118,5 +118,49 @@ int main() {
         }
         std::printf("PASS sky up: octahedral words within %.6f rad, carried into the image\n", worst);
     }
+    {
+        // The matrix groups (E-05): every row the shaders address lies in its group's rows, groups do not overlap
+        // within a kind, and the accessors' kind starts (native_material.hlsli) are the groups' kind starts.
+        for (std::uint32_t r = 0; r < draw_rows::kLight + 32u; ++r) {
+            if (draw_rows::kPost - 4u <= r && r < draw_rows::kPost) {
+                continue;  // the rows between normals and post-transform matrices are none of them
+            }
+            const std::uint32_t g = draw_groups::of_row(r);
+            const std::uint32_t first = draw_groups::first_row(g);
+            if (g >= draw_groups::kGroups || r < first || r >= first + draw_groups::rows(g)) {
+                std::printf("FAILED matrix groups: row %u in group %u (rows %u-%u)\n", r, g, first,
+                            first + draw_groups::rows(g) - 1u);
+                return 1;
+            }
+        }
+        if (draw_groups::of_row(draw_rows::kTexture) != draw_groups::kTexture ||
+            draw_groups::of_row(draw_rows::kNormal) != draw_groups::kNormal ||
+            draw_groups::of_row(draw_rows::kPost) != draw_groups::kPost ||
+            draw_groups::of_row(draw_rows::kLight) != draw_groups::kLight) {
+            std::printf("FAILED matrix groups: a kind's first row is not its first group\n");
+            return 1;
+        }
+        // A write marks its own group only; the same values again mark nothing.
+        DrawMatrices m;
+        m.clear_dirty_groups();
+        std::array<float, 12> v{};
+        v[0] = 2.0f;
+        m.set_position(3u, v.data(), 0u);
+        const std::uint64_t after_position = m.dirty_groups();
+        m.clear_dirty_groups();
+        m.set_position(3u, v.data(), 0u);
+        const std::uint64_t again = m.dirty_groups();
+        NativeLight light{};
+        light.color[0] = 7u;
+        m.set_light(5u, light);
+        const std::uint64_t after_light = m.dirty_groups();
+        if (after_position != (1ull << 3u) || again != 0u || after_light != (1ull << (draw_groups::kLight + 5u))) {
+            std::printf("FAILED matrix groups: dirty %016llx %016llx %016llx\n",
+                        static_cast<unsigned long long>(after_position), static_cast<unsigned long long>(again),
+                        static_cast<unsigned long long>(after_light));
+            return 1;
+        }
+        std::printf("PASS matrix groups: rows map into their groups; writes mark only their own group\n");
+    }
     return 0;
 }
