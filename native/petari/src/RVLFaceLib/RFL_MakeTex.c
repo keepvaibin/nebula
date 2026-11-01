@@ -590,7 +590,6 @@ void RFLiSetFaceParts(const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRS
 void RFLiCapture(u8* buffer, const RFLiCharInfo* info, RFLiFaceParts* face, RFLi_MASKRSL resolution) {
     f32 vp[6];
 
-    J3DNativeStateInvalidateTexAll();
     J3DNativeViewGetViewportv(vp);
     RFLiSetup2DCameraAndParam();
 

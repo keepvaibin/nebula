@@ -62,7 +62,6 @@ enum Kind : std::uint8_t {
     kLightAttenuation,
     kLightPosition,
     kPixelFormat,
-    kInvalidateTextures,
     kZTexture,
     kFogRange,
     kFogRangeTable,

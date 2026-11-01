@@ -6612,14 +6612,6 @@ void RenderCore::record_async_peek_fields_at_token(std::uint16_t token) {
     }
 }
 
-void RenderCore::on_invalidate_textures() {
-    flush_pending_draw_batch();
-    texture_cache_.invalidate_all();
-    texture_handle_cache_.clear();
-    clear_texture_binding_table_cache();
-    texture_bindings_dirty_ = true;
-    current_texture_binding_key_valid_ = false;
-}
 
 void RenderCore::load_light(const state::Op& op) {
     // Light a[0]: its colour (a[1-4]) and angle and distance terms (f[0-5]), or its position and direction (f[0-5]).

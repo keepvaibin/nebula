@@ -57,7 +57,6 @@ void MainLoopFramework::prepareCopyDisp() {
 }
 
 void MainLoopFramework::preGX() {
-    J3DNativeState::invalidateTexAll();
     if (mUseAlpha) {
         J3DNativeState::setPixelFmt(GX_PF_RGBA6_Z24, GX_ZC_LINEAR);
         J3DNativeState::setDither(GX_TRUE);

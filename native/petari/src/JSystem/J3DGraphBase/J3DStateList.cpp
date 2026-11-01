@@ -522,10 +522,6 @@ void J3DStateList::setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed
     r.a[5] = static_cast< u8 >((format - GX_PF_Y8) & 3);
 }
 
-void J3DStateList::invalidateTexAll() {
-    add(NEBULA_STATE_INVALIDATE_TEXTURES);
-}
-
 void J3DStateList::setZTexture(GXZTexOp op, GXTexFmt format, u32 bias) {
     NebulaStateOp& r = add(NEBULA_STATE_Z_TEXTURE);
     r.a[0] = op;

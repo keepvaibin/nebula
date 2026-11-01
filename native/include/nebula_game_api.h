@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 72u
+#define NEBULA_GAME_API_VERSION 73u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -216,7 +216,6 @@ enum {
     NEBULA_STATE_PIXEL_FORMAT,      /* changed (the format and depth format are new), pixel type (the hardware's:
                                        GXSetPixelFmt's table), depth format, antialiasing, YUV (a Y8/U8/V8 format),
                                        YUV component */
-    NEBULA_STATE_INVALIDATE_TEXTURES, /* none: textures in memory changed (GXInvalidateTexAll) */
     NEBULA_STATE_Z_TEXTURE,         /* operation (GXZTexOp), format (GXTexFmt), bias (24 bits, a[2..4] low first) */
     NEBULA_STATE_FOG_RANGE,         /* enable; size[0]: centre (screen x); a[1]: with its table, then f: none and the
                                        table's ten 12-bit entries in NEBULA_STATE_FOG_RANGE_TABLE ops before it */

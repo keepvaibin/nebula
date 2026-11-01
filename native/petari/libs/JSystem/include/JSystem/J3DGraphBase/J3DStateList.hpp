@@ -105,7 +105,6 @@ public:
     void setLight(GXLightID id, const J3DNativeLight& rLight);
     // GXSetPixelFmt's change: `changed` when the format or depth format differs from the last one set.
     void setPixelFmt(GXPixelFmt format, GXZFmt16 zFormat, bool changed);
-    void invalidateTexAll();
     void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
     // GXSetFogRangeAdj's changes: an enabled one's table pairs, then the centre and enable.
     void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);
