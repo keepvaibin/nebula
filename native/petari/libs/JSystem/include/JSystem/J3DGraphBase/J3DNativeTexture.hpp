@@ -58,8 +58,6 @@ namespace J3DNativeTexture {
     // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps). An image that is a
     // texture record (nebula_cooked_texture.h: a cooked file's, or one the game made) goes whole, as its header says.
     void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
-    // A buffer the game made for a capture or fills later: a blank of its size under its address (NEBULA_TEXTURE_BLANK).
-    void registerBlank(const void* pImage, u16 width, u16 height);
     // A palette's colours handed to the renderer (`entries` 16-bit colours).
     void registerPalette(const void* pPalette, u16 entries);
     // The bytes of an image of that format and size with that many levels, as GX lays them out (32-byte tiles).

@@ -428,12 +428,11 @@ void MarioActor::updateRandomTexture(f32 distance) {
     distance = 1.0f - distance / 1000.0f;
     f32 probability = MR::clamp(distance, 0.0f, 1.0f);
 
-    // Luminance 0 and a 4-bit alpha (as 17 times it) per texel, in rows (nebula_cooked_texture.h LA8).
     for (u32 y = 0; y < 8; y++) {
-        pixel = image + y * 16;
+        pixel = image + y * 8;
 
         for (u32 x = 0; x < 8; x++) {
-            s32 alpha = pixel[1] / 17;
+            s32 alpha = *pixel >> 4;
 
             if (MR::getRandom() < probability) {
                 alpha += 4;
@@ -442,13 +441,12 @@ void MarioActor::updateRandomTexture(f32 distance) {
             }
 
             s32 clamped = alpha < 0 ? 0 : alpha > 15 ? 15 : alpha;
-            pixel[0] = 0;
-            pixel[1] = static_cast< u8 >(clamped * 17);
-            pixel += 2;
+            *pixel = (clamped * 16) & 0xF0;
+            pixel++;
         }
     }
 
-    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    J3DNativeTexture::registerImage(image, GX_TF_IA4, 8, 8, 1);
 }
 
 namespace {

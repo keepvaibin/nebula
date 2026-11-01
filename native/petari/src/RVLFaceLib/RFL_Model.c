@@ -6,7 +6,6 @@
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <cstddef>
 #include <cstdio>
-#include <nebula_cooked_texture.h>
 
 _Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel holds an RFLiCharModel");
 
@@ -830,10 +829,6 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
         break;
     }
 
-    // A cooked texture record (the cooker's rfl_res) goes whole.
-    if (nebula_texture_record(RFLiGetTexImage(tex)) != NULL) {
-        texSize = nebula_texture_record(RFLiGetTexImage(tex))->size;
-    }
     memcpy(buffer, RFLiGetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
     J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
