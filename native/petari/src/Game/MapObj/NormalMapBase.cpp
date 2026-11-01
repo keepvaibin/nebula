@@ -531,71 +531,80 @@ void NormalMapBase::setTevForObject() const {
     sNormalMap.constants[35] = height;
 }
 
+namespace {
+    // The gradient's level at `index` of `count` steps (the light's ramp between the low and high levels).
+    s32 gradLevel(u32 index, u32 count, s32 low, s32 high, s32 mode) {
+        s32 value = index * (256.0f / count);
+        if (value < low) {
+            return 0;
+        }
+        if (value >= high) {
+            return 255;
+        }
+        f32 rate = 1.0f - static_cast< f32 >(high - value) / (high - low);
+        switch (mode) {
+        case 0:
+            value = 255.0f * rate;
+            break;
+        case 1:
+            value = 255.0f * (rate * rate);
+            break;
+        case 2:
+            value = 255.0f * MR::sqrt(rate);
+            break;
+        }
+        return value;
+    }
+
+    u8 sGradIntensity[0x100];
+    u8 sGradAlpha[0x100];
+}  // namespace
+
+// The light gradient as LA8 rows (NEBULA_TEXTURE_LINEAR_LA8): intensity by column (the ambient-to-material ramp),
+// alpha by row (the same ramp down the rows, none when _138 & 1), laid out as the picture the game has always shown.
+// The game wrote both ramps as big-endian IA8 texels in rows and ran its tile conversion on them, which leaves the
+// first 2 KB as each 4-row band's first eight intensities (two to a texel: alpha, then intensity) and the rest as the
+// rows' bytes read as 4x4 tiles: texel (x, y) here is what those tiles showed there.
 void NormalMapBase::createGradTexture() {
-    f32 step = 256.0f / width;
     for (u32 x = 0; x < width; x++) {
-        s32 value = x * step;
-        if (value < mLightingLowLevel) {
-            value = 0;
-        } else if (value >= mLightingHighLevel) {
-            value = 255;
-        } else {
-            f32 rate = 1.0f - static_cast< f32 >(mLightingHighLevel - value) / (mLightingHighLevel - mLightingLowLevel);
-            switch (mGradTexMode) {
-            case 0:
-                value = 255.0f * rate;
-                break;
-            case 1:
-                value = 255.0f * (rate * rate);
-                break;
-            case 2:
-                value = 255.0f * MR::sqrt(rate);
-                break;
-            }
+        const f32 ratio = gradLevel(x, width, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
+        sGradIntensity[x] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
+    }
+    for (u32 y = 0; y < height; y++) {
+        if (_138 & 1) {
+            sGradAlpha[y] = 0;
+            continue;
         }
-
-        f32 ratio = value / 255.0f;
-        value = mAmbColor + ratio * (mMatColor - mAmbColor);
-        for (u32 y = 0; y < height; y++) {
-            // IA8 texels for GX, in the console's byte order (tileConversion16 reads them the same way).
-            static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x] = value;
-        }
+        const f32 ratio = gradLevel(y, height, mLightingLowLevel, mLightingHighLevel, mGradTexMode) / 255.0f;
+        sGradAlpha[y] = static_cast< u8 >(static_cast< s32 >(mAmbColor + ratio * (mMatColor - mAmbColor)));
     }
 
-    if (!(_138 & 1)) {
-        f32 step = 256.0f / height;
-        for (u32 y = 0; y < height; y++) {
-            s32 value = y * step;
-            if (value < mLightingLowLevel) {
-                value = 0;
-            } else if (value >= mLightingHighLevel) {
-                value = 255;
+    u8* pTexels = static_cast< u8* >(mImagePtr);
+    const u32 tilesAcross = width / 4;
+    for (u32 y = 0; y < height; y++) {
+        for (u32 x = 0; x < width; x++) {
+            const u32 tile = (y / 4) * tilesAcross + x / 4;
+            const u32 inTile = (y % 4) * 4 + x % 4;
+            u8 alpha;
+            u8 intensity;
+            if (tile < static_cast< u32 >(height / 4)) {
+                // Band `tile`'s entries 2 * inTile and 2 * inTile + 1: columns 0-3 of its rows, then columns 4-7.
+                const u32 first = 2 * inTile;
+                const u32 second = first + 1;
+                alpha = sGradIntensity[first < 16 ? first % 4 : 4 + (first - 16) % 4];
+                intensity = sGradIntensity[second < 16 ? second % 4 : 4 + (second - 16) % 4];
             } else {
-                f32 rate = 1.0f - static_cast< f32 >(mLightingHighLevel - value) / (mLightingHighLevel - mLightingLowLevel);
-                switch (mGradTexMode) {
-                case 0:
-                    value = 255.0f * rate;
-                    break;
-                case 1:
-                    value = 255.0f * (rate * rate);
-                    break;
-                case 2:
-                    value = 255.0f * MR::sqrt(rate);
-                    break;
-                }
+                const u32 written = tile * 16 + inTile;
+                alpha = sGradAlpha[written / width];
+                intensity = sGradIntensity[written % width];
             }
-
-            f32 ratio = value / 255.0f;
-            value = mAmbColor + ratio * (mMatColor - mAmbColor);
-            for (u32 x = 0; x < width; x++) {
-                NEBULA_BE(u16)& texel = static_cast< NEBULA_BE(u16)* >(mImagePtr)[y * width + x];
-                texel = texel | (value << 8);
-            }
+            u8* pTexel = pTexels + 2 * (y * width + x);
+            pTexel[0] = intensity;
+            pTexel[1] = alpha;
         }
     }
 
-    TDDraw::tileConversion16(static_cast< u16* >(mImagePtr), width, height);
-    J3DNativeTexture::registerImage(mImagePtr, GX_TF_IA8, width, height, 1);
+    J3DNativeTexture::registerImage(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }
 
 void NormalMapBase::swapColorGB(JUTTexture* pTexture) {

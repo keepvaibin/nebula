@@ -829,6 +829,10 @@ void RFLiInitTexRes(GXTexObj* texObj, RFLiPartsShpTex part, u16 file, void* buff
         break;
     }
 
+    // A cooked part (a record, nebula_cooked_texture.h) is copied whole.
+    if (nebula_texture_record(RFLiGetTexImage(tex)) != NULL) {
+        texSize = nebula_texture_record(RFLiGetTexImage(tex))->size;
+    }
     memcpy(buffer, RFLiGetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
     J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);

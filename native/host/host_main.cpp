@@ -1901,20 +1901,41 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
         std::fprintf(stderr, "%s%s\n", line, from.c_str());
     }
 #endif
+    // A record the game made (NEBULA_TEXTURE_MADE) in rows of texels: named below by them, as linear texels are; its
+    // header in our copy differs from the game's, so only its texels are compared.
+    const NebulaTexture* made = image->format == NEBULA_TEXTURE_IMAGE ? nebula_texture_record(image->bytes) : nullptr;
+    if (made != nullptr && (made->disc_format != NEBULA_TEXTURE_MADE || made->layout == NEBULA_TEXTURE_BLOCK4 ||
+                            image->size < NEBULA_TEXTURE_HEADER)) {
+        made = nullptr;
+    }
+    const std::size_t same_from = made != nullptr ? NEBULA_TEXTURE_HEADER : 0u;
     {
         std::lock_guard guard(gHandedLock);
         auto& last = gHanded[address];
         if (last != nullptr && last->size() == header + image->size &&
-            std::memcmp(last->data() + header, first, image->size) == 0) {
+            std::memcmp(last->data() + header + same_from, first + same_from, image->size - same_from) == 0) {
             return;
         }
         auto bytes = std::make_shared<std::vector<std::byte>>(header + image->size);
         if (linear) {
             nebula_texture_init(bytes->data(), image->width, image->height, 1u,
-                                static_cast<uint8_t>(image->format - NEBULA_TEXTURE_LINEAR_L8),
+                                nebula_texture_linear_layout(image->format),
                                 NEBULA_TEXTURE_FILTER_AT_UPLOAD);
         }
         std::memcpy(bytes->data() + header, first, image->size);
+        if (linear) {
+            // Texture packs name it by its own texels (Dolphin's naming, the linear code as the format).
+            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
+            record->disc_format = image->format;
+            record->pack_hash = galaxy::render::texture_pack_hash(reinterpret_cast<const uint8_t*>(first), image->size);
+        } else if (made != nullptr) {
+            auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
+            record->disc_format = nebula_texture_linear_code(made->layout);
+            record->pack_hash = galaxy::render::texture_pack_hash(
+                reinterpret_cast<const uint8_t*>(first + NEBULA_TEXTURE_HEADER),
+                std::min<std::size_t>(image->size - NEBULA_TEXTURE_HEADER,
+                                      nebula_texture_level_bytes(made->width, made->height, 1u, made->layout)));
+        }
         last = std::move(bytes);
         copy = last;
     }
@@ -2350,13 +2371,17 @@ uint32_t svc_art_export(void*, const NebulaArtExport* art) {
     };
     std::string line = art->name != nullptr ? art->name : "";
     constexpr uint32_t kRgb5a3 = static_cast<uint32_t>(galaxy::render::TexFormat::RGB5A3);
-    if (art->texels != nullptr && art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u) {
+    const bool linear = art->format >= NEBULA_TEXTURE_LINEAR_L8 && art->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
+    if (art->texels != nullptr && (linear || (art->format == kRgb5a3 && art->width % 4u == 0u && art->height % 4u == 0u))) {
         galaxy::render::TexturePackName name{};
         name.width = static_cast<uint16_t>(art->width);
         name.height = static_cast<uint16_t>(art->height);
         name.format = static_cast<uint8_t>(art->format);
-        name.hash = galaxy::render::texture_pack_hash(static_cast<const uint8_t*>(art->texels),
-                                                  static_cast<std::size_t>(art->width) * art->height * 2u);
+        const std::size_t bytes = linear ? nebula_texture_level_bytes(art->width, art->height, 1u,
+                                                                       nebula_texture_linear_layout(
+                                                                           static_cast<uint8_t>(art->format)))
+                                         : static_cast<std::size_t>(art->width) * art->height * 2u;
+        name.hash = galaxy::render::texture_pack_hash(static_cast<const uint8_t*>(art->texels), bytes);
         const std::string stem = galaxy::render::texture_pack_name(name);
         write(folder / "pack" / "RMG" / (stem + ".png"), art->hd_width, art->hd_height, art->hd);
         line += "\t" + stem;

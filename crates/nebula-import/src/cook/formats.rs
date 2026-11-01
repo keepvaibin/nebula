@@ -86,6 +86,68 @@ pub fn bti(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
     Ok(out)
 }
 
+/// RFL_Res.dat (the Mii library's parts, in MiiFaceDatabase.arc): a header of two 16-bit fields and one offset per
+/// section, then the sections, each a file count, a 16-bit field, the files' offsets (count + 1, from the end of the
+/// table) and the files. A part texture (a ResTIMG-shaped header and its image) is cooked as a BTI file is; the shapes
+/// stay as they are. Every section's files start 32-byte aligned, so each record does.
+pub fn rfl_res(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
+    const SECTIONS: usize = 18; // RFLiArcID_Max
+    // Eye, Eyebrow, FaceTex, GlassTex, Mole, Mouth, Mustache, NlineTex, CapTex (RFLiArcID).
+    const TEXTURES: [usize; 9] = [1, 2, 4, 7, 10, 11, 12, 15, 17];
+    let header = 4 + SECTIONS * 4;
+    if bytes.len() < header {
+        bail!("RFL_Res.dat shorter than its header");
+    }
+    let mut out = bytes[..header].to_vec();
+    for section in 0..SECTIONS {
+        let at = be32(bytes, (section + 1) * 4)? as usize;
+        let count = be16(bytes, at)? as usize;
+        let field = be16(bytes, at + 2)?;
+        let table = at + 4;
+        let data = table + (count + 1) * 4;
+        if data > bytes.len() {
+            bail!("RFL_Res.dat section {section} past the file's end");
+        }
+        let mut files = Vec::with_capacity(count);
+        for i in 0..count {
+            let start = be32(bytes, table + i * 4)? as usize;
+            let end = be32(bytes, table + i * 4 + 4)? as usize;
+            let file = bytes.get(data + start..data + end).context("an RFL_Res.dat file past the file's end")?;
+            let cooked = if TEXTURES.contains(&section) && !file.is_empty() && !texture::is_record(file.get(RES_TIMG..).unwrap_or(&[])) {
+                bti(file, stats).with_context(|| format!("RFL_Res.dat section {section} file {i}"))?
+            } else {
+                file.to_vec()
+            };
+            files.push(cooked);
+        }
+        // The section starts where its files begin 32-byte aligned.
+        let table_bytes = 4 + (count + 1) * 4;
+        while (out.len() + table_bytes) % 32 != 0 {
+            out.push(0);
+        }
+        let start = out.len();
+        put32(&mut out, (section + 1) * 4, start as u32);
+        out.extend_from_slice(&(count as u16).to_be_bytes());
+        out.extend_from_slice(&field.to_be_bytes());
+        let mut offset = 0usize;
+        let mut offsets = Vec::with_capacity(count + 1);
+        for file in &files {
+            offsets.push(offset as u32);
+            offset += (file.len() + 31) & !31;
+        }
+        // An empty file's offset equals the next one's.
+        offsets.push(offset as u32);
+        for o in &offsets {
+            out.extend_from_slice(&o.to_be_bytes());
+        }
+        for file in &files {
+            out.extend_from_slice(file);
+            pad32(&mut out);
+        }
+    }
+    Ok(out)
+}
+
 /// A ResTIMG array's records (images shared by several headers cooked once), appended to `out` from its length; the
 /// headers in `out` at `headers[i]` point at them.
 fn timg_array(source: &[u8], source_headers: &[usize], out: &mut Vec<u8>, headers: &[usize], stats: &mut Stats) -> Result<()> {
@@ -300,4 +362,55 @@ pub fn font(bytes: &[u8], stats: &mut Stats) -> Result<Vec<u8>> {
     let size = out.len() as u32;
     put32(&mut out, 0x08, size);
     Ok(out)
+}
+
+#[cfg(test)]
+mod rfl_tests {
+    use super::*;
+
+    // One I8 8x4 eye texture in section 1; every other section empty.
+    fn sample() -> Vec<u8> {
+        let mut out = vec![0u8; 4 + 18 * 4];
+        for section in 0..18usize {
+            let at = out.len() as u32;
+            out[(section + 1) * 4..(section + 2) * 4].copy_from_slice(&at.to_be_bytes());
+            if section == 1 {
+                out.extend_from_slice(&1u16.to_be_bytes());
+                out.extend_from_slice(&0u16.to_be_bytes());
+                let mut file = vec![0u8; RES_TIMG];
+                file[0] = 0x1; // I8
+                file[2..4].copy_from_slice(&8u16.to_be_bytes());
+                file[4..6].copy_from_slice(&4u16.to_be_bytes());
+                file[0x18] = 1;
+                file[0x1C..0x20].copy_from_slice(&(RES_TIMG as u32).to_be_bytes());
+                file.extend((0..32u8).map(|i| i * 7));
+                out.extend_from_slice(&0u32.to_be_bytes());
+                out.extend_from_slice(&(file.len() as u32).to_be_bytes());
+                out.extend_from_slice(&file);
+            } else {
+                out.extend_from_slice(&[0u8; 8]);
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn part_textures_become_records_and_tables_follow() {
+        let mut stats = Stats::default();
+        let cooked = rfl_res(&sample(), &mut stats).unwrap();
+        let at = be32(&cooked, 2 * 4).unwrap() as usize;
+        assert_eq!(be16(&cooked, at).unwrap(), 1);
+        let data = at + 4 + 2 * 4;
+        assert_eq!(data % 32, 0, "files start 32-byte aligned");
+        let start = be32(&cooked, at + 4).unwrap() as usize;
+        let end = be32(&cooked, at + 8).unwrap() as usize;
+        let file = &cooked[data + start..data + end];
+        let image = be32(file, 0x1C).unwrap() as usize;
+        assert!(texture::is_record(&file[image..]), "the image is a record");
+        // An empty section keeps a count of 0 and one offset.
+        let empty = be32(&cooked, 1 * 4).unwrap() as usize;
+        assert_eq!(be16(&cooked, empty).unwrap(), 0);
+        // Cooking twice changes nothing.
+        assert_eq!(rfl_res(&cooked, &mut stats).unwrap(), cooked);
+    }
 }
