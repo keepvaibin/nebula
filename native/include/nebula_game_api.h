@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 82u
+#define NEBULA_GAME_API_VERSION 83u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -236,8 +236,18 @@ typedef struct NebulaTextureImage {
     uint8_t format, levels;
 } NebulaTextureImage;
 
-/* Vertices the game sends as it draws (immediate): `count` of them grouped as `primitive` (GXBegin's: quads,
-   triangles, strips, fans, lines, line strips, points), each with the values `attributes` names (NEBULA_SHAPE_NORMAL,
+/* How immediate vertices group (NebulaImmediate::primitive). */
+typedef enum NebulaPrimitive {
+    NEBULA_PRIMITIVE_QUADS = 0,          /* drawn as (0 1 2)(0 2 3) */
+    NEBULA_PRIMITIVE_TRIANGLES = 1,
+    NEBULA_PRIMITIVE_TRIANGLE_STRIP = 2, /* odd triangles turned to keep the winding */
+    NEBULA_PRIMITIVE_TRIANGLE_FAN = 3,   /* around vertex 0 */
+    NEBULA_PRIMITIVE_LINES = 4,
+    NEBULA_PRIMITIVE_LINE_STRIP = 5,
+    NEBULA_PRIMITIVE_POINTS = 6
+} NebulaPrimitive;
+
+/* Vertices the game sends as it draws (immediate): `count` of them grouped as `primitive` (NebulaPrimitive), each with the values `attributes` names (NEBULA_SHAPE_NORMAL,
    _COLOR0, _COLOR1, _TEXCOORD0 << n, _POSITION_MATRIX): 3 floats of position and of normal, an R << 24 | G << 16 |
    B << 8 | A word per colour, 2 floats per texture coordinate, a position matrix place (0-9) per position matrix.
    Without a position matrix the vertices take the current one. `matrices` (`matrix_count`): the position and normal

@@ -2146,6 +2146,8 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
     }
     const uint32_t n = draw->count;
     auto imm = std::make_shared<shapes::Immediate>();
+    static_assert(shapes::kQuads == NEBULA_PRIMITIVE_QUADS && shapes::kPoints == NEBULA_PRIMITIVE_POINTS &&
+                  shapes::kTriangleFan == NEBULA_PRIMITIVE_TRIANGLE_FAN && shapes::kLineStrip == NEBULA_PRIMITIVE_LINE_STRIP);
     imm->primitive = draw->primitive;
     shapes::Geometry& g = imm->geometry;
     // Its values are its own: geometry the game builds as it draws.

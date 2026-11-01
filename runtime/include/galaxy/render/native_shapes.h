@@ -87,17 +87,19 @@ struct Matrix {
     std::array<float, 12> values{};
 };
 
+// How immediate vertices group: nebula_game_api.h NebulaPrimitive's values.
+enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints };
+
 // Vertices the game sent as it drew them (nebula_game_api.h NebulaImmediate): `geometry` has one corner per vertex,
-// in order, reading `arrays` (its values) entry by entry; `primitive` is GX's opcode (its top five bits).
+// in order, reading `arrays` (its values) entry by entry; `primitive` is a NebulaPrimitive.
 struct Immediate {
     std::uint8_t primitive = 0;
     Geometry geometry;
     std::array<Array, 12> arrays;
 };
 
-// The indices a primitive of `count` vertices draws with, as the renderer has always split GX's primitives (`primitive`
-// is GX's opcode, its top five bits): quads as (0 1 2)(0 2 3), strips with their odd triangles turned, fans around
-// vertex 0, line strips as line lists, triangles, lines and points as they are.
+// The indices a primitive (NebulaPrimitive) of `count` vertices draws with: quads as (0 1 2)(0 2 3), strips with their
+// odd triangles turned, fans around vertex 0, line strips as line lists, triangles, lines and points as they are.
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
 
 // The game's records, in the order it made them (render_core.h attach_shape_record).

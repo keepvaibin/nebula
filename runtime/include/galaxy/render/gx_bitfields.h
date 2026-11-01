@@ -34,10 +34,9 @@ enum class FogType : std::uint8_t {
 };
 
 // Draw opcode bits 7:3.
-enum class PrimitiveClass : std::uint8_t {
-    Quads = 0x10, Quads2 = 0x11, Triangles = 0x12,
-    TriangleStrip = 0x13, TriangleFan = 0x14,
-    Lines = 0x15, LineStrip = 0x16, Points = 0x17,
+// How a draw's vertices group: NebulaPrimitive's values.
+enum class Primitive : std::uint8_t {
+    Quads = 0, Triangles, TriangleStrip, TriangleFan, Lines, LineStrip, Points,
 };
 
 enum class TexGenType : std::uint8_t {
@@ -140,13 +139,12 @@ struct XfChannelCtrl {
 };
 
 [[nodiscard]] constexpr bool cull_all_suppresses_primitive(
-    CullMode cull, PrimitiveClass primitive) noexcept {
+    CullMode cull, Primitive primitive) noexcept {
     return cull == CullMode::All &&
-        (primitive == PrimitiveClass::Triangles ||
-         primitive == PrimitiveClass::TriangleStrip ||
-         primitive == PrimitiveClass::TriangleFan ||
-         primitive == PrimitiveClass::Quads ||
-         primitive == PrimitiveClass::Quads2);
+        (primitive == Primitive::Triangles ||
+         primitive == Primitive::TriangleStrip ||
+         primitive == Primitive::TriangleFan ||
+         primitive == Primitive::Quads);
 }
 [[nodiscard]] constexpr std::uint8_t cmpr_interpolated_channel(
     std::uint8_t primary, std::uint8_t secondary) {

@@ -441,27 +441,26 @@ struct ScopedFlushTiming {
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
 
-void gx_topology_for_primitive(
-    PrimitiveClass primitive,
+void topology_for_primitive(
+    Primitive primitive,
     gpu::Topology& topology,
     gpu::TopologyType& topology_type) {
     topology = gpu::kTopologyTriangleList;
     topology_type = gpu::kTopologyTypeTriangle;
     switch (primitive) {
-    case PrimitiveClass::Lines:
-    case PrimitiveClass::LineStrip:
+    case Primitive::Lines:
+    case Primitive::LineStrip:
         topology = gpu::kTopologyLineList;
         topology_type = gpu::kTopologyTypeLine;
         break;
-    case PrimitiveClass::Points:
+    case Primitive::Points:
         topology = gpu::kTopologyPointList;
         topology_type = gpu::kTopologyTypePoint;
         break;
-    case PrimitiveClass::Quads:
-    case PrimitiveClass::Quads2:
-    case PrimitiveClass::Triangles:
-    case PrimitiveClass::TriangleStrip:
-    case PrimitiveClass::TriangleFan:
+    case Primitive::Quads:
+    case Primitive::Triangles:
+    case Primitive::TriangleStrip:
+    case Primitive::TriangleFan:
     default:
         break;
     }
@@ -501,7 +500,7 @@ void RenderCore::reset_fifo_session_state() {
     cached_draw_run_primitive_indexed_ = false;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
-    cached_draw_run_primitive_ = PrimitiveClass::Points;
+    cached_draw_run_primitive_ = Primitive::Points;
     cached_draw_run_vtxfmt_ = 0u;
     cached_draw_run_state_call_ = {};
 
@@ -5531,7 +5530,7 @@ void RenderCore::flush_pending_draw_batch() {
 }
 
 bool RenderCore::begin_cached_draw_run(
-    PrimitiveClass primitive,
+    Primitive primitive,
     std::uint8_t vtxfmt,
     std::size_t draw_count) {
     (void)draw_count;
@@ -5541,7 +5540,7 @@ bool RenderCore::begin_cached_draw_run(
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
-    gx_topology_for_primitive(primitive, topology, topology_type);
+    topology_for_primitive(primitive, topology, topology_type);
 
     const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
@@ -5555,7 +5554,7 @@ bool RenderCore::begin_cached_draw_run(
     cached_draw_run_primitive_ = primitive;
     cached_draw_run_vtxfmt_ = vtxfmt;
     cached_draw_run_primitive_indexed_ =
-        primitive != PrimitiveClass::Triangles;
+        primitive != Primitive::Triangles;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
     cached_draw_run_state_call_ = {};
@@ -5611,7 +5610,7 @@ void RenderCore::end_cached_draw_run() {
     cached_draw_run_primitive_indexed_ = false;
     cached_draw_run_no_pso_ = false;
     cached_draw_run_batch_compatible_known_ = false;
-    cached_draw_run_primitive_ = PrimitiveClass::Points;
+    cached_draw_run_primitive_ = Primitive::Points;
     cached_draw_run_vtxfmt_ = 0;
     cached_draw_run_state_call_ = {};
 }
@@ -6086,7 +6085,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     };
     record_inputs_ = &inputs;
     RecordScope scope{this};
-    if (!begin_cached_draw_run(PrimitiveClass::Triangles, 0u, 1u)) {
+    if (!begin_cached_draw_run(Primitive::Triangles, 0u, 1u)) {
         return;
     }
     scope.run = true;
@@ -6160,7 +6159,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
 
 void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     display_copy_on_output_ = false;
-    const auto primitive = static_cast<PrimitiveClass>(immediate.primitive >> 3u);
+    const auto primitive = static_cast<Primitive>(immediate.primitive);
     const shapes::Geometry& geometry = immediate.geometry;
     const auto count = static_cast<std::uint32_t>(geometry.corners.size());
     shapes::primitive_indices(immediate.primitive, count, immediate_indices_);

@@ -234,7 +234,7 @@ private:
     // Resolves draw state once for a run of `draw_count` draws (a native shape's); end_cached_draw_run follows
     // only when this returns true.
     [[nodiscard]] bool begin_cached_draw_run(
-        PrimitiveClass primitive,
+        Primitive primitive,
         std::uint8_t vtxfmt,
         std::size_t draw_count);
     void end_cached_draw_run();
@@ -1463,7 +1463,7 @@ private:
     bool cached_draw_run_primitive_indexed_ = false;
     bool cached_draw_run_no_pso_ = false;
     bool cached_draw_run_batch_compatible_known_ = false;
-    PrimitiveClass cached_draw_run_primitive_ = PrimitiveClass::Points;
+    Primitive cached_draw_run_primitive_ = Primitive::Points;
     std::uint8_t cached_draw_run_vtxfmt_ = 0;
     DrawCall cached_draw_run_state_call_{};
     std::atomic<std::uint64_t> stat_xfb_copies_{0};
