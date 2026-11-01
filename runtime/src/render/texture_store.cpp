@@ -8,7 +8,7 @@
 #define NOMINMAX
 #endif
 
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/render/rt_materials.h"
 #include "nebula_cooked_texture.h"
 

@@ -10,7 +10,7 @@
 #include "galaxy/experimental_ultrawide_aspect.h"
 #include "galaxy/render/game_asset_extract.h"
 #include "galaxy/render/host_window.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/native_host.h"
 
 #include <vk_mem_alloc.h>

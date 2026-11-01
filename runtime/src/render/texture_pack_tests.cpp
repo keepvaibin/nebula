@@ -11,7 +11,7 @@
 
 #include "galaxy/render/render_core.h"
 #include "galaxy/render/rt_materials.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 #include "galaxy/render/texture_pack.h"
 #include "nebula_cooked_texture.h"
 

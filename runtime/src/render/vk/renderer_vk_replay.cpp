@@ -11,7 +11,7 @@
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/interp_eval.h"
 #include "galaxy/render/render_config.h"
-#include "galaxy/render/texture_cache.h"
+#include "galaxy/render/texture_store.h"
 
 #include <algorithm>
 #include <chrono>
