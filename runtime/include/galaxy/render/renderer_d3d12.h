@@ -235,7 +235,7 @@ public:
     void wait_for_fence_value(std::uint64_t fence_value);
 
     // Binds EFB RTV+DSV and applies the viewport from the XF viewport regs.
-    void bind_efb(const float xf_viewport[6]);
+    void bind_efb();
 
     // HUD split: from the end of the game's 3D scene to the display copy the
     // EFB is a second target at the window's integer scale, so the 2D layer
@@ -1098,10 +1098,6 @@ private:
         unsigned x = 0, y = 0, w = 0, h = 0;
         std::uint8_t format = 0;
     };
-    struct ReplayViewport {
-        float values[6]{};
-        bool valid = false;
-    };
     // RtComposite: the ambient occlusion of ray-tracer result slot `index`.
     enum class ReplayKind : std::uint8_t {
         Draw, BindEfb, Clear, Copy, SwapEfbSets, ClearDepth, RtComposite, RtWater, SceneAa, SceneAo,
@@ -1127,7 +1123,6 @@ private:
     // the next game frame records while the previous one is interpolated.
     std::vector<ReplayOp> replay_ops_;
     std::vector<DrawCall> replay_draws_;
-    std::vector<ReplayViewport> replay_viewports_;
     std::vector<ReplayClear> replay_clears_;
     std::vector<ReplayCopy> replay_copies_;
     std::vector<ReplayBloom> replay_blooms_;
@@ -1140,7 +1135,6 @@ private:
     std::uint64_t log_gap_ops_ = 0;
     std::vector<ReplayOp> play_ops_;
     std::vector<DrawCall> play_draws_;
-    std::vector<ReplayViewport> play_viewports_;
     std::vector<ReplayClear> play_clears_;
     std::vector<ReplayCopy> play_copies_;
     std::vector<ReplayBloom> play_blooms_;
@@ -1150,7 +1144,6 @@ private:
     // so a newer completed log can wait while sub-frames of this one run.
     std::vector<ReplayOp> run_ops_;
     std::vector<DrawCall> run_draws_;
-    std::vector<ReplayViewport> run_viewports_;
     std::vector<ReplayClear> run_clears_;
     std::vector<ReplayCopy> run_copies_;
     std::vector<ReplayBloom> run_blooms_;

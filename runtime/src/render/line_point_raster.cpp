@@ -11,21 +11,21 @@ namespace galaxy::render {
 
 LinePointRasterParams make_line_point_raster_params(
     const LinePointValues& values,
-    float viewport_half_width,
-    float viewport_half_height,
+    float viewport_width,
+    float viewport_height,
     unsigned efb_scale,
     unsigned fallback_efb_width,
     unsigned fallback_efb_height) noexcept {
     const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
     const bool valid_viewport =
-        std::isfinite(viewport_half_width) &&
-        std::isfinite(viewport_half_height) &&
-        viewport_half_width > 0.0f && viewport_half_height < 0.0f;
+        std::isfinite(viewport_width) &&
+        std::isfinite(viewport_height) &&
+        viewport_width > 0.0f && viewport_height > 0.0f;
     const float logical_width = valid_viewport
-        ? 2.0f * viewport_half_width
+        ? viewport_width
         : static_cast<float>(std::max(fallback_efb_width, 1u));
     const float logical_height = valid_viewport
-        ? -2.0f * viewport_half_height
+        ? viewport_height
         : static_cast<float>(std::max(fallback_efb_height, 1u));
     const float physical_scale = static_cast<float>(scale);
     return LinePointRasterParams{

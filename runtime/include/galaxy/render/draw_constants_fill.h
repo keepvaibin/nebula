@@ -127,7 +127,7 @@ inline void fill_vs_constants(
         values.point_coords = static_cast<std::uint8_t>(values.point_coords | (draw.coord[i].point_offset ? 1u : 0u) << i);
     }
     const LinePointRasterParams line_point =
-        make_line_point_raster_params(values, draw.viewport[0], draw.viewport[1], efb_scale, 640u, 456u);
+        make_line_point_raster_params(values, draw.viewport[2], draw.viewport[3], efb_scale, 640u, 456u);
     out.line_point_raster[0] = line_point.viewport_width_pixels;
     out.line_point_raster[1] = line_point.viewport_height_pixels;
     out.line_point_raster[2] = line_point.line_width_pixels;

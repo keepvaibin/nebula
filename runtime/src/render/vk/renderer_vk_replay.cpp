@@ -247,7 +247,6 @@ VkDescriptorSet RendererVk::allocate_table_set(VkDescriptorSetLayout layout) {
 void RendererVk::ReplayLog::clear() {
     ops.clear();
     draws.clear();
-    viewports.clear();
     clears.clear();
     copies.clear();
     blooms.clear();
@@ -1067,7 +1066,7 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         reset_gx_bindings();
-        bind_efb(nullptr);
+        bind_efb();
         return;
     }
     if (copy.display) {
@@ -1173,7 +1172,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     replay_list_ = &list;
     replay_constant_sets_.clear();
     list.held.clear();
-    bind_efb(nullptr);
+    bind_efb();
     const gpu::Address output = interp_output_address_;
     // The log before's vertices are gone once its segment came round (a later game frame records there).
     const bool blend = sequence.vertex_blend && prev_valid_ && (!blend_pairs_.empty() || !stripe_gather_.empty()) &&
@@ -1206,11 +1205,9 @@ bool RendererVk::record_replay_list(ReplayList& list) {
             draw(call);
             break;
         }
-        case ReplayKind::BindEfb: {
-            const ReplayViewport& viewport = run_log_.viewports[op.index];
-            bind_efb(viewport.valid ? viewport.values : nullptr);
+        case ReplayKind::BindEfb:
+            bind_efb();
             break;
-        }
         case ReplayKind::Clear: {
             const ReplayClear& c = run_log_.clears[op.index];
             clear_efb(c.rgba, c.z24, c.color, c.alpha, c.depth, c.x, c.y, c.w, c.h, c.format);
@@ -1230,7 +1227,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
         case ReplayKind::SwapEfbSets:
             if (alt_efb_.color) {
                 swap_efb_sets();
-                bind_efb(nullptr);
+                bind_efb();
             }
             break;
         case ReplayKind::Copy: {

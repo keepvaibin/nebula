@@ -263,38 +263,32 @@ int main() {
             "6x rectangle helper saturates oversized public target extents");
     }
     {
-        const float full_viewport[6] = {
-            320.0f,
-            -228.0f,
-            16777215.0f,
-            662.0f,
-            570.0f,
-            16777215.0f};
-        const galaxy::render::ScaledGxViewport viewport =
-            galaxy::render::compute_scaled_gx_viewport(full_viewport, 4u);
+        const float full_viewport[6] = {0.0f, 0.0f, 640.0f, 456.0f, 0.0f, 1.0f};
+        const galaxy::render::ScaledViewport viewport =
+            galaxy::render::compute_scaled_viewport(full_viewport, 4u);
         passed &= expect_near(
             viewport.x, 0.0f,
-            "4x full GX viewport retains its zero X origin");
+            "4x full viewport retains its zero X origin");
         passed &= expect_near(
             viewport.y, 0.0f,
-            "4x full GX viewport retains its zero Y origin");
+            "4x full viewport retains its zero Y origin");
         passed &= expect_near(
             viewport.width, 2560.0f,
-            "4x GX viewport rasterizes geometry across the scaled EFB width");
+            "4x viewport rasterizes geometry across the scaled EFB width");
         passed &= expect_near(
             viewport.height, 1824.0f,
-            "4x GX viewport rasterizes geometry across the scaled copy height");
+            "4x viewport rasterizes geometry across the scaled copy height");
         passed &= expect(
             viewport.valid() && viewport.min_depth <= viewport.max_depth,
-            "scaled GX viewport preserves a valid reversed depth range");
-        const galaxy::render::ScaledGxViewport sixfold_viewport =
-            galaxy::render::compute_scaled_gx_viewport(full_viewport, 6u);
+            "scaled viewport preserves a valid reversed depth range");
+        const galaxy::render::ScaledViewport sixfold_viewport =
+            galaxy::render::compute_scaled_viewport(full_viewport, 6u);
         passed &= expect_near(
             sixfold_viewport.width, 3840.0f,
-            "6x GX viewport spans the scaled EFB width");
+            "6x viewport spans the scaled EFB width");
         passed &= expect_near(
             sixfold_viewport.height, 2736.0f,
-            "6x GX viewport spans the scaled copy height");
+            "6x viewport spans the scaled copy height");
     }
     {
         for (const unsigned scale : {1u, 2u, 3u, 4u, 5u, 6u}) {

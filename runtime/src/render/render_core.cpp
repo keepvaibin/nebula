@@ -1167,8 +1167,8 @@ void RenderCore::apply_scene_jitter(const VertexConstants& cpu, VertexConstants&
         return;
     }
     const float scale = static_cast<float>(renderer_.efb_scale());
-    const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-    const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
+    const float width = std::fabs(draw_state_.viewport[2]) * scale;
+    const float height = std::fabs(draw_state_.viewport[3]) * scale;
     if (!(width > 0.0f) || !(height > 0.0f)) {
         return;
     }
@@ -1758,13 +1758,12 @@ void RenderCore::note_interp_rt_projection() {
         scene.rt_projection[i] = draw_state_.projection[i];
     }
     const float scale = static_cast<float>(renderer_.efb_scale());
-    scene.rt_viewport[0] = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-    scene.rt_viewport[1] =
-        2.0f * std::fabs(draw_state_.viewport[1]) * scale;
+    scene.rt_viewport[0] = std::fabs(draw_state_.viewport[2]) * scale;
+    scene.rt_viewport[1] = std::fabs(draw_state_.viewport[3]) * scale;
     scene.rt_projection_known = true;
 }
 
-RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
+RtView RenderCore::scene_depth_view(const ScaledViewport& viewport) const {
     const auto projection = [this](unsigned i) {
         return draw_state_.projection[i];
     };
@@ -1777,8 +1776,8 @@ RtView RenderCore::scene_depth_view(const ScaledGxViewport& viewport) const {
     // the view carries the jitter too, or each sample would land up to half a pixel off its surface.
     if (temporal_scene_ && draw_state_.projection_type == 0u) {
         const float scale = static_cast<float>(renderer_.efb_scale());
-        const float width = 2.0f * std::fabs(draw_state_.viewport[0]) * scale;
-        const float height = 2.0f * std::fabs(draw_state_.viewport[1]) * scale;
+        const float width = std::fabs(draw_state_.viewport[2]) * scale;
+        const float height = std::fabs(draw_state_.viewport[3]) * scale;
         if (width > 0.0f && height > 0.0f) {
             view.projection[1] -= 2.0f * scene_jitter_px_[0] / width;
             view.projection[3] -= -2.0f * scene_jitter_px_[1] / height;
@@ -1800,7 +1799,7 @@ void RenderCore::note_scene_ao_view(const DrawCall& call) {
         draw_state_.projection_type != 0u || !call.has_viewport) {
         return;
     }
-    const ScaledGxViewport viewport = compute_scaled_gx_viewport(call.xf_viewport, renderer_.efb_scale());
+    const ScaledViewport viewport = compute_scaled_viewport(call.viewport, renderer_.efb_scale());
     if (!viewport.valid()) {
         return;
     }
@@ -4221,7 +4220,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
 
     // Bind EFB with default (null) viewport. The XF viewport registers
     // will provide the actual values once processed from the FIFO.
-    renderer_.bind_efb(nullptr);
+    renderer_.bind_efb();
 
     // GX keeps the EFB across frames; only an EFB copy with the clear bit set clears it (on_efb_copy,
     // with the latched copy-clear registers). One initial clear (depth = far) seeds the targets.
@@ -5496,9 +5495,9 @@ bool RenderCore::draw_calls_batch_compatible(
         return true;
     }
     return std::memcmp(
-               lhs.xf_viewport,
-               rhs.xf_viewport,
-               sizeof(lhs.xf_viewport)) == 0;
+               lhs.viewport,
+               rhs.viewport,
+               sizeof(lhs.viewport)) == 0;
 }
 
 void RenderCore::flush_pending_draw_batch() {
@@ -5598,11 +5597,11 @@ bool RenderCore::begin_cached_draw_run(
     cached_draw_run_state_call_.topology       = draw_topology(topology);
     cached_draw_run_state_call_.scissor        = scissor_rect;
     for (unsigned i = 0; i < 6; ++i) {
-        cached_draw_run_state_call_.xf_viewport[i] = draw_state_.viewport[i];
+        cached_draw_run_state_call_.viewport[i] = draw_state_.viewport[i];
     }
     cached_draw_run_state_call_.has_viewport =
-        cached_draw_run_state_call_.xf_viewport[0] > 0.0f &&
-        cached_draw_run_state_call_.xf_viewport[1] < 0.0f;
+        cached_draw_run_state_call_.viewport[2] > 0.0f &&
+        cached_draw_run_state_call_.viewport[3] > 0.0f;
     return true;
 }
 

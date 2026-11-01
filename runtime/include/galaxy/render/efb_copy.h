@@ -143,7 +143,7 @@ struct ScaledEfbRect {
     }
 };
 
-// Inline: this and compute_scaled_gx_viewport run once per draw.
+// Inline: this and compute_scaled_viewport run once per draw.
 [[nodiscard]] inline ScaledEfbRect compute_scaled_efb_rect(
     std::int32_t logical_left,
     std::int32_t logical_top,
@@ -178,7 +178,7 @@ struct ScaledEfbRect {
         scaled_clamped(logical_bottom, target_height)};
 }
 
-struct ScaledGxViewport {
+struct ScaledViewport {
     float x = 0.0f;
     float y = 0.0f;
     float width = 0.0f;
@@ -191,35 +191,26 @@ struct ScaledGxViewport {
     }
 };
 
-// XF viewport layout: wd, ht, zRange, xOrig, yOrig, farZ.
-[[nodiscard]] inline ScaledGxViewport compute_scaled_gx_viewport(
-    const float xf_viewport[6],
+// The viewport (draw_state.h: left, top, width, height, near and far depth) at the frame scale, depth reversed.
+[[nodiscard]] inline ScaledViewport compute_scaled_viewport(
+    const float viewport[6],
     unsigned efb_scale) noexcept {
-    if (xf_viewport == nullptr) {
+    if (viewport == nullptr) {
         return {};
     }
     const float scale = static_cast<float>(
         std::clamp(efb_scale, 1u, kMaxEfbScale));
-    const float wd = xf_viewport[0];
-    const float ht = xf_viewport[1];
-    const float z_range = xf_viewport[2];
-    const float x_origin = xf_viewport[3] - 342.0f;
-    const float y_origin = xf_viewport[4] - 342.0f;
-    const float far_z = xf_viewport[5];
-    constexpr float kZ24 = 16777216.0f;
-    float min_depth = std::clamp(1.0f - far_z / kZ24, 0.0f, 1.0f);
-    const float max_depth = std::clamp(
-        1.0f - (far_z - z_range) / kZ24,
-        0.0f,
-        1.0f);
+    // Reversed depth: the far depth maps to 0, the near depth to 1.
+    float min_depth = std::clamp(1.0f - viewport[5], 0.0f, 1.0f);
+    const float max_depth = std::clamp(1.0f - viewport[4], 0.0f, 1.0f);
     if (min_depth > max_depth) {
         min_depth = max_depth;
     }
-    return ScaledGxViewport{
-        (x_origin - wd) * scale,
-        (y_origin + ht) * scale,
-        2.0f * wd * scale,
-        -2.0f * ht * scale,
+    return ScaledViewport{
+        viewport[0] * scale,
+        viewport[1] * scale,
+        viewport[2] * scale,
+        viewport[3] * scale,
         min_depth,
         max_depth};
 }

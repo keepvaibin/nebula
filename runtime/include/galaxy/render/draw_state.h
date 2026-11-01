@@ -46,8 +46,8 @@ struct NativeDrawState {
     // Texture coordinate generation and each coordinate's post-transform matrix.
     XfTexGen texgen[8]{};
     XfPostTexGen post_texgen[8]{};
-    // The projection's six terms and type (0 perspective), the viewport (half width, half height, depth range,
-    // centre x, centre y, far).
+    // The projection's six terms and type (0 perspective), the viewport (left, top, width, height in frame pixels,
+    // near and far depth 0-1).
     float projection[6]{};
     std::uint8_t projection_type = 0u;
     float viewport[6]{};

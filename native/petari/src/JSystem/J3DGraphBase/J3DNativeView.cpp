@@ -11,11 +11,12 @@ namespace {
     bool sPerspective = false;
     f32 sTerms[6] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f};
 
-    // The viewport as GX keeps it (set by the game each frame before anything reads it; a read before then stops).
+    // The viewport the game set (left, top, width, height, near, far; set each frame before anything reads it, a read
+    // before then stops) and the depth scale and offset it maps near and far through.
     bool sViewportSet = false;
     f32 sViewport[6] = {};
-    f32 sZScale = 16777216.0f;
-    f32 sZOffset = 0.0f;
+    f32 sDepthScale = 1.0f;
+    f32 sDepthOffset = 0.0f;
     // The scissor box: left, top, width, height.
     bool sScissorSet = false;
     u32 sScissor[4] = {};
@@ -26,18 +27,16 @@ namespace {
     }
 
     void sendViewport() {
-        // GX's terms (__GXSetViewport): half sizes, centres offset by 342, the depth range scaled.
+        // The rectangle in frame pixels and the depth range (0 near .. 1 far) the near and far planes map to.
         NebulaStateOp op;
         memset(&op, 0, sizeof(op));
         op.kind = NEBULA_STATE_VIEWPORT;
-        const f32 zMin = sViewport[4] * sZScale;
-        const f32 zMax = sViewport[5] * sZScale;
-        op.f[0] = sViewport[2] / 2.0f;
-        op.f[1] = -sViewport[3] / 2.0f;
-        op.f[2] = zMax - zMin;
-        op.f[3] = sViewport[0] + (sViewport[2] / 2.0f) + 342.0f;
-        op.f[4] = sViewport[1] + (sViewport[3] / 2.0f) + 342.0f;
-        op.f[5] = zMax + sZOffset;
+        op.f[0] = sViewport[0];
+        op.f[1] = sViewport[1];
+        op.f[2] = sViewport[2];
+        op.f[3] = sViewport[3];
+        op.f[4] = sViewport[4] * sDepthScale + sDepthOffset;
+        op.f[5] = sViewport[5] * sDepthScale + sDepthOffset;
         sendOp(op);
     }
 
@@ -130,8 +129,8 @@ namespace J3DNativeView {
     }
 
     void setZScaleOffset(f32 scale, f32 offset) {
-        sZOffset = offset * static_cast< f32 >(0x00FFFFFF);
-        sZScale = scale * static_cast< f32 >(0xFFFFFF) + 1.0f;
+        sDepthScale = scale;
+        sDepthOffset = offset;
         if (sViewportSet) {
             sendViewport();
         }
