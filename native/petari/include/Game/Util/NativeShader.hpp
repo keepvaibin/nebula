@@ -4,6 +4,7 @@
 // (runtime/src/render/materials), its constants, textures and fixed-function state, sent for the draws that follow.
 
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
+#include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <revolution/types.h>
@@ -56,6 +57,36 @@ namespace NativeShader {
         rMaterial.textures[slot].lod_bias = pTexture->mLodBias / 100.0f;
         rMaterial.textures[slot].min_lod = static_cast< s16 >(pTexture->mMinLod) / 8.0f;
         rMaterial.textures[slot].max_lod = static_cast< s16 >(pTexture->mMaxLod) / 8.0f;
+    }
+
+    // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
+    inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const GXTexObj* pObj) {
+        void* pImage;
+        u16 width, height;
+        GXTexFmt format;
+        GXTexWrapMode wrapS, wrapT;
+        GXBool mipmap;
+        J3DNativeTexture::getAll(pObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
+        GXTexFilter minFilter, magFilter;
+        f32 minLod, maxLod, lodBias;
+        GXBool biasClamp, edgeLod;
+        GXAnisotropy maxAniso;
+        J3DNativeTexture::getLODAll(pObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
+                                    &maxAniso);
+        rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pImage);
+        rMaterial.textures[slot].width = width;
+        rMaterial.textures[slot].height = height;
+        rMaterial.textures[slot].format = static_cast< u8 >(format & 0x0F);
+        rMaterial.textures[slot].repeat_s = static_cast< u8 >(wrapS);
+        rMaterial.textures[slot].repeat_t = static_cast< u8 >(wrapT);
+        rMaterial.textures[slot].mag_linear = magFilter != GX_NEAR ? 1 : 0;
+        rMaterial.textures[slot].min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5 ? 1 : 0;
+        rMaterial.textures[slot].mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
+        rMaterial.textures[slot].anisotropy = static_cast< u8 >(maxAniso);
+        rMaterial.textures[slot].edge_lod = edgeLod ? 1 : 0;
+        rMaterial.textures[slot].lod_bias = lodBias;
+        rMaterial.textures[slot].min_lod = minLod;
+        rMaterial.textures[slot].max_lod = maxLod;
     }
 
     // Constants from offset `at` (floats): an RGBA colour as 0-1 values.
