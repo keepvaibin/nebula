@@ -959,6 +959,24 @@ namespace nw4r {
                 rProgram.blend.logic_op = GX_LO_SET;
             }
 
+            // Each coordinate's scale: the size of the texture its stage samples (GXLoadTexObj's normalized coordinates).
+            for (u32 s = 0; s < rProgram.tev_stages && s < 16; s++) {
+                const u8 coord = rProgram.tev[s].tex_coord;
+                const u8 map = rProgram.tev[s].tex_map;
+                if (coord < 8 && map < 8 && rValues.texture[map].image != 0) {
+                    rValues.tex_coord_scale[coord].scale_s = rValues.texture[map].width;
+                    rValues.tex_coord_scale[coord].scale_t = rValues.texture[map].height;
+                }
+            }
+            for (u32 s = 0; s < rProgram.ind_stages && s < 4; s++) {
+                const u8 coord = rProgram.ind_order[s].coord;
+                const u8 map = rProgram.ind_order[s].map;
+                if (coord < 8 && map < 8 && rValues.texture[map].image != 0) {
+                    rValues.tex_coord_scale[coord].scale_s = rValues.texture[map].width;
+                    rValues.tex_coord_scale[coord].scale_t = rValues.texture[map].height;
+                }
+            }
+
             J3DNativeMaterial::sendWhole(rProgram, rValues);
             J3DNativeShape::setCurrent(GX_PNMTX0, places);
 
