@@ -143,14 +143,7 @@ void MiiFacePartsHolder::drawEachActor(DrawPartsFuncPtr pDrawFunc, const RFLDraw
 
 void MiiFacePartsHolder::drawExtra() const {
     RFLDrawCoreSetting setting;
-    setting.txcGenNum = 1;
-    setting.txcID = GX_TEXCOORD0;
-    setting.texMapID = GX_TEXMAP0;
-    setting.tevStageNum = 3;
-    setting.tevSwapTable = GX_TEV_SWAP0;
-    setting.tevKColorID = GX_KCOLOR0;
-    setting.tevOutRegID = GX_TEVPREV;
-    setting.posNrmMtxID = GX_PNMTX0;
+    setting.matrix = 0;
     setting.reverseCulling = 0;
 
     MR::loadLight(1);

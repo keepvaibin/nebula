@@ -20,7 +20,7 @@ _Static_assert(sizeof(RFLCharModel) >= sizeof(RFLiCharModel), "RFLCharModel hold
 
 RFLiCoordinateData coordinateData = {1, 2, 0, FALSE, FALSE, FALSE};
 
-const RFLDrawCoreSetting cDefaultDrawCoreSetting2Tev = {1, GX_TEXCOORD0, GX_TEXMAP0, 2, GX_TEV_SWAP0, GX_KCOLOR0, GX_TEVPREV, GX_PNMTX0, FALSE};
+const RFLDrawCoreSetting cDefaultDrawCoreSetting = {0, FALSE};
 
 
 static const GXColor cFacelineColor[RFLi_MAX_FACELINE_COLOR + 1] = {
@@ -246,11 +246,11 @@ void RFLLoadDrawSetting(const RFLDrawSetting* setting) {
 }
 
 void RFLDrawOpa(const RFLCharModel* model) {
-    RFLDrawOpaCore(model, &cDefaultDrawCoreSetting2Tev);
+    RFLDrawOpaCore(model, &cDefaultDrawCoreSetting);
 }
 
 void RFLDrawXlu(const RFLCharModel* model) {
-    RFLDrawXluCore(model, &cDefaultDrawCoreSetting2Tev);
+    RFLDrawXluCore(model, &cDefaultDrawCoreSetting);
 }
 
 // A shape's primitives (RFLiInitShapeRes's stream) with its 16-bit fixed-point arrays: positions with 8 fraction bits,
@@ -289,9 +289,9 @@ void RFLDrawOpaCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
     const GXCullMode back = setting->reverseCulling ? GX_CULL_BACK : GX_CULL_FRONT;
 
-    J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
-    J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
+    J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
+    J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
+    J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
 
     if (res->beardDlSize > 0) {
         RFLiNativePart(RFLi_NATIVE_FORM_COLOR, cBeardColor[res->beardColor], front, NULL);
@@ -330,9 +330,9 @@ void RFLDrawXluCore(const RFLCharModel* model, const RFLDrawCoreSetting* setting
     const GXCullMode front = setting->reverseCulling ? GX_CULL_FRONT : GX_CULL_BACK;
     static const GXColor cBlack = {0, 0, 0, 255};
 
-    J3DNativeShapeSetPosition(setting->posNrmMtxID / 3, imodel->posMtx);
-    J3DNativeShapeSetNormal(setting->posNrmMtxID / 3, imodel->nrmMtx);
-    J3DNativeStateSetCurrentMtx(setting->posNrmMtxID);
+    J3DNativeShapeSetPosition(setting->matrix, imodel->posMtx);
+    J3DNativeShapeSetNormal(setting->matrix, imodel->nrmMtx);
+    J3DNativeStateSetCurrentMtx(GX_PNMTX0 + 3u * setting->matrix);
 
     RFLiNativePart(RFLi_NATIVE_FORM_MASK, cBlack, front, imodel->maskTexObj[imodel->expression]);
     RFLiDrawShape(res->maskVtxPos, res->maskVtxNrm, res->maskVtxTxc, res->maskDl, res->maskDlSize);
