@@ -214,15 +214,17 @@ void FurDrawer::setupLayerMaterial(s32 layer) const {
 
 void FurDrawer::createFurMap() {
     u32 count;
-    // IA8 texels for GX, in the console's byte order.
-    NEBULA_BE(u16)* pPixels;
+    // Linear luminance-alpha texels in rows (nebula_cooked_texture.h): luminance 255 minus the strand's length, alpha
+    // its thickness; no strand is luminance 255, alpha 0.
+    u8* pPixels;
     u32 width = mFurTexture->getTexInfo()->mWidth;
     u32 height = mFurTexture->getTexInfo()->mHeight;
-    pPixels = reinterpret_cast< NEBULA_BE(u16)* >(mFurTexture->mImage);
+    pPixels = static_cast< u8* >(mFurTexture->mImage);
     count = height * width;
 
     for (u32 i = 0; i < count; i++) {
-        pPixels[i] = 255;
+        pPixels[2 * i] = 255;
+        pPixels[2 * i + 1] = 0;
     }
 
     for (u32 type = 0; type < 4; type++) {
@@ -240,9 +242,10 @@ void FurDrawer::createFurMap() {
                 x = s32(width) - 1;
             }
 
-            pPixels[x + width * y] = (u16((s32)(255.0f * mThickness[type])) << 8) | u16(255 - mLengthMap[type]);
+            pPixels[2 * (x + width * y)] = static_cast< u8 >(255 - mLengthMap[type]);
+            pPixels[2 * (x + width * y) + 1] = static_cast< u8 >((s32)(255.0f * mThickness[type]));
         }
     }
 
-    J3DNativeTexture::registerImage(pPixels, GX_TF_IA8, width, height, 1);
+    J3DNativeTexture::registerImage(pPixels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }
