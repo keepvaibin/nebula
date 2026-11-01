@@ -389,8 +389,8 @@ namespace TDDraw {
         drawSpherePart(mtx, radius, 0.0f, TWO_PI, 0.0f, PI, color, segments, segments);
     }
 
-    // The site's native material holds the texture (`pTexture` as it set it).
     void drawTexture(const TVec2f& rPosition, JUTTexture* pTexture, const TVec2f& rSize) {
+        pTexture->load(GX_TEXMAP0);
 
         J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
         {
@@ -413,6 +413,10 @@ namespace TDDraw {
         TVec3f p0;
         TVec3f right;
         TVec3f up;
+
+        if (pTexture != nullptr) {
+            pTexture->load(GX_TEXMAP0);
+        }
 
         right.cross(rNormal, rUp);
         MR::normalizeOrZero(&right);

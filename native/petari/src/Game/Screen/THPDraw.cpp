@@ -1,5 +1,4 @@
 #include "Game/Screen/MovieDraw.hpp"
-#include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
@@ -173,7 +172,6 @@ namespace MovieDraw {
         J3DNativeShape::flushState();
         const NebulaHostServices* pHost = nebula_host();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sFrameProgram), &values);
-        J3DNativeMaterial::watch(NULL);
         // The coordinates' texture matrices: the identity's place.
         static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
                                         GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
@@ -193,6 +191,5 @@ namespace MovieDraw {
         // What the draws after the frame start from (registers, konst colours and textures as the frame left them).
         J3DNativeShape::flushState();
         pHost->material(pHost->user, reinterpret_cast< uintptr_t >(&sRestoreProgram), &values);
-        J3DNativeMaterial::watch(NULL);
     }
 };  // namespace MovieDraw
