@@ -1,4 +1,5 @@
 #include "Game/Util/FootPrint.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util/Color.hpp"
@@ -124,9 +125,10 @@ void FootPrint::draw() const {
         return;
     }
 
-    TDDraw::setup(2, 1, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_FALSE);
-    _C->load(GX_TEXMAP0);
+    NebulaNativeMaterial material;
+    TDDraw::setupNative(&material, 2, 1, 0);
+    NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
+    NativeShader::setTexture(material, 0, _C);
 
     Color8 color(0, 0, 0, 255);
 
@@ -136,7 +138,8 @@ void FootPrint::draw() const {
         }
 
         color.a = (s32)(255.0f * MR::normalize(mPrints[i].mTimeLeft, 0.0f, ::sFadeOutTime));
-        J3DNativeState::setTevColor(GX_TEVREG0, color);
+        NativeShader::setColor(material, 0, color.r, color.g, color.b, color.a);
+        NativeShader::send(material);
 
         TVec3f cross = mPrints[i]._C.cross(mPrints[i]._18);
         TVec3f v1;

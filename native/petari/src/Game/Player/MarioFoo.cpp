@@ -1,4 +1,5 @@
 #include "Game/Player/MarioFoo.hpp"
+#include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "Game/LiveActor/HitSensor.hpp"
@@ -684,19 +685,17 @@ void MarioFoo::draw3D() const {
     TVec3f nextRightEdge[2];
 
     if (getPlayer()->_1C._9) {
-        TDDraw::setup(1, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         MR::ddSetVtxFormat(2);
-        MR::ddLightingOff();
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXA, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-        _6B8->load(GX_TEXMAP0);
+        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.constants[9] = 2.0f;
+        NativeShader::setTexture(material, 0, _6B8);
         const Color8 color0(255, 32, 32, 128);
-        J3DNativeState::setTevColor(GX_TEVREG0, color0);
+        NativeShader::setColor(material, 0, color0.r, color0.g, color0.b, color0.a);
         const Color8 color1(255, 64, 64, 255);
-        J3DNativeState::setTevColor(GX_TEVREG1, color1);
+        NativeShader::setColor(material, 4, color1.r, color1.g, color1.b, color1.a);
+        NativeShader::send(material);
 
         TVec3f center = mActor->_2A0 + getPlayer()->getUpVec() * 50.0f;
         TVec3f back = -getPlayer()->getUpVec();
@@ -729,18 +728,13 @@ void MarioFoo::draw3D() const {
     }
 
     const Color8 color2(255, 64, 64, 255);
-
-    J3DNativeState::setTevColor(GX_TEVREG1, color2);
     if (_6B0) {
-        TDDraw::setup(1, 1, 0);
+        NebulaNativeMaterial material;
+        TDDraw::setupNative(&material, 1, 2, 0);
         MR::ddSetVtxFormat(2);
-        MR::ddLightingOff();
-        J3DNativeState::setTevColorIn(GX_TEVSTAGE0, GX_CC_C0, GX_CC_C1, GX_CC_TEXA, GX_CC_ZERO);
-        J3DNativeState::setTevColorOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setTevAlphaIn(GX_TEVSTAGE0, GX_CA_ZERO, GX_CA_TEXA, GX_CA_A0, GX_CA_ZERO);
-        J3DNativeState::setTevAlphaOp(GX_TEVSTAGE0, GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_2, GX_TRUE, GX_TEVPREV);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ONE, GX_LO_NOOP);
-        _6B8->load(GX_TEXMAP0);
+        material.shader = NEBULA_SHADER_TEX_ALPHA_LERP;
+        material.constants[9] = 2.0f;
+        NativeShader::setTexture(material, 0, _6B8);
 
         u32 midpoint;
         u32 count = _6B0;
@@ -757,7 +751,9 @@ void MarioFoo::draw3D() const {
             }
 
             const Color8 color3(255, 0, 0, alpha);
-            J3DNativeState::setTevColor(GX_TEVREG0, color3);
+            NativeShader::setColor(material, 0, color3.r, color3.g, color3.b, color3.a);
+            NativeShader::setColor(material, 4, color2.r, color2.g, color2.b, color2.a);
+            NativeShader::send(material);
             u32 index = (_6B4 + 127 - i) % 64;
             if (i == 0) {
                 u32 j;
