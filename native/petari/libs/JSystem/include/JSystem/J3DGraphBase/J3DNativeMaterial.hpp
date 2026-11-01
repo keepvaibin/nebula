@@ -9,6 +9,7 @@ class J3DModelData;
 class J3DTexture;
 class J3DDisplayListObj;
 struct NebulaMaterialParts;
+struct NebulaNativeMaterial;
 struct NebulaMaterialProgram;
 struct NebulaMaterialValues;
 struct NebulaStateOp;
@@ -36,9 +37,12 @@ namespace J3DNativeMaterial {
     // materials' constants take, a value change folded into the current native J3D material, and a change of what
     // its shader computes handing its draws back to the drawing state.
     void state(const NebulaStateOp* pOps, u32 count);
-    // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: TEV registers, konst, material and
+    // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
     // ambient colours, indirect matrices, fog, alpha references) as the materials and state changes left it.
     const f32* registers();
+    // A material another part of the game sends (NativeShader::send; NULL a drawing-state one: a registered program's
+    // values): the draws after it no longer use the current J3D material.
+    void watch(const NebulaNativeMaterial* pNative);
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
     // until the next material: its generated native shader when the material set has its program (depth and culling
     // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.

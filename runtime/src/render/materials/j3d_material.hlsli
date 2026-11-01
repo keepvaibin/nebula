@@ -4,8 +4,8 @@
 // framework, and the vertex lighting from the draw's lights (float math).
 
 struct MaterialConstants {
-    float4 reg[4];        // the TEV registers PREV, REG0-2 at the draw (0-1 scale; signed, beyond 1 possible)
-    float4 konst[4];      // konst colours 0-3
+    float4 reg[4];        // the colour registers PREV, REG0-2 at the draw (0-1 scale; signed, beyond 1 possible)
+    float4 kcolor[4];     // the constant colours 0-3
     float4 mat_color[2];  // channels 0 and 1: material colour
     float4 amb_color[2];  // and ambient colour
     float4 ind_mtx[6];    // indirect matrix m: rows 2m and 2m + 1 (xyz), its scale applied
@@ -19,11 +19,11 @@ struct MaterialConstants {
 
 #include "native_material.hlsli"
 
-// GX's TEV takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
+// GX's colour combiner takes a register as an operand a, b or c through its low 8 bits (Dolphin: tevin & 255): a value an
 // unclamped stage left past 1 or below 0 wraps.
 float j3d_in(float x) { const float v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
 float3 j3d_in(float3 x) { const float3 v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
-// The final result as the pixel engine takes it: its low 8 bits (the uber shader's tev_wrap).
+// The final result as the pixel engine takes it: its low 8 bits (the uber shader's wrap).
 float4 j3d_out(float4 x) { const float4 v = round(x * 255.0); return (v - 256.0 * floor(v / 256.0)) / 255.0; }
 
 // GX fog over the colour (native_material.hlsli native_fog) with the material's fog values.
@@ -44,7 +44,7 @@ float2 j3d_texel(float4 uv, uint coord) {
 // A pass over the material's own geometry, channels and textures that replaces its stages (J3DNativeMaterial::
 // override; GX's one-stage programs the game loads over a material): 1 texture 0 at coordinate 0 with alpha 1/4
 // (J3DModelX list 2), 2 the channel colour with alpha A0 (MarioSearchLight's volume), 3 the channel colour with alpha
-// RASA - K(1 - A0) (its cone: stage 0's konst alpha), 4 the channel colour with alpha (A1 + (A0 - A1) RASA) / 2 (its
+// RASA - K(1 - A0) (its cone: stage 0's constant alpha), 4 the channel colour with alpha (A1 + (A0 - A1) RASA) / 2 (its
 // falloff). Fog as the material's.
 float4 j3d_override(float4 t0, float4 ras, float k0, float4 pos) {
     const uint mode = uint(material.ovr.x);

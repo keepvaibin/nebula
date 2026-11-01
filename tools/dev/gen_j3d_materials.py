@@ -1,6 +1,6 @@
 """E-04 step 3: the J3D material set. Reads material program dumps (GALAXY_DUMP_MATERIAL_PROGRAMS: raw
 NebulaMaterialProgram records, nebula_game_api.h), reduces each to its shader key (only what a shader of it uses:
-stages, their inputs, ops, swaps and konst selections, indirect texturing, texture coordinate generation, lit
+stages, their inputs, ops, swaps and constant selections, indirect texturing, texture coordinate generation, lit
 channels, alpha test, fog type; not blend, depth, culling or values) and reports the distinct keys.
 
     python -I tools/dev/gen_j3d_materials.py census <dump.bin> [more dumps...]
@@ -120,19 +120,19 @@ def konst_color(sel):
     if sel < 8:
         return f"float3({FRACTION[sel]}, {FRACTION[sel]}, {FRACTION[sel]})"
     if 0x0C <= sel <= 0x0F:
-        return f"material.konst[{sel - 0x0C}].rgb"
+        return f"material.kcolor[{sel - 0x0C}].rgb"
     if 0x10 <= sel <= 0x1F:
         comp = "rgba"[(sel - 0x10) // 4]
-        return f"material.konst[{(sel - 0x10) % 4}].{comp * 3}"
-    raise Unsupported(f"konst colour selection {sel}")
+        return f"material.kcolor[{(sel - 0x10) % 4}].{comp * 3}"
+    raise Unsupported(f"constant colour selection {sel}")
 
 
 def konst_alpha(sel):
     if sel < 8:
         return FRACTION[sel]
     if 0x10 <= sel <= 0x1F:
-        return f"material.konst[{(sel - 0x10) % 4}].{'rgba'[(sel - 0x10) // 4]}"
-    raise Unsupported(f"konst alpha selection {sel}")
+        return f"material.kcolor[{(sel - 0x10) % 4}].{'rgba'[(sel - 0x10) // 4]}"
+    raise Unsupported(f"constant alpha selection {sel}")
 
 
 def swizzle(table):
@@ -227,7 +227,7 @@ def emit_channels(p, out):
 def emit_pixel(p, out):
     out.append("float4 material_color(NativeVaryings i) {")
     # A pass that replaces the stages (j3d_material.hlsli j3d_override): texture 0 at coordinate 0, the channel colour,
-    # stage 0's konst alpha.
+    # stage 0's constant alpha.
     t0 = ("tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw)" if p["tex_gens"] > 0
           else "float4(0.0, 0.0, 0.0, 0.0)")
     k0 = konst_alpha(p["stages"][0]["konst_alpha"]) if p["stages"] else "1.0"

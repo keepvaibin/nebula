@@ -8415,14 +8415,14 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     const std::uint32_t native_texmtx = native_material_ != nullptr ? (matrix_bits >> 1u) & 0xFFu : 0u;
     // The header word as the last upload wrote it (a GX draw's from its key): any change uploads again, or a native
     // draw after a GX one would read that draw's mask.
-    // A native draw's pixel engine word (native_material.hlsli native_ps): bit 0 an RGBA6 EFB, bit 1 its dither, bit 8
+    // A native draw's pixel engine word (native_material.hlsli native_ps): bit 0 a six-bit frame, bit 1 its pattern, bit 8
     // constant destination alpha with the alpha at bits 9-16 (as the uber shader's output flags and dst-alpha flag).
     std::uint32_t native_pe = 0u;
     if (native_material_ != nullptr) {
         const BlendMode& pe_blend = draw_state_.blend;
-        const bool rgba6 = draw_state_.pe.pixel_format == 1u;
-        native_pe = (rgba6 ? 1u : 0u) | (rgba6 && pe_blend.dither ? 2u : 0u) |
-                    (rgba6 && pe_blend.const_alpha_enable && pe_blend.alpha_update
+        const bool six_bit = draw_state_.pe.pixel_format == 1u;
+        native_pe = (six_bit ? 1u : 0u) | (six_bit && pe_blend.dither ? 2u : 0u) |
+                    (six_bit && pe_blend.const_alpha_enable && pe_blend.alpha_update
                          ? 0x100u | static_cast<std::uint32_t>(pe_blend.const_alpha) << 9u
                          : 0u);
     }

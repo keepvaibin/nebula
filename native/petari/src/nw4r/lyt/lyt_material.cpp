@@ -817,7 +817,7 @@ namespace nw4r {
 
                 useRasStage = true;
             } else {
-                // nw4r's stages for a material without its own: the textures blended by the konst selections, the
+                // nw4r's stages for a material without its own: the textures blended by the constant selections, the
                 // black/white remap, the vertex colour; each adds into PREV, clamped.
                 u8 tevStageID = GX_TEVSTAGE0;
                 const auto stage = [&rProgram](u8 id, u8 coord, u8 map, u8 channel, u8 ca, u8 cb, u8 cc, u8 cd, u8 aa, u8 ab,

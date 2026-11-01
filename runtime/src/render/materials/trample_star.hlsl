@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // TrampleStar (Game/MapObj/TrampleStar.cpp): channel 0 lit by light 0 (colour) and light 2 (alpha), spot attenuation,
-// clamped diffuse; the colour the lit colour by texture 0 (the first coordinate) plus the shade (the konst alpha where
+// clamped diffuse; the colour the lit colour by texture 0 (the first coordinate) plus the shade (the constant alpha where
 // the alpha channel is dark, doubled); the texture's alpha. Near Mario his shadow texture (1), projected from the
 // position by the draw's texture matrix 1, darkens it.
 struct MaterialConstants {
     float4 mat_color;  // channel 0's material colour (rgba, 0-1)
     float4 amb_color;  // and ambient colour
-    float4 params;     // x: the konst alpha (0-1), y: 1 where Mario's shadow is drawn
+    float4 params;     // x: the constant alpha (0-1), y: 1 where Mario's shadow is drawn
 };
 
 #include "native_material.hlsli"

@@ -8,7 +8,7 @@ struct MaterialConstants {
     float4 amb0;
     float4 mat1;     // channel 1's (specular)
     float4 amb1;
-    float4 konst;    // r: the shell's brightness, g: its alpha, b: its base alpha
+    float4 kshell;   // r: the shell's brightness, g: its alpha, b: its base alpha
     float4 color;    // rgb: the shell colour
     float4 params;   // x: channel 0's light mask, y: channel 1's, z: sources (bit 0 channel 0's ambient from the vertex,
                      // 1 its material, 2 and 3 channel 1's), w: 1 specular, 2 indirect
@@ -56,16 +56,16 @@ float4 material_color(NativeVaryings i) {
     const uint flags = uint(material.params.w);
     float2 coord1 = i.uv[0].zw;
     if ((flags & 2u) != 0u) {
-        // GX's indirect stage: the indirect texture's alpha and blue less 128, by the shell's scale, in texels.
+        // GX's indirect lookup: the indirect texture's alpha and blue less 128, by the shell's scale, in texels.
         const float3 ind = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;
         coord1 = (coord1 * material.params2.zw + material.params2.x * ind.xy) / material.params2.zw;
     }
     const float4 t0 = tex[0].Sample(samp[0], i.uv[0].xy);
     const float4 t1 = tex[1].Sample(samp[1], coord1);
-    const float3 c0 = saturate(t0.rgb * i.color.rgb + material.konst.r);
+    const float3 c0 = saturate(t0.rgb * i.color.rgb + material.kshell.r);
     const float3 spec = (flags & 1u) != 0u ? i.color1.rgb : float3(0.0, 0.0, 0.0);
     float3 c = saturate((lerp(material.color.rgb, c0, t1.rgb) + spec) * 2.0);
-    const float a = saturate(material.konst.b + t1.a * material.konst.g);
+    const float a = saturate(material.kshell.b + t1.a * material.kshell.g);
     if (round(a * 255.0) <= material.params2.y) {
         discard;
     }
