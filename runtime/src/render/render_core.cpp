@@ -960,7 +960,11 @@ bool RenderCore::initialize(int w, int h) {
     renderer_.create_first_use_resources();
     boot_step("first-use resources");
 
+#if defined(NEBULA_GPU_VULKAN)
+    if (!pipeline_cache_.initialize(renderer_.device(), renderer_.root_signature(), shader_cache_directory())) {
+#else
     if (!pipeline_cache_.initialize(renderer_.device(), renderer_.root_signature())) {
+#endif
         std::cerr << "[RenderCore] PipelineCache::initialize failed\n";
         texture_cache_.shutdown();
         efb_copies_.shutdown();
