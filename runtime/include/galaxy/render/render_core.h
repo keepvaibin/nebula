@@ -263,11 +263,9 @@ private:
     // Whether a triangle draw with vertex format `vtxfmt` is a curved surface (curved_surfaces.h): a perspective scene
     // draw of a model the game registered, its positions indexed, not bump mapped, while the setting is on.
     [[nodiscard]] bool curved_draw(std::uint8_t vtxfmt) const;
-    // The pipeline of a curved draw's flat triangles (current_flat_pipeline_) for the curved pipeline's key.
-    [[nodiscard]] gpu::Pipeline* resolve_flat_pipeline(const PsoKey& curved_key);
     // The topology a draw records: a curved surface's patches while its specialized pipeline draws it.
     [[nodiscard]] gpu::Topology draw_topology(gpu::Topology topology) const noexcept {
-        return current_curved_ && !current_pipeline_is_uber_ ? gpu::kTopologyTrianglePatches : topology;
+        return current_curved_ ? gpu::kTopologyTrianglePatches : topology;
     }
 
     struct PendingDrawBatch {
@@ -684,7 +682,6 @@ private:
     // Whether a batch starting with `call` is traced geometry; the scene's first one also gives
     // the camera (projection and viewport) for rays through EFB pixels.
     [[nodiscard]] bool begin_rt_batch(const DrawCall& call, RtDrawInfo& info);
-    void exclude_layer_water(DrawCall& call, const RtDrawInfo& info, bool rt);
     // Actor lights (actor_lights.h): the open scene's aim and its serial; the scene's key light in
     // world space (direction towards it), how far the lights are moved to it, its source (1 the
     // game's visible sun, 2 the sun its sky shows, 3 a world-fixed light) and, for 2 and 3, its
@@ -1399,9 +1396,6 @@ private:
     std::uint64_t current_pso_key_hash_ = 0u;
     gpu::Address current_vs_constants_ = 0;
     VsConstantsCpuCache cpu_vs_constants_{};
-    // current_pipeline_ is an uber pipeline standing in for a specialization
-    // that is still compiling: resolve the key again on the next draw.
-    bool current_pipeline_is_uber_ = false;
     gpu::Address current_ps_constants_ = 0;
     gpu::Table current_texture_table_{};
     // The textures current_texture_table_ holds (texture cache handles; empty maps have no resource).
