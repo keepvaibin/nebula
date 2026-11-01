@@ -359,6 +359,7 @@ typedef enum NebulaShaderId {
     NEBULA_SHADER_FONT_TEXT = 27,            /* nw4r CharWriter: glyphs mapped between two colours, by the vertex colour */
     NEBULA_SHADER_J2D_PICTURE = 28,          /* J2DPicture: up to four textures blended by constant ratios, remapped */
     NEBULA_SHADER_FUR = 29,                  /* FurDrawer: a fur shell over the body texture, lit */
+    NEBULA_SHADER_PARTICLE = 30,             /* JPA particles: the texture by the emitter's colours, its colour mode */
     NEBULA_SHADER_COUNT,
     /* The J3D material set (tools/dev/gen_j3d_materials.py): J3D_FIRST + n - 1 for its material n. */
     NEBULA_SHADER_J3D_FIRST = 256
@@ -384,6 +385,8 @@ enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2 };
 /* blend_op, depth_test or cull: the drawing state's blending, depth or culling as it is (a material that replaces only
    the shader of the draws after the state the game set: J3DModelX's override passes). */
 enum { NEBULA_NATIVE_KEPT = 0xFF };
+/* A texture's image: the drawing state's map as it is (its image, size and sampling: textures the game loads per draw). */
+#define NEBULA_NATIVE_KEPT_IMAGE (~(uint64_t)0)
 
 typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */
@@ -408,8 +411,9 @@ typedef struct NebulaNativeMaterial {
     /* Texgen i's post-transform matrix row (GX_PTTEXMTX0 + 3k as 3k; 61 the identity), | 0x80 to normalize first: the
        drawing state's until a draw's own texgens replace it (a shape's env map or projection). */
     uint8_t texgen_post[8];
-    uint32_t constants_only; /* 1: only the constants of the material the draws use change (the game folding a state
-                                change of one of its values in); its state, textures and lights stay as set since */
+    uint32_t constants_only; /* bit 0: only the constants of the material the draws use change (the game folding a state
+                                change of one of its values in); its state, textures and lights stay as set since; bit 1: the first 84 constants are
+                                the register file (j3d_material.hlsli's layout), which the game keeps current) */
 } NebulaNativeMaterial;
 
 typedef struct NebulaMaterialProgram {

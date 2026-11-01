@@ -90,6 +90,13 @@ public:
         return mpData->mAlphaRef1;
     }
 
+    // The colour and alpha modes (st_ca and st_aa rows: runtime/src/render/materials/particle.hlsl).
+    u32 getTevColorMode() const {
+        return (mpData->mFlags >> 0x0F) & 0x07;
+    }
+    u32 getTevAlphaMode() const {
+        return (mpData->mFlags >> 0x12) & 0x01;
+    }
     const GXTevColorArg* getTevColorArg() const {
         return st_ca[(mpData->mFlags >> 0x0F) & 0x07];
     }

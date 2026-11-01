@@ -9201,7 +9201,7 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         return;
     }
     const material::Native& m = *native;
-    if (m.constants_only != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
+    if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
         native_material_ = std::move(native);
         native_constants_dirty_ = true;
         return;
@@ -9251,6 +9251,11 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
     for (unsigned map = 0; map < 8u; ++map) {
         const auto& t = m.textures[map];
         if (t.image == 0u) {
+            continue;
+        }
+        if (t.image == material::kNativeKeptImage) {
+            // The drawing state's map as the game loaded it.
+            native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
             continue;
         }
         // The map as the native material names it: its image, size and format, and its sampling.
