@@ -4939,6 +4939,9 @@ void RendererD3D12::record_motion_debug_view() {
 }
 
 bool RendererD3D12::interpolation_mode() const {
+    if (kFrameInterpolationParked) {
+        return false;
+    }
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     // With a temporal upscaler every presented frame is upscaled, its motion from the frame presented before (any

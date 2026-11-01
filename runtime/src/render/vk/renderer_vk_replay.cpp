@@ -30,6 +30,9 @@ constexpr VkDeviceSize kEvalFrameBlock = 256u;
 }  // namespace
 
 bool RendererVk::interpolation_mode() const {
+    if (kFrameInterpolationParked) {
+        return false;
+    }
     const RenderConfig cfg = get_render_config();
     const double rate = present_frame_rate(presented_max_fps(cfg), cfg.vsync_interval, display_refresh_hz_);
     return interpolated_frames_per_game_frame(rate) != 0u;

@@ -181,6 +181,11 @@ inline double present_frame_rate(float max_fps, unsigned vsync_interval, double 
 
 // The most interpolated frames one game frame needs at a present rate: ceil(rate / 60) - 1 (75 Hz shows one between
 // most pairs of game frames, 144 Hz two between some), none at 60 and below, at most 7.
+// Frame interpolation is parked (E-04/E-05): it replayed the GX path's matrix blocks and inline matrices, which native
+// draws no longer have. It returns when it is rebuilt on native matrices (the additions' F/G phase); until then the
+// renderers never record or present interpolated frames, whatever the present rate.
+inline constexpr bool kFrameInterpolationParked = true;
+
 inline unsigned interpolated_frames_per_game_frame(double rate) {
     if (!(rate > 61.0)) return 0u;
     const double frames = std::ceil(rate / 60.0 - 1e-3) - 1.0;
