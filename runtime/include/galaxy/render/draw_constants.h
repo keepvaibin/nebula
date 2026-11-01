@@ -32,10 +32,7 @@ struct alignas(256) VertexConstants {
     std::uint32_t reserved_c7[5][4];  // c7-c11: read by no shader
     std::uint32_t num_texgens;
     std::uint32_t num_chans;
-    // Bit 0 per-vertex posmtx, bit 1 lighting enable. Physical ray tracing (the art's baked light removed): bits 2-3
-    // de-bake unlit channel 0 / 1's vertex colour to its program's neutral light; bits 4-5 keep a lit channel's
-    // vertex colour hue and light it at the neutral level; bit 6 de-bakes by debake_sh; bit 7 marks a draw lit by the
-    // player light rig (its level, not its hue); bits 8-15 and 16-23 hold the levels.
+    // Bit 0 per-vertex position matrix, bit 1 lighting enable.
     std::uint32_t flags;
     // The first row of the draw's position block in the bound matrix rows (position place k at pos_base + 3k).
     std::uint32_t pos_base;
@@ -69,13 +66,7 @@ struct alignas(256) VertexConstants {
     float motion_prev_pos[3][4];
     float motion_params[4];
     std::uint32_t motion_ctrl[4];
-    // Physical ray tracing (flags bit 6): the model's light baked into its vertex colours as a function of the
-    // surface's facing (RenderCore::fit_debake_light): nine spherical-harmonic coefficients of the object-space normal
-    // per channel (r 0-8, g 9-17, b 18-26), and its value at the most lit sampled facing (rgb). A de-baked channel's
-    // vertex colour is raised by that over its own facing's value: the light's fall-off and colour leave it, its
-    // paint and occlusion stay.
-    float debake_sh[7][4];
-    float debake_peak[4];
+    std::uint32_t reserved_c80[8][4];  // c80-c87: read by no shader
     // The first rows of the draw's normal, texture, post-transform and light blocks (draw_matrices.h): normal row q
     // at row_bases[0] + q, texture row r (30-63) at row_bases[1] + r - 30, post-transform row q at row_bases[2] + q,
     // light n's rows at row_bases[3] + 4n.
@@ -99,8 +90,7 @@ static_assert(offsetof(VertexConstants, motion_prev_proj) == 1168);
 static_assert(offsetof(VertexConstants, motion_ctrl) == 1264);
 // motion_ctrl[1] in mode 0 for the draw's own position rows (its previous rows are its rows).
 inline constexpr std::uint32_t kMotionOwnRows = 0xFFFFFFFFu;
-static_assert(offsetof(VertexConstants, debake_sh) == 1280);
-static_assert(offsetof(VertexConstants, debake_peak) == 1392);
+static_assert(offsetof(VertexConstants, reserved_c80) == 1280);
 static_assert(offsetof(VertexConstants, row_bases) == 1408);
 static_assert(sizeof(VertexConstants) == 1536);
 

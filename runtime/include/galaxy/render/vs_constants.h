@@ -106,8 +106,7 @@ inline void fill_vs_constants(
         }
     }
     // Bit 0 (the shape's vertices carry their own position matrix index) is merged in by VsConstantsCpuCache::update
-    // (per_vertex, RenderCore's): native_material.hlsli native_vs and ray_tracing.hlsl transform_vertex read it; the
-    // uber shaders read the key's copy (VertexShaderKey::flags bit 0).
+    // (per_vertex, RenderCore's): native_material.hlsli native_vs reads it.
     out.flags  = lighting ? 2u : 0u;
 
     // Previous rows: the draw's own (no motion of its own) unless a motion scene names other position rows.
@@ -182,11 +181,6 @@ struct VsConstantsCpuCache {
     // The scene's sky up (VertexConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
     std::uint32_t sky_up_known = 0u;
-    // VertexConstants::flags above bits 0-1: the ray tracer's de-bake controls (RenderCore), kept across fills.
-    std::uint32_t debake = 0u;
-    // VertexConstants::debake_sh, debake_peak (flags bit 6).
-    float debake_sh[7][4]{};
-    float debake_peak[4]{};
     // The draw's matrix blocks (VertexConstants::pos_base, row_bases), RenderCore's.
     std::uint32_t pos_base = 0u;
     std::uint32_t row_bases[4]{};
@@ -196,7 +190,7 @@ struct VsConstantsCpuCache {
 
     const VertexConstants& update(const DrawMatrices& state, const NativeDrawState& draw, std::uint32_t dirty,
         unsigned current_scale, bool frame_bindings_dirty) {
-        // When only XF matrices changed, refresh the inline matrices and keep the rest of the last full fill;
+        // When only the matrices changed, refresh the inline matrices and keep the rest of the last full fill;
         // any other change, dirty frame bindings or a new scale refill everything.
         if (valid && !frame_bindings_dirty && efb_scale == current_scale &&
             dirty == kStateDirtyMatrices) {
@@ -208,9 +202,7 @@ struct VsConstantsCpuCache {
         }
         constants.sky_up = sky_up;
         constants.sky_up_known = sky_up_known;
-        constants.flags = (constants.flags & 0x2u) | (per_vertex & 1u) | debake;
-        std::memcpy(constants.debake_sh, debake_sh, sizeof(debake_sh));
-        std::memcpy(constants.debake_peak, debake_peak, sizeof(debake_peak));
+        constants.flags = (constants.flags & 0x2u) | (per_vertex & 1u);
         constants.pos_base = pos_base;
         std::memcpy(constants.row_bases, row_bases, sizeof(row_bases));
         return constants;

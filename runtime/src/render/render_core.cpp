@@ -1456,14 +1456,8 @@ void RenderCore::on_host_marker(std::uint8_t kind, std::uint16_t aux, std::uint6
         return;
     }
     if (kind == motion::kMarkerNameObj) {
-        rt_object_ = a;
     } else if (kind == motion::kMarkerShapePacket) {
-        // A model from a draw buffer: a shadow drawer draws through GX directly, so the flag of the
-        // object before it does not apply.
-        rt_object_fake_shadow_ = false;
     } else if (kind == motion::kMarkerEmitter || kind == motion::kMarkerParticle) {
-        rt_object_ = 0u;
-        rt_object_fake_shadow_ = false;
     }
     if (!history_scene_) {
         return;
@@ -1524,7 +1518,6 @@ void RenderCore::on_motion_marker(std::uint8_t kind, std::uint16_t aux, std::uin
         return;
     case motion::kMarkerPass:
         ++motion_mirror_markers_;
-        rt_mirror_pass_ = aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin);
         if (aux == static_cast<std::uint16_t>(motion::PassMarker::MirrorBegin)) {
             end_side_layer();
             begin_side_layer(kMirrorLayer);
@@ -1863,7 +1856,6 @@ void RenderCore::on_fifo_marker(FifoMarker marker, const std::array<float, 12>* 
             cpu_vs_constants_.sky_up_known = known;
             sky_up_dirty_ = true;
         }
-        rt_mirror_pass_ = false;
         renderer_.set_scene_view(view);
     } else {
         if (side_layer_ == kMirrorLayer) {
@@ -4995,13 +4987,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         render_state_key_.primitive_topology = topology_key;
     }
     render_state_key_.samples_log2 = samples_log2;
-    // The ray tracer's draw eligibility (traced, card, glow, sprite, water) was judged by the GX pixel key: none
-    // until the ray tracer is rebuilt on native materials (E-04 step 4; F/G).
-    rt_state_eligible_ = false;
-    rt_card_eligible_ = false;
-    rt_glow_eligible_ = false;
-    rt_sprite_eligible_ = false;
-    rt_water_eligible_ = false;
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
@@ -5117,7 +5102,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // A native material's shader may read any block (palette positions, normals, lights, per-vertex texture matrices).
     const bool palette_required = true;
     current_palette_required_ = palette_required;
-    rt_draw_lights_ = 0u;
     if (palette_required && (matrix_palette_stale_ || current_matrix_palette_ == 0)) {
         // Clock reads on detail frames only; the upload counts below are always kept.
         const auto matrix_start = time_detail
@@ -5133,7 +5117,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         if (kinds != 0u || matrix_blocks_forced_) {
             const std::uint64_t snapshot_start = trace_actor_lights_enabled() ? trace_cycles() : 0u;
             // The changed kinds' blocks, then the draw's moved lights (a light block of its own: the game's stay).
-            const bool moved = rt_draw_lights_ != 0u;
+            constexpr bool moved = false;  // no moved light blocks (they were the ray tracer's)
             std::uint32_t rows = moved ? draw_rows::kLightRows : 0u;
             for (const DrawMatrices::Kind kind : kMatrixKinds) {
                 rows += (kinds & kind) != 0u ? DrawMatrices::row_count(kind) : 0u;
@@ -5161,12 +5145,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             draw_light_base_ = matrix_block_base_[kLightKind];
             std::array<std::uint32_t, draw_rows::kLightRows * 4u> moved_lights{};
             if (snapshot_start != 0u) [[unlikely]] {
-                rt_snapshot_cycles_ += trace_cycles() - snapshot_start;
-                ++rt_snapshot_count_;
             }
             current_matrix_palette_ = bytes != 0u ? mtx_alloc.gpu : current_matrix_palette_;
-            rt_palette_lights_ = rt_draw_lights_;
-            if (interp_recording_ && history_scene_) [[unlikely]] {
+                if (interp_recording_ && history_scene_) [[unlikely]] {
                 InterpScene& scene = interp_scenes_[interp_scene_];
                 // The kinds that changed since the scene's last shadow (all of them for its first) join the scene's
                 // rows; the shadow's table names each row's current one.
@@ -6157,7 +6138,6 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     pending_draw_batch_.rt = false;
     pending_draw_batch_.hidden = false;
     pending_draw_batch_.traced = false;
-    pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = shape.resident_offset;
     pending_draw_batch_.vertex_count = units;
@@ -6272,7 +6252,6 @@ void RenderCore::draw_record_immediate(const shapes::Immediate& immediate) {
     pending_draw_batch_.rt = false;
     pending_draw_batch_.hidden = false;
     pending_draw_batch_.traced = false;
-    pending_draw_batch_.debake_model = debake_sample_key_;
     pending_draw_batch_.indexed = true;
     pending_draw_batch_.base_vertex = base_vertex;
     pending_draw_batch_.vertex_count = count;
