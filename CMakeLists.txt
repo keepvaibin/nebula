@@ -621,4 +621,9 @@ if(NEBULA_VULKAN)
         target_link_options(NebulaNativeVk PRIVATE /DEBUG /OPT:REF /OPT:ICF /PDBALTPATH:NebulaNativeVk.pdb)
     endif()
 
+    # The shared utility shaders through the Vulkan HLSL front end (compiled at start by RendererVk).
+    add_executable(galaxy_vk_utility_shader_tests runtime/src/render/vk/utility_shader_tests.cpp)
+    target_link_libraries(galaxy_vk_utility_shader_tests PRIVATE galaxy_gx_vk)
+    add_test(NAME galaxy_vk_utility_shader_tests COMMAND galaxy_vk_utility_shader_tests)
+
 endif()
