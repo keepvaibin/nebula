@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "nw4r/lyt/animation.h"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
@@ -623,6 +624,7 @@ namespace nw4r {
             }
             rProgram.channel[0].material_source = colorSrc;
             rProgram.channel[1].material_source = alphaSrc;
+            J3DNativeChannel::toNative(rProgram);
 
             bool useRasStage = false;
 

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 78u
+#define NEBULA_GAME_API_VERSION 79u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -438,6 +438,8 @@ typedef struct NebulaMaterialProgram {
        bits 4-6 emboss light); source: J3DNativeTexGen::source (bits 0-3 row, 4-6 emboss coordinate); post_matrix a row
        (61 the identity); reserved[0] 1: written in this encoding. */
     struct { uint8_t type, source, matrix, normalize, post_matrix, reserved[3]; } tex_gen[8];
+    /* diffuse 0 none, 1 signed, 2 clamped; attenuation 0 none, 1 specular, 2 directional, 3 spot (J3DNativeChannel);
+       channel[0].reserved[0] 1: written in this encoding. */
     struct { uint8_t enable, material_source, ambient_source, light_mask, diffuse, attenuation, reserved[2]; } channel[4];
     struct { uint8_t type, adjust_enable; uint16_t adjust_center; uint16_t adjust[10]; } fog;
     struct { uint8_t comp0, op, comp1, reserved; } alpha_compare;

@@ -61,8 +61,8 @@ XfChannelCtrl make_channel(std::uint8_t material_source, std::uint8_t enable, st
                          (enable & 1u) != 0u,
                          light_mask,
                          (ambient_source & 1u) != 0u,
-                         static_cast<std::uint8_t>(attenuation == 0u ? 0u : diffuse & 3u),
-                         static_cast<std::uint8_t>((attenuation != 2u ? 1u : 0u) | (attenuation != 0u ? 2u : 0u))};
+                         static_cast<std::uint8_t>(diffuse & 3u),       // J3DNativeChannel: 0 none, 1 signed, 2 clamped
+                         static_cast<std::uint8_t>(attenuation & 3u)};  // 0 none, 1 specular, 2 directional, 3 spot
 }
 
 }  // namespace
