@@ -21,50 +21,22 @@ struct TextureMap {
     [[nodiscard]] bool operator==(const TextureMap&) const = default;
 };
 
-// One stage's indirect texturing (GXSetTevIndirect).
-struct IndirectStage {
-    std::uint8_t stage, format, bias, alpha, matrix, wrap_s, wrap_t;
-    bool lod, prev;
-};
-
-// What a change invalidates (the backend's caches): shader keys, pipeline state, texture bindings, vertex shader
-// keys, matrix memory, constants.
-inline constexpr std::uint32_t kStateDirtyTev = 1u << 0;
+// What a change invalidates (the backend's caches): pipeline state, texture bindings, vertex shader, matrix memory,
+// vertex constants.
 inline constexpr std::uint32_t kStateDirtyRenderState = 1u << 1;
 inline constexpr std::uint32_t kStateDirtyTex = 1u << 2;
 inline constexpr std::uint32_t kStateDirtyVertexShader = 1u << 3;
 inline constexpr std::uint32_t kStateDirtyMatrices = 1u << 4;
-inline constexpr std::uint32_t kStateDirtyPixelConstants = 1u << 6;
 inline constexpr std::uint32_t kStateDirtyVertexConstants = 1u << 7;
 
 struct NativeDrawState {
     // Fixed-function state: the counts and cull of the generation mode, depth, blend (as the game set it; the
-    // pixel engine's effective blend is effective_blend's), the pixel format and the alpha compare.
+    // pixel engine's effective blend is effective_blend's) and the pixel format. The shader tests its own alpha,
+    // combines its own colours and applies its own fog (native materials).
     GenMode gen{0u, 0u, 1u, CullMode::None, 0u, false};
     ZMode z{false, CompareFunc::Never, false};
     BlendMode blend{false, false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
     PeControl pe{0u, 0u, false};
-    AlphaCompare alpha{0u, 0u, CompareFunc::Never, CompareFunc::Never, AlphaTestLogic::And};
-
-    // TEV: the stages, the four swap tables (each channel's source: red, green, blue, alpha), the fog's type, the
-    // Z texture (op 0 off, 1 add, 2 replace; type 0 Z8, 1 Z16, 2 Z24X8; bias in Z24 units).
-    TevStageConfig tev[16]{};
-    std::uint8_t swap[4][4]{};
-    FogType fog_type{FogType::Off};
-    struct { std::uint8_t op, type; std::uint32_t bias; } z_texture{};
-    // Indirect texturing: each TEV stage's, and the four indirect stages' map, coordinate and scales.
-    IndirectStage ind[16]{};
-    struct { std::uint8_t map, coord, scale_s, scale_t; } ind_order[4]{};
-    // Indirect matrices (GXSetIndTexMtx): 1.10 terms by row (s, t) and column, and the scale exponent (held as
-    // exponent + 17 in six bits: an unset matrix's is -17).
-    struct { std::int16_t m[2][3]{}; std::int8_t scale = -17; } ind_matrix[3]{};
-
-    // TEV registers PREV and REG0-2 (signed 11-bit; red, green, blue, alpha) and the four konst colours.
-    std::int16_t tev_color[4][4]{};
-    std::uint8_t konst[4][4]{};
-    // Fog (GXSetFog): A and C as the pixel engine holds them (floats cut to 11 mantissa bits), B as its 24-bit
-    // mantissa and shift, the projection (true: orthographic) and the colour.
-    struct { float a, c; std::uint32_t b_magnitude, b_shift; bool projection; std::uint8_t color[3]; } fog{};
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient
     // colours (RGBA) of channels 0 and 1.
@@ -122,16 +94,7 @@ private:
 public:
 };
 
-// The indirect state in the pixel shader's packed form (its key and constants): a stage's command, the four stages'
-// maps and coordinates, a pair of stages' scales.
-[[nodiscard]] std::uint32_t ind_cmd_word(const IndirectStage& stage);
-// A TEV stage's colour and alpha operations in the pixel shader's packed form (its constants).
-[[nodiscard]] std::uint32_t tev_color_word(const TevStageConfig& stage);
-[[nodiscard]] std::uint32_t tev_alpha_word(const TevStageConfig& stage);
-[[nodiscard]] std::uint32_t ind_ref_word(const NativeDrawState& state);
-[[nodiscard]] std::uint32_t ind_scale_word(const NativeDrawState& state, unsigned pair);
 // The shaders' packed forms of the vertex state (their constants and keys).
-[[nodiscard]] std::uint32_t channel_word(const XfChannelCtrl& channel);
 [[nodiscard]] std::uint32_t texgen_word(const XfTexGen& texgen);
 [[nodiscard]] std::uint32_t post_texgen_word(const XfPostTexGen& post);
 [[nodiscard]] std::uint32_t rgba_word(const std::uint8_t* rgba);
@@ -148,7 +111,5 @@ public:
 [[nodiscard]] EfbCopyParams capture_copy_params(std::uint64_t key, const std::uint16_t rect[4], std::uint8_t channels,
                                                 std::uint8_t flags);
 
-// Konst colour `k` as RGBA8 (red in the top byte).
-[[nodiscard]] std::uint32_t konst_rgba(const NativeDrawState& state, unsigned k);
 
 }  // namespace galaxy::render

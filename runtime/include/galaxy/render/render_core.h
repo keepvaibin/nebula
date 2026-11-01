@@ -1148,7 +1148,6 @@ private:
     std::uint32_t dump_tag_ = 0;
     std::uint32_t dump_wanted_ = 0;
     std::uint32_t dump_count_ = 0;
-    std::unique_ptr<PixelConstants> dump_gx_ps_;
     void dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_texmtx, std::uint64_t presents);
     std::uint64_t frame_resident_vertex_bytes_ = 0;
     [[nodiscard]] bool ensure_resident_vertex_buffer();
@@ -1337,9 +1336,6 @@ private:
     // without rewriting its BP texture registers.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
-    // Coordinate scales come from the sampled textures (the game changed TEV order or textures since the last
-    // material) rather than from the scale registers (coordinate_scales).
-    bool scales_from_textures_ = false;
     std::uint8_t current_texture_map_mask_ = 0;
     // sampled_texture_map_mask(draw_state_) reads GenMode, the TEV order, indirect-command and IND_REF registers,
     // all of which set kDirtyTev; invalidated wherever the BP register file resets.

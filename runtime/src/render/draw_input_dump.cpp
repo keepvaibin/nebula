@@ -91,8 +91,6 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
     write_words(f, "vs", &vs, sizeof(vs));
     if (native) {
         write_words(f, "material", native_material_->constants, sizeof(native_material_->constants));
-    } else if (dump_gx_ps_ != nullptr) {
-        write_words(f, "ps", dump_gx_ps_.get(), sizeof(PixelConstants));
     }
     std::fprintf(f, "position_matrix %u texture_matrix", static_cast<unsigned>(draw_state_.position_matrix));
     for (unsigned i = 0; i < 8u; ++i) {

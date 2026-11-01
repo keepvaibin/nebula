@@ -33,14 +33,59 @@ void J3DStateList::copy(const J3DStateList& rOther) {
     mCount = rOther.mCount;
 }
 
+namespace {
+    // A change the native material folds into itself (its TEV, indirect, alpha-compare and Z-texture state): the
+    // host draws with the material's own shader and never receives it.
+    bool materialOnly(u8 kind) {
+        switch (kind) {
+        case NEBULA_STATE_ALPHA_COMPARE:
+        case NEBULA_STATE_TEV_COLOR_CALC:
+        case NEBULA_STATE_TEV_ALPHA_CALC:
+        case NEBULA_STATE_TEV_DIRECT:
+        case NEBULA_STATE_TEV_ORDER:
+        case NEBULA_STATE_TEV_COLOR:
+        case NEBULA_STATE_TEV_COLOR_IN:
+        case NEBULA_STATE_TEV_ALPHA_IN:
+        case NEBULA_STATE_TEV_COLOR_OP:
+        case NEBULA_STATE_TEV_ALPHA_OP:
+        case NEBULA_STATE_TEV_KCOLOR_SEL:
+        case NEBULA_STATE_TEV_KALPHA_SEL:
+        case NEBULA_STATE_TEV_SWAP_MODE:
+        case NEBULA_STATE_TEV_STAGE_ORDER:
+        case NEBULA_STATE_TEV_KCOLOR:
+        case NEBULA_STATE_TEV_COLOR_S10:
+        case NEBULA_STATE_IND_TEX_MATRIX:
+        case NEBULA_STATE_TEV_SWAP_TABLE:
+        case NEBULA_STATE_TEV_INDIRECT:
+        case NEBULA_STATE_IND_TEX_SCALE:
+        case NEBULA_STATE_IND_TEX_ORDER:
+        case NEBULA_STATE_Z_TEXTURE:
+        case NEBULA_STATE_FOG_RANGE:
+        case NEBULA_STATE_FOG_RANGE_TABLE:
+            return true;
+        default:
+            return false;
+        }
+    }
+}  // namespace
+
 void J3DStateList::send() const {
     if (mCount == 0) {
         return;
     }
     J3DNativeShape::flushState();
     J3DNativeMaterial::state(mOps, mCount);
+    // The host's share, in order, in runs between material-only changes.
     const NebulaHostServices* pHost = nebula_host();
-    pHost->state(pHost->user, mOps, mCount);
+    u16 start = 0;
+    for (u16 i = 0; i <= mCount; i++) {
+        if (i == mCount || materialOnly(mOps[i].kind)) {
+            if (i > start) {
+                pHost->state(pHost->user, mOps + start, i - start);
+            }
+            start = i + 1;
+        }
+    }
 }
 
 NebulaStateOp& J3DStateList::add(u8 kind) {

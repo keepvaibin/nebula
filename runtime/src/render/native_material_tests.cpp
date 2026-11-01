@@ -155,16 +155,8 @@ bool same_state(const NativeDrawState& a, const NativeDrawState& b) {
     const RenderStateKey ra = build_render_state_key(a), rb = build_render_state_key(b);
     if (!(ra == rb)) return false;
     const auto eq = [](const auto& x, const auto& y) { return std::memcmp(&x, &y, sizeof(x)) == 0; };
-    if (!eq(a.tev_color, b.tev_color) || !eq(a.konst, b.konst) || !eq(a.material_color, b.material_color) ||
-        !eq(a.ambient_color, b.ambient_color) || a.alpha.ref0 != b.alpha.ref0 || a.alpha.ref1 != b.alpha.ref1) {
+    if (!eq(a.material_color, b.material_color) || !eq(a.ambient_color, b.ambient_color)) {
         return false;
-    }
-    if (a.fog.a != b.fog.a || a.fog.c != b.fog.c || a.fog.b_magnitude != b.fog.b_magnitude ||
-        a.fog.b_shift != b.fog.b_shift || !eq(a.fog.color, b.fog.color)) {
-        return false;
-    }
-    for (unsigned i = 0; i < 3u; ++i) {
-        if (!eq(a.ind_matrix[i].m, b.ind_matrix[i].m) || a.ind_matrix[i].scale != b.ind_matrix[i].scale) return false;
     }
     for (unsigned c = 0; c < 8u; ++c) {
         if (!eq(a.coord[c].size_minus_one, b.coord[c].size_minus_one) || !eq(a.coord[c].bias, b.coord[c].bias) ||
