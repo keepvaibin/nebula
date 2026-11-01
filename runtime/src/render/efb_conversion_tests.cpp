@@ -13,7 +13,7 @@
 #include "galaxy/render/efb_copy.h"
 #include "galaxy/render/renderer_d3d12.h"
 #include "galaxy/render/pipeline_cache.h"
-#include "galaxy/render/uber_constants.h"
+#include "galaxy/render/draw_constants.h"
 #include "galaxy/render/texture_cache.h"
 #include "nebula_cooked_texture.h"
 
