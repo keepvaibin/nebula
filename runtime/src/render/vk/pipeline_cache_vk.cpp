@@ -546,10 +546,13 @@ VkPipeline PipelineCacheVk::get_native(std::uint32_t shader, const RenderStateKe
         gs = native_module(widen.data, widen.size, vk::ShaderStage::Geometry);
     }
     if (vs != VK_NULL_HANDLE && ps != VK_NULL_HANDLE) {
+        // The dual variant's second output is the 8-bit combiner alpha the colour blends against (render state bit 27),
+        // as the GX path's dual-source pipelines.
+        const bool dual = variant == kNativeVariantDual;
         const auto make = [&](std::uint32_t compat, VkResult& result) {
-            return create_pipeline(rs, vs, ps, false, false, compat, result, hs, ds, gs);
+            return create_pipeline(rs, vs, ps, dual, false, compat, result, hs, ds, gs);
         };
-        pipeline = with_fallbacks(make, applicable_compat(rs, false, false), "a native pipeline",
+        pipeline = with_fallbacks(make, applicable_compat(rs, dual, false), "a native pipeline",
                                   describe_render_state(rs), nullptr);
     }
     bucket.emplace_back(std::make_pair(id, rs), pipeline);
