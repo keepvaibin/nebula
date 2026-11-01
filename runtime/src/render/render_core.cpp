@@ -7724,7 +7724,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
 
     // Rebuild canonical keys only for their dirty inputs; hash only changed
     // keys. Uniform updates still upload their constants below.
-    const bool tev_dirty  = (dirty & kStateDirtyTev)         != 0;
     const bool rs_dirty   = (dirty & kStateDirtyRenderState)  != 0;
     const bool xf_dirty   = (dirty & kStateDirtyVertexShader)    != 0;
     const bool vcd_dirty  = dirty == ~0u;  // the vertex inputs' layout: only after a reset
@@ -7781,181 +7780,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     const bool tex_dirty = frame_bindings_dirty_ ||
         texture_bindings_dirty_ || texture_binding_changed;
 
-    if (tev_dirty || !shader_key_hashes_valid_) {
-        const auto next = build_pixel_shader_key(draw_state_, renderer_.efb_scale());
-        if (!shader_key_hashes_valid_ || !(next == ps_key_)) {
-            ps_key_ = next;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    if (xf_dirty || vcd_dirty || vertex_source_changed || !shader_key_hashes_valid_) {
-        const auto next = build_vertex_shader_key(draw_state_, matrix_bits);
-        if (!shader_key_hashes_valid_ || !(next == vs_key_)) {
-            vs_key_ = next;
-            current_vs_hash_ = vs_key_.hash();
-        }
-    }
-    // Glows: additive scene draws shine at the ray tracer's glow exposure (output_flags bit 5).
-    bool glow_changed = false;
-    {
-        const BlendMode b = draw_blend();
-        const bool glow = scene_phase_ && side_layer_ == kSceneLayer && b.blend_enable && !b.logic_op_enable &&
-                          !b.subtract && b.color_update && b.dst_factor == BlendFactor::One &&
-                          (renderer_.rt_physical() || renderer_.rt_glow_exposure() > 1.0f);
-        const auto flags = static_cast<std::uint8_t>(glow ? (ps_key_.output_flags | 0x20u)
-                                                          : (ps_key_.output_flags & ~0x20u));
-        if (flags != ps_key_.output_flags) {
-            ps_key_.output_flags = flags;
-            current_ps_hash_ = ps_key_.hash();
-            glow_changed = true;
-        }
-        // Lit translucents (output_flags bit 6): the lighting texture in map 7.
-        const auto lit_flags = static_cast<std::uint8_t>(
-            (ps_key_.output_flags & ~0xC0u) | (lit_translucent_ ? 0x40u : 0u) | (lit_late_ ? 0x80u : 0u));
-        if (lit_flags != ps_key_.output_flags) {
-            ps_key_.output_flags = lit_flags;
-            current_ps_hash_ = ps_key_.hash();
-            glow_changed = true;
-        }
-        // Indexed positions: a model (a star's fiery surface); direct ones: sprites and sparks.
-        const bool position_indexed = draw_positions_indexed();
-        const std::uint8_t kind =
-            !glow ? 0u : position_indexed ? 2u : 1u;
-        if (kind != glow_kind_) {
-            glow_kind_ = kind;
-            glow_changed = true;
-        }
-    }
-    // Per-pixel and enhanced lighting need the extra position/normal
-    // interpolants, which the line and point geometry shaders do not carry.
-    const bool triangles = topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle);
-    // Physical ray tracing: the vertex shaders take a channel's baked vertex light to its program's neutral level (flags
-    // bits 2-3, levels in bits 8-23).
-    // Bit 6: by the model's facing fit (debake_sh, debake_peak).
-    debake_sample_key_ = 0u;
-    debake_fit_active_ = false;
-    {
-        const std::uint32_t state = triangles ? debake_state() : 0u;
-        const bool fit = debake_fit_active_ && (state & 3u) != 0u;
-        if (fit && cpu_vs_constants_.sky_up_known != 0u) {
-            // The level it is de-baked to: its baked light at the player's up, the exposure's reference (a white surface
-            // facing the player's up shows white), the up taken into the model's space by its position matrix; at most
-            // its most lit facing's, at least a quarter of it.
-            float up[3];
-            decode_octahedral(cpu_vs_constants_.sky_up, up);
-            const unsigned row = std::min<unsigned>(draw_state_.position_matrix, 61u);
-            float model_up[3]{};
-            for (unsigned c = 0; c < 3u; ++c) {
-                for (unsigned r = 0; r < 3u; ++r) {
-                    model_up[c] += matrices_.matrix_value(row + r, c) * up[r];
-                }
-            }
-            const float length = std::sqrt(model_up[0] * model_up[0] + model_up[1] * model_up[1] + model_up[2] * model_up[2]);
-            if (std::isfinite(length) && length > 1e-6f) {
-                for (float& v : model_up) {
-                    v /= length;
-                }
-                float y[9];
-                debake_sh9(model_up, y);
-                for (unsigned c = 0; c < 3u; ++c) {
-                    float light = 0.0f;
-                    for (unsigned i = 0; i < 9u; ++i) {
-                        light += debake_fit_sh_[(c * 9u + i) / 4u][(c * 9u + i) % 4u] * y[i];
-                    }
-                    debake_fit_peak_[c] = std::clamp(light, 0.25f * debake_fit_peak_[c], debake_fit_peak_[c]);
-                }
-            }
-        }
-        // Bit 7: lit by the game's player light rig (rt_player_rig_draw): its level, not its hue.
-        const bool rig = triangles && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u && rt_player_rig_draw();
-        const std::uint32_t debake = ((state & 3u) << 2u) | (((state >> 2u) & 3u) << 4u) | (state & 0xFFFF00u) |
-                                     (fit ? 64u : 0u) | (rig ? 128u : 0u);
-        bool changed = cpu_vs_constants_.debake != debake;
-        if (fit && (std::memcmp(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_)) != 0 ||
-                    std::memcmp(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_)) != 0)) {
-            std::memcpy(cpu_vs_constants_.debake_sh, debake_fit_sh_, sizeof(debake_fit_sh_));
-            std::memcpy(cpu_vs_constants_.debake_peak, debake_fit_peak_, sizeof(debake_fit_peak_));
-            changed = true;
-        }
-        if (changed) {
-            cpu_vs_constants_.debake = debake;
-            sky_up_dirty_ = true;   // the scene constants' upload
-        }
-    }
-    // The vertex shaders carry interpolation's vertex blend only in frames recorded for interpolated redraws, and the
-    // de-baking only under physical ray tracing (kVsFeature*).
-    const std::uint32_t vs_features = (interp_recording_ ? kVsFeatureVertexBlend : 0u) |
-                                      ((enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u ? kVsFeatureDebake : 0u);
-    const bool vs_features_changed = vs_key_.features != vs_features;
-    if (vs_features_changed) {
-        vs_key_.features = vs_features;
-        current_vs_hash_ = vs_key_.hash();
-    }
-    bool enhanced = false;
-    bool enhanced_changed = false;
-    {
-        // Perspective scene draws only: the view vector is the eye-space position. The material
-        // follows the keys, which change only with their dirty bits.
-        // GALAXY_RT_DELIGHT=1: the opaque draws are de-lit under traced lighting. Off by default: de-lighting
-        // does not change the traced light, and its enhanced path clamps the TEV where the game wraps.
-        static const bool delight = read_env_u64("GALAXY_RT_DELIGHT", 0u) != 0u;
-        // The traced lighting de-lights the opaque phases only (it relights what it traces); translucent
-        // draws (water, glass, seaweed) keep the game's lit colour.
-        using motion::ScenePhase;
-        const bool opaque_phase = rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeVolumeShadow) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::OpaBeforeSilhouette) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::Opa) ||
-                                  rt_phase_ == static_cast<std::uint8_t>(ScenePhase::ListOpa);
-        // Ray tracing in the game's light units (kEnhancedRtPhysical) needs every lit opaque draw at its full light
-        // (the albedo the traced light multiplies), whatever the lighting setting.
-        const bool physical = opaque_phase && (enhanced_ps_flags_ & kEnhancedRtPhysical) != 0u;
-        const bool gate = (enhanced_lighting_ || physical ||
-                           (delight && opaque_phase && (enhanced_ps_flags_ & kEnhancedRtLighting) != 0u)) &&
-                          triangles &&
-                          scene_phase_ && side_layer_ == kSceneLayer &&
-                          draw_state_.projection_type == 0u;
-        if (gate != enhanced_gate_ || tev_dirty || xf_dirty || vcd_dirty || !shader_key_hashes_valid_) {
-            enhanced_gate_ = gate;
-            enhanced_material_ = gate ? enhanced_lighting_material(vs_key_, ps_key_) : 0u;
-        }
-        const std::uint32_t material = enhanced_material_;
-        enhanced = material != 0u;
-        if (((vs_key_.flags & kVsKeyEnhancedLighting) != 0u) != enhanced) {
-            vs_key_.flags ^= kVsKeyEnhancedLighting;
-            current_vs_hash_ = vs_key_.hash();
-        }
-        enhanced_changed = ((ps_key_.reserved & kPsKeyEnhancedLighting) != 0u) != enhanced;
-        if (enhanced_changed || ps_key_.ind_reserved != material) {
-            ps_key_.reserved = static_cast<std::uint8_t>(enhanced ? ps_key_.reserved | kPsKeyEnhancedLighting
-                                                                  : ps_key_.reserved & ~kPsKeyEnhancedLighting);
-            ps_key_.ind_reserved = material;
-            current_ps_hash_ = ps_key_.hash();
-        }
-        // The scene draws of a ray-traced scene keep the branches only ray tracing takes (kPsKeyRtPaths).
-        constexpr std::uint32_t kRtBits = kEnhancedRtReflections | kEnhancedRtLighting | kEnhancedRtPhysical;
-        const bool rt_scene = scene_phase_ && (enhanced_ps_flags_ & kRtBits) != 0u;
-        if (((ps_key_.reserved & kPsKeyRtPaths) != 0u) != rt_scene) {
-            ps_key_.reserved ^= kPsKeyRtPaths;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    {
-        const bool ppl = per_pixel_lighting_ && !enhanced && (vs_key_.flags & 0x02u) != 0u && triangles;
-        if (((vs_key_.flags & kVsKeyPerPixelLighting) != 0u) != ppl) {
-            vs_key_.flags ^= kVsKeyPerPixelLighting;
-            current_vs_hash_ = vs_key_.hash();
-        }
-        if (((ps_key_.reserved & kPsKeyPerPixelLighting) != 0u) != ppl) {
-            ps_key_.reserved ^= kPsKeyPerPixelLighting;
-            current_ps_hash_ = ps_key_.hash();
-        }
-        const bool ppl_finite = ppl && (vs_key_.flags & kVsKeyFiniteLightAttn) != 0u;
-        if (((ps_key_.reserved & kPsKeyPplFiniteLightAttn) != 0u) != ppl_finite) {
-            ps_key_.reserved ^= kPsKeyPplFiniteLightAttn;
-            current_ps_hash_ = ps_key_.hash();
-        }
-    }
-    shader_key_hashes_valid_ = true;
     if (rs_dirty) {
         render_state_key_ = build_render_state_key(draw_state_);
     }
@@ -7969,44 +7793,13 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         render_state_key_.primitive_topology = topology_key;
     }
     render_state_key_.samples_log2 = samples_log2;
-    if (renderer_.rt_active()) {
-        // Traced geometry: unblended triangles (no logic op) that write colour and depth under a
-        // perspective projection. Shadow volumes, z-only passes and screen quads stay out, and so
-        // do alpha-tested cut-outs (foliage, fences) and z-textured surfaces, whose depth is not
-        // their triangles'. The material table's foliage cards are the exception (rt_card_draw).
-        const std::uint32_t bb = render_state_key_.blend_bits;
-        const bool traceable =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) &&
-            (bb & ((1u << 0u) | (1u << 8u))) == 0u && (bb & (1u << 25u)) != 0u &&
-            (render_state_key_.zmode_bits & (1u << 4u)) != 0u &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u &&
-            (ps_key_.flags & 0x02u) == 0u;
-        rt_state_eligible_ = traceable && alpha_test_keeps_all(ps_key_);
-        rt_card_eligible_ = traceable && !rt_state_eligible_;
-        const BlendMode blend = draw_blend();
-        rt_glow_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update && blend.dst_factor == BlendFactor::One &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u;
-        // Water and clear materials are models (indexed positions); particles (steam, smoke, haze with
-        // indirect warps) are direct-vertex sprites and never water.
-        const bool position_indexed = draw_positions_indexed();
-        rt_sprite_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
-            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u;
-        rt_water_eligible_ =
-            topology_key == static_cast<std::uint8_t>(gpu::kTopologyTypeTriangle) && blend.blend_enable &&
-            !blend.logic_op_enable && !blend.subtract && blend.color_update &&
-            blend.src_factor == BlendFactor::SrcAlpha && blend.dst_factor == BlendFactor::InvSrcAlpha &&
-            render_state_key_.cull != static_cast<std::uint8_t>(CullMode::All) &&
-            draw_state_.projection_type == 0u &&
-            position_indexed;
-    }
+    // The ray tracer's draw eligibility (traced, card, glow, sprite, water) was judged by the GX pixel key: none
+    // until the ray tracer is rebuilt on native materials (E-04 step 4; F/G).
+    rt_state_eligible_ = false;
+    rt_card_eligible_ = false;
+    rt_glow_eligible_ = false;
+    rt_sprite_eligible_ = false;
+    rt_water_eligible_ = false;
     // Motion writers: opaque triangles with color writes in a temporal scene
     // (blending, logic ops and dual-source alpha cannot share a second
     // target). Keys only change while a motion scene is (or was) active.
@@ -8050,17 +7843,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             set_bit(bb, 1u << 28, constant_alpha && dual);
             set_bit(bb, kRenderStateZeroAlpha, constant_alpha && !dual);
             render_state_key_.blend_bits = bb;
-            const std::uint8_t flags = ps_key_.flags;
-            set_bit(ps_key_.flags, std::uint8_t{0x80u}, dual);
-            set_bit(ps_key_.flags, std::uint8_t{0x04u}, constant_alpha && dual);
-            if (ps_key_.flags != flags) {
-                current_ps_hash_ = ps_key_.hash();
-            }
-        }
-        if (((vs_key_.flags & kVsKeyMotion) != 0u) != writer) {
-            vs_key_.flags ^= kVsKeyMotion;
-            current_vs_hash_ = vs_key_.hash();
-            motion_key_changed = true;
         }
         // The effects layer (RendererD3D12::begin_layer_window): a reactive draw (single-source) whose factors never
         // read the EFB (its colour or, on an EFB with alpha, its alpha) blends the same into the layer's targets.
@@ -8071,14 +7853,6 @@ gpu::Pipeline* RenderCore::flush_draw_state(
         const bool layer = reactive && renderer_.layer_window() &&
                            (blend_mode.subtract ||
                             (!reads_efb(blend_mode.src_factor, true) && !reads_efb(blend_mode.dst_factor, false)));
-        const std::uint8_t ps_bits =
-            (writer ? kPsKeyMotion : 0u) | (reactive ? kPsKeyReactive : 0u) | (layer ? kPsKeyLayer : 0u);
-        if ((ps_key_.reserved & (kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) != ps_bits) {
-            ps_key_.reserved = static_cast<std::uint8_t>(
-                (ps_key_.reserved & ~(kPsKeyMotion | kPsKeyReactive | kPsKeyLayer)) | ps_bits);
-            current_ps_hash_ = ps_key_.hash();
-            motion_key_changed = true;
-        }
         const std::uint32_t rs_bits = (writer ? kRenderStateMotionTarget : 0u) |
                                       (reactive ? kRenderStateReactiveTarget : 0u) |
                                       (layer ? kRenderStateLayerTarget : 0u);
@@ -8092,20 +7866,9 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     }
 
     // Curved surfaces: the vertex stage's curve outputs and the patches of its output variant's hull and domain shaders.
-    bool curved_changed = curved != current_curved_;
     current_curved_ = curved;
-    if (((vs_key_.flags & kVsKeyCurved) != 0u) != curved) {
-        vs_key_.flags ^= kVsKeyCurved;
-        current_vs_hash_ = vs_key_.hash();
-        curved_changed = true;
-    }
     if (curved) {
-        const auto patch = static_cast<std::uint8_t>(
-            kTopologyPatch |
-            ((vs_key_.flags & (kVsKeyPerPixelLighting | kVsKeyEnhancedLighting)) != 0u ? kCurvedPerPixel : 0u) |
-            ((vs_key_.flags & kVsKeyMotion) != 0u ? kCurvedMotion : 0u));
-        curved_changed = curved_changed || render_state_key_.primitive_topology != patch;
-        render_state_key_.primitive_topology = patch;
+        render_state_key_.primitive_topology = static_cast<std::uint8_t>(kTopologyPatch);
     }
     {
         // The native material's pipeline: its build-compiled shaders under the draw's render state.
