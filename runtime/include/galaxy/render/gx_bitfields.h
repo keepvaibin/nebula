@@ -1,7 +1,7 @@
 #pragma once
 
-// GX CP/XF/BP register addresses and constexpr bitfield decoders. Layouts follow the hardware
-// registers as the RVL SDK GX library programs them.
+// The drawing state's typed values (blend, depth, TEV orders, texture sampling and images, texgens, channels) and
+// their enumerations.
 
 #include <cstdint>
 
@@ -17,125 +17,6 @@ namespace galaxy::render {
 [[nodiscard]] constexpr bool bit(std::uint32_t value, unsigned index) {
     return ((value >> index) & 1u) != 0u;
 }
-
-// BP (blitting processor, the pixel pipeline) registers. A LOAD_BP_REG payload is one u32:
-// register = bits 31:24, value = bits 23:0.
-namespace bp {
-inline constexpr std::uint8_t kGenMode = 0x00;
-inline constexpr std::uint8_t kDisplayCopyFilterBase = 0x01; // 0x01-0x04
-inline constexpr std::uint8_t kIndMtxBase = 0x06;       // 0x06-0x0E: 3x2 ind mtx
-inline constexpr std::uint8_t kIndMtxCount = 9;
-inline constexpr std::uint8_t kIndMask = 0x0F;
-inline constexpr std::uint8_t kBpMask = 0xFE;           // one-shot write mask
-inline constexpr std::uint8_t kIndCmdBase = 0x10;       // 0x10-0x1F per ind stage
-inline constexpr std::uint8_t kScissorTopLeft = 0x20;
-inline constexpr std::uint8_t kScissorBottomRight = 0x21;
-inline constexpr std::uint8_t kSuLpSize = 0x22;         // line/point size
-// BPMEM_PERF0_TRI/BPMEM_PERF0_QUAD: performance-counter registers with no effect on rendering
-// (Dolphin's BPWritten ignores them).
-inline constexpr std::uint8_t kPerf0TriBase = 0x23;     // 0x23-0x24
-inline constexpr std::uint8_t kRas1Ss0 = 0x25;          // ind tex scale 0
-inline constexpr std::uint8_t kRas1Ss1 = 0x26;          // ind tex scale 1
-inline constexpr std::uint8_t kIndRef = 0x27;           // ind stage tex refs
-inline constexpr std::uint8_t kTevOrderBase = 0x28;     // 0x28-0x2F, 2 stages/reg
-inline constexpr std::uint8_t kTexCoordSizeBase = 0x30; // 0x30-0x3F, S/T pairs
-inline constexpr std::uint8_t kTexCoordSizeCount = 16;
-inline constexpr std::uint8_t kZMode = 0x40;
-inline constexpr std::uint8_t kBlendMode = 0x41;        // PE_CMODE0
-inline constexpr std::uint8_t kConstAlpha = 0x42;       // PE_CMODE1
-inline constexpr std::uint8_t kPeControl = 0x43;
-inline constexpr std::uint8_t kFieldMask = 0x44;
-inline constexpr std::uint8_t kPeDone = 0x45;           // GXDrawDone signal
-inline constexpr std::uint8_t kBusClock0 = 0x46;
-inline constexpr std::uint8_t kPeToken = 0x47;          // GXSetDrawSync
-inline constexpr std::uint8_t kPeTokenInt = 0x48;       // token w/ interrupt
-inline constexpr std::uint8_t kCopySrcTopLeft = 0x49;
-inline constexpr std::uint8_t kCopySrcSize = 0x4A;
-inline constexpr std::uint8_t kCopyDestAddr = 0x4B;     // physical >> 5
-inline constexpr std::uint8_t kCopyDestStride = 0x4D;   // bytes >> 5
-inline constexpr std::uint8_t kCopyYScale = 0x4E;       // 8.8 fixed inverse
-inline constexpr std::uint8_t kCopyClearAR = 0x4F;
-inline constexpr std::uint8_t kCopyClearGB = 0x50;
-inline constexpr std::uint8_t kCopyClearZ = 0x51;       // 24-bit Z
-inline constexpr std::uint8_t kCopyExecute = 0x52;
-inline constexpr std::uint8_t kCopyFilter0 = 0x53;
-inline constexpr std::uint8_t kCopyFilter1 = 0x54;
-inline constexpr std::uint8_t kCopyClearBoundingBox1 = 0x55;
-inline constexpr std::uint8_t kCopyClearBoundingBox2 = 0x56;
-inline constexpr std::uint8_t kCopyClearPixelPerf = 0x57;
-inline constexpr std::uint8_t kRevBits = 0x58;
-inline constexpr std::uint8_t kScissorOffset = 0x59;
-// TMEM load start: a write loads the number of lines it holds. GXTexModeSync (RMGE01
-// 0x804BA0F8) writes 0x63000000, an empty load that orders texture-mode changes after earlier
-// texture work. The game does not link GXPreLoadEntireTexture, so a nonzero count never occurs.
-inline constexpr std::uint8_t kTexLoadStart = 0x63;
-inline constexpr std::uint8_t kTlutSrcAddr = 0x64;      // main memory >> 5
-inline constexpr std::uint8_t kTlutDest = 0x65;         // TMEM offset + count
-inline constexpr std::uint8_t kTexInvalidate = 0x66;
-inline constexpr std::uint8_t kPerf1 = 0x67;
-inline constexpr std::uint8_t kFieldMode = 0x68;
-inline constexpr std::uint8_t kBusClock1 = 0x69;
-// Texture units: registers for maps 0-3; maps 4-7 are at +0x20.
-inline constexpr std::uint8_t kTexMode0Base = 0x80;     // wrap/filter/lod bias
-inline constexpr std::uint8_t kTexMode1Base = 0x84;     // min/max lod
-inline constexpr std::uint8_t kTexImage0Base = 0x88;    // width/height/format
-inline constexpr std::uint8_t kTexImage3Base = 0x94;    // physical addr >> 5
-inline constexpr std::uint8_t kTexTlutBase = 0x98;      // TLUT ref
-inline constexpr std::uint8_t kTexHighBankOffset = 0x20;  // maps 4-7
-inline constexpr std::uint8_t kTevColorEnvBase = 0xC0;  // even regs, 16 stages
-inline constexpr std::uint8_t kTevAlphaEnvBase = 0xC1;  // odd regs, 16 stages
-inline constexpr std::uint8_t kTevRegisterBase = 0xE0;  // 0xE0-0xE7 RA/BG pairs
-inline constexpr std::uint8_t kFogParam0 = 0xEE;
-inline constexpr std::uint8_t kFogParam1 = 0xEF;
-inline constexpr std::uint8_t kFogParam2 = 0xF0;
-inline constexpr std::uint8_t kFogParam3 = 0xF1;
-inline constexpr std::uint8_t kFogColor = 0xF2;
-inline constexpr std::uint8_t kAlphaCompare = 0xF3;
-inline constexpr std::uint8_t kTevZEnv0 = 0xF4;
-inline constexpr std::uint8_t kTevZEnv1 = 0xF5;
-inline constexpr std::uint8_t kTevKSelBase = 0xF6;      // 0xF6-0xFD, 2 stages/reg
-}  // namespace bp
-
-// CP (command processor) registers (LOAD_CP_REG: u8 reg + u32 value).
-namespace cp {
-// 0x00/0x10/0x20: registers of unknown purpose (UNKNOWN_00/10/20 in Dolphin's CPMemory.h)
-// with no effect on vertex state; stored, never read.
-inline constexpr std::uint8_t kUnknown00 = 0x00;
-inline constexpr std::uint8_t kUnknown10 = 0x10;
-inline constexpr std::uint8_t kUnknown20 = 0x20;
-inline constexpr std::uint8_t kMatrixIndexA = 0x30;
-inline constexpr std::uint8_t kMatrixIndexB = 0x40;
-inline constexpr std::uint8_t kVcdLo = 0x50;
-inline constexpr std::uint8_t kVcdHi = 0x60;
-inline constexpr std::uint8_t kVatABase = 0x70;         // +vtxfmt (0-7)
-inline constexpr std::uint8_t kVatBBase = 0x80;
-inline constexpr std::uint8_t kVatCBase = 0x90;
-inline constexpr std::uint8_t kArrayBaseBase = 0xA0;    // +attr index (0-15)
-inline constexpr std::uint8_t kArrayStrideBase = 0xB0;
-}  // namespace cp
-
-// XF (transform unit) memory (LOAD_XF_REG: count, base, values).
-namespace xf {
-// XFMEM_ERROR..XFMEM_UNKNOWN_1007 (0x1000-0x1007) and XFMEM_VTXSPECS (0x1008): status and
-// diagnostic registers with no effect on rendering (Dolphin's XFRegWritten ignores
-// 0x1000-0x1007; 0x1008 only feeds a CP/XF consistency check).
-inline constexpr std::uint16_t kStatusRegsBase = 0x1000;
-inline constexpr std::uint16_t kNumChannels = 0x1009;
-inline constexpr std::uint16_t kDualTexTrans = 0x1012;  // bit 0: dual-tex (post-matrix) enable
-// 0x1013-0x1017: XFMEM_UNKNOWN_GROUP_1, undocumented (Dolphin's XFRegWritten only logs them).
-// 0x1018-0x1019: XFMEM_SETMATRIXINDA/B, the XF copy of the current matrix indices. Every
-// consumer reads the CP copy (cp::kMatrixIndexA/B), which the SDK keeps in step, so these are
-// stored and never read.
-inline constexpr std::uint16_t kUnknownGroup1Base = 0x1013;  // 0x1013-0x1019
-inline constexpr std::uint16_t kAmbientColorBase = 0x100A;  // 0x100A-0x100B
-inline constexpr std::uint16_t kMaterialColorBase = 0x100C; // 0x100C-0x100D
-inline constexpr std::uint16_t kChannelCtrlBase = 0x100E;   // color0/1, alpha0/1
-inline constexpr std::uint16_t kProjectionBase = 0x1020;    // 6 floats + type
-inline constexpr std::uint16_t kNumTexGens = 0x103F;
-inline constexpr std::uint16_t kTexGenBase = 0x1040;        // 0x1040-0x1047
-inline constexpr std::uint16_t kPostTexGenBase = 0x1050;    // dual-tex transforms
-inline constexpr std::uint16_t kViewportBase = 0x101A;      // 6 floats
-}  // namespace xf
 
 enum class TevColorArg : std::uint8_t {
     CPrev = 0, APrev, C0, A0, C1, A1, C2, A2,
@@ -326,17 +207,6 @@ struct TexImage {
     [[nodiscard]] bool operator==(const TexImage&) const = default;
 };
 
-[[nodiscard]] constexpr TexImage decode_tex_image(
-    std::uint32_t image0,
-    std::uint32_t image3) {
-    return TexImage{
-        static_cast<std::uint16_t>(bits(image0, 0, 10) + 1u),
-        static_cast<std::uint16_t>(bits(image0, 10, 10) + 1u),
-        static_cast<TexFormat>(bits(image0, 20, 4)),
-        bits(image3, 0, 24) << 5,
-    };
-}
-
 struct TexMode {
     TexWrap wrap_s;
     TexWrap wrap_t;
@@ -349,25 +219,6 @@ struct TexMode {
 
     [[nodiscard]] bool operator==(const TexMode&) const = default;
 };
-
-[[nodiscard]] constexpr TexMode decode_tex_mode(
-    std::uint32_t mode0,
-    std::uint32_t mode1) {
-    const std::uint32_t raw_bias = bits(mode0, 9, 8);
-    // Sign-extend the 8-bit bias field.
-    const std::int16_t bias = static_cast<std::int16_t>(
-        static_cast<std::int8_t>(raw_bias));
-    return TexMode{
-        static_cast<TexWrap>(bits(mode0, 0, 2)),
-        static_cast<TexWrap>(bits(mode0, 2, 2)),
-        static_cast<TexMagFilter>(bits(mode0, 4, 1)),
-        static_cast<TexMinFilter>(bits(mode0, 5, 3)),
-        bias,
-        static_cast<std::uint8_t>(bits(mode0, 19, 2)),
-        static_cast<std::uint8_t>(bits(mode1, 0, 8)),
-        static_cast<std::uint8_t>(bits(mode1, 8, 8)),
-    };
-}
 
 struct TlutRef {
     std::uint16_t tmem_offset;      // TLUT slot in TMEM high bank
@@ -410,30 +261,16 @@ struct XfTexGen {
     std::uint8_t source_row;        // position/normal/color/tex0-7 input row
     std::uint8_t emboss_source;
     std::uint8_t emboss_light;
-};
 
-[[nodiscard]] constexpr XfTexGen decode_xf_texgen(std::uint32_t v) {
-    return XfTexGen{
-        bit(v, 1),
-        bit(v, 2),
-        static_cast<TexGenType>(bits(v, 4, 3)),
-        static_cast<std::uint8_t>(bits(v, 7, 5)),
-        static_cast<std::uint8_t>(bits(v, 12, 3)),
-        static_cast<std::uint8_t>(bits(v, 15, 3)),
-    };
-}
+    [[nodiscard]] bool operator==(const XfTexGen&) const = default;
+};
 
 struct XfPostTexGen {
     std::uint8_t matrix_index;      // post-transform matrix row
     bool normalize;
-};
 
-[[nodiscard]] constexpr XfPostTexGen decode_xf_post_texgen(std::uint32_t v) {
-    return XfPostTexGen{
-        static_cast<std::uint8_t>(bits(v, 0, 6)),
-        bit(v, 8),
-    };
-}
+    [[nodiscard]] bool operator==(const XfPostTexGen&) const = default;
+};
 
 struct XfChannelCtrl {
     bool material_from_vertex;      // matsource
@@ -445,104 +282,6 @@ struct XfChannelCtrl {
                                     // 0=none, 1=specular, 2=dir, 3=spot
 };
 
-[[nodiscard]] constexpr XfChannelCtrl decode_xf_channel_ctrl(std::uint32_t v) {
-    return XfChannelCtrl{
-        bit(v, 0),
-        bit(v, 1),
-        static_cast<std::uint8_t>(
-            bits(v, 2, 4) | (bits(v, 11, 4) << 4)),
-        bit(v, 6),
-        static_cast<std::uint8_t>(bits(v, 7, 2)),
-        static_cast<std::uint8_t>(bits(v, 9, 2)),
-    };
-}
-
-// Vertex descriptor: VCD_LO/VCD_HI (which attributes, direct or indexed) plus VAT A/B/C for
-// one of the eight vertex formats (component types and counts).
-struct VertexAttribute {
-    VcdType vcd;                    // not present / direct / index8 / index16
-    std::uint8_t count;             // component count selector (e.g. xy vs xyz)
-    std::uint8_t format;            // ComponentFormat or ColorComponentFormat
-    std::uint8_t shift;             // fixed-point fraction bits
-};
-
-struct VertexDescriptor {
-    bool has_pn_matrix_index;       // per-vertex position matrix index byte
-    bool has_tex_matrix_index[8];   // per-vertex texture matrix index bytes
-    VertexAttribute position;
-    VertexAttribute normal;         // count: 0 = normal only, 1 = NBT
-    VertexAttribute color[2];
-    VertexAttribute texcoord[8];
-    bool byte_dequant;              // VAT_A bit 30
-    bool normal_index_3;            // VAT_A bit 31 (separate NBT indices)
-};
-
-[[nodiscard]] constexpr VertexDescriptor decode_vertex_descriptor(
-    std::uint32_t vcd_lo,
-    std::uint32_t vcd_hi,
-    std::uint32_t vat_a,
-    std::uint32_t vat_b,
-    std::uint32_t vat_c) {
-    VertexDescriptor d{};
-    d.has_pn_matrix_index = bit(vcd_lo, 0);
-    for (unsigned i = 0; i < 8; ++i) {
-        d.has_tex_matrix_index[i] = bit(vcd_lo, 1 + i);
-    }
-    d.position = VertexAttribute{
-        static_cast<VcdType>(bits(vcd_lo, 9, 2)),
-        static_cast<std::uint8_t>(bits(vat_a, 0, 1)),
-        static_cast<std::uint8_t>(bits(vat_a, 1, 3)),
-        static_cast<std::uint8_t>(bits(vat_a, 4, 5)),
-    };
-    d.normal = VertexAttribute{
-        static_cast<VcdType>(bits(vcd_lo, 11, 2)),
-        static_cast<std::uint8_t>(bits(vat_a, 9, 1)),
-        static_cast<std::uint8_t>(bits(vat_a, 10, 3)),
-        0,
-    };
-    d.color[0] = VertexAttribute{
-        static_cast<VcdType>(bits(vcd_lo, 13, 2)),
-        static_cast<std::uint8_t>(bits(vat_a, 13, 1)),
-        static_cast<std::uint8_t>(bits(vat_a, 14, 3)),
-        0,
-    };
-    d.color[1] = VertexAttribute{
-        static_cast<VcdType>(bits(vcd_lo, 15, 2)),
-        static_cast<std::uint8_t>(bits(vat_a, 17, 1)),
-        static_cast<std::uint8_t>(bits(vat_a, 18, 3)),
-        0,
-    };
-    d.texcoord[0] = VertexAttribute{
-        static_cast<VcdType>(bits(vcd_hi, 0, 2)),
-        static_cast<std::uint8_t>(bits(vat_a, 21, 1)),
-        static_cast<std::uint8_t>(bits(vat_a, 22, 3)),
-        static_cast<std::uint8_t>(bits(vat_a, 25, 5)),
-    };
-    // VAT_B bit 31 is VCacheEnhance, not part of texcoord 4. Its fraction
-    // starts at VAT_C bit 0; texcoords 5-7 start at C bits 5, 14 and 23.
-    for (unsigned i = 1; i < 8; ++i) {
-        std::uint32_t field = 0;
-        if (i <= 3u) {
-            field = bits(vat_b, (i - 1u) * 9u, 9);
-        } else if (i == 4u) {
-            field = bits(vat_b, 27, 4) | (bits(vat_c, 0, 5) << 4u);
-        } else {
-            field = bits(vat_c, 5u + (i - 5u) * 9u, 9);
-        }
-        d.texcoord[i] = VertexAttribute{
-            static_cast<VcdType>(bits(vcd_hi, 2 * i, 2)),
-            static_cast<std::uint8_t>(bits(field, 0, 1)),
-            static_cast<std::uint8_t>(bits(field, 1, 3)),
-            static_cast<std::uint8_t>(bits(field, 4, 5)),
-        };
-    }
-    d.byte_dequant = bit(vat_a, 30);
-    d.normal_index_3 = bit(vat_a, 31);
-    return d;
-}
-
-// Wii TLUT loads and texture TLUT references address TMEM alike, with no 0x80000 bias; the
-// GameCube source-address mask does not apply.
 inline constexpr std::uint32_t kTmemBytes = 0x100000u;
 [[nodiscard]] constexpr bool cull_all_suppresses_primitive(
     CullMode cull, PrimitiveClass primitive) noexcept {
@@ -557,20 +296,6 @@ inline constexpr std::uint32_t kTmemBytes = 0x100000u;
     std::uint8_t primary, std::uint8_t secondary) {
     return static_cast<std::uint8_t>((5u * primary + 3u * secondary) >> 3u);
 }
-struct TlutTransfer {
-    std::uint32_t source_address;
-    std::uint32_t destination_offset;
-    std::uint32_t byte_count;
-};
-[[nodiscard]] constexpr TlutTransfer decode_wii_tlut_transfer(
-    std::uint32_t source, std::uint32_t destination) {
-    return {
-        (source & 0x00FFFFFFu) << 5u,
-        (destination & 0x3FFu) << 9u,
-        ((destination >> 10u) & 0x7FFu) << 5u,
-    };
-}
-
 // Compile-time checks of the helpers above.
 namespace bitfield_checks {
 
@@ -598,14 +323,6 @@ constexpr auto kLogicCopyMode = blend_of(false, true, BlendFactor::Zero, BlendFa
 static_assert(!effective_blend(kLogicCopyMode, true).logic_op_enable);
 constexpr auto kLogicXor = blend_of(false, true, BlendFactor::Zero, BlendFactor::Zero, false, 6u);
 static_assert(effective_blend(kLogicXor, true).logic_op_enable);
-
-// TEX_SETIMAGE0/3: 640x480 RGB565 at physical 0x01000000.
-constexpr auto kTexImage = decode_tex_image(
-    (640u - 1u) | ((480u - 1u) << 10) | (4u << 20), 0x01000000u >> 5);
-static_assert(kTexImage.width == 640);
-static_assert(kTexImage.height == 480);
-static_assert(kTexImage.format == TexFormat::RGB565);
-static_assert(kTexImage.address == 0x01000000u);
 
 }  // namespace bitfield_checks
 

@@ -328,97 +328,6 @@ bool dependency_ranges_overlap(
     return lhs_begin < rhs_end && rhs_begin < lhs_end;
 }
 
-[[nodiscard]] std::uint16_t snapshot_read_be_u16(const std::byte* p) {
-    return static_cast<std::uint16_t>(
-        (static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[0])) << 8) |
-        static_cast<std::uint16_t>(std::to_integer<std::uint8_t>(p[1])));
-}
-
-[[nodiscard]] std::size_t snapshot_component_byte_size(std::uint8_t fmt) {
-    switch (static_cast<ComponentFormat>(fmt)) {
-    case ComponentFormat::U8:
-    case ComponentFormat::S8:
-        return 1u;
-    case ComponentFormat::U16:
-    case ComponentFormat::S16:
-        return 2u;
-    case ComponentFormat::F32:
-        return 4u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown component format");
-    }
-}
-
-[[nodiscard]] std::size_t snapshot_color_byte_size(std::uint8_t fmt) {
-    switch (static_cast<ColorComponentFormat>(fmt)) {
-    case ColorComponentFormat::RGB565:
-    case ColorComponentFormat::RGBA4444:
-        return 2u;
-    case ColorComponentFormat::RGB888:
-    case ColorComponentFormat::RGBA6666:
-        return 3u;
-    case ColorComponentFormat::RGBX8888:
-    case ColorComponentFormat::RGBA8888:
-        return 4u;
-    default:
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: unknown color format");
-    }
-}
-
-[[nodiscard]] std::size_t snapshot_pos_component_count(std::uint8_t count) {
-    return count == 0u ? 2u : 3u;
-}
-
-[[nodiscard]] std::size_t snapshot_tex_component_count(std::uint8_t count) {
-    return count == 0u ? 1u : 2u;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_pos(
-    const VertexAttribute& attr) {
-    return snapshot_component_byte_size(attr.format) *
-        snapshot_pos_component_count(attr.count);
-}
-
-[[nodiscard]] std::size_t snapshot_normal_vector_size(
-    const VertexAttribute& attr) {
-    const std::size_t component_size =
-        snapshot_component_byte_size(attr.format);
-    if (component_size >
-        std::numeric_limits<std::size_t>::max() / 3u) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: normal vector size overflows");
-    }
-    return component_size * 3u;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_nrm(
-    const VertexAttribute& attr) {
-    const std::size_t normal_size = snapshot_normal_vector_size(attr);
-    if (attr.count != 0u &&
-        normal_size > std::numeric_limits<std::size_t>::max() / 3u) {
-        throw std::runtime_error(
-            "[RenderCore] dependency scan: NBT element size overflows");
-    }
-    return attr.count != 0u ? normal_size * 3u : normal_size;
-}
-
-[[nodiscard]] bool snapshot_normal_has_nbt(const VertexDescriptor& desc) {
-    return desc.normal.count != 0u;
-}
-
-[[nodiscard]] bool snapshot_normal_uses_three_indices(
-    const VertexDescriptor& desc) {
-    return snapshot_normal_has_nbt(desc) && desc.normal_index_3;
-}
-
-[[nodiscard]] std::size_t snapshot_attr_direct_size_tex(
-    const VertexAttribute& attr) {
-    return snapshot_component_byte_size(attr.format) *
-        snapshot_tex_component_count(attr.count);
-}
-
 [[nodiscard]] std::uint32_t snapshot_tex_data_size(
     TexFormat fmt,
     std::uint32_t width,
@@ -6580,14 +6489,11 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
         }
     }
     for (const auto& g : record.texgens) {
-        const std::uint32_t gen = material::tex_gen_word(g[1], g[2]);
-        const std::uint32_t post = static_cast<std::uint32_t>(g[4] - 64u) | static_cast<std::uint32_t>(g[3]) << 8u;
-        const std::uint32_t before = texgen_word(draw_state_.texgen[g[0] & 7u]);
-        const std::uint32_t before_post = post_texgen_word(draw_state_.post_texgen[g[0] & 7u]);
-        draw_state_.texgen[g[0] & 7u] = decode_xf_texgen(gen);
-        draw_state_.post_texgen[g[0] & 7u] = decode_xf_post_texgen(post);
-        if (texgen_word(draw_state_.texgen[g[0] & 7u]) != before ||
-            post_texgen_word(draw_state_.post_texgen[g[0] & 7u]) != before_post) {
+        const XfTexGen gen = material::tex_gen(g[1], g[2]);
+        const XfPostTexGen post = material::post_tex_gen(g[4], g[3]);
+        if (!(draw_state_.texgen[g[0] & 7u] == gen) || !(draw_state_.post_texgen[g[0] & 7u] == post)) {
+            draw_state_.texgen[g[0] & 7u] = gen;
+            draw_state_.post_texgen[g[0] & 7u] = post;
             draw_state_.dirty |= kStateDirtyVertexShader | kStateDirtyVertexConstants;
         }
     }
