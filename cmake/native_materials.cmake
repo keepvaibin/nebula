@@ -3,7 +3,7 @@
 # galaxy_native_material_sources(OUT_VAR BACKEND) adds the build rules of BACKEND (dxil: dxc; spirv: the
 # galaxy_native_spirv tool) and sets OUT_VAR to the generated headers and table source to add to a target.
 
-set(galaxy_native_materials whirlpool ocean_bowl movie)
+set(galaxy_native_materials whirlpool ocean_bowl movie water_camera)
 set(galaxy_native_variants base reactive layer motion)
 set(galaxy_native_defines_base "")
 set(galaxy_native_defines_reactive "NATIVE_REACTIVE")
