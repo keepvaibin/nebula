@@ -35,6 +35,9 @@ namespace MR {
     void fillScreenArea(const TVec2s&, const TVec2s&);
     void fillScreen(const GXColor&);
     void setupShadowVolumeDraw();
+    // The volume draws' colour (runtime/src/render/materials/flat_color.hlsl), their blending, depth, culling and
+    // writes as the drawing state has them (each pass sets them).
+    void setShadowVolumeColor(const GXColor& rColor);
     void drawSimpleModel(J3DModelData*);
     void fillSilhouetteColor();
     const JUTTexture* getMarioShadowTex();

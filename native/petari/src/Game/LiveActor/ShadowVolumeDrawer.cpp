@@ -83,7 +83,7 @@ void ShadowVolumeDrawer::draw() const {
     if (isDraw()) {
         loadModelDrawMtx();
         GXColor shapeColor = reinterpret_cast< GXColor& >(::sShapeColor);
-        J3DNativeState::setTevColor(GX_TEVREG0, shapeColor);
+        MR::setShadowVolumeColor(shapeColor);
         J3DNativeState::setColorUpdate(0);
         J3DNativeState::setDstAlpha(0, 0);
         J3DNativeState::setCullMode(GX_CULL_FRONT);
