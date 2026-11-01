@@ -45,8 +45,9 @@ float2 j3d_texel(float4 uv, uint coord) {
 // override; GX's one-stage programs the game loads over a material): 1 texture 0 at coordinate 0 with alpha 1/4
 // (J3DModelX list 2), 2 the channel colour with alpha A0 (MarioSearchLight's volume), 3 the channel colour with alpha
 // RASA - K(1 - A0) (its cone: stage 0's constant alpha), 4 the channel colour with alpha (A1 + (A0 - A1) RASA) / 2 (its
-// falloff). Fog as the material's.
-float4 j3d_override(float4 t0, float4 ras, float k0, float4 pos) {
+// falloff), 5 texture 0 at coordinate 0 halved with stage 0's own alpha (`a0`: the material's stage 0 alpha combiner
+// without channels; J3DModelX list 11, the reflection model). Fog as the material's.
+float4 j3d_override(float4 t0, float4 ras, float k0, float a0, float4 pos) {
     const uint mode = uint(material.ovr.x);
     float4 c;
     if (mode == 1u) {
@@ -55,8 +56,10 @@ float4 j3d_override(float4 t0, float4 ras, float k0, float4 pos) {
         c = float4(ras.rgb, material.ovr.y);
     } else if (mode == 3u) {
         c = float4(ras.rgb, saturate(ras.a - k0 * (1.0 - material.ovr.y)));
-    } else {
+    } else if (mode == 4u) {
         c = float4(ras.rgb, saturate(lerp(material.ovr.z, material.ovr.y, ras.a) * 0.5));
+    } else {
+        c = float4(saturate(t0.rgb * 0.5), a0);
     }
     if (round(c.a * 255.0) <= material.ovr.w) {
         discard;
