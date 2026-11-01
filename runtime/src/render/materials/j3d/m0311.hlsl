@@ -38,18 +38,8 @@ float4 material_color(NativeVaryings i) {
     {  // stage 0
         const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = material.kcolor[0].a;
         const float3 rc = saturate((float3(0.0, 0.0, 0.0) + lerp(float3(0.0, 0.0, 0.0), t.rgb, ras.rgb)));
-        const float ra = saturate((0.0 + lerp(ka, 0.0, ras.a)) * 2.0);
-        prev.rgb = rc;
-        prev.a = ra;
-    }
-    {  // stage 1
-        const float4 t = float4(0.0, 0.0, 0.0, 0.0);
-        const float4 ras = i.color.rgba;
-        const float ka = material.kcolor[1].a;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), j3d_in(r0.rgb), ras.rgb)));
-        const float ra = saturate((0.0 + lerp(0.0, ras.a, ka)));
+        const float ra = saturate((0.0 + lerp(ras.a, 0.0, 0.0)));
         prev.rgb = rc;
         prev.a = ra;
     }

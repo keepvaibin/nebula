@@ -62,12 +62,14 @@ namespace {
             return 0;
         }
         // Materials whose native draws still differ after the A/B input dump (E04-NATIVE-SHADERS-PLAN.md exclusion
-        // list, each with its dump): drawn by their GX programs until fixed. The list is empty before step 4.
-        static const u16 kExcluded[] = {
-            586,  // the penguin coach's belly samples another texture region (team/a/ab586)
+        // list, each with its dump): drawn by their GX programs until fixed, by program hash (the set's numbers move
+        // as it grows). The list is empty before step 4.
+        static const u64 kExcluded[] = {
+            0x1489E0EBCCA8038Full,  // the penguin coach (SurfingLv1Galaxy; team/a/ab586): its belly's ambient colour
+            0xE3D6D2F3B6026641ull,  // the same material's second program
         };
         for (u32 i = 0; i < sizeof(kExcluded) / sizeof(kExcluded[0]); i++) {
-            if (sJ3DShaders[lo].material == kExcluded[i]) {
+            if (hash == kExcluded[i]) {
                 return 0;
             }
         }
@@ -305,15 +307,16 @@ namespace {
         sSinceLost = false;
     }
 
-    // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the draws of the material whose native shader is the asked one, on either
-    // path, for the renderer's input dump.
+    // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the draws of the material whose native shader is the asked one (65535:
+    // every J3D material), on either path, for the renderer's input dump.
     void dumpTag(u32 shader) {
         static s32 sWanted = -1;
         if (sWanted < 0) {
             const NebulaHostServices* pHost = nebula_host();
             sWanted = static_cast< s32 >(pHost->option(pHost->user, NEBULA_OPTION_TEST_DUMP_DRAW_INPUTS));
         }
-        if (sWanted != 0 && shader == static_cast< u32 >(sWanted)) {
+        if (sWanted != 0 &&
+            (shader == static_cast< u32 >(sWanted) || (sWanted == 65535 && shader >= NEBULA_SHADER_J3D_FIRST))) {
             NebulaRender::dumpTag(shader);
         }
     }

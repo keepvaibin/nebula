@@ -2,10 +2,7 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    const uint nq = v.pn_row & 31u;
-    const float3 nt = float3(dot(native_normal_row(nq).xyz, v.nrm), dot(native_normal_row(nq + 1u).xyz, v.nrm), dot(native_normal_row(nq + 2u).xyz, v.nrm));
-    const float3 nrm = dot(nt, nt) > 0.0 ? normalize(nt) : nt;
-    o.color.rgb = material.mat_color[0].rgb * saturate((material.amb_color[0].rgb * 255.0 + j3d_light(0u, 3u, 2u, v.eye, nrm).rgb) / 255.0);
+    o.color.rgb = v.color0.rgb;
     o.color.a = material.mat_color[0].a;
     o.color1 = v.color1;
     {  // coordinate 0: type 1, source 4
@@ -29,7 +26,7 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
 }
 float4 material_color(NativeVaryings i) {
     [branch] if (material.ovr.x != 0.0) {
-        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, material.kcolor[0].a, i.pos);
+        return j3d_override(tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw), i.color, 1.0, i.pos);
     }
     float4 prev = material.reg[0];
     float4 r0 = material.reg[1];
@@ -44,6 +41,10 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+    const float a8 = round(prev.a * 255.0);
+    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
+        discard;
+    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }

@@ -10,6 +10,7 @@
 #include "galaxy/host_env.h"
 
 #include "galaxy/render/draw_matrices.h"
+#include "galaxy/render/native_shaders.h"
 #include "galaxy/render/uber_shaders.h"
 
 #include <cstdio>
@@ -51,7 +52,10 @@ void RenderCore::dump_draw_inputs(std::uint32_t native_pe, std::uint32_t native_
         const auto value = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS_MAX");
         return value ? static_cast<std::uint32_t>(std::strtoul(value->c_str(), nullptr, 10)) : 64u;
     }();
-    if (dump_tag_ != dump_wanted_ || dump_count_ >= most || presents < from || (from != 0u && presents > from)) {
+    // 65535: every J3D material's draws (shader ids from kNativeShaderJ3DFirst).
+    const bool wanted = dump_tag_ != 0u && (dump_tag_ == dump_wanted_ ||
+                                            (dump_wanted_ == 65535u && dump_tag_ >= kNativeShaderJ3DFirst));
+    if (!wanted || dump_count_ >= most || presents < from || (from != 0u && presents > from)) {
         return;
     }
     const auto path = host::read_env_string("GALAXY_DUMP_DRAW_INPUTS_FILE");

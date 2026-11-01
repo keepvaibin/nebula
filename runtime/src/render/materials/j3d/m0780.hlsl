@@ -2,7 +2,7 @@
 #include "j3d_material.hlsli"
 
 void material_vertex(NativeVertex v, inout NativeVaryings o) {
-    o.color.rgb = v.color0.rgb;
+    o.color.rgb = material.mat_color[0].rgb;
     o.color.a = v.color0.a;
     o.color1 = v.color1;
 }

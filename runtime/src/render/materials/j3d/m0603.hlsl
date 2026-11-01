@@ -26,8 +26,8 @@ void material_vertex(NativeVertex v, inout NativeVaryings o) {
         if (posted && res.z == 0.0) res.xy = clamp(res.xy * 0.5, -1.0, 1.0);
         o.uv[0] = float4(res, posted ? 1.0 : 0.0);
     }
-    {  // coordinate 1: type 1, source 4
-        const float4 c = float4(v.uv[0], 1.0, 1.0);
+    {  // coordinate 1: type 1, source 1
+        const float4 c = float4(v.nrm, 1.0);
         float3 res;
         if (((vs_header.w >> 1u) & 1u) != 0u) {
             const uint tm = native_tex_matrix(v, 1u);
@@ -63,15 +63,26 @@ float4 material_color(NativeVaryings i) {
         prev.a = ra;
     }
     {  // stage 1
+        const float4 t = tex[0].Sample(samp[0], j3d_texel(i.uv[0], 0u) / material.tex_scale[0].zw).rgba;
+        const float4 ras = i.color.rgba;
+        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), ras.rgb, j3d_in(prev.aaa))));
+        const float ra = saturate((t.a + lerp(0.0, 0.0, 0.0)));
+        prev.rgb = rc;
+        prev.a = ra;
+    }
+    {  // stage 2
         const float4 t = tex[1].Sample(samp[1], j3d_texel(i.uv[1], 1u) / material.tex_scale[1].zw).rgba;
         const float4 ras = i.color.rgba;
-        const float ka = 0.25;
-        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, j3d_in(prev.aaa))) * 2.0);
-        const float ra = saturate((0.0 + lerp(0.0, ka, ras.a)));
+        const float3 rc = saturate((prev.rgb + lerp(float3(0.0, 0.0, 0.0), t.rgb, ras.rgb)));
+        const float ra = (0.0 + lerp(j3d_in(prev.a), 0.0, 0.0));
         prev.rgb = rc;
         prev.a = ra;
     }
     prev = j3d_out(float4(prev.rgb, prev.a));
+    const float a8 = round(prev.a * 255.0);
+    if (!((a8 >= round(material.alpha_ref.x * 255.0)) && (a8 <= round(material.alpha_ref.y * 255.0)))) {
+        discard;
+    }
     prev.rgb = j3d_fog(prev.rgb, i.pos);
     return prev;
 }
