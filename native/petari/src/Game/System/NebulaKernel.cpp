@@ -368,7 +368,9 @@ namespace {
         if (pAlarm->period > 0) {
             const int64_t now = nebula_time();
             fire = pAlarm->start;
-            if (pAlarm->start < now) {
+            // An alarm firing at its start (a clock that lands on it exactly: deterministic test mode) next fires a
+            // period later, never at its start again.
+            if (pAlarm->start <= now) {
                 fire += pAlarm->period * ((now - pAlarm->start) / pAlarm->period + 1);
             }
         }
