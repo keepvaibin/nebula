@@ -1288,7 +1288,7 @@ private:
     std::vector<RenderVertex> immediate_vertices_;
     std::vector<std::uint16_t> immediate_indices_;
     // The vertex inputs the last keys were built with (GX's VCD bits 0-8, or a record's matrix bits and arrays).
-    std::uint64_t vs_key_vertex_source_ = 0;
+    std::uint64_t vertex_source_ = 0;
     // Whether the draw being made reads indexed positions (a model's): a record does unless its positions are its own.
     [[nodiscard]] bool draw_positions_indexed() const noexcept;
     bool stop_render_thread_ = false;
@@ -1318,8 +1318,6 @@ private:
     static constexpr std::uint32_t kMem2Size = 0x10000000u;
 
     // Cached per-draw bindings, rebuilt when the matching dirty bit fires.
-    PixelShaderKey ps_key_{};
-    VertexShaderKey vs_key_{};
     RenderStateKey render_state_key_{};
     std::uint64_t current_vs_hash_{};
     // The game's material programs by key (their display lists), as registered.

@@ -182,27 +182,6 @@ void clear_register_tint(float (&c)[4], float share) noexcept {
     }
 }
 
-// True when the alpha test passes every fragment.
-bool alpha_test_keeps_all(const PixelShaderKey& key) noexcept {
-    const auto always = static_cast<std::uint8_t>(CompareFunc::Always);
-    const auto never = static_cast<std::uint8_t>(CompareFunc::Never);
-    const bool a0 = key.alpha_comp0 == always;
-    const bool a1 = key.alpha_comp1 == always;
-    const bool n0 = key.alpha_comp0 == never;
-    const bool n1 = key.alpha_comp1 == never;
-    switch (static_cast<AlphaTestLogic>(key.alpha_logic)) {
-    case AlphaTestLogic::And:
-        return a0 && a1;
-    case AlphaTestLogic::Or:
-        return a0 || a1;
-    case AlphaTestLogic::Xor:
-        return (a0 && n1) || (n0 && a1);
-    case AlphaTestLogic::Xnor:
-        return (a0 && a1) || (n0 && n1);
-    }
-    return false;
-}
-
 // Test aid for runs without a display: every Nth swap-chain present is read
 // back and written to GALAXY_PRESENT_SNAPSHOT_DIR\present_<n>.ppm, limited to
 // presents GALAXY_PRESENT_SNAPSHOT_FIRST..GALAXY_PRESENT_SNAPSHOT_LAST.
@@ -867,8 +846,6 @@ void RenderCore::reset_fifo_session_state() {
     cached_draw_run_state_call_ = {};
 
     // Derived state below holds descriptors and resources of the previous renderer session.
-    ps_key_ = {};
-    vs_key_ = {};
     render_state_key_ = {};
     current_vs_hash_ = 0u;
     current_ps_hash_ = 0u;
@@ -1621,7 +1598,7 @@ void RenderCore::write_scene_vs_constants(const VertexConstants& cpu, VertexCons
     record.category = identity_category_;
     record.continuity = identity_continuity_;
     record.particle = identity_continuity_particle_;
-    record.palette = (vs_key_.flags & 0x01u) != 0u;
+    record.palette = cpu_vs_constants_.per_vertex != 0u;
     if (record.palette) {
         // PNMTX0 (XF rows 0-2) stands for the per-vertex palette's object.
         for (unsigned i = 0; i < 12u; ++i) record.position[i] = matrices_.matrix_value(i / 4u, i % 4u);
@@ -5538,8 +5515,8 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             ? ((record_inputs_->positions * 0x9E3779B97F4A7C15ull) ^ record_inputs_->colors ^
                (static_cast<std::uint64_t>(matrix_bits) << 1u) ^ 1u)
             : static_cast<std::uint64_t>(matrix_bits) << 1u;
-    const bool vertex_source_changed = vertex_source != vs_key_vertex_source_;
-    vs_key_vertex_source_ = vertex_source;
+    const bool vertex_source_changed = vertex_source != vertex_source_;
+    vertex_source_ = vertex_source;
     if (!dirty_needs_body &&
         !vertex_source_changed &&
         !texture_bindings_dirty_ &&
@@ -6870,7 +6847,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
         call.curve_sort = renderer_.sort_curved(
             vbv.BufferLocation, ibv.BufferLocation + shape.split_flat_indices * sizeof(std::uint16_t),
             (index_count - shape.split_flat_indices) / 3u, call.vs_constants, call.matrix_palette,
-            (vs_key_.flags & 0x01u) != 0u);
+            cpu_vs_constants_.per_vertex != 0u);
         call.curve_sort_list = renderer_.curve_sort_list();
     }
     pending_draw_batch_.active = true;
