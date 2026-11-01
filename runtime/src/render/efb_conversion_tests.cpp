@@ -78,144 +78,6 @@ bool expect_pixel(Pixel actual, Pixel expected, const char* message) {
     return false;
 }
 
-bool test_intensity_tile_decode() {
-    using galaxy::render::RGBA8;
-    using galaxy::render::TexFormat;
-    constexpr std::array<std::uint32_t, 12> dimensions{
-        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
-    constexpr RGBA8 guard{0xD3u, 0x62u, 0xA5u, 0x18u};
-    const auto same = [](RGBA8 a, RGBA8 b) {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-    };
-    const auto check = [&](TexFormat format, std::uint32_t width,
-                           std::uint32_t height, std::uint32_t prefix) {
-        const std::uint32_t tile_width = format == TexFormat::IA8 ? 4u : 8u;
-        const std::uint32_t tile_height = format == TexFormat::I4 ? 8u : 4u;
-        const auto blocks_x = (width + tile_width - 1u) / tile_width;
-        const auto blocks_y = (height + tile_height - 1u) / tile_height;
-        const auto byte_count = blocks_x * blocks_y * 32u;
-        std::vector<std::uint8_t> source(byte_count + prefix, 0xEDu);
-        for (std::uint32_t i = 0; i < byte_count; ++i) {
-            if (format == TexFormat::IA8) {
-                // The 256x256 case covers all 65,536 (A,I) pairs.
-                const auto word = i / 2u;
-                source[prefix + i] = static_cast<std::uint8_t>(
-                    (i & 1u) == 0u ? word >> 8u : word);
-            } else {
-                // Odd stride traverses every possible byte value.
-                source[prefix + i] = static_cast<std::uint8_t>(i * 73u + 91u);
-            }
-        }
-        std::vector<RGBA8> output(width * height + 2u, guard);
-        galaxy::render::detail::decode_intensity_tiles(
-            format, source.data() + prefix, width, height, output.data() + 1u);
-        if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                    "intensity edge tiles stay inside output")) {
-            return false;
-        }
-        for (std::uint32_t y = 0; y < height; ++y) {
-            for (std::uint32_t x = 0; x < width; ++x) {
-                // Independent address oracle: global pixel -> tile -> texel, tile padding included.
-                const auto tile = (y / tile_height) * blocks_x + x / tile_width;
-                const auto pixel = (y % tile_height) * tile_width + x % tile_width;
-                const auto offset = prefix + tile * 32u;
-                std::uint8_t intensity = 0u;
-                std::uint8_t alpha = 0u;
-                if (format == TexFormat::I4) {
-                    const auto byte = source[offset + pixel / 2u];
-                    const auto nibble = static_cast<std::uint8_t>(
-                        ((pixel & 1u) == 0u ? byte >> 4u : byte) & 15u);
-                    intensity = static_cast<std::uint8_t>((nibble << 4u) | nibble);
-                    alpha = intensity;
-                } else if (format == TexFormat::I8) {
-                    intensity = alpha = source[offset + pixel];
-                } else if (format == TexFormat::IA4) {
-                    const auto byte = source[offset + pixel];
-                    const auto i = static_cast<std::uint8_t>(byte & 15u);
-                    const auto a = static_cast<std::uint8_t>(byte >> 4u);
-                    intensity = static_cast<std::uint8_t>((i << 4u) | i);
-                    alpha = static_cast<std::uint8_t>((a << 4u) | a);
-                } else {
-                    alpha = source[offset + pixel * 2u];
-                    intensity = source[offset + pixel * 2u + 1u];
-                }
-                if (!expect(same(output[1u + y * width + x],
-                                 RGBA8{intensity, intensity, intensity, alpha}),
-                            "intensity tiled bytes, channel order and alpha match oracle")) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    };
-    for (const auto format : {TexFormat::I4, TexFormat::I8,
-                              TexFormat::IA4, TexFormat::IA8}) {
-        for (const auto width : dimensions) {
-            for (const auto height : dimensions) {
-                for (const auto prefix : {0u, 1u, 3u}) {
-                    if (!check(format, width, height, prefix)) {
-                        return false;
-                    }
-                }
-            }
-        }
-        galaxy::render::detail::decode_intensity_tiles(format, nullptr, 0u, 0u, nullptr);
-        galaxy::render::detail::decode_intensity_tiles(format, nullptr, 0u, 8u, nullptr);
-        galaxy::render::detail::decode_intensity_tiles(format, nullptr, 8u, 0u, nullptr);
-    }
-    return check(TexFormat::IA8, 256u, 256u, 1u);
-}
-
-bool test_rgba8_tile_decode() {
-    using galaxy::render::RGBA8;
-    constexpr std::array<std::uint32_t, 12> dimensions{
-        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
-    constexpr RGBA8 guard{0xD3u, 0x62u, 0xA5u, 0x18u};
-    const auto same = [](RGBA8 a, RGBA8 b) {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-    };
-    for (const auto width : dimensions) {
-        for (const auto height : dimensions) {
-            const auto blocks_x = (width + 3u) / 4u;
-            const auto blocks_y = (height + 3u) / 4u;
-            const auto bytes = blocks_x * blocks_y * 64u;
-            for (const auto prefix : {0u, 1u, 3u}) {
-                std::vector<std::uint8_t> source(bytes + prefix, 0xEDu);
-                for (std::uint32_t i = 0; i < bytes; ++i) {
-                    source[prefix + i] = static_cast<std::uint8_t>(
-                        (i * 37u + (i / 64u) * 19u + (i / 8u) * 7u) ^ 0xB3u);
-                }
-                std::vector<RGBA8> output(width * height + 2u, guard);
-                galaxy::render::detail::decode_rgba8_tiles(
-                    source.data() + prefix, width, height, output.data() + 1u);
-                if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                            "RGBA8 edge tiles stay inside output")) {
-                    return false;
-                }
-                for (std::uint32_t y = 0; y < height; ++y) {
-                    for (std::uint32_t x = 0; x < width; ++x) {
-                        // Independent address oracle: global pixel -> tile ->
-                        // local pixel, including the full padded source tiles.
-                        const auto tile = (y / 4u) * blocks_x + x / 4u;
-                        const auto pixel = (y % 4u) * 4u + x % 4u;
-                        const auto offset = prefix + tile * 64u + pixel * 2u;
-                        const RGBA8 expected{source[offset + 1u], source[offset + 32u],
-                                             source[offset + 33u], source[offset]};
-                        if (!expect(same(output[1u + y * width + x], expected),
-                                    "RGBA8 tiled channels and row stride match oracle")) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    galaxy::render::detail::decode_rgba8_tiles(nullptr, 0u, 0u, nullptr);
-    galaxy::render::detail::decode_rgba8_tiles(nullptr, 0u, 8u, nullptr);
-    galaxy::render::detail::decode_rgba8_tiles(nullptr, 8u, 0u, nullptr);
-    return true;
-}
-
 bool test_generated_mip_uniform_alpha() {
     using galaxy::render::RGBA8;
     std::vector<RGBA8> actual;
@@ -382,157 +244,6 @@ bool test_remove_texel_checker() {
         same &= noise[i].r == noise_before[i].r && noise[i].g == noise_before[i].g && noise[i].b == noise_before[i].b;
     }
     return expect(untouched && same, "only texel-scale detail in one checker phase is removed");
-}
-
-bool test_cmpr_tile_decode() {
-    using galaxy::render::RGBA8;
-    constexpr std::array<std::uint32_t, 12> dimensions{
-        1u, 2u, 3u, 4u, 5u, 7u, 8u, 9u, 13u, 16u, 31u, 32u};
-    constexpr std::array<std::array<std::uint16_t, 2>, 6> endpoints{{
-        {0xF800u, 0x07E0u}, {0x001Fu, 0xFFFFu}, {0x0000u, 0xFFFFu},
-        {0xFFFFu, 0x0000u}, {0x1234u, 0x1234u}, {0x9A56u, 0x1234u}}};
-    constexpr std::array<std::uint8_t, 4> selectors{0x1Bu, 0xE4u, 0x55u, 0xAAu};
-    constexpr RGBA8 guard{0x92u, 0x3Au, 0xCFu, 0x57u};
-    const auto same = [](RGBA8 a, RGBA8 b) {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-    };
-    const auto expand = [](std::uint16_t word) -> RGBA8 {
-        const auto r = (word >> 11u) & 31u;
-        const auto g = (word >> 5u) & 63u;
-        const auto b = word & 31u;
-        return {static_cast<std::uint8_t>(r * 8u + r / 4u),
-                static_cast<std::uint8_t>(g * 4u + g / 16u),
-                static_cast<std::uint8_t>(b * 8u + b / 4u), 255u};
-    };
-    for (const auto width : dimensions) {
-        for (const auto height : dimensions) {
-            const auto macro_columns = (width + 7u) / 8u;
-            const auto subblocks = macro_columns * ((height + 7u) / 8u) * 4u;
-            for (std::size_t alignment = 0u; alignment < 4u; ++alignment) {
-                std::vector<std::uint8_t> source(alignment + subblocks * 8u);
-                auto* tiled = source.data() + alignment;
-                for (std::uint32_t sub = 0u; sub < subblocks; ++sub) {
-                    const auto pair = endpoints[sub % endpoints.size()];
-                    auto* block = tiled + sub * 8u;
-                    block[0] = static_cast<std::uint8_t>(pair[0] >> 8u);
-                    block[1] = static_cast<std::uint8_t>(pair[0]);
-                    block[2] = static_cast<std::uint8_t>(pair[1] >> 8u);
-                    block[3] = static_cast<std::uint8_t>(pair[1]);
-                    for (unsigned row = 0u; row < 4u; ++row) {
-                        block[4u + row] = selectors[(sub + row) & 3u];
-                    }
-                }
-                std::vector<RGBA8> output(width * height + 2u, guard);
-                galaxy::render::detail::decode_cmpr_tiles(tiled, width, height, output.data() + 1u);
-                if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                            "CMPR clipped tiles stay inside output")) return false;
-                // Pixel-directed oracle: derive a pixel's source subblock and
-                // selector without sharing the decoder's block/row traversal.
-                for (std::uint32_t y = 0u; y < height; ++y) {
-                    for (std::uint32_t x = 0u; x < width; ++x) {
-                        const auto sub = (y / 8u * macro_columns + x / 8u) * 4u +
-                            (y % 8u / 4u) * 2u + (x % 8u / 4u);
-                        const auto pair = endpoints[sub % endpoints.size()];
-                        const auto a = expand(pair[0]);
-                        const auto b = expand(pair[1]);
-                        const auto selector = (tiled[sub * 8u + 4u + (y & 3u)] >>
-                            (6u - (x & 3u) * 2u)) & 3u;
-                        RGBA8 expected = selector == 0u ? a : b;
-                        if (selector >= 2u) {
-                            const auto channel = [&](std::uint8_t first, std::uint8_t second) {
-                                if (pair[0] <= pair[1]) {
-                                    return static_cast<std::uint8_t>((first + second) / 2u);
-                                }
-                                return static_cast<std::uint8_t>(selector == 2u
-                                    ? (5u * first + 3u * second) / 8u
-                                    : (3u * first + 5u * second) / 8u);
-                            };
-                            expected = {channel(a.r, b.r), channel(a.g, b.g), channel(a.b, b.b),
-                                static_cast<std::uint8_t>(pair[0] <= pair[1] && selector == 3u ? 0u : 255u)};
-                        }
-                        if (!expect(same(output[1u + y * width + x], expected),
-                                    "CMPR tile order, selectors, GX interpolation and transparent RGB match oracle")) {
-                            return false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-    galaxy::render::detail::decode_cmpr_tiles(nullptr, 0u, 0u, nullptr);
-    galaxy::render::detail::decode_cmpr_tiles(nullptr, 0u, 8u, nullptr);
-    galaxy::render::detail::decode_cmpr_tiles(nullptr, 8u, 0u, nullptr);
-    return true;
-}
-
-bool test_direct_color_tile_decode() {
-    using galaxy::render::RGBA8;
-    using galaxy::render::TexFormat;
-    constexpr std::array<std::uint32_t, 12> dimensions{
-        1u, 2u, 3u, 4u, 5u, 6u, 7u, 8u, 9u, 15u, 16u, 33u};
-    constexpr RGBA8 guard{0x91u, 0x38u, 0xE2u, 0x57u};
-    const auto same = [](RGBA8 a, RGBA8 b) {
-        return a.r == b.r && a.g == b.g && a.b == b.b && a.a == b.a;
-    };
-    // Independent arithmetic expansion of the GX channel fields, both RGB5A3 encodings included.
-    const auto color = [](std::uint16_t word, TexFormat format) -> RGBA8 {
-        const auto e5 = [](unsigned n) { return static_cast<std::uint8_t>(8u * n + n / 4u); };
-        if (format == TexFormat::RGB565) {
-            const unsigned green = (word / 32u) % 64u;
-            return {e5(word / 2048u), static_cast<std::uint8_t>(4u * green + green / 16u),
-                e5(word % 32u), 255u};
-        }
-        if (word >= 0x8000u) {
-            return {e5((word / 1024u) % 32u), e5((word / 32u) % 32u), e5(word % 32u), 255u};
-        }
-        const unsigned alpha = word / 4096u;
-        return {static_cast<std::uint8_t>(17u * ((word / 256u) % 16u)),
-            static_cast<std::uint8_t>(17u * ((word / 16u) % 16u)),
-            static_cast<std::uint8_t>(17u * (word % 16u)),
-            static_cast<std::uint8_t>(32u * alpha + 4u * alpha + alpha / 2u)};
-    };
-    for (const auto format : {TexFormat::RGB565, TexFormat::RGB5A3}) {
-        const auto check = [&](std::uint32_t width, std::uint32_t height,
-                               unsigned offset, bool all_words) {
-            const unsigned tiles_x = (width + 3u) / 4u;
-            const unsigned tiles_y = (height + 3u) / 4u;
-            const auto word_at = [all_words](unsigned index) {
-                return static_cast<std::uint16_t>(all_words ? index : index * 421u + 0x3d37u);
-            };
-            std::vector<std::uint8_t> source(offset + tiles_x * tiles_y * 32u);
-            for (unsigned index = 0; index < tiles_x * tiles_y * 16u; ++index) {
-                const auto word = word_at(index);
-                source[offset + index * 2u] = static_cast<std::uint8_t>(word / 256u);
-                source[offset + index * 2u + 1u] = static_cast<std::uint8_t>(word % 256u);
-            }
-            std::vector<RGBA8> output(width * height + 2u, guard);
-            galaxy::render::detail::decode_color_tiles(format, source.data() + offset,
-                width, height, output.data() + 1u);
-            if (!expect(same(output.front(), guard) && same(output.back(), guard),
-                        "RGB565/RGB5A3 tiled decode stays within output")) return false;
-            for (unsigned y = 0; y < height; ++y) {
-                for (unsigned x = 0; x < width; ++x) {
-                    const unsigned index = ((y / 4u) * tiles_x + x / 4u) * 16u +
-                        (y % 4u) * 4u + x % 4u;
-                    if (!expect(same(output[1u + y * width + x], color(word_at(index), format)),
-                                "RGB565/RGB5A3 tile coordinates and channel expansion match oracle")) return false;
-                }
-            }
-            return true;
-        };
-        for (auto width : dimensions) {
-            for (auto height : dimensions) {
-                for (auto offset : {0u, 1u, 3u}) {
-                    if (!check(width, height, offset, false)) return false;
-                }
-            }
-        }
-        // Exactly 65536 pixels in full tiles: every possible color word once.
-        if (!check(256u, 256u, 1u, true)) return false;
-        galaxy::render::detail::decode_color_tiles(format, nullptr, 0u, 9u, nullptr);
-        galaxy::render::detail::decode_color_tiles(format, nullptr, 9u, 0u, nullptr);
-    }
-    return true;
 }
 
 galaxy::render::EfbCopyParams make_filter_params(bool filtered) {
@@ -1422,34 +1133,32 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    // Async first-use decode uploads the same bytes as the synchronous decode, in the same frame, for every format
-    // family (full SIMD tiles and clipped edges), even when the TLUT bank is reloaded between lookup and join.
+    // Async first-use expansion uploads the same texels as the synchronous one, in the same frame, for every texture
+    // record layout (RGBA8, L8, LA8, BC1 blocks; whole and clipped extents).
     bool test_async_texture_decode_matches_sync() {
         using namespace galaxy::render;
         constexpr std::uint32_t address = 0x10000000u;
-        std::vector<std::byte> bytes(64u * 1024u);
-        for (std::size_t i = 0; i < bytes.size(); ++i) {
-            bytes[i] = static_cast<std::byte>((i * 2654435761u) >> 13u);
-        }
         struct Case {
-            TexFormat format;
+            std::uint8_t layout;
             std::uint16_t width;
             std::uint16_t height;
-            TlutFormat tlut;
         };
         const std::vector<Case> cases{
-            {TexFormat::RGBA8, 16u, 8u, TlutFormat::IA8},
-            {TexFormat::RGBA8, 13u, 7u, TlutFormat::IA8},
-            {TexFormat::CMPR, 16u, 16u, TlutFormat::IA8},
-            {TexFormat::CMPR, 12u, 9u, TlutFormat::IA8},
-            {TexFormat::RGB565, 8u, 8u, TlutFormat::IA8},
-            {TexFormat::RGB5A3, 12u, 8u, TlutFormat::IA8},
-            {TexFormat::IA8, 8u, 4u, TlutFormat::IA8},
-            {TexFormat::IA8, 5u, 6u, TlutFormat::IA8},
-            {TexFormat::I8, 16u, 8u, TlutFormat::IA8},
-            {TexFormat::I8, 5u, 3u, TlutFormat::IA8},
-            {TexFormat::I4, 8u, 8u, TlutFormat::IA8},
+            {NEBULA_TEXTURE_RGBA8, 16u, 8u}, {NEBULA_TEXTURE_RGBA8, 13u, 7u}, {NEBULA_TEXTURE_BLOCK4, 16u, 16u},
+            {NEBULA_TEXTURE_BLOCK4, 12u, 9u}, {NEBULA_TEXTURE_LA8, 8u, 4u}, {NEBULA_TEXTURE_LA8, 5u, 6u},
+            {NEBULA_TEXTURE_L8, 16u, 8u}, {NEBULA_TEXTURE_L8, 5u, 3u},
         };
+        // Each case a record of pseudo-random texels, 0x400 apart.
+        std::vector<std::vector<std::byte>> records;
+        for (const Case& test : cases) {
+            std::vector<std::byte> record(NEBULA_TEXTURE_HEADER +
+                                          nebula_texture_level_bytes(test.width, test.height, 1u, test.layout));
+            nebula_texture_init(record.data(), test.width, test.height, 1u, test.layout, 0u);
+            for (std::size_t i = NEBULA_TEXTURE_HEADER; i < record.size(); ++i) {
+                record[i] = static_cast<std::byte>((i * 2654435761u + records.size() * 97u) >> 13u);
+            }
+            records.push_back(std::move(record));
+        }
         const auto run = [&](bool async) {
             auto cache_owner = std::make_unique<TextureCache>();
             TextureCache& cache = *cache_owner;
@@ -1464,7 +1173,9 @@ V main(uint id : SV_VertexID) {
             check_hr(device_->CreateCommandList(0u, D3D12_COMMAND_LIST_TYPE_DIRECT,
                 allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create async decode list");
             cache.backend().set_upload_list(list.Get());
-            hand_over(cache, address, bytes.data(), bytes.size());
+            for (std::size_t i = 0; i < records.size(); ++i) {
+                hand_over(cache, address + static_cast<std::uint32_t>(i) * 0x400u, records[i].data(), records[i].size());
+            }
             cache.set_async_decode_allowed(async);
             std::vector<TextureHandle> handles;
             std::uint32_t offset = 0u;
@@ -1473,10 +1184,10 @@ V main(uint id : SV_VertexID) {
                 image.address = address + offset;
                 image.width = test.width;
                 image.height = test.height;
-                image.format = test.format;
+                image.format = TexFormat::RGBA8;
                 TexMode mode{};
                 mode.min_filter = TexMinFilter::Near;
-                handles.push_back(cache.get(image, mode, address + 0x8000u, test.tlut));
+                handles.push_back(cache.get(image, mode, 0u, TlutFormat::IA8));
                 offset += 0x400u;
             }
             cache.set_async_decode_allowed(false);
@@ -1603,12 +1314,14 @@ V main(uint id : SV_VertexID) {
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create retirement command list");
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
-        std::array<std::byte, 512> bytes{};
+        // An 8x8 RGBA8 texture record (nebula_cooked_texture.h).
+        std::vector<std::byte> bytes(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(8u, 8u, 1u, NEBULA_TEXTURE_RGBA8));
+        nebula_texture_init(bytes.data(), 8u, 8u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
         hand_over(cache, address, bytes.data(), bytes.size());
         TexImage image{};
         image.address = address;
         image.width = image.height = 8u;
-        image.format = TexFormat::RGB565;
+        image.format = TexFormat::RGBA8;
         TexMode mode{};
         mode.min_filter = TexMinFilter::Near;
         const auto initial_revision = cache.retirement_revision();
@@ -1666,50 +1379,48 @@ V main(uint id : SV_VertexID) {
             allocator.Get(), nullptr, IID_PPV_ARGS(&list)), "Create texture cache command list");
         cache.backend().set_upload_list(list.Get());
         constexpr std::uint32_t address = 0x10000000u;
-        std::array<std::byte, 2048> bytes{};
-        hand_over(cache, address, bytes.data(), 1536u);
-        hand_over(cache, address + 1536u, bytes.data() + 1536u, 512u);
+        // Texture records (nebula_cooked_texture.h), the only images the cache draws: an 8x8 RGBA8 one with three
+        // authored levels, an 8x8 L8 one with one, a 64x4 L8 one for generated levels.
+        const auto record_of = [](std::uint16_t w, std::uint16_t h, std::uint8_t levels, std::uint8_t layout) {
+            std::vector<std::byte> r(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(w, h, levels, layout));
+            nebula_texture_init(r.data(), w, h, levels, layout, 0u);
+            return r;
+        };
+        const std::vector<std::byte> authored = record_of(8u, 8u, 3u, NEBULA_TEXTURE_RGBA8);
+        hand_over(cache, address, authored.data(), authored.size());
         TexImage image{};
         image.address = address;
         image.width = image.height = 8u;
-        image.format = TexFormat::RGB565;
+        image.format = TexFormat::RGBA8;
         TexMode mode{};
         mode.min_filter = TexMinFilter::NearMipNear;
         mode.max_lod_x16 = 32u;
         const auto decoded = cache.get(image, mode, 0u, TlutFormat{});
-        // Independent tiled footprint: 8x8=4*32, 4x4=32, 2x2=32.
-        passed &= expect(decoded.source_bytes == 192u && decoded.mip_levels == 3u,
-            "authored mip handle retains all three block-rounded source levels");
-
-        for (auto format : {TexFormat::I4, TexFormat::I8, TexFormat::IA4, TexFormat::IA8,
-                            TexFormat::RGB565, TexFormat::RGB5A3, TexFormat::RGBA8, TexFormat::CMPR}) {
-            auto direct_image = image; direct_image.address = address + 768u;
-            direct_image.format = format;
-            const auto original = cache.get(direct_image, mode, 0u, TlutFormat{});
-            for (auto palette_format : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3})
-                for (std::uint32_t palette : {0u, address + 1536u, address + 0x8000u}) {
-                const auto reused = cache.get(direct_image, mode, palette, palette_format);
-                passed &= expect(reused.resource == original.resource && reused.srv_index == original.srv_index &&
-                    reused.source_bytes == original.source_bytes && reused.mip_levels == original.mip_levels,
-                    "direct texture formats reuse the same resource and descriptor across irrelevant palette changes");
-            }
+        passed &= expect(decoded.source_bytes == authored.size() && decoded.mip_levels == 3u,
+            "a record's authored levels all upload, the handle sized as the record");
+        for (auto palette_format : {TlutFormat::IA8, TlutFormat::RGB565, TlutFormat::RGB5A3})
+            for (std::uint32_t palette : {0u, address + 1536u, address + 0x8000u}) {
+            const auto reused = cache.get(image, mode, palette, palette_format);
+            passed &= expect(reused.resource == decoded.resource && reused.srv_index == decoded.srv_index &&
+                reused.source_bytes == decoded.source_bytes && reused.mip_levels == decoded.mip_levels,
+                "a record reuses its resource and descriptor across irrelevant palette changes");
         }
-        // A texture record (nebula_cooked_texture.h) uploads its own levels: an 8x8 L8 record with one level serves a
-        // sampler that asks for three with its one, its size the record's.
-        alignas(8) std::array<std::uint8_t, NEBULA_TEXTURE_HEADER + 64u> record_bytes{};
-        nebula_texture_init(record_bytes.data(), 8u, 8u, 1u, NEBULA_TEXTURE_L8, 0u);
+        // An 8x8 L8 record with one level serves a sampler that asks for three with its one, its size the record's.
+        const std::vector<std::byte> single = record_of(8u, 8u, 1u, NEBULA_TEXTURE_L8);
         constexpr auto record_address = address + 0x9000u;
-        hand_over(cache, record_address, reinterpret_cast<const std::byte*>(record_bytes.data()), record_bytes.size());
+        hand_over(cache, record_address, single.data(), single.size());
         auto record_image = image; record_image.address = record_address;
         record_image.format = TexFormat::I8;
         const auto record = cache.get(record_image, mode, 0u, TlutFormat{});
-        passed &= expect(record.mip_levels == 1u && record.source_bytes == record_bytes.size() && record.width == 8u,
+        passed &= expect(record.mip_levels == 1u && record.source_bytes == single.size() && record.width == 8u,
             "a texture record uploads the levels it holds and is sized as the record");
 
+        const std::vector<std::byte> wide = record_of(64u, 4u, 1u, NEBULA_TEXTURE_L8);
+        hand_over(cache, address + 0x2000u, wide.data(), wide.size());
         const auto original_config = get_render_config();
         auto mip_config = original_config; mip_config.enhanced_mipmaps = false;
         set_render_config(mip_config);
-        auto enhanced_image = image; enhanced_image.address = address + 1280u;
+        auto enhanced_image = image; enhanced_image.address = address + 0x2000u;
         enhanced_image.width = 64u; enhanced_image.height = 4u;
         TexMode enhanced_mode{};
         enhanced_mode.wrap_s = TexWrap::Repeat;
@@ -1725,7 +1436,7 @@ V main(uint id : SV_VertexID) {
         set_render_config(original_config);
         passed &= expect(no_enhancement.mip_levels == 1u && !no_enhancement.generated_mips &&
             enhancement.mip_levels == 7u && enhancement.generated_mips &&
-            enhancement.resource != no_enhancement.resource && enhancement.source_bytes == 512u,
+            enhancement.resource != no_enhancement.resource && enhancement.source_bytes == wide.size(),
             "eligible native mip generation still reads live options and keeps its resource separate from the base texture");
         passed &= expect(decal.mip_levels == 1u && !decal.generated_mips,
             "a clamped texture keeps its single authored level");
@@ -1741,13 +1452,12 @@ V main(uint id : SV_VertexID) {
             throw std::runtime_error("texture cache upload fence timeout");
         }
         passed &= expect(cache.invalidate_range(address + 17u, 0u) == 0u,
-            "zero-byte write inside decoded texture does not evict it");
-        // The zero range is inside the separate direct textures at +768;
-        // only the real write in the base texture's lower mip may retire one.
+            "zero-byte write inside a texture does not evict it");
+        // A write inside the authored record's lower level retires it; the zero range inside the wide one nothing.
         const std::array<TextureCache::MemoryRange, 2> mip_dirty{{
-            {address + 160u, 1u}, {address + 785u, 0u}}};
+            {address + 160u, 1u}, {address + 0x2005u, 0u}}};
         passed &= expect(cache.invalidate_ranges(mip_dirty) == 1u,
-            "write confined to a lower mip retires the decoded resource");
+            "write confined to a lower level retires the record's resource");
 
         cache.backend().set_upload_list(nullptr);
         cache.shutdown();
@@ -2480,13 +2190,9 @@ int main(int argc, char** argv) {
     }
     // Any other argument runs the default suite.
     bool passed = test_cpu_oracle();
-    passed &= test_direct_color_tile_decode();
-    passed &= test_intensity_tile_decode();
-    passed &= test_rgba8_tile_decode();
     passed &= test_generated_mip_uniform_alpha();
     passed &= test_flatten_texel_checker();
     passed &= test_remove_texel_checker();
-    passed &= test_cmpr_tile_decode();
     passed &= test_clear_precision();
     passed &= test_warp_against_oracle();
     try {

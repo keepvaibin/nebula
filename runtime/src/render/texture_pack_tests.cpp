@@ -13,6 +13,7 @@
 #include "galaxy/render/rt_materials.h"
 #include "galaxy/render/texture_cache.h"
 #include "galaxy/render/texture_pack.h"
+#include "nebula_cooked_texture.h"
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -512,8 +513,10 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     std::filesystem::create_directories(root / "cache" / TexturePacks::kGameId);
     // A 32x32 RGBA8 game texture: 16 tiles of 64 bytes.
     constexpr std::uint32_t kAddress = 0x80100000u;
-    std::vector<std::byte> guest(4096u);
-    for (std::size_t i = 0; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
+    // A cooked texture record (nebula_cooked_texture.h): 32x32 RGBA8 texels, named for packs by the disc's level 0.
+    std::vector<std::byte> guest(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(32u, 32u, 1u, NEBULA_TEXTURE_RGBA8));
+    nebula_texture_init(guest.data(), 32u, 32u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
+    for (std::size_t i = NEBULA_TEXTURE_HEADER; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
     TexImage image{};
     image.address = kAddress;
     image.width = 32u;
@@ -528,7 +531,13 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     name.width = 32u;
     name.height = 32u;
     name.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
-    name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(guest.data()), guest.size());
+    name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(guest.data()) + NEBULA_TEXTURE_HEADER,
+                        guest.size() - NEBULA_TEXTURE_HEADER);
+    {
+        auto* const record = reinterpret_cast<NebulaTexture*>(guest.data());
+        record->disc_format = static_cast<std::uint8_t>(TexFormat::RGBA8);
+        record->pack_hash = name.hash;
+    }
     std::vector<std::uint8_t> big(96u * 96u * 4u, 0x80u);
     expect(write_png(root / "cache" / TexturePacks::kGameId / (texture_pack_name(name) + ".png"), 96u, 96u, big.data()),
            "cache test PNG written");

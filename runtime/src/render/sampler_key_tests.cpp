@@ -284,28 +284,6 @@ int main() {
         passed &= expect(rejected, "256th distinct table in one frame is explicit exhaustion");
     }
 
-    passed &= expect(galaxy::render::texture_source_bytes(
-        galaxy::render::TexFormat::RGB565, 8u, 8u, 3u) == 192u,
-        "full authored mip footprint includes the two minimum blocks");
-    passed &= expect(galaxy::render::texture_source_bytes(
-        galaxy::render::TexFormat::I4, 9u, 9u) == 128u,
-        "odd I4 extent rounds both dimensions to complete 8x8 blocks");
-    passed &= expect(galaxy::render::texture_source_bytes(
-        galaxy::render::TexFormat::RGBA8, 8u, 8u) == 256u,
-        "generated mip guest source remains base-only");
-    for (const auto extent : {0u, 1025u, UINT32_MAX}) {
-        bool rejected = false;
-        try { (void)galaxy::render::texture_source_bytes(
-            galaxy::render::TexFormat::RGBA8, extent, 8u); }
-        catch (const std::runtime_error&) { rejected = true; }
-        passed &= expect(rejected, "invalid public dimensions rejected before size arithmetic");
-    }
-    bool bad_levels = false;
-    try { (void)galaxy::render::texture_source_bytes(
-        galaxy::render::TexFormat::RGBA8, 8u, 8u, 33u); }
-    catch (const std::runtime_error&) { bad_levels = true; }
-    passed &= expect(bad_levels, "invalid mip count rejected before shifts");
-
     if (!passed) {
         return 1;
     }

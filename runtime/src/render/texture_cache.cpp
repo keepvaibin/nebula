@@ -114,16 +114,6 @@ std::uint64_t elapsed_us(
             end - start).count());
 }
 
-// An image the game never handed over decodes from zeros (transparent): the renderer reads no game memory. The
-// largest GX image (1024x1024 RGBA8 with every level) fits.
-static const std::byte* missing_image_bytes(std::uint32_t size) {
-    static const std::vector<std::byte> zeros(texture_source_bytes(TexFormat::RGBA8, 1024u, 1024u, 11u));
-    if (size > zeros.size()) {
-        throw std::runtime_error("[TextureCache] image larger than any GX image");
-    }
-    return zeros.data();
-}
-
 // SIMD tile kernels (galaxy/simd128.h: SSE on x86, NEON on AArch64). Each decodes one complete tile with the
 // scalar loops' arithmetic; clipped edge tiles use the scalar loops. RGBA8 is stored as bytes r,g,b,a
 // (little-endian u32 r | g<<8 | b<<16 | a<<24).
@@ -403,501 +393,6 @@ void detail::generate_rgba8_mip_level(
     }
 }
 
-namespace {
-
-// One direct-colour texel word (big-endian RGB565 or RGB5A3), its channels widened by bit replication.
-[[nodiscard]] static RGBA8 decode_colour_word(
-    const std::uint8_t* entry,
-    TlutFormat fmt) {
-    const std::uint16_t v = read_be16(entry);
-    switch (fmt) {
-    case TlutFormat::RGB565: {
-        const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
-        const std::uint8_t g6 = static_cast<std::uint8_t>((v >> 5)  & 0x3Fu);
-        const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-        return RGBA8{
-            static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-            static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4)),
-            static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-            0xFFu
-        };
-    }
-    case TlutFormat::RGB5A3: {
-        if ((v & 0x8000u) != 0u) {
-            // RGB555
-            const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 10) & 0x1Fu);
-            const std::uint8_t g5 = static_cast<std::uint8_t>((v >>  5) & 0x1Fu);
-            const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-            return RGBA8{
-                static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-                static_cast<std::uint8_t>((g5 << 3) | (g5 >> 2)),
-                static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-                0xFFu
-            };
-        } else {
-            // RGBA3444
-            const std::uint8_t a3 = static_cast<std::uint8_t>((v >> 12) & 0x7u);
-            const std::uint8_t r4 = static_cast<std::uint8_t>((v >>  8) & 0xFu);
-            const std::uint8_t g4 = static_cast<std::uint8_t>((v >>  4) & 0xFu);
-            const std::uint8_t b4 = static_cast<std::uint8_t>( v        & 0xFu);
-            return RGBA8{
-                static_cast<std::uint8_t>((r4 << 4) | r4),
-                static_cast<std::uint8_t>((g4 << 4) | g4),
-                static_cast<std::uint8_t>((b4 << 4) | b4),
-                static_cast<std::uint8_t>((a3 << 5) | (a3 << 2) | (a3 >> 1))
-            };
-        }
-    }
-    default:
-        throw std::runtime_error("[TextureCache] not a direct-colour format");
-    }
-}
-
-// Per-format decoders: each writes width * height RGBA8 pixels (row-major, unpadded) to `out` from the
-// texture's base `src`, in raster order inside each tile.
-template <TexFormat Format>
-void decode_intensity_tiles_impl(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    static_assert(Format == TexFormat::I4 || Format == TexFormat::I8 ||
-                  Format == TexFormat::IA4 || Format == TexFormat::IA8);
-    // All four formats use a 32-byte tile; clipping is per tile, not per pixel.
-    constexpr std::uint32_t block_width = Format == TexFormat::IA8 ? 4u : 8u;
-    constexpr std::uint32_t block_height = Format == TexFormat::I4 ? 8u : 4u;
-    constexpr std::uint32_t row_bytes = 32u / block_height;
-    const std::uint32_t blocks_x = (width + block_width - 1u) / block_width;
-    const std::uint32_t blocks_y = (height + block_height - 1u) / block_height;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * block_height;
-        const std::uint32_t rows = std::min(block_height, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * block_width;
-            const std::uint32_t columns = std::min(block_width, width - base_x);
-            if constexpr (Format == TexFormat::I8 || Format == TexFormat::IA8) {
-                if (rows == block_height && columns == block_width) {
-                    RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                    const std::size_t stride = width;
-                    const v128 rows01 = load_tile16(src);
-                    const v128 rows23 = load_tile16(src + 16u);
-                    if constexpr (Format == TexFormat::I8) {
-                        // 8 bytes per row; replicate each intensity 4 times.
-                        const v128 q0 = simd::bytes(0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3);
-                        const v128 q1 = simd::bytes(4, 4, 4, 4, 5, 5, 5, 5, 6, 6, 6, 6, 7, 7, 7, 7);
-                        const v128 q2 = simd::bytes(8, 8, 8, 8, 9, 9, 9, 9, 10, 10, 10, 10, 11, 11, 11, 11);
-                        const v128 q3 = simd::bytes(12, 12, 12, 12, 13, 13, 13, 13, 14, 14, 14, 14, 15, 15, 15, 15);
-                        store_pixels4(dst, simd::shuffle_bytes(rows01, q0));
-                        store_pixels4(dst + 4u, simd::shuffle_bytes(rows01, q1));
-                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, q2));
-                        store_pixels4(dst + stride + 4u, simd::shuffle_bytes(rows01, q3));
-                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, q0));
-                        store_pixels4(dst + 2u * stride + 4u, simd::shuffle_bytes(rows23, q1));
-                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, q2));
-                        store_pixels4(dst + 3u * stride + 4u, simd::shuffle_bytes(rows23, q3));
-                    } else {
-                        // (A, I) byte pairs -> I, I, I, A.
-                        const v128 lo = simd::bytes(1, 1, 1, 0, 3, 3, 3, 2, 5, 5, 5, 4, 7, 7, 7, 6);
-                        const v128 hi = simd::bytes(9, 9, 9, 8, 11, 11, 11, 10, 13, 13, 13, 12, 15, 15, 15, 14);
-                        store_pixels4(dst, simd::shuffle_bytes(rows01, lo));
-                        store_pixels4(dst + stride, simd::shuffle_bytes(rows01, hi));
-                        store_pixels4(dst + 2u * stride, simd::shuffle_bytes(rows23, lo));
-                        store_pixels4(dst + 3u * stride, simd::shuffle_bytes(rows23, hi));
-                    }
-                    src += 32u;
-                    continue;
-                }
-            }
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                const std::uint8_t* row = src + py * row_bytes;
-                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
-                if constexpr (Format == TexFormat::I4) {
-                    // High nibble first. I4 and I8 replicate intensity into alpha.
-                    std::uint32_t px = 0u;
-                    for (; px + 1u < columns; px += 2u) {
-                        const std::uint8_t byte = row[px / 2u];
-                        const auto high = static_cast<std::uint8_t>((byte >> 4u) * 17u);
-                        const auto low = static_cast<std::uint8_t>((byte & 15u) * 17u);
-                        dst[px] = RGBA8{high, high, high, high};
-                        dst[px + 1u] = RGBA8{low, low, low, low};
-                    }
-                    if (px < columns) {
-                        const auto high = static_cast<std::uint8_t>((row[px / 2u] >> 4u) * 17u);
-                        dst[px] = RGBA8{high, high, high, high};
-                    }
-                } else {
-                    for (std::uint32_t px = 0; px < columns; ++px) {
-                        if constexpr (Format == TexFormat::I8) {
-                            const std::uint8_t i = row[px];
-                            dst[px] = RGBA8{i, i, i, i};
-                        } else if constexpr (Format == TexFormat::IA4) {
-                            // A[7:4] I[3:0], both expanded by bit replication.
-                            const std::uint8_t byte = row[px];
-                            const auto i = static_cast<std::uint8_t>((byte & 15u) * 17u);
-                            const auto a = static_cast<std::uint8_t>((byte >> 4u) * 17u);
-                            dst[px] = RGBA8{i, i, i, a};
-                        } else {
-                            // IA8 stores A then I in guest byte order.
-                            const std::uint8_t a = row[px * 2u];
-                            const std::uint8_t i = row[px * 2u + 1u];
-                            dst[px] = RGBA8{i, i, i, a};
-                        }
-                    }
-                }
-            }
-            // A clipped tile still occupies its full 32 bytes.
-            src += 32u;
-        }
-    }
-}
-
-template <TlutFormat Format>
-static void decode_color_tiles_impl(
-    const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
-    RGBA8* out) {
-    static_assert(Format == TlutFormat::RGB565 || Format == TlutFormat::RGB5A3);
-    const std::uint32_t blocks_x = (width + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * 4u;
-        const std::uint32_t rows = std::min(4u, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * 4u;
-            const std::uint32_t columns = std::min(4u, width - base_x);
-            if (rows == 4u && columns == 4u) {
-                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                const std::size_t stride = width;
-                const v128 rows01 = simd::byteswap16(load_tile16(src));
-                const v128 rows23 = simd::byteswap16(load_tile16(src + 16u));
-                if constexpr (Format == TlutFormat::RGB565) {
-                    rgb565x8_to_rgba(rows01, dst, dst + stride);
-                    rgb565x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
-                } else {
-                    rgb5a3x8_to_rgba(rows01, dst, dst + stride);
-                    rgb5a3x8_to_rgba(rows23, dst + 2u * stride, dst + 3u * stride);
-                }
-                src += 32u;
-                continue;
-            }
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                const std::uint8_t* row = src + py * 8u;
-                RGBA8* dst = out + static_cast<std::size_t>(base_y + py) * width + base_x;
-                for (std::uint32_t px = 0; px < columns; ++px) {
-                    // Direct colour and TLUT entries share the GX word encoding.
-                    dst[px] = decode_colour_word(row + px * 2u, Format);
-                }
-            }
-            src += 32u;
-        }
-    }
-}
-
-}  // namespace
-
-void detail::decode_color_tiles(
-    TexFormat format, const std::uint8_t* src,
-    std::uint32_t width, std::uint32_t height, RGBA8* out) {
-    switch (format) {
-    case TexFormat::RGB565:
-        decode_color_tiles_impl<TlutFormat::RGB565>(src, width, height, out);
-        break;
-    case TexFormat::RGB5A3:
-        decode_color_tiles_impl<TlutFormat::RGB5A3>(src, width, height, out);
-        break;
-    default: throw std::runtime_error("[TextureCache] unsupported direct color format");
-    }
-}
-
-void detail::decode_intensity_tiles(
-    TexFormat format, const std::uint8_t* src,
-    std::uint32_t width, std::uint32_t height, RGBA8* out) {
-    switch (format) {
-    case TexFormat::I4: decode_intensity_tiles_impl<TexFormat::I4>(src, width, height, out); break;
-    case TexFormat::I8: decode_intensity_tiles_impl<TexFormat::I8>(src, width, height, out); break;
-    case TexFormat::IA4: decode_intensity_tiles_impl<TexFormat::IA4>(src, width, height, out); break;
-    case TexFormat::IA8: decode_intensity_tiles_impl<TexFormat::IA8>(src, width, height, out); break;
-    default: throw std::runtime_error("[TextureCache] unsupported intensity format");
-    }
-}
-
-void detail::decode_rgba8_tiles(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    // Block: 4x4 pixels stored as two 32-byte sub-tiles:
-    //   tile 0 (bytes 0-31): 16 AR pairs (A then R, row-major within 4x4)
-    //   tile 1 (bytes 32-63): 16 GB pairs (G then B)
-    const std::uint32_t blocks_x = (width  + 3u) / 4u;
-    const std::uint32_t blocks_y = (height + 3u) / 4u;
-    for (std::uint32_t by = 0; by < blocks_y; ++by) {
-        const std::uint32_t base_y = by * 4u;
-        const std::uint32_t rows = std::min(4u, height - base_y);
-        for (std::uint32_t bx = 0; bx < blocks_x; ++bx) {
-            const std::uint32_t base_x = bx * 4u;
-            const std::uint32_t columns = std::min(4u, width - base_x);
-            if (rows == 4u && columns == 4u) {
-                // unpack(AR, GB) gives bytes A,R,G,B per pixel; rotate each
-                // pixel right by one byte to R,G,B,A.
-                const auto rotate = [](v128 x) {
-                    return simd::or_(simd::shr32<8>(x), simd::shl32<24>(x));
-                };
-                const v128 ar01 = load_tile16(src);
-                const v128 ar23 = load_tile16(src + 16u);
-                const v128 gb01 = load_tile16(src + 32u);
-                const v128 gb23 = load_tile16(src + 48u);
-                RGBA8* dst = out + static_cast<std::size_t>(base_y) * width + base_x;
-                const std::size_t stride = width;
-                store_pixels4(dst, rotate(simd::interleave_low16(ar01, gb01)));
-                store_pixels4(dst + stride, rotate(simd::interleave_high16(ar01, gb01)));
-                store_pixels4(dst + 2u * stride, rotate(simd::interleave_low16(ar23, gb23)));
-                store_pixels4(dst + 3u * stride, rotate(simd::interleave_high16(ar23, gb23)));
-                src += 64u;
-                continue;
-            }
-            const std::uint8_t* ar = src;
-            const std::uint8_t* gb = src + 32u;
-            for (std::uint32_t py = 0; py < rows; ++py) {
-                RGBA8* dst = out + (base_y + py) * width + base_x;
-                const std::uint8_t* ar_row = ar + py * 8u;
-                const std::uint8_t* gb_row = gb + py * 8u;
-                for (std::uint32_t px = 0; px < columns; ++px) {
-                    dst[px] = {ar_row[px * 2u + 1u], gb_row[px * 2u],
-                               gb_row[px * 2u + 1u], ar_row[px * 2u]};
-                }
-            }
-            src += 64u;
-        }
-    }
-}
-
-namespace {
-
-// CMPR (S3TC/DXT1): 8x8 blocks of four 4x4 DXT1 sub-blocks in the order top-left, top-right, bottom-left,
-// bottom-right. Decodes one 8-byte sub-block into the 4x4 patch of `out` at (ox, oy), clipped to the image.
-static void decode_dxt1_subblock(
-    const std::uint8_t* block,
-    std::uint32_t ox,
-    std::uint32_t oy,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    if (ox >= width || oy >= height) {
-        return;
-    }
-    const std::uint32_t columns = std::min(4u, width - ox);
-    const std::uint32_t rows = std::min(4u, height - oy);
-    const std::uint16_t c0 = read_be16(block);
-    const std::uint16_t c1 = read_be16(block + 2);
-
-    auto expand565 = [](std::uint16_t v) -> RGBA8 {
-        const std::uint8_t r5 = static_cast<std::uint8_t>((v >> 11) & 0x1Fu);
-        const std::uint8_t g6 = static_cast<std::uint8_t>((v >>  5) & 0x3Fu);
-        const std::uint8_t b5 = static_cast<std::uint8_t>( v        & 0x1Fu);
-        return RGBA8{
-            static_cast<std::uint8_t>((r5 << 3) | (r5 >> 2)),
-            static_cast<std::uint8_t>((g6 << 2) | (g6 >> 4)),
-            static_cast<std::uint8_t>((b5 << 3) | (b5 >> 2)),
-            0xFFu
-        };
-    };
-
-    const RGBA8 col0 = expand565(c0);
-    const RGBA8 col1 = expand565(c1);
-
-    RGBA8 palette[4];
-    palette[0] = col0;
-    palette[1] = col1;
-    if (c0 > c1) {
-        // Four-color mode (no transparency).
-        palette[2] = RGBA8{
-            cmpr_interpolated_channel(col0.r, col1.r),
-            cmpr_interpolated_channel(col0.g, col1.g),
-            cmpr_interpolated_channel(col0.b, col1.b),
-            0xFFu
-        };
-        palette[3] = RGBA8{
-            cmpr_interpolated_channel(col1.r, col0.r),
-            cmpr_interpolated_channel(col1.g, col0.g),
-            cmpr_interpolated_channel(col1.b, col0.b),
-            0xFFu
-        };
-    } else {
-        // Three-color mode: palette[3] has averaged RGB with zero alpha.
-        palette[2] = RGBA8{
-            static_cast<std::uint8_t>((col0.r + col1.r) / 2u),
-            static_cast<std::uint8_t>((col0.g + col1.g) / 2u),
-            static_cast<std::uint8_t>((col0.b + col1.b) / 2u),
-            0xFFu
-        };
-        palette[3] = RGBA8{
-            static_cast<std::uint8_t>((col0.r + col1.r) / 2u),
-            static_cast<std::uint8_t>((col0.g + col1.g) / 2u),
-            static_cast<std::uint8_t>((col0.b + col1.b) / 2u),
-            0u
-        };
-    }
-
-    // One selector byte per row, leftmost pixel in its top two bits. Rows advance an integer offset: a pointer
-    // advanced past the last clipped row could point beyond one-past-the-end of `out`.
-    std::size_t offset = static_cast<std::size_t>(oy) * width + ox;
-    if (columns == 4u) {
-        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
-            RGBA8* row = out + offset;
-            const std::uint8_t selectors = block[4u + py];
-            row[0] = palette[(selectors >> 6u) & 3u];
-            row[1] = palette[(selectors >> 4u) & 3u];
-            row[2] = palette[(selectors >> 2u) & 3u];
-            row[3] = palette[selectors & 3u];
-        }
-    } else {
-        for (std::uint32_t py = 0; py < rows; ++py, offset += width) {
-            RGBA8* row = out + offset;
-            const std::uint8_t selectors = block[4u + py];
-            for (std::uint32_t px = 0; px < columns; ++px) {
-                row[px] = palette[(selectors >> (6u - px * 2u)) & 3u];
-            }
-        }
-    }
-}
-
-}  // namespace
-
-void detail::decode_cmpr_tiles(
-    const std::uint8_t* src,
-    std::uint32_t width,
-    std::uint32_t height,
-    RGBA8* out) {
-    const std::uint32_t macro_x = (width  + 7u) / 8u;
-    const std::uint32_t macro_y = (height + 7u) / 8u;
-    static constexpr std::uint32_t kSubOffX[4] = {0u, 4u, 0u, 4u};
-    static constexpr std::uint32_t kSubOffY[4] = {0u, 0u, 4u, 4u};
-
-    for (std::uint32_t by = 0; by < macro_y; ++by) {
-        for (std::uint32_t bx = 0; bx < macro_x; ++bx) {
-            for (std::uint32_t sub = 0; sub < 4u; ++sub) {
-                const std::uint32_t ox = bx * 8u + kSubOffX[sub];
-                const std::uint32_t oy = by * 8u + kSubOffY[sub];
-                decode_dxt1_subblock(src, ox, oy, width, height, out);
-                src += 8u;
-            }
-        }
-    }
-}
-
-namespace {
-
-// Guest byte size of one level, in whole blocks.
-[[nodiscard]] static std::uint32_t tex_data_size(
-    TexFormat fmt,
-    std::uint32_t width,
-    std::uint32_t height) {
-    auto blocks = [](std::uint32_t dim, std::uint32_t block) {
-        return (dim + block - 1u) / block;
-    };
-    switch (fmt) {
-    case TexFormat::I4:
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    case TexFormat::I8:
-    case TexFormat::IA4:
-        return blocks(width, 8u) * blocks(height, 4u) * 32u;
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-        return blocks(width, 4u) * blocks(height, 4u) * 32u;
-    case TexFormat::RGBA8:
-        return blocks(width, 4u) * blocks(height, 4u) * 64u;
-    case TexFormat::CMPR:
-        // Each 8x8 macro-block = 4 DXT1 sub-blocks x 8 bytes = 32 bytes.
-        return blocks(width, 8u) * blocks(height, 8u) * 32u;
-    default:
-        throw std::runtime_error("[TextureCache] tex_data_size: unknown TexFormat");
-    }
-}
-
-[[nodiscard]] static bool texture_decode_format_supported(TexFormat format) {
-    switch (format) {
-    case TexFormat::I4:
-    case TexFormat::I8:
-    case TexFormat::IA4:
-    case TexFormat::IA8:
-    case TexFormat::RGB565:
-    case TexFormat::RGB5A3:
-    case TexFormat::RGBA8:
-    case TexFormat::CMPR:
-        return true;
-    default:
-        return false;
-    }
-}
-
-// Decodes every guest-authored level (contiguous, block-aligned from `src`)
-// and generates any enhancement levels from the decoded level above. Pure:
-// reads only `src`, writes only `level_pixels`. Runs on the render
-// thread or a TextureDecodePool worker.
-static void decode_texture_levels(
-    TexFormat format,
-    const std::uint8_t* src,
-    std::uint32_t w,
-    std::uint32_t h,
-    unsigned source_levels,
-    unsigned levels,
-    bool generated_mips,
-    std::vector<std::vector<RGBA8>>& level_pixels) {
-    for (unsigned l = 0; l < source_levels; ++l) {
-        const std::uint32_t lw = std::max<std::uint32_t>(1u, w >> l);
-        const std::uint32_t lh = std::max<std::uint32_t>(1u, h >> l);
-        level_pixels[l].resize(
-            static_cast<std::size_t>(lw) * static_cast<std::size_t>(lh));
-        RGBA8* out = level_pixels[l].data();
-
-        switch (format) {
-        case TexFormat::I4:
-        case TexFormat::I8:
-        case TexFormat::IA4:
-        case TexFormat::IA8:
-            detail::decode_intensity_tiles(format, src, lw, lh, out);
-            break;
-        case TexFormat::RGB565:
-        case TexFormat::RGB5A3:
-            detail::decode_color_tiles(format, src, lw, lh, out);
-            break;
-        case TexFormat::RGBA8:
-            detail::decode_rgba8_tiles(src, lw, lh, out);
-            break;
-        case TexFormat::CMPR:
-            detail::decode_cmpr_tiles(src, lw, lh, out);
-            break;
-        default:
-            throw std::runtime_error(
-                "[TextureCache] get: unhandled TexFormat");
-        }
-        if (!detail::flatten_texel_checker(level_pixels[l], lw, lh)) {
-            detail::remove_texel_checker(level_pixels[l], lw, lh);
-        }
-        src += tex_data_size(format, lw, lh);
-    }
-    if (generated_mips) {
-        for (unsigned l = 1; l < levels; ++l) {
-            const std::uint32_t src_w =
-                std::max<std::uint32_t>(1u, w >> (l - 1u));
-            const std::uint32_t src_h =
-                std::max<std::uint32_t>(1u, h >> (l - 1u));
-            const std::uint32_t dst_w = std::max<std::uint32_t>(1u, w >> l);
-            const std::uint32_t dst_h = std::max<std::uint32_t>(1u, h >> l);
-            detail::generate_rgba8_mip_level(
-                level_pixels[l - 1u],
-                src_w,
-                src_h,
-                level_pixels[l],
-                dst_w,
-                dst_h);
-        }
-    }
-}
-
-}  // namespace
-
 void detail::expand_record_level(std::uint8_t layout, const std::uint8_t* src, std::uint32_t width, std::uint32_t height,
                                  RGBA8* out) {
     const std::size_t count = static_cast<std::size_t>(width) * height;
@@ -962,7 +457,7 @@ namespace {
 
 // A texture record's levels (nebula_cooked_texture.h) as RGBA8: the first `source_levels` it holds, widened from
 // its layout, through the dither-checker filters when it asks for them; then any generated levels, as for a decoded
-// image. Pure, like decode_texture_levels.
+// image. Pure.
 static void expand_record_levels(
     const NebulaTexture* record,
     unsigned source_levels,
@@ -1031,24 +526,6 @@ static void write_staging_levels(
 }
 
 } // anonymous namespace
-
-std::uint32_t texture_source_bytes(
-    TexFormat format, std::uint32_t width, std::uint32_t height,
-    unsigned source_levels) {
-    if (width == 0u || height == 0u || width > 1024u || height > 1024u ||
-        source_levels == 0u || source_levels > full_mip_chain_levels(width, height)) {
-        throw std::runtime_error("[TextureCache] invalid game texture extent");
-    }
-    std::uint64_t total = 0u;
-    for (unsigned level = 0; level < source_levels; ++level) {
-        total += tex_data_size(format, std::max(1u, width >> level),
-                               std::max(1u, height >> level));
-    }
-    if (total > UINT32_MAX) {
-        throw std::runtime_error("[TextureCache] game texture footprint overflow");
-    }
-    return static_cast<std::uint32_t>(total);
-}
 
 bool TextureCache::initialize(gpu::Device* device) {
     next_srv_index_ = 0u;
@@ -1897,23 +1374,10 @@ TextureHandle TextureCache::get(
         source_levels = record->levels;
         levels = source_levels;
     }
-    // Authored levels come from the image the game handed over: a sampler asking for more than it holds gets those.
-    if (record == nullptr && source_levels > 1u) {
-        const auto handed = registered_images_.find(image.address);
-        if (handed != registered_images_.end()) {
-            const unsigned wanted = source_levels;
-            while (source_levels > 1u &&
-                   texture_source_bytes(image.format, image.width, image.height, source_levels) > handed->second->size()) {
-                --source_levels;
-            }
-            levels = source_levels;
-            static const bool log_clamp = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-            if (log_clamp && source_levels != wanted) {
-                std::fprintf(stderr, "[texture] levels limited to the handed-over image: %llX %ux%u format %u %u of %u\n",
-                             image.address, image.width, image.height, static_cast<unsigned>(image.format),
-                             source_levels, wanted);
-            }
-        }
+    // Without a record (cooked, or made by the game) there are no texels: one blank level.
+    if (record == nullptr) {
+        source_levels = levels = 1u;
+        generated_mips = false;
     }
     const auto config_end = trace_stalls
         ? std::chrono::steady_clock::now()
@@ -1926,9 +1390,7 @@ TextureHandle TextureCache::get(
     key.format      = static_cast<std::uint8_t>(image.format);
     key.levels      = static_cast<std::uint8_t>(levels);
     key.generated_mips = generated_mips ? 1u : 0u;
-    const std::uint32_t total_source_size = record != nullptr
-        ? record->size
-        : texture_source_bytes(image.format, image.width, image.height, source_levels);
+    const std::uint32_t total_source_size = record != nullptr ? record->size : 1u;
     if (image.address + total_source_size < image.address) {
         throw std::runtime_error("[TextureCache] texture address overflow");
     }
@@ -1956,14 +1418,12 @@ TextureHandle TextureCache::get(
     const std::uint32_t w = image.width;
     const std::uint32_t h = image.height;
 
-    const std::byte* handed_over = registered_bytes(image.address, total_source_size);
-    if (handed_over == nullptr && record == nullptr) {
+    if (record == nullptr) {
         ++missing_images_;
-        std::fprintf(stderr, "[texture] image not handed over: %llX %ux%u format %u (%u bytes)\n", static_cast<unsigned long long>(image.address),
-                     image.width, image.height, static_cast<unsigned>(image.format), total_source_size);
+        std::fprintf(stderr, "[texture] no texture record: %llX %ux%u format %u (drawn blank)\n",
+                     static_cast<unsigned long long>(image.address), image.width, image.height,
+                     static_cast<unsigned>(image.format));
     }
-    const auto* src = reinterpret_cast<const std::uint8_t*>(
-        handed_over != nullptr ? handed_over : missing_image_bytes(total_source_size));
     // The ray tracer's material table names textures by the texture-pack key of their base level.
     // A record carries the disc image's names (pack hash, palette hash, disc format); one the game made has none.
     const TexFormat source_format = record != nullptr ? static_cast<TexFormat>(record->disc_format) : image.format;
@@ -1971,8 +1431,7 @@ TextureHandle TextureCache::get(
     std::uint16_t rt_material = 0u;
     std::uint64_t pack = 0u;
     if (rt_materials_loaded() && !nameless) {
-        pack = record != nullptr ? record->pack_hash
-                                 : texture_pack_hash(src, texture_source_bytes(image.format, image.width, image.height, 1u));
+        pack = record != nullptr ? record->pack_hash : 0u;
         rt_material = rt_material_index(pack);
         note_rt_texture(image.address, pack, image.width, image.height, static_cast<std::uint32_t>(source_format));
     }
@@ -1980,21 +1439,15 @@ TextureHandle TextureCache::get(
     // replacement binds without a decode; else the original decodes and waits for it.
     std::uint32_t pack_slot = TexturePacks::kNone;
     TexturePackName pack_name{};
-    const bool pack_lookup = !nameless && packs_.may_match(image.width, image.height, source_format);
-    const bool pack_dump = !nameless && packs_.dumping();
+    const bool pack_lookup = record != nullptr && !nameless && packs_.may_match(image.width, image.height, source_format);
+    const bool pack_dump = record != nullptr && !nameless && packs_.dumping();
     if (pack_lookup || pack_dump) {
         pack_name.width = image.width;
         pack_name.height = image.height;
         pack_name.format = static_cast<std::uint8_t>(source_format);
         pack_name.mipmapped = source_levels > 1u;
-        if (record != nullptr) {
-            pack_name.hash = record->pack_hash;
-            pack_name.tlut = record->pack_palette_hash;
-        } else {
-            pack_name.hash = pack != 0u ? pack
-                                        : texture_pack_hash(src, texture_source_bytes(image.format, image.width,
-                                                                                         image.height, 1u));
-        }
+        pack_name.hash = record->pack_hash;
+        pack_name.tlut = record->pack_palette_hash;
         ++pack_hashed_;
         if (pack_lookup) {
             pack_slot = packs_.find(image.width, image.height, source_format, pack_name.hash, pack_name.tlut,
@@ -2044,24 +1497,16 @@ TextureHandle TextureCache::get(
     }
     // Only the pixel fill moves off-thread. Texture-pack dumps, which read the decoded pixels here, and unknown
     // formats, which must throw here, stay synchronous.
-    const bool async_decode = async_decode_allowed_ &&
-        (record != nullptr || texture_decode_format_supported(image.format)) && !pack_dump;
+    const bool async_decode = async_decode_allowed_ && record != nullptr && !pack_dump;
     if (level_pixels_scratch_.size() < levels) {
         level_pixels_scratch_.resize(levels);
-    }
-    static const bool log_console_images = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
-    if (log_console_images && record == nullptr) {
-        // What still reaches the renderer in a console format (the cooker and the game's records cover the rest).
-        std::fprintf(stderr, "[texture] console image: %llX %ux%u format %u\n", static_cast<unsigned long long>(image.address),
-                     image.width, image.height, static_cast<unsigned>(image.format));
     }
     auto& level_pixels = level_pixels_scratch_;
     if (!async_decode) {
         if (record != nullptr) {
             expand_record_levels(record, source_levels, levels, generated_mips, level_pixels);
         } else {
-            decode_texture_levels(
-                image.format, src, w, h, source_levels, levels, generated_mips, level_pixels);
+            level_pixels[0].assign(static_cast<std::size_t>(w) * h, RGBA8{});
         }
     }
     const auto decode_end = trace_stalls
@@ -2119,23 +1564,15 @@ TextureHandle TextureCache::get(
         }
         std::vector<std::uint64_t> offsets(level_offset.begin(), level_offset.begin() + levels);
         std::vector<std::uint32_t> pitches(level_pitch.begin(), level_pitch.begin() + levels);
-        const TexFormat format = image.format;
-        // The source bytes stay unchanged until finish_pending_decodes() (caller contract).
+        // The record stays unchanged until finish_pending_decodes() (caller contract).
         decode_pool_->submit(
-            [format, source_ptr = src, record, w, h, source_levels, levels,
-             generated_mips, dst_base, offsets = std::move(offsets),
+            [record, w, h, source_levels, levels, generated_mips, dst_base, offsets = std::move(offsets),
              pitches = std::move(pitches)]() {
                 thread_local std::vector<std::vector<RGBA8>> scratch;
                 if (scratch.size() < levels) {
                     scratch.resize(levels);
                 }
-                if (record != nullptr) {
-                    expand_record_levels(record, source_levels, levels, generated_mips, scratch);
-                } else {
-                    decode_texture_levels(
-                        format, source_ptr, w, h, source_levels, levels,
-                        generated_mips, scratch);
-                }
+                expand_record_levels(record, source_levels, levels, generated_mips, scratch);
                 write_staging_levels(
                     dst_base, w, h, levels, offsets.data(), pitches.data(),
                     scratch);
