@@ -210,8 +210,7 @@ public:
     // A copy right after the display copy, from the output EFB the 2D layer drew in (the EFB itself without one).
     [[nodiscard]] bool copy_output_efb_to_texture(const EfbCopyParams& params, TextureCache& textures);
 
-    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache,
-                                               bool lit_table = false);  // no ray tracing on Vulkan yet
+    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     void attach_texture_uploads(TextureCache& cache);
     void drain_gpu();
     void pump_messages() {}

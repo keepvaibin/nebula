@@ -207,9 +207,7 @@ public:
     // A persistently mapped upload buffer; empty when it cannot be created.
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
     // The frame's table of `count` texture descriptors for the draw's maps (null SRVs where a handle is empty).
-    // `lit_table`: map 7 is the ray tracer's light texture (lit translucent draws).
-    [[nodiscard]] gpu::Table texture_table_for(
-        const TextureHandle* handles, unsigned count, const TextureCache& cache, bool lit_table = false);
+    [[nodiscard]] gpu::Table texture_table_for(const TextureHandle* handles, unsigned count, const TextureCache& cache);
     // The texture cache records its uploads into this frame's command list.
     void attach_texture_uploads(TextureCache& cache);
     void pump_messages();           // no-op: window_owner_ pumps the window's messages
@@ -305,82 +303,8 @@ public:
     // The temporal history does not match the picture (scene cut).
     void reset_temporal_history() noexcept { temporal_history_valid_ = false; }
 
-    // Ray tracing (galaxy/render/ray_tracing.h): the 3D scene's opaque draws, noted as they are
-    // drawn, become the traced scene when the game's translucent phases begin.
-    [[nodiscard]] bool rt_active() const noexcept { return ray_tracer_->ready(); }
-    // Starts or stops the ray tracer at a frame boundary to follow the RAY TRACING setting.
-    void reconcile_ray_tracing();
-    [[nodiscard]] bool rt_scene_open() const noexcept { return ray_tracer_->scene_open(); }
-    [[nodiscard]] bool rt_glow_open() const noexcept { return ray_tracer_->glow_open(); }
-    [[nodiscard]] bool rt_water_open() const noexcept { return ray_tracer_->water_open(); }
-    [[nodiscard]] bool rt_late_open() const noexcept { return ray_tracer_->late_open(); }
-    [[nodiscard]] bool rt_sky_open() const noexcept { return ray_tracer_->sky_open(); }
-    void rt_begin_sky() noexcept { ray_tracer_->begin_sky(); }
-    void rt_set_scene_up(const std::array<float, 3>& up) noexcept { ray_tracer_->set_scene_up(up); }
-    [[nodiscard]] float rt_glow_exposure(bool model = false) const noexcept {
-        return ray_tracer_->ready() ? ray_tracer_->glow_exposure(model) : 1.0f;
-    }
-    // The last traced scene's lighting as a texture for lit translucents (texture 7).
-    [[nodiscard]] bool rt_light_texture_ready() const noexcept {
-        return ray_tracer_->ready() && ray_tracer_->light_texture_ready();
-    }
-    [[nodiscard]] ID3D12Resource* rt_light_texture() const noexcept { return ray_tracer_->light_texture(); }
-    [[nodiscard]] D3D12_CPU_DESCRIPTOR_HANDLE rt_light_texture_srv() const noexcept {
-        return ray_tracer_->light_texture_srv();
-    }
-    [[nodiscard]] float rt_light_texture_scale() const noexcept { return ray_tracer_->light_texture_scale(); }
-    void rt_begin_scene();
-    void rt_set_view(const RtView& view) noexcept { ray_tracer_->set_view(view); }
-    void rt_set_camera(const std::array<float, 12>* view) noexcept { ray_tracer_->set_camera(view); }
-    [[nodiscard]] bool rt_lighting() const noexcept { return ray_tracer_->lighting_active(); }
-    [[nodiscard]] bool rt_physical() const noexcept { return ray_tracer_->physical_active(); }
-    // The ray tracing engine runs (its clear-surface pass traces the table's `traced` glass).
-    [[nodiscard]] bool rt_engine() const noexcept { return ray_tracer_->engine_active(); }
-    [[nodiscard]] bool rt_engine_clear() const noexcept { return ray_tracer_->engine_clear_active(); }
     // When the swap chain last took a present (QPC; 0 none).
     [[nodiscard]] std::int64_t last_present_qpc() const noexcept { return swap_present_qpc_; }
-    // The waterfall mist (SceneRayTracer::mist_open, note_mist): the table's `mist` effects' sprites as puffs of drops.
-    [[nodiscard]] bool rt_mist_open() const noexcept { return ray_tracer_->mist_open(); }
-    void rt_note_mist(const float centre[3], float sigma, float depth, float white) {
-        ray_tracer_->note_mist(centre, sigma, depth, white);
-    }
-    [[nodiscard]] bool rt_log_seq() const noexcept { return ray_tracer_->log_seq(); }
-    [[nodiscard]] bool rt_ab_original() const noexcept { return ray_tracer_->ab_original(); }
-    [[nodiscard]] bool rt_scene_untraced() const noexcept { return ray_tracer_->scene_untraced(); }
-    void rt_set_ab_original(bool original) noexcept { ray_tracer_->set_ab_original(original); }
-    void rt_set_scene_untraced(bool untraced) noexcept { ray_tracer_->set_scene_untraced(untraced); }
-    void rt_set_presents(std::uint64_t presents) noexcept { ray_tracer_->set_presents(presents); }
-    // The traced reflections on the scene's surfaces (SceneRayTracer::surface_reflections_active).
-    [[nodiscard]] bool rt_reflections_active() const noexcept { return ray_tracer_->surface_reflections_active(); }
-    [[nodiscard]] bool rt_sun_direction(std::array<float, 3>& world) const noexcept {
-        return ray_tracer_->sun_direction(world);
-    }
-    void rt_hold_sun(bool held) noexcept { ray_tracer_->hold_sun(held); }
-    void rt_set_key_light(bool valid, const std::array<float, 3>& world, const std::array<float, 3>& color,
-                          float strength, bool shown) noexcept {
-        ray_tracer_->set_key_light(valid, world, color, strength, shown);
-    }
-    [[nodiscard]] bool rt_sky_sun(std::array<float, 3>& world, std::array<float, 3>& color) const noexcept {
-        return ray_tracer_->sky_sun(world, color);
-    }
-    [[nodiscard]] bool rt_sky_key(std::array<float, 3>& world, float& strength) const noexcept {
-        return ray_tracer_->sky_key(world, strength);
-    }
-    void rt_reset_sky() noexcept { ray_tracer_->reset_sky(); }
-    void rt_set_stage_sun(const RtStageSun* sun) noexcept { ray_tracer_->set_stage_sun(sun); }
-    [[nodiscard]] const RtStageSun* rt_stage_sun() const noexcept { return ray_tracer_->stage_sun(); }
-    void rt_note_draw(const DrawCall& call, const RtDrawInfo& info);
-    void rt_trace_scene();
-    // The scene's end: its finished picture becomes the light the next frame's rays read.
-    void rt_capture_picture();
-    // The scene layer's beginning while ray tracing runs: the HDR scene EFB stands in for the EFB (its contents so
-    // far carried over), until end_hdr_scene's camera pass (rt_capture_picture, or the display copy of a scene that
-    // never ended) writes its picture to the EFB and restores it. Sub-frames replay both.
-    void begin_hdr_scene();
-    void end_hdr_scene();
-    // After the translucent phases: the water drawn since the trace reflects (its composite is
-    // recorded for the sub-frames' replays).
-    void rt_trace_water();
     // Matrix-ring segment advances back whose palettes are still alive while
     // this frame executes (0 outside temporal mode). In temporal mode the
     // segment advances only after frames that wrote palettes, so present and
@@ -1324,49 +1248,8 @@ private:
     D3D12_RESOURCE_STATES blend_verdicts_state_ = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     Microsoft::WRL::ComPtr<ID3D12RootSignature> blend_validate_root_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> blend_validate_pso_;
-    std::unique_ptr<SceneRayTracer> ray_tracer_ = std::make_unique<SceneRayTracer>();
-    // The ray tracer could not start on this device: not retried every frame.
-    bool rt_start_failed_ = false;
-    // A tracer starting on a worker (start_ray_tracer), and since when: the frames draw without ray tracing meanwhile.
-    std::future<std::unique_ptr<SceneRayTracer>> rt_starting_;
-    std::chrono::steady_clock::time_point rt_start_time_{};
-    // The frames after a started tracer took over ([rt] frame N after taking over: their intervals, begin to begin),
-    // and the last frame's start.
-    unsigned rt_takeover_frames_ = 0u;
+    // The last frame's start (the hitch log's intervals, begin to begin).
     std::chrono::steady_clock::time_point frame_begun_{};
-    // The descriptor tables the tracers write their texture and de-light views into (set at initialize).
-    struct RtViewTable {
-        D3D12_CPU_DESCRIPTOR_HANDLE cpu{};
-        std::uint32_t first = 0u;
-        UINT increment = 0u;
-    };
-    RtViewTable rt_texture_views_{};
-    RtViewTable rt_delight_views_{};
-    void start_ray_tracer(bool first);
-    // reconcile_ray_tracing's first call (initialize's) is past; RAY TRACING waits for the next start (logged once).
-    bool rt_first_reconciled_ = false;
-    bool rt_waiting_restart_ = false;
-    void take_started_ray_tracer();
-    // Waits for a tracer still starting and drops it (the device goes away, or the renderer shuts down).
-    void abandon_ray_tracer_start() noexcept;
-    static RtUpload rt_allocate(void* renderer, std::size_t bytes, std::size_t alignment);
-    [[nodiscard]] RtSources rt_sources() const;
-    // The occlusion of result `slot` onto the EFB colour; `reproject` on a sub-frame's replay.
-    void record_rt_composite(int slot, bool reproject);
-    // The EFB colour as the ray-traced composite reads it (it draws into the EFB): a copy, and its
-    // view in this frame's descriptor ring.
-    D3D12_GPU_DESCRIPTOR_HANDLE rt_composite_color();
-    D3D12_GPU_DESCRIPTOR_HANDLE rt_copy_color(Microsoft::WRL::ComPtr<ID3D12Resource>& target, const wchar_t* name);
-    D3D12_GPU_DESCRIPTOR_HANDLE rt_game_picture();
-    Microsoft::WRL::ComPtr<ID3D12Resource> rt_color_copy_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> rt_water_copy_;   // the frame with the game's water (water composite)
-    Microsoft::WRL::ComPtr<ID3D12Resource> rt_opaque_copy_;  // the frame before the translucent phases
-    D3D12_GPU_DESCRIPTOR_HANDLE rt_opaque_srv_{};             // its view this frame (0: none)
-    // What the frame's effects drew over the water and the clear surfaces: copies of the effects layer's colour and
-    // transmittance, a table of their two views (0: no layer this scene).
-    D3D12_GPU_DESCRIPTOR_HANDLE rt_layer_table();
-    Microsoft::WRL::ComPtr<ID3D12Resource> rt_layer_color_copy_;
-    Microsoft::WRL::ComPtr<ID3D12Resource> rt_layer_trans_copy_;
     // The effects layer: its colour (what the effects added, as they blended into the EFB) and transmittance (what of
     // the EFB behind them they let through), render targets 2 and 3 of a layer draw; whether this scene's is open.
     Microsoft::WRL::ComPtr<ID3D12Resource> layer_color_;
@@ -1376,10 +1259,6 @@ private:
     bool layer_window_ = false;
     void record_layer_begin();
     bool reactive_scene_ = false;   // this scene's blended draws write the reactive mask (begin_motion_scene)
-    void record_rt_water(int slot, bool reproject, bool layer);
-    // The waterfall mist of light slot `slot` over the frame (SceneRayTracer::composite_mist), after the water's.
-    void record_rt_mist(int slot, bool reproject, bool layer);
-    void log_rt_seq(const char* step);
     [[nodiscard]] bool temporal_inputs_match(const TemporalUpscaleInputs& in) const;
     D3D12_GPU_VIRTUAL_ADDRESS resident_vertex_base_ = 0;
     std::uint64_t resident_vertex_bytes_ = 0;
