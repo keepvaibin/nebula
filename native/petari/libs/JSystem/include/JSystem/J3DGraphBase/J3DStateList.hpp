@@ -62,8 +62,6 @@ public:
     void setTexImgAttr(GXTexMapID map, u16 width, u16 height, GXTexFmt format);
     void setTexImgPtr(GXTexMapID map, const void* pImage);
     // A colour-indexed texture's palette: its format and place (a GX TLUT name).
-    void setTexTlut(GXTexMapID map, GXTlutFmt format, u32 tlutName);
-    void loadTlut(u32 tlutName, const void* pLut);
     void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color);
     // Changes of some fields of a register, its others as they are (GX's partial setters).
     void setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d);

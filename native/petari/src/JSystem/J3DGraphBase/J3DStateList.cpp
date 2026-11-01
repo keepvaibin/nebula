@@ -281,19 +281,6 @@ void J3DStateList::setTexImgPtr(GXTexMapID map, const void* pImage) {
     r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pImage));
 }
 
-void J3DStateList::setTexTlut(GXTexMapID map, GXTlutFmt format, u32 tlutName) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEX_TLUT);
-    r.a[0] = map;
-    r.a[1] = format;
-    r.a[2] = static_cast< u8 >(tlutName);
-}
-
-void J3DStateList::loadTlut(u32 tlutName, const void* pLut) {
-    NebulaStateOp& r = add(NEBULA_STATE_TLUT_LOAD);
-    r.a[0] = static_cast< u8 >(tlutName);
-    r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pLut));
-}
-
 void J3DStateList::setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, GXColor color) {
     NebulaStateOp& r = add(NEBULA_STATE_FOG);
     r.a[0] = type;

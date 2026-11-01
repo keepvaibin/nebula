@@ -16,7 +16,6 @@ namespace {
     }
 
     // The format of the palette last loaded into each of GX's 20 palette places.
-    u8 sTlutFormat[20];
 
     bool isColorIndexed(GXTexFmt format) {
         return format == GX_TF_C4 || format == GX_TF_C8 || format == GX_TF_C14X2;
@@ -119,21 +118,6 @@ namespace J3DNativeTexture {
         pHost->texture_image(pHost->user, &image);
     }
 
-    void registerPalette(const void* pPalette, u16 entries) {
-        if (pPalette == nullptr || entries == 0) {
-            return;
-        }
-        NebulaTextureImage palette;
-        palette.bytes = pPalette;
-        palette.size = static_cast< u32 >(entries) * 2;
-        palette.width = entries;
-        palette.height = 1;
-        palette.format = 0xFF;  // not an image
-        palette.levels = 1;
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->texture_image(pHost->user, &palette);
-    }
-
     void init(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,
               GXTexWrapMode wrapT, GXBool mipmap) {
         J3DNativeTexObj& rTex = texture(pObj);
@@ -190,8 +174,8 @@ namespace J3DNativeTexture {
 
     void load(const GXTexObj* pObj, GXTexMapID map) {
         const J3DNativeTexObj& rTex = texture(pObj);
-        NebulaStateOp ops[4];
-        J3DStateList list(ops, 4);
+        NebulaStateOp ops[3];
+        J3DStateList list(ops, 3);
         list.setTexLookupMode(map, static_cast< GXTexWrapMode >(rTex.mWrapS), static_cast< GXTexWrapMode >(rTex.mWrapT),
                               static_cast< GXTexFilter >(rTex.mMinFilter), static_cast< GXTexFilter >(rTex.mMagFilter),
                               rTex.mMinLod, rTex.mMaxLod, rTex.mLodBias, rTex.mBiasClamp, rTex.mEdgeLod,
@@ -200,9 +184,6 @@ namespace J3DNativeTexture {
         list.setTexImgAttr(map, rTex.mWidth, rTex.mHeight, static_cast< GXTexFmt >(rTex.mFormat & 0xF));
         list.setTexImgPtr(map, rTex.mImage);
         ops[2].a[1] = 1;  // GXLoadTexObj's: the coordinate scales follow the texture
-        if (rTex.mPalette) {
-            list.setTexTlut(map, static_cast< GXTlutFmt >(sTlutFormat[rTex.mTlutName % 20]), rTex.mTlutName);
-        }
         list.send();
     }
 
@@ -242,21 +223,10 @@ namespace J3DNativeTexture {
     void initTlut(GXTlutObj* pObj, void* pLut, GXTlutFmt format, u16 entries) {
         J3DNativeTlutObj& rTlut = *reinterpret_cast< J3DNativeTlutObj* >(pObj);
         memcpy(rTlut.mLut, &pLut, sizeof(pLut));
-        registerPalette(pLut, entries);
         rTlut.mFormat = static_cast< u8 >(format);
         rTlut.mEntries = entries;
     }
 
-    void loadTlut(const GXTlutObj* pObj, u32 tlutName) {
-        const J3DNativeTlutObj& rTlut = *reinterpret_cast< const J3DNativeTlutObj* >(pObj);
-        sTlutFormat[tlutName % 20] = rTlut.mFormat;
-        const void* pLut;
-        memcpy(&pLut, rTlut.mLut, sizeof(pLut));
-        NebulaStateOp op;
-        J3DStateList list(&op, 1);
-        list.loadTlut(tlutName, pLut);
-        list.send();
-    }
 };  // namespace J3DNativeTexture
 
 void J3DNativeTextureInit(GXTexObj* pObj, void* pImage, u16 width, u16 height, GXTexFmt format, GXTexWrapMode wrapS,

@@ -202,10 +202,6 @@ void JUTTexture::initTexObj(GXTlut lut) {
 }
 
 void JUTTexture::load(GXTexMapID texMapID) {
-    if (mPalette != nullptr) {
-        mPalette->load();
-    }
-
     J3DNativeTexture::load(&mObj, texMapID);
 }
 

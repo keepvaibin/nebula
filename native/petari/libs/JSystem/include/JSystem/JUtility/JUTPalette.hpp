@@ -24,7 +24,6 @@ public:
 
     void storeTLUT(GXTlut, ResTLUT*);
     void storeTLUT(GXTlut, GXTlutFmt, JUTTransparency, u16, void*);
-    bool load();
 
     /* 0x00 */ GXTlutObj mObj;
     /* 0x0C */ u8 mName;
