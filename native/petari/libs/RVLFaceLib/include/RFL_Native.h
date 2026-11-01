@@ -35,6 +35,11 @@ void RFLiNativeChain(u32 chain, u32 lightMask, GXDiffuseFn diffuse, GXAttnFn att
 // A part's material: its form, constant colour, culling and texture (NULL: none).
 void RFLiNativePart(u32 form, GXColor color, GXCullMode cull, const GXTexObj* pTexture);
 
+// The face texture's parts (RFL_MakeTex.c, runtime/src/render/materials/mii_texture.hlsl): the form and colours the
+// next parts take (0 solid c0, 1 mouth, 2 eye), and a part's material with its texture at its draw.
+void RFLiNativeTextureForm(u32 form, GXColor c0, GXColor c1);
+void RFLiNativeTexturePart(const GXTexObj* pTexture);
+
 #ifdef __cplusplus
 }
 #endif
