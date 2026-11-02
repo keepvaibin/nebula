@@ -10,7 +10,7 @@
 #include <JSystem/JAudio2/JASWaveArcLoader.hpp>
 #include <JSystem/JSupport/JSupport.hpp>
 #include <cstring>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 JASChannel* JASBank::noteOn(JASBank const* pBank, int progNo, u8 pitch, u8 velocity, u16 priority, JASChannel::Callback pCallback,
                             void* pChannelMgr) {
@@ -147,7 +147,7 @@ void JASWaveArc::setFileName(const char* pName) {
     MR::makeFileNameConsideringLanguage(fileName, sizeof(fileName), path);
     #endif
 
-    int entryNum = NebulaDisc::find(fileName);
+    int entryNum = GameAssets::find(fileName);
     delete[] path;
     if (entryNum < 0) {
         return;

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "Game/System/GameAssets.hpp"
+
 #include "Game/System/ArchiveHolder.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/FileHolder.hpp"
 #include "Game/System/FileLoaderThread.hpp"
-#include <JSystem/JKernel/JKRDvdRipper.hpp>
+
 #include <JSystem/JKernel/JKRHeap.hpp>
 #include <cstdio>
 #include <NebulaGpu.h>
@@ -17,7 +19,7 @@ class FileLoader {
 public:
     FileLoader();
 
-    void requestLoadToMainRAM(const char*, u8*, JKRHeap*, JKRDvdRipper::EAllocDirection, bool);
+    void requestLoadToMainRAM(const char*, u8*, JKRHeap*, GameAssets::AllocDirection, bool);
     void requestMountArchive(const char*, JKRHeap*, bool);
     bool isLoaded(const char*) const;
     bool isMountedArchive(const char*) const;

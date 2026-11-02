@@ -421,7 +421,7 @@ namespace {
 
 void GalaxyMap::initPaneCtrlPointing() {
     JMapInfo galaxyInfo;
-    galaxyInfo.attach(NebulaDiscTables::getGalaxyInfoTable());
+    galaxyInfo.attach(NebulaDataTables::getGalaxyInfoTable());
     ::initIconArray(mIcon, new GalaxyMapIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     ::initIconArray(mCometIcon, new GalaxyMapCometIcon*[galaxyInfo.getNumEntries()], galaxyInfo.getNumEntries());
     initPointingTarget(galaxyInfo.getNumEntries());

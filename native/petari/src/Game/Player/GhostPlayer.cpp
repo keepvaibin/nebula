@@ -153,7 +153,7 @@ void GhostPlayer::init(const JMapInfoIter& rIter) {
     mCurrentPacket = static_cast< GhostPacket* >(MR::loadResourceFromArc(arcPath, gstPath));
 
     if (MR::isFileExist(gstPath, false)) {
-        mCurrentPacket = static_cast< GhostPacket* >(MR::loadToMainRAM(gstPath, nullptr, nullptr, JKRDvdRipper::ALLOC_DIRECTION_FORWARD));
+        mCurrentPacket = static_cast< GhostPacket* >(MR::loadToMainRAM(gstPath, nullptr, nullptr, GameAssets::ALLOC_DIRECTION_FORWARD));
     }
 
     if (mCurrentPacket == nullptr) {

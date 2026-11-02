@@ -1,5 +1,6 @@
+#include "Game/System/GameAssets.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
 #include <NebulaGpu.h>
@@ -97,7 +98,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
     if (mountDir == MOUNT_DIRECTION_1) {
         u32 size;
 
-        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, &size);
+        void* pData = GameAssets::load(entryNum, nullptr, 0, mHeap, GameAssets::ALLOC_DIRECTION_FORWARD, &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
         panicIfNotCooked(pData);
@@ -107,7 +108,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
     } else {
         u32 size;
 
-        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_BACKWARD, 0, &size);
+        void* pData = GameAssets::load(entryNum, nullptr, 0, mHeap, GameAssets::ALLOC_DIRECTION_BACKWARD, &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
         panicIfNotCooked(pData);

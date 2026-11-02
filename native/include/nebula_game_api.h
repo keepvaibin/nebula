@@ -1,7 +1,7 @@
 /* The game module's interface to Nebula's host (docs/NATIVE_PORT.md, "Module layout"): plain C, so the game module
    (built against the game's own C++ library) and the host (the host's C++ library) share nothing else. The host fills
    NebulaHostServices and calls nebula_game_attach, then runs the game on its simulation thread with nebula_game_run;
-   events from host threads (the renderer's PE tokens and stream consumption, the video retrace, audio, input, disc)
+   events from host threads (the renderer's PE tokens and stream consumption, the video retrace, audio, input, file reads)
    come back through the nebula_game_* entry points, which may be called from any thread. */
 #ifndef NEBULA_GAME_API_H
 #define NEBULA_GAME_API_H
@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 85u
+#define NEBULA_GAME_API_VERSION 86u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per audio_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -460,14 +460,14 @@ typedef struct NebulaShapeGeometry {
     const uint16_t* indices;
 } NebulaShapeGeometry;
 
-/* A file or folder of the game's disc (the game partition's file table, or the mods' disc built over it). */
-typedef struct NebulaDiscEntry {
+/* A file or folder of the asset store. */
+typedef struct NebulaAssetEntry {
     int32_t index;     /* in the file table; 0 is the root folder */
     uint32_t length;   /* a file's length in bytes; 0 for a folder */
     uint8_t folder;
     uint8_t reserved[3];
     const char* name;  /* valid for the process's life */
-} NebulaDiscEntry;
+} NebulaAssetEntry;
 
 /* System settings (SCGet*), with the SDK's values (SC_LANGUAGE_*, SC_SOUND_MODE_*, SC_ASPECT_RATIO_*...). */
 enum {
@@ -941,18 +941,17 @@ typedef struct NebulaHostServices {
     /* Disc: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
        none. */
-    int (*disc_find)(void* user, const char* path, NebulaDiscEntry* entry);
+    int (*asset_find)(void* user, const char* path, NebulaAssetEntry* entry);
     /* The entry with file-table index `index`: 0 when there is none. */
-    int (*disc_entry)(void* user, int32_t index, NebulaDiscEntry* entry);
+    int (*asset_entry)(void* user, int32_t index, NebulaAssetEntry* entry);
     /* The `child`-th entry of the folder `folder`, in the table's order: 0 past the last. */
-    int (*disc_child)(void* user, int32_t folder, uint32_t child, NebulaDiscEntry* entry);
-    /* Reads `size` bytes at `offset` of the file `file` into `dst` without blocking (offset at most the file's length,
-       the end before its length plus 32: the bytes after a file are the disc's); the host calls
-       nebula_game_disc_complete(slot, bytes read or -1) from any thread when done. */
-    void (*disc_read)(void* user, int32_t file, uint32_t offset, uint32_t size, void* dst, uint32_t slot);
+    int (*asset_child)(void* user, int32_t folder, uint32_t child, NebulaAssetEntry* entry);
+    /* Reads `size` bytes at `offset` of a file into dst; the host calls nebula_game_asset_complete(slot, bytes read or -1)
+       from any thread when done. */
+    void (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
     /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
        whose few differences the module follows (NebulaRegion.hpp) and whose save folder the NAND holds. */
-    const char* (*disc_id)(void* user);
+    const char* (*game_id)(void* user);
 
     /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
        whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
@@ -1201,8 +1200,8 @@ enum {
 NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 /* Runs the game on the calling thread, the simulation thread. Does not return. */
 NEBULA_GAME_API void nebula_game_run(void);
-/* A disc read finished: `result` is the bytes read, or -1 on a read error. */
-NEBULA_GAME_API void nebula_game_disc_complete(uint32_t slot, int32_t result);
+/* A file read finished: `result` is the bytes read, or -1 on a read error. */
+NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result);
 /* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
 NEBULA_GAME_API void nebula_game_vi_retrace(void);
 /* A NAND operation finished. */

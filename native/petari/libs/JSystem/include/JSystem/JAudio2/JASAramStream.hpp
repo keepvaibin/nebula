@@ -4,7 +4,7 @@
 
 #include "JSystem/JAudio2/JASTaskThread.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 class JASChannel;
 
@@ -144,7 +144,7 @@ public:
     /* 0x0C0 */ bool _0C0;
     /* 0x0C4 */ NebulaAtomic< u32 > _0C4;
     /* 0x0C8 */ NebulaAtomic< f32 > _0C8;
-    /* 0x0CC */ NebulaDisc::File mDvdFile;
+    /* 0x0CC */ GameAssets::File mDvdFile;
     /* 0x108 */ u32 _108;
     /* 0x10C */ int _10C;
     /* 0x110 */ u32 mBlock;

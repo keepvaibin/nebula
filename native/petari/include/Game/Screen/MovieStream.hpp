@@ -3,7 +3,7 @@
 #include "Game/System/NebulaAtomic.hpp"
 
 #include "Game/System/NerveExecutor.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 // A movie file as the importer cooks it (crates/nebula-import/src/cook/thp.rs), host order.
 struct MovieFileHeader {
@@ -87,8 +87,8 @@ private:
     bool mLoop;
     bool mReadError;
     bool mReading;
-    NebulaDisc::File mFile;
-    NebulaDisc::Request mRequest;
+    GameAssets::File mFile;
+    GameAssets::Request mRequest;
     MovieFileHeader mHeader;
     MovieVideoInfo mVideoInfo;
     u32 mCurOffset;

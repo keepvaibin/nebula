@@ -29,7 +29,7 @@ GameSystemObjHolder::GameSystemObjHolder()
     initDvd();
     initNAND();
     initNameObj();
-    MR::createAndAddArchive(NebulaDiscTables::loadErrorMessageArchive(MR::getStationedHeap()), MR::getStationedHeap(),
+    MR::createAndAddArchive(NebulaDataTables::loadErrorMessageArchive(MR::getStationedHeap()), MR::getStationedHeap(),
                             "ErrorMessageArchive.arc");
 }
 

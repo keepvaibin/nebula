@@ -12,10 +12,10 @@
 #include "JSystem/JAudio2/JAUSoundInfo.hpp"
 #include "JSystem/JAudio2/JAUSoundTable.hpp"
 #include "JSystem/JAudio2/JAUStreamFileTable.hpp"
-#include "JSystem/JKernel/JKRDvdRipper.hpp"
+
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 #include <cstring>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 namespace {
     class TPushCurrentHeap {
@@ -53,7 +53,7 @@ namespace {
             }
 
             for (u32 i = 0; i < field_0x4; i++) {
-                field_0x8[i] = NebulaDisc::find(stack_14.getFilePath(i));
+                field_0x8[i] = GameAssets::find(stack_14.getFilePath(i));
             }
         }
 
@@ -287,8 +287,7 @@ bool JAUSection::newStaticSeqData(JAISoundID param_0) {
 void* JAUSection::loadDVDFile(const char* pFileName, bool direction) {
     {
         TPushCurrentHeap push(getHeap_());
-        return JKRDvdToMainRam(pFileName, nullptr, 0, getHeap_(), direction ? JKRDvdRipper::ALLOC_DIRECTION_BACKWARD : JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0,
-                               nullptr);
+        return GameAssets::load(pFileName, nullptr, 0, getHeap_(), direction ? GameAssets::ALLOC_DIRECTION_BACKWARD : GameAssets::ALLOC_DIRECTION_FORWARD, nullptr);
     }
 }
 

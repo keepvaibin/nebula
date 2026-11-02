@@ -1,18 +1,19 @@
 #include "Game/System/FileLoaderThread.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "Game/System/FileRipper.hpp"
 #include "Game/Util/FileUtil.hpp"
+#include "JSystem/JUtility/JUTException.hpp"
 
 namespace {
-    void* loadFileUsingRipper(RequestFileInfo* pInfo) {
-        s32 val = 0;
-
-        if (pInfo->mRequestType != 1) {
-            val = 1;
+    void* loadFile(RequestFileInfo* pInfo) {
+        void* pData = GameAssets::load(pInfo->mFileName, (u8*)pInfo->mFileEntry->mContext, 0, pInfo->mFileEntry->mHeap,
+                                       pInfo->mRequestType != 1 ? GameAssets::ALLOC_DIRECTION_BACKWARD
+                                                                : GameAssets::ALLOC_DIRECTION_FORWARD,
+                                       nullptr);
+        if (pData == nullptr) {
+            JUTException::panic_f(__FILE__, __LINE__, "%s cannot be loaded", pInfo->mFileName);
         }
 
-        return FileRipper::loadToMainRAM(pInfo->mFileName, (u8*)pInfo->mFileEntry->mContext, pInfo->mFileEntry->mHeap,
-                                         (FileRipper::AllocDirection)val);
+        return pData;
     }
 };  // namespace
 
@@ -40,14 +41,14 @@ void* FileLoaderThread::run() {
 
 void FileLoaderThread::loadToMainRAM(RequestFileInfo* pInfo) {
     pInfo->_88 = 1;
-    void* data = ::loadFileUsingRipper(pInfo);
+    void* data = ::loadFile(pInfo);
     pInfo->mFileEntry->setContext(data, pInfo->mFileEntry->mHeap);
     pInfo->_88 = 2;
 }
 
 void FileLoaderThread::mountArchiveAndStartCreateResource(RequestFileInfo* pInfo) {
     pInfo->_88 = 1;
-    void* data = ::loadFileUsingRipper(pInfo);
+    void* data = ::loadFile(pInfo);
     MR::createAndAddArchive(data, pInfo->mFileEntry->mHeap, pInfo->mFileName);
     pInfo->mFileEntry->setContext(data, pInfo->mFileEntry->mHeap);
     pInfo->_88 = 2;

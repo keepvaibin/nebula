@@ -39,7 +39,7 @@
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 const char sAudioResFile[] = "/AudioRes/SMR.szs";
 const char sJaiSeqArc[] = "/AudioRes/Seqs/JaiSeq.arc";
@@ -95,7 +95,7 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
     newHeap->getHeap()->becomeCurrentHeap();
 
     if (pV == nullptr) {
-        if (NebulaDisc::find(sAudioResFile) >= 0) {
+        if (GameAssets::find(sAudioResFile) >= 0) {
             JAUAudioArcLoader loader(newHeap);
             loader.load(sAudioResFile);
             newHeap->getHeap()->freeTail();
@@ -108,8 +108,8 @@ AudSystem* AudNewAudSystem(JKRSolidHeap* pHeap, void* pV, JKRArchive* pSeqArchiv
 
     u32 maxSeqDataSize;
     if (pSeqArchive == nullptr) {
-        if (NebulaDisc::find(sJaiSeqArc) >= 0) {
-            JKRArchive* seqArc = JKRArchive::mount(sJaiSeqArc, JKRArchive::MOUNT_MODE_DVD, newHeap->getHeap(), JKRArchive::MOUNT_DIRECTION_1);
+        if (GameAssets::find(sJaiSeqArc) >= 0) {
+            JKRArchive* seqArc = JKRArchive::mount(sJaiSeqArc, JKRArchive::MOUNT_MODE_MEM, currHeap, JKRArchive::MOUNT_DIRECTION_1);
             newHeap->setSeqDataArchive(seqArc);
             maxSeqDataSize = AudParams::maxSeqDataSize;
         } else {

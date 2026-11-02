@@ -1,7 +1,7 @@
-#include "Game/System/NebulaDiscTables.hpp"
+#include "Game/System/NebulaDataTables.hpp"
 #include "Game/System/GalaxyCometScheduler.hpp"
 #include "Game/System/GameEventFlag.hpp"
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JUtility/JUTException.hpp>
@@ -17,21 +17,20 @@ namespace {
     const s32 cCometPapersMax = 26;
     const u32 cEventFlags = 0xEB0 / 0x14;
 
-    // A file of the folder read into `pHeap` (straight from the disc: the file loader may not run yet); null when the
+    // A file of the folder read into `pHeap` (straight from the store: the file loader may not run yet); null when the
     // disc has none of that name.
     u8* load(const char* pName, bool required, JKRHeap* pHeap) {
         char path[64];
         snprintf(path, sizeof(path), "/NebulaData/%s", pName);
-        NebulaDisc::File file;
-        if (!NebulaDisc::open(path, &file)) {
+        GameAssets::File file;
+        if (!GameAssets::open(path, &file)) {
             if (required) {
                 JUTException::panic_f(__FILE__, __LINE__, "%s is missing: the game content was not cooked by this version", path);
             }
             return nullptr;
         }
-        const s32 size = static_cast< s32 >((file.mLength + 31) & ~31u);
-        u8* pData = static_cast< u8* >(JKRHeap::alloc(size, 32, pHeap));
-        if (pData == nullptr || NebulaDisc::read(&file, pData, size, 0) < static_cast< s32 >(file.mLength)) {
+        u8* pData = static_cast< u8* >(JKRHeap::alloc(file.mLength, 32, pHeap));
+        if (pData == nullptr || GameAssets::read(&file, pData, file.mLength, 0) < static_cast< s32 >(file.mLength)) {
             JUTException::panic_f(__FILE__, __LINE__, "%s cannot be read", path);
         }
         return pData;
@@ -56,7 +55,7 @@ namespace {
     }
 }  // namespace
 
-namespace NebulaDiscTables {
+namespace NebulaDataTables {
     const void* getGalaxyInfoTable() {
         static const u8* sTable = load("GalaxyInfoTable.bcsv", true);
         return sTable;
@@ -133,4 +132,4 @@ namespace NebulaDiscTables {
         JUTNativeLog("main.dol: the event flags differ from the game's (a mod's): main.dol's used\n");
         return sFlags;
     }
-};  // namespace NebulaDiscTables
+};  // namespace NebulaDataTables

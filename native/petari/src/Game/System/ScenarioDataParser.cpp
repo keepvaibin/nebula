@@ -10,7 +10,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <algorithm>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 template const bool JMapInfo::getValue< s32 >(int, const char*, s32*) const NO_INLINE;
 
@@ -158,8 +158,8 @@ GalaxyStatusAccessor ScenarioDataIter::makeAccessor() const {
 #pragma push
 #pragma opt_propagation off
 ScenarioDataParser::ScenarioDataParser(const char* pName) : NameObj(pName), mScenarioData() {
-    NebulaDisc::FolderEntry dirent;
-    for (u32 i = 0; NebulaDisc::folderEntry("/StageData", i, &dirent); i++) {
+    GameAssets::FolderEntry dirent;
+    for (u32 i = 0; GameAssets::folderEntry("/StageData", i, &dirent); i++) {
         if (!dirent.mIsFolder) {
             continue;
         }

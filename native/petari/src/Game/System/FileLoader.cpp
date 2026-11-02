@@ -19,7 +19,7 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
 }
 
-void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection direction, bool jam) {
+void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, GameAssets::AllocDirection direction, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();

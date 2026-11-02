@@ -232,7 +232,7 @@ namespace {
         Galaxies result = {false, true, true, true, true, true, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
         s32 comets = 0, daredevil = 0, cosmic = 0, speedy = 0, purpleCoins = 0, hidden = 0;
         JMapInfo galaxies;
-        galaxies.attach(NebulaDiscTables::getGalaxyInfoTable());
+        galaxies.attach(NebulaDataTables::getGalaxyInfoTable());
         for (s32 i = 0; i < galaxies.getNumEntries(); i++) {
             const char* pPane = nullptr;
             const char* pName = nullptr;

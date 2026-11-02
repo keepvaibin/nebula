@@ -1,6 +1,5 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/System/FileLoader.hpp"
-#include "Game/System/FileRipper.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/System/ResourceHolderManager.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -9,7 +8,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <cstdio>
 #include <cstring>
-#include "Game/System/NebulaDisc.hpp"
+#include "Game/System/GameAssets.hpp"
 
 namespace MR {
     bool isFileExist(const char* pFilePath, bool considerLanguage) {
@@ -18,7 +17,7 @@ namespace MR {
         if (considerLanguage) {
             entryNum = convertPathToEntrynumConsideringLanguage(pFilePath);
         } else {
-            entryNum = NebulaDisc::find(pFilePath);
+            entryNum = GameAssets::find(pFilePath);
         }
 
         return entryNum >= 0;
@@ -30,27 +29,27 @@ namespace MR {
         if (considerLanguage) {
             entryNum = convertPathToEntrynumConsideringLanguage(pFilePath);
         } else {
-            entryNum = NebulaDisc::find(pFilePath);
+            entryNum = GameAssets::find(pFilePath);
         }
 
-        NebulaDisc::File file;
-        return NebulaDisc::open(entryNum, &file) ? file.mLength : 0;
+        GameAssets::File file;
+        return GameAssets::open(entryNum, &file) ? file.mLength : 0;
     }
 
     s32 convertPathToEntrynumConsideringLanguage(const char* pFilePath) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
-        return NebulaDisc::find(filePath);
+        return GameAssets::find(filePath);
     }
 
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection allocDir) {
+    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir) {
         loadAsyncToMainRAM(pFilePath, pDst, pHeap, allocDir);
 
         return receiveFile(pFilePath);
     }
 
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, JKRDvdRipper::EAllocDirection allocDir) {
+    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
@@ -142,7 +141,6 @@ namespace MR {
     void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align) {
         const u8* const fileData = static_cast< const u8* >(pArchive->getResource(pFilePath));
         const u32 fileSize = pArchive->getResSize(fileData);
-        JKRDvdRipper::panicIfCompressed(fileData, pFilePath);
         u8* const buffer = new (pHeap, align) u8[fileSize];
         memcpy(buffer, fileData, fileSize);
 

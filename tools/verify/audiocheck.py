@@ -5,27 +5,7 @@ import array
 import struct
 import sys
 
-
-def files(pak):
-    pak.seek(0x424)
-    at, size = (v << 2 for v in struct.unpack(">II", pak.read(8)))
-    pak.seek(at)
-    fst = pak.read(size)
-    count = struct.unpack_from(">I", fst, 8)[0]
-    names = count * 12
-    out = {}
-    folders = []
-    for n in range(1, count):
-        while folders and n >= folders[-1][1]:
-            folders.pop()
-        w, a, b = struct.unpack_from(">III", fst, n * 12)
-        at = names + (w & 0xFFFFFF)
-        label = fst[at : fst.index(b"\0", at)].decode("latin-1")
-        if w >> 24:
-            folders.append((label, b))
-        else:
-            out["/".join([f for f, _ in folders] + [label])] = (a << 2, b)
-    return out
+from pakfiles import files
 
 
 def read(pak, entry):
