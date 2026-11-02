@@ -43,9 +43,6 @@ enum NativeShaderVariant : unsigned {
 // whether the output layout carries motion vectors (kNativeVariantMotion).
 [[nodiscard]] NativeShaderBytes native_curved_bytes(bool motion, bool domain) noexcept;
 
-// The geometry stage that widens lines (point false) or points into quads at the drawing state's sizes for every
-// native material (native_lines.hlsl), by whether the output layout carries motion vectors.
-[[nodiscard]] NativeShaderBytes native_line_point_bytes(bool motion, bool point) noexcept;
 
 // A native pipeline's render state: the draw's (its dual-source and constant-alpha bits the shader's dual variant
 // and PE word serve).

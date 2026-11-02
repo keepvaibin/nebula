@@ -196,6 +196,20 @@ uint native_tex_matrix(NativeVertex v, uint i) {
 }
 float4 material_color(NativeVaryings i);
 
+// The texture coordinates `mask` names moved by 1 / divisor in x (and in y when `bottom`).
+void native_texcoord_offset(inout NativeVaryings v, uint mask, uint divisor, bool right, bool bottom) {
+    if (divisor == 0u) {
+        return;
+    }
+    const float offset = 1.0 / float(divisor);
+    [unroll] for (uint i = 0u; i < 8u; ++i) {
+        if ((mask & (1u << i)) != 0u) {
+            v.uv[i].x += right ? offset : 0.0;
+            v.uv[i].y += bottom ? offset : 0.0;
+        }
+    }
+}
+
 NativeVsOut native_vs(NativeVertexIn input) {
     NativeVertex v;
     v.pos = input.pos;
@@ -252,6 +266,35 @@ NativeVsOut native_vs(NativeVertexIn input) {
     o.mv_prev = float4(prev_clip.xy, motion_params.w, prev_clip.z);  // .w the previous clip w
 #endif
     material_vertex(v, o);
+    // A corner of a widened point or line (render_vertex.h kVertexWiden*): moved out by the draw's size in pixels. A line
+    // widens across its major axis (a steep one across x, a flat one across y); the second edge's coordinates move.
+    const uint widen = (input.mtx_idx.z >> 8u) & 15u;
+    if (widen != 0u) {
+        const bool right = (widen & 4u) != 0u;
+        const bool bottom = (widen & 8u) != 0u;
+        if ((widen & 1u) != 0u) {
+            const float2 signs = float2(right ? 1.0 : -1.0, bottom ? -1.0 : 1.0);
+            o.pos.xy += signs * line_point_raster.ww / line_point_raster.xy * o.pos.w;
+            native_texcoord_offset(o, line_point_tex_offsets.y, line_point_tex_offsets.w, right, bottom);
+        } else {
+            const float4 q = float4(input.tangent, 1.0);
+            float4 other_eye;
+            if ((draw_counts.z & 1u) != 0u) {
+                const uint r = min(input.curve.x & 0x3Fu, 61u);
+                other_eye = float4(dot(native_matrix_row(r), q), dot(native_matrix_row(r + 1u), q),
+                                   dot(native_matrix_row(r + 2u), q), 1.0);
+            } else {
+                other_eye = float4(dot(m0, q), dot(m1, q), dot(m2, q), 1.0);
+            }
+            const float4 other = mul(projection, other_eye);
+            const float2 delta = abs(o.pos.xy / o.pos.w - other.xy / other.w);
+            const bool tall = line_point_raster.y * delta.y > line_point_raster.x * delta.x;
+            const float2 offset = tall ? float2(line_point_raster.z / line_point_raster.x, 0.0)
+                                       : float2(0.0, -line_point_raster.z / line_point_raster.y);
+            o.pos.xy += (right ? offset : -offset) * o.pos.w;
+            native_texcoord_offset(o, line_point_tex_offsets.x, line_point_tex_offsets.z, right, false);
+        }
+    }
     NativeVsOut out_ = (NativeVsOut)0;
     out_.pos = o.pos;
     out_.color = o.color;

@@ -445,29 +445,9 @@ struct ScopedFlushTiming {
     ScopedFlushTiming& operator=(const ScopedFlushTiming&) = delete;
 };
 
-void topology_for_primitive(
-    Primitive primitive,
-    gpu::Topology& topology,
-    gpu::TopologyType& topology_type) {
+void topology_for_primitive(gpu::Topology& topology, gpu::TopologyType& topology_type) {
     topology = gpu::kTopologyTriangleList;
     topology_type = gpu::kTopologyTypeTriangle;
-    switch (primitive) {
-    case Primitive::Lines:
-    case Primitive::LineStrip:
-        topology = gpu::kTopologyLineList;
-        topology_type = gpu::kTopologyTypeLine;
-        break;
-    case Primitive::Points:
-        topology = gpu::kTopologyPointList;
-        topology_type = gpu::kTopologyTypePoint;
-        break;
-    case Primitive::Quads:
-    case Primitive::Triangles:
-    case Primitive::TriangleStrip:
-    case Primitive::TriangleFan:
-    default:
-        break;
-    }
 }
 
 // The kinds of a draw's matrices (draw_matrices.h), in the order their blocks are appended (RenderCore::flush).
@@ -4095,7 +4075,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
         // frame after them (started by the render loop after this chunk).
         // As on the VI-present path, a present while a completed log waits
         // starts that log's sequence, even one the duplicate or rate checks
-        // would drop: the VI may still name the previous display picture (the guest flips
+        // would drop: the VI may still name the previous display picture (the game flips
         // at the next retrace), and the waiting frame would be skipped when
         // the next one closes first.
         if (interp_log_waiting_ && chunk.present_swap_chain && selected_display != nullptr &&
@@ -5260,7 +5240,7 @@ bool RenderCore::begin_cached_draw_run(
     }
     gpu::Topology topology{};
     gpu::TopologyType topology_type{};
-    topology_for_primitive(primitive, topology, topology_type);
+    topology_for_primitive(topology, topology_type);
 
     const ScissorRect sc = draw_state_.scissor;
     // The reject flag also covers fully culled polygons; lines and points stay visible under
@@ -5824,7 +5804,7 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
 
 void RenderCore::draw_record_immediate(const shapes::Record& record) {
     display_copy_on_output_ = false;
-    const auto primitive = static_cast<Primitive>(record.primitive);
+    const auto primitive = record.primitive == shapes::kWideQuads ? Primitive::Triangles : static_cast<Primitive>(record.primitive);
     const std::uint32_t count = record.vertex_count;
     shapes::primitive_indices(record.primitive, count, immediate_indices_);
     if (immediate_indices_.empty() || count > 0x10000u) {
@@ -5978,7 +5958,7 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                     seen[count++]=current;
                     const auto scale=renderer_.covering_scale();
                     std::cerr<<"[display-render-layout] unique="<<count<<" backing-efb="<<640u*scale<<'x'<<456u*scale
-                        <<" guest-copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
+                        <<" copy-rect="<<params.src_x<<','<<params.src_y<<','<<params.src_width<<','<<params.src_height
                         <<" scene-copy-sampled="<<params.src_width*scale<<'x'<<params.src_height*scale
                         <<" scaled-xfb="<<display_picture->width<<'x'<<display_picture->height
                         <<" internal-scale="<<scale<<" xfb-serial-before-publication="<<display_picture->copy_serial<<'\n';

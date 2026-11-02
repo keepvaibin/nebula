@@ -272,7 +272,6 @@ bool Context::initialize(bool prefer_integrated, bool validation, std::vector<co
     VkPhysicalDeviceFeatures enabled{};
     enabled.dualSrcBlend = available.dualSrcBlend;
     enabled.logicOp = available.logicOp;
-    enabled.geometryShader = available.geometryShader;
     // Curved surfaces: the vertex stage's 19 interpolant locations into the hull stage, 16 segments an edge.
     const VkPhysicalDeviceLimits& limits = properties_.limits;
     tessellation_shader_ = !quirks_.no_tessellation && available.tessellationShader == VK_TRUE &&

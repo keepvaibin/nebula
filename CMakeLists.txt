@@ -558,26 +558,9 @@ foreach(name curved_surfaces native_shapes draw_constants_fill render_config
         warp_capture_store native_material)
     galaxy_test(galaxy_${name}_tests SOURCES ${gxs}/${name}_tests.cpp LIBS galaxy_gx)
 endforeach()
-# line_point_params_tests' own vertex and pixel stages, DXIL as the native stages they share pipelines with.
-set(galaxy_line_point_test_headers "")
-foreach(galaxy_lp_stage vs ps)
-    string(TOUPPER "${galaxy_lp_stage}" galaxy_lp_upper)
-    string(SUBSTRING "${galaxy_lp_upper}" 0 1 galaxy_lp_first)
-    string(SUBSTRING "${galaxy_lp_stage}" 1 -1 galaxy_lp_rest)
-    set(galaxy_lp_out "${CMAKE_CURRENT_BINARY_DIR}/generated/line_point_test_${galaxy_lp_stage}.h")
-    add_custom_command(OUTPUT "${galaxy_lp_out}"
-        COMMAND "${GALAXY_DXC}" -nologo -T ${galaxy_lp_stage}_6_0 -E test_${galaxy_lp_stage} -O3 -WX -Qstrip_debug
-                -Vn kLinePointTest${galaxy_lp_first}${galaxy_lp_rest} -Fh "${galaxy_lp_out}"
-                "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_params_tests.hlsl"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/runtime/src/render/line_point_params_tests.hlsl"
-        VERBATIM)
-    list(APPEND galaxy_line_point_test_headers "${galaxy_lp_out}")
-endforeach()
 # The tests compile their own small shaders; the program itself never compiles any.
 target_link_libraries(galaxy_capture_tests PRIVATE d3dcompiler)
 target_link_libraries(galaxy_warp_capture_store_tests PRIVATE d3dcompiler)
-target_sources(galaxy_line_point_params_tests PRIVATE ${galaxy_line_point_test_headers})
-target_include_directories(galaxy_line_point_params_tests PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 add_test(NAME galaxy_post_process_tests_held_no_deband COMMAND galaxy_post_process_tests --held-no-deband)
 # Texture records (nebula_cooked_texture.h) in the texture cache's suite.
 target_include_directories(galaxy_warp_capture_store_tests PRIVATE native/include)

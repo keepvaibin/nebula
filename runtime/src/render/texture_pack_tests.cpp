@@ -230,7 +230,7 @@ void test_sampler_shift() {
     // A 4x replacement of a mip-less texture: levels 0..2 of the replacement (the game's base size).
     const std::uint32_t key = pack_sampler_key(mode, false, 9u, 32u);
     expect(((key >> 5u) & 0x7u) == 6u,
-           "mip-less guest sampler gains a mip filter for a replacement");
+           "mip-less game sampler gains a mip filter for a replacement");
     expect(((key >> 16u) & 0xFFu) == 0u && ((key >> 24u) & 0xFFu) == 32u, "LOD range 0..2 for a 4x replacement");
     // Authored mips: the range moves by the shift.
     mode.min_linear = true, mode.mip = 2u;
@@ -257,7 +257,7 @@ void test_sampler_shift() {
     mode.mag_linear = false;
     const std::uint32_t nearest = pack_sampler_key(mode, false, 9u, 16u);
     expect(((nearest >> 5u) & 0x7u) == 1u,
-           "nearest guest sampler keeps nearest filtering");
+           "nearest game sampler keeps nearest filtering");
 }
 
 struct Gpu {
@@ -328,12 +328,12 @@ void test_packs(Gpu& gpu, const std::filesystem::path& root) {
     const std::filesystem::path game = root / "My Pack" / TexturePacks::kGameId / "sub";
     std::filesystem::create_directories(game);
     // A 32x32 RGBA8 game texture replaced by a 128x128 PNG.
-    std::vector<std::uint8_t> guest(32u * 32u * 4u, 0x5Au);
+    std::vector<std::uint8_t> texels(32u * 32u * 4u, 0x5Au);
     TexturePackName png{};
     png.width = 32u;
     png.height = 32u;
     png.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
-    png.hash = hash_of(guest.data(), guest.size());
+    png.hash = hash_of(texels.data(), texels.size());
     std::vector<std::uint8_t> big(128u * 128u * 4u);
     for (std::size_t i = 0; i < big.size(); ++i) big[i] = static_cast<std::uint8_t>(i * 13u);
     expect(write_png(game / (texture_pack_name(png) + ".png"), 128u, 128u, big.data()), "pack PNG written");
@@ -522,9 +522,9 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     // A 32x32 RGBA8 game texture: 16 tiles of 64 bytes.
     constexpr std::uint32_t kAddress = 0x80100000u;
     // A cooked texture record (nebula_cooked_texture.h): 32x32 RGBA8 texels, named for packs by the disc's level 0.
-    std::vector<std::byte> guest(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(32u, 32u, 1u, NEBULA_TEXTURE_RGBA8));
-    nebula_texture_init(guest.data(), 32u, 32u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
-    for (std::size_t i = NEBULA_TEXTURE_HEADER; i < guest.size(); ++i) guest[i] = static_cast<std::byte>(i * 31u + 7u);
+    std::vector<std::byte> texels(NEBULA_TEXTURE_HEADER + nebula_texture_level_bytes(32u, 32u, 1u, NEBULA_TEXTURE_RGBA8));
+    nebula_texture_init(texels.data(), 32u, 32u, 1u, NEBULA_TEXTURE_RGBA8, 0u);
+    for (std::size_t i = NEBULA_TEXTURE_HEADER; i < texels.size(); ++i) texels[i] = static_cast<std::byte>(i * 31u + 7u);
     TestImage image{};
     image.address = kAddress;
     image.width = 32u;
@@ -539,10 +539,10 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     name.width = 32u;
     name.height = 32u;
     name.format = static_cast<std::uint8_t>(TexFormat::RGBA8);
-    name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(guest.data()) + NEBULA_TEXTURE_HEADER,
-                        guest.size() - NEBULA_TEXTURE_HEADER);
+    name.hash = hash_of(reinterpret_cast<const std::uint8_t*>(texels.data()) + NEBULA_TEXTURE_HEADER,
+                        texels.size() - NEBULA_TEXTURE_HEADER);
     {
-        auto* const record = reinterpret_cast<NebulaTexture*>(guest.data());
+        auto* const record = reinterpret_cast<NebulaTexture*>(texels.data());
         record->disc_format = static_cast<std::uint8_t>(TexFormat::RGBA8);
         record->pack_hash = name.hash;
     }
@@ -554,7 +554,7 @@ void test_cache(Gpu& gpu, const std::filesystem::path& root) {
     const auto owner = std::make_unique<TextureCache>();
     TextureCache& cache = *owner;
     expect(cache.initialize(gpu.device.Get()), "cache initializes");
-    cache.register_image(kAddress, std::make_shared<const std::vector<std::byte>>(guest));
+    cache.register_image(kAddress, std::make_shared<const std::vector<std::byte>>(texels));
     unsigned frame = 0;
     const auto next_frame = [&] {
         gpu.run();

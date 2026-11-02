@@ -347,7 +347,7 @@ public:
     [[nodiscard]] unsigned replay_hold_segment() const noexcept {
         return ring_mode_ == RingMode::Interp ? ring_segment_ : ~0u;
     }
-    // Completed logs, counted; the guest display picture the latest one copied to.
+    // Completed logs, counted; the game display picture the latest one copied to.
     [[nodiscard]] std::uint64_t replay_serial() const noexcept { return replay_serial_; }
     [[nodiscard]] std::uint32_t replay_picture_slot() const noexcept { return replay_picture_slot_; }
     // A 3D scene began inside the log being recorded (one is replayable).
@@ -1673,7 +1673,7 @@ private:
     UINT last_stats_present_refresh_count_ = 0;
     std::array<std::uint64_t, 5> telemetry_shown_refreshes_{};
 
-    // scene target->texture copy destinations, keyed by (guest dest address, copy format,
+    // scene target->texture copy destinations, keyed by (game dest address, copy format,
     // depth-source). SMG reuses one address with different copy formats, and each format
     // needs its own converted texture. The resource is reused across copies and recreated
     // only on size change; the TextureCache alias is refreshed per copy (cheap when unchanged).

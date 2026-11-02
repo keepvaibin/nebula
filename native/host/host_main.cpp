@@ -2169,7 +2169,13 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
         }
     }
     record.attributes = attributes;
-    galaxy::render::RenderVertex* out = galaxy::render::reserve_record_vertices(record, n);
+    // Lines and points become four corners each (the vertex stage widens them): made here, then widened into the pool.
+    const uint32_t widened = shapes::widened_count(draw->primitive, n);
+    static thread_local std::vector<galaxy::render::RenderVertex> gLinePointVertices;
+    if (widened != 0u) {
+        gLinePointVertices.resize(n);
+    }
+    galaxy::render::RenderVertex* out = widened != 0u ? gLinePointVertices.data() : galaxy::render::reserve_record_vertices(record, n);
     std::memset(out, 0, sizeof(galaxy::render::RenderVertex) * n);
     for (uint32_t i = 0; i < n; ++i) {
         galaxy::render::RenderVertex& v = out[i];
@@ -2204,6 +2210,11 @@ void svc_immediate(void*, const NebulaImmediate* draw) {
                 }
             }
         }
+    }
+    if (widened != 0u) {
+        shapes::widen_lines_points(draw->primitive, n, out, galaxy::render::reserve_record_vertices(record, widened));
+        record.primitive = shapes::kWideQuads;
+        record.pass.cull = NEBULA_CULL_NONE;  // culling is for polygons
     }
     galaxy::render::attach_shape_record(std::move(record));
 #else
