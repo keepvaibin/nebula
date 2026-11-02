@@ -52,7 +52,7 @@ int J3DDrawBuffer::entryMatSort(J3DMatPacket* pMatPacket) {
     } else {
         // The same image, the same slot, wherever it was loaded: draw order does not depend on memory layout.
         const ResTIMG* pTimg = pTexture->getResTIMG(texNo);
-        const NebulaTexture* pRecord = nebula_texture_record(reinterpret_cast< const u8* >(pTimg) + pTimg->mImageDataOffset);
+        const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
         hash = pRecord != nullptr ? static_cast< u32 >(pRecord->pack_hash) : 0;
     }
     u32 slot = hash & (mEntryTableSize - 1);
