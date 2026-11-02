@@ -1625,6 +1625,11 @@ uint64_t svc_clock_ns(void*) {
 }
 
 int64_t svc_calendar_ns(void*) {
+    if (deterministic_mode()) {
+        // A fixed date (2026-01-01 from 2000-01-01), then the retraces' time.
+        constexpr int64_t kFixedDate = 820454400;
+        return kFixedDate * 1000000000ll + static_cast<int64_t>(gDeterministicRetraces.load(std::memory_order_relaxed)) * 1000000000ll / 60;
+    }
     const auto now = std::chrono::system_clock::now();
     const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
     std::tm local{};
@@ -2895,7 +2900,7 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     *request->status = NEBULA_SAVE_PENDING;
     const NebulaSaveRequest r = *request;
     const std::string name = r.name != nullptr ? r.name : "";
-    gFs.post([r, name] {
+    auto operation = [r, name] {
         if (test_delay_us != 0) {
             std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
         }
@@ -2919,7 +2924,14 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
 #else  // libc++ without atomic_ref (Android NDK r28): the compiler's builtin, the same release store.
         __atomic_store_n(const_cast<int32_t*>(r.status), result, __ATOMIC_RELEASE);
 #endif
-    });
+    };
+    // Deterministic test mode: done before the call returns, as disc reads are, so the game's poll sees the same
+    // status on the same frame every run.
+    if (deterministic_mode()) {
+        operation();
+    } else {
+        gFs.post(operation);
+    }
 }
 
 // The system settings (SYSCONF) of a new console, as the game reads them. The pointer mapping (native_input's
