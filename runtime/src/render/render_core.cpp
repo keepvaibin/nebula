@@ -781,7 +781,7 @@ void RenderCore::trace_memory() {
         if (shape.geometry != nullptr) {
             geometry += shape.geometry->corners.capacity() * sizeof(shapes::Corner) + shape.geometry->indices.capacity() * sizeof(std::uint16_t);
         }
-        vertices += shape.vertices.capacity() * sizeof(RenderVertex);
+        vertices += shape.resident_units * sizeof(RenderVertex);
         split += shape.split_indices.capacity() * sizeof(std::uint16_t);
     }
     const auto mb = [](std::uint64_t bytes) { return static_cast<double>(bytes) / (1024.0 * 1024.0); };
@@ -1020,7 +1020,7 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     if (device == nullptr) {
         return false;
     }
-    if (resident_vertex_buffer_ && resident_vertex_device_ == device) {
+    if (resident_vertex_gpu_ != 0u && resident_vertex_device_ == device) {
         return true;
     }
     if (resident_vertex_buffer_failed_ && resident_vertex_device_ == device) {
@@ -1032,14 +1032,13 @@ bool RenderCore::ensure_resident_vertex_buffer() {
     UploadBuffer buffer = renderer_.create_resident_vertices(
         static_cast<std::size_t>(kResidentDecodedVertexCapacity) * sizeof(RenderVertex),
         "GX resident decoded vertices");
-    if (!buffer) {
+    if (buffer.gpu == 0u) {
         // Not fatal: every hit keeps using the per-frame ring upload.
         resident_vertex_buffer_failed_ = true;
         std::cerr << "[gx-resident-vertices] buffer creation failed; "
                      "decoded vertices stay on the frame ring\n";
         return false;
     }
-    resident_vertex_mapped_ = buffer.cpu;
     resident_vertex_gpu_ = buffer.gpu;
     resident_vertex_buffer_ = std::move(buffer);
     resident_vertices_.reset(kResidentDecodedVertexCapacity, kFramesInFlight);
@@ -1053,7 +1052,6 @@ void RenderCore::release_resident_vertex_buffer() noexcept {
     // The GPU no longer reads the buffer (session reset before renderer initialization, or shutdown
     // after drain_gpu()). The arena reset bumps its epoch, invalidating every entry's block.
     resident_vertex_buffer_ = {};
-    resident_vertex_mapped_ = nullptr;
     resident_vertex_gpu_ = 0;
     renderer_.set_resident_vertices(0u, 0u);
     resident_vertex_device_ = nullptr;
@@ -5780,11 +5778,15 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     // Corners without a position matrix of their own take the one J3DCurrentMtx::load set.
     const auto position_matrix = static_cast<std::uint8_t>(
         (geometry.attributes & shapes::kPositionMatrix) != 0u ? 0u : draw_state_.position_matrix);
-    if (!shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix) {
+    if (!ensure_resident_vertex_buffer()) {
+        return;
+    }
+    const bool stale = !shape.expanded || shape.versions != versions || shape.position_matrix != position_matrix;
+    if (stale || shape.resident_epoch != resident_vertices_.epoch()) {
         // The model's analysis for its curved surfaces (its first draw waits for it).
         shape.curved = curved::find_model(keys[0]);
-        if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), shape.vertices) ||
-            shape.vertices.empty() || shape.vertices.size() > 0x10000u) {
+        if (!shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_) ||
+            expand_scratch_.empty() || expand_scratch_.size() > 0x10000u) {
             ++frame_native_shape_misses_;
             static bool warned = false;
             if (!warned) {
@@ -5795,32 +5797,30 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
             shape.expanded = false;
             return;
         }
-        release_record_shape(shape);
-        shape.expanded = true;
-        shape.versions = versions;
-        shape.position_matrix = position_matrix;
-        shape.split_built = false;
-        shape.split_indices.clear();
-    }
-    if (!ensure_resident_vertex_buffer()) {
-        return;
-    }
-    const auto units = static_cast<std::uint32_t>(shape.vertices.size());
-    if (shape.resident_epoch != resident_vertices_.epoch()) {
+        if (stale) {
+            release_record_shape(shape);
+            shape.expanded = true;
+            shape.versions = versions;
+            shape.position_matrix = position_matrix;
+            shape.split_built = false;
+            shape.split_indices.clear();
+        }
+        const auto expanded_units = static_cast<std::uint32_t>(expand_scratch_.size());
         shape.resident_epoch = 0u;
-        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(units);
+        const std::optional<std::uint32_t> offset = resident_vertices_.allocate(expanded_units);
         if (!offset.has_value()) {
+            ++frame_native_shape_misses_;
             return;
         }
         // Written once while the block belongs to this group, so no in-flight frame sees a partial write.
-        std::memcpy(resident_vertex_mapped_ + static_cast<std::size_t>(*offset) * sizeof(RenderVertex),
-                    shape.vertices.data(), static_cast<std::size_t>(units) * sizeof(RenderVertex));
-        renderer_.copy_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
-                                         static_cast<std::uint64_t>(units) * sizeof(RenderVertex));
+        std::memcpy(renderer_.stage_resident_vertices(static_cast<std::uint64_t>(*offset) * sizeof(RenderVertex),
+                                                      static_cast<std::uint64_t>(expanded_units) * sizeof(RenderVertex)),
+                    expand_scratch_.data(), static_cast<std::size_t>(expanded_units) * sizeof(RenderVertex));
         shape.resident_epoch = resident_vertices_.epoch();
         shape.resident_offset = *offset;
-        shape.resident_units = units;
+        shape.resident_units = expanded_units;
     }
+    const std::uint32_t units = shape.resident_units;
 
     RecordVertexInputs inputs;
     inputs.matrix_bits = ((geometry.attributes & shapes::kPositionMatrix) != 0u ? 1u : 0u) |
@@ -5862,7 +5862,8 @@ void RenderCore::draw_record_shape(const shapes::Record& record) {
     const bool curved = current_curved_ && curved_split_ && current_flat_pipeline_ != nullptr;
     if (curved && !shape.split_built) {
         shape.split_built = true;
-        shape.split_flat_indices = split_curved_triangles(shape.vertices, geometry.indices, shape.split_indices);
+        (void)shapes::expand(geometry, arrays, position_matrix, shape.curved.get(), expand_scratch_);
+        shape.split_flat_indices = split_curved_triangles(expand_scratch_, geometry.indices, shape.split_indices);
     }
     const bool split = curved && !shape.split_indices.empty();
     const std::vector<std::uint16_t>& indices = split ? shape.split_indices : geometry.indices;

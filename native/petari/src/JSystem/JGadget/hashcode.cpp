@@ -7,7 +7,7 @@ namespace JGadget {
         inline u32 getHashCode_(const T* data, TPRIsEnd_value_< T > p) {
             u32 hash = 0;
             while (!p(*data)) {
-                hash = *data + hash * 31;
+                hash = static_cast< s8 >(*data) + hash * 31;
                 data++;
             }
             return hash;

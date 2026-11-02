@@ -174,14 +174,11 @@ void AudioMixer::set_rate(std::uint32_t rate) {
     }
 }
 
-void AudioMixer::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
-                       const std::byte* sound_memory, std::uint32_t sound_memory_size) {
+void AudioMixer::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects) {
     ++stats_.setups;
     voices_ = voices;
     voice_count_ = std::min<std::uint32_t>(count, kVoices);
     effects_ = effects;
-    sound_ = sound_memory;
-    sound_size_ = sound_memory_size;
 }
 
 void AudioMixer::set_category_gains(const NativeAudioBusGains& gains) noexcept {
@@ -762,18 +759,11 @@ void AudioMixer::effects_end() {
 // `size` bytes `offset` past the voice's wave, when they lie in the sound memory.
 const std::byte* AudioMixer::wave_bytes(const NebulaVoice& voice, std::uint32_t offset, std::uint32_t size) const {
     const auto* wave = reinterpret_cast<const std::byte*>(voice.wave);
-    if (voice.wave_end != nullptr) {
-        const auto available = static_cast<std::size_t>(voice.wave_end - voice.wave);
-        return offset <= available && size <= available - offset ? wave + offset : nullptr;
-    }
-    if (sound_ == nullptr || wave < sound_ || wave > sound_ + sound_size_) {
+    if (voice.wave_end == nullptr) {
         return nullptr;
     }
-    const auto start = static_cast<std::size_t>(wave - sound_) + offset;
-    if (start > sound_size_ || size > sound_size_ - start) {
-        return nullptr;
-    }
-    return sound_ + start;
+    const auto available = static_cast<std::size_t>(voice.wave_end - voice.wave);
+    return offset <= available && size <= available - offset ? wave + offset : nullptr;
 }
 
 }  // namespace galaxy::audio

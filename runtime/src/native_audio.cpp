@@ -329,7 +329,7 @@ NativeGameAudio::NativeGameAudio() : state_(std::make_unique<State>()) {}
 NativeGameAudio::~NativeGameAudio() = default;
 
 void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const NebulaEffectLine* effects,
-                            const void* sound_memory, std::uint32_t sound_memory_size, bool device) {
+                            bool device) {
     State& s = *state_;
     std::uint32_t rate = 48000u;
     if (device) {
@@ -338,7 +338,7 @@ void NativeGameAudio::setup(NebulaVoice* voices, std::uint32_t count, const Nebu
         rate = s.device->rate();
     }
     s.mixer = std::make_unique<galaxy::audio::AudioMixer>(rate);
-    s.mixer->setup(voices, count, effects, static_cast<const std::byte*>(sound_memory), sound_memory_size);
+    s.mixer->setup(voices, count, effects);
     const galaxy::RuntimeAudioSettings audio = galaxy::get_runtime_settings().audio;
     s.mixer->set_category_gains({1.0f, audio.music, audio.voice, audio.sfx, audio.ambience, audio.cutscene});
 }

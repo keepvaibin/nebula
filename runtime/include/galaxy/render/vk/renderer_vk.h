@@ -236,7 +236,9 @@ public:
     // The resident decoded vertices (RendererD3D12::create_resident_vertices): written once, read every frame, so in
     // device memory where the device maps it (vk::BufferPlace::DeviceMapped).
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
-    void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
+    [[nodiscard]] std::byte* stage_resident_vertices(std::uint64_t offset, std::uint64_t) noexcept {
+        return resident_mapped_ + offset;
+    }
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation (E-10, RendererD3D12's): at default settings the display copy takes the scene target's colour image
     // instead of copying it (the display's vertical filter is applied when the frame is presented), and the scene target
@@ -603,6 +605,7 @@ private:
     bool corner_texture_tried_ = false;
 
     // console draws.
+    std::byte* resident_mapped_ = nullptr;
     UploadRing vertex_ring_;
     UploadRing index_ring_;
     UploadRing constant_ring_;

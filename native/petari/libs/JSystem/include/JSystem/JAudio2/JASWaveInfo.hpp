@@ -42,6 +42,7 @@ public:
     }
     virtual const JASWaveInfo* getWaveInfo() const = 0;
     virtual const u8* getWavePtr() const = 0;
+    virtual const u8* getWaveLimit() const = 0;
 };
 
 class JASWaveBank {

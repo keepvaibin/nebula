@@ -34,7 +34,7 @@ struct Game {
         std::memcpy(&sound[offset], &value, sizeof(value));
     }
     void attach(AudioMixer& mixer) {
-        mixer.setup(voices.data(), 64u, effects.data(), sound.data(), static_cast<std::uint32_t>(sound.size()));
+        mixer.setup(voices.data(), 64u, effects.data());
     }
     // A PCM16 voice over `samples` samples at offset `wave`, one send to `bus` at `volume`.
     NebulaVoice& pcm16(std::uint32_t index, std::uint32_t wave, std::uint32_t samples, std::uint16_t bus,
@@ -46,6 +46,7 @@ struct Game {
         v.rate = 32000.0f;
         v.format = NEBULA_AUDIO_PCM16;
         v.wave = reinterpret_cast<const std::uint8_t*>(sound.data()) + wave;
+        v.wave_end = reinterpret_cast<const std::uint8_t*>(sound.data()) + sound.size();
         v.end = samples;
         v.loop = loop ? 1u : 0u;
         v.sends[0] = {bus, volume / 65536.0f, volume / 65536.0f};
