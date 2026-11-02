@@ -142,7 +142,7 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     MR::convertCanvasPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertCanvasPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     NebulaNativeMaterial material;
@@ -397,7 +397,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
         }
     }
 
-    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
 }
 
 namespace {
@@ -453,8 +453,7 @@ namespace {
         TDDraw::setupNative(&material, 1, 0, 2);
         NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP,
-                               GPU_FALSE);
+        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
         J3DNativeTarget::capture(pFrame, 0, 0, width, height, NEBULA_TARGET_RGB, 0);
         NativeShader::setTexObj(material, 0, &texture);
         material.constants[0] = amplitude;
@@ -646,7 +645,7 @@ void MarioActor::initDarkMask() {
         for (u32 i = 0; i < 8 * 8 * 2; i++) {
             image[i] = 0;
         }
-        J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+        J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     }
 
     _1C3 = true;
@@ -668,7 +667,7 @@ void MarioActor::updateDarkMask(u16 unused) {
     image[index + 1] = 255;
     previous[index] = 0;
     previous[index + 1] = 255;
-    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     _1C4++;
 }
 

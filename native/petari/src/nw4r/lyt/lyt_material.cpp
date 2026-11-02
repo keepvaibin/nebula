@@ -590,32 +590,21 @@ namespace nw4r {
                 for (int i = 0; i < mNum.texMap && i < 8; i++) {
                     J3DNativeTexObj texObj;
                     pTexMap[i].Get(&texObj);
-                    void* pImage;
-                    u16 width, height;
-                    GpuTexFmt format;
-                    GpuTexWrapMode wrapS, wrapT;
-                    GpuBool mipmap;
-                    J3DNativeTexture::getAll(&texObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
-                    GpuTexFilter minFilter, magFilter;
-                    f32 minLod, maxLod, lodBias;
-                    GpuBool biasClamp, edgeLod;
-                    GpuAnisotropy maxAniso;
-                    J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
-                                                &maxAniso);
                     NebulaMaterialTexture& rTex = rValues.texture[i];
-                    rTex.image = reinterpret_cast< uintptr_t >(pImage);
-                    rTex.width = width;
-                    rTex.height = height;
-                    rTex.wrap_s = static_cast< u8 >(wrapS);
-                    rTex.wrap_t = static_cast< u8 >(wrapT);
-                    rTex.min_linear = minFilter == GPU_LINEAR || minFilter == GPU_LIN_MIP_NEAR || minFilter == GPU_LIN_MIP_LIN;
-                    rTex.mag_linear = magFilter != GPU_NEAR;
-                    rTex.mip_filter = minFilter < GPU_NEAR_MIP_NEAR ? 0 : minFilter < GPU_NEAR_MIP_LIN ? 1 : 2;
-                    rTex.edge_lod = edgeLod ? 1 : 0;
-                    rTex.anisotropy = static_cast< u8 >(maxAniso);
-                    rTex.min_lod = minLod;
-                    rTex.max_lod = maxLod;
-                    rTex.lod_bias = lodBias;
+                    const u8 minFilter = texObj.mMinFilter;
+                    rTex.image = reinterpret_cast< uintptr_t >(texObj.mImage);
+                    rTex.width = texObj.mWidth;
+                    rTex.height = texObj.mHeight;
+                    rTex.wrap_s = texObj.mWrapS;
+                    rTex.wrap_t = texObj.mWrapT;
+                    rTex.min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5;
+                    rTex.mag_linear = texObj.mMagFilter != NEBULA_FILTER_NEAREST;
+                    rTex.mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
+                    rTex.edge_lod = texObj.mEdgeLod;
+                    rTex.anisotropy = texObj.mMaxAniso;
+                    rTex.min_lod = texObj.mMinLod;
+                    rTex.max_lod = texObj.mMaxLod;
+                    rTex.lod_bias = texObj.mLodBias;
                 }
             }
 

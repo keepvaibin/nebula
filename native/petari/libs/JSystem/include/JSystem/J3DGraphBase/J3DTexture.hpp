@@ -33,8 +33,7 @@ public:
         mpRes[index] = timg;
         mpRes[index].mImage = timg.image();
         // The new image handed to the renderer, as the model's own were at load.
-        J3DNativeTexture::registerImage(timg.image(), timg.mFormat, timg.mWidth,
-                                        timg.mHeight, timg.mMipmap ? timg.mImageNum : 1);
+        J3DNativeTexture::registerRecord(timg.image());
     }
 };
 

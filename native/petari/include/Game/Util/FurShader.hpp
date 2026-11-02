@@ -18,7 +18,7 @@ public:
 
         void setLengthMap(const ResTIMG*);
         f32 refer(f32, f32) const;
-        u16 getTexelOrder(u16, f32, GpuTexWrapMode) const;
+        u16 getTexelOrder(u16, f32, u8) const;
 
         const ResTIMG* _0;
         const u8* _4;

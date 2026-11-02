@@ -51,8 +51,8 @@ namespace nw4r {
                     return (atSmall != rhs.atSmall) || (atLarge != rhs.atLarge);
                 }
 
-                GpuTexFilter atSmall;
-                GpuTexFilter atLarge;
+                u8 atSmall;
+                u8 atLarge;
             };
 
             class LoadingTexture {

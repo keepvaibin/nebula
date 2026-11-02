@@ -449,8 +449,7 @@ static void registerTextureImages(const ResTIMG* pRes, u32 num) {
         const ResTIMG& rTimg = pRes[i];
         const u8* pImage = rTimg.image();
         // Every level the file holds: a material may sample levels the image's own mip flag leaves off.
-        J3DNativeTexture::registerImage(pImage, rTimg.mFormat, rTimg.mWidth, rTimg.mHeight,
-                                        rTimg.mImageNum != 0 ? rTimg.mImageNum : 1);
+        J3DNativeTexture::registerRecord(pImage);
     }
 }
 

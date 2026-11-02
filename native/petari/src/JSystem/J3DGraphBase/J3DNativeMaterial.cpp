@@ -341,7 +341,7 @@ namespace {
         rOut.height = pImg->mHeight;
         rOut.wrap_s = pImg->mWrapS;
         rOut.wrap_t = pImg->mWrapT;
-        // GpuTexFilter: near 0, linear 1, then by level near/linear: 2-3 the nearest level, 4-5 between levels.
+        // u8: near 0, linear 1, then by level near/linear: 2-3 the nearest level, 4-5 between levels.
         rOut.min_linear = pImg->mMinType == 1 || pImg->mMinType == 3 || pImg->mMinType == 5;
         rOut.mag_linear = pImg->mMagType != 0;
         rOut.mip_filter = pImg->mMinType < 2 ? 0 : pImg->mMinType < 4 ? 1 : 2;

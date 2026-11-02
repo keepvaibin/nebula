@@ -4,25 +4,25 @@
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "JSystem/JUtility/JUTTexture.hpp"
 
-JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
+JUTTexture::JUTTexture(int width, int height, u8 layout) {
     mFlag = 1;
-    u32 bufSize = J3DNativeTexture::imageSize(format, width, height, 1);
+    u32 bufSize = J3DNativeTexture::linearSize(layout, width, height, 1);
 
     ResTIMG* texBuf = reinterpret_cast< ResTIMG* >(new (sizeof(ResTIMG)) u8[bufSize + sizeof(ResTIMG)]);
     _3C = texBuf;
-    texBuf->mFormat = format;
+    texBuf->mFormat = layout;
     texBuf->mTransparency = 0;
     texBuf->mWidth = width;
     texBuf->mHeight = height;
-    texBuf->mWrapS = GPU_CLAMP;
-    texBuf->mWrapT = GPU_CLAMP;
+    texBuf->mWrapS = NEBULA_WRAP_CLAMP;
+    texBuf->mWrapT = NEBULA_WRAP_CLAMP;
     texBuf->mImage = nullptr;
     texBuf->mMipmap = false;
     texBuf->mDoEdgeLod = false;
     texBuf->mBiasClamp = false;
-    texBuf->mMaxAnisotropy = GPU_ANISO_1;
-    texBuf->mMinType = GPU_LINEAR;
-    texBuf->mMagType = GPU_LINEAR;
+    texBuf->mMaxAnisotropy = 0;
+    texBuf->mMinType = NEBULA_FILTER_LINEAR;
+    texBuf->mMagType = NEBULA_FILTER_LINEAR;
     texBuf->mMinLod = 0;
     texBuf->mMaxLod = 0;
     texBuf->mImageNum = 1;
@@ -31,7 +31,7 @@ JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
     storeTIMG(texBuf);
     // Black until its first capture or until the game writes it.
     memset(mImage, 0, bufSize);
-    J3DNativeTexture::registerImage(mImage, NEBULA_TEXTURE_LINEAR_L8, width, height, 1);
+    J3DNativeTexture::registerLinear(mImage, layout, width, height, 1);
 }
 
 JUTTexture::~JUTTexture() {
@@ -61,24 +61,15 @@ void JUTTexture::init() {
 }
 
 void JUTTexture::initTexObj() {
-    GpuBool mipmapEnabled;
-    if (mTIMG->mMipmap != 0) {
-        mipmapEnabled = 1;
-    } else {
-        mipmapEnabled = 0;
-    }
-    u8* image = const_cast< u8* >(mTIMG->image());
+    const u8* image = mTIMG->image();
     // A texture with its own buffer (made at run time: a capture's or target's picture, or texels the game writes and
     // hands over itself) has nothing to hand over yet; a texture over loaded data hands its record over.
     if ((mFlag & 0x1) == 0) {
-        J3DNativeTexture::registerImage(image, mTIMG->mFormat, mTIMG->mWidth, mTIMG->mHeight,
-                                        mTIMG->mImageNum != 0 ? mTIMG->mImageNum : 1);
+        J3DNativeTexture::registerRecord(image);
     }
-    J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, static_cast< GpuTexFmt >(mTIMG->mFormat), static_cast< GpuTexWrapMode >(mWrapS),
-                 static_cast< GpuTexWrapMode >(mWrapT), mipmapEnabled);
-
-    J3DNativeTexture::initLOD(&mObj, static_cast< GpuTexFilter >(mMinType), static_cast< GpuTexFilter >(mMagType), mMinLod / 8.0f, mMaxLod / 8.0f,
-                    mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GpuAnisotropy >(mTIMG->mMaxAnisotropy));
+    J3DNativeTexture::init(&mObj, image, mTIMG->mWidth, mTIMG->mHeight, mWrapS, mWrapT);
+    J3DNativeTexture::setFilter(&mObj, mMinType, mMagType, mMinLod / 8.0f, mMaxLod / 8.0f, mLodBias / 100.0f,
+                                mTIMG->mDoEdgeLod, mTIMG->mMaxAnisotropy);
 }
 
 void JUTTexture::frameColor(bool half) {
