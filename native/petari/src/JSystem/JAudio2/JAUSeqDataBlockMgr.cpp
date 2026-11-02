@@ -59,7 +59,7 @@ JAUDynamicSeqDataBlocks::JAUDynamicSeqDataBlocks() {
     mSeqDataArchive = nullptr;
 }
 
-void JAUDynamicSeqDataBlocks::setSeqDataArchive(JKRArchive* param_0) {
+void JAUDynamicSeqDataBlocks::setSeqDataArchive(AssetFolder* param_0) {
     mSeqDataArchive = param_0;
 }
 

@@ -23,7 +23,7 @@ class AudSystemVolumeController;
 class JAISoundHandle;
 class JAISoundID;
 class JAUSectionHeap;
-class JKRArchive;
+class AssetFolder;
 class NebulaArena;
 class SpkSystem;
 
@@ -50,7 +50,7 @@ public:
         MenuType_Error = 2,
     };
 
-    AudSystem(JAUSectionHeap*, JKRArchive*, JKRArchive*, JKRArchive*);
+    AudSystem(JAUSectionHeap*, AssetFolder*, AssetFolder*, AssetFolder*);
 
     virtual void frameWork();
     virtual void calc();
@@ -58,7 +58,7 @@ public:
     virtual bool startLevelSound(JAISoundID, JAISoundHandle*, const TVec3f*);
 
     AudChordInfo* getChordInfo();
-    void setSpeakerResource(JKRArchive*);
+    void setSpeakerResource(AssetFolder*);
     void switchToLuigi(JAISoundID, JAISoundHandle*);
     bool isSubmitSeByVolumeSetting(JAISoundID);
     void updateOutputMode();
@@ -94,7 +94,7 @@ public:
     void setSeVolumeSetLevel(s32);
     void initVolumeSetting();
     void initCategoryArrangement();
-    void setMeResource(JKRArchive*, u16, u16);
+    void setMeResource(AssetFolder*, u16, u16);
     void seFanfareProcess();
     bool isFanfareSePlaying();
     void registerLimitedSound(JAISoundID, s32);
@@ -152,5 +152,5 @@ public:
     /* 0x132C */ SpkSystem* mSpkSystem;
 };
 
-AudSystem* AudNewAudSystem(NebulaArena*, void*, JKRArchive*, JKRArchive*, JKRArchive*, JKRArchive*);
-AudSystem* AudNewAudSystem_(JAUSectionHeap*, JKRArchive*, JKRArchive*, JKRArchive*, int);
+AudSystem* AudNewAudSystem(NebulaArena*, void*, AssetFolder*, AssetFolder*, AssetFolder*, AssetFolder*);
+AudSystem* AudNewAudSystem_(JAUSectionHeap*, AssetFolder*, AssetFolder*, AssetFolder*, int);

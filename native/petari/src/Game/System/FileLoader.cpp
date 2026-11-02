@@ -68,7 +68,7 @@ void* FileLoader::receiveFile(const char* pName) {
     return mFileHolder->getContext(pName);
 }
 
-JKRMemArchive* FileLoader::receiveArchive(const char* pName) {
+AssetFolder* FileLoader::receiveArchive(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
     if (info != nullptr && info->mFileEntry != nullptr) {
         info->mFileEntry->waitReadDone();
@@ -85,11 +85,11 @@ void FileLoader::receiveAllRequestedFile() {
     }
 }
 
-JKRMemArchive* FileLoader::createAndAddArchive(void* pData, NebulaArena* pHeap, const char* pName) {
-    return mArchiveHolder->createAndAdd(pData, pHeap, pName)->mArchive;
+AssetFolder* FileLoader::createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pName) {
+    return mArchiveHolder->createAndAdd(pFolder, pHeap, pName)->mArchive;
 }
 
-void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchive, NebulaArena** pHeap) const {
+void FileLoader::getMountedArchiveAndHeap(const char* pName, AssetFolder** pArchive, NebulaArena** pHeap) const {
     mArchiveHolder->getArchiveAndHeap(pName, pArchive, pHeap);
 }
 

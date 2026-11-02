@@ -2,8 +2,7 @@
 
 #include "Game/Animation/BckCtrl.hpp"
 #include "Game/System/ResourceInfo.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
-#include <JSystem/JKernel/JKRFileFinder.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include "Game/System/NebulaArena.hpp"
 
 class MaterialAnmBuffer;
@@ -13,7 +12,7 @@ typedef const char* ArchiveName;
 
 class ResourceHolder {
 public:
-    ResourceHolder(JKRArchive&);
+    ResourceHolder(AssetFolder&);
 
     const char* getMotionName(u32) const;
     bool isExistMaterialAnm() const;
@@ -21,12 +20,11 @@ public:
     void newBckCtrl();
 
     Mtx44& getInitEffectMtx(int, int) const;
-    void initializeArc(JKRArchive&);
-    static JKRFileFinder* getFileFinder(JKRArchive*, const char*);
-    u32 initEachResTable(ResTable**, JKRArchive*, const ArchiveName*);
+    void initializeArc(AssetFolder&);
+    u32 initEachResTable(ResTable**, AssetFolder*, const ArchiveName*);
 
-    static s32 count(JKRArchive*, const char*, const char*);
-    void mount(JKRArchive*, char*);
+    static s32 count(AssetFolder*, const char*, s32);
+    void mount(AssetFolder*, s32);
 
     ResFileInfo* createAndRegisterObject(const char*, void*);
     void backupInitMaterialData(const J3DModelData*);
@@ -87,7 +85,7 @@ public:
     /* 0x38 */ MaterialAnmBuffer* mMaterialBuf;
     /* 0x3C */ BckCtrl* mBckCtrl;
     /* 0x40 */ Mtx44* mBackupMaterialData;
-    /* 0x44 */ JKRArchive* mArchive;
+    /* 0x44 */ AssetFolder* mArchive;
     /* 0x48 */ NebulaArena* mHeap;
     /* 0x4C */ u32 mTotalResourceSize;
 };

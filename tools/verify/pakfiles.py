@@ -9,13 +9,13 @@ def store_files(pak):
     count = struct.unpack_from("<I", header, 12)[0]
     nodes_at, _, names_at, names_size = struct.unpack_from("<QQQQ", header, 16)
     pak.seek(nodes_at)
-    nodes = pak.read(count * 32)
+    nodes = pak.read(count * 40)
     pak.seek(names_at)
     names = pak.read(names_size)
     paths = {0: ""}
     out = {}
     for n in range(count):
-        position, size, name, parent, flags, _ = struct.unpack_from("<QQIIII", nodes, n * 32)
+        position, size, name, parent, flags, _, _, _ = struct.unpack_from("<QQIIIIII", nodes, n * 40)
         if n == 0:
             continue
         label = names[name : names.index(b"\0", name)].decode("latin-1")

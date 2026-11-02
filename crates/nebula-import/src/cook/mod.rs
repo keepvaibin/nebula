@@ -67,7 +67,67 @@ pub fn cooks(name: &str) -> bool {
     matches!(extension(name).as_str(), "arc" | "szs" | "gst" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
 }
 
-/// One file cooked: Some(new bytes), or None when it stays as it is.
+/// What a source file (or a part of one) becomes in the store: bytes at a path below it, or a folder with no files.
+pub struct StoreItem {
+    pub path: String,
+    /// Where it comes in the store's bytes against the others of its source file.
+    pub order: usize,
+    pub bytes: Option<Vec<u8>>,
+}
+
+/// One source file as the store holds it: itself cooked, or, an archive, a folder of its members cooked, side by side.
+pub fn cook_entry(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Vec<StoreItem>> {
+    let mut bytes = bytes;
+    if archive::is_compressed(&bytes) {
+        bytes = archive::expand(&bytes).with_context(|| format!("{name} cannot be expanded"))?;
+        stats.expanded_files += 1;
+    }
+    if !archive::is_archive(&bytes) {
+        let cooked = cook_file(name, bytes.clone(), stats)?.unwrap_or(bytes);
+        return Ok(vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]);
+    }
+    let mut items = Vec::new();
+    for member in archive::members(&bytes).with_context(|| format!("{name}: archive"))? {
+        let file = member.path.rsplit('/').next().unwrap_or(&member.path);
+        for item in cook_entry(&format!("{name}/{file}"), member.bytes, stats)? {
+            let path = if item.path.is_empty() { member.path.clone() } else { format!("{}/{}", member.path, item.path) };
+            items.push(StoreItem { path, order: member.offset, bytes: item.bytes });
+        }
+    }
+    if items.is_empty() {
+        items.push(StoreItem { path: String::new(), order: 0, bytes: None });
+    }
+    stats.cooked_files += 1;
+    Ok(items)
+}
+
+/// Writes a source file's items at `at` in their order, each on a boundary; their places, in the items' own order.
+fn place(pak: &mut File, at: &mut u64, path: &str, items: Vec<StoreItem>, stats: &mut Stats) -> Result<Vec<store::Placed>> {
+    let mut by_order: Vec<usize> = (0..items.len()).collect();
+    by_order.sort_by_key(|i| items[*i].order);
+    let mut places = vec![(0u64, 0u64); items.len()];
+    for i in by_order {
+        if let Some(bytes) = &items[i].bytes {
+            pak.seek(SeekFrom::Start(*at))?;
+            pak.write_all(bytes).with_context(|| format!("{path}/{} cannot be written", items[i].path))?;
+            places[i] = (*at, bytes.len() as u64);
+            stats.bytes_out += bytes.len() as u64;
+            *at = (*at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+        }
+    }
+    Ok(items
+        .iter()
+        .zip(places)
+        .map(|(item, (position, size))| store::Placed {
+            path: if item.path.is_empty() { path.to_string() } else { format!("{path}/{}", item.path) },
+            position,
+            size,
+            folder: item.bytes.is_none(),
+        })
+        .collect())
+}
+
+/// One file cooked: Some(new bytes), or None when it stays as it is. An archive is not one file (cook_entry).
 pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option<Vec<u8>>> {
     let mut changed = false;
     let mut bytes = bytes;
@@ -76,10 +136,10 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         stats.expanded_files += 1;
         changed = true;
     }
-    let cooked = if archive::is_archive(&bytes) {
-        let rebuilt = archive::rebuild(&bytes, &mut |member, data| cook_file(&format!("{name}/{member}"), data, stats))?;
-        Some(native_data::rarc_host(&rebuilt).with_context(|| format!("{name}: archive (host order)"))?)
-    } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
+    if archive::is_archive(&bytes) {
+        bail!("{name} is an archive");
+    }
+    let cooked = if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
         let textured = formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?;
         Some(material::cook_model(&textured).with_context(|| format!("{name}: native model materials"))?)
     } else if native_data::is_j3d_model(&bytes) {
@@ -241,19 +301,16 @@ pub fn write_cooked_pak(
         }
         stats.bytes_in += file.length;
         // Whatever its name, a compressed file is expanded here: the game has no decompressor.
-        let out = if cooks(&file.path) || archive::is_compressed(&bytes) {
-            cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
+        let items = if cooks(&file.path) || archive::is_compressed(&bytes) {
+            cook_entry(&file.path, bytes, stats)?
         } else if let Some(places) = waves.get(&audio_data::wave_archive_key(&file.path)) {
             stats.cooked_files += 1;
-            audio_data::wave_archive(&bytes, places).with_context(|| format!("{}: wave archive", file.path))?
+            let cooked = audio_data::wave_archive(&bytes, places).with_context(|| format!("{}: wave archive", file.path))?;
+            vec![StoreItem { path: String::new(), order: 0, bytes: Some(cooked) }]
         } else {
-            bytes
+            vec![StoreItem { path: String::new(), order: 0, bytes: Some(bytes) }]
         };
-        pak.seek(SeekFrom::Start(at))?;
-        pak.write_all(&out).with_context(|| format!("{} cannot be written", file.path))?;
-        placed.push((file.node, store::Placed { path: file.path.clone(), position: at, size: out.len() as u64 }));
-        stats.bytes_out += out.len() as u64;
-        at = (at + out.len() as u64).div_ceil(ALIGN) * ALIGN;
+        placed.extend(place(&mut pak, &mut at, &file.path, items, stats)?.into_iter().map(|p| (file.node, p)));
         done += file.length;
         if !progress(done, total) {
             bail!("the import was cancelled");
@@ -266,11 +323,8 @@ pub fn write_cooked_pak(
     let dol = system_dol(system)?;
     let game_id = String::from_utf8_lossy(&system.bytes[..6]).into_owned();
     let extra = dol::tables(dol, &game_id, stats)?;
-    for (name, bytes) in &extra {
-        pak.seek(SeekFrom::Start(at))?;
-        pak.write_all(bytes)?;
-        placed.push(store::Placed { path: format!("{}/{name}", dol::FOLDER), position: at, size: bytes.len() as u64 });
-        at = (at + bytes.len() as u64).div_ceil(ALIGN) * ALIGN;
+    for (name, items) in extra {
+        placed.extend(place(&mut pak, &mut at, &format!("{}/{name}", dol::FOLDER), items, stats)?);
     }
     let at = store::write_index(&mut pak, at, &placed, system.bytes[..8].try_into().unwrap())?;
     pak.set_len(at)?;
@@ -339,26 +393,13 @@ pub fn cook_content(input: &Path, output: &Path, progress: &mut dyn FnMut(u64, u
             pak.read_exact(&mut bytes).with_context(|| format!("{} cannot be read from game.pak", file.path))?;
             Ok(bytes)
         };
-        write_cooked_pak(&system, &mut read, &target, progress, &mut stats)?;
-        write_beside_files(&target, output)
+        write_cooked_pak(&system, &mut read, &target, progress, &mut stats).map(|_| ())
     })();
     if let Err(error) = result {
         let _ = fs::remove_dir_all(output);
         return Err(error);
     }
     Ok(stats)
-}
-
-/// The content folder's one file besides game.pak: the settings overlay draws its window frame from this archive.
-pub const FILE_SELECT_ARCHIVE: &str = "LayoutData/FileSelect.arc";
-
-/// files/LayoutData/FileSelect.arc beside a cooked game.pak, copied out of it.
-pub fn write_beside_files(pak_path: &Path, output: &Path) -> Result<()> {
-    let bytes = store::read_file(pak_path, FILE_SELECT_ARCHIVE)?;
-    let target = FILE_SELECT_ARCHIVE.split('/').fold(output.join("files"), |p, c| p.join(c));
-    fs::create_dir_all(target.parent().unwrap())?;
-    fs::write(&target, bytes).with_context(|| format!("{} cannot be written", target.display()))?;
-    Ok(())
 }
 
 /// The runtime's call into the cooker for a mod's files (runtime/src/cooker_bridge.cpp): `name` (UTF-8, its disc

@@ -4,9 +4,8 @@
 
 
 
-class JKRArchive;
+class AssetFolder;
 class NebulaArena;
-class JKRMemArchive;
 
 namespace MR {
     /// @brief Determines if a file exists within the disc file system.
@@ -45,7 +44,7 @@ namespace MR {
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @return A pointer to the mounted archive.
-    JKRMemArchive* mountArchive(const char* pFilePath, NebulaArena* pHeap);
+    AssetFolder* mountArchive(const char* pFilePath, NebulaArena* pHeap);
 
     /// @brief Requests asynchronous mounting of an archive file.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
@@ -65,7 +64,7 @@ namespace MR {
     /// @brief Returns the archive after it has been asynchronously mounted.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @return A pointer to the mounted archive.
-    JKRMemArchive* receiveArchive(const char* pFilePath);
+    AssetFolder* receiveArchive(const char* pFilePath);
 
     /// @brief Receives all files that have been requested for loading.
     void receiveAllRequestedFile();
@@ -74,13 +73,13 @@ namespace MR {
     /// @param[in] pArcData A pointer to the archive file data.
     /// @param[in,out] pHeap A pointer to the target heap.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    void createAndAddArchive(void* pArcData, NebulaArena* pHeap, const char* pFilePath);
+    void createAndAddArchive(AssetFolder* pFolder, NebulaArena* pHeap, const char* pFilePath);
 
     /// @brief Returns the mounted archive and heap for a given file by pointer.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @param[out] ppArchive A pointer to the archive pointer to initialize.
     /// @param[out] ppHeap A pointer to the heap pointer to initialize.
-    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, NebulaArena** ppHeap);
+    void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap);
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     void removeFile(const char*);
@@ -94,13 +93,6 @@ namespace MR {
     /// @param[in,out] pHeap A pointer to the heap to compare with.
     void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap);
 
-    /// @brief Decompresses a file from an archive file.
-    /// @param[in] pArchive A pointer to the target archive.
-    /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file within the archive file.
-    /// @param[in,out] pHeap A pointer to the target heap.
-    /// @param[in] align The alignment for the allocation.
-    /// @return A pointer to the copy.
-    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, NebulaArena* pHeap, int align);
 
     /// @brief Determines if an file is currently loaded.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.

@@ -1,8 +1,7 @@
 #include "Game/Scene/StageFileLoader.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/Util.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
-#include <JSystem/JKernel/JKRFileFinder.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -21,7 +20,6 @@ void StageFileLoader::waitLoadedStageFile() {
     for (int i = 0; i < mZoneCount; i++) {
         const char* file = mStageFiles[i];
         MR::receiveFile(file);
-        mountFilesInStageMapFile(file);
     }
 }
 
@@ -41,30 +39,4 @@ void StageFileLoader::makeStageArchiveNameList() {
 
 void StageFileLoader::makeStageArchiveName(char* buf, u32 len, const char* pZoneName) {
     nebula_snprintf(buf, len, "/StageData/%s.arc", pZoneName);
-}
-
-void StageFileLoader::mountFilesInStageMapFile(const char* pName) {
-    JKRArchive* archive = 0;
-    NebulaArena* heap = 0;
-    MR::getMountedArchiveAndHeap(pName, &archive, &heap);
-    void* res;
-    const char* curName;
-    s32 fileCount = archive->countFile("/arc") - 2;
-
-    if (fileCount > 0) {
-        JKRArcFinder* firstFile = archive->getFirstFile("/arc");
-
-        for (int i = 0; i < fileCount;) {
-            if (!MR::isMountedArchive(firstFile->mName)) {
-                curName = firstFile->mName;
-                res = archive->getResource(QUESTIONMARK_MAGIC, curName);
-                MR::createAndAddArchive(res, heap, curName);
-            }
-
-            i++;
-            firstFile->findNextFile();
-        }
-
-        delete firstFile;
-    }
 }

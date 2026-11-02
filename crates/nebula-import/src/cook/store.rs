@@ -3,27 +3,28 @@
 //!
 //! Header: magic, version u32, node count u32, nodes u64, hashes u64, names u64, names' size u64, game id 6 bytes, disc
 //! number, revision.
-//! Node, 32 bytes: position u64 (a file's first byte; a folder's first child), size u64 (a file's bytes; a folder's
-//! child count), name u32, parent u32, flags u32 (1: folder), reserved u32. Node 0 is the root; a folder's children
-//! are consecutive nodes.
+//! Node, 40 bytes: position u64 and size u64 (a file's bytes; a folder's, from its first file's first byte to its last
+//! one's end), name u32, parent u32, flags u32 (1: folder), first child u32, child count u32, reserved u32. Node 0 is the
+//! root; a folder's children are consecutive nodes. An archive of the source is a folder whose files lie side by side, so
+//! the game has it as one block.
 //! Hash, 16 bytes: FNV-1a 64 of the lower-case path without a leading '/', node u32, reserved u32; sorted by hash.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::Path;
+use std::io::{Seek, SeekFrom, Write};
 
 pub const MAGIC: &[u8; 8] = b"NBSTORE\0";
-pub const VERSION: u32 = 2;
+pub const VERSION: u32 = 3;
 /// The files start past this.
 pub const HEADER: u64 = 64;
 
-/// A file in the store: its path from the root, with '/', and where its bytes are.
+/// A file in the store: its path from the root, with '/', and where its bytes are; or a folder with nothing in it.
 pub struct Placed {
     pub path: String,
     pub position: u64,
     pub size: u64,
+    pub folder: bool,
 }
 
 struct Node {
@@ -55,7 +56,7 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
                 prefix.push('/');
             }
             prefix.push_str(&part.to_ascii_lowercase());
-            if parts.peek().is_some() {
+            if parts.peek().is_some() || file.folder {
                 parent = match folders.get(&prefix) {
                     Some(&node) => node,
                     None => {
@@ -84,8 +85,17 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
         queue.extend(nodes[node].children.iter().copied());
     }
 
+    // Each folder's range: its children came after it, so backwards each is known before its parent.
+    let mut ranges: Vec<Option<(u64, u64)>> = nodes.iter().map(|n| n.file.map(|(at, size)| (at, at + size))).collect();
+    for &node in order.iter().rev().filter(|n| **n != 0) {
+        if let Some((start, end)) = ranges[node] {
+            let parent = &mut ranges[nodes[node].parent];
+            *parent = Some(parent.map_or((start, end), |(s, e)| (s.min(start), e.max(end))));
+        }
+    }
+
     let mut names = vec![0u8];
-    let mut table = Vec::with_capacity(order.len() * 32);
+    let mut table = Vec::with_capacity(order.len() * 40);
     let mut hashes = Vec::with_capacity(order.len());
     let mut paths: Vec<String> = vec![String::new(); nodes.len()];
     for &node in &order {
@@ -102,18 +112,16 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
             names.push(0);
             at
         };
-        let (position, size, flags) = match n.file {
-            Some((position, size)) => (position, size, 0u32),
-            None => {
-                let first = n.children.first().map_or(0, |c| new_index[*c] as u64);
-                (first, n.children.len() as u64, 1u32)
-            }
-        };
-        table.extend_from_slice(&position.to_le_bytes());
-        table.extend_from_slice(&size.to_le_bytes());
+        let (start, end) = ranges[node].unwrap_or((0, 0));
+        let flags = if n.file.is_some() { 0u32 } else { 1u32 };
+        let first = n.children.first().map_or(0, |c| new_index[*c]);
+        table.extend_from_slice(&start.to_le_bytes());
+        table.extend_from_slice(&(end - start).to_le_bytes());
         table.extend_from_slice(&name_at.to_le_bytes());
         table.extend_from_slice(&new_index[n.parent].to_le_bytes());
         table.extend_from_slice(&flags.to_le_bytes());
+        table.extend_from_slice(&first.to_le_bytes());
+        table.extend_from_slice(&(n.children.len() as u32).to_le_bytes());
         table.extend_from_slice(&0u32.to_le_bytes());
         hashes.push((path_hash(&paths[node]), new_index[node]));
     }
@@ -151,7 +159,10 @@ pub fn write_index(pak: &mut File, at: u64, files: &[Placed], game_id: &[u8; 8])
 }
 
 /// A file of a store on disk, by path.
-pub fn read_file(pak_path: &Path, path: &str) -> Result<Vec<u8>> {
+#[cfg(test)]
+pub fn read_file(pak_path: &std::path::Path, path: &str) -> Result<Vec<u8>> {
+    use anyhow::Context;
+    use std::io::Read;
     let mut pak = File::open(pak_path).with_context(|| format!("{} cannot be read", pak_path.display()))?;
     let mut header = [0u8; HEADER as usize];
     pak.read_exact(&mut header)?;
@@ -170,8 +181,8 @@ pub fn read_file(pak_path: &Path, path: &str) -> Result<Vec<u8>> {
         .find(|e| u64::from_le_bytes(e[..8].try_into().unwrap()) == wanted)
         .with_context(|| format!("the store has no {path}"))?;
     let node = u32::from_le_bytes(entry[8..12].try_into().unwrap()) as u64;
-    let mut record = [0u8; 32];
-    pak.seek(SeekFrom::Start(nodes_at + node * 32))?;
+    let mut record = [0u8; 16];
+    pak.seek(SeekFrom::Start(nodes_at + node * 40))?;
     pak.read_exact(&mut record)?;
     let position = u64::from_le_bytes(record[..8].try_into().unwrap());
     let size = u64::from_le_bytes(record[8..16].try_into().unwrap());
@@ -179,4 +190,35 @@ pub fn read_file(pak_path: &Path, path: &str) -> Result<Vec<u8>> {
     pak.seek(SeekFrom::Start(position))?;
     pak.read_exact(&mut bytes)?;
     Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_holds_its_files_range_and_an_empty_one_stays() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("store");
+        let mut pak = File::create(&path).unwrap();
+        let file = |path: &str, position, size| Placed { path: path.to_string(), position, size, folder: false };
+        let files = [
+            file("x.arc/a.bin", 0x140, 2),
+            file("x.arc/sub/b.bin", 0x100, 3),
+            Placed { path: "empty.arc".to_string(), position: 0, size: 0, folder: true },
+        ];
+        write_index(&mut pak, 0x200, &files, b"RMGE01\0\0").unwrap();
+        drop(pak);
+        let bytes = std::fs::read(&path).unwrap();
+        let word = |at: usize| u64::from_le_bytes(bytes[at..at + 8].try_into().unwrap());
+        let nodes = word(16) as usize;
+        let count = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+        // Breadth first: the root, x.arc, empty.arc, a.bin, sub, b.bin.
+        assert_eq!(count, 6);
+        let node = |i: usize| (word(nodes + i * 40), word(nodes + i * 40 + 8), u32::from_le_bytes(bytes[nodes + i * 40 + 24..nodes + i * 40 + 28].try_into().unwrap()));
+        assert_eq!(node(1), (0x100, 0x42, 1));
+        assert_eq!(node(2), (0, 0, 1));
+        assert_eq!(node(3), (0x140, 2, 0));
+        assert_eq!(node(4), (0x100, 3, 1));
+    }
 }

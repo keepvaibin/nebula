@@ -12,10 +12,9 @@ fn scan(bytes: &[u8], out: &mut File, count: &mut usize) -> Result<()> {
         return scan(&archive::expand(bytes)?, out, count);
     }
     if archive::is_archive(bytes) {
-        archive::rebuild(bytes, &mut |_, bytes| {
-            scan(&bytes, out, count)?;
-            Ok(None)
-        })?;
+        for member in archive::members(bytes)? {
+            scan(&member.bytes, out, count)?;
+        }
     } else if bytes.starts_with(b"RLYT") {
         for p in layout::file_programs(bytes)? {
             out.write_all(&p)?;

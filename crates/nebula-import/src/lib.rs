@@ -812,7 +812,7 @@ impl Partition {
         Ok(())
     }
 
-    /// Writes the content folder the native game runs from: game.pak and files/LayoutData/FileSelect.arc. `output`
+    /// Writes the content folder the native game runs from: game.pak. `output`
     /// must not exist; it is removed again when the import fails.
     pub fn write_content(&mut self, output: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<u64> {
         if output.exists() {
@@ -829,7 +829,6 @@ impl Partition {
     fn write_content_to(&mut self, output: &Path, progress: &mut dyn FnMut(u64, u64) -> bool) -> Result<u64> {
         let pak = output.join("game.pak");
         let (size, _) = self.write_cooked_pak(&pak, progress)?;
-        cook::write_beside_files(&pak, output)?;
         Ok(size)
     }
 
@@ -1167,7 +1166,7 @@ mod tests {
     }
 
     #[test]
-    fn content_folder_holds_the_cooked_game_pak_and_file_select_archive() {
+    fn content_folder_holds_the_cooked_game_pak() {
         let directory = tempfile::tempdir().unwrap();
         // A Yaz0 file of four literal bytes (a code byte, then them): stored expanded.
         let mut compressed = b"Yaz0".to_vec();
@@ -1180,7 +1179,6 @@ mod tests {
         );
         let output = directory.path().join("content");
         partition.write_content(&output, &mut |_, _| true).unwrap();
-        assert_eq!(fs::read(output.join("files").join("LayoutData").join("FileSelect.arc")).unwrap(), b"archive");
         let read = |path: &str| cook::store::read_file(&output.join("game.pak"), path).unwrap();
         assert_eq!(read("small.szs"), b"abcd");
         assert_eq!(read("LayoutData/FileSelect.arc"), b"archive");
@@ -1188,11 +1186,6 @@ mod tests {
         assert_eq!(read("NebulaData/StoryProgressTable.bcsv").len(), 0x1E0);
         assert_eq!(read("NebulaData/GameEventFlags.bin").len(), 4 + 188 * 20);
         assert!(partition.write_content(&output, &mut |_, _| true).unwrap_err().to_string().contains("already exists"));
-
-        let mut without_archive = table_partition(&directory.path().join("other"), &[("a.bin", 0x21000, b"x")]);
-        let failed = directory.path().join("failed");
-        assert!(without_archive.write_content(&failed, &mut |_, _| true).is_err());
-        assert!(!failed.exists());
     }
 
     #[test]
