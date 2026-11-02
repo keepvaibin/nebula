@@ -19,10 +19,10 @@ public:
     void exeFly();
     void exeBreak();
 
-    /* 0x8C */ bool mIsKoopaJr;
-    /* 0x90 */ const KoopaBattleMapStair* mStair;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ TVec3f _A0;
-    /* 0xAC */ TVec3f _AC;
-    /* 0xB8 */ ModelObj* mBreakModel;
+    bool mIsKoopaJr;
+    const KoopaBattleMapStair* mStair;
+    TVec3f _94;
+    TVec3f _A0;
+    TVec3f _AC;
+    ModelObj* mBreakModel;
 };

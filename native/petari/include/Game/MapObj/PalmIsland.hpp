@@ -13,7 +13,7 @@ public:
     void exeFloat();
     void exeWait();
 
-    /* 0x8C */ s32 _8C;
-    /* 0x90 */ TVec3f _90;
-    /* 0x9C */ s32 _9C;
+    s32 _8C;
+    TVec3f _90;
+    s32 _9C;
 };

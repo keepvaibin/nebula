@@ -11,11 +11,11 @@ extern "C" {
 typedef struct MiiMiddleDB;
 
 typedef struct MiiAdditionalInfo {
-    char16_t name[MII_NAME_LEN + 1];       // at 0x0
-    char16_t creator[MII_CREATOR_LEN + 1]; // at 0x16
-    MiiCreateID createID;                 // at 0x2C
+    char16_t name[MII_NAME_LEN + 1];
+    char16_t creator[MII_CREATOR_LEN + 1];
+    MiiCreateID createID;
 
-    // at 0x34
+
     u32 sex : 1;
     u32 bmonth : 4;
     u32 bday : 5;
@@ -25,7 +25,7 @@ typedef struct MiiAdditionalInfo {
     u32 build : 7;
     u32 reserved : 3;
 
-    NebulaColor8 skinColor; // at 0x38
+    NebulaColor8 skinColor;
 } MiiAdditionalInfo;
 
 MiiErrcode MiiGetAdditionalInfo(MiiAdditionalInfo* info, MiiDataSource source,

@@ -19,7 +19,7 @@ public:
     void startDemoStartCountDown();
     void startDemoLastBattle();
 
-    /* 0x08C */ J3DTexMtx _8C;
-    /* 0x120 */ J3DTexMtx _120;
-    /* 0x1B4 */ bool _1B4;
+    J3DTexMtx _8C;
+    J3DTexMtx _120;
+    bool _1B4;
 };

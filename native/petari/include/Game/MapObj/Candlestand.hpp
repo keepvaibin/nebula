@@ -29,7 +29,7 @@ public:
     inline void exeAttack();
     inline void exeBurn();
 
-    /* 0xC4 */ s32 mItem;
-    /* 0xC8 */ bool mHasItemAppear;
-    /* 0xCC */ SpinPullParticleCallBack* mSpinPtclCb;
+    s32 mItem;
+    bool mHasItemAppear;
+    SpinPullParticleCallBack* mSpinPtclCb;
 };

@@ -26,9 +26,9 @@ public:
     void pushVolumeSet();
     void popVolumeSet();
 
-    /* 0x00 */ AudSystem* mSystem;
-    /* 0x04 */ s32 mVolumeSetDelay;
-    /* 0x08 */ s32 mCurrVolumeSet;
-    /* 0x0C */ s32 mVolumeSets[8];
-    /* 0x2C */ s32 mNumVolumeSets;
+    AudSystem* mSystem;
+    s32 mVolumeSetDelay;
+    s32 mCurrVolumeSet;
+    s32 mVolumeSets[8];
+    s32 mNumVolumeSets;
 };

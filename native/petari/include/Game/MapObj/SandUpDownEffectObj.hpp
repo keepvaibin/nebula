@@ -26,9 +26,9 @@ public:
     void exeBuryEnd();
 
 private:
-    /* 0x8C */ f32 _8C;
-    /* 0x90 */ f32 _90;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ TPos3f _A0;
-    /* 0xD0 */ TriangleFilterFunc* _D0;
+    f32 _8C;
+    f32 _90;
+    TVec3f _94;
+    TPos3f _A0;
+    TriangleFilterFunc* _D0;
 };

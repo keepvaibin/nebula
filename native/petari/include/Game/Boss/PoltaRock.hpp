@@ -33,9 +33,9 @@ public:
         return mOwner;
     }
 
-    /* 0x8C */ Polta* mOwner;
+    Polta* mOwner;
     TQuat4f _90;
     TVec3f _A0;
     TVec3f _AC;
-    /* 0xB8 */ s32 mType;
+    s32 mType;
 };

@@ -21,14 +21,14 @@ public:
     void exeWait();
     void exeHit();
 
-    /* 0x8C */ u16 _8C;
-    /* 0x8E */ u16 _8E;  // Unused?
-    /* 0x90 */ u16 _90;
-    /* 0x92 */ u16 _92;
-    /* 0x94 */ u16 _94;
-    /* 0x96 */ bool _96;
-    /* 0x97 */ bool _97;
-    /* 0x98 */ bool _98;
-    /* 0x99 */ bool mHasShadow;  // Obj_arg1
-    /* 0x9C */ s32 mCoinCount;   // Obj_arg0
+    u16 _8C;
+    u16 _8E;  // Unused?
+    u16 _90;
+    u16 _92;
+    u16 _94;
+    bool _96;
+    bool _97;
+    bool _98;
+    bool mHasShadow;  // Obj_arg1
+    s32 mCoinCount;   // Obj_arg0
 };

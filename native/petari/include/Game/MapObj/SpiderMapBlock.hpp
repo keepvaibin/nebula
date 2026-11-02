@@ -12,5 +12,5 @@ public:
     virtual bool receiveMsgPlayerAttack(u32, HitSensor*, HitSensor*);
     virtual bool receiveMsgEnemyAttack(u32, HitSensor*, HitSensor*);
 
-    /* 0x8C */ f32 mPosZ;
+    f32 mPosZ;
 };

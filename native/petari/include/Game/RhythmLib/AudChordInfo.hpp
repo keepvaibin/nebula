@@ -7,15 +7,15 @@
 class AssetFolder;
 
 struct AudChordData {
-    /* 0x00 */ u8 mBass;
-    /* 0x01 */ u8 mChordTone[4];
-    /* 0x05 */ u8 mAddNote[3];
+    u8 mBass;
+    u8 mChordTone[4];
+    u8 mAddNote[3];
 };
 
 // In the chord table file (host order, as the importer cooks it): its note lists' offsets from the file's start.
 struct AudScaleData {
-    /* 0x00 */ u32 mUpOffset;
-    /* 0x04 */ u32 mDownOffset;
+    u32 mUpOffset;
+    u32 mDownOffset;
 };
 
 class AudChordTable {
@@ -25,9 +25,9 @@ public:
     bool setChordTable(s32 id, AssetFolder* pArchive);
     bool setChordTableResource(void* pRes);
 
-    /* 0x00 */ bool mLoaded;
-    /* 0x04 */ int mChordCount;
-    /* 0x08 */ int mScaleCount;
+    bool mLoaded;
+    int mChordCount;
+    int mScaleCount;
     // The file and its offset tables (from the file's start); the file is not written.
     const u8* mBase;
     const u32* mChordOffsets;
@@ -140,16 +140,16 @@ public:
         return mTable.mLoaded && mCurChord != nullptr && mCurScale != nullptr;
     }
 
-    /* 0x00 */ AssetFolder* mArchive;
-    /* 0x04 */ AudChordTable mTable;
-    /* 0x18 */ const AudChordData* mCurChord;
-    /* 0x1C */ const AudScaleData* mCurScale;
+    AssetFolder* mArchive;
+    AudChordTable mTable;
+    const AudChordData* mCurChord;
+    const AudScaleData* mCurScale;
     const u8* mCurScaleUp;  // the current scale's note lists in the chord table file
     const u8* mCurScaleDown;
-    /* 0x20 */ u8 mChordNoteList[NUM_CHORD_NOTES];
-    /* 0x28 */ u8 mFlags;
-    /* 0x2C */ u32 _2C;
-    /* 0x30 */ s32 mCurChordIndex;
-    /* 0x34 */ s32 mCurScaleIndex;
-    /* 0x38 */ s16 mTableId;
+    u8 mChordNoteList[NUM_CHORD_NOTES];
+    u8 mFlags;
+    u32 _2C;
+    s32 mCurChordIndex;
+    s32 mCurScaleIndex;
+    s16 mTableId;
 };

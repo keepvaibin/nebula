@@ -31,7 +31,7 @@ public:
     void exeDisappearBeforeAppear();
 
 private:
-    /* 0x20 */ MessageType mMessageType;
-    /* 0x24 */ const char* mMessageId;
-    /* 0x28 */ const nw4r::lyt::TexMap* mTexture;
+    MessageType mMessageType;
+    const char* mMessageId;
+    const nw4r::lyt::TexMap* mTexture;
 };

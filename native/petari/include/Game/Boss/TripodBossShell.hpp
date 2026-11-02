@@ -21,5 +21,5 @@ public:
     void exeWait();
     void exeBreak();
 
-    /* 0xE4 */ ModelObj* mBreakModel;
+    ModelObj* mBreakModel;
 };

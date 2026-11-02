@@ -20,7 +20,7 @@ public:
     void exeSelect();
     void exeConfirm();
 
-    /* 0x8C */ PartsModel* mBloomModel;
-    /* 0x90 */ MiniatureGalaxy* mMiniGalaxy;
-    /* 0x94 */ LiveActor** mPointingActors;
+    PartsModel* mBloomModel;
+    MiniatureGalaxy* mMiniGalaxy;
+    LiveActor** mPointingActors;
 };

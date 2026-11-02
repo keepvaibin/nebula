@@ -13,11 +13,11 @@ class J3DShapePacket;
 
 enum J3DMdlFlag {
     J3DMdlFlag_None = 0x0,
-    /* 0x00001 */ J3DMdlFlag_Unk1 = 0x1,
-    /* 0x00002 */ J3DMdlFlag_UseDefaultJ3D = 0x2,
-    /* 0x20000 */ J3DMdlFlag_UseSharedSnapshot = 0x20000,
-    /* 0x40000 */ J3DMdlFlag_UseSingleSnapshot = 0x40000,
-    /* 0x80000 */ J3DMdlFlag_DifferedSnapshots = 0x80000,
+    J3DMdlFlag_Unk1 = 0x1,
+    J3DMdlFlag_UseDefaultJ3D = 0x2,
+    J3DMdlFlag_UseSharedSnapshot = 0x20000,
+    J3DMdlFlag_UseSingleSnapshot = 0x40000,
+    J3DMdlFlag_DifferedSnapshots = 0x80000,
 };
 
 typedef void (*J3DCalcCallBack)(J3DModel*, u32 timing);
@@ -148,18 +148,18 @@ public:
         return mMtxBuffer->getWeightAnmMtx(i);
     }
 
-    /* 0x04 */ J3DModelData* mModelData;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u32 mDiffFlag;
-    /* 0x10 */ J3DCalcCallBack mCalcCallBack;
-    /* 0x14 */ uintptr_t mUserArea;
-    /* 0x18 */ Vec mBaseScale;
-    /* 0x24 */ Mtx mBaseTransformMtx;
-    /* 0x54 */ Mtx mInternalView;
-    /* 0x84 */ J3DMtxBuffer* mMtxBuffer;
-    /* 0x88 */ J3DVertexBuffer mVertexBuffer;
-    /* 0xC0 */ J3DMatPacket* mMatPacket;
-    /* 0xC4 */ J3DShapePacket* mShapePacket;
-    /* 0xD4 */ J3DVtxShader* mUnkCalc1;
+    J3DModelData* mModelData;
+    u32 mFlags;
+    u32 mDiffFlag;
+    J3DCalcCallBack mCalcCallBack;
+    uintptr_t mUserArea;
+    Vec mBaseScale;
+    Mtx mBaseTransformMtx;
+    Mtx mInternalView;
+    J3DMtxBuffer* mMtxBuffer;
+    J3DVertexBuffer mVertexBuffer;
+    J3DMatPacket* mMatPacket;
+    J3DShapePacket* mShapePacket;
+    J3DVtxShader* mUnkCalc1;
     u16 mMotionEpoch;  // counts the model's lives (MotionSignal)
 };

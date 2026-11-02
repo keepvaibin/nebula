@@ -16,8 +16,8 @@ public:
     bool isEmpty() const;
     void reset();
 
-    /* 0x00 */ TripodBossStepPoint* mStepPoints[32];
-    /* 0x80 */ s32 mCurrentPoint;
-    /* 0x84 */ s32 mPointNum;
-    /* 0x88 */ bool _88;
+    TripodBossStepPoint* mStepPoints[32];
+    s32 mCurrentPoint;
+    s32 mPointNum;
+    bool _88;
 };

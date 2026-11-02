@@ -20,13 +20,13 @@ namespace NrvCandlestand {
 
 namespace {
     struct Param {
-        /* 0x00 */ const char* mObjName;
-        /* 0x04 */ f32 mClippingRadius;
-        /* 0x08 */ f32 mSensorRange;
-        /* 0x0C */ f32 mSensorHeight;
-        /* 0x10 */ f32 mItemHeight;
-        /* 0x14 */ f32 mCoinAngle;
-        /* 0x18 */ bool mCanUseSwitch;
+        const char* mObjName;
+        f32 mClippingRadius;
+        f32 mSensorRange;
+        f32 mSensorHeight;
+        f32 mItemHeight;
+        f32 mCoinAngle;
+        bool mCanUseSwitch;
     };
 
     static const Param sParams[] = {

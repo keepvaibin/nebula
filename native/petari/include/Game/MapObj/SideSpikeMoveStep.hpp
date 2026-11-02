@@ -21,7 +21,7 @@ public:
     void endDPDStopSync();
 
 private:
-    /* 0xC4 */ AnimScaleController* mScaleController;
-    /* 0xC8 */ WalkerStateBindStarPointer* mStateBindStarPointer;
-    /* 0xCC */ TVec3f mRailClipping;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mStateBindStarPointer;
+    TVec3f mRailClipping;
 };

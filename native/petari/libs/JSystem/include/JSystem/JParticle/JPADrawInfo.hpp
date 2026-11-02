@@ -19,8 +19,8 @@ public:
         NebulaMtxLightOrtho(mPrjMtx, top, bottom, left, right, 0.5f, 0.5f, 0.5f, 0.5f);
     }
 
-    /* 0x00 */ Mtx mCamMtx;
-    /* 0x30 */ Mtx mPrjMtx;
+    Mtx mCamMtx;
+    Mtx mPrjMtx;
 
     void getCamMtx(Mtx pDst) const {
         NebulaMtxCopy(mCamMtx, pDst);

@@ -34,16 +34,16 @@ public:
     void startDemoRequested();
     void doDemoEndRequest();
 
-    /* 0x0C */ bool mIsActive;
-    /* 0x10 */ DemoExecutor* mExecutor;
-    /* 0x14 */ bool _14;
-    /* 0x18 */ DemoCastGroupHolder* _18;
-    /* 0x1C */ DemoCastGroupHolder* mCastSubGroupHolder;
-    /* 0x20 */ DemoSimpleCastHolder* _20;
-    /* 0x24 */ ResourceHolder* mResourceHolder;
-    /* 0x28 */ DemoStartRequestHolder* mStartRequestHolder;
-    /* 0x2C */ NameObj* _2C;
-    /* 0x30 */ const char* _30;
-    /* 0x34 */ s32 _34;
-    /* 0x38 */ bool _38;
+    bool mIsActive;
+    DemoExecutor* mExecutor;
+    bool _14;
+    DemoCastGroupHolder* _18;
+    DemoCastGroupHolder* mCastSubGroupHolder;
+    DemoSimpleCastHolder* _20;
+    ResourceHolder* mResourceHolder;
+    DemoStartRequestHolder* mStartRequestHolder;
+    NameObj* _2C;
+    const char* _30;
+    s32 _34;
+    bool _38;
 };

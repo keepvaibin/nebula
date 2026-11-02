@@ -18,7 +18,7 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts* pParts) const;
 
-    /* 0x04 */ const HitSensor* mSensor;
+    const HitSensor* mSensor;
 };
 
 class CollisionPartsFilterActor : public CollisionPartsFilterBase {
@@ -28,5 +28,5 @@ public:
 
     virtual bool isInvalidParts(const CollisionParts* pParts) const;
 
-    /* 0x04 */ const LiveActor* mActor;
+    const LiveActor* mActor;
 };

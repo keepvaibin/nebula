@@ -23,11 +23,11 @@ public:
         mCamAngleRate = angleRate;
     }
 
-    /* 0x4C */ const char* mName;
-    /* 0x50 */ f32 mDist;
-    /* 0x54 */ f32 mAngleX;
-    /* 0x58 */ f32 mAngleYMin;
-    /* 0x5C */ f32 mAngleYMax;
-    /* 0x60 */ f32 mCamDistRatio;
-    /* 0x64 */ f32 mCamAngleRate;
+    const char* mName;
+    f32 mDist;
+    f32 mAngleX;
+    f32 mAngleYMin;
+    f32 mAngleYMax;
+    f32 mCamDistRatio;
+    f32 mCamAngleRate;
 };

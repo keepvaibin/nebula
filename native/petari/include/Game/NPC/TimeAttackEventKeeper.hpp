@@ -12,5 +12,5 @@ public:
     void endEvent();
 
 private:
-    /* 0x00 */ LiveActor* _0;
+    LiveActor* _0;
 };

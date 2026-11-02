@@ -11,8 +11,8 @@ class LiveActor;
 class JointController;
 
 struct JointControllerInfo {
-    /* 0x00 */ JointController* mController;
-    /* 0x04 */ J3DJoint* mJoint;
+    JointController* mController;
+    J3DJoint* mJoint;
 };
 
 class JointController {
@@ -27,8 +27,8 @@ public:
     void calcJointMatrixAfterChildAndSetSystem(J3DJoint*);
     static int staticCallBack(J3DJoint*, int);
 
-    /* 0x04 */ J3DModel* mModel;
-    /* 0x08 */ J3DJoint* mJoint;
+    J3DModel* mModel;
+    J3DJoint* mJoint;
 };
 
 template < typename T >
@@ -67,9 +67,9 @@ public:
         }
     }
 
-    /* 0x0C */ T* mHost;
-    /* 0x10 */ func mMtxCalcFunc;
-    /* 0x1C */ func mMtxCalcAfterChildFunc;
+    T* mHost;
+    func mMtxCalcFunc;
+    func mMtxCalcAfterChildFunc;
 };
 
 namespace MR {

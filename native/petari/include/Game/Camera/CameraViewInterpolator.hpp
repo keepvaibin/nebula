@@ -8,8 +8,8 @@ class Binder;
 class CameraViewInterpolator {
 public:
     enum CalcState {
-        /* 0x0 */ CalcState_Ready,
-        /* 0x1 */ CalcState_Invalid,
+        CalcState_Ready,
+        CalcState_Invalid,
     };
 
     CameraViewInterpolator();
@@ -32,27 +32,27 @@ public:
         mGravity.set(grav);
     }
 
-    /* 0x00 */ u32 mInterpolateTimer;
-    /* 0x04 */ u32 mInterpolateTime;
-    /* 0x08 */ bool mIsAntiOscillation;
-    /* 0x09 */ bool mIsForceCameraChange;
-    /* 0x0A */ bool mIsInterpolationOff;
-    /* 0x0C */ TPos3f mTargetMtx;
-    /* 0x3C */ TPos3f mMtx;
-    /* 0x6C */ TVec3f mTargetPosition;
-    /* 0x78 */ f32 mRate;
-    /* 0x7C */ bool mIsCollisionOff;
-    /* 0x7D */ bool mIsRepulsionOff;
-    /* 0x80 */ f32 mTargetFovy;
-    /* 0x84 */ f32 mFovy;
-    /* 0x88 */ bool mIsInterpolatingNearlyEnd;
-    /* 0x89 */ bool mIsInterpolating;
-    /* 0x8A */ bool mIsCorrectErpPositionOn;
-    /* 0x8C */ u32 mCalcState;
-    /* 0x90 */ const CameraTargetObj* mTargetObj;
-    /* 0x94 */ Binder* mBinder;
-    /* 0x98 */ TVec3f mPosition;
-    /* 0xA4 */ TVec3f mGravity;
-    /* 0xB0 */ bool mIsCollided;
-    /* 0xB4 */ TVec3f mLErpOffset;  // TODO: is this name correct?
+    u32 mInterpolateTimer;
+    u32 mInterpolateTime;
+    bool mIsAntiOscillation;
+    bool mIsForceCameraChange;
+    bool mIsInterpolationOff;
+    TPos3f mTargetMtx;
+    TPos3f mMtx;
+    TVec3f mTargetPosition;
+    f32 mRate;
+    bool mIsCollisionOff;
+    bool mIsRepulsionOff;
+    f32 mTargetFovy;
+    f32 mFovy;
+    bool mIsInterpolatingNearlyEnd;
+    bool mIsInterpolating;
+    bool mIsCorrectErpPositionOn;
+    u32 mCalcState;
+    const CameraTargetObj* mTargetObj;
+    Binder* mBinder;
+    TVec3f mPosition;
+    TVec3f mGravity;
+    bool mIsCollided;
+    TVec3f mLErpOffset;  // TODO: is this name correct?
 };

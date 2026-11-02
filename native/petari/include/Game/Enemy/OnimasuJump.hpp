@@ -22,6 +22,6 @@ public:
     void calcJumpVelocity();
 
 private:
-    /* 0x104 */ s32 mCurNormal;
-    /* 0x108 */ MR::AssignableArray< TVec3f > mNormals;
+    s32 mCurNormal;
+    MR::AssignableArray< TVec3f > mNormals;
 };

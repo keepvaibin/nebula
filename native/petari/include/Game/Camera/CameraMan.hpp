@@ -53,9 +53,9 @@ public:
     void activate(CameraDirector*);
     void deactivate(CameraDirector*);
 
-    /* 0x0C */ CameraDirector* mDirector;
-    /* 0x10 */ CameraPoseParam* mPoseParam;
-    /* 0x14 */ bool mIsActivated;
-    /* 0x15 */ bool mRequestLOfsReset;
-    /* 0x18 */ TPos3f mMatrix;
+    CameraDirector* mDirector;
+    CameraPoseParam* mPoseParam;
+    bool mIsActivated;
+    bool mRequestLOfsReset;
+    TPos3f mMatrix;
 };

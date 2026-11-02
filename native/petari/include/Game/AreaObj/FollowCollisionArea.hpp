@@ -14,15 +14,15 @@ public:
 
     bool hitCheck(const TVec3f& rPos, f32 radius, TVec3f* pPoint, TVec3f* pNormal);
 
-    /* 0x0C */ u32 _C;
-    /* 0x10 */ f32 _10;
-    /* 0x14 */ TVec3f _14;
-    /* 0x20 */ s32 _20;
-    /* 0x24 */ s32 _24;
-    /* 0x28 */ bool _28;
-    /* 0x2C */ s32 _2C;
-    /* 0x30 */ AreaPolygon* _30;
-    /* 0x34 */ MtxPtr _34;
-    /* 0x38 */ TVec3f _38;
-    /* 0x44 */ f32 _44;
+    u32 _C;
+    f32 _10;
+    TVec3f _14;
+    s32 _20;
+    s32 _24;
+    bool _28;
+    s32 _2C;
+    AreaPolygon* _30;
+    MtxPtr _34;
+    TVec3f _38;
+    f32 _44;
 };

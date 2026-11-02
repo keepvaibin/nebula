@@ -32,9 +32,9 @@ public:
     void exeDownVs2();
     void updateCastPose();
 
-    /* 0x10 */ BossKameckDemoPosition* mDemoPos;
-    /* 0x14 */ const Nerve* mDemoNerve;
-    /* 0x18 */ const char* mCurDemoName;
+    BossKameckDemoPosition* mDemoPos;
+    const Nerve* mDemoNerve;
+    const char* mCurDemoName;
 };
 
 class BossKameckDemoPosition : public LiveActor {
@@ -43,5 +43,5 @@ public:
 
     virtual void init(const JMapInfoIter&);
 
-    /* 0x8C */ ActorCameraInfo* mCameraInfo;
+    ActorCameraInfo* mCameraInfo;
 };

@@ -41,8 +41,8 @@ public:
     void makeIndexData(J3DShape*) const;
     void checkBorderVtx(J3DModelData*, u32);
 
-    /* 0x08 */ f32 _8;
-    /* 0x0C */ CShader::CIndex* mIndexArray;
-    /* 0x10 */ CShader::CLengthMap mLengthMap;
-    /* 0x1C */ f32 _1C;
+    f32 _8;
+    CShader::CIndex* mIndexArray;
+    CShader::CLengthMap mLengthMap;
+    f32 _1C;
 };

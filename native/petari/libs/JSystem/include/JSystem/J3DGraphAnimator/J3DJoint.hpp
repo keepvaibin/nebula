@@ -100,20 +100,20 @@ public:
     friend struct J3DJointFactory;
     friend class J3DJointTree;
 
-    /* 0x00 */ void* mCallBackUserData;
-    /* 0x04 */ J3DJointCallBack mCallBack;
-    /* 0x08 */ void* field_0x8;
-    /* 0x0C */ J3DJoint* mChild;
-    /* 0x10 */ J3DJoint* mYounger;
-    /* 0x14 */ u16 mJntNo;
-    /* 0x16 */ u8 mKind;
-    /* 0x17 */ u8 mScaleCompensate;
-    /* 0x18 */ J3DTransformInfo mTransformInfo;
-    /* 0x38 */ f32 mBoundingSphereRadius;
-    /* 0x3C */ Vec mMin;
-    /* 0x48 */ Vec mMax;
-    /* 0x54 */ J3DMtxCalc* mMtxCalc;
-    /* 0x58 */ J3DMaterial* mMesh;
+    void* mCallBackUserData;
+    J3DJointCallBack mCallBack;
+    void* field_0x8;
+    J3DJoint* mChild;
+    J3DJoint* mYounger;
+    u16 mJntNo;
+    u8 mKind;
+    u8 mScaleCompensate;
+    J3DTransformInfo mTransformInfo;
+    f32 mBoundingSphereRadius;
+    Vec mMin;
+    Vec mMax;
+    J3DMtxCalc* mMtxCalc;
+    J3DMaterial* mMesh;
 };
 
 class J3DMtxCalcNoAnmBase : public J3DMtxCalc {

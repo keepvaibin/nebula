@@ -16,8 +16,8 @@ public:
     void exeNormal();
     bool tryStartPauseMenu();
 
-    /* 0x08 */ GameScene* mScene;
-    /* 0x0C */ PauseButtonCheckerInGame* mPauseChecker;
-    /* 0x10 */ bool mPauseMenuOff;
-    /* 0x14 */ const Nerve* mPauseMenuNerve;
+    GameScene* mScene;
+    PauseButtonCheckerInGame* mPauseChecker;
+    bool mPauseMenuOff;
+    const Nerve* mPauseMenuNerve;
 };

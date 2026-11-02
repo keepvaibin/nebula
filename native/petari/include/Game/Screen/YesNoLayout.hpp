@@ -18,6 +18,6 @@ public:
     void setSelectMessage(const char*, const char*);
     void exeSelecting();
 
-    /* 0x20 */ YesNoController* mController;
-    /* 0x24 */ bool _24;
+    YesNoController* mController;
+    bool _24;
 };

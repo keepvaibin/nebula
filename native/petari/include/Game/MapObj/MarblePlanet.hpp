@@ -22,11 +22,11 @@ public:
     void exeBreakCore();
     void initCoreAndElectron();
 
-    /* 0x8C */ ModelObj* mCorePlanetModel;
-    /* 0x90 */ MarblePlanetElectron** mPlanetElectrons;
-    /* 0x94 */ CollisionParts* mWatermelonCollision;
-    /* 0x98 */ s32 mNumElectrons;
-    /* 0x9C */ s32 mRemainingElectrons;
+    ModelObj* mCorePlanetModel;
+    MarblePlanetElectron** mPlanetElectrons;
+    CollisionParts* mWatermelonCollision;
+    s32 mNumElectrons;
+    s32 mRemainingElectrons;
 };
 
 class MarblePlanetElectron : public LiveActor {
@@ -44,9 +44,9 @@ public:
     void exeAttack();
     void crashElectron(HitSensor*);
 
-    /* 0x8C */ MarblePlanet* mParentPlanet;
-    /* 0x90 */ MarblePlanetElectronShadow* mElectronShadow;
-    /* 0x94 */ TVec3f _94;
+    MarblePlanet* mParentPlanet;
+    MarblePlanetElectronShadow* mElectronShadow;
+    TVec3f _94;
 };
 
 class MarblePlanetElectronShadow : public LiveActor {
@@ -57,6 +57,6 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ MarblePlanetElectron* mParentElectron;
-    /* 0x90 */ const TVec3f* _90;
+    MarblePlanetElectron* mParentElectron;
+    const TVec3f* _90;
 };

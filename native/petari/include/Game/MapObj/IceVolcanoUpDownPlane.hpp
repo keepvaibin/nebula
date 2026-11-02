@@ -12,5 +12,5 @@ public:
     bool tryCalcNearestPosToPlayer(TVec3f*) const;
     TVec3f* getSoundCalcPos();
 
-    /* 0xD4 */ TVec3f mNearestPosToPlayer;
+    TVec3f mNearestPosToPlayer;
 };

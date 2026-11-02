@@ -6,25 +6,25 @@
 
 // In host order, as the importer cooks model TEX1 blocks, particle textures and BTI files (native_data.rs host_timg).
 struct ResTIMG {
-    /* 0x00 */ u8 mFormat;
-    /* 0x01 */ u8 mTransparency;
-    /* 0x02 */ u16 mWidth;
-    /* 0x04 */ u16 mHeight;
-    /* 0x06 */ u8 mWrapS;
-    /* 0x07 */ u8 mWrapT;
-    /* 0x08 */ const u8* mImage;  // null in a file; J3DTexture::setResTIMG's other image, anywhere in memory
-    /* 0x10 */ bool mMipmap;
-    /* 0x11 */ bool mDoEdgeLod;
-    /* 0x12 */ bool mBiasClamp;
-    /* 0x13 */ u8 mMaxAnisotropy;
-    /* 0x14 */ u8 mMinType;
-    /* 0x15 */ u8 mMagType;
-    /* 0x16 */ u8 mMinLod;
-    /* 0x17 */ u8 mMaxLod;
-    /* 0x18 */ u8 mImageNum;
-    /* 0x19 */ u8 _19;
-    /* 0x1A */ s16 mLodBias;
-    /* 0x1C */ s32 mImageDataOffset;  // from this header; 0 means right after it
+    u8 mFormat;
+    u8 mTransparency;
+    u16 mWidth;
+    u16 mHeight;
+    u8 mWrapS;
+    u8 mWrapT;
+    const u8* mImage;  // null in a file; J3DTexture::setResTIMG's other image, anywhere in memory
+    bool mMipmap;
+    bool mDoEdgeLod;
+    bool mBiasClamp;
+    u8 mMaxAnisotropy;
+    u8 mMinType;
+    u8 mMagType;
+    u8 mMinLod;
+    u8 mMaxLod;
+    u8 mImageNum;
+    u8 _19;
+    s16 mLodBias;
+    s32 mImageDataOffset;  // from this header; 0 means right after it
 
     const u8* image() const {
         if (mImage != nullptr) {
@@ -95,15 +95,15 @@ public:
     }
 
     J3DNativeTexObj mObj;
-    /* 0x20 */ const ResTIMG* mTIMG;
-    /* 0x24 */ u8* mImage;
-    /* 0x30 */ u8 mWrapS;
-    /* 0x31 */ u8 mWrapT;
-    /* 0x32 */ u8 mMinType;
-    /* 0x33 */ u8 mMagType;
-    /* 0x34 */ u16 mMinLod;
-    /* 0x36 */ u16 mMaxLod;
-    /* 0x38 */ s16 mLodBias;
-    /* 0x3B */ u8 mFlag;
-    /* 0x3C */ ResTIMG* _3C;
+    const ResTIMG* mTIMG;
+    u8* mImage;
+    u8 mWrapS;
+    u8 mWrapT;
+    u8 mMinType;
+    u8 mMagType;
+    u16 mMinLod;
+    u16 mMaxLod;
+    s16 mLodBias;
+    u8 mFlag;
+    ResTIMG* _3C;
 };

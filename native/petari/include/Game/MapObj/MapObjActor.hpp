@@ -48,22 +48,22 @@ public:
     void exeMove();
     void exeDone();
 
-    /* 0x8C */ const char* mObjectName;
-    /* 0x90 */ LodCtrl* mPlanetLodCtrl;
-    /* 0x94 */ ModelObj* mBloomModel;
-    /* 0x98 */ ModelObj* mModelObj;
-    /* 0x9C */ ProjmapEffectMtxSetter* mMatrixSetter;
-    /* 0xA0 */ MapPartsRailMover* mRailMover;
-    /* 0xA4 */ MapPartsRotatorBase* mRotator;
-    /* 0xA8 */ MapPartsRailRotator* mRailRotator;
-    /* 0xAC */ MapPartsRailPosture* mRailPosture;
-    /* 0xB0 */ MapPartsRailGuideDrawer* mRailGuideDrawer;
-    /* 0xB4 */ u8 _B4;
-    /* 0xB5 */ u8 _B5;
-    /* 0xB6 */ u8 _B6;
-    /* 0xB8 */ Nerve* mWaitNrv;
-    /* 0xBC */ Nerve* mMoveNrv;
-    /* 0xC0 */ Nerve* mDoneNrv;
+    const char* mObjectName;
+    LodCtrl* mPlanetLodCtrl;
+    ModelObj* mBloomModel;
+    ModelObj* mModelObj;
+    ProjmapEffectMtxSetter* mMatrixSetter;
+    MapPartsRailMover* mRailMover;
+    MapPartsRotatorBase* mRotator;
+    MapPartsRailRotator* mRailRotator;
+    MapPartsRailPosture* mRailPosture;
+    MapPartsRailGuideDrawer* mRailGuideDrawer;
+    u8 _B4;
+    u8 _B5;
+    u8 _B6;
+    Nerve* mWaitNrv;
+    Nerve* mMoveNrv;
+    Nerve* mDoneNrv;
 };
 
 class MapObjActorUtil {

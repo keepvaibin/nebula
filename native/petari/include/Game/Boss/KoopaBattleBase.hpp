@@ -30,7 +30,7 @@ public:
     bool updateFind();
     bool updateRecover(const Nerve* pNerve);
 
-    /* 0x10 */ KoopaStateDamageEscape* mStateDamageEscape;
-    /* 0x14 */ KoopaStateGuard* mStateGuard;
-    /* 0x18 */ s32 mWanderTime;
+    KoopaStateDamageEscape* mStateDamageEscape;
+    KoopaStateGuard* mStateGuard;
+    s32 mWanderTime;
 };

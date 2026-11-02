@@ -21,8 +21,8 @@ public:
     void initBaseMatrix(const JMapInfoIter&);
     void setShape(ClipAreaShape*);
 
-    /* 0x8C */ TPos3f mBaseMtx;
-    /* 0xBC */ ClipAreaShape* mShape;
+    TPos3f mBaseMtx;
+    ClipAreaShape* mShape;
 };
 
 namespace MR {

@@ -16,8 +16,8 @@ public:
     virtual void endClipped();
     virtual void control();
 
-    /* 0x8C */ MR::Vector< MR::AssignableArray< ModelObj* > > mModelArray;
-    /* 0x98 */ TVec3f _98;
-    /* 0xA4 */ f32 mRailSpeed;
-    /* 0xA8 */ s32 mWhistleTimer;
+    MR::Vector< MR::AssignableArray< ModelObj* > > mModelArray;
+    TVec3f _98;
+    f32 mRailSpeed;
+    s32 mWhistleTimer;
 };

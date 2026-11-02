@@ -37,8 +37,8 @@ public:
     bool tryRemoveFile(const char*, bool*);
     bool trySave(bool*, bool);
 
-    /* 0x08 */ SaveRequest* mSaveRequest;
-    /* 0x0C */ u32 _C;
-    /* 0x14 */ u8* _14;
-    /* 0x18 */ u8* _18;
+    SaveRequest* mSaveRequest;
+    u32 _C;
+    u8* _14;
+    u8* _18;
 };

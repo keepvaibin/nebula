@@ -44,15 +44,15 @@ public:
     bool isEnablePush() const;
     void endBindStarPointer() const;
 
-    /* 0x8C */ Kuribo* mKuribo;
-    /* 0x90 */ ModelObj* mBreakModel;
-    /* 0x94 */ AnimScaleController* mAnimeScale;
-    /* 0x98 */ WalkerStateBindStarPointer* mStateBindStartPointer;
-    /* 0x9C */ TQuat4f mRotationQuat;
-    /* 0xAC */ TVec3f mFrontVec;
-    /* 0xB8 */ s32 _B8;
-    /* 0xBC */ bool mIsFloating;
+    Kuribo* mKuribo;
+    ModelObj* mBreakModel;
+    AnimScaleController* mAnimeScale;
+    WalkerStateBindStarPointer* mStateBindStartPointer;
+    TQuat4f mRotationQuat;
+    TVec3f mFrontVec;
+    s32 _B8;
+    bool mIsFloating;
 
     /// @brief Drops fire on every point of the rail reached, except the first one.
-    /* 0xBD */ bool mIsValidDropFire;
+    bool mIsValidDropFire;
 };

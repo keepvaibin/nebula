@@ -21,7 +21,7 @@ public:
     void exeEnd();
     void updateBindActorMtx();
 
-    /* 0x8C */ CollisionParts* mCollisionParts;
-    /* 0x90 */ LiveActor* _90;
-    /* 0x94 */ MapObjConnector* mMapObjConnector;
+    CollisionParts* mCollisionParts;
+    LiveActor* _90;
+    MapObjConnector* mMapObjConnector;
 };

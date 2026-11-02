@@ -14,7 +14,7 @@ public:
     void setUpPixelFormat() const;
     void setUpMaterial() const;
 
-    /* 0x0 */ JUTTexture* mBubbleTexture;
-    /* 0x4 */ JUTTexture* mRainbowTexture;
-    /* 0x8 */ f32 _8;
+    JUTTexture* mBubbleTexture;
+    JUTTexture* mRainbowTexture;
+    f32 _8;
 };

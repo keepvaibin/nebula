@@ -27,10 +27,10 @@ public:
     void exeDead();
 
 private:
-    /* 0x08 */ TitleSequenceProductSub::LogoLayout* mLogoLayout;
-    /* 0x0C */ SimpleLayout* mPressStartLayout;
-    /* 0x14 */ TriggerChecker* mAButtonChecker;
-    /* 0x18 */ TriggerChecker* mBButtonChecker;
+    TitleSequenceProductSub::LogoLayout* mLogoLayout;
+    SimpleLayout* mPressStartLayout;
+    TriggerChecker* mAButtonChecker;
+    TriggerChecker* mBButtonChecker;
 };
 
 namespace TitleSequenceProductSub {

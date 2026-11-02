@@ -21,8 +21,8 @@ public:
     void exeSwitchUp();
     void calcRotSpeed();
 
-    /* 0x8C */ u32 _8C;
-    /* 0x90 */ s32 _90;
-    /* 0x94 */ f32 mRotateSpeed;
-    /* 0x98 */ u8 _98;
+    u32 _8C;
+    s32 _90;
+    f32 mRotateSpeed;
+    u8 _98;
 };

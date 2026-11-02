@@ -12,9 +12,9 @@
 
 namespace {
     struct LineCheckParam {
-        /* 0x00 */ const char* mObjName;
-        /* 0x04 */ f32 _4;
-        /* 0x08 */ f32 _8;
+        const char* mObjName;
+        f32 _4;
+        f32 _8;
     };
 
     static const LineCheckParam sLineCheckParamTable[] = {

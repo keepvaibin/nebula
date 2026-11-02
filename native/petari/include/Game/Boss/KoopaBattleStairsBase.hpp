@@ -20,6 +20,6 @@ public:
     bool receiveMsgPlayerAttack(u32 msg, HitSensor* pSender, HitSensor* pReceiver);
     s32 calcFireAttackStep(KoopaBattleMapStair*, f32, s32, const TVec3f&) const;
 
-    /* 0x8 */ Koopa* mKoopa;
-    /* 0xC */ LiveActorGroup* mStairsGroup;
+    Koopa* mKoopa;
+    LiveActorGroup* mStairsGroup;
 };

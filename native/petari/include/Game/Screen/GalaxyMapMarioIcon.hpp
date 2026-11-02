@@ -12,6 +12,6 @@ public:
     void showBlink();
 
 private:
-    /* 0x20 */ LayoutActor* _20;
-    /* 0x24 */ const char* _24;
+    LayoutActor* _20;
+    const char* _24;
 };

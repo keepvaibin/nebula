@@ -10,5 +10,5 @@ public:
     virtual void init(const JMapInfoIter&);
     virtual void movement();
 
-    /* 0x3C */ u8 _3C;
+    u8 _3C;
 };

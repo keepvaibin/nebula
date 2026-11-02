@@ -16,7 +16,7 @@ public:
             mVtxs[2] = vtx3;
         }
 
-        /* 0x00 */ u16 mVtxs[3];
+        u16 mVtxs[3];
     };
 
     TrampleStar(const char*);
@@ -46,32 +46,32 @@ public:
     u32 calcNearestVtxIndex(const TVec3f&);
     void drawSelf() const;
 
-    /* 0x8C */ u32 _8C;  // NOTE: unused
-    /* 0x90 */ u16* mCheckFlags;
-    /* 0x94 */ u16 mNumFlags;
-    /* 0x96 */ u16 mNumSurfaces;
-    /* 0x98 */ u16 mNumVtxs;
-    /* 0x9C */ TVec3f* mVtxs;
-    /* 0xA0 */ f32* mDeformCoeff;
-    /* 0xA4 */ f32* mDeformSpeed;
-    /* 0xA8 */ u8* _A8;  // NOTE: allocated but unused?
-    /* 0xAC */ Surface* mSurfaces;
-    /* 0xB0 */ Surface* mLodSurfaces;
-    /* 0xB4 */ u32 _B4;  // NOTE: unused
-    /* 0xB8 */ JUTTexture* mTexture;
-    /* 0xBC */ TVec2f* mTexST;
-    /* 0xC0 */ s16* mVtxOverlap;
-    /* 0xC4 */ u16 mNumDrawVtxs;
-    /* 0xC8 */ TVec3f* mDrawPos;
-    /* 0xCC */ TVec3f* mDrawNorm;
-    /* 0xD0 */ TVec2f* mDrawTex;
-    /* 0xD4 */ f32* mDrawDeformCoeffs;
-    /* 0xD8 */ bool mIsLod;
-    /* 0xDA */ u16 mCaptureVtx;
-    /* 0xDC */ f32 mDeformRate;
-    /* 0xE0 */ f32 mJumpVel;
-    /* 0xE4 */ f32 mSpringRate;
-    /* 0xE8 */ u16 mCaptureFrames;
+    u32 _8C;  // NOTE: unused
+    u16* mCheckFlags;
+    u16 mNumFlags;
+    u16 mNumSurfaces;
+    u16 mNumVtxs;
+    TVec3f* mVtxs;
+    f32* mDeformCoeff;
+    f32* mDeformSpeed;
+    u8* _A8;  // NOTE: allocated but unused?
+    Surface* mSurfaces;
+    Surface* mLodSurfaces;
+    u32 _B4;  // NOTE: unused
+    JUTTexture* mTexture;
+    TVec2f* mTexST;
+    s16* mVtxOverlap;
+    u16 mNumDrawVtxs;
+    TVec3f* mDrawPos;
+    TVec3f* mDrawNorm;
+    TVec2f* mDrawTex;
+    f32* mDrawDeformCoeffs;
+    bool mIsLod;
+    u16 mCaptureVtx;
+    f32 mDeformRate;
+    f32 mJumpVel;
+    f32 mSpringRate;
+    u16 mCaptureFrames;
 };
 
 class TrampleStarShare : public LiveActor {
@@ -79,5 +79,5 @@ public:
     TrampleStarShare(TrampleStar*);
     void copy(TrampleStar*) const;
 
-    /* 0x8C */ TrampleStar* mTrampleStar;
+    TrampleStar* mTrampleStar;
 };

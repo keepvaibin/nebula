@@ -38,11 +38,11 @@ struct JASVoiceSlot {
 
     static JASVoiceSlot* sSlots;
 
-    /* 0x00 */ s32 mStatus;
-    /* 0x04 */ s16 mPriority;
-    /* 0x08 */ u32 mFlags;
-    /* 0x0C */ u32 field_0xc;
-    /* 0x10 */ Callback mCallback;
-    /* 0x14 */ void* mCallbackData;
-    /* 0x18 */ JASVoice* mChannel;
+    s32 mStatus;
+    s16 mPriority;
+    u32 mFlags;
+    u32 field_0xc;
+    Callback mCallback;
+    void* mCallbackData;
+    JASVoice* mChannel;
 };

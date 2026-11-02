@@ -123,23 +123,23 @@ public:
 
 private:
     /// @brief The pointer to the state of the owning Wii Remote.
-    /* 0x00 */ const GamePad* mPad;
+    const GamePad* mPad;
 
     /// @brief The combination of buttons pressed.
-    /* 0x04 */ u32 mHold;
+    u32 mHold;
 
     /// @brief The combination of buttons just pressed.
-    /* 0x08 */ u32 mTrigger;
+    u32 mTrigger;
 
     /// @brief The combination of buttons just released.
-    /* 0x0C */ u32 mRelease;
+    u32 mRelease;
 
     /// @brief The combination of buttons pressed during the repeat period.
-    /* 0x10 */ u32 mRepeat;
+    u32 mRepeat;
 
     /// @brief The number of seconds to hold down any button before the button repeats.
-    /* 0x14 */ f32 mDelaySec;
+    f32 mDelaySec;
 
     /// @brief The number of seconds to hold down any button after @ref mDelaySec before the button repeats.
-    /* 0x18 */ f32 mPulseSec;
+    f32 mPulseSec;
 };

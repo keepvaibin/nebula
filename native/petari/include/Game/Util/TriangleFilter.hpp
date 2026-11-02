@@ -12,7 +12,7 @@ public:
 
     virtual bool isInvalidTriangle(const Triangle*) const = 0;
 
-    //  /* 0x4 */ TriangleFunc mFunction;
+    //  TriangleFunc mFunction;
 };
 
 class TriangleFilterFunc : public TriangleFilterBase {
@@ -24,7 +24,7 @@ public:
         return mFunction(pTriangle);
     }
 
-    /* 0x04 */ TriangleFunc mFunction;
+    TriangleFunc mFunction;
 };
 
 namespace MR {
@@ -42,8 +42,8 @@ public:
         return (mParent->*mFunc)(pTriangle);
     }
 
-    /* 0x04 */ T* mParent;
-    /* 0x10 */ DelegateFilter mFunc;
+    T* mParent;
+    DelegateFilter mFunc;
 };
 
 class TriangleFilterDangerCode : public TriangleFilterBase {

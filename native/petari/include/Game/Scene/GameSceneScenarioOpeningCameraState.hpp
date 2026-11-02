@@ -17,6 +17,6 @@ public:
     void exePlay();
     bool trySkipTrigger() const;
 
-    /* 0x08 */ TPos3f mBaseMtx;
-    /* 0x38 */ ScenarioTitle* mScenarioTitle;
+    TPos3f mBaseMtx;
+    ScenarioTitle* mScenarioTitle;
 };

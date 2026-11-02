@@ -34,5 +34,5 @@ public:
     void resetDirection();
     void faceToMario();
 
-    /* 0x9C */ TVec3f mFront;
+    TVec3f mFront;
 };

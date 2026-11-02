@@ -13,7 +13,7 @@ namespace MR {
             return MR::strcasecmp(pValue->getName(), mName) == 0;
         }
 
-        /* 0x00 */ const char* mName;
+        const char* mName;
     };
 };  // namespace MR
 

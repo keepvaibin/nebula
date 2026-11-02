@@ -125,23 +125,23 @@ public:
         mJoint = pJoint;
     }
 
-    /* 0x04 */ J3DMaterial* mNext;
-    /* 0x08 */ J3DShape* mShape;
-    /* 0x0C */ J3DJoint* mJoint;
-    /* 0x10 */ u32 mMaterialMode;
-    /* 0x14 */ u16 mIndex;
-    /* 0x18 */ u32 mInvalid;
-    /* 0x1C */ u32 field_0x1c;
-    /* 0x20 */ u32 mDiffFlag;
-    /* 0x24 */ J3DColorBlock* mColorBlock;
-    /* 0x28 */ J3DTexGenBlock* mTexGenBlock;
-    /* 0x2C */ J3DRegisterBlock* mRegisterBlock;
-    /* 0x30 */ J3DIndBlock* mIndBlock;
-    /* 0x34 */ J3DOutputBlock* mOutputBlock;
-    /* 0x38 */ J3DMaterial* mpOrigMaterial;
-    /* 0x3C */ J3DMaterialAnm* mMaterialAnm;
-    /* 0x40 */ J3DCurrentMtx mCurrentMtx;
-    /* 0x48 */ J3DMaterialSnapshot* mSharedSnapshot;
+    J3DMaterial* mNext;
+    J3DShape* mShape;
+    J3DJoint* mJoint;
+    u32 mMaterialMode;
+    u16 mIndex;
+    u32 mInvalid;
+    u32 field_0x1c;
+    u32 mDiffFlag;
+    J3DColorBlock* mColorBlock;
+    J3DTexGenBlock* mTexGenBlock;
+    J3DRegisterBlock* mRegisterBlock;
+    J3DIndBlock* mIndBlock;
+    J3DOutputBlock* mOutputBlock;
+    J3DMaterial* mpOrigMaterial;
+    J3DMaterialAnm* mMaterialAnm;
+    J3DCurrentMtx mCurrentMtx;
+    J3DMaterialSnapshot* mSharedSnapshot;
     const NebulaCookedMaterial* mNativeMaterial;
 };
 

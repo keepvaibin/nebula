@@ -24,6 +24,6 @@ public:
     }
 
 private:
-    /* 0x20 */ ButtonPaneController* mPaneCtrl;
-    /* 0x24 */ bool mCanCloseWithPad;
+    ButtonPaneController* mPaneCtrl;
+    bool mCanCloseWithPad;
 };

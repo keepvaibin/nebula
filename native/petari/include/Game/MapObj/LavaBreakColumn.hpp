@@ -10,6 +10,6 @@ public:
     virtual void makeActorAppeared();
     virtual void control();
 
-    /* 0xD0 */ TVec3f mEffectPos;
-    /* 0xDC */ bool mIsPillarFallen;
+    TVec3f mEffectPos;
+    bool mIsPillarFallen;
 };

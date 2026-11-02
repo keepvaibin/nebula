@@ -85,10 +85,10 @@ public:
     }
 
 public:
-    /* 0x04 */ J3DPacket* mpNextPacket;
-    /* 0x08 */ J3DPacket* mpFirstChild;
-    /* 0x0C */ void* mpUserArea;
-};  // Size: 0x10
+    J3DPacket* mpNextPacket;
+    J3DPacket* mpFirstChild;
+    void* mpUserArea;
+};
 
 class J3DDrawPacket : public J3DPacket {
 public:
@@ -136,11 +136,11 @@ public:
     }
 
 public:
-    /* 0x10 */ u32 mFlags;
-    /* 0x14 */ char unk_0x14[0x20 - 0x14];
-    /* 0x20 */ J3DMaterialSnapshot* mpSnapshot;
-    /* 0x24 */ J3DTexMtxObj* mpTexMtxObj;
-};  // Size: 0x28
+    u32 mFlags;
+    char unk_0x14[0x20 - 0x14];
+    J3DMaterialSnapshot* mpSnapshot;
+    J3DTexMtxObj* mpTexMtxObj;
+};
 
 class J3DShapePacket : public J3DDrawPacket {
 public:
@@ -178,12 +178,12 @@ public:
     }
 
 public:
-    /* 0x28 */ J3DShape* mpShape;
-    /* 0x2C */ J3DMtxBuffer* mpMtxBuffer;
-    /* 0x30 */ Mtx* mpBaseMtxPtr;
-    /* 0x34 */ u32 mDiffFlag;
-    /* 0x38 */ J3DModel* mpModel;
-};  // Size: 0x3C
+    J3DShape* mpShape;
+    J3DMtxBuffer* mpMtxBuffer;
+    Mtx* mpBaseMtxPtr;
+    u32 mDiffFlag;
+    J3DModel* mpModel;
+};
 
 class J3DMatPacket : public J3DDrawPacket {
 public:
@@ -230,10 +230,10 @@ public:
     virtual void draw();
 
 public:
-    /* 0x28 */ J3DShapePacket* mpInitShapePacket;
-    /* 0x2C */ J3DShapePacket* mpShapePacket;
-    /* 0x30 */ J3DMaterial* mpMaterial;
-    /* 0x34 */ u32 mDiffFlag;
-    /* 0x38 */ J3DTexture* mpTexture;
-    /* 0x3C */ J3DMaterialAnm* mpMaterialAnm;
-};  // Size: 0x40
+    J3DShapePacket* mpInitShapePacket;
+    J3DShapePacket* mpShapePacket;
+    J3DMaterial* mpMaterial;
+    u32 mDiffFlag;
+    J3DTexture* mpTexture;
+    J3DMaterialAnm* mpMaterialAnm;
+};

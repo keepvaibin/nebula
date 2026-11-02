@@ -21,15 +21,15 @@ public:
     void exeLaunchReady();
     void exeRailMove();
 
-    /* 0x8C */ HitSensor* mPlayerSensor;
-    /* 0x90 */ f32 mParabolaProgress;
-    /* 0x94 */ TVec3f mParabolaStartPos;
-    /* 0xA0 */ TVec3f mTargetVelocity;
-    /* 0xAC */ TVec3f mCurrentGravity;
-    /* 0xB8 */ TVec3f mEndGravity;
-    /* 0xC4 */ TVec3f mParabolaDirection;
-    /* 0xD0 */ u32 mParabolaSteps;
-    /* 0xD4 */ f32 mParabolaDistance;
-    /* 0xD8 */ f32 mParabolaAccel;
-    /* 0xDC */ f32 mParabolaVel;
+    HitSensor* mPlayerSensor;
+    f32 mParabolaProgress;
+    TVec3f mParabolaStartPos;
+    TVec3f mTargetVelocity;
+    TVec3f mCurrentGravity;
+    TVec3f mEndGravity;
+    TVec3f mParabolaDirection;
+    u32 mParabolaSteps;
+    f32 mParabolaDistance;
+    f32 mParabolaAccel;
+    f32 mParabolaVel;
 };

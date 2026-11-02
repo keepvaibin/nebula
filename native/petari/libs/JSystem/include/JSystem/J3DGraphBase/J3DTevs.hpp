@@ -42,9 +42,9 @@ public:
         return *this;
     }
 
-    /* 0x00 */ J3DLightInfo mInfo;
-    /* 0x34 */ J3DNativeLight mLightObj;
-};  // Size = 0x74
+    J3DLightInfo mInfo;
+    J3DNativeLight mLightObj;
+};
 
 
 extern const J3DNBTScaleInfo j3dDefaultNBTScaleInfo;
@@ -71,7 +71,7 @@ struct J3DNBTScale : public J3DNBTScaleInfo {
 
 
 
-  // Size: 0x1
+
 
 struct J3DNBTScale;
 struct J3DTexCoord;
@@ -128,9 +128,9 @@ struct J3DTexCoord {
         mTexMtxReg = mInfo.mTexGenMtx;
     }
 
-    /* 0x0 */ J3DTexCoordInfo mInfo;
-    /* 0x4 */ u16 mTexMtxReg;
-};  // Size: 0x6
+    J3DTexCoordInfo mInfo;
+    u16 mTexMtxReg;
+};
 
 struct J3DBlend : public J3DBlendInfo {
     J3DBlend() {

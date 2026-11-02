@@ -37,5 +37,5 @@ public:
     void calcAttackDir(TVec3f*, const TVec3f&, const TVec3f&);
     bool calcVerticalizedDir(TVec3f*, const TVec3f&);
 
-    /* 0x8C */ Dodoryu* mHost;
+    Dodoryu* mHost;
 };

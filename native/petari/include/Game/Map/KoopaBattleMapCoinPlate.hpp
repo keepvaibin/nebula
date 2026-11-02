@@ -13,5 +13,5 @@ public:
     virtual bool receiveOtherMsg(u32, HitSensor*, HitSensor*);
 
 private:
-    /* 0x8C */ TPos3f mBaseMtx;
+    TPos3f mBaseMtx;
 };

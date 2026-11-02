@@ -51,108 +51,108 @@ enum J3DModelLoaderFlagTypes {
 // host order as the importer cooks them (crates/nebula-import cook/native_data.rs j3d_model); the magic, type and
 // block kinds read as their character constants.
 struct J3DModelBlock {
-    /* 0x0 */ u32 mBlockType;
-    /* 0x4 */ u32 mBlockSize;
+    u32 mBlockType;
+    u32 mBlockSize;
 };
 
 struct J3DModelFileData {
-    /* 0x00 */ u32 mMagic1;
-    /* 0x04 */ u32 mMagic2;
-    /* 0x08 */ u8 _8[4];
-    /* 0x0C */ u32 mBlockNum;
-    /* 0x10 */ u8 _10[0x10];
-    /* 0x20 */ J3DModelBlock mBlocks[1];
+    u32 mMagic1;
+    u32 mMagic2;
+    u8 _8[4];
+    u32 mBlockNum;
+    u8 _10[0x10];
+    J3DModelBlock mBlocks[1];
 };
 
 struct J3DModelInfoBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mFlags;
-    /* 0x0C */ u32 mPacketNum;
-    /* 0x10 */ u32 mVtxNum;
-    /* 0x14 */ u32 mpHierarchy;
+    u16 mFlags;
+    u32 mPacketNum;
+    u32 mVtxNum;
+    u32 mpHierarchy;
 };
 
 struct J3DVertexBlock : public J3DModelBlock {
-    /* 0x08 */ u32 mpVtxAttrFmtList;
-    /* 0x0C */ u32 mpVtxPosArray;
-    /* 0x10 */ u32 mpVtxNrmArray;
-    /* 0x14 */ u32 mpVtxNBTArray;
-    /* 0x18 */ u32 mpVtxColorArray[2];
-    /* 0x20 */ u32 mpVtxTexCoordArray[8];
-    /* 0x40 */ u32 mCounts[13];   // entries of each array above, position first
-    /* 0x74 */ u32 mNormalFloats;  // 3, or 9 where the model's normals are NBT normals
+    u32 mpVtxAttrFmtList;
+    u32 mpVtxPosArray;
+    u32 mpVtxNrmArray;
+    u32 mpVtxNBTArray;
+    u32 mpVtxColorArray[2];
+    u32 mpVtxTexCoordArray[8];
+    u32 mCounts[13];   // entries of each array above, position first
+    u32 mNormalFloats;  // 3, or 9 where the model's normals are NBT normals
 };
 
 struct J3DEnvelopeBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mWEvlpMtxNum;
-    /* 0x0C */ u32 mpWEvlpMixMtxNum;
-    /* 0x10 */ u32 mpWEvlpMixIndex;
-    /* 0x14 */ u32 mpWEvlpMixWeight;
-    /* 0x18 */ u32 mpInvJointMtx;
+    u16 mWEvlpMtxNum;
+    u32 mpWEvlpMixMtxNum;
+    u32 mpWEvlpMixIndex;
+    u32 mpWEvlpMixWeight;
+    u32 mpInvJointMtx;
 };
 
 struct J3DDrawBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mMtxNum;
-    /* 0x0C */ u32 mpDrawMtxFlag;
-    /* 0x10 */ u32 mpDrawMtxIndex;
+    u16 mMtxNum;
+    u32 mpDrawMtxFlag;
+    u32 mpDrawMtxIndex;
 };
 
 struct J3DJointBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mJointNum;
-    /* 0x0C */ u32 mpJointInitData;
-    /* 0x10 */ u32 mpIndexTable;
-    /* 0x14 */ u32 mpNameTable;
-};  // size 0x18
+    u16 mJointNum;
+    u32 mpJointInitData;
+    u32 mpIndexTable;
+    u32 mpNameTable;
+};
 
 struct J3DMaterialBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mMaterialNum;
-    /* 0x0C */ u32 mpMaterialInitData;
-    /* 0x10 */ u32 mpMaterialID;
-    /* 0x14 */ u32 mpNameTable;
-    /* 0x18 */ u32 mpIndInitData;
-    /* 0x1C */ u32 mpCullMode;
-    /* 0x20 */ u32 mpMatColor;
-    /* 0x24 */ u32 mpColorChanNum;
-    /* 0x28 */ u32 mpColorChanInfo;
-    /* 0x2C */ u32 mpAmbColor;
-    /* 0x30 */ u32 mpLightInfo;
-    /* 0x34 */ u32 mpTexGenNum;
-    /* 0x38 */ u32 mpTexCoordInfo;
-    /* 0x3C */ u32 mpTexCoord2Info;
-    /* 0x40 */ u32 mpTexMtxInfo;
-    /* 0x44 */ u32 field_0x44;
-    /* 0x48 */ u32 mpTexNo;
-    /* 0x4C */ u32 mpTevOrderInfo;
-    /* 0x50 */ u32 mpRegisterColor;
-    /* 0x54 */ u32 mpConstantColor;
-    /* 0x58 */ u32 mpTevStageNum;
-    /* 0x5C */ u32 mpTevStageInfo;
-    /* 0x60 */ u32 mpTevSwapModeInfo;
-    /* 0x64 */ u32 mpTevSwapModeTableInfo;
-    /* 0x68 */ u32 mpFogInfo;
-    /* 0x6C */ u32 mpAlphaCompInfo;
-    /* 0x70 */ u32 mpBlendInfo;
-    /* 0x74 */ u32 mpZModeInfo;
-    /* 0x78 */ u32 mpZCompLoc;
-    /* 0x7C */ u32 mpDither;
-    /* 0x80 */ u32 mpNBTScaleInfo;
+    u16 mMaterialNum;
+    u32 mpMaterialInitData;
+    u32 mpMaterialID;
+    u32 mpNameTable;
+    u32 mpIndInitData;
+    u32 mpCullMode;
+    u32 mpMatColor;
+    u32 mpColorChanNum;
+    u32 mpColorChanInfo;
+    u32 mpAmbColor;
+    u32 mpLightInfo;
+    u32 mpTexGenNum;
+    u32 mpTexCoordInfo;
+    u32 mpTexCoord2Info;
+    u32 mpTexMtxInfo;
+    u32 field_0x44;
+    u32 mpTexNo;
+    u32 mpTevOrderInfo;
+    u32 mpRegisterColor;
+    u32 mpConstantColor;
+    u32 mpTevStageNum;
+    u32 mpTevStageInfo;
+    u32 mpTevSwapModeInfo;
+    u32 mpTevSwapModeTableInfo;
+    u32 mpFogInfo;
+    u32 mpAlphaCompInfo;
+    u32 mpBlendInfo;
+    u32 mpZModeInfo;
+    u32 mpZCompLoc;
+    u32 mpDither;
+    u32 mpNBTScaleInfo;
 };
 
 struct J3DShapeBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mShapeNum;
-    /* 0x0C */ u32 mpShapeInitData;
-    /* 0x10 */ u32 mpIndexTable;
-    /* 0x14 */ u32 mpNameTable;
-    /* 0x18 */ u32 mpVtxDescList;
-    /* 0x1C */ u32 mpMtxTable;
-    /* 0x20 */ u32 mpShapeDrawData;
-    /* 0x24 */ u32 mpMtxInitData;
-    /* 0x28 */ u32 mpDrawInitData;
+    u16 mShapeNum;
+    u32 mpShapeInitData;
+    u32 mpIndexTable;
+    u32 mpNameTable;
+    u32 mpVtxDescList;
+    u32 mpMtxTable;
+    u32 mpShapeDrawData;
+    u32 mpMtxInitData;
+    u32 mpDrawInitData;
 };
 
 struct J3DTextureBlock : public J3DModelBlock {
-    /* 0x08 */ u16 mTextureNum;
-    /* 0x0C */ u32 mpTextureRes;
-    /* 0x10 */ u32 mpNameTable;
+    u16 mTextureNum;
+    u32 mpTextureRes;
+    u32 mpNameTable;
 };
 
 class J3DModelLoader {
@@ -182,14 +182,14 @@ public:
     void readTextureTable(J3DTextureBlock const*);
 
 
-    /* 0x04 */ J3DModelData* mpModelData;
-    /* 0x08 */ J3DMaterialTable* mpMaterialTable;
-    /* 0x0C */ const J3DShapeBlock* mpShapeBlock;
-    /* 0x10 */ const J3DMaterialBlock* mpMaterialBlock;
-    /* 0x14 */ J3DModelHierarchy* mpModelHierarchy;
-    /* 0x18 */ u8 field_0x18;  // CLEANME: Change unknown JSystem members to the _XX format?
-    /* 0x1C */ u8 field_0x19;
-    /* 0x1A */ u16 mEnvelopeSize;
+    J3DModelData* mpModelData;
+    J3DMaterialTable* mpMaterialTable;
+    const J3DShapeBlock* mpShapeBlock;
+    const J3DMaterialBlock* mpMaterialBlock;
+    J3DModelHierarchy* mpModelHierarchy;
+    u8 field_0x18;  // CLEANME: Change unknown JSystem members to the _XX format?
+    u8 field_0x19;
+    u16 mEnvelopeSize;
 };
 
 class J3DModelLoader_v26 : public J3DModelLoader {

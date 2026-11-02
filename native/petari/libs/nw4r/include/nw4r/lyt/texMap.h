@@ -147,16 +147,16 @@ namespace nw4r {
             f32 mMaxLOD;
             u16 mLODBias;
 
-            /* 0x18 */ struct {
-                /* 0x18 */ u32 textureFormat : 4;
-                /* 0x1C */ u32 mipmap : 1;
-                /* 0x20 */ u32 wrapS : 2;
-                /* 0x24 */ u32 wrapT : 2;
-                /* 0x28 */ u32 minFilter : 3;
-                /* 0x2C */ u32 magFilter : 1;
-                /* 0x30 */ u32 biasClampEnable : 1;
-                /* 0x34 */ u32 edgeLODEnable : 1;
-                /* 0x38 */ u32 anisotropy : 2;
+            struct {
+                u32 textureFormat : 4;
+                u32 mipmap : 1;
+                u32 wrapS : 2;
+                u32 wrapT : 2;
+                u32 minFilter : 3;
+                u32 magFilter : 1;
+                u32 biasClampEnable : 1;
+                u32 edgeLODEnable : 1;
+                u32 anisotropy : 2;
             } mBits;
         };
     };  // namespace lyt

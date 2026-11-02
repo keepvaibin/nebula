@@ -26,12 +26,12 @@ public:
         return MR::strcasecmp(mName, pStr) == 0;
     }
 
-    /* 0x00 */ MR::FunctorBase* mFunc;
+    MR::FunctorBase* mFunc;
     NebulaArena* mStarterHeap;  // the current heap where it was started
-    /* 0x08 */ const char* mName;
-    /* 0x0C */ NebulaAtomic< bool > mIsEnd;
-    /* 0x10 */ GameMessageQueue mQueue;
-    /* 0x30 */ void* mMessage;
+    const char* mName;
+    NebulaAtomic< bool > mIsEnd;
+    GameMessageQueue mQueue;
+    void* mMessage;
 };
 
 class FunctionAsyncExecutorThread : public GameThread {
@@ -40,8 +40,8 @@ public:
 
     virtual void* run();
 
-    /* 0x3C */ bool mIsSuspended;
-    /* 0x40 */ const char* mName;
+    bool mIsSuspended;
+    const char* mName;
 };
 
 class FunctionAsyncExecutorOnMainThread {
@@ -50,10 +50,10 @@ public:
 
     void update();
 
-    /* 0x000 */ bool _0;
-    /* 0x004 */ GameMessageQueue mQueue;
-    /* 0x024 */ void* mMsgArray[64];
-    /* 0x124 */ GameThreadRecord* mThread;
+    bool _0;
+    GameMessageQueue mQueue;
+    void* mMsgArray[64];
+    GameThreadRecord* mThread;
 };
 
 class FunctionAsyncExecutor {
@@ -70,8 +70,8 @@ public:
     FunctionAsyncExecutorThread* getSuspendThread();
 
     MR::Vector< MR::AssignableArray< FunctionAsyncExecutorThread* > > mThreads;
-    /* 0x008 */ FunctionAsyncExecutorOnMainThread* mMainThreadExec;
-    /* 0x00C */ MR::Vector< MR::FixedArray< FunctionAsyncExecInfo*, 256 > > mHolders;
-    /* 0x410 */ NebulaArena* _410;
-    /* 0x414 */ NebulaArena* _414;
+    FunctionAsyncExecutorOnMainThread* mMainThreadExec;
+    MR::Vector< MR::FixedArray< FunctionAsyncExecInfo*, 256 > > mHolders;
+    NebulaArena* _410;
+    NebulaArena* _414;
 };

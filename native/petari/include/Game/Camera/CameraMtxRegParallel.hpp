@@ -21,9 +21,9 @@ public:
 
     void calcIdealPose();
 
-    /* 0x4C */ const char* mString;
-    /* 0x50 */ f32 mAngleX;
-    /* 0x54 */ f32 mAngleY;
-    /* 0x58 */ f32 mDist;
-    /* 0x5C */ TVec3f mWPoint;
+    const char* mString;
+    f32 mAngleX;
+    f32 mAngleY;
+    f32 mDist;
+    TVec3f mWPoint;
 };

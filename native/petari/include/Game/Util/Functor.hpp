@@ -128,7 +128,7 @@ namespace MR {
             return new (pHeap, 0) FunctorV0F(*this);
         }
 
-        /* 0x04 */ void (*mFunc)();
+        void (*mFunc)();
     };
 
     static FunctorV0F Functor(void (*pFunction)()) {

@@ -65,7 +65,7 @@ public:
     bool updateToFly();
     void startSoundFly(s32);
 
-    /* 0x10 */ SpringValue* mSpringValue;
+    SpringValue* mSpringValue;
     TVec3f _14;
     TVec3f _20;
     f32 _2C;
@@ -76,7 +76,7 @@ public:
     f32 _40;
     f32 _44;
     f32 _48;
-    /* 0x4C */ u32 mThrowBombTimer;
+    u32 mThrowBombTimer;
     bool _50;
     f32 _54;
     f32 _58;

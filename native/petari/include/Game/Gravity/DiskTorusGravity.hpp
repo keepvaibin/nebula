@@ -16,13 +16,13 @@ public:
     void setEdgeType(s32 val);
     void setBothSide(bool val);
 
-    /* 0x28 */ TVec3f mLocalPosition;
-    /* 0x34 */ TVec3f mTranslation;
-    /* 0x40 */ TVec3f mLocalDirection;
-    /* 0x4C */ TVec3f mRotation;
-    /* 0x58 */ f32 mRadius;
-    /* 0x5C */ f32 mWorldRadius;
-    /* 0x60 */ f32 mDiskRadius;
-    /* 0x64 */ s32 mEdgeType;
-    /* 0x68 */ bool mEnableBothSide;
+    TVec3f mLocalPosition;
+    TVec3f mTranslation;
+    TVec3f mLocalDirection;
+    TVec3f mRotation;
+    f32 mRadius;
+    f32 mWorldRadius;
+    f32 mDiskRadius;
+    s32 mEdgeType;
+    bool mEnableBothSide;
 };

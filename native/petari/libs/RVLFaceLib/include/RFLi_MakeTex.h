@@ -23,30 +23,30 @@ typedef enum {
 } MII_I_MASKRSL;
 
 typedef struct Mii_TexObj {
-    struct Mii_Texture* texture; // at 0x0
-    u8* image;                   // at 0x4
-    J3DNativeTexObj tobj;               // at 0x8
+    struct Mii_Texture* texture;
+    u8* image;
+    J3DNativeTexObj tobj;
 } Mii_TexObj;
 
 typedef struct Mii_Part {
-    f32 x;             // at 0x0
-    f32 y;             // at 0x4
-    f32 width;         // at 0x8
-    f32 height;        // at 0xC
-    f32 angle;         // at 0x10
-    MII_ORIGIN origin; // at 0x14
-    Mii_TexObj ngtobj; // at 0x18
+    f32 x;
+    f32 y;
+    f32 width;
+    f32 height;
+    f32 angle;
+    MII_ORIGIN origin;
+    Mii_TexObj ngtobj;
 } Mii_Part;
 
 typedef struct Mii_FaceParts {
-    Mii_Part eyeR;      // at 0x0
-    Mii_Part eyeL;      // at 0x40
-    Mii_Part eyebrowR;  // at 0x80
-    Mii_Part eyebrowL;  // at 0xC0
-    Mii_Part mouth;     // at 0x100
-    Mii_Part mustacheR; // at 0x140
-    Mii_Part mustacheL; // at 0x180
-    Mii_Part mole;      // at 0x1C0
+    Mii_Part eyeR;
+    Mii_Part eyeL;
+    Mii_Part eyebrowR;
+    Mii_Part eyebrowL;
+    Mii_Part mouth;
+    Mii_Part mustacheR;
+    Mii_Part mustacheL;
+    Mii_Part mole;
 } Mii_FaceParts;
 
 void Mii_SetupTextureDraw(void);

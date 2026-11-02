@@ -16,5 +16,5 @@ public:
     virtual void activateTripodBoss();
     virtual void exeWaitOwn();
 
-    /* 0xF0 */ MapPartsRailMover* mRailMover;
+    MapPartsRailMover* mRailMover;
 };

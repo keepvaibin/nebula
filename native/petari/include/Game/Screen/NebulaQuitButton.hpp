@@ -28,7 +28,7 @@ public:
 private:
     void layOut();
 
-    /* 0x20 */ ButtonPaneController* mButton;
-    /* 0x24 */ s32 mShownFrames;
-    /* 0x28 */ bool mIsDecided;
+    ButtonPaneController* mButton;
+    s32 mShownFrames;
+    bool mIsDecided;
 };

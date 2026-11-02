@@ -11,5 +11,5 @@ public:
 
     void arrangeRound();
 
-    /* 0x8C */ f32 mAngleY;
+    f32 mAngleY;
 };

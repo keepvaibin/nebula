@@ -81,10 +81,10 @@ public:
         return mVelocity;
     }
 
-    /* 0x00 */ TPos3f mMtx;
-    /* 0x30 */ TVec3f mVelocity;
-    /* 0x3C */ TVec3f mPos;
-    /* 0x48 */ TVec3f mPrevPos;
+    TPos3f mMtx;
+    TVec3f mVelocity;
+    TVec3f mPos;
+    TVec3f mPrevPos;
 };
 
 class AudAudience_withSetting : public JAIAudience {
@@ -204,13 +204,13 @@ public:
         return mSetting.mMinFxMix + mFxMixRate * (dist - mSetting.mNearDistance);
     }
 
-    /* 0x04 */ JAUAudience3DSetting mSetting;
-    /* 0x3C */ f32 mFrontDolbyRate;
-    /* 0x40 */ f32 mBehindDolbyRate;
-    /* 0x44 */ f32 mVolumeRate;
-    /* 0x48 */ f32 mPriorityRate;
-    /* 0x4C */ f32 mFxMixRate;
-    /* 0x50 */ bool mFarCamera;
+    JAUAudience3DSetting mSetting;
+    f32 mFrontDolbyRate;
+    f32 mBehindDolbyRate;
+    f32 mVolumeRate;
+    f32 mPriorityRate;
+    f32 mFxMixRate;
+    bool mFarCamera;
 };
 
 class AudAudience_withSetting_doppler : public AudAudience_withSetting {
@@ -416,9 +416,9 @@ public:
         }
     }
 
-    /* 0x054 */ int mMaxChannels;
-    /* 0x058 */ AudienceState mStates[MAX_CHANNELS];
-    /* 0x1A8 */  // Audible* mAudible;
+    int mMaxChannels;
+    AudienceState mStates[MAX_CHANNELS];
+     // Audible* mAudible;
 };
 
 template < int MAX_CHANNELS >
@@ -428,5 +428,5 @@ public:
         : AudAudience_< MAX_CHANNELS, AudDopplerAudible< MAX_CHANNELS >, AudDopplerAudienceState, AudAudience_withSetting_doppler >() {
 
           };
-    /* 0x1A8 */  // AudDopplerAudible< MAX_CHANNELS >* mAudible;
+     // AudDopplerAudible< MAX_CHANNELS >* mAudible;
 };

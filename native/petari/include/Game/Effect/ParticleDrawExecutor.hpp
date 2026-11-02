@@ -23,14 +23,14 @@ public:
     void drawWithViewMtxAfterImageEffect(const TPos3f&) const;
     void initDrawAdaptor();
 
-    /* 0x00 */ const EffectSystem* mHost;
-    /* 0x04 */ NameObjAdaptor* _4;
-    /* 0x08 */ NameObjAdaptor* _8;
-    /* 0x0C */ NameObjAdaptor* _C;
-    /* 0x10 */ NameObjAdaptor* _10;
-    /* 0x14 */ NameObjAdaptor* _14;
-    /* 0x18 */ NameObjAdaptor* _18;
-    /* 0x1C */ NameObjAdaptor* _1C;
-    /* 0x20 */ bool _20;
-    /* 0x21 */ bool _21;
+    const EffectSystem* mHost;
+    NameObjAdaptor* _4;
+    NameObjAdaptor* _8;
+    NameObjAdaptor* _C;
+    NameObjAdaptor* _10;
+    NameObjAdaptor* _14;
+    NameObjAdaptor* _18;
+    NameObjAdaptor* _1C;
+    bool _20;
+    bool _21;
 };

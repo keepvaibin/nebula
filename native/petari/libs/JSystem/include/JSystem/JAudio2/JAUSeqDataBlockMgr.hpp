@@ -11,10 +11,10 @@ class AssetFolder;
 struct JAUSeqDataBlock {
     JAUSeqDataBlock();
 
-    /* 0x00 */ JSULink< JAUSeqDataBlock > mLink;
-    /* 0x10 */ JAISoundID mSoundID;
-    /* 0x14 */ JAISeqDataRegion region;
-    /* 0x1C */ NebulaAtomic< int > field_0x1c;  // the load thread says when the data is there
+    JSULink< JAUSeqDataBlock > mLink;
+    JAISoundID mSoundID;
+    JAISeqDataRegion region;
+    NebulaAtomic< int > field_0x1c;  // the load thread says when the data is there
 };
 
 class JAUSeqDataBlocks : public JSUList< JAUSeqDataBlock > {
@@ -46,8 +46,8 @@ public:
         return mSeqDataArchive;
     }
 
-    /* 0x00 */ JAUSeqDataBlocks mFreeBlocks;
-    /* 0x0C */ JAUSeqDataBlocks field_0xc;
-    /* 0x18 */ JAUSeqDataBlocks mLoadedBlocks;
-    /* 0x24 */ AssetFolder* mSeqDataArchive;
+    JAUSeqDataBlocks mFreeBlocks;
+    JAUSeqDataBlocks field_0xc;
+    JAUSeqDataBlocks mLoadedBlocks;
+    AssetFolder* mSeqDataArchive;
 };

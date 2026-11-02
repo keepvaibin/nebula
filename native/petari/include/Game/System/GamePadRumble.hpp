@@ -10,12 +10,12 @@ public:
     void update();
     void setPattern(const void*, const RumblePattern&, u32, bool);
 
-    /* 0x00 */ const RumblePattern* _0;
-    /* 0x04 */ bool _4;
-    /* 0x08 */ u32 _8;
-    /* 0x0C */ s16 _C;
-    /* 0x0E */ bool _E;
-    /* 0x10 */ const void* _10;
+    const RumblePattern* _0;
+    bool _4;
+    u32 _8;
+    s16 _C;
+    bool _E;
+    const void* _10;
 };
 
 class GamePadRumble {
@@ -34,14 +34,14 @@ public:
     bool setRumblePatternIfNotExist(const void*, const RumblePattern&, bool);
     bool findRubmlePattern(const void*, s32*, s32*, s32*, const RumblePattern&);
 
-    /* 0x04 */ GamePad* mPad;
-    /* 0x08 */ bool _8;
-    /* 0x0C */ u32 _C;
-    /* 0x10 */ RumbleChannel mChannel[8];
-    /* 0xB0 */ s32 _B0;
-    /* 0xB4 */ s32 _B4;
-    /* 0xB8 */ bool _B8;
-    /* 0xBC */ s32 _BC;
+    GamePad* mPad;
+    bool _8;
+    u32 _C;
+    RumbleChannel mChannel[8];
+    s32 _B0;
+    s32 _B4;
+    bool _B8;
+    s32 _BC;
 
 private:
     static GamePadRumble** sInstanceForCallback;

@@ -11,11 +11,11 @@ public:
         return mHashCode == hash;
     }
 
-    /* 0x00 */ void* mResource;
-    /* 0x04 */ u32 _4;
-    /* 0x08 */ void* _8;
-    /* 0x10 */ char* mName;
-    /* 0x14 */ u32 mHashCode;
+    void* mResource;
+    u32 _4;
+    void* _8;
+    char* mName;
+    u32 mHashCode;
 };
 
 class ResTable {
@@ -34,8 +34,8 @@ public:
     const char* findResName(const void*) const;
     const char* getResName(const void*) const;
 
-    /* 0x0 */ ResFileInfo* mFileInfoTable;
-    /* 0x4 */ u32 mCount;
+    ResFileInfo* mFileInfoTable;
+    u32 mCount;
 
 private:
     void* findRes(const char*) const;

@@ -30,12 +30,12 @@ public:
     void exeFadeOut();
     void exeWaitDemoEnd();
 
-    /* 0x8C */ ReturnDemoRailMove* mReturnDemoRailMove;
-    /* 0x90 */ StageResultInformer* mStageResultInformer;
-    /* 0x94 */ TPos3f mPrevTransform;
-    /* 0xC4 */ TPos3f mTransform;
-    /* 0xF4 */ PowerStar* mPowerStar;
-    /* 0xF8 */ TVec3f mDistanceToCore;
-    /* 0x104 */ TVec3f mPowerStarPosition;
-    /* 0x110 */ ActorCameraInfo* mActorCameraInfo;
+    ReturnDemoRailMove* mReturnDemoRailMove;
+    StageResultInformer* mStageResultInformer;
+    TPos3f mPrevTransform;
+    TPos3f mTransform;
+    PowerStar* mPowerStar;
+    TVec3f mDistanceToCore;
+    TVec3f mPowerStarPosition;
+    ActorCameraInfo* mActorCameraInfo;
 };

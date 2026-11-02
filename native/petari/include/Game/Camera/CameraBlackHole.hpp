@@ -15,8 +15,8 @@ public:
         mBasePos.set(rBasePos);
     }
 
-    /* 0x4C */ f32 mFovy;
-    /* 0x50 */ f32 mRoll;
-    /* 0x54 */ TVec3f mWPoint;
-    /* 0x60 */ TVec3f mBasePos;
+    f32 mFovy;
+    f32 mRoll;
+    TVec3f mWPoint;
+    TVec3f mBasePos;
 };

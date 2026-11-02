@@ -6,10 +6,10 @@ class BallRailPoint {
 public:
     BallRailPoint();
 
-    /* 0x00 */ TVec3f _0;
-    /* 0x0C */ TVec3f _C;
-    /* 0x18 */ TVec3f _18;
-    /* 0x24 */ TVec3f _24;
+    TVec3f _0;
+    TVec3f _C;
+    TVec3f _18;
+    TVec3f _24;
 };
 
 class BallRail : public LiveActor {
@@ -27,11 +27,11 @@ public:
     void exeRun();
     inline void exeNoBind();
 
-    /* 0x8C */ BallRailPoint* mRailPoints;
-    /* 0x90 */ HitSensor* _90;
-    /* 0x94 */ TVec3f _94;
-    /* 0xA0 */ s32 mNumPoints;
-    /* 0xA4 */ f32 mAcceleration;
-    /* 0xA8 */ f32 mDeceleration;
-    /* 0xAC */ f32 _AC;
+    BallRailPoint* mRailPoints;
+    HitSensor* _90;
+    TVec3f _94;
+    s32 mNumPoints;
+    f32 mAcceleration;
+    f32 mDeceleration;
+    f32 _AC;
 };

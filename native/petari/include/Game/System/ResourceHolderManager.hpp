@@ -17,9 +17,9 @@ public:
     /// @brief Creates a new `CreateResourceHolderArgs`.
     CreateResourceHolderArgs();
 
-    /* 0x0 */ ResourceHolder* mResourceHolder;
-    /* 0x4 */ LayoutHolder* mLayoutHolder;
-    /* 0x8 */ NebulaArena* mHeap;
+    ResourceHolder* mResourceHolder;
+    LayoutHolder* mLayoutHolder;
+    NebulaArena* mHeap;
 };
 
 class ResourceHolderManagerName2Resource {
@@ -32,10 +32,10 @@ public:
     /// @return A reference to `this`.
     ResourceHolderManagerName2Resource& operator=(const ResourceHolderManagerName2Resource& other);
 
-    /* 0x0 */ ResourceHolder* mResourceHolder;
-    /* 0x4 */ LayoutHolder* mLayoutHolder;
-    /* 0x8 */ u32 mHash;
-    /* 0xC */ NebulaArena* mHeap;
+    ResourceHolder* mResourceHolder;
+    LayoutHolder* mLayoutHolder;
+    u32 mHash;
+    NebulaArena* mHeap;
 };
 
 class ResourceHolderManager {
@@ -61,5 +61,5 @@ private:
     ResourceHolderManagerName2Resource* find(const char*);
 
 private:
-    /* 0x0 */ MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
+    MR::Vector< MR::FixedArray< ResourceHolderManagerName2Resource, 512 > > mResourceArray;
 };

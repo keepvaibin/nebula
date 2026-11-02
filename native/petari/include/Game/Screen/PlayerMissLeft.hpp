@@ -19,6 +19,6 @@ public:
     void exeEnd();
 
 private:
-    /* 0x20 */ CounterLayoutAppearer* mLayoutAppearer;
-    /* 0x24 */ CountUpPaneRumbler* mPaneRumbler;
+    CounterLayoutAppearer* mLayoutAppearer;
+    CountUpPaneRumbler* mPaneRumbler;
 };

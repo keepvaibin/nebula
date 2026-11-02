@@ -37,9 +37,9 @@ public:
     bool tryProcessDoneKeyWait(const char*);
 
 private:
-    /* 0x10 */ const char* mSystemMessageId;
-    /* 0x14 */ bool _14;
-    /* 0x15 */ bool _15;
-    /* 0x1C */ u32 mResult;
-    /* 0x20 */ SysInfoWindow* mSysInfoWindow;
+    const char* mSystemMessageId;
+    bool _14;
+    bool _15;
+    u32 mResult;
+    SysInfoWindow* mSysInfoWindow;
 };

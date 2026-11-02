@@ -8,9 +8,9 @@
 #include "Game/Util/StringUtil.hpp"
 
 struct GalaxyTimeLimitInfo {
-    /* 0x0 */ const char* mGalaxyName;
-    /* 0x4 */ s32 mScenarioNo;
-    /* 0x8 */ u32 mTimeLimit;
+    const char* mGalaxyName;
+    s32 mScenarioNo;
+    u32 mTimeLimit;
 };
 
 namespace {

@@ -15,8 +15,8 @@ public:
     AutoEffectGroup* find(const char* pName) const;
     bool isExist(const char* pName) const;
 
-    /* 0x000 */ AutoEffectGroup* mGroups[0x100];
-    /* 0x400 */ s32 mCount;
+    AutoEffectGroup* mGroups[0x100];
+    s32 mCount;
 };
 
 namespace MR {

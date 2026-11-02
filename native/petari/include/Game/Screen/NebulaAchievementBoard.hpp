@@ -30,7 +30,7 @@ public:
     void exeDisappear();
 
 private:
-    /* 0x20 */ NebulaBoardParts* mParts;
-    /* 0x24 */ GalaxyMapBackground* mBackground;
-    /* 0x28 */ bool mIsOpen;
+    NebulaBoardParts* mParts;
+    GalaxyMapBackground* mBackground;
+    bool mIsOpen;
 };

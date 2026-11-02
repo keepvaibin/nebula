@@ -17,7 +17,7 @@ public:
 
     static JASVoice::EffectConfig mFxLine[];
 
-    /* 0x10 */ f32 mFxSend;
-    /* 0x14 */ s32 mCutoff;
-    /* 0x18 */ s32 mSpecialFx;
+    f32 mFxSend;
+    s32 mCutoff;
+    s32 mSpecialFx;
 };

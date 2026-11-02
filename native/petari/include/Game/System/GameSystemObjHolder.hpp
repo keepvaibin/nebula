@@ -49,16 +49,16 @@ public:
     void initStarPointerDirector();
     void initDisplay();
 
-    /* 0x00 */ NameObjHolder* mObjHolder;
-    /* 0x04 */ ParticleResourceHolder* mParticleResHolder;
+    NameObjHolder* mObjHolder;
+    ParticleResourceHolder* mParticleResHolder;
     u16 mPictureSpan;
-    /* 0x18 */ CaptureScreenDirector* mCaptureScreenDirector;
-    /* 0x1C */ ScreenPreserver* mScreenPreserver;
-    /* 0x20 */ AudSystemWrapper* mAudioSystem;
-    /* 0x24 */ GamePadHolder* mGamePadHolder;
-    /* 0x28 */ FunctionAsyncExecutor* mFunctionAsyncExecutor;
-    /* 0x2C */ MessageHolder* mMessageHolder;
-    /* 0x30 */ StarPointerDirector* mStarPointerDirector;
-    /* 0x34 */ JMath::TRandom_fast_ mRandom;
-    /* 0x38 */ u32 mLanguage;
+    CaptureScreenDirector* mCaptureScreenDirector;
+    ScreenPreserver* mScreenPreserver;
+    AudSystemWrapper* mAudioSystem;
+    GamePadHolder* mGamePadHolder;
+    FunctionAsyncExecutor* mFunctionAsyncExecutor;
+    MessageHolder* mMessageHolder;
+    StarPointerDirector* mStarPointerDirector;
+    JMath::TRandom_fast_ mRandom;
+    u32 mLanguage;
 };

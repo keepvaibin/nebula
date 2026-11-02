@@ -28,8 +28,8 @@ public:
     void exeEnd();
     void exeEven();
 
-    /* 0x10 */ s32 mMaxAttacks;
-    /* 0x14 */ s32 mAttacks;
-    /* 0x18 */ const MR::ActorMoveParam* mMoveParam;
-    /* 0x1C */ s32 mSpinDelay;
+    s32 mMaxAttacks;
+    s32 mAttacks;
+    const MR::ActorMoveParam* mMoveParam;
+    s32 mSpinDelay;
 };

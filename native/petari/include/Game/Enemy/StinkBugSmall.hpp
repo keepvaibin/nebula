@@ -40,9 +40,9 @@ public:
     bool isShakeChance() const;
     bool isNrvEnableStarPieceAttack() const;
 
-    /* 0xBC */ AnimScaleController* mScaleController;
-    /* 0xC0 */ WalkerStateBindStarPointer* mBindStarPointer;
+    AnimScaleController* mScaleController;
+    WalkerStateBindStarPointer* mBindStarPointer;
 
 private:
-    /* 0xC4 */ bool _C4;
+    bool _C4;
 };

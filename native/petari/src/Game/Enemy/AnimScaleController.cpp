@@ -17,7 +17,7 @@ namespace {
     public:
         AnimScaleDefaultParam();
 
-        /* 0x34 */ AnimScaleParam tightParam;
+        AnimScaleParam tightParam;
     };
 
     AnimScaleDefaultParam::AnimScaleDefaultParam() {

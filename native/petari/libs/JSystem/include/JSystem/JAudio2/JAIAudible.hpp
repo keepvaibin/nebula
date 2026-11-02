@@ -17,5 +17,5 @@ public:
         mPos.set(other);
     }
 
-    /* 0x04 */ TVec3f mPos;
+    TVec3f mPos;
 };

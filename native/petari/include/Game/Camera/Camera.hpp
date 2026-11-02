@@ -60,11 +60,11 @@ public:
         return mVPan != nullptr;
     }
 
-    /* 0x0C */ CameraMan* mCameraMan;
-    /* 0x10 */ CameraPoseParam* mPoseParam;
-    /* 0x14 */ CameraHeightArrange* mVPan;
-    /* 0x18 */ bool mIsLOfsErpOff;
-    /* 0x1C */ TPos3f mZoneMatrix;
+    CameraMan* mCameraMan;
+    CameraPoseParam* mPoseParam;
+    CameraHeightArrange* mVPan;
+    bool mIsLOfsErpOff;
+    TPos3f mZoneMatrix;
 };
 
 class CamTranslatorDummy : public CamTranslatorBase {
@@ -77,5 +77,5 @@ public:
         return mCamera;
     }
 
-    /* 0x04 */ Camera* mCamera;
+    Camera* mCamera;
 };

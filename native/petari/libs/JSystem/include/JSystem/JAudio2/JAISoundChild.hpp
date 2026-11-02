@@ -18,6 +18,6 @@ struct JAISoundChild : JASPoolAllocObject< JAISoundChild > {
         return &mMove;
     }
 
-    /* 0x00 */ JAISoundParamsMove mMove;
-    /* 0x50 */ JASSoundParams mParams;
+    JAISoundParamsMove mMove;
+    JASSoundParams mParams;
 };

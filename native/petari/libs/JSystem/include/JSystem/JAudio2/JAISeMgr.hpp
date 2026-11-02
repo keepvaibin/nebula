@@ -22,7 +22,7 @@ struct JASNonCopyable {
     ~JASNonCopyable() {
     }
 
-    /* 0x0 */ T* data;
+    T* data;
 };
 
 struct JAISeCategoryArrangementItem {
@@ -90,10 +90,10 @@ public:
         mSeList.append(se);
     }
 
-    /* 0x08 */ JAISoundParamsMove mParams;
-    /* 0x58 */ JSUList< JAISe > mSeList;
-    /* 0x64 */ int mMaxInactiveSe;
-    /* 0x68 */ int mMaxActiveSe;
+    JAISoundParamsMove mParams;
+    JSUList< JAISe > mSeList;
+    int mMaxInactiveSe;
+    int mMaxActiveSe;
 };
 
 class JAISeMgr : public JASGlobalInstance< JAISeMgr >, public JAISeqDataUser, public JAISoundActivityMgr {
@@ -145,9 +145,9 @@ public:
 
     static const int NUM_CATEGORIES = 16;
 
-    /* 0x00C */ JAIAudience* mAudience;
-    /* 0x010 */ JAISeqDataMgr* mSeqDataMgr;
-    /* 0x014 */ JAISoundStrategyMgr< JAISe >* mStrategyMgr;
-    /* 0x018 */ JAISeCategoryMgr mCategoryMgrs[NUM_CATEGORIES];
-    /* 0x6D8 */ JAISoundParamsMove mParams;
+    JAIAudience* mAudience;
+    JAISeqDataMgr* mSeqDataMgr;
+    JAISoundStrategyMgr< JAISe >* mStrategyMgr;
+    JAISeCategoryMgr mCategoryMgrs[NUM_CATEGORIES];
+    JAISoundParamsMove mParams;
 };

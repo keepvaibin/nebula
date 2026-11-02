@@ -33,16 +33,16 @@ public:
     bool trySpinUp(s32 step);
     void endBind(f32 ejectForce);
 
-    /* 0x8C */ TVec3f mSide;
-    /* 0x98 */ TVec3f mUp;
-    /* 0xA4 */ TVec3f mFront;
-    /* 0xB0 */ TPos3f mBaseMtx;
-    /* 0xE0 */ TVec3f mTargetUpVec;
-    /* 0xEC */ TVec3f mWindDir;
-    /* 0xF8 */ f32 mWindDistance;
-    /* 0xFC */ s32 mWindSpinTimer;
-    /* 0x100 */ s32 mSpinsRemaining;
-    /* 0x104 */ ModelObj* mModel;
-    /* 0x108 */ LiveActor* mRider;
-    /* 0x10C */ CameraTargetMtx* mCameraTargetMtx;
+    TVec3f mSide;
+    TVec3f mUp;
+    TVec3f mFront;
+    TPos3f mBaseMtx;
+    TVec3f mTargetUpVec;
+    TVec3f mWindDir;
+    f32 mWindDistance;
+    s32 mWindSpinTimer;
+    s32 mSpinsRemaining;
+    ModelObj* mModel;
+    LiveActor* mRider;
+    CameraTargetMtx* mCameraTargetMtx;
 };

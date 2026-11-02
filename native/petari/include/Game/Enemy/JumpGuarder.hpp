@@ -20,13 +20,13 @@ public:
     void endEventCamera();
     void updateRotate();
 
-    /* 0x8C */ MtxPtr mBodyJointMtx;
-    /* 0x90 */ TMtx34f _90;
-    /* 0xC0 */ PartsModel* mHeadModel;
-    /* 0xC4 */ TVec3f _C4;
-    /* 0xD0 */ bool mIsEventCamera;
-    /* 0xD4 */ ActorCameraInfo* mCameraInfo;
-    /* 0xD8 */ MultiEventCamera* mMultEventCamera;
+    MtxPtr mBodyJointMtx;
+    TMtx34f _90;
+    PartsModel* mHeadModel;
+    TVec3f _C4;
+    bool mIsEventCamera;
+    ActorCameraInfo* mCameraInfo;
+    MultiEventCamera* mMultEventCamera;
 };
 
 namespace MR {
@@ -62,14 +62,14 @@ public:
     void exeInter();
 
     /// @brief Allocated array of `mNumBabies` babies.
-    /* 0x0DC */ JumpGuarderBaby* mBabies;
+    JumpGuarderBaby* mBabies;
 
-    /* 0x0E0 */ s32 mNumBabies;
-    /* 0x0E4 */ s32 mBumpCooldown;
-    /* 0x0E8 */ JumpGuarderBaby* mActiveBabies[4];
-    /* 0x0F8 */ s32 mNumActiveBabies;
-    /* 0x0FC */ s32 mNumCoins;
-    /* 0x100 */ f32 mBabyVelocity;
+    s32 mNumBabies;
+    s32 mBumpCooldown;
+    JumpGuarderBaby* mActiveBabies[4];
+    s32 mNumActiveBabies;
+    s32 mNumCoins;
+    f32 mBabyVelocity;
 };
 
 class JumpGuarderBaby : public BegomanBaby {

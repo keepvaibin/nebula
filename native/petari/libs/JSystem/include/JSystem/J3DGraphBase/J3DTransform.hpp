@@ -4,10 +4,10 @@
 #include <nebula_math.h>
 
 struct J3DTransformInfo {
-    /* 0x00 */ Vec mScale;
-    /* 0x0C */ S16Vec mRotation;
-    /* 0x12 */ u16 _12;
-    /* 0x14 */ Vec mTranslate;
+    Vec mScale;
+    S16Vec mRotation;
+    u16 _12;
+    Vec mTranslate;
 
 };
 

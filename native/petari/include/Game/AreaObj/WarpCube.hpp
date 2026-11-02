@@ -16,10 +16,10 @@ public:
     virtual void movement();
     virtual void draw() const;
 
-    /* 0x3C */ JMapIdInfo* mMapIdInfo;
-    /* 0x40 */ ActorCameraInfo* mCameraInfo;
-    /* 0x44 */ char* mEventName;
-    /* 0x48 */ u16 mInvalidateTimer;
+    JMapIdInfo* mMapIdInfo;
+    ActorCameraInfo* mCameraInfo;
+    char* mEventName;
+    u16 mInvalidateTimer;
 };
 
 class WarpCubeMgr : public AreaObjMgr {
@@ -35,5 +35,5 @@ public:
     void startEventCamera(const AreaObj* pAreaObj);
     void endEventCamera();
 
-    /* 0x1C */ const WarpCube* mWarpCube;
+    const WarpCube* mWarpCube;
 };

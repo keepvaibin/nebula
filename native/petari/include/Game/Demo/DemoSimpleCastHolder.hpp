@@ -16,7 +16,7 @@ public:
     void movementOnAllCasts();
 
 private:
-    /* 0x00 */ MR::Vector< MR::AssignableArray< LiveActor* > > mLiveActors;
-    /* 0x0C */ MR::Vector< MR::AssignableArray< LayoutActor* > > mLayoutActors;
-    /* 0x18 */ MR::Vector< MR::AssignableArray< NameObj* > > mNameObjs;
+    MR::Vector< MR::AssignableArray< LiveActor* > > mLiveActors;
+    MR::Vector< MR::AssignableArray< LayoutActor* > > mLayoutActors;
+    MR::Vector< MR::AssignableArray< NameObj* > > mNameObjs;
 };

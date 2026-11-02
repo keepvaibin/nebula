@@ -27,11 +27,11 @@ public:
     void arrangeHorizontalPose(const TVec3f&, TVec3f&);
     void arrangeWatchPos(TVec3f&, const TVec3f&);
 
-    /* 0x6C */ TVec3f mWPoint;
-    /* 0x78 */ TVec3f mAxis;
-    /* 0x84 */ f32 mAngleYMaxSpeed;
-    /* 0x88 */ f32 mAngleX;
-    /* 0x8C */ f32 mDist;
-    /* 0x90 */ f32 mAngleXRate;
-    /* 0x94 */ TVec3f mPos;
+    TVec3f mWPoint;
+    TVec3f mAxis;
+    f32 mAngleYMaxSpeed;
+    f32 mAngleX;
+    f32 mDist;
+    f32 mAngleXRate;
+    TVec3f mPos;
 };

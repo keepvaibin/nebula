@@ -24,13 +24,13 @@ public:
     /// @param pContext The context data.
     void setContext(void*);
 
-    /* 0x00 */ s32 mEntryNum;
-    /* 0x04 */ void* mContext;
-    /* 0x08 */ NebulaArena* mHeap;
-    /* 0x0C */ bool mDone;
-    /* 0x10 */ GameMessageQueue mQueue;
-    /* 0x30 */ void* mMessage;
-    /* 0x34 */ bool mContextSet;
+    s32 mEntryNum;
+    void* mContext;
+    NebulaArena* mHeap;
+    bool mDone;
+    GameMessageQueue mQueue;
+    void* mMessage;
+    bool mContextSet;
 };
 
 class FileHolder {
@@ -67,5 +67,5 @@ public:
     /// @return The pointer to the found entry, or `nullptr` if not found.
     FileHolderFileEntry* findEntry(const char*) const;
 
-    /* 0x0 */ MR::Vector< MR::AssignableArray< FileHolderFileEntry* > > mEntries;
+    MR::Vector< MR::AssignableArray< FileHolderFileEntry* > > mEntries;
 };

@@ -111,17 +111,17 @@ public:
     static Mtx* sNoUseDrawMtxPtr;
     static Mtx33* sNoUseNrmMtxPtr;
 
-    /* 0x00 */ J3DJointTree* mJointTree;
-    /* 0x04 */ u8* mpScaleFlagArr;
-    /* 0x08 */ u8* mpEvlpScaleFlagArr;
-    /* 0x0C */ Mtx* mpAnmMtx;
-    /* 0x10 */ Mtx* mpWeightEvlpMtx;
-    /* 0x14 */ Mtx** mpDrawMtxArr[2];
-    /* 0x1C */ Mtx33** mpNrmMtxArr[2];
-    /* 0x24 */ Mtx33*** mpBumpMtxArr[2];
-    /* 0x2C */ u32 mMtxNum;
-    /* 0x30 */ u32 mCurrentViewNo;
-    /* 0x34 */ Mtx* mpUserAnmMtx;
+    J3DJointTree* mJointTree;
+    u8* mpScaleFlagArr;
+    u8* mpEvlpScaleFlagArr;
+    Mtx* mpAnmMtx;
+    Mtx* mpWeightEvlpMtx;
+    Mtx** mpDrawMtxArr[2];
+    Mtx33** mpNrmMtxArr[2];
+    Mtx33*** mpBumpMtxArr[2];
+    u32 mMtxNum;
+    u32 mCurrentViewNo;
+    Mtx* mpUserAnmMtx;
 
     virtual ~J3DMtxBuffer() {
     }

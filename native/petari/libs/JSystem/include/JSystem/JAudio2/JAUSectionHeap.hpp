@@ -27,15 +27,15 @@ public:
         void resetRegisteredBankTables();
         void resetRegisteredWaveBankTables();
 
-        /* 0x00 */ JAUDynamicSeqDataBlocks field_0x00;
-        /* 0x28 */ JSUList< JAUSeqDataBlock > field_0x28;
-        /* 0x34 */ std::bitset< 255 > registeredWaveBankTables;
-        /* 0x54 */ std::bitset< 255 > registeredBankTables;
-        /* 0x74 */ JAUBankTableDictionary field_0x74;
-        /* 0x80 */ JAISeqDataMgr* field_0x80;
-        /* 0x84 */ const void* mBstDst;
-        /* 0x88 */ const void* mBstnDst;
-        /* 0x8C */ JSUList< JAUDisposer_ > field_0x8c;
+        JAUDynamicSeqDataBlocks field_0x00;
+        JSUList< JAUSeqDataBlock > field_0x28;
+        std::bitset< 255 > registeredWaveBankTables;
+        std::bitset< 255 > registeredBankTables;
+        JAUBankTableDictionary field_0x74;
+        JAISeqDataMgr* field_0x80;
+        const void* mBstDst;
+        const void* mBstnDst;
+        JSUList< JAUDisposer_ > field_0x8c;
     };
 
     JAUSection(JAUSectionHeap*, u32, s32);
@@ -87,11 +87,11 @@ public:
 
     NebulaArena* getHeap_();
 
-    /* 0x28 */ u32 field_0x28;
-    /* 0x2C */ bool field_0x2c;
-    /* 0x30 */ JAUSectionHeap* sectionHeap_;
-    /* 0x34 */ JAUBankTableLink* buildingBankTable_;
-    /* 0x38 */ TSectionData data_;
+    u32 field_0x28;
+    bool field_0x2c;
+    JAUSectionHeap* sectionHeap_;
+    JAUBankTableLink* buildingBankTable_;
+    TSectionData data_;
 };
 
 class JAUSectionHeap : public JAUSection, public JASGlobalInstance< JAUSectionHeap >, public JAISeqDataMgr {
@@ -99,13 +99,13 @@ public:
     struct TSectionHeapData {
         TSectionHeapData();
 
-        /* 0x000 */ JAUWaveBankTable waveBankTable;
-        /* 0x404 */ JAISeqDataUser* seqDataUser;
-        /* 0x408 */ JAUDynamicSeqDataBlocks seqDataBlocks;
-        /* 0x430 */ JAISeqDataMgr* seSeqDataMgr_;
-        /* 0x434 */ JAIStreamDataMgr* streamDataMgr_;
-        /* 0x438 */ JAUSoundTable* soundTable;
-        /* 0x43C */ JAUSoundNameTable* soundNameTable;
+        JAUWaveBankTable waveBankTable;
+        JAISeqDataUser* seqDataUser;
+        JAUDynamicSeqDataBlocks seqDataBlocks;
+        JAISeqDataMgr* seSeqDataMgr_;
+        JAIStreamDataMgr* streamDataMgr_;
+        JAUSoundTable* soundTable;
+        JAUSoundNameTable* soundNameTable;
     };
 
     void setSeqDataArchive(AssetFolder*);
@@ -147,10 +147,10 @@ public:
         return nullptr;
     }
 
-    /* 0xE0 */ NebulaArena* mHeap;
-    /* 0xE4 */ int field_0xe4;
-    /* 0xE8 */ JSUList< JAUSection > mSectionList;
-    /* 0xF4 */ TSectionHeapData sectionHeapData_;
+    NebulaArena* mHeap;
+    int field_0xe4;
+    JSUList< JAUSection > mSectionList;
+    TSectionHeapData sectionHeapData_;
 };
 
 inline NebulaArena* JAUSection::getHeap_() {

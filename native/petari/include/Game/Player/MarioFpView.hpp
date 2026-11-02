@@ -15,7 +15,7 @@ public:
 
     void forceClose();
 
-    /* 0x12 */ u16 mDelay;
-    /* 0x14 */ bool mIsActive;
-    /* 0x18 */ f32 mBlurOffset;
+    u16 mDelay;
+    bool mIsActive;
+    f32 mBlurOffset;
 };

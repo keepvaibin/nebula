@@ -9,9 +9,9 @@ class WalkerStateFindPlayerParam {
 public:
     WalkerStateFindPlayerParam();
 
-    /* 0x0 */ u32 mJumpStartStep;
-    /* 0x4 */ f32 mJumpVelocity;
-    /* 0x8 */ f32 mTurnMaxRateDegree;
+    u32 mJumpStartStep;
+    f32 mJumpVelocity;
+    f32 mTurnMaxRateDegree;
 };
 
 class WalkerStateFindPlayer : public ActorStateBase< LiveActor > {
@@ -28,7 +28,7 @@ public:
     bool isFindJumpBegin() const;
     bool isLandStart() const;
 
-    /* 0x10 */ TVec3f* mDirection;
-    /* 0x14 */ WalkerStateParam* mStateParam;
-    /* 0x18 */ WalkerStateFindPlayerParam* mFindPlayerParam;
+    TVec3f* mDirection;
+    WalkerStateParam* mStateParam;
+    WalkerStateFindPlayerParam* mFindPlayerParam;
 };

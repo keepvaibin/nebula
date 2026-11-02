@@ -17,7 +17,7 @@ public:
     void clear();
     void killAll();
 
-    /* 0x0 */ LiveActor** mActorList;
-    /* 0x4 */ s32 mCurCount;
-    /* 0x8 */ int mMaxCount;
+    LiveActor** mActorList;
+    s32 mCurCount;
+    int mMaxCount;
 };

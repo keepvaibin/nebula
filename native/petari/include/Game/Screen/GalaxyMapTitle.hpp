@@ -24,5 +24,5 @@ public:
     bool tryDisappear();
 
 private:
-    /* 0x20 */ const char* mMessageID;
+    const char* mMessageID;
 };

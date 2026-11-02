@@ -16,11 +16,11 @@ public:
 
     virtual void init(const JMapInfoIter& rIter);
 
-    /* 0x0C */ PowerStarEventKeeper* mPowerStarEventKeeper;
-    /* 0x10 */ StageStateKeeper* mStageStateKeeper;
-    /* 0x14 */ PowerStarHolder* mPowerStarHolder;
-    /* 0x18 */ CometEventKeeper* mCometEventKeeper;
-    /* 0x1C */ TimeAttackEventKeeper* mTimeAttackEventKeeper;
+    PowerStarEventKeeper* mPowerStarEventKeeper;
+    StageStateKeeper* mStageStateKeeper;
+    PowerStarHolder* mPowerStarHolder;
+    CometEventKeeper* mCometEventKeeper;
+    TimeAttackEventKeeper* mTimeAttackEventKeeper;
 };
 
 namespace EventFunction {

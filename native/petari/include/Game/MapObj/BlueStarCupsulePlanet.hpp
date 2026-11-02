@@ -8,8 +8,8 @@ class MapPartsRotator;
 
 namespace {
     struct BlueStarCupsulePlanetParam {
-        /* 0x0 */ const char* mBlueStarName;
-        /* 0x4 */ f32 mRadius;
+        const char* mBlueStarName;
+        f32 mRadius;
     };
 };  // namespace
 
@@ -38,8 +38,8 @@ public:
     void activateMapPartsFunction();
     void deactivateMapPartsFunction();
 
-    /* 0x90 */ MapPartsRailMover* mRailMover;
-    /* 0x94 */ MapPartsRotator* mRotator;
-    /* 0x98 */ const char* mName;
-    /* 0x9C */ bool mIsStepUpdatable;
+    MapPartsRailMover* mRailMover;
+    MapPartsRotator* mRotator;
+    const char* mName;
+    bool mIsStepUpdatable;
 };

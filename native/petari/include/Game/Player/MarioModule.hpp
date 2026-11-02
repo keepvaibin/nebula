@@ -108,7 +108,7 @@ public:
     f32 marioAcos(f32) const;
     bool isInputDisable() const;
 
-    /* 0x4 */ MarioActor* mActor;
+    MarioActor* mActor;
 };
 
 class MarioModuleTask {
@@ -121,6 +121,6 @@ public:
     virtual bool exec() = 0;
     virtual void draw() const = 0;
 
-    /* 0x4 */ void* _4;
-    /* 0x8 */ MarioModuleTask* mNext;
+    void* _4;
+    MarioModuleTask* mNext;
 };

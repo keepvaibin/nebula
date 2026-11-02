@@ -53,10 +53,10 @@ public:
     }
 
 private:
-    /* 0x00 */ JAISoundActivity mActivity;
-    /* 0x04 */ JAISoundParamsMove mParams;
-    /* 0x54 */ JAIAudience* mAudience;
-    /* 0x58 */ JSUList< JAIStream > mStreamList;
-    /* 0x64 */ JAIStreamDataMgr* streamDataMgr_;
-    /* 0x6C */ JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
+    JAISoundActivity mActivity;
+    JAISoundParamsMove mParams;
+    JAIAudience* mAudience;
+    JSUList< JAIStream > mStreamList;
+    JAIStreamDataMgr* streamDataMgr_;
+    JAISoundStrategyMgr< JAIStream >* soundStrategyMgr;
 };

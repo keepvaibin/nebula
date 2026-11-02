@@ -9,40 +9,40 @@ class MovieSubtitles;
 /// @brief The general parameters for a movie.
 struct MoviePlayingInfo {
     /// @brief A pointer to the null-terminated absolute path of the associated movie file.
-    /* 0x00 */ const char* mMovieName;
+    const char* mMovieName;
 
     /// @brief A pointer to the null-terminated absolute path of the associated movie file for Luigi.
-    /* 0x04 */ const char* mMovieNameLuigi;
+    const char* mMovieNameLuigi;
 
     /// @brief A pointer to the null-terminated name of the galaxy to enter after playback.
-    /* 0x08 */ const char* mStageName;
+    const char* mStageName;
 
     /// @brief A pointer to the null-terminated name of the background music to start after playback.
-    /* 0x0C */ const char* mStageBgmName;
+    const char* mStageBgmName;
 
     /// @brief The number of frames to wait on a blank screen before playback.
-    /* 0x10 */ s32 mPlayWaitTime;
+    s32 mPlayWaitTime;
 
     /// @brief The number of frames to wait on a blank screen after playback.
-    /* 0x14 */ s32 mEndWaitTime;
+    s32 mEndWaitTime;
 
     /// @brief The type of screen transition for the start of playback.
-    /* 0x18 */ s32 mOpenWipeType;
+    s32 mOpenWipeType;
 
     /// @brief The number of frames for the screen to transition at the start of playback.
-    /* 0x1C */ s32 mOpenWipeTime;
+    s32 mOpenWipeTime;
 
     /// @brief The type of screen transition for the end of playback.
-    /* 0x20 */ s32 mCloseWipeType;
+    s32 mCloseWipeType;
 
     /// @brief The number of frames for the screen to transition at the end of playback.
-    /* 0x24 */ s32 mCloseWipeTime;
+    s32 mCloseWipeTime;
 
     /// @brief The type of screen transition for after playback.
-    /* 0x28 */ s32 mEndWaitWipeType;
+    s32 mEndWaitWipeType;
 
     /// @brief The loudness of the audio within the unit interval.
-    /* 0x2C */ f32 mVolume;
+    f32 mVolume;
 };
 
 class MoviePlayingSequence : public LayoutActor {
@@ -75,9 +75,9 @@ public:
     void exeEndWait();
 
 private:
-    /* 0x20 */ const MoviePlayingInfo* mInfo;
-    /* 0x24 */ MR::Vector< MR::AssignableArray< MovieSubtitles* > > mSubtitles;
-    /* 0x30 */ DemoPadRumbler* mPadRumbler;
+    const MoviePlayingInfo* mInfo;
+    MR::Vector< MR::AssignableArray< MovieSubtitles* > > mSubtitles;
+    DemoPadRumbler* mPadRumbler;
 };
 
 class MoviePlayingSequenceHolder : public NameObj {
@@ -90,7 +90,7 @@ public:
     s32 getSequenceNum() const;
 
 private:
-    /* 0x0C */ MR::AssignableArray< MoviePlayingSequence* > mSequence;
+    MR::AssignableArray< MoviePlayingSequence* > mSequence;
 };
 
 namespace MR {

@@ -9,8 +9,8 @@ struct AudCallbackData {
     AudCallbackData() : mFunc(), mData() {
     }
 
-    /* 0x0 */ AudCallbackFunc mFunc;
-    /* 0x4 */ void* mData;
+    AudCallbackFunc mFunc;
+    void* mData;
 };
 
 class AudCallback {
@@ -20,7 +20,7 @@ public:
     bool regist(AudCallbackFunc, void*);
     void callback(s32, s32);
 
-    /* 0x0 */ AudCallbackData mCallbackData[32];
+    AudCallbackData mCallbackData[32];
 };
 
 class AudMeTrackCallback : public AudCallback {

@@ -31,12 +31,12 @@ public:
         return mFovy;
     }
 
-    /* 0x0C */ TPos3f mView;
-    /* 0x3C */ TPos3f mViewInv;
-    /* 0x6C */ TProj3f mProjection;
-    /* 0xAC */ f32 mAspectRatio;
-    /* 0xB0 */ f32 mNearZ;
-    /* 0xB4 */ f32 mFarZ;
-    /* 0xB8 */ f32 mFovy;
-    /* 0xBC */ TVec2f mShakeOffset;
+    TPos3f mView;
+    TPos3f mViewInv;
+    TProj3f mProjection;
+    f32 mAspectRatio;
+    f32 mNearZ;
+    f32 mFarZ;
+    f32 mFovy;
+    TVec2f mShakeOffset;
 };

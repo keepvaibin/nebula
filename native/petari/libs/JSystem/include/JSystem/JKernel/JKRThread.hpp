@@ -88,18 +88,18 @@ public:
 
     static void* start(void* pData);
 
-    /* 0x18 */ JSULink< JKRThread > mThreadListLink;
-    /* 0x28 */ NebulaArena* mHeap;
-    /* 0x2C */ GameThreadRecord* mThread;
+    JSULink< JKRThread > mThreadListLink;
+    NebulaArena* mHeap;
+    GameThreadRecord* mThread;
     NebulaArena* mStartCurrentHeap;
-    /* 0x30 */ GameMessageQueue mMessageQueue;
-    /* 0x50 */ void** mMesgBuffer;
-    /* 0x54 */ s32 mMessageCount;
-    /* 0x58 */ void* mStackMemory;
-    /* 0x5C */ u32 mStackSize;
-    /* 0x60 */ TLoad mLoadInfo;
-    /* 0x74 */ NebulaArena* mCurrentHeap;
-    /* 0x78 */ s32 mCurrentHeapError;
+    GameMessageQueue mMessageQueue;
+    void** mMesgBuffer;
+    s32 mMessageCount;
+    void* mStackMemory;
+    u32 mStackSize;
+    TLoad mLoadInfo;
+    NebulaArena* mCurrentHeap;
+    s32 mCurrentHeapError;
 
     static JSUList< JKRThread > sThreadList;
 };

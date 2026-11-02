@@ -71,30 +71,30 @@ public:
     bool isMoveNormal() const;
     bool isGravityIgnored() const;
 
-    /* 0x8C */ Type mType;
-    /* 0x90 */ f32 mChaseStartDist;
-    /* 0x94 */ f32 mChaseEndDist;
-    /* 0x98 */ f32 mChaseRotateSpeed;
-    /* 0x9C */ f32 mChaseStartAngle;
-    /* 0xA0 */ TVec3f mFront;
-    /* 0xAC */ TVec3f mUp;
-    /* 0xB8 */ TVec3f mBasePos;
-    /* 0xC4 */ TVec3f mBaseFront;
-    /* 0xD0 */ TVec3f mBaseUp;
-    /* 0xDC */ TPos3f mBaseMtx;
-    /* 0x10C */ s32 mFreezeTime;
-    /* 0x110 */ TVec3f mFreezePos;
-    /* 0x11C */ const Nerve* mUnfreezeNerve;
-    /* 0x120 */ s32 mChaseInvalidTime;
-    /* 0x124 */ s32 mMoveTime;
-    /* 0x128 */ TPos3f mEffectMtx;
-    /* 0x158 */ HitSensor* mTargetSensor;
-    /* 0x15C */ bool mDisableChase;
-    /* 0x15D */ bool mIsLinearShot;       // if set, ignore gravity and disable chase
-    /* 0x15E */ bool mUseFullSightAngle;  // if set, ignore gravity but use full sight angle to start chase
+    Type mType;
+    f32 mChaseStartDist;
+    f32 mChaseEndDist;
+    f32 mChaseRotateSpeed;
+    f32 mChaseStartAngle;
+    TVec3f mFront;
+    TVec3f mUp;
+    TVec3f mBasePos;
+    TVec3f mBaseFront;
+    TVec3f mBaseUp;
+    TPos3f mBaseMtx;
+    s32 mFreezeTime;
+    TVec3f mFreezePos;
+    const Nerve* mUnfreezeNerve;
+    s32 mChaseInvalidTime;
+    s32 mMoveTime;
+    TPos3f mEffectMtx;
+    HitSensor* mTargetSensor;
+    bool mDisableChase;
+    bool mIsLinearShot;       // if set, ignore gravity and disable chase
+    bool mUseFullSightAngle;  // if set, ignore gravity but use full sight angle to start chase
                                           // In game, this seems to only be used in Drip Drop for the Torpedos
-    /* 0x160 */ PartsModel* mPropeller;
-    /* 0x164 */ ModelObj* mTorpedoLight;
+    PartsModel* mPropeller;
+    ModelObj* mTorpedoLight;
 };
 
 class HomingKillerLauncher : public LiveActor {
@@ -108,5 +108,5 @@ public:
     void exeAppearKiller();
     void exeDeadKiller();
 
-    /* 0x8C */ HomingKiller* mKiller;
+    HomingKiller* mKiller;
 };

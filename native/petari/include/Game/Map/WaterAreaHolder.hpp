@@ -23,20 +23,20 @@ public:
     void entryWhirlPool(WhirlPool*);
     void entryWhirlPoolAccelerator(WhirlPoolAccelerator*);
 
-    /* 0x0C */ s32 mNumOceanBowls;
-    /* 0x10 */ OceanBowl** mOceanBowls;
-    /* 0x14 */ s32 mNumOceanRings;
-    /* 0x18 */ OceanRing** mOceanRings;
-    /* 0x1C */ s32 mNumOceanSpheres;
-    /* 0x20 */ OceanSphere** mOceanSpheres;
-    /* 0x24 */ s32 mNumWhirlPools;
-    /* 0x28 */ WhirlPool** mWhirlPools;
-    /* 0x2C */ s32 mNumWhirlPoolAccelerators;
-    /* 0x30 */ WhirlPoolAccelerator** mWhirlPoolAccelerators;
-    /* 0x34 */ bool mCamInWater;
-    /* 0x38 */ WaterInfo mWaterInfo;
-    /* 0x88 */ WaterCameraFilter* mCameraFilter;
-    /* 0x8C */ bool mUseBloom;
+    s32 mNumOceanBowls;
+    OceanBowl** mOceanBowls;
+    s32 mNumOceanRings;
+    OceanRing** mOceanRings;
+    s32 mNumOceanSpheres;
+    OceanSphere** mOceanSpheres;
+    s32 mNumWhirlPools;
+    WhirlPool** mWhirlPools;
+    s32 mNumWhirlPoolAccelerators;
+    WhirlPoolAccelerator** mWhirlPoolAccelerators;
+    bool mCamInWater;
+    WaterInfo mWaterInfo;
+    WaterCameraFilter* mCameraFilter;
+    bool mUseBloom;
 };
 
 namespace WaterAreaFunction {

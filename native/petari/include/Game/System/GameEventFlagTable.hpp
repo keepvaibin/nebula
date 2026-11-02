@@ -9,7 +9,7 @@ public:
     const GameEventFlag* getFlag() const;
     bool isValid() const;
 
-    /* 0x00 */ s32 mIter;
+    s32 mIter;
 };
 
 class GameEventFlagTableInstance {
@@ -24,8 +24,8 @@ public:
     void initSortTable();
     const GameEventFlag* findFlag(const char*);
 
-    /* 0x00 */ Key* mSortTable;
-    /* 0x04 */ s32 mLength;
+    Key* mSortTable;
+    s32 mLength;
 };
 
 namespace GameEventFlagTable {

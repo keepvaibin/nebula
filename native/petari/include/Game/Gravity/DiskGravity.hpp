@@ -20,26 +20,26 @@ public:
     void setEnableEdgeGravity(bool val);
 
     // Position
-    /* 0x28 */ TVec3f mLocalPosition;
-    /* 0x34 */ TVec3f mWorldPosition;
+    TVec3f mLocalPosition;
+    TVec3f mWorldPosition;
 
     // Unit normal vector to the circular surface of the disk
-    /* 0x40 */ TVec3f mLocalNormal;
-    /* 0x4C */ TVec3f mWorldNormal;
+    TVec3f mLocalNormal;
+    TVec3f mWorldNormal;
 
-    /* 0x58 */ TVec3f mSideDirection;
+    TVec3f mSideDirection;
 
-    /* 0x64 */ TVec3f mOppositeSideVecOrtho;
-    /* 0x70 */ TVec3f mWorldOppositeSideVecOrtho;
+    TVec3f mOppositeSideVecOrtho;
+    TVec3f mWorldOppositeSideVecOrtho;
 
     // Radius of the circular face of the disk
-    /* 0x7C */ f32 mLocalRadius;
-    /* 0x80 */ f32 mWorldRadius;
+    f32 mLocalRadius;
+    f32 mWorldRadius;
 
     // Number of degrees of the circle gravity applies to
-    /* 0x84 */ f32 mValidDegree;
-    /* 0x88 */ f32 mValidCos;
+    f32 mValidDegree;
+    f32 mValidCos;
 
-    /* 0x8C */ bool mEnableBothSide;
-    /* 0x8D */ bool mEnableEdgeGravity;
+    bool mEnableBothSide;
+    bool mEnableEdgeGravity;
 };

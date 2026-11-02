@@ -23,8 +23,8 @@ public:
         return zero;
     }
 
-    /* 0x18 */ const char* _18;
-    /* 0x1C */ TVec3f _1C;
-    /* 0x28 */ TVec3f _28;
-    /* 0x34 */ f32 mMoveConditionType;
+    const char* _18;
+    TVec3f _1C;
+    TVec3f _28;
+    f32 mMoveConditionType;
 };

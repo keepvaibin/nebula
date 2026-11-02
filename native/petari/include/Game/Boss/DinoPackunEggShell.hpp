@@ -13,6 +13,6 @@ public:
 
     void exeWait();
 
-    /* 0x8C */ HitSensor* _8C;
-    /* 0x90 */ MtxPtr _90;
+    HitSensor* _8C;
+    MtxPtr _90;
 };

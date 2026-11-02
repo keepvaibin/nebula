@@ -52,12 +52,12 @@ public:
     void updateBoxParam();
     void calcWorldMtx(TPos3f*) const;
 
-    /* 0x08 */ int _8;
-    /* 0x0C */ TVec3f mTranslation;
-    /* 0x18 */ TVec3f mRotation;
-    /* 0x24 */ TVec3f mScale;
-    /* 0x30 */ TBox3f mBounding;
-    /* 0x48 */ TPos3f _48;
+    int _8;
+    TVec3f mTranslation;
+    TVec3f mRotation;
+    TVec3f mScale;
+    TBox3f mBounding;
+    TPos3f _48;
 };
 
 class AreaFormSphere : public AreaForm {
@@ -70,9 +70,9 @@ public:
     void calcUpVec(TVec3f*) const;
     void calcPos(TVec3f*) const;
 
-    /* 0x08 */ TVec3f mTranslation;
-    /* 0x14 */ f32 mRadius;
-    /* 0x18 */ TVec3f mUp;
+    TVec3f mTranslation;
+    f32 mRadius;
+    TVec3f mUp;
 };
 
 class AreaFormBowl : public AreaForm {
@@ -84,9 +84,9 @@ public:
 
     void calcUpVec(const TVec3f&);
 
-    /* 0x08 */ TVec3f mTranslation;
-    /* 0x14 */ TVec3f mUp;
-    /* 0x20 */ f32 _20;
+    TVec3f mTranslation;
+    TVec3f mUp;
+    f32 _20;
 };
 
 class AreaFormCylinder : public AreaForm {
@@ -101,8 +101,8 @@ public:
     void calcUpVec(TVec3f*) const;
     void calcDir(const TVec3f&);
 
-    /* 0x08 */ TVec3f mTranslation;
-    /* 0x14 */ TVec3f mRotation;
-    /* 0x20 */ f32 mRadius;
-    /* 0x24 */ f32 mHeight;
+    TVec3f mTranslation;
+    TVec3f mRotation;
+    f32 mRadius;
+    f32 mHeight;
 };

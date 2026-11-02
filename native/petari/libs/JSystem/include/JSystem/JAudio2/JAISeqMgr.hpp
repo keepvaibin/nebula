@@ -74,10 +74,10 @@ public:
     }
 
 private:
-    /* 0x08 */ JAIAudience* mAudience;
-    /* 0x0C */ JAISeqDataMgr* seqDataMgr;
-    /* 0x10 */ JAISoundStrategyMgr< JAISeq >* soundStrategyMgr;
-    /* 0x14 */ JAISoundParamsMove mMove;
-    /* 0x64 */ JSUList< JAISeq > mSeqList;
-    /* 0x70 */ int mNumTracks;
+    JAIAudience* mAudience;
+    JAISeqDataMgr* seqDataMgr;
+    JAISoundStrategyMgr< JAISeq >* soundStrategyMgr;
+    JAISoundParamsMove mMove;
+    JSUList< JAISeq > mSeqList;
+    int mNumTracks;
 };

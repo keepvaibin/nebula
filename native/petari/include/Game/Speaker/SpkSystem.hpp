@@ -20,8 +20,8 @@ public:
     static void extensionProcess(s32, s32);
     static f32 getDeviceVolume(s32);
 
-    /* 0x00 */ NebulaArena* mHeap;
-    /* 0x04 */ SpkData* mData;
-    /* 0x08 */ SpkMixingBuffer* mMixBuffer;
-    /* 0x0C */ SpkSoundHolder* mSoundHolder;
+    NebulaArena* mHeap;
+    SpkData* mData;
+    SpkMixingBuffer* mMixBuffer;
+    SpkSoundHolder* mSoundHolder;
 };

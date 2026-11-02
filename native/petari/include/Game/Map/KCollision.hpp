@@ -8,11 +8,11 @@
 class JMapInfo;
 
 struct KC_PrismData {
-    /* 0x00 */ f32 mHeight;
-    /* 0x04 */ u16 mPositionIndex;
-    /* 0x06 */ u16 mNormalIndex;
-    /* 0x08 */ u16 mEdgeIndices[3];
-    /* 0x0E */ u16 mAttribute;
+    f32 mHeight;
+    u16 mPositionIndex;
+    u16 mNormalIndex;
+    u16 mEdgeIndices[3];
+    u16 mAttribute;
 };
 
 class Fxyz {
@@ -106,8 +106,8 @@ public:
     bool outCheck(const TVec3f*, const TVec3f*, V3u*, V3u*) const;
     void objectSpaceToLocalSpace(V3u*, const TVec3f&) const;
 
-    /* 0x00 */ KCLFile* mFile;
-    /* 0x04 */ JMapInfo* mapInfo;
-    /* 0x08 */ f32 mMaxVertexDistance;
+    KCLFile* mFile;
+    JMapInfo* mapInfo;
+    f32 mMaxVertexDistance;
     KCLFile mModel;  // the view of a cooked file
 };

@@ -32,9 +32,9 @@ public:
         return mTexMtxNum;
     }
 
-    /* 0x00 */ Mtx* mpTexMtx;
-    /* 0x04 */ Mtx44* mpEffectMtx;
-    /* 0x08 */ u16 mTexMtxNum;
+    Mtx* mpTexMtx;
+    Mtx44* mpEffectMtx;
+    u16 mTexMtxNum;
 };
 
 class J3DDifferedTexMtx {
@@ -74,9 +74,9 @@ public:
     virtual void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
 
 private:
-    /* 0x8 */ u16 mUseMtxNum;
+    u16 mUseMtxNum;
     // In the file.
-    /* 0xC */ u16* mUseMtxIndexTable;
+    u16* mUseMtxIndexTable;
 };
 
 class J3DShapeMtxConcatView : public J3DShapeMtx {
@@ -122,9 +122,9 @@ public:
     virtual void loadNrmMtx(int, u16, f32 (*)[4]) const;
 
 private:
-    /* 0x8 */ u16 mUseMtxNum;
+    u16 mUseMtxNum;
     // In the file.
-    /* 0xC */ u16* mUseMtxIndexTable;
+    u16* mUseMtxIndexTable;
 };
 
 class J3DShapeMtxBBoardConcatView : public J3DShapeMtxConcatView {

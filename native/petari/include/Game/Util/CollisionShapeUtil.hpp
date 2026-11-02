@@ -22,8 +22,8 @@ public:
         return mPos.squared(other.mPos) <= rad * rad;
     }
 
-    /* 0x00 */ TVec3f mPos;
-    /* 0x0C */ f32 mRadius;
+    TVec3f mPos;
+    f32 mRadius;
 };
 
 class HitCylinder {
@@ -53,6 +53,6 @@ public:
         *ortho = JGeometry::TUtil< f32 >::sqrt((para * dist - dot * dot) / para);
     }
 
-    /* 0x00 */ TVec3f mPos;
-    /* 0x0C */ TVec3f mAxis;
+    TVec3f mPos;
+    TVec3f mAxis;
 };

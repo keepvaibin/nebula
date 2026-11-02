@@ -15,7 +15,7 @@ public:
     virtual void control();
     virtual void calcAndSetBaseMtx();
 
-    /* 0x8C */ MapPartsRotator* mRotator;
-    /* 0x90 */ const char* mObjName;
-    /* 0x94 */ LodCtrl* mLodCtrl;
+    MapPartsRotator* mRotator;
+    const char* mObjName;
+    LodCtrl* mLodCtrl;
 };

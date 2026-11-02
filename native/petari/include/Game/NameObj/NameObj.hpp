@@ -12,22 +12,22 @@ public:
     NameObj(const char* pName);
 
     /// @brief Destroys the `NameObj`.
-    /* 0x08 */ virtual ~NameObj();
+    virtual ~NameObj();
 
     /// @brief Intializes the `NameObj` while being placed into a scene.
     /// @param rIter A reference to an iterator over a `JMapInfo`.
-    /* 0x0C */ virtual void init(const JMapInfoIter& rIter);
+    virtual void init(const JMapInfoIter& rIter);
 
     /// @brief Intializes the `NameObj` after being placed into a scene.
-    /* 0x10 */ virtual void initAfterPlacement();
+    virtual void initAfterPlacement();
 
-    /* 0x14 */ virtual void movement();
+    virtual void movement();
 
     /// @brief Draws the `NameObj` to the screen.
-    /* 0x18 */ virtual void draw() const;
+    virtual void draw() const;
 
-    /* 0x1C */ virtual void calcAnim();
-    /* 0x20 */ virtual void calcViewAndEntry();
+    virtual void calcAnim();
+    virtual void calcViewAndEntry();
 
     /// @brief Initializes the `NameObj` without an iterator over a `JMapInfo`.
     void initWithoutIter();
@@ -51,9 +51,9 @@ public:
     void requestResume();
     void syncWithFlags();
 
-    /* 0x04 */ const char* mName;  ///< A string to identify the NameObj.
-    /* 0x08 */ u16 mFlag;          ///< Flags in relation to movement.
-    /* 0x0A */ s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
+    const char* mName;  ///< A string to identify the NameObj.
+    u16 mFlag;          ///< Flags in relation to movement.
+    s16 mExecutorIdx;   ///< The index into the NameObjExecuteInfo array.
     u16 mMotionEpoch;  ///< Counts the object's lives (MotionSignal), in the padding after mExecutorIdx.
 };
 

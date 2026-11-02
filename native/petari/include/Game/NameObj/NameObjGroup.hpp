@@ -26,7 +26,7 @@ public:
     void initObjArray(int);
 
 private:
-    /* 0x0C */ s32 mObjNumMax;
-    /* 0x10 */ s32 mObjNum;
-    /* 0x14 */ NameObj** mObjArray;
+    s32 mObjNumMax;
+    s32 mObjNum;
+    NameObj** mObjArray;
 };

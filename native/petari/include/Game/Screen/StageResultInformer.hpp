@@ -16,8 +16,8 @@ public:
     void exeDisappear();
     void exeIdle();
 
-    /* 0x08 */ StageResultInformer* mHost;
-    /* 0x0C */ const char* mMessageId;
+    StageResultInformer* mHost;
+    const char* mMessageId;
 };
 
 class StageResultInformer : public LayoutActor {
@@ -55,10 +55,10 @@ public:
     void setCounterPaneShowHide(bool, bool, bool);
 
 private:
-    /* 0x20 */ DisplayInformationForResult* mInformationDisplayer;
-    /* 0x24 */ StageResultSequenceChecker* mSequenceChecker;
-    /* 0x28 */ IconAButton* mIconAButton;
-    /* 0x2C */ s32 mClearedStarPieceNum;
-    /* 0x30 */ bool _30;
-    /* 0x30 */ bool _31;
+    DisplayInformationForResult* mInformationDisplayer;
+    StageResultSequenceChecker* mSequenceChecker;
+    IconAButton* mIconAButton;
+    s32 mClearedStarPieceNum;
+    bool _30;
+    bool _31;
 };

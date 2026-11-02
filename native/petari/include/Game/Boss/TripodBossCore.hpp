@@ -22,6 +22,6 @@ public:
     void exeWarning();
     void exeBreak();
 
-    /* 0xE4 */ ModelObj* mBreakModel;
-    /* 0xE8 */ ModelObj* mBloomModel;
+    ModelObj* mBreakModel;
+    ModelObj* mBloomModel;
 };

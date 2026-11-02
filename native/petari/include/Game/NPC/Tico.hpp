@@ -50,13 +50,13 @@ public:
 
     static const f32 sFloatSeMinVolume;
 
-    /* 0x15C */ u32 _15C;
-    /* 0x160 */ TVec3f _160;
-    /* 0x16C */ f32 _16C;
-    /* 0x170 */ TicoDemoGetPower* mDemoGetPower;
-    /* 0x174 */ TalkMessageCtrl* _174;
-    /* 0x178 */ MtxPtr _178;
-    /* 0x17C */ Color8 _17C;
-    /* 0x180 */ const Nerve* _180;
-    /* 0x184 */ DemoStarter mDemoStarter;
+    u32 _15C;
+    TVec3f _160;
+    f32 _16C;
+    TicoDemoGetPower* mDemoGetPower;
+    TalkMessageCtrl* _174;
+    MtxPtr _178;
+    Color8 _17C;
+    const Nerve* _180;
+    DemoStarter mDemoStarter;
 };

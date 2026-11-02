@@ -24,7 +24,7 @@ public:
     virtual void listenSwitchOnEvent();
     virtual void listenSwitchOffEvent();
 
-    /* 0x4 */ LiveActor* mActor;
-    /* 0x8 */ bool mUsesOn;
-    /* 0x9 */ bool mUsesOff;
+    LiveActor* mActor;
+    bool mUsesOn;
+    bool mUsesOff;
 };

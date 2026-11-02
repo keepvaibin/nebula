@@ -2,9 +2,9 @@
 
 namespace {
     struct PlacedHiddenStarInfo {
-        /* 0x00 */ const char* mStageName;
-        /* 0x04 */ s32 mHiddenScenarioNo;
-        /* 0x08 */ s32 mPlacedScenarioNo;
+        const char* mStageName;
+        s32 mHiddenScenarioNo;
+        s32 mPlacedScenarioNo;
     };
 
     const PlacedHiddenStarInfo cPlacedHiddenStarInfoTable[] = {
