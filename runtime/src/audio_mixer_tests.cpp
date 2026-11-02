@@ -337,27 +337,23 @@ void test_square() {
     expect(changes >= 99 && changes <= 100, "square frequency", changes);
 }
 
-// Volume categories: a muted music category silences a PCM16 voice no owner names.
+// Volume categories: a voice follows the setting the game names.
 void test_categories() {
     Game game;
     for (std::uint32_t i = 0; i < 4096u; ++i) {
         game.put16(i * 2u, 16384);
     }
-    game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767);
+    game.pcm16(0u, 0u, 4096u, NEBULA_AUDIO_BUS_LEFT, 32767).category = NEBULA_SOUND_MUSIC;
     AudioMixer mixer(48000u);
     game.attach(mixer);
     mixer.set_category_gains({1.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f});
     const std::vector<float> out = run(mixer, 2u);
     expect(near(out[2u * 100u], 0.0, 1e-6), "muted music", out[2u * 100u]);
-    expect(mixer.voice_category(0u).decision.bus == galaxy::audio::NativeAudioBus::Music, "PCM16 is music");
-    // A voice the game names as a player voice effect (section 0, category 1) follows the voice gain; music ramps back
-    // up over 10 ms.
+    // A voice in the voices category follows that gain; music ramps back up over 10 ms.
     NebulaVoice& named = game.pcm16(1u, 0u, 4096u, NEBULA_AUDIO_BUS_RIGHT, 32767);
-    named.sound_route = 1u;
-    named.sound_id = 0x00010005u;
+    named.category = NEBULA_SOUND_VOICE;
     mixer.set_category_gains({1.0f, 1.0f, 0.0f, 1.0f, 1.0f, 1.0f});
     const std::vector<float> named_out = run(mixer, 7u);
-    expect(mixer.voice_category(1u).decision.bus == galaxy::audio::NativeAudioBus::Voice, "named player voice");
     expect(near(named_out[2u * 100u + 1u], 0.0, 1e-6), "muted voices", named_out[2u * 100u + 1u]);
     expect(near(named_out[2u * 800u], 0.5 * 32767.0 / 65536.0, 1e-3), "music back on", named_out[2u * 800u]);
 }

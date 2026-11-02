@@ -453,7 +453,6 @@ std::string NativeGameAudio::stats_line() const {
          << " oscillators=" << s.oscillator_renders << " noise=" << s.noise_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " panner=" << s.panner_renders << " effect-subframes=" << s.effect_subframes
          << " stream-frames=" << s.stream_frames << " unresolved=" << s.unresolved_reads
-         << " categories=" << s.category_decisions << " unnamed=" << s.category_unnamed
          << " mix-ms=" << s.mix_ns / 1000000u;
     return line.str();
 }

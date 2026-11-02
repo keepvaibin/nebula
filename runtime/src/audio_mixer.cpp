@@ -294,28 +294,6 @@ std::span<const float> AudioMixer::end_frame() {
     return out;
 }
 
-void AudioMixer::classify(std::uint32_t index, const NebulaVoice& voice) {
-    AudioVoiceCategory& category = categories_[index];
-    const std::uint32_t route = voice.sound_route <= 3u ? voice.sound_route : 0u;
-    const std::uint32_t sound_id = voice.sound_id;
-    category.owner = {static_cast<JAudioOwnerRoute>(route), sound_id};
-    category.decision = route != 0u ? native_audio_bus_from_sound_id(sound_id) : NativeAudioBusDecision{};
-    if (category.decision.classification != NativeAudioBusClassification::OwnerSoundId) {
-        // Without an owner the source decides: the game's streams and sequence voices are PCM16.
-        if (voice.format == NEBULA_AUDIO_PCM16) {
-            category.decision = {NativeAudioBus::Music, NativeAudioBusClassification::ChannelFormat};
-        } else if (voice.format == NEBULA_AUDIO_ADPCM4 || voice.format == NEBULA_AUDIO_PCM8) {
-            category.decision = {NativeAudioBus::Sfx, NativeAudioBusClassification::ChannelFormat};
-        } else {
-            category.decision = {};
-        }
-    }
-    ++stats_.category_decisions;
-    if (route == 0u) {
-        ++stats_.category_unnamed;
-    }
-}
-
 void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     ++stats_.voice_renders;
     VoiceState& state = voice_states_[index];
@@ -339,14 +317,7 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     apply_fir(state, voice, out);
     apply_iir(state, voice, out);
     if (category_gains_set_) {
-        if (state.category_key_id != voice.sound_id || state.category_key_route != voice.sound_route ||
-            state.category_key_format != voice.format) {
-            state.category_key_id = voice.sound_id;
-            state.category_key_route = voice.sound_route;
-            state.category_key_format = voice.format;
-            classify(index, voice);
-        }
-        apply_category(index, state, voice, out);
+        apply_category(state, voice, out);
     }
     if (voice.panner != 0u) {
         mix_panner(voice, out);
@@ -358,9 +329,9 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     }
 }
 
-void AudioMixer::apply_category(std::uint32_t index, VoiceState& state, const NebulaVoice&, float* samples) {
-    const NativeAudioBus bus = categories_[index].decision.bus;
-    const float target = category_gains_[static_cast<std::size_t>(bus)];
+void AudioMixer::apply_category(VoiceState& state, const NebulaVoice& voice, float* samples) {
+    const std::uint8_t bus = voice.category < category_gains_.size() ? voice.category : std::uint8_t{NEBULA_SOUND_EFFECT};
+    const float target = category_gains_[bus];
     if (!state.category_set || state.category_bus != bus) {
         // A voice's first sound, or a new owner on another bus, starts at its own gain: nothing of a muted bus leaks
         // through a ramp from the previous owner's.
