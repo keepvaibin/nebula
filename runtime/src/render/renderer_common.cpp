@@ -390,11 +390,9 @@ SceneConversionShaderConstants make_scene_conversion_constants(
     float step_x,
     float step_y,
     float filter_row_offset,
-    unsigned scene_target_scale,
+    float scale,
     unsigned logical_scene_height,
     unsigned reduction_width) noexcept {
-    const float scale = static_cast<float>(
-        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
     const float fw_up = static_cast<float>(capture_filter_upper(params));
     const float fw_mid = static_cast<float>(capture_filter_middle(params));
     const float fw_low = static_cast<float>(capture_filter_lower(params));
