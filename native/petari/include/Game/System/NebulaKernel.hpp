@@ -87,6 +87,9 @@ namespace NebulaKernel {
     void cancel(NebulaThread* pThread);
     // A new thread starts.
     void resume(NebulaThread* pThread);
+    // This thread works off the game world from now on (file loaders): it runs alongside the others, under its mutexes. Test mode
+    // keeps it under the world lock, so that two runs take the same steps.
+    void leaveWorld();
     bool isTerminated(const NebulaThread* pThread);
 
     // disableInterrupts returns the previous state for restoreInterrupts.

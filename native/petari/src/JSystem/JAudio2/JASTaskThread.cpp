@@ -80,6 +80,7 @@ int JASTaskThread::sendCmdMsg(JASThreadCallback callback, void* msg) {
 }
 
 void* JASTaskThread::run() {
+    NebulaKernel::leaveWorld();
     JASThreadCallStack* callstack;
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());

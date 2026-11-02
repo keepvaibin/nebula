@@ -134,7 +134,7 @@ namespace {
 
     // Lets go of the world; true if it came straight back. In test mode, with no thread able to run, this thread moves the clock
     // on, holding the world so that what a step wakes runs after the step, in the order it was woken.
-    bool leaveWorld(NebulaThread* pSelf) {
+    bool releaseWorld(NebulaThread* pSelf) {
         if (passWorld(pSelf)) {
             return true;
         }
@@ -167,7 +167,7 @@ namespace {
             tInterruptsOff = false;
             nebula_host_unlock(NEBULA_HOST_LOCK_INTERRUPTS);
         }
-        const bool mine = self->world && leaveWorld(self);
+        const bool mine = self->world && releaseWorld(self);
         unlockState();
         if (!mine) {
             nebula_host_thread_wait(self->host);
@@ -362,7 +362,7 @@ namespace NebulaKernel {
         forget(self);
         NebulaHostThread* const host = self->host;
         if (self->world) {
-            leaveWorld(self);
+            releaseWorld(self);
         }
         unlockState();
         nebula_host_thread_exit(host);
@@ -397,6 +397,17 @@ namespace NebulaKernel {
             pThread->started = true;
             wake(pThread);
         }
+        unlockState();
+    }
+
+    void leaveWorld() {
+        if (sTestMode) {
+            return;
+        }
+        lockState();
+        NebulaThread* self = tSelf;
+        self->world = false;
+        passWorld(self);
         unlockState();
     }
 

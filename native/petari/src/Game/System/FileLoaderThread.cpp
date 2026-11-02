@@ -20,6 +20,7 @@ FileLoaderThread::FileLoaderThread(int priority, int msgCount, JKRHeap* pHeap) :
 }
 
 void* FileLoaderThread::run() {
+    NebulaKernel::leaveWorld();
 
     while (true) {
         void* msg;
