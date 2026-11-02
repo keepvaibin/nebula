@@ -101,10 +101,12 @@ Texture::~Texture() {
     const VkImage image_handle = image;
     VmaAllocation_T* const allocation_handle = allocation;
     const VkImageView views[2] = {view, target_view};
-    const VkFramebuffer framebuffer_handle = framebuffer;
+    const VkFramebuffer framebuffers[2] = {framebuffer, scene_framebuffer};
     context.defer([=] {
-        if (framebuffer_handle != VK_NULL_HANDLE) {
-            vkDestroyFramebuffer(device, framebuffer_handle, nullptr);
+        for (const VkFramebuffer f : framebuffers) {
+            if (f != VK_NULL_HANDLE) {
+                vkDestroyFramebuffer(device, f, nullptr);
+            }
         }
         for (const VkImageView v : views) {
             if (v != VK_NULL_HANDLE) {

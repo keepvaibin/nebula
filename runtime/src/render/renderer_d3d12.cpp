@@ -1406,26 +1406,15 @@ void RendererD3D12::write_scene_conversion_views(const DescriptorRing::Table& ta
 }
 
 bool RendererD3D12::can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const {
-    static const bool enabled = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_NATIVE_XFB") != 0 || length <= 1u || value[0] != '0';
-    }();
-    // GALAXY_TEST_NATIVE_XFB_AB=1: handed over in every other presented frame, copied in the others.
-    static const bool test_ab = [] {
-        char value[8]{};
-        std::size_t length = 0;
-        return getenv_s(&length, value, sizeof(value), "GALAXY_TEST_NATIVE_XFB_AB") == 0 && length > 1u &&
-               value[0] == '1';
-    }();
-    if (!enabled || (test_ab && (presented_frames_ & 1u) != 0u) || !scene_color_ || scene_owed_ ||
+    if (!scene_color_ || scene_owed_ ||
         scene_carry_color_ || replay_recording_ || replay_playing_ || ring_mode_ == RingMode::Interp ||
         frame_generation_running() || output_scene_active_ || scene_msaa_.samples > 1u || scene_hdr_ || scene_temporal_ ||
         !post_process_.ready() || !post_process_.reads_held_pictures()) {
         return false;
     }
     const unsigned scale = scene_target_scale_;
-    return !params.filtered && !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
+    // The display's vertical filter is applied when the frame is presented (present: filter_display_picture).
+    return !params.luma && !params.half_scale && params.src_x == 0u && params.src_y == 0u &&
            params.src_width == kFrameWidth && params.src_height != 0u && params.src_height <= kFrameHeight &&
            dest.width == kFrameWidth * scale && dest.height == params.src_height * scale;
 }
@@ -9497,16 +9486,97 @@ void RendererD3D12::debug_log_readback() {
               << static_cast<unsigned>(amax) << ")\n";
 }
 
+// A handed-over frame through the display's vertical filter (E-10: the deflicker look inside the presentation), into
+// a picture-size target: the display filter shader on the frame's own pixels, as the display copy ran it.
+gpu::TextureRef RendererD3D12::filter_display_picture(const DisplayTexture& source) {
+    const GpuPassScope pass{*this, GpuPass::DisplayCopy};
+    if (!display_filter_picture_ || display_filter_picture_width_ != source.width ||
+        display_filter_picture_height_ != source.height) {
+        if (display_filter_picture_) {
+            retired_scene_copy_textures_[frame_slot_].push_back(std::move(display_filter_picture_));
+        }
+        D3D12_HEAP_PROPERTIES heap{};
+        heap.Type = D3D12_HEAP_TYPE_DEFAULT;
+        D3D12_RESOURCE_DESC rd{};
+        rd.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        rd.Width = source.width;
+        rd.Height = source.height;
+        rd.DepthOrArraySize = 1;
+        rd.MipLevels = 1;
+        rd.Format = kSceneColorFormat;
+        rd.SampleDesc.Count = 1;
+        rd.Flags = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        d3d_check(device_->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &rd,
+                                                   D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
+                                                   IID_PPV_ARGS(&display_filter_picture_)),
+                  "Create the display filter's picture");
+        display_filter_picture_width_ = source.width;
+        display_filter_picture_height_ = source.height;
+    }
+    ID3D12Resource* dest = display_filter_picture_.Get();
+    D3D12_RESOURCE_BARRIER b{};
+    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    b.Transition.pResource = dest;
+    b.Transition.StateBefore = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+    b.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    command_list_->ResourceBarrier(1, &b);
+
+    const DescriptorRing::Table table = srv_ring_.allocate(1);
+    D3D12_SHADER_RESOURCE_VIEW_DESC sd{};
+    sd.Format = kSceneColorFormat;
+    sd.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    sd.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    sd.Texture2D.MipLevels = 1;
+    device_->CreateShaderResourceView(source.texture.Get(), &sd, table.cpu);
+
+    const D3D12_CPU_DESCRIPTOR_HANDLE rtv = allocate_conversion_rtv(dest);
+    command_list_->OMSetRenderTargets(1, &rtv, FALSE, nullptr);
+    bound_rt_aux_ = 0u;
+    const D3D12_VIEWPORT vp{0.0f, 0.0f, static_cast<float>(source.width), static_cast<float>(source.height),
+                            0.0f, 1.0f};
+    const D3D12_RECT sci{0, 0, static_cast<LONG>(source.width), static_cast<LONG>(source.height)};
+    command_list_->RSSetViewports(1, &vp);
+    command_list_->RSSetScissorRects(1, &sci);
+    command_list_->SetGraphicsRootSignature(s_conv_root_sig.Get());
+    command_list_->SetPipelineState(display_filter_pipeline_.Get());
+    // The picture's own pixels (scale 1), clamped to its rows, one row apart: the display copy's constants.
+    CaptureRequest params{};
+    params.src_width = static_cast<std::uint16_t>(source.width);
+    params.src_height = static_cast<std::uint16_t>(source.height);
+    params.filtered = true;
+    const SceneConversionShaderConstants constants = make_scene_conversion_constants(
+        params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1u, source.height);
+    command_list_->SetGraphicsRoot32BitConstants(0, 16, constants.values.data(), 0);
+    command_list_->SetGraphicsRootDescriptorTable(1, table.gpu);
+    command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    command_list_->DrawInstanced(3, 1, 0, 0);
+    std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
+    command_list_->ResourceBarrier(1, &b);
+    command_list_->SetGraphicsRootSignature(root_signature_.Get());
+    invalidate_gx_bindings();
+    return display_filter_picture_;
+}
+
 bool RendererD3D12::present(
-    const DisplayTexture* source, bool capture_backbuffer, bool black) {
+    const DisplayTexture* frame, bool capture_backbuffer, bool black) {
     const bool can_blit =
-        source != nullptr && source->texture && blit_pipeline_ &&
+        frame != nullptr && frame->texture && blit_pipeline_ &&
         s_blit_root_sig;
     ++presented_frames_;
     if (!can_blit) {
         ++telemetry_no_display_present_count_;
         throw std::runtime_error(
             "present requested without a valid display picture blit source");
+    }
+    // The picture shown: a handed-over frame owed the display filter is shown filtered.
+    DisplayTexture filtered_frame{};
+    const DisplayTexture* source = frame;
+    if (frame->display_filter && !black && display_filter_pipeline_ != nullptr) {
+        filtered_frame = *frame;
+        filtered_frame.texture = filter_display_picture(*frame);
+        filtered_frame.display_filter = false;
+        source = &filtered_frame;
     }
     if (capture_backbuffer) {
         if (capture_waits_) {
@@ -9659,7 +9729,7 @@ bool RendererD3D12::present(
     }
     invalidate_gx_bindings();
     if (!black) {
-        present_fg_hudless(*source, vp, sci);
+        present_fg_hudless(*frame, vp, sci);
     }
 
     // The overlays are drawn in backbuffer pixels, not Wii content coordinates:

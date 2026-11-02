@@ -240,9 +240,12 @@ public:
     [[nodiscard]] UploadBuffer create_resident_vertices(std::size_t bytes, const char* name);
     void copy_resident_vertices(std::uint64_t, std::uint64_t) noexcept {}
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
-    // Native presentation (renderer_d3d12.h): not yet on Vulkan, whose display copies stay copies.
-    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest&, const DisplayTexture&) const { return false; }
-    [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh) { return fresh; }
+    // Native presentation (E-10, RendererD3D12's): at default settings the display copy takes the scene target's colour image
+    // instead of copying it (the display's vertical filter is applied when the frame is presented), and the scene target
+    // continues on `fresh`, an idle picture of its size (made when null). The handed picture stays owed to the scene target
+    // until a clear covers it: any other use copies it back (settle_owed_scene), at the latest when the frame ends.
+    [[nodiscard]] bool can_hand_over_display_copy(const CaptureRequest& params, const DisplayTexture& dest) const;
+    [[nodiscard]] gpu::TextureRef hand_over_scene_color(gpu::TextureRef fresh);
     [[nodiscard]] bool copy_scene_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy);
     // `black`: the frame is presented black (the pass clears; the display picture is not drawn).
     bool present(const DisplayTexture* source, bool capture_backbuffer = false, bool black = false);
@@ -401,6 +404,7 @@ private:
     };
     struct AsyncField {
         gpu::TextureRef target;
+        VkDescriptorSet color_source = VK_NULL_HANDLE;  // its colour input (separate_peek_color)
         std::array<Readback, kAsyncPeekFieldSlots> readbacks;
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer commands = VK_NULL_HANDLE;
@@ -464,11 +468,31 @@ private:
     void record_conversion_blit(vk::Texture& dest, unsigned dest_w, unsigned dest_h, const CaptureRequest& params,
                                 bool is_depth_copy, bool intensity, bool keep_alpha, std::uint8_t copy_format,
                                 float src_x, float src_y, float step_x, float step_y, float filter_row_offset);
+    // `color_source`: the colour input of a separate submission (separate_peek_color); none: the scene target's.
     void record_peek_field(VkCommandBuffer commands, vk::Texture& target, ReadbackKind kind,
                            const SceneConversionShaderConstants& constants, unsigned width, unsigned height,
-                           VkBuffer readback);
-    void transition_scene_for_sampling(VkCommandBuffer commands, bool depth);
-    void transition_scene_to_attachment(VkCommandBuffer commands, bool depth);
+                           VkBuffer readback, VkDescriptorSet color_source = VK_NULL_HANDLE,
+                           VkImage color_image = VK_NULL_HANDLE);
+    // `color_image`: the colour image read (none: the scene target's).
+    void transition_scene_for_sampling(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
+    void transition_scene_to_attachment(VkCommandBuffer commands, bool depth, VkImage color_image = VK_NULL_HANDLE);
+    // The hand-over (E-10). The scene target's framebuffer and colour conversion input: the set's own, or for an image a
+    // hand-over gave it, the image's framebuffer (vk::Texture::scene_framebuffer, with the scene target's depth) and a set
+    // in the frame's descriptors.
+    [[nodiscard]] VkFramebuffer scene_framebuffer();
+    [[nodiscard]] VkDescriptorSet scene_color_source();
+    // A separate submission's scene colour (it runs before the open frame's commands): the image the scene target had
+    // when the last frame was submitted, through `set` (the caller's own, idle since its last submission completed).
+    [[nodiscard]] VkImage separate_peek_color(VkDescriptorSet& set);
+    // The owed picture copied back into the scene target, all of it or the bands around `kept` (a clear covers `kept`).
+    void restore_owed_scene(const VkRect2D* kept);
+    void settle_owed_scene() {
+        if (scene_owed_ && !replaying_) [[unlikely]] {
+            restore_owed_scene(nullptr);
+        }
+    }
+    // A handed-over frame through the display's vertical filter into a picture of its size (present).
+    [[nodiscard]] vk::Texture* filter_display_picture(const DisplayTexture& source);
     [[nodiscard]] VkFramebuffer framebuffer_for(vk::Texture& texture);
     void refresh_display_rate();
     void follow_window_and_resize();
@@ -528,8 +552,24 @@ private:
         VkFramebuffer resolve_framebuffer = VK_NULL_HANDLE;
         VkDescriptorSet ms_depth_source = VK_NULL_HANDLE;
         bool depth_dirty = false;
+        // Its colour is an image a hand-over gave it (E-10): framebuffer and colour input per image (scene_framebuffer).
+        bool turned = false;
+        std::uint64_t depth_serial = 0;  // its depth target's (create_scene_set): the per-image framebuffers' key
     };
     SceneSet scene_;
+    std::uint64_t scene_depth_serial_ = 0;
+    // E-10: the picture the scene target owes (hand_over_scene_color), the image the scene target had at the last frame submission while a
+    // hand-over in the open frame replaced it, the open frame's input set for a turned scene target colour, the separate
+    // submissions' colour input (peek_scene's; the async fields have their own) and the present's filtered picture.
+    gpu::TextureRef scene_owed_;
+    std::weak_ptr<vk::Texture> scene_submitted_color_;
+    VkImage scene_shown_image_ = VK_NULL_HANDLE;  // that picture while it stays owed across a submission
+    bool scene_turned_in_frame_ = false;
+    VkDescriptorSet turn_source_ = VK_NULL_HANDLE;
+    const vk::Texture* turn_source_image_ = nullptr;
+    std::uint64_t turn_source_frame_ = ~std::uint64_t{0};
+    VkDescriptorSet peek_color_source_ = VK_NULL_HANDLE;
+    gpu::TextureRef display_filter_picture_;
     // The output scene target (begin_output_scene) and its scale; they trade places with scene_ and scene_target_scale_ while it is active.
     SceneSet alt_scene_;
     unsigned alt_scene_target_scale_ = 0;
@@ -1017,6 +1057,12 @@ private:
         unsigned frames = 0;
         std::uint64_t passes = 0;
         std::uint64_t copies = 0;
+        // Display copies handed over (E-10), and how their owed pictures ended: covered by a clear, copied back in
+        // bands around a clear, or copied back whole.
+        std::uint64_t handovers = 0;
+        std::uint64_t owed_free = 0;
+        std::uint64_t owed_banded = 0;
+        std::uint64_t owed_restored = 0;
     };
     GpuWindow gpu_window_;
     struct PresentStats {

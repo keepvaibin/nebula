@@ -66,6 +66,8 @@ struct DisplayTexture {
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
     gpu::CpuDescriptor rtv{};
+    // A handed-over frame shown through the display's vertical filter: the presentation applies it (E-10).
+    bool display_filter = false;
     bool presentable = false;
     bool rtv_valid = false;
 };

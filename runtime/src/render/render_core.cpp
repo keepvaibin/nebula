@@ -6300,8 +6300,10 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                     *display_picture, renderer_.hand_over_scene_color(scene_copies_.take_idle_texture(
                               static_cast<std::uint16_t>(kFrameWidth * scale),
                               static_cast<std::uint16_t>(kFrameHeight * scale))));
+                display_picture->display_filter = params.filtered;
             } else {
                 renderer_.copy_scene_to_display(params, *display_picture);
+                display_picture->display_filter = false;
             }
             // The display copy ends the 2D layer: later work and the next
             // frame use the render-resolution scene target again.
