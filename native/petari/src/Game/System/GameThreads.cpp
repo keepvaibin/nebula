@@ -438,8 +438,13 @@ namespace GameThreads {
 
     void enterAudio() {
         // In test mode this runs on the thread stepping the clock: its record stands aside.
-        if (sAudioThread.host == nullptr && !sTestMode) {
-            sAudioThread.host = nebula_host_thread_adopt();
+        // The output device may change its thread (SDL's does when it reopens).
+        static thread_local NebulaHostThread* tAudioHost;
+        if (tAudioHost == nullptr && !sTestMode) {
+            tAudioHost = nebula_host_thread_adopt();
+        }
+        if (!sTestMode) {
+            sAudioThread.host = tAudioHost;
         }
         sAudioThread.outer = tSelf;
         tSelf = &sAudioThread;

@@ -3,7 +3,6 @@
 #include "galaxy/native_host.h"
 #include "galaxy/host_env.h"
 
-#include "galaxy/native_audio_queue.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/controller_hid.h"
 #include "galaxy/wiimote_hid.h"
