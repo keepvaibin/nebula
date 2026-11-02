@@ -1,5 +1,7 @@
 #pragma once
 
+#include "JSystem/JParticle/JPANativeColor.hpp"
+
 #include "JSystem/JUtility/JUTTexture.hpp"
 
 struct JPATextureData {
@@ -13,8 +15,9 @@ public:
     JPATexture(u8 const*);
     virtual ~JPATexture();
 
-    void load(GpuTexMapID texMapID) {
-        mTexture.load(texMapID);
+    // This texture in the particle material's slot.
+    void use(u32 slot) {
+        JPANativeColor::texture(slot, mTexture.texObj());
     }
 
     JUTTexture* getJUTTexture() {

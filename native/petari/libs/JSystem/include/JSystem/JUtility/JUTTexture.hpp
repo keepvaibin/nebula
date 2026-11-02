@@ -63,6 +63,9 @@ public:
     J3DNativeTexObj getTexObj() const {
         return mObj;
     }
+    const J3DNativeTexObj* texObj() const {
+        return &mObj;
+    }
 
     void initTexObj();
     void load(_GpuTexMapID);
