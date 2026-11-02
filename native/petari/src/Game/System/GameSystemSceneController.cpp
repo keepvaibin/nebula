@@ -389,6 +389,7 @@ void GameSystemSceneController::exeInitializeScene() {
 
     if (MR::tryEndFunctionAsyncExecute("\203\126\201\133\203\223\217\211\212\372\211\273" /* シーン初期化 */)) {
         mSceneInitializeState = SceneInitializeState_End;
+        mIntermissionScene->setCurrentSceneControllerState("[scene ready]");
 
         requestChangeNerve(GET_NERVE(GameSystemSceneController, GameSystemSceneControllerInvalidateSystemWipe));
     }

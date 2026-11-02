@@ -1,5 +1,5 @@
 // Tests for the game's NebulaCalendar (native/petari/src/Game/System/NebulaCalendar.cpp), compiled here against a host
-// whose clock the test sets: seconds from 2000-01-01, the save files' unit (the console's 60.75 MHz ticks) and dates across leap
+// whose clock the test sets: seconds from 2000-01-01, the unit saves hold and dates across leap
 // days, centuries and before 2000.
 #include "Game/System/NebulaCalendar.hpp"
 
@@ -47,10 +47,12 @@ int main() {
     bool passed = true;
 
     gCalendarNs = 1000000000;
-    passed &= expect(NebulaCalendar::toFileTime(NebulaCalendar::now()) == 60750000, "one second is 60,750,000 ticks in a save file");
+    passed &= expect(NebulaCalendar::now() == 1, "a second is a second");
     gCalendarNs = 846678896LL * 1000000000 + 500000000;
     passed &= expect(NebulaCalendar::now() == 846678896, "seconds, fractions dropped");
-    passed &= expect(NebulaCalendar::fromFileTime(NebulaCalendar::toFileTime(NebulaCalendar::now())) == 846678896, "through a save file and back");
+    passed &= expect(NebulaCalendar::fromSaved(846678896) == 846678896, "a save's seconds");
+    passed &= expect(NebulaCalendar::fromSaved(846678896LL * 60750000) == 846678896, "an older save's ticks");
+    passed &= expect(NebulaCalendar::fromSaved(0) == 0, "no time yet");
 
     passed &= expect(date_is(0, 2000, 1, 1, 0, 0, 0), "2000-01-01, the clock's start");
     passed &= expect(date_is(5183999, 2000, 2, 29, 23, 59, 59), "2000's leap day (a century divisible by 400)");

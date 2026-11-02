@@ -3,6 +3,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 #include "Game/System/HeapMemoryWatcher.hpp"
+#include "Game/System/GameAssets.hpp"
 #include "Game/AudioLib/AudParams.hpp"
 #include "Game/Screen/NebulaIcons.hpp"
 #include "Game/Util/MemoryUtil.hpp"
@@ -44,7 +45,11 @@ namespace {
             const NebulaHostServices* const pHost = nebula_host();
             pHost->shape_forget(pHost->user, reinterpret_cast< uintptr_t >((*pHeap)->getStartAddr()),
                                 reinterpret_cast< uintptr_t >((*pHeap)->getEndAddr()));
-            JKRHeap::destroy(*pHeap);
+            JKRHeap* const pGoing = *pHeap;
+            const void* const pStart = pGoing->getStartAddr();
+            const void* const pEnd = pGoing->getEndAddr();
+            JKRHeap::destroy(pGoing);
+            GameAssets::unloadHeap(pGoing, pStart, pEnd);
             *pHeap = nullptr;
         }
     }

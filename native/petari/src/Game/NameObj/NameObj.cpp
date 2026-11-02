@@ -10,7 +10,6 @@
 
 NameObj::NameObj(const char* pName) : mName(pName), mFlag(), mExecutorIdx(-1) {
     mMotionEpoch = 0;
-    NebulaHost::objectName(this, pName);
     SingletonHolder< NameObjRegister >::get()->add(this);
 }
 
@@ -41,7 +40,6 @@ void NameObj::initWithoutIter() {
 
 void NameObj::setName(const char* pName) {
     mName = pName;
-    NebulaHost::objectName(this, pName);
 }
 
 void NameObj::executeMovement() {

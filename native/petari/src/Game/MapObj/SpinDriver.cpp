@@ -23,7 +23,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
-#include "Inline.hpp"
 #include <cmath>
 
 #include "Game/Util/StringUtil.hpp"

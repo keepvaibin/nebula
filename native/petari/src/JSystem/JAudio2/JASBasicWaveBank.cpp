@@ -67,7 +67,7 @@ void JASBasicWaveBank::incWaveTable(JASBasicWaveBank::TWaveGroup const* pWaveGro
             entry->mPrev = info;
         }
 
-        entry = info;
+        __atomic_store_n(&entry, info, __ATOMIC_RELEASE);
     }
 }
 
@@ -100,11 +100,9 @@ JASWaveHandle* JASBasicWaveBank::getWaveHandle(u32 waveId) const {
         return nullptr;
     }
 
-    if (mWaveTable[waveId] == nullptr) {
-        return nullptr;
-    }
-
-    return &mWaveTable[waveId]->mWaveHandle;
+    // Published by the load thread with the release in incWaveTable.
+    TWaveInfo* const info = __atomic_load_n(&mWaveTable[waveId], __ATOMIC_ACQUIRE);
+    return info != nullptr ? &info->mWaveHandle : nullptr;
 }
 
 JASBasicWaveBank::TWaveGroup::TWaveGroup(JASBasicWaveBank* pBank) {

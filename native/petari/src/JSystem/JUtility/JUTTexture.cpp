@@ -16,10 +16,7 @@ JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
     texBuf->mHeight = height;
     texBuf->mWrapS = GPU_CLAMP;
     texBuf->mWrapT = GPU_CLAMP;
-    texBuf->mCookedPaletteName = 0;
-    texBuf->mCookedPaletteFormat = 0;
-    texBuf->mCookedPaletteNum = 0;
-    texBuf->mCookedPaletteOffset = 0;
+    texBuf->mImage = nullptr;
     texBuf->mMipmap = false;
     texBuf->mDoEdgeLod = false;
     texBuf->mBiasClamp = false;
@@ -46,9 +43,7 @@ JUTTexture::~JUTTexture() {
 void JUTTexture::storeTIMG(const ResTIMG* pTIMG) {
     if (pTIMG != nullptr) {
         mTIMG = pTIMG;
-        mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + pTIMG->mImageDataOffset;
-        if (pTIMG->mImageDataOffset == 0)
-            mImage = reinterpret_cast< u8* >(const_cast< ResTIMG* >(pTIMG)) + sizeof(ResTIMG);
+        mImage = const_cast< u8* >(pTIMG->image());
 
         mWrapS = getTexInfo()->mWrapS;
         mWrapT = getTexInfo()->mWrapT;
@@ -72,8 +67,7 @@ void JUTTexture::initTexObj() {
     } else {
         mipmapEnabled = 0;
     }
-    u8* image = reinterpret_cast< u8* >(const_cast< ResTIMG* >(mTIMG));
-    image += (mTIMG->mImageDataOffset ? (s32)mTIMG->mImageDataOffset : 0x20);
+    u8* image = const_cast< u8* >(mTIMG->image());
     // A texture with its own buffer (made at run time: a capture's or target's picture, or texels the game writes and
     // hands over itself) has nothing to hand over yet; a texture over loaded data hands its record over.
     if ((mFlag & 0x1) == 0) {

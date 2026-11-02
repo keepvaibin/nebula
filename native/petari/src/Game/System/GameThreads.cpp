@@ -161,15 +161,15 @@ namespace {
     }
 
     // This thread sleeps on `pList` until woken, with the state lock held on entry and exit. A section the audio thread stays out of
-    // ends for the wait: the console's sleeping thread let interrupts back on.
+    // ends for the wait: a section never lasts across a sleep.
     void block(GameWaitList* pList) {
         GameThreadRecord* self = tSelf;
         if (self == &sAudioThread && sTestMode) {
             nebula_fatal("test mode: the audio thread has to wait, and no thread can run while it does");
         }
         append(pList, self);
-        const bool interruptsOff = tAudioExcluded;
-        if (interruptsOff) {
+        const bool inSection = tAudioExcluded;
+        if (inSection) {
             tAudioExcluded = false;
             nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
         }
@@ -178,7 +178,7 @@ namespace {
         if (!mine) {
             nebula_host_thread_wait(self->host);
         }
-        if (interruptsOff) {
+        if (inSection) {
             nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
             tAudioExcluded = true;
         }
@@ -485,8 +485,8 @@ void nebula_threads_init(void) {
 void nebula_threads_dump(void) {
     nebula_log("threads (current %p, world %p):\n", static_cast< void* >(tSelf), static_cast< void* >(sWorldOwner));
     for (const GameThreadRecord* t = sThreads; t != nullptr; t = t->all) {
-        nebula_log("  %p started %d sleeps on %p\n", static_cast< const void* >(t), t->started ? 1 : 0,
-                   static_cast< const void* >(t->list));
+        nebula_log("  %p entry %p started %d ended %d world %d sleeps on %p\n", static_cast< const void* >(t), reinterpret_cast< const void* >(t->entry),
+                   t->started ? 1 : 0, t->ended ? 1 : 0, t->world ? 1 : 0, static_cast< const void* >(t->list));
     }
 }
 }  // extern "C"

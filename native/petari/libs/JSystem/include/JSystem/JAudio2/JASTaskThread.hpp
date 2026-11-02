@@ -25,11 +25,8 @@ public:
     void* allocCallStack(JASThreadCallback callback, const void* msg, u32 msgSize);
     int sendCmdMsg(JASThreadCallback callback, void* msg);
     int sendCmdMsg(JASThreadCallback callback, const void* msg, u32 msgSize);
-    void pause(bool);
 
     virtual ~JASTaskThread();
     virtual void* run();
 
-    /* 0x7C */ GameEvent threadQueue_;
-    /* 0x84 */ bool _84;
 };

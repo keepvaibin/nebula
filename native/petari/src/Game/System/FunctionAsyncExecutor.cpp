@@ -39,8 +39,8 @@ void* FunctionAsyncExecutorThread::run() {
         mName = info->mName;
         mIsSuspended = true;
         info->execute();
-        info->mQueue.send(nullptr, false);
         info->mIsEnd = true;
+        info->mQueue.send(nullptr, false);
     }
 }
 
@@ -57,10 +57,8 @@ void FunctionAsyncExecutorOnMainThread::update() {
 
         info = static_cast< FunctionAsyncExecInfo* >(msg);
         info->execute();
-
-        info->mQueue.send(nullptr, false);
-
         info->mIsEnd = true;
+        info->mQueue.send(nullptr, false);
     }
 }
 

@@ -202,7 +202,7 @@ AREAS = [
      r"streamline_bridge)", "feature-temporal", "CONVERT",
      "Interpolation, upscalers, frame generation: exact per-object motion from native data (phase 2)."),
     (r"^runtime/(?:src|include/galaxy)/render/(?:post_process|game_bloom|ambient_occlusion|enhanced_lighting|"
-     r"curved_surfaces|game_lights|game_objects|galaxy_select)", "feature-graphics", "CONVERT",
+     r"curved_surfaces|game_lights|galaxy_select)", "feature-graphics", "CONVERT",
      "Graphics features: on native targets and native data (phase 2)."),
     (r"^runtime/(?:src|include/galaxy)/render/(?:texture_pack|movie_replacement|game_asset_extract)", "feature-packs", "CONVERT",
      "Texture packs and HD movies: names from the cooker (Dolphin hashes of original data), native textures/video."),

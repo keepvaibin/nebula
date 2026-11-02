@@ -22,13 +22,12 @@ public:
 
     /// @brief Sets the context data for the file.
     /// @param pContext The context data.
-    /// @param pHeap The heap used for allocation.
-    void setContext(void*, JKRHeap*);
+    void setContext(void*);
 
     /* 0x00 */ s32 mEntryNum;
     /* 0x04 */ void* mContext;
     /* 0x08 */ JKRHeap* mHeap;
-    /* 0x0C */ s32 mState;
+    /* 0x0C */ bool mDone;
     /* 0x10 */ GameMessageQueue mQueue;
     /* 0x30 */ void* mMessage;
     /* 0x34 */ bool mContextSet;

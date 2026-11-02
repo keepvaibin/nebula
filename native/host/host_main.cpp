@@ -1,9 +1,8 @@
 // The native game's host (docs/NATIVE_PORT.md, "Module layout"): loads the game module (smg_game.dll), gives it
 // Nebula's services (nebula_game_api.h) and runs it. Built three ways:
-//   - nebula_native_host (native/CMakeLists.txt): headless. The console stream is released as it arrives and PE events
-//     answered at once; audio is paced but not played; no remotes connect.
-//   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the stream goes to Nebula's D3D12 renderer, which
-//     raises the PE events and presents the frame buffer the game displays.
+//   - nebula_native_host (native/CMakeLists.txt): headless. Records are dropped as they arrive; audio is paced but not
+//     played; no remotes connect.
+//   - NebulaNative (the top-level build, NEBULA_HOST_RENDERER): the records go to Nebula's D3D12 renderer.
 //   - On SDL platforms (platform/sdl, NEBULA_HOST_SDL): the same with the Vulkan renderer, SDL's window, sound and
 //     input; on Android SDL's activity calls SDL_main.
 //
@@ -131,7 +130,7 @@ namespace {
 using Clock = std::chrono::steady_clock;
 
 // Sleeps until `when` on a high-resolution waitable timer (Windows 10 1803+; the scheduler tick otherwise), so the
-// retrace, the audio interface and the remotes keep their periods to well under a millisecond.
+// frame, the audio interface and the remotes keep their periods to well under a millisecond.
 void sleep_until_precise(Clock::time_point when) {
 #if defined(_WIN32)
     thread_local HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,
@@ -309,10 +308,6 @@ void report_crash_facts(const fs::path& dump) {
     std::_Exit(3);
 }
 
-uint32_t load_be32(const uint8_t* p) {
-    return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
-}
-
 // The module's entry points.
 struct Module {
     decltype(&nebula_game_attach) attach;
@@ -325,14 +320,11 @@ struct Module {
 };
 Module gModule;
 
-// The console command ring's size (sdk/gx/gx_fifo.c), mapped twice in a row: a span past the first mapping's end
-// continues in the second.
-
 // Progress counters for the host's log.
 std::atomic<uint32_t> gFileReads{0};
-std::atomic<uint32_t> gFsOps{0};
-std::atomic<uint32_t> gAiBlocks{0};
-std::atomic<uint32_t> gDspFrames{0};
+std::atomic<uint32_t> gSaveOps{0};
+std::atomic<uint32_t> gSoundBlocks{0};
+std::atomic<uint32_t> gSoundSubframes{0};
 std::atomic<uint32_t> gMovieFrames{0};
 std::atomic<uint64_t> gMovieDecodeNs{0};   // the movie decoder's time (svc_movie_video_decode)
 std::atomic<uint32_t> gMovieSkipped{0};    // movie frames not decoded: a replacement video showed instead
@@ -597,10 +589,10 @@ private:
 ReadPool gReads;
 Worker gFs(L"Nebula Host Saves");
 
-// NAND: the console's absolute paths under the host's NAND root, in the Wii's layout.
+// The save folder's root: the game's paths under it, each checked.
 fs::path gNandRoot;
 
-// The game's save folder on the NAND (title/00010000/<the game's four-character code in hex>/data).
+// The game's save folder under it (title/00010000/<the game's four-character code in hex>/data, as an install has it).
 std::string gSaveDataPath;
 
 bool nand_path(const char* path, fs::path* out) {
@@ -618,33 +610,6 @@ bool nand_path(const char* path, fs::path* out) {
     return true;
 }
 
-// A rename, else a copy and a removal: a mod's save folder can be on another volume than the NAND's /tmp.
-void move_path(const fs::path& from, const fs::path& to, std::error_code& error) {
-    fs::rename(from, to, error);
-    if (!error) {
-        return;
-    }
-    std::error_code copy_error;
-    if (fs::is_directory(from, copy_error)) {
-        fs::copy(from, to, fs::copy_options::recursive | fs::copy_options::overwrite_existing, copy_error);
-    } else {
-        fs::copy_file(from, to, fs::copy_options::overwrite_existing, copy_error);
-    }
-    if (!copy_error) {
-        fs::remove_all(from, copy_error);
-        error.clear();
-    }
-}
-
-std::FILE* open_file(const fs::path& path, uint32_t mode) {
-    // NAND_ACCESS_READ 1, WRITE 2, RW 3: the file must exist.
-#if defined(_WIN32)
-    return _wfopen(path.wstring().c_str(), mode == 1 ? L"rb" : L"r+b");
-#else
-    return std::fopen(path.c_str(), mode == 1 ? "rb" : "r+b");
-#endif
-}
-
 // The audio clock: started by the game with its frame's length (in 32 kHz samples).
 std::mutex gAiLock;
 std::condition_variable gAiWake;
@@ -656,17 +621,17 @@ extern galaxy::host::NativeGameAudio* gAudio;
 #endif
 
 // The app out of sight (SDL hosts: Android's background): the display and audio clocks stop, so the game waits at
-// its next retrace; they restart from its return, with nothing to catch up.
+// its next frame; they restart from its return, with nothing to catch up.
 std::mutex gSuspendLock;
 std::condition_variable gSuspendWake;
 bool gSuspended = false;  // guarded by gSuspendLock
 
 // The start runs ahead: the game shows nothing until its first 3D scene (the title's, or a test's galaxy), and its
-// loads advance a step each retrace while it takes well under a millisecond a frame, so until then retraces come every
-// kBootRetrace and one frame a display period is presented. The first 3D scene, or kBootRetraces retraces, end it.
-// GALAXY_BOOT_FAST=0 keeps 60 retraces a second from the start.
-constexpr auto kBootRetrace = std::chrono::microseconds(2000);
-constexpr uint32_t kBootRetraces = 600;
+// loads advance a step each frame while it takes well under a millisecond a frame, so until then frames come every
+// kBootPeriod and one frame a display period is presented. The first 3D scene, or kBootFrames frames, end it.
+// GALAXY_BOOT_FAST=0 keeps 60 frames a second from the start.
+constexpr auto kBootPeriod = std::chrono::microseconds(2000);
+constexpr uint32_t kBootFrames = 600;
 std::atomic<bool> gBootFast{[] {
     const char* value = std::getenv("GALAXY_BOOT_FAST");
     return value == nullptr || value[0] != '0';
@@ -681,9 +646,9 @@ void end_boot_fast(const char* why) {
     }
 }
 
-// GALAXY_TEST_DETERMINISTIC=1: deterministic test mode. The game's time is its retrace count: the host's retrace and
-// audio clocks do not run; the game takes each retrace when it has nothing to run (test_frame_step), disc reads
-// complete inside their call, and the steady clock counts retraces. Two runs of one build then match frame for frame.
+// GALAXY_TEST_DETERMINISTIC=1: deterministic test mode. The game's time is its frame count: the host's frame and
+// audio clocks do not run; the game takes each frame when it has nothing to run (test_frame_step), disc reads
+// complete inside their call, and the steady clock counts frames. Two runs of one build then match frame for frame.
 bool deterministic_mode() {
     static const bool deterministic = [] {
         const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DETERMINISTIC"));
@@ -691,7 +656,7 @@ bool deterministic_mode() {
     }();
     return deterministic;
 }
-std::atomic<uint64_t> gDeterministicRetraces{0};
+std::atomic<uint64_t> gDeterministicFrames{0};
 
 // True when it waited.
 bool wait_while_suspended() {
@@ -707,7 +672,7 @@ bool wait_while_suspended() {
 // Headless, nothing is mixed: the game's sound logic runs on the clock.
 void ai_thread() {
     if (deterministic_mode()) {
-        return;  // the audio ticks come with each retrace (svc_test_frame_step)
+        return;  // the audio ticks come with each frame (svc_test_frame_step)
     }
     name_thread(L"Nebula Host Audio");
     for (;;) {
@@ -717,7 +682,7 @@ void ai_thread() {
             gAiWake.wait(lock, [] { return gAiRunning && gAudioFrameSamples != 0; });
             frame_samples = gAudioFrameSamples;
         }
-        gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+        gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
         gModule.audio_tick();
         std::this_thread::sleep_for(std::chrono::nanoseconds(static_cast<int64_t>(frame_samples * 1e9 / 32000.0)));
     }
@@ -726,25 +691,25 @@ void ai_thread() {
 
 // The device asks for the game's next frame of sound, on its thread.
 void audio_frame_tick() {
-    gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+    gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TEST_AI_STALL_AFTER=<frames>: no tick after that many frames. The game's sounds then never end and its sound
     // pools fill; it must refuse new sounds, not crash.
     static const uint64_t stall_after = [] {
         const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_AI_STALL_AFTER"));
         return value != nullptr ? std::strtoull(value, nullptr, 10) : 0ull;
     }();
-    if (stall_after == 0 || gAiBlocks.load(std::memory_order_relaxed) < stall_after) {
+    if (stall_after == 0 || gSoundBlocks.load(std::memory_order_relaxed) < stall_after) {
         gModule.audio_tick();
     }
 }
 
-// The display's retrace at 60 Hz: the console's NTSC 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
+// The display's frame at 60 Hz: the console's NTSC 59.94 would repeat a frame every 17 s on a 60 Hz display. A late
 // wake-up skips the fields it missed, as a display does, rather than delivering them back to back. On Android the
-// retrace follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
+// frame follows the display's own vsync (every second one at 120 Hz), so frames never drift against it and each
 // stays on screen for the same time; the host's clock takes over where the display gives none.
 void svc_frame_wait(void*) {
     const auto display_period = std::chrono::nanoseconds(1000000000ull / 60);
-    static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootRetrace) : display_period;
+    static auto period = gBootFast.load(std::memory_order_relaxed) ? std::chrono::nanoseconds(kBootPeriod) : display_period;
     static auto next = Clock::now() + period;
 #if defined(NEBULA_HOST_SDL)
     static int64_t vsync_ns = 0;
@@ -810,13 +775,13 @@ void svc_test_frame_step(void*) {
         const double period_ns = static_cast<double>(frame_samples) * 1e9 / 32000.0;
         while (due_ns >= period_ns) {
             due_ns -= period_ns;
-            gAiBlocks.fetch_add(1, std::memory_order_relaxed);
+            gSoundBlocks.fetch_add(1, std::memory_order_relaxed);
             gModule.audio_tick();
         }
     } else {
         due_ns = 0.0;
     }
-    gDeterministicRetraces.fetch_add(1, std::memory_order_relaxed);
+    gDeterministicFrames.fetch_add(1, std::memory_order_relaxed);
 }
 
 void svc_log(void*, const char* text) {
@@ -949,6 +914,8 @@ void report_thread_cpu(double tsc_hz) {
 }
 #endif
 
+std::string gSceneStage;
+
 #if defined(_WIN32)
 // Crash reports. A fatal exception in the game module or the host, or the game's own fatal call, writes a minidump and
 // the report (report_crash_facts) to the crash folder from a thread kept for it (the failing thread's stack may be what
@@ -1024,6 +991,7 @@ void report_crash(EXCEPTION_POINTERS* info) {
                                                       ? info->ExceptionRecord->ExceptionInformation[1]
                                                       : 0));
     log_line("crash:", text);
+    log_line("crash: stage", gSceneStage.c_str());
     gather_crash_facts(galaxy::crash::Facts::Kind::Fault, text, owner == GetModuleHandleW(L"smg_game.dll"),
                        code == EXCEPTION_STACK_OVERFLOW);
     report_crash(info);
@@ -1255,7 +1223,7 @@ void svc_fatal(void*, const char* text) {
 
 #if defined(NEBULA_HOST_RENDERER)
 // The renderer: the game's records reach it in frames (render_frame at the game's frame end and, while the start runs
-// ahead, at the retrace, which also presents). All of this runs on the simulation thread, where the game makes these
+// ahead, at the frame, which also presents). All of this runs on the simulation thread, where the game makes these
 // calls.
 using galaxy::RenderLogLevel;
 using galaxy::RenderServices;
@@ -1316,21 +1284,11 @@ void submit_frame(bool present, bool black) {
 #endif
 
 // The stage the game reports before each 3D scene (game_stage); the scene's begin marker carries it.
-std::string gSceneStage;
 
 void svc_game_stage(void*, const char* name) {
     if (name != nullptr && gSceneStage != name) {
         gSceneStage = name;
     }
-}
-
-void svc_object_name(void*, uint64_t id, const char* name) {
-#if defined(NEBULA_HOST_RENDERER)
-    galaxy::render::note_object_name(id, name);
-#else
-    (void)id;
-    (void)name;
-#endif
 }
 
 // The Discord application Nebula's status shows under ("Super Mario Galaxy"; GALAXY_DISCORD_CLIENT_ID replaces it).
@@ -1607,7 +1565,7 @@ void svc_stripe_particle(void*, uint64_t particle, uint32_t age_lifetime, uint8_
 // The game's steady clock: nanoseconds since the process's first read, plus one (0 means "never" to its users).
 uint64_t svc_clock_ns(void*) {
     if (deterministic_mode()) {
-        return gDeterministicRetraces.load(std::memory_order_relaxed) * 1000000000ull / 60u + 1u;
+        return gDeterministicFrames.load(std::memory_order_relaxed) * 1000000000ull / 60u + 1u;
     }
     static const Clock::time_point start = Clock::now();
     return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - start).count()) + 1u;
@@ -1615,9 +1573,9 @@ uint64_t svc_clock_ns(void*) {
 
 int64_t svc_calendar_ns(void*) {
     if (deterministic_mode()) {
-        // A fixed date (2026-01-01 from 2000-01-01), then the retraces' time.
+        // A fixed date (2026-01-01 from 2000-01-01), then the frames' time.
         constexpr int64_t kFixedDate = 820454400;
-        return kFixedDate * 1000000000ll + static_cast<int64_t>(gDeterministicRetraces.load(std::memory_order_relaxed)) * 1000000000ll / 60;
+        return kFixedDate * 1000000000ll + static_cast<int64_t>(gDeterministicFrames.load(std::memory_order_relaxed)) * 1000000000ll / 60;
     }
     const auto now = std::chrono::system_clock::now();
     const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
@@ -1736,8 +1694,8 @@ std::mutex gShapeLock;
 std::vector<galaxy::render::shapes::Record> gShapePending;
 std::atomic<bool> gShapePendingAny{false};
 
-// GALAXY_TEST_FRAME_HASH=<file> (1: frame_hash.txt in GALAXY_PRESENT_SNAPSHOT_DIR): per retrace, a line "retrace records hash reads" for the records the game sent since
-// the last retrace (hash: the sum of each record's kind, matrices, target and clear values, image size, so addresses
+// GALAXY_TEST_FRAME_HASH=<file> (1: frame_hash.txt in GALAXY_PRESENT_SNAPSHOT_DIR): per frame, a line "frame records hash reads" for the records the game sent since
+// the last frame (hash: the sum of each record's kind, matrices, target and clear values, image size, so addresses
 // and the order loading threads interleave in do not count) and the disc reads completed so far. Two runs of one build
 // diffed find the first game frame that differs and what moved (deterministic test mode).
 struct FrameHash {
@@ -1792,13 +1750,13 @@ void frame_hash_record(const galaxy::render::shapes::Record& r) {
     fh.sum += h;
     fh.records++;
 }
-void frame_hash_retrace(uint32_t retrace) {
+void frame_hash_line(uint32_t frame) {
     FrameHash& fh = frame_hash();
     if (fh.file == nullptr) {
         return;
     }
     std::lock_guard guard(fh.lock);
-    std::fprintf(fh.file, "%u %llu %016llx %llu\n", retrace, static_cast<unsigned long long>(fh.records),
+    std::fprintf(fh.file, "%u %llu %016llx %llu\n", frame, static_cast<unsigned long long>(fh.records),
                  static_cast<unsigned long long>(fh.sum),
                  static_cast<unsigned long long>(fh.reads.load(std::memory_order_relaxed)));
     std::fflush(fh.file);
@@ -1997,37 +1955,6 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
     // Linear texels the game wrote (nebula_cooked_texture.h): kept as a texture record, its header first.
     const bool linear = image->format >= NEBULA_TEXTURE_LINEAR_L8 && image->format <= NEBULA_TEXTURE_LINEAR_RGBA8;
     const std::size_t header = linear ? NEBULA_TEXTURE_HEADER : 0u;
-#if defined(_WIN32)
-    // GALAXY_LOG_GUEST_TEXTURES=1: where each console-format image comes from (E-02: the console tile decoders go once no
-    // game site hands one over). The game module's return offsets, for llvm-symbolizer against its PDB.
-    static const bool log_console = [] {
-        const char* value = std::getenv("GALAXY_LOG_GUEST_TEXTURES");
-        return value != nullptr && value[0] == '1';
-    }();
-    if (log_console && !linear && image->format != NEBULA_TEXTURE_IMAGE) [[unlikely]] {
-        void* frames[16]{};
-        const USHORT count = CaptureStackBackTrace(1u, 16u, frames, nullptr);
-        const auto game = reinterpret_cast<uintptr_t>(GetModuleHandleW(L"smg_game.dll"));
-        std::string from;
-        for (USHORT i = 0; i < count; ++i) {
-            const auto at = reinterpret_cast<uintptr_t>(frames[i]);
-            HMODULE owner = nullptr;
-            if (game != 0u && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                                                     GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                                                 reinterpret_cast<LPCWSTR>(frames[i]), &owner) &&
-                reinterpret_cast<uintptr_t>(owner) == game) {
-                char part[24];
-                std::snprintf(part, sizeof(part), " +%llx", static_cast<unsigned long long>(at - game));
-                from += part;
-            }
-        }
-        char line[160];
-        std::snprintf(line, sizeof(line), "[texture] console image handed over: %llX %ux%u format %u from",
-                      static_cast<unsigned long long>(address), image->width, image->height,
-                      static_cast<unsigned>(image->format));
-        std::fprintf(stderr, "%s%s\n", line, from.c_str());
-    }
-#endif
     // A record the game made (NEBULA_TEXTURE_MADE) in rows of texels: named below by them, as linear texels are; its
     // header in our copy differs from the game's, so only its texels are compared.
     const NebulaTexture* made = image->format == NEBULA_TEXTURE_IMAGE ? nebula_texture_record(image->bytes) : nullptr;
@@ -2569,13 +2496,35 @@ const void* svc_asset_map(void*, int32_t file) {
     return gPak.store.map(entry->position, static_cast<std::size_t>(entry->length));
 }
 
+void* svc_asset_map_private(void*, int32_t file) {
+    const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
+    if (!entry || entry->folder) {
+        return nullptr;
+    }
+    void* const data = gPak.store.map_private(entry->position, static_cast<std::size_t>(entry->length));
+    static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] frame %llu entry %d mapped size %llu %s at %p\n", static_cast<unsigned long long>(gDeterministicFrames.load()), file,
+                     static_cast<unsigned long long>(entry->length), entry->name != nullptr ? entry->name : "?", data);
+    }
+    return data;
+}
+
+void svc_asset_unmap(void*, void* data, uint64_t size) {
+    static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    if (trace_reads) {
+        std::fprintf(stderr, "[read] frame %llu unmapped %p size %llu\n", static_cast<unsigned long long>(gDeterministicFrames.load()), data, static_cast<unsigned long long>(size));
+    }
+    gPak.store.unmap_private(data, static_cast<std::size_t>(size));
+}
+
 void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
     gFileReads.fetch_add(1, std::memory_order_relaxed);
-    // GALAXY_TRACE_FILE_READS=1: each read with the retrace it came on: two runs of deterministic mode compare by it.
+    // GALAXY_TRACE_FILE_READS=1: each read with the frame it came on: two runs of deterministic mode compare by it.
     static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (trace_reads) {
-        std::fprintf(stderr, "[read] retrace %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicRetraces.load()),
+        std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load()),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
     }
     if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size) {
@@ -2617,27 +2566,27 @@ const char* svc_game_id(void*) {
     return gPak.id;
 }
 
-std::atomic<uint32_t> gRetraces{0};
+std::atomic<uint32_t> gGameFrames{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-void svc_frame_begun(void*, int black, uint32_t retrace) {
-    gRetraces.store(retrace, std::memory_order_relaxed);
+void svc_frame_begun(void*, int black, uint32_t frame) {
+    gGameFrames.store(frame, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
-    frame_hash_retrace(retrace);
+    frame_hash_line(frame);
 #endif
 #if defined(NEBULA_HOST_RENDERER)
-    // GALAXY_TRACE_VI_TIMES=1: each retrace's time, where a scripted press begins (press-to-present measurements).
+    // GALAXY_TRACE_VI_TIMES=1: each frame's time, where a scripted press begins (press-to-present measurements).
     static const bool trace_vi = [] {
         const char* value = std::getenv("GALAXY_TRACE_VI_TIMES");
         return value != nullptr && value[0] != '\0' && value[0] != '0';
     }();
-    if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", retrace, static_cast<long long>(galaxy::qpc_now()));
+    if (trace_vi) std::fprintf(stderr, "[latency] retrace vi=%u qpc=%lld\n", frame, static_cast<long long>(galaxy::qpc_now()));
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
-    galaxy::timeline::record(galaxy::timeline::Event::GameFrame, retrace, 0u);
+    galaxy::timeline::record(galaxy::timeline::Event::GameFrame, frame, 0u);
 #endif
-    if (retrace >= kBootRetraces) {
-        end_boot_fast("start's retraces run out");
+    if (frame >= kBootFrames) {
+        end_boot_fast("start's frames run out");
     }
     {
         // While the start runs ahead, one frame a display period goes to the screen.
@@ -2651,18 +2600,18 @@ void svc_frame_begun(void*, int black, uint32_t retrace) {
         // The renderer's newest picture, or black while the game shows black.
         submit_frame(present, black != 0);
     }
-    // GALAXY_TEST_MII_IMPORT=<retrace>:<file>: imports the file at that retrace, as the settings do.
+    // GALAXY_TEST_MII_IMPORT=<frame>:<file>: imports the file at that frame, as the settings do.
     {
         static const char* const test_import = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_MII_IMPORT"));
         static bool test_imported = false;
         if (test_import != nullptr && !test_imported) {
             const char* const colon = std::strchr(test_import, ':');
-            if (colon != nullptr && retrace >= std::strtoul(test_import, nullptr, 10)) {
+            if (colon != nullptr && frame >= std::strtoul(test_import, nullptr, 10)) {
                 test_imported = true;
                 const std::filesystem::path file(colon + 1);
                 std::string message;
                 (void)galaxy::host::import_mii_files(std::span<const std::filesystem::path>(&file, 1u), &message);
-                std::fprintf(stderr, "[mii] test import at %u: %s\n", retrace, message.c_str());
+                std::fprintf(stderr, "[mii] test import at %u: %s\n", frame, message.c_str());
             }
         }
     }
@@ -2671,7 +2620,7 @@ void svc_frame_begun(void*, int black, uint32_t retrace) {
         gModule.mii_changed();
         std::fprintf(stderr, "[mii] %zu imported while running\n", placed.size());
     }
-    // The output's shape (the window's, or the chosen aspect) is latched once this retrace's picture is presented:
+    // The output's shape (the window's, or the chosen aspect) is latched once this frame's picture is presented:
     // queued frames finish first, so a picture is never fitted with the next frame's camera and layouts.
     {
         const auto client = galaxy::render::aspect_latch_extent();
@@ -2827,7 +2776,7 @@ static_assert(int{galaxy::saves::kDone} == NEBULA_SAVE_DONE && int{galaxy::saves
 std::atomic<int> gSavesPending{0};
 
 void svc_save_request(void*, const NebulaSaveRequest* request) {
-    gFsOps.fetch_add(1, std::memory_order_relaxed);
+    gSaveOps.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TEST_NAND_DELAY_US: a slow drive for saves (each operation takes this long), so the windows that open
     // and close around a save are exercised as on a busy disk.
     static const uint32_t test_delay_us = [] {
@@ -2873,8 +2822,8 @@ void svc_save_request(void*, const NebulaSaveRequest* request) {
     }
 }
 
-// The system settings (SYSCONF) of a new console, as the game reads them. The pointer mapping (native_input's
-// virtual sensor bar) assumes the bar above the screen.
+// The settings the game asks the system for. The pointer mapping (native_input's virtual sensor bar) assumes the bar above
+// the screen.
 uint32_t svc_system_setting(void*, uint32_t item) {
     switch (item) {
     case NEBULA_SETTING_LANGUAGE:
@@ -2988,7 +2937,7 @@ NebulaInputSample controls_sample() {
     const int32_t mode = gStarPointerMode.load(std::memory_order_relaxed);
     galaxy::host::native_game_rumble(gMotor.load(std::memory_order_relaxed), mode);
     return input_sample(galaxy::host::native_game_input(
-        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gRetraces.load(std::memory_order_relaxed), mode,
+        frame_clock ? gSceneFrames.load(std::memory_order_relaxed) : gGameFrames.load(std::memory_order_relaxed), mode,
         static_cast<uint8_t>(gTiltSection.load(std::memory_order_relaxed))));
 }
 #endif
@@ -3198,14 +3147,14 @@ void svc_audio_mix(void*, float gain) {
 #else
     (void)gain;
 #endif
-    gDspFrames.fetch_add(1, std::memory_order_relaxed);
+    gSoundSubframes.fetch_add(1, std::memory_order_relaxed);
 }
 
 void svc_audio_frame(void*) {
     static const bool trace_frames = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
     if (trace_frames) {
-        std::fprintf(stderr, "[read] sound frame %llu at retrace %llu\n", static_cast<unsigned long long>(gAiBlocks.load(std::memory_order_relaxed)),
-                     static_cast<unsigned long long>(gDeterministicRetraces.load(std::memory_order_relaxed)));
+        std::fprintf(stderr, "[read] sound frame %llu at frame %llu\n", static_cast<unsigned long long>(gSoundBlocks.load(std::memory_order_relaxed)),
+                     static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)));
     }
 #if defined(NEBULA_HOST_RENDERER)
     gAudio->frame();
@@ -3232,7 +3181,7 @@ void svc_movie_audio_control(void*, uint32_t what, int32_t value, int32_t millis
 
 void svc_audio_control(void*, uint32_t what, uint32_t value) {
     if (std::getenv("GALAXY_TRACE_FILE_READS") != nullptr) {
-        std::fprintf(stderr, "[read] sound clock %u at retrace %llu\n", what, static_cast<unsigned long long>(gDeterministicRetraces.load()));
+        std::fprintf(stderr, "[read] sound clock %u at frame %llu\n", what, static_cast<unsigned long long>(gDeterministicFrames.load()));
     }
     {
         std::lock_guard<std::mutex> lock(gAiLock);
@@ -3320,13 +3269,13 @@ int svc_hbm(void*, uint32_t what, uint32_t value) {
 //   GALAXY_TEST_EVENTS shake@frame: the screen shakes from that frame until the scene ends.
 //   GALAXY_TEST_EVENTS defeat:<model>@frame: the live actors with that model (as actors@ names it) are killed, as their
 //     defeat ends: what they leave appears (KuriboChief, the Gateway's big Goomba: its key).
-//   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of retraces, so a
+//   GALAXY_TEST_SCRIPT_CLOCK=frames: the scripted input (GALAXY_INPUT_*) counts scene frames instead of frames, so a
 //     run's game frames take the same input whatever its renderer's speed (builds compared frame for frame).
 std::atomic<bool> gTourDone{false};
 
 int svc_test_scene_frame(void*, NebulaTestAction* action) {
     // GALAXY_TEST_GAME_STALL_MS=<ms>: the game's main thread stops that long every 120 scene frames; the sound must not
-    // notice (ai blocks x 7 = dsp subframes in the status line).
+    // notice (sound blocks x 7 = sound subframes in the status line).
     static const int stall_ms = [] {
         const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_GAME_STALL_MS"));
         return value != nullptr ? std::atoi(value) : 0;
@@ -3946,7 +3895,6 @@ int main(int argc, char** argv) {
     }
     gNandRoot = nand;
     std::error_code error;
-    fs::create_directories(gNandRoot / "tmp", error);  // where saves stage their banner before moving it
     open_pak(pak);
     boot_mark("disc opened");
     load_module(module);
@@ -4080,6 +4028,8 @@ int main(int argc, char** argv) {
     services.asset_child = svc_asset_child;
     services.asset_read = svc_asset_read;
     services.asset_map = svc_asset_map;
+    services.asset_map_private = svc_asset_map_private;
+    services.asset_unmap = svc_asset_unmap;
     services.game_id = svc_game_id;
     services.frame_wait = svc_frame_wait;
     services.frame_begun = svc_frame_begun;
@@ -4106,7 +4056,6 @@ int main(int argc, char** argv) {
     services.option = svc_option;
     services.game_light = svc_game_light;
     services.game_stage = svc_game_stage;
-    services.object_name = svc_object_name;
 #if defined(NEBULA_HOST_RENDERER)
     // The display configuration (GALAXY_RENDER_CONFIG_PATH in tests), loaded before the window; the settings overlay
     // reads its frame art from the game files.
@@ -4133,7 +4082,7 @@ int main(int argc, char** argv) {
         die("the renderer did not start%s%s", reason.empty() ? "" : ": ", reason.c_str());
     }
     boot_mark("renderer started");
-    // While the start runs ahead, the retraces' presents alone reach the screen (svc_frame_started).
+    // While the start runs ahead, the frames' presents alone reach the screen (svc_frame_started).
     galaxy::render::set_frame_end_presents(!gBootFast.load(std::memory_order_relaxed));
     gAudio = new galaxy::host::NativeGameAudio();  // lives as long as the process (the audio clock is detached)
     // The live controls' links to the window: the mouse as the pointer, keyboard capture and controller navigation
@@ -4251,15 +4200,15 @@ int main(int argc, char** argv) {
         std::this_thread::sleep_until(next_report);
 #endif
         next_report += std::chrono::seconds(1);
-        const uint32_t retraces = gRetraces.load(std::memory_order_relaxed);
-        if (retraces != reported) {
+        const uint32_t frames = gGameFrames.load(std::memory_order_relaxed);
+        if (frames != reported) {
             char text[384];
-            std::snprintf(text, sizeof(text), "retrace %u, disc reads %u, nand ops %u, ai blocks %u, dsp subframes %u",
-                          retraces,
-                          gFileReads.load(std::memory_order_relaxed), gFsOps.load(std::memory_order_relaxed),
-                          gAiBlocks.load(std::memory_order_relaxed), gDspFrames.load(std::memory_order_relaxed));
+            std::snprintf(text, sizeof(text), "frame %u, file reads %u, save ops %u, sound blocks %u, sound subframes %u",
+                          frames,
+                          gFileReads.load(std::memory_order_relaxed), gSaveOps.load(std::memory_order_relaxed),
+                          gSoundBlocks.load(std::memory_order_relaxed), gSoundSubframes.load(std::memory_order_relaxed));
 #if defined(NEBULA_HOST_RENDERER)
-            if (retraces / 60 % 30 == 0) {
+            if (frames / 60 % 30 == 0) {
                 log_line("host:", ("jaudio " + gAudio->stats_line()).c_str());
             }
             const size_t length = std::strlen(text);
@@ -4286,7 +4235,7 @@ int main(int argc, char** argv) {
             }
 #endif
             log_line("host:", text);
-            reported = retraces;
+            reported = frames;
         }
     }
     log_line("host:", Clock::now() < end ? "the window was closed" : "time limit reached");

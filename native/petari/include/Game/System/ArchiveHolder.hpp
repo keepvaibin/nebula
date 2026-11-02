@@ -50,5 +50,5 @@ public:
     ArchiveHolderArchiveEntry* findEntry(const char*) const;
 
     /* 0x0 */ MR::Vector< MR::AssignableArray< ArchiveHolderArchiveEntry* > > mEntries;
-    /* 0xC */ GameMutex mMutex;
+    /* 0xC */ mutable GameMutex mMutex;
 };

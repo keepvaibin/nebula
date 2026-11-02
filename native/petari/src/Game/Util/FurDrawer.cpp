@@ -34,10 +34,7 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
     pImage->mHeight = 32;
     pImage->mWrapS = GPU_REPEAT;
     pImage->mWrapT = GPU_REPEAT;
-    pImage->mCookedPaletteName = 0;
-    pImage->mCookedPaletteFormat = 0;
-    pImage->mCookedPaletteNum = 0;
-    pImage->mCookedPaletteOffset = 0;
+    pImage->mImage = nullptr;
     pImage->mMipmap = false;
     pImage->mDoEdgeLod = false;
     pImage->mBiasClamp = false;

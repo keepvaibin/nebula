@@ -39,7 +39,7 @@ void TrampleStarShare::copy(TrampleStar* pTrampleStar) const {
     pTrampleStar->mNumVtxs = mTrampleStar->mNumVtxs;
 }
 
-TrampleStar::TrampleStar(const char* pName) : LiveActor(pName) {
+TrampleStar::TrampleStar(const char* pName) : LiveActor(pName), mIsLod(false) {
 }
 
 TrampleStar::~TrampleStar() {

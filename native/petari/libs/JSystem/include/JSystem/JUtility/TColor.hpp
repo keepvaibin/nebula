@@ -1,6 +1,5 @@
 #pragma once
 
-#include "Inline.hpp"
 #include <NebulaGpu.h>
 
 namespace JUtility {

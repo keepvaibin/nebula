@@ -23,18 +23,16 @@ bool JAUSeqCollection::getSeqData(int groupId, int waveId, JAISeqData* pSeqData)
         return false;
     }
 
-    u32 offset = mSoundTableOffsets[groupId];
-    JAUSeqCollectionSoundTable* pSoundTable = (JAUSeqCollectionSoundTable*)((u8*)mCollectionData + offset);
-
-    // Sound tables follow each other at any address.
+    // Sound tables follow each other at any address: a table is its wave count, then that many offsets.
+    const u8* const pSoundTable = reinterpret_cast< const u8* >(mCollectionData) + mSoundTableOffsets[groupId];
     u32 waveNum;
-    memcpy(&waveNum, &pSoundTable->mWaveNum, sizeof(waveNum));
+    memcpy(&waveNum, pSoundTable, sizeof(waveNum));
     if (waveId >= waveNum) {
         return false;
     }
 
     u32 seqOffset;
-    memcpy(&seqOffset, &pSoundTable->mWaveSeqOffsets[waveId], sizeof(seqOffset));
+    memcpy(&seqOffset, pSoundTable + sizeof(u32) * (1 + waveId), sizeof(seqOffset));
     pSeqData->set((void*)mCollectionData, seqOffset);
     return true;
 }

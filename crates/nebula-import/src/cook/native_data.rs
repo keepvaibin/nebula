@@ -498,13 +498,12 @@ pub fn jpc_host(bytes: &[u8]) -> Result<Vec<u8>> {
     Ok(out)
 }
 
-/// An image header (ResTIMG) at `at` in host order: width, height, palette count, palette offset, LOD bias, image
-/// offset (the bytes between stay bytes).
+/// An image header (ResTIMG) at `at` in host order: width, height, LOD bias, image offset (the bytes between stay
+/// bytes). Palettes are applied, so their eight bytes are cleared: they are the game's image pointer, null in a file.
 fn host_timg(src: &[u8], out: &mut [u8], at: usize) -> Result<()> {
     host16(src, out, at + 2)?;
     host16(src, out, at + 4)?;
-    host16(src, out, at + 0xA)?;
-    host32(src, out, at + 0xC)?;
+    out[at + 8..at + 0x10].fill(0);
     host16(src, out, at + 0x1A)?;
     host32(src, out, at + 0x1C)?;
     Ok(())
