@@ -37,8 +37,8 @@ int32_t nebula_scheduler_disable(void);
 int32_t nebula_scheduler_enable(void);
 void nebula_kernel_poll(void);
 
-/* The platform layer calls these: the kernel's start on the boot stack, and the thread diagnostic. */
-void nebula_kernel_init(void* bootStackTop, void* bootStackEnd);
+/* The platform layer calls these: the kernel's start on the host thread that runs the game, and the thread diagnostic. */
+void nebula_kernel_init(void);
 void nebula_kernel_dump(void);
 
 /* The platform layer provides these (os_native.c). */
@@ -48,10 +48,18 @@ void nebula_timer_arm(int64_t deadline);
 void nebula_time_set(int64_t time);
 void nebula_sleep_for_work(void);
 void nebula_wake_simulation(void);
-void* nebula_thread_stack(const void* owner, uint32_t requested, uint32_t* size);
-void nebula_thread_stack_release(const void* owner);
-void* nebula_prepare_stack(void* top, size_t size, void (*entry)(void*), void* arg);
-void nebula_switch_stack(void** fromSp, void* toSp);
+/* A game thread is a host thread. The kernel runs one at a time: each waits for its turn here, and passes it on. */
+typedef struct NebulaHostThread NebulaHostThread;
+/* A new host thread, waiting for its first turn; then `entry(arg)`, which never returns. */
+NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uint32_t stackSize);
+/* The calling host thread. */
+NebulaHostThread* nebula_host_thread_adopt(void);
+void nebula_host_thread_pass(NebulaHostThread* pTo);
+void nebula_host_thread_wait(NebulaHostThread* pSelf);
+/* The end of the calling thread, whose turn has been passed on. */
+void nebula_host_thread_exit(NebulaHostThread* pSelf);
+/* The end of a thread waiting for its turn. */
+void nebula_host_thread_cancel(NebulaHostThread* pThread);
 
 #ifdef __cplusplus
 }
