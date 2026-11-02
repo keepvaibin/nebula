@@ -3,7 +3,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASWaveInfo.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 #include <nebula_game_api.h>
 

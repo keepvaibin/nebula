@@ -4,13 +4,13 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
-class JKRHeap;
+class NebulaArena;
 class JPAResource;
 struct ResTIMG;
 
 class JPAResourceManager {
 public:
-    JPAResourceManager(void const*, JKRHeap*);
+    JPAResourceManager(void const*, NebulaArena*);
     JPAResource* getResource(u16) const;
     bool checkUserIndexDuplication(u16) const;
     const ResTIMG* swapTexture(ResTIMG const*, char const*);
@@ -23,7 +23,7 @@ public:
     }
 
 public:
-    /* 0x00 */ JKRHeap* mpHeap;
+    /* 0x00 */ NebulaArena* mpHeap;
     /* 0x04 */ JPAResource** mpResArr;
     /* 0x08 */ JPATexture** mpTexArr;
     /* 0x0C */ u16 mResMax;

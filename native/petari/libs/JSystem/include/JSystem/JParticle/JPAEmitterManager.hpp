@@ -10,12 +10,12 @@ class JPAParticleCallBack;
 class JPABaseEmitter;
 class JPAResourceManager;
 class JPABaseParticle;
-class JKRHeap;
+class NebulaArena;
 struct JPAEmitterWorkData;
 
 class JPAEmitterManager {
 public:
-    JPAEmitterManager(u32, u32, JKRHeap*, u8, u8);
+    JPAEmitterManager(u32, u32, NebulaArena*, u8, u8);
     JPABaseEmitter* createSimpleEmitterID(JGeometry::TVec3< f32 > const&, u16, u8, u8, JPAEmitterCallBack*, JPAParticleCallBack*);
     void calc(u8);
     void draw(JPADrawInfo const*, u8);
@@ -49,5 +49,5 @@ public:
     /* 0x28 */ u32 ptclNum;
     /* 0x2C */ u8 gidMax;
     /* 0x2D */ u8 ridMax;
-    JKRHeap* mHeap;
+    NebulaArena* mHeap;
 };

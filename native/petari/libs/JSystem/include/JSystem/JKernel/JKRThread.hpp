@@ -2,7 +2,7 @@
 
 #include "JSystem/JKernel/JKRDisposer.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 
 class JKRTask {
@@ -26,7 +26,7 @@ public:
     };
 
     JKRThread(u32 stack_size, int message_count);
-    JKRThread(JKRHeap* heap, u32 stack_size, int message_count);
+    JKRThread(NebulaArena* heap, u32 stack_size, int message_count);
     JKRThread(GameThreadRecord* thread, int message_count);
 
     virtual ~JKRThread();
@@ -34,8 +34,8 @@ public:
         return nullptr;
     }
 
-    void setCommon_mesgQueue(JKRHeap* heap, int message_count);
-    void setCommon_heapSpecified(JKRHeap* heap, u32 stack_size);
+    void setCommon_mesgQueue(NebulaArena* heap, int message_count);
+    void setCommon_heapSpecified(NebulaArena* heap, u32 stack_size);
 
     GameThreadRecord* getThreadRecord() const {
         return mThread;
@@ -46,15 +46,15 @@ public:
     TLoad* getLoadInfo() {
         return &mLoadInfo;
     }
-    JKRHeap* getCurrentHeap() const {
+    NebulaArena* getCurrentHeap() const {
         return mCurrentHeap;
     }
     s32 getCurrentHeapError() const {
         return mCurrentHeapError;
     }
 
-    void setCurrentHeap(JKRHeap* heap) {
-        mCurrentHeap = heap ? heap : JKRHeap::getCurrentHeap();
+    void setCurrentHeap(NebulaArena* heap) {
+        mCurrentHeap = heap ? heap : NebulaArena::getCurrentHeap();
     }
 
     void resume() {
@@ -91,16 +91,16 @@ public:
     static JKRThread* searchThread(GameThreadRecord*);
 
     /* 0x18 */ JSULink< JKRThread > mThreadListLink;
-    /* 0x28 */ JKRHeap* mHeap;
+    /* 0x28 */ NebulaArena* mHeap;
     /* 0x2C */ GameThreadRecord* mThread;
-    JKRHeap* mStartCurrentHeap;
+    NebulaArena* mStartCurrentHeap;
     /* 0x30 */ GameMessageQueue mMessageQueue;
     /* 0x50 */ void** mMesgBuffer;
     /* 0x54 */ s32 mMessageCount;
     /* 0x58 */ void* mStackMemory;
     /* 0x5C */ u32 mStackSize;
     /* 0x60 */ TLoad mLoadInfo;
-    /* 0x74 */ JKRHeap* mCurrentHeap;
+    /* 0x74 */ NebulaArena* mCurrentHeap;
     /* 0x78 */ s32 mCurrentHeapError;
 
     static JSUList< JKRThread > sThreadList;

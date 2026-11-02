@@ -8,7 +8,7 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 ShapePacketUserData::ShapePacketUserData() : mTexGenNum(), mEnvMap(), mTexGenType(), mTexGenSource() {
 }

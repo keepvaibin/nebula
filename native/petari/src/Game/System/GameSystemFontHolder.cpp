@@ -2,7 +2,7 @@
 #include "Game/System/FileLoader.hpp"
 #include "Game/System/Language.hpp"
 #include "Game/Util/FileUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
 #include <cstdio>
 #include <nw4r/ut/ResFont.h>
@@ -20,7 +20,7 @@ nw4r::ut::Font* GameSystemFontHolder::getMessageFont() const {
 
 void GameSystemFontHolder::createFontFromEmbeddedData() {
     JKRArchive* pArchive = nullptr;
-    JKRHeap* pHeap = nullptr;
+    NebulaArena* pHeap = nullptr;
 
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 

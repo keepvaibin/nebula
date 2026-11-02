@@ -1,5 +1,5 @@
 #include "Game/AudioLib/AudEffector.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 JASVoice::EffectConfig AudEffector::mFxLine[] = {
     {1, 0, 0, 0x7000, 1, 0x0000, 0, 64, {0, 0x1000, 0, 0, 0, 0, 0x3FFF, 0}},
@@ -11,7 +11,7 @@ JASVoice::EffectConfig AudEffector::mFxLine[] = {
 AudEffector::AudEffector() : mFxSend(), mCutoff(0x7F), mSpecialFx() {
 }
 
-void AudEffector::initFxLine(JKRHeap* pHeap) {
+void AudEffector::initFxLine(NebulaArena* pHeap) {
     for (u8 i = 0; i < 4; i++) {
         JASVoice::setEffectLine(i, true, &mFxLine[i]);
     }

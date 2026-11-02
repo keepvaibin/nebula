@@ -5,7 +5,7 @@
 #include "JSystem/JAudio2/JASOscillator.hpp"
 #include "JSystem/JAudio2/JASSoundParams.hpp"
 
-struct JKRHeap;
+struct NebulaArena;
 
 struct JASInstEffect;
 
@@ -79,7 +79,7 @@ struct JASBasicInst : public JASInst {
             mHighKey = key;
         }
 
-        void setVeloRegionCount(u32, JKRHeap*);
+        void setVeloRegionCount(u32, NebulaArena*);
         TVelomap* getVeloRegion(int);
         const TVelomap* getVeloRegion(int) const;
 
@@ -93,7 +93,7 @@ struct JASBasicInst : public JASInst {
     };
 
     JASBasicInst();
-    void setKeyRegionCount(u32, JKRHeap*);
+    void setKeyRegionCount(u32, NebulaArena*);
     void appendEffect(JASPtrListAdaptor< JASInstEffect >*);
     void setOsc(int, JASOscillator::Data const*);
     TKeymap* getKeyRegion(int);

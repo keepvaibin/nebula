@@ -12,7 +12,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace {
     NEW_NERVE(GameSystemStationedArchiveLoaderLoadAudio1stWaveData, GameSystemStationedArchiveLoader, LoadAudio1stWaveData);
@@ -41,7 +41,7 @@ bool ConditionUsePlayerHeap::isExecute(const MR::StationedFileInfo* pInfo) const
     return pInfo->mLoadType == type;
 }
 
-JKRHeap* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInfo) const {
+NebulaArena* ConditionUsePlayerHeap::getProperHeap(const MR::StationedFileInfo* pInfo) const {
     switch (pInfo->mHeapType) {
     case MR::StationedFileInfo::HEAP_TYPE_NAPA:
         return mNapaHeap;
@@ -61,8 +61,8 @@ namespace {
 PlayerHeapHolder::PlayerHeapHolder() : mCondition(), mNapaHeap(), mGDDRHeap(), mIsDataMario(true) {
     ConditionUsePlayerHeap* condition = new ConditionUsePlayerHeap();
     // Room for either player's archives: a change of player loads the other's in the same heaps at any time. Pages not used cost nothing.
-    mNapaHeap = PlayerHeapHolder::createHeap(cPlayerHeapBytes, MR::getStationedHeap());
-    JKRExpHeap* gddr = PlayerHeapHolder::createHeap(cPlayerHeapBytes, MR::getStationedHeap());
+    mNapaHeap = NebulaArena::create(MR::getStationedHeap());
+    NebulaArena* gddr = NebulaArena::create(MR::getStationedHeap());
     mGDDRHeap = gddr;
     condition->mNapaHeap = mNapaHeap;
     condition->mGDDRHeap = gddr;
@@ -74,26 +74,13 @@ void PlayerHeapHolder::dispose() {
     MR::removeResourceAndFileHolderIfIsEqualHeap(mNapaHeap);
     MR::removeResourceAndFileHolderIfIsEqualHeap(mGDDRHeap);
 
-    if (mNapaHeap->mSize != 0) {
-        mNapaHeap->freeAll();
-    }
-
-    if (mGDDRHeap->mSize != 0) {
-        mGDDRHeap->freeAll();
-    }
+    mNapaHeap->freeAll();
+    mGDDRHeap->freeAll();
 }
 
 void PlayerHeapHolder::setIsDataMario(bool isDataMario) {
     mIsDataMario = isDataMario;
     mCondition->mIsDataMario = isDataMario;
-}
-
-JKRExpHeap* PlayerHeapHolder::createHeap(u32 size, JKRHeap* pParent) {
-    if (pParent->getMaxAllocatableSize(0x10) < size) {
-        size = -1;
-    }
-
-    return JKRExpHeap::create(size, pParent, true);
 }
 
 GameSystemStationedArchiveLoader::GameSystemStationedArchiveLoader() : NerveExecutor("\217\355\222\223\203\146\201\133\203\136\217\211\212\372\211\273" /* 常駐データ初期化 */), mHeapHolder() {

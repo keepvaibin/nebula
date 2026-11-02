@@ -1,7 +1,7 @@
 #include "Game/AudioLib/AudRemixMgr.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
-AudRemixMgr::AudRemixMgr(JKRHeap* pHeap) {
+AudRemixMgr::AudRemixMgr(NebulaArena* pHeap) {
     mHeap = pHeap;
     mGroups = nullptr;
     mSoundObj = nullptr;

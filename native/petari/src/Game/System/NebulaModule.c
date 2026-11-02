@@ -29,9 +29,6 @@ NEBULA_GAME_API void nebula_game_run(void) {
     if (sHost == NULL) {
         nebula_fatal("nebula_game_run before nebula_game_attach");
     }
-    if (!nebula_memory_init()) {
-        nebula_fatal("could not reserve the game's memory");
-    }
     nebula_threads_init();
     nebula_game_main();
     nebula_fatal("the game's main returned");

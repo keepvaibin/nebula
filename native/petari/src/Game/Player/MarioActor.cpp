@@ -43,7 +43,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaAchievements.hpp"
 
 template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);

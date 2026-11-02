@@ -2,7 +2,7 @@
 
 #include "JSystem/JSupport/JSupport.hpp"
 
-class JKRHeap;
+class NebulaArena;
 class JASWaveBank;
 struct JASBasicWaveBank;
 struct JASSimpleWaveBank;
@@ -88,9 +88,8 @@ public:
     };
 
     static u32 getGroupCount(void const*);
-    static JASWaveBank* createWaveBank(void const*, JKRHeap*);
-    static JASBasicWaveBank* createBasicWaveBank(void const*, JKRHeap*);
-    static JASSimpleWaveBank* createSimpleWaveBank(void const*, JKRHeap*);
+    static JASWaveBank* createWaveBank(void const*, NebulaArena*);
+    static JASBasicWaveBank* createBasicWaveBank(void const*, NebulaArena*);
+    static JASSimpleWaveBank* createSimpleWaveBank(void const*, NebulaArena*);
 
-    static u32 sUsedHeapSize;
 };

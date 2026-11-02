@@ -1,7 +1,7 @@
 #include "Game/System/GameAssets.hpp"
 #include "JSystem/JKernel/JKRMemArchive.hpp"
 
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 #include <cstring>
@@ -28,7 +28,7 @@ JKRMemArchive::JKRMemArchive(s32 entryNum, EMountDirection mountDir) : JKRArchiv
 JKRMemArchive::~JKRMemArchive() {
     if (mIsMounted == true) {
         if (_6C && mHeader != nullptr) {
-            JKRHeap::free(mHeader, mHeap);
+            NebulaArena::free(mHeader, mHeap);
         }
 
         removeVolumeList(&mLoaderLink);
@@ -42,9 +42,9 @@ void JKRMemArchive::fixedInit(s32 entryNum) {
     _34 = 1;
     _58 = 2;
     // The heap the archive lies in: the current heap is a thread's, and this may run on the file loader's.
-    mHeap = JKRHeap::findFromRoot(this);
+    mHeap = NebulaArena::findFromRoot(this);
     if (mHeap == nullptr) {
-        mHeap = JKRHeap::sCurrentHeap;
+        mHeap = NebulaArena::sCurrentHeap;
     }
     mEntryNum = entryNum;
 
@@ -147,7 +147,7 @@ bool JKRMemArchive::open(void* pData, u32 a2, JKRMemBreakFlag breakFlag) {
     mFileDataStart = reinterpret_cast< u8* >(mHeader->mFileDataOffset + (reinterpret_cast< uintptr_t >(mHeader) + mHeader->mHeaderSize));
     _6C = breakFlag == JKR_MEM_BREAK_FLAG_1;
     // A file mapped from the store is in no heap: the archive keeps the one it lives in.
-    if (JKRHeap* const pHeap = JKRHeap::findFromRoot(pData)) {
+    if (NebulaArena* const pHeap = NebulaArena::findFromRoot(pData)) {
         mHeap = pHeap;
     }
 

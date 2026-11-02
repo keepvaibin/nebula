@@ -4,7 +4,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 class FileHolderFileEntry {
 public:
@@ -12,7 +12,7 @@ public:
     /// @param pFilePath The path to the file.
     /// @param pHeap The heap used for allocation.
     /// @param pContext The context data for the file.
-    FileHolderFileEntry(const char*, JKRHeap*, void*);
+    FileHolderFileEntry(const char*, NebulaArena*, void*);
 
     /// @brief Destroys the `FileHolderFileEntry`.
     ~FileHolderFileEntry();
@@ -26,7 +26,7 @@ public:
 
     /* 0x00 */ s32 mEntryNum;
     /* 0x04 */ void* mContext;
-    /* 0x08 */ JKRHeap* mHeap;
+    /* 0x08 */ NebulaArena* mHeap;
     /* 0x0C */ bool mDone;
     /* 0x10 */ GameMessageQueue mQueue;
     /* 0x30 */ void* mMessage;
@@ -42,7 +42,7 @@ public:
     /// @param pFilePath The path to the file.
     /// @param pHeap The heap used for allocation.
     /// @param pContext The context data for the file.
-    FileHolderFileEntry* add(const char*, JKRHeap*, void*);
+    FileHolderFileEntry* add(const char*, NebulaArena*, void*);
 
     /// @brief Checks if a file entry exists.
     /// @param pFilePath The path to the file.
@@ -55,7 +55,7 @@ public:
 
     /// @brief Removes file entries that match the given heap.
     /// @param pHeap The heap to compare.
-    void removeIfIsEqualHeap(JKRHeap*);
+    void removeIfIsEqualHeap(NebulaArena*);
 
     /// @brief Removes the file entry for the given file.
     /// @param pFilePath The path to the file.

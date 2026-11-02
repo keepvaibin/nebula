@@ -2,7 +2,7 @@
 #include "JSystem/J3DGraphAnimator/J3DJoint.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 Mtx J3DMtxBuffer::sNoUseDrawMtx;
 Mtx33 J3DMtxBuffer::sNoUseNrmMtx;

@@ -13,7 +13,7 @@ struct RequestFileInfo {
 
 class FileLoaderThread : public GameThread {
 public:
-    FileLoaderThread(int, JKRHeap*);
+    FileLoaderThread(int, NebulaArena*);
 
     virtual void* run();
 

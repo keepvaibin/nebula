@@ -4,7 +4,7 @@
 #include <nebula_math.h>
 #include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 namespace MR {
     template < int T >

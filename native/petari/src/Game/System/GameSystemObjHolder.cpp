@@ -20,7 +20,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
 GameSystemObjHolder::GameSystemObjHolder()
@@ -42,7 +42,7 @@ void GameSystemObjHolder::initAfterStationedResourceLoaded() {
 
 void GameSystemObjHolder::initMessageResource() {
     JKRArchive* pArchive = nullptr;
-    JKRHeap* pHeap = nullptr;
+    NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
     char systemMessagePath[128];

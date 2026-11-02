@@ -3,7 +3,7 @@
 #include "Game/Util.hpp"
 #include "Game/System/GameAssets.hpp"
 
-FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
+FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, NebulaArena* pHeap, void* pContext)
     : mEntryNum(GameAssets::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mDone(false), mContextSet(true) {
     mQueue.init(&mMessage, 1);
 
@@ -39,7 +39,7 @@ FileHolder::FileHolder() {
     mEntries.init(0x180);
 }
 
-FileHolderFileEntry* FileHolder::add(const char* pFilePath, JKRHeap* pHeap, void* pContext) {
+FileHolderFileEntry* FileHolder::add(const char* pFilePath, NebulaArena* pHeap, void* pContext) {
     FileHolderFileEntry* pEntry = new (pHeap, 0) FileHolderFileEntry(pFilePath, pHeap, pContext);
     mEntries.push_back(pEntry);
     return pEntry;
@@ -53,7 +53,7 @@ void* FileHolder::getContext(const char* pFilePath) const {
     return findEntry(pFilePath)->mContext;
 }
 
-void FileHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
+void FileHolder::removeIfIsEqualHeap(NebulaArena* pHeap) {
     if (pHeap == nullptr) {
         return;
     }

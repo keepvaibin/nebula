@@ -4,7 +4,7 @@
 #include "Game/Util/FurParam.hpp"
 #include "Game/Util/RenderSignals.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModel.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 
 class CShader;

@@ -7,7 +7,7 @@
 #include "JSystem/J3DGraphBase/J3DDrawBuffer.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/J3DGraphBase/J3DShapeMtx.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstdio>
 #include <cstring>
 

@@ -1,6 +1,6 @@
 #define JGEOMETRY_VEC3_ZERO_NOINLINE
 #include "JSystem/JParticle/JPAFieldBlock.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JParticle/JPAEmitter.hpp"
 #include "JSystem/JParticle/JPAParticle.hpp"
 
@@ -135,12 +135,12 @@ void JPAFieldSpin::calc(JPAEmitterWorkData* work, JPAFieldBlock* block, JPABaseP
     calcAffect(block, ptcl);
 }
 
-JPAFieldBlock::JPAFieldBlock(u8 const* data, JKRHeap* heap) : mpData((const JPAFieldBlockData*)data) {
+JPAFieldBlock::JPAFieldBlock(u8 const* data, NebulaArena* heap) : mpData((const JPAFieldBlockData*)data) {
     init(heap);
 }
 
 // https://decomp.me/scratch/5AuZW
-void JPAFieldBlock::init(JKRHeap* heap) {
+void JPAFieldBlock::init(NebulaArena* heap) {
     mFadeInRate = getFadeInTime() - getEnTime();
     if (mFadeInRate == 0.0f) {
         mFadeInRate = 1.0f;

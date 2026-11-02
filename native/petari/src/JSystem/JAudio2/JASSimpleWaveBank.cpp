@@ -10,7 +10,7 @@ JASSimpleWaveBank::~JASSimpleWaveBank() {
     delete[] mWaveTable;
 }
 
-void JASSimpleWaveBank::setWaveTableSize(u32 size, JKRHeap* heap) {
+void JASSimpleWaveBank::setWaveTableSize(u32 size, NebulaArena* heap) {
     delete[] mWaveTable;
     mWaveTable = new (heap, 0) TWaveHandle[size];
     mWaveTableSize = size;

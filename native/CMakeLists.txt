@@ -108,7 +108,7 @@ target_compile_options(smg_game PRIVATE
     -Wno-register -Wno-c++11-narrowing)
 
 if(WIN32)
-    # The DLL's own operator new/delete are JKRHeap's; the host process keeps its own.
+    # The DLL's own operator new/delete are NebulaArena's; the host process keeps its own.
     target_link_options(smg_game PRIVATE -fuse-ld=lld "LINKER:/errorlimit:0")
 else()
     target_link_options(smg_game PRIVATE -Wl,-Bsymbolic -Wl,-z,now)
@@ -131,15 +131,13 @@ endif()
 set(NEBULA_SANITIZE "" CACHE STRING "Sanitizers for a test build (clang -fsanitize=...)")
 if(NEBULA_SANITIZE)
     target_compile_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} -fno-omit-frame-pointer)
-    # The module's operator new/delete are JKRHeap's; the sanitizer runtime's own definitions give way.
+    # The module's operator new/delete are NebulaArena's; the sanitizer runtime's own definitions give way.
     target_link_options(smg_game PRIVATE -fsanitize=${NEBULA_SANITIZE} $<$<PLATFORM_ID:Windows>:LINKER:/force:multiple>)
     if(NEBULA_SANITIZE MATCHES "address")
-        # The game's heaps manage their own memory: built uninstrumented, they keep what is free poisoned and unpoison
-        # what they hand out (JKRHeap.cpp), so overflows and uses after free inside them are reported too.
-        set(heaps "${petari}/src/JSystem/JKernel")
-        set_source_files_properties("${heaps}/JKRHeap.cpp" "${heaps}/JKRExpHeap.cpp" "${heaps}/JKRSolidHeap.cpp"
-                                    "${heaps}/JKRUnitHeap.cpp" PROPERTIES COMPILE_OPTIONS "-fno-sanitize=address")
-        set_source_files_properties("${heaps}/JKRHeap.cpp" PROPERTIES COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
+        # The game's arenas manage their own memory: built uninstrumented, they keep what is free poisoned and
+        # what they hand out (NebulaArena.cpp), so overflows and uses after free inside them are reported too.
+        set_source_files_properties("${petari}/src/Game/System/NebulaArena.cpp" PROPERTIES COMPILE_OPTIONS "-fno-sanitize=address"
+                                    COMPILE_DEFINITIONS NEBULA_ASAN_HEAPS=1)
     endif()
 endif()
 

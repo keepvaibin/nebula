@@ -10,15 +10,14 @@
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
 
 namespace AudRhythmWrap {
     void rhythmProc();
 };  // namespace AudRhythmWrap
 
-AudSystemWrapper::AudSystemWrapper(JKRSolidHeap* pSolidHeap, JKRHeap* pHeap) {
+AudSystemWrapper::AudSystemWrapper(NebulaArena* pSolidHeap, NebulaArena* pHeap) {
     volatile AudSystemWrapper* self = this;
 
     self->mIsResetDone = false;
@@ -33,7 +32,7 @@ AudSystemWrapper::AudSystemWrapper(JKRSolidHeap* pSolidHeap, JKRHeap* pHeap) {
     self->mSpkRes = nullptr;
     self->_28 = false;
     self->mDisableReset = false;
-    mSpkHeap = JKRExpHeap::create(AudSpeakerWrap::getRequiredHeapSize(), pSolidHeap, false);
+    mSpkHeap = NebulaArena::create(pSolidHeap);
 }
 
 void AudSystemWrapper::requestResourceForInitialize() {

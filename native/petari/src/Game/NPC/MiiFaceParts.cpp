@@ -5,7 +5,7 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <RVLFaceLib.h>
 
 MiiFaceParts::MiiFaceParts(const char* pName, const MiiFaceRecipe& rRecipe)

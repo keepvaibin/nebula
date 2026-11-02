@@ -18,7 +18,7 @@ class JAUSectionHeap;
 struct JAUSoundTable;
 struct JAUSoundNameTable;
 class JKRArchive;
-class JKRSolidHeap;
+class NebulaArena;
 
 class JAUSection : public JKRDisposer, protected JSULink< JAUSection > {
 public:
@@ -36,9 +36,6 @@ public:
         /* 0x84 */ const void* mBstDst;
         /* 0x88 */ const void* mBstnDst;
         /* 0x8C */ JSUList< JAUDisposer_ > field_0x8c;
-        /* 0x98 */ s32 field_0x98;
-        /* 0x9C */ int field_0x9c;
-        /* 0xA0 */ int field_0xa0;
     };
 
     JAUSection(JAUSectionHeap*, u32, s32);
@@ -88,7 +85,7 @@ public:
         return data_.field_0x8c;
     }
 
-    JKRHeap* getHeap_();
+    NebulaArena* getHeap_();
 
     /* 0x28 */ u32 field_0x28;
     /* 0x2C */ bool field_0x2c;
@@ -114,7 +111,7 @@ public:
     void setSeqDataArchive(JKRArchive*);
     bool loadDynamicSeq(JAISoundID, bool);
     u32 releaseIdleDynamicSeqDataBlock();
-    JAUSectionHeap(JKRSolidHeap*, bool, s32);
+    JAUSectionHeap(NebulaArena*, bool, s32);
     JAUSection* getOpenSection();
     JAUSection* getSection(int);
     bool setSeqDataUser(JAISeqDataUser*);
@@ -145,7 +142,7 @@ public:
     }
 
     JAUSoundTable* getSoundTable();
-    JKRHeap* getHeap() {
+    NebulaArena* getHeap() {
         if (getOpenSection()->isBuilding() != 0) {
             return mHeap;
         }
@@ -153,13 +150,13 @@ public:
         return nullptr;
     }
 
-    /* 0xE0 */ JKRHeap* mHeap;
+    /* 0xE0 */ NebulaArena* mHeap;
     /* 0xE4 */ int field_0xe4;
     /* 0xE8 */ JSUList< JAUSection > mSectionList;
     /* 0xF4 */ TSectionHeapData sectionHeapData_;
 };
 
-inline JKRHeap* JAUSection::getHeap_() {
+inline NebulaArena* JAUSection::getHeap_() {
     return sectionHeap_->mHeap;
 }
 

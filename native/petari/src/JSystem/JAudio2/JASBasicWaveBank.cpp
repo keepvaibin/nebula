@@ -2,7 +2,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASMutex.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <stdint.h>
 
 JASBasicWaveBank::JASBasicWaveBank() {
@@ -30,7 +30,7 @@ JASBasicWaveBank::TWaveGroup* JASBasicWaveBank::getWaveGroup(u32 param_0) {
     return mWaveGroupArray[param_0];
 }
 
-void JASBasicWaveBank::setGroupCount(u32 param_0, JKRHeap* heap) {
+void JASBasicWaveBank::setGroupCount(u32 param_0, NebulaArena* heap) {
     for (int i = 0; i < mGroupCount; i++) {
         delete mWaveGroupArray[i];
     }
@@ -43,7 +43,7 @@ void JASBasicWaveBank::setGroupCount(u32 param_0, JKRHeap* heap) {
     }
 }
 
-void JASBasicWaveBank::setWaveTableSize(u32 count, JKRHeap* heap) {
+void JASBasicWaveBank::setWaveTableSize(u32 count, NebulaArena* heap) {
     delete[] mWaveTable;
     mWaveTable = new (heap, 0) TWaveInfo*[count];
     JASCalc::bzero(mWaveTable, sizeof(TWaveHandle*) * count);
@@ -115,7 +115,7 @@ JASBasicWaveBank::TWaveGroup::~TWaveGroup() {
     delete[] mCtrlWaveArray;
 }
 
-void JASBasicWaveBank::TWaveGroup::setWaveCount(u32 count, JKRHeap* heap) {
+void JASBasicWaveBank::TWaveGroup::setWaveCount(u32 count, NebulaArena* heap) {
     delete[] mCtrlWaveArray;
     mWaveCount = (u16)count;
     mCtrlWaveArray = new (heap, 0) TWaveInfo[count];

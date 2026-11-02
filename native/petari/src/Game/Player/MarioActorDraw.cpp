@@ -31,7 +31,7 @@
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/J3DGraphBase/J3DMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTNameTab.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
@@ -109,7 +109,7 @@ void MarioActor::initDrawAndModel() {
     createRainbowMesh();
 
     {
-        MR::CurrentHeapRestorer restorer(static_cast< JKRHeap* >(MR::getSceneHeap()));
+        MR::CurrentHeapRestorer restorer(static_cast< NebulaArena* >(MR::getSceneHeap()));
         _B7C = new JUTTexture(0x80, 0x40, GPU_TF_RGB565);
 
         for (u32 i = 0; i < 2; i++) {

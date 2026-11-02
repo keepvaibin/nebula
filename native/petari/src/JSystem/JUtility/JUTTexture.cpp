@@ -1,5 +1,5 @@
 #include <string.h>
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "JSystem/JUtility/JUTTexture.hpp"

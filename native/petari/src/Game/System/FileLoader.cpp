@@ -2,7 +2,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 FileLoader::FileLoader() {
     mLoaderThread = nullptr;
@@ -19,7 +19,7 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
 }
 
-void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHeap, GameAssets::AllocDirection direction, bool jam) {
+void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, NebulaArena* pHeap, GameAssets::AllocDirection direction, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();
@@ -35,7 +35,7 @@ void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHe
     }
 }
 
-void FileLoader::requestMountArchive(const char* pName, JKRHeap* pHeap, bool jam) {
+void FileLoader::requestMountArchive(const char* pName, NebulaArena* pHeap, bool jam) {
     if (isNeedToLoad(pName)) {
         if (pHeap == nullptr) {
             pHeap = MR::getCurrentHeap();
@@ -85,11 +85,11 @@ void FileLoader::receiveAllRequestedFile() {
     }
 }
 
-JKRMemArchive* FileLoader::createAndAddArchive(void* pData, JKRHeap* pHeap, const char* pName) {
+JKRMemArchive* FileLoader::createAndAddArchive(void* pData, NebulaArena* pHeap, const char* pName) {
     return mArchiveHolder->createAndAdd(pData, pHeap, pName)->mArchive;
 }
 
-void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchive, JKRHeap** pHeap) const {
+void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchive, NebulaArena** pHeap) const {
     mArchiveHolder->getArchiveAndHeap(pName, pArchive, pHeap);
 }
 
@@ -99,7 +99,7 @@ void FileLoader::clearRequestFileInfo(bool) {
     mRequestedFileCount = 0;
 }
 
-void FileLoader::removeHolderIfIsEqualHeap(JKRHeap* pHeap) {
+void FileLoader::removeHolderIfIsEqualHeap(NebulaArena* pHeap) {
     for (u32 i = 0; i < mRequestedFileCount; i++) {
         RequestFileInfo* info = &mRequestFileInfos[i];
         if (info->mFileEntry != nullptr && info->mFileEntry->mHeap == pHeap) {

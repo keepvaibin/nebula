@@ -2,7 +2,7 @@
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASGadget.hpp"
 #include "JSystem/JAudio2/JASInstEffect.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 JASBasicInst::JASBasicInst() : mVolume(1.0f), mPitch(1.0f), mEffects(nullptr), mKeymapCount(0), mKeymap(nullptr) {
     JASCalc::bzero(mOscillatorData, sizeof(mOscillatorData));
@@ -49,7 +49,7 @@ bool JASBasicInst::getParam(int pitch, int velocity, JASInstParam* pParams) cons
     return false;
 }
 
-void JASBasicInst::setKeyRegionCount(u32 count, JKRHeap* pHeap) {
+void JASBasicInst::setKeyRegionCount(u32 count, NebulaArena* pHeap) {
     delete[] mKeymap;
     mKeymap = new (pHeap, 0) TKeymap[count];
     mKeymapCount = count;
@@ -91,7 +91,7 @@ JASBasicInst::TKeymap::~TKeymap() {
     delete[] mVelomap;
 }
 
-void JASBasicInst::TKeymap::setVeloRegionCount(u32 count, JKRHeap* pHeap) {
+void JASBasicInst::TKeymap::setVeloRegionCount(u32 count, NebulaArena* pHeap) {
     delete[] mVelomap;
     mVelomap = new (pHeap, 0) TVelomap[count];
     mVelomapCount = count;

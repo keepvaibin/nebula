@@ -4,7 +4,7 @@
 #include "Game/NPC/MiiFaceRecipe.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 
 MiiFaceIcon::MiiFaceIcon(u16 width, u16 height, const MiiFaceRecipe& rRecipe, const char* pName)

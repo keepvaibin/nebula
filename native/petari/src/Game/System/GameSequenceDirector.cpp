@@ -4,7 +4,7 @@
 #include "Game/System/GameSequenceProgress.hpp"
 #include "Game/System/SaveDataHandleSequence.hpp"
 #include "Game/Util/Functor.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 GameSequenceDirector::GameSequenceDirector()
     : mGameDataTemporaryInGalaxy(nullptr), mGameSequenceProgress(nullptr), mSaveDataHandleSequence(nullptr) {

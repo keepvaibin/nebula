@@ -16,7 +16,7 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRMemArchive.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 MiiFacePartsHolder::MiiFacePartsHolder(int partsNumMax) : LiveActorGroup("Mii\212\347\203\202\203\146\203\213\225\333\216\235" /* Mii顔モデル保持 */, partsNumMax), JKRDisposer(), _34() {
 }

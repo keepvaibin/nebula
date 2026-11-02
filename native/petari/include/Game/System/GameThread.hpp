@@ -2,22 +2,22 @@
 
 #include "Game/System/GameThreads.hpp"
 
-class JKRHeap;
+class NebulaArena;
 
 // A game thread: a host thread (GameThreads) with its message queue; subclasses run their work in run().
 class GameThread {
 public:
-    GameThread(u32, int, JKRHeap*);
+    GameThread(u32, int, NebulaArena*);
 
     virtual ~GameThread();
     virtual void* run();
 
-    void initMessageQueue(JKRHeap*, int);
-    void initHeapSpecified(JKRHeap*, u32);
+    void initMessageQueue(NebulaArena*, int);
+    void initHeapSpecified(NebulaArena*, u32);
     static void* start(void*);
 
-    JKRHeap* mHeap;
-    JKRHeap* mStartCurrentHeap;
+    NebulaArena* mHeap;
+    NebulaArena* mStartCurrentHeap;
     GameThreadRecord* mThread;
     GameMessageQueue mQueue;
     void** mMessageArray;
