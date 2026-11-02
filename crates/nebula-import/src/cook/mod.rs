@@ -4,6 +4,7 @@
 //! files' new places and sizes, the files after it.
 
 pub mod archive;
+pub mod audio_data;
 pub mod dol;
 pub mod formats;
 pub mod native_data;
@@ -59,7 +60,7 @@ fn placement_table_name(name: &str) -> bool {
 
 /// Whether the cooker reads a file of this name (the others are copied as they are).
 pub fn cooks(name: &str) -> bool {
-    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp")
+    matches!(extension(name).as_str(), "arc" | "szs" | "bti" | "bmd" | "bdl" | "bmt" | "cit" | "bas" | "brs" | "bme" | "bct" | "csw" | "bck" | "bca" | "btk" | "brk" | "bpk" | "bpa" | "btp" | "bva" | "blk" | "bla" | "bxk" | "bxa" | "tpl" | "brfnt" | "jpc" | "bcsv" | "tbl" | "pa" | "bcam" | "banmt" | "canm" | "thp" | "ast")
 }
 
 /// One file cooked: Some(new bytes), or None when it stays as it is.
@@ -89,6 +90,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
         Some(native_data::layout(&bytes).with_context(|| format!("{name}: layout"))?)
+    } else if bytes.starts_with(b"STRM") && extension(name) == "ast" {
+        Some(audio_data::ast(&bytes).with_context(|| format!("{name}: stream"))?)
     } else if bytes.starts_with(b"THP\0") {
         Some(thp::movie(&bytes).with_context(|| format!("{name}: movie"))?)
     } else if bytes.starts_with(b"AA_<") {
@@ -217,6 +220,11 @@ pub fn write_cooked_pak(
     if !progress(0, total) {
         bail!("the import was cancelled");
     }
+    // AW files have no header: the audio archive's wave systems say which of their ranges hold PCM16.
+    let mut pcm16 = std::collections::BTreeMap::new();
+    for file in files.iter().filter(|f| f.path.ends_with("AudioRes/SMR.szs")) {
+        pcm16 = audio_data::pcm16_ranges(&read(file)?).context("the audio archive's wave systems")?;
+    }
     // In disc order, so a reader of the source reads forwards.
     let mut order: Vec<&PakFile> = files.iter().collect();
     order.sort_by_key(|f| f.offset);
@@ -229,6 +237,9 @@ pub fn write_cooked_pak(
         // Whatever its name, a compressed file is expanded here: the game has no decompressor.
         let out = if cooks(&file.path) || archive::is_compressed(&bytes) {
             cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
+        } else if let Some(ranges) = pcm16.get(&audio_data::wave_archive_key(&file.path)) {
+            stats.cooked_files += 1;
+            audio_data::wave_archive(&bytes, ranges).with_context(|| format!("{}: wave archive", file.path))?
         } else {
             bytes
         };
@@ -420,6 +431,42 @@ pub unsafe extern "C" fn nebula_cook_file(
         let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
         let bytes = std::slice::from_raw_parts(data, size).to_vec();
         cook_file(&name, bytes, &mut Stats::default())
+    });
+    match result {
+        Ok(Ok(Some(cooked))) => {
+            let boxed = cooked.into_boxed_slice();
+            *out_size = boxed.len();
+            *out = Box::into_raw(boxed) as *mut u8;
+            1
+        }
+        Ok(Ok(None)) => 0,
+        _ => -1,
+    }
+}
+
+/// A mod's AW file (`size` bytes at `data`) with the PCM16 ranges the audio archive (`archive_size` bytes at `archive`)
+/// names for it in host order. Returns 1 with the bytes in `*out` (`*out_size` of them, freed by nebula_cook_free), 0 when
+/// it has none, -1 when either cannot be read.
+///
+/// # Safety
+/// `name` is a NUL-terminated string, `data` and `archive` hold their sizes, `out` and `out_size` are writable.
+#[no_mangle]
+pub unsafe extern "C" fn nebula_cook_wave_archive(
+    name: *const std::ffi::c_char,
+    data: *const u8,
+    size: usize,
+    archive: *const u8,
+    archive_size: usize,
+    out: *mut *mut u8,
+    out_size: *mut usize,
+) -> i32 {
+    let result = std::panic::catch_unwind(|| -> Result<Option<Vec<u8>>> {
+        let name = std::ffi::CStr::from_ptr(name).to_string_lossy().into_owned();
+        let ranges = audio_data::pcm16_ranges(std::slice::from_raw_parts(archive, archive_size))?;
+        match ranges.get(&audio_data::wave_archive_key(&name)) {
+            Some(list) => Ok(Some(audio_data::wave_archive(std::slice::from_raw_parts(data, size), list)?)),
+            None => Ok(None),
+        }
     });
     match result {
         Ok(Ok(Some(cooked))) => {

@@ -9,6 +9,7 @@
 #endif
 
 #include "galaxy/render/texture_store.h"
+#include "galaxy/loss_report.h"
 #include "galaxy/render/rt_materials.h"
 #include "nebula_cooked_texture.h"
 
@@ -909,6 +910,9 @@ void TextureCache::invalidate_all() {
 }
 
 std::size_t TextureCache::retire_key(std::uint64_t key) {
+    if (blank_images_.erase(key) != 0u) {
+        galaxy::loss::filled(galaxy::loss::Kind::BlankTexture);
+    }
     std::size_t evicted = 0;
     for (auto it = entries_.begin(); it != entries_.end();) {
         if (it->first.address == key) {
@@ -1296,6 +1300,9 @@ TextureHandle TextureCache::get(std::uint64_t texture, const TextureSampler& mod
 
     if (record == nullptr) {
         ++missing_images_;
+        if (blank_images_.insert(image.key).second) {
+            galaxy::loss::note(galaxy::loss::Kind::BlankTexture);
+        }
         std::fprintf(stderr, "[texture] no texture record: %llX %ux%u format %u (drawn blank)\n",
                      static_cast<unsigned long long>(image.key), image.width, image.height,
                      static_cast<unsigned>(image.disc_format));

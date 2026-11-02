@@ -21,7 +21,7 @@ public:
     void viewCalcRefPos(u32, J3DModel*, const TVec3f&, const TVec3f&);
     bool simpleDrawSetup(J3DMaterial*);
     void simpleDrawShape(J3DMaterial*);
-    void storeStateList(J3DStateList& rBuilder, u32 index);
+    static void buildStateLists(J3DStateList* pLists);
     void shapePacketDrawFast(J3DShapePacketX*) const;
     void shapeDrawFast(J3DShapeX*) const;
     void copyExtraMtxBuffer(const J3DModelX*);

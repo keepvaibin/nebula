@@ -28,29 +28,30 @@ public:
         /* 0x8 */ int _8;
     };
 
+    // An AST stream in host order (cook/audio_data.rs).
     struct Header {
-        /* 0x00 */ NEBULA_BE(u32) tag;
+        /* 0x00 */ u32 tag;
         /* 0x04 */ u8 _4[5];
         /* 0x09 */ u8 format;
         /* 0x0A */ u8 bits;
-        /* 0x0C */ NEBULA_BE(u16) channels;
-        /* 0x0E */ NEBULA_BE(u16) loop;
-        /* 0x10 */ NEBULA_BE(s32) _10;
+        /* 0x0C */ u16 channels;
+        /* 0x0E */ u16 loop;
+        /* 0x10 */ s32 _10;
         /* 0x14 */ u8 _14[4];
-        /* 0x18 */ NEBULA_BE(s32) loop_start;
-        /* 0x1C */ NEBULA_BE(s32) loop_end;
-        /* 0x20 */ NEBULA_BE(u32) block_size;
+        /* 0x18 */ s32 loop_start;
+        /* 0x1C */ s32 loop_end;
+        /* 0x20 */ u32 block_size;
         /* 0x24 */ u8 _24[4];
         /* 0x28 */ u8 _28;
         /* 0x29 */ u8 _29[0x17];
     };
 
     struct BlockHeader {
-        /* 0x00 */ NEBULA_BE(u32) tag;
-        /* 0x04 */ NEBULA_BE(u32) _4;
+        /* 0x00 */ u32 tag;
+        /* 0x04 */ u32 _4;
         /* 0x08 */ struct {
-            NEBULA_BE(s16) _0;
-            NEBULA_BE(s16) _2;
+            s16 _0;
+            s16 _2;
         } _8[6];
     };
 
