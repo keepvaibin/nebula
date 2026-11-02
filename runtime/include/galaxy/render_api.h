@@ -252,7 +252,7 @@ void request_sharp_2d(bool on) noexcept;
 [[nodiscard]] std::int32_t take_pointer_wheel() noexcept;
 
 // The native game's HOME Menu with the console menu's choices, taking the keyboard and controllers while open: return
-// to the game, reset, or leave it (the console's Wii Menu), the last two after "are you sure?". The game opens it
+// to the game, reset, or leave it, the last two after "are you sure?". The game opens it
 // (HBMInit) and polls each frame: -1 nothing chosen yet, 0 return to the game, 1 leave the game, 2 reset. The game
 // draws it from home_menu_view (NEBULA_HBM_VIEW, `drawing`) and sends the pointer's answers; until it draws it, the
 // host draws its own panel.

@@ -6,7 +6,7 @@
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <cstdio>
 
-// The XF colour word, r in the top byte (the console read the four bytes as a u32).
+// The XF colour word, r in the top byte.
 
 
 

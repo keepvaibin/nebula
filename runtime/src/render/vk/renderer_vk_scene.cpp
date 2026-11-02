@@ -2108,7 +2108,7 @@ bool RendererVk::record_screen_probes(std::size_t slot, ScreenProbeKind kind, st
     region.imageExtent = {kScreenProbesMax, 1u, 1u};
     VkImage copy_source = target.image;
     if (vk::Context::get().quirks().linear_readback) {
-        // Through a linear image the size of the target (Dolphin's VKStagingTexture on Qualcomm).
+        // Through a linear image the size of the target.
         if (!probe_target_linear_) {
             probe_target_linear_ = vk::Context::get().create_linear_image(target.width, target.height, target.format, "screen probes linear");
         }

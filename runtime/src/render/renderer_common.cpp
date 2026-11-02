@@ -284,7 +284,7 @@ constexpr char kDepthCarryPs[] =
     "struct V{float4 p:SV_Position;float2 uv:TEXCOORD0;};"
     "float main(V v):SV_Depth{return t.SampleLevel(s,v.uv,0);}";
 
-// The depth resolve: each pixel's first sample (the console's single sample sits at the pixel centre).
+// The depth resolve: each pixel's first sample.
 constexpr char kDepthResolvePs[] = R"HLSL(
 Texture2DMS<float> depth_samples : register(t0);
 float main(float4 pos : SV_Position) : SV_Depth {

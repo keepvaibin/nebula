@@ -39,7 +39,7 @@ constexpr D3D12_INPUT_ELEMENT_DESC kInputLayout[] = {
     {"BEND",         0, DXGI_FORMAT_R32G32B32_UINT,  0, 132, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 };
 
-// console BlendFactor -> D3D12, src side (console factor 2/3 reference the destination).
+// console BlendFactor -> D3D12, src side.
 D3D12_BLEND src_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
@@ -54,7 +54,7 @@ D3D12_BLEND src_blend(std::uint32_t f) {
     }
 }
 
-// console BlendFactor -> D3D12, dst side (console factor 2/3 reference the source).
+// console BlendFactor -> D3D12, dst side.
 D3D12_BLEND dst_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;

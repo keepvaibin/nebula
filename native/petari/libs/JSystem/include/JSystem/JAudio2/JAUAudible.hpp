@@ -52,7 +52,7 @@ struct JAUAudibleParam {
     }
 
     u32 getDoppler() const {
-        // The top nibble of mAudibleSw (the console read the word's first halfword).
+        // The top nibble of mAudibleSw.
         return (u32)((mAudibleSw >> 12) & 0xf);
         // return raw >> 28 & 0xF;
     }

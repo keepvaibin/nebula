@@ -1964,7 +1964,7 @@ void svc_texture_image(void*, const NebulaTextureImage* image) {
         }
         std::memcpy(bytes->data() + header, first, image->size);
         if (linear) {
-            // Texture packs name it by its own texels (Dolphin's naming, the linear code as the format).
+            // Texture packs name it by its own texels.
             auto* record = reinterpret_cast<NebulaTexture*>(bytes->data());
             record->disc_format = image->format;
             record->pack_hash = galaxy::render::texture_pack_hash(reinterpret_cast<const uint8_t*>(first), image->size);

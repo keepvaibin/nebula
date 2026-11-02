@@ -244,7 +244,6 @@ void MeterLayout::exeWait() {
     mFollowPosW.x = 0.0f;
 }
 
-// ! minus operator gets inlined - https://decomp.me/scratch/wWkjw
 void MeterLayout::exePowerUp() {
     TVec2f basePos;
 

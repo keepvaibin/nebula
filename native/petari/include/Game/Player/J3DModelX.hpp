@@ -40,7 +40,7 @@ public:
         }
 
         // directDraw reads the flags as one word (bit i selects display list i): declared last-first, so each
-        // flag has the console's bit (CodeWarrior allocates bitfields from the most significant bit).
+        // flag has the console's bit.
         unsigned _1F : 1;
         unsigned _1E : 1;
         unsigned _1D : 1;

@@ -379,7 +379,7 @@ struct KeyList {
 
 // The overlay chord/navigation word (native_settings_pad.h, XInput layout) for
 // a unified button mask. Nintendo controllers swap the face buttons so their
-// labelled A changes and B closes, as on the console.
+// labelled A changes and B closes.
 [[nodiscard]] constexpr std::uint16_t settings_pad_buttons(
     ControlScheme scheme, std::uint32_t buttons) noexcept {
     std::uint32_t word = buttons & 0xffffu;

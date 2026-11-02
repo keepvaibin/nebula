@@ -153,7 +153,7 @@ DeviceQuirks quirks_for(const DeviceIdentity& id) {
     // maximal-reconvergence execution mode (Dawn use_spirv_reconvergence_mode, Dusklight issue 2563: Adreno 740's
     // compiler crashes); TEV byte masks one component at a time (Dolphin BUG_BROKEN_VECTOR_BITWISE_AND: Mali returns
     // the constant vector of a vector AND); D24S8 depth where the device has it (Dolphin BUG_BROKEN_D32F_CLEAR: D32F
-    // clears do nothing on Adreno); viewport depth ranges never reversed (Dolphin BUG_BROKEN_REVERSED_DEPTH_RANGE).
+    // clears do nothing on Adreno); viewport depth ranges never reversed.
     return quirks;
 }
 

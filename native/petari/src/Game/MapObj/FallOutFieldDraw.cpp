@@ -53,7 +53,7 @@ FallOutFieldDraw::FallOutFieldDraw(const char* pName) : NameObj(pName), _C() {
 
 namespace {
     // The fill (runtime/src/render/materials/image_effect.hlsl mode 2 or 3): the fill colour where the screen's alpha
-    // mask (texture 0) is under or, by arg 0, over 1 (console: konst 0's alpha compared), nothing elsewhere; blended by its
+    // mask (texture 0) is under or, by arg 0, over 1, nothing elsewhere; blended by its
     // alpha, depth always passing and written, no culling.
     void sendFillMaterial(bool textureFirst) {
         NebulaNativeMaterial material;

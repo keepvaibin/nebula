@@ -539,7 +539,6 @@ public:
     // half-scale box / display picture y-scale stretch / depth-source packing) instead
     // of a raw CopyTextureRegion, following Dolphin TextureConverterShaderGen
     // semantics. `is_depth_copy` is true when the PE pixel format is Z24 at copy time
-    // (Dolphin BPStructs BPMEM_TRIGGER_EFB_COPY).
     void copy_scene_to_display(const CaptureRequest& params, DisplayTexture& dest);
     // Native presentation: whether this display copy can take the scene target's colour target instead of copying it
     // (hand_over_scene_color): an exact copy of the scene target's top rows (the identity filter, no gamma or scaling) on the
