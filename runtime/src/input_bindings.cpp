@@ -2,13 +2,7 @@
 #include "galaxy/rumble.h"
 #include "galaxy/c_locale_number.h"
 
-#if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
-#include <Windows.h>
-#else
-#include "galaxy/virtual_keys.h"
-#endif
+#include "galaxy/input/key_codes.h"
 
 #include <algorithm>
 #include <atomic>
@@ -23,6 +17,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <limits>
+
+#if defined(_WINDOWS_) || defined(_INC_WINDOWS)
+#error The shared bindings engine must not include Windows.h
+#endif
 
 namespace galaxy::input {
 
@@ -58,21 +56,21 @@ struct NamedKey {
 
 // Keys whose name is not a single letter or digit.
 constexpr NamedKey kNamedKeys[] = {
-    {VK_SPACE, "Space"}, {VK_RETURN, "Enter"}, {VK_TAB, "Tab"},
-    {VK_BACK, "Backspace"}, {VK_ESCAPE, "Escape"},
-    {VK_LSHIFT, "LShift"}, {VK_RSHIFT, "RShift"}, {VK_SHIFT, "Shift"},
-    {VK_LCONTROL, "LCtrl"}, {VK_RCONTROL, "RCtrl"}, {VK_CONTROL, "Ctrl"},
-    {VK_LMENU, "LAlt"}, {VK_RMENU, "RAlt"}, {VK_MENU, "Alt"},
-    {VK_UP, "Up"}, {VK_DOWN, "Down"}, {VK_LEFT, "Left"}, {VK_RIGHT, "Right"},
-    {VK_INSERT, "Insert"}, {VK_DELETE, "Delete"}, {VK_HOME, "Home"},
-    {VK_END, "End"}, {VK_PRIOR, "PageUp"}, {VK_NEXT, "PageDown"},
-    {VK_CAPITAL, "CapsLock"},
-    {VK_OEM_MINUS, "Minus"}, {VK_OEM_PLUS, "Equals"},
-    {VK_OEM_4, "LBracket"}, {VK_OEM_6, "RBracket"}, {VK_OEM_5, "Backslash"},
-    {VK_OEM_1, "Semicolon"}, {VK_OEM_7, "Quote"}, {VK_OEM_COMMA, "Comma"},
-    {VK_OEM_PERIOD, "Period"}, {VK_OEM_2, "Slash"}, {VK_OEM_3, "Grave"},
-    {VK_ADD, "NumAdd"}, {VK_SUBTRACT, "NumSub"}, {VK_MULTIPLY, "NumMul"},
-    {VK_DIVIDE, "NumDiv"}, {VK_DECIMAL, "NumDecimal"},
+    {keys::SPACE, "Space"}, {keys::RETURN, "Enter"}, {keys::TAB, "Tab"},
+    {keys::BACK, "Backspace"}, {keys::ESCAPE, "Escape"},
+    {keys::LSHIFT, "LShift"}, {keys::RSHIFT, "RShift"}, {keys::SHIFT, "Shift"},
+    {keys::LCONTROL, "LCtrl"}, {keys::RCONTROL, "RCtrl"}, {keys::CONTROL, "Ctrl"},
+    {keys::LMENU, "LAlt"}, {keys::RMENU, "RAlt"}, {keys::MENU, "Alt"},
+    {keys::UP, "Up"}, {keys::DOWN, "Down"}, {keys::LEFT, "Left"}, {keys::RIGHT, "Right"},
+    {keys::INSERT, "Insert"}, {keys::DELETE, "Delete"}, {keys::HOME, "Home"},
+    {keys::END, "End"}, {keys::PRIOR, "PageUp"}, {keys::NEXT, "PageDown"},
+    {keys::CAPITAL, "CapsLock"},
+    {keys::OEM_MINUS, "Minus"}, {keys::OEM_PLUS, "Equals"},
+    {keys::OEM_4, "LBracket"}, {keys::OEM_6, "RBracket"}, {keys::OEM_5, "Backslash"},
+    {keys::OEM_1, "Semicolon"}, {keys::OEM_7, "Quote"}, {keys::OEM_COMMA, "Comma"},
+    {keys::OEM_PERIOD, "Period"}, {keys::OEM_2, "Slash"}, {keys::OEM_3, "Grave"},
+    {keys::ADD, "NumAdd"}, {keys::SUBTRACT, "NumSub"}, {keys::MULTIPLY, "NumMul"},
+    {keys::DIVIDE, "NumDiv"}, {keys::DECIMAL, "NumDecimal"},
 };
 
 constexpr std::array<const char*, kMouseButtonCount> kMouseNames{
@@ -146,11 +144,11 @@ std::string format_key(std::uint8_t vk) {
     if ((vk >= '0' && vk <= '9') || (vk >= 'A' && vk <= 'Z')) {
         return std::string(1, static_cast<char>(vk));
     }
-    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) {
-        return "Num" + std::to_string(vk - VK_NUMPAD0);
+    if (vk >= keys::NUMPAD0 && vk <= keys::NUMPAD9) {
+        return "Num" + std::to_string(vk - keys::NUMPAD0);
     }
-    if (vk >= VK_F1 && vk <= VK_F24) {
-        return "F" + std::to_string(vk - VK_F1 + 1);
+    if (vk >= keys::F1 && vk <= keys::F24) {
+        return "F" + std::to_string(vk - keys::F1 + 1);
     }
     for (const NamedKey& key : kNamedKeys) {
         if (key.vk == vk) return key.name;
@@ -187,11 +185,11 @@ std::optional<std::uint8_t> parse_key(std::string_view text) noexcept {
     int value = 0;
     if (text.size() == 4u && iequals(text.substr(0, 3), "Num") &&
         parse_number(text.substr(3), 10, value)) {
-        return static_cast<std::uint8_t>(VK_NUMPAD0 + value);
+        return static_cast<std::uint8_t>(keys::NUMPAD0 + value);
     }
     if (text.size() >= 2u && (text[0] == 'F' || text[0] == 'f') &&
         parse_number(text.substr(1), 10, value) && value >= 1 && value <= 24) {
-        return static_cast<std::uint8_t>(VK_F1 + value - 1);
+        return static_cast<std::uint8_t>(keys::F1 + value - 1);
     }
     if (text.size() == 4u && iequals(text.substr(0, 2), "VK") &&
         parse_number(text.substr(2), 16, value) && value > 0) {
@@ -327,23 +325,23 @@ BindingTable legacy_binding_table(ControlScheme scheme) {
     BindingTable table{};
     using T = WiiTarget;
     if (scheme == ControlScheme::Keyboard) {
-        set(table, T::A, {key(VK_SPACE), key(VK_RETURN), mouse(MouseButton::Left)});
-        set(table, T::B, {key(VK_LSHIFT), key(VK_RSHIFT), mouse(MouseButton::Right)});
-        set(table, T::One, {key('1'), key(VK_NUMPAD1)});
-        set(table, T::Two, {key('2'), key(VK_NUMPAD2)});
-        set(table, T::Plus, {key(VK_OEM_PLUS), key('P')});
-        set(table, T::Minus, {key(VK_OEM_MINUS), key('M')});
+        set(table, T::A, {key(keys::SPACE), key(keys::RETURN), mouse(MouseButton::Left)});
+        set(table, T::B, {key(keys::LSHIFT), key(keys::RSHIFT), mouse(MouseButton::Right)});
+        set(table, T::One, {key('1'), key(keys::NUMPAD1)});
+        set(table, T::Two, {key('2'), key(keys::NUMPAD2)});
+        set(table, T::Plus, {key(keys::OEM_PLUS), key('P')});
+        set(table, T::Minus, {key(keys::OEM_MINUS), key('M')});
         set(table, T::Home, {key('H')});
-        set(table, T::DpadUp, {key(VK_UP)});
-        set(table, T::DpadDown, {key(VK_DOWN)});
-        set(table, T::DpadLeft, {key(VK_LEFT)});
-        set(table, T::DpadRight, {key(VK_RIGHT)});
+        set(table, T::DpadUp, {key(keys::UP)});
+        set(table, T::DpadDown, {key(keys::DOWN)});
+        set(table, T::DpadLeft, {key(keys::LEFT)});
+        set(table, T::DpadRight, {key(keys::RIGHT)});
         set(table, T::StickUp, {key('W')});
         set(table, T::StickDown, {key('S')});
         set(table, T::StickLeft, {key('A')});
         set(table, T::StickRight, {key('D')});
         set(table, T::C, {key('C')});
-        set(table, T::Z, {key('Z'), key(VK_LCONTROL), key(VK_RCONTROL)});
+        set(table, T::Z, {key('Z'), key(keys::LCONTROL), key(keys::RCONTROL)});
         set(table, T::Shake, {key('Q'), key('E')});
         set(table, T::PointerUp, {key('I')});
         set(table, T::PointerDown, {key('K')});
@@ -1110,15 +1108,15 @@ GlyphPlace glyph_of(InputSource source) noexcept {
 
 // The layout keys in key icon order: US ; = , - . / ` [ \ ] ', OEM 8 and the ISO key.
 constexpr std::array<std::uint8_t, kKeyIconLayoutCount> kLayoutKeys{
-    VK_OEM_1, VK_OEM_PLUS, VK_OEM_COMMA, VK_OEM_MINUS, VK_OEM_PERIOD, VK_OEM_2, VK_OEM_3,
-    VK_OEM_4, VK_OEM_5, VK_OEM_6, VK_OEM_7, VK_OEM_8, VK_OEM_102};
+    keys::OEM_1, keys::OEM_PLUS, keys::OEM_COMMA, keys::OEM_MINUS, keys::OEM_PERIOD, keys::OEM_2, keys::OEM_3,
+    keys::OEM_4, keys::OEM_5, keys::OEM_6, keys::OEM_7, keys::OEM_8, keys::OEM_102};
 
 // Named keys' icons in order from Space (the game API's NEBULA_KEY_SPACE .. NEBULA_KEY_RIGHT_WIN).
 constexpr std::uint8_t kKeyIconSpace = 75;
 constexpr std::array<std::uint8_t, 32> kNamedKeyIcons{
-    VK_SPACE, VK_RETURN, VK_TAB, VK_BACK, VK_ESCAPE, VK_SHIFT, VK_LSHIFT, VK_RSHIFT, VK_CONTROL, VK_LCONTROL,
-    VK_RCONTROL, VK_MENU, VK_LMENU, VK_RMENU, VK_UP, VK_DOWN, VK_LEFT, VK_RIGHT, VK_INSERT, VK_DELETE, VK_HOME,
-    VK_END, VK_PRIOR, VK_NEXT, VK_CAPITAL, VK_NUMLOCK, VK_SCROLL, VK_PAUSE, VK_SNAPSHOT, VK_APPS, VK_LWIN, VK_RWIN};
+    keys::SPACE, keys::RETURN, keys::TAB, keys::BACK, keys::ESCAPE, keys::SHIFT, keys::LSHIFT, keys::RSHIFT, keys::CONTROL, keys::LCONTROL,
+    keys::RCONTROL, keys::MENU, keys::LMENU, keys::RMENU, keys::UP, keys::DOWN, keys::LEFT, keys::RIGHT, keys::INSERT, keys::DELETE, keys::HOME,
+    keys::END, keys::PRIOR, keys::NEXT, keys::CAPITAL, keys::NUMLOCK, keys::SCROLL, keys::PAUSE, keys::SNAPSHOT, keys::APPS, keys::LWIN, keys::RWIN};
 static_assert(kKeyIconSpace + kNamedKeyIcons.size() == kKeyIconLayoutFirst);
 
 }  // namespace
@@ -1133,14 +1131,14 @@ std::optional<std::uint8_t> key_icon(InputSource source) noexcept {
     const std::uint8_t vk = source.code;
     if (vk >= 'A' && vk <= 'Z') return static_cast<Icon>(vk - 'A');
     if (vk >= '0' && vk <= '9') return static_cast<Icon>(26 + vk - '0');
-    if (vk >= VK_F1 && vk <= VK_F24) return static_cast<Icon>(36 + vk - VK_F1);
-    if (vk >= VK_NUMPAD0 && vk <= VK_NUMPAD9) return static_cast<Icon>(60 + vk - VK_NUMPAD0);
+    if (vk >= keys::F1 && vk <= keys::F24) return static_cast<Icon>(36 + vk - keys::F1);
+    if (vk >= keys::NUMPAD0 && vk <= keys::NUMPAD9) return static_cast<Icon>(60 + vk - keys::NUMPAD0);
     switch (vk) {
-    case VK_ADD: return Icon{70};
-    case VK_SUBTRACT: return Icon{71};
-    case VK_MULTIPLY: return Icon{72};
-    case VK_DIVIDE: return Icon{73};
-    case VK_DECIMAL: return Icon{74};
+    case keys::ADD: return Icon{70};
+    case keys::SUBTRACT: return Icon{71};
+    case keys::MULTIPLY: return Icon{72};
+    case keys::DIVIDE: return Icon{73};
+    case keys::DECIMAL: return Icon{74};
     default: break;
     }
     for (std::size_t i = 0; i < kNamedKeyIcons.size(); ++i) {
@@ -1158,17 +1156,17 @@ std::array<char, 8> key_icon_name(std::uint8_t vk) noexcept {
         const char* name;
     };
     static constexpr Name kNames[] = {
-        {VK_VOLUME_MUTE, "MUTE"}, {VK_VOLUME_DOWN, "VOL -"}, {VK_VOLUME_UP, "VOL +"}, {VK_MEDIA_NEXT_TRACK, "NEXT"},
-        {VK_MEDIA_PREV_TRACK, "PREV"}, {VK_MEDIA_STOP, "STOP"}, {VK_MEDIA_PLAY_PAUSE, "PLAY"}, {VK_BROWSER_BACK, "BACK"},
-        {VK_BROWSER_FORWARD, "FWD"}, {VK_BROWSER_REFRESH, "RELOAD"}, {VK_BROWSER_STOP, "STOP"},
-        {VK_BROWSER_SEARCH, "SEARCH"}, {VK_BROWSER_FAVORITES, "FAV"}, {VK_BROWSER_HOME, "WEB"}, {VK_LAUNCH_MAIL, "MAIL"},
-        {VK_LAUNCH_MEDIA_SELECT, "MEDIA"}, {VK_LAUNCH_APP1, "APP 1"}, {VK_LAUNCH_APP2, "APP 2"}, {VK_SLEEP, "SLEEP"},
-        {VK_HELP, "HELP"}, {VK_SELECT, "SELECT"}, {VK_PRINT, "PRINT"}, {VK_EXECUTE, "EXEC"}, {VK_CLEAR, "CLEAR"},
-        {VK_SEPARATOR, "SEP"}, {VK_CANCEL, "BREAK"}, {VK_KANA, "KANA"}, {VK_JUNJA, "JUNJA"}, {VK_FINAL, "FINAL"},
-        {VK_KANJI, "KANJI"}, {VK_CONVERT, "CONV"}, {VK_NONCONVERT, "NCONV"}, {VK_ACCEPT, "ACCEPT"},
-        {VK_MODECHANGE, "MODE"}, {VK_OEM_ATTN, "EISU"}, {VK_OEM_FINISH, "KATA"}, {VK_OEM_COPY, "HIRA"},
-        {VK_OEM_AUTO, "HANKAK"}, {VK_OEM_ENLW, "ZENKAK"}, {VK_OEM_BACKTAB, "ROMAJI"}, {VK_ATTN, "ATTN"},
-        {VK_PLAY, "PLAY"}, {VK_ZOOM, "ZOOM"}, {VK_OEM_CLEAR, "CLEAR"},
+        {keys::VOLUME_MUTE, "MUTE"}, {keys::VOLUME_DOWN, "VOL -"}, {keys::VOLUME_UP, "VOL +"}, {keys::MEDIA_NEXT_TRACK, "NEXT"},
+        {keys::MEDIA_PREV_TRACK, "PREV"}, {keys::MEDIA_STOP, "STOP"}, {keys::MEDIA_PLAY_PAUSE, "PLAY"}, {keys::BROWSER_BACK, "BACK"},
+        {keys::BROWSER_FORWARD, "FWD"}, {keys::BROWSER_REFRESH, "RELOAD"}, {keys::BROWSER_STOP, "STOP"},
+        {keys::BROWSER_SEARCH, "SEARCH"}, {keys::BROWSER_FAVORITES, "FAV"}, {keys::BROWSER_HOME, "WEB"}, {keys::LAUNCH_MAIL, "MAIL"},
+        {keys::LAUNCH_MEDIA_SELECT, "MEDIA"}, {keys::LAUNCH_APP1, "APP 1"}, {keys::LAUNCH_APP2, "APP 2"}, {keys::SLEEP, "SLEEP"},
+        {keys::HELP, "HELP"}, {keys::SELECT, "SELECT"}, {keys::PRINT, "PRINT"}, {keys::EXECUTE, "EXEC"}, {keys::CLEAR, "CLEAR"},
+        {keys::SEPARATOR, "SEP"}, {keys::CANCEL, "BREAK"}, {keys::KANA, "KANA"}, {keys::JUNJA, "JUNJA"}, {keys::FINAL, "FINAL"},
+        {keys::KANJI, "KANJI"}, {keys::CONVERT, "CONV"}, {keys::NONCONVERT, "NCONV"}, {keys::ACCEPT, "ACCEPT"},
+        {keys::MODECHANGE, "MODE"}, {keys::OEM_ATTN, "EISU"}, {keys::OEM_FINISH, "KATA"}, {keys::OEM_COPY, "HIRA"},
+        {keys::OEM_AUTO, "HANKAK"}, {keys::OEM_ENLW, "ZENKAK"}, {keys::OEM_BACKTAB, "ROMAJI"}, {keys::ATTN, "ATTN"},
+        {keys::PLAY, "PLAY"}, {keys::ZOOM, "ZOOM"}, {keys::OEM_CLEAR, "CLEAR"},
     };
     std::array<char, 8> out{};
     for (const Name& name : kNames) {
