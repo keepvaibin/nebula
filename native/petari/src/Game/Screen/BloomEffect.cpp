@@ -1,3 +1,4 @@
+#include <JSystem/J3DGraphBase/J3DNativeTarget.hpp>
 #include "Game/Screen/BloomEffect.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
@@ -43,7 +44,7 @@ namespace {
 
     // The stage the chain's texture draws use: modulate (texture matrix 0, initDraw's), modulate after a blur (the
     // identity matrix), or the brightness threshold (red above the material colour's: konst alpha).
-    enum BloomStage { BloomStage_Modulate, BloomStage_ModulateIdentity, BloomStage_Threshold };
+    enum BloomStage { BloomStage_Modulate, BloomStage_ModulateIdentity, BloomStage_Threshold, BloomStage_Luminance };
     BloomStage sBloomStage = BloomStage_Modulate;
     // runtime/src/render/materials/image_effect.hlsl for a texture draw: modulate (the intensity) or the threshold
     // (white where the texture's red is above it), blended by `type`: 0 replaces, 1 adds, 2 multiplies the frame by
@@ -57,7 +58,7 @@ namespace {
             NativeShader::setBlend(material, NEBULA_FACTOR_DST_COLOR, NEBULA_FACTOR_ZERO);
         }
         NativeShader::setColor(material, 0, intensity, intensity, intensity, 255);
-        material.constants[12] = sBloomStage == BloomStage_Threshold ? 1.0f : 0.0f;
+        material.constants[12] = sBloomStage == BloomStage_Threshold ? 1.0f : sBloomStage == BloomStage_Luminance ? 6.0f : 0.0f;
         NativeShader::setTexture(material, 0, pTexture);
         NativeShader::send(material);
     }
@@ -90,6 +91,10 @@ namespace {
     // How the bloom goes through the renderer (NEBULA_OPTION_BLOOM; galaxy/gx/game_bloom.h): decided at preDraw for
     // the frame's pair of passes, so a change in between never restores a scene that was not kept.
     u32 sBloomRoute;
+
+    void beginPass(JUTTexture* pTexture) {
+        J3DNativeTarget::begin(pTexture->mImage, pTexture->getWidth(), pTexture->getHeight(), 0, 0xFFFFFF);
+    }
 
     u32 floatBits(f32 value) {
         u32 bits;
@@ -171,31 +176,43 @@ void BloomEffect::postDraw() const {
         return;
     }
 
+    // Every step a pass into its own texture: the frame is read once.
     ImageEffectLocalUtil::capture(_28, 1, 0, GPU_TF_RGB565, true, 0);
     initDraw();
+    beginPass(_2C);
     drawTexture(_28, 4, 0, 0xFF, DrawType_0);
+    J3DNativeTarget::end(_2C->mImage, NEBULA_TARGET_RGB);
 
-    ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_40, 4, 0, GPU_TF_I8, false, 0);
-    drawTexture(_2C, 4, 2, 0xFF, DrawType_0);
+    sBloomStage = BloomStage_Luminance;
+    beginPass(_40);
+    drawTexture(_2C, 4, 0, 0xFF, DrawType_0);
+    J3DNativeTarget::end(_40->mImage, NEBULA_TARGET_RED);
 
-    sBloomStage = BloomStage_Threshold;
-    drawTexture(_40, 4, 2, _20, DrawType_2);
     sBloomStage = BloomStage_Modulate;
+    beginPass(_44);
+    drawTexture(_2C, 4, 0, 0xFF, DrawType_0);
+    sBloomStage = BloomStage_Threshold;
+    drawTexture(_40, 4, 0, _20, DrawType_2);
+    sBloomStage = BloomStage_Modulate;
+    J3DNativeTarget::end(_44->mImage, NEBULA_TARGET_RGB);
 
-    ImageEffectLocalUtil::capture(_44, 4, 2, GPU_TF_RGB565, false, 0);
-    blurTexture(_44, _48, 4, 3, 6, _18, 2, &::sL1RadAndOfs[0]._0);
+    beginPass(_30);
+    blurTexture(_44, _48, 4, 0, 6, _18, 2, &::sL1RadAndOfs[0]._0);
+    J3DNativeTarget::end(_30->mImage, NEBULA_TARGET_RGB);
 
-    ImageEffectLocalUtil::capture(_30, 4, 3, GPU_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_34, 4, 3, GPU_TF_RGB565, true, 0);
-    blurTexture(_34, _4C, 8, 20, 12, _1C, 3, &::sL2RadAndOfs[0]._0);
+    beginPass(_34);
+    drawTexture(_30, 8, 0, 0xFF, DrawType_0);
+    J3DNativeTarget::end(_34->mImage, NEBULA_TARGET_RGB);
 
-    ImageEffectLocalUtil::capture(_38, 8, 20, GPU_TF_RGB565, false, 0);
+    beginPass(_38);
+    blurTexture(_34, _4C, 8, 0, 12, _1C, 3, &::sL2RadAndOfs[0]._0);
+    J3DNativeTarget::end(_38->mImage, NEBULA_TARGET_RGB);
+
     const u8 intensity = _14 * get_10();
-    drawTexture(_30, 4, 7, intensity, DrawType_0);
-    drawTexture(_38, 4, 7, intensity, DrawType_1);
-
-    ImageEffectLocalUtil::capture(_3C, 4, 7, GPU_TF_RGB565, false, 0);
+    beginPass(_3C);
+    drawTexture(_30, 4, 0, intensity, DrawType_0);
+    drawTexture(_38, 4, 0, intensity, DrawType_1);
+    J3DNativeTarget::end(_3C->mImage, NEBULA_TARGET_RGB);
 
     if (sBloomRoute != 0) {
         // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).

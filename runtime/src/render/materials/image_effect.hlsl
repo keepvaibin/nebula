@@ -5,7 +5,8 @@
 //   mode (params.x): 0 modulate, tex x the material colour; 1 threshold, white where the texture's red is above the
 //   material colour's (COMP_R8_GT), alpha 1; 2 mask below, the edge colour (register 0) where the texture's alpha is
 //   under the constant's (COMP_A8_GT), else its colour at alpha 0; 3 mask above, where it is over; 4 alpha, the
-//   texture's alpha in every channel; 5 edge, the edge colour at its alpha times the texture's.
+//   texture's alpha in every channel; 5 edge, the edge colour at its alpha times the texture's; 6 luminance, the
+//   texture's in every channel, alpha 1.
 //   params.y 1: nothing drawn where the alpha is 0 (the fall-out field's fill: GX's alpha test above 0).
 struct MaterialConstants {
     float4 color;   // the material colour (rgba, 0-1)
@@ -42,6 +43,10 @@ float4 material_color(NativeVaryings i) {
     }
     if (mode == 4u) {
         return float4(t.a, t.a, t.a, t.a);
+    }
+    if (mode == 6u) {
+        const float y = saturate(dot(t.rgb, float3(66.0, 129.0, 25.0) / 256.0) + 16.0 / 255.0);
+        return float4(y, y, y, 1.0);
     }
     return float4(material.edge.rgb, saturate(material.edge.a * t.a));
 }
