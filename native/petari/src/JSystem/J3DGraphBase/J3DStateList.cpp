@@ -42,29 +42,13 @@ namespace {
     bool materialOnly(u8 kind) {
         switch (kind) {
         case NEBULA_STATE_ALPHA_COMPARE:
-        case NEBULA_STATE_TEV_COLOR_CALC:
-        case NEBULA_STATE_TEV_ALPHA_CALC:
-        case NEBULA_STATE_TEV_DIRECT:
-        case NEBULA_STATE_TEV_ORDER:
         case NEBULA_STATE_TEV_COLOR:
-        case NEBULA_STATE_TEV_COLOR_IN:
-        case NEBULA_STATE_TEV_ALPHA_IN:
-        case NEBULA_STATE_TEV_COLOR_OP:
-        case NEBULA_STATE_TEV_ALPHA_OP:
-        case NEBULA_STATE_TEV_KCOLOR_SEL:
-        case NEBULA_STATE_TEV_KALPHA_SEL:
-        case NEBULA_STATE_TEV_SWAP_MODE:
-        case NEBULA_STATE_TEV_STAGE_ORDER:
         case NEBULA_STATE_TEV_KCOLOR:
         case NEBULA_STATE_TEV_COLOR_S10:
         case NEBULA_STATE_IND_TEX_MATRIX:
-        case NEBULA_STATE_TEV_SWAP_TABLE:
-        case NEBULA_STATE_TEV_INDIRECT:
-        case NEBULA_STATE_IND_TEX_SCALE:
-        case NEBULA_STATE_IND_TEX_ORDER:
-        case NEBULA_STATE_Z_TEXTURE:
-        case NEBULA_STATE_FOG_RANGE:
-        case NEBULA_STATE_FOG_RANGE_TABLE:
+        case NEBULA_STATE_MATERIAL_COLOR:
+        case NEBULA_STATE_AMBIENT_COLOR:
+        case NEBULA_STATE_FOG:
             return true;
         default:
             return false;
