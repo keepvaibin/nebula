@@ -331,8 +331,8 @@ static bool categoryOfSound(uint32_t id, u8* pCategory) {
     }
 }
 
-// The voice's volume setting once the channel's callback has run (its owner may link only then). A voice nobody names follows its
-// source: the game's streams and sequence voices are PCM16.
+// The voice's volume setting once the channel's callback has run (its owner may link only then). A voice nobody names keeps its
+// source's (JASVoice::setWaveInfo, setOscInfo).
 void JASVoiceSlot::nameSound() {
     if (mStatus != STATUS_ACTIVE || mChannel == NULL) {
         return;
@@ -340,7 +340,7 @@ void JASVoiceSlot::nameSound() {
     uint32_t route = 0u;
     const uint32_t id = voice_owner(*this, &route);
     mChannel->named = route != 0u;
-    if (route == 0u || !categoryOfSound(id, &mChannel->category)) {
-        mChannel->category = mChannel->format == NEBULA_AUDIO_PCM16 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
+    if (route != 0u) {
+        categoryOfSound(id, &mChannel->category);
     }
 }

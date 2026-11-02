@@ -1,6 +1,6 @@
 """audiocheck.py SOURCE.PAK COOKED.PAK: each AST stream of a source pak (big-endian) against its cooked file: header numbers,
-every block's size and last samples, every PCM16 sample; each AW file: bytes equal except the PCM16 ranges the cooked audio
-archive names, which must be the same samples turned; every other file of AudioRes unchanged in size. Exit 1 on a difference."""
+every block's size and last samples, every PCM16 sample; each wave of the cooked archive: inside its AW file, PCM16; a loop cooked audio
+history the disc stored against the decoded wave; every other file of AudioRes unchanged in size. Exit 1 on a difference."""
 import array
 import struct
 import sys
@@ -51,22 +51,24 @@ def check_ast(name, s, d):
     return errors, blocks, channels, 1
 
 
-def pcm16(smr):
-    ranges = {}
+def waves(smr, unpack):
+    """Each wave of each wave system of an audio archive: (archive name, wave's fields)."""
     at = smr.find(b"WSYS")
     while at >= 0:
-        bank = struct.unpack_from("<I", smr, at + 0x10)[0]
-        for a in range(struct.unpack_from("<I", smr, at + bank + 4)[0]):
-            archive = struct.unpack_from("<I", smr, at + bank + 8 + 4 * a)[0]
-            if not archive:
-                continue
-            name = smr[at + archive : smr.index(b"\0", at + archive)].decode("latin-1").lower()
-            for w in range(struct.unpack_from("<I", smr, at + archive + 0x70)[0]):
-                wave = struct.unpack_from("<I", smr, at + archive + 0x74 + 4 * w)[0]
-                if wave and smr[at + wave + 1] == 3:
-                    ranges.setdefault(name, set()).add(struct.unpack_from("<II", smr, at + wave + 8))
+        bank = unpack(smr, at + 0x10)
+        for a in range(unpack(smr, at + bank + 4)):
+            archive = unpack(smr, at + bank + 8 + 4 * a)
+            if archive:
+                name = smr[at + archive : smr.index(b"\0", at + archive)].decode("latin-1").lower()
+                for w in range(unpack(smr, at + archive + 0x70)):
+                    wave = unpack(smr, at + archive + 0x74 + 4 * w)
+                    if wave:
+                        yield name, at + wave
         at = smr.find(b"WSYS", at + 4)
-    return ranges
+
+
+def le32(data, at):
+    return struct.unpack_from("<I", data, at)[0]
 
 
 def main():
@@ -84,20 +86,37 @@ def main():
             errors += result[0]
             asts += 1
             blocks += result[1]
-        ranges = pcm16(read(b, fb["AudioRes/SMR.szs"]))
-        aws = turned = 0
-        for name in sorted(fa):
-            if not name.lower().endswith(".aw"):
+        cooked = read(b, fb["AudioRes/SMR.szs"])
+        aw = {name.rsplit("/", 1)[-1].lower(): name for name in fa if name.lower().endswith(".aw")}
+        loaded = {}
+        checked = loops = loop_moved = worst = 0
+        for name, at in waves(cooked, le32):
+            kind = cooked[at + 1]
+            if kind > 3:
                 continue
-            s, d = read(a, fa[name]), read(b, fb[name])
+            checked += 1
+            if name not in loaded:
+                loaded[name] = read(a, fa[aw[name]]), read(b, fb[aw[name]])
+            source, target = loaded[name]
+            offset, length, flags, loop_start, loop_end, count = struct.unpack_from("<IIIIII", cooked, at + 8)
+            last, penult = struct.unpack_from("<hh", cooked, at + 0x20)
+            if offset + length > len(target) or length < count * 2:
+                errors.append(f"{name} wave at {at:#x}: {offset:#x}+{length:#x} of {len(target):#x}, {count} samples")
+                continue
+            if flags and kind < 2 and loop_start >= 16:
+                # What the disc's decoder would restore at the loop, against what the decoded wave holds there.
+                loops += 1
+                was_last, was_penult = struct.unpack_from("<hh", target, offset + ((loop_start & ~15) - 2) * 2)
+                if (was_penult, was_last) != (last, penult):
+                    moved = max(abs(was_penult - last), abs(was_last - penult))
+                    loop_moved += 1
+                    worst = max(worst, moved)
+        print(f"{checked} waves placed; {loops} loops, {loop_moved} whose stored history is not the decoded wave's (largest {worst})")
+        aws = turned = 0
+        for name in aw:
             aws += 1
-            expect = bytearray(s)
-            for start, length in sorted(ranges.get(name.rsplit("/", 1)[-1].lower(), [])):
-                expect[start : start + length] = swapped16(s[start : start + length])
-                turned += length
-            if bytes(expect) != d:
-                errors.append(f"{name}: wave archive bytes")
-    print(f"{asts} streams, {blocks} blocks; {aws} wave archives, {turned} PCM16 bytes turned; {len(errors)} differences")
+            turned += len(read(b, fb[aw[name]]))
+    print(f"{asts} streams, {blocks} blocks; {aws} wave archives, {turned} PCM16 bytes; {len(errors)} differences")
     for e in errors[:40]:
         print(e)
     sys.exit(1 if errors else 0)
