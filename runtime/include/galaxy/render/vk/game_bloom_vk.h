@@ -6,11 +6,9 @@
 #include "galaxy/render/vk/vk_context.h"
 
 #include <array>
-#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <memory>
-#include <thread>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -93,9 +91,7 @@ private:
 
     bool ready_ = false;
     bool kept_ = false;
-    std::thread worker_;
-    std::atomic<bool> compiled_{false};
-    std::array<std::vector<std::uint32_t>, kProgramCount> spirv_{};
+    bool to_build_ = false;  // initialized: poll_ready makes the passes
 
     VkDescriptorSetLayout image_layout_ = VK_NULL_HANDLE;    // set 0: t0-t2 sampled, u0-u2 storage
     VkDescriptorSetLayout sampler_layout_ = VK_NULL_HANDLE;  // set 1: s0 linear clamp (immutable)

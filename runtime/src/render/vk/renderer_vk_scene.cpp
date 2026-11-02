@@ -15,6 +15,8 @@
 #include "galaxy/render/texture_store.h"
 #include "galaxy/render/draw_constants.h"
 
+#include <span>
+#include <tuple>
 #include <vk_mem_alloc.h>
 
 #include <algorithm>
@@ -1223,17 +1225,13 @@ bool RendererVk::ensure_curve_sort() {
     pool_info.poolSizeCount = 1;
     pool_info.pPoolSizes = &size;
     vk::check(vkCreateDescriptorPool(device, &pool_info, nullptr, &curve_pool_), "curve sort descriptor pool");
-    const std::string source = curved::curve_sort_source();
-    for (const auto& [entry, pipeline] : {std::pair{"classify", &curve_classify_}, std::pair{"offsets", &curve_offsets_},
-                                          std::pair{"scatter", &curve_scatter_}}) {
-        std::string error;
-        const std::vector<std::uint32_t> spirv = vk::compile_hlsl(source, vk::ShaderStage::Compute, entry, {}, error);
-        if (spirv.empty()) {
-            std::cerr << "[curve-sort] " << error << '\n';
-            return false;
-        }
+    for (const auto& [shader, entry, pipeline] :
+         {std::tuple{vk::UtilitySpirv::CurveClassifyCs, "classify", &curve_classify_},
+          std::tuple{vk::UtilitySpirv::CurveOffsetsCs, "offsets", &curve_offsets_},
+          std::tuple{vk::UtilitySpirv::CurveScatterCs, "scatter", &curve_scatter_}}) {
+        const std::span<const std::uint32_t> spirv = vk::utility_spirv(shader);
         VkShaderModuleCreateInfo module_info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-        module_info.codeSize = spirv.size() * sizeof(std::uint32_t);
+        module_info.codeSize = spirv.size_bytes();
         module_info.pCode = spirv.data();
         VkShaderModule module = VK_NULL_HANDLE;
         vk::check(vkCreateShaderModule(device, &module_info, nullptr, &module), "curve sort shader module");

@@ -44,30 +44,8 @@ bool trace_present_stats_enabled() {
     return enabled;
 }
 
-// The binding layouts of the renderer's own shaders (annotate()).
-constexpr vk::RegisterBinding kUtilityBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}};
-constexpr vk::RegisterBinding kConversionBindings[] = {
-    {"b0", 0, 0, true}, {"t0", 0, 0}, {"s0", 0, 1}, {"s1", 0, 2}};
 constexpr std::uint32_t kPushConstantBytes = 64u;
 constexpr VkShaderStageFlags kPushStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-// The display picture into the swap chain image (the present pass's blit), turned for a pre-rotated image: `transform` is the
-// image's VkSurfaceTransformFlagBitsKHR (identity, 90, 180 or 270 degrees clockwise). t is the position in the
-// viewport, which already covers the picture's turned rectangle; uv is the picture's point shown there.
-constexpr char kPresentVs[] = R"HLSL(
-cbuffer C : register(b0) { uint transform; };
-struct V { float4 pos:SV_Position; float2 uv:TEXCOORD0; };
-V main(uint id : SV_VertexID) {
-    V o;
-    float2 t = float2(id == 1 ? 2 : 0, id == 2 ? 2 : 0);
-    o.pos = float4(t.x * 2 - 1, 1 - t.y * 2, 0.5, 1);
-    o.uv = transform == 2u ? float2(t.y, 1 - t.x)
-         : transform == 4u ? float2(1 - t.x, 1 - t.y)
-         : transform == 8u ? float2(1 - t.y, t.x)
-         : t;
-    return o;
-}
-)HLSL";
 
 // The picture's rectangle (in the window as displayed, `width` x `height`) in an image turned by `transform`.
 VkRect2D turned_rect(VkSurfaceTransformFlagBitsKHR transform, int width, int height, int left, int top, int w, int h) {
@@ -774,31 +752,23 @@ bool RendererVk::restore_surface() {
     return true;
 }
 
-VkShaderModule RendererVk::utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion) {
-    std::string error;
-    const std::vector<std::uint32_t> spirv = vk::compile_hlsl(
-        vk::annotate(hlsl, conversion ? std::span<const vk::RegisterBinding>(kConversionBindings)
-                                      : std::span<const vk::RegisterBinding>(kUtilityBindings)),
-        stage, "main", {}, error);
-    if (spirv.empty()) {
-        throw std::runtime_error("utility shader: " + error);
-    }
+VkShaderModule RendererVk::utility_module(vk::UtilitySpirv shader) {
+    const std::span<const std::uint32_t> spirv = vk::utility_spirv(shader);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = spirv.size() * sizeof(std::uint32_t);
+    info.codeSize = spirv.size_bytes();
     info.pCode = spirv.data();
     VkShaderModule module = VK_NULL_HANDLE;
     vk::check(vkCreateShaderModule(vk::Context::get().device(), &info, nullptr, &module), "vkCreateShaderModule");
     return module;
 }
 
-VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, std::string_view vs_source,
-                                               std::string_view ps_source, VkColorComponentFlags write_mask,
+VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout, vk::UtilitySpirv vs_shader,
+                                               vk::UtilitySpirv ps_shader, VkColorComponentFlags write_mask,
                                                bool blend, bool strip, bool depth_write,
                                                VkSampleCountFlagBits samples) {
     const VkDevice device = vk::Context::get().device();
-    const bool conversion = layout == conversion_layout_;
-    const VkShaderModule vs = utility_module(vs_source, vk::ShaderStage::Vertex, conversion);
-    const VkShaderModule ps = utility_module(ps_source, vk::ShaderStage::Fragment, conversion);
+    const VkShaderModule vs = utility_module(vs_shader);
+    const VkShaderModule ps = utility_module(ps_shader);
     VkPipelineShaderStageCreateInfo stages[2]{};
     stages[0] = {VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, nullptr, 0, VK_SHADER_STAGE_VERTEX_BIT, vs,
                  "main", nullptr};
@@ -866,40 +836,33 @@ VkPipeline RendererVk::create_utility_pipeline(VkRenderPass pass, VkPipelineLayo
 bool RendererVk::create_utility_pipelines() {
     constexpr VkColorComponentFlags kAll = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                   scene_conversion_shader_source(), kAll, false, false, false);
-    grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                        scene_conversion_shader_source(), kAll, false, false, false);
-    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, blit_vertex_shader_source(),
-                                                       display_filter_shader_source(), kAll, false, false, false);
+    conversion_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                                   vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
+    grey_conversion_pipeline_ = create_utility_pipeline(grey_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                                        vk::UtilitySpirv::SceneConversionPs, kAll, false, false, false);
+    display_filter_pipeline_ = create_utility_pipeline(color_pass_, conversion_layout_, vk::UtilitySpirv::BlitVs,
+                                                       vk::UtilitySpirv::DisplayFilterPs, kAll, false, false, false);
     for (unsigned kind = 0u; kind < static_cast<unsigned>(SceneUtility::Count); ++kind) {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
-        // The depth resolve: each pixel's sample 0 (the console's single sample sits at the pixel centre).
-        static constexpr char kDepthResolvePs[] = R"HLSL(
-Texture2DMS<float> t0 : register(t0);
-float main(float4 pos : SV_Position) : SV_Depth {
-    return t0.Load(int2(pos.xy), 0);
-}
-)HLSL";
         depth_resolve_pipeline_ = create_utility_pipeline(gx_layout_.scene_pass, utility_layout_,
-                                                          blit_vertex_shader_source(), kDepthResolvePs, 0u, false,
+                                                          vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
                                                           false, true);
     }
-    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, kPresentVs, blit_pixel_shader_source(),
+    blit_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::PresentVs, vk::UtilitySpirv::BlitPs,
                                              kAll, false, false, false);
-    ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, ui_solid_quad_vertex_shader_source(),
-                                                 ui_solid_quad_pixel_shader_source(), kAll, true, true, false);
+    ui_solid_pipeline_ = create_utility_pipeline(present_pass_, utility_layout_, vk::UtilitySpirv::UiSolidVs,
+                                                 vk::UtilitySpirv::UiSolidPs, kAll, true, true, false);
     ui_textured_pipeline_ = create_utility_pipeline(
-        present_pass_, utility_layout_, ui_textured_quad_vertex_shader_source(),
-        ui_textured_quad_pixel_shader_source(), kAll, true, true, false);
+        present_pass_, utility_layout_, vk::UtilitySpirv::UiTexturedVs,
+        vk::UtilitySpirv::UiTexturedPs, kAll, true, true, false);
     depth_carry_pipeline_ = create_utility_pipeline(
-        gx_layout_.scene_pass, utility_layout_, blit_vertex_shader_source(),
-        depth_linear_ ? depth_carry_pixel_shader_source() : depth_carry_load_pixel_shader_source(), 0u, false, false,
+        gx_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+        depth_linear_ ? vk::UtilitySpirv::DepthCarryPs : vk::UtilitySpirv::DepthCarryLoadPs, 0u, false, false,
         true);
-    color_carry_pipeline_ = create_utility_pipeline(gx_layout_.scene_pass, utility_layout_, blit_vertex_shader_source(),
-                                                    blit_pixel_shader_source(), kAll, false, false, false);
+    color_carry_pipeline_ = create_utility_pipeline(gx_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                                    vk::UtilitySpirv::BlitPs, kAll, false, false, false);
     return true;
 }
 
@@ -922,14 +885,14 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
     case SceneUtility::ClearAlpha:
     case SceneUtility::ClearRgba:
         pipeline = create_utility_pipeline(
-            pass, utility_layout_, blit_vertex_shader_source(), clear_pixel_shader_source(),
+            pass, utility_layout_, vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::ClearPs,
             kind == SceneUtility::ClearRgb ? kRgb
                 : kind == SceneUtility::ClearAlpha ? VK_COLOR_COMPONENT_A_BIT : kRgb | VK_COLOR_COMPONENT_A_BIT,
             false, false, false, samples);
         break;
     case SceneUtility::ClearDepth:
-        pipeline = create_utility_pipeline(pass, utility_layout_, blit_vertex_shader_source(),
-                                           clear_depth_pixel_shader_source(), 0u, false, false, true, samples);
+        pipeline = create_utility_pipeline(pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+                                           vk::UtilitySpirv::ClearDepthPs, 0u, false, false, true, samples);
         break;
     case SceneUtility::Count:
         break;

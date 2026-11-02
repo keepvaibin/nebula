@@ -30,6 +30,7 @@
 #include "galaxy/render/vk/game_bloom_vk.h"
 #include "galaxy/render/vk/post_process_vk.h"
 #include "galaxy/render/vk/shader_compile_vk.h"
+#include "galaxy/render/vk/utility_spirv.h"
 #include "galaxy/render/vk/vk_context.h"
 #include "galaxy/render/host_window.h"
 #include "galaxy/render/window_owner.h"
@@ -431,11 +432,11 @@ private:
     // A pipeline of the renderer's own passes: no vertex input, `strip` four-vertex quads or full-screen triangles,
     // blended over the target when `blend`, depth written (always passing) when `depth_write`.
     [[nodiscard]] VkPipeline create_utility_pipeline(VkRenderPass pass, VkPipelineLayout layout,
-                                                     std::string_view vs_source, std::string_view ps_source,
+                                                     vk::UtilitySpirv vs_shader, vk::UtilitySpirv ps_shader,
                                                      VkColorComponentFlags write_mask, bool blend, bool strip,
                                                      bool depth_write,
                                                      VkSampleCountFlagBits samples = VK_SAMPLE_COUNT_1_BIT);
-    [[nodiscard]] VkShaderModule utility_module(std::string_view hlsl, vk::ShaderStage stage, bool conversion);
+    [[nodiscard]] VkShaderModule utility_module(vk::UtilitySpirv shader);
 
     // Frame recording.
     // `clear`: begins with both targets cleared to it (scene_pass_clear).

@@ -3,18 +3,14 @@
 #include "galaxy/render/vk/game_bloom_vk.h"
 
 #include "galaxy/render/game_bloom_shape.h"
-#include "galaxy/render/vk/shader_compile_vk.h"
+#include "galaxy/render/vk/utility_spirv.h"
 
 #include <algorithm>
 #include <cstring>
 #include <iostream>
+#include <span>
 #include <string>
 #include <utility>
-
-namespace galaxy::render {
-// The shader source cmake/post_shader_sources.cmake embeds.
-extern const unsigned char galaxy_post_game_bloom_hlsl[];
-}  // namespace galaxy::render
 
 namespace galaxy::render::vk {
 namespace {
@@ -22,10 +18,6 @@ namespace {
 constexpr VkFormat kWorkFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
 constexpr VkShaderStageFlags kStages =
     VK_SHADER_STAGE_COMPUTE_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-// game_bloom.hlsl's registers: t0-t2 sampled and u0-u2 storage images in set 0, s0 in set 1, the constants pushed.
-constexpr RegisterBinding kBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1}, {"t2", 0, 2},
-                                         {"u0", 0, 3},       {"u1", 0, 4}, {"u2", 0, 5}, {"s0", 1, 0}};
 
 void image_barrier(VkCommandBuffer commands, VkImage image, VkImageLayout from, VkImageLayout to,
                    VkPipelineStageFlags src_stage, VkAccessFlags src_access, VkPipelineStageFlags dst_stage,
@@ -55,35 +47,11 @@ void written(VkCommandBuffer commands) {
 
 void GameBloomVk::initialize() {
     shutdown();
-    compiled_.store(false, std::memory_order_relaxed);
-    worker_ = std::thread([this] {
-        struct Source {
-            Program program;
-            ShaderStage stage;
-            const char* entry;
-        };
-        static constexpr Source kSources[] = {{kDown, ShaderStage::Compute, "DownCS"},
-                                              {kBox, ShaderStage::Compute, "BoxCS"},
-                                              {kBlur, ShaderStage::Compute, "BlurCS"},
-                                              {kCompositeVs, ShaderStage::Vertex, "CompositeVS"},
-                                              {kCompositePs, ShaderStage::Fragment, "CompositePS"}};
-        const std::string source =
-            annotate(reinterpret_cast<const char*>(galaxy_post_game_bloom_hlsl), kBindings);
-        for (const Source& s : kSources) {
-            std::string error;
-            spirv_[s.program] = compile_hlsl(source, s.stage, s.entry, {"BLOOM_STORAGE_FORMAT=1"}, error);
-            if (spirv_[s.program].empty()) {
-                std::cerr << "[bloom] " << s.entry << ": " << error << '\n';
-            }
-        }
-        compiled_.store(true, std::memory_order_release);
-    });
+    to_build_ = true;
 }
 
 void GameBloomVk::shutdown() noexcept {
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    to_build_ = false;
     destroy();
     ready_ = false;
     kept_ = false;
@@ -100,10 +68,10 @@ bool GameBloomVk::poll_ready() {
     if (ready_) {
         return true;
     }
-    if (!worker_.joinable() || !compiled_.load(std::memory_order_acquire)) {
+    if (!to_build_) {
         return false;
     }
-    worker_.join();
+    to_build_ = false;
     ready_ = build();
     if (!ready_) {
         destroy();
@@ -113,12 +81,12 @@ bool GameBloomVk::poll_ready() {
 }
 
 VkShaderModule GameBloomVk::module(Program program) const {
-    const std::vector<std::uint32_t>& code = spirv_[program];
-    if (code.empty()) {
-        return VK_NULL_HANDLE;
-    }
+    static constexpr UtilitySpirv kShaders[kProgramCount] = {UtilitySpirv::BloomDownCs, UtilitySpirv::BloomBoxCs,
+                                                             UtilitySpirv::BloomBlurCs, UtilitySpirv::BloomCompositeVs,
+                                                             UtilitySpirv::BloomCompositePs};
+    const std::span<const std::uint32_t> code = utility_spirv(kShaders[program]);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * sizeof(std::uint32_t);
+    info.codeSize = code.size_bytes();
     info.pCode = code.data();
     VkShaderModule shader = VK_NULL_HANDLE;
     return vkCreateShaderModule(Context::get().device(), &info, nullptr, &shader) == VK_SUCCESS ? shader
@@ -198,8 +166,8 @@ bool GameBloomVk::build() {
             return false;
         }
     }
-    // The composite's pipelines are made per scene target pass at first use; its programs must have compiled.
-    return !spirv_[kCompositeVs].empty() && !spirv_[kCompositePs].empty();
+    // The composite's pipelines are made per scene target pass at first use.
+    return true;
 }
 
 void GameBloomVk::destroy() noexcept {

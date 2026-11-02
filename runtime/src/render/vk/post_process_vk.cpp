@@ -2,7 +2,7 @@
 // Presentation post-processing on Vulkan (post_process_vk.h).
 #include "galaxy/render/vk/post_process_vk.h"
 
-#include "galaxy/render/vk/shader_compile_vk.h"
+#include "galaxy/render/vk/utility_spirv.h"
 
 #include "AreaTex.h"
 #include "SearchTex.h"
@@ -12,16 +12,9 @@
 #include <cstdio>
 #include <cstring>
 #include <iostream>
+#include <span>
 #include <string>
 #include <utility>
-
-namespace galaxy::render {
-// The shader sources cmake/post_shader_sources.cmake embeds.
-extern const unsigned char galaxy_post_post_process_hlsl[];
-extern const unsigned char galaxy_post_smaa_hlsl[];
-extern const unsigned char galaxy_post_ffx_a_h[];
-extern const unsigned char galaxy_post_ffx_fsr1_h[];
-}  // namespace galaxy::render
 
 namespace galaxy::render::vk {
 namespace {
@@ -31,49 +24,6 @@ constexpr VkFormat kEdgesFormat = VK_FORMAT_R8G8_UNORM;
 constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT;
 constexpr VkColorComponentFlags kRgba = kRgb | VK_COLOR_COMPONENT_A_BIT;
 constexpr VkShaderStageFlags kStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
-
-// post_process.hlsl's registers: textures t0-t2 in set 0, the linear and point samplers in set 1, the constants
-// pushed.
-constexpr RegisterBinding kBindings[] = {{"b0", 0, 0, true}, {"t0", 0, 0}, {"t1", 0, 1},
-                                         {"t2", 0, 2},       {"s0", 1, 0}, {"s1", 1, 1}};
-
-enum class Library { kNone, kSmaa, kFsr };
-
-const char* text_of(const unsigned char* bytes) {
-    return reinterpret_cast<const char*>(bytes);
-}
-
-// One pass's source, composed as CMakeLists.txt's galaxy_post_shader composes the D3D12 build's fxc inputs.
-std::string compose(const char* pass, const char* preset, Library library) {
-    std::string text = std::string("#define ") + pass + " 1\n";
-    if (preset != nullptr) {
-        text += std::string("#define ") + preset + " 1\n";
-    }
-    text += "#define POST_SECTION 1\n";
-    text += text_of(galaxy_post_post_process_hlsl);
-    text += '\n';
-    if (library == Library::kSmaa) {
-        text += text_of(galaxy_post_smaa_hlsl);
-        text += '\n';
-    } else if (library == Library::kFsr) {
-        text += text_of(galaxy_post_ffx_a_h);
-        text += "\n#undef POST_SECTION\n#define POST_SECTION 2\n";
-        text += text_of(galaxy_post_post_process_hlsl);
-        text += '\n';
-        text += text_of(galaxy_post_ffx_fsr1_h);
-        text += '\n';
-    }
-    text += "#undef POST_SECTION\n#define POST_SECTION 3\n";
-    text += text_of(galaxy_post_post_process_hlsl);
-    text += '\n';
-    return text;
-}
-
-const char* smaa_preset(unsigned quality) {
-    static constexpr const char* kPresets[4] = {"SMAA_PRESET_LOW", "SMAA_PRESET_MEDIUM", "SMAA_PRESET_HIGH",
-                                                "SMAA_PRESET_ULTRA"};
-    return kPresets[std::min(quality, 3u)];
-}
 
 VkSampler create_sampler(VkDevice device, VkFilter filter) {
     VkSamplerCreateInfo info{VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
@@ -196,60 +146,13 @@ void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPa
     status_ = {};
     status_.live_aa = static_cast<std::uint8_t>(settings_.aa);
     status_.live_quality = settings_.smaa_quality;
-    set_reason(status_.smaa_reason, "COMPILING");
-    set_reason(status_.fxaa_reason, "COMPILING");
+    set_reason(status_.smaa_reason, "STARTING");
+    set_reason(status_.fxaa_reason, "STARTING");
     scene_pass_ = scene_pass;
     color_pass_ = color_pass;
     stencil_format_ = stencil_format();
-    compiled_.store(false, std::memory_order_relaxed);
-    const unsigned quality = settings_.smaa_quality;
-    worker_ = std::thread([this, quality] { compile_programs(quality, false); });
-}
-
-void PostProcessorVk::compile_programs(unsigned smaa_quality, bool quality_only) {
-    struct Source {
-        Program program;
-        const char* pass;
-        Library library;
-        bool quality_preset;  // SMAA: the chosen quality's preset, else HIGH (the D3D12 build's)
-        ShaderStage stage;
-    };
-    static constexpr Source kSources[] = {
-        {kFullscreenVs, "PASS_RESAMPLE", Library::kNone, false, ShaderStage::Vertex},
-        {kResamplePs, "PASS_RESAMPLE", Library::kNone, false, ShaderStage::Fragment},
-        {kFxaaPs, "PASS_FXAA", Library::kNone, false, ShaderStage::Fragment},
-        {kEasuPs, "PASS_FSR_EASU", Library::kFsr, false, ShaderStage::Fragment},
-        {kRcasPs, "PASS_FSR_RCAS", Library::kFsr, false, ShaderStage::Fragment},
-        {kRcasScaledPs, "PASS_FSR_RCAS_SCALED", Library::kFsr, false, ShaderStage::Fragment},
-        {kSmaaEdgesVs, "PASS_SMAA_EDGES", Library::kSmaa, false, ShaderStage::Vertex},
-        {kSmaaEdgesPs, "PASS_SMAA_EDGES", Library::kSmaa, true, ShaderStage::Fragment},
-        {kSmaaWeightsVs, "PASS_SMAA_WEIGHTS", Library::kSmaa, true, ShaderStage::Vertex},
-        {kSmaaWeightsPs, "PASS_SMAA_WEIGHTS", Library::kSmaa, true, ShaderStage::Fragment},
-        {kSmaaBlendVs, "PASS_SMAA_BLEND", Library::kSmaa, false, ShaderStage::Vertex},
-        {kSmaaBlendPs, "PASS_SMAA_BLEND", Library::kSmaa, false, ShaderStage::Fragment},
-        {kSmaaBlendKeepPs, "PASS_SMAA_BLEND_KEEP", Library::kSmaa, false, ShaderStage::Fragment},
-        {kDebandPs, "PASS_DEBAND", Library::kNone, false, ShaderStage::Fragment},
-        {kDebandReducePs, "PASS_DEBAND_REDUCE", Library::kNone, false, ShaderStage::Fragment},
-        {kDebandSmoothPs, "PASS_DEBAND_SMOOTH", Library::kNone, false, ShaderStage::Fragment},
-        {kDebandApplyPs, "PASS_DEBAND_APPLY", Library::kNone, false, ShaderStage::Fragment},
-    };
-    for (const Source& source : kSources) {
-        if (quality_only && !source.quality_preset) {
-            continue;
-        }
-        const char* preset = source.library != Library::kSmaa ? nullptr
-            : source.quality_preset                          ? smaa_preset(smaa_quality)
-                                                             : "SMAA_PRESET_HIGH";
-        std::string error;
-        spirv_[source.program] =
-            compile_hlsl(annotate(compose(source.pass, preset, source.library), kBindings), source.stage,
-                         source.stage == ShaderStage::Vertex ? "VSMain" : "PSMain", {}, error);
-        if (spirv_[source.program].empty() && compile_error_[0] == '\0') {
-            std::snprintf(compile_error_.data(), compile_error_.size(), "%s %s: %s", source.pass,
-                          source.stage == ShaderStage::Vertex ? "VS" : "PS", error.c_str());
-        }
-    }
-    compiled_.store(true, std::memory_order_release);
+    spirv_quality_ = settings_.smaa_quality;
+    to_build_ = true;
 }
 
 void PostProcessorVk::set_present_pass(VkRenderPass pass) {
@@ -279,12 +182,9 @@ void PostProcessorVk::set_present_pass(VkRenderPass pass) {
 }
 
 VkShaderModule PostProcessorVk::module(Program program) const {
-    const std::vector<std::uint32_t>& code = spirv_[program];
-    if (code.empty()) {
-        return VK_NULL_HANDLE;
-    }
+    const std::span<const std::uint32_t> code = post_spirv(program, spirv_quality_);
     VkShaderModuleCreateInfo info{VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    info.codeSize = code.size() * sizeof(std::uint32_t);
+    info.codeSize = code.size_bytes();
     info.pCode = code.data();
     VkShaderModule shader = VK_NULL_HANDLE;
     return vkCreateShaderModule(Context::get().device(), &info, nullptr, &shader) == VK_SUCCESS ? shader
@@ -484,9 +384,7 @@ void PostProcessorVk::destroy_pipelines() noexcept {
 }
 
 void PostProcessorVk::shutdown() noexcept {
-    if (worker_.joinable()) {
-        worker_.join();
-    }
+    to_build_ = false;
     ready_ = false;
     status_.initialized = false;
     status_.smaa_ok = false;
@@ -496,23 +394,18 @@ void PostProcessorVk::shutdown() noexcept {
     area_texture_.reset();
     search_texture_.reset();
     edges_ = weights_ = stencil_ = antialiased_ = scaled_ = debanded_ = deband_reduced_ = deband_smoothed_ = {};
-    spirv_ = {};
-    compile_error_ = {};
 }
 
 bool PostProcessorVk::poll_ready() {
-    if (ready_ || built_ || !compiled_.load(std::memory_order_acquire)) {
+    if (!to_build_) {
         return ready_;
     }
-    worker_.join();
-    if (compile_error_[0] != '\0') {
-        std::cerr << "[post-process] compile failed: " << compile_error_.data() << '\n';
-    }
+    to_build_ = false;
     if (!build_pipelines()) {
         std::cerr << "[post-process] scaling pipelines failed; plain blit\n";
         set_reason(status_.skip_reason, "INIT FAILED");
         destroy_pipelines();
-        built_ = true;  // not again
+        built_ = true;
         return false;
     }
     self_test();
@@ -529,8 +422,8 @@ void PostProcessorVk::apply_settings(const PostProcessSettings& settings) {
     PostProcessSettings next = settings;
     next.smaa_quality = std::min<std::uint8_t>(next.smaa_quality, 3u);
     if (ready_ && status_.smaa_ok && next.smaa_quality != settings_.smaa_quality) {
-        // The quality's edges and weights shaders, compiled here: a settings change, not a frame.
-        compile_programs(next.smaa_quality, true);
+        // The quality's edges and weights pipelines, made here: a settings change, not a frame.
+        spirv_quality_ = next.smaa_quality;
         const VkPipeline edges = create_pipeline(kSmaaEdgesVs, kSmaaEdgesPs, edges_pass_, kRgba, 1);
         const VkPipeline weights = create_pipeline(kSmaaWeightsVs, kSmaaWeightsPs, weights_pass_, kRgba, 2);
         if (edges == VK_NULL_HANDLE || weights == VK_NULL_HANDLE) {
@@ -540,6 +433,7 @@ void PostProcessorVk::apply_settings(const PostProcessSettings& settings) {
             if (edges != VK_NULL_HANDLE) vkDestroyPipeline(device, edges, nullptr);
             if (weights != VK_NULL_HANDLE) vkDestroyPipeline(device, weights, nullptr);
             next.smaa_quality = settings_.smaa_quality;
+            spirv_quality_ = settings_.smaa_quality;
         } else {
             const VkDevice device = Context::get().device();
             const VkPipeline old_edges = std::exchange(smaa_edges_, edges);
