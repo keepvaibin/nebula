@@ -198,8 +198,18 @@ namespace {
             // Normal, rainbow, fire, ice, bee, spring, Boo, flying, tornado (PlayerMode).
             static const u16 kForms[] = {0, 1, 2, 3, 4, 5, 6, 7, 9};
             const u16 form = kForms[static_cast< u32 >(index) % (sizeof(kForms) / sizeof(kForms[0]))];
-            JUTNativeLog("test: form %u\n", form);
-            MarioAccess::getPlayerActor()->setPlayerMode(form, true);
+            // Only what this stage loaded: a form's models come with the stage's item, as in play.
+            MarioActor* pPlayer = MarioAccess::getPlayerActor();
+            const bool loaded = form == PlayerMode_Invincible ? pPlayer->_9C8 != nullptr
+                                : form == PlayerMode_Ice      ? pPlayer->_9C0 != nullptr
+                                : form == PlayerMode_Bee      ? pPlayer->_9E4 != nullptr
+                                : form == PlayerMode_Teresa   ? pPlayer->_9A4 != nullptr
+                                : form == PlayerMode_Tornado  ? pPlayer->mTornadoMario != nullptr
+                                                              : true;
+            if (loaded) {
+                JUTNativeLog("test: form %u\n", form);
+                pPlayer->setPlayerMode(form, true);
+            }
         }
         if (kind == NEBULA_TEST_PLACE_PLAYER_WATER) {
             TVec3f pos;
