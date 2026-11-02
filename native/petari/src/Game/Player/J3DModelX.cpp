@@ -217,7 +217,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             if (i == 6 && J3DNativeMaterial::overrideCoordinate(
                               reinterpret_cast< const u8* >(MR::getScreenResTIMG()) + MR::getScreenResTIMG()->mImageDataOffset,
-                              MR::getScreenWidth(), NebulaFrameClock::cFrameHeight)) {
+                              MR::getScreenWidth(), NebulaFrameClock::cCanvasHeight)) {
                 continue;
             }
             mStateLists[i].send();

@@ -227,7 +227,7 @@ void BloomEffect::initDraw() const {
     J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
 
     Mtx44 projectionMtx;
-    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
+    NebulaMtxOrtho(projectionMtx, 0.0f, MR::getCanvasHeight(), 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
     J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
@@ -249,8 +249,8 @@ void BloomEffect::drawTexture(JUTTexture* pTexture, s32 param2, s32 param3, u8 i
 
     s32 row = param3 / param2;
     s32 column = param3 % param2;
-    f32 width = static_cast< f32 >(MR::getFrameBufferWidth()) / param2;
-    f32 height = static_cast< f32 >(MR::getFrameBufferHeight()) / param2;
+    f32 width = static_cast< f32 >(MR::getCanvasWidth()) / param2;
+    f32 height = static_cast< f32 >(MR::getCanvasHeight()) / param2;
     f32 left = column * width;
     f32 right = (column + 1) * width;
     f32 bottom = (row + 1) * height;
@@ -303,8 +303,8 @@ void BloomEffect::initBlur(JUTTexture* pTexture, u32 param2, f32 intensity) cons
 void BloomEffect::drawBlur(s32 divisions, s32 tile, Mtx* pMtx, u32 stageCount, u32 matrixCount) const {
     s32 row = tile / divisions;
     s32 column = tile % divisions;
-    f32 width = static_cast< f32 >(MR::getFrameBufferWidth()) / divisions;
-    f32 height = static_cast< f32 >(MR::getFrameBufferHeight()) / divisions;
+    f32 width = static_cast< f32 >(MR::getCanvasWidth()) / divisions;
+    f32 height = static_cast< f32 >(MR::getCanvasHeight()) / divisions;
     f32 left = column * width;
     f32 right = (column + 1) * width;
     f32 bottom = (row + 1) * height;

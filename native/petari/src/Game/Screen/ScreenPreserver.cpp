@@ -27,7 +27,7 @@ void ScreenPreserver::draw() const {
     J2DPicture pic(&tex);
 
     f32 width = MR::getScreenWidth();
-    f32 height = static_cast<s32>(NebulaFrameClock::cFrameHeight);
+    f32 height = static_cast<s32>(NebulaFrameClock::cCanvasHeight);
     pic.draw(0.0f, 0.0f, width, height, false, false, false);
 }
 
