@@ -672,7 +672,7 @@ void FileSelector::clearPointing() {
 }
 
 namespace {
-    inline OSTime getUserFileLastModified(const FileSelector* pSelector, s32 id) {
+    inline NebulaCalendar::SaveTime getUserFileLastModified(const FileSelector* pSelector, s32 id) {
         return pSelector->mUserFile[id - 1].getLastModified();
     }
 

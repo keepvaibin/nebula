@@ -58,13 +58,13 @@ TitleSequenceProduct::TitleSequenceProduct()
 #pragma opt_propagation off
 void TitleSequenceProduct::exeDisplayEncouragePal60Window() {
     if (MR::isFirstStep(this)) {
-        OSTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
-        OSTime ticks = NebulaCalendar::now();
-        s32 day = NebulaCalendar::toSeconds(ticks) / (60 * 60 * 24);
-        s32 dayAnnounced = NebulaCalendar::toSeconds(timeAnnounced) / (60 * 60 * 24);
+        NebulaCalendar::SaveTime timeAnnounced = GameDataFunction::getSysConfigFileTimeAnnounced();
+        const NebulaCalendar::SaveTime now = NebulaCalendar::now();
+        s32 day = now / (60 * 60 * 24);
+        s32 dayAnnounced = timeAnnounced / (60 * 60 * 24);
         dayAnnounced += 100;
 
-        if (timeAnnounced == 0 || ticks < timeAnnounced || dayAnnounced < day) {
+        if (timeAnnounced == 0 || now < timeAnnounced || dayAnnounced < day) {
             mEncouragePal60Window->appear();
             if (NebulaRegion::isPal()) {
                 GameDataFunction::updateSysConfigFileTimeAnnounced();

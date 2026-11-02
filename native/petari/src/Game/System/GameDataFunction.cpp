@@ -1,3 +1,4 @@
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameDataGalaxyStorage.hpp"
@@ -325,7 +326,7 @@ namespace GameDataFunction {
         return ::getSaveDataHandleSequence()->getCurrentUserFile()->isOnCompleteEndingMarioAndLuigi();
     }
 
-    OSTime getSysConfigFileTimeAnnounced() {
+    NebulaCalendar::SaveTime getSysConfigFileTimeAnnounced() {
         return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeAnnounced();
     }
 
@@ -333,11 +334,11 @@ namespace GameDataFunction {
         ::getSaveDataHandleSequence()->getSysConfigFile()->updateTimeAnnounced();
     }
 
-    OSTime getSysConfigFileTimeSent() {
+    NebulaCalendar::SaveTime getSysConfigFileTimeSent() {
         return ::getSaveDataHandleSequence()->getSysConfigFile()->getTimeSent();
     }
 
-    void setSysConfigFileTimeSent(OSTime timeSent) {
+    void setSysConfigFileTimeSent(NebulaCalendar::SaveTime timeSent) {
         ::getSaveDataHandleSequence()->getSysConfigFile()->setTimeSent(timeSent);
     }
 

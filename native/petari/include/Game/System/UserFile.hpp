@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaCalendar.hpp"
 #include <revolution/os.h>
 
 class ConfigDataHolder;
@@ -18,7 +19,7 @@ public:
     bool getIconId(u32*) const;
     bool isLastLoadedMario() const;
     bool isOnCompleteEndingMarioAndLuigi() const;
-    OSTime getLastModified() const;
+    NebulaCalendar::SaveTime getLastModified() const;
     void setCreated();
     void setMiiOrIconId(const void*, const u32*);
     void setLastLoadedMario(bool);

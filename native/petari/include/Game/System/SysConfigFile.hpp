@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/BinaryDataChunkHolder.hpp"
 #include <revolution/os.h>
 
@@ -22,8 +23,8 @@ public:
     void initHeaderSerializer();
 
 private:
-    /* 0x08 */ OSTime mTimeAnnounced;
-    /* 0x10 */ OSTime mTimeSent;
+    /* 0x08 */ NebulaCalendar::SaveTime mTimeAnnounced;
+    /* 0x10 */ NebulaCalendar::SaveTime mTimeSent;
     /* 0x18 */ u32 mSentBytes;
     /* 0x1C */ BinaryDataContentHeaderSerializer* mHeaderSerializer;
 };
@@ -33,10 +34,10 @@ public:
     /// @brief Creates a new `SysConfigFile`.
     SysConfigFile();
 
-    OSTime getTimeAnnounced();
+    NebulaCalendar::SaveTime getTimeAnnounced();
     void updateTimeAnnounced();
-    OSTime getTimeSent();
-    void setTimeSent(OSTime);
+    NebulaCalendar::SaveTime getTimeSent();
+    void setTimeSent(NebulaCalendar::SaveTime);
     u32 getSentBytes();
     void setSentBytes(u32);
     void makeDataBinary(u8*, u32) const;

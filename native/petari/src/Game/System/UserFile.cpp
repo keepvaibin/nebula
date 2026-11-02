@@ -1,3 +1,4 @@
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/UserFile.hpp"
 #include "Game/System/ConfigDataHolder.hpp"
 #include "Game/System/GameDataHolder.hpp"
@@ -48,7 +49,7 @@ bool UserFile::isOnCompleteEndingMarioAndLuigi() const {
     return mConfigDataHolder->isOnCompleteEndingMario() && mConfigDataHolder->isOnCompleteEndingLuigi();
 }
 
-OSTime UserFile::getLastModified() const {
+NebulaCalendar::SaveTime UserFile::getLastModified() const {
     return mConfigDataHolder->getLastModified();
 }
 

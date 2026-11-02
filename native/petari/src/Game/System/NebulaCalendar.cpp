@@ -7,14 +7,13 @@ extern "C" const NebulaHostServices* nebula_host(void);
 namespace NebulaCalendar {
     SaveTime now() {
         const NebulaHostServices* const host = nebula_host();
-        // 60.75 MHz is 243/4 ticks per microsecond.
-        return host->calendar_ns(host->user) / 1000 * 243 / 4;
+        return host->calendar_ns(host->user) / 1000000000;
     }
 
     // Days from 2000-01-01 to a civil date: the proleptic Gregorian calendar in eras of 400 years (146,097 days),
     // counted from March so that the leap day ends a year.
     Date toDate(SaveTime time) {
-        int64_t seconds = toSeconds(time);
+        int64_t seconds = time;
         int64_t days = seconds / 86400;
         int64_t secondOfDay = seconds % 86400;
         if (secondOfDay < 0) {

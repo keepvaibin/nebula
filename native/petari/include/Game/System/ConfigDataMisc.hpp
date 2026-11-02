@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/BinaryDataChunkHolder.hpp"
 #include <revolution/os.h>
 
@@ -19,10 +20,10 @@ public:
     void onCompleteEndingLuigi();
     bool isOnCompleteEndingMario();
     bool isOnCompleteEndingLuigi();
-    OSTime getLastModified() const;
+    NebulaCalendar::SaveTime getLastModified() const;
     void updateLastModified();
 
 private:
     /* 0x04 */ u8 mFlag;
-    /* 0x08 */ OSTime mLastModified;
+    /* 0x08 */ NebulaCalendar::SaveTime mLastModified;
 };
