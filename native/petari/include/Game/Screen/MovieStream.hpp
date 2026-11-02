@@ -1,8 +1,6 @@
 #pragma once
 
-#include "Game/System/NebulaAtomic.hpp"
 
-#include "Game/System/NerveExecutor.hpp"
 #include "Game/System/GameAssets.hpp"
 
 // A movie file as the importer cooks it (crates/nebula-import/src/cook/thp.rs), host order.
@@ -30,74 +28,41 @@ struct MovieVideoInfo {
     u32 mHeight;
 };
 
-// Reads a movie's frames ahead from the disc, decodes the next one into its Y, U and V planes and hands its sound to
-// the host's mixer.
-class MovieStream : public NerveExecutor {
+// A movie in the mapped store: decodes the next frame into its Y, U and V planes and hands the frame's sound to the host's mixer.
+class MovieStream {
 public:
-    MovieStream(const char*);
+    MovieStream();
 
     bool open(const char*);
     bool close();
     void quit();
     u32 calcNeedMemory() const;
     void setBuffer(u8*);
-    bool preLoad(bool);
-    void loadStop();
+    void start(bool);
+    void stop();
     s32 decode(s32);
     s32 drawCurrentFrame(u32, u32, u32, u32);
-    bool isHeaderRead() const {
-        return mHeaderRead;
-    }
     const MovieVideoInfo& getVideoInfo() const {
         return mVideoInfo;
     }
     f32 getFrameRate() const;
     s32 getTotalFrame() const;
     void setVolume(s32, s32);
-    bool isPreLoading() const;
     void setUnpauseFrameFlag();
 
-    void onFrameRead(s32);
-    void onLoadRead(s32);
-
-    void exeWait();
-    void exeReadHeader();
-    void exeReadPreLoad();
-
 private:
-    struct ReadBuffer {
-        u8* mData;
-        s32 mFrameNumber;
-        NebulaAtomic< bool > mValid;
-    };
+    void rewind();
 
-    static const s32 cReadBuffers = 20;
-
-    void startFrameRead();
-    void checkPrefetch();
-    void onHeaderRead();
-    void onPreLoadRead();
-    static s32 nextBuffer(s32 index) {
-        return index + 1 >= cReadBuffers ? 0 : index + 1;
-    }
-
-    bool mHeaderRead;
     bool mOpen;
-    bool mPreFetching;
+    bool mPlaying;
     bool mLoop;
-    bool mReadError;
-    bool mReading;
     GameAssets::File mFile;
-    GameAssets::Request mRequest;
+    const u8* mData;
     MovieFileHeader mHeader;
     MovieVideoInfo mVideoInfo;
     u32 mCurOffset;
-    s32 mNextDecodeIndex;
-    NebulaAtomic< s32 > mReadIndex;
-    s32 mReadSize;
-    s32 mTotalReadFrame;
-    s32 mPreLoadLeft;
-    ReadBuffer mReadBuffer[cReadBuffers];
+    u32 mFrameSize;
+    s32 mFrame;
     u8* mPlaneY;
     u8* mPlaneU;
     u8* mPlaneV;

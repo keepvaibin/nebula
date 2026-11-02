@@ -14,44 +14,6 @@ __attribute__((noreturn)) void nebula_fatal(const char* format, ...);
 }
 
 namespace {
-    // Reads in flight: the host completes a slot from its own thread, which finishes it.
-    struct Slot {
-        GameAssets::Request* mRequest;  // nullptr when free (game thread only)
-        bool mCanceled;
-        s32 mResult;
-    };
-
-    const u32 cSlots = 64;
-    Slot sSlots[cSlots];
-    GameEvent sCanceled;
-
-    void finish(Slot* pSlot) {
-        GameAssets::Request* pRequest = pSlot->mRequest;
-        const bool canceled = pSlot->mCanceled;
-        const s32 result = canceled ? GameAssets::cResultCanceled : pSlot->mResult < 0 ? GameAssets::cResultFailed : pSlot->mResult;
-        pSlot->mRequest = nullptr;
-        pRequest->mResult = result;
-        pRequest->mBusy = false;
-
-        if (pRequest->mCallback != nullptr) {
-            pRequest->mCallback(result, pRequest);
-        }
-
-        if (canceled) {
-            sCanceled.signal();
-        }
-    }
-
-    Slot* slotOf(const GameAssets::Request* pRequest) {
-        for (u32 i = 0; i < cSlots; i++) {
-            if (sSlots[i].mRequest == pRequest) {
-                return &sSlots[i];
-            }
-        }
-
-        return nullptr;
-    }
-
     bool toFile(const NebulaAssetEntry& rEntry, GameAssets::File* pFile) {
         if (rEntry.folder != 0) {
             return false;
@@ -61,20 +23,7 @@ namespace {
         pFile->mLength = rEntry.length;
         return true;
     }
-
-    void wakeReader(s32, GameAssets::Request* pRequest) {
-        (static_cast< GameEvent* >(pRequest->mUser))->signal();
-    }
 }  // namespace
-
-extern "C" NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result) {
-    if (slot < cSlots) {
-        const BOOL enabled = GameThreads::excludeAudio();
-        sSlots[slot].mResult = result;
-        finish(&sSlots[slot]);
-        GameThreads::restoreAudio(enabled);
-    }
-}
 
 namespace GameAssets {
     s32 find(const char* pPath) {
@@ -110,58 +59,18 @@ namespace GameAssets {
         return true;
     }
 
-    void readAsync(const File* pFile, Request* pRequest, void* pDst, s32 size, s32 offset, Callback callback) {
-        if (offset < 0 || size < 0 || static_cast< u64 >(offset) + static_cast< u64 >(size) > pFile->mLength) {
-            nebula_fatal("read outside file %d (length %u): %d bytes at %d", pFile->mEntry, pFile->mLength, size, offset);
-        }
-
-        const BOOL enabled = GameThreads::excludeAudio();
-        u32 slot = 0;
-        while (slot < cSlots && sSlots[slot].mRequest != nullptr) {
-            slot++;
-        }
-
-        if (slot == cSlots) {
-            nebula_fatal("more than %u reads in flight", cSlots);
-        }
-
-        sSlots[slot].mRequest = pRequest;
-        sSlots[slot].mCanceled = false;
-        pRequest->mCallback = callback;
-        pRequest->mBusy = true;
-        GameThreads::restoreAudio(enabled);
-
-        const NebulaHostServices* const host = nebula_host();
-        host->asset_read(host->user, pFile->mEntry, static_cast< u64 >(offset), static_cast< u32 >(size), pDst, slot);
-    }
-
     const void* map(s32 entryNum) {
         const NebulaHostServices* const host = nebula_host();
         return host->asset_map(host->user, entryNum);
     }
 
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset) {
-        GameEvent done;
-        done.init();
-        Request request;
-        request.mUser = &done;
-        readAsync(pFile, &request, pDst, size, offset, wakeReader);
-        done.wait();
-        return request.mResult;
-    }
-
-    void cancel(Request* pRequest) {
-        const BOOL enabled = GameThreads::excludeAudio();
-        Slot* pSlot = slotOf(pRequest);
-        if (pSlot != nullptr) {
-            pSlot->mCanceled = true;
-            while (slotOf(pRequest) != nullptr) {
-                GameThreads::restoreAudio(enabled);
-                sCanceled.wait();
-                GameThreads::excludeAudio();
-            }
+        if (offset < 0 || size < 0 || static_cast< u64 >(offset) + static_cast< u64 >(size) > pFile->mLength) {
+            nebula_fatal("read outside file %d (length %u): %d bytes at %d", pFile->mEntry, pFile->mLength, size, offset);
         }
-        GameThreads::restoreAudio(enabled);
+
+        const NebulaHostServices* const host = nebula_host();
+        return host->asset_read(host->user, pFile->mEntry, static_cast< u64 >(offset), static_cast< u32 >(size), pDst);
     }
 
     // A file loaded whole is a view of the store from cMappedFrom bytes up: nearly all its pages stay as they are (a model's few

@@ -312,7 +312,6 @@ void report_crash_facts(const fs::path& dump) {
 struct Module {
     decltype(&nebula_game_attach) attach;
     decltype(&nebula_game_run) run;
-    decltype(&nebula_game_asset_complete) asset_complete;
     decltype(&nebula_game_sound_frame) audio_tick;
     decltype(&nebula_game_mii_valid) mii_valid;
     decltype(&nebula_game_mii_changed) mii_changed;
@@ -432,7 +431,6 @@ void load_module(const fs::path& path) {
     }
     gModule.attach = reinterpret_cast<decltype(gModule.attach)>(find_symbol(module, "nebula_game_attach"));
     gModule.run = reinterpret_cast<decltype(gModule.run)>(find_symbol(module, "nebula_game_run"));
-    gModule.asset_complete = reinterpret_cast<decltype(gModule.asset_complete)>(find_symbol(module, "nebula_game_asset_complete"));
     gModule.audio_tick = reinterpret_cast<decltype(gModule.audio_tick)>(find_symbol(module, "nebula_game_sound_frame"));
     gModule.mii_valid = reinterpret_cast<decltype(gModule.mii_valid)>(find_symbol(module, "nebula_game_mii_valid"));
     gModule.mii_changed =
@@ -550,43 +548,6 @@ private:
     const wchar_t* name_;
 };
 
-// File reads, each on the next free thread: a movie's read does not hold up a load or the music.
-class ReadPool {
-public:
-    template <typename F>
-    void post(F&& job) {
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            jobs_.emplace_back(std::forward<F>(job));
-        }
-        ready_.notify_one();
-    }
-
-    void start() {
-        for (int i = 0; i < 3; i++) {
-            std::thread([this] {
-                name_thread(L"Nebula Host Reads");
-                for (;;) {
-                    std::function<void()> job;
-                    {
-                        std::unique_lock<std::mutex> lock(mutex_);
-                        ready_.wait(lock, [this] { return !jobs_.empty(); });
-                        job = std::move(jobs_.front());
-                        jobs_.pop_front();
-                    }
-                    job();
-                }
-            }).detach();
-        }
-    }
-
-private:
-    std::mutex mutex_;
-    std::condition_variable ready_;
-    std::deque<std::function<void()>> jobs_;
-};
-
-ReadPool gReads;
 Worker gFs(L"Nebula Host Saves");
 
 // The save folder's root: the game's paths under it, each checked.
@@ -2488,7 +2449,19 @@ int svc_asset_child(void*, int32_t folder, uint32_t child, NebulaAssetEntry* out
     return disc_entry_out(disc_table().child(folder, child), out);
 }
 
+// GALAXY_TEST_DISC_DELAY_US: a slow drive (each way to the store takes this long), so waits on loads are exercised.
+void test_drive_delay() {
+    static const uint32_t delay_us = [] {
+        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DISC_DELAY_US"));
+        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
+    }();
+    if (delay_us != 0) {
+        std::this_thread::sleep_for(std::chrono::microseconds(delay_us));
+    }
+}
+
 const void* svc_asset_map(void*, int32_t file) {
+    test_drive_delay();
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (!entry || entry->folder) {
         return nullptr;
@@ -2497,6 +2470,7 @@ const void* svc_asset_map(void*, int32_t file) {
 }
 
 void* svc_asset_map_private(void*, int32_t file) {
+    test_drive_delay();
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (!entry || entry->folder) {
         return nullptr;
@@ -2518,48 +2492,26 @@ void svc_asset_unmap(void*, void* data, uint64_t size) {
     gPak.store.unmap_private(data, static_cast<std::size_t>(size));
 }
 
-void svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst, uint32_t slot) {
+int32_t svc_asset_read(void*, int32_t file, uint64_t file_offset, uint32_t size, void* dst) {
+    test_drive_delay();
     gFileReads.fetch_add(1, std::memory_order_relaxed);
     // GALAXY_TRACE_FILE_READS=1: each read with the frame it came on: two runs of deterministic mode compare by it.
     static const bool trace_reads = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
     const std::optional<galaxy::disc::Entry> entry = disc_table().entry(file);
     if (trace_reads) {
-        std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load()),
+        std::fprintf(stderr, "[read] frame %llu entry %d at %llu size %u %s\n", static_cast<unsigned long long>(gDeterministicFrames.load(std::memory_order_relaxed)),
                      file, static_cast<unsigned long long>(file_offset), size, entry && entry->name != nullptr ? entry->name : "?");
     }
-    if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size) {
-        gModule.asset_complete(slot, -1);
-        return;
+    if (!entry || entry->folder || file_offset > entry->length || entry->length - file_offset < size ||
+        !gPak.store.read(entry->position + file_offset, size, dst)) {
+        return -1;
     }
-    const uint64_t offset = entry->position + file_offset;
-    // GALAXY_TEST_DISC_DELAY_US: a slow drive (each read takes this long), so waits on loads are exercised.
-    static const uint32_t test_delay_us = [] {
-        const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_TEST_DISC_DELAY_US"));
-        return value != nullptr ? static_cast<uint32_t>(std::strtoul(value, nullptr, 10)) : 0u;
-    }();
-    // Deterministic test mode: the read is done here, on the simulation thread, and completes before the call
-    // returns, so a load finishes at the same point of the game's code every run.
-    const bool deterministic = deterministic_mode();
-    auto read = [=] {
-        if (test_delay_us != 0) {
-            std::this_thread::sleep_for(std::chrono::microseconds(test_delay_us));
-        }
-        if (!gPak.store.read(offset, size, dst)) {
-            gModule.asset_complete(slot, -1);
-            return;
-        }
 #if defined(NEBULA_HOST_RENDERER)
-        // A read writes memory the GPU sees.
-        mark_written(dst, size);
-        frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
+    // A read writes memory the GPU sees.
+    mark_written(dst, size);
+    frame_hash().reads.fetch_add(1, std::memory_order_relaxed);
 #endif
-        gModule.asset_complete(slot, (int32_t)size);
-    };
-    if (deterministic) {
-        read();
-    } else {
-        gReads.post(read);
-    }
+    return static_cast<int32_t>(size);
 }
 
 const char* svc_game_id(void*) {
@@ -4115,7 +4067,6 @@ int main(int argc, char** argv) {
     }
 
     name_thread(L"Nebula Host Main");
-    gReads.start();
     gFs.start();
 #if !defined(NEBULA_HOST_RENDERER)
     std::thread(ai_thread).detach();
