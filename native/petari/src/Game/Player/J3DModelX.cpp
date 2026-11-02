@@ -215,9 +215,9 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     s32 override = -1;
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
-            if (i == 6 && J3DNativeMaterial::overrideCoordinate(
-                              MR::getScreenResTIMG()->image(),
-                              MR::getScreenWidth(), NebulaFrameClock::cCanvasHeight)) {
+            if (i == 6) {
+                J3DNativeMaterial::overrideCoordinate(MR::getScreenResTIMG()->image(), MR::getScreenWidth(),
+                                                      NebulaFrameClock::cCanvasHeight);
                 continue;
             }
             mStateLists[i].send();
@@ -247,7 +247,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         _1C8[index] = nullptr;
     }
     if (_1C4[index]) {
-        _1C4[index]->send();
+        J3DNativeMaterial::swapImage(0, _1C4[index]);
     }
     if (override >= 0) {
         // runtime/src/render/materials/flat_color.hlsl: the pass's colour over the material's program (the console's: one
@@ -360,9 +360,6 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     pLists[5].copy(list);
     list.clear();
 
-    list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
-    list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(MR::getScreenResTIMG()->image()));
-    list.setTexCoordGen(GPU_TEXCOORD0, GPU_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
     pLists[6].copy(list);
     list.clear();
 
@@ -445,8 +442,8 @@ J3DModelX::J3DModelX(J3DModelData* data, u32 flags, u32 bufferFlags) : J3DModel(
     _1B8 = nullptr;
 
     u32 count = mModelData->getMaterialNum();
-    _1C4 = new const J3DStateList*[count];
-    _1C8 = new const J3DStateList*[count];
+    _1C4 = new const void*[count];
+    _1C8 = new const void*[count];
     for (u32 i = 0; i < count; i++) {
         _1C4[i] = nullptr;
         _1C8[i] = nullptr;

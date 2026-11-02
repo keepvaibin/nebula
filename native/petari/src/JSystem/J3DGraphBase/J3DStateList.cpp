@@ -172,30 +172,6 @@ void J3DStateList::setTexCoordGen(GpuTexCoordID coord, GpuTexGenType type, GpuTe
     r.a[4] = J3DNativeTexGen::post(postMtx);
 }
 
-void J3DStateList::setTexLookupMode(GpuTexMapID map, GpuTexWrapMode wrapS, GpuTexWrapMode wrapT, GpuTexFilter minFilter,
-                                    GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GpuBool biasClamp,
-                                    GpuBool edgeLod, GpuAnisotropy maxAniso) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEX_LOOKUP);
-    r.a[0] = map;
-    r.a[1] = wrapS;
-    r.a[2] = wrapT;
-    r.a[3] = minFilter == GPU_LINEAR || minFilter == GPU_LIN_MIP_NEAR || minFilter == GPU_LIN_MIP_LIN;
-    r.a[4] = magFilter != GPU_NEAR;
-    r.a[5] = minFilter < GPU_NEAR_MIP_NEAR ? 0 : minFilter < GPU_NEAR_MIP_LIN ? 1 : 2;
-    r.a[6] = biasClamp;
-    r.a[7] = edgeLod;
-    r.a[8] = maxAniso;
-    r.f[0] = minLod;
-    r.f[1] = maxLod;
-    r.f[2] = lodBias;
-}
-
-void J3DStateList::setTexImgPtr(GpuTexMapID map, const void* pImage) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEX_IMAGE);
-    r.a[0] = map;
-    r.image = static_cast< u64 >(reinterpret_cast< uintptr_t >(pImage));
-}
-
 void J3DStateList::setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
     NebulaStateOp& r = add(J3D_STATE_FOG);
     r.a[0] = type;

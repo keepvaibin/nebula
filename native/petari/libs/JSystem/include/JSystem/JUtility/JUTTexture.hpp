@@ -68,7 +68,6 @@ public:
     }
 
     void initTexObj();
-    void load(_GpuTexMapID);
     // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
     // filter: J3DNativeTarget::capture's flags).
     void capture(int x, int y, GpuTexFmt format, bool half, u8 clear);

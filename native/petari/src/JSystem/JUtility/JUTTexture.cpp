@@ -81,10 +81,6 @@ void JUTTexture::initTexObj() {
                     mLodBias / 100.0f, mTIMG->mBiasClamp, mTIMG->mDoEdgeLod, static_cast< GpuAnisotropy >(mTIMG->mMaxAnisotropy));
 }
 
-void JUTTexture::load(GpuTexMapID texMapID) {
-    J3DNativeTexture::load(&mObj, texMapID);
-}
-
 namespace {
     // A capture read as a texture of `format`: the picture's channels it reads, and what its intensity holds.
     NebulaTargetChannels captureChannels(GpuTexFmt format, u32* pFlags) {

@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 103u
+#define NEBULA_GAME_API_VERSION 104u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -161,10 +161,6 @@ enum {
     NEBULA_STATE_TEX_COORD_GEN = 1, /* coordinate, type and source (J3DNativeTexGen's encoding), normalize,
                                        post row; a[5] 1: also the coordinate's matrix a[6] (a slot: 0-9 position
                                        matrices, 10-19 texture matrices, 20 identity) */
-    NEBULA_STATE_TEX_LOOKUP,        /* map, wrap s, wrap t (0 clamp, 1 repeat, 2 mirror), minified linear, magnified
-                                       linear, levels (0 the first only, 1 nearest, 2 between), bias clamp, edge LOD,
-                                       anisotropy (0 off, 1 two, 2 four); f: min LOD, max LOD, LOD bias (levels) */
-    NEBULA_STATE_TEX_IMAGE,         /* map; a[1] 1: a texture object's load (coordinate scales follow it); image */
     NEBULA_STATE_PROJECTION,        /* type (0 perspective, 1 orthographic); f: GXSetProjectionv's six terms */
     NEBULA_STATE_VIEWPORT,          /* f: left, top, width, height (pixels), near depth, far depth (0-1) */
     NEBULA_STATE_SCISSOR,           /* f: left, top, width, height (pixels) */
@@ -338,7 +334,6 @@ enum { NEBULA_CULL_NONE = 0, NEBULA_CULL_BACK = 1, NEBULA_CULL_FRONT = 2, NEBULA
    the shader of the draws after the state the game set: J3DModelX's override passes). */
 enum { NEBULA_NATIVE_KEPT = 0xFF };
 /* A texture's image: the drawing state's map as it is (its image, size and sampling: textures the game loads per draw). */
-#define NEBULA_NATIVE_KEPT_IMAGE (~(uint64_t)0)
 
 typedef struct NebulaNativeMaterial {
     uint32_t shader;           /* NebulaShaderId */
