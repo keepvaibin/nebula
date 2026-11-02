@@ -131,8 +131,10 @@ void HeapMemoryWatcher::createRootHeap() {
     nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
     arenaLo = reinterpret_cast< uintptr_t >(mem2Lo);
     arenaHi = reinterpret_cast< uintptr_t >(mem2Hi);
-    newHi = reinterpret_cast< void* >(arenaLo + 0xE00000);
-    NebulaAuxMemory::init(mem2Lo, 0xE00000);
+    // The sound heap (AudParams aramSize) past the reserved part: all of it inside the auxiliary memory.
+    const u32 auxBytes = NebulaAuxMemory::cReserved + NebulaAuxMemory::cSoundBytes;
+    newHi = reinterpret_cast< void* >(arenaLo + auxBytes);
+    NebulaAuxMemory::init(mem2Lo, auxBytes);
     JKRHeap::setAltAramStartAdr(arenaLo);
     pHeap = JKRExpHeap::create(newHi, (u32)(arenaHi - reinterpret_cast< uintptr_t >(newHi)), JKRHeap::sRootHeap, true);
 
