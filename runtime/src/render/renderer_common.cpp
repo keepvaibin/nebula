@@ -23,18 +23,16 @@
 
 namespace galaxy::render {
 
-// The capture shader (captures, the frame shown, peeks). A capture samples the frame inside its rectangle, through
+// The capture shader (captures, the frame shown, screen probes). A capture samples the frame inside its rectangle, through
 // the display's vertical filter when the game asked for it (the line above and the line, weighted), takes the colour's
 // luminance or the depth when asked, and writes the channels the picture carries. Colour stays in floating point; the
-// target's format rounds it once. A peek reads one logical pixel (colour averaged over its scaled block, depth as the
-// 24-bit value the game reads, in three bytes).
+// target's format rounds it once. A screen probe reads one pixel (depth as its 24-bit value, in three bytes).
 //
 // Root constants (b0):
 //   src_xform = src origin.xy, src texels per dest pixel .zw (scaled frame px)
 //   modes     = luminance, unused, depth, keep_alpha
 //   filt      = filter weights above/line/below (64ths), clamp_y min
-//   filt2     = clamp_y max, picture channels (7 the frame shown), the scaled one-logical-row filter offset, the
-//               peek reduction width
+//   filt2     = clamp_y max, picture channels (7 the frame shown), the scaled one-logical-row filter offset, 1 a probe
 static constexpr char kConvPs[] = R"HLSL(
 cbuffer C : register(b0) {
     float4 src_xform;
@@ -94,31 +92,11 @@ float4 main(V v) : SV_Target {
     srctex.GetDimensions(dims.x, dims.y);
     float2 inv = 1.0 / dims;
     float2 sp = src_xform.xy + v.pos.xy * src_xform.zw;
-    uint reduction_width = filt2.w < 0.0 ? 1u : uint(filt2.w + 0.5);
     float4 c;
-    if (reduction_width != 0u || filt2.w < 0.0) {
-        if (modes.z != 0.0) {
-            // Depth peeks are point reads of the physical texel the CPU
-            // geometry selected (src_xform.xy); Load avoids a multi-texel
-            // blend at scaled frame sizes.
-            c = float4(pack_depth(
-                srctex.Load(int3(
-                    filt2.w < 0.0 ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw)
-                                 : int2(src_xform.xy), 0)).r)) / 255.0;
-        } else {
-            // Color peeks reduce the complete scaled logical-pixel block; a whole field (filt2.w < 0)
-            // reduces each destination pixel's block.
-            const bool field = filt2.w < 0.0;
-            const uint block = field ? uint(src_xform.z + 0.5) : reduction_width;
-            const int2 origin = field ? int2(src_xform.xy + floor(v.pos.xy) * src_xform.zw) : int2(src_xform.xy);
-            float4 sum = 0.0;
-            [loop] for (uint py = 0u; py < block; ++py) {
-                [loop] for (uint px = 0u; px < block; ++px) {
-                    sum += srctex.Load(int3(origin + int2(px, py), 0));
-                }
-            }
-            c = saturate(sum / float(block * block));
-        }
+    if (filt2.w > 0.0) {
+        // A screen probe: the pixel src_xform.xy names.
+        const float4 texel = srctex.Load(int3(int2(src_xform.xy), 0));
+        c = modes.z != 0.0 ? float4(pack_depth(texel.r)) / 255.0 : saturate(texel);
     } else {
         float ylo = filt.w, yhi = filt2.x;
         float filter_offset = max(filt2.z, 1.0);
@@ -419,33 +397,17 @@ SceneConversionShaderConstants make_scene_conversion_constants(
     }};
 }
 
-SceneConversionShaderConstants make_scene_peek_conversion_constants(
-    const ScenePeekSamplingGeometry& sampling,
-    ReadbackKind kind) noexcept {
-    const bool is_depth = kind == ReadbackKind::Depth;
-    const float src_x = is_depth
-        ? static_cast<float>(sampling.depth_texel_x)
-        : sampling.src_x;
-    const float src_y = is_depth
-        ? static_cast<float>(sampling.depth_texel_y)
-        : sampling.src_y;
+SceneConversionShaderConstants make_screen_probe_constants(float x, float y, const FrameMap& map, bool depth) noexcept {
+    const auto pixel = [](float at, float scale, unsigned size) {
+        return static_cast<float>(std::min(static_cast<unsigned>(at * scale), size - 1u));
+    };
+    const float px = pixel(x, map.sx, map.width);
+    const float py = pixel(y, map.sy, map.height);
     return SceneConversionShaderConstants{{
-        src_x,
-        src_y,
-        sampling.step_x,
-        sampling.step,
-        0.0f,
-        1.0f,
-        is_depth ? 1.0f : 0.0f,
-        1.0f,
-        0.0f,
-        64.0f,
-        0.0f,
-        sampling.center_y,
-        sampling.center_y,
-        255.0f,
-        sampling.step_x,
-        sampling.step,
+        px, py, 1.0f, 1.0f,
+        0.0f, 1.0f, depth ? 1.0f : 0.0f, 1.0f,
+        0.0f, 64.0f, 0.0f, py + 0.5f,
+        py + 0.5f, 255.0f, 1.0f, 1.0f,
     }};
 }
 

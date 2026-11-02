@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan GX renderer (renderer_vk.h): device, swapchain, frames, present and the overlay. The scene target, draws,
-// copies and peeks are renderer_vk_scene.cpp.
+// copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
 #include "galaxy/render/vk/renderer_vk.h"
@@ -135,11 +135,6 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
             pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
             pool_info.queueFamilyIndex = vk::Context::get().queue_family();
             vk::check(vkCreateCommandPool(device, &pool_info, nullptr, &utility_pool_), "vkCreateCommandPool");
-            VkCommandBufferAllocateInfo alloc{VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO};
-            alloc.commandPool = utility_pool_;
-            alloc.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            alloc.commandBufferCount = 1;
-            vk::check(vkAllocateCommandBuffers(device, &alloc, &utility_commands_), "vkAllocateCommandBuffers");
         }
         if (!create_scene_targets(scene_map_, wanted_msaa_samples()) || !create_utility_pipelines()) {
             shutdown();
@@ -452,7 +447,7 @@ bool RendererVk::create_layouts() {
                                                         : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
-    // One RGBA8 target written whole (copies, peeks): its old contents are dropped; it ends shader-readable.
+    // One RGBA8 target written whole (copies, screen probes): its old contents are dropped; it ends shader-readable.
     {
         VkAttachmentDescription attachment{};
         attachment.format = VK_FORMAT_R8G8B8A8_UNORM;
@@ -911,7 +906,7 @@ void RendererVk::shutdown() {
         scene_submitted_color_.reset();
         scene_shown_image_ = VK_NULL_HANDLE;
         display_filter_picture_.reset();
-        turn_source_ = peek_color_source_ = VK_NULL_HANDLE;
+        turn_source_ = VK_NULL_HANDLE;
         release_replay_resources();
         scene_copy_dests_.clear();
         scene_copy_dests_bytes_ = 0u;
@@ -923,51 +918,15 @@ void RendererVk::shutdown() {
             if (frame.acquired != VK_NULL_HANDLE) vkDestroySemaphore(device, frame.acquired, nullptr);
             frame = Frame{};
         }
-        for (AsyncField& field : async_fields_) {
-            if (field.pool != VK_NULL_HANDLE) vkDestroyCommandPool(device, field.pool, nullptr);
-            field = AsyncField{};
-        }
         if (utility_pool_ != VK_NULL_HANDLE) vkDestroyCommandPool(device, utility_pool_, nullptr);
         utility_pool_ = VK_NULL_HANDLE;
-        utility_commands_ = VK_NULL_HANDLE;
-        for (VkPipeline pipeline : {conversion_pipeline_, grey_conversion_pipeline_, display_filter_pipeline_,
-                                    blit_pipeline_, ui_solid_pipeline_, ui_textured_pipeline_, depth_carry_pipeline_,
-                                    color_carry_pipeline_, depth_resolve_pipeline_}) {
-            if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-        }
-        for (auto& by_samples : scene_utility_pipelines_) {
-            for (VkPipeline& pipeline : by_samples) {
-                if (pipeline != VK_NULL_HANDLE) vkDestroyPipeline(device, pipeline, nullptr);
-                pipeline = VK_NULL_HANDLE;
-            }
-        }
-        conversion_pipeline_ = grey_conversion_pipeline_ = display_filter_pipeline_ = blit_pipeline_ =
-            depth_resolve_pipeline_ = VK_NULL_HANDLE;
-        ui_solid_pipeline_ = ui_textured_pipeline_ = depth_carry_pipeline_ = color_carry_pipeline_ = VK_NULL_HANDLE;
-        for (auto& [key, sampler] : samplers_) vkDestroySampler(device, sampler, nullptr);
-        samplers_.clear();
-        sampler_tables_.clear();
-        constants_sets_.clear();
-        for (SceneSet* set : {&scene_, &alt_scene_}) {
-            for (VkFramebuffer framebuffer : {set->framebuffer, set->resolve_framebuffer}) {
-                if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(device, framebuffer, nullptr);
-            }
-            set->framebuffer = set->resolve_framebuffer = VK_NULL_HANDLE;
-            set->color.reset();
-            set->depth.reset();
-            set->ms_color.reset();
-            set->ms_depth.reset();
-            set->samples = 1u;
-        }
-        alt_scene_map_ = 0u;
         output_scene_active_ = false;
         scene_carry_color_.reset();
         scene_carry_depth_.reset();
         corner_texture_.reset();
-        peek_target_.reset();
-        field_target_.reset();
-        peek_readback_ = Readback{};
-        for (Readback& readback : pointer_depth_ring_) readback = Readback{};
+        probe_target_.reset();
+        probe_target_linear_.reset();
+        for (Readback& readback : probe_slots_) readback = Readback{};
         scene_capture_ = Readback{};
         backbuffer_capture_ = Readback{};
         vertex_ring_.reset();
@@ -1218,13 +1177,9 @@ std::uint64_t RendererVk::end_frame(bool present_swap_chain, SubmissionCallback 
         segments_[ring_segment_].fence = std::max(segments_[ring_segment_].fence, fence);
     }
     timestamp_pending_[frame_slot_] = timestamps_ != VK_NULL_HANDLE;
-    if (pointer_depth_in_frame_) {
-        pointer_depth_fence_ = fence;
-        pointer_depth_in_frame_ = false;
-    }
-    for (AsyncField& field : async_fields_) {
-        if (field.fence == kAsyncPeekInFrame) {
-            field.fence = fence;
+    for (Readback& readback : probe_slots_) {
+        if (readback.fence == kProbesInFrame) {
+            readback.fence = fence;
         }
     }
     if (scene_capture_.buffer && scene_capture_.fence == 0u && !scene_capture_pending_path_.empty()) {

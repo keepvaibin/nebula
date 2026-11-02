@@ -621,7 +621,6 @@ bool RenderCore::initialize(int w, int h) {
     render_chunks_in_flight_ = 0;
     present_chunks_in_flight_ = 0;
     utility_chunks_in_flight_ = 0;
-    pending_pointer_depth_capture_ = {};
     render_thread_ = std::thread(&RenderCore::render_thread_main, this);
     if (read_env_u64("GALAXY_FRAME_TELEMETRY", 1u) != 0u) {
         try {
@@ -1009,7 +1008,7 @@ void RenderCore::render_frame(
             timing_frame_index_.load(std::memory_order_relaxed));
     // Nothing to render: nothing attached (records, scene markers, captures).
     const bool empty = producer_shape_records_.empty() && producer_stream_marker_count_ == 0u &&
-        producer_stripe_particles_.empty() && !producer_pointer_depth_capture_;
+        producer_stripe_particles_.empty();
     if (empty) {
         if (present_swap_chain) {
             present_cached_display(black, true);
@@ -1031,7 +1030,6 @@ void RenderCore::render_frame(
         : std::chrono::steady_clock::time_point{};
     FrameChunk chunk;
     chunk.pointer_response=producer_pointer_response_;
-    take_attached_pointer_depth_capture(chunk);
     take_attached_stream_markers(chunk);
     take_attached_stripe_particles(chunk);
     take_attached_shape_records(chunk);
@@ -1153,8 +1151,7 @@ void RenderCore::wait_for_render_idle() {
                (frame_queue_.empty() &&
                 render_chunks_in_flight_ == 0u &&
                 present_chunks_in_flight_ == 0u &&
-                utility_chunks_in_flight_ == 0u &&
-                !pending_pointer_depth_capture_.capture);
+                utility_chunks_in_flight_ == 0u);
     });
     if (render_thread_error_ != nullptr) {
         std::exception_ptr error = render_thread_error_;
@@ -1589,6 +1586,8 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
         const std::size_t vertices = producer_record_pool_.vertices.size();
         chunk.record_pool.vertices.swap(producer_record_pool_.vertices);
         producer_record_pool_.vertices.reserve(vertices);
+        chunk.record_pool.probes.swap(producer_record_pool_.probes);
+        producer_record_pool_.probes.clear();
         chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
         chunk.record_pool.ops.swap(producer_record_pool_.ops);
         chunk.record_pool.natives.swap(producer_record_pool_.natives);
@@ -1606,6 +1605,9 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     const auto first_vertex = static_cast<std::uint32_t>(chunk.record_pool.vertices.size());
     chunk.record_pool.vertices.insert(chunk.record_pool.vertices.end(), producer_record_pool_.vertices.begin(), producer_record_pool_.vertices.end());
     producer_record_pool_.vertices.clear();
+    const auto first_probe = static_cast<std::uint32_t>(chunk.record_pool.probes.size());
+    chunk.record_pool.probes.insert(chunk.record_pool.probes.end(), producer_record_pool_.probes.begin(), producer_record_pool_.probes.end());
+    producer_record_pool_.probes.clear();
     chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
     producer_record_pool_.matrices.clear();
     producer_record_pool_.ops.clear();
@@ -1614,7 +1616,7 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     for (shapes::Record& record : producer_shape_records_) {
         record.matrix_first += first_matrix;
         record.op_first += first_op;
-        record.vertex_first += first_vertex;
+        record.vertex_first += record.kind == shapes::Record::Kind::Readback ? first_probe : first_vertex;
         record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
         chunk.shape_records.push_back(std::move(record));
     }
@@ -2004,44 +2006,6 @@ void RenderCore::on_scene_marker(SceneMarker marker, const std::array<float, 12>
     }
     if (marker == SceneMarker::SceneBegin) {
         s_scene_display_scale.store(renderer_.scene_display_scale(), std::memory_order_relaxed);
-    }
-}
-
-void RenderCore::take_attached_pointer_depth_capture(FrameChunk& chunk) {
-    if (!producer_pointer_depth_capture_) return;
-    chunk.pointer_depth_capture = std::move(producer_pointer_depth_capture_);
-    chunk.pointer_depth_in_frame = true;
-    producer_pointer_depth_capture_.reset();
-}
-
-// Render thread, inside the frame's parse: the field joins this command list.
-void RenderCore::record_pointer_depth_capture_in_frame(FrameChunk& chunk) {
-    auto capture = std::move(chunk.pointer_depth_capture);
-    chunk.pointer_depth_capture.reset();
-    chunk.pointer_depth_in_frame = false;
-    if (!capture) return;
-    const auto start = std::chrono::steady_clock::now();
-    bool recorded = false;
-    try {
-        recorded = renderer_.record_pointer_depth_capture_in_frame();
-    } catch (...) {
-        capture->error = std::current_exception();
-    }
-    if (!recorded) {
-        capture->success = false;
-        capture->publish_complete();
-        return;
-    }
-    const std::lock_guard<std::mutex> lock(queue_mutex_);
-    // The fence is assigned at end_frame; adopt_pointer_depth_fence_if_needed
-    // copies it before any wait or completion poll.
-    pending_pointer_depth_capture_ = {std::move(capture), 0u, start};
-}
-
-void RenderCore::adopt_pointer_depth_fence_if_needed() {
-    if (pending_pointer_depth_capture_.capture &&
-        pending_pointer_depth_capture_.fence_value == 0u) {
-        pending_pointer_depth_capture_.fence_value = renderer_.pointer_depth_capture_fence();
     }
 }
 
@@ -3317,8 +3281,7 @@ void RenderCore::present_cached_display(
                 queue_cv_.notify_one();
                 return;
             }
-            if (!back.scene_peek_only &&
-                !back.present_only && !back.present_swap_chain) {
+            if (!back.present_only && !back.present_swap_chain) {
                 back.present_swap_chain = true;
                 back.black = black;
                 queue_cv_.notify_one();
@@ -3362,57 +3325,16 @@ void RenderCore::render_thread_main() {
 #endif
         });
     }
-    ScenePeekRequest* active_peek = nullptr;
-    std::shared_ptr<PointerDepthCapture> active_pointer_depth;
-    // Called with queue_mutex_ held. Never leave a stack-owned utility request
-    // queued after its worker has failed. Notify while holding its mutex, so a
-    // waiter cannot destroy the request before the final cv access finishes.
+    // Called with queue_mutex_ held.
     const auto fail_queued_utilities = [&](std::exception_ptr error) {
         render_thread_error_ = error;
         stop_render_thread_ = true;
-        const auto fail_request = [&](ScenePeekRequest* request) {
-            if (request != nullptr) {
-                const std::lock_guard<std::mutex> request_lock(request->mutex);
-                request->error = error;
-                request->success = false;
-                request->done = true;
-                request->cv.notify_one();
-            }
-        };
-        fail_request(active_peek);
-        active_peek = nullptr;
-        if (active_pointer_depth) {
-            active_pointer_depth->error = error;
-            active_pointer_depth->success = false;
-            active_pointer_depth->publish_complete();
-            active_pointer_depth.reset();
-        }
-        if (pending_pointer_depth_capture_.capture) {
-            auto capture = std::move(pending_pointer_depth_capture_.capture);
-            pending_pointer_depth_capture_ = {};
-            capture->error = error;
-            capture->success = false;
-            capture->publish_complete();
-        }
-        for (FrameChunk& queued : frame_queue_) {
-            if (queued.scene_peek_only) {
-                ScenePeekRequest* request = queued.scene_peek_request;
-                queued.scene_peek_request = nullptr;
-                fail_request(request);
-                if (queued.pointer_depth_capture) {
-                    queued.pointer_depth_capture->error=error;
-                    queued.pointer_depth_capture->success=false;
-                    queued.pointer_depth_capture->publish_complete();
-                }
-            }
-        }
         queue_space_cv_.notify_all();
     };
     try {
     for (;;) {
         try {
-            poll_completed_pointer_depth_capture();
-            poll_async_peek_fields();
+            poll_screen_probes();
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             fail_queued_utilities(std::current_exception());
@@ -3422,15 +3344,12 @@ void RenderCore::render_thread_main() {
         bool have_chunk = false;
         bool idle_present = false;
         bool overlay_idle = false;
-        std::uint64_t shutdown_fence = 0;
         {
             std::unique_lock<std::mutex> lock(queue_mutex_);
             const RenderConfig cfg = get_render_config();
             idle_present = cfg.frame_rate_decouple &&
                 (cfg.vsync_interval != 0u || presented_max_fps(cfg) > 0.0f);
-            const bool poll_pointer_depth =
-                static_cast<bool>(pending_pointer_depth_capture_.capture) ||
-                renderer_.any_async_peek_field_pending();
+            const bool poll_probes = probe_flights_active_ != 0u;
             // Draining for a stop: queued frames present without sub-frames.
             interp_stopping_ = stop_render_thread_;
             // A native overlay over a game showing no interpolated frames (the HOME Menu's paused game draws no 3D scene;
@@ -3468,7 +3387,7 @@ void RenderCore::render_thread_main() {
                     interp_sleep_us(remaining_us);
                     lock.lock();
                 }
-            } else if (idle_present || poll_pointer_depth) {
+            } else if (idle_present || poll_probes) {
                 // Fences are polled at the top of the loop, outside queue_mutex_:
                 // park for at most 1 ms, woken early by new work or a stop.
                 queue_cv_.wait_for(lock, std::chrono::milliseconds(1), [this] {
@@ -3505,16 +3424,12 @@ void RenderCore::render_thread_main() {
             }
             if (frame_queue_.empty()) {
                 if (stop_render_thread_) {
-                    if (!pending_pointer_depth_capture_.capture) {
-                        break;  // stop requested, queue and capture fences drained
-                    }
-                    shutdown_fence = pending_pointer_depth_capture_.fence_value;
+                    break;  // stop requested, queue drained
                 }
             } else {
                 chunk = std::move(frame_queue_.front());
                 frame_queue_.pop_front();
-                if (!chunk.scene_peek_only &&
-                    !chunk.present_only && !chunk.present_swap_chain &&
+                if (!chunk.present_only && !chunk.present_swap_chain &&
                     !frame_queue_.empty() &&
                     frame_queue_.front().present_only) {
                     FrameChunk present = std::move(frame_queue_.front());
@@ -3522,11 +3437,7 @@ void RenderCore::render_thread_main() {
                     chunk.present_swap_chain = present.present_swap_chain;
                     chunk.black = present.black;
                 }
-                if (chunk.scene_peek_only) {
-                    active_peek = chunk.scene_peek_request;
-                    active_pointer_depth = chunk.pointer_depth_capture;
-                    ++utility_chunks_in_flight_;
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     ++present_chunks_in_flight_;
                 } else {
                     galaxy::timeline::record(galaxy::timeline::Event::RenderBegin, 0u, 0u);
@@ -3540,17 +3451,9 @@ void RenderCore::render_thread_main() {
         }
 
         try {
-            if (shutdown_fence != 0u) {
-                // Shutdown finishes the pointer capture in flight.
-                renderer_.wait_for_fence_value(shutdown_fence);
-                poll_completed_pointer_depth_capture();
-            } else if (have_chunk) {
+            if (have_chunk) {
                 queue_space_cv_.notify_all();
-                if (chunk.scene_peek_only) {
-                    execute_scene_peek_on_thread(chunk);
-                    active_peek = nullptr;
-                    active_pointer_depth.reset();
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     // An interpolation sequence presents the latest frame itself.
                     if (chunk.black) {
                         supersede_interp_sequence();
@@ -3582,7 +3485,6 @@ void RenderCore::render_thread_main() {
                         std::lock_guard<std::mutex> lock(queue_mutex_);
                         render_chunk_started_ns_ = 0u;
                     }
-                    submit_async_peek_fields_if_requested();
                 }
             } else if (idle_present) {
                 present_latest_frame_on_thread();
@@ -3605,11 +3507,7 @@ void RenderCore::render_thread_main() {
         } catch (...) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (have_chunk) {
-                if (chunk.scene_peek_only) {
-                    if (utility_chunks_in_flight_ != 0u) {
-                        --utility_chunks_in_flight_;
-                    }
-                } else if (chunk.present_only) {
+                if (chunk.present_only) {
                     if (present_chunks_in_flight_ != 0u) {
                         --present_chunks_in_flight_;
                     }
@@ -3621,13 +3519,7 @@ void RenderCore::render_thread_main() {
             break;
         }
 
-        if (have_chunk && chunk.scene_peek_only) {
-            std::lock_guard<std::mutex> lock(queue_mutex_);
-            if (utility_chunks_in_flight_ != 0u) {
-                --utility_chunks_in_flight_;
-            }
-            queue_space_cv_.notify_all();
-        } else if (have_chunk && chunk.present_only) {
+        if (have_chunk && chunk.present_only) {
             std::lock_guard<std::mutex> lock(queue_mutex_);
             if (present_chunks_in_flight_ != 0u) {
                 --present_chunks_in_flight_;
@@ -3651,230 +3543,56 @@ void RenderCore::render_thread_main() {
     }
 }
 
-std::uint32_t RenderCore::readback_serial(std::uint16_t token) const noexcept {
-    const std::uint32_t key = async_peek_key(ReadbackKind::Color, token);
-    for (const AsyncPeekFieldState& state : async_peek_) {
-        if (state.key.load(std::memory_order_acquire) == key) {
-            return state.publications.load(std::memory_order_acquire);
-        }
+std::uint32_t RenderCore::screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity) {
+    if (channel >= kScreenProbeChannels) {
+        return 0u;
     }
-    return 0u;
+    const std::lock_guard guard(probe_answers_lock_);
+    const ScreenProbeAnswers& answers = probe_answers_[channel];
+    const std::uint32_t count = std::min(answers.count, capacity);
+    std::memcpy(probes, answers.probes.data(), count * sizeof(ScreenProbe));
+    return count;
 }
 
-std::size_t RenderCore::async_peek_channel(ReadbackKind kind, std::uint16_t token) {
-    const std::uint32_t key = async_peek_key(kind, token);
-    std::size_t oldest = 0;
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        if (async_peek_[index].key.load(std::memory_order_relaxed) == key) {
-            return index;
-        }
-        if (async_peek_[index].last_request < async_peek_[oldest].last_request) {
-            oldest = index;
-        }
-    }
-    AsyncPeekFieldState& state = async_peek_[oldest];
-    state.generation.fetch_add(1u, std::memory_order_acq_rel);
-    state.publications.store(0u, std::memory_order_release);
-    state.key.store(key, std::memory_order_release);
-    return oldest;
-}
-
-bool RenderCore::read_async_peek_field(
-    AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value) {
-    const std::uint64_t published = state.published.load(std::memory_order_acquire);
-    if ((published & 0xFFFFFFFFu) == 0u ||
-        (published >> 32u) != state.generation.load(std::memory_order_acquire)) {
-        return false;
-    }
-    const std::uint8_t* field = state.rgba[static_cast<std::size_t>((published & 0xFFFFFFFFu) - 1u)];
-    if (field == nullptr) {
-        return false;
-    }
-    // Same packing the full-field conversion produced: 0x00RRGGBB for depth,
-    // 0xAARRGGBB for colour.
-    const std::uint8_t* pixel =
-        field + (static_cast<std::size_t>(y) * kFrameWidth + x) * 4u;
-    const std::uint32_t rgb = (std::uint32_t{pixel[0]} << 16u) |
-        (std::uint32_t{pixel[1]} << 8u) | pixel[2];
-    value = kind == ReadbackKind::Depth ? rgb : (std::uint32_t{pixel[3]} << 24u) | rgb;
-    state.published_answers.fetch_add(1u, std::memory_order_relaxed);
-    return true;
-}
-
-bool RenderCore::readback_published(
-    std::uint16_t x,
-    std::uint16_t y,
-    ReadbackKind kind,
-    std::uint16_t token,
-    std::uint32_t& value) {
-    if (!initialized_ || x >= kFrameWidth || y >= kFrameHeight) {
-        return false;
-    }
-    AsyncPeekFieldState& state = async_peek_[async_peek_channel(kind, token)];
-    state.last_request = ++async_peek_requests_;
-    state.requested.store(true, std::memory_order_release);
-    if (read_async_peek_field(state, x, y, kind, value)) {
-        return true;
-    }
-    // A channel just bound: the latest field of the kind, so a new token never stalls on the
-    // synchronous path.
-    AsyncPeekFieldState* latest = nullptr;
-    for (AsyncPeekFieldState& other : async_peek_) {
-        const std::uint32_t key = other.key.load(std::memory_order_relaxed);
-        if (&other != &state && key != kAsyncPeekUnbound && async_peek_key_kind(key) == kind &&
-            (latest == nullptr || other.last_request > latest->last_request) &&
-            (other.published.load(std::memory_order_acquire) & 0xFFFFFFFFu) != 0u) {
-            latest = &other;
-        }
-    }
-    return latest != nullptr &&
-        read_async_peek_field(*latest, x, y, kind, value);
-}
-
-void RenderCore::poll_async_peek_fields() {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        if (!renderer_.async_peek_field_pending(index)) {
-            continue;
-        }
-        AsyncPeekFieldState& state = async_peek_[index];
-        const int slot = state.pending_slot;
-        if (slot < 0) {
-            continue;
-        }
-        if (renderer_.try_complete_async_peek_field(index)) {
-            state.pending_slot = -1;
-            ++state.completed;
-            state.published.store(
-                (std::uint64_t{state.pending_generation} << 32u) | static_cast<std::uint32_t>(slot + 1),
-                std::memory_order_release);
-            if (state.pending_generation == state.generation.load(std::memory_order_acquire)) {
-                state.publications.fetch_add(1u, std::memory_order_release);
-            }
-        }
-    }
-}
-
-void RenderCore::submit_async_peek_fields_if_requested() {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        AsyncPeekFieldState& state = async_peek_[index];
-        if (!state.requested.load(std::memory_order_acquire)) {
-            continue;
-        }
-        // Token channels record at their token (record_async_peek_fields_at_token).
-        const std::uint32_t key = state.key.load(std::memory_order_acquire);
-        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != 0u) {
-            continue;
-        }
-        if (renderer_.async_peek_field_pending(index)) {
-            // Keep the request alive for the next rendered chunk.
-            continue;
-        }
-        state.requested.store(false, std::memory_order_relaxed);
-        // Never the published slot: a reader may be converting its pixel.
-        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
-        const int slot = (published & 0xFFFFFFFFu) == 0u
-            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
-        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
-        if (renderer_.submit_async_peek_field(
-                index, async_peek_key_kind(key), static_cast<std::size_t>(slot)) != 0u) {
-            // The slot pointers are fixed once the resources exist; record
-            // them before the first publication so readers never race a write.
-            if (state.rgba[0] == nullptr) {
-                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
-                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
-                }
-            }
-            state.pending_slot = slot;
-            state.pending_generation = generation;
-        }
-    }
-}
-
-void RenderCore::poll_completed_pointer_depth_capture() {
-    if (!pending_pointer_depth_capture_.capture) {
+void RenderCore::record_screen_probes(const shapes::Record& record) {
+    const auto channel = static_cast<std::uint32_t>(record.key);
+    if (channel >= kScreenProbeChannels || record.vertex_count == 0u || probe_flights_active_ == probe_flights_.size()) {
         return;
     }
-    adopt_pointer_depth_fence_if_needed();
-    auto capture = pending_pointer_depth_capture_.capture;
-    const std::uint8_t* rgba = nullptr;
-    if (!renderer_.try_complete_pointer_depth_capture_in_place(rgba)) {
-        return;
-    }
-    capture->rgba = rgba;
-    if (rgba == nullptr) {
-        throw std::runtime_error("pointer depth readback is not mapped");
-    }
-    capture->success = true;
-    capture->worker_ns = static_cast<std::uint64_t>(
-        std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::steady_clock::now() -
-            pending_pointer_depth_capture_.started).count());
-    // The mutex protects the idle predicate. Completion publication protects
-    // the pixel/status stores; no guest code can run on this render owner.
-    const std::lock_guard<std::mutex> lock(queue_mutex_);
-    pending_pointer_depth_capture_ = {};
-    capture->publish_complete();
-    queue_space_cv_.notify_all();
-}
-
-void RenderCore::drain_pending_pointer_depth_capture() {
-    adopt_pointer_depth_fence_if_needed();
-    if (pending_pointer_depth_capture_.capture) {
-        // Scalar game peeks and a second field share the utility allocator and
-        // descriptors. Preserve the first field before either can reuse them.
-        renderer_.wait_for_fence_value(
-            pending_pointer_depth_capture_.fence_value);
-        poll_completed_pointer_depth_capture();
-        if (pending_pointer_depth_capture_.capture) {
-            throw std::logic_error("completed pointer depth fence was not published");
-        }
+    ScreenProbeFlight& flight = probe_flights_[(probe_flight_first_ + probe_flights_active_) % probe_flights_.size()];
+    const std::span<const ScreenProbe> probes(current_record_pool_->probes.data() + record.vertex_first, record.vertex_count);
+    flight.kind = record.marker_aux != 0u ? ScreenProbeKind::Depth : ScreenProbeKind::Alpha;
+    flight.slot = (probe_flight_first_ + probe_flights_active_) % probe_flights_.size();
+    if (renderer_.record_screen_probes(flight.slot, flight.kind, probes)) {
+        flight.channel = channel;
+        flight.count = record.vertex_count;
+        std::copy(probes.begin(), probes.end(), flight.probes.begin());
+        ++probe_flights_active_;
     }
 }
 
-void RenderCore::execute_scene_peek_on_thread(FrameChunk& chunk) {
-    drain_pending_pointer_depth_capture();
-    if (chunk.pointer_depth_capture) {
-        auto& capture=*chunk.pointer_depth_capture;
-        const auto start=std::chrono::steady_clock::now();
-        try {
-            capture.success=renderer_.capture_pointer_depth(capture.pixels);
-            if (!capture.success) throw std::runtime_error("owned pointer depth capture failed");
-        } catch (...) {
-            capture.error=std::current_exception();
-            capture.success=false;
-            // render_thread_main owns the active request and publishes failure
-            // once, together with all pending/queued requests, before stopping.
-            throw;
+void RenderCore::poll_screen_probes() {
+    while (probe_flights_active_ != 0u) {
+        ScreenProbeFlight& flight = probe_flights_[probe_flight_first_];
+        const std::uint8_t* const rgba = renderer_.screen_probes_finished(flight.slot);
+        if (rgba == nullptr) {
+            return;
         }
-        capture.worker_ns=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count());
-        capture.publish_complete();
-        return;
-    }
-    ScenePeekRequest* request = chunk.scene_peek_request;
-    if (request == nullptr) {
-        return;
-    }
-
-    try {
-        std::uint32_t value = 0;
-        const bool success =
-            request->depth_pixels.empty()
-                ? renderer_.peek_scene(request->x, request->y, request->kind, value)
-                : renderer_.capture_pointer_depth(request->depth_pixels);
+        for (std::uint32_t i = 0; i < flight.count; ++i) {
+            const std::uint8_t* const pixel = rgba + std::size_t{i} * 4u;
+            flight.probes[i].value = flight.probes[i].x < 0.0f ? 0.0f
+                : flight.kind == ScreenProbeKind::Depth
+                    ? static_cast<float>((std::uint32_t{pixel[0]} << 16u) | (std::uint32_t{pixel[1]} << 8u) | pixel[2]) / 16777215.0f
+                    : static_cast<float>(pixel[3]) / 255.0f;
+        }
         {
-            std::lock_guard<std::mutex> lock(request->mutex);
-            request->value = value;
-            request->success = success;
-            request->done = true;
-            request->cv.notify_one();
+            const std::lock_guard guard(probe_answers_lock_);
+            ScreenProbeAnswers& answers = probe_answers_[flight.channel];
+            answers.count = flight.count;
+            std::copy_n(flight.probes.begin(), flight.count, answers.probes.begin());
         }
-    } catch (...) {
-        {
-            std::lock_guard<std::mutex> lock(request->mutex);
-            request->error = std::current_exception();
-            request->done = true;
-            request->cv.notify_one();
-        }
+        probe_flight_first_ = (probe_flight_first_ + 1u) % probe_flights_.size();
+        --probe_flights_active_;
     }
 }
 
@@ -4273,20 +3991,15 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
     const std::uint64_t diagnostic_parse_start_ns =
         cadence::steady_now_ns_if_enabled(cadence_diagnostics_);
     if (!chunk.shape_records.empty() || chunk.stream_marker_count != 0u ||
-        !chunk.stripe_particles.empty() || chunk.pointer_depth_in_frame) {
+        !chunk.stripe_particles.empty()) {
         frame_services_ = services;
         // The images are the game's handed-over copies, unchanged while they are read: first-use decodes may run
         // on workers.
         texture_cache_.set_async_decode_allowed(true);
         try {
-            // The chunk's records, scene markers and pointer capture in the order the game made them.
-            const bool capture_in_frame =
-                chunk.pointer_depth_in_frame && chunk.pointer_depth_capture != nullptr;
+            // The chunk's records and scene markers in the order the game made them.
             std::vector<StreamSplit>& splits = stream_splits_;
             splits.clear();
-            if (capture_in_frame) {
-                splits.push_back({0u, -1, -1});
-            }
             for (std::uint8_t i = 0; i < chunk.stream_marker_count; ++i) {
                 splits.push_back({chunk.stream_marker_serials[i], static_cast<int>(chunk.stream_markers[i]),
                                   static_cast<int>(i)});
@@ -4307,8 +4020,6 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
                 if (split.marker == kSplitShapeRecord) {
                     current_record_pool_ = &chunk.record_pool;
                     on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
-                } else if (split.marker < 0) {
-                    record_pointer_depth_capture_in_frame(chunk);
                 } else if (split.marker == static_cast<int>(SceneMarker::Scene2DBegin)) {
                     on_scene_2d_begin();
                 } else if (split.marker != static_cast<int>(SceneMarker::Scene2DEnd)) {
@@ -5721,9 +5432,9 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
                        record.marker[0], record.marker[1]);
         return;
     case shapes::Record::Kind::Readback:
-        // The picture here, as the channel's next field (its reads take the latest finished one).
+        // The picture here at the game's points.
         flush_pending_draw_batch();
-        record_async_peek_fields_at_token(static_cast<std::uint16_t>(record.key));
+        record_screen_probes(record);
         return;
     case shapes::Record::Kind::TargetBegin:
         begin_target_pass(record);
@@ -6375,34 +6086,6 @@ void RenderCore::on_scene_copy(const CaptureRequest& params) {
                   << " clear=" << (params.clear ? 1 : 0) << '\n';
     }
 }
-
-void RenderCore::record_async_peek_fields_at_token(std::uint16_t token) {
-    for (std::size_t index = 0; index < async_peek_.size(); ++index) {
-        AsyncPeekFieldState& state = async_peek_[index];
-        const std::uint32_t key = state.key.load(std::memory_order_acquire);
-        if (key == kAsyncPeekUnbound || (key & 0xFFFFu) != token ||
-            !state.requested.load(std::memory_order_acquire) || renderer_.async_peek_field_pending(index)) {
-            continue;
-        }
-        // Never the published slot: a reader may be converting its pixel.
-        const std::uint64_t published = state.published.load(std::memory_order_relaxed);
-        const int slot = (published & 0xFFFFFFFFu) == 0u
-            ? 0 : static_cast<int>(published & 0xFFFFFFFFu) % 3;
-        const std::uint32_t generation = state.generation.load(std::memory_order_acquire);
-        if (renderer_.record_async_peek_field_in_frame(
-                index, async_peek_key_kind(key), static_cast<std::size_t>(slot))) {
-            state.requested.store(false, std::memory_order_relaxed);
-            if (state.rgba[0] == nullptr) {
-                for (std::size_t i = 0; i < state.rgba.size(); ++i) {
-                    state.rgba[i] = renderer_.async_peek_field_rgba(index, i);
-                }
-            }
-            state.pending_slot = slot;
-            state.pending_generation = generation;
-        }
-    }
-}
-
 
 void RenderCore::load_light(const state::Op& op) {
     // Light a[0]: its colour (a[1-4]) and angle and distance terms (f[0-5]), or its position and direction (f[0-5]).

@@ -137,7 +137,7 @@ public:
     // Waits until the GPU has passed `value`; false on a timeout or a lost device.
     bool wait(std::uint64_t value, std::uint64_t timeout_ns = UINT64_MAX);
     // Runs `destroy` once the GPU has passed the next frame submission (submit_frame), which carries any commands
-    // being recorded now; peeks and other submissions in between carry none of them (one submitting thread: the
+    // being recorded now; other submissions in between carry none of them (one submitting thread: the
     // render thread).
     void defer(std::function<void()> destroy);
     // Runs the deferred destructions the GPU has passed.

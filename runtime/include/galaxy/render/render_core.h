@@ -208,6 +208,12 @@ public:
         std::memcpy(&producer_record_pool_.natives.back(), native, bytes);
         return index;
     }
+    [[nodiscard]] ScreenProbe* reserve_record_probes(shapes::Record& record, std::uint32_t count) {
+        record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.probes.size());
+        record.vertex_count = count;
+        producer_record_pool_.probes.resize(producer_record_pool_.probes.size() + count);
+        return producer_record_pool_.probes.data() + record.vertex_first;
+    }
     [[nodiscard]] RenderVertex* reserve_record_vertices(shapes::Record& record, std::uint32_t count) {
         record.vertex_first = static_cast<std::uint32_t>(producer_record_pool_.vertices.size());
         record.vertex_count = count;
@@ -239,20 +245,8 @@ public:
         mark.height = static_cast<std::uint16_t>(height);
     }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
-    // Simulation thread: answers a depth or color peek from an asynchronous scene target field. A peek made in
-    // a draw-sync token's callback (`token` nonzero) reads the field captured where the stream
-    // reached that token (the console stopped the GPU there with a breakpoint while the callback
-    // peeked); the field a frame earlier, as the capture completes asynchronously. Until that
-    // channel has a field, and for token 0, the latest field of the kind answers. The request is
-    // recorded so the render thread keeps producing fields while peeks continue.
-    [[nodiscard]] bool readback_published(
-        std::uint16_t x,
-        std::uint16_t y,
-        ReadbackKind kind,
-        std::uint16_t token,
-        std::uint32_t& value);
-    // Simulation thread: how many captures of channel `token`'s colour have finished since it was bound (0: none).
-    [[nodiscard]] std::uint32_t readback_serial(std::uint16_t token) const noexcept;
+    // Simulation thread: channel `channel`'s latest finished probes, at most `capacity`; how many.
+    [[nodiscard]] std::uint32_t screen_probe_results(std::uint32_t channel, ScreenProbe* probes, std::uint32_t capacity);
     void pump_messages();
     [[nodiscard]] bool quit_requested() const noexcept;
     [[nodiscard]] std::uint64_t display_copy_count() const noexcept;
@@ -326,19 +320,6 @@ private:
 
 
 
-    struct ScenePeekRequest {
-        std::uint16_t x = 0;
-        std::uint16_t y = 0;
-        ReadbackKind kind = ReadbackKind::Color;
-        std::span<std::uint32_t> depth_pixels;
-        std::uint32_t value = 0;
-        bool success = false;
-        bool done = false;
-        std::exception_ptr error;
-        std::mutex mutex;
-        std::condition_variable cv;
-    };
-
     // One queued frame: the FIFO bytes the simulation produced for a retrace and the memory and
     // services the parser callbacks need. With memory_snapshot_active, `memory` points at
     // memory_snapshot, so delayed parsing sees the arrays and textures of submission time.
@@ -352,11 +333,6 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        bool scene_peek_only = false;
-        ScenePeekRequest* scene_peek_request = nullptr;
-        std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
-        // In-frame pointer field: recorded before the chunk's records.
-        bool pointer_depth_in_frame = false;
         // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
         std::array<SceneMarker, kStreamMarkersPerChunk> stream_markers{};
         // Per marker: how many shape records the game had made before it (their order at one offset).
@@ -392,14 +368,9 @@ private:
 
     void render_thread_main();
     void render_frame_on_thread(FrameChunk& chunk);
-    void execute_scene_peek_on_thread(FrameChunk& chunk);
-    void poll_completed_pointer_depth_capture();
-    void drain_pending_pointer_depth_capture();
     // Render owner: completes an in-flight asynchronous depth field into the
-    // next publication slot, and submits a new one after a rendered chunk
-    // while the simulation thread keeps peeking.
-    void poll_async_peek_fields();
-    void submit_async_peek_fields_if_requested();
+    // Render owner: the probes whose frames have finished become their channels' answers.
+    void poll_screen_probes();
     // Presents black, a named picture (`slot`) or the newest.
     void present_cached_display_on_thread(
         bool black,
@@ -413,7 +384,6 @@ private:
     void present_vi_black(bool in_frame);
     bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
-    std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
     std::array<SceneMarker, kStreamMarkersPerChunk> producer_stream_markers_{};
     std::array<std::uint64_t, kStreamMarkersPerChunk> producer_stream_marker_serials_{};
     // Shape records made so far (attach_shape_record): each record's and marker's place among them.
@@ -959,15 +929,6 @@ private:
     static_assert(
         kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
         "the chunk pool must cover twice the deepest render queue plus the consumer's chunk");
-    // Only the render owner accesses this record outside queue_mutex_. All
-    // mutations hold that mutex for simulation-thread idle predicates.
-    struct PendingPointerDepthCapture {
-        std::shared_ptr<PointerDepthCapture> capture;
-        std::uint64_t fence_value = 0;
-        std::chrono::steady_clock::time_point started{};
-    } pending_pointer_depth_capture_;
-    void take_attached_pointer_depth_capture(FrameChunk& chunk);
-    void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
     void take_attached_stream_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_scene_marker(SceneMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
@@ -979,43 +940,23 @@ private:
     // `jitter_ndc` receives the offset (zero for orthographic draws).
     void apply_scene_jitter(const VertexConstants& cpu, VertexConstants& upload,
                             float jitter_ndc[2]);
-    void adopt_pointer_depth_fence_if_needed();
-    // Asynchronous scene target fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
-    // answers one peek kind at one draw-sync token (`key`, bound by the simulation thread at the
-    // first such peek; the least recently used channel is rebound). Three slots: the render owner
-    // fills the slot after the published one, then publishes it. Readers only load the published
-    // slot. `published` packs the binding generation (high word) and slot + 1, so a field
-    // captured for an earlier binding never answers the new one.
-    static constexpr std::uint32_t kAsyncPeekUnbound = 0xFFFFFFFFu;
-    struct AsyncPeekFieldState {
-        // Mapped readback bytes of each slot (RGBA8, 640x456), written by the
-        // render thread before the slot is published.
-        std::array<const std::uint8_t*, 3> rgba{};
-        // Slot the in-flight field writes and the binding it was captured for; render thread only.
-        int pending_slot = -1;
-        std::uint32_t pending_generation = 0;
-        std::atomic<std::uint32_t> key{kAsyncPeekUnbound};
-        std::atomic<std::uint32_t> generation{0};
-        std::atomic<std::uint64_t> published{0};
-        std::atomic<bool> requested{false};
-        std::atomic<std::uint64_t> published_answers{0};
-        std::atomic<std::uint32_t> publications{0};  // fields published for the current binding
-        std::uint64_t last_request = 0;  // simulation thread
-        std::uint64_t completed = 0;
+    // Probes in flight, oldest first; the answers of each channel. Only the answers are shared with the simulation thread.
+    struct ScreenProbeFlight {
+        std::uint32_t channel = 0, count = 0;
+        std::size_t slot = 0;
+        ScreenProbeKind kind = ScreenProbeKind::Alpha;
+        std::array<ScreenProbe, kScreenProbesMax> probes{};
     };
-    static constexpr std::uint32_t async_peek_key(ReadbackKind kind, std::uint16_t token) noexcept {
-        return (kind == ReadbackKind::Depth ? 0u : 0x10000u) | token;
-    }
-    static constexpr ReadbackKind async_peek_key_kind(std::uint32_t key) noexcept {
-        return (key & 0x10000u) == 0u ? ReadbackKind::Depth : ReadbackKind::Color;
-    }
-    [[nodiscard]] std::size_t async_peek_channel(ReadbackKind kind, std::uint16_t token);
-    [[nodiscard]] static bool read_async_peek_field(
-        AsyncPeekFieldState& state, std::uint16_t x, std::uint16_t y, ReadbackKind kind, std::uint32_t& value);
-    std::array<AsyncPeekFieldState, Renderer::kAsyncPeekFieldChannels> async_peek_{};
-    std::uint64_t async_peek_requests_ = 0;  // simulation thread
-    // Render owner: records the fields of channels bound to `token` where the stream reaches it.
-    void record_async_peek_fields_at_token(std::uint16_t token);
+    std::array<ScreenProbeFlight, Renderer::kScreenProbeSlots> probe_flights_{};
+    std::size_t probe_flight_first_ = 0, probe_flights_active_ = 0;
+    void record_screen_probes(const shapes::Record& record);
+    static constexpr std::uint32_t kScreenProbeChannels = 8u;
+    struct ScreenProbeAnswers {
+        std::uint32_t count = 0;
+        std::array<ScreenProbe, kScreenProbesMax> probes{};
+    };
+    mutable std::mutex probe_answers_lock_;
+    std::array<ScreenProbeAnswers, kScreenProbeChannels> probe_answers_{};
     std::size_t render_chunks_in_flight_ = 0;
     std::size_t present_chunks_in_flight_ = 0;
     std::size_t utility_chunks_in_flight_ = 0;
