@@ -580,7 +580,6 @@ namespace MR {
         newModel->viewCalc();
         (MR::MutexHolder< 0 >::sMutex).unlock();
         if (modelData->getModelDataType() == 0) {
-            ProhibitSchedulerAndInterrupts prohibit(false);
             (MR::MutexHolder< 0 >::sMutex).lock();
             newModel->makeDL();
             (MR::MutexHolder< 0 >::sMutex).unlock();

@@ -51,7 +51,6 @@ NebulaAtomic< u32 > JASDriver::sSubFrameCounter;
 void JASDriver::startAudio() {
     setOutputRate(OUTPUT_RATE_0);
     JASChannel::initBankDisposeMsgQueue();
-    NebulaKernel::enableEvent(NEBULA_EVENT_AUDIO);
     JASDsp::initBuffer();
     JASDSPChannel::initAll();
     JASPoolAllocObject_MultiThreaded< JASChannel >::newMemPool(0x48);

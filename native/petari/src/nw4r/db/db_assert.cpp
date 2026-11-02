@@ -54,7 +54,6 @@ namespace nw4r {
         __declspec(weak) void VPanic(const char* file, int line, const char* fmt, va_list vlist, bool halt) {
             u32 stackPointer = 0;
             (void)NebulaKernel::disableInterrupts();
-            (void)NebulaKernel::disableScheduler();
 
             (void)NebulaFrameClock::setPreHook(NULL);
             (void)NebulaFrameClock::setPostHook(NULL);

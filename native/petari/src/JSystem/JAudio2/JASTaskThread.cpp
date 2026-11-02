@@ -84,7 +84,7 @@ void* JASTaskThread::run() {
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
         if (_84) {
-            threadQueue_.sleep();
+            threadQueue_.wait();
         }
 
         if (callstack->msgType_) {
@@ -103,7 +103,7 @@ void JASTaskThread::pause(bool param_0) {
         _84 = 1;
     } else {
         if (_84) {
-            threadQueue_.wakeup();
+            threadQueue_.signal();
         }
         _84 = 0;
     }

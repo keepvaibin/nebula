@@ -27,7 +27,6 @@ JKRThread::~JKRThread() {
 
     if (mHeap != nullptr) {
         if (!NebulaKernel::isTerminated(mThread)) {
-            NebulaKernel::detach(mThread);
             NebulaKernel::cancel(mThread);
         }
 
@@ -53,7 +52,7 @@ void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size, int para
     mStackSize = stack_size & 0xffffffe0;
     mStackMemory = JKRAllocFromHeap(mHeap, mStackSize, 0x20);
     mThread = reinterpret_cast< NebulaThread* >(JKRAllocFromHeap(mHeap, sizeof(NebulaThread), 0x20));
-    NebulaKernel::create(mThread, start, this, mStackSize, param_3, true);
+    NebulaKernel::create(mThread, start, this, mStackSize);
 }
 
 void* JKRThread::start(void* pThread) {

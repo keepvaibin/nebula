@@ -14,7 +14,6 @@ GameThread::GameThread(u32 stackSize, int messageCount, int priority, JKRHeap* p
 GameThread::~GameThread() {
     if (mHeap != nullptr) {
         if (!NebulaKernel::isTerminated(mThread)) {
-            NebulaKernel::detach(mThread);
             NebulaKernel::cancel(mThread);
         }
 
@@ -36,7 +35,7 @@ void GameThread::initHeapSpecified(JKRHeap* pHeap, u32 stackSize, int priority) 
     mStackSize = stackSize & ~31;  // the host thread's own stack
     mThread = new (mHeap, 32) NebulaThread();
 
-    NebulaKernel::create(mThread, &GameThread::start, this, mStackSize, priority, true /* detached */);
+    NebulaKernel::create(mThread, &GameThread::start, this, mStackSize);
 }
 
 void* GameThread::start(void* pArg) {
