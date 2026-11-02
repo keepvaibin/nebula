@@ -1219,8 +1219,31 @@ void install_crash_reporter() {
 }
 #endif
 
+#if defined(_WIN32)
+// The stack that called a fatal, as module + offset (no folder names).
+void log_fatal_stack() {
+    void* frames[32];
+    const USHORT count = RtlCaptureStackBackTrace(1, 32, frames, nullptr);
+    for (USHORT i = 0; i < count; i++) {
+        HMODULE module = nullptr;
+        char name[MAX_PATH] = "?";
+        if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                               static_cast<const char*>(frames[i]), &module)) {
+            K32GetModuleBaseNameA(GetCurrentProcess(), module, name, MAX_PATH);
+        }
+        char line[MAX_PATH + 32];
+        std::snprintf(line, sizeof(line), "%s+0x%llx", name,
+                      static_cast<unsigned long long>(static_cast<const char*>(frames[i]) - reinterpret_cast<const char*>(module)));
+        log_line("fatal stack:", line);
+    }
+}
+#endif
+
 void svc_fatal(void*, const char* text) {
     log_line("fatal:", text);
+#if defined(_WIN32)
+    log_fatal_stack();
+#endif
     gather_crash_facts(galaxy::crash::Facts::Kind::GameFatal, text);
 #if defined(_WIN32)
     if (gCrashing.exchange(1) == 0) {

@@ -39,33 +39,33 @@ void MarioActor::initHand() {
 
     if (_9C0 != nullptr) {
         _A40 = new ModelHolder("IceMarioHandL", true);
-        MR::initDLMakerFog(_A40, true);
-        MR::newDifferedDLBuffer(_A40);
+        MR::initMaterialFog(_A40, true);
+        MR::newDifferedMaterials(_A40);
 
         _A44 = new ModelHolder("IceMarioHandR", true);
-        MR::initDLMakerFog(_A44, true);
-        MR::newDifferedDLBuffer(_A44);
+        MR::initMaterialFog(_A44, true);
+        MR::newDifferedMaterials(_A44);
     }
 
     _A48 = new ModelHolder("MarioHandL", true);
-    MR::initDLMakerFog(_A48, true);
-    MR::newDifferedDLBuffer(_A48);
+    MR::initMaterialFog(_A48, true);
+    MR::newDifferedMaterials(_A48);
 
     _A4C = new ModelHolder("MarioHandR", true);
-    MR::initDLMakerFog(_A4C, true);
-    MR::newDifferedDLBuffer(_A4C);
+    MR::initMaterialFog(_A4C, true);
+    MR::newDifferedMaterials(_A4C);
 
     _A50 = nullptr;
     _A54 = nullptr;
 
     if (_9C8 != nullptr) {
         _A50 = new ModelHolder("InvincibleMarioHandL", true);
-        MR::initDLMakerFog(_A50, true);
-        MR::newDifferedDLBuffer(_A50);
+        MR::initMaterialFog(_A50, true);
+        MR::newDifferedMaterials(_A50);
 
         _A54 = new ModelHolder("InvincibleMarioHandR", true);
-        MR::initDLMakerFog(_A54, true);
-        MR::newDifferedDLBuffer(_A54);
+        MR::initMaterialFog(_A54, true);
+        MR::newDifferedMaterials(_A54);
     }
 
     for (u32 idx = 0; idx < MR::getJointNum(_A48) - 1; idx++) {
@@ -180,11 +180,11 @@ void MarioActor::drawHand() const {
     }
 
     J3DModelX* model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A48));
-    model->setDynamicDL(&mDL[mCurrDL]);
+    model->setDynamicList(&mLists[mCurrList]);
     model->directDraw(nullptr);
 
     model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A4C));
-    model->setDynamicDL(&mDL[mCurrDL]);
+    model->setDynamicList(&mLists[mCurrList]);
     model->directDraw(nullptr);
 }
 
@@ -203,10 +203,10 @@ void MarioActor::drawIndirectHand() const {
         return;
     }
 
-    model->setDynamicDL(&mDL[mCurrDL]);
+    model->setDynamicList(&mLists[mCurrList]);
     model->directDraw(nullptr);
 
     model = reinterpret_cast< J3DModelX* >(MR::getJ3DModel(_A44));
-    model->setDynamicDL(&mDL[mCurrDL]);
+    model->setDynamicList(&mLists[mCurrList]);
     model->directDraw(nullptr);
 }

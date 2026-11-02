@@ -159,8 +159,8 @@ ProjectionMapAir::ProjectionMapAir(const char* pName) : Air(pName) {
 
 void ProjectionMapAir::initModel(const char* pModelName) {
     initModelManagerWithAnm(pModelName, nullptr, true);
-    ProjmapEffectMtxSetter* mtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
-    MR::newDifferedDLBuffer(this);
+    ProjmapEffectMtxSetter* mtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
+    MR::newDifferedMaterials(this);
     mtxSetter->updateMtxUseBaseMtx();
 }
 

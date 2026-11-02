@@ -27,7 +27,7 @@ public:
     void copyExtraMtxBuffer(const J3DModelX*);
     void copyAnmMtxBuffer(const J3DModelX*);
     void swapDrawBuffer(u32);
-    void setDynamicDL(const J3DStateList* pList);
+    void setDynamicList(const J3DStateList* pList);
     void setDrawViewBuffer(MtxPtr);
     void setDrawView(u32);
     void directDraw(J3DModel*);

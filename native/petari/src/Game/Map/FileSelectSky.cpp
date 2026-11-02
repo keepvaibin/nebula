@@ -25,7 +25,7 @@ void FileSelectSky::init(const JMapInfoIter& rIter) {
     mScale.x = 0.8f;
     mScale.y = 0.8f;
     mScale.z = 0.8f;
-    mProjmapEffectMtxSetter = MR::initDLMakerProjmapEffectMtxSetter(this);
+    mProjmapEffectMtxSetter = MR::initMaterialProjmapEffectMtxSetter(this);
     MR::connectToSceneSky(this);
     initEffectKeeper(0, nullptr, false);
     MR::invalidateClipping(this);

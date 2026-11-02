@@ -7,7 +7,7 @@ class BrkPlayer;
 class BtkPlayer;
 class BtpPlayer;
 class BvaPlayer;
-class DisplayListMaker;
+class MaterialUpdater;
 class J3DFrameCtrl;
 class J3DModel;
 class J3DModelData;
@@ -25,8 +25,8 @@ public:
     void calcAnim();
     void calcView();
     void entry();
-    void newDifferedDLBuffer();
-    void updateDL(bool);
+    void newDifferedMaterials();
+    void updateList(bool);
     void startBck(const char*, const char*);
     void startBckWithInterpole(const char*, s32);
     void startBtk(const char*);
@@ -79,5 +79,5 @@ public:
     /* 0x18 */ XanimePlayer* mXanimePlayer;
     /* 0x1C */ J3DModel* mModel;
     /* 0x20 */ ResourceHolder* mModelResourceHolder;
-    /* 0x24 */ DisplayListMaker* mDisplayListMaker;
+    /* 0x24 */ MaterialUpdater* mMaterialUpdater;
 };

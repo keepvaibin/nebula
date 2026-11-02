@@ -1,4 +1,4 @@
-#include "Game/LiveActor/DisplayListMaker.hpp"
+#include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/Animation/MaterialAnmBuffer.hpp"
 #include "Game/LiveActor/MaterialCtrl.hpp"
 #include "Game/System/ResourceHolder.hpp"
@@ -9,7 +9,7 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <algorithm>
 
-DisplayListMaker::DisplayListMaker(J3DModel* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
+MaterialUpdater::MaterialUpdater(J3DModel* pModel, const ResourceHolder* pResHolder) : mModel(pModel), mFogCtrl(), mResHolder(pResHolder) {
     u16 materialNum = mModel->getModelData()->getMaterialNum();
     mPrgFlag = new u32[materialNum];
     mCurFlag = new u32[materialNum];
@@ -18,13 +18,13 @@ DisplayListMaker::DisplayListMaker(J3DModel* pModel, const ResourceHolder* pResH
     mMaterialCtrl.init(materialNum * 4);
 }
 
-void DisplayListMaker::update() {
+void MaterialUpdater::update() {
     for (auto& item : mMaterialCtrl) {
         item->update();
     }
 }
 
-void DisplayListMaker::diff() {
+void MaterialUpdater::diff() {
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         if (mCurFlag[i]) {
             j3dSys.setMatPacket(mModel->getMatPacket(i));
@@ -33,30 +33,30 @@ void DisplayListMaker::diff() {
     }
 }
 
-void DisplayListMaker::newDifferedDisplayList() {
+void MaterialUpdater::newDifferedSnapshot() {
     checkMaterial();
 
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         u32 flag = getDiffFlag(i);
         if (flag) {
-            mModel->getMatPacket(i)->getShapePacket()->newDifferedDisplayList(flag);
+            mModel->getMatPacket(i)->getShapePacket()->newDifferedSnapshot(flag);
         }
     }
 }
 
-bool DisplayListMaker::isValidDiff() {
+bool MaterialUpdater::isValidDiff() {
     return true;
 }
 
-void DisplayListMaker::onPrgFlag(u16 materialNo, u32 flag) {
+void MaterialUpdater::onPrgFlag(u16 materialNo, u32 flag) {
     mPrgFlag[materialNo] |= flag;
 }
 
-void DisplayListMaker::onCurFlag(u16 materialNo, u32 flag) {
+void MaterialUpdater::onCurFlag(u16 materialNo, u32 flag) {
     mCurFlag[materialNo] |= flag;
 }
 
-u32 DisplayListMaker::getDiffFlag(s32 materialNo) const {
+u32 MaterialUpdater::getDiffFlag(s32 materialNo) const {
     u32 flag = mPrgFlag[materialNo];
     if (mResHolder->mMaterialBuf) {
         flag |= mResHolder->mMaterialBuf->getDiffFlag(materialNo);
@@ -65,7 +65,7 @@ u32 DisplayListMaker::getDiffFlag(s32 materialNo) const {
     return flag;
 }
 
-FogCtrl* DisplayListMaker::addFogCtrl(bool useAllMaterials) {
+FogCtrl* MaterialUpdater::addFogCtrl(bool useAllMaterials) {
     FogCtrl* fog = new FogCtrl(mModel->mModelData, useAllMaterials);
     push(fog);
     mFogCtrl = fog;
@@ -73,7 +73,7 @@ FogCtrl* DisplayListMaker::addFogCtrl(bool useAllMaterials) {
     return fog;
 }
 
-MatColorCtrl* DisplayListMaker::addMatColorCtrl(const char* pName, u32 color, const J3DGXColor* pColor) {
+MatColorCtrl* MaterialUpdater::addMatColorCtrl(const char* pName, u32 color, const J3DGXColor* pColor) {
     MatColorCtrl* ctrl = new MatColorCtrl(mModel->mModelData, pName, color, pColor);
     push(ctrl);
     s16 materialNo = MR::getMaterialNo(mModel->mModelData, pName);
@@ -81,7 +81,7 @@ MatColorCtrl* DisplayListMaker::addMatColorCtrl(const char* pName, u32 color, co
     return ctrl;
 }
 
-TexMtxCtrl* DisplayListMaker::addTexMtxCtrl(const char* pName) {
+TexMtxCtrl* MaterialUpdater::addTexMtxCtrl(const char* pName) {
     TexMtxCtrl* ctrl = new TexMtxCtrl(mModel->mModelData, pName);
     push(ctrl);
     s16 materialNo = MR::getMaterialNo(mModel->mModelData, pName);
@@ -89,62 +89,62 @@ TexMtxCtrl* DisplayListMaker::addTexMtxCtrl(const char* pName) {
     return ctrl;
 }
 
-ProjmapEffectMtxSetter* DisplayListMaker::addProjmapEffectMtxSetter() {
+ProjmapEffectMtxSetter* MaterialUpdater::addProjmapEffectMtxSetter() {
     ProjmapEffectMtxSetter* setter = new ProjmapEffectMtxSetter(mModel, mResHolder);
     push(setter);
     return setter;
 }
 
-MirrorReflectionMtxSetter* DisplayListMaker::addMirrorReflectionMtxSetter() {
+MirrorReflectionMtxSetter* MaterialUpdater::addMirrorReflectionMtxSetter() {
     MirrorReflectionMtxSetter* setter = new MirrorReflectionMtxSetter(mModel, mResHolder);
     push(setter);
     return setter;
 }
 
-void DisplayListMaker::offCurFlagBpk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::offCurFlagBpk(const J3DAnmBase* pAnm) {
     MR::offDiffFlagBpk(mCurFlag, static_cast< const J3DAnmColorKey* >(pAnm), "");
 }
 
-void DisplayListMaker::onCurFlagBtp(const J3DAnmBase* pAnm) {
+void MaterialUpdater::onCurFlagBtp(const J3DAnmBase* pAnm) {
     MR::onDiffFlagBtp(mCurFlag, static_cast< const J3DAnmTexPattern* >(pAnm), "");
 }
 
-void DisplayListMaker::offCurFlagBtp(const J3DAnmBase* pAnm) {
+void MaterialUpdater::offCurFlagBtp(const J3DAnmBase* pAnm) {
     MR::offDiffFlagBtp(mCurFlag, static_cast< const J3DAnmTexPattern* >(pAnm), "");
 }
 
-void DisplayListMaker::onCurFlagBtk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::onCurFlagBtk(const J3DAnmBase* pAnm) {
     MR::onDiffFlagBtk(mCurFlag, static_cast< const J3DAnmTextureSRTKey* >(pAnm), "");
 }
 
-void DisplayListMaker::offCurFlagBtk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::offCurFlagBtk(const J3DAnmBase* pAnm) {
     MR::offDiffFlagBtk(mCurFlag, static_cast< const J3DAnmTextureSRTKey* >(pAnm), "");
 }
 
-void DisplayListMaker::onCurFlagBrk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::onCurFlagBrk(const J3DAnmBase* pAnm) {
     MR::onDiffFlagBrk(mCurFlag, static_cast< const J3DAnmTevRegKey* >(pAnm), "");
 }
 
-void DisplayListMaker::offCurFlagBrk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::offCurFlagBrk(const J3DAnmBase* pAnm) {
     MR::offDiffFlagBrk(mCurFlag, static_cast< const J3DAnmTevRegKey* >(pAnm), "");
 }
 
-void DisplayListMaker::push(MaterialCtrl* pCtrl) {
+void MaterialUpdater::push(MaterialCtrl* pCtrl) {
     mMaterialCtrl.push_back(pCtrl);
 }
 
-void DisplayListMaker::onBothFlag(u16 materialNo, u32 flag) {
+void MaterialUpdater::onBothFlag(u16 materialNo, u32 flag) {
     onPrgFlag(materialNo, flag);
     onCurFlag(materialNo, flag);
 }
 
-void DisplayListMaker::onBothFlagAll(u32 flag) {
+void MaterialUpdater::onBothFlagAll(u32 flag) {
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         onBothFlag(i, flag);
     }
 }
 
-void DisplayListMaker::checkMaterial() {
+void MaterialUpdater::checkMaterial() {
     checkTexture();
 
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
@@ -156,7 +156,7 @@ void DisplayListMaker::checkMaterial() {
     checkViewProjmapEffectMtx();
 }
 
-void DisplayListMaker::checkViewProjmapEffectMtx() {
+void MaterialUpdater::checkViewProjmapEffectMtx() {
     J3DMaterial* material;
     for (u16 i = 0; i < mModel->getModelData()->getMaterialNum(); i++) {
         material = mModel->getModelData()->getMaterialNodePointer(i);
@@ -170,23 +170,23 @@ void DisplayListMaker::checkViewProjmapEffectMtx() {
     }
 }
 
-ViewProjmapEffectMtxSetter* DisplayListMaker::addViewProjmapEffectMtxSetter() {
+ViewProjmapEffectMtxSetter* MaterialUpdater::addViewProjmapEffectMtxSetter() {
     ViewProjmapEffectMtxSetter* setter = new ViewProjmapEffectMtxSetter(mModel->getModelData());
     push(setter);
     return setter;
 }
 
-MarioShadowProjmapMtxSetter* DisplayListMaker::addMarioShadowProjmapMtxSetter() {
+MarioShadowProjmapMtxSetter* MaterialUpdater::addMarioShadowProjmapMtxSetter() {
     MarioShadowProjmapMtxSetter* setter = new MarioShadowProjmapMtxSetter(mModel, mResHolder);
     push(setter);
     return setter;
 }
 
-void DisplayListMaker::onCurFlagBpk(const J3DAnmBase* pAnm) {
+void MaterialUpdater::onCurFlagBpk(const J3DAnmBase* pAnm) {
     MR::onDiffFlagBpk(mCurFlag, static_cast< const J3DAnmColorKey* >(pAnm), "");
 }
 
-void DisplayListMaker::checkTexture() {
+void MaterialUpdater::checkTexture() {
     bool hasShadowSetter = false;
     for (u16 i = 0; i < mModel->getModelData()->getTexture()->getNum(); i++) {
         const char* name = mModel->getModelData()->getTextureName()->getName(i);
@@ -218,7 +218,7 @@ void DisplayListMaker::checkTexture() {
     }
 }
 
-bool DisplayListMaker::isExistDiffMaterial(const J3DModelData* pModelData) {
+bool MaterialUpdater::isExistDiffMaterial(const J3DModelData* pModelData) {
     if (pModelData->getTextureName()->getIndex("IndDummy") != -1) {
         return true;
     }

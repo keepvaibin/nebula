@@ -17,7 +17,7 @@
 
 namespace {
     const f32 sPointNumInPart = 0.0f;
-    const f32 sDistancePartDL = 13000.0f;
+    const f32 sDistancePartMesh = 13000.0f;
     const f32 sFlowSpeedTexRate = 0.0f;
     const f32 sFlowSpeedTexRateMin = 0.0f;
     const f32 sTexRate0 = 0.0f;
@@ -50,7 +50,7 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
     _1C = *pTexCoordU0;
     _20 = *pTexCoordU1;
     _24 = *pTexCoordU2;
-    initDisplayList(pTexCoordU0, pTexCoordU1, pTexCoordU2);
+    initMesh(pTexCoordU0, pTexCoordU1, pTexCoordU2);
 
     for (int i = 0; i < a4; i++) {
         int v12 = a3 + i;
@@ -65,14 +65,14 @@ OceanRingPartDrawer::OceanRingPartDrawer(const OceanRing* pRing, int a3, int a4,
     mPosition.scale(1.0f / a4);
 }
 
-void OceanRingPartDrawer::initDisplayList(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
+void OceanRingPartDrawer::initMesh(f32* pTexCoordU0, f32* pTexCoordU1, f32* pTexCoordU2) {
     mMesh.init(NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1 | NEBULA_SHAPE_TEXCOORD0 << 2, 2 * mOceanRing->mStride * (_14 - 1));
     drawGD(pTexCoordU0, pTexCoordU1, pTexCoordU2);
     mMesh.send();
 }
 
 void OceanRingPartDrawer::draw() const {
-    if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartDL) {
+    if (mPosition.distance(*MR::getPlayerPos()) < ::sDistancePartMesh) {
         drawDynamic();
     } else {
         mMesh.draw();
@@ -300,7 +300,7 @@ OceanRingDrawer::OceanRingDrawer(const OceanRing* pOceanRing) {
     mWaterTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
     mWaterIndTex = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
     initParts();
-    initDisplayList();
+    initMesh();
 }
 
 void OceanRingDrawer::update() {
@@ -368,7 +368,7 @@ void OceanRingDrawer::initParts() {
     mPartDrawers[last] = new OceanRingPartDrawer(mRing, w, v, flag, &a, &b, &c);
 }
 
-void OceanRingDrawer::initDisplayList() {
+void OceanRingDrawer::initMesh() {
     s32 flag = 0;
 
     if (MR::isLoopRail(mRing)) {

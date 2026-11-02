@@ -77,10 +77,10 @@ void ElectricRailHolder::draw() const {
         }
 
         J3DMatPacket* pPacket = pItem->mMatPacket;
-        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getDisplayListObj());
+        J3DNativeMaterial::send(pItem->mMatPacket->getMaterial(), pItem->mMatPacket->mpTexture, pItem->mMatPacket->getSnapshot());
 
-        if (pPacket->mpShapePacket->mpDisplayListObj != nullptr) {
-            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpDisplayListObj);
+        if (pPacket->mpShapePacket->mpSnapshot != nullptr) {
+            J3DNativeMaterial::sendDiffered(pPacket->mpShapePacket->mpSnapshot);
         }
 
         pItem->mHost->draw();
@@ -157,7 +157,7 @@ f32 ElectricRailFunction::getHitSensorRadius() {
     return ::cHitSensorRadius;
 }
 
-u32 ElectricRailFunction::calcDisplayListSize(u32 size, s32 count) {
+u32 ElectricRailFunction::calcMeshSize(u32 size, s32 count) {
     return (((size * count + 3) / 32) + 2) * 32;
 }
 

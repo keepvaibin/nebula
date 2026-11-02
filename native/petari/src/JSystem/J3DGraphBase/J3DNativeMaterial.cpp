@@ -625,7 +625,7 @@ namespace J3DNativeMaterial {
         return new (0x20) NebulaMaterialParts;
     }
 
-    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags) {
+    void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DMaterialSnapshot* pList, u32 diffFlags) {
         if (pList != NULL && pList->mpNebulaMaterial != NULL) {
             NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
             build(pMaterial, pTexture, &rParts);
@@ -635,7 +635,7 @@ namespace J3DNativeMaterial {
         }
     }
 
-    void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
+    void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DMaterialSnapshot* pList) {
         static NebulaMaterialParts sParts;
         J3DNativeShape::flushState();
         if (pList != NULL && pList->mNebulaCaptured) {
@@ -657,7 +657,7 @@ namespace J3DNativeMaterial {
         notDrawn(shader, keyOf(pMaterial));
     }
 
-    void sendDiffered(J3DDisplayListObj* pList) {
+    void sendDiffered(J3DMaterialSnapshot* pList) {
         if (pList == NULL || !pList->mNebulaCaptured) {
             return;
         }

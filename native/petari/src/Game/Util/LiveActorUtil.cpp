@@ -7,7 +7,7 @@
 #include "Game/LiveActor/Binder.hpp"
 #include "Game/LiveActor/ClippingActorHolder.hpp"
 #include "Game/LiveActor/ClippingDirector.hpp"
-#include "Game/LiveActor/DisplayListMaker.hpp"
+#include "Game/LiveActor/MaterialUpdater.hpp"
 #include "Game/LiveActor/EffectKeeper.hpp"
 #include "Game/LiveActor/HitSensor.hpp"
 #include "Game/LiveActor/LiveActor.hpp"
@@ -236,10 +236,10 @@ namespace MR {
     }
 
     void initMirrorReflection(LiveActor* pActor) {
-        initDLMakerChangeTex(pActor, "MirrorTex");
-        pActor->mModelManager->newDifferedDLBuffer();
+        initMaterialChangeTex(pActor, "MirrorTex");
+        pActor->mModelManager->newDifferedMaterials();
         changeModelDataTexAll(pActor, "MirrorTex", *MR::getScreenResTIMG());
-        pActor->mModelManager->mDisplayListMaker->addMirrorReflectionMtxSetter();
+        pActor->mModelManager->mMaterialUpdater->addMirrorReflectionMtxSetter();
     }
 
     CollisionParts* tryCreateCollisionMoveLimit(LiveActor* pActor, HitSensor* pSensor) {
@@ -867,21 +867,21 @@ namespace MR {
         return getJ3DModelData(pActor)->mMaterialTable.getTextureName()->getIndex(pName) != -1;
     }
 
-    void newDifferedDLBuffer(LiveActor* pActor) {
-        pActor->mModelManager->newDifferedDLBuffer();
+    void newDifferedMaterials(LiveActor* pActor) {
+        pActor->mModelManager->newDifferedMaterials();
     }
 
-    void initDLMakerFog(LiveActor* pActor, bool enable) {
-        pActor->mModelManager->mDisplayListMaker->addFogCtrl(enable);
+    void initMaterialFog(LiveActor* pActor, bool enable) {
+        pActor->mModelManager->mMaterialUpdater->addFogCtrl(enable);
     }
 
-    void initDLMakerMatColor0(LiveActor* pActor, const char* pMatName, const J3DGXColor* pColor) {
-        pActor->mModelManager->mDisplayListMaker->addMatColorCtrl(pMatName, 0, pColor);
+    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DGXColor* pColor) {
+        pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
     }
 
-    void initDLMakerChangeTex(LiveActor* pActor, const char* pTexName) {
+    void initMaterialChangeTex(LiveActor* pActor, const char* pTexName) {
         J3DModelData* pModelData = getJ3DModelData(pActor);
-        DisplayListMaker* pDLMaker = pActor->mModelManager->mDisplayListMaker;
+        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
 
         for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
             if (!MR::isEqualString(pModelData->mMaterialTable.getTextureName()->getName(texIndex), pTexName)) {
@@ -890,18 +890,18 @@ namespace MR {
 
             for (u16 matIndex = 0; matIndex < pModelData->mMaterialTable.getMaterialNum(); matIndex++) {
                 if (isUseTex(pModelData->mMaterialTable.getMaterialNodePointer(matIndex), texIndex)) {
-                    pDLMaker->onPrgFlag(matIndex, 0x4020000);
+                    pMaterialUpdater->onPrgFlag(matIndex, 0x4020000);
                 }
             }
         }
     }
 
-    TexMtxCtrl* initDLMakerTexMtx(LiveActor* pActor, const char* pName) {
-        return pActor->mModelManager->mDisplayListMaker->addTexMtxCtrl(pName);
+    TexMtxCtrl* initMaterialTexMtx(LiveActor* pActor, const char* pName) {
+        return pActor->mModelManager->mMaterialUpdater->addTexMtxCtrl(pName);
     }
 
-    ProjmapEffectMtxSetter* initDLMakerProjmapEffectMtxSetter(LiveActor* pActor) {
-        return pActor->mModelManager->mDisplayListMaker->addProjmapEffectMtxSetter();
+    ProjmapEffectMtxSetter* initMaterialProjmapEffectMtxSetter(LiveActor* pActor) {
+        return pActor->mModelManager->mMaterialUpdater->addProjmapEffectMtxSetter();
     }
 
     void startAction(const LiveActor* pActor, const char* pName) {
@@ -1626,7 +1626,7 @@ namespace MR {
     }
 
     void updateMaterial(LiveActor* pActor) {
-        pActor->mModelManager->updateDL(true);
+        pActor->mModelManager->updateList(true);
     }
 
     void setMirrorReflectionInfoFromMtxYUp(const TPos3f& rMtx) {
@@ -1644,7 +1644,7 @@ namespace MR {
 
     void changeModelDataTexAll(LiveActor* pActor, const char* pTexName, const ResTIMG& rTimg) {
         J3DModelData* pModelData = MR::getJ3DModelData(pActor);
-        DisplayListMaker* pDLMaker = pActor->mModelManager->mDisplayListMaker;
+        MaterialUpdater* pMaterialUpdater = pActor->mModelManager->mMaterialUpdater;
 
         for (u16 texIndex = 0; texIndex < pModelData->mMaterialTable.getTexture()->getNum(); texIndex++) {
             const char* name = pModelData->mMaterialTable.getTextureName()->getName(texIndex);
@@ -1659,7 +1659,7 @@ namespace MR {
                 J3DMaterial* material = pModelData->mMaterialTable.getMaterialNodePointer(matIndex);
 
                 if (MR::isUseTex(material, texIndex)) {
-                    pDLMaker->onCurFlag(matIndex, 0x4020000);
+                    pMaterialUpdater->onCurFlag(matIndex, 0x4020000);
                 }
             }
         }

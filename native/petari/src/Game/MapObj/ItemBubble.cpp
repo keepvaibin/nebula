@@ -103,8 +103,8 @@ void ItemBubble::init(const JMapInfoIter& rIter) {
             _94[i] = new StarPiece("\203\101\203\103\203\145\203\200\203\157\203\165\203\213\203\163\201\133\203\130" /* アイテムバブルピース */);
             _94[i]->initWithoutIter();
             _90[i] = new RotPartsModel(this, "\203\130\203\136\201\133\203\163\201\133\203\130" /* スターピース */, "StarPiece", nullptr, 13, true);
-            MR::initDLMakerMatColor0(_90[i], "StarPiece1_v", &_94[i]->mColor);
-            MR::newDifferedDLBuffer(_90[i]);
+            MR::initMaterialColor0(_90[i], "StarPiece1_v", &_94[i]->mColor);
+            MR::newDifferedMaterials(_90[i]);
             _90[i]->initWithoutIter();
 
             switch (itemCount) {

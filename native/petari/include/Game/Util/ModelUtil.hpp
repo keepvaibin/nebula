@@ -42,7 +42,7 @@ namespace MR {
     J3DMaterial* getMaterial(const LiveActor*, int);
     s32 getMaterialNum(J3DModel*);
     const char* getMaterialName(const J3DModelData*, int);
-    void updateModelDiffDL(LiveActor*);
+    void updateModelDiffMaterials(LiveActor*);
     bool isEnvelope(J3DMaterial*);
     void hideMaterial(J3DModel*, const char*);
     void hideMaterial(const LiveActor*, const char*);

@@ -102,8 +102,8 @@ void StarPiece::init(const JMapInfoIter& rIter) {
     }
 
     initModelManagerWithAnm("StarPiece", nullptr, true);
-    MR::initDLMakerMatColor0(this, "StarPiece1_v", &mColor);
-    MR::newDifferedDLBuffer(this);
+    MR::initMaterialColor0(this, "StarPiece1_v", &mColor);
+    MR::newDifferedMaterials(this);
     MR::connectToSceneNoSilhouettedMapObj(this);
 
     f32 flt = 30.0f;

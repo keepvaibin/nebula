@@ -231,7 +231,7 @@ void ElectricRail::init(const JMapInfoIter& rIter) {
 
     initPoints();
     initSeparators();
-    initDisplayList();
+    initMesh();
     initShadow(rIter);
     initSound(4, 1);
 
@@ -442,7 +442,7 @@ void ElectricRail::initSeparators() {
     MR::moveCoordToStartPos(this);
 }
 
-void ElectricRail::initDisplayList() {
+void ElectricRail::initMesh() {
     mMesh.init(NEBULA_SHAPE_TEXCOORD0, mSeparatorCount * 4 * mRailHeight);
     drawPlane(mMesh, 30.0, 30.0, -30.0, -30.0);
     drawPlane(mMesh, -30.0, 30.0, 30.0, -30.0);

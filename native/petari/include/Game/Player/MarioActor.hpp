@@ -9,7 +9,7 @@
 
 class BlackHole;
 class CollisionShadow;
-class DLchanger;
+class StateListChanger;
 class DrawAdaptor;
 class FixedPosition;
 class FootPrint;
@@ -41,7 +41,7 @@ class Triangle;
 class XanimePlayer;
 class XanimeResourceTable;
 class XjointTransform;
-struct DLholder;
+struct StateListHolder;
 struct ResTIMG;
 struct SmokeEffectEntry;
 class MatrixControl;
@@ -250,7 +250,7 @@ public:
     J3DModelX* getJ3DModel() const;
     J3DModelData* getModelData() const;
     J3DModelX* getSimpleModel() const;
-    void createTextureDL(DLholder*, u16, u16);
+    void createTextureList(StateListHolder*, u16, u16);
     void swapTexture(const char*, u8) const;
     void copyMaterial(J3DModel*, u16, s32);
 
@@ -395,14 +395,14 @@ public:
     void hideBeeFur();
     void calcFogLighting();
     void resetFog();
-    static void fillAlphaDL(J3DStateList& rList, u8 alpha);
-    static void fillReflectAlphaDL(J3DStateList& rList, u8 alpha);
-    void updateAlphaDL(u8);
-    void updateSimpleAlphaDL(u8);
-    void updateReflectAlphaDL(u8);
-    static void fillLightDL(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial);
-    void updateLightDL(const Color8&, const Color8&, const Color8&, f32);
-    void createRainbowDL();
+    static void fillAlphaList(J3DStateList& rList, u8 alpha);
+    static void fillReflectAlphaList(J3DStateList& rList, u8 alpha);
+    void updateAlphaList(u8);
+    void updateSimpleAlphaList(u8);
+    void updateReflectAlphaList(u8);
+    static void fillLightList(J3DStateList& rList, const NebulaColor8& rAmbient, const NebulaColor8& rMaterial);
+    void updateLightList(const Color8&, const Color8&, const Color8&, f32);
+    void createRainbowMesh();
     void drawScreenBlend() const;
     void updateRandomTexture(f32);
     void drawWallShade(const TVec3f&, const TVec3f&, f32) const;
@@ -576,11 +576,11 @@ public:
     };
 
     /* 0x08C */ u8 _8C;
-    /* 0x090 */ DLchanger* mDLchanger;
-    /* 0x094 */ DLchanger* _94[0x40];
+    /* 0x090 */ StateListChanger* mListChanger;
+    /* 0x094 */ StateListChanger* _94[0x40];
     // The lighting state lists (one being drawn, one being written).
-    J3DStateList mDL[2];
-    /* 0x1A0 */ u8 mCurrDL;
+    J3DStateList mLists[2];
+    /* 0x1A0 */ u8 mCurrList;
     /* 0x1A1 */ u8 _1A1;
     /* 0x1A4 */ f32 _1A4;
     /* 0x1A8 */ u16 _1A8;
@@ -879,7 +879,7 @@ public:
     /* 0xB64 */ ResTIMG** _B64;
     /* 0xB68 */ u8 _B68;
     /* 0xB6A */ u16 _B6A;
-    /* 0xB6C */ DLholder* _B6C;
+    /* 0xB6C */ StateListHolder* _B6C;
     /* 0xB70 */ u16 _B70;
     /* 0xB72 */ u8 _B72;
     /* 0xB74 */ u16 _B74;

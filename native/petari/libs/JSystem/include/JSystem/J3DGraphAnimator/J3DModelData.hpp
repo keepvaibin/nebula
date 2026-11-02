@@ -14,7 +14,7 @@ public:
     virtual ~J3DModelData() {
     }
 
-    s32 newSharedDisplayList(u32);
+    s32 newSharedSnapshot(u32);
     void clear();
     void syncJ3DSysFlags() const;
 

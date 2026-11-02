@@ -104,7 +104,7 @@ WaterRoadModelInfo::WaterRoadModelInfo(WaterRoad* pRoad, bool isLow)
     : mIsLow(isLow), mNumPoints(), mNumLinePoints(), mNumLoopPoints(12), mPoints(), mNormals(), mRailCoords(),
       mRoad(pRoad) {
     initPoints(pRoad);
-    initDisplayList();
+    initMesh();
 }
 
 void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
@@ -169,7 +169,7 @@ void WaterRoadModelInfo::initPoints(WaterRoad* pRoad) {
 
 }
 
-void WaterRoadModelInfo::initDisplayList() {
+void WaterRoadModelInfo::initMesh() {
     u32 attributes = NEBULA_SHAPE_NORMAL | NEBULA_SHAPE_TEXCOORD0 | NEBULA_SHAPE_TEXCOORD0 << 1;
     if (!mIsLow) {
         attributes |= NEBULA_SHAPE_TEXCOORD0 << 2;
