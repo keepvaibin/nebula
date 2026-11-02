@@ -4,6 +4,7 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
+#include <JSystem/JUtility/JUTNativeLog.hpp>
 #include <cstdio>
 #include <cstdarg>
 
@@ -31,5 +32,6 @@ void IntermissionScene::setCurrentSceneControllerState(const char* pState, ...) 
     va_start(list, pState);
     nebula_vsnprintf(mState, sizeof(mState), pState, list);
     va_end(list);
+    JUTNativeLog("scene: %s\n", mState);
     _54 = 0;
 }

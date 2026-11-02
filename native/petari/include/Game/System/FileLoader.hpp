@@ -32,7 +32,7 @@ public:
     void removeFile(const char*);
     bool isNeedToLoad(const char*) const;
     const RequestFileInfo* getRequestFileInfoConst(const char*) const;
-    RequestFileInfo* addRequest(const char*);
+    RequestFileInfo* addRequest(const char*, u32, u32, FileHolderFileEntry*);
 
     /* 0x00 */ FileLoaderThread* mLoaderThread;
     /* 0x04 */ GameMutex mMutex;

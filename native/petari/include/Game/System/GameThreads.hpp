@@ -84,13 +84,13 @@ namespace GameThreads {
     void leaveWorld();
     bool isTerminated(const GameThreadRecord* pThread);
 
-    // A section the audio thread stays out of, as interrupts disabled were on the console. excludeAudio returns the previous state for
+    // A section the audio thread stays out of. excludeAudio returns the previous state for
     // restoreAudio.
     bool excludeAudio();
     bool restoreAudio(bool enabled);
 
     // The audio thread (JASDriver, on the host's audio clock) runs between these, when no thread is in such a section, and none enters
-    // one until it leaves: what the console's audio interrupt and high-priority thread were to the game.
+    // one until it leaves.
     void enterAudio();
     void leaveAudio();
 }  // namespace GameThreads

@@ -39,16 +39,11 @@ void* FileLoaderThread::run() {
 }
 
 void FileLoaderThread::loadToMainRAM(RequestFileInfo* pInfo) {
-    pInfo->_88 = 1;
-    void* data = ::loadFile(pInfo);
-    pInfo->mFileEntry->setContext(data, pInfo->mFileEntry->mHeap);
-    pInfo->_88 = 2;
+    pInfo->mFileEntry->setContext(::loadFile(pInfo));
 }
 
 void FileLoaderThread::mountArchiveAndStartCreateResource(RequestFileInfo* pInfo) {
-    pInfo->_88 = 1;
     void* data = ::loadFile(pInfo);
     MR::createAndAddArchive(data, pInfo->mFileEntry->mHeap, pInfo->mFileName);
-    pInfo->mFileEntry->setContext(data, pInfo->mFileEntry->mHeap);
-    pInfo->_88 = 2;
+    pInfo->mFileEntry->setContext(data);
 }

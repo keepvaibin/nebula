@@ -33,6 +33,9 @@ static void heapUnpoison(const void* p, s32 n) {
 }
 #endif
 
+// The tree of heaps: the file loader looks in it (a disposer finds its heap) while the game makes and destroys heaps.
+static GameMutex sTreeMutex;
+
 JKRHeap::JKRHeap(void* data, u32 size, JKRHeap* parent, bool error) : JKRDisposer(), mChildTree(this), mDisposerList() {
     mMutex.init();
     mSize = size;
@@ -46,7 +49,9 @@ JKRHeap::JKRHeap(void* data, u32 size, JKRHeap* parent, bool error) : JKRDispose
         JKRHeap::sSystemHeap = this;
         JKRHeap::sCurrentHeap = this;
     } else {
+        sTreeMutex.lock();
         parent->mChildTree.appendChild(&mChildTree);
+        sTreeMutex.unlock();
 
         if (JKRHeap::sSystemHeap == JKRHeap::sRootHeap) {
             JKRHeap::sSystemHeap = this;
@@ -69,8 +74,10 @@ JKRHeap::JKRHeap(void* data, u32 size, JKRHeap* parent, bool error) : JKRDispose
 }
 
 JKRHeap::~JKRHeap() {
+    sTreeMutex.lock();
     mChildTree.getParent()->removeChild(&mChildTree);
     JSUTree< JKRHeap >* nextRootHeap = sRootHeap->mChildTree.getFirstChild();
+    sTreeMutex.unlock();
 
     if (sCurrentHeap == this)
         sCurrentHeap = !nextRootHeap ? sRootHeap : nextRootHeap->getObject();
@@ -237,11 +244,10 @@ JKRHeap* JKRHeap::findFromRoot(void* pData) {
         return nullptr;
     }
 
-    if ((void*)root->mStart <= pData && pData < (void*)root->mEnd) {
-        return root->find(pData);
-    }
-
-    return root->findAllHeap(pData);
+    sTreeMutex.lock();
+    JKRHeap* const heap = (void*)root->mStart <= pData && pData < (void*)root->mEnd ? root->find(pData) : root->findAllHeap(pData);
+    sTreeMutex.unlock();
+    return heap;
 }
 
 JKRHeap* JKRHeap::find(void* pData) const {

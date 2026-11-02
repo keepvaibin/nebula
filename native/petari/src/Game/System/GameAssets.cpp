@@ -178,16 +178,7 @@ namespace GameAssets {
 
         Mapped sMapped[cMappedMax];
         u32 sMappedCount;
-        GameMutex sMappedLock;
-        bool sMappedLockReady;
-
-        void lockMapped() {
-            if (!sMappedLockReady) {
-                sMappedLockReady = true;
-                sMappedLock.init();
-            }
-            sMappedLock.lock();
-        }
+        GameMutex sMappedLock;  // all zeros: ready before anything can run
 
         void release(const Mapped& rMapped) {
             const NebulaHostServices* const host = nebula_host();
@@ -198,7 +189,7 @@ namespace GameAssets {
 
         void* loadMapped(s32 entry, u32 size, JKRHeap* pHeap) {
             const NebulaHostServices* const host = nebula_host();
-            lockMapped();
+            sMappedLock.lock();
             void* pData = sMappedCount < cMappedMax ? host->asset_map_private(host->user, entry) : nullptr;
             if (pData != nullptr) {
                 Mapped& rMapped = sMapped[sMappedCount++];
@@ -212,7 +203,7 @@ namespace GameAssets {
     }  // namespace
 
     bool unload(void* pData) {
-        if (sMappedCount == 0 || pData == nullptr) {
+        if (pData == nullptr) {
             return false;
         }
         // Heap memory is the usual case. Anything else is a view: it stays until its heap goes, as a freed block's bytes
@@ -222,10 +213,7 @@ namespace GameAssets {
     }
 
     void unloadHeap(const JKRHeap* pHeap, const void* pStart, const void* pEnd) {
-        if (sMappedCount == 0) {
-            return;
-        }
-        lockMapped();
+        sMappedLock.lock();
         for (u32 i = 0; i < sMappedCount;) {
             const void* const pOwner = sMapped[i].mHeap;
             if (pOwner == pHeap || (pOwner >= pStart && pOwner < pEnd)) {
