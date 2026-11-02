@@ -386,6 +386,12 @@ void NebulaThreadQueue::init() {
 
 void NebulaThreadQueue::sleep() {
     if (tAudio) {
+        // In test mode the sound runs on the thread stepping the clock: nothing else can run to end this wait.
+        const NebulaHostServices* host = nebula_host();
+        if (host != nullptr && host->test_frame_step != nullptr) {
+            nebula_fatal("test mode: the audio thread has to wait (queue %p), and no thread can run while it does",
+                         static_cast< void* >(this));
+        }
         // Its callers look again.
         NebulaKernel::leaveAudio();
         nebula_host_thread_yield();
