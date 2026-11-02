@@ -166,7 +166,7 @@ namespace nw4r {
 
         struct TexCoordGen {
             TexCoordGen() : reserve(0) {
-                Set(GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY);
+                Set(GPU_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY);
             }
 
             TexCoordGen(GpuTexGenType aTexGenType, GpuTexGenSrc aTexGenSrc, u32 aTexMtx)

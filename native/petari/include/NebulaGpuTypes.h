@@ -31,9 +31,13 @@ typedef struct J3DNativeTexObj {
 } J3DNativeTexObj;
 
 
-typedef struct _GpuLightObj {
-    u32 dummy[16];
-} GpuLightObj;
+typedef struct J3DNativeLight {
+    u8 mColor[4];
+    f32 mAngle[3];     // a0-a2
+    f32 mDistance[3];  // k0-k2
+    f32 mPosition[3];
+    f32 mDirection[3];
+} J3DNativeLight;
 
 typedef struct _GpuVtxAttrFmtList {
     GpuAttr attr;

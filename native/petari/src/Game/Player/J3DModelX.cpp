@@ -362,7 +362,7 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
 
     list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
     list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
-    list.setTexCoordGen(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
+    list.setTexCoordGen(GPU_TEXCOORD0, GPU_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
     pLists[6].copy(list);
     list.clear();
 

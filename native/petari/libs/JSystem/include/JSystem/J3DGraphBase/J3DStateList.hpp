@@ -30,15 +30,6 @@ enum {
     J3D_STATE_TEX_OFFSETS,          /* texture coordinate, lines offset it, points offset it */
 };
 
-// A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
-struct J3DNativeLight {
-    u8 mColor[4];
-    f32 mAngle[3];     // a0-a2
-    f32 mDistance[3];  // k0-k2
-    f32 mPosition[3];
-    f32 mDirection[3];
-};
-
 // Drawing state the game sets outside materials, as values (nebula_game_api.h NebulaStateOp), sent as one record in
 // draw order. Each setter takes the arguments of the console function its change is named after.
 class J3DStateList {
