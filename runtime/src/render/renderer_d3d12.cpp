@@ -811,7 +811,7 @@ void RendererD3D12::resolve_scene(bool depth, bool color_wanted) {
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
         command_list_->OMSetRenderTargets(1, &scene_rtv_, FALSE, &scene_dsv_);
         bound_rt_aux_ = 0u;
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
         bound_viewport_valid_ = false;
         bound_scissor_valid_ = false;
         bound_scissor_input_valid_ = false;
@@ -1010,10 +1010,10 @@ void RendererD3D12::carry_over_scene_contents() {
     retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_color_));
     retired_scene_copy_textures_[frame_slot_].push_back(std::move(scene_carry_depth_));
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
 }
 
-HRESULT create_gx_root_signature(
+HRESULT create_draw_root_signature(
     ID3D12Device* device,
     ID3D12RootSignature** root_signature) noexcept {
     if (device == nullptr || root_signature == nullptr) {
@@ -1114,7 +1114,7 @@ HRESULT create_gx_root_signature(
 
 bool RendererD3D12::create_root_signature() {
     d3d_check(
-        create_gx_root_signature(
+        create_draw_root_signature(
             device_.Get(), root_signature_.ReleaseAndGetAddressOf()),
         "Create GX root signature");
     return true;
@@ -1604,7 +1604,7 @@ void RendererD3D12::apply_window_size() {
     }
     frame_ = wanted;
     refresh_scene_conversion_source_views();
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_scissor_input_scale_ = 0u;
     std::cout << "[Renderer] internal resolution " << previous.width << "x" << previous.height << " -> "
               << frame_.width << "x" << frame_.height;
@@ -2569,7 +2569,7 @@ void RendererD3D12::shutdown() {
     constant_ring_.reset();
     matrix_ring_.reset();
     srv_ring_.reset();
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     last_latency_wait_us_ = last_frame_slot_wait_us_ =
         last_timestamp_read_us_ = last_begin_reset_us_ = 0;
     telemetry_window_start_qpc_ = last_present_qpc_ = 0;
@@ -3053,7 +3053,7 @@ void RendererD3D12::draw_ui_textured_quad(
     command_list_->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     command_list_->DrawInstanced(4, 1, 0, 0);
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
 }
 
 void RendererD3D12::ensure_native_settings_solid_pipeline_loaded() {
@@ -3149,7 +3149,7 @@ void RendererD3D12::draw_ui_solid_quad(
     command_list_->IASetPrimitiveTopology(
         D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     command_list_->DrawInstanced(4, 1, 0, 0);
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
 }
 
 void RendererD3D12::draw_ui_glyph(
@@ -3172,7 +3172,7 @@ void RendererD3D12::draw_ui_glyph(
     command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
     // One instance per cell, row-major; unlit cells have degenerate geometry.
     command_list_->DrawInstanced(4, 35, 0, 0);
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
 }
 
 void RendererD3D12::pump_messages() {
@@ -3183,7 +3183,7 @@ bool RendererD3D12::quit_requested() const noexcept {
     return host_window::quit_request.load(std::memory_order_acquire);
 }
 
-void RendererD3D12::invalidate_gx_bindings() {
+void RendererD3D12::invalidate_draw_bindings() {
     bound_pipeline_ = nullptr;
     bound_vs_constants_ = 0;
     bound_ps_constants_ = 0;
@@ -3906,7 +3906,7 @@ void RendererD3D12::begin_frame(bool present_swap_chain) {
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     if (scene_carry_color_ || scene_carry_depth_) {
         carry_over_scene_contents();
     }
@@ -4697,7 +4697,7 @@ void RendererD3D12::record_motion_debug_view() {
     std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &barrier);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bind_scene();
 }
 
@@ -6009,7 +6009,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             interp_rings ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, heaps);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
         bound_rt_aux_ = 0u;
 
         ++subframe_counter_;
@@ -6151,7 +6151,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
                         interp_segment ? sampler_heaps_[run_segment_].Get() : sampler_heap_.Get()};
                     command_list_->SetDescriptorHeaps(2, after_heaps);
                     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-                    invalidate_gx_bindings();
+                    invalidate_draw_bindings();
                     bound_rt_aux_ = 0u;
                     break;
                 }
@@ -6220,7 +6220,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
             return scratch.used + 1024u < subframe_counter_;
         });
         d3d_check(command_list_->Close(), "replay Close");
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
 
         entry.sequence = sequence_.serial;
         entry.blend = blend && blended != 0u;
@@ -6229,7 +6229,7 @@ bool RendererD3D12::record_replay_list(ReplayList& entry) {
         entry.guarded = subframe_guarded_.size();
         entry.alloc_segment = ring_segment_;
     }
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     sequence_record_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - record_start).count();
     ++replay_records_;
@@ -6361,7 +6361,7 @@ bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Aff
         ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, heaps);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
         record_subframe_upscale(*replay, time);
         d3d_check(command_list_->Close(), "sub-frame upscale Close");
     }
@@ -6373,7 +6373,7 @@ bool RendererD3D12::present_replay_subframe(const SubframeTime& given, const Aff
         ID3D12DescriptorHeap* live[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, live);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
     }
     (void)present(&subframe_display_, subframe_capture_);
     const bool readback = eval_readback_requested_ && eval_readback_fence_ == 0u;
@@ -6596,7 +6596,7 @@ void RendererD3D12::record_subframe_upscale(const ReplayList& entry, const Subfr
         ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
         command_list_->SetDescriptorHeaps(2, heaps);
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
-        invalidate_gx_bindings();
+        invalidate_draw_bindings();
     }
     temporal_history_valid_ = upscaled;
     if (!upscaled && entry.upscale.copy < run_copies_.size()) {
@@ -6838,7 +6838,7 @@ bool RendererD3D12::record_temporal_upscale(unsigned output_scale) {
     ID3D12DescriptorHeap* heaps[] = {srv_ring_.heap(), sampler_heap_.Get()};
     command_list_->SetDescriptorHeaps(2, heaps);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     temporal_history_valid_ = recorded;
     return recorded;
 }
@@ -7058,7 +7058,7 @@ void RendererD3D12::swap_scene_with(SceneTargetSet& other) {
     std::swap(conv_scene_source_table_, other.conv_table);
     std::swap(conv_scene_color_srv_, other.conv_color_srv);
     std::swap(conv_scene_depth_srv_, other.conv_depth_srv);
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_scissor_input_scale_ = 0u;
 }
 
@@ -7078,7 +7078,7 @@ void RendererD3D12::swap_scene_sets() {
     std::swap(conv_scene_color_srv_, alt_scene_.conv_color_srv);
     std::swap(conv_scene_depth_srv_, alt_scene_.conv_depth_srv);
     output_scene_active_ = !output_scene_active_;
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_scissor_input_scale_ = 0u;
     bind_scene();
 }
@@ -7098,7 +7098,7 @@ void RendererD3D12::swap_target_set() {
     std::swap(conv_scene_color_srv_, target_scene_.conv_color_srv);
     std::swap(conv_scene_depth_srv_, target_scene_.conv_depth_srv);
     target_pass_active_ = !target_pass_active_;
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_scissor_input_scale_ = 0u;
     bind_scene();
 }
@@ -7403,7 +7403,7 @@ void RendererD3D12::present_fg_hudless(const DisplayTexture& source, const D3D12
         command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         command_list_->DrawInstanced(3, 1, 0, 0);
     }
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     streamline::tag_hudless(command_list_.Get(), fg_hudless_target_.Get(), host_window::backbuffer_width, host_window::backbuffer_height);
     // Back to the backbuffer for the overlays.
     const UINT buf_idx = swap_chain_->GetCurrentBackBufferIndex();
@@ -7434,7 +7434,7 @@ void RendererD3D12::record_scene_aa() {
         static_cast<unsigned>(std::max(content.width, 1)), static_cast<unsigned>(std::max(content.height, 1)),
         frame_index_, kFramesInFlight));
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
 }
 
@@ -7475,7 +7475,7 @@ void RendererD3D12::record_scene_ao() {
         scene_msaa_.color_dirty = true;
     }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
 }
 
@@ -7557,7 +7557,7 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
         scene_msaa_.color_dirty = true;
     }
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bound_rt_aux_ = 0xFFu;
 }
 
@@ -7756,7 +7756,7 @@ void RendererD3D12::clear_scene(
             command_list_->DrawInstanced(3, 1, 0, 0);
 
             command_list_->SetGraphicsRootSignature(root_signature_.Get());
-            invalidate_gx_bindings();
+            invalidate_draw_bindings();
             bind_scene();
         }
     }
@@ -7890,8 +7890,8 @@ void RendererD3D12::draw(const DrawCall& call) {
     // XF layout (hardware/Dolphin xfmem): wd, ht, zRange, xOrig, yOrig, farZ.
     // Depth range (Dolphin BPFunctions::SetScissorAndViewport, the REVERSED-Z form for backends
     // without reversed-range support):
-    //   gx_min = (farZ - zRange) / 2^24,  gx_max = farZ / 2^24
-    //   MinDepth = 1 - gx_max,  MaxDepth = 1 - gx_min
+    //   min_filter = (farZ - zRange) / 2^24,  max_filter = farZ / 2^24
+    //   MinDepth = 1 - max_filter,  MaxDepth = 1 - min_filter
     // Composes with the negated projection z (fill_projection): GX near maps to the depth MaxDepth
     // side, GX far to the MinDepth side; depth funcs are flipped in pipeline_cache to match.
     if (call.has_viewport) {
@@ -7926,7 +7926,7 @@ void RendererD3D12::draw(const DrawCall& call) {
     // A replayed display list rebinds the same vertex-ring allocation for
     // thousands of consecutive draws, so the view is compared before binding.
     // Every other writer of stream 0 (the UI helpers, the conversion blit, the
-    // clear quad) is followed by invalidate_gx_bindings(), and begin_frame()
+    // clear quad) is followed by invalidate_draw_bindings(), and begin_frame()
     // re-arms the cached view after rewinding the vertex ring.
     if (!bound_vertex_view_valid_ ||
         call.vertex_view.BufferLocation != bound_vertex_view_.BufferLocation ||
@@ -8156,7 +8156,7 @@ void RendererD3D12::record_conversion_blit(
     // Restore the GX drawing state (root signature changed; scene target RTV/DSV and full
     // viewport/scissor re-bound; per-draw viewport/scissor follow).
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bind_scene();
 }
 
@@ -8695,7 +8695,7 @@ bool RendererD3D12::record_pointer_depth_capture_in_frame() {
 
     // Restore the GX drawing state exactly as record_conversion_blit does.
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bind_scene();
     pointer_depth_in_frame_pending_ = true;
     return true;
@@ -8866,7 +8866,7 @@ bool RendererD3D12::record_async_peek_field_in_frame(
     record_async_peek_field_commands(command_list_.Get(), field, kind, slot);
     // Restore the GX drawing state exactly as record_conversion_blit does.
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     bind_scene();
     field.fence = kAsyncPeekInFrame;  // fenced at end_frame
     return true;
@@ -9464,7 +9464,7 @@ gpu::TextureRef RendererD3D12::filter_display_picture(const DisplayTexture& sour
     std::swap(b.Transition.StateBefore, b.Transition.StateAfter);
     command_list_->ResourceBarrier(1, &b);
     command_list_->SetGraphicsRootSignature(root_signature_.Get());
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     return display_filter_picture_;
 }
 
@@ -9625,7 +9625,7 @@ bool RendererD3D12::present(
         command_list_->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         command_list_->DrawInstanced(3, 1, 0, 0);
     }
-    invalidate_gx_bindings();
+    invalidate_draw_bindings();
     if (!black) {
         present_fg_hudless(*frame, vp, sci);
     }

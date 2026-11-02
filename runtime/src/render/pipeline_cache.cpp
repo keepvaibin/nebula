@@ -34,7 +34,7 @@ constexpr D3D12_INPUT_ELEMENT_DESC kInputLayout[] = {
 };
 
 // GX BlendFactor -> D3D12, src side (GX factor 2/3 reference the destination).
-D3D12_BLEND gx_src_blend(std::uint32_t f) {
+D3D12_BLEND src_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
     case 1: return D3D12_BLEND_ONE;
@@ -49,7 +49,7 @@ D3D12_BLEND gx_src_blend(std::uint32_t f) {
 }
 
 // GX BlendFactor -> D3D12, dst side (GX factor 2/3 reference the source).
-D3D12_BLEND gx_dst_blend(std::uint32_t f) {
+D3D12_BLEND dst_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
     case 1: return D3D12_BLEND_ONE;
@@ -75,7 +75,7 @@ D3D12_BLEND to_alpha_blend(D3D12_BLEND b) {
 }
 
 // GX LogicOp 0-15 -> D3D12.
-D3D12_LOGIC_OP gx_logic_op(std::uint32_t m) {
+D3D12_LOGIC_OP logic_op_mode(std::uint32_t m) {
     switch (m) {
     case 0:  return D3D12_LOGIC_OP_CLEAR;
     case 1:  return D3D12_LOGIC_OP_AND;
@@ -134,8 +134,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
             rt.DestBlend = D3D12_BLEND_ONE;
             rt.BlendOp   = D3D12_BLEND_OP_REV_SUBTRACT;
         } else {
-            rt.SrcBlend  = gx_src_blend((bb >> 2) & 0x7u);
-            rt.DestBlend = gx_dst_blend((bb >> 5) & 0x7u);
+            rt.SrcBlend  = src_blend((bb >> 2) & 0x7u);
+            rt.DestBlend = dst_blend((bb >> 5) & 0x7u);
             rt.BlendOp   = D3D12_BLEND_OP_ADD;
             if (rs.pixfmt != 1u) {
                 if (rt.SrcBlend == D3D12_BLEND_DEST_ALPHA)
@@ -179,7 +179,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         }
     } else if (bb & (1u << 8)) {         // logic_op_enable
         rt.LogicOpEnable = TRUE;
-        rt.LogicOp = gx_logic_op((bb >> 9) & 0xFu);
+        rt.LogicOp = logic_op_mode((bb >> 9) & 0xFu);
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;

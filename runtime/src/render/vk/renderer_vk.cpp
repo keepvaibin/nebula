@@ -218,7 +218,7 @@ bool RendererVk::initialize(int window_width, int window_height, const FrameMap&
         // Presentation post-processing, compiled on a worker; the plain blit presents until it is ready.
         const RenderConfig cfg = get_render_config();
         if (cfg.post_process) {
-            post_.initialize(post_process_settings_from(cfg), gx_layout_.scene_pass, color_pass_);
+            post_.initialize(post_process_settings_from(cfg), draw_layout_.scene_pass, color_pass_);
             post_.set_present_pass(present_pass_);
         } else {
             PostProcessStatus off{};
@@ -273,23 +273,23 @@ bool RendererVk::create_layouts() {
         depth_linear_ = (depth_properties.optimalTilingFeatures & VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT) != 0u;
     }
 
-    const VkShaderStageFlags gx_stages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
+    const VkShaderStageFlags stage_passes = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT |
         (context.geometry_shader() ? VK_SHADER_STAGE_GEOMETRY_BIT : 0u);
     {
         // Set 0: b0, b1, the matrix palette, vertex blending's earlier vertices and verdicts.
         const VkDescriptorSetLayoutBinding bindings[] = {
-            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
+            {0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             // b1: the pixel constants, or a native material's constants (both stages read those).
             {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, nullptr},
-            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, gx_stages, nullptr},
+            {2, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1, stage_passes, nullptr},
             {3, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
             {4, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, gx_stages, nullptr},  // the rows the row table names
+            {5, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, stage_passes, nullptr},  // the rows the row table names
         };
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 6;
         info.pBindings = bindings;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[0]), "set 0 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[0]), "set 0 layout");
     }
     {
         const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 8,
@@ -297,7 +297,7 @@ bool RendererVk::create_layouts() {
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
         info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[1]), "set 1 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[1]), "set 1 layout");
     }
     {
         const VkDescriptorSetLayoutBinding binding{0, VK_DESCRIPTOR_TYPE_SAMPLER, 8, VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -305,17 +305,17 @@ bool RendererVk::create_layouts() {
         VkDescriptorSetLayoutCreateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
         info.bindingCount = 1;
         info.pBindings = &binding;
-        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &gx_layout_.sets[2]), "set 2 layout");
+        vk::check(vkCreateDescriptorSetLayout(device, &info, nullptr, &draw_layout_.sets[2]), "set 2 layout");
     }
     {
         // Vertex blending's per-draw values (b2): mode, frame element, verdict slot, last vertex, first vertex's byte.
         const VkPushConstantRange blend{VK_SHADER_STAGE_VERTEX_BIT, 0, 5u * sizeof(std::uint32_t)};
         VkPipelineLayoutCreateInfo info{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
         info.setLayoutCount = 3;
-        info.pSetLayouts = gx_layout_.sets.data();
+        info.pSetLayouts = draw_layout_.sets.data();
         info.pushConstantRangeCount = 1;
         info.pPushConstantRanges = &blend;
-        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &gx_layout_.layout), "GX pipeline layout");
+        vk::check(vkCreatePipelineLayout(device, &info, nullptr, &draw_layout_.layout), "GX pipeline layout");
     }
     linear_clamp_ = create_sampler(device, VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_NEAREST);
     point_clamp_ = create_sampler(device, VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST);
@@ -442,14 +442,14 @@ bool RendererVk::create_layouts() {
         info.dependencyCount = 2;
         info.pDependencies = dependencies;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &gx_layout_.ms_passes[samples_log2] : &gx_layout_.scene_pass),
+                                     samples_log2 != 0u ? &draw_layout_.ms_passes[samples_log2] : &draw_layout_.scene_pass),
                   "scene target render pass");
         attachments[0].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         attachments[1].stencilLoadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
         vk::check(vkCreateRenderPass(device, &info, nullptr,
-                                     samples_log2 != 0u ? &gx_layout_.ms_passes_clear[samples_log2]
-                                                        : &gx_layout_.scene_pass_clear),
+                                     samples_log2 != 0u ? &draw_layout_.ms_passes_clear[samples_log2]
+                                                        : &draw_layout_.scene_pass_clear),
                   "scene target clearing render pass");
     }
     // One RGBA8 target written whole (copies, peeks): its old contents are dropped; it ends shader-readable.
@@ -493,13 +493,13 @@ bool RendererVk::create_layouts() {
         attachment.format = VK_FORMAT_R8_UNORM;
         vk::check(vkCreateRenderPass(device, &info, nullptr, &grey_pass_), "one-channel copy render pass");
     }
-    gx_layout_.depth_format = depth_format_;
-    gx_layout_.geometry_shaders = context.geometry_shader();
-    gx_layout_.tessellation = context.tessellation_shader();
-    gx_layout_.dual_source_blend = context.dual_source_blend();
-    gx_layout_.logic_op = context.logic_op();
-    gx_layout_.depth_clamp = context.depth_clamp();
-    gx_layout_.depth_clip_enable = context.depth_clip_enable();
+    draw_layout_.depth_format = depth_format_;
+    draw_layout_.geometry_shaders = context.geometry_shader();
+    draw_layout_.tessellation = context.tessellation_shader();
+    draw_layout_.dual_source_blend = context.dual_source_blend();
+    draw_layout_.logic_op = context.logic_op();
+    draw_layout_.depth_clamp = context.depth_clamp();
+    draw_layout_.depth_clip_enable = context.depth_clip_enable();
     persistent_pool_ = create_pool(device, kPersistentSets, kPersistentPool);
     return true;
 }
@@ -845,7 +845,7 @@ bool RendererVk::create_utility_pipelines() {
         (void)scene_utility_pipeline(static_cast<SceneUtility>(kind));
     }
     if (msaa_max_samples_ > 1u) {
-        depth_resolve_pipeline_ = create_utility_pipeline(gx_layout_.scene_pass, utility_layout_,
+        depth_resolve_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_,
                                                           vk::UtilitySpirv::BlitVs, vk::UtilitySpirv::DepthResolvePs, 0u, false,
                                                           false, true);
     }
@@ -857,10 +857,10 @@ bool RendererVk::create_utility_pipelines() {
         present_pass_, utility_layout_, vk::UtilitySpirv::UiTexturedVs,
         vk::UtilitySpirv::UiTexturedPs, kAll, true, true, false);
     depth_carry_pipeline_ = create_utility_pipeline(
-        gx_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+        draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
         depth_linear_ ? vk::UtilitySpirv::DepthCarryPs : vk::UtilitySpirv::DepthCarryLoadPs, 0u, false, false,
         true);
-    color_carry_pipeline_ = create_utility_pipeline(gx_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
+    color_carry_pipeline_ = create_utility_pipeline(draw_layout_.scene_pass, utility_layout_, vk::UtilitySpirv::BlitVs,
                                                     vk::UtilitySpirv::BlitPs, kAll, false, false, false);
     return true;
 }
@@ -875,7 +875,7 @@ VkPipeline RendererVk::scene_utility_pipeline(SceneUtility kind) {
         !vk::Context::get().quirks().clear_with_draw) {
         return VK_NULL_HANDLE;
     }
-    const VkRenderPass pass = gx_layout_.pass_for(samples_log2, false);
+    const VkRenderPass pass = draw_layout_.pass_for(samples_log2, false);
     const auto samples = static_cast<VkSampleCountFlagBits>(1u << samples_log2);
     constexpr VkColorComponentFlags kRgb = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT;
@@ -988,25 +988,25 @@ void RendererVk::shutdown() {
         draw_queries_ = VK_NULL_HANDLE;
         destroy_swapchain();
         for (VkRenderPass pass :
-             {present_pass_, color_pass_, grey_pass_, gx_layout_.scene_pass, gx_layout_.scene_pass_clear}) {
+             {present_pass_, color_pass_, grey_pass_, draw_layout_.scene_pass, draw_layout_.scene_pass_clear}) {
             if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
         }
-        for (auto* passes : {&gx_layout_.ms_passes, &gx_layout_.ms_passes_clear}) {
+        for (auto* passes : {&draw_layout_.ms_passes, &draw_layout_.ms_passes_clear}) {
             for (VkRenderPass& pass : *passes) {
                 if (pass != VK_NULL_HANDLE) vkDestroyRenderPass(device, pass, nullptr);
                 pass = VK_NULL_HANDLE;
             }
         }
-        present_pass_ = color_pass_ = grey_pass_ = gx_layout_.scene_pass = gx_layout_.scene_pass_clear = VK_NULL_HANDLE;
-        for (VkPipelineLayout layout : {gx_layout_.layout, utility_layout_, conversion_layout_}) {
+        present_pass_ = color_pass_ = grey_pass_ = draw_layout_.scene_pass = draw_layout_.scene_pass_clear = VK_NULL_HANDLE;
+        for (VkPipelineLayout layout : {draw_layout_.layout, utility_layout_, conversion_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyPipelineLayout(device, layout, nullptr);
         }
-        gx_layout_.layout = utility_layout_ = conversion_layout_ = VK_NULL_HANDLE;
-        for (VkDescriptorSetLayout layout : {gx_layout_.sets[0], gx_layout_.sets[1], gx_layout_.sets[2],
+        draw_layout_.layout = utility_layout_ = conversion_layout_ = VK_NULL_HANDLE;
+        for (VkDescriptorSetLayout layout : {draw_layout_.sets[0], draw_layout_.sets[1], draw_layout_.sets[2],
                                              utility_set_layout_, conversion_set_layout_}) {
             if (layout != VK_NULL_HANDLE) vkDestroyDescriptorSetLayout(device, layout, nullptr);
         }
-        gx_layout_.sets.fill(VK_NULL_HANDLE);
+        draw_layout_.sets.fill(VK_NULL_HANDLE);
         utility_set_layout_ = conversion_set_layout_ = VK_NULL_HANDLE;
         for (VkSampler sampler : {linear_clamp_, point_clamp_}) {
             if (sampler != VK_NULL_HANDLE) vkDestroySampler(device, sampler, nullptr);
@@ -1159,7 +1159,7 @@ void RendererVk::begin_frame(bool) {
         constant_ring_.begin_frame(frame_slot_);
         matrix_ring_.begin_frame(frame_slot_);
     }
-    reset_gx_bindings();
+    reset_draw_bindings();
     scene_pass_open_ = false;
     swap_image_ = UINT32_MAX;
     if (scene_carry_color_ || scene_carry_depth_) {
@@ -1817,7 +1817,7 @@ bool RendererVk::present(const DisplayTexture* source, bool capture_backbuffer, 
         host_window::draw_home_menu(*this);
     }
     vkCmdEndRenderPass(commands);
-    reset_gx_bindings();
+    reset_draw_bindings();
 
     if (capture_backbuffer && swapchain_.copyable && !backbuffer_capture_path_.empty() &&
         backbuffer_capture_pending_path_.empty()) {

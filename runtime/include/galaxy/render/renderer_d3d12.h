@@ -110,7 +110,7 @@ inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 // Builds the GX graphics root signature used by RendererD3D12. Root
 // CBV b0 is visible to both VS and GS because native GX line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
-[[nodiscard]] HRESULT create_gx_root_signature(
+[[nodiscard]] HRESULT create_draw_root_signature(
     ID3D12Device* device,
     ID3D12RootSignature** root_signature) noexcept;
 
@@ -698,7 +698,7 @@ public:
         const std::array<float, 4>& color) override;
 
 private:
-    void invalidate_gx_bindings();
+    void invalidate_draw_bindings();
     // VSYNC ON presents each frame for round(refresh / rate) refreshes when
     // the refresh is a multiple of the present rate (60 at 120 Hz, 30 at
     // 60 Hz), so every frame stays on screen equally long; other rates keep
@@ -1586,7 +1586,7 @@ private:
     std::uint64_t last_begin_reset_us_ = 0;
 
     // Redundant-state elision for draw(). Every one of these is re-armed by
-    // invalidate_gx_bindings(), which begin_frame() calls after the upload rings
+    // invalidate_draw_bindings(), which begin_frame() calls after the upload rings
     // for the new frame slot have been rewound and before any list is recorded.
     // The vertex view is part of the set: its GPU VA comes from the per-frame
     // vertex ring, so a stale entry can never survive that rewind.
@@ -1606,7 +1606,7 @@ private:
     bool bound_vertex_view_valid_ = false;
     // The index view is a CPU-side 20-byte descriptor whose BufferLocation comes
     // from the per-frame index ring, so like the vertex view it must be re-armed
-    // by invalidate_gx_bindings() after the ring for the new slot is rewound.
+    // by invalidate_draw_bindings() after the ring for the new slot is rewound.
     D3D12_INDEX_BUFFER_VIEW bound_index_view_{};
     bool bound_index_view_valid_ = false;
     D3D12_RECT bound_scissor_{};

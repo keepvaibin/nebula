@@ -446,13 +446,13 @@ bool frame_generation_allowed() noexcept {
            steady_ms() - at < kFrameGenerationReportMs;
 }
 
-RenderTimingConfig resolve_gx_timing_config_from_environment() {
+RenderTimingConfig resolve_frame_timing_config_from_environment() {
     return RenderTimingConfig{};
 }
 
-const RenderTimingConfig& get_gx_timing_config() {
+const RenderTimingConfig& get_frame_timing_config() {
     static const RenderTimingConfig config =
-        resolve_gx_timing_config_from_environment();
+        resolve_frame_timing_config_from_environment();
     return config;
 }
 

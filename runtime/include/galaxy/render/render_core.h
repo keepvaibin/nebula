@@ -120,28 +120,28 @@ public:
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
     // Scene boundaries one render chunk carries (3D and 2D, two frames).
-    static constexpr std::size_t kFifoMarkersPerChunk = 8u;
+    static constexpr std::size_t kStreamMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
     using SceneStage = std::array<char, 48>;
     // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
     void attach_scene_marker(SceneMarker marker) noexcept {
-        if (producer_fifo_marker_count_ < producer_fifo_markers_.size()) {
-            const std::uint8_t index = producer_fifo_marker_count_++;
-            producer_fifo_markers_[index] = marker;
-            producer_fifo_marker_serials_[index] = producer_shape_record_serial_;
-            producer_fifo_marker_views_[index] = producer_scene_view_;
-            producer_fifo_marker_sky_up_[index] = producer_scene_sky_up_;
+        if (producer_stream_marker_count_ < producer_stream_markers_.size()) {
+            const std::uint8_t index = producer_stream_marker_count_++;
+            producer_stream_markers_[index] = marker;
+            producer_stream_marker_serials_[index] = producer_shape_record_serial_;
+            producer_stream_marker_views_[index] = producer_scene_view_;
+            producer_stream_marker_sky_up_[index] = producer_scene_sky_up_;
             if (producer_scene_view_valid_ && marker == SceneMarker::SceneBegin) {
-                producer_fifo_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
+                producer_stream_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
             } else {
-                producer_fifo_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
+                producer_stream_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
             }
             if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == SceneMarker::SceneBegin) {
-                producer_fifo_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
+                producer_stream_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
             } else {
-                producer_fifo_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
+                producer_stream_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
             }
-            producer_fifo_marker_stages_[index] = producer_scene_stage_;
+            producer_stream_marker_stages_[index] = producer_scene_stage_;
         }
         producer_scene_view_valid_ = false;
     }
@@ -358,19 +358,19 @@ private:
         // In-frame pointer field: recorded before the chunk's records.
         bool pointer_depth_in_frame = false;
         // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
-        std::array<SceneMarker, kFifoMarkersPerChunk> fifo_markers{};
+        std::array<SceneMarker, kStreamMarkersPerChunk> stream_markers{};
         // Per marker: how many shape records the game had made before it (their order at one offset).
-        std::array<std::uint64_t, kFifoMarkersPerChunk> fifo_marker_serials{};
-        std::uint8_t fifo_marker_count = 0;
+        std::array<std::uint64_t, kStreamMarkersPerChunk> stream_marker_serials{};
+        std::uint8_t stream_marker_count = 0;
         // Game camera (world to eye) per SceneBegin marker; bit i of the
         // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, kFifoMarkersPerChunk> fifo_marker_views{};
-        std::uint8_t fifo_marker_view_mask = 0;
+        std::array<std::array<float, 12>, kStreamMarkersPerChunk> stream_marker_views{};
+        std::uint8_t stream_marker_view_mask = 0;
         // The player's up per SceneBegin marker (VertexConstants::sky_up); bit i of the mask marks it known.
-        std::array<std::uint32_t, kFifoMarkersPerChunk> fifo_marker_sky_up{};
-        std::uint8_t fifo_marker_sky_up_mask = 0;
+        std::array<std::uint32_t, kStreamMarkersPerChunk> stream_marker_sky_up{};
+        std::uint8_t stream_marker_sky_up_mask = 0;
         // The stage per SceneBegin marker (empty when the game did not say).
-        std::array<SceneStage, kFifoMarkersPerChunk> fifo_marker_stages{};
+        std::array<SceneStage, kStreamMarkersPerChunk> stream_marker_stages{};
         // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
         // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
@@ -388,7 +388,7 @@ private:
     // Starts one fresh GX command-stream session. Every parser, state and tail mirror resets
     // together. Resetting only some of them can classify a receipt as event-free after shutdown
     // or reinitialize.
-    void reset_fifo_session_state();
+    void reset_session_state();
 
     void render_thread_main();
     void render_frame_on_thread(FrameChunk& chunk);
@@ -414,8 +414,8 @@ private:
     bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
     std::shared_ptr<PointerDepthCapture> producer_pointer_depth_capture_;
-    std::array<SceneMarker, kFifoMarkersPerChunk> producer_fifo_markers_{};
-    std::array<std::uint64_t, kFifoMarkersPerChunk> producer_fifo_marker_serials_{};
+    std::array<SceneMarker, kStreamMarkersPerChunk> producer_stream_markers_{};
+    std::array<std::uint64_t, kStreamMarkersPerChunk> producer_stream_marker_serials_{};
     // Shape records made so far (attach_shape_record): each record's and marker's place among them.
     std::uint64_t producer_shape_record_serial_ = 0;
     // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
@@ -426,16 +426,16 @@ private:
     };
     static constexpr int kSplitShapeRecord = -2;
     std::vector<StreamSplit> stream_splits_;
-    std::uint8_t producer_fifo_marker_count_ = 0;
-    std::array<std::array<float, 12>, kFifoMarkersPerChunk> producer_fifo_marker_views_{};
-    std::uint8_t producer_fifo_marker_view_mask_ = 0;
-    std::array<std::uint32_t, kFifoMarkersPerChunk> producer_fifo_marker_sky_up_{};
-    std::uint8_t producer_fifo_marker_sky_up_mask_ = 0;
+    std::uint8_t producer_stream_marker_count_ = 0;
+    std::array<std::array<float, 12>, kStreamMarkersPerChunk> producer_stream_marker_views_{};
+    std::uint8_t producer_stream_marker_view_mask_ = 0;
+    std::array<std::uint32_t, kStreamMarkersPerChunk> producer_stream_marker_sky_up_{};
+    std::uint8_t producer_stream_marker_sky_up_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
     std::uint32_t producer_scene_sky_up_ = 0u;
     bool producer_scene_sky_up_known_ = false;
-    std::array<SceneStage, kFifoMarkersPerChunk> producer_fifo_marker_stages_{};
+    std::array<SceneStage, kStreamMarkersPerChunk> producer_stream_marker_stages_{};
     SceneStage producer_scene_stage_{};
     // Render thread: the stage the game last reported, and whether it ever did.
     SceneStage scene_stage_{};
@@ -968,7 +968,7 @@ private:
     } pending_pointer_depth_capture_;
     void take_attached_pointer_depth_capture(FrameChunk& chunk);
     void record_pointer_depth_capture_in_frame(FrameChunk& chunk);
-    void take_attached_fifo_markers(FrameChunk& chunk) noexcept;
+    void take_attached_stream_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_scene_marker(SceneMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);

@@ -24,10 +24,10 @@ template <class Compiler>
         std::launch::async,
         [compiler, &vertex_source]() mutable {
             return std::invoke(
-                compiler, vertex_source, "vs_5_1", "gx_vs");
+                compiler, vertex_source, "vs_5_1", "draw_vs");
         });
     Result pixel = std::invoke(
-        compiler, pixel_source, "ps_5_1", "gx_ps");
+        compiler, pixel_source, "ps_5_1", "draw_ps");
     // get() rethrows the worker's exception. If the pixel compile throws, the future's destructor joins the worker
     // before the sources go out of scope.
     return std::pair<Result, Result>{vertex.get(), std::move(pixel)};
