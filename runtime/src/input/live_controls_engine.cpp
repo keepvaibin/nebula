@@ -33,7 +33,8 @@ LiveControlsResult LiveControlsEngine::sample(const LiveControlsFrame& frame, Li
     const auto& keyboard_levels = frame.keyboard_levels;
     const auto& script = frame.script;
     const auto live_pads = frame.pads;
-    const bool use_pads = frame.use_pads, use_keyboard = frame.use_keyboard;
+    const bool use_pads = frame.use_pads && (frame.window_focused || frame.allow_background_device_input);
+    const bool use_keyboard = frame.use_keyboard;
     const bool window_focused = frame.window_focused, allow_absolute_pointer = frame.allow_absolute_pointer;
     const bool drop_injected = frame.drop_injected;
     const auto current_vi = frame.vi;

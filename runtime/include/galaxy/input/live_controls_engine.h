@@ -62,6 +62,7 @@ struct LiveControlsFrame {
     bool window_focused = false;
     bool use_keyboard = false;
     bool use_pads = false;
+    bool allow_background_device_input = false;
     bool allow_absolute_pointer = false;
     bool drop_injected = false;
     bool script_pointer_force = false;

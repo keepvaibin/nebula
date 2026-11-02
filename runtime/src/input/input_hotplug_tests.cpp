@@ -64,7 +64,7 @@ int reorder_and_reconnect() {
     devices[0].device_slot = 0; devices[0].sample.axes[0] = 0.9f;
     devices[1].sample.connected = true; devices[1].sample.scheme = ControlScheme::SwitchPro;
     devices[1].device_slot = 0;
-    LiveControlsFrame frame{config}; frame.pads = devices; frame.use_pads = true;
+    LiveControlsFrame frame{config}; frame.pads = devices; frame.use_pads = true; frame.window_focused = true;
     LiveControlsEngine engine; Host host;
     (void)engine.sample(frame, host);
     std::swap(devices[0], devices[1]);
@@ -79,8 +79,34 @@ int reorder_and_reconnect() {
               << "\texpected_retained=1\texpected_reconnected=0\n";
     return retained && !reconnected ? 0 : 1;
 }
+int focus_release_and_reacquire() {
+    auto config = default_controls_config();
+    config.table(ControlScheme::Xbox) = {};
+    config.table(ControlScheme::Xbox)[WiiTarget::A] = {InputSource{SourceKind::AxisPositive, 0}};
+    LivePad pad; pad.sample.connected = true; pad.sample.scheme = ControlScheme::Xbox;
+    pad.device_slot = 0; pad.sample.axes[0] = 0.9f;
+    pad.sample.axes[1] = 0.8f;
+    LiveControlsFrame frame{config}; frame.pads = std::span(&pad, 1);
+    frame.use_pads = true; frame.window_focused = true;
+    LiveControlsEngine engine; Host host;
+    const bool first = engine.sample(frame, host).input.buttons.a;
+    frame.window_focused = false; host.clock += 16'667;
+    const auto lost = engine.sample(frame, host);
+    pad.sample.axes[0] = (kStickDirectionPress + kStickDirectionRelease) * 0.5f;
+    frame.window_focused = true; host.clock += 16'667;
+    const auto resumed = engine.sample(frame, host);
+    pad.sample.axes[0] = 0.9f; frame.window_focused = false;
+    frame.allow_background_device_input = true; host.clock += 16'667;
+    const auto explicit_background = engine.sample(frame, host);
+    std::cout << "focus_release\tfirst=" << first << "\tlost=" << lost.input.buttons.a
+              << "\tlost_motor=" << lost.rumble.device.has_value() << "\tresumed_midpoint=" << resumed.input.buttons.a
+              << "\tbackground_opt_in=" << explicit_background.input.buttons.a
+              << "\tbackground_motor_focus=" << explicit_background.rumble.focused << '\n';
+    return first && !lost.input.buttons.a && !lost.rumble.device && !lost.input.pointer_on &&
+        !resumed.input.buttons.a && explicit_background.input.buttons.a && !explicit_background.rumble.focused ? 0 : 1;
+}
 }
 int main() {
-    const int failures = replacement_hysteresis() + rumble_fallback() + reorder_and_reconnect();
+    const int failures = replacement_hysteresis() + rumble_fallback() + reorder_and_reconnect() + focus_release_and_reacquire();
     return failures ? 1 : 0;
 }
