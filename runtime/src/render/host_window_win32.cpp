@@ -25,6 +25,8 @@
 #include "galaxy/ui/settings_graphics_page.h"
 #include "galaxy/ui/settings_general_page.h"
 #include "galaxy/ui/settings_display_page.h"
+#include "galaxy/ui/settings_advanced_page.h"
+#include "galaxy/ui/settings_system_page.h"
 #include "galaxy/ui/settings_save_model.h"
 
 #include <algorithm>
@@ -2131,9 +2133,6 @@ using ui::percent_text;
 using ui::mods_ui_text;
 using ui::upper_ascii;
 using ui::settings_step;
-const char* exposed_text(const RenderFeatureStatus& status) {
-    return status.settings_exposed ? "READY" : "HIDDEN";
-}
 
 class WindowDisplayPageHost final : public ui::DisplayPageHost {
 public:
@@ -2202,8 +2201,7 @@ std::vector<SettingsRow> graphics_page(const RenderConfig& render) {
 }
 
 // GAME > GALAXY SELECT: the galaxy and star the TRAVEL row goes to.
-std::size_t s_galaxy_select_stage = 0u;
-std::uint32_t s_galaxy_select_star = 1u;
+ui::AdvancedPageModel s_advanced_page;
 
 // Mii import (GENERAL page): the last import's result and the console's Mii count (read again after an import).
 std::mutex s_mii_mutex;
@@ -2988,83 +2986,12 @@ std::vector<SettingsRow> game_page(const RuntimeSettings& runtime) {
 // ADVANCED: any galaxy and star, entered with the game's own stage change (names in its own words), and the Grand
 // Stars that power the Observatory.
 std::vector<SettingsRow> advanced_page() {
-    std::vector<SettingsRow> rows;
-    want_galaxy_select_names();
-    const std::size_t stage = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-    const std::uint32_t star = std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[stage].stars);
-    std::string name = galaxy_select_name(stage);
-    if (name.empty()) {
-        name = std::string_view(kGalaxyStages[stage].id) == kObservatoryId ? std::string(kObservatoryName)
-                                                                            : upper_ascii(kGalaxyStages[stage].id);
-    }
-    rows.push_back({"GALAXY SELECT", {}, nullptr, {}, true});
-    rows.push_back({"GALAXY", name,
-                    [](RenderConfig&, int delta) {
-                        s_galaxy_select_stage = settings_step(
-                            static_cast<unsigned>(std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u)),
-                            static_cast<unsigned>(kGalaxyStageCount), delta);
-                        s_galaxy_select_star = 1u;
-                    },
-                    "ANY GALAXY, FOR TESTING. STARS COLLECTED THERE ARE SAVED"});
-    rows.back().names = 2u;  // the game's own name in the played language
-    std::string star_name = galaxy_select_star_name(stage, star);
-    char star_text[96]{};
-    std::snprintf(star_text, sizeof(star_text), star_name.empty() ? "%u" : "%u  %s", star, star_name.c_str());
-    rows.push_back({"STAR", star_text,
-                    [](RenderConfig&, int delta) {
-                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                        s_galaxy_select_star = settings_step(s_galaxy_select_star - 1u, kGalaxyStages[at].stars,
-                                                             delta) + 1u;
-                    },
-                    "THE MISSION TO PLAY"});
-    rows.back().names = 2u;
-    rows.push_back(button_row("TRAVEL", {"GO"},
-                    [](RenderConfig&, unsigned) {
-                        const std::size_t at = std::min(s_galaxy_select_stage, kGalaxyStageCount - 1u);
-                        request_galaxy_travel(at, std::clamp(s_galaxy_select_star, 1u, kGalaxyStages[at].stars));
-                        std::cerr << "[settings] travel to " << kGalaxyStages[at].id << ' '
-                                  << s_galaxy_select_star << '\n';
-                        set_native_settings_visible(false);
-                    },
-                    "LOADS IT WITH THE GAME OWN STAGE CHANGE, FROM ANY GALAXY"));
-    rows.push_back(button_row("GRAND STARS", {"GET"},
-                    [](RenderConfig&, unsigned) {
-                        request_grand_stars();
-                        std::cerr << "[settings] grand stars\n";
-                        set_native_settings_visible(false);
-                    },
-                    "GIVES THIS SAVE FILE GRAND STARS 1-6 (EVERY DOME POWERED) AND LOADS THE OBSERVATORY. "
-                    "USE A SPARE FILE"));
-    return rows;
+    return s_advanced_page.rows([] { set_native_settings_visible(false); });
 }
 
 std::vector<SettingsRow> system_page(const RenderFeatureCaps& caps) {
-    std::vector<SettingsRow> rows;
-    {
-        std::string name = mods_ui_text(caps.adapter_description.data(), 32u);
-        while (!name.empty() && name.back() == ' ') name.pop_back();
-        rows.push_back({"GRAPHICS CARD", name, nullptr, "CHOSEN IN NEBULA SETTINGS. A CHANGE APPLIES AT THE NEXT START"});
-    }
-    char text[64]{};
-    if (caps.dxr_raytracing_tier != 0u) {
-        std::snprintf(text, sizeof(text), "TIER %u.%u %s", caps.dxr_raytracing_tier / 10u, caps.dxr_raytracing_tier % 10u,
-                      exposed_text(caps.dxr));
-    } else {
-        std::snprintf(text, sizeof(text), "NONE");
-    }
-    rows.push_back({"RAY TRACING HARDWARE", text, nullptr, "DIRECTX RAYTRACING ON THIS GPU"});
-    rows.push_back({"NVIDIA STREAMLINE", exposed_text(caps.streamline), nullptr, "LOADS DLSS FROM THE NVIDIA DOWNLOAD"});
-    rows.push_back({"NVIDIA REFLEX", exposed_text(caps.reflex), nullptr, "LOW LATENCY WITH FRAME GENERATION"});
-    rows.push_back({"DLSS", exposed_text(caps.dlss_super_resolution), nullptr, "UPSCALING ON NVIDIA RTX GPUS"});
-    rows.push_back({"DLSS FRAME GENERATION", exposed_text(caps.dlss_frame_generation), nullptr,
-                    "GENERATED FRAMES ON NVIDIA RTX 40 AND 50 GPUS"});
-    std::string post = post_process_caps_text(get_post_process_status());
-    if (const std::size_t colon = post.find(": "); colon != std::string::npos) post.erase(0, colon + 2u);
-    rows.push_back({"POST-PROCESS", post, nullptr, "ANTI-ALIASING, FSR 1 AND SHARPENING"});
-    rows.push_back(button_row("DIAGNOSTICS", {"RECORD"},
-                              [](RenderConfig&, unsigned) { s_diagnostics_ask.store(true, std::memory_order_release); },
-                              {}));
-    return rows;
+    return ui::system_page(caps, post_process_caps_text(get_post_process_status()),
+                           [] { s_diagnostics_ask.store(true, std::memory_order_release); });
 }
 
 std::vector<SettingsRow> settings_page(unsigned tab, const RenderConfig& draft, const RuntimeSettings& runtime,
