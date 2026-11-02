@@ -71,9 +71,8 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         changed = true;
     }
     let cooked = if archive::is_archive(&bytes) {
-        Some(archive::rebuild(&bytes, &mut |member, data| {
-            cook_file(&format!("{name}/{member}"), data, stats)
-        })?)
+        let rebuilt = archive::rebuild(&bytes, &mut |member, data| cook_file(&format!("{name}/{member}"), data, stats))?;
+        Some(native_data::rarc_host(&rebuilt).with_context(|| format!("{name}: archive (host order)"))?)
     } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
         let textured = formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?;
         Some(native_data::j3d_model(&textured).with_context(|| format!("{name}: model (host order)"))?)

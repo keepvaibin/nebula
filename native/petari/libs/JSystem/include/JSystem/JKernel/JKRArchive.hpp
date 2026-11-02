@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JSystem/JKernel/JKRFileLoader.hpp"
-#include "nebula_disc.hpp"
 
 class JKRArcFinder;
 
@@ -35,47 +34,43 @@ public:
         FILE_FLAG_IS_YAZ0 = 1 << FILE_FLAG_IS_YAZ0_SHIFT
     };
 
+    // An archive in host order, as the importer cooks it (native_data.rs rarc_host); a disc one panics.
+    static void panicIfNotCooked(const void* pHeader);
+
     struct RarcHeader {
-        /* 0x00 */ NEBULA_BE(u32) mMagic;
-        /* 0x04 */ NEBULA_BE(u32) mFileSize;
-        /* 0x08 */ NEBULA_BE(u32) mHeaderSize;
-        /* 0x0C */ NEBULA_BE(u32) mFileDataOffset;
-        /* 0x10 */ NEBULA_BE(u32) mTotalDataSize;
-        /* 0x14 */ NEBULA_BE(u32) mMRamDataSize;
-        /* 0x18 */ NEBULA_BE(u32) mARamDataSize;
-        /* 0x1C */ NEBULA_BE(u32) _1C;
+        /* 0x00 */ u32 mMagic;
+        /* 0x04 */ u32 mFileSize;
+        /* 0x08 */ u32 mHeaderSize;
+        /* 0x0C */ u32 mFileDataOffset;
+        /* 0x10 */ u32 mTotalDataSize;
+        /* 0x14 */ u32 mMRamDataSize;
+        /* 0x18 */ u32 mARamDataSize;
+        /* 0x1C */ u32 _1C;
     };
 
     struct RarcInfoBlock {
-        /* 0x00 */ NEBULA_BE(u32) mNrDirs;
-        /* 0x04 */ NEBULA_BE(u32) mDirOffset;
-        /* 0x08 */ NEBULA_BE(u32) mNrFiles;
-        /* 0x0C */ NEBULA_BE(u32) mFileOffset;
-        /* 0x10 */ NEBULA_BE(u32) mStringTableSize;
-        /* 0x14 */ NEBULA_BE(u32) mStringTableOffset;
-        /* 0x18 */ NEBULA_BE(u16) mNextAvailableFileID;
-        /* 0x1A */ NEBULA_BE(u16) mFileIDIsIndex;
-        /* 0x1C */ NEBULA_BE(u32) _1C;
+        /* 0x00 */ u32 mNrDirs;
+        /* 0x04 */ u32 mDirOffset;
+        /* 0x08 */ u32 mNrFiles;
+        /* 0x0C */ u32 mFileOffset;
+        /* 0x10 */ u32 mStringTableSize;
+        /* 0x14 */ u32 mStringTableOffset;
+        /* 0x18 */ u16 mNextAvailableFileID;
+        /* 0x1A */ u16 mFileIDIsIndex;
+        /* 0x1C */ u32 _1C;
     };
 
     struct SDIFileEntry {
-        /* 0x00 */ NEBULA_BE(u16) mFileID;
-        /* 0x02 */ NEBULA_BE(u16) mHash;
-#ifdef TARGET_PC
-        // The console's MSB-first bitfields over the big-endian word.
+        /* 0x00 */ u16 mFileID;
+        /* 0x02 */ u16 mHash;
+        // The flags-and-name word in host order: the flags in its top byte (the low 24 bits are the name's offset).
+        /* 0x04 */ u32 mNameOffset : 24;
+        /* 0x07 */ u32 mFlag : 8;
         union {
-            /* 0x04 */ BEBits32< 24, 8 > mFlag;
-            /* 0x04 */ BEBits32< 0, 24 > mNameOffset;
+            /* 0x08 */ u32 mDataOffset;
+            /* 0x08 */ u32 mDirIndex;
         };
-#else
-        /* 0x04 */ u32 mFlag : 8;
-        /* 0x05 */ u32 mNameOffset : 24;
-#endif
-        union {
-            /* 0x08 */ NEBULA_BE(u32) mDataOffset;
-            /* 0x08 */ NEBULA_BE(u32) mDirIndex;
-        };
-        /* 0x0C */ NEBULA_BE(u32) mDataSize;
+        /* 0x0C */ u32 mDataSize;
 #ifdef TARGET_PC
         // A host pointer does not fit the 4-byte slot (and entries are stepped by their 20-byte size): the archive keeps
         // each entry's loaded data in its own table (JKRArchive::fileData).
@@ -86,11 +81,11 @@ public:
     };
 
     struct SDIDirEntry {
-        /* 0x0 */ NEBULA_BE(u32) mID;
-        /* 0x4 */ NEBULA_BE(u32) mNameOffset;
-        /* 0x8 */ NEBULA_BE(u16) mHash;
-        /* 0xA */ NEBULA_BE(u16) mNrFiles;
-        /* 0xC */ NEBULA_BE(u32) mFirstFileIndex;
+        /* 0x0 */ u32 mID;
+        /* 0x4 */ u32 mNameOffset;
+        /* 0x8 */ u16 mHash;
+        /* 0xA */ u16 mNrFiles;
+        /* 0xC */ u32 mFirstFileIndex;
     };
 
     struct SDirEntry {

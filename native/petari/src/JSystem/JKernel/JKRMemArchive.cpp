@@ -103,6 +103,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
                                                   reinterpret_cast< int* >(&_5C), &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
+        panicIfNotCooked(pData);
 
         if (pData != nullptr) {
         }
@@ -113,6 +114,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
                                                   reinterpret_cast< int* >(&_5C), &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
+        panicIfNotCooked(pData);
 
         if (pData != nullptr) {
         }
@@ -133,6 +135,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
 }
 
 bool JKRMemArchive::open(void* pData, u32 a2, JKRMemBreakFlag breakFlag) {
+    panicIfNotCooked(pData);
     mHeader = reinterpret_cast< RarcHeader* >(pData);
     mInfoBlock = reinterpret_cast< RarcInfoBlock* >(reinterpret_cast< u8* >(mHeader) + mHeader->mHeaderSize);
     mDirs = reinterpret_cast< SDIDirEntry* >(&reinterpret_cast< u8* >(mInfoBlock)[mInfoBlock->mDirOffset]);
