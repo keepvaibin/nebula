@@ -3,7 +3,9 @@
 # native SDK layer, as a shared library apart from the host runtime.
 cmake_minimum_required(VERSION 3.24)
 project(NebulaGame LANGUAGES C CXX)
-
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    add_compile_options(/clang:-mssse3)
+endif()
 if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     message(FATAL_ERROR "The game module is built with clang's GNU driver (clang++, not clang-cl).")
 endif()
