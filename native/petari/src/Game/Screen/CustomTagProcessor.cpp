@@ -12,6 +12,7 @@
 #include <nw4r/lyt/material.h>
 #include <nw4r/lyt/textBox.h>
 #include <nw4r/ut/TextWriterBase.h>
+#include "Game/Util/ByteView.hpp"
 
 
 namespace {
@@ -400,7 +401,7 @@ void CustomTagProcessor::setArgNumber(s32 number, s32 index) {
             break;
         }
 
-        *reinterpret_cast< s32* >(tag.getParamPtr(0)) = number;
+        writeBytes< s32 >(tag.getParamPtr(0), number);
     }
 }
 
@@ -617,7 +618,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exeLocalizeGroup(nw4r::ut::Rec
 
 CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
     char16_t string[16];
-    s32 number = *reinterpret_cast< s32* >(tag.getParamPtr(0));
+    s32 number = readBytes< s32 >(tag.getParamPtr(0));
     switch (tag.getTag()) {
     case 5:
         MR::formatText(string, 256, u"%02d", number);
@@ -638,12 +639,6 @@ CustomTagProcessor::Operation CustomTagProcessor::exeNumberGroup(nw4r::ut::Rect*
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeStringGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-#if (VERSION == RMGK01)
-    if (!*reinterpret_cast< const u8* >(tag.getParamPtr(0))) {
-        return OPERATION_DEFAULT;
-    }
-#endif
-
     writeString(rect, tag.getParamString(), context);
     return OPERATION_DEFAULT;
 }

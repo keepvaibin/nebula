@@ -1,6 +1,7 @@
 #include "Game/RhythmLib/AudChordInfo.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/AssetFolder.hpp"
+#include "Game/Util/ByteView.hpp"
 
 AudChordTable::AudChordTable() : mLoaded(false), mChordCount(0), mScaleCount(0), mBase(nullptr), mChordOffsets(nullptr), mScaleOffsets(nullptr) {
 }
@@ -26,8 +27,8 @@ bool AudChordTable::setChordTableResource(void* pRes) {
     }
     const u8* base = file + 12;
     mBase = file;
-    mChordCount = *reinterpret_cast< const u16* >(base + 0);
-    mScaleCount = *reinterpret_cast< const u16* >(base + 2);
+    mChordCount = readBytes< u16 >(base + 0);
+    mScaleCount = readBytes< u16 >(base + 2);
     mChordOffsets = reinterpret_cast< const u32* >(base + 4);
     mScaleOffsets = mChordOffsets + mChordCount;
 

@@ -207,6 +207,8 @@ void* NebulaArena::takeBlock(u32 bytes) {
         void* const pBlock = mFree[index];
         mFree[index] = *static_cast< void** >(pBlock);
         UNPOISON_BLOCK(pBlock, rounded);
+        // As memory new from the host is: what a field left unset reads must not depend on what lay here before.
+        memset(pBlock, 0, rounded);
         return pBlock;
     }
 

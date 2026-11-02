@@ -1683,18 +1683,7 @@ SoundList soundlist[] = {
     },
 };
 
-struct SoundSwapList {
-    const char* name;
-
-    u32 offset1;
-    u32 offset2;
-    u32 offset3;
-};
-
-SoundSwapList soundswaplist[] = {{"", 0, 0, 0}};
-
-u32 Mario::initSoundTable(SoundList* pList, u32 globalTablePosition) {
-    u32* pSwapOffset = reinterpret_cast< u32* >(soundswaplist) + globalTablePosition;
+u32 Mario::initSoundTable(SoundList* pList) {
     SoundList* pEntry;
     u32 count = 0;
     s32 i = 0;
@@ -1707,26 +1696,6 @@ u32 Mario::initSoundTable(SoundList* pList, u32 globalTablePosition) {
         pEntry->_10 = 0;
         pEntry->_14 = pEntry->_4;
 
-        if (globalTablePosition != 0) {
-            s32 swapIndex = 0;
-            while (true) {
-                const SoundSwapList* pSwapEntry = soundswaplist + swapIndex;
-                if (pSwapEntry->name[0] == '\0') {
-                    break;
-                }
-
-                if (strcmp(pEntry->name, pSwapEntry->name) == 0) {
-                    u32 soundID = pSwapOffset[swapIndex * 4];
-                    if (soundID != 0) {
-                        pEntry->_14 = soundID;
-                    }
-                    break;
-                }
-
-                swapIndex++;
-            }
-        }
-
         count++;
         i++;
     }
@@ -1735,7 +1704,7 @@ u32 Mario::initSoundTable(SoundList* pList, u32 globalTablePosition) {
 }
 
 void Mario::initSound() {
-    u32 count = initSoundTable(soundlist, 0);
+    u32 count = initSoundTable(soundlist);
     _96C = new HashSortTable(count);
     for (u32 i = 0; i < count; i++) {
         _96C->add(soundlist[i].name, i, false);

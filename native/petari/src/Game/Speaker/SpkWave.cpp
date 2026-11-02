@@ -1,5 +1,6 @@
 #include "Game/Speaker/SpkWave.hpp"
 #include "Game/System/GameThreads.hpp"
+#include "Game/Util/ByteView.hpp"
 
 SpkWave::SpkWave() : mResource(nullptr) {
 }
@@ -42,5 +43,5 @@ s16* SpkWave::getWave(s32 wave) const {
 }
 
 WaveData* SpkWave::getWaveData(s32 wave) const {
-    return (WaveData*)((uintptr_t)mResource + *(u32*)((uintptr_t)mResource + wave * 4 + 8));
+    return (WaveData*)((uintptr_t)mResource + readBytes< u32 >(static_cast< const u8* >(mResource) + wave * 4 + 8));
 }
