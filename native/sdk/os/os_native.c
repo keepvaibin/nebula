@@ -3,6 +3,7 @@
    and fatal errors, and the boot onto the boot thread. The kernel schedules; this layer provides what is
    platform-specific. */
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,20 +24,6 @@
 #include <pthread.h>
 #include <time.h>
 #endif
-
-/* AddressSanitizer test builds: every stack switch is a fiber switch it is told of. */
-#if defined(__has_feature)
-#if __has_feature(address_sanitizer)
-#include <sanitizer/common_interface_defs.h>
-#define NEBULA_ASAN_START(save, bottom, size) __sanitizer_start_switch_fiber((save), (bottom), (size))
-#define NEBULA_ASAN_FINISH(save) __sanitizer_finish_switch_fiber((save), NULL, NULL)
-#endif
-#endif
-#ifndef NEBULA_ASAN_START
-#define NEBULA_ASAN_START(save, bottom, size) ((void)0)
-#define NEBULA_ASAN_FINISH(save) ((void)0)
-#endif
-
 
 /* The host's log takes whole lines (stderr before the host attaches): a report without its newline waits for the rest
    of its line. */
@@ -356,102 +343,142 @@ void nebula_timer_arm(int64_t deadline) {
     }
 }
 
-void nebula_thread_start(void (*entry)(void*), void* arg) {
-    entry(arg);
-    nebula_fatal("a thread's entry returned");
-}
-
 NEBULA_GAME_API void nebula_game_debug_dump(void) {
     nebula_kernel_dump();
 }
 
-/* A game thread runs on a stack from the pool at the top of MEM2 (in the arena, where the GPU can read stack data the
-   game gives GX), not on the buffer the game gives OSCreateThread: that is sized for the console's code, and x64
-   frames are larger (an AddressSanitizer build's larger still, with exceptions dispatched on the current stack). A
-   guard below each stack makes an overflow fault instead of overwriting the heap. A slot is reused once its thread has
-   exited or been cancelled. */
+/* The game's host threads: each sleeps on its own turn; only the one whose turn it is runs. A thread's own stack, at least
+   this size: the game's numbers are the console's, and x64 frames are larger (AddressSanitizer's several times so). */
 #if defined(__has_feature)
 #if __has_feature(address_sanitizer)
-#define NEBULA_STACK_MIN 0x100000u /* AddressSanitizer frames are several times larger */
+#define NEBULA_STACK_MIN 0x100000u
 #endif
 #endif
 #ifndef NEBULA_STACK_MIN
 #define NEBULA_STACK_MIN 0x40000u /* 256 KB: the game's deepest stack, boot to the title screen, is 13.5 KB */
 #endif
-enum { kStackGuard = 0x4000u, kStackMin = NEBULA_STACK_MIN, kStackSlots = 64 };
 
-typedef struct {
-    const void* owner;
-    uint8_t* end;
-    u32 size;
-} StackSlot;
+struct NebulaHostThread {
+    void (*entry)(void*);
+    void* arg;
+    bool cancelled;
+#if defined(_WIN32)
+    HANDLE turn;
+#else
+    pthread_mutex_t lock;
+    pthread_cond_t cond;
+    bool turn;
+#endif
+};
 
-static StackSlot sStackSlots[kStackSlots];
-static int sStackSlotCount;
-static uint8_t* sStackNext;
-
-void* nebula_thread_stack(const void* owner, uint32_t requested, uint32_t* size) {
-    const u32 want = (requested > kStackMin ? (requested + 0xFFFFu) & ~0xFFFFu : kStackMin);
-    StackSlot* slot = NULL;
-    for (int i = 0; i < sStackSlotCount; i++) {
-        if (sStackSlots[i].owner == owner) {
-            sStackSlots[i].owner = NULL; /* a thread object created again */
-        }
+static NebulaHostThread* host_thread_new(void (*entry)(void*), void* arg) {
+    NebulaHostThread* thread = (NebulaHostThread*)calloc(1, sizeof(NebulaHostThread));
+    if (thread == NULL) {
+        nebula_fatal("could not allocate a thread");
     }
-    for (int i = 0; i < sStackSlotCount && slot == NULL; i++) {
-        if (sStackSlots[i].owner == NULL && sStackSlots[i].size >= want) {
-            slot = &sStackSlots[i];
-        }
+    thread->entry = entry;
+    thread->arg = arg;
+#if defined(_WIN32)
+    thread->turn = CreateEventW(NULL, FALSE, FALSE, NULL);
+    if (thread->turn == NULL) {
+        nebula_fatal("could not create a thread's event");
     }
-    if (slot == NULL) {
-        size_t poolSize;
-        uint8_t* pool = nebula_stack_pool(&poolSize);
-        if (sStackNext == NULL) {
-            sStackNext = pool;
-        }
-        if (sStackSlotCount == kStackSlots || sStackNext + kStackGuard + want > pool + poolSize) {
-            nebula_fatal("no native stack left for a thread (%d stacks, %u bytes wanted)", sStackSlotCount, want);
-        }
-        nebula_memory_guard(sStackNext, kStackGuard);
-        slot = &sStackSlots[sStackSlotCount++];
-        slot->end = sStackNext + kStackGuard;
-        slot->size = want;
-        sStackNext += kStackGuard + want;
-    }
-    slot->owner = owner;
-    *size = slot->size;
-    return slot->end + slot->size;
+#else
+    pthread_mutex_init(&thread->lock, NULL);
+    pthread_cond_init(&thread->cond, NULL);
+#endif
+    return thread;
 }
 
-void nebula_thread_stack_release(const void* owner) {
-    for (int i = 0; i < sStackSlotCount; i++) {
-        if (sStackSlots[i].owner == owner) {
-            sStackSlots[i].owner = NULL;
-        }
+void nebula_host_thread_pass(NebulaHostThread* pTo) {
+#if defined(_WIN32)
+    SetEvent(pTo->turn);
+#else
+    pthread_mutex_lock(&pTo->lock);
+    pTo->turn = true;
+    pthread_cond_signal(&pTo->cond);
+    pthread_mutex_unlock(&pTo->lock);
+#endif
+}
+
+void nebula_host_thread_exit(NebulaHostThread* pSelf) {
+#if defined(_WIN32)
+    CloseHandle(pSelf->turn);
+    free(pSelf);
+    ExitThread(0);
+#else
+    pthread_mutex_destroy(&pSelf->lock);
+    pthread_cond_destroy(&pSelf->cond);
+    free(pSelf);
+    pthread_exit(NULL);
+#endif
+}
+
+void nebula_host_thread_wait(NebulaHostThread* pSelf) {
+#if defined(_WIN32)
+    WaitForSingleObject(pSelf->turn, INFINITE);
+#else
+    pthread_mutex_lock(&pSelf->lock);
+    while (!pSelf->turn) {
+        pthread_cond_wait(&pSelf->cond, &pSelf->lock);
+    }
+    pSelf->turn = false;
+    pthread_mutex_unlock(&pSelf->lock);
+#endif
+    if (pSelf->cancelled) {
+        nebula_host_thread_exit(pSelf);
     }
 }
 
-/* The boot thread runs on a stack in MEM1 below the arena, as the console's main stack is. */
-enum { kBootStackTop = 0x00100000u, kBootStackSize = 0x00080000u };
-
-static void* boot_stack_top(void) {
-    return nebula_arena_base() + kBootStackTop;
+void nebula_host_thread_cancel(NebulaHostThread* pThread) {
+    pThread->cancelled = true;
+    nebula_host_thread_pass(pThread);
 }
 
-static void* boot_stack_end(void) {
-    return nebula_arena_base() + kBootStackTop - kBootStackSize;
+NebulaHostThread* nebula_host_thread_adopt(void) {
+    return host_thread_new(NULL, NULL);
 }
 
-static void (*sGameMain)(void);
-static void* sHostStack;
+static void host_thread_run(NebulaHostThread* pSelf) {
+    nebula_host_thread_wait(pSelf);
+    pSelf->entry(pSelf->arg);
+    nebula_fatal("a thread's entry returned");
+}
 
-static void boot_thread(void* arg) {
-    (void)arg;
-    NEBULA_ASAN_FINISH(NULL);
-    nebula_kernel_init(boot_stack_top(), boot_stack_end());
-    nebula_interrupts_restore(1);
-    sGameMain();
-    nebula_fatal("the game's main returned");
+#if defined(_WIN32)
+static DWORD WINAPI host_thread_main(void* arg) {
+    host_thread_run((NebulaHostThread*)arg);
+    return 0;
+}
+#else
+static void* host_thread_main(void* arg) {
+    host_thread_run((NebulaHostThread*)arg);
+    return NULL;
+}
+#endif
+
+NebulaHostThread* nebula_host_thread_create(void (*entry)(void*), void* arg, uint32_t stackSize) {
+    NebulaHostThread* thread = host_thread_new(entry, arg);
+    const uint32_t size = stackSize > NEBULA_STACK_MIN ? stackSize : NEBULA_STACK_MIN;
+#if defined(_WIN32)
+    HANDLE handle = CreateThread(NULL, size, host_thread_main, thread, STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    if (handle == NULL) {
+        nebula_fatal("could not start a thread");
+    }
+    SetThreadDescription(handle, L"Nebula Game Thread");
+    CloseHandle(handle);
+#else
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, size);
+    pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+    pthread_t handle;
+    if (pthread_create(&handle, &attr, host_thread_main, thread) != 0) {
+        nebula_fatal("could not start a thread");
+    }
+    pthread_attr_destroy(&attr);
+#endif
+    return thread;
 }
 
 void nebula_os_boot(void (*gameMain)(void)) {
@@ -465,10 +492,8 @@ void nebula_os_boot(void (*gameMain)(void)) {
     if (!nebula_memory_init()) {
         nebula_fatal("could not reserve the game's memory");
     }
-    sGameMain = gameMain;
-    void* sp = nebula_prepare_stack(boot_stack_top(), kBootStackSize, boot_thread, NULL);
-    void* fake = NULL;
-    NEBULA_ASAN_START(&fake, boot_stack_end(), kBootStackSize);
-    nebula_switch_stack(&sHostStack, sp);
-    nebula_fatal("the boot thread returned to the host stack");
+    nebula_kernel_init();
+    nebula_interrupts_restore(1);
+    gameMain();
+    nebula_fatal("the game's main returned");
 }

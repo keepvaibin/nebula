@@ -1,7 +1,7 @@
 #pragma once
 
 // The game's threads and their synchronisation (docs/NATIVE_PORT.md, "Platform boundary", Threads). Every game
-// thread runs on its own native stack on the simulation thread, one at a time: the highest-priority ready thread runs
+// thread is a host thread and they run one at a time: the highest-priority ready thread runs
 // (0 is the highest), equal priorities in the order they became ready, and a running thread keeps running until it
 // blocks, yields, or a higher-priority thread becomes ready. Host events (a finished disc read, the frame clock, an
 // audio block, a timer) reach the game only at the kernel's scheduling points: entering or leaving an interrupt
@@ -12,6 +12,7 @@
 
 struct NebulaThread;
 struct NebulaMutex;
+struct NebulaHostThread;
 
 // Threads waiting for something (a wake-up, a message, a mutex), highest priority first.
 struct NebulaThreadQueue {
@@ -90,7 +91,7 @@ enum NebulaThreadState {
 };
 
 struct NebulaThread {
-    void* nativeSp;  // the stack pointer while switched out
+    NebulaHostThread* host;
     uint16_t state;
     uint16_t detached;
     int32_t suspend;
@@ -103,8 +104,8 @@ struct NebulaThread {
     NebulaMutex* mutex;  // the mutex it waits for
     NebulaMutexQueue mutexes;  // the mutexes it owns
     NebulaThreadLink linkActive;
-    uint8_t* stackTop;
-    uint8_t* stackEnd;
+    void* (*entry)(void*);
+    void* arg;
 };
 
 struct NebulaAlarm;
