@@ -23,8 +23,9 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 102u
 #define NEBULA_GAME_API_VERSION 103u
+
+typedef struct NebulaHostThread NebulaHostThread;
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
