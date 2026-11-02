@@ -117,7 +117,7 @@ namespace nw4r {
                     f32 value = GetHermiteCurveValue(frame, keys, pAnimTarget->keyNum);
                     value += 0.5f;
                     u8 u8Val;
-                    OSf32tou8(&value, &u8Val);
+                    u8Val = nebula_f32_to_u8(value);
                     pPane->SetColorElement(pAnimTarget->target, u8Val);
                 }
             }
@@ -132,7 +132,7 @@ namespace nw4r {
                     f32 value = GetHermiteCurveValue(frame, keys, pAnimTarget->keyNum);
                     value += 0.5f;
                     s16 s16Val;
-                    OSf32tos16(&value, &s16Val);
+                    s16Val = nebula_f32_to_s16(value);
 
                     s16Val = ut::Min(ut::Max(s16Val, s16(-1024)), s16(1023));
                     pMaterial->SetColorElement(pAnimTarget->target, s16Val);
