@@ -8,6 +8,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <cstdio>
+#include <cstring>
 #include "Game/System/NebulaDisc.hpp"
 
 namespace MR {
@@ -138,23 +139,12 @@ namespace MR {
         SingletonHolder< FileLoader >::get()->removeHolderIfIsEqualHeap(pHeap);
     }
 
-    void* decompressFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align) {
-        u8* fileData = (u8*)pArchive->getResource(pFilePath);
-        s32 compressionType = FileRipper::checkCompressed(fileData);
-        u32 fileSize = pArchive->getResSize(fileData);
-
-        u32 adjustedFileSize = fileSize;
-
-        if (compressionType == 2)  // Yaz0
-        {
-            u32 decompressedSize = (fileData[4] << 24) | (fileData[5] << 16) | (fileData[6] << 8) | fileData[7];
-
-            adjustedFileSize = decompressedSize;
-        }
-
-        u8* buffer = new (pHeap, align) u8[adjustedFileSize];
-
-        JKRMemArchive::fetchResource_subroutine(fileData, fileSize, buffer, adjustedFileSize, compressionType);
+    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align) {
+        const u8* const fileData = static_cast< const u8* >(pArchive->getResource(pFilePath));
+        const u32 fileSize = pArchive->getResSize(fileData);
+        JKRDvdRipper::panicIfCompressed(fileData, pFilePath);
+        u8* const buffer = new (pHeap, align) u8[fileSize];
+        memcpy(buffer, fileData, fileSize);
 
         return buffer;
     }

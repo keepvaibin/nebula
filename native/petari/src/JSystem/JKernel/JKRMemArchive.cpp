@@ -1,5 +1,4 @@
 #include "JSystem/JKernel/JKRMemArchive.hpp"
-#include "JSystem/JKernel/JKRDecomp.hpp"
 #include "JSystem/JKernel/JKRDvdRipper.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
@@ -98,8 +97,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
     if (mountDir == MOUNT_DIRECTION_1) {
         u32 size;
 
-        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, EXPAND_SWITCH_UNKNOWN1, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0,
-                                                  reinterpret_cast< int* >(&_5C), &size);
+        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
         panicIfNotCooked(pData);
@@ -109,8 +107,7 @@ bool JKRMemArchive::open(s32 entryNum, EMountDirection mountDir) {
     } else {
         u32 size;
 
-        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, EXPAND_SWITCH_UNKNOWN1, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_BACKWARD, 0,
-                                                  reinterpret_cast< int* >(&_5C), &size);
+        void* pData = JKRDvdRipper::loadToMainRAM(entryNum, nullptr, 0, mHeap, JKRDvdRipper::ALLOC_DIRECTION_BACKWARD, 0, &size);
 
         mHeader = reinterpret_cast< RarcHeader* >(pData);
         panicIfNotCooked(pData);
@@ -143,7 +140,6 @@ bool JKRMemArchive::open(void* pData, u32 a2, JKRMemBreakFlag breakFlag) {
     mFileDataStart = reinterpret_cast< u8* >(mHeader->mFileDataOffset + (reinterpret_cast< uintptr_t >(mHeader) + mHeader->mHeaderSize));
     _6C = breakFlag == JKR_MEM_BREAK_FLAG_1;
     mHeap = JKRHeap::findFromRoot(pData);
-    _5C = 0;
 
     return true;
 }
@@ -170,17 +166,8 @@ void* JKRMemArchive::fetchResource(void* pData, u32 dataSize, SDIFileEntry* pFil
     if (fileData(pFile) != nullptr) {
         memcpy(pData, fileData(pFile), size);
     } else {
-        s32 compression;
-
-        if ((pFile->mFlag & FILE_FLAG_COMPRESSED) == 0) {
-            compression = JKR_COMPRESSION_NONE;
-        } else if ((pFile->mFlag & FILE_FLAG_IS_YAZ0) != 0) {
-            compression = JKR_COMPRESSION_SZS;
-        } else {
-            compression = JKR_COMPRESSION_SZP;
-        }
-
-        size = fetchResource_subroutine(mFileDataStart + pFile->mDataOffset, size, reinterpret_cast< u8* >(pData), dataSize, compression);
+        panicIfCompressedEntry(pFile);
+        memcpy(pData, mFileDataStart + pFile->mDataOffset, size);
     }
 
     if (pSize != nullptr) {
@@ -217,47 +204,4 @@ bool JKRMemArchive::removeResource(void* pResource) {
 
     fileData(file) = nullptr;
     return true;
-}
-
-s32 JKRMemArchive::fetchResource_subroutine(unsigned char* pSrc, u32 srcSize, unsigned char* pDst, u32 dstSize, int compression) {
-    switch (compression) {
-    case JKR_COMPRESSION_NONE:
-        if (srcSize > dstSize) {
-            srcSize = dstSize;
-        }
-
-        memcpy(pDst, pSrc, srcSize);
-
-        return srcSize;
-    case JKR_COMPRESSION_SZP:
-    case JKR_COMPRESSION_SZS: {
-        u32 size = JKRDecompExpandSize(pSrc);
-
-        if (size > dstSize) {
-            size = dstSize;
-        }
-
-        JKRDecomp::orderSync(pSrc, pDst, size, 0);
-        return size;
-    }
-    default:
-        JUTException::panic(__FILE__, 723, "??? bad sequence\n");
-        break;
-    }
-
-    return 0;
-}
-
-u32 JKRMemArchive::getExpandedResSize(const void* pResource) const {
-    SDIFileEntry* file = findPtrResource(pResource);
-
-    if (file == nullptr) {
-        return -1;
-    }
-
-    if ((file->mFlag & FILE_FLAG_COMPRESSED) == 0) {
-        return getResSize(pResource);
-    }
-
-    return JKRDecompExpandSize(reinterpret_cast< u8* >(const_cast< void* >(pResource)));
 }

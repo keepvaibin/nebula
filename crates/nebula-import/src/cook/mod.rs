@@ -223,7 +223,8 @@ pub fn write_cooked_pak(
             bail!("{} is {} bytes, not the file table's {}", file.path, bytes.len(), file.length);
         }
         stats.bytes_in += file.length;
-        let out = if cooks(&file.path) {
+        // Whatever its name, a compressed file is expanded here: the game has no decompressor.
+        let out = if cooks(&file.path) || archive::is_compressed(&bytes) {
             cook_file(&file.path, bytes.clone(), stats)?.unwrap_or(bytes)
         } else {
             bytes
