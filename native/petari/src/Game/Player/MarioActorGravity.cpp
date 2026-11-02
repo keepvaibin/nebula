@@ -9,12 +9,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
 
-void MarioActorGravity_FORCE_MATCH(TVec3f& rVec, f32 a, f32 b, f32 c) {
-    rVec *= a;
-    rVec *= b;
-    rVec *= c;
-}
-
 const TVec3f& MarioActor::getGravityVec() const {
     return *mMario->getGravityVec();
 }

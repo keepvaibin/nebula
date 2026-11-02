@@ -32,11 +32,6 @@ void SurfingGuidance::init(const JMapInfoIter& rIter) {
     kill();
 }
 
-void SurfingGuidance_FORCE_MATCH_STRINGS(LayoutActor* pActor) {
-    MR::startAnim(pActor, "OKAppear", 2);
-    MR::startAnim(pActor, "OKEnd", 2);
-}
-
 void SurfingGuidance::activate() {
     // Pictures of a Wii Remote (tilting it) only with one in hand; the tutorial runs on without them.
     if (!NebulaIcons::wiiRemoteInUse()) {

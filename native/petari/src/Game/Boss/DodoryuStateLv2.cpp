@@ -9,11 +9,6 @@
 #include <cmath>
 #include "Game/System/NebulaHost.hpp"
 
-void DodoryuStateLv2_FORCE_MATCH(TPos3f* pMtx, TVec3f* pVec) {
-    pMtx->getYDir(*pVec);
-    pMtx->getYDir(*pVec);
-}
-
 namespace {
     static const f32 sKnockSpeed = 10.0f;
     static const s32 sStopSceneFrame = 10;

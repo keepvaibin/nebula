@@ -40,10 +40,3 @@ nw4r::lyt::Pane* LayoutGroupCtrl::getPane(u32 idx) const {
     return nullptr;
 }
 
-void LayoutGroupCtrl_FORCE_MATCH(nw4r::lyt::Group* pGroup, LayoutAnmPlayer* pAnmPlayer) {
-    for (nw4r::lyt::PaneLinkList::Iterator iter = pGroup->GetPaneList().GetBeginIter(); iter != pGroup->GetPaneList().GetEndIter(); iter++) {
-        (void)iter->mTarget;
-    }
-
-    pAnmPlayer->isStop();
-}

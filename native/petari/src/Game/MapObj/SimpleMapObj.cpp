@@ -236,6 +236,3 @@ SimpleMapObjPush::~SimpleMapObjPush() {
 UFOKinokoUnderConstruction::~UFOKinokoUnderConstruction() {
 }
 
-void SimpleMapObj_FORCE_MATCH(TMtx34f* pMtx, const Mtx pSrc) {
-    pMtx->set(pSrc);
-}

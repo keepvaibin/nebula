@@ -6,10 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
 
-f32 KCollision_FORCE_MATCH_CONVERSION(s32 value) {
-    return value;
-}
-
 // trying to get both operator== and operator/ to emit
 void DUMMY_KCollision() {
     TVec3f a, b, c;

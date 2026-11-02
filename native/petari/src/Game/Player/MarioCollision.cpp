@@ -20,47 +20,6 @@
 #include <cstring>
 #include <nebula_math.h>
 
-void MarioCollision_FORCE_MATCH_STRINGS(const TVec3f& rPosition) {
-    MR::getAreaObj("Fur", rPosition);
-    MR::getAreaObj("\202\337\202\350\202\261\202\335" /* めりこみ */, rPosition);
-    MR::getAreaObj("\213\363\222\206\210\352\211\361\223\135" /* 空中一回転 */, rPosition);
-    MR::getAreaObj("Spine1", rPosition);
-    MR::getAreaObj("\203\175\203\223\203\172\201\133\203\213\202\314\202\323\202\275(\203\116\203\142\203\160\221\104)" /* マンホールのふた(クッパ船) */, rPosition);
-    MR::getAreaObj("GhostThroughCode", rPosition);
-    MR::getAreaObj("\212\122\202\323\202\361\202\316\202\350" /* 崖ふんばり */, rPosition);
-    MR::getAreaObj("\225\307\211\237\202\265" /* 壁押し */, rPosition);
-    MR::getAreaObj("\221\117\225\373WKFALL" /* 前方WKFALL */, rPosition);
-    MR::getAreaObj("+\213\164-\215\266WKFALL" /* +逆-左WKFALL */, rPosition);
-    MR::getAreaObj("+\215\266WKFALL" /* +左WKFALL */, rPosition);
-    MR::getAreaObj("+\213\164-\211\105WKFALL" /* +逆-右WKFALL */, rPosition);
-    MR::getAreaObj("+\211\105WKFALL" /* +右WKFALL */, rPosition);
-    MR::getAreaObj("+\214\343\202\3531WKFALL" /* +後ろ1WKFALL */, rPosition);
-    MR::getAreaObj("+\214\343\202\3532WKFALL" /* +後ろ2WKFALL */, rPosition);
-    MR::getAreaObj("+SIDEFALL", rPosition);
-    MR::getAreaObj("-L-SIDEFALL", rPosition);
-    MR::getAreaObj("+R-SIDEFALL", rPosition);
-    MR::getAreaObj("+F-SIDEFALL", rPosition);
-    MR::getAreaObj("force Trans", rPosition);
-    MR::getAreaObj("force Trs2", rPosition);
-    MR::getAreaObj("force Trs3", rPosition);
-    MR::getAreaObj("no-g(back)", rPosition);
-    MR::getAreaObj("no-g", rPosition);
-    MR::getAreaObj("CubeCamera", rPosition);
-    MR::getAreaObj("PullBackCube", rPosition);
-    MR::getAreaObj("PullBackCylinder", rPosition);
-    MR::getAreaObj("PlaneCollisionCube", rPosition);
-    MR::getAreaObj("TowerModeCylinder", rPosition);
-    MR::getAreaObj("ForbidTriangleJumpCube", rPosition);
-    MR::getAreaObj("GlaringLightArea", rPosition);
-    MR::getAreaObj("FallsCube", rPosition);
-    MR::getAreaObj("\220\205\225\307\203\161\203\142\203\147" /* 水壁ヒット */, rPosition);
-    MR::getAreaObj("HeavySteeringCube", rPosition);
-    MR::getAreaObj("DashChargeCylinder", rPosition);
-    MR::getAreaObj("RasterScrollCube", rPosition);
-    MR::getAreaObj("ForbidJumpCube", rPosition);
-    MR::getAreaObj("DarkMatterCube", rPosition);
-}
-
 bool Mario::isIgnoreTriangle(const Triangle* pTriangle) {
     return MR::isNearZero(pTriangle->getNormal(0)->dot(*getGravityVec()));
 }

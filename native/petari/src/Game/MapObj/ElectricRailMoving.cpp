@@ -516,6 +516,3 @@ ElectricRailMoving::~ElectricRailMoving() {
 ElectricRailMovingPoint::~ElectricRailMovingPoint() {
 }
 
-void ElectricRailMoving_FORCE_MATCH(TVec3f* pVec, f32 scale) {
-    *pVec *= scale;
-}

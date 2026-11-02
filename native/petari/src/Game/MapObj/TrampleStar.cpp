@@ -643,6 +643,3 @@ void TrampleStar::drawSelf() const {
 
 }
 
-void TrampleStar_FORCE_MATCH_TEXTURE(const ResTIMG* pImage) {
-    new JUTTexture(pImage, 0);
-}

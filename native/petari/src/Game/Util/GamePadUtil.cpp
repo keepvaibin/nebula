@@ -350,8 +350,3 @@ namespace GamePadFunction {
     }
 };  // namespace GamePadFunction
 
-void GamePadUtil_FORCE_MATCH(const TVec3f& rFirst, const TVec3f& rSecond, TVec3f* pOut) {
-    TVec3f value(rFirst);
-    value.add(rSecond);
-    *pOut = value;
-}

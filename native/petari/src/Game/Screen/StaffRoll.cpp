@@ -713,8 +713,3 @@ namespace MR {
     }
 };  // namespace MR
 
-void StaffRoll_FORCE_MATCH(StaffRollLine* pLine, StaffRollPicture* pPicture, StaffRoll* pRoll) {
-    pLine->StaffRollLine::~StaffRollLine();
-    pPicture->StaffRollPicture::~StaffRollPicture();
-    pRoll->StaffRoll::~StaffRoll();
-}

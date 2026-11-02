@@ -499,6 +499,17 @@ std::uint64_t TextureCache::upload_arena_bytes() const noexcept {
     return upload_arena_chunks_ * kUploadArenaChunkBytes;
 }
 
+std::vector<std::uint64_t> TextureCache::forget_range(std::uint64_t start, std::uint64_t end) {
+    std::vector<std::uint64_t> keys;
+    for (auto it = registered_images_.lower_bound(start); it != registered_images_.end() && it->first < end; ++it) {
+        keys.push_back(it->first);
+    }
+    for (const std::uint64_t key : keys) {
+        (void)forget(key);
+    }
+    return keys;
+}
+
 std::size_t TextureCache::forget(std::uint64_t key) {
     if (const auto it = registered_images_.find(key); it != registered_images_.end()) {
         static const bool log_drops = read_env_u64("GALAXY_LOG_GUEST_TEXTURES", 0u) != 0u;
