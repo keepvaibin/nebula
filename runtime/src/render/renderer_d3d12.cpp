@@ -815,7 +815,7 @@ void RendererD3D12::resolve_scene(bool depth, bool color_wanted) {
     record_scene_resolve(command_list_.Get(), color, depth);
     msaa.color_dirty = msaa.color_dirty && !color;
     if (depth) {
-        // The scene target's own targets and the console state again, as the next draw expects them.
+        // The scene target's own targets and the state again, as the next draw expects them.
         command_list_->SetGraphicsRootSignature(root_signature_.Get());
         command_list_->OMSetRenderTargets(1, &scene_rtv_, FALSE, &scene_dsv_);
         bound_rt_aux_ = 0u;
@@ -1029,7 +1029,7 @@ HRESULT create_draw_root_signature(
     }
     *root_signature = nullptr;
 
-    // console root signature:
+    // root signature:
     //   [0] Root CBV b0,space0  VS+GS - VertexConstants
     //   [1] Root CBV b1,space0  VS+PS - PixelConstants (a native material's constants: both stages)
     //   [2] Descriptor table   SRV t0..t7,space0  PS - textures
@@ -8068,7 +8068,7 @@ D3D12_CPU_DESCRIPTOR_HANDLE RendererD3D12::allocate_conversion_rtv(
 
 // Records the conversion blit (see kConvPs).  Handles the scene target source
 // transitions; the caller transitions `dest` to RENDER_TARGET first and back
-// after.  Restores the console root signature + scene target binding before returning.
+// after.  Restores the root signature + scene target binding before returning.
 void RendererD3D12::record_conversion_blit(
     ID3D12Resource* dest,
     unsigned dest_w,

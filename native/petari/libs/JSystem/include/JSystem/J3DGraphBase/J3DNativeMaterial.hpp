@@ -102,6 +102,6 @@ namespace J3DNativeMaterial {
     bool overrideCoordinate(const void* pImage, u16 width, u16 height);
     // A pass over the current J3D material's draws that replaces its stages (j3d_material.hlsli j3d_override: `mode`
     // 1-4, alphas A0 and A1, drawn above `ref`, -1 always): whether the material draws natively and took it (else the
-    // caller loads its console program). Mode 0 ends it.
+    // caller loads its program). Mode 0 ends it.
     bool override(u32 mode, f32 a0, f32 a1, f32 ref);
 };  // namespace J3DNativeMaterial

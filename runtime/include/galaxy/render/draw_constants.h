@@ -47,7 +47,7 @@ struct alignas(256) VertexConstants {
     // Physical viewport width and height, line width and point size (the line width) at the scene target scale. Geometry shaders
     // read it at HLSL packoffset(c65).
     float line_point_raster[4];
-    // Line mask, point mask, line divisor, point divisor for console texture
+    // Line mask, point mask, line divisor, point divisor for texture
     // coordinate offsets. Geometry shaders read this at packoffset(c66).
     std::uint32_t line_point_tex_offsets[4];
     // native_material.hlsli vs_header (c67): y the frame scale, z the PE word (native_ps), w the shape's per-vertex

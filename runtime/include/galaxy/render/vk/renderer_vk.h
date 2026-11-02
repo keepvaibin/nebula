@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// The console renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
+// The renderer on Vulkan (docs/VULKAN.md), with the interface RenderCore uses on RendererD3D12.
 //
 // The scene target is a colour target (RGBA8) and a depth target (D24 where the device has it, else D32 float) drawn through
 // one render pass; a scene target copy, screen probe or present ends that pass, and the next scene target operation begins it again. Between
@@ -56,7 +56,7 @@ struct TextureHandle;
 
 namespace vk {
 
-// What PipelineCacheVk builds console pipelines against (RendererVk::root_signature()).
+// What PipelineCacheVk builds pipelines against (RendererVk::root_signature()).
 struct RenderLayout {
     VkPipelineLayout layout = VK_NULL_HANDLE;
     std::array<VkDescriptorSetLayout, 3> sets{};
@@ -319,7 +319,7 @@ public:
     [[nodiscard]] gpu::Device* device() const noexcept { return vk::Context::get().device(); }
     [[nodiscard]] unsigned covering_scale() const noexcept { return scene_map_.scale(); }
     [[nodiscard]] const FrameMap& frame_map() const noexcept { return scene_map_; }
-    // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the console pipelines' sample count.
+    // log2 of the scene target's samples per pixel (MSAA; the output scene target has one): the pipelines' sample count.
     [[nodiscard]] std::uint8_t scene_samples_log2() const noexcept {
         return static_cast<std::uint8_t>(std::countr_zero(scene_.samples));
     }
@@ -479,7 +479,7 @@ private:
     std::array<Frame, kFramesInFlight> frames_{};
     unsigned frame_slot_ = 0;
     Frame* frame_ = &frames_[0];  // the submission being recorded: the frame slot's, or a sub-frame's
-    VkCommandBuffer commands_ = VK_NULL_HANDLE;  // where console work records: the frame's, or a replay's
+    VkCommandBuffer commands_ = VK_NULL_HANDLE;  // where work records: the frame's, or a replay's
     std::uint64_t frame_index_ = 0;
     std::uint64_t last_submitted_ = 0;
 
@@ -603,7 +603,7 @@ private:
     VkDescriptorSet corner_set_ = VK_NULL_HANDLE;
     bool corner_texture_tried_ = false;
 
-    // console draws.
+    // draws.
     std::byte* resident_mapped_ = nullptr;
     UploadRing vertex_ring_;
     UploadRing index_ring_;
@@ -700,7 +700,7 @@ private:
     unsigned ring_segment_ = 0;
     bool ring_advance_pending_ = false;
 
-    // The log: one game frame's console work in order (a display copy closes it).
+    // The log: one game frame's work in order (a display copy closes it).
     // OutputSceneBegin: the scene resampled into the output scene target at the op's scale; SwapSceneSets: the scene target and the output
     // scene target trade places.
     enum class ReplayKind : std::uint8_t {
@@ -769,7 +769,7 @@ private:
     void take_log_snapshots();
     // The display copy closes the log: one 3D scene makes it replayable.
     void close_replay_log(std::uint32_t picture_slot);
-    // console work recorded now goes into the log (not while a replay records, nor inside a logged operation's own
+    // work recorded now goes into the log (not while a replay records, nor inside a logged operation's own
     // clears and rebinds: LogPause).
     [[nodiscard]] bool logging() const noexcept { return recording_log_valid_ && !replaying_ && !log_paused_; }
     struct LogPause {
@@ -1051,7 +1051,7 @@ private:
     // The frame's shader invocations (gpu-stats): vertex, tessellation control patches and evaluation, clipped
     // primitives, fragment and compute, in VkQueryPipelineStatisticFlagBits' order.
     VkQueryPool stats_queries_ = VK_NULL_HANDLE;
-    // GALAXY_GPU_DRAWS=1: each console draw between two timestamps, its time summed by pipeline for present-stats'
+    // GALAXY_GPU_DRAWS=1: each draw between two timestamps, its time summed by pipeline for present-stats'
     // [gpu-draws] lines (RendererD3D12's; the timestamps serialize the draws: the total grows, the shares hold).
     static constexpr unsigned kGpuDrawSlots = 16384;
     struct GpuDrawMark {

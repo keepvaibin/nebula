@@ -3,7 +3,7 @@
 
 // The game's actor lights under ray tracing.
 //
-// Characters and most lit objects take console lights 0 and 1 from an ActorLightInfo
+// Characters and most lit objects take lights 0 and 1 from an ActorLightInfo
 // (LightFunction::loadActorLightInfo: LightInfo A and B; loadLightInfoCoin: A only). A light with the
 // follow-camera flag is loaded at a fixed eye-space position, so it turns with the camera; one without it sits at
 // a world position. With ray tracing on and GALAXY_RT_ACTOR_LIGHTS set, the scene draws' palette snapshots move

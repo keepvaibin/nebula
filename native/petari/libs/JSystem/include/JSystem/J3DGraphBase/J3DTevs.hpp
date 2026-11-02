@@ -135,12 +135,12 @@ struct J3DTexCoord {
 
 struct J3DBlend : public J3DBlendInfo {
     J3DBlend() {
-        // The four bytes as they are (a u32 read and store, on the console).
+        // The four bytes as they are.
         memcpy(this, &j3dDefaultBlendInfo, sizeof(u32));
     }
 
     J3DBlend(J3DBlendInfo const& info) {
-        // The four bytes as they are (a u32 read and store, on the console).
+        // The four bytes as they are.
         memcpy(this, &info, sizeof(u32));
     }
 

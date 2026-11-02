@@ -16,7 +16,7 @@ namespace J3DNativeDraw {
     void drawArrays(u8 primitive, u32 attributes, u32 count, const f32* pPositions, const u32* const pColors[2],
                     const f32* const pTexCoords[8]);
     // A primitive of `count` vertices, each giving the values `attributes` names (NEBULA_SHAPE_POSITION_MATRIX,
-    // _NORMAL, _COLOR0, _COLOR1, _TEXCOORD0 << n; every vertex has a position) in the console's order: position matrix,
+    // _NORMAL, _COLOR0, _COLOR1, _TEXCOORD0 << n; every vertex has a position) in order: position matrix,
     // position, normal, colour 0, colour 1, texture coordinates. The record goes when the last vertex is complete.
     void begin(NebulaPrimitive primitive, u16 count, u32 attributes);
     // The vertex's position matrix place (0-9, J3DNativeShape::setPosition).
