@@ -19,12 +19,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include <cstdio>
 
-void MapPartsUtil_DUMMY() {
-    TVec3f a(0.0f, 0.0f, 0.0f);
-    TVec3f b;
-    a.sub(b);
-}
-
 namespace {
     const char* cFollowJointName = "Move";
 

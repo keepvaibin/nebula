@@ -23,11 +23,6 @@ namespace {
 
 };  // namespace
 
-void MercatorTransformCube_FORCE_EMIT() {
-    TVec3f vec;
-    vec *= 0.0f;
-}
-
 MercatorTransformCube::MercatorTransformCube(int formType, const char* pName) : AreaObj(formType, pName) {
     _3C.identity();
 }

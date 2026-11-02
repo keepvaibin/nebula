@@ -48,10 +48,6 @@
 
 template void JGeometry::SMatrix34C< f32 >::set(const f32 (*)[4]);
 
-void MarioActor_DUMMY() {
-    (void)JGeometry::TUtil< f32 >::acos(1.0f);
-}
-
 bool gIsLuigi;
 static f32 BASE_ROTATION = 0.0f;
 

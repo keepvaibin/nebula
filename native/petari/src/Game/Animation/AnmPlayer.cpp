@@ -5,44 +5,6 @@
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 
-int (*AnmPlayer_FORCE_EMIT(TQuat4f& rQuat, const TQuat4f& rOther, TPos3f& rMtx, const TPos3f& rSrc, TVec3f& rVec, f32 value))(f32, f32, f32) {
-    (void)1.0f;
-    (void)0.0f;
-    (void)3.814697265625e-6f;
-    (void)-3.814697265625e-6f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)3.1415927f;
-    (void)1023.5f;
-    (void)1.5707964f;
-    (void)2.0f;
-    (void)-1.5707964f;
-
-    rQuat.setEuler(value, value, value);
-    rQuat.setRotate(rVec, rVec);
-    rQuat.slerp(rOther, value);
-    rQuat.normalize(rOther);
-    rQuat.getEuler(rVec);
-
-    delete[] new TPos3f[1];
-    rMtx.identity();
-    rMtx.mult(rVec, rVec);
-    rMtx.multTranspose(rVec, rVec);
-    rMtx.invert(rSrc);
-    rMtx.concat(rSrc, rSrc);
-    rMtx.concat(rSrc);
-
-    TVec3f vectors[2] = {value, value};
-    rVec.set< f32 >(value, value, value);
-    JGeometry::TUtil< f32 >::sqrt(value);
-    rMtx.set(value, value, value, value, value, value, value, value, value, value, value, value);
-    rMtx.getQuat(rQuat);
-    rQuat.set< f32 >(value, value, value, value);
-    (rQuat.*&TQuat4f::operator=)(rOther);
-    return &JGeometry::TUtil< f32 >::epsilonEquals;
-}
-
 AnmPlayerBase::AnmPlayerBase(const ResTable* pResTable) : mResTable(pResTable), mAnmRes(), mFrameCtrl() {
 }
 

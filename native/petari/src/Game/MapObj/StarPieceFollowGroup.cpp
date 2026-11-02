@@ -16,11 +16,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <nebula_math.h>
 
-void StarPieceFollowGroup_DUMMY() {
-    TVec3f a;
-    a *= 1.0f;
-}
-
 namespace NrvStarPieceFollowGroup {
     NEW_NERVE(HostTypeNrvFollowToPlayer, StarPieceFollowGroup, FollowToPlayer);
     NEW_NERVE(HostTypeNrvFollowEnd, StarPieceFollowGroup, FollowEnd);

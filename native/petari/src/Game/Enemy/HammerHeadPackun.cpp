@@ -24,12 +24,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
 
-void HammerHeadPackun_DUMMY() {
-    // to emit operator-
-    TVec3f a, b;
-    TVec3f c = a - b;
-}
-
 HammerHeadPackun::HammerHeadPackun(const char* pName) : LiveActor(pName) {
     mLeafModel = nullptr;
     mImmunityTime = 0;

@@ -1,10 +1,5 @@
 #include "JSystem/JAudio2/JAUSoundTable.hpp"
 
-void JAUSoundTable_DUMMY() {
-    JAUSoundNameTable table(false);
-    table.getItem(0, 0);
-}
-
 void JAUSoundTable::init(void const* pData) {
     if (pData != nullptr) {
         mTable.init(pData);

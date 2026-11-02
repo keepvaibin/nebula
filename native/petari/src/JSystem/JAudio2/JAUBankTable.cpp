@@ -5,6 +5,3 @@ void JAUBankTableDictionary::appendBankTable(JSULink< JAUBankTable >* bankTableL
 }
 
 // Needed to make the inline function JAUBankTable::getBank appear in this TU
-const JASBank* JAUBankTable_DUMMY(const JAUBankTable* table) {
-    return table->getBank(0);
-}

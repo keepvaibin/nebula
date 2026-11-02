@@ -530,9 +530,3 @@ void SpinningBox::calcAndSetBaseMtx() {
     MR::setBaseTRMtx(this, mtx);
 }
 
-void SpinningBox_DUMMY() {
-    // This dummy is here to ensure that TVec3f::sub is the deepest call in the operator- chain.
-    // Presumably one of the stripped functions would have used sub directly.
-    TVec3f a, b;
-    a.sub(b);
-}
