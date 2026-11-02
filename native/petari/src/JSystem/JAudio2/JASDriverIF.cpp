@@ -1,6 +1,5 @@
 #include "JSystem/JAudio2/JASDriverIF.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <revolution/os.h>
 #include "JSystem/JAudio2/JASAiCtrl.hpp"
 #include "JSystem/JAudio2/JASDspInterface.hpp"
 

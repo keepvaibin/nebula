@@ -1,7 +1,6 @@
 #pragma once
 
 #include <nw4r/lyt/common.h>
-#include <revolution/types.h>
 
 class LayoutHolder;
 

@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace MR {
     void initCameraCodeCollection(const char*, s32);

@@ -13,7 +13,7 @@ FL="-std=gnu11 -O2 -g -DTARGET_PC=1 -DVERSION=1 -DNEBULA_GAME_MODULE=1 -fsigned-
     -Werror=int-to-pointer-cast -Werror=pointer-to-int-cast -Werror=void-pointer-to-int-cast -Werror=pointer-to-enum-cast
     -Werror=implicit-function-declaration -Werror=implicit-int -Werror=int-conversion
     -Werror=incompatible-function-pointer-types -Werror=return-stack-address -Werror=array-bounds
-    -include nebula_prelude.h -I$N/math/include -I$P/libs/RVL_SDK/include
+    -include nebula_prelude.h -I$N/math/include
     -I$P/include -I$N/include"
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*) LIBS="-lwinmm"; EXE=.exe ;;

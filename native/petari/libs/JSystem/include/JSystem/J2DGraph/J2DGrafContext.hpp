@@ -5,7 +5,6 @@
 #include "JSystem/JUtility/TColor.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 enum J2DGrafType {
     J2DGraf_Base = 0,

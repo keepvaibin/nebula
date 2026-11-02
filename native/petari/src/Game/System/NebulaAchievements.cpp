@@ -11,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

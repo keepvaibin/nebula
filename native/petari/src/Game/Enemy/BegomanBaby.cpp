@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Enemy/BegomanBaby.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Util/ActorMovementUtil.hpp"

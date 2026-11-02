@@ -4,7 +4,6 @@
 #include <nebula_cooked_material.h>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 // A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
 struct J3DNativeLight {

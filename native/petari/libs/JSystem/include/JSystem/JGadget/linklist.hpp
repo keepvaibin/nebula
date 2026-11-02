@@ -3,7 +3,6 @@
 #include <iterator>
 
 #include <cstddef>
-#include <revolution/types.h>
 
 #include "JSystem/JGadget/predicate.hpp"
 

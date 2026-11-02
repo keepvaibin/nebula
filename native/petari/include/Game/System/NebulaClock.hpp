@@ -3,7 +3,6 @@
 // The host's steady clock (B-01: the game no longer reads the console's time base for durations and pacing).
 // Nanoseconds from an arbitrary start, never 0, so 0 can mean "never".
 
-#include <revolution/types.h>
 
 namespace NebulaClock {
     s64 nowNs();

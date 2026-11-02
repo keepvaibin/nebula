@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include "Game/System/SaveBinary.hpp"
 
 class BinaryDataChunkBase {

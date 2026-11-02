@@ -3,7 +3,6 @@
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 inline J3DShapeMtx::~J3DShapeMtx() {
 }

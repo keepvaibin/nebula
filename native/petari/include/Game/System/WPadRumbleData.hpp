@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 struct RumblePattern {
     /* 0x00 */ const char* mName;

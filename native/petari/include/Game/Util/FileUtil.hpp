@@ -3,7 +3,6 @@
 #include "Game/System/GameAssets.hpp"
 
 
-#include <revolution/types.h>
 
 class JKRArchive;
 class JKRHeap;

@@ -3,7 +3,6 @@
 #include "Inline.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace MR {
     /// @brief A contiguous reallocatable array.

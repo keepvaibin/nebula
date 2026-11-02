@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 #include "JSystem/JAudio2/JASSeqParser.hpp"
 #include "JSystem/JAudio2/JASSeqReader.hpp"

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace MR {
     /* thanks to https://github.com/magcius/noclip.website/blob/master/src/SuperMarioGalaxy/NameObj.ts */

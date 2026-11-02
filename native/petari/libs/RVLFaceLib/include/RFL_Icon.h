@@ -4,7 +4,6 @@
 #include "RFLi_Types.h"
 #include "RFL_Database.h"
 #include "RFL_MiddleDatabase.h"
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

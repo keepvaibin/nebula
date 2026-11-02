@@ -31,7 +31,6 @@ target_include_directories(smg_game BEFORE PRIVATE
     "${petari}/include"
     "${petari}/libs/JSystem/include"
     "${petari}/libs/RVLFaceLib/include"
-    "${petari}/libs/RVL_SDK/include"
     "${petari}/libs/nw4r/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/include")
 

@@ -11,7 +11,6 @@
 #include "Game/Util/DrawUtil.hpp"
 #include <nw4r/lyt/pane.h>
 #include <nw4r/lyt/textBox.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 
 namespace {

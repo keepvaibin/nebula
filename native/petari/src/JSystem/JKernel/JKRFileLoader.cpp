@@ -2,7 +2,6 @@
 #include "Game/System/GameThreads.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 JKRFileLoader* JKRFileLoader::sCurrentVolume;
 JSUList< JKRFileLoader > JKRFileLoader::sVolumeList = JSUList< JKRFileLoader >();

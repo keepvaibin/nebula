@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/os.h>
 #include "Game/System/GameThreads.hpp"
 
 class JKRArchive;

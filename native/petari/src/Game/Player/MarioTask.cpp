@@ -4,7 +4,6 @@
 #include "Game/Player/MarioState.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 static const f32 sOne = 1.0f;
 static const f32 sZero = 0.0f;

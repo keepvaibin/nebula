@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 struct J3DTransformInfo {
     /* 0x00 */ Vec mScale;

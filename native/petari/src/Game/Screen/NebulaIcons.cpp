@@ -18,7 +18,6 @@
 #include <nw4r/lyt/layout.h>
 #include <nw4r/lyt/material.h>
 #include <nw4r/ut/ResFont.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaClock.hpp"
 #include "Game/System/NebulaHost.hpp"
 

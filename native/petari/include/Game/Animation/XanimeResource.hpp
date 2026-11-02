@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class HashSortTable;
 class ResourceHolder;

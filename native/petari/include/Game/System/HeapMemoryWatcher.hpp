@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Inline.hpp"
-#include <revolution/types.h>
 
 class JKRExpHeap;
 class JKRHeap;

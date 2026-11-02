@@ -1,6 +1,5 @@
 #ifndef RVL_FACE_LIBRARY_TYPES_H
 #define RVL_FACE_LIBRARY_TYPES_H
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

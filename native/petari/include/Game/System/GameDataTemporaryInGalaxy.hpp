@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class AlreadyDoneFlagInGalaxy;
 class JMapIdInfo;

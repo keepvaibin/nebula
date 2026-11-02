@@ -2,7 +2,6 @@
 #define RVL_FACE_LIBRARY_INTERNAL_HEAP_H
 // The Mii library's working memory: host allocations (Game/NPC/NebulaMiiHeap.cpp), 32-byte aligned, as large as
 // each part needs; no work buffer or fixed-size heaps.
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif

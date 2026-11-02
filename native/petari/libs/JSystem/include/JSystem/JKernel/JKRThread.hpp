@@ -4,7 +4,6 @@
 #include "Game/System/GameThreads.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 
-#include <revolution/os.h>
 
 class JKRTask {
 public:

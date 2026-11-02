@@ -3,7 +3,6 @@
 #include <limits>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 // Android's C library defines bcopy and bzero as macros (<strings.h>); JASCalc has functions of those names.
 #undef bcopy

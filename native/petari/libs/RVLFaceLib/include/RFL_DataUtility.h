@@ -2,7 +2,6 @@
 #define RVL_FACE_LIBRARY_DATA_UTILITY_H
 #include "RFL_Types.h"
 #include <NebulaGpu.h>
-#include <revolution/types.h>
 #include <stdio.h>
 #ifdef __cplusplus
 extern "C" {

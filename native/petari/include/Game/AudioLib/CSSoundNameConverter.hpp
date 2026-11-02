@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/SingletonHolder.hpp"
-#include <revolution/types.h>
 
 class SpkTable;
 

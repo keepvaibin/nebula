@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 // In host order as the importer cooks models and animations.
 struct ResNTAB {

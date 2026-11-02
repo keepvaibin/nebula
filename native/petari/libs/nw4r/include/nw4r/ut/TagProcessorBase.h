@@ -3,7 +3,6 @@
 #include "nw4r/ut/Rect.h"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace nw4r {
     namespace ut {

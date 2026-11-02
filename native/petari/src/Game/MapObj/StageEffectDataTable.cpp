@@ -5,7 +5,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <revolution/types.h>
 
 namespace {
     enum CameraShakeType {

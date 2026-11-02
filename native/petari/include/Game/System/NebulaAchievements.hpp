@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 // An achievement's icon: a picture-font glyph, or a texture from the game's files (a layout archive's TPL in
 // LayoutData, or an object archive's BTI in ObjectData), the part [u0, u1] x [v0, v1] of it.

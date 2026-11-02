@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/System/NebulaCalendar.hpp"
-#include <revolution/os.h>
 
 class GameDataHolder;
 class GameDataSomeScenarioAccessor;

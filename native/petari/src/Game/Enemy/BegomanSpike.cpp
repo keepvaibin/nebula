@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Enemy/BegomanSpike.hpp"
 #include "Game/Enemy/BegomanSpringHead.hpp"
 #include "Game/LiveActor/HitSensor.hpp"

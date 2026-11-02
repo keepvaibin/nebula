@@ -1,7 +1,5 @@
 #pragma once
 
-#include <revolution/os.h>
-#include <revolution/types.h>
 
 namespace nw4r {
     namespace math {

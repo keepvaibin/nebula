@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Enemy/WaterBazooka.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Enemy/ElectricPressureBullet.hpp"

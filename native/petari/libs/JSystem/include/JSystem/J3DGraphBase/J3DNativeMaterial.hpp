@@ -3,7 +3,6 @@
 #include <NebulaGpu.h>
 #include <nebula_game_api.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class J3DMaterial;
 class J3DModelData;

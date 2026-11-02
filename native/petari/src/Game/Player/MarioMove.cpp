@@ -10,7 +10,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 void Mario::mainMove() {
     TVec3f vec1;

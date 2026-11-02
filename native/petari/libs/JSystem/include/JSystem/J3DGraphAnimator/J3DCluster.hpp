@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 class J3DDeformer;
 class J3DClusterKey;

@@ -13,7 +13,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 struct SinCosPair {
     f32 sin;

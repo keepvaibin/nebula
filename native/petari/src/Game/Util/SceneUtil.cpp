@@ -1,5 +1,4 @@
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/NameObj/NameObjFinder.hpp"
 #include "Game/Scene/PlacementStateChecker.hpp"

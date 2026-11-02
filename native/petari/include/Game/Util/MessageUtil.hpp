@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace MR {
     const char16_t* getSystemMessageDirect(const char*);

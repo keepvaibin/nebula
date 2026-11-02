@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 namespace nw4r {
     namespace ut {

@@ -2,7 +2,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 /// @brief The controller for linearly interpolating a value over time.
 class ValueControl {

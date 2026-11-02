@@ -3,7 +3,6 @@
 #include "JSystem/JGeometry/TVec.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 namespace JGeometry {
     template < class T >

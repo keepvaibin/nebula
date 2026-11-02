@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include <nebula_game_api.h>
 
 #ifdef __cplusplus

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 #ifdef __cplusplus
 extern "C" {

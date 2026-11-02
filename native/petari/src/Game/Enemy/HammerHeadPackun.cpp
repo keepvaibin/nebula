@@ -23,7 +23,6 @@
 #include <JSystem/JMath/JMATrigonometric.hpp>
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 void HammerHeadPackun_DUMMY() {
     // to emit operator-

@@ -1,6 +1,5 @@
 #include "Game/Util/SortUtil.hpp"
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/System/GameEventFlagTable.hpp"
 #include "Game/System/GalaxyInfoTable.hpp"
 #include "Game/Util/HashUtil.hpp"

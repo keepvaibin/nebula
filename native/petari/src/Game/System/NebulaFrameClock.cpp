@@ -4,7 +4,6 @@
 #include <JSystem/JKernel/JKRHeap.hpp>
 
 #include <math.h>
-#include <revolution/os.h>
 
 #include <nebula_game_api.h>
 #include <nebula_threads.h>

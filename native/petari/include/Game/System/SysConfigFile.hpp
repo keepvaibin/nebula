@@ -2,7 +2,6 @@
 
 #include "Game/System/NebulaCalendar.hpp"
 #include "Game/System/BinaryDataChunkHolder.hpp"
-#include <revolution/os.h>
 
 class BinaryDataChunkHolder;
 class BinaryDataContentHeaderSerializer;

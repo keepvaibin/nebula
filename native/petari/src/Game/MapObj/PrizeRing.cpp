@@ -4,7 +4,6 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 #include <cstddef>
-#include <revolution/types.h>
 
 
 namespace {

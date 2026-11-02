@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 
 // One request on the game's save files through the host's save service (nebula_game_api.h save_request): set up by
 // one of the set* calls, started by start(), done when the host has finished it (the game polls isDone). The host

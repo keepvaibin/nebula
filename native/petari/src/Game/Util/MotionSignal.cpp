@@ -22,7 +22,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <nebula_game_api.h>
 #include <nw4r/lyt/pane.h>
-#include <revolution/os.h>
 #include "Game/Util/RenderSignals.hpp"
 #include "Game/System/NebulaHost.hpp"
 

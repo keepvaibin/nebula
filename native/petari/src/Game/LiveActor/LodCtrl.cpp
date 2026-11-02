@@ -10,7 +10,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include <cstdio>
 #include <nebula_game_api.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaHost.hpp"
 
 namespace {

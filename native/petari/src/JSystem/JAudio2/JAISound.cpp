@@ -4,7 +4,6 @@
 #include "JSystem/JAudio2/JAISoundHandles.hpp"
 #include "JSystem/JAudio2/JASReport.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
-#include <revolution/os.h>
 
 void JAISoundHandle::releaseSound() {
     if (mSound != nullptr) {

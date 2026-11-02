@@ -135,7 +135,7 @@ J3DJoint::J3DJoint() {
     mJntNo = 0;
     mKind = 1;
     mScaleCompensate = false;
-    __memcpy(&mTransformInfo, &j3dDefaultTransformInfo, sizeof(J3DTransformInfo));
+    memcpy(&mTransformInfo, &j3dDefaultTransformInfo, sizeof(J3DTransformInfo));
     mBoundingSphereRadius = 0.0f;
     mMtxCalc = NULL;
     mMesh = NULL;

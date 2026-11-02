@@ -1,6 +1,5 @@
 #pragma once
 
-#include <revolution/types.h>
 #include "Game/System/GameThreads.hpp"
 
 class JKRHeap;

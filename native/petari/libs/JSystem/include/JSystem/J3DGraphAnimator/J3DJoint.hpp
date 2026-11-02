@@ -5,7 +5,6 @@
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class J3DAnmTransform;
 class J3DJoint;

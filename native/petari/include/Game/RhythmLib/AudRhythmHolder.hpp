@@ -4,7 +4,6 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 #define NUM_RHYTHM_INFO 6
 

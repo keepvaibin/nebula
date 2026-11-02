@@ -3,7 +3,6 @@
 #include "Game/Util/Array.hpp"
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/GameThreads.hpp"
-#include <revolution/types.h>
 
 class JKRHeap;
 

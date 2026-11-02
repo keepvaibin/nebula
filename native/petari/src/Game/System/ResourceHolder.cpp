@@ -12,7 +12,6 @@
 #include <cstring>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include "Game/Util/MotionSignal.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"

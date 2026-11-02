@@ -5,7 +5,6 @@
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 
 class VolumeModelDrawer : public NameObj {
 public:

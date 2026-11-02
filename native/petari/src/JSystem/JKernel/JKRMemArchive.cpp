@@ -5,7 +5,6 @@
 #include "JSystem/JUtility/JUTException.hpp"
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <revolution/os.h>
 #include <cstring>
 
 JKRMemArchive::JKRMemArchive() {

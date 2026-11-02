@@ -1,7 +1,6 @@
 #pragma once
 
 #include "JSystem/JAudio2/JASGadget.hpp"
-#include <revolution/types.h>
 
 namespace JASDsp {
     struct TChannel;

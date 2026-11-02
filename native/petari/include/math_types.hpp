@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <nebula_math.h>
-#include <revolution/types.h>
 
 const f32 HALF_PI = 1.5707964f;
 const f64 HALF_PI_D = 1.57079637050628662109375;

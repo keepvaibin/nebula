@@ -25,7 +25,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <JSystem/JMath/JMath.hpp>
-#include <revolution/types.h>
 
 void Metbo_FORCE_MATCH_SDATA2() {
     (void)1.0f;

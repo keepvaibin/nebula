@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/System/GameEventFlag.hpp"
-#include <revolution/types.h>
 
 class GameEventFlagIter {
 public:

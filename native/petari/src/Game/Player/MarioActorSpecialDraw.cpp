@@ -20,7 +20,6 @@
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
 #include <NebulaGpuEnums.h>
-#include <revolution/os.h>
 
 void MarioActorSpecialDraw_FORCE_MATCH_SDATA2() {
     (void)80.0f;

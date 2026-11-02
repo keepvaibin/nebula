@@ -27,7 +27,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShapeDraw.hpp>
 #include <nebula_math.h>
-#include <revolution/types.h>
 #include "Game/System/NebulaInput.hpp"
 
 namespace {

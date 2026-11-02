@@ -11,7 +11,6 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/TalkUtil.hpp"
 #include <math.h>
-#include <revolution/os.h>
 
 namespace NrvNebulaAchievementLuma {
     NEW_NERVE(NebulaAchievementLumaNrvWait, NebulaAchievementLuma, NebulaWait);

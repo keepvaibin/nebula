@@ -23,7 +23,6 @@
 #include <cstring>
 #include <nebula_game_api.h>
 #include <nw4r/lyt/layout.h>
-#include <revolution/os.h>
 #include "Game/System/NebulaInput.hpp"
 #include "Game/System/NebulaHost.hpp"
 

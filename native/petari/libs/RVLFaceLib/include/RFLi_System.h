@@ -5,7 +5,6 @@
 #include "RFLi_NANDLoader.h"
 #include "RFLi_Types.h"
 #include "RFLi_Heap.h"
-#include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
 #endif
