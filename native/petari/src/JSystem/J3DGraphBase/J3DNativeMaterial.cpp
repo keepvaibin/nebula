@@ -698,6 +698,15 @@ namespace J3DNativeMaterial {
         return true;
     }
 
+    void swapImage(u32 map, const void* pImage) {
+        if (sCurrentKind != CURRENT_J3D) {
+            return;
+        }
+        sCurrent.textures[map].image = keyOf(pImage);
+        sCurrent.constants_only = 0;
+        J3DNativeState::sendMaterial(&sCurrent);
+    }
+
     bool overrideCoordinate(const void* pImage, u16 width, u16 height) {
         if (sCurrentKind != CURRENT_J3D) {
             return false;

@@ -250,7 +250,6 @@ public:
     J3DModelX* getJ3DModel() const;
     J3DModelData* getModelData() const;
     J3DModelX* getSimpleModel() const;
-    void createTextureList(StateListHolder*, u16, u16);
     void swapTexture(const char*, u8) const;
     void copyMaterial(J3DModel*, u16, s32);
 
@@ -879,7 +878,7 @@ public:
     /* 0xB64 */ ResTIMG** _B64;
     /* 0xB68 */ u8 _B68;
     /* 0xB6A */ u16 _B6A;
-    /* 0xB6C */ StateListHolder* _B6C;
+    /* 0xB6C */ const void** _B6C;
     /* 0xB70 */ u16 _B70;
     /* 0xB72 */ u8 _B72;
     /* 0xB74 */ u16 _B74;

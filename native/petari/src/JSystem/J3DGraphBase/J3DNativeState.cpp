@@ -442,9 +442,6 @@ namespace J3DNativeState {
         static J3DNativeTexObj sDefaultTexture;
         J3DNativeTexture::registerImage(&sDefaultTexData, GPU_TF_IA8, 4, 4, 1);
         J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
-        for (u32 i = 0; i < 8; i++) {
-            J3DNativeTexture::load(&sDefaultTexture, static_cast< GpuTexMapID >(i));
-        }
 
         setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
 

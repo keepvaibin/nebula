@@ -548,7 +548,7 @@ void MarioActor::swapTextureInit() {
         _B64[i] = MR::getResTIMG(this, i);
     }
 
-    _B6C = new StateListHolder[12];
+    _B6C = new const void*[12]();
 
     u16 texNo = 0;
     for (u16 i = 0; i < textureCount; i++) {
@@ -561,10 +561,10 @@ void MarioActor::swapTextureInit() {
     }
 
     _B70 = texNo;
-    createTextureList(&_B6C[0], 0, texNo);
-    createTextureList(&_B6C[1], 0, texNo + 1);
-    createTextureList(&_B6C[2], 0, texNo + 2);
-    createTextureList(&_B6C[3], 0, texNo + 3);
+    _B6C[0] = _B64[texNo]->image();
+    _B6C[1] = _B64[texNo + 1]->image();
+    _B6C[2] = _B64[texNo + 2]->image();
+    _B6C[3] = _B64[texNo + 3]->image();
 
     if (_9E4 != nullptr) {
         J3DModelData* beeData = MR::getJ3DModelData(_9E4);
@@ -583,10 +583,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_9E4, i);
         }
 
-        createTextureList(&_B6C[4], 0, texNo);
-        createTextureList(&_B6C[5], 0, texNo + 1);
-        createTextureList(&_B6C[6], 0, texNo + 2);
-        createTextureList(&_B6C[7], 0, texNo + 3);
+        _B6C[4] = _B64[texNo]->image();
+        _B6C[5] = _B64[texNo + 1]->image();
+        _B6C[6] = _B64[texNo + 2]->image();
+        _B6C[7] = _B64[texNo + 3]->image();
     }
 
     if (_A00 != nullptr) {
@@ -606,10 +606,10 @@ void MarioActor::swapTextureInit() {
             _B64[i] = MR::getResTIMG(_A00, i);
         }
 
-        createTextureList(&_B6C[8], 0, texNo);
-        createTextureList(&_B6C[9], 0, texNo + 1);
-        createTextureList(&_B6C[10], 0, texNo + 2);
-        createTextureList(&_B6C[11], 0, texNo + 3);
+        _B6C[8] = _B64[texNo]->image();
+        _B6C[9] = _B64[texNo + 1]->image();
+        _B6C[10] = _B64[texNo + 2]->image();
+        _B6C[11] = _B64[texNo + 3]->image();
     }
 
     initBlink();
@@ -940,12 +940,6 @@ void MarioActor::drawModelBlur() const {
     model->mFlags._13 = false;
 }
 
-void MarioActor::createTextureList(StateListHolder* pHolder, u16 texMapID, u16 texIndex) {
-    ResTIMG* texture = _B64[texIndex];
-    pHolder->mList.reserve(1);
-    pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), const_cast< u8* >(texture->image()));
-}
-
 void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
     switch (mPlayerMode) {
     case 4:
@@ -969,12 +963,7 @@ void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {
     J3DModelData* modelData = MR::getJ3DModelData(this);
     u16 materialNo = MR::getMaterialNo(modelData, pMaterialName);
 
-    const StateListHolder* holder = _B6C;
-    const u8 modelIdx = mCurrModel;
-    const J3DStateList* dl = holder[texNo].mList.isEmpty() ? nullptr : &holder[texNo].mList;
-    J3DModelX* model = mModels[modelIdx];
-
-    model->_1C8[materialNo] = dl;
+    mModels[mCurrModel]->_1C8[materialNo] = _B6C[texNo];
 }
 
 void MarioActor::copyMaterial(J3DModel* pModel, u16 materialNo, s32 packetIndex) {

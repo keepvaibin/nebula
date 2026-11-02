@@ -10,8 +10,6 @@ namespace galaxy::render::state {
 
 enum Kind : std::uint8_t {
     kTexCoordGen = 1,
-    kTexLookup,
-    kTexImage,
     kProjection,
     kViewport,
     kScissor,

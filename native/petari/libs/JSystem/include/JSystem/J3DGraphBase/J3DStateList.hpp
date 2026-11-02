@@ -63,10 +63,6 @@ public:
     void setChanMatColor(GpuChannelID chan, NebulaColor8 color);
     void setChanAmbColor(GpuChannelID chan, NebulaColor8 color);
     void setTexCoordGen(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, GpuBool normalize, u32 postMtx);
-    void setTexLookupMode(GpuTexMapID map, GpuTexWrapMode wrapS, GpuTexWrapMode wrapT, GpuTexFilter minFilter,
-                          GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GpuBool biasClamp,
-                          GpuBool edgeLod, GpuAnisotropy maxAniso);
-    void setTexImgPtr(GpuTexMapID map, const void* pImage);
     // A colour-indexed texture's palette: its format and place (a console TLUT name).
     void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     // Changes of some fields of a register, its others as they are (the console's partial setters).

@@ -109,8 +109,8 @@ public:
     const J3DStateList* _1B8;
     /* 0x1C0 */ u16 _1C0;
     // Per material: the state list it draws with (texture swaps); the one set for its next draws.
-    const J3DStateList** _1C4;
-    const J3DStateList** _1C8;
+    const void** _1C4;
+    const void** _1C8;
     /* 0x1D0 */ u8 _1D0;
     /* 0x1D4 */ f32 _1D4;
     /* 0x1D8 */ u32 _1D8;

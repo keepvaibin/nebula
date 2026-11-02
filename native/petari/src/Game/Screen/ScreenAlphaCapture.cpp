@@ -37,10 +37,6 @@ void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
     mTexture[textureIndex]->capture(0, 0, GPU_CTF_A8, false, 0);
 }
 
-void ScreenAlphaCapture::loadScreenTexture(s32 index, GpuTexMapID id) {
-    mTexture[index]->load(id);
-}
-
 JUTTexture* ScreenAlphaCapture::getTexture(s32 index) {
     return mTexture[index];
 }
@@ -53,10 +49,6 @@ namespace MR {
 
     void captureScreenAlpha(s32 textureIndex) {
         ::getScreenAlphaCapture()->captureScreenAlpha(textureIndex);
-    }
-
-    void loadScreenAlphaTexture(s32 index, GpuTexMapID id) {
-        ::getScreenAlphaCapture()->loadScreenTexture(index, id);
     }
 
     JUTTexture* getScreenAlphaTexture(s32 index) {
