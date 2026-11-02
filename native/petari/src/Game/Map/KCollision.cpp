@@ -5,6 +5,7 @@
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
+#include "Game/Util/ByteView.hpp"
 
 // trying to get both operator== and operator/ to emit
 void DUMMY_KCollision() {
@@ -1442,7 +1443,7 @@ s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, co
         offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
     }
 
-    while ((offset = *reinterpret_cast< s32* >(octree + offset)) >= 0) {
+    while ((offset = readBytes< s32 >(octree + offset)) >= 0) {
         octree += offset;
         (*pShift)--;
         s32 shift = *pShift;

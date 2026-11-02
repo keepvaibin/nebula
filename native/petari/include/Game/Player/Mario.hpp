@@ -302,7 +302,7 @@ public:
     bool isSkatableFloor() const;
     bool doSkate();
 
-    u32 initSoundTable(SoundList* list, u32);
+    u32 initSoundTable(SoundList* list);
     void initSound();
     void playSoundJ(const char*, s32);
     void stopSoundJ(const char*, u32);

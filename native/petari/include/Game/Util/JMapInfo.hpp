@@ -3,6 +3,7 @@
 #include <cstring>
 #include <NebulaGpu.h>
 #include <nebula_math.h>
+#include "Game/Util/ByteView.hpp"
 
 #define JMAP_VALUE_TYPE_LONG 0
 #define JMAP_VALUE_TYPE_STRING 1
@@ -79,13 +80,13 @@ public:
     bool getValueFast(int entryIndex, int itemIndex, f32* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = *reinterpret_cast< const f32* >(pValue);
+        *pValueOut = readBytes< f32 >(pValue);
         return true;
     }
     bool getValueFast(int entryIndex, int itemIndex, bool* pValueOut) const {
         const JMapItem* pItem = &mData->mItems[itemIndex];
         const char* pValue = getEntryAddress(mData, mData->mDataOffset, entryIndex) + pItem->mOffsData;
-        *pValueOut = (*reinterpret_cast< const u32* >(pValue) & pItem->mMask) != 0;
+        *pValueOut = (readBytes< u32 >(pValue) & pItem->mMask) != 0;
         return true;
     }
 

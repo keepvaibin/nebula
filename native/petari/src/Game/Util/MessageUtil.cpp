@@ -7,6 +7,7 @@
 #include "Game/Util/SceneUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 #include <cstdio>
+#include "Game/Util/ByteView.hpp"
 
 #define MESSAGE_ID_BUFFER_SIZE 256
 
@@ -154,7 +155,7 @@ namespace MR {
                 if (tag.getGroup() == 3) {
                     count++;
                 } else if (tag.getGroup() == 6) {
-                    count += countMessageFigure(*reinterpret_cast< const s32* >(tag.getParamPtr(0)));
+                    count += countMessageFigure(readBytes< s32 >(tag.getParamPtr(0)));
                 } else if (tag.getGroup() == 5) {
                     count += 3;
                 }

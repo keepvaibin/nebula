@@ -7,23 +7,24 @@
 #include "Game/System/NebulaText.hpp"
 #include <cstring>
 #include "Game/System/AssetFolder.hpp"
+#include "Game/Util/ByteView.hpp"
 
 #define SYSTEMMESSAGE_ARC "/Memory/SystemMessage.arc"
 #define MESSAGE_ARC "/MessageData/Message.arc"
 
 namespace {
     u8* getBlock(u32 magic, u8* pData) {
-        u32 numBlocks = *reinterpret_cast< u32* >(pData + 0xc);
+        u32 numBlocks = readBytes< u32 >(pData + 0xc);
         pData += 0x20;
 
         for (u32 i = 0; i < numBlocks; i++) {
-            u32 blockMagic = *reinterpret_cast< u32* >(pData);
+            u32 blockMagic = readBytes< u32 >(pData);
 
             if (blockMagic == magic) {
                 return pData;
             }
 
-            u32 blockSize = *reinterpret_cast< u32* >(pData + 4);
+            u32 blockSize = readBytes< u32 >(pData + 4);
             pData += blockSize;
         }
 
@@ -63,8 +64,8 @@ bool MessageData::getMessageDirect(TalkMessageInfo* pMessageInfo, const char* pM
 
 bool MessageData::getMessage(TalkMessageInfo* pMessageInfo, u16, u16 infoToolIndex) const {
     u8* pInfoTool = getMessageInfoTool(infoToolIndex);
-    pMessageInfo->_0 = reinterpret_cast< u8* >(mDataBlock + 1) + *reinterpret_cast< u32* >(pInfoTool);
-    pMessageInfo->mCameraSetID = *reinterpret_cast< u16* >(pInfoTool + 4);
+    pMessageInfo->_0 = reinterpret_cast< u8* >(mDataBlock + 1) + readBytes< u32 >(pInfoTool);
+    pMessageInfo->mCameraSetID = readBytes< u16 >(pInfoTool + 4);
     pMessageInfo->_6 = *(pInfoTool + 6);
     pMessageInfo->mCameraType = *(pInfoTool + 7);
     pMessageInfo->mTalkType = *(pInfoTool + 8);

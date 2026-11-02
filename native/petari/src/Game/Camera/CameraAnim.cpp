@@ -3,6 +3,7 @@
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
 #include "Game/Util/MathUtil.hpp"
+#include "Game/Util/ByteView.hpp"
 
 void CamAnmDataAccessor::set(void* pInfo, void* pValues) {
     mInfo = reinterpret_cast< CanmFrameInfo* >(pInfo);
@@ -244,7 +245,7 @@ bool CameraAnim::loadBin(u8* pFile) {
 
     u32 valueOffset = pHeader->mValueOffset;
 
-    mNrValues = *(reinterpret_cast< u32* >(&pEntry[valueOffset])) / sizeof(f32);
+    mNrValues = readBytes< u32 >(&pEntry[valueOffset]) / sizeof(f32);
 
     mFileDataAccessor->set(pEntry, pEntry + valueOffset + 4);
 

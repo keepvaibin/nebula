@@ -135,7 +135,7 @@ struct JAISoundStatus_ {
     void init() {
         _0.value = 0;
         _1.value = 0;
-        *((u16*)&mState) = 0;
+        __builtin_memset(&mState, 0, sizeof(mState));
         mUserData = 0;
     }
 

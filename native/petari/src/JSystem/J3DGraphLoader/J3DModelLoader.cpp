@@ -12,6 +12,7 @@
 #include "JSystem/JUtility/JUTNameTab.hpp"
 #include <stdint.h>
 #include <cstring>
+#include "Game/Util/ByteView.hpp"
 
 namespace {
     // A material's ID (mDiffFlag): packets with the same ID share their material state (J3DMatPacket::isSame). The
@@ -43,7 +44,7 @@ static J3DModelData* withCurvedSurfaces(J3DModelData* pModelData) {
 
 // A model as the disc has it ("J3D2" read in host order): the importer cooks every one.
 static void panicIfNotCooked(const void* pData) {
-    if (*(const u32*)pData == '2D3J') {
+    if (readBytes< u32 >(pData) == '2D3J') {
         NEBULA_PANIC("J3DModelLoader: a model not in host order (the importer cooks it)");
     }
 }
@@ -53,10 +54,10 @@ J3DModelData* J3DModelLoaderDataBase::load(void const* i_data, u32 i_flags) {
         return NULL;
     }
     panicIfNotCooked(i_data);
-    if (*(const u32*)i_data == 'J3D1' && *(const u32*)((uintptr_t)i_data + 4) == 'bmd1') {
+    if (readBytes< u32 >(i_data) == 'J3D1' && readBytes< u32 >(static_cast< const u8* >(i_data) + 4) == 'bmd1') {
         return NULL;
     }
-    if (*(const u32*)i_data == 'J3D2' && *(const u32*)((uintptr_t)i_data + 4) == 'bmd3') {
+    if (readBytes< u32 >(i_data) == 'J3D2' && readBytes< u32 >(static_cast< const u8* >(i_data) + 4) == 'bmd3') {
         J3DModelLoader_v26 loader;
         return withCurvedSurfaces(loader.load(i_data, i_flags));
     }
