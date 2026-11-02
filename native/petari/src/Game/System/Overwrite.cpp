@@ -1006,16 +1006,8 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
             JASTrack::TChannelMgr::newMemPool(field_0x20);
         }
 
-        JASDvd::createThread(dvdThreadPriority_, 0x100, 0x8000);
+        JASDvd::createThread(0x100, 0x8000);
         JASDriver::startAudio();
-        JKRThreadSwitch* pThreadSwitch = JKRThreadSwitch::getManager();
-        if (pThreadSwitch != nullptr) {
-            if (dvdThreadId_ >= 0) {
-                pThreadSwitch->enter(JASDvd::getThreadPointer(), dvdThreadId_);
-            }
-
-        }
-
         JASDriver::setDSPLevel(dspLevel_);
         JASAramStream::initSystem(aramBlockSize_, aramChannelNum_);
     }

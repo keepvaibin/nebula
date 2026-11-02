@@ -12,10 +12,6 @@ public:
     /* 0x00 */ u32 audioMemory_;
     /* 0x04 */ u32 audioMemSize_;
     /* 0x08 */ int heapSize_;
-    /* 0x0C */ int dvdThreadPriority_;
-    /* 0x10 */ int audioThreadPriority_;
-    /* 0x14 */ int dvdThreadId_;
-    /* 0x18 */ int audioThreadId_;
     /* 0x1C */ int field_0x1c;
     /* 0x20 */ int field_0x20;
     /* 0x24 */ int aramBlockSize_;

@@ -63,10 +63,6 @@ namespace {
         initJAS.audioMemory_ = AudParams::aramAddr;
         initJAS.audioMemSize_ = AudParams::aramSize;
         initJAS.heapSize_ = AudParams::workAreaSize;
-        initJAS.dvdThreadPriority_ = AudParams::dvdThreadPriority;
-        initJAS.audioThreadPriority_ = AudParams::audioThreadPriority;
-        initJAS.dvdThreadId_ = AudParams::dvdThreadSwitchID;
-        initJAS.audioThreadId_ = AudParams::audioThreadSwitchID;
         initJAS.field_0x1c = AudParams::numFreeTracks;
         initJAS.field_0x20 = AudParams::numFreeTrackChannels;
         initJAS.aramBlockSize_ = AudParams::streamBlockSize;

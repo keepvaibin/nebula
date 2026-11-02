@@ -21,7 +21,7 @@ private:
 public:
     typedef JASMemChunkPool< 1024, JASThreadingModel::ObjectLevelLockable > ThreadMemPool;
 
-    JASTaskThread(int priority, int msgCount, u32 stackSize);
+    JASTaskThread(int msgCount, u32 stackSize);
     void* allocCallStack(JASThreadCallback callback, void* msg);
     void* allocCallStack(JASThreadCallback callback, const void* msg, u32 msgSize);
     int sendCmdMsg(JASThreadCallback callback, void* msg);

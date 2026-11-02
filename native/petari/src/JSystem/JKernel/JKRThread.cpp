@@ -3,22 +3,22 @@
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include "JSystem/JUtility/TColor.hpp"
 
-JKRThread::JKRThread(u32 stack_size, int message_count, int param_3) : mThreadListLink(this) {
+JKRThread::JKRThread(u32 stack_size, int message_count) : mThreadListLink(this) {
     JKRHeap* heap = JKRHeap::findFromRoot(this);
     if (heap == nullptr) {
         heap = JKRGetSystemHeap();
     }
 
-    setCommon_heapSpecified(heap, stack_size, param_3);
+    setCommon_heapSpecified(heap, stack_size);
     setCommon_mesgQueue(mHeap, message_count);
 }
 
-JKRThread::JKRThread(JKRHeap* pHeap, u32 stack_size, int message_count, int param_4) : mThreadListLink(this) {
+JKRThread::JKRThread(JKRHeap* pHeap, u32 stack_size, int message_count) : mThreadListLink(this) {
     if (pHeap == nullptr) {
         pHeap = JKRGetCurrentHeap();
     }
 
-    setCommon_heapSpecified(pHeap, stack_size, param_4);
+    setCommon_heapSpecified(pHeap, stack_size);
     setCommon_mesgQueue(mHeap, message_count);
 }
 
@@ -47,7 +47,7 @@ void JKRThread::setCommon_mesgQueue(JKRHeap* pHeap, int msgCount) {
     mCurrentHeapError = 0;
 }
 
-void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size, int param_3) {
+void JKRThread::setCommon_heapSpecified(JKRHeap* pHeap, u32 stack_size) {
     mStartCurrentHeap = JKRHeap::sCurrentHeap;
     mHeap = pHeap;
     mStackSize = stack_size & 0xffffffe0;

@@ -20,8 +20,6 @@ namespace AudParams {
     const int aramAddr = nullptr;
     const int aramSize = 0xE00000;
     const int workAreaSize = 0x1000;
-    const int audioThreadPriority = 2;
-    const int dvdThreadPriority = 5;
     const int dvdThreadSwitchID = -1;
     const int audioThreadSwitchID = -1;
     const int numFreeTracks = 200;

@@ -15,7 +15,7 @@ struct RequestFileInfo {
 
 class FileLoaderThread : public GameThread {
 public:
-    FileLoaderThread(int, int, JKRHeap*);
+    FileLoaderThread(int, JKRHeap*);
 
     virtual void* run();
 

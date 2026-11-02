@@ -8,8 +8,8 @@
 #include <JSystem/JKernel/JKRUnitHeap.hpp>
 #include "JSystem/JUtility/JUTException.hpp"
 
-FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, int priority, const char* pName)
-    : mFunc(pFunc), mStarterHeap(JKRHeap::sCurrentHeap), mPriority(priority), mName(pName), mIsEnd(false) {
+FunctionAsyncExecInfo::FunctionAsyncExecInfo(MR::FunctorBase* pFunc, const char* pName)
+    : mFunc(pFunc), mStarterHeap(JKRHeap::sCurrentHeap), mName(pName), mIsEnd(false) {
     mQueue.init(&mMessage, 1);
 }
 
@@ -24,7 +24,7 @@ void FunctionAsyncExecInfo::execute() {
 }
 
 FunctionAsyncExecutorThread::FunctionAsyncExecutorThread(JKRHeap* pHeap)
-    : GameThread(0x10000, 4, 1, pHeap), mIsSuspended(false), mName(nullptr) {
+    : GameThread(0x10000, 4, pHeap), mIsSuspended(false), mName(nullptr) {
 }
 
 void* FunctionAsyncExecutorThread::run() {
@@ -83,8 +83,8 @@ void FunctionAsyncExecutor::update() {
     mMainThreadExec->update();
 }
 
-void FunctionAsyncExecutor::start(const MR::FunctorBase& rFunc, int priority, const char* pName) {
-    FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, priority, pName);
+void FunctionAsyncExecutor::start(const MR::FunctorBase& rFunc, const char* pName) {
+    FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, pName);
     FunctionAsyncExecutorThread* thread = getSuspendThread();
     thread->mQueue.send(info, false);
 }
@@ -97,7 +97,7 @@ bool FunctionAsyncExecutor::startOnMainThread(const MR::FunctorBase& rFunc, cons
         rFunc();
         return false;
     } else {
-        FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, 0, pName);
+        FunctionAsyncExecInfo* info = createAndAddExecInfo(rFunc, pName);
         mMainThreadExec->mQueue.send(info, false);
         return true;
     }
@@ -164,9 +164,9 @@ bool FunctionAsyncExecutor::isEnd(const char* pName) const {
     return info->mIsEnd;
 }
 
-FunctionAsyncExecInfo* FunctionAsyncExecutor::createAndAddExecInfo(const MR::FunctorBase& rFunc, int priority, const char* pName) {
+FunctionAsyncExecInfo* FunctionAsyncExecutor::createAndAddExecInfo(const MR::FunctorBase& rFunc, const char* pName) {
     MR::FunctorBase* func = rFunc.clone(_414);
-    FunctionAsyncExecInfo* info = new (_410, 0) FunctionAsyncExecInfo(func, priority, pName);
+    FunctionAsyncExecInfo* info = new (_410, 0) FunctionAsyncExecInfo(func, pName);
 
     (MR::MutexHolder< 2 >::sMutex).lock();
     mHolders.push_back(info);

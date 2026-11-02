@@ -120,7 +120,7 @@ void GameSystem::startToLoadSystemArchive() {
 
 void GameSystem::exeInitializeAudio() {
     if (MR::isFirstStep(this)) {
-        MR::startFunctionAsyncExecute(MR::Functor(mObjHolder, &GameSystemObjHolder::createAudioSystem), 14, INIT_AUDIO_KEY);
+        MR::startFunctionAsyncExecute(MR::Functor(mObjHolder, &GameSystemObjHolder::createAudioSystem), INIT_AUDIO_KEY);
     }
 
     updateSceneController();
