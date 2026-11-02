@@ -1771,10 +1771,11 @@ int main(int argc, char** argv) {
         std::cout << format_controls_settings(default_controls_config());
         return 0;
     }
+    const bool base_only = argc > 1 && std::strcmp(argv[1], "--base") == 0;
     test_names_round_trip();
     test_ini_round_trip();
     test_evaluation();
-    test_chord_and_capture();
+    if (!base_only) test_chord_and_capture();
     test_switch_pro_decoding();
     test_joycons();
     time_joycon_reports();
@@ -1800,6 +1801,6 @@ int main(int argc, char** argv) {
         std::cerr << g_failures << " controls test(s) failed\n";
         return 1;
     }
-    std::cout << "Controls tests passed\n";
+    std::cout << (base_only ? "Controls base tests passed\n" : "Controls tests passed\n");
     return 0;
 }
