@@ -401,7 +401,7 @@ namespace {
         if (image != sBatchImage) {
             JPAParticleBatch::flush();
             sBatchImage = image;
-            work->mpResMgr->load(image, GPU_TEXMAP0);
+            work->mpResMgr->use(image, 0);
         }
     }
 }  // namespace
