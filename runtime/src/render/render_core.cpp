@@ -5228,7 +5228,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
             ? std::chrono::steady_clock::now()
             : std::chrono::steady_clock::time_point{};
         const VertexConstants& vs_c = cpu_vs_constants_.update(
-            matrices_, draw_state_, dirty, renderer_.scene_target_scale(), frame_bindings_dirty_);
+            matrices_, draw_state_, dirty, RasterScale{renderer_.frame_map().sx, renderer_.frame_map().sy}, frame_bindings_dirty_);
         UploadRing::Allocation vs_alloc =
             renderer_.constant_ring().allocate(sizeof(VertexConstants), 256u);
         std::memcpy(vs_alloc.cpu, &vs_c, sizeof(vs_c));

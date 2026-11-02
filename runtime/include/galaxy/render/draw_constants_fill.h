@@ -86,7 +86,7 @@ inline void refresh_vs_inline_matrices(const DrawMatrices& state, const NativeDr
 inline void fill_vs_constants(
     const DrawMatrices& state,
     const NativeDrawState& draw,
-    unsigned scene_target_scale,
+    RasterScale scale,
     VertexConstants& out) {
     std::memset(&out, 0, sizeof(out));
 
@@ -127,7 +127,7 @@ inline void fill_vs_constants(
         values.point_coords = static_cast<std::uint8_t>(values.point_coords | (draw.coord[i].point_offset ? 1u : 0u) << i);
     }
     const LinePointRasterParams line_point =
-        make_line_point_raster_params(values, draw.viewport[2], draw.viewport[3], scene_target_scale, 640u, 456u);
+        make_line_point_raster_params(values, draw.viewport[2], draw.viewport[3], scale, 640u, 456u);
     out.line_point_raster[0] = line_point.viewport_width_pixels;
     out.line_point_raster[1] = line_point.viewport_height_pixels;
     out.line_point_raster[2] = line_point.line_width_pixels;
@@ -176,7 +176,7 @@ inline void decode_octahedral(std::uint32_t word, float out[3]) noexcept {
 
 struct VsConstantsCpuCache {
     VertexConstants constants{};
-    unsigned scene_target_scale = 0u;
+    RasterScale raster_scale{0.0f, 0.0f};
     bool valid = false;
     // The scene's sky up (VertexConstants::sky_up, sky_up_known), kept across fills.
     std::uint32_t sky_up = 0u;
@@ -189,15 +189,15 @@ struct VsConstantsCpuCache {
     std::uint32_t per_vertex = 0u;
 
     const VertexConstants& update(const DrawMatrices& state, const NativeDrawState& draw, std::uint32_t dirty,
-        unsigned current_scale, bool frame_bindings_dirty) {
+        RasterScale current_scale, bool frame_bindings_dirty) {
         // When only the matrices changed, refresh the inline matrices and keep the rest of the last full fill;
         // any other change, dirty frame bindings or a new scale refill everything.
-        if (valid && !frame_bindings_dirty && scene_target_scale == current_scale &&
+        if (valid && !frame_bindings_dirty && raster_scale.x == current_scale.x && raster_scale.y == current_scale.y &&
             dirty == kStateDirtyMatrices) {
             refresh_vs_inline_matrices(state, draw, constants);
         } else {
             fill_vs_constants(state, draw, current_scale, constants);
-            scene_target_scale = current_scale;
+            raster_scale = current_scale;
             valid = true;
         }
         constants.sky_up = sky_up;
