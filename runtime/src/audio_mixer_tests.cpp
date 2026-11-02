@@ -154,42 +154,6 @@ void test_resampled_sine() {
     expect(energy - tone_energy < tone_energy * 1e-3, "no other content", (energy - tone_energy) / tone_energy);
 }
 
-// ADPCM: the record's bookkeeping (next block, samples left, leftover in the block) as the stream player reads it.
-void test_adpcm_bookkeeping() {
-    Game game;
-    for (std::uint32_t b = 0; b < 64u; ++b) {
-        game.sound[b * 9u] = std::byte{0x00};  // scale 0, predictor 0: samples are the nibbles
-        for (std::uint32_t k = 1; k < 9u; ++k) {
-            game.sound[b * 9u + k] = std::byte{0x11};
-        }
-    }
-    NebulaVoice& v = game.voices[0];
-    v = {};
-    v.active = 1u;
-    v.starting = 1u;
-    v.pitch = 0x1000u;
-    v.format = NEBULA_AUDIO_ADPCM4;
-    v.wave = reinterpret_cast<const std::uint8_t*>(game.sound.data());
-    v.end = 1000u;
-    v.leftover = 16u;
-    v.sends[0] = {NEBULA_AUDIO_BUS_LEFT, 32767, 32767, 0u};
-    AudioMixer mixer(48000u);
-    game.attach(mixer);
-    (void)run(mixer, 1u);
-    // 80 samples: 5 blocks.
-    expect(v.address == 45u, "next block (bytes from the wave)", v.address);
-    expect(v.left == 1000u - 80u, "samples left", v.left);
-    expect(v.leftover == 0u, "no leftover", v.leftover);
-    v.pitch = 0x0800u;  // 40 samples: two blocks and a half
-    (void)run(mixer, 1u);
-    expect(v.address == 45u + 27u, "three more blocks", v.address);
-    expect(v.leftover == 8u, "half a block left", v.leftover);
-    expect(v.left == 1000u - 80u - 48u, "samples left after a partial block", v.left);
-    (void)run(mixer, 30u);
-    expect(v.finished == 1u, "finishes at the end", v.finished);
-}
-
-// A looping PCM voice plays on from its loop start.
 void test_pcm_loop() {
     Game game;
     for (std::uint32_t i = 0; i < 100u; ++i) {
@@ -461,7 +425,6 @@ int main() {
     test_ramp();
     test_kernel();
     test_resampled_sine();
-    test_adpcm_bookkeeping();
     test_pcm_loop();
     test_effect_delay();
     test_panner();

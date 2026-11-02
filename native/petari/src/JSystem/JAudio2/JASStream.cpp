@@ -242,8 +242,6 @@ void JASStream::channelStart() {
         wave_info.mSampleLoopStart = mHeader.loop_start;
         wave_info.mSampleLoopEnd = mHeader.loop_end;
         wave_info.mSampleCount = mHeader.loop_end;
-        wave_info.mpLastSample = 0;
-        wave_info.mpPenultSample = 0;
         static u32 const one = 1;
         wave_info._24 = &one;
         JASChannel* jc = new JASChannel(channelCallback, this);

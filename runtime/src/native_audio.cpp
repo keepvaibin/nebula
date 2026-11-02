@@ -456,7 +456,7 @@ std::string NativeGameAudio::stats_line() const {
     const galaxy::audio::AudioMixerStats& s = state_->mixer->stats();
     std::ostringstream line;
     line << "rate=" << state_->mixer->rate() << " frames=" << s.frames << " subframes=" << s.subframes
-         << " voice-renders=" << s.voice_renders << " adpcm-blocks=" << s.adpcm_blocks << " pcm=" << s.pcm_renders
+         << " voice-renders=" << s.voice_renders << " pcm=" << s.pcm_renders
          << " oscillators=" << s.oscillator_renders << " noise=" << s.noise_renders << " fir=" << s.fir_renders
          << " iir=" << s.iir_renders << " panner=" << s.panner_renders << " effect-subframes=" << s.effect_subframes
          << " stream-frames=" << s.stream_frames << " unresolved=" << s.unresolved_reads

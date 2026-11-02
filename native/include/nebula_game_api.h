@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 90u
+#define NEBULA_GAME_API_VERSION 91u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
@@ -45,12 +45,9 @@ enum {
     NEBULA_AUDIO_BUSES
 };
 
-/* A voice's source (NebulaVoice.format). Wave data stays as on the disc (big-endian PCM16). */
+/* A voice's source (NebulaVoice.format). Wave data is PCM16 in host order (the importer decodes the disc's forms). */
 enum {
     NEBULA_AUDIO_SILENT = 0,
-    NEBULA_AUDIO_ADPCM4,     /* 9-byte blocks of 16 samples */
-    NEBULA_AUDIO_ADPCM2,     /* 5-byte blocks of 16 samples */
-    NEBULA_AUDIO_PCM8,
     NEBULA_AUDIO_PCM16,
     NEBULA_AUDIO_OSCILLATOR, /* waveform `oscillator`, no wave data */
 };
@@ -96,14 +93,12 @@ typedef struct NebulaVoice {
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
     const uint8_t* wave;     /* the source's first byte, in the sound memory (voices_setup) or before wave_end */
     const uint8_t* wave_end; /* the end of a source outside the sound memory; else null */
-    uint32_t restart;        /* PCM: the sample it starts at */
+    uint32_t restart;        /* the sample it starts at */
     uint32_t loop_start;     /* samples */
     uint32_t end;            /* samples: the end, or the loop's end when loop is set */
     uint16_t loop;           /* nonzero: plays on from loop_start after end */
-    int16_t loop_history[2]; /* ADPCM: the decoder's previous two samples at loop_start, newest first */
     /* The position, advanced by the mixer each subframe (the stream player reads and moves it): */
-    uint16_t leftover;       /* ADPCM: decoded samples of the current block still to play */
-    uint32_t address;        /* the next ADPCM block or PCM sample, in bytes from wave */
+    uint32_t address;        /* the next sample, in bytes from wave */
     uint32_t left;           /* samples before end */
     uint16_t filter;         /* FIR taps (bits 0-4; coefficients past the eighth are zero), IIR on (bit 5) */
     /* FIR: y[n] = sum fir[k] x[n - taps + k], k < taps; IIR: y[n] = iir[0] x[n] + iir[1] x[n-1] + iir[2] y[n-1] +

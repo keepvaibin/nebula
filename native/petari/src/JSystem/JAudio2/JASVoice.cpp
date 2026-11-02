@@ -128,18 +128,13 @@ bool JASVoice::isFinish() const {
     return finished != 0;
 }
 
-// `wave_data`: the wave's data in the sound memory; `skip`: samples to start into it (1: from its loop start).
+// `wave_data`: the wave's data in the sound memory, PCM16; `skip`: samples to start into it (1: from its loop start). A voice nobody
+// names follows its wave: a wave that was PCM16 on the disc is music (JASVoiceSlot::nameSound).
 void JASVoice::setWaveInfo(JASWaveInfo const& waveInfo, const u8* wave_data, u32 skip) {
-    static const u16 FORMATS[8] = {
-        NEBULA_AUDIO_ADPCM4, NEBULA_AUDIO_ADPCM2, NEBULA_AUDIO_PCM8,   NEBULA_AUDIO_PCM16,
-        NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT, NEBULA_AUDIO_SILENT,
-    };
-    static const u8 BLOCK_SAMPLES[8] = {16, 16, 1, 1, 1, 16, 16, 1};
-    static const u8 BLOCK_BYTES[8] = {9, 5, 1, 2, 0, 0, 0, 0};
     const u8 kind = waveInfo.mFormat & 7;
     wave = wave_data;
-    leftover = BLOCK_SAMPLES[kind];
-    format = FORMATS[kind];
+    format = kind < 4 ? NEBULA_AUDIO_PCM16 : NEBULA_AUDIO_SILENT;
+    category = kind == 3 ? NEBULA_SOUND_MUSIC : NEBULA_SOUND_EFFECT;
     restart = 0;
     if (format == NEBULA_AUDIO_SILENT) {
         return;
@@ -151,25 +146,18 @@ void JASVoice::setWaveInfo(JASWaveInfo const& waveInfo, const u8* wave_data, u32
         }
         loop_start = waveInfo.mSampleLoopStart;
         end = waveInfo.mSampleLoopEnd;
-        loop_history[0] = waveInfo.mpLastSample;
-        loop_history[1] = waveInfo.mpPenultSample;
     } else {
         end = waveInfo.mSampleCount;
     }
     if (skip != 0 && end > skip) {
         restart = skip;
-        if (format == NEBULA_AUDIO_ADPCM4 || format == NEBULA_AUDIO_ADPCM2) {
-            wave += skip * BLOCK_BYTES[kind] >> 4;
-            loop_start -= skip;
-            end -= skip;
-        }
     }
 }
 
 void JASVoice::setOscInfo(u32 waveform) {
     wave = nullptr;
-    leftover = 16;
     format = NEBULA_AUDIO_OSCILLATOR;
+    category = NEBULA_SOUND_EFFECT;
     oscillator = waveform;
 }
 
