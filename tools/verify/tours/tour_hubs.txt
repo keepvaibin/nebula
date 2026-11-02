@@ -1,0 +1,7 @@
+AstroGalaxy 0
+LibraryRoom 1
+PeachCastleGardenGalaxy 1
+PeachCastleFinalGalaxy 1
+EpilogueDemoStage 1
+FileSelect 1
+AstroDome 1
