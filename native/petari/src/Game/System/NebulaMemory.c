@@ -11,7 +11,7 @@
 #include <sys/mman.h>
 #endif
 
-enum { kSize = 0x20000000u /* 512 MB */ };
+enum { kSize = 0x18100000u /* 385 MB */ };
 
 static uint8_t* sMemory;
 

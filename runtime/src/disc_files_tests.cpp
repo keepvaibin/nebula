@@ -4,6 +4,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <utility>
@@ -148,6 +150,21 @@ int main() {
     std::uint8_t read[4]{};
     passed &= expect(table.read(0, 4, read) && std::memcmp(read, "NBST", 4) == 0 && !table.read(bytes.size(), 1, read),
                      "reads inside the store only");
+    const std::uint8_t* mapped = table.map(0, 4);
+    passed &= expect(mapped != nullptr && std::memcmp(mapped, "NBST", 4) == 0 && table.map(bytes.size(), 1) == nullptr &&
+                         table.map(bytes.size(), 0) != nullptr,
+                     "a store in memory maps inside itself only");
+    // From a file: every byte where the store says it is, and the mapping gone with the store.
+    const auto path = std::filesystem::temp_directory_path() / "nebula_disc_files_test.pak";
+    {
+        std::ofstream(path, std::ios::binary).write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+        AssetStore from_file;
+        passed &= expect(from_file.open(path), "the store opens from a file");
+        mapped = from_file.map(0, bytes.size());
+        passed &= expect(mapped != nullptr && std::memcmp(mapped, bytes.data(), bytes.size()) == 0, "the file's bytes are mapped");
+        passed &= expect(from_file.map(bytes.size() - 1, 2) == nullptr, "a file maps inside itself only");
+    }
+    std::filesystem::remove(path);
 
     if (!passed) {
         return 1;
