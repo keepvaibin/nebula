@@ -6,7 +6,7 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "Game/System/NebulaText.hpp"
 #include <cstring>
-#include <JSystem/JKernel/JKRArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 
 #define SYSTEMMESSAGE_ARC "/Memory/SystemMessage.arc"
 #define MESSAGE_ARC "/MessageData/Message.arc"
@@ -134,12 +134,12 @@ MessageData* MessageSystem::getSceneMessageData() {
 
 MessageData::MessageData(const char* pArchiveName)
     : mIDTable(nullptr), mInfoBlock(nullptr), mDataBlock(nullptr), _C(0), mFlowBlock(nullptr), _14(nullptr), _18(nullptr), mFLI1Block(nullptr) {
-    JKRArchive* pArchive = nullptr;
+    AssetFolder* pArchive = nullptr;
     NebulaArena* pHeap = nullptr;
     MR::getMountedArchiveAndHeap(pArchiveName, &pArchive, &pHeap);
 
     u8* msgData = (u8*)pArchive->getResource("Message.bmg");
-    u8* mapData = (u8*)pArchive->getResource(QUESTIONMARK_MAGIC, "MessageId.tbl");
+    u8* mapData = (u8*)pArchive->getResource("MessageId.tbl");
 
     mIDTable = new JMapInfo();
     mIDTable->attach(mapData);

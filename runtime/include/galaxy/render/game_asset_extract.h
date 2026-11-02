@@ -13,20 +13,6 @@
 
 namespace galaxy::render {
 
-// A named file in a RARC archive.
-struct RarcFile {
-    std::string name;
-    std::span<const std::byte> data;
-};
-
-// Every regular file of a RARC archive. The spans alias `data`, which must outlive the result.
-[[nodiscard]] std::vector<RarcFile> rarc_list_files(
-    std::span<const std::byte> data);
-
-// The file of that exact (case-sensitive) name in a RARC archive, or std::nullopt.
-[[nodiscard]] std::optional<std::span<const std::byte>> rarc_find_file(
-    std::span<const std::byte> data, std::string_view name);
-
 // A texture's first level: RGBA8, top-left origin.
 struct DecodedTexture {
     unsigned width{};
@@ -39,11 +25,11 @@ struct DecodedTexture {
 [[nodiscard]] std::optional<DecodedTexture> tpl_texture(
     std::span<const std::byte> data) noexcept;
 
-// Reads <content_root>/<arc_relative_path> and the named texture from the RARC. std::nullopt on any failure (missing
-// file or entry, content packed before cooking, over 64 MiB, allocation or I/O error); callers then draw solid colour.
+// The named texture below the folder `folder` ("LayoutData/FileSelect.arc") of <content_root>/game.pak. std::nullopt on any
+// failure; callers then draw without it.
 [[nodiscard]] std::optional<DecodedTexture> load_game_texture(
     const std::string& content_root_utf8,
-    std::string_view arc_relative_path,
+    std::string_view folder,
     std::string_view texture_entry_name) noexcept;
 
 }  // namespace galaxy::render

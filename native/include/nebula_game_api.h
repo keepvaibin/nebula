@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 105u
+#define NEBULA_GAME_API_VERSION 106u
 
 typedef struct NebulaHostThread NebulaHostThread;
 
@@ -425,11 +425,13 @@ typedef struct NebulaShapeGeometry {
 
 /* A file or folder of the asset store. */
 typedef struct NebulaAssetEntry {
-    int32_t index;     /* in the file table; 0 is the root folder */
-    uint32_t length;   /* a file's length in bytes; 0 for a folder */
+    int32_t index;      /* in the file table; 0 is the root folder */
+    uint32_t length;    /* a file's length in bytes; a folder's, from its first file to its last one's end */
+    uint64_t position;  /* the first byte in the store */
+    uint32_t children;  /* a folder's entries */
     uint8_t folder;
     uint8_t reserved[3];
-    const char* name;  /* valid for the process's life */
+    const char* name;   /* valid for the process's life */
 } NebulaAssetEntry;
 
 /* The settings the game reads from the player's system (system_setting). */

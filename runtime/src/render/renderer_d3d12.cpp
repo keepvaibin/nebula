@@ -2831,7 +2831,7 @@ void RendererD3D12::ensure_native_settings_corner_texture_loaded() {
         return;
     }
     const auto tex = galaxy::render::load_game_texture(
-        host_window::native_settings_content_root, "files\\LayoutData\\FileSelect.arc",
+        host_window::native_settings_content_root, "LayoutData/FileSelect.arc",
         "myfileselwinframe.tpl");
     if (!tex.has_value() || tex->width == 0 || tex->height == 0) {
         return;

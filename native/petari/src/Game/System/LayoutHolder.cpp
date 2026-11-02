@@ -1,7 +1,6 @@
 #include "Game/System/LayoutHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRArchive.hpp>
-#include <JSystem/JKernel/JKRFileFinder.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <cstdio>
 #include <cstring>
 
@@ -24,7 +23,7 @@ namespace {
     };
 };  // namespace
 
-LayoutHolder::LayoutHolder(JKRArchive& rArchive) : nw4r::lyt::ResourceAccessor(), mArchive(&rArchive) {
+LayoutHolder::LayoutHolder(AssetFolder& rArchive) : nw4r::lyt::ResourceAccessor(), mArchive(&rArchive) {
     initializeArc();
 }
 
@@ -124,22 +123,14 @@ void LayoutHolder::initializeArc() {
         mResOther.newFileInfoTable(resCount);
     }
 
-    mount(nullptr);
-}
-
-JKRArcFinder* LayoutHolder::getFileFinder(const char* pRoot) {
-    if (pRoot == nullptr) {
-        return mArchive->getFirstFile("/");
-    }
-
-    return mArchive->getFirstFile(pRoot);
+    mount(mArchive->getEntry());
 }
 
 u32 LayoutHolder::initEachResTable(ResTable* pResTable, const char* const* pExtensionTable) {
     u32 resCount = 0;
 
     for (s32 i = 0; pExtensionTable[i] != nullptr; i++) {
-        resCount += count(pExtensionTable[i], nullptr);
+        resCount += count(pExtensionTable[i], mArchive->getEntry());
     }
 
     if (resCount > 0) {
@@ -149,52 +140,33 @@ u32 LayoutHolder::initEachResTable(ResTable* pResTable, const char* const* pExte
     return resCount;
 }
 
-u32 LayoutHolder::count(const char* pExtension, const char* pRoot) {
+u32 LayoutHolder::count(const char* pExtension, s32 folder) {
     u32 resCount = 0;
-    JKRArcFinder* pFinder = getFileFinder(pRoot);
+    AssetFolder::Item item;
 
-    while (pFinder->mHasMoreFiles) {
-        if (pFinder->mFileIsFolder) {
-            if (pFinder->mName[0] != '.') {
-                char path[128];
-                nebula_sprintf(path, "%s%s%s", pRoot, "/", pFinder->mName);
-                resCount += count(pExtension, path);
-            }
-        } else {
-            if (pExtension == nullptr || strstr(pFinder->mName, pExtension) != nullptr) {
-                resCount++;
-            }
+    for (u32 i = 0; mArchive->getItem(folder, i, &item); i++) {
+        if (item.mIsFolder) {
+            resCount += count(pExtension, item.mEntry);
+        } else if (pExtension == nullptr || strstr(item.mName, pExtension) != nullptr) {
+            resCount++;
         }
-
-        pFinder->findNextFile();
     }
 
-    delete pFinder;
     return resCount;
 }
 
-void LayoutHolder::mount(char* pRoot) {
-    JKRFileFinder* pFinder = getFileFinder(pRoot);
+void LayoutHolder::mount(s32 folder) {
+    AssetFolder::Item item;
 
-    while (pFinder->mHasMoreFiles) {
-        if (pFinder->mFileIsFolder) {
-            if (pFinder->mName[0] != '.') {
-                char path[128];
-                nebula_snprintf(path, 128, "%s/%s", pRoot, pFinder->mName);
-                mount(path);
-            }
+    for (u32 i = 0; mArchive->getItem(folder, i, &item); i++) {
+        if (item.mIsFolder) {
+            mount(item.mEntry);
         } else {
-            u32 fileID = mArchive->getFileAttribute(pFinder->mFileID);
-            ResFileInfo* pInfo = createAndRegisterObject(pFinder->mName, mArchive->getResource(pFinder->mFileID));
-            pInfo->_8 = mArchive->getResource(pFinder->mFileID);
-            pInfo->_4 = mArchive->getResSize(pInfo->_8);
-            pInfo->_C = pFinder->mFileID;
+            ResFileInfo* pInfo = createAndRegisterObject(item.mName, item.mData);
+            pInfo->_8 = item.mData;
+            pInfo->_4 = item.mSize;
         }
-
-        pFinder->findNextFile();
     }
-
-    delete pFinder;
 }
 
 ResFileInfo* LayoutHolder::createAndRegisterObject(const char* pName, void* pResource) {

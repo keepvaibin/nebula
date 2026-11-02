@@ -223,7 +223,7 @@ namespace MR {
         return ::cInitializeStartIdInfo;
     }
 
-    JKRMemArchive* getStageArchive(const char* pStageName) {
+    AssetFolder* getStageArchive(const char* pStageName) {
         char archiveName[256];
         StageFileLoader::makeStageArchiveName(archiveName, sizeof(archiveName), pStageName);
         return receiveArchive(archiveName);

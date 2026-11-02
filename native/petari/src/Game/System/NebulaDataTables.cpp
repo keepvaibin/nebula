@@ -65,10 +65,6 @@ namespace NebulaDataTables {
         return sTable;
     }
 
-    void* loadErrorMessageArchive(NebulaArena* pHeap) {
-        return load("ErrorMessageArchive.arc", true, pHeap);
-    }
-
     const GalaxyCometTimePaper* getCometTimePaper(s32 galaxy, const GalaxyCometTimePaper* pCompiled) {
         static const u8* sFile = load("GalaxyCometSchedules.bin", false);
         static GalaxyCometTimePaper sPapers[cCometTables][cCometPapersMax];

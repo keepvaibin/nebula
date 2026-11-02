@@ -4,7 +4,7 @@
 #include "Game/Util/Array.hpp"
 #include <JSystem/JGeometry.hpp>
 
-class JKRArchive;
+class AssetFolder;
 class JMapIdInfo;
 class PlacementInfoOrdered;
 
@@ -76,7 +76,7 @@ public:
     /* 0x3C */ JMapInfo* mObjNameTbl;
     /* 0x40 */ s32 mStageDataHolderCount;
     /* 0x44 */ StageDataHolder* mStageDataArray[0x18];
-    /* 0xA4 */ JKRArchive* mArchive;
+    /* 0xA4 */ AssetFolder* mArchive;
     /* 0xA8 */ const char* _A8;
     /* 0xAC */ TPos3f mPlacementMtx;
     /* 0xDC */ s32 mZoneID;

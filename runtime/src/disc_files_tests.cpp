@@ -49,11 +49,13 @@ std::vector<std::uint8_t> store_of(const std::vector<Item>& items) {
     std::string names(1, '\0');
     const std::uint64_t nodes = out.size();
     for (const Item& item : items) {
-        put<std::uint64_t>(out, item.position);
-        put<std::uint64_t>(out, item.size);
+        put<std::uint64_t>(out, item.folder ? 0u : item.position);
+        put<std::uint64_t>(out, item.folder ? 0u : item.size);
         put<std::uint32_t>(out, item.name.empty() ? 0u : static_cast<std::uint32_t>(names.size()));
         put<std::uint32_t>(out, item.parent);
         put<std::uint32_t>(out, item.folder ? 1u : 0u);
+        put<std::uint32_t>(out, item.folder ? static_cast<std::uint32_t>(item.position) : 0u);
+        put<std::uint32_t>(out, item.folder ? static_cast<std::uint32_t>(item.size) : 0u);
         put<std::uint32_t>(out, 0u);
         if (!item.name.empty()) {
             names += item.name;

@@ -2,16 +2,16 @@
 
 #include "Game/System/GameThreads.hpp"
 
-class JKRArchive;
+class AssetFolder;
 
 namespace JASResArcLoader {
 
     typedef void (*LoadCallback)(u32, uintptr_t);
 
     struct TLoadResInfo {
-        TLoadResInfo(JKRArchive* archive, u16 id, void* buffer, u32 size);
+        TLoadResInfo(AssetFolder* archive, u16 id, void* buffer, u32 size);
 
-        /* 0x0 */ JKRArchive* mArchive;
+        /* 0x0 */ AssetFolder* mArchive;
         /* 0x4 */ u16 mResID;
         /* 0x8 */ void* mBuffer;
         /* 0xC */ u32 mBufferSize;
@@ -20,9 +20,9 @@ namespace JASResArcLoader {
         /* 0x18 */ GameMessageQueue* mMsgQueue;
     };
 
-    u32 getResSize(JKRArchive const*, u16);
+    u32 getResSize(AssetFolder const*, u16);
     static void loadResourceCallback(void*);
-    int loadResourceAsync(JKRArchive*, u16, u8*, u32, void (*)(u32, uintptr_t), uintptr_t);
+    int loadResourceAsync(AssetFolder*, u16, u8*, u32, void (*)(u32, uintptr_t), uintptr_t);
 }  // namespace JASResArcLoader
 
 enum ResArcMessage {

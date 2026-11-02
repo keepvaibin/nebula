@@ -8,7 +8,7 @@ namespace nw4r {
     };  // namespace ut
 };  // namespace nw4r
 
-class JKRMemArchive;
+class AssetFolder;
 
 class GameSystemFontHolder {
 public:
@@ -19,8 +19,7 @@ public:
     void createFontFromEmbeddedData();
     void createFontFromFile();
 
-    /* 0x00 */ u8* _0;
-    /* 0x04 */ JKRMemArchive* _4;
+    /* 0x04 */ AssetFolder* _4;
     /* 0x08 */ nw4r::ut::ResFont* mEmbeddedMessageFont;
     /* 0x0C */ nw4r::ut::ResFont* mMessageFont;
     /* 0x10 */ nw4r::ut::ResFont* mPictureFont;

@@ -38,7 +38,7 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/JKernel/JKRMemArchive.hpp>
+#include "Game/System/AssetFolder.hpp"
 #include <nw4r/ut/ResFont.h>
 #include "Game/AudioLib/AudSystem.hpp"
 #include "Game/AudioLib/AudWrap.hpp"
@@ -474,7 +474,7 @@ void FileSelector::createMiiConfirmIcon() {
 
 #if (VERSION == RMGK01)
 void FileSelector::createMiiFont() {
-    JKRMemArchive* pArchive = MR::receiveArchive("/LayoutData/MiiFont.arc");
+    AssetFolder* pArchive = MR::receiveArchive("/LayoutData/MiiFont.arc");
     mFont = new nw4r::ut::ResFont();
     mFont->SetResource(pArchive->getResource("/MiiFont26.brfnt"));
     mFont->SetAlternateChar('?');

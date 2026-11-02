@@ -3,7 +3,7 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 
-class JKRMemArchive;
+class AssetFolder;
 class JMapIdInfo;
 class JMapInfo;
 class JMapInfoIter;
@@ -48,7 +48,7 @@ namespace MR {
     bool getMarioStartPose(s32 marioNo, TVec3f* pTrans, TVec3f* pRotate);
     s32 getCurrentStartZoneId();
     const JMapIdInfo& getInitializeStartIdInfo();
-    JKRMemArchive* getStageArchive(const char*);
+    AssetFolder* getStageArchive(const char*);
     s32 getGeneralPosNum();
     void getGeneralPosData(const char**, TVec3f*, TVec3f*, JMapLinkInfo**, int);
     s32 getChildObjNum(const JMapInfoIter&);

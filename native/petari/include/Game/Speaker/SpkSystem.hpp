@@ -10,7 +10,7 @@ class SpkSystem : JASGlobalInstance< SpkSystem > {
 public:
     SpkSystem(NebulaArena*);
 
-    void setResource(JKRArchive*, u16, u16);
+    void setResource(AssetFolder*, u16, u16);
     void framework();
     void startSound(s32, s32, SpkSoundHandle*);
     static void newSoundMemPool(s32);

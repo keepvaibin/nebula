@@ -13,7 +13,7 @@ SpkSystem::SpkSystem(NebulaArena* pHeap) : JASGlobalInstance(true), mData() {
     SpkSpeakerCtrl::setMixingBuffer(mMixBuffer);
 }
 
-void SpkSystem::setResource(JKRArchive* pArchive, u16 tableOffset, u16 waveOffset) {
+void SpkSystem::setResource(AssetFolder* pArchive, u16 tableOffset, u16 waveOffset) {
     mData = new (mHeap, 0) SpkData(pArchive);
     mData->loadTable(tableOffset);
     mData->loadWave(waveOffset);
