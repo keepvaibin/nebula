@@ -39,6 +39,8 @@
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
 //!   counts and values (rfl_res_host).
+//! - The audio archive (BAA): the command stream, BST, BSTN and BSC (baa); WSYS and IBNK stay big-endian until
+//!   their steps.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1549,6 +1551,170 @@ pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
         }
     }
     Ok(out)
+}
+
+/// The audio archive (BAA, AudioRes/SMR.szs expanded) with these parts in host order: the command stream (commands as
+/// host-order character constants, a cooked archive starts "<_AA"; their arguments; 'sect' keeps its four bytes), the
+/// sound table (BST: header words, sections, groups, item offsets with their type byte, items by type: SE, BGM,
+/// stream), the sound name table (BSTN: header words, sections, groups, name offsets) and the sequence collection
+/// (BSC: group count, size, table offsets, each table's count and sequence offsets; the sequences stay bytes). The wave
+/// systems (WSYS) and banks (IBNK) stay big-endian until their steps.
+pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() >= 4 && &bytes[0..4] == b"<_AA" {
+        return Ok(bytes.to_vec()); // cooked already
+    }
+    if bytes.len() < 8 || &bytes[0..4] != b"AA_<" {
+        bail!("not an audio archive");
+    }
+    let mut out = bytes.to_vec();
+    let constant = |out: &mut Vec<u8>, at: usize| -> Result<[u8; 4]> {
+        let c: [u8; 4] = bytes.get(at..at + 4).context("an audio archive command past the file's end")?.try_into().unwrap();
+        out[at..at + 4].copy_from_slice(&u32::from_be_bytes(c).to_le_bytes());
+        Ok(c)
+    };
+    constant(&mut out, 0)?;
+    let mut p = 4;
+    loop {
+        let cmd = constant(&mut out, p)?;
+        p += 4;
+        let args = match &cmd {
+            b">_AA" => break,
+            b"ws  " | b"bms " => 3,
+            b"bnk " | b"bl_<" | b"bsc " | b"bst " | b"bstn" | b"vbnk" => 2,
+            b"bmsa" | b"dsqb" | b"bsft" => 1,
+            b">_bl" => 0,
+            b"sect" => {
+                p += 4; // four bytes
+                continue;
+            }
+            _ => bail!("audio archive command {:?} at {:#x}", String::from_utf8_lossy(&cmd), p - 4),
+        };
+        let mut v = [0usize; 3];
+        for k in 0..args {
+            v[k] = host32(bytes, &mut out, p + 4 * k)? as usize;
+        }
+        p += 4 * args;
+        match &cmd {
+            b"bst " => sound_table(bytes, &mut out, v[0], v[1]).context("the sound table (BST)")?,
+            b"bstn" => sound_name_table(bytes, &mut out, v[0], v[1]).context("the sound name table (BSTN)")?,
+            b"bsc " => seq_collection(bytes, &mut out, v[0]).context("the sequence collection (BSC)")?,
+            _ => {}
+        }
+    }
+    Ok(out)
+}
+
+/// The sound table (BST) at `base` (to `end`): magic and header words, root, sections, groups and items, offsets from
+/// `base`.
+fn sound_table(src: &[u8], out: &mut [u8], base: usize, end: usize) -> Result<()> {
+    if src.get(base..base + 4) != Some(b"BST ".as_slice()) {
+        bail!("no BST magic");
+    }
+    host32(src, out, base)?; // the magic, as its host-order character constant
+    host32(src, out, base + 4)?;
+    host32(src, out, base + 8)?;
+    let root = base + host32(src, out, base + 0xC)? as usize;
+    let sections = host32(src, out, root)? as usize;
+    let mut items: HashSet<usize> = HashSet::new();
+    let mut seen: HashSet<usize> = HashSet::new(); // sections and groups another entry shares: turned once
+    for s in 0..sections {
+        let section = host32(src, out, root + 4 + 4 * s)? as usize;
+        if section == 0 || !seen.insert(section) {
+            continue;
+        }
+        let groups = host32(src, out, base + section)? as usize;
+        for g in 0..groups {
+            let group = host32(src, out, base + section + 4 + 4 * g)? as usize;
+            if group == 0 || !seen.insert(group) {
+                continue;
+            }
+            let at = base + group;
+            let count = host32(src, out, at)? as usize;
+            host32(src, out, at + 4)?; // global offset
+            for i in 0..count {
+                let word = host32(src, out, at + 8 + 4 * i)?;
+                let item = base + (word & 0xFF_FFFF) as usize;
+                if word & 0xFF_FFFF == 0 || !items.insert(item) {
+                    continue;
+                }
+                if item + 8 > end {
+                    bail!("a sound item at {item:#x} past the table");
+                }
+                match (word >> 24) & 0xF0 {
+                    0x50 => {
+                        host16(src, out, item + 2)?; // audible switch
+                        host16(src, out, item + 4)?; // sound switch
+                    }
+                    0x60 => {
+                        host16(src, out, item + 2)?; // resource
+                        host16(src, out, item + 4)?; // chord resource
+                        host16(src, out, item + 6)?; // sound switch
+                    }
+                    0x70 => {
+                        host16(src, out, item + 2)?; // channel control
+                        host32(src, out, item + 4)?; // stream file name offset
+                    }
+                    t => bail!("a sound item of type {t:#x} at {item:#x}"),
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The sound name table (BSTN) at `base`: header words, root, sections (count, global offset, groups), groups (count,
+/// category name offset, name offsets).
+fn sound_name_table(src: &[u8], out: &mut [u8], base: usize, _end: usize) -> Result<()> {
+    if src.get(base..base + 4) != Some(b"BSTN".as_slice()) {
+        bail!("no BSTN magic");
+    }
+    host32(src, out, base)?; // the magic, as its host-order character constant
+    host32(src, out, base + 4)?;
+    host32(src, out, base + 8)?;
+    let root = base + host32(src, out, base + 0xC)? as usize;
+    let sections = host32(src, out, root)? as usize;
+    let mut seen: HashSet<usize> = HashSet::new();
+    for s in 0..sections {
+        let section = host32(src, out, root + 4 + 4 * s)? as usize;
+        if section == 0 || !seen.insert(section) {
+            continue;
+        }
+        let groups = host32(src, out, base + section)? as usize;
+        host32(src, out, base + section + 4)?;
+        for g in 0..groups {
+            let group = host32(src, out, base + section + 8 + 4 * g)? as usize;
+            if group == 0 || !seen.insert(group) {
+                continue;
+            }
+            let count = host32(src, out, base + group)? as usize;
+            host32(src, out, base + group + 4)?;
+            for i in 0..count {
+                host32(src, out, base + group + 8 + 4 * i)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// The sequence collection (BSC) at `base`: group count, size, table offsets; each table's count and sequence offsets.
+fn seq_collection(src: &[u8], out: &mut [u8], base: usize) -> Result<()> {
+    if src.get(base..base + 2) != Some(b"SC".as_slice()) {
+        bail!("no SC magic");
+    }
+    let groups = host16(src, out, base + 2)? as usize;
+    host32(src, out, base + 4)?;
+    let mut seen: HashSet<usize> = HashSet::new();
+    for g in 0..groups {
+        let table = host32(src, out, base + 8 + 4 * g)? as usize;
+        if table == 0 || !seen.insert(table) {
+            continue;
+        }
+        let count = host32(src, out, base + table)? as usize;
+        for w in 0..count {
+            host32(src, out, base + table + 4 + 4 * w)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
