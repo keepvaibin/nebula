@@ -5,7 +5,7 @@
 #include "JSystem/JUtility/JUTTexture.hpp"
 
 JUTTexture::JUTTexture(int width, int height, GpuTexFmt format) {
-    mFlag = mFlag & 2 | 1;
+    mFlag = 1;
     u32 bufSize = J3DNativeTexture::imageSize(format, width, height, 1);
 
     ResTIMG* texBuf = reinterpret_cast< ResTIMG* >(new (sizeof(ResTIMG)) u8[bufSize + sizeof(ResTIMG)]);
