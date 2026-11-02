@@ -3,12 +3,8 @@
 #include "Game/Util.hpp"
 #include "Game/System/GameAssets.hpp"
 
-#define FILE_HOLDER_STATE_NONE 0
-#define FILE_HOLDER_STATE_READING 1
-#define FILE_HOLDER_STATE_DONE 2
-
 FileHolderFileEntry::FileHolderFileEntry(const char* pFilePath, JKRHeap* pHeap, void* pContext)
-    : mEntryNum(GameAssets::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mState(FILE_HOLDER_STATE_NONE), mContextSet(true) {
+    : mEntryNum(GameAssets::find(pFilePath)), mContext(nullptr), mHeap(pHeap), mDone(false), mContextSet(true) {
     mQueue.init(&mMessage, 1);
 
     if (pContext) {
@@ -24,19 +20,18 @@ FileHolderFileEntry::~FileHolderFileEntry() {
 }
 
 void FileHolderFileEntry::waitReadDone() {
-    if (mState != FILE_HOLDER_STATE_DONE) {
+    if (!mDone) {
         void* msg;
         mQueue.receive(&msg, true);
-        mState = FILE_HOLDER_STATE_DONE;
+        mDone = true;
+        // Another thread may wait for this file too: the message stays for it.
+        mQueue.send(nullptr, false);
     }
 }
 
-void FileHolderFileEntry::setContext(void* pContext, JKRHeap* pHeap) {
+// The file loader's last touch of the entry: the message wakes a waiter on another thread, which owns it from then on.
+void FileHolderFileEntry::setContext(void* pContext) {
     mContext = pContext;
-    mHeap = pHeap;
-
-    // In this order: the message wakes a waiter on another thread, which marks the entry done.
-    mState = FILE_HOLDER_STATE_READING;
     mQueue.send(nullptr, false);
 }
 

@@ -41,7 +41,11 @@ void JKRMemArchive::fixedInit(s32 entryNum) {
     mMountMode = MOUNT_MODE_MEM;
     _34 = 1;
     _58 = 2;
-    mHeap = JKRHeap::sCurrentHeap;
+    // The heap the archive lies in: the current heap is a thread's, and this may run on the file loader's.
+    mHeap = JKRHeap::findFromRoot(this);
+    if (mHeap == nullptr) {
+        mHeap = JKRHeap::sCurrentHeap;
+    }
     mEntryNum = entryNum;
 
     if (sCurrentVolume != nullptr) {
@@ -53,12 +57,14 @@ void JKRMemArchive::fixedInit(s32 entryNum) {
 }
 
 bool JKRMemArchive::mountFixed(void* a1, JKRMemBreakFlag breakFlag) {
+    sVolumeListMutex.lock();
     // An archive mounted from memory has no disc entry (-1): mounting the same data again finds it.
     for (JSUPtrLink* link = sVolumeList.mHead; link != nullptr; link = link->mNext) {
         JKRArchive* const archive = reinterpret_cast< JKRArchive* >(link->mData);
         if (archive->mLoaderType == RARC_MAGIC && archive->mMountMode == MOUNT_MODE_MEM && archive->mEntryNum < 0 &&
             static_cast< JKRMemArchive* >(archive)->mHeader == a1) {
             archive->_34++;
+            sVolumeListMutex.unlock();
             return false;
         }
     }
@@ -66,6 +72,7 @@ bool JKRMemArchive::mountFixed(void* a1, JKRMemBreakFlag breakFlag) {
     fixedInit(-1);
 
     if (!open(a1, 0xFFFF, breakFlag)) {
+        sVolumeListMutex.unlock();
         return false;
     }
 
@@ -80,6 +87,7 @@ bool JKRMemArchive::mountFixed(void* a1, JKRMemBreakFlag breakFlag) {
     mIsMounted = true;
     _6C = breakFlag == JKR_MEM_BREAK_FLAG_1;
 
+    sVolumeListMutex.unlock();
     return true;
 }
 

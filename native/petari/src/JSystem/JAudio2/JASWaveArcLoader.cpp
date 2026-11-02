@@ -45,7 +45,6 @@ JASWaveArc::JASWaveArc() : mHeap(this) {
     mData = nullptr;
     mEntryNum = -1;
     mFileLength = 0;
-    _5A = 0;
     mMutex.init();
 }
 
@@ -86,8 +85,10 @@ void JASWaveArc::loadCallback(void* this_) {
     if (pData == nullptr) {
         return;
     }
-    wavArc->mData = pData;
-    wavArc->_5A--;
+    {
+        JASMutexLock mutexLock(&wavArc->mMutex);
+        wavArc->mData = pData;
+    }
     if (wavArc->loadSetup(tmp->_C)) {
         wavArc->onLoadDone();
         sLoadDone.signal();
@@ -102,8 +103,6 @@ bool JASWaveArc::sendLoadCmd() {
     commandInfo.mWavArc = this;
     commandInfo.mEntryNum = mEntryNum;
     commandInfo._C = ++_58;
-
-    _5A++;
 
     if (JASLoad::getThreadPointer()->sendCmdMsg(loadCallback, &commandInfo, sizeof(commandInfo)) == 0) {
         mHeap.free();

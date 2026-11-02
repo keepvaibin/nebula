@@ -25,10 +25,7 @@ void FileLoader::requestLoadToMainRAM(const char* pName, u8* pData, JKRHeap* pHe
             pHeap = MR::getCurrentHeap();
         }
 
-        RequestFileInfo* info = addRequest(pName);
-        info->_0 = 0;
-        info->mRequestType = direction;
-        info->mFileEntry = mFileHolder->add(pName, pHeap, pData);
+        RequestFileInfo* info = addRequest(pName, 0, direction, mFileHolder->add(pName, pHeap, pData));
 
         if (jam) {
             mLoaderThread->mQueue.jam(info, false);
@@ -44,10 +41,7 @@ void FileLoader::requestMountArchive(const char* pName, JKRHeap* pHeap, bool jam
             pHeap = MR::getCurrentHeap();
         }
 
-        RequestFileInfo* info = addRequest(pName);
-        info->_0 = 1;
-        info->mRequestType = 1;
-        info->mFileEntry = mFileHolder->add(pName, pHeap, nullptr);
+        RequestFileInfo* info = addRequest(pName, 1, 1, mFileHolder->add(pName, pHeap, nullptr));
 
         if (jam) {
             mLoaderThread->mQueue.jam(info, false);
@@ -67,7 +61,7 @@ bool FileLoader::isMountedArchive(const char* pName) const {
 
 void* FileLoader::receiveFile(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
-    if (info != nullptr) {
+    if (info != nullptr && info->mFileEntry != nullptr) {
         info->mFileEntry->waitReadDone();
     }
 
@@ -76,7 +70,7 @@ void* FileLoader::receiveFile(const char* pName) {
 
 JKRMemArchive* FileLoader::receiveArchive(const char* pName) {
     const RequestFileInfo* info = getRequestFileInfoConst(pName);
-    if (info != nullptr) {
+    if (info != nullptr && info->mFileEntry != nullptr) {
         info->mFileEntry->waitReadDone();
     }
 
@@ -85,7 +79,9 @@ JKRMemArchive* FileLoader::receiveArchive(const char* pName) {
 
 void FileLoader::receiveAllRequestedFile() {
     for (u32 i = 0; i < mRequestedFileCount; i++) {
-        mRequestFileInfos[i].mFileEntry->waitReadDone();
+        if (mRequestFileInfos[i].mFileEntry != nullptr) {
+            mRequestFileInfos[i].mFileEntry->waitReadDone();
+        }
     }
 }
 
@@ -97,16 +93,32 @@ void FileLoader::getMountedArchiveAndHeap(const char* pName, JKRArchive** pArchi
     mArchiveHolder->getArchiveAndHeap(pName, pArchive, pHeap);
 }
 
+// The loader reads a request's slot when it comes to it: a slot is free for the next request only once its load is over.
 void FileLoader::clearRequestFileInfo(bool) {
+    receiveAllRequestedFile();
     mRequestedFileCount = 0;
 }
 
 void FileLoader::removeHolderIfIsEqualHeap(JKRHeap* pHeap) {
+    for (u32 i = 0; i < mRequestedFileCount; i++) {
+        RequestFileInfo* info = &mRequestFileInfos[i];
+        if (info->mFileEntry != nullptr && info->mFileEntry->mHeap == pHeap) {
+            info->mFileEntry->waitReadDone();
+            info->mFileEntry = nullptr;
+        }
+    }
+
     mFileHolder->removeIfIsEqualHeap(pHeap);
     mArchiveHolder->removeIfIsEqualHeap(pHeap);
 }
 
 void FileLoader::removeFile(const char* pName) {
+    RequestFileInfo* info = const_cast< RequestFileInfo* >(getRequestFileInfoConst(pName));
+    if (info != nullptr && info->mFileEntry != nullptr) {
+        info->mFileEntry->waitReadDone();
+        info->mFileEntry = nullptr;
+    }
+
     mFileHolder->removeFile(pName);
 }
 
@@ -131,15 +143,17 @@ const RequestFileInfo* FileLoader::getRequestFileInfoConst(const char* pName) co
 }
 
 // string load is in the wrong spot for some reason
-RequestFileInfo* FileLoader::addRequest(const char* pName) {
+RequestFileInfo* FileLoader::addRequest(const char* pName, u32 kind, u32 requestType, FileHolderFileEntry* pEntry) {
     GameMutex* mutex = &mMutex;
     mutex->lock();
 
+    // Counted once whole: another thread may wait for every request while this one is added.
     RequestFileInfo* info = &mRequestFileInfos[mRequestedFileCount];
-    mRequestedFileCount++;
-    info->mFileEntry = nullptr;
-    info->_88 = 0;
+    info->_0 = kind;
+    info->mRequestType = requestType;
+    info->mFileEntry = pEntry;
     nebula_snprintf(info->mFileName, sizeof(info->mFileName), "%s", pName);
+    mRequestedFileCount++;
 
     mutex->unlock();
 

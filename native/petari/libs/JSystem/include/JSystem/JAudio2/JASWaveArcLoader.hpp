@@ -76,7 +76,6 @@ struct JASWaveArc : JASDisposer {
     /* 0x54 */ u32 mFileLength;
     const u8* mData;
     /* 0x58 */ u16 _58;
-    /* 0x5A */ u16 _5A;
     /* 0x5C */ GameMutex mMutex;
 
     // Until an archive has finished loading since the last wait.

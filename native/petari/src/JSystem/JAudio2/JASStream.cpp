@@ -106,9 +106,11 @@ void JASStream::loadTask(void* i_this) {
 void JASStream::finishTask(void* i_this) {
     JASStream* _this = static_cast< JASStream* >(i_this);
     JASDriver::rejectCallback(channelProcCallback, _this);
-    if (_this->mCallback != nullptr) {
-        _this->mCallback(CB_START, _this, _this->mCallbackData);
+    // Cleared first: the callback tells the game thread it may free this stream.
+    const StreamCallback callback = _this->mCallback;
+    if (callback != nullptr) {
         _this->mCallback = nullptr;
+        callback(CB_START, _this, _this->mCallbackData);
     }
 }
 

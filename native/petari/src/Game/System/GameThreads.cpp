@@ -161,15 +161,15 @@ namespace {
     }
 
     // This thread sleeps on `pList` until woken, with the state lock held on entry and exit. A section the audio thread stays out of
-    // ends for the wait: the console's sleeping thread let interrupts back on.
+    // ends for the wait: a section never lasts across a sleep.
     void block(GameWaitList* pList) {
         GameThreadRecord* self = tSelf;
         if (self == &sAudioThread && sTestMode) {
             nebula_fatal("test mode: the audio thread has to wait, and no thread can run while it does");
         }
         append(pList, self);
-        const bool interruptsOff = tAudioExcluded;
-        if (interruptsOff) {
+        const bool inSection = tAudioExcluded;
+        if (inSection) {
             tAudioExcluded = false;
             nebula_host_unlock(NEBULA_HOST_LOCK_AUDIO);
         }
@@ -178,7 +178,7 @@ namespace {
         if (!mine) {
             nebula_host_thread_wait(self->host);
         }
-        if (interruptsOff) {
+        if (inSection) {
             nebula_host_lock(NEBULA_HOST_LOCK_AUDIO);
             tAudioExcluded = true;
         }
