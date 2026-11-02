@@ -222,7 +222,7 @@ u32 Mii_GetTexSize(Mii_PartsTex part, u16 file) {
 // A part texture's image handed to the renderer as it loads (its base level).
 static Mii_Texture* handOver(Mii_Texture* tex) {
     if (tex != NULL) {
-        J3DNativeTextureRegisterImage(Mii_GetTexImage(tex), tex->format, tex->width, tex->height, 1);
+        J3DNativeTextureRegisterRecord(Mii_GetTexImage(tex));
     }
     return tex;
 }

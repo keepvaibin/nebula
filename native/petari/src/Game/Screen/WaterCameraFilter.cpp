@@ -87,7 +87,7 @@ namespace {
 
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-    mScreenTex = new JUTTexture(::getCanvasWidth(), ::getScreenHeight(), GPU_TF_RGB565);
+    mScreenTex = new JUTTexture(::getCanvasWidth(), ::getScreenHeight());
 }
 
 void WaterCameraFilter::exeAirToWater() {

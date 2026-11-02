@@ -446,9 +446,8 @@ void Mii_MakeTexture(const Mii_CharInfo* info, u8** buffers, MiiResolution resol
 void Mii_InitRFLTexture(Mii_TexObj* tobj) {
     Mii_Texture* tex = tobj->texture;
 
-    J3DNativeTextureInit(&tobj->tobj, Mii_GetTexImage(tex), tex->width, tex->height, tex->format, GPU_CLAMP, GPU_CLAMP, FALSE);
-    J3DNativeTextureInitLOD(&tobj->tobj, tex->minFilt, tex->magFilt, tex->minLOD, tex->maxLOD, tex->lodBias, tex->enableBiasClamp,
-                    tex->enableEdgeLOD, tex->enableMaxAniso);
+    J3DNativeTextureInit(&tobj->tobj, Mii_GetTexImage(tex), tex->width, tex->height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+    J3DNativeTextureSetFilter(&tobj->tobj, tex->minFilt, tex->magFilt, tex->minLOD, tex->maxLOD, tex->lodBias, tex->enableEdgeLOD, tex->enableMaxAniso);
 }
 
 void Mii_Setup2DCameraAndParam(void) {

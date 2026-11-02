@@ -45,9 +45,9 @@ namespace MovieDraw {
         // The frame's planes, decoded into these buffers since the last frame as rows of texels (nebula_cooked_texture.h).
         const u16 chromaWidth = static_cast< u16 >(textureWidth >> 1);
         const u16 chromaHeight = static_cast< u16 >(textureHeight >> 1);
-        J3DNativeTexture::registerImage(pY, NEBULA_TEXTURE_LINEAR_L8, textureWidth, textureHeight, 1);
-        J3DNativeTexture::registerImage(pU, NEBULA_TEXTURE_LINEAR_L8, chromaWidth, chromaHeight, 1);
-        J3DNativeTexture::registerImage(pV, NEBULA_TEXTURE_LINEAR_L8, chromaWidth, chromaHeight, 1);
+        J3DNativeTexture::registerLinear(pY, NEBULA_TEXTURE_LINEAR_L8, textureWidth, textureHeight, 1);
+        J3DNativeTexture::registerLinear(pU, NEBULA_TEXTURE_LINEAR_L8, chromaWidth, chromaHeight, 1);
+        J3DNativeTexture::registerLinear(pV, NEBULA_TEXTURE_LINEAR_L8, chromaWidth, chromaHeight, 1);
 
         // runtime/src/render/materials/movie.hlsl: Y, U and V to RGB; opaque, depth neither tested nor written.
         NebulaNativeMaterial material;

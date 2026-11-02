@@ -104,9 +104,7 @@ namespace nw4r {
                     FontTextureGlyph* glyph = reinterpret_cast< FontTextureGlyph* >(reinterpret_cast< u8* >(blockHeader) + sizeof(*blockHeader));
                     ResolveOffset(glyph->sheetImage, fileHeader);
                     for (u32 sheet = 0; sheet < glyph->sheetNum; sheet++) {
-                        J3DNativeTexture::registerImage(glyph->sheetImage + sheet * glyph->sheetSize,
-                                                        static_cast< u8 >((u16)glyph->sheetFormat), glyph->sheetWidth,
-                                                        glyph->sheetHeight, 1);
+                        J3DNativeTexture::registerRecord(glyph->sheetImage + sheet * glyph->sheetSize);
                     }
                 } break;
 

@@ -177,13 +177,14 @@ void CShader::CLengthMap::setLengthMap(const ResTIMG* pTimg) {
         return;
     }
 
-    if (pTimg->mFormat != GPU_TF_I8) {
+    const NebulaTexture* pRecord = nebula_texture_record(pTimg->image());
+    if (pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_L8) {
         _8 = 1;
         return;
     }
 
     _0 = pTimg;
-    _4 = reinterpret_cast< const u8* >(pTimg) + sizeof(ResTIMG);
+    _4 = reinterpret_cast< const u8* >(pRecord) + NEBULA_TEXTURE_HEADER;
     _8 = 0;
 }
 
@@ -192,22 +193,20 @@ f32 CShader::CLengthMap::refer(f32 u, f32 v) const {
         return 1.0f;
     }
 
-    if (_0->mFormat != GPU_TF_I8) {
-        return 1.0f;
-    }
-
-    u16 x = getTexelOrder(_0->mWidth, u, static_cast< GpuTexWrapMode >(_0->mWrapS));
-    u16 y = getTexelOrder(_0->mHeight, v, static_cast< GpuTexWrapMode >(_0->mWrapT));
-    return f32(_4[((x % 8) + (y % 4) * 8) + (x / 8 + (_0->mWidth / 8) * (y / 4)) * 32]) / 255.0f;
+    u16 x = getTexelOrder(_0->mWidth, u, static_cast< u8 >(_0->mWrapS));
+    u16 y = getTexelOrder(_0->mHeight, v, static_cast< u8 >(_0->mWrapT));
+    x = x < _0->mWidth ? x : _0->mWidth - 1;
+    y = y < _0->mHeight ? y : _0->mHeight - 1;
+    return f32(_4[y * _0->mWidth + x]) / 255.0f;
 }
 
-u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GpuTexWrapMode mode) const {
+u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, u8 mode) const {
     if (a2 > 1.0f) {
         switch (mode) {
-        case GPU_CLAMP:
+        case NEBULA_WRAP_CLAMP:
             a2 = 1.0f;
             break;
-        case GPU_REPEAT:
+        case NEBULA_WRAP_REPEAT:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }
@@ -217,7 +216,7 @@ u16 CShader::CLengthMap::getTexelOrder(u16 a1, f32 a2, _GpuTexWrapMode mode) con
             }
 
             break;
-        case GPU_MIRROR:
+        case NEBULA_WRAP_MIRROR:
             while (a2 > 1.0f) {
                 a2 -= 1.0f;
             }

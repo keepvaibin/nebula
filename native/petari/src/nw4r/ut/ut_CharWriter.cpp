@@ -47,9 +47,8 @@ namespace nw4r {
             if (loadInfo != mLoadingTexture) {
                 J3DNativeTexObj tobj;
 
-                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GPU_CLAMP, GPU_CLAMP,
-                             GPU_FALSE);
-                J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GPU_DISABLE, GPU_DISABLE, GPU_ANISO_1);
+                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GPU_DISABLE, 0);
                 NativeShader::setTexObj(sMaterial, slot - GPU_TEXMAP0, &tobj);
                 NativeShader::send(sMaterial);
 
@@ -70,22 +69,22 @@ namespace nw4r {
                 SetupGXWithColorMapping(mColorMapping.min, mColorMapping.max);
             } else {
                 if (mFont) {
-                    GpuTexFmt format = mFont->GetTextureFormat();
+                    u8 format = mFont->GetTextureFormat();
 
                     switch (format) {
-                    case GPU_TF_I4:
-                    case GPU_TF_I8:
+                    case SHEET_I4:
+                    case SHEET_I8:
                         SetupGXForI();
                         break;
 
-                    case GPU_TF_IA4:
-                    case GPU_TF_IA8:
+                    case SHEET_IA4:
+                    case SHEET_IA8:
                         SetupGXDefault();
                         break;
 
-                    case GPU_TF_RGB565:
-                    case GPU_TF_RGB5A3:
-                    case GPU_TF_RGBA8:
+                    case SHEET_RGB565:
+                    case SHEET_RGB5A3:
+                    case SHEET_RGBA8:
                         SetupGXForRGBA();
                         break;
 
@@ -130,8 +129,8 @@ namespace nw4r {
         }
 
         void CharWriter::EnableLinearFilter(bool atSmall, bool atLarge) {
-            mFilter.atSmall = atSmall ? GPU_LINEAR : GPU_NEAR;
-            mFilter.atLarge = atLarge ? GPU_LINEAR : GPU_NEAR;
+            mFilter.atSmall = atSmall ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
+            mFilter.atLarge = atLarge ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
         }
 
         f32 CharWriter::Print(CharCode code) {

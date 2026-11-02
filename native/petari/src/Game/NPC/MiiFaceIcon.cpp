@@ -65,18 +65,17 @@ void MiiFaceIcon::createImageBuffer() {
     width = mWidth;
 
     pImageBuffer = reinterpret_cast< ResTIMG* >(mImageBuffer);
-    pImageBuffer->mFormat = GPU_TF_RGB5A3;
     pImageBuffer->mWidth = width;
     pImageBuffer->mHeight = height;
-    pImageBuffer->mWrapS = GPU_CLAMP;
-    pImageBuffer->mWrapT = GPU_CLAMP;
+    pImageBuffer->mWrapS = NEBULA_WRAP_CLAMP;
+    pImageBuffer->mWrapT = NEBULA_WRAP_CLAMP;
     pImageBuffer->mImage = nullptr;
     pImageBuffer->mMipmap = false;
     pImageBuffer->mDoEdgeLod = false;
     pImageBuffer->mBiasClamp = false;
-    pImageBuffer->mMaxAnisotropy = GPU_ANISO_1;
-    pImageBuffer->mMinType = GPU_LINEAR;
-    pImageBuffer->mMagType = GPU_LINEAR;
+    pImageBuffer->mMaxAnisotropy = 0;
+    pImageBuffer->mMinType = NEBULA_FILTER_LINEAR;
+    pImageBuffer->mMagType = NEBULA_FILTER_LINEAR;
     pImageBuffer->mMinLod = 0;
     pImageBuffer->mMaxLod = 0;
     pImageBuffer->mImageNum = 1;

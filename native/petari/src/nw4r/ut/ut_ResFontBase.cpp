@@ -57,8 +57,8 @@ namespace nw4r {
                 return TYPE_RESOURCE;
             }
 
-            GpuTexFmt ResFontBase::GetTextureFormat() const {
-                return static_cast< GpuTexFmt >((u16)mFontInfo->pGlyph->sheetFormat);
+            u8 ResFontBase::GetTextureFormat() const {
+                return static_cast< u8 >((u16)mFontInfo->pGlyph->sheetFormat);
             }
 
             int ResFontBase::GetLineFeed() const {
@@ -204,7 +204,7 @@ namespace nw4r {
                 pGlyph->widths = GetCharWidthsFromIndex(index);
                 pGlyph->height = pTexGlyph->cellHeight;
 
-                pGlyph->texFormat = static_cast< GpuTexFmt >((u16)pTexGlyph->sheetFormat);
+                pGlyph->texFormat = static_cast< u8 >((u16)pTexGlyph->sheetFormat);
 
                 pGlyph->texWidth = pTexGlyph->sheetWidth;
                 pGlyph->texHeight = pTexGlyph->sheetHeight;

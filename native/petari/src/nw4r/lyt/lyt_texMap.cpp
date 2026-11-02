@@ -7,39 +7,23 @@
 namespace nw4r {
     namespace lyt {
         void TexMap::Get(J3DNativeTexObj* pTexObj) const {
-            J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetTexelFormat(), GetWrapModeS(), GetWrapModeT(), IsMipMap());
-
-            J3DNativeTexture::initLOD(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(), IsBiasClampEnable(), IsEdgeLODEnable(),
-                            GetAnisotropy());
+            J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetWrapModeS(), GetWrapModeT());
+            J3DNativeTexture::setFilter(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(),
+                                        IsEdgeLODEnable(), GetAnisotropy());
         }
 
         void TexMap::Set(const J3DNativeTexObj& texObj) {
-            void* image;
-            u16 width, height;
-            GpuTexFmt format;
-            GpuTexWrapMode wrapS, wrapT;
-            GpuBool mipmap;
-
-            J3DNativeTexture::getAll(&texObj, &image, &width, &height, &format, &wrapS, &wrapT, &mipmap);
-
-            mImage = image;
-            SetSize(width, height);
-            mBits.textureFormat = format;
-            SetWrapMode(wrapS, wrapT);
-            SetMipMap(mipmap);
-
-            GpuTexFilter minFilter, magFilter;
-            f32 minLOD, maxLOD, lodBias;
-            GpuBool biasCLampEnable, edgeLODEnable;
-            GpuAnisotropy aniso;
-            J3DNativeTexture::getLODAll(&texObj, &minFilter, &magFilter, &minLOD, &maxLOD, &lodBias, &biasCLampEnable, &edgeLODEnable, &aniso);
-
-            SetFilter(minFilter, magFilter);
-            SetLOD(minLOD, maxLOD);
-            SetLODBias(lodBias);
-            SetBiasClampEnable(biasCLampEnable);
-            SetEdgeLODEnable(edgeLODEnable);
-            mBits.anisotropy = aniso;
+            mImage = const_cast< void* >(texObj.mImage);
+            SetSize(texObj.mWidth, texObj.mHeight);
+            SetTexelFormat(TEXEL_I4);
+            SetWrapMode(texObj.mWrapS, texObj.mWrapT);
+            SetMipMap(false);
+            SetFilter(texObj.mMinFilter, texObj.mMagFilter);
+            SetLOD(texObj.mMinLod, texObj.mMaxLod);
+            SetLODBias(texObj.mLodBias);
+            SetBiasClampEnable(false);
+            SetEdgeLODEnable(texObj.mEdgeLod != 0);
+            mBits.anisotropy = texObj.mMaxAniso;
         }
 
         // A cooked TPL file (nebula-import): big-endian fields, offsets from the file's start. Its header holds the
@@ -62,7 +46,7 @@ namespace nw4r {
             void* const image = const_cast< u8* >(file + *reinterpret_cast< const u32* >(header + 8));
             const u8 maxLOD = header[34];
             mImage = image;
-            J3DNativeTexture::registerImage(image, static_cast< u8 >(format), width, height, static_cast< u8 >(maxLOD + 1));
+            J3DNativeTexture::registerRecord(image);
             SetSize(width, height);
             mBits.textureFormat = format;
         }

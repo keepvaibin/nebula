@@ -27,20 +27,19 @@ FurDrawer::FurDrawer(u32 numLayers, ResTIMG* pBody, ResTIMG* pIndirect)
         mUseIndirect = 0;
     }
 
-    u32 size = J3DNativeTexture::imageSize(GPU_TF_IA8, 32, 32, 1);
+    u32 size = J3DNativeTexture::linearSize(NEBULA_TEXTURE_LINEAR_LA8, 32, 32, 1);
     ResTIMG* pImage = reinterpret_cast< ResTIMG* >(new (32) u8[size + sizeof(ResTIMG)]);
-    pImage->mFormat = GPU_TF_IA8;
     pImage->mWidth = 32;
     pImage->mHeight = 32;
-    pImage->mWrapS = GPU_REPEAT;
-    pImage->mWrapT = GPU_REPEAT;
+    pImage->mWrapS = NEBULA_WRAP_REPEAT;
+    pImage->mWrapT = NEBULA_WRAP_REPEAT;
     pImage->mImage = nullptr;
     pImage->mMipmap = false;
     pImage->mDoEdgeLod = false;
     pImage->mBiasClamp = false;
-    pImage->mMaxAnisotropy = GPU_ANISO_1;
-    pImage->mMinType = GPU_LINEAR;
-    pImage->mMagType = GPU_LINEAR;
+    pImage->mMaxAnisotropy = 0;
+    pImage->mMinType = NEBULA_FILTER_LINEAR;
+    pImage->mMagType = NEBULA_FILTER_LINEAR;
     pImage->mMinLod = 0;
     pImage->mMaxLod = 0;
     pImage->mImageNum = 1;
@@ -250,5 +249,5 @@ void FurDrawer::createFurMap() {
         }
     }
 
-    J3DNativeTexture::registerImage(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
+    J3DNativeTexture::registerLinear(pTexels, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }

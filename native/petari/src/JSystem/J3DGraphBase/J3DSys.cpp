@@ -130,7 +130,7 @@ void J3DSys::reinitTransform() {
 }
 
 void J3DSys::reinitTexture() {
-    J3DNativeTexture::registerImage(&sNullTexture, GPU_TF_IA8, 4, 4, 1);
+    J3DNativeTexture::registerRecord(&sNullTexture);
 }
 
 void J3DSys::reinitTevStages() {

@@ -66,7 +66,7 @@ void NormalMapBase::setup(const char* pName) {
     MR::invalidateClipping(this);
     mHeight = 128;
     mWidth = 128;
-    _4B8 = new (0x20) JUTTexture(mHeight, mWidth, GPU_TF_IA8);
+    _4B8 = new (0x20) JUTTexture(mHeight, mWidth, NEBULA_TEXTURE_LINEAR_LA8);
     appear();
 }
 
@@ -122,8 +122,8 @@ void NormalMapBase::setupTexture() {
             pImage = MR::getTexFromArc(fileName, this);
             mNormalTex = new JUTTexture(pImage);
             mTextures[i] = mNormalTex;
-            mTextures[i]->mMinType = GPU_LINEAR;
-            mTextures[i]->mMagType = GPU_LINEAR;
+            mTextures[i]->mMinType = NEBULA_FILTER_LINEAR;
+            mTextures[i]->mMagType = NEBULA_FILTER_LINEAR;
             mTextures[i]->init();
         } else if (strstr(pName, "ormal") && !mNormalTex) {
             mNormalTex = new JUTTexture(pImage);
@@ -367,12 +367,12 @@ void NormalMapBase::drawShape(J3DModel* pModel, J3DShape* pShape) const {
 
 void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
     J3DNativeTexObj obj;
-    J3DNativeTexture::init(&obj, mImagePtr, width, height, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeTexture::init(&obj, mImagePtr, width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
     if (_13A & 1) {
-        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_NEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
     } else {
-        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
     }
 
     NativeShader::setTexObj(sNormalMap, slot, &obj);
@@ -380,15 +380,15 @@ void NormalMapBase::loadDiffuseGradTex(u32 slot) const {
 
 void NormalMapBase::loadNormalTex(const JUTTexture* pTex, u32 slot) const {
     J3DNativeTexObj obj;
-    J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, GPU_TF_RGBA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    J3DNativeTexture::init(&obj, pTex->mImage, pTex->mTIMG->mWidth, pTex->mTIMG->mHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     if ((_13A & 2) != 0 && (_13A & 0x4) != 0) {
-        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_NEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_NEAREST, 0.0f, 0.0f, 0.0f, GPU_FALSE, 0);
     } else if ((_13A & 0x2) != 0) {
-        J3DNativeTexture::initLOD(&obj, GPU_NEAR, GPU_LINEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_NEAREST, NEBULA_FILTER_LINEAR, 0.0, 0.0, 0.0, 0, 0);
     } else if ((_13A & 0x4) != 0) {
-        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_NEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_NEAREST, 0.0, 0.0, 0.0, 0, 0);
     } else {
-        J3DNativeTexture::initLOD(&obj, GPU_LINEAR, GPU_LINEAR, 0.0, 0.0, 0.0, 0, 0, GPU_ANISO_1);
+        J3DNativeTexture::setFilter(&obj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0, 0.0, 0.0, 0, 0);
     }
 
     NativeShader::setTexObj(sNormalMap, slot, &obj);
@@ -586,24 +586,39 @@ void NormalMapBase::createGradTexture() {
         }
     }
 
-    J3DNativeTexture::registerImage(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
+    J3DNativeTexture::registerLinear(mImagePtr, NEBULA_TEXTURE_LINEAR_LA8, width, height, 1);
 }
 
 void NormalMapBase::swapColorGB(JUTTexture* pTexture) {
-    for (u32 y = 0; y < pTexture->getHeight(); y++) {
-        for (u32 x = 0; x < pTexture->getWidth(); x++) {
-            u32 color = TDDraw::getTexel32(pTexture, x, y);
-            TVec3f normal;
-            normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
-                       static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
-            u8 r = (s32)(128.0f + 127.0f * normal.x);
-            u8 g = (s32)(128.0f + 127.0f * normal.y);
-            u8 b = (s32)(128.0f + 127.0f * normal.z);
-            TDDraw::setTexel32(pTexture, x, y, (g << 16) | (b << 8) | r);
+    const NebulaTexture* pRecord = nebula_texture_record(pTexture->mImage);
+    if (pRecord == nullptr || pRecord->layout != NEBULA_TEXTURE_RGBA8) {
+        return;
+    }
+    // The file's own texels stay as they are.
+    u8* pCopy = new (32) u8[pRecord->size];
+    memcpy(pCopy, pRecord, pRecord->size);
+    u8* pTexel = pCopy + NEBULA_TEXTURE_HEADER;
+    for (u32 level = 0; level < pRecord->levels; level++) {
+        const u32 levelWidth = pRecord->width >> level != 0 ? pRecord->width >> level : 1;
+        const u32 levelHeight = pRecord->height >> level != 0 ? pRecord->height >> level : 1;
+        for (u32 at = 0; at < levelWidth * levelHeight; at++, pTexel += 4) {
+            const u32 color = pTexel[0] << 24 | pTexel[1] << 16 | pTexel[2] << 8 | pTexel[3];
+                TVec3f normal;
+                normal.set(static_cast< s8 >((color & 0xFF) - 128) / 128.0f, static_cast< s8 >(((color >> 8) & 0xFF) - 128) / 128.0f,
+                           static_cast< s8 >(((color >> 16) & 0xFF) - 128) / 128.0f);
+                u8 r = (s32)(128.0f + 127.0f * normal.x);
+                u8 g = (s32)(128.0f + 127.0f * normal.y);
+                u8 b = (s32)(128.0f + 127.0f * normal.z);
+            pTexel[0] = 0;
+            pTexel[1] = g;
+            pTexel[2] = b;
+            pTexel[3] = r;
         }
     }
 
-    J3DNativeTexture::registerImage(pTexture->mImage, GPU_TF_RGBA8, pTexture->getWidth(), pTexture->getHeight(), 1);
+    pTexture->mImage = pCopy;
+    pTexture->mObj.mImage = pCopy;
+    J3DNativeTexture::registerRecord(pCopy);
 }
 
 void NormalMapBase::loadData(const char* pData, u32 size) {

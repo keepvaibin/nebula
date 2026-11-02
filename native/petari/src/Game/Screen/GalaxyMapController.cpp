@@ -102,7 +102,7 @@ void GalaxyMapController::init(const JMapInfoIter& rIter) {
     {
         MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2, GPU_TF_RGB565);
+        _38 = new JUTTexture(getFbWidth() / 2, MR::getScreenHeight() / 2);
     }
 
     if (MR::startFunctionAsyncExecuteOnMainThread(MR::Functor(this, &GalaxyMapController::capture), "GalaxyMapController::capture")) {

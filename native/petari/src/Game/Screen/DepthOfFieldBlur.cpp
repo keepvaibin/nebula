@@ -70,16 +70,16 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     _1C = MR::getImageEffectResource()->_4;
     _20 = MR::getImageEffectResource()->_8;
     _24 = MR::getImageEffectResource()->_C;
-    _28 = new JUTTexture(128, 2, GPU_TF_I8);
-    _28->mWrapS = GPU_CLAMP;
-    _28->mWrapT = GPU_CLAMP;
-    _28->mMinType = GPU_LINEAR;
-    _28->mMagType = GPU_LINEAR;
-    mQuarter = new JUTTexture(_24->getWidth(), _24->getHeight(), GPU_TF_RGB565);
-    mQuarter->mWrapS = GPU_CLAMP;
-    mQuarter->mWrapT = GPU_CLAMP;
-    mQuarter->mMinType = GPU_LINEAR;
-    mQuarter->mMagType = GPU_LINEAR;
+    _28 = new JUTTexture(128, 2);
+    _28->mWrapS = NEBULA_WRAP_CLAMP;
+    _28->mWrapT = NEBULA_WRAP_CLAMP;
+    _28->mMinType = NEBULA_FILTER_LINEAR;
+    _28->mMagType = NEBULA_FILTER_LINEAR;
+    mQuarter = new JUTTexture(_24->getWidth(), _24->getHeight());
+    mQuarter->mWrapS = NEBULA_WRAP_CLAMP;
+    mQuarter->mWrapT = NEBULA_WRAP_CLAMP;
+    mQuarter->mMinType = NEBULA_FILTER_LINEAR;
+    mQuarter->mMagType = NEBULA_FILTER_LINEAR;
 }
 
 void DepthOfFieldBlur::draw() const {

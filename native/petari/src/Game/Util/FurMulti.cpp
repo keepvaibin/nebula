@@ -72,18 +72,17 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
     mFurCtrls[layer]->calcLayerForm();
 
     if (pDensity) {
-        pDensity->mFormat = GPU_TF_IA8;
         pDensity->mWidth = 32;
         pDensity->mHeight = 32;
-        pDensity->mWrapS = GPU_REPEAT;
-        pDensity->mWrapT = GPU_REPEAT;
+        pDensity->mWrapS = NEBULA_WRAP_REPEAT;
+        pDensity->mWrapT = NEBULA_WRAP_REPEAT;
         pDensity->mImage = nullptr;
         pDensity->mMipmap = false;
         pDensity->mDoEdgeLod = false;
         pDensity->mBiasClamp = false;
-        pDensity->mMaxAnisotropy = GPU_ANISO_1;
-        pDensity->mMinType = GPU_LINEAR;
-        pDensity->mMagType = GPU_LINEAR;
+        pDensity->mMaxAnisotropy = 0;
+        pDensity->mMinType = NEBULA_FILTER_LINEAR;
+        pDensity->mMagType = NEBULA_FILTER_LINEAR;
         pDensity->mMinLod = 0;
         pDensity->mMaxLod = 0;
         pDensity->mImageNum = 1;

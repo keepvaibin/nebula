@@ -205,12 +205,12 @@ void Mii_InitCharModel(MiiCharModel* model, Mii_CharInfo* info, void* work, MiiR
 
     for (i = 0; i < MiiExp_Max; i++) {
         if (imodel->maskTexObj[i] != NULL) {
-            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, GPU_TF_RGB5A3, GPU_CLAMP, GPU_CLAMP, mipmap);
+            J3DNativeTextureInit(imodel->maskTexObj[i], maskImages[i], maskRes, maskRes, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
 
             if (mipmap) {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LIN_MIP_LIN, GPU_LINEAR, 0.0f, maxLod, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+                J3DNativeTextureSetFilter(imodel->maskTexObj[i], NEBULA_FILTER_LINEAR_BETWEEN_LEVELS, NEBULA_FILTER_LINEAR, 0.0f, maxLod, 0.0f, FALSE, 0);
             } else {
-                J3DNativeTextureInitLOD(imodel->maskTexObj[i], GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+                J3DNativeTextureSetFilter(imodel->maskTexObj[i], NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, 0);
             }
 
             if (!setExpr) {
@@ -853,9 +853,9 @@ void Mii_InitTexRes(J3DNativeTexObj* texObj, Mii_PartsShpTex part, u16 file, voi
     }
     memcpy(buffer, Mii_GetTexImage(tex), texSize);
     // The model draws this copy: handed over here, where its bytes now live (the file is freed below).
-    J3DNativeTextureRegisterImage(buffer, tex->format, tex->width, tex->height, 1);
-    J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->format, tex->wrapS, tex->wrapT, FALSE);
-    J3DNativeTextureInitLOD(texObj, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, FALSE, GPU_ANISO_1);
+    J3DNativeTextureRegisterRecord(buffer);
+    J3DNativeTextureInit(texObj, buffer, tex->width, tex->height, tex->wrapS, tex->wrapT);
+    J3DNativeTextureSetFilter(texObj, NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR, 0.0f, 0.0f, 0.0f, FALSE, 0);
     Mii_Free(tex);
 }
 
