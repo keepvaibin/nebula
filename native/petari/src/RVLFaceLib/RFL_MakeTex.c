@@ -10,7 +10,7 @@
 
 // The drawing state a Mii texture is drawn with.
 void Mii_SetupTextureDraw(void) {
-    J3DNativeStateSetFog(GPU_FOG_NONE, 1.0f, 1.0f, 0.0f, 0.0f, (NebulaColor8){0, 0, 0, 0});
+    J3DPassNoFog();
     J3DPassWriteColor(1);
     J3DPassWriteAlpha(1);
     J3DPassConstantAlpha(0, 0);
@@ -460,7 +460,7 @@ void Mii_Setup2DCameraAndParam(void) {
     J3DNativeViewSetZScaleOffset(1.0f, 0.0f);
     J3DPassCull(NEBULA_CULL_BACK);
     J3DPassDepth(0, NEBULA_COMPARE_LEQUAL, 0);
-    J3DNativeStateSetAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_NEVER, 0);
+    J3DPassAlphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPassWriteAlpha(1);
 }
 

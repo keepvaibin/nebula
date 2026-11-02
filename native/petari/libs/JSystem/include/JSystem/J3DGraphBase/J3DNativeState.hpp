@@ -16,6 +16,18 @@ namespace J3DPass {
     void writeAlpha(bool write);
     void constantAlpha(bool on, u8 alpha);  // the picture's alpha takes this value
     void positionMatrix(u8 index);          // the place vertices without one of their own use
+    void noAlphaTest();
+    void alphaTest(u8 compare, u8 reference);  // NEBULA_COMPARE_*
+    void noFog();
+    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
+    void lineWidth(u8 width, bool texelOffset = false);  // in sixths of a pixel
+    void pointSize(u8 size, bool texelOffset = false);
+    void materialColor(u8 index, NebulaColor8 color);
+    void constantColor(u8 index, NebulaColor8 color);
+    void lightMaterial(u8 channel, NebulaColor8 color);
+    void lightAmbient(u8 channel, NebulaColor8 color);
+    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp);
+    void textureMatrix(u8 coord, u8 matrix);
 };  // namespace J3DPass
 
 extern "C" {
@@ -29,6 +41,9 @@ void J3DPassWriteColor(int write);
 void J3DPassWriteAlpha(int write);
 void J3DPassConstantAlpha(int on, u8 alpha);
 void J3DPassPositionMatrix(u8 index);
+void J3DPassNoAlphaTest(void);
+void J3DPassAlphaTest(u8 compare, u8 reference);
+void J3DPassNoFog(void);
 #ifdef __cplusplus
 }
 #endif

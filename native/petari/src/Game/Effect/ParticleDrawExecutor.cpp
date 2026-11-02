@@ -29,7 +29,7 @@ ParticleDrawExecutor::ParticleDrawExecutor(const EffectSystem* pSystem, bool cre
 }
 
 void ParticleDrawExecutor::initDraw() {
-    J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, Color8(0, 0, 0, 0));
+    J3DPass::noFog();
 }
 
 void ParticleDrawExecutor::draw3D() const {

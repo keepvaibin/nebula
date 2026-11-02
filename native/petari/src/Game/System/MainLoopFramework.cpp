@@ -93,7 +93,7 @@ void MainLoopFramework::clearEfb(NebulaColor8 color) {
     NebulaMtxIdentity(identity);
     J3DNativeShape::setPosition(0, identity);
     J3DPass::positionMatrix(0);
-    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    J3DPass::noAlphaTest();
     J3DPass::noBlend();
     if (mUseAlpha) {
         J3DPass::writeAlpha(true);

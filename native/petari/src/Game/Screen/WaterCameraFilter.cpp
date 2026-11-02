@@ -182,7 +182,7 @@ void WaterCameraFilter::loadMaterial() const {
     TMtx34f modelView;
     modelView.identity();
     J3DNativeShape::setPosition(0, modelView);
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
     TVec2f screenPos;
     screenPos.x = 0.0f;
     screenPos.y = 0.0f;

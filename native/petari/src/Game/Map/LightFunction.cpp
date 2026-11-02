@@ -198,7 +198,7 @@ void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     u8 alpha = pInfo->mAlpha2;
     NebulaColor8 c = {0, 0, 0, alpha};
     ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), GPU_LIGHT2);
-    J3DNativeState::setChanAmbColor(GPU_COLOR0A0, NebulaColor8(pInfo->mColor));
+    J3DPass::lightAmbient(0, NebulaColor8(pInfo->mColor));
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {

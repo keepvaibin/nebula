@@ -15,7 +15,7 @@ ShadowVolumeLine::ShadowVolumeLine() : ShadowVolumeDrawer("\211\145\225\140\211\
 
 void ShadowVolumeLine::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(0);
+    J3DPass::positionMatrix(0);
 }
 
 void ShadowVolumeLine::drawShape() const {

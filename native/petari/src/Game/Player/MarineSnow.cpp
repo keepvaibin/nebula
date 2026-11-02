@@ -53,7 +53,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     TDDraw::setupNative(&material, 0, 1, 0);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
     NativeShader::send(material);
-    J3DNativeState::setPointSize(27, GPU_TO_ZERO);
+    J3DPass::pointSize(27);
 
     static u8 phase = 0;
     phase = (phase + 1) & 3;

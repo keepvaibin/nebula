@@ -112,7 +112,7 @@ namespace MR {
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         J3DPass::positionMatrix(0);
-        J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+        J3DPass::noAlphaTest();
         J3DPass::noBlend();
         J3DPass::writeAlpha(false);
         J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);

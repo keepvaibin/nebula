@@ -205,6 +205,10 @@ void J3DStateList::setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuT
     r.a[6] = static_cast< u8 >(mtx / 3);
 }
 
+void J3DStateList::useTextureMatrix(u8 coord, u8 matrix) {
+    setTexCoordGen2(static_cast< GpuTexCoordID >(coord), GPU_TG_MTX2x4, GPU_TG_TEX0, 30u + 3u * matrix, GPU_FALSE, 125);
+}
+
 void J3DStateList::setCurrentMtx(u32 id) {
     add(J3D_STATE_CURRENT_MATRIX).a[0] = static_cast< u8 >(id / 3);  // GX_PNMTXn is 3n
 }

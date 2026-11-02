@@ -10,7 +10,7 @@ J2DGrafContext::J2DGrafContext(f32 x, f32 y, f32 width, f32 height)
     JUtility::TColor color(-1);
     setColor(color);
     mLineWidth = 6;
-    J3DNativeState::setLineWidth(mLineWidth, GPU_TO_ZERO);
+    J3DPass::lineWidth(mLineWidth);
 }
 
 void J2DGrafContext::setColor(JUtility::TColor colorTL, JUtility::TColor colorTR, JUtility::TColor colorBR, JUtility::TColor colorBL) {
@@ -74,15 +74,15 @@ void J2DGrafContext::setPort() {
 // The 2D view's fixed state: the panes draw with their own native materials (J2DPicture, J2DMaterial,
 // fillBox's vertex_color), so the TEV program the console reset here has no reader.
 void J2DGrafContext::setup2D() {
-    J3DNativeState::setAlphaCompare(GPU_GREATER, 0, GPU_AOP_OR, GPU_GREATER, 0);
+    J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
     J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
     J3DPass::cull(NEBULA_CULL_NONE);
     J3DNativeShape::setPosition(0, mPosMtx);
     Mtx mtx;
     NebulaMtxIdentity(mtx);
     J3DNativeShape::setTexture(J3DNativeShape::kIdentityTexture, mtx, 3);
-    J3DNativeState::setCurrentMtx(0);
-    J3DNativeState::setLineWidth(mLineWidth, GPU_TO_ZERO);
+    J3DPass::positionMatrix(0);
+    J3DPass::lineWidth(mLineWidth);
 }
 
 void J2DGrafContext::setScissor() {
