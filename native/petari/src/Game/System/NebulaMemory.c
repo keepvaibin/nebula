@@ -2,6 +2,7 @@
    no physical memory. */
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #include "nebula_module.h"
 
@@ -17,7 +18,10 @@ static uint8_t* sMemory;
 
 int nebula_memory_init(void) {
 #if defined(_WIN32)
-    sMemory = (uint8_t*)VirtualAlloc(NULL, kSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    // A test's address for the block: far from the file views and across a 4 GB line, so an address squeezed through
+    // 32 bits fails in every run, not in the one run in ten chance places it so.
+    const char* at = getenv("GALAXY_TEST_MEMORY_AT");
+    sMemory = (uint8_t*)VirtualAlloc(at != NULL ? (void*)(uintptr_t)strtoull(at, NULL, 16) : NULL, kSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
     return sMemory != NULL;
 #else
     void* p = mmap(NULL, kSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0);

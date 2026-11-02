@@ -943,7 +943,7 @@ void MarioActor::drawModelBlur() const {
 void MarioActor::createTextureList(StateListHolder* pHolder, u16 texMapID, u16 texIndex) {
     ResTIMG* texture = _B64[texIndex];
     pHolder->mList.reserve(1);
-    pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), reinterpret_cast< u8* >(texture) + texture->mImageDataOffset);
+    pHolder->mList.setTexImgPtr(static_cast< GpuTexMapID >(texMapID), const_cast< u8* >(texture->image()));
 }
 
 void MarioActor::swapTexture(const char* pMaterialName, u8 texNo) const {

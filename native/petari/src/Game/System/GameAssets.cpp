@@ -164,10 +164,82 @@ namespace GameAssets {
         GameThreads::restoreAudio(enabled);
     }
 
+    // A file loaded whole is a view of the store from cMappedFrom bytes up: nearly all its pages stay as they are (a model's few
+    // fixed-up pointers aside), so they cost no memory of the game's. The heap it was asked for decides when it goes.
+    namespace {
+        const u32 cMappedFrom = 0x2000;
+        const u32 cMappedMax = 2048;
+
+        struct Mapped {
+            void* mData;
+            u32 mSize;
+            JKRHeap* mHeap;
+        };
+
+        Mapped sMapped[cMappedMax];
+        u32 sMappedCount;
+        GameMutex sMappedLock;  // all zeros: ready before anything can run
+
+        void release(const Mapped& rMapped) {
+            const NebulaHostServices* const host = nebula_host();
+            const uintptr_t start = reinterpret_cast< uintptr_t >(rMapped.mData);
+            host->shape_forget(host->user, start, start + rMapped.mSize);
+            host->asset_unmap(host->user, rMapped.mData, rMapped.mSize);
+        }
+
+        void* loadMapped(s32 entry, u32 size, JKRHeap* pHeap) {
+            const NebulaHostServices* const host = nebula_host();
+            sMappedLock.lock();
+            void* pData = sMappedCount < cMappedMax ? host->asset_map_private(host->user, entry) : nullptr;
+            if (pData != nullptr) {
+                Mapped& rMapped = sMapped[sMappedCount++];
+                rMapped.mData = pData;
+                rMapped.mSize = size;
+                rMapped.mHeap = pHeap != nullptr ? pHeap : JKRHeap::getCurrentHeap();
+            }
+            sMappedLock.unlock();
+            return pData;
+        }
+    }  // namespace
+
+    bool unload(void* pData) {
+        if (pData == nullptr) {
+            return false;
+        }
+        // Heap memory is the usual case. Anything else is a view: it stays until its heap goes, as a freed block's bytes
+        // and the renderer's copies of them always did.
+        const JKRHeap* const pRoot = JKRHeap::getRootHeap();
+        return pData < pRoot->getStartAddr() || pData >= pRoot->getEndAddr();
+    }
+
+    void unloadHeap(const JKRHeap* pHeap, const void* pStart, const void* pEnd) {
+        sMappedLock.lock();
+        for (u32 i = 0; i < sMappedCount;) {
+            const void* const pOwner = sMapped[i].mHeap;
+            if (pOwner == pHeap || (pOwner >= pStart && pOwner < pEnd)) {
+                release(sMapped[i]);
+                sMapped[i] = sMapped[--sMappedCount];
+            } else {
+                i++;
+            }
+        }
+        sMappedLock.unlock();
+    }
+
     void* load(s32 entry, u8* pDst, u32 maxLength, JKRHeap* pHeap, AllocDirection direction, u32* pSize) {
         File file;
         if (!open(entry, &file)) {
             return nullptr;
+        }
+
+        if (pDst == nullptr && maxLength == 0 && file.mLength >= cMappedFrom) {
+            void* const pMapped = loadMapped(entry, file.mLength, pHeap);
+            if (pMapped != nullptr) {
+                if (pSize != nullptr) {
+                    *pSize = file.mLength;
+                }
+                return pMapped;
+            }
         }
 
         const u32 size = maxLength != 0 && maxLength < file.mLength ? maxLength : file.mLength;

@@ -85,7 +85,6 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/transform_history.cpp
     ${rt}/render/render_core.cpp
     ${rt}/render/game_lights.cpp
-    ${rt}/render/game_objects.cpp
     ${rt}/render/galaxy_select.cpp
     ${rt}/render/frame_interpolation.cpp
     ${rt}/render/interp_gpu.cpp

@@ -49,8 +49,8 @@ public:
     LayoutHolder* createAndAddLayoutHolderStationed(const char*);
     LayoutHolder* createAndAddLayoutHolderRawData(const char*);
     void removeIfIsEqualHeap(JKRHeap*);
-    static void startCreateResourceHolderOnMainThread(const char*, CreateResourceHolderArgs*);
-    static void startCreateLayoutHolderOnMainThread(const char*, CreateResourceHolderArgs*);
+    static void startCreateResourceHolder(const char*, CreateResourceHolderArgs*);
+    static void startCreateLayoutHolder(const char*, CreateResourceHolderArgs*);
 
 private:
     ResourceHolderManagerName2Resource* createAndAddInner(const char*, MakeArchiveFileNameFuncPtr, FuncPtrB);

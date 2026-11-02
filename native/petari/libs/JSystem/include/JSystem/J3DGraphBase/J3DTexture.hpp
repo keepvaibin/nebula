@@ -31,9 +31,9 @@ public:
 
     void setResTIMG(u16 index, const ResTIMG& timg) {
         mpRes[index] = timg;
-        mpRes[index].mImageDataOffset = ((mpRes[index].mImageDataOffset + (uintptr_t)&timg - (uintptr_t)(mpRes + index)));
+        mpRes[index].mImage = timg.image();
         // The new image handed to the renderer, as the model's own were at load.
-        J3DNativeTexture::registerImage(reinterpret_cast< const u8* >(&timg) + (s32)timg.mImageDataOffset, timg.mFormat, timg.mWidth,
+        J3DNativeTexture::registerImage(timg.image(), timg.mFormat, timg.mWidth,
                                         timg.mHeight, timg.mMipmap ? timg.mImageNum : 1);
     }
 };

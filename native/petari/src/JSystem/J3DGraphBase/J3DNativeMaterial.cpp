@@ -403,7 +403,7 @@ namespace {
     void texture(J3DTexture* pTexture, u32 map, u16 texNo, J3DMaterialValues* pOut, u16* pSizes) {
         ResTIMG* pImg = pTexture->getResTIMG(texNo);
         NebulaMaterialTexture& rOut = pOut->texture[map];
-        rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
+        rOut.image = keyOf(pImg->image());
         rOut.width = pImg->mWidth;
         rOut.height = pImg->mHeight;
         rOut.wrap_s = pImg->mWrapS;

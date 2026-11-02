@@ -216,7 +216,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
     for (u32 i = 0; i <= 15; i++) {
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             if (i == 6 && J3DNativeMaterial::overrideCoordinate(
-                              reinterpret_cast< const u8* >(MR::getScreenResTIMG()) + MR::getScreenResTIMG()->mImageDataOffset,
+                              MR::getScreenResTIMG()->image(),
                               MR::getScreenWidth(), NebulaFrameClock::cCanvasHeight)) {
                 continue;
             }
@@ -361,7 +361,7 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     list.clear();
 
     list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
-    list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
+    list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(MR::getScreenResTIMG()->image()));
     list.setTexCoordGen(GPU_TEXCOORD0, GPU_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
     pLists[6].copy(list);
     list.clear();

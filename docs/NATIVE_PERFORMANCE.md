@@ -27,6 +27,20 @@ cores with SMT of the machine above, `GALAXY_GPU_PREFERENCE=low GALAXY_TEST_CPU_
   instead of 1.08 s.
 - Today, RTX 5090, shader cache warm: 689 ms to the title, 320 of them the device and Streamline (`boot:` lines).
 
+## Loading a galaxy
+
+The `scene:` lines of the log time each phase (real time at 60 fps, RTX 5090, 8 stops, `run_ld`; **M**):
+
+| phase | before | now |
+|---|---|---|
+| `[initialize Scene]` to `[scene ready]` | 834-1,534 ms | 50-67 ms |
+| destroy and wave banks | about 50 ms | about 50 ms |
+| frames over 25 ms in a load | 1 (37 ms) | 5-6 (29-144 ms) |
+
+Each archive's resource holder used to wait for the main thread, which took one a frame. The thread that asks now makes it: all
+game threads hold the world while they run. The picture is black at each long frame. Frames are byte-identical to before at the
+12 stops compared (`matchframes`), each stop starting earlier.
+
 ## Fixed
 
 | path | before | after | evidence |
@@ -153,9 +167,8 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
 
 ### Native draws
 
-The game's GX calls still reach the renderer as GX commands, parsed into GX register state. They are replaced by native
-draws subsystem by subsystem (design: the shared NATIVE-RENDER note; order: shapes, materials, records for 2D,
-particles and immediate draws, then the command stream goes).
+How the game's GX calls became native draws, and what each step measured. The command stream, its parser and the markers
+named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the numbers stand as the record of each step.
 
 - Model shapes: J3DShapeDraw draws its list by a handle (`__NebulaGXCallShapeDisplayList`, the shape-list marker).
   Each list is built once on a worker at background priority (`galaxy/render/native_shapes.h`): decoded by the renderer's
@@ -282,13 +295,15 @@ it (`asset_map`), and its pages are the file's: no commit, and the system can dr
 
 | what | before | now |
 |---|---|---|
-| process, private working set | 2,224 MB (first reading) | 405 MB |
+| process, private working set | 2,224 MB (first reading) | 357-372 MB |
 | upload rings | 464 MB, all resident | 64 MB; the most a frame took: vertex 2.2, index 1.2, constant 1.4, matrix 0.7 |
 | resident vertices | CPU copy + 64 MB upload copy + 64 MB local | 64 MB local |
 | wave archives | 48 MB and more in the sound memory | none: mapped |
 | streams | a whole file in the heap each (29 MB for one) | none: mapped |
 | images of dead scenes | grew to 404 MB over a tour | gone with their scene's heap |
-| game block | 512 MB committed | 385 MB committed, about 80 MB in memory |
+| archives | read into the heaps | private views of the store: only written pages are the game's |
+| game block | 512 MB committed | 385 MB committed, about 41 MB in memory |
+| limited to 4 GB of committed memory, the 102 stops | 2,378 MB peak | 1,363 MB peak, nothing lost |
 
 ## Planned, measured before adopted (H)
 

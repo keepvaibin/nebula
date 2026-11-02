@@ -6,8 +6,6 @@
 #include "JSystem/JKernel/JKRSolidHeap.hpp"
 
 JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
-    _84 = false;
-    threadQueue_.init();
 }
 
 JASTaskThread::~JASTaskThread() {
@@ -84,9 +82,6 @@ void* JASTaskThread::run() {
     JASThreadCallStack* callstack;
     do {
         callstack = static_cast< JASThreadCallStack* >(waitMessageBlock());
-        if (_84) {
-            threadQueue_.wait();
-        }
 
         if (callstack->msgType_) {
             callstack->callback_(callstack->msg.buffer);
@@ -96,16 +91,4 @@ void* JASTaskThread::run() {
 
         JASKernel::getCommandHeap()->free(callstack);
     } while (true);
-}
-
-void JASTaskThread::pause(bool param_0) {
-    GameAudioExclusion aJStack_14;
-    if (param_0) {
-        _84 = 1;
-    } else {
-        if (_84) {
-            threadQueue_.signal();
-        }
-        _84 = 0;
-    }
 }

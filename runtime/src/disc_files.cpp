@@ -38,6 +38,10 @@ void AssetStore::close() {
     if (view_ != nullptr) {
         UnmapViewOfFile(view_);
     }
+    if (mapping_ != nullptr) {
+        CloseHandle(mapping_);
+        mapping_ = nullptr;
+    }
     if (file_ != nullptr) {
         CloseHandle(file_);
         file_ = nullptr;
@@ -144,11 +148,8 @@ bool AssetStore::open(const std::filesystem::path& path) {
     }
     // Address space only: pages come in as they are used and are the file's, so they cost no commit and the system can drop them.
 #if defined(_WIN32)
-    const HANDLE mapping = CreateFileMappingW(file_, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    view_ = mapping != nullptr ? static_cast<const std::uint8_t*>(MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0)) : nullptr;
-    if (mapping != nullptr) {
-        CloseHandle(mapping);
-    }
+    mapping_ = CreateFileMappingW(file_, nullptr, PAGE_WRITECOPY, 0, 0, nullptr);
+    view_ = mapping_ != nullptr ? static_cast<const std::uint8_t*>(MapViewOfFile(mapping_, FILE_MAP_READ, 0, 0, 0)) : nullptr;
 #else
     void* const mapped = mmap(nullptr, static_cast<std::size_t>(size_), PROT_READ, MAP_PRIVATE, file_, 0);
     view_ = mapped != MAP_FAILED ? static_cast<const std::uint8_t*>(mapped) : nullptr;
@@ -179,6 +180,43 @@ const std::uint8_t* AssetStore::map(std::uint64_t position, std::size_t size) co
     madvise(reinterpret_cast<void*>(page), size + (reinterpret_cast<std::uintptr_t>(data) - page), MADV_WILLNEED);
 #endif
     return data;
+}
+
+// A view starts where the system's granularity allows, at most 64 KB before the file; the bytes before it are the store's.
+std::uint8_t* AssetStore::map_private(std::uint64_t position, std::size_t size) const {
+    constexpr std::uint64_t granularity = 0x10000u;
+    if (view_ == nullptr || position > size_ || size_ - position < size) {
+        return nullptr;
+    }
+    const std::uint64_t start = position & ~(granularity - 1u);
+    const auto length = static_cast<std::size_t>(position + size - start);
+#if defined(_WIN32)
+    void* const base = MapViewOfFile(mapping_, FILE_MAP_COPY, static_cast<DWORD>(start >> 32u), static_cast<DWORD>(start), length);
+    if (base == nullptr) {
+        return nullptr;
+    }
+    WIN32_MEMORY_RANGE_ENTRY range{base, length};
+    PrefetchVirtualMemory(GetCurrentProcess(), 1, &range, 0);
+#else
+    void* const base = mmap(nullptr, length, PROT_READ | PROT_WRITE, MAP_PRIVATE, file_, static_cast<off_t>(start));
+    if (base == MAP_FAILED) {
+        return nullptr;
+    }
+    madvise(base, length, MADV_WILLNEED);
+#endif
+    return static_cast<std::uint8_t*>(base) + (position - start);
+}
+
+void AssetStore::unmap_private(void* data, std::size_t size) const {
+    constexpr std::uintptr_t granularity = 0x10000u;
+    const auto at = reinterpret_cast<std::uintptr_t>(data);
+    const std::uintptr_t base = at & ~(granularity - 1u);
+#if defined(_WIN32)
+    (void)size;
+    UnmapViewOfFile(reinterpret_cast<void*>(base));
+#else
+    munmap(reinterpret_cast<void*>(base), size + (at - base));
+#endif
 }
 
 bool AssetStore::read(std::uint64_t position, std::size_t size, void* dst) const {

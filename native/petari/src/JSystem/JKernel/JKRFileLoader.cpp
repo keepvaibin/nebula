@@ -14,9 +14,11 @@ JKRFileLoader::JKRFileLoader() : JKRDisposer(), mLoaderLink(this) {
 }
 
 JKRFileLoader::~JKRFileLoader() {
+    sVolumeListMutex.lock();
     if (sCurrentVolume == this) {
         sCurrentVolume = nullptr;
     }
+    sVolumeListMutex.unlock();
 }
 
 void JKRFileLoader::unmount() {
@@ -37,6 +39,7 @@ void* JKRFileLoader::getGlbResource(const char* pName, JKRFileLoader* pLoader) {
     if (pLoader != nullptr) {
         resource = pLoader->getResource(0, pName);
     } else {
+        sVolumeListMutex.lock();
         JSUPtrLink* current = sVolumeList.mHead;
 
         while (current != nullptr) {
@@ -48,6 +51,7 @@ void* JKRFileLoader::getGlbResource(const char* pName, JKRFileLoader* pLoader) {
 
             current = current->mNext;
         }
+        sVolumeListMutex.unlock();
     }
 
     return resource;

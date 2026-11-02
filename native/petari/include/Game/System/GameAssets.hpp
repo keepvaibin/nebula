@@ -54,6 +54,10 @@ namespace GameAssets {
     s32 read(const File* pFile, void* pDst, s32 size, s32 offset);
     // The file's bytes in the mapped store, read-only, for the process's life; may wait for the drive.
     const void* map(s32 entryNum);
+    // Whether `pData` is a file load() mapped: a free of it does nothing, it goes with its heap.
+    bool unload(void* pData);
+    // Every file mapped for a heap or a heap inside it (the memory it had, `pStart` to `pEnd`): a scene-level heap has gone.
+    void unloadHeap(const JKRHeap* pHeap, const void* pStart, const void* pEnd);
     void readAsync(const File* pFile, Request* pRequest, void* pDst, s32 size, s32 offset, Callback callback);
     // A read cannot be withdrawn from the host: its callback gets cResultCanceled when it ends, and cancel() returns then.
     void cancel(Request* pRequest);

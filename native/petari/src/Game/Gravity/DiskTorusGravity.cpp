@@ -1,6 +1,5 @@
 #include "Game/Gravity.hpp"
 #include "Game/Util.hpp"
-#include "Inline.hpp"
 
 #define DISK_TORUS_DISABLE_BOTH_EDGE_GRAVITY 0
 #define DISK_TORUS_DISABLE_OUTER_EDGE_GRAVITY 1

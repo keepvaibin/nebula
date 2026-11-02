@@ -36,12 +36,16 @@ ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, JKRHeap* pHe
 }
 
 JKRMemArchive* ArchiveHolder::getArchive(const char* pArchiveName) const {
+    mMutex.lock();
     ArchiveHolderArchiveEntry* entry = findEntry(pArchiveName);
+    mMutex.unlock();
     return (entry != nullptr) ? entry->mArchive : nullptr;
 }
 
 void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, JKRArchive** pArchive, JKRHeap** pHeap) const {
+    mMutex.lock();
     ArchiveHolderArchiveEntry* entry = findEntry(pArchiveName);
+    mMutex.unlock();
 
     if (entry != nullptr) {
         *pArchive = entry->mArchive;
@@ -54,6 +58,7 @@ void ArchiveHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
         return;
     }
 
+    mMutex.lock();
     for (ArchiveHolderArchiveEntry** i = mEntries.begin(); i != mEntries.end();) {
         if ((*i)->mHeap == pHeap) {
             delete *i;
@@ -62,6 +67,7 @@ void ArchiveHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
             i++;
         }
     }
+    mMutex.unlock();
 }
 
 ArchiveHolderArchiveEntry* ArchiveHolder::findEntry(const char* pArchiveName) const {

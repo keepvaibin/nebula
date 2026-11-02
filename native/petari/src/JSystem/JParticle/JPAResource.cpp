@@ -1052,7 +1052,7 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     if (mpChildShape->isClipOn()) {
     } else {
     }
-    work->mpResMgr->CALL_INLINE_FUNC(load, work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GPU_TEXMAP1);
+    work->mpResMgr->load(work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GPU_TEXMAP1);
     sendParticleMaterial(mpBaseShape, 8);
 }
 

@@ -83,17 +83,17 @@ public:
 
 namespace JASThreadingModel {
     template < typename T >
-    class InterruptsDisable {
+    class AudioExcluded {
     public:
         struct Lock {
             Lock(const T&) {
-                mInterruptState = GameThreads::excludeAudio();
+                mEnabled = GameThreads::excludeAudio();
             }
             ~Lock() {
-                GameThreads::restoreAudio(mInterruptState);
+                GameThreads::restoreAudio(mEnabled);
             }
 
-            /* 0x00 */ u32 mInterruptState;
+            /* 0x00 */ u32 mEnabled;
         };
     };
 
@@ -312,16 +312,16 @@ template < typename T >
 class JASMemPool_MultiThreaded : public JASGenericMemPool {
 public:
     void newMemPool(int n) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded< T > >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded< T > >::Lock lock(*this);
         JASGenericMemPool::newMemPool(sizeof(T), n);
     }
 
     void* alloc(u32 size) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded >::Lock lock(*this);
         return JASGenericMemPool::alloc(size);
     }
     void free(void* addr, u32 size) {
-        typename JASThreadingModel::InterruptsDisable< JASMemPool_MultiThreaded >::Lock lock(*this);
+        typename JASThreadingModel::AudioExcluded< JASMemPool_MultiThreaded >::Lock lock(*this);
         JASGenericMemPool::free(addr, size);
     }
 };

@@ -369,7 +369,6 @@ add_library(galaxy_gx STATIC
     ${galaxy_bloom_headers}
     runtime/src/render/temporal_upscaler.cpp
     runtime/src/render/game_lights.cpp
-    runtime/src/render/game_objects.cpp
     runtime/src/render/rt_materials.cpp
     runtime/src/render/streamline_bridge.cpp
     runtime/src/render/transform_history.cpp
@@ -637,7 +636,6 @@ if(NEBULA_VULKAN)
             runtime/src/render/render_core.cpp
             runtime/src/render/draw_input_dump.cpp
         runtime/src/render/game_lights.cpp
-        runtime/src/render/game_objects.cpp
         runtime/src/render/galaxy_select.cpp
         runtime/src/render/frame_interpolation.cpp
         runtime/src/render/interp_gpu.cpp

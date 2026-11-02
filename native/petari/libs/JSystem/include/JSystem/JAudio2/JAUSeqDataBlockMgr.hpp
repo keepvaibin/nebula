@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/NebulaAtomic.hpp"
 #include "JSystem/JAudio2/JAISeqDataMgr.hpp"
 #include "JSystem/JSupport/JSUList.hpp"
 
@@ -13,7 +14,7 @@ struct JAUSeqDataBlock {
     /* 0x00 */ JSULink< JAUSeqDataBlock > mLink;
     /* 0x10 */ JAISoundID mSoundID;
     /* 0x14 */ JAISeqDataRegion region;
-    /* 0x1C */ int field_0x1c;
+    /* 0x1C */ NebulaAtomic< int > field_0x1c;  // the load thread says when the data is there
 };
 
 class JAUSeqDataBlocks : public JSUList< JAUSeqDataBlock > {

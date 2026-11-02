@@ -8,6 +8,7 @@
 #include "Game/System/GameAssets.hpp"
 
 JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
+    JKRFileLoader::sVolumeListMutex.lock();
     JSUPtrLink* current = JKRFileLoader::sVolumeList.mHead;
 
     while (current != nullptr) {
@@ -15,12 +16,14 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum) {
 
         if (archive->mLoaderType == RARC_MAGIC && archive->mEntryNum == entryNum) {
             archive->_34++;
+            JKRFileLoader::sVolumeListMutex.unlock();
             return archive;
         }
 
         current = current->mNext;
     }
 
+    JKRFileLoader::sVolumeListMutex.unlock();
     return nullptr;
 }
 
@@ -29,6 +32,7 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
         pHeap = JKRHeap::sCurrentHeap;
     }
 
+    JKRFileLoader::sVolumeListMutex.lock();
     JSUPtrLink* current = JKRFileLoader::sVolumeList.mHead;
 
     while (current != nullptr) {
@@ -36,12 +40,14 @@ JKRArchive* JKRArchive::check_mount_already(s32 entryNum, JKRHeap* pHeap) {
 
         if (archive->mLoaderType == RARC_MAGIC && archive->mEntryNum == entryNum && archive->mHeap == pHeap) {
             archive->_34++;
+            JKRFileLoader::sVolumeListMutex.unlock();
             return archive;
         }
 
         current = current->mNext;
     }
 
+    JKRFileLoader::sVolumeListMutex.unlock();
     return nullptr;
 }
 

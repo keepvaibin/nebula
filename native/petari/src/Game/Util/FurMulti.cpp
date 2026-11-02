@@ -77,10 +77,7 @@ void FurMulti::setLayerDirect(u32 layer, u32 drawOrder, u32 shape, u32 numLayers
         pDensity->mHeight = 32;
         pDensity->mWrapS = GPU_REPEAT;
         pDensity->mWrapT = GPU_REPEAT;
-        pDensity->mCookedPaletteName = 0;
-        pDensity->mCookedPaletteFormat = 0;
-        pDensity->mCookedPaletteNum = 0;
-        pDensity->mCookedPaletteOffset = 0;
+        pDensity->mImage = nullptr;
         pDensity->mMipmap = false;
         pDensity->mDoEdgeLod = false;
         pDensity->mBiasClamp = false;
