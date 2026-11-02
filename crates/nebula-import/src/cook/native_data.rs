@@ -39,8 +39,8 @@
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
 //!   counts and values (rfl_res_host).
-//! - The audio archive (BAA): the command stream, BST, BSTN and BSC (baa); WSYS and IBNK stay big-endian until
-//!   their steps.
+//! - The audio archive (BAA): the command stream, BST, BSTN, BSC and the wave systems (WSYS) (baa); IBNK stays
+//!   big-endian until its step.
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1557,8 +1557,9 @@ pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
 /// host-order character constants, a cooked archive starts "<_AA"; their arguments; 'sect' keeps its four bytes), the
 /// sound table (BST: header words, sections, groups, item offsets with their type byte, items by type: SE, BGM,
 /// stream), the sound name table (BSTN: header words, sections, groups, name offsets) and the sequence collection
-/// (BSC: group count, size, table offsets, each table's count and sequence offsets; the sequences stay bytes). The wave
-/// systems (WSYS) and banks (IBNK) stay big-endian until their steps.
+/// (BSC: group count, size, table offsets, each table's count and sequence offsets; the sequences stay bytes) and the
+/// wave systems (WSYS: header, wave archive bank, archives, waves, control groups, scenes, controls and their wave
+/// entries). The banks (IBNK) stay big-endian until their step.
 pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 4 && &bytes[0..4] == b"<_AA" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1573,6 +1574,7 @@ pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
         Ok(c)
     };
     constant(&mut out, 0)?;
+    let mut turned: HashSet<usize> = HashSet::new(); // records two wave systems share: turned once
     let mut p = 4;
     loop {
         let cmd = constant(&mut out, p)?;
@@ -1598,6 +1600,7 @@ pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
             b"bst " => sound_table(bytes, &mut out, v[0], v[1]).context("the sound table (BST)")?,
             b"bstn" => sound_name_table(bytes, &mut out, v[0], v[1]).context("the sound name table (BSTN)")?,
             b"bsc " => seq_collection(bytes, &mut out, v[0]).context("the sequence collection (BSC)")?,
+            b"ws  " => wave_system(bytes, &mut out, v[1], &mut turned).with_context(|| format!("wave system {}", v[0]))?,
             _ => {}
         }
     }
@@ -1690,6 +1693,71 @@ fn sound_name_table(src: &[u8], out: &mut [u8], base: usize, _end: usize) -> Res
             host32(src, out, base + group + 4)?;
             for i in 0..count {
                 host32(src, out, base + group + 8 + 4 * i)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A wave system (WSYS) at `base`: header (size, id, wave table size, archive bank and control group offsets), the
+/// wave archive bank (count, archive offsets), each archive (count after its 0x70-byte name, wave offsets), each wave
+/// (sample rate, AW offset and length, loop flags and points, sample count: 32-bit; the two last samples: 16-bit;
+/// format and key bytes stay), the control group (count, scene offsets), each scene's three control offsets, each
+/// control (count, wave entry offsets) and its wave entries (32-bit: group and wave id halves). Magics stay
+/// characters (the game compares none).
+fn wave_system(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usize>) -> Result<()> {
+    if src.get(base..base + 4) != Some(b"WSYS".as_slice()) {
+        bail!("no WSYS magic");
+    }
+    if !turned.insert(base) {
+        return Ok(());
+    }
+    for o in [4, 8, 0xC] {
+        host32(src, out, base + o)?;
+    }
+    let bank = host32(src, out, base + 0x10)? as usize;
+    let group = host32(src, out, base + 0x14)? as usize;
+    if bank != 0 {
+        let archives = host32(src, out, base + bank + 4)? as usize;
+        for a in 0..archives {
+            let archive = host32(src, out, base + bank + 8 + 4 * a)? as usize;
+            if archive == 0 || !turned.insert(base + archive) {
+                continue;
+            }
+            let waves = host32(src, out, base + archive + 0x70)? as usize;
+            for w in 0..waves {
+                let wave = host32(src, out, base + archive + 0x74 + 4 * w)? as usize;
+                if wave == 0 || !turned.insert(base + wave) {
+                    continue;
+                }
+                let at = base + wave;
+                for o in (4..0x20).step_by(4) {
+                    host32(src, out, at + o)?;
+                }
+                host16(src, out, at + 0x20)?;
+                host16(src, out, at + 0x22)?;
+            }
+        }
+    }
+    if group != 0 {
+        let scenes = host32(src, out, base + group + 8)? as usize;
+        for c in 0..scenes {
+            let scene = host32(src, out, base + group + 0xC + 4 * c)? as usize;
+            if scene == 0 || !turned.insert(base + scene) {
+                continue;
+            }
+            for o in [0xC, 0x10, 0x14] {
+                let ctrl = host32(src, out, base + scene + o)? as usize;
+                if ctrl == 0 || !turned.insert(base + ctrl) {
+                    continue;
+                }
+                let entries = host32(src, out, base + ctrl + 4)? as usize;
+                for e in 0..entries {
+                    let entry = host32(src, out, base + ctrl + 8 + 4 * e)? as usize;
+                    if entry != 0 && turned.insert(base + entry) {
+                        host32(src, out, base + entry)?;
+                    }
+                }
             }
         }
     }

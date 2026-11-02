@@ -7,6 +7,7 @@ class JASWaveBank;
 struct JASBasicWaveBank;
 struct JASSimpleWaveBank;
 
+// Wave systems (WSYS) in host order, as the importer cooks the audio archive (native_data.rs wave_system).
 class JASWSParser {
 public:
     template < class T >
@@ -17,16 +18,16 @@ public:
         }
 
     private:
-        /* 0x0 */ NEBULA_BE(u32) mOffset;
+        /* 0x0 */ u32 mOffset;
     };
 
     struct TCtrlWave {
         union {
             struct {
-                /* 0x0 */ NEBULA_BE(u16) mWaveGroupId;
-                /* 0x2 */ NEBULA_BE(u16) mWaveId;
+                /* 0x0 */ u16 mWaveGroupId;
+                /* 0x2 */ u16 mWaveId;
             };
-            /* 0x0 */ NEBULA_BE(u32) mData;
+            /* 0x0 */ u32 mData;
         };
     };
 
@@ -34,32 +35,32 @@ public:
         /* 0x00 */ u8 _00;
         /* 0x01 */ u8 mFormat;
         /* 0x02 */ u8 mBaseKey;
-        /* 0x04 */ NEBULA_BE(f32) mSampleRate;
-        /* 0x08 */ NEBULA_BE(u32) mAWStartOffs;
-        /* 0x0C */ NEBULA_BE(u32) mAWLength;
-        /* 0x10 */ NEBULA_BE(u32) mLoopFlags;
-        /* 0x14 */ NEBULA_BE(u32) mSampleLoopStart;
-        /* 0x18 */ NEBULA_BE(u32) mSampleLoopEnd;
-        /* 0x1C */ NEBULA_BE(u32) mSampleCount;
-        /* 0x20 */ NEBULA_BE(s16) mpLastSample;
-        /* 0x22 */ NEBULA_BE(s16) mpPenultSample;
+        /* 0x04 */ f32 mSampleRate;
+        /* 0x08 */ u32 mAWStartOffs;
+        /* 0x0C */ u32 mAWLength;
+        /* 0x10 */ u32 mLoopFlags;
+        /* 0x14 */ u32 mSampleLoopStart;
+        /* 0x18 */ u32 mSampleLoopEnd;
+        /* 0x1C */ u32 mSampleCount;
+        /* 0x20 */ s16 mpLastSample;
+        /* 0x22 */ s16 mpPenultSample;
     };
 
     struct TWaveArchive {
         /* 0x00 */ char mFileName[0x70];
-        /* 0x70 */ NEBULA_BE(s32) mWaveCount;
+        /* 0x70 */ s32 mWaveCount;
         /* 0x74 */ TOffset< TWave > mWaveOffsets[0];
     };
 
     struct TWaveArchiveBank {
         /* 0x0 */ char mMagic[4];
-        /* 0x4 */ NEBULA_BE(s32) mWaveGroupCount;
+        /* 0x4 */ s32 mWaveGroupCount;
         /* 0x8 */ TOffset< TWaveArchive > mArchiveOffsets[0];
     };
 
     struct TCtrl {
         /* 0x0 */ char mMagic[4];
-        /* 0x4 */ NEBULA_BE(u32) mWaveCount;
+        /* 0x4 */ u32 mWaveCount;
         /* 0x8 */ TOffset< TCtrlWave > mCtrlWaveOffsets[0];
     };
 
@@ -72,16 +73,16 @@ public:
     struct TCtrlGroup {
         /* 0x0 */ char mMagic[4];
         /* 0x4 */ u8 _04[4];
-        /* 0x8 */ NEBULA_BE(u32) mGroupCount;
+        /* 0x8 */ u32 mGroupCount;
         /* 0xC */ TOffset< TCtrlScene > mCtrlSceneOffsets[0];
     };
 
     /** @fabricated */
     struct THeader {
         /* 0x00 */ char mMagic[4];
-        /* 0x04 */ NEBULA_BE(s32) mSize;
-        /* 0x08 */ NEBULA_BE(s32) mId;
-        /* 0x0C */ NEBULA_BE(u32) mWaveTableSize;
+        /* 0x04 */ s32 mSize;
+        /* 0x08 */ s32 mId;
+        /* 0x0C */ u32 mWaveTableSize;
         /* 0x10 */ TOffset< TWaveArchiveBank > mArchiveBankOffset;
         /* 0x14 */ TOffset< TCtrlGroup > mCtrlGroupOffset;
     };
