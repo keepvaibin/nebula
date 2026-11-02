@@ -253,7 +253,6 @@ public:
     void doLanding();
     void startSlidingTask(u32, f32, u16);
     bool taskOnSlide(u32);
-    bool taskOnWallRising(u32);
     void incAirWalkTimer();
 
     void mainMove();

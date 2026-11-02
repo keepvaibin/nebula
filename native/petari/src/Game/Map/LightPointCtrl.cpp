@@ -43,7 +43,7 @@ void LightPointCtrl::requestPointLight(const LiveActor* pActor, TVec3f pos, Colo
     if (mStep == -1 && isUpdateCandidateActor(pActor)) {
         mCandidateActor = pActor;
         mTargetInfo->mPos = pos;
-        mTargetInfo->mColor = color.mGXColor;
+        mTargetInfo->mColor = color.mRGBA;
         mTargetInfo->mRefBrightness = MR::clamp(intensity, 0.95f, 0.999999f);
         mTargetInfo->mRefDistance = ::sDefaultDistRef;
         mTargetInfo->mDistAttnFn = J3D_FALLOFF_STEEP;

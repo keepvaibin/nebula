@@ -385,11 +385,11 @@ namespace J3DNativeMaterial {
         pParts->cooked = pMaterial->mNativeMaterial;
         J3DMaterialSetup* pOut = &pParts->setup;
         J3DMaterialValues* pVal = &pParts->values;
-        J3DTevBlock* pTev = pMaterial->mTevBlock;
+        J3DRegisterBlock* pTev = pMaterial->mRegisterBlock;
         J3DIndBlock* pInd = pMaterial->mIndBlock;
         J3DTexGenBlock* pTexGen = pMaterial->mTexGenBlock;
         J3DColorBlock* pColor = pMaterial->mColorBlock;
-        J3DPEBlock* pPE = pMaterial->mPEBlock;
+        J3DOutputBlock* pPE = pMaterial->mOutputBlock;
 
         const u32 indStages = pInd->getIndTexStageNum();
         pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
@@ -418,20 +418,20 @@ namespace J3DNativeMaterial {
             }
         }
         // The parts a TEV block variant keeps (J3DTevBlock1 has no colours): left as set before.
-        if (pTev->getTevColor(0) != NULL) {
+        if (pTev->getRegisterColor(0) != NULL) {
             pOut->loads |= J3D_LOADS_TEV_COLOR;
             for (u32 i = 0; i < 3; i++) {
-                const J3DGXColorS10& rColor = *pTev->getTevColor(i);
+                const J3DColorWide& rColor = *pTev->getRegisterColor(i);
                 pVal->tev_color[i][0] = rColor.r;
                 pVal->tev_color[i][1] = rColor.g;
                 pVal->tev_color[i][2] = rColor.b;
                 pVal->tev_color[i][3] = rColor.a;
             }
         }
-        if (pTev->getTevKColor(0) != NULL) {
+        if (pTev->getConstantColor(0) != NULL) {
             pOut->loads |= J3D_LOADS_KONST_COLOR;
             for (u32 i = 0; i < 4; i++) {
-                copyColor(pVal->konst_color[i], *pTev->getTevKColor(i));
+                copyColor(pVal->konst_color[i], *pTev->getConstantColor(i));
             }
         }
 
@@ -503,10 +503,10 @@ namespace J3DNativeMaterial {
         }
 
         // The preset blocks write fixed modes and no fog (J3DPEBlockOpa, TexEdge, Xlu load).
-        const J3DPEBlock::Kind peKind = pPE->getKind();
+        const J3DOutputBlock::Kind peKind = pPE->getKind();
         if (pPE->isPreset()) {
-            const bool edge = peKind == J3DPEBlock::Kind_TexEdge;
-            const bool xlu = peKind == J3DPEBlock::Kind_Translucent;
+            const bool edge = peKind == J3DOutputBlock::Kind_TexEdge;
+            const bool xlu = peKind == J3DOutputBlock::Kind_Translucent;
             pOut->alpha_compare.comp0 = edge ? NEBULA_COMPARE_GEQUAL : NEBULA_COMPARE_ALWAYS;
             pVal->alpha_ref[0] = edge ? 0x80 : 0;
             pOut->alpha_compare.op = J3D_AOP_AND;
@@ -609,10 +609,6 @@ namespace J3DNativeMaterial {
 
     void watch(const NebulaNativeMaterial* pNative) {
         watchMaterial(pNative);
-    }
-
-    u32 currentShader() {
-        return sCurrentKind != CURRENT_NONE ? sWatchedShader : 0;
     }
 
     bool override(u32 mode, f32 a0, f32 a1, f32 ref) {

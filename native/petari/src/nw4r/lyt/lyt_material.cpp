@@ -165,11 +165,11 @@ namespace nw4r {
             SetName(pRes->name);
 
             for (int i = 0; i < 3; ++i) {
-                mTevCols[i] = pRes->tevCols[i];
+                mRegisterColors[i] = pRes->tevCols[i];
             }
 
             for (int i = 0; i < 4; ++i) {
-                mTevKCols[i] = pRes->tevKCols[i];
+                mConstantColors[i] = pRes->tevKCols[i];
             }
 
             u32 resOffs = sizeof(res::Material);
@@ -268,9 +268,9 @@ namespace nw4r {
 
 
         void Material::Init() {
-            mTevCols[0] = DefaultBlackColor;
-            mTevCols[1].a = mTevCols[1].b = mTevCols[1].g = mTevCols[1].r = 255;
-            mTevCols[2].a = mTevCols[2].b = mTevCols[2].g = mTevCols[2].r = 255;
+            mRegisterColors[0] = DefaultBlackColor;
+            mRegisterColors[1].a = mRegisterColors[1].b = mRegisterColors[1].g = mRegisterColors[1].r = 255;
+            mRegisterColors[2].a = mRegisterColors[2].b = mRegisterColors[2].g = mRegisterColors[2].r = 255;
 
             InitStorageNums(&mCap);
             InitStorageNums(&mNum);
@@ -457,16 +457,16 @@ namespace nw4r {
                 const u32 regIdx = (idx - detail::ANIMTARGET_MATCOLOR_TEVCOLOR0_R) / 4;
                 switch ((idx - detail::ANIMTARGET_MATCOLOR_TEVCOLOR0_R) % 4) {
                 case 0:
-                    mTevCols[regIdx].r = value;
+                    mRegisterColors[regIdx].r = value;
                     break;
                 case 1:
-                    mTevCols[regIdx].g = value;
+                    mRegisterColors[regIdx].g = value;
                     break;
                 case 2:
-                    mTevCols[regIdx].b = value;
+                    mRegisterColors[regIdx].b = value;
                     break;
                 case 3:
-                    mTevCols[regIdx].a = value;
+                    mRegisterColors[regIdx].a = value;
                     break;
                 }
             } break;
@@ -488,12 +488,12 @@ namespace nw4r {
             case detail::ANIMTARGET_MATCOLOR_TEVKONST3_B:
             case detail::ANIMTARGET_MATCOLOR_TEVKONST3_A: {
                 const u32 regIdx = (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) / 4;
-                SetColorComponentValue(&mTevKCols[regIdx], (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) % 4, value);
+                SetColorComponentValue(&mConstantColors[regIdx], (idx - detail::ANIMTARGET_MATCOLOR_TEVKONST0_R) % 4, value);
             } break;
             }
         }
 
-        bool Material::SetupGX(bool modulate, u8 alpha) {
+        bool Material::Setup(bool modulate, u8 alpha) {
             // The material's setup and values, drawn by the shader the cook chose (mNativeShaders). Stored until the next
             // material.
             static J3DMaterialSetup sSetup;
@@ -609,16 +609,16 @@ namespace nw4r {
             }
 
             for (u32 r = 0; r < 3; r++) {
-                rValues.tev_color[r][0] = mTevCols[r].r;
-                rValues.tev_color[r][1] = mTevCols[r].g;
-                rValues.tev_color[r][2] = mTevCols[r].b;
-                rValues.tev_color[r][3] = mTevCols[r].a;
+                rValues.tev_color[r][0] = mRegisterColors[r].r;
+                rValues.tev_color[r][1] = mRegisterColors[r].g;
+                rValues.tev_color[r][2] = mRegisterColors[r].b;
+                rValues.tev_color[r][3] = mRegisterColors[r].a;
             }
             for (u32 k = 0; k < 4; k++) {
-                rValues.konst_color[k][0] = mTevKCols[k].r;
-                rValues.konst_color[k][1] = mTevKCols[k].g;
-                rValues.konst_color[k][2] = mTevKCols[k].b;
-                rValues.konst_color[k][3] = mTevKCols[k].a;
+                rValues.konst_color[k][0] = mConstantColors[k].r;
+                rValues.konst_color[k][1] = mConstantColors[k].g;
+                rValues.konst_color[k][2] = mConstantColors[k].b;
+                rValues.konst_color[k][3] = mConstantColors[k].a;
             }
 
             // Each coordinate's scale: the size of the texture the cook found it samples.
@@ -684,7 +684,7 @@ namespace nw4r {
                 rSetup.blend.logic_op = J3D_LO_SET;
             }
 
-            const bool remap = mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1]);
+            const bool remap = mRegisterColors[0] != DefaultBlackColor || !IsWhiteColor(mRegisterColors[1]);
             const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
             J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rSetup, rValues);
             J3DNativeShape::setCurrentFromFile(0, places);

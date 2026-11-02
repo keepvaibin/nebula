@@ -59,7 +59,6 @@ namespace MR {
 
     /// @brief Extracts the language setting from the working region-language identifier.
     /// @return The language setting.
-    u32 getLanguageFromIPL();
 
     /// @brief Returns the region-language label.
     /// @return The pointer to the null-terminated label.

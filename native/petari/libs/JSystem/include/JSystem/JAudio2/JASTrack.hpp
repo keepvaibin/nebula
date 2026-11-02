@@ -121,7 +121,6 @@ struct JASTrack : public JASPoolAllocObject_MultiThreaded< JASTrack > {
     void setTimebase(u16);
     void updateChannel(JASChannel*, JASVoice*);
     JASTrack* getRootTrack();
-    s32 getChannelCount() const;
     int tickProc();
     s32 seqMain();
 

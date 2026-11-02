@@ -763,7 +763,7 @@ void JPAResource::draw(JPAEmitterWorkData* work, JPABaseEmitter* emtr) {
     work->mpRes = this;
     work->mDrawCount = 0;
     calcWorkData_d(work);
-    mpBaseShape->setGX(work);
+    mpBaseShape->setPass(work);
     for (s32 i = 1; i <= emtr->getDrawTimes(); i++) {
         work->mDrawCount++;
         if (mpBaseShape->isDrawPrntAhead() && mpChildShape != NULL)

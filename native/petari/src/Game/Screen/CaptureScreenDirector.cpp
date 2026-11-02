@@ -57,10 +57,6 @@ const ResTIMG* CaptureScreenDirector::getResTIMG() const {
     return mTexture->mTIMG;
 }
 
-u8* CaptureScreenDirector::getTexImage() const {
-    return mTexture->mImage;
-}
-
 const TimingInfo* CaptureScreenDirector::getUsingTiming() const {
     if (_C != nullptr) {
         return findFromName(_C);

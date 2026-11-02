@@ -88,7 +88,6 @@ namespace J3DNativeMaterial {
     // values): the draws after it no longer use the current J3D material.
     void watch(const NebulaNativeMaterial* pNative);
     // The native shader of the material the draws use now (0: the drawing state's program).
-    u32 currentShader();
     // Tests (GALAXY_DUMP_DRAW_INPUTS): tags the next draws when `shader` is the asked native shader.
     void dumpTag(u32 shader);
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts

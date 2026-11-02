@@ -47,7 +47,6 @@ public:
     void stop(u32 fadeTime);
     void stop();
     void stopSoundID(JAISoundID id);
-    void pause(bool);
     void JAISeMgr_mixOut_(const JAISoundParamsMove& params, JAISoundActivity activity);
 
     JAISeCategoryMgr() {
@@ -101,7 +100,6 @@ class JAISeMgr : public JASGlobalInstance< JAISeMgr >, public JAISeqDataUser, pu
 public:
     JAISeMgr(bool setInstance);
     void setCategoryArrangement(const JAISeCategoryArrangement& arrangement);
-    void getCategoryArrangement(JAISeCategoryArrangement*);
     void stop();
     void stop(u32 fadeTime);
     void stopSoundID(JAISoundID id);

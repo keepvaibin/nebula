@@ -689,10 +689,6 @@ bool Rock::tryBreakReachedGoal() {
     return false;
 }
 
-const char* Rock::getTouchEffect() const {
-    return mRockType == WanwanRollingMini ? "MiniTouch" : "Touch";
-}
-
 void Rock::exeAppear() {
     f32 rotateSpeed = (::cAppearMoveSpeed * 180.0f * ::cRotateSpeedRate) / (mRadius * MR::pi());
     s32 spawnDelay = mRockType == NormalRock ? ::cAppearStopFrameRock : ::cAppearStopFrame;

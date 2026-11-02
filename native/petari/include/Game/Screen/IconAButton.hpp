@@ -16,9 +16,6 @@ public:
     void open();
     void openWithTalk();
     void openWithRead();
-    void openWithNext();
-    void openWithTerm();
-    void openWithDecide();
     void openWithTurn();
     void openWithoutMessage();
     void term();

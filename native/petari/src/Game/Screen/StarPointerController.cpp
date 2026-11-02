@@ -130,8 +130,3 @@ f32 StarPointerController::calcViewDistanceZ(const TVec3f& rPos, MtxPtr pMtx) {
     return MR::abs(rPos.x * pMtx[2][0] + rPos.y * pMtx[2][1] + rPos.z * pMtx[2][2] + pMtx[2][3]);
 }
 
-// NOTE: this is a debug symbol, TVec2f::sub is included here just to emit TVec symbol
-void StarPointerController::drawDebug3D() const {
-    TVec2f v1 = mScreenVel;
-    v1.sub(mScreenPos);
-}

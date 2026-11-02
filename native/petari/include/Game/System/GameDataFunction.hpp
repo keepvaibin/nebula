@@ -54,8 +54,6 @@ namespace GameDataFunction {
     void addStarPiece(int);
     void setLast1upStarPieceNum(int);
     s32 getLast1upStarPieceNum();
-    const char16_t* getUserName();
-    u16 getUserFileIndex();
     void resetAllGameData();
     bool isOnJustGameEventFlag(const char*);
     bool canOnJustGameEventFlag(const char*);

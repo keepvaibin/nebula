@@ -36,7 +36,6 @@ struct JASWaveArc : JASDisposer {
     bool sendLoadCmd();
     static const u32 cAllocSize = 32;
     bool load(JASHeap*); /* overwritten in OverwriteJAudio */
-    bool loadTail(JASHeap*);
     bool erase();
     void setEntryNum(s32);
     void setFileName(char const*); /* overwritten in OverwriteJAudio */

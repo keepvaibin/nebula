@@ -2660,18 +2660,6 @@ bool Mario::taskOnSlide(u32 a1) {
     return _A3C != 0;
 }
 
-bool Mario::taskOnWallRising(u32 a1) {
-    (void)a1;
-
-    if ((mMovementStates._17) == 0) {
-        stopEffect("\213\244\222\312\225\307\217\343\217\270" /* 共通壁上昇 */);
-        return false;
-    }
-
-    playSound("\203\130\203\212\203\142\203\166" /* スリップ */);
-    return true;
-}
-
 void Mario::incAirWalkTimer() {
     const u16 timer = _402;
     const u16 limit = mActor->getConst().getTable()->mAirWalkTime;

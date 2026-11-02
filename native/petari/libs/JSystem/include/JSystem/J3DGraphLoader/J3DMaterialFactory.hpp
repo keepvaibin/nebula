@@ -73,7 +73,6 @@ class J3DMaterialFactory {
 public:
     enum MaterialType {
         MATERIAL_TYPE_NORMAL = 0,
-        MATERIAL_TYPE_PATCHED = 2,
     };
 
     J3DMaterialFactory(J3DMaterialBlock const&);
@@ -82,19 +81,17 @@ public:
     u32 countStages(int) const;
     J3DMaterial* create(J3DMaterial*, MaterialType, int, u32) const;
     J3DMaterial* createNormalMaterial(J3DMaterial*, int, u32) const;
-    J3DMaterial* createPatchedMaterial(J3DMaterial*, int, u32) const;
-    void modifyPatchedCurrentMtx(J3DMaterial*, int) const;
-    J3DGXColor newMatColor(int, int) const;
+    J3DColor newMatColor(int, int) const;
     const u8 newColorChanNum(int) const;
     J3DColorChan newColorChan(int, int) const;
-    J3DGXColor newAmbColor(int, int) const;
+    J3DColor newAmbColor(int, int) const;
     u32 newTexGenNum(int) const;
     J3DTexCoord newTexCoord(int, int) const;
     J3DTexMtx* newTexMtx(int, int) const;
     u8 newCullMode(int) const;
     u16 newTexNo(int, int) const;
-    J3DGXColorS10 newTevColor(int, int) const;
-    J3DGXColor newTevKColor(int, int) const;
+    J3DColorWide newRegisterColor(int, int) const;
+    J3DColor newConstantColor(int, int) const;
     u8 newIndTexStageNum(int) const;
     J3DIndTexMtx newIndTexMtx(int, int) const;
     J3DFog newFog(int) const;
@@ -127,8 +124,8 @@ public:
     /* 0x34 */ J3DTexMtxInfo* field_0x34;
     /* 0x38 */ u16* mpTexNo;
     /* 0x3C */ u32* mpCullMode;
-    /* 0x44 */ NebulaColor16* mpTevColor;
-    /* 0x48 */ NebulaColor8* mpTevKColor;
+    /* 0x44 */ NebulaColor16* mpRegisterColor;
+    /* 0x48 */ NebulaColor8* mpConstantColor;
     /* 0x4C */ u8* mpTevStageNum;
     /* 0x5C */ J3DFogInfo* mpFogInfo;
     /* 0x60 */ J3DAlphaCompInfo* mpAlphaCompInfo;

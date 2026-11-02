@@ -206,14 +206,6 @@ void J3DTexMtx::calcPostTexMtx(const Mtx param_0) {
     }
 }
 
-bool isTexNoReg(void* pList) {
-    u8 r31 = ((u8*)pList)[1];
-    if (r31 >= 0x80 && r31 <= 0xbb) {
-        return true;
-    }
-    return false;
-}
-
 void loadNBTScale(J3DNBTScale& NBTScale) {
     if (NBTScale.mbHasScale == true) {
         j3dSys.setNBTScale(&NBTScale.mScale);
@@ -240,7 +232,7 @@ J3DTexMtxInfo const j3dDefaultTexMtxInfo = {
 
 J3DIndTexMtxInfo const j3dDefaultIndTexMtxInfo = {0.5f, 0.0f, 0.0f, 0.0f, 0.5f, 0.0f, 1};
 
-const NebulaColor16 j3dDefaultTevColor = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor16 j3dDefaultRegisterColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 J3DFogInfo const j3dDefaultFogInfo = {
     0x00,   0x00,   0x0140, 0.0f,   0.0f,   0.1f,   10000.0f, 0xFF,   0xFF,   0xFF,   0x00,
@@ -268,7 +260,7 @@ const NebulaColor8 j3dDefaultAmbInfo = {0x32, 0x32, 0x32, 0x32};
 
 const u8 j3dDefaultNumChans = 1;
 
-const NebulaColor8 j3dDefaultTevKColor = {0xFF, 0xFF, 0xFF, 0xFF};
+const NebulaColor8 j3dDefaultConstantColor = {0xFF, 0xFF, 0xFF, 0xFF};
 
 const J3DBlendInfo j3dDefaultBlendInfo = {J3D_BM_BLEND, J3D_BL_SRCALPHA, J3D_BL_INVSRCALPHA, J3D_LO_NOOP};
 

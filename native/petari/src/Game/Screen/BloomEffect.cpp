@@ -45,7 +45,7 @@ void BloomEffect::preDraw() const {
     }
     NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
 
-    MR::fillScreen(Color8(0, 0, 0, 0xFF).mGXColor);
+    MR::fillScreen(Color8(0, 0, 0, 0xFF).mRGBA);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 }

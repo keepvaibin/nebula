@@ -774,10 +774,6 @@ namespace MR {
         ::getStarPointerOnOffController()->incModeCounter(pRequester, StarPointerMode_MarioLauncher);
     }
 
-    void startStarPointerModeHomeButton(void* pRequester) {
-        ::getStarPointerOnOffController()->incModeCounter(pRequester, StarPointerMode_HomeButton);
-    }
-
     void startStarPointerModeChooseYesNo(void* pRequester) {
         ::getStarPointerOnOffController()->incModeCounter(pRequester, StarPointerMode_ChooseYesNo);
     }

@@ -558,14 +558,6 @@ namespace MR {
         return turnQuat(pDst, rSrc, zDir, rTo, angle);
     }
 
-    void turnQuatZDirRate(TQuat4f* pDst, const TQuat4f& rSrc, const TVec3f& rTo, f32 rate) {
-        TVec3f zDir;
-        rSrc.getZDir(zDir);
-        TQuat4f rot;
-        rot.setRotate(zDir, rTo, rate);
-        pDst->mult(rot, rSrc);
-    }
-
     f32 sign(f32 x) {
         if (0.0f < x) {
             return 1.0f;
@@ -1523,22 +1515,6 @@ namespace MR {
 
     f32 mod(f32 x, f32 y) {
         return fmod(x, y);
-    }
-
-    void floatToFixed16(TVec3s* pDst, const TVec3f& rPSrc, u8 q) {
-        f32 scale = 1 << q;
-
-        pDst->x = (s32)(rPSrc.x * scale);
-        pDst->y = (s32)(rPSrc.y * scale);
-        pDst->z = (s32)(rPSrc.z * scale);
-    }
-
-    void fixed16ToFloat(TVec3f* pDst, const TVec3s& rPSrc, u8 q) {
-        f32 scale = 1.0f / (1 << q);
-
-        pDst->x = rPSrc.x * scale;
-        pDst->y = rPSrc.y * scale;
-        pDst->z = rPSrc.z * scale;
     }
 
     void getRotatedAxisY(TVec3f* pDst, const TVec3f& rPSrc) {

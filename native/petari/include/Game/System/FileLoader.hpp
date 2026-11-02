@@ -21,7 +21,6 @@ public:
     void requestLoadToMainRAM(const char*, u8*, NebulaArena*, GameAssets::AllocDirection, bool);
     void requestMountArchive(const char*, NebulaArena*, bool);
     bool isLoaded(const char*) const;
-    bool isMountedArchive(const char*) const;
     void* receiveFile(const char*);
     AssetFolder* receiveArchive(const char*);
     void receiveAllRequestedFile();

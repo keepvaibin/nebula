@@ -19,24 +19,24 @@ public:
         return mKind;
     }
 
-    void setMatColor(u32 idx, J3DGXColor const* color) {
+    void setMatColor(u32 idx, J3DColor const* color) {
         mMatColor[idx] = *color;
     }
-    void setMatColor(u32 idx, J3DGXColor color) {
+    void setMatColor(u32 idx, J3DColor color) {
         mMatColor[idx] = color;
     }
-    J3DGXColor* getMatColor(u32 idx) {
+    J3DColor* getMatColor(u32 idx) {
         return &mMatColor[idx];
     }
-    void setAmbColor(u32 idx, J3DGXColor const* color) {
+    void setAmbColor(u32 idx, J3DColor const* color) {
         setAmbColor(idx, *color);
     }
-    void setAmbColor(u32 idx, J3DGXColor color) {
+    void setAmbColor(u32 idx, J3DColor color) {
         if (mKind != Kind_LightOff) {
             mAmbColor[idx] = color;
         }
     }
-    J3DGXColor* getAmbColor(u32 idx) {
+    J3DColor* getAmbColor(u32 idx) {
         return mKind != Kind_LightOff ? &mAmbColor[idx] : nullptr;
     }
     void setColorChanNum(u8 num) {
@@ -77,8 +77,8 @@ public:
 
 private:
     Kind mKind;
-    J3DGXColor mMatColor[2];
-    J3DGXColor mAmbColor[2];
+    J3DColor mMatColor[2];
+    J3DColor mAmbColor[2];
     u8 mColorChanNum;
     J3DColorChan mColorChan[4];
     J3DLightObj* mLight[8];
@@ -139,13 +139,13 @@ private:
 };
 
 // What a material's stage block holds at run time (the cook made its shader): its textures and colour registers.
-class J3DTevBlock {
+class J3DRegisterBlock {
 public:
     // `texCapacity` textures; `hasTextures` false for a material with no block of its own; `hasColors` false for the
     // one-stage block, which keeps the colours set before.
-    J3DTevBlock(u8 texCapacity, bool hasTextures, bool hasColors);
+    J3DRegisterBlock(u8 texCapacity, bool hasTextures, bool hasColors);
 
-    void reset(J3DTevBlock* pBlock);
+    void reset(J3DRegisterBlock* pBlock);
     u8 getTexCapacity() const {
         return mTexCapacity;
     }
@@ -163,33 +163,33 @@ public:
     u16 getTexNo(u32 idx) const {
         return idx < mTexCapacity ? mTexNo[idx] : static_cast< u16 >(0xFFFF);
     }
-    void setTevColor(u32 idx, J3DGXColorS10 const* color) {
-        setTevColor(idx, *color);
+    void setRegisterColor(u32 idx, J3DColorWide const* color) {
+        setRegisterColor(idx, *color);
     }
-    void setTevColor(u32 idx, J3DGXColorS10 color) {
+    void setRegisterColor(u32 idx, J3DColorWide color) {
         if (mHasColors) {
-            mTevColor[idx] = color;
+            mRegisterColor[idx] = color;
         }
     }
-    J3DGXColorS10* getTevColor(u32 idx) {
-        return mHasColors ? &mTevColor[idx] : nullptr;
+    J3DColorWide* getRegisterColor(u32 idx) {
+        return mHasColors ? &mRegisterColor[idx] : nullptr;
     }
-    void setTevKColor(u32 idx, J3DGXColor const* color) {
-        setTevKColor(idx, *color);
+    void setConstantColor(u32 idx, J3DColor const* color) {
+        setConstantColor(idx, *color);
     }
-    void setTevKColor(u32 idx, J3DGXColor color) {
+    void setConstantColor(u32 idx, J3DColor color) {
         if (mHasColors) {
-            mTevKColor[idx] = color;
+            mConstantColor[idx] = color;
         }
     }
-    J3DGXColor* getTevKColor(u32 idx) {
-        return mHasColors ? &mTevKColor[idx] : nullptr;
+    J3DColor* getConstantColor(u32 idx) {
+        return mHasColors ? &mConstantColor[idx] : nullptr;
     }
 
 private:
     u16 mTexNo[8];
-    J3DGXColorS10 mTevColor[4];
-    J3DGXColor mTevKColor[4];
+    J3DColorWide mRegisterColor[4];
+    J3DColor mConstantColor[4];
     u8 mTexCapacity;
     bool mHasTextures;
     bool mHasColors;
@@ -249,7 +249,7 @@ private:
 
 // How a material meets the target. A preset's modes come from its material mode (opaque, edge, translucent), with no
 // state of its own; the others keep their own, the full one fog too.
-class J3DPEBlock {
+class J3DOutputBlock {
 public:
     enum Kind {
         Kind_Opaque,
@@ -259,9 +259,9 @@ public:
         Kind_Full,
     };
 
-    explicit J3DPEBlock(Kind kind);
+    explicit J3DOutputBlock(Kind kind);
 
-    void reset(J3DPEBlock* pBlock);
+    void reset(J3DOutputBlock* pBlock);
     Kind getKind() const {
         return mKind;
     }

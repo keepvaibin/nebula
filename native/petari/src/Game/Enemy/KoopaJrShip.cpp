@@ -71,12 +71,6 @@ namespace NrvKoopaJrShip {
     NEW_NERVE(HostTypeTurnFront, KoopaJrShip, TurnFront);
 };  // namespace NrvKoopaJrShip
 
-void KoopaJrShip_float_ordering0() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)2.0f;
-}
-
 KoopaJrShip::KoopaJrShip(const char* pName)
     : LiveActor(pName), mShellHolder(nullptr), mMainShellHolder(nullptr), mJr(nullptr), mShipBreakModel(nullptr), mPodModel(nullptr), _D0(5),
       _D4(gZeroVec), _E0(0.0f, 0.0f, 1.0f), _EC(0), mPropRotateSpeed(20.0f), _184(0.0f), _188(0), _1EC(::sKoopaJrPos), _1F8(gZeroVec) {
@@ -250,10 +244,6 @@ s32 KoopaJrShip::getNumShootShells() const {
     }
 
     return isNerve(GET_NERVE(KoopaJrShip, HostTypeShoot2)) != 0 ? 5 : 0;
-}
-
-void KoopaJrShip_float_ordering1() {
-    (void)4.0f;
 }
 
 f32 KoopaJrShip::getPropellerRotSpeed() const {

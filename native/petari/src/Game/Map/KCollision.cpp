@@ -7,23 +7,6 @@
 #include <algorithm>
 #include "Game/Util/ByteView.hpp"
 
-// trying to get both operator== and operator/ to emit
-void DUMMY_KCollision() {
-    TVec3f a, b, c;
-
-    if (a == b) {
-        c = a / b.x;
-    }
-}
-
-void DUMMY_KCollision2() {
-    TVec3f a, b, c;
-
-    if (a == b) {
-        c = a / b.x;
-    }
-}
-
 KCollisionServer::KCollisionServer() : mFile(), mapInfo(new JMapInfo()), mMaxVertexDistance(1.0f), mModel() {
 }
 

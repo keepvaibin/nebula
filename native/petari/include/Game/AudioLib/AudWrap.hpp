@@ -34,5 +34,4 @@ namespace AudWrap {
     AudRemixMgr* getRemixMgr();
     AudRemixSequencer* getRemixSequencer();
     AudSoundObject* getRemixSeqObject();
-    AudSoundNameConverter* getSoundNameConverter();
 };  // namespace AudWrap

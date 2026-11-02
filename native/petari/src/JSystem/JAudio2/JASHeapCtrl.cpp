@@ -79,27 +79,6 @@ bool JASHeap::alloc(JASHeap* pParent, u32 size) {
     return true;
 }
 
-bool JASHeap::allocTail(JASHeap* pParent, u32 size) {
-    JASMutexLock lock(&mMutex);
-    if (isAllocated()) {
-        return false;
-    }
-
-    if (!pParent->isAllocated()) {
-        return false;
-    }
-
-    u32 alignedSize = (size + 0x1f) & ~0x1f;
-    u32 curOffset = pParent->getCurOffset();
-    u32 tailOffset = pParent->getTailOffset();
-    if (curOffset + alignedSize > tailOffset) {
-        return false;
-    }
-
-    pParent->insertChild(this, pParent->getTailHeap(), pParent->mBase + tailOffset - alignedSize, alignedSize, true);
-    return true;
-}
-
 bool JASHeap::free() {
     JASMutexLock lock(&mMutex);
     if (!isAllocated()) {

@@ -32,7 +32,7 @@ public:
     void initRail(const JMapInfoIter&);
     void initPoints();
     void initMesh();
-    void drawRailGX(f32) const;
+    void drawRail(f32) const;
     void drawPlane(NativeMesh&, f32, f32, f32, f32) const;
     void drawPlaneGX(f32, f32, f32, f32) const;
     // A segment's two corners into `pMesh`, or drawn now when it is null.

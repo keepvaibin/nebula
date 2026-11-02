@@ -404,14 +404,6 @@ namespace MR {
         }
     }
 
-    void onShadowVisibleSyncHostAll(LiveActor* pActor) {
-        u32 count = ActorShadow::getShadowControllerCount(pActor);
-
-        for (u32 i = 0; i < count; i++) {
-            ActorShadow::getShadowController(pActor, i)->onVisibleSyncHost();
-        }
-    }
-
     void offShadowVisibleSyncHostAll(LiveActor* pActor) {
         u32 count = ActorShadow::getShadowControllerCount(pActor);
 

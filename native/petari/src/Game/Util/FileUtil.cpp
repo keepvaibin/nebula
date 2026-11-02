@@ -23,19 +23,6 @@ namespace MR {
         return entryNum >= 0;
     }
 
-    u32 getFileSize(const char* pFilePath, bool considerLanguage) {
-        s32 entryNum;
-
-        if (considerLanguage) {
-            entryNum = convertPathToEntrynumConsideringLanguage(pFilePath);
-        } else {
-            entryNum = GameAssets::find(pFilePath);
-        }
-
-        GameAssets::File file;
-        return GameAssets::open(entryNum, &file) ? file.mLength : 0;
-    }
-
     s32 convertPathToEntrynumConsideringLanguage(const char* pFilePath) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
@@ -141,13 +128,6 @@ namespace MR {
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
         return SingletonHolder< FileLoader >::get()->isLoaded(filePath);
-    }
-
-    bool isMountedArchive(const char* pFilePath) {
-        char filePath[256];
-        makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
-
-        return SingletonHolder< FileLoader >::get()->isMountedArchive(filePath);
     }
 
     bool isLoadedObjectOrLayoutArchive(const char* pFilePrefix) {

@@ -245,32 +245,6 @@ namespace StarPointerFunction {
         return true;
     }
 
-    bool isOnScreenEdge(const TVec2f& rPos, f32 marginX, f32 marginY) {
-        if (rPos.x <= marginX) {
-            return true;
-        }
-
-        if (rPos.y <= marginY) {
-            return true;
-        }
-
-        if (MR::getScreenWidth() - marginX <= rPos.x) {
-            return true;
-        }
-
-        if (MR::getScreenHeight() - marginY <= rPos.y) {
-            return true;
-        }
-
-        return false;
-    }
-
-    bool isOnScreenEdge(s32 channel) {
-        TVec2f pos;
-        MR::convertPaneLocalPosToScreenPos(&pos, MR::getRootPane(getStarPointerDirector()->getStarPointerLayout(channel)), TVec2f(0.0f, 0.0f));
-        return isOnScreenEdge(pos, 0.0f, 0.0f);
-    }
-
     bool forceInsideScreenEdge(TVec2f* pPos) {
         bool forced = false;
 

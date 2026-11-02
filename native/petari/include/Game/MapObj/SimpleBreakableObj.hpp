@@ -65,6 +65,4 @@ public:
 
     virtual ~SimpleBreakableIndirectObj() {
     }
-
-    virtual void connectToScene(const MapObjActorInitInfo&) override;
 };

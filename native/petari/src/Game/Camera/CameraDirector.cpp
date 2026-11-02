@@ -166,9 +166,6 @@ void CameraDirector::backLastMtx() {
     }
 }
 
-void CameraDirector::updateTarget() {
-}
-
 CameraMan* CameraDirector::getCurrentCameraMan() const {
     return mStack->mElements[mStack->mCount - 1];
 }

@@ -285,7 +285,6 @@ namespace MR {
     /// @brief Determines if the given Wii Remote is being controlled.
     /// @param channel The handle to the Wii Remote.
     /// @return `true` if the Wii Remote is being controlled, `false` otherwise.
-    bool isOperatingGamePad(s32 channel);
 };  // namespace MR
 
 namespace GamePadFunction {

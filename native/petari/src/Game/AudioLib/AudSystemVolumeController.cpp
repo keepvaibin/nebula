@@ -31,13 +31,6 @@ void AudSystemVolumeController::recoverSeVolumeSet(u32 maxSteps) {
     setSeVolumeSetInner(mCurrVolumeSet, maxSteps);
 }
 
-void AudSystemVolumeController::setSeVolumeSetLevel(s32 volumeSet) {
-    if (mVolumeSetDelay < 0) {
-        setSeVolumeSetTrig(volumeSet, 60);
-    }
-    mVolumeSetDelay = 2;
-}
-
 void AudSystemVolumeController::updateSeVolumeSetLevel() {
     if (mVolumeSetDelay > 0) {
         mVolumeSetDelay--;

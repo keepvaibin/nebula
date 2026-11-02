@@ -157,10 +157,6 @@ f32 ElectricRailFunction::getHitSensorRadius() {
     return ::cHitSensorRadius;
 }
 
-u32 ElectricRailFunction::calcMeshSize(u32 size, s32 count) {
-    return (((size * count + 3) / 32) + 2) * 32;
-}
-
 void ElectricRailHolder::init(const JMapInfoIter& rIter) {
     MR::connectToScene(this, MR::MovementType_MapObjDecoration, MR::CalcAnimType_MapObj, MR::DrawBufferType_None, MR::DrawType_ElectricRailHolder);
 

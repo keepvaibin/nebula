@@ -30,8 +30,6 @@ public:
 
     f32 calcViewDistanceZ(const TVec3f&, MtxPtr);
 
-    void drawDebug3D() const;
-
     bool isInScreen() const {
         return mPastInfo.mInScreen;
     }

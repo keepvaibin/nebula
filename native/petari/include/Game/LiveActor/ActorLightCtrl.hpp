@@ -14,7 +14,6 @@ public:
     void update(bool);
     void loadLight() const;
     void reset();
-    void copy(const ActorLightCtrl*);
     bool isSameLight(const ActorLightCtrl*) const;
     const ActorLightInfo* getActorLight() const;
     void initActorLightInfo();

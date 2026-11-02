@@ -63,21 +63,6 @@ void IconAButton::openWithRead() {
     MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemRead");
 }
 
-void IconAButton::openWithNext() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemNext");
-}
-
-void IconAButton::openWithTerm() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTerm");
-}
-
-void IconAButton::openWithDecide() {
-    open();
-    MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemDecide");
-}
-
 void IconAButton::openWithTurn() {
     open();
     MR::setTextBoxLayoutMessageRecursive(this, "IconAButton", "Layout_SystemTurn");

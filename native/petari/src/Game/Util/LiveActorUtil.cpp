@@ -867,7 +867,7 @@ namespace MR {
         pActor->mModelManager->mMaterialUpdater->addFogCtrl(enable);
     }
 
-    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DGXColor* pColor) {
+    void initMaterialColor0(LiveActor* pActor, const char* pMatName, const J3DColor* pColor) {
         pActor->mModelManager->mMaterialUpdater->addMatColorCtrl(pMatName, 0, pColor);
     }
 

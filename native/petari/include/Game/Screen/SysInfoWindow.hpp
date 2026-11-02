@@ -71,7 +71,6 @@ public:
     void setYesNoSelectorSE(const char*, const char*, const char*);
     void resetYesNoSelectorSE();
     void setTextBoxArgNumber(s32, s32);
-    void setTextBoxArgString(const char16_t*, s32);
 
     /* 0x20 */ SysInfoWindowType mWindowType;
     /* 0x24 */ SysInfoType mType;

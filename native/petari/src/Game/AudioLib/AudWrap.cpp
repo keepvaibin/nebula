@@ -79,7 +79,4 @@ namespace AudWrap {
         return getRemixMgr()->mSoundObj;
     }
 
-    AudSoundNameConverter* getSoundNameConverter() {
-        return AudSoundNameConverter::get();
-    }
 };  // namespace AudWrap
