@@ -7613,6 +7613,17 @@ void RendererD3D12::record_game_bloom(const ReplayBloom& bloom) {
     in.frame_width = std::min(kFrameWidth * scene_target_scale_, static_cast<unsigned>(desc.Width));
     in.frame_height = std::min(kFrameHeight * scene_target_scale_, static_cast<unsigned>(desc.Height));
     if (bloom.phase == motion::kBloomKeep) {
+        if (game_bloom_.ready() && scene_msaa_.samples <= 1u && !scene_hdr_ && !replay_recording_ && !replay_playing_ &&
+            ring_mode_ != RingMode::Interp) {
+            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
+            // bloom's objects on black into the new target, over the same depth.
+            gpu::TextureRef picture =
+                hand_over_scene_color(game_bloom_.take_kept_image(command_list_.Get(), in, frame_index_, kFramesInFlight));
+            scene_owed_.Reset();
+            game_bloom_.keep_picture(std::move(picture), in);
+            clear_scene(0u, 0x00FFFFFFu, true, true, false);
+            return;
+        }
         static_cast<void>(game_bloom_.keep(command_list_.Get(), in, frame_index_, kFramesInFlight));
         return;
     }

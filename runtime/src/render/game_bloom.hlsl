@@ -143,7 +143,8 @@ float4 CompositeVS(uint id : SV_VertexID) : SV_Position {
 // t_source the kept scene, t_second level 1 (normal: the first blur's sum; simple: its one blur), t_third level 2.
 // Kind 0 (the game's own chain restoring its kept scene): the scene alone.
 float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
-    const float3 scene = t_source.Load(int3(int2(position.xy), 0)).rgb;
+    const float4 kept = t_source.Load(int3(int2(position.xy), 0));
+    const float3 scene = kept.rgb;
     float3 bloom = 0.0f;
     if (c_params.z == 1.0f) {
         const float3 first = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb;
@@ -153,10 +154,10 @@ float4 CompositePS(float4 position : SV_Position) : SV_Target0 {
         bloom = t_second.SampleLevel(s_linear, position.xy * c_uv.xy, 0.0f).rgb * (c_params.x * c_params.y);
     }
     if (c_params.w == 0.0f) {
-        return float4(scene + bloom, 1.0f);
+        return float4(scene + bloom, kept.a);
     }
     // Into 8 bits: the scene as it was, the bloom stochastically rounded (interleaved gradient noise, Jimenez 2014), so
     // its gradients come out smooth instead of in bands.
     const float u = frac(52.9829189f * frac(dot(floor(position.xy), float2(0.06711056f, 0.00583715f))));
-    return float4(saturate((round(saturate(scene) * 255.0f) + floor(bloom * 255.0f + u)) / 255.0f), 1.0f);
+    return float4(saturate((round(saturate(scene) * 255.0f) + floor(bloom * 255.0f + u)) / 255.0f), kept.a);
 }

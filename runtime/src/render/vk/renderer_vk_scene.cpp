@@ -972,6 +972,15 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
     const auto allocate = [this](VkDescriptorSetLayout layout) { return allocate_post_set(layout); };
     end_scene_pass();
     if (bloom.phase == motion::kBloomKeep) {
+        if (bloom_.ready() && scene_.samples <= 1u && !logging() && !replaying_ && ring_mode_ != RingMode::Interp) {
+            // The scene and the bloom's image trade places instead of the scene being copied. The game draws the
+            // bloom's objects on black into the new target, over the same depth.
+            gpu::TextureRef picture = hand_over_scene_color(bloom_.take_kept_image());
+            scene_owed_.reset();
+            bloom_.keep_picture(std::move(picture));
+            clear_scene(0u, 0x00FFFFFFu, true, true, false);
+            return;
+        }
         static_cast<void>(bloom_.keep(commands_, in));
     } else {
         vk::GameBloomVk::Params p{};
