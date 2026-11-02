@@ -86,6 +86,7 @@ bool JKRDvdArchive::open(s32 entryNum) {
     } else {
         JKRDvdRipper::loadToMainRAM(entryNum, reinterpret_cast< u8* >(header), EXPAND_SWITCH_UNKNOWN1, 32, nullptr,
                                     JKRDvdRipper::ALLOC_DIRECTION_FORWARD, 0, &_5C, nullptr);
+        panicIfNotCooked(header);
 
         int alignment = mMountDir == MOUNT_DIRECTION_1 ? 32 : -32;
         mInfoBlock = reinterpret_cast< RarcInfoBlock* >(JKRHeap::alloc(header->mFileDataOffset, alignment, mHeap));

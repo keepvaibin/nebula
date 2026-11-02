@@ -1,3 +1,4 @@
+#include "JSystem/JUtility/JUTException.hpp"
 #include "JSystem/JKernel/JKRArchive.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <cstring>
@@ -46,6 +47,12 @@ void JKRArchive::freeFileDataTable() {
     mFileDataTable = nullptr;
 }
 #endif
+
+void JKRArchive::panicIfNotCooked(const void* pHeader) {
+    if (pHeader != nullptr && *static_cast< const u32* >(pHeader) == 'CRAR') {  // "RARC" as the disc has it
+        JUTException::panic_f(__FILE__, __LINE__, "JKRArchive: an archive not in host order (the importer cooks it)");
+    }
+}
 
 bool JKRArchive::isSameName(CArcName& rName, u32 nameOffset, u16 hash) const {
     if (rName.mHash != hash) {

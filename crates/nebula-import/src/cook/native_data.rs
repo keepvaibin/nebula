@@ -37,6 +37,7 @@
 //!   descriptors, display lists' counts and 16-bit indices), MAT3 (every table by its record layout) and MDL3's
 //!   tables (its console command lists stay: the game does not read them), TEX1's image headers.
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
+//! - RARC (archives, after cook::archive::rebuild): header, info block, directory nodes, file entries (rarc_host).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
 //!   counts and values (rfl_res_host).
 //! - The audio archive (BAA): the command stream, BST, BSTN, BSC, the wave systems (WSYS) and the banks (IBNK)
@@ -1933,6 +1934,46 @@ fn seq_collection(src: &[u8], out: &mut [u8], base: usize) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// An archive (RARC, after cook::archive::rebuild) in host order: the header's words (the magic as its host character
+/// constant: a cooked archive starts "CRAR"), the info block (counts, offsets, sizes, the two 16-bit fields), every
+/// directory node (id, name offset, hash, file count, first file) and every file entry (id, hash, the flags-and-name
+/// word with the flags in its top byte, data offset or directory index, size, the spare word). Names and data stay.
+pub fn rarc_host(bytes: &[u8]) -> Result<Vec<u8>> {
+    if bytes.len() < 0x40 || &bytes[0..4] != b"RARC" {
+        bail!("not an archive");
+    }
+    let mut out = bytes.to_vec();
+    for o in (0..0x20).step_by(4) {
+        host32(bytes, &mut out, o)?;
+    }
+    let dirs = host32(bytes, &mut out, 0x20)? as usize;
+    let dir_at = host32(bytes, &mut out, 0x24)? as usize + 0x20;
+    let files = host32(bytes, &mut out, 0x28)? as usize;
+    let file_at = host32(bytes, &mut out, 0x2C)? as usize + 0x20;
+    host32(bytes, &mut out, 0x30)?;
+    host32(bytes, &mut out, 0x34)?;
+    host16(bytes, &mut out, 0x38)?;
+    host16(bytes, &mut out, 0x3A)?;
+    host32(bytes, &mut out, 0x3C)?;
+    for i in 0..dirs {
+        let at = dir_at + 0x10 * i;
+        host32(bytes, &mut out, at)?;
+        host32(bytes, &mut out, at + 4)?;
+        host16(bytes, &mut out, at + 8)?;
+        host16(bytes, &mut out, at + 0xA)?;
+        host32(bytes, &mut out, at + 0xC)?;
+    }
+    for i in 0..files {
+        let at = file_at + 0x14 * i;
+        host16(bytes, &mut out, at)?;
+        host16(bytes, &mut out, at + 2)?;
+        for o in [4, 8, 0xC, 0x10] {
+            host32(bytes, &mut out, at + o)?;
+        }
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
