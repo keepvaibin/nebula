@@ -12,14 +12,24 @@ extern "C" {
 typedef NebulaColor8 GpuColor;
 typedef NebulaColor16 GpuColorS10;
 
-typedef struct _GpuTexObj {
-    // GX's record (GpuTexObjInt) holds an 8-byte pointer natively: 40 bytes, 8-byte aligned (GpuTexture.c checks).
-    u64 dummy[5];
-} GpuTexObj;
+typedef struct J3DNativeTexObj {
+    const void* mImage;
+    u16 mWidth;
+    u16 mHeight;
+    u8 mFormat;
+    u8 mWrapS;
+    u8 mWrapT;
+    u8 mMinFilter;
+    u8 mMagFilter;
+    u8 mMipmap;
+    u8 mBiasClamp;
+    u8 mEdgeLod;
+    u8 mMaxAniso;
+    f32 mMinLod;
+    f32 mMaxLod;
+    f32 mLodBias;
+} J3DNativeTexObj;
 
-typedef struct _GpuTlutObj {
-    u32 dummy[3];
-} GpuTlutObj;
 
 typedef struct _GpuLightObj {
     u32 dummy[16];

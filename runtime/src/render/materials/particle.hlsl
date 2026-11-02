@@ -15,7 +15,7 @@ struct MaterialConstants {
     float4 alpha_ref;     // the alpha test's references (0-1)
     float4 params;        // x: the colour mode (JPABaseShape::st_ca 0-5), y: the alpha mode (st_aa 0-1), z: flags (1
                           // indirect, 2 second texture, 4 projected coordinates, 8 child: texture 1), w: unused
-    float4 test;          // x, y: the alpha test's compares 0 and 1 (GX's order), z: its logic (and, or, xor, xnor)
+    float4 test;          // x, y: the alpha test's compares 0 and 1 (the console's order), z: its logic (and, or, xor, xnor)
 };
 
 #include "native_material.hlsli"
@@ -48,7 +48,7 @@ float4 material_color(NativeVaryings i) {
         uv /= i.uv[0].z;
     }
     if ((flags & 1u) != 0u) {
-        // GX's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
+        // the console's indirect lookup: the indirect texture's alpha, blue, green less 128 by indirect matrix 0, in texels.
         uint w, h;
         tex[0].GetDimensions(w, h);
         const float3 sv = round(tex[2].Sample(samp[2], i.uv[1].xy).abg * 255.0) - 128.0;

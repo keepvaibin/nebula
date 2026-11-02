@@ -3,7 +3,7 @@
 
 // The game's actor lights under ray tracing.
 //
-// Characters and most lit objects take GX lights 0 and 1 from an ActorLightInfo
+// Characters and most lit objects take console lights 0 and 1 from an ActorLightInfo
 // (LightFunction::loadActorLightInfo: LightInfo A and B; loadLightInfoCoin: A only). A light with the
 // follow-camera flag is loaded at a fixed eye-space position, so it turns with the camera; one without it sits at
 // a world position. With ray tracing on and GALAXY_RT_ACTOR_LIGHTS set, the scene draws' palette snapshots move
@@ -32,7 +32,7 @@ inline constexpr float kActorLightDistance = 1.0e7f;
 // (RenderCore::note_rt_world_key).
 inline constexpr float kActorLightFar = 20000.0f;
 
-// One LightLoad host marker (aux: motion::LightSite, b: follow-camera bit per LightInfo): the GX
+// One LightLoad host marker (aux: motion::LightSite, b: follow-camera bit per LightInfo): the console
 // lights the load writes and those of them that follow the camera.
 struct ActorLightLoad {
     std::uint8_t written = 0;

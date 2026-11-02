@@ -119,7 +119,7 @@ GCaptureRibbon::~GCaptureRibbon() {
 }
 
 void GCaptureRibbon::init(const JMapInfoIter& rIter) {
-    mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon.arc", "GCaptureRibbon.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("GCaptureRibbon.arc", "GCaptureRibbon.bti"));
     MR::invalidateClipping(this);
     makeActorAppeared();
 }

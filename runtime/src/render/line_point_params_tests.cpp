@@ -698,10 +698,9 @@ int main() {
 
         galaxy::render::NativeDrawState state;
         (void)state.consume_dirty();
-        galaxy::render::state::Op line{};
-        line.kind = galaxy::render::state::kLineWidth;
-        line.f[0] = 1.0f;  // one pixel
-        state.apply(line);
+        galaxy::render::shapes::PassState line{};
+        line.line_width = 1.0f;  // one pixel
+        state.apply_pass(line);
         passed &= expect(
             (state.consume_dirty() & galaxy::render::kStateDirtyVertexConstants) != 0u,
             "a line width refreshes line/point GPU constants");

@@ -184,7 +184,7 @@ void WaterRoadModelInfo::initDisplayList() {
     mMesh.useArray(NativeMesh::SLOT_POSITION, mPoints);
     mMesh.useArray(NativeMesh::SLOT_NORMAL, mNormals);
     NativeMesh::sendArray(mPoints, NEBULA_SHAPE_ARRAY_POSITION, mNumPoints, mPoints);
-    // The normals as GX reads S16 normals (1.14 fixed point).
+    // The normals as console reads S16 normals (1.14 fixed point).
     f32* pNormals = new f32[3 * mNumPoints];
     for (s32 i = 0; i < mNumPoints; i++) {
         pNormals[3 * i] = mNormals[i].x / 16384.0f;
@@ -386,7 +386,7 @@ namespace {
     // runtime/src/render/materials/water_road.hlsl at high or low detail: blended by alpha where above zero, depth
     // tested and written, no culling.
     void sendRoadMaterial(const WaterRoad* pRoad, bool high, u8 alpha) {
-        JUTTexture screen(MR::getScreenResTIMG(), 0);
+        JUTTexture screen(MR::getScreenResTIMG());
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_WATER_ROAD, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                            NEBULA_CULL_NONE);
@@ -466,9 +466,9 @@ void WaterRoad::init(const JMapInfoIter& rIter) {
     MR::setEffectHostMtx(this, "Top", mBaseMtx);
     MR::setEffectHostMtx(this, "End", mBaseMtx);
 
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mIndirect = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
-    mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "EnvMap.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mIndirect = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
+    mEnvMap = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "EnvMap.bti"));
 
     initSound(3, false);
     mSoundObj = new AudSoundObject(&mCamRailNearestPos, 4, MR::getCurrentHeap());

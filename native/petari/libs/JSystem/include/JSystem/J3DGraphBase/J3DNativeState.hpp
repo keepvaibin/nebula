@@ -51,7 +51,7 @@ namespace J3DNativeState {
     // The game's frame is complete: the host renders what it drew.
     void endFrame();
     void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
-    // The cull mode (kept here: the game reads it back), GX's mapping.
+    // The cull mode (kept here: the game reads it back), the console's mapping.
     void setCullMode(GpuCullMode mode);
     void getCullMode(GpuCullMode* pMode);
     void setChanMatColor(GpuChannelID chan, NebulaColor8 color);

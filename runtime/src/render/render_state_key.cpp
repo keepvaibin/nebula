@@ -11,7 +11,7 @@ namespace galaxy::render {
 
 namespace {
 
-// GX blending uses the TEV-computed source alpha. The scene target alpha that is eventually stored may
+// console blending uses the TEV-computed source alpha. The scene target alpha that is eventually stored may
 // be quantized to the target format or replaced by GXSetDstAlpha. Source-alpha blend factors
 // therefore need a separate export whenever they cannot safely read color0.a.
 [[nodiscard]] bool blend_reads_src_alpha(const BlendMode& bm) {
@@ -45,7 +45,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     // An scene target without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
     // mapping to the D3D12 PSO.
-    // The pipeline key's three bits per factor are GX's codes, as the pipelines decode them: a colour factor names
+    // The pipeline key's three bits per factor are the console's codes, as the pipelines decode them: a colour factor names
     // the other side's colour (source 2 = destination colour, destination 2 = source colour).
     const auto key_code = [](BlendFactor factor) {
         switch (factor) {

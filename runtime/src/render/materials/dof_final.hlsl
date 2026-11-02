@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The game's depth of field, its final pass (Game/Screen/DepthOfFieldBlur.cpp drawFinal): the blurred picture
-// (texture 0) blended over the sharp one by an alpha the focus ramp (texture 1) gives at the depth (texture 2), as GX's
+// (texture 0) blended over the sharp one by an alpha the focus ramp (texture 1) gives at the depth (texture 2), as the console's
 // two stages and indirect lookup did: stage 1's coordinate is wrapped to 0 and moved by the depth sample (8-bit, less
 // 128 in s and t) through the matrix diag(scale, scale), in texture 1's texels; alpha that ramp's alpha times the
 // material alpha.

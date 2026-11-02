@@ -15,13 +15,9 @@ enum Kind : std::uint8_t {
     kProjection,
     kViewport,
     kScissor,
-    kCurrentMatrix,
-    kLineWidth,
-    kPointSize,
     kLightAttenuation,
     kLightPosition,
     kFrameAlpha,
-    kTexOffsets,
 };
 
 struct Op {

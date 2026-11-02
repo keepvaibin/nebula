@@ -163,9 +163,9 @@ void Flag::init(const JMapInfoIter& rIter) {
     }
 
     if (mObjName != nullptr) {
-        mTexture = new JUTTexture(MR::loadTexFromArc(mObjName), 0);
+        mTexture = new JUTTexture(MR::loadTexFromArc(mObjName));
     } else {
-        mTexture = new JUTTexture(MR::loadTexFromArc("Flag.arc", "Flag.bti"), 0);
+        mTexture = new JUTTexture(MR::loadTexFromArc("Flag.arc", "Flag.bti"));
     }
 
     initSound(4, false);

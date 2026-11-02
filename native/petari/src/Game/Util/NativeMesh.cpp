@@ -172,7 +172,7 @@ void NativeMesh::corner() {
         return;
     }
 
-    // The primitive as triangles, as the renderer splits GX's (a strip's odd triangles turned to keep its winding).
+    // The primitive as triangles, as the renderer splits the console's (a strip's odd triangles turned to keep its winding).
     const u32 count = mPrimitiveCount;
     const u8 type = mPrimitiveType;
     u32 triangles = 0;

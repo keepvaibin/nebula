@@ -34,6 +34,7 @@ namespace J3DNativeState {
     }  // namespace
 
     const NebulaPassState* pass() {
+        sPass.position_matrix = J3DNativeShape::currentPosition();
         return &sPass;
     }
 
@@ -67,6 +68,23 @@ namespace J3DNativeState {
             case J3D_STATE_ALPHA_UPDATE:
                 sPass.alpha_write = a[0] != 0;
                 break;
+            case J3D_STATE_CURRENT_MATRIX:
+                J3DNativeShape::setCurrentPosition(a[0] % 10);
+                break;
+            case J3D_STATE_LINE_WIDTH:
+                sPass.line_width = pOps[i].f[0];
+                sPass.line_divisor = a[1];
+                break;
+            case J3D_STATE_POINT_SIZE:
+                sPass.point_size = pOps[i].f[0];
+                sPass.point_divisor = a[1];
+                break;
+            case J3D_STATE_TEX_OFFSETS: {
+                const u8 bit = static_cast< u8 >(1u << (a[0] & 7));
+                sPass.line_offsets = static_cast< u8 >((a[1] & 1) != 0 ? sPass.line_offsets | bit : sPass.line_offsets & ~bit);
+                sPass.point_offsets = static_cast< u8 >((a[2] & 1) != 0 ? sPass.point_offsets | bit : sPass.point_offsets & ~bit);
+                break;
+            }
             default:
                 break;
             }
@@ -212,7 +230,6 @@ namespace J3DNativeState {
     }
 
     void setCurrentMtx(u32 id) {
-        J3DNativeShape::setCurrentPosition(id / 3);
         NebulaStateOp op;
         J3DStateList list(&op, 1);
         list.setCurrentMtx(id);
@@ -255,7 +272,7 @@ namespace J3DNativeState {
         rLight.mDirection[2] = -nz;
     }
 
-    // GX's distance for a light at infinity.
+    // the console's distance for a light at infinity.
     const f32 cInfiniteLightDistance = 1.0e18f;
 
     void initSpecularDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz) {
@@ -428,7 +445,7 @@ namespace J3DNativeState {
         setChanAmbColor(GPU_COLOR1A1, black);
         setChanMatColor(GPU_COLOR1A1, white);
 
-        static GpuTexObj sDefaultTexture;
+        static J3DNativeTexObj sDefaultTexture;
         J3DNativeTexture::registerImage(&sDefaultTexData, GPU_TF_IA8, 4, 4, 1);
         J3DNativeTexture::init(&sDefaultTexture, &sDefaultTexData, 4, 4, GPU_TF_IA8, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
         for (u32 i = 0; i < 8; i++) {

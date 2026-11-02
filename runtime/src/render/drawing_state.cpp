@@ -110,9 +110,6 @@ std::uint32_t op_groups(std::uint8_t kind) {
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
     case state::kViewport: return bit(kViewport);
     case state::kFrameAlpha: return bit(kFrame);
-    case state::kCurrentMatrix: return bit(kPositionMatrix);
-    case state::kLineWidth: case state::kPointSize: return bit(kLinePoint);
-    case state::kTexOffsets: return bit(kCoord);
     default: return 0u;
     }
 }
@@ -138,7 +135,16 @@ void tracked(NativeDrawState& s, std::uint32_t groups, Change&& change) {
 }  // namespace
 
 void NativeDrawState::apply_pass(const shapes::PassState& pass) {
-    tracked(*this, bit(kBlend) | bit(kZ) | bit(kGen), [&] {
+    tracked(*this, bit(kBlend) | bit(kZ) | bit(kGen) | bit(kPositionMatrix) | bit(kLinePoint) | bit(kCoord), [&] {
+        position_matrix = static_cast<std::uint8_t>(pass.position_matrix % 10u);
+        line_point.line_width = pass.line_width;
+        line_point.line_divisor = pass.line_divisor;
+        line_point.point_size = pass.point_size;
+        line_point.point_divisor = pass.point_divisor;
+        for (unsigned t = 0; t < 8u; ++t) {
+            coord[t].line_offset = ((pass.line_offsets >> t) & 1u) != 0u;
+            coord[t].point_offset = ((pass.point_offsets >> t) & 1u) != 0u;
+        }
         set_blend(blend, pass.blend_op, pass.blend_src, pass.blend_dst, pass.logic_op);
         blend.color_update = pass.color_write != 0u;
         blend.alpha_update = pass.alpha_write != 0u;
@@ -184,21 +190,6 @@ void NativeDrawState::set_op(const state::Op& op) {
         for (unsigned i = 0; i < 6u; ++i) {
             viewport[i] = op.f[i];
         }
-        break;
-    case state::kCurrentMatrix:
-        position_matrix = static_cast<std::uint8_t>(a[0] % 10u);
-        break;
-    case state::kLineWidth:
-        line_point.line_width = op.f[0];
-        line_point.line_divisor = a[1];
-        break;
-    case state::kPointSize:
-        line_point.point_size = op.f[0];
-        line_point.point_divisor = a[1];
-        break;
-    case state::kTexOffsets:
-        coord[a[0] & 7u].line_offset = (a[1] & 1u) != 0u;
-        coord[a[0] & 7u].point_offset = (a[2] & 1u) != 0u;
         break;
     case state::kScissor: {
         // Left, top, width, height: the box's corners, inclusive.

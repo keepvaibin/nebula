@@ -26,7 +26,7 @@
 #include "Game/Util/RenderSignals.hpp"
 
 namespace {
-    GpuTexObj clear_z_tobj;
+    J3DNativeTexObj clear_z_tobj;
 
     const f32 cNearZ = -10000.0f;
     const f32 cFarZ = 10000.0f;
@@ -241,7 +241,7 @@ namespace MR {
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
         // runtime/src/render/materials/clip_fill.hlsl: black at alpha 0x80 where the captured screen alpha is above 1
-        // (GX's A8 compare against constant alpha 1), blended by alpha, depth not tested, the alpha buffer cleared to 0
+        // (the console's A8 compare against constant alpha 1), blended by alpha, depth not tested, the alpha buffer cleared to 0
         // there (constant destination alpha).
         NebulaNativeMaterial material;
         NativeShader::init(material, NEBULA_SHADER_CLIP_FILL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,

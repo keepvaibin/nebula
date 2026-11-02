@@ -6,14 +6,14 @@
 
 namespace nw4r {
     namespace lyt {
-        void TexMap::Get(_GpuTexObj* pTexObj) const {
+        void TexMap::Get(J3DNativeTexObj* pTexObj) const {
             J3DNativeTexture::init(pTexObj, mImage, mWidth, mHeight, GetTexelFormat(), GetWrapModeS(), GetWrapModeT(), IsMipMap());
 
             J3DNativeTexture::initLOD(pTexObj, GetMinFilter(), GetMagFilter(), GetMinLOD(), GetMaxLOD(), GetLODBias(), IsBiasClampEnable(), IsEdgeLODEnable(),
                             GetAnisotropy());
         }
 
-        void TexMap::Set(const GpuTexObj& texObj) {
+        void TexMap::Set(const J3DNativeTexObj& texObj) {
             void* image;
             u16 width, height;
             GpuTexFmt format;

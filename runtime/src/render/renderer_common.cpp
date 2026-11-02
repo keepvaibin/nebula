@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// What both GX renderers share (renderer_common.h).
+// What both console renderers share (renderer_common.h).
 
 #include "galaxy/render/renderer_common.h"
 #include "galaxy/platform_time.h"

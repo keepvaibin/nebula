@@ -153,7 +153,7 @@ void MiiSelectIcon::copyIconID(FileSelectIconID* pIconID) {
 
 nw4r::lyt::TexMap* MiiSelectIcon::getTexMap() {
     if (mIconID->isFellow()) {
-        GpuTexObj texObj;
+        J3DNativeTexObj texObj;
 
         MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
         mFellowTexMap->Set(texObj);
@@ -242,7 +242,7 @@ void MiiSelectIcon::createFaceImageObj() {
         new MiiFaceIcon(128, 128, MiiFaceRecipe(MiiDataSource_Official, 0, MiiResolution_256, MiiExpFlag_Normal | MiiExpFlag_Blink), "Mii\203\101\203\103\203\122\203\223" /* Miiアイコン */);
     mIcon->initWithoutIter();
 
-    GpuTexObj texObj;
+    J3DNativeTexObj texObj;
     MR::getLytTexMap(this, "PicMario", 0)->Get(&texObj);
 
     mFellowTexMap = new nw4r::lyt::TexMap(texObj);

@@ -24,6 +24,10 @@ enum {
     J3D_STATE_TEV_COLOR_S10,        /* register; size: r, g; f: b, a (signed 10-bit values) */
     J3D_STATE_IND_TEX_MATRIX,       /* matrix id (GXIndTexMtxID), scale exponent (s8); f: offset[0][0], [1][0],
                                        [0][1], [1][1], [0][2], [1][2] */
+    J3D_STATE_CURRENT_MATRIX,       /* position/normal matrix (0-9) */
+    J3D_STATE_LINE_WIDTH,           /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
+    J3D_STATE_POINT_SIZE,           /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
+    J3D_STATE_TEX_OFFSETS,          /* texture coordinate, lines offset it, points offset it */
 };
 
 // A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
@@ -36,7 +40,7 @@ struct J3DNativeLight {
 };
 
 // Drawing state the game sets outside materials, as values (nebula_game_api.h NebulaStateOp), sent as one record in
-// draw order. Each setter takes the arguments of the GX function its change is named after.
+// draw order. Each setter takes the arguments of the console function its change is named after.
 class J3DStateList {
 public:
     J3DStateList() : mOps(nullptr), mCount(0), mCapacity(0), mMaterialPass(0) {}
@@ -72,9 +76,9 @@ public:
                           GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GpuBool biasClamp,
                           GpuBool edgeLod, GpuAnisotropy maxAniso);
     void setTexImgPtr(GpuTexMapID map, const void* pImage);
-    // A colour-indexed texture's palette: its format and place (a GX TLUT name).
+    // A colour-indexed texture's palette: its format and place (a console TLUT name).
     void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-    // Changes of some fields of a register, its others as they are (GX's partial setters).
+    // Changes of some fields of a register, its others as they are (the console's partial setters).
     void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
     void setColorUpdate(GpuBool enable);
     void setAlphaUpdate(GpuBool enable);

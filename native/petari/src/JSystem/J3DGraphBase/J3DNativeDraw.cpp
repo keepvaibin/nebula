@@ -152,7 +152,7 @@ namespace J3DNativeDraw {
         // GpuBegin's primitive as the host's grouping (NebulaPrimitive).
         switch (primitive) {
         case GPU_QUADS:
-        case 0x88:  // GX's second quads opcode
+        case 0x88:  // the console's second quads opcode
             sPrimitive = NEBULA_PRIMITIVE_QUADS;
             break;
         case GPU_TRIANGLES:

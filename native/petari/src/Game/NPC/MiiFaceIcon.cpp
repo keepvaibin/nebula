@@ -70,10 +70,10 @@ void MiiFaceIcon::createImageBuffer() {
     pImageBuffer->mHeight = height;
     pImageBuffer->mWrapS = GPU_CLAMP;
     pImageBuffer->mWrapT = GPU_CLAMP;
-    pImageBuffer->mPaletteName = GPU_TLUT0;
-    pImageBuffer->mPaletteFormat = GPU_TL_IA8;
-    pImageBuffer->mPaletteNum = 0;
-    pImageBuffer->mPaletteDataOffset = 0;
+    pImageBuffer->mCookedPaletteName = 0;
+    pImageBuffer->mCookedPaletteFormat = 0;
+    pImageBuffer->mCookedPaletteNum = 0;
+    pImageBuffer->mCookedPaletteOffset = 0;
     pImageBuffer->mMipmap = false;
     pImageBuffer->mDoEdgeLod = false;
     pImageBuffer->mBiasClamp = false;

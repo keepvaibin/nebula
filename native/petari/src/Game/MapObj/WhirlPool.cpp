@@ -26,8 +26,8 @@ void WhirlPool::init(const JMapInfoIter& rIter) {
     mHeight = 100.0f * mScale.y;
     MR::calcActorAxisY(&mAxis, this);
     initPoints();
-    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"), 0);
-    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"), 0);
+    mTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "Water.bti"));
+    mIndirectTexture = new JUTTexture(MR::loadTexFromArc("WaterWave.arc", "WaterIndirect.bti"));
     initSound(4, false);
     mClippingCenter.set(mPosition);
     mClippingCenter.y -= mRadius / 2.0f;
@@ -160,7 +160,7 @@ void WhirlPool::loadMaterial() const {
     static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
-    JUTTexture screenTexture(MR::getScreenResTIMG(), 0);
+    JUTTexture screenTexture(MR::getScreenResTIMG());
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_WHIRLPOOL, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_LEQUAL, true,
                        NEBULA_CULL_NONE);

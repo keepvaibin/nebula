@@ -73,7 +73,7 @@ inline constexpr float kRtIceTintKept = 0.225f;
 inline constexpr float kRtCrystalTintKept = 0.075f;
 
 struct RtMaterial {
-    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the GX state shows it
+    std::uint8_t surface_class = 0xFFu;   // RtSurfaceClass; 0xFF: as the console state shows it
     RtEmission emission = RtEmission::None;
     bool no_light = false;                // skip: never a light, whatever the picture shows
     bool helper = false;                  // a lookup texture: skipped when a draw's material is chosen

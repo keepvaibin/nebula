@@ -41,6 +41,7 @@ namespace J3DNativeShape {
     void setCurrent(u8 position, const u8* pTexture);
     // The position matrix corners without one take (J3DNativeState::setCurrentMtx).
     void setCurrentPosition(u32 index);
+    u8 currentPosition();
     // Texture coordinate `coord` of the next draw generated as given (GpuSetTexCoordGen's values).
     void setTexGen(u8 coord, u8 type, u8 source, bool normalize, u8 postMatrix);
     // Texture matrices, current matrices and texgens set since the last draw, as a record now (before a material

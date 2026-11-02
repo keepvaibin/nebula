@@ -5,7 +5,7 @@
 #include <nebula_math.h>
 
 // The projection the game draws with: its values kept here (the game reads them back) and each change sent as a
-// state record (nebula_game_api.h NEBULA_STATE_PROJECTION). The values are GX's (GpuSetProjectionv's layout: the type,
+// state record (nebula_game_api.h NEBULA_STATE_PROJECTION). The values are the console's (GpuSetProjectionv's layout: the type,
 // 0 for perspective, then the six terms).
 #ifdef __cplusplus
 namespace J3DNativeView {
