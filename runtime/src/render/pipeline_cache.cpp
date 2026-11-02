@@ -39,7 +39,7 @@ constexpr D3D12_INPUT_ELEMENT_DESC kInputLayout[] = {
     {"BEND",         0, DXGI_FORMAT_R32G32B32_UINT,  0, 132, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
 };
 
-// GX BlendFactor -> D3D12, src side (GX factor 2/3 reference the destination).
+// console BlendFactor -> D3D12, src side (console factor 2/3 reference the destination).
 D3D12_BLEND src_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
@@ -54,7 +54,7 @@ D3D12_BLEND src_blend(std::uint32_t f) {
     }
 }
 
-// GX BlendFactor -> D3D12, dst side (GX factor 2/3 reference the source).
+// console BlendFactor -> D3D12, dst side (console factor 2/3 reference the source).
 D3D12_BLEND dst_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
@@ -80,7 +80,7 @@ D3D12_BLEND to_alpha_blend(D3D12_BLEND b) {
     }
 }
 
-// GX LogicOp 0-15 -> D3D12.
+// console LogicOp 0-15 -> D3D12.
 D3D12_LOGIC_OP logic_op_mode(std::uint32_t m) {
     switch (m) {
     case 0:  return D3D12_LOGIC_OP_CLEAR;
@@ -124,7 +124,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
 
     D3D12_RENDER_TARGET_BLEND_DESC& rt = pd.BlendState.RenderTarget[0];
     const std::uint32_t bb = rs.blend_bits;
-    // GX scene target write masks (key bits 25/26 = cmode0 color_update/alpha_update).
+    // console scene target write masks (key bits 25/26 = cmode0 color_update/alpha_update).
     // Z-clear / z-prepass draws disable color update while writing depth.
     rt.RenderTargetWriteMask = static_cast<UINT8>(
         ((bb & (1u << 25)) ? (D3D12_COLOR_WRITE_ENABLE_RED |
@@ -135,7 +135,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         rt.BlendEnable = TRUE;
         const bool subtract = (bb & 2u) != 0;
         if (subtract) {
-            // GX subtract: dst = dst - src, factors forced to one.
+            // console subtract: dst = dst - src, factors forced to one.
             rt.SrcBlend  = D3D12_BLEND_ONE;
             rt.DestBlend = D3D12_BLEND_ONE;
             rt.BlendOp   = D3D12_BLEND_OP_REV_SUBTRACT;
@@ -189,7 +189,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
-    // GX screen space is Y-down relative to D3D NDC (the scene target viewport does not flip), so a GX
+    // console screen space is Y-down relative to D3D NDC (the scene target viewport does not flip), so a console
     // front face lands as a D3D back face and vice versa, as in Dolphin's D3D backends.
     // CullMode::All (rasterize nothing) has no PSO equivalent and maps to None.
     switch (static_cast<CullMode>(rs.cull)) {
@@ -208,8 +208,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
     pd.RasterizerState.FrontCounterClockwise = FALSE;
     pd.RasterizerState.DepthClipEnable = TRUE;
 
-    // Depth is reversed-Z relative to the GX z24 values (near=1, far=0; the projection negation
-    // in render_core.cpp fill_projection), so GX LESS maps to D3D GREATER, GX LEQUAL to
+    // Depth is reversed-Z relative to the console z24 values (near=1, far=0; the projection negation
+    // in render_core.cpp fill_projection), so console LESS maps to D3D GREATER, console LEQUAL to
     // GREATER_EQUAL, and so on, as in Dolphin's D3D backends.
     static constexpr D3D12_COMPARISON_FUNC kGxDepthFunc[8] = {
         D3D12_COMPARISON_FUNC_NEVER,           // GX_NEVER
@@ -240,7 +240,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         }
         pd.GS = point_geometry_shader;
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-        // GX culling applies to polygons, not points expanded by the host.
+        // console culling applies to polygons, not points expanded by the host.
         pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE:
@@ -250,7 +250,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         }
         pd.GS = line_geometry_shader;
         pd.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-        // GX culling applies to polygons, not lines expanded by the host.
+        // console culling applies to polygons, not lines expanded by the host.
         pd.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
         break;
     case D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE:

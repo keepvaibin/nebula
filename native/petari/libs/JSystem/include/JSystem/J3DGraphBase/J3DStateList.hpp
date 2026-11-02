@@ -36,7 +36,7 @@ struct J3DNativeLight {
 };
 
 // Drawing state the game sets outside materials, as values (nebula_game_api.h NebulaStateOp), sent as one record in
-// draw order. Each setter takes the arguments of the GX function its change is named after.
+// draw order. Each setter takes the arguments of the console function its change is named after.
 class J3DStateList {
 public:
     J3DStateList() : mOps(nullptr), mCount(0), mCapacity(0), mMaterialPass(0) {}
@@ -72,9 +72,9 @@ public:
                           GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GpuBool biasClamp,
                           GpuBool edgeLod, GpuAnisotropy maxAniso);
     void setTexImgPtr(GpuTexMapID map, const void* pImage);
-    // A colour-indexed texture's palette: its format and place (a GX TLUT name).
+    // A colour-indexed texture's palette: its format and place (a console TLUT name).
     void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-    // Changes of some fields of a register, its others as they are (GX's partial setters).
+    // Changes of some fields of a register, its others as they are (the console's partial setters).
     void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
     void setColorUpdate(GpuBool enable);
     void setAlphaUpdate(GpuBool enable);

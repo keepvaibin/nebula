@@ -255,7 +255,7 @@ namespace J3DNativeState {
         rLight.mDirection[2] = -nz;
     }
 
-    // GX's distance for a light at infinity.
+    // the console's distance for a light at infinity.
     const f32 cInfiniteLightDistance = 1.0e18f;
 
     void initSpecularDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz) {

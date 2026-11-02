@@ -13,7 +13,7 @@ typedef NebulaColor8 GpuColor;
 typedef NebulaColor16 GpuColorS10;
 
 typedef struct _GpuTexObj {
-    // GX's record (GpuTexObjInt) holds an 8-byte pointer natively: 40 bytes, 8-byte aligned (GpuTexture.c checks).
+    // the console's record (GpuTexObjInt) holds an 8-byte pointer natively: 40 bytes, 8-byte aligned (GpuTexture.c checks).
     u64 dummy[5];
 } GpuTexObj;
 

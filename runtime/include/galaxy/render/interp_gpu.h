@@ -152,12 +152,12 @@ public:
     void palette(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b, const CameraMotion& camera);
     // Only its changed position matrices.
     void palette_positions(std::uint32_t dst, const PaletteMotion& m, RowView a, RowView b);
-    // One GX light (16 words at dst) as light_at; a may be null.
+    // One console light (16 words at dst) as light_at; a may be null.
     void light(std::uint32_t dst, const std::uint32_t* a, const std::uint32_t* b, const CameraMotion& camera,
                bool split);
     // Projection of a VS block as the sub-frame lerp of render_interp_subframe.
     void projection(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
-    // Its GX parameters A..D (motion_prev_proj) the same way.
+    // Its console parameters A..D (motion_prev_proj) the same way.
     void projection_params(std::uint32_t dst, const VertexConstants& a, const VertexConstants& b);
 
     std::vector<Op> ops;

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Tests (GALAXY_DUMP_DRAW_INPUTS=<shader id>, GALAXY_DUMP_DRAW_INPUTS_FILE=<path>, GALAXY_DUMP_DRAW_INPUTS_FROM=<present>):
 // every input the draws of that present (or the run's first 64)
-// of the tagged material read, on whichever path draws it (native: its MaterialConstants; GX: the uber shader's
-// PixelConstants), so a run with the material native and one with it on GX (GALAXY_TEST_NATIVE_J3D) diff field by
+// of the tagged material read, on whichever path draws it (native: its MaterialConstants; console: the uber shader's
+// PixelConstants), so a run with the material native and one with it on console (GALAXY_TEST_NATIVE_J3D) diff field by
 // field: the vertex constants (inline matrices, matrix indices, header words, post rows), the matrix rows 0-63 and
 // the post-transform rows, each texture map's image, size, format, palette and sampling, each coordinate's scale.
 #include "galaxy/render/render_core.h"

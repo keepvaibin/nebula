@@ -54,10 +54,10 @@ namespace J3DNativeTexture {
     // GpuInitTexObjTlut: the palette place a colour-indexed texture reads.
     void setTlut(GpuTexObj* pObj, u32 tlutName);
     // An image's bytes handed to the renderer (nebula_game_api.h texture_image): where it is loaded or rewritten.
-    // `format`: GX's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps). An image that is a
+    // `format`: the console's numbering of texture formats; `levels`: its mipmap images (1 without mipmaps). An image that is a
     // texture record (nebula_cooked_texture.h: a cooked file's, or one the game made) goes whole, as its header says.
     void registerImage(const void* pImage, u8 format, u16 width, u16 height, u8 levels);
-    // The bytes of an image of that format and size with that many levels, as GX lays them out (32-byte tiles).
+    // The bytes of an image of that format and size with that many levels, as console lays them out (32-byte tiles).
     u32 imageSize(u8 format, u16 width, u16 height, u8 levels);
     // GpuInitTlutObj. The renderer takes no palettes: colour-indexed images are cooked with theirs applied.
     void initTlut(GpuTlutObj* pObj, void* pLut, GpuTlutFmt format, u16 entries);

@@ -7,7 +7,7 @@
 // begin_frame() waits only on the fence of frame N - kFramesInFlight. A full
 // CPU/GPU sync happens only in shutdown() and on resize.
 //
-// All GX draws target the offscreen scene target (color RGBA8 + depth
+// All console draws target the offscreen scene target (color RGBA8 + depth
 // D24_UNORM_S8_UINT, which keeps 24-bit Z parity with the Wii). present()
 // aspect-fits an display picture into the swap-chain backbuffer.
 //
@@ -107,8 +107,8 @@ inline constexpr DXGI_FORMAT kSceneDepthSrvFormat =
     DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 inline constexpr DXGI_FORMAT kBackbufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
 
-// Builds the GX graphics root signature used by RendererD3D12. Root
-// CBV b0 is visible to both VS and GS because native GX line/point expansion
+// Builds the console graphics root signature used by RendererD3D12. Root
+// CBV b0 is visible to both VS and GS because native console line/point expansion
 // reads its scale-aware raster constants in the geometry stage.
 [[nodiscard]] HRESULT create_draw_root_signature(
     ID3D12Device* device,
@@ -194,7 +194,7 @@ void record_scene_identity_copy(
 class RendererD3D12 final : public UiCanvas {
 public:
     // Creates the Win32 window, device, queue, swap chain, scene target targets at
-    // kFrameWidth x kFrameHeight x scene_target_scale, the shared GX root signature, the
+    // kFrameWidth x kFrameHeight x scene_target_scale, the shared console root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     [[nodiscard]] std::string startup_failure() const { return {}; }
@@ -213,7 +213,7 @@ public:
     // Advances the frame ring: waits on the fence of frame N-kFramesInFlight
     // only, resets that slot's command allocator, opens the command list,
     // and rewinds the slot's ring segments. Swap-chain latency is waited in
-    // present(), after GX/scene target work is recorded but before the backbuffer is
+    // present(), after console/scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
     void begin_frame(bool present_swap_chain = true);
     // The frame-latency wait begin_frame(true) takes, for a frame begun without a present that presents after all (a
@@ -494,7 +494,7 @@ public:
             scene_view_ = *view;
         }
     }
-    // GX copy-clear: color from the latched AR/GB regs, depth from z24
+    // console copy-clear: color from the latched AR/GB regs, depth from z24
     // (converted z24 / 0xFFFFFF into the D24 target).  The clear is scoped to
     // the given rect in unscaled scene target pixels (w==0 -> full target), matching
     // hardware: PE_COPY_EXECUTE's clear bit wipes the copy's src rect only
@@ -615,7 +615,7 @@ public:
         return last_begin_reset_us_;
     }
     // Current frame's shared s0-s7 table for draws without dynamic samplers.
-    // Exhaustion is explicit; defaults never replace a requested GX table.
+    // Exhaustion is explicit; defaults never replace a requested console table.
     [[nodiscard]] D3D12_GPU_DESCRIPTOR_HANDLE default_sampler_table() const {
         return default_sampler_table_;
     }
@@ -757,7 +757,7 @@ private:
     // sampling the scene target color (or depth) SRV.  (src_x, src_y) is the source
     // origin and (step_x, step_y) the source texels advanced per dest pixel,
     // all in scaled scene target texels.  Caller handles dest resource transitions;
-    // scene target transitions happen inside.  Restores GX root signature/scene target
+    // scene target transitions happen inside.  Restores console root signature/scene target
     // binding before returning.
     void record_conversion_blit(
         ID3D12Resource* dest,
@@ -836,7 +836,7 @@ private:
     GpuPass current_pass_ = GpuPass::Scene;
     bool pass_list_open_ = false;
     std::array<double, static_cast<std::size_t>(GpuPass::Count)> telemetry_pass_ms_{};
-    // GALAXY_GPU_DRAWS=1: each GX draw between two timestamps, its time summed by pipeline for present-stats'
+    // GALAXY_GPU_DRAWS=1: each console draw between two timestamps, its time summed by pipeline for present-stats'
     // [gpu-draws] lines (the timestamps serialize the draws: the total grows, the shares hold).
     static constexpr unsigned kGpuDrawSlots = 16384;
     struct GpuDrawMark {
@@ -1563,7 +1563,7 @@ private:
     D3D12_INDEX_BUFFER_VIEW bound_index_view_{};
     bool bound_index_view_valid_ = false;
     D3D12_RECT bound_scissor_{};
-    // Successful nonempty GX input that produced the currently bound scissor.
+    // Successful nonempty console input that produced the currently bound scissor.
     D3D12_RECT bound_scissor_input_{};
     unsigned bound_scissor_input_scale_ = 0;
     bool bound_scissor_input_valid_ = false;

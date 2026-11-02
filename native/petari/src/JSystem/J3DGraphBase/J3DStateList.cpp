@@ -75,7 +75,7 @@ NebulaStateOp& J3DStateList::add(u8 kind) {
 }
 
 namespace {
-    // GpuBlendFactor as the renderer's factor (NEBULA_FACTOR_*): GX's colour factors name the other side's colour (a
+    // GpuBlendFactor as the renderer's factor (NEBULA_FACTOR_*): the console's colour factors name the other side's colour (a
     // source factor 2 is the destination's colour).
     u8 nativeFactor(u8 gx, bool source) {
         if (gx == 2 || gx == 3) {
@@ -226,7 +226,7 @@ void J3DStateList::setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuT
     setTexCoordGen(coord, type, src, normalize, postMtx);
     NebulaStateOp& r = mOps[mCount - 1];
     r.a[5] = 1;
-    // GX's matrix id (three rows a matrix: GPU_PNMTX0-9 0-27, GPU_TEXMTX0-9 30-57, GPU_IDENTITY 60) as its slot.
+    // the console's matrix id (three rows a matrix: GPU_PNMTX0-9 0-27, GPU_TEXMTX0-9 30-57, GPU_IDENTITY 60) as its slot.
     r.a[6] = static_cast< u8 >(mtx / 3);
 }
 
@@ -239,7 +239,7 @@ namespace {
     const u8 sTexOffsetDivisor[8] = {0, 16, 8, 4, 2, 1, 1, 1};
 }  // namespace
 
-// GX's widths are sixths of a pixel: the op carries pixels.
+// the console's widths are sixths of a pixel: the op carries pixels.
 void J3DStateList::setLineWidth(u8 width, GpuTexOffset texOffsets) {
     NebulaStateOp& r = add(NEBULA_STATE_LINE_WIDTH);
     r.f[0] = width / 6.0f;

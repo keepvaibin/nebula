@@ -859,7 +859,7 @@ void SpaceCocoon::drawPlane(f32 x1, f32 y1, f32 x2, f32 y2, Color8 color1, Color
 
 void SpaceCocoon::initDraw() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, opaque (GX's constant alpha 1); drawn where
+    // runtime/src/render/materials/tex_modulate.hlsl: the texture times the vertex colour, opaque (the console's constant alpha 1); drawn where
     // the alpha is above 0, depth tested and written, back faces culled.
     NebulaNativeMaterial material;
     NativeShader::init(material, NEBULA_SHADER_TEX_MODULATE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_LEQUAL, true,

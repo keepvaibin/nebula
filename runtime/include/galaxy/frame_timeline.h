@@ -29,7 +29,7 @@ namespace galaxy::timeline {
 enum class Event : std::uint16_t {
     SubmitBegin = 1,       // sim: render_frame with a FIFO. a=fifo bytes
     SubmitEnd = 2,         // sim: render_frame returned. a=token value, b=token kind
-    SubmitSource = 3,      // sim: caller of the next render_frame. a=1 VI, 2 draw-done, 3 GX sync, 4 other
+    SubmitSource = 3,      // sim: caller of the next render_frame. a=1 VI, 2 draw-done, 3 console sync, 4 other
     RenderBegin = 4,       // render: chunk dequeued. a=token value, b=fifo bytes
     RenderReadsDone = 5,   // render: every guest-memory read of the chunk done. a=token value
     RenderSubmitted = 6,   // render: command list executed and fence signaled. a=token value, b=fence | pe<<63

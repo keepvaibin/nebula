@@ -30,11 +30,11 @@ struct NebulaMaterialParts {
 namespace {
     // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
     // J3D materials and the game's state changes set last. A native J3D material takes the parts its program does not
-    // load from here (the TEV register PREV always: J3D loads registers 1-3), as GX kept them.
+    // load from here (the TEV register PREV always: J3D loads registers 1-3), as console kept them.
     f32 sRegisters[84];
 
     // The native material the draws use now (J3D: sCurrent, its program and values; or a site's own), and the state
-    // changes made since it was sent (replayed should the GX path take over its draws).
+    // changes made since it was sent (replayed should the old path take over its draws).
     enum CurrentKind {
         CURRENT_NONE,
         CURRENT_J3D,
@@ -237,7 +237,7 @@ namespace {
     }
 
     u8 nativeFactor(u8 gx, bool source) {
-        // GX's colour factors name the other side's colour (a source factor 2 is the destination's colour).
+        // the console's colour factors name the other side's colour (a source factor 2 is the destination's colour).
         if (gx == 2 || gx == 3) {
             return source ? static_cast< u8 >(gx == 2 ? NEBULA_FACTOR_DST_COLOR : NEBULA_FACTOR_INV_DST_COLOR)
                           : static_cast< u8 >(gx == 2 ? NEBULA_FACTOR_SRC_COLOR : NEBULA_FACTOR_INV_SRC_COLOR);
@@ -321,8 +321,8 @@ namespace {
         }
         loadRegisters(rSetup, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
-        // Each coordinate's GX scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
-        // of map m at c's scale over m's size, as GX scales coordinates per coordinate.
+        // Each coordinate's console scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
+        // of map m at c's scale over m's size, as console scales coordinates per coordinate.
         for (u32 k = 0; k < 8; k++) {
             f32* pScale = material.constants + 84 + k * 4;
             const NebulaMaterialTexture& rTex = rValues.texture[k];
@@ -356,7 +356,7 @@ namespace {
             material.textures[map].max_lod = rTex.max_lod;
         }
         // Its texgens' post-transform rows (a shape's own texgens replace them at its draw). An instance's differed
-        // list loads texgens only when its flags name them (TexGenNum with 0x1000: diffTexGen, as the GX path's
+        // list loads texgens only when its flags name them (TexGenNum with 0x1000: diffTexGen, as the old path's
         // differed records): otherwise the texgens stay as the draw has them (a shape's own, ShapePacketUserData's
         // environment maps, set before the packet's differed list).
         const bool keepTexGens = differed && !(((rSetup.diff_flags >> 8) & 15) != 0 && (rSetup.diff_flags & 0x1000) != 0);

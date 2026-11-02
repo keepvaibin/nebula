@@ -681,7 +681,7 @@ namespace nw4r {
                                           : type == GPU_BM_LOGIC ? NEBULA_BLEND_LOGIC : NEBULA_BLEND_REPLACE;
                 }
                 {
-                    // NEBULA_FACTOR_*: GX's source colour factors (2, 3) are the destination's colour.
+                    // NEBULA_FACTOR_*: the console's source colour factors (2, 3) are the destination's colour.
                     const u8 src = pBlendMode->GetSrcFactor();
                     rSetup.blend.source = src == GPU_BL_DSTCLR ? NEBULA_FACTOR_DST_COLOR
                                             : src == GPU_BL_INVDSTCLR ? NEBULA_FACTOR_INV_DST_COLOR : src;
