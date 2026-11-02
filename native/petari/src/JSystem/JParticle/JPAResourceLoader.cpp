@@ -10,6 +10,7 @@
 #include "JSystem/JParticle/JPAKeyBlock.hpp"
 #include "JSystem/JParticle/JPAResource.hpp"
 #include "JSystem/JParticle/JPAResourceManager.hpp"
+#include "Game/Util/ByteView.hpp"
 
 JPAResourceLoader::JPAResourceLoader(u8 const* data, JPAResourceManager* mgr) {
     // As the importer cooks it (crates/nebula-import cook/native_data.rs jpc_host): host order, "JPAc2-10".
@@ -31,13 +32,13 @@ struct JPAResourceHeader {
 
 void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
     NebulaArena* heap = mgr->mpHeap;
-    mgr->mResMax = *(u16*)(data + 8);
-    mgr->mTexMax = *(u16*)(data + 0xA);
+    mgr->mResMax = readBytes< u16 >(data + 8);
+    mgr->mTexMax = readBytes< u16 >(data + 0xA);
     mgr->mpResArr = new (heap, 0) JPAResource*[mgr->mResMax];
     mgr->mpTexArr = new (heap, 0) JPATexture*[mgr->mTexMax];
 
     u32 offset = 0x10;
-    for (int i = 0; i < *(u16*)(data + 8); i++) {
+    for (int i = 0; i < readBytes< u16 >(data + 8); i++) {
         JPAResourceHeader* header = (JPAResourceHeader*)(data + offset);
         JPAResource* res = new (heap, 0) JPAResource();
         res->mFieldBlockNum = header->mFieldBlockNum;
@@ -56,7 +57,7 @@ void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
             // The block's tag, four characters.
             const u8* pTag = data + offset;
             u32 magic = (u32)pTag[0] << 24 | (u32)pTag[1] << 16 | (u32)pTag[2] << 8 | pTag[3];
-            u32 size = *(u32*)(data + offset + 4);
+            u32 size = readBytes< u32 >(data + offset + 4);
             switch (magic) {
             case 'FLD1':
                 res->mpFieldBlocks[field_idx] = new (heap, 0) JPAFieldBlock(data + offset, heap);
@@ -92,9 +93,9 @@ void JPAResourceLoader::load_jpc(u8 const* data, JPAResourceManager* mgr) {
         mgr->registRes(res);
     }
 
-    offset = *(u32*)(data + 0xC);
-    for (int i = 0; i < *(u16*)(data + 0xA); i++) {
-        u32 size = *(u32*)(data + offset + 4);
+    offset = readBytes< u32 >(data + 0xC);
+    for (int i = 0; i < readBytes< u16 >(data + 0xA); i++) {
+        u32 size = readBytes< u32 >(data + offset + 4);
         JPATexture* tex = new (heap, 0) JPATexture(data + offset);
         mgr->registTex(tex);
         offset += size;

@@ -41,8 +41,6 @@ public:
     bool tryShowSeparator(s32, f32);
     void setSeparatorPaneSize();
     
-#if (VERSION == RMGK01)
-#endif
 
     void exeAppear();
     void exeWait();

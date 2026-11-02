@@ -5,6 +5,7 @@
 #include "Game/Scene/SceneFunction.hpp"
 #include "Game/Util.hpp"
 #include <new>
+#include "Game/Util/ByteView.hpp"
 
 DynamicCollisionObj::DynamicCollisionObj(const char* pName) : LiveActor(pName) {
     _A4 = 0;
@@ -160,7 +161,7 @@ void DynamicCollisionObj::createCollision() {
 
     // One leaf octree entry, 0x80000002: the list two bytes on. The console's halves were its big-endian s32; the
     // native KCollisionServer reads entries in host order (KCLOctreeSwap converts the disc's), so the s32 is written.
-    *reinterpret_cast< s32* >(u16array) = static_cast< s32 >(0x80000002);
+    writeBytes< s32 >(u16array, static_cast< s32 >(0x80000002));
 
     s32 count = v;
     for (s32 i = 0; i <= v; i++) {

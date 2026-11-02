@@ -4,6 +4,7 @@
 // optional features a driver refuses left out (learned per driver build in vk_compat.txt).
 
 #include "galaxy/render/vk/pipeline_cache_vk.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/pipeline_seed.h"
 #include "galaxy/windows_power.h"
 
@@ -58,7 +59,7 @@ struct TestRefusals {
 const TestRefusals& test_refusals() {
     static const TestRefusals refusals = [] {
         TestRefusals r;
-        const char* names = std::getenv("GALAXY_VK_TEST_REFUSE");
+        const char* names = std::getenv(NEBULA_TEST_ENV("GALAXY_VK_TEST_REFUSE"));
         const std::string list = names != nullptr ? std::string(",") + names + "," : "";
         const auto has = [&](const char* name) { return list.find(std::string(",") + name + ",") != std::string::npos; };
         r.dual_source = has("dual-source");

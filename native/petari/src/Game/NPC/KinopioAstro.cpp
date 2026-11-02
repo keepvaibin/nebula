@@ -138,15 +138,6 @@ bool KinopioAstro::eventFunc(u32 letterEvent) {
     } else if (letterEvent == LetterEvent_3) {
         return true;
     }
-#if (VERSION == RMGK01)
-    else if (letterEvent == LetterEvent_OnMsgLedPattern) {
-        MR::onMsgLedPattern();
-        return true;
-    } else if (letterEvent == LetterEvent_OffMsgLedPattern) {
-        MR::offMsgLedPattern();
-        return true;
-    }
-#endif
 
     return true;
 }

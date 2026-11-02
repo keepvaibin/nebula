@@ -19,7 +19,7 @@
 
 namespace galaxy::host {
 const char* test_data_paths_error(int argc, char** argv) {
-    bool test = read_env_flag_uncached("GALAXY_HIDE_WINDOW", false);
+    bool test = read_env_flag_uncached(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"), false);
     wchar_t* environment = GetEnvironmentStringsW();
     if (!environment) return "cannot inspect the test environment";
     for (const wchar_t* entry = environment; *entry; entry += std::wcslen(entry) + 1) {
@@ -39,7 +39,7 @@ const char* test_data_paths_error(int argc, char** argv) {
     }
     for (const auto* name : {L"NEBULA_SETTINGS", L"NEBULA_APPDATA", L"NEBULA_NAND",
                               L"LOCALAPPDATA", L"GALAXY_RUNTIME_SETTINGS_PATH",
-                              L"GALAXY_RENDER_CONFIG_PATH", L"GALAXY_CRASH_DUMP_DIR"}) {
+                              L"GALAXY_RENDER_CONFIG_PATH", NEBULA_TEST_ENV_W("GALAXY_CRASH_DUMP_DIR")}) {
         const auto path = get_env_path(name);
         if (!path || !path_is_within(*path, *work) || path_is_within(*path, protected_root)) {
             return "tests require private settings, saves, app data and crash paths inside NEBULA_WORK";

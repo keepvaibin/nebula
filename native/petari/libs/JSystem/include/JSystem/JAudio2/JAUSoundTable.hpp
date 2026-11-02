@@ -2,6 +2,7 @@
 
 #include "JSystem/JAudio2/JAISound.hpp"
 #include "JSystem/JAudio2/JASGlobal.hpp"
+#include "Game/Util/ByteView.hpp"
 
 // The sound tables (BST, BSTN) in host order, as the importer cooks the audio archive (native_data.rs baa).
 struct JAUSoundTableItem {
@@ -47,7 +48,7 @@ struct JAUSoundTable_ {
 
     void init(const void* pData) {
         mData = pData;
-        if (*(const u32*)mData != Root::magicNumber()) {
+        if (readBytes< u32 >(mData) != Root::magicNumber()) {
             mData = nullptr;
         } else {
             mRoot = (Root*)((u8*)mData + *((const u32*)mData + 3));

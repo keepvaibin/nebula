@@ -77,9 +77,6 @@ namespace NrvStarPointerLayout {
 StarPointerLayout::StarPointerLayout(const char* pName)
     : LayoutActor(pName, true), mPosition(0.0f, 0.0f), mPointerKind(StarPointerKind_NULL), mAnimType(AnimType_HandPaa), mTouchTimer(),
       mPadChannel(-1), mRadius(::sNormalRadius), _3C(),
-#if (VERSION == RMGK01)
-      mRotateAngle(),
-#endif
       mDirector(), mBlur(), mCommandStream(), mNumber(), mActor(), mNewTouchedID(), mTouchedID(), mStartTouch(), mStartDisableShoot(), mSingleTouch(),
       mShootDisabled(), mIsPointerValid(true), mIsAppear(true), mAppearTime() {
 }
@@ -587,9 +584,7 @@ void StarPointerLayout::control() {
     }
 
     updateDecoration();
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     rotateTest();
-#endif
     updateTouch();
 
     mShootDisabled = mStartDisableShoot;
@@ -630,28 +625,15 @@ void StarPointerLayout::control() {
                 }
                 setNerve(GET_NERVE(StarPointerLayout, HostTypeNrvOutScreen));
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
                 MR::tryRumblePadWeak(this, mPadChannel);
-#else
-                rotateTest();
-                return;
-#endif
             }
             
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             return;
-#endif
         } else {
-#if (VERSION == RMGK01)
-            rotateTest();
-#endif
             return;
         }
     }
 
-#if (VERSION == RMGK01)
-    rotateTest();
-#endif
 
     if (mPadChannel == GAMEPAD_CHAN1) {
         MR::startAnim(this, "Transparency", 1);
@@ -678,21 +660,9 @@ void StarPointerLayout::setPosition() {
 }
 
 void StarPointerLayout::rotateTest() {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     TVec2f horiz;
     MR::getGamePad(mPadChannel)->mPointer->getHorizonVec(&horiz);
     f32 angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
-#else
-    f32 angle = mRotateAngle;
-    if (MR::isStarPointerInScreen(mPadChannel)) {
-        TVec2f horiz;
-        MR::getGamePad(mPadChannel)->mPointer->getHorizonVec(&horiz);
-        angle = MR::normalizeAbs(MR::toDegree(MR::atan2(horiz.y, horiz.x)), ::sDegreeMin, 180.0f);
-        if (angle != 0.0f) {
-            mRotateAngle = angle;
-        }
-    }
-#endif
 
     if (mPointerKind == StarPointerKind_StarPointer) {
         angle *= ::sRotateMult;

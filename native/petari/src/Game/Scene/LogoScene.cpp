@@ -50,12 +50,7 @@ namespace {
 
 
 namespace {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     const s32 FADEINOUT_FRAME = 60;
-#else
-    const s32 FADEINOUT_FRAME = 30;
-    const s32 CENSORSHIP_DISPLAY_FRAME = 180;
-#endif
     const s32 STRAP_DISPLAY_MIN_FRAME = 450;
     const s32 STRAP_DISPLAY_MAX_FRAME = 1200;
 
@@ -107,15 +102,9 @@ void LogoScene::draw() const {
     MR::drawInit();
 
     NebulaColor8 color;
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     color.r = 0;
     color.g = 0;
     color.b = 0;
-#elif (VERSION == RMGK01)
-    color.r = 255;
-    color.g = 255;
-    color.b = 255;
-#endif
     color.a = 255;
 
     MR::fillScreen(color);
@@ -217,7 +206,6 @@ void LogoScene::initLayout() {
 }
 
 bool LogoScene::tryFadeinLayout(LayoutActor* pActor) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     if (MR::isFirstStep(this)) {
         mLogoFader->startFadeIn();
         pActor->appear();
@@ -228,21 +216,9 @@ bool LogoScene::tryFadeinLayout(LayoutActor* pActor) {
     }
 
     return false;
-#else
-    if (MR::isFirstStep(this)) {
-        pActor->appear();
-    }
-
-    if (tryFadeinLayout()) {
-        return true;
-    }
-
-    return false;
-#endif
 }
 
 bool LogoScene::tryFadeoutLayout(LayoutActor* pActor) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     if (MR::isFirstStep(this)) {
         mLogoFader->startFadeOut();
     }
@@ -253,13 +229,5 @@ bool LogoScene::tryFadeoutLayout(LayoutActor* pActor) {
     }
 
     return false;
-#else
-    if (tryFadeoutLayout()) {
-        pActor->kill();
-        return true;
-    }
-
-    return false;
-#endif
 }
 

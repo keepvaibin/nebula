@@ -394,12 +394,6 @@ void TrickRabbitSnow::exeBlowDamage() {
 }
 
 void TrickRabbitSnow::exeCaught() {
-#if (VERSION == RMGK01)
-    if (MR::isFirstStep(this) && MR::isDemoActive()) {
-        setNerve(GET_NERVE(TrickRabbitFreeRun, TrickRabbitSnowNrvCaught));
-        return;
-    }
-#endif
 
     if (MR::updateActorState(this, mStateCaught)) {
         MR::endDemo(this, "\225\337\202\334\202\350" /* 捕まり */);

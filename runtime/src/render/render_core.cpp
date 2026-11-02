@@ -185,7 +185,7 @@ bool snapshot_waits() {
 // GALAXY_TRACE_LIGHTS=1: the actor-light aim every 600 scenes, the first moved draws and the CPU
 // cycles ([rt-actor-light]); =2: the aim of every scene.
 std::uint64_t actor_light_trace_level() {
-    static const std::uint64_t level = read_env_u64("GALAXY_TRACE_LIGHTS", 0u);
+    static const std::uint64_t level = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_LIGHTS"), 0u);
     return level;
 }
 
@@ -239,7 +239,7 @@ bool trace_stalls_enabled() {
                    &length,
                    value,
                    sizeof(value),
-                   "GALAXY_TRACE_GX_STALLS") == 0 &&
+                   NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALLS")) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;
@@ -336,7 +336,7 @@ struct GameWaitTimer {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64("GALAXY_TRACE_RENDER_STALL_US", 1000u);
+        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
     return threshold;
 }
 
@@ -745,7 +745,7 @@ void RenderCore::reset_monotonic_cadence(
 
 // GALAXY_TRACE_MEMORY=1: every 600 presented frames, what the renderer holds, in MB.
 void RenderCore::trace_memory() {
-    static const bool enabled = read_env_u64("GALAXY_TRACE_MEMORY", 0u) != 0u;
+    static const bool enabled = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_MEMORY"), 0u) != 0u;
     static std::uint64_t frames = 0u;
     if (!enabled || ++frames % 600u != 0u) {
         return;
@@ -774,7 +774,7 @@ void RenderCore::trace_memory() {
                  mb(producer_record_pool_.vertices.capacity() * sizeof(RenderVertex) + producer_record_pool_.matrices.capacity() * sizeof(shapes::Matrix)));
 #if defined(_WIN32)
     // GALAXY_TRACE_MEMORY=2: the process's heaps as well, each one's busy bytes and the block sizes holding the most.
-    static const bool heaps = read_env_u64("GALAXY_TRACE_MEMORY", 0u) == 2u;
+    static const bool heaps = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_MEMORY"), 0u) == 2u;
     if (heaps) {
         HANDLE list[64];
         const DWORD count = std::min<DWORD>(GetProcessHeaps(64, list), 64);
@@ -2250,7 +2250,7 @@ void RenderCore::restart_interp_governors() {
 
 void RenderCore::note_game_frame_cadence(std::int64_t now_qpc) {
     static const std::int64_t frequency = galaxy::qpc_frequency();
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
     const std::int64_t period = frequency * 1001 / 60000;
     // Since the frame before: the game's waits on the render thread, and the render thread's sub-frame time.
     const std::uint64_t waited_total = game_wait_qpc_.load(std::memory_order_relaxed);
@@ -2591,7 +2591,7 @@ void RenderCore::advance_interp_sequence(bool flush) {
 // time from its slot to the vblank ending that interval. The picture shows its slot's moment, so with even motion
 // that time stays the same; its spread is the motion's unevenness on the display.
 void RenderCore::note_present_vblank(std::int64_t slot) {
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
     std::int64_t vblank = 0;
     std::int64_t period = 0;
     if (!trace || !renderer_.vblank_grid(vblank, period)) {
@@ -2658,7 +2658,7 @@ void RenderCore::note_interp_real_present() {
 }
 
 void RenderCore::report_interp_stats() {
-    static const bool trace = read_env_u64("GALAXY_TRACE_PRESENT_STATS", 0u) != 0u;
+    static const bool trace = read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), 0u) != 0u;
     if (!trace) {
         return;
     }

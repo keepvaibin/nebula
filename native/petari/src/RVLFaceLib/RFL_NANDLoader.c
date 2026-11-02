@@ -3,6 +3,12 @@
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
 #include <stdio.h>
 
+static u16 readU16(const void* p) {
+    u16 value;
+    memcpy(&value, p, sizeof(value));
+    return value;
+}
+
 #define LOADER_HEADER_BUF_1_SIZE 0x100
 #define LOADER_HEADER_BUF_2_SIZE 0x20
 
@@ -138,7 +144,7 @@ static void parseOnmemoryRes_(void) {
     int i;
 
     loader = Mii_GetLoader();
-    loader->version = *(u16*)((u8*)loader->cache + 2);
+    loader->version = readU16((u8*)loader->cache + 2);
     for (i = 0; i < Mii_ArcID_Max; i++) {
         // Pointer to section offset in header
         u32* offset = (u32*)((u8*)loader->cache + ((i + 1) * 4));

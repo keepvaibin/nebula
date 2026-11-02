@@ -20,7 +20,9 @@ DemoSoundKeeper::DemoSoundKeeper(DemoExecutor* pExecutor) : DemoSheetKeeperBase(
         pMap->getValue(i, "PartName", &info.mPartName);
         pMap->getValue(i, "Bgm", &info.mBgm);
         pMap->getValue(i, "SystemSe", &info.mSystemSe);
-        pMap->getValue(i, "ReturnBgm", reinterpret_cast< s32* >(&info.mReturnBgm));
+        s32 returnBgm = 0;
+        pMap->getValue(i, "ReturnBgm", &returnBgm);
+        info.mReturnBgm = returnBgm != 0;
         pMap->getValue(i, "BgmWipeoutFrame", &info.mBgmWipeoutFrame);
         mInfo.push_back(info);
     }

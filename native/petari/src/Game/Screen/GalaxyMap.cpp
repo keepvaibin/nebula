@@ -39,9 +39,6 @@ namespace {
 
 GalaxyMap::GalaxyMap()
     : LayoutActor("\203\115\203\203\203\211\203\116\203\126\201\133\201\105\223\126\225\266\221\344\203\175\203\142\203\166" /* ギャラクシー・天文台マップ */, true), mMarioIcon1(), mMarioIcon2(), mGalaxyPlain(), mGalaxyDetail(), mPointingIcon(), mGalaxyName(),
-#if (VERSION == RMGK01)
-      mIconAButton(),
-#endif
       _70(), _71(true) {
 }
 
@@ -78,12 +75,6 @@ void GalaxyMap::init(const JMapInfoIter& rIter) {
     mTitle = new GalaxyMapTitle();
     mTitle->initWithoutIter();
 
-#if (VERSION == RMGK01)
-    mIconAButton = new IconAButton(false, false);
-    mIconAButton->initWithoutIter();
-    mIconAButton->setFollowActorPane(this, "AButtonPosition");
-    mIconAButton->kill();
-#endif
 
     kill();
 }
@@ -133,9 +124,6 @@ void GalaxyMap::kill() {
     mGalaxyDetail->kill();
     mMarioIcon1->kill();
     mTitle->kill();
-#if (VERSION == RMGK01)
-    mIconAButton->kill();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->kill();
@@ -169,9 +157,6 @@ void GalaxyMap::movement() {
     mGalaxyDetail->movement();
     mGalaxyPlain->movement();
     mTitle->movement();
-#if (VERSION == RMGK01)
-    mIconAButton->movement();
-#endif
 }
 
 void GalaxyMap::calcAnim() {
@@ -194,9 +179,6 @@ void GalaxyMap::calcAnim() {
     mGalaxyDetail->calcAnim();
     mGalaxyPlain->calcAnim();
     mTitle->calcAnim();
-#if (VERSION == RMGK01)
-    mIconAButton->calcAnim();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->calcAnim();
@@ -230,9 +212,6 @@ void GalaxyMap::draw() const {
     }
     drawGalaxyIconWithOrder(2);
 
-#if (VERSION == RMGK01)
-    mIconAButton->draw();
-#endif
 }
 
 void GalaxyMap::movementForCapture() {
@@ -360,9 +339,6 @@ void GalaxyMap::setModeCapture() {
 
     mTitle->kill();
     mMarioIcon1->kill();
-#if (VERSION == RMGK01)
-    mIconAButton->kill();
-#endif
 
     if (mMarioIcon2 != nullptr) {
         mMarioIcon2->kill();
@@ -390,11 +366,6 @@ bool GalaxyMap::isShowDetail() const {
     return !MR::isDead(this) && isNerve(GET_NERVE_ANON(GalaxyMapShowDetail));
 }
 
-#if (VERSION == RMGK01)
-void GalaxyMap::dispIconAButton() {
-    mIconAButton->openWithoutMessage();
-}
-#endif
 
 void GalaxyMap::changeToGalaxyMap() {
     appear();

@@ -2,6 +2,7 @@
 #include "Game/Util/StringUtil.hpp"
 #include <JSystem/JGadget/hashcode.hpp>
 #include <cstring>
+#include "Game/Util/ByteView.hpp"
 
 JMapInfo::JMapInfo() {
     mData = nullptr;
@@ -89,13 +90,13 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, u32* pValueOut) const
     switch (item->mType) {
     case JMAP_VALUE_TYPE_LONG:
     case JMAP_VALUE_TYPE_LONG_2:
-        rawValue = *reinterpret_cast< const u32* >(valuePtr);
+        rawValue = readBytes< u32 >(valuePtr);
         break;
     case JMAP_VALUE_TYPE_SHORT:
-        rawValue = *reinterpret_cast< const u16* >(valuePtr);
+        rawValue = readBytes< u16 >(valuePtr);
         break;
     case JMAP_VALUE_TYPE_BYTE:
-        rawValue = *reinterpret_cast< const u8* >(valuePtr);
+        rawValue = readBytes< u8 >(valuePtr);
         break;
     default:
         return false;
@@ -116,19 +117,19 @@ bool JMapInfo::getValueFast(int entryIndex, int itemIndex, s32* pValueOut) const
     switch (item->mType) {
     case JMAP_VALUE_TYPE_LONG:
         if (item->mMask == 0xffffffff) {
-            *pValueOut = *reinterpret_cast< const s32* >(valuePtr);
+            *pValueOut = readBytes< s32 >(valuePtr);
             break;
         }
         goto FAIL;
     case JMAP_VALUE_TYPE_SHORT:
         if (item->mMask == 0xffff) {
-            *pValueOut = *reinterpret_cast< const s16* >(valuePtr);
+            *pValueOut = readBytes< s16 >(valuePtr);
             break;
         }
         goto FAIL;
     case JMAP_VALUE_TYPE_BYTE:
         if (item->mMask == 0xff) {
-            *pValueOut = *reinterpret_cast< const s8* >(valuePtr);
+            *pValueOut = readBytes< s8 >(valuePtr);
             break;
         }
         goto FAIL;

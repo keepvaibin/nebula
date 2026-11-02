@@ -5,31 +5,6 @@
 
 enum JSUStreamSeekFrom { SEEK_FROM_START, SEEK_FROM_POSITION, SEEK_FROM_END };
 
-// While a save in the console's byte order is converted (SaveDataHandler): the streams and MR::loadSave* read it so.
-// Everything else is host order.
-inline bool gSaveConsoleOrder = false;
-
-template < typename T >
-inline T jsuSwapScalar(T value) {
-    if constexpr (sizeof(T) == 2) {
-        u16 v;
-        __builtin_memcpy(&v, &value, 2);
-        v = __builtin_bswap16(v);
-        __builtin_memcpy(&value, &v, 2);
-    } else if constexpr (sizeof(T) == 4) {
-        u32 v;
-        __builtin_memcpy(&v, &value, 4);
-        v = __builtin_bswap32(v);
-        __builtin_memcpy(&value, &v, 4);
-    } else {
-        u64 v;
-        __builtin_memcpy(&v, &value, 8);
-        v = __builtin_bswap64(v);
-        __builtin_memcpy(&value, &v, 8);
-    }
-    return value;
-}
-
 // A stream's scalars, element by element.
 template < typename T >
 struct JSUScalar {};

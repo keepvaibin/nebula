@@ -205,11 +205,6 @@ void TalkMessageCtrl::rootNodePre(bool arg) {
         case TalkMessageCtrl_TypeC:
             cond = MR::isOnMessageAlreadyRead(branch->mNextIdx);
             break;
-#if (VERSION == RMGK01)
-        case TalkMessageCtrl_TypeD:
-            cond = MR::isMsgLedPattern();
-            break;
-#endif
         case TalkMessageCtrl_TypeE:
             cond = TalkFunction::getBranchAstroGalaxyResult(branch->mNextIdx);
             break;
@@ -424,11 +419,6 @@ const char* TalkMessageCtrl::getBranchID() const {
     case BranchNode_Type12:
         result = "KnockOnTheDoor";
         break;
-#if (VERSION == RMGK01)
-    case BranchNode_Type13:
-        result = "LedPattern";
-        break;
-#endif
     }
 
     return result;

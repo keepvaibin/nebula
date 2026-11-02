@@ -37,7 +37,7 @@ struct HostPointerCoordinates {
     std::int32_t client_height = 0;
 };
 
-// The absolute pointer state the Wii Remote report is built from. Coordinates, visibility, sequence
+// The absolute pointer state the pointer's samples are built from. Coordinates, visibility, sequence
 // counters and sample time are published together; reading them separately can mix parts of
 // different mouse messages.
 struct HostPointerSnapshot {
@@ -140,7 +140,7 @@ struct HostPointerCursorPollAuthorityDecision {
 };
 
 // GetCursorPos sampling does not depend on the render thread's message pump and is authoritative at
-// the Wii Remote report rate. The exception is RDP: some hosts return a stale centred GetCursorPos
+// the input sample rate. The exception is RDP: some hosts return a stale centred GetCursorPos
 // while WM_MOUSEMOVE carries the live coordinate, so in a remote session Adaptive mode lets a recent
 // message take precedence. Forced mode trusts polling even in a remote session.
 [[nodiscard]] constexpr HostPointerCursorPollAuthorityDecision

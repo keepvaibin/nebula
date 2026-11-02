@@ -7,6 +7,12 @@
 #include <stddef.h>
 #include <stdio.h>
 
+static u16 readU16(const void* p) {
+    u16 value;
+    memcpy(&value, p, sizeof(value));
+    return value;
+}
+
 _Static_assert(sizeof(MiiCharModel) >= sizeof(Mii_CharModel), "MiiCharModel holds an Mii_CharModel");
 
 #define NUM_VTX_POS(size) ((size) / VTX_POS_SIZE)
@@ -679,7 +685,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
      * Vertex positions
      */
 
-    if (*(u16*)ptr8 == 0) {
+    if (readU16(ptr8) == 0) {
         shape->numVtxPos = 0;
         shape->numVtxNrm = 0;
         shape->numVtxTxc = 0;
@@ -688,7 +694,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
         return;
     }
 
-    shape->numVtxPos = *(u16*)ptr8;
+    shape->numVtxPos = readU16(ptr8);
     ptr8 += sizeof(u16);
 
     {
@@ -743,7 +749,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
      * Vertex normals
      */
 
-    shape->numVtxNrm = *(u16*)ptr8;
+    shape->numVtxNrm = readU16(ptr8);
     ptr8 += sizeof(u16);
 
     {
@@ -783,7 +789,7 @@ void Mii_InitShapeRes(Mii_ShapeRes* shape) {
         if (skipTxc) {
             shape->numVtxTxc = 0;
         } else {
-            shape->numVtxTxc = *(u16*)ptr8;
+            shape->numVtxTxc = readU16(ptr8);
             ptr8 += sizeof(u16);
 
             byteSize = SIZE_VTX_TXC(shape->numVtxTxc);

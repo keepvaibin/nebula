@@ -26,23 +26,15 @@ public:
     void updateDpdInfo();
     void updateAdditionalInfo();
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     void forcePointerOut();
-#endif
 
     f32 calcViewDistanceZ(const TVec3f&, MtxPtr);
 
     void drawDebug3D() const;
 
-    #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     bool isInScreen() const {
         return mPastInfo.mInScreen;
     }
-    #else
-    bool isInScreen() const {
-        return !isOutScreenLong();
-    }
-    #endif
 
     f32 getViewDistZ() const {
         return mPastInfo.mViewDistZ;

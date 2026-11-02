@@ -199,17 +199,11 @@ namespace MR {
         u32 i;
 
         for (i = 0; i < num - 1; pDst++, pSrc++, i++) {
-            const char* p = reinterpret_cast< const char* >(pSrc);
-
-            if (p[0] != '\0') {
+            if (*pSrc == 0 || *pSrc > 0xFF) {
                 break;
             }
 
-            if (p[1] == '\0') {
-                break;
-            }
-
-            *pDst = p[1];
+            *pDst = static_cast< char >(*pSrc);
         }
 
         *pDst = '\0';
