@@ -712,7 +712,7 @@ void MiniatureGalaxy::exeOpen() {
     if (MR::isStep(this, ::cOpenMiniatureAppearStep)) {
         MR::startSystemSE("SE_SY_NEW_GALAXY_OPEN");
         MR::emitEffect(mUnknownModel, "MiniatureGalaxyNewOpen");
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -741,7 +741,7 @@ void MiniatureGalaxy::exeOpen() {
     }
 
     if (MR::isLessStep(this, ::cOpenDisappearStep)) {
-        MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::cOpenTotalFrame)) {

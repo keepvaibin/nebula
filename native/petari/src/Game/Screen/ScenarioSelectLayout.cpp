@@ -11,7 +11,7 @@
 #include "Game/System/GameDataConst.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -411,7 +411,7 @@ bool ScenarioSelectLayout::trySelect() {
             return true;
         }
 
-        if (!MR::isStarPointerInScreen(GAMEPAD_CHAN0)) {
+        if (!MR::isStarPointerInScreen(PLAYER_1)) {
             for (s32 i = 0; i < 7; i++) {
                 if (mStar[i]->_30) {
                     continue;
@@ -571,7 +571,7 @@ bool ScenarioSelectLayout::tryCancel() {
         return true;
     }
 
-    if (MR::testCorePadTriggerB(GAMEPAD_CHAN0)) {
+    if (MR::isPressedFire(PLAYER_1)) {
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
         mBackButton->disappear();
         setNerve(GET_NERVE(ScenarioSelectLayout, ScenarioSelectLayoutNrvCancel));

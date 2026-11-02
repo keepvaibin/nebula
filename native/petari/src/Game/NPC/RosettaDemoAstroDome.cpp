@@ -9,7 +9,7 @@
 #include "Game/Screen/IconAButton.hpp"
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -96,7 +96,7 @@ void RosettaMonologue::control() {
     MR::setLayoutPosAtPaneTrans(mIconAButton, this, "AButtonPosition");
 
     // A skipped reading turns each page as soon as it is up.
-    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0) && !NebulaCutsceneSkip::isSkipping()) {
+    if (!MR::isPressedJump(PLAYER_1) && !NebulaCutsceneSkip::isSkipping()) {
         return;
     }
 
@@ -111,7 +111,7 @@ void RosettaMonologue::control() {
 
     if (mMessageNo == 4) {
         MR::startSystemSE("SE_SY_TALK_OK");
-        MR::startCSSound("CS_CLICK_CLOSE", nullptr, GAMEPAD_CHAN0);
+        MR::startCSSound("CS_CLICK_CLOSE", nullptr, PLAYER_1);
     } else {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
 

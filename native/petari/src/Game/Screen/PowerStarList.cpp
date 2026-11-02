@@ -11,7 +11,7 @@
 #include "Game/System/GameDataFunction.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -684,9 +684,9 @@ void PowerStarList::exeWait() {
         updateButtonAppearance();
     }
 
-    if (mPageNo < mPageNum - 1 && (mArrowDownButtonCtrl->trySelect() || MR::testCorePadButtonDown(0) || MR::testSubPadStickTriggerDown(0))) {
+    if (mPageNo < mPageNum - 1 && (mArrowDownButtonCtrl->trySelect() || MR::isHeldDown(0) || MR::isMoveStickPressedDown(0))) {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPageNext));
-    } else if (mPageNo > 0 && (mArrowUpButtonCtrl->trySelect() || MR::testCorePadButtonUp(0) || MR::testSubPadStickTriggerUp(0))) {
+    } else if (mPageNo > 0 && (mArrowUpButtonCtrl->trySelect() || MR::isHeldUp(0) || MR::isMoveStickPressedUp(0))) {
         setNerve(GET_NERVE(PowerStarList, PowerStarListNrvPagePrev));
     }
 }

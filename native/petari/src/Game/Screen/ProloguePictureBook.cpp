@@ -2,7 +2,7 @@
 #include "Game/System/NebulaFrameGen.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/IconAButton.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -84,7 +84,7 @@ void ProloguePictureBook::exeKeyWait() {
         animCtrl->setRate(0.0f);
     }
 
-    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (MR::isPressedJump(PLAYER_1)) {
         MR::startSystemSE("SE_SY_TALK_FOCUS_ITEM");
         mIconAButton->term();
 

@@ -44,8 +44,8 @@ public:
     void updateBindTrans();
     void calcGravityMtx(TPos3f*);
     void updateTopPos(f32);
-    f32 getPoleSubPadStickX() const;
-    f32 getPoleSubPadStickY() const;
+    f32 getPoleMoveStickX() const;
+    f32 getPoleMoveStickY() const;
 
     /* 0x8C */ TVec3f mBasePos;
     /* 0x98 */ TVec3f mTopPos;

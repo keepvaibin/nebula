@@ -1,5 +1,5 @@
 #include "Game/System/PauseButtonCheckerInGame.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 
 namespace {
     static const s32 sHoldCounterMax = 12;
@@ -13,14 +13,14 @@ PauseButtonCheckerInGame::PauseButtonCheckerInGame()
 }
 
 void PauseButtonCheckerInGame::update() {
-    if (MR::testCorePadButtonPlus(GAMEPAD_CHAN0)) {
+    if (MR::isHeldPause(PLAYER_1)) {
         mPlusHoldFrame++;
     } else {
         mPlusHoldFrame = 0;
         mPlusUsed = false;
     }
 
-    if (MR::testCorePadButtonMinus(GAMEPAD_CHAN0)) {
+    if (MR::isHeldMap(PLAYER_1)) {
         mMinusHoldFrame++;
     } else {
         mMinusHoldFrame = 0;
@@ -49,8 +49,8 @@ bool PauseButtonCheckerInGame::isPermitToMinusPause() const {
     return true;
 }
 
-// Not while A or B is held. The console also waited for the remote to be still, which drops a press made while the
+// Not while A or B is held. The console also waited for the controller to be still, which drops a press made while the
 // controller moves (a gyro pointer, a hand in motion).
 bool PauseButtonCheckerInGame::isPermitToPause() const {
-    return !MR::testCorePadButtonA(GAMEPAD_CHAN0) && !MR::testCorePadButtonB(GAMEPAD_CHAN0);
+    return !MR::isHeldJump(PLAYER_1) && !MR::isHeldFire(PLAYER_1);
 }

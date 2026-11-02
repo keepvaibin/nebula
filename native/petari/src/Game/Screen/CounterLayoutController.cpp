@@ -6,7 +6,7 @@
 #include "Game/Screen/StarCounter.hpp"
 #include "Game/Screen/StarPieceCounter.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -124,8 +124,8 @@ bool CounterLayoutController::isPlayerMoving() const {
         return true;
     }
 
-    if (!MR::isNearZero(MR::getSubPadStickX(GAMEPAD_CHAN0)) || !MR::isNearZero(MR::getSubPadStickY(GAMEPAD_CHAN0)) ||
-        MR::testPadButtonAnyWithoutHome(GAMEPAD_CHAN0) || MR::isCorePadSwing(GAMEPAD_CHAN0) || MR::isSubPadSwing(GAMEPAD_CHAN0)) {
+    if (!MR::isNearZero(MR::getMoveStickX(PLAYER_1)) || !MR::isNearZero(MR::getMoveStickY(PLAYER_1)) ||
+        MR::isHeldAnyWithoutHome(PLAYER_1) || MR::isMainSpin(PLAYER_1) || MR::isSubSpin(PLAYER_1)) {
         return true;
     }
 

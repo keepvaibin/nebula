@@ -19,7 +19,7 @@ public:
     void getPadAcceleration(TVec3f*) const;
     bool testBrake() const;
 
-    bool isCorePad() const {
+    bool isMainHand() const {
         return mPad == Pad_Core;
     }
 

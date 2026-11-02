@@ -426,7 +426,7 @@ void TrampleStar::exeBindingShoot() {
                     TVec3f up = mVtxs[mCaptureVtx];
                     MR::normalizeOrZero(&up);
 
-                    if (MR::getPlayerLevelA()) {
+                    if (MR::getPlayerHeldJump()) {
                         mJumpVel *= 1.5f;
                         MR::startSoundPlayer("SE_OJ_TRAMPOLINE_BOUND_L");
                         MR::startSoundPlayer("SE_PV_JUMP_JOY");
@@ -452,7 +452,7 @@ void TrampleStar::exeBindingShoot() {
             TVec3f up = mVtxs[mCaptureVtx];
             MR::normalizeOrZero(&up);
 
-            if (MR::getPlayerLevelA()) {
+            if (MR::getPlayerHeldJump()) {
                 mJumpVel *= 1.5f;
             }
 

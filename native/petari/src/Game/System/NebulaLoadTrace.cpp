@@ -9,7 +9,7 @@
 #include "Game/Player/MarioAccess.hpp"
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/SceneUtil.hpp"
@@ -35,7 +35,7 @@ namespace {
 
 namespace NebulaLoadTrace {
     void frame() {
-        if (enabled() && (MR::testCorePadTriggerA(0) || MR::testCorePadTriggerB(0))) {
+        if (enabled() && (MR::isPressedJump(0) || MR::isPressedFire(0))) {
             JUTNativeLog("load: press\n");
         }
     }

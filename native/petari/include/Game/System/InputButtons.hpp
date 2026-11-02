@@ -1,16 +1,16 @@
 #pragma once
 
 
-class GamePad;
+class PlayerInput;
 
-/// @brief The wrapper around the state of a Wii Remote's buttons.
-class GamePadButton {
+/// @brief The wrapper around the state of a player's buttons.
+class InputButtons {
 public:
-    /// @brief Creates a new `GamePadButton`.
-    /// @param pPad The pointer to the state of the owning Wii Remote.
-    GamePadButton(const GamePad* pPad);
+    /// @brief Creates a new `InputButtons`.
+    /// @param pPad The owning player's input.
+    InputButtons(const PlayerInput* pPad);
 
-    /// @brief Updates the state of the Wii Remote's buttons.
+    /// @brief Updates the state of the player's buttons.
     void update();
 
     /// @brief Determines if up on the +Control Pad is pressed.
@@ -122,8 +122,8 @@ public:
     bool isChangeAnyState() const;
 
 private:
-    /// @brief The pointer to the state of the owning Wii Remote.
-    /* 0x00 */ const GamePad* mPad;
+    /// @brief The owning player's input.
+    /* 0x00 */ const PlayerInput* mPad;
 
     /// @brief The combination of buttons pressed.
     /* 0x04 */ u32 mHold;

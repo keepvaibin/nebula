@@ -1,0 +1,218 @@
+#include "Game/System/InputRumbleData.hpp"
+#include "Game/Util/HashUtil.hpp"
+#include "Game/System/NebulaInput.hpp"
+
+static RumblePattern gRumblePatternTable[] = {
+    {
+        "\215\305\213\255\201\171\222\267\201\172" /* 最強【長】 */,
+        100,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_ON,
+        },
+    },
+    {
+        "\215\305\213\255" /* 最強 */,
+        30,
+        {
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\213\255" /* 強 */,
+        30,
+        {
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\222\206" /* 中 */,
+        30,
+        {
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\216\343" /* 弱 */,
+        30,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\224\367\216\343" /* 微弱 */,
+        30,
+        {
+            RUMBLE_ON, RUMBLE_OFF, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\203\130\203\212\203\142\203\166\203\101\203\142\203\166]" /* マリオ[スリップアップ] */,
+        25,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\213\124\223\212\202\260]" /* マリオ[亀投げ] */,
+        10,
+        {
+            RUMBLE_OFF,
+            RUMBLE_OFF,
+            RUMBLE_OFF,
+            RUMBLE_ON,
+            RUMBLE_ON,
+            RUMBLE_OFF,
+            RUMBLE_ON,
+            RUMBLE_OFF,
+            RUMBLE_ON,
+            RUMBLE_ON,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\203\172\203\142\203\160\201\133\202\275\202\337]" /* マリオ[ホッパーため] */,
+        5,
+        {
+            RUMBLE_ON,
+            RUMBLE_ON,
+            RUMBLE_OFF,
+            RUMBLE_ON,
+            RUMBLE_ON,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\225\317\220\147]" /* マリオ[変身] */,
+        60,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\225\317\220\147\211\360\217\234]" /* マリオ[変身解除] */,
+        30,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_OFF,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\202\265\202\321\202\352]" /* マリオ[しびれ] */,
+        60,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+        },
+    },
+    {
+        "\203\175\203\212\203\111[\202\302\202\324\202\352]" /* マリオ[つぶれ] */,
+        120,
+        {
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_ON, RUMBLE_OFF,   RUMBLE_ON, RUMBLE_OFF,
+            RUMBLE_ON,
+        },
+    },
+    {},
+};
+
+namespace RumbleData {
+    u32 getTableSize() {
+        return ARRAY_SIZE(gRumblePatternTable) - 1;
+    }
+
+    RumblePattern* getData(u16 index) {
+        return &gRumblePatternTable[index];
+    }
+
+    const RumblePattern* getPattern(const char* pName) {
+        u32 hash = MR::getHashCode(pName);
+
+        for (u16 i = 0; i < getTableSize(); i++) {
+            if (getData(i)->mHash == hash) {
+                return &gRumblePatternTable[i];
+            }
+        }
+
+        return nullptr;
+    }
+
+    void initHashValue() {
+        for (u32 i = 0; i < getTableSize(); i++) {
+            RumblePattern* pPattern = getData(i);
+
+            pPattern->mHash = MR::getHashCode(pPattern->mName);
+        }
+    }
+
+    void checkHashCollision() {
+    }
+};  // namespace RumbleData

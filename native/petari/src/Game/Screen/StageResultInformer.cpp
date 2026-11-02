@@ -8,7 +8,7 @@
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/System/StageResultSequenceChecker.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"

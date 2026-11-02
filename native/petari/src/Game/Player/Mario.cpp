@@ -399,7 +399,7 @@ void Mario::checkKeyLock() {
         mMovementStates._22 = false;
     }
 
-    if (MR::testSubPadButtonC(GAMEPAD_CHAN0)) {
+    if (MR::isHeldCamera(PLAYER_1)) {
         mDrawStates._7 = true;
     }
 }

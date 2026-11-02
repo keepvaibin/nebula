@@ -236,7 +236,7 @@ void DinoPackunDemo::exeDownDemo() {
 
     if (MR::isBckStopped(getHost())) {
         MR::startSound(getHost(), "SE_BM_D_PAKKUN_EXPLODE");
-        MR::tryRumblePadVeryStrong(getHost(), GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(getHost(), PLAYER_1);
         MR::hideModel(getHost());
         setNerve(GET_NERVE(DinoPackunDemo, DinoPackunDemoNrvAppearPowerStar));
     }

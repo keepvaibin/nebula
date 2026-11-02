@@ -12,7 +12,7 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
@@ -232,7 +232,7 @@ void FileSelectItem::onPointing() {
         _A0->onSelectIn();
         _144 = 1;
         mScaleCtrl->setNerve(GET_NERVE_DIRECT(FileSelectItemSub, ScaleControllerNrvToBig));
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 }
 
@@ -266,7 +266,7 @@ void FileSelectItem::exeFormat() {
         emitVanish();
         killAllModels();
         mPlanetMapObj->makeActorAppeared();
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -299,7 +299,7 @@ void FileSelectItem::exeChangeFellow() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -337,7 +337,7 @@ void FileSelectItem::exeChangeMii() {
             emitOpen();
         }
 
-        MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadStrong(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 

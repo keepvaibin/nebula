@@ -11,7 +11,7 @@
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/JMapInfo.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -239,7 +239,7 @@ void GCapture::reset() {
 }
 
 bool GCapture::tryCapture() {
-    if (mTarget != nullptr && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (mTarget != nullptr && MR::isPressedJump(PLAYER_1)) {
         decideTractTarget();
         MR::setBinderRadius(this, 75.0f);
         _110->getTargetPosition(&mPosition);
@@ -261,7 +261,7 @@ bool GCapture::tryCancelCapture() {
         }
     }
 
-    if (MR::isGreaterStep(this, 40) || (!MR::testCorePadButtonA(GAMEPAD_CHAN0) && MR::isGreaterStep(this, 30)) || ret) {
+    if (MR::isGreaterStep(this, 40) || (!MR::isHeldJump(PLAYER_1) && MR::isGreaterStep(this, 30)) || ret) {
         releaseTractTarget();
         setNerve(GET_NERVE(GCapture, GCaptureNrvWait));
         return true;
@@ -271,7 +271,7 @@ bool GCapture::tryCancelCapture() {
 }
 
 bool GCapture::tryEndTraction() {
-    if (!MR::testCorePadButtonA(GAMEPAD_CHAN0) && MR::isGreaterStep(this, 30)) {
+    if (!MR::isHeldJump(PLAYER_1) && MR::isGreaterStep(this, 30)) {
         releaseTractTarget();
         setNerve(GET_NERVE(GCapture, GCaptureNrvHold));
         return true;
@@ -281,7 +281,7 @@ bool GCapture::tryEndTraction() {
 }
 
 bool GCapture::tryRecapture() {
-    if (mTarget != nullptr && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (mTarget != nullptr && MR::isPressedJump(PLAYER_1)) {
         decideTractTarget();
         setNerve(GET_NERVE(GCapture, GCaptureNrvRecapture));
         return true;
@@ -300,27 +300,27 @@ bool GCapture::tryRetraction() {
 }
 
 bool GCapture::tryBreak() {
-    s32 channel = GAMEPAD_CHAN0;
+    s32 channel = PLAYER_1;
 
-    if (MR::isPadSwing(channel)) {
+    if (MR::isSpin(channel)) {
         MR::startBckPlayer("Spin2nd", "GCaptureCancel");
-        channel = GAMEPAD_CHAN1;
-    } else if (MR::testSubPadTriggerZ(channel)) {
+        channel = PLAYER_2;
+    } else if (MR::isPressedCrouch(channel)) {
         MR::startBckPlayer("GCaptureBreak", "GCaptureBreak");
-        channel = GAMEPAD_CHAN1;
+        channel = PLAYER_2;
     } else if (_110 != nullptr) {
         if (_110->isReleaseForce()) {
-            channel = GAMEPAD_CHAN1;
+            channel = PLAYER_2;
         } else if ((_110->releaseDistance() >= 0.0f) != false) {
             TVec3f targetPos;
             _110->getTargetPosition(&targetPos);
             if (mPosition.distance(targetPos) <= _110->releaseDistance()) {
-                channel = GAMEPAD_CHAN1;
+                channel = PLAYER_2;
             }
         }
     }
 
-    if (channel != GAMEPAD_CHAN0) {
+    if (channel != PLAYER_1) {
         setNerve(GET_NERVE(GCapture, GCaptureNrvBreak));
         return true;
     }
@@ -607,7 +607,7 @@ void GCapture::updateBindActorMatrix() {
 }
 
 bool GCapture::canRequestTarget() const {
-    return !MR::testCorePadButtonA(GAMEPAD_CHAN0);
+    return !MR::isHeldJump(PLAYER_1);
 }
 
 bool GCapture::canCancelBind() const {
@@ -690,7 +690,7 @@ bool GCapture::tryAddVelocityReflectJumpCollision() {
 bool GCapture::requestTarget(GCaptureTargetable* gCaptureTarget) {
     TVec3f targetPos;
     if (canRequestTarget()) {
-        TVec2f pointerPos = *MR::getStarPointerScreenPosition(GAMEPAD_CHAN0);
+        TVec2f pointerPos = *MR::getStarPointerScreenPosition(PLAYER_1);
         gCaptureTarget->getTargetPosition(&targetPos);
         TVec2f screenPos;
         MR::calcScreenPosition(&screenPos, targetPos);
@@ -781,7 +781,7 @@ namespace MR {
     }
 
     bool isOnTractTrigger() {
-        return MR::testCorePadTriggerA(GAMEPAD_CHAN0) != false;
+        return MR::isPressedJump(PLAYER_1) != false;
     }
 
     bool isPlayerGCaptured() {

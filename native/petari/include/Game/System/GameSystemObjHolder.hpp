@@ -16,7 +16,7 @@ class NameObjHolder;
 class ParticleResourceHolder;
 class ScreenPreserver;
 class StarPointerDirector;
-class GamePadHolder;
+class PlayerInputs;
 
 class GameSystemObjHolder {
 public:
@@ -45,7 +45,7 @@ public:
     void initFunctionAsyncExecutor();
     void initResourceHolderManager();
     void initGameController();
-    void initGamePad();
+    void initPlayerInput();
     void initStarPointerDirector();
     void initDisplay();
 
@@ -55,7 +55,7 @@ public:
     /* 0x18 */ CaptureScreenDirector* mCaptureScreenDirector;
     /* 0x1C */ ScreenPreserver* mScreenPreserver;
     /* 0x20 */ AudSystemWrapper* mAudioSystem;
-    /* 0x24 */ GamePadHolder* mGamePadHolder;
+    /* 0x24 */ PlayerInputs* mPlayerInputs;
     /* 0x28 */ FunctionAsyncExecutor* mFunctionAsyncExecutor;
     /* 0x2C */ MessageHolder* mMessageHolder;
     /* 0x30 */ StarPointerDirector* mStarPointerDirector;

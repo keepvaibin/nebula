@@ -10,7 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -197,7 +197,7 @@ void SlingShooter::exeAim() {
 
         MR::onBind(this);
         MR::startSound(this, "SE_OJ_SPACE_COCOON_ATTACH");
-        if (mPadChannel == GAMEPAD_CHAN1) {
+        if (mPadChannel == PLAYER_2) {
             MR::startCSSound2P("CS_DPD_HIT", nullptr);
         }
     }
@@ -211,7 +211,7 @@ void SlingShooter::exeAim() {
         return;
     }
 
-    if (!MR::testCorePadButtonA(mPadChannel)) {
+    if (!MR::isHeldJump(mPadChannel)) {
         endCommandStream();
 
         if (!mIsKinopioAttached) {
@@ -246,7 +246,7 @@ void SlingShooter::exeAttack() {
 
 void SlingShooter::exeAttackSuccess() {
     if (MR::isFirstStep(this)) {
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     mVelocity.mult(::sBindAttackFrictionRate);
@@ -492,20 +492,20 @@ void SlingShooter::calcBaseMtx(TPos3f* pBaseMtx) {
 bool SlingShooter::updateWait() {
     mPosition.set(*mBasePos);
 
-    if (MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         MR::requestStarPointerModeBlueStarReady(this);
     }
 
     bool set;
-    if (MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */) && MR::testCorePadTriggerA(GAMEPAD_CHAN0) &&
-        MR::tryStartStarPointerCommandStream(this, &mPosition, GAMEPAD_CHAN0, false)) {
+    if (MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */) && MR::isPressedJump(PLAYER_1) &&
+        MR::tryStartStarPointerCommandStream(this, &mPosition, PLAYER_1, false)) {
         set = true;
     } else {
         set = false;
     }
 
     if (set) {
-        mPadChannel = GAMEPAD_CHAN0;
+        mPadChannel = PLAYER_1;
     }
 
     if (mPadChannel >= 0) {
@@ -608,7 +608,7 @@ void SlingShooter::updateActorMtx() {
 }
 
 bool SlingShooter::tryCancel() {
-    if (!mIsKinopioAttached && MR::isPadSwing(GAMEPAD_CHAN0) && MR::isGreaterStep(this, 10)) {
+    if (!mIsKinopioAttached && MR::isSpin(PLAYER_1) && MR::isGreaterStep(this, 10)) {
         MR::endEventCamera(mCameraInfo, "\203\166\203\214\201\133\203\204\201\133\216\313\217\157\216\322[\203\105\203\106\203\103\203\147]" /* プレーヤー射出者[ウェイト] */, true);
         MR::startBckPlayer("Spin2nd");
         MR::emitEffect(this, "Stick");
@@ -622,7 +622,7 @@ bool SlingShooter::tryCancel() {
 }
 
 bool SlingShooter::tryRelease() {
-    if (MR::testCorePadButtonA(mPadChannel)) {
+    if (MR::isHeldJump(mPadChannel)) {
         return false;
     }
 

@@ -6,7 +6,7 @@
 #include "Game/System/GalaxyStatusAccessor.hpp"
 #include "Game/System/GameSequenceFunction.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -300,7 +300,7 @@ void PauseMenu::exeSelecting() {
     bool isAnimStopped = isPaneAnimStoppedWithoutButton() && !_20->isAppearing() && (_24 == nullptr || !_24->isAppearing()) &&
                          ((_38 == nullptr || _38->isHidden()) || !_38->isAppearing());
 
-    if (isAnimStopped && (MR::testCorePadTriggerPlus(0) || MR::testCorePadTriggerMinus(0))) {
+    if (isAnimStopped && (MR::isPressedPause(0) || MR::isPressedMap(0))) {
         MR::startSystemSE("SE_SY_PAUSE_OFF");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
         setNerve(GET_NERVE(PauseMenu, PauseMenuNrvDisappear));

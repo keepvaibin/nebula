@@ -1,11 +1,11 @@
 #pragma once
 
 
-class GamePad;
+class PlayerInput;
 
-class GamePadInfoChecker {
+class InputInfoChecker {
 public:
-    GamePadInfoChecker(GamePad*);
+    InputInfoChecker(PlayerInput*);
 
     s32 getBattery() const;
     void startCheck();
@@ -13,7 +13,7 @@ public:
     void update();
 
 private:
-    /* 0x00 */ GamePad* mPad;
+    /* 0x00 */ PlayerInput* mPad;
     /* 0x04 */ s32 mCheckInfoFrame;
     /* 0x08 */ s32 mBattery;
 };

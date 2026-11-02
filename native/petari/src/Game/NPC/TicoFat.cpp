@@ -22,7 +22,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EffectUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LightUtil.hpp"
@@ -342,7 +342,7 @@ void TicoFat::control() {
 
         if (_178 > 0) {
             if (MR::isIntervalStep(this, _1F0)) {
-                if (MR::testCorePadButtonB(GAMEPAD_CHAN0)) {
+                if (MR::isHeldFire(PLAYER_1)) {
                     if (!MR::isDemoActive() && !isNerve(GET_NERVE(TicoFat, TicoFatNrvReaction))) {
                         if (_1E0 && MR::getStarPieceNum() > 0) {
                             shootStarPiece();
@@ -469,7 +469,7 @@ void TicoFat::setMessage(s32 msg) {
 void TicoFat::shootStarPiece() {
     if (MR::giftStarPieceToTarget(getSensor("Mouth"), 1)) {
         mCurrentFed++;
-        MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryWeak(this, PLAYER_1);
     }
 }
 
@@ -484,7 +484,7 @@ void TicoFat::receiveStarPiece(s32 num) {
     addStarPieceSaveData(val);
     setScale(calcScale());
     mMeter->setNumber(_1E4 - _1E0);
-    MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadVeryWeak(this, PLAYER_1);
     startAbsorbSound();
     MR::setMessageArg(mMsgCtrl, _1E0);
     MR::setMessageArg(_16C, _1E0);
@@ -858,10 +858,10 @@ void TicoFat::exeFly() {
         MR::startMultiActorCameraTargetSelf(this, mCameraInfo, "\224\362\215\163" /* 飛行 */);
         MR::startAction(this, getActionName("Fly"));
         MR::startSound(this, "SE_DM_TICOFAT_MORPH_FLY");
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
-    MR::tryRumblePadVeryWeak(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadVeryWeak(this, PLAYER_1);
     f32 v4 = _1F8 / mShootPath->getTotalLength();
     if (1.0f >= v4) {
         v4 = v4;
@@ -897,7 +897,7 @@ void TicoFat::exeWipeOut() {
         MR::startSystemSE("SE_DM_TICOFAT_MORPH_WIPE_OUT");
         emitScreenEffect();
         MR::closeWipeWhiteFade(60);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -949,7 +949,7 @@ void TicoFat::exeInfo() {
         appearInformation();
     }
 
-    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (MR::isPressedJump(PLAYER_1)) {
         MR::startSystemSE("SE_SY_TALK_OK");
         MR::disappearInformationMessage();
         setNerve(GET_NERVE(TicoFat, TicoFatNrvAfter));

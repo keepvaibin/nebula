@@ -218,7 +218,7 @@ void MoviePlayerSimple::play(bool a1) {
     _44 = a1;
     setNerve(GET_NERVE_ANON(MoviePlayerSimpleOpen));
     MR::startStarPointerModeDemo(this);
-    _45 = GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+    _45 = GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
 }
 
 void MoviePlayerSimple::stop() {
@@ -227,7 +227,7 @@ void MoviePlayerSimple::stop() {
     delete[] mMovie->mBuffer;
     mMovie->mBuffer = nullptr;
     MR::endStarPointerMode(this);
-    GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(_45);
+    GameSystemFunction::setPermissionToCheckInputAndScreenDimming(_45);
 }
 
 void MoviePlayerSimple::drawCinemaFrame() const {

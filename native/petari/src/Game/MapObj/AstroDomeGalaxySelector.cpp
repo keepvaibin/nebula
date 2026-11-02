@@ -10,7 +10,7 @@
 #include "Game/Util/ActorSwitchUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -162,7 +162,7 @@ void AstroDomeGalaxySelector::exeGalaxySelect() {
         mBackButton->appear();
     }
 
-    if (SphereSelectorFunction::isValidPointing() && MR::testCorePadTriggerB(GAMEPAD_CHAN0)) {
+    if (SphereSelectorFunction::isValidPointing() && MR::isPressedFire(PLAYER_1)) {
         MR::startSystemSE("SE_SY_GALAXY_DECIDE_CANCEL");
 
         if (mBackButton->isAppearing()) {

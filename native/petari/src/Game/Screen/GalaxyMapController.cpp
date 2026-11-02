@@ -11,7 +11,7 @@
 #include "Game/Screen/PowerStarList.hpp"
 #include "Game/Screen/WipeFade.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -552,7 +552,7 @@ bool GalaxyMapController::tryChangeMode() {
         return true;
     }
 
-    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (!mMapSelectButton->isPointingAnything() && !mMap->isPointingAnything() && !mBackButton->isPointing() && MR::isPressedJump(PLAYER_1)) {
         switch (mMode) {
         case Mode_AstroMap:
             MR::startSystemSE("SE_SY_GALAMAP_PAGE_CHANGE");
@@ -597,7 +597,7 @@ bool GalaxyMapController::tryDisplayAndKeyWait() {
     }
 
 
-    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (MR::isGreaterStep(this, ::sDisplayKeepFrame) && MR::isPressedJump(PLAYER_1)) {
         setNerve(GET_NERVE_ANON(GalaxyMapControllerFadeout));
 
         return true;

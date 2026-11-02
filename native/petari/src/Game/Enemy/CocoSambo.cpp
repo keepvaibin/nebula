@@ -570,7 +570,7 @@ void CocoSambo::exeHide() {
         MR::emitEffect(this, "CocoSamboSmoke");
         MR::startSound(this, "SE_EM_SFSAMBO_HIDE");
         MR::invalidateShadow(this, nullptr);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraWeak();
     }
 
@@ -589,7 +589,7 @@ void CocoSambo::exeAttack() {
     if (!tryDpdPointing(GET_NERVE(CocoSambo, CocoSamboNrvAttack))) {
         if (MR::checkPassBckFrame(this, 115.0f)) {
             MR::emitEffect(mHead, "CocoSamboAttack");
-            MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
             MR::shakeCameraNormal();
         }
 
@@ -615,7 +615,7 @@ void CocoSambo::exeFallHead() {
         MR::emitEffect(this, "Hit");
         MR::startSound(this, "SE_EM_SFSAMBO_DAMAGE");
         MR::startSound(this, "SE_EM_SFSAMBO_BLOW_HEAD");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::hideMaterial(mHead, "SanboNeedleMat_v");
     }
 
@@ -673,7 +673,7 @@ void CocoSambo::exePressY() {
         MR::setBckRate(this, 0.0f);
         MR::startBck(mHead, "PressY");
         MR::startSound(this, "SE_EM_STOMPED_S");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
     }
 
     if (MR::isStep(this, ::cPressFrame)) {
@@ -684,7 +684,7 @@ void CocoSambo::exePressY() {
 void CocoSambo::exeBlow() {
     if (MR::isFirstStep(this)) {
         MR::invalidateShadow(this, nullptr);
-        MR::tryRumblePadVeryStrong(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadVeryStrong(this, PLAYER_1);
         MR::startBlowHitSound(this);
         mHead->setNerve(GET_NERVE(CocoSamboHead, CocoSamboHeadNrvHeadBlow));
     }

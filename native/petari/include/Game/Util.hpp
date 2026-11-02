@@ -24,7 +24,7 @@
 #include "Game/Util/FixedPosition.hpp"
 #include "Game/Util/FootPrint.hpp"
 #include "Game/Util/Functor.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/GeometryBindUtil.hpp"
 #include "Game/Util/GravityUtil.hpp"
 #include "Game/Util/HashUtil.hpp"

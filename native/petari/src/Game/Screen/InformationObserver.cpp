@@ -4,7 +4,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -96,7 +96,7 @@ void InformationObserver::exeDisp() {
         mDisplayFrame--;
     }
 
-    if (!MR::testCorePadTriggerA(GAMEPAD_CHAN0) || mDisplayFrame >= 0) {
+    if (!MR::isPressedJump(PLAYER_1) || mDisplayFrame >= 0) {
         return;
     }
 

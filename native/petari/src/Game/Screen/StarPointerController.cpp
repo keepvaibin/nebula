@@ -1,7 +1,7 @@
 #include "Game/Screen/StarPointerController.hpp"
 #include "Game/Screen/StarPointerDirector.hpp"
 #include "Game/Util/DirectDraw.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
@@ -64,7 +64,7 @@ void StarPointerController::storePastPointingData() {
         mPastPosition[idx] = mNextPastPosition[idx];
     }
 
-    s32 pastCount = MR::min(MR::getCorePadEnablePastCount(mPadChannel), 16);
+    s32 pastCount = MR::min(MR::getPointerPastCount(mPadChannel), 16);
     mNextPastPointNum = pastCount;
 
     for (s32 idx = 0; idx < pastCount; idx++) {
@@ -73,7 +73,7 @@ void StarPointerController::storePastPointingData() {
 }
 
 void StarPointerController::calcPastPointingPosOnScreen(TVec2f* pPos, s32 idx) const {
-    MR::getCorePadPastPointingPos(pPos, idx, mPadChannel);
+    MR::getPointerPastPos(pPos, idx, mPadChannel);
     pPos->x += 1.0f;
     pPos->y += 1.0f;
     pPos->x *= MR::getScreenWidth() * 0.5f;
@@ -81,7 +81,7 @@ void StarPointerController::calcPastPointingPosOnScreen(TVec2f* pPos, s32 idx) c
 }
 
 void StarPointerController::updateDpdInfo() {
-    if (!MR::isCorePadPointInScreen(mPadChannel)) {
+    if (!MR::isPointerInScreen(mPadChannel)) {
         TVec2f vec;
         vec.x = mInfo.mPos.x;
         vec.y = mInfo.mPos.y;
@@ -98,7 +98,7 @@ void StarPointerController::updateDpdInfo() {
         mInfo.mInScreen = true;
         mInfo.mPos.set(mNextPastPosition[0]);
         mNotInScreen = StarPointerFunction::forceInsideScreenEdge(&mInfo.mPos);
-        mScreenDist = MR::getCorePadDistanceToDisplay(mPadChannel);
+        mScreenDist = MR::getPointerDistance(mPadChannel);
         updateAdditionalInfo();
     }
 }

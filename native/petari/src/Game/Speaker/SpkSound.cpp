@@ -86,7 +86,7 @@ f32 SpkSoundVolume::calc(bool& kill) {
 }
 
 SpkSound::SpkSound()
-    : JSULink(this), mSoundHandle(nullptr), mWaveID(-1), mWave(nullptr), mWavePtr(0), mPadChannel(GAMEPAD_CHAN0), _24(100), mReleaseTime(0),
+    : JSULink(this), mSoundHandle(nullptr), mWaveID(-1), mWave(nullptr), mWavePtr(0), mPadChannel(PLAYER_1), _24(100), mReleaseTime(0),
       mWaveSize(0), mLoopStartPos(-1), mLoopEndPos(-1), mState(0), _3C(-1) {
 }
 

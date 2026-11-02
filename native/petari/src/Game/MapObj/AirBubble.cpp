@@ -144,7 +144,7 @@ void AirBubble::exeBreak() {
         MR::startSound(this, "SE_OJ_AIR_BUBBLE_BREAK");
         MR::emitEffect(this, "RecoveryBubbleBreak");
         MR::incPlayerOxygen(8);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         kill();
     }
 }

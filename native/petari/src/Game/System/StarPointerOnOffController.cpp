@@ -70,257 +70,257 @@ void StarPointerOnOffController::requestMode(void* pRequester, StarPointerModeEn
 }
 
 void StarPointerOnOffController::setupHomeButton() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
 }
 
 void StarPointerOnOffController::setupErrorWindow() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
 }
 
 void StarPointerOnOffController::setupLogo() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupTitle() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupFileSelect() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupPictureBook() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupDemo() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupDemoWithStarPointer() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupDemoWithHandPointerFinger() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupDemoMarioDeath() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setup1PInvalid2PValid() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::deactiveStarPointerGuidance();
     MR::enableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupMarioLauncher() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupChooseYesNo() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupPauseMenu() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupScenarioSelectScene() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupBlueStar() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startHandPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::enableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupBlueStarReady() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startHandPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::enableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupPowerStarGetDemo() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupStarPieceTarget() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupSphereSelectorFinger() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startFingerPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupSphereSelectorOnReaction() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startHandPointerReactionWithCrossCursor();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupBigBubble() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointerNozzle();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
     ::getStarPointerDirector()->mIsAllowP2StarPieceShot = true;
 }
 
 void StarPointerOnOffController::setupCommandStream() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
     ::getStarPointerDirector()->mIsAllowP2StarPieceShot = true;
 }
 
 void StarPointerOnOffController::setupGame() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->show();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->show();
+    ::getStarPointerLayout(PLAYER_1)->show();
+    ::getStarPointerLayout(PLAYER_2)->show();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->validate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->validate();
+    ::getStarPointerLayout(PLAYER_1)->validate();
+    ::getStarPointerLayout(PLAYER_2)->validate();
     MR::activeStarPointerGuidance();
     MR::enableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::setupBase() {
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->hide();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->hide();
+    ::getStarPointerLayout(PLAYER_1)->hide();
+    ::getStarPointerLayout(PLAYER_2)->hide();
     ::getStarPointerDirector()->startStarPointer();
-    ::getStarPointerLayout(GAMEPAD_CHAN0)->invalidate();
-    ::getStarPointerLayout(GAMEPAD_CHAN1)->invalidate();
+    ::getStarPointerLayout(PLAYER_1)->invalidate();
+    ::getStarPointerLayout(PLAYER_2)->invalidate();
     MR::deactiveStarPointerGuidance();
     MR::disableStarPointerShootStarPiece();
 }
 
 void StarPointerOnOffController::updateMode() {
-    if (::getStarPointerLayout(GAMEPAD_CHAN0) == nullptr) {
+    if (::getStarPointerLayout(PLAYER_1) == nullptr) {
         return;
     }
 

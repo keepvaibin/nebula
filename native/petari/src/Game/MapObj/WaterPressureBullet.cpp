@@ -125,10 +125,10 @@ void WaterPressureBullet::exeFly() {
         mVelocity.scaleAdd(0.4f, mGravity, mVelocity);
     }
 
-    if (MR::isPadSwing(GAMEPAD_CHAN0) && isBound() && !_B2) {
+    if (MR::isSpin(PLAYER_1) && isBound() && !_B2) {
         MR::startSound(mHostActor, "SE_PV_TWIST_START");
         MR::startSound(mHostActor, "SE_PM_SPIN_ATTACK");
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         setNerve(GET_NERVE(WaterPressureBullet, WaterPressureBulletNrvSpinKill));
         return;
     }
@@ -242,7 +242,7 @@ bool WaterPressureBullet::endHostCamera() const {
 }
 
 bool WaterPressureBullet::inviteMario(HitSensor* pSensor) {
-    MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+    MR::tryRumblePadMiddle(this, PLAYER_1);
 
     if (MR::isOnGroundPlayer() && MR::isNearAngleDegree(mVelocity, mGravity, 60.0f)) {
         if (_B1) {

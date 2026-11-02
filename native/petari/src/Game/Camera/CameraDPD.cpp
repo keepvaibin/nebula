@@ -2,7 +2,7 @@
 #include "Game/Camera/CamTranslatorDPD.hpp"
 #include "Game/Camera/CameraLocalUtil.hpp"
 #include "Game/Camera/CameraTargetObj.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/System/NebulaInput.hpp"
@@ -13,7 +13,7 @@ namespace {
 };  // namespace
 
 CameraDPD::CameraDPD(const char* pName)
-    : Camera(pName), mCorePadDistToDisplay(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
+    : Camera(pName), mPointerDistance(), mRealPointPos(0.0f, 0.0f), mBlendPointPos(0.0f, 0.0f), mResetPointingPos(true), mCameraType(), mDist(),
       mFovy(40.0f), mAngleXRange(PI / 2.0f), mAngleYRange(PI / 2.0f), mAngleX(), mSpeedBlendRate(0.05f), mBlendFriction(0.99f), mIsVertical(),
       mAngleYMin() {
     mMtx.identity();
@@ -35,7 +35,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     } else if (mCameraType == CameraType_FollowWorldPos) {
         TVec3f worldPos;
-        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(GAMEPAD_CHAN0));
+        worldPos.set(*MR::getStarPointerWorldPosUsingDepth(PLAYER_1));
         TVec3f basePos = CameraLocalUtil::getTarget(this)->getPosition() + CameraLocalUtil::getTarget(this)->getUpVec() * mDist;
         TVec3f front = worldPos - basePos;
         if (MR::isNearZero(front)) {
@@ -63,7 +63,7 @@ void CameraDPD::reset() {
         mMtx.setZDir(front);
     }
 
-    MR::getCorePadPointingPos(&mRealPointPos, GAMEPAD_CHAN0);
+    MR::getPointerPos(&mRealPointPos, PLAYER_1);
     mResetPointingPos = true;
     mBlendPointPos.set(0.0f, 0.0f);
     mRealPointPos.set(0.0f, 0.0f);
@@ -81,7 +81,7 @@ CameraTargetObj* CameraDPD::calc() {
     }
 
     TVec2f pointPos;
-    MR::getCorePadPointingPos(&pointPos, GAMEPAD_CHAN0);
+    MR::getPointerPos(&pointPos, PLAYER_1);
 
     if (mResetPointingPos) {
         pointPos.set(0.0f, 0.0f);
@@ -90,14 +90,14 @@ CameraTargetObj* CameraDPD::calc() {
         }
     }
 
-    if (MR::isCorePadPointInScreen(GAMEPAD_CHAN0)) {
+    if (MR::isPointerInScreen(PLAYER_1)) {
         mRealPointPos = mRealPointPos * 0.9f + pointPos * 0.1f;
         if (mCameraType != CameraType_FollowWorldPos) {
-            if (MR::testSubPadTriggerZ(GAMEPAD_CHAN0)) {
-                mCorePadDistToDisplay = MR::getCorePadDistanceToDisplay(GAMEPAD_CHAN0);
+            if (MR::isPressedCrouch(PLAYER_1)) {
+                mPointerDistance = MR::getPointerDistance(PLAYER_1);
             }
-            if (MR::testSubPadButtonZ(GAMEPAD_CHAN0)) {
-                f32 updateDist = MR::clamp(mCorePadDistToDisplay - MR::getCorePadDistanceToDisplay(GAMEPAD_CHAN0), -::sMaxDistance, ::sMaxDistance);
+            if (MR::isHeldCrouch(PLAYER_1)) {
+                f32 updateDist = MR::clamp(mPointerDistance - MR::getPointerDistance(PLAYER_1), -::sMaxDistance, ::sMaxDistance);
                 mFovy =
                     (40.0f - ((updateDist * 30.0f) / ::sMaxDistance)) * (1.0f - ::sFovyBlendRate) + CameraLocalUtil::getFovy(this) * ::sFovyBlendRate;
             }
@@ -114,7 +114,7 @@ CameraTargetObj* CameraDPD::calc() {
     mBlendPointPos = mBlendPointPos * t + pointPos * (1.0f - t);
 
     if (mCameraType != CameraType_FollowWorldPos) {
-        if (!MR::testSubPadButtonZ(GAMEPAD_CHAN0)) {
+        if (!MR::isHeldCrouch(PLAYER_1)) {
             mFovy = CameraLocalUtil::getFovy(this) * ::sFovyBlendRate + 38.0f;
         }
         CameraLocalUtil::setFovy(this, mFovy);

@@ -1,7 +1,7 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/NebulaMenuFocus.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"

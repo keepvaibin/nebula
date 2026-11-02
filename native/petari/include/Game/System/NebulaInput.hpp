@@ -1,45 +1,42 @@
 #pragma once
 
-// The game's names for its controllers on Nebula's input (nebula_game_api.h input_read/input_control): the players'
-// channels, what is on a remote's extension port, the connection results its callbacks take, the battery's levels,
-// the motor's two states in rumble patterns, and the sensor bar's place.
+// The game's names for its players' input (nebula_game_api.h input_read/input_control).
 
-// Players' controllers: player 1's remote (with its Nunchuk), then the others (player 2 the co-star).
 enum {
-    GAMEPAD_CHAN0 = 0,
-    GAMEPAD_CHAN1 = 1,
-    GAMEPAD_CHAN2 = 2,
-    GAMEPAD_MAX_CONTROLLERS = 4,
+    PLAYER_1 = 0,
+    PLAYER_2 = 1,
+    PLAYER_3 = 2,
+    PLAYER_MAX = 4,
 };
 
-// The device on a remote's extension port (GamePad::extensionCallback): none, the Nunchuk, or one the game does not use.
+// A player's two hands: motion in each; the sub hand has the move stick.
 enum {
-    GAMEPAD_DEV_CORE = 0,
-    GAMEPAD_DEV_FREESTYLE = 1,
-    GAMEPAD_DEV_UNKNOWN = 255,
+    INPUT_HAND_MAIN = 0,
+    INPUT_HAND_SUB = 1,
+    INPUT_HAND_UNKNOWN = 255,
 };
 
-// A connection change (GamePad::connectCallback): connected, or gone.
+// A connection change (PlayerInput::connectCallback): connected, or gone.
 enum {
-    GAMEPAD_ERR_NONE = 0,
-    GAMEPAD_ERR_NO_CONTROLLER = -1,
+    INPUT_CONNECTED = 0,
+    INPUT_DISCONNECTED = -1,
 };
 
-// The battery's level (GamePad::getBattery): 0 critical to 4 full.
+// The battery's level (PlayerInput::getBattery): 0 critical to 4 full.
 enum {
-    GAMEPAD_BATTERY_LEVEL_CRITICAL = 0,
-    GAMEPAD_BATTERY_LEVEL_LOW = 1,
-    GAMEPAD_BATTERY_LEVEL_MAX = 4,
+    INPUT_BATTERY_CRITICAL = 0,
+    INPUT_BATTERY_LOW = 1,
+    INPUT_BATTERY_MAX = 4,
 };
 
-// One step of a rumble pattern (GamePadRumbleData).
+// One step of a rumble pattern (InputRumbleData).
 enum {
-    GAMEPAD_MOTOR_STOP = 0,
-    GAMEPAD_MOTOR_RUMBLE = 1,
+    RUMBLE_OFF = 0,
+    RUMBLE_ON = 1,
 };
 
-// Where the sensor bar stands (GamePadHolder's pointer mode).
+// In play, or in the HOME Menu (PlayerInputs' mode).
 enum {
-    GAMEPAD_SENSOR_BAR_POS_BOTTOM = 0,
-    GAMEPAD_SENSOR_BAR_POS_TOP = 1,
+    INPUT_MODE_HOME = 0,
+    INPUT_MODE_GAME = 1,
 };

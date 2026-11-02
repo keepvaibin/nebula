@@ -4,18 +4,18 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BatteryInfo.hpp"
 #include "Game/Screen/ErrorMessageWindow.hpp"
-#include "Game/System/GamePad.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/TriggerChecker.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-#define WII_REMOTE_STATUS_OK 0
-#define WII_REMOTE_STATUS_DISCONNECT 1
-#define WII_REMOTE_STATUS_NO_BATTERY 2
-#define WII_REMOTE_STATUS_UNPLAGGED 3
+#define INPUT_STATUS_OK 0
+#define INPUT_STATUS_DISCONNECT 1
+#define INPUT_STATUS_NO_BATTERY 2
+#define INPUT_STATUS_NO_MOVE_STICK 3
 
 namespace {
     const GameSystemErrorWatcher::Message cMessageUnplagged = {
@@ -31,7 +31,7 @@ namespace {
         ErrorMessageWindow::MessageType_Game,
     };
 
-    static const s32 sCounterMaxIgnoreCheckFreeStyle = 90;
+    static const s32 sCounterMaxIgnoreCheckMoveStick = 90;
     static const s32 sCounterMaxDecideDisconnect = 120;
 };  // namespace
 
@@ -44,8 +44,8 @@ namespace {
 
 GameSystemErrorWatcher::GameSystemErrorWatcher()
     : NerveExecutor("ErrorWatcher"), mWindow(nullptr), mMessage(nullptr), mUnplaggedTexMap(nullptr), mBatteryLayout(nullptr),
-      _1C(nullptr), mWiiRemoteStatus(WII_REMOTE_STATUS_OK), mCounterIgnoreCheckFreeStyle(0),
-      mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mWiiRemoteBattery(GAMEPAD_BATTERY_LEVEL_MAX), mPermissionUpdateWiiRemoteStatus(false) {
+      _1C(nullptr), mInputStatus(INPUT_STATUS_OK), mCounterIgnoreCheckMoveStick(0),
+      mCounterDecideDisconnect(::sCounterMaxDecideDisconnect), mInputBattery(INPUT_BATTERY_MAX), mPermissionUpdateInputStatus(false) {
     mWindow = new ErrorMessageWindow();
     mWindow->initWithoutIter();
 
@@ -66,17 +66,17 @@ void GameSystemErrorWatcher::movement() {
     mWindow->movement();
     mWindow->calcAnim();
 
-    updateWiiRemoteStatus();
+    updateInputStatus();
     updateNerve();
 
-    if (mPermissionUpdateWiiRemoteStatus && mBatteryLayout != nullptr) {
+    if (mPermissionUpdateInputStatus && mBatteryLayout != nullptr) {
         mBatteryLayout->movement();
         mBatteryLayout->calcAnim();
     }
 }
 
 void GameSystemErrorWatcher::draw() const {
-    if (mPermissionUpdateWiiRemoteStatus && mBatteryLayout != nullptr) {
+    if (mPermissionUpdateInputStatus && mBatteryLayout != nullptr) {
         mBatteryLayout->draw();
     }
 
@@ -87,10 +87,10 @@ bool GameSystemErrorWatcher::isWarning() const {
     return !isNerve(GET_NERVE_ANON(GameSystemErrorWatcherNoError));
 }
 
-bool GameSystemErrorWatcher::setPermissionUpdateWiiRemoteStatus(bool permission) {
-    bool permissionPrev = mPermissionUpdateWiiRemoteStatus;
+bool GameSystemErrorWatcher::setPermissionUpdateInputStatus(bool permission) {
+    bool permissionPrev = mPermissionUpdateInputStatus;
 
-    mPermissionUpdateWiiRemoteStatus = permission;
+    mPermissionUpdateInputStatus = permission;
 
     if (permission) {
         mCounterDecideDisconnect = 0;
@@ -99,7 +99,7 @@ bool GameSystemErrorWatcher::setPermissionUpdateWiiRemoteStatus(bool permission)
             mBatteryLayout->appear();
         }
     } else {
-        mWiiRemoteStatus = WII_REMOTE_STATUS_OK;
+        mInputStatus = INPUT_STATUS_OK;
 
         if (mBatteryLayout != nullptr && !MR::isDead(mBatteryLayout)) {
             mBatteryLayout->kill();
@@ -174,19 +174,19 @@ void GameSystemErrorWatcher::exeErrorWindowOut() {
     }
 }
 
-void GameSystemErrorWatcher::updateWiiRemoteStatus() {
+void GameSystemErrorWatcher::updateInputStatus() {
     bool isWaitDecideDisconnect;
     bool isOk;
 
-    if (!mPermissionUpdateWiiRemoteStatus) {
-        mWiiRemoteStatus = WII_REMOTE_STATUS_OK;
+    if (!mPermissionUpdateInputStatus) {
+        mInputStatus = INPUT_STATUS_OK;
     } else {
         isOk = true;
 
-        _1C->update(MR::getGamePad(GAMEPAD_CHAN0)->mIsConnected);
+        _1C->update(MR::getPlayerInput(PLAYER_1)->mIsConnected);
 
-        if (MR::getGamePad(GAMEPAD_CHAN0)->mIsConnected) {
-            mWiiRemoteBattery = MR::getGamePad(GAMEPAD_CHAN0)->getBattery();
+        if (MR::getPlayerInput(PLAYER_1)->mIsConnected) {
+            mInputBattery = MR::getPlayerInput(PLAYER_1)->getBattery();
         }
 
         if (_1C->getLevel()) {
@@ -198,43 +198,43 @@ void GameSystemErrorWatcher::updateWiiRemoteStatus() {
         isWaitDecideDisconnect = mCounterDecideDisconnect != 0;
 
         if (_1C->getOnTrigger()) {
-            mCounterIgnoreCheckFreeStyle = ::sCounterMaxIgnoreCheckFreeStyle;
+            mCounterIgnoreCheckMoveStick = ::sCounterMaxIgnoreCheckMoveStick;
         }
 
-        if (mCounterIgnoreCheckFreeStyle != 0) {
-            mCounterIgnoreCheckFreeStyle--;
+        if (mCounterIgnoreCheckMoveStick != 0) {
+            mCounterIgnoreCheckMoveStick--;
         }
 
-        if (mCounterIgnoreCheckFreeStyle == 0) {
-            if (_1C->getLevel() && !MR::getGamePad(GAMEPAD_CHAN0)->mIsSubPadConnected) {
-                mWiiRemoteStatus = WII_REMOTE_STATUS_UNPLAGGED;
+        if (mCounterIgnoreCheckMoveStick == 0) {
+            if (_1C->getLevel() && !MR::getPlayerInput(PLAYER_1)->mHasMoveStick) {
+                mInputStatus = INPUT_STATUS_NO_MOVE_STICK;
                 isOk = false;
             }
 
             if (!isWaitDecideDisconnect) {
-                if (mWiiRemoteBattery <= GAMEPAD_BATTERY_LEVEL_LOW) {
-                    mWiiRemoteStatus = WII_REMOTE_STATUS_NO_BATTERY;
+                if (mInputBattery <= INPUT_BATTERY_LOW) {
+                    mInputStatus = INPUT_STATUS_NO_BATTERY;
                 } else {
-                    mWiiRemoteStatus = WII_REMOTE_STATUS_DISCONNECT;
+                    mInputStatus = INPUT_STATUS_DISCONNECT;
                 }
 
                 isOk = false;
             }
 
             if (isOk) {
-                mWiiRemoteStatus = WII_REMOTE_STATUS_OK;
+                mInputStatus = INPUT_STATUS_OK;
             }
         }
     }
 }
 
 const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageId() const {
-    switch (mWiiRemoteStatus) {
-    case WII_REMOTE_STATUS_UNPLAGGED:
+    switch (mInputStatus) {
+    case INPUT_STATUS_NO_MOVE_STICK:
         return &::cMessageUnplagged;
-    case WII_REMOTE_STATUS_DISCONNECT:
+    case INPUT_STATUS_DISCONNECT:
         return &::cMessageDisconnect;
-    case WII_REMOTE_STATUS_NO_BATTERY:
+    case INPUT_STATUS_NO_BATTERY:
         return &::cMessageNoBattery;
     default:
         return nullptr;
@@ -242,8 +242,8 @@ const GameSystemErrorWatcher::Message* GameSystemErrorWatcher::getProperMessageI
 }
 
 const nw4r::lyt::TexMap* GameSystemErrorWatcher::getProperErrorTexMap() const {
-    switch (mWiiRemoteStatus) {
-    case WII_REMOTE_STATUS_UNPLAGGED:
+    switch (mInputStatus) {
+    case INPUT_STATUS_NO_MOVE_STICK:
         return mUnplaggedTexMap;
     default:
         return nullptr;

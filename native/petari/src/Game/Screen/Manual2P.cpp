@@ -2,7 +2,7 @@
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/BackButton.hpp"
 #include "Game/Screen/ButtonPaneController.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -109,7 +109,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0) || MR::testCorePadTriggerLeft(GAMEPAD_CHAN0)) {
+        if (MR::isMoveStickPressedLeft(PLAYER_1) || MR::isPressedLeft(PLAYER_1)) {
             mLeftPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");
@@ -127,7 +127,7 @@ void Manual2P::exeWait() {
             return;
         }
 
-        if (MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0)) {
+        if (MR::isMoveStickPressedRight(PLAYER_1) || MR::isPressedRight(PLAYER_1)) {
             mRightPaneCtrl->_24 = false;
 
             MR::startSystemSE("SE_SY_FILE_SEL_TIPS_PAGE");

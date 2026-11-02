@@ -2,7 +2,7 @@
 #include "Game/System/NebulaRegion.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/System/GameDataFunction.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
@@ -91,14 +91,14 @@ void TitleSequenceProduct::exeLogoDisplay() {
         MR::startAnim(mPressStartLayout, "Wait", 0);
     }
 
-    mAButtonChecker->update(MR::testCorePadButtonA(GAMEPAD_CHAN0));
-    mBButtonChecker->update(MR::testCorePadButtonB(GAMEPAD_CHAN0));
+    mAButtonChecker->update(MR::isHeldJump(PLAYER_1));
+    mBButtonChecker->update(MR::isHeldFire(PLAYER_1));
 
     if (mAButtonChecker->getLevel() && mBButtonChecker->getLevel()) {
         MR::stopStageBGM(75);
         MR::startSystemSE("SE_SY_GAME_START");
         MR::startCSSound("CS_CLICK_CLOSE", nullptr, 0);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         setNerve(GET_NERVE_ANON(TitleSequenceProductDecide));
     } else {
         updateButtonReaction(mAButtonChecker, "ReactionA");

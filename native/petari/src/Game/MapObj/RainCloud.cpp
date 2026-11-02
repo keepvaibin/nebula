@@ -206,7 +206,7 @@ void RainCloud::exeSoftTouch() {
 void RainCloud::exeHardTouch() {
     if (MR::isFirstStep(this)) {
         MR::invalidateCollisionParts(this);
-        MR::tryRumblePadMiddle(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadMiddle(this, PLAYER_1);
         MR::shakeCameraNormal();
     }
 
@@ -244,7 +244,7 @@ void RainCloud::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     if (MR::isSensorPlayer(pReceiver)) {
         if (MR::isPlayerElementModeBee()) {
             MR::curePlayerElementMode();
-            MR::tryRumblePadStrong(this, GAMEPAD_CHAN0);
+            MR::tryRumblePadStrong(this, PLAYER_1);
         }
 
         MR::sendArbitraryMsg(ACTMES_PUDDLE_TOUCH_GROUND, pReceiver, pSender);

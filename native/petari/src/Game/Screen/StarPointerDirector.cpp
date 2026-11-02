@@ -8,7 +8,7 @@
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
@@ -49,7 +49,7 @@ void StarPointerDirector::update() {
     mTransHolder->movement();
 
     for (s32 channel = 0; channel < StarPointerFunction::getNumStarPointer(); channel++) {
-        if (MR::isConnectedGamePad(channel)) {
+        if (MR::isConnectedInput(channel)) {
             getStarPointerController(channel)->movement(mPeekZ->mProjectionParameters, mPeekZ->mViewportParameters);
         }
 

@@ -23,7 +23,7 @@
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/FixedPosition.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JMapUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
@@ -344,7 +344,7 @@ void GhostPlayer::exePreStartDemo0() {
 }
 
 bool GhostPlayer::isRequestSkipDemo() const {
-    if (MR::hasRetryGalaxySequence() && MR::testCorePadTriggerA(GAMEPAD_CHAN0)) {
+    if (MR::hasRetryGalaxySequence() && MR::isPressedJump(PLAYER_1)) {
         return true;
     }
     return false;
@@ -380,10 +380,10 @@ void GhostPlayer::exePreStartDemo2() {
         MR::endDemo(this, "\203\214\201\133\203\130\217\200\224\365" /* レース準備 */);
     }
 
-    if (MR::getPlayerTriggerZ()) {
+    if (MR::getPlayerPressedCrouch()) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\203\116\203\211\203\105\203\140\203\223\203\117\212\112\216\156" /* レースクラウチング開始 */);
         MR::startSoundPlayer("SE_PV_SQUAT");
-    } else if (MR::testSubPadReleaseZ(GAMEPAD_CHAN0)) {
+    } else if (MR::isReleasedCrouch(PLAYER_1)) {
         MR::startBckPlayerJ("\203\214\201\133\203\130\212\112\216\156" /* レース開始 */);
     }
 

@@ -584,7 +584,7 @@ bool BigBubble::tryBreakEnd() {
 }
 
 bool BigBubble::tryEscape() {
-    if (MR::testSubPadTriggerZ(GAMEPAD_CHAN0)) {
+    if (MR::isPressedCrouch(PLAYER_1)) {
         setNerve(GET_NERVE(BigBubble, BigBubbleNrvEscape));
         return true;
     }
@@ -692,14 +692,14 @@ void BigBubble::exeCapture() {
     }
 
     if (mIsAttached) {
-        if (addAccelPointing(GAMEPAD_CHAN0)) {
+        if (addAccelPointing(PLAYER_1)) {
             MR::makeMtxUpNoSupportPos(&mEffectMtx, mPosition - mPointerPos, mPointerPos);
             MR::emitEffect(this, "PushWind");
         } else {
             MR::deleteEffect(this, "PushWind");
         }
 
-        addAccelMoment(GAMEPAD_CHAN0);
+        addAccelMoment(PLAYER_1);
     } else {
         addCoriolisAccel();
     }
@@ -928,7 +928,7 @@ void BigBubble::addAccelMoment(s32 padChannel) {
 
 bool BigBubble::addAccelPointing(s32 padChannel) {
     mPointAccel = 0.0f;
-    if (!MR::testCorePadButtonA(padChannel)) {
+    if (!MR::isHeldJump(padChannel)) {
         return false;
     }
 

@@ -2597,39 +2597,39 @@ namespace MR {
 
     void tryRumblePadAndCameraDistanceVeryStrong(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadVeryStrong(pActor, GAMEPAD_CHAN0);
+            tryRumblePadVeryStrong(pActor, PLAYER_1);
             shakeCameraStrong();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadStrong(pActor, GAMEPAD_CHAN0);
+            tryRumblePadStrong(pActor, PLAYER_1);
             shakeCameraNormal();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadMiddle(pActor, GAMEPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         }
     }
 
     void tryRumblePadAndCameraDistanceStrong(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadStrong(pActor, GAMEPAD_CHAN0);
+            tryRumblePadStrong(pActor, PLAYER_1);
             shakeCameraNormal();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadMiddle(pActor, GAMEPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadWeak(pActor, GAMEPAD_CHAN0);
+            tryRumblePadWeak(pActor, PLAYER_1);
             shakeCameraWeak();
         }
     }
 
     void tryRumblePadAndCameraDistanceMiddle(const LiveActor* pActor, f32 near, f32 middle, f32 far) {
         if (isNearPlayerAnyTime(pActor, near)) {
-            tryRumblePadMiddle(pActor, GAMEPAD_CHAN0);
+            tryRumblePadMiddle(pActor, PLAYER_1);
             shakeCameraNormalWeak();
         } else if (isNearPlayerAnyTime(pActor, middle)) {
-            tryRumblePadWeak(pActor, GAMEPAD_CHAN0);
+            tryRumblePadWeak(pActor, PLAYER_1);
             shakeCameraWeak();
         } else if (isNearPlayerAnyTime(pActor, far)) {
-            tryRumblePadVeryWeak(pActor, GAMEPAD_CHAN0);
+            tryRumblePadVeryWeak(pActor, PLAYER_1);
             shakeCameraVeryWeak();
         }
     }

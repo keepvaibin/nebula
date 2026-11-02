@@ -20,7 +20,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/System/ResourceHolder.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MapUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -624,7 +624,7 @@ namespace MR {
     }
 
     void startCSSound2P(const char* pCSName, const char* pSEName) {
-        if (isConnectedGamePad(1)) {
+        if (isConnectedInput(1)) {
             startCSSound(pCSName, pSEName, 1);
         }
     }

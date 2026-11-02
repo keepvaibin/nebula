@@ -301,7 +301,7 @@ void AstroDomeBlueStar::exeWait() {
         MR::tryShowTimeoutedStarPointerGuidance();
     }
 
-    if (isValidBindStart() && MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (isValidBindStart() && MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvPointing));
     }
 }
@@ -314,7 +314,7 @@ void AstroDomeBlueStar::exePointing() {
 
         MR::invalidateClipping(this);
 
-        MR::startCSSound("CS_STAR_POWER", nullptr, GAMEPAD_CHAN0);
+        MR::startCSSound("CS_STAR_POWER", nullptr, PLAYER_1);
     }
 
     MR::requestStarPointerModeBlueStarReady(this);
@@ -326,7 +326,7 @@ void AstroDomeBlueStar::exePointing() {
         return;
     }
 
-    if (!isValidBindStart() || !MR::isStarPointerPointing(this, GAMEPAD_CHAN0, true, "\216\343" /* 弱 */)) {
+    if (!isValidBindStart() || !MR::isStarPointerPointing(this, PLAYER_1, true, "\216\343" /* 弱 */)) {
         setNerve(GET_NERVE(AstroDomeBlueStar, AstroDomeBlueStarNrvWait));
     }
 }

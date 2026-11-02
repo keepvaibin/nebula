@@ -468,7 +468,7 @@ bool StarPieceShooter::tryShoot() {
         _A4 = -1;
         MR::deleteEffect(this, "Charge");
 
-        if ((MR::getStarPieceNum() <= 0) && MR::isStarPointerInScreen(_A0) && MR::isStarPointerValid(_A0) && MR::testCorePadTriggerB(_A0) &&
+        if ((MR::getStarPieceNum() <= 0) && MR::isStarPointerInScreen(_A0) && MR::isStarPointerValid(_A0) && MR::isPressedFire(_A0) &&
             (MR::isEnableStarPointerShootStarPiece(_A0) || MR::isStarPointerModeStarPieceTarget())) {
             MR::startCSSound("CS_NO_SPIECE", "SE_SY_CS_NO_PIECE", _A0);
         }
@@ -479,10 +479,10 @@ bool StarPieceShooter::tryShoot() {
     calcShootGoalUsingPointingDepth();
 
     if (_A4 < 0) {
-        if (!MR::testCorePadButtonB(_A0)) {
+        if (!MR::isHeldFire(_A0)) {
             _A4 = 0;
         }
-    } else if (!MR::testCorePadButtonB(_A0)) {
+    } else if (!MR::isHeldFire(_A0)) {
         if (_A4 > 0) {
             MR::deleteEffect(this, "Charge");
         }
@@ -490,7 +490,7 @@ bool StarPieceShooter::tryShoot() {
         _A4 = 0;
     } else {
         if (_A4 == 0) {
-            if (MR::testCorePadTriggerB(_A0)) {
+            if (MR::isPressedFire(_A0)) {
                 if (StarPointerFunction::canShoot(_A0)) {
                     MR::emitEffect(this, "Charge");
                     MR::startCSSound("CS_STARDUST_CHARGE", nullptr, _A0);
@@ -499,7 +499,7 @@ bool StarPieceShooter::tryShoot() {
                     _A4 = -1;
                 }
             }
-        } else if (MR::testCorePadButtonB(_A0)) {
+        } else if (MR::isHeldFire(_A0)) {
             _A4++;
         }
 
@@ -552,7 +552,7 @@ void StarPieceShooter::calcShootGoalUsingPointingDepth() {
         dirToPlayer.sub(camPos);
 
         TVec2f pointingPos;
-        MR::getCorePadPointingPosBasedOnScreen(&pointingPos, _A0);
+        MR::getPointerPosOnScreen(&pointingPos, _A0);
 
         TVec3f worldPos;
         MR::calcWorldPositionFromScreen(&worldPos, pointingPos, -1.0f);

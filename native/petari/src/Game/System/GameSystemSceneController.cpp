@@ -13,7 +13,7 @@
 #include "Game/System/GameSystemObjHolder.hpp"
 #include "Game/System/HeapMemoryWatcher.hpp"
 #include "Game/System/ScenarioDataParser.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include "Game/Util/EventUtil.hpp"
 #include "Game/Util/FileUtil.hpp"
 #include "Game/Util/JMapIdInfo.hpp"
@@ -134,7 +134,7 @@ void GameSystemSceneController::initializeScene() {
         mScenarioSelectScene->validateScenarioSelect();
     }
 
-    MR::resetGamePad();
+    MR::resetPlayerInput();
 
     mScene = MR::createScene(mCurrSceneControlInfo.mScene);
     mScene->initNameObjListExecutor();

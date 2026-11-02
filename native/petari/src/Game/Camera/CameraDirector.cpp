@@ -26,7 +26,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
@@ -654,7 +654,7 @@ void CameraDirector::controlCameraSE() {
     }
 
     if (mIsSubjectiveCamera) {
-        if (MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testFpViewStartTrigger()) {
+        if (MR::isPressedLeft(PLAYER_1) || MR::isPressedRight(PLAYER_1) || MR::testFpViewStartTrigger()) {
             if (isPlayableCameraSE(false)) {
                 MR::startSystemSE("SE_SY_CAMERA_NG");
                 mIsCameraNG = true;
@@ -715,7 +715,7 @@ void CameraDirector::controlCameraSE() {
         }
     }
 
-    if (MR::testCorePadTriggerDown(GAMEPAD_CHAN0)) {
+    if (MR::isPressedDown(PLAYER_1)) {
         if (isPlayableCameraSE(false)) {
             MR::startSystemSE("SE_SY_CAMERA_NG");
             mIsCameraNG = true;

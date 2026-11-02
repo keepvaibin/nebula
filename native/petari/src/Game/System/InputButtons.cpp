@@ -1,13 +1,13 @@
-#include "Game/System/GamePadButton.hpp"
-#include "Game/System/GamePad.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/InputButtons.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 
-GamePadButton::GamePadButton(const GamePad* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease(), mRepeat(), mDelaySec(1.0f / 2.4f), mPulseSec(1.0f / 6.0f) {
+InputButtons::InputButtons(const PlayerInput* pPad) : mPad(pPad), mHold(), mTrigger(), mRelease(), mRepeat(), mDelaySec(1.0f / 2.4f), mPulseSec(1.0f / 6.0f) {
     mPad->mReadInfo->setButtonRepeat(mDelaySec, mPulseSec);
 }
 
-void GamePadButton::update() {
-    GamePadSample* pSample = mPad->getSample(0);
+void InputButtons::update() {
+    PlayerInputSample* pSample = mPad->getSample(0);
 
     if (pSample == nullptr) {
         return;
@@ -28,110 +28,110 @@ void GamePadButton::update() {
     }
 }
 
-bool GamePadButton::testButtonUp() const {
+bool InputButtons::testButtonUp() const {
     return (mHold & NEBULA_BUTTON_UP) != 0;
 }
 
-bool GamePadButton::testButtonDown() const {
+bool InputButtons::testButtonDown() const {
     return (mHold & NEBULA_BUTTON_DOWN) != 0;
 }
 
-bool GamePadButton::testButtonLeft() const {
+bool InputButtons::testButtonLeft() const {
     return (mHold & NEBULA_BUTTON_LEFT) != 0;
 }
 
-bool GamePadButton::testButtonRight() const {
+bool InputButtons::testButtonRight() const {
     return (mHold & NEBULA_BUTTON_RIGHT) != 0;
 }
 
-bool GamePadButton::testButtonA() const {
+bool InputButtons::testButtonA() const {
     return (mHold & NEBULA_BUTTON_A) != 0;
 }
 
-bool GamePadButton::testButtonB() const {
+bool InputButtons::testButtonB() const {
     return (mHold & NEBULA_BUTTON_B) != 0;
 }
 
-bool GamePadButton::testButtonMinus() const {
+bool InputButtons::testButtonMinus() const {
     return (mHold & NEBULA_BUTTON_MINUS) != 0;
 }
 
-bool GamePadButton::testButtonPlus() const {
+bool InputButtons::testButtonPlus() const {
     return (mHold & NEBULA_BUTTON_PLUS) != 0;
 }
 
-bool GamePadButton::testButton1() const {
+bool InputButtons::testButton1() const {
     return (mHold & NEBULA_BUTTON_1) != 0;
 }
 
-bool GamePadButton::testButton2() const {
+bool InputButtons::testButton2() const {
     return (mHold & NEBULA_BUTTON_2) != 0;
 }
 
-bool GamePadButton::testButtonC() const {
+bool InputButtons::testButtonC() const {
     return (mHold & NEBULA_BUTTON_C) != 0;
 }
 
-bool GamePadButton::testButtonZ() const {
+bool InputButtons::testButtonZ() const {
     return (mHold & NEBULA_BUTTON_Z) != 0;
 }
 
-bool GamePadButton::testTriggerUp() const {
+bool InputButtons::testTriggerUp() const {
     return (mTrigger & NEBULA_BUTTON_UP) != 0;
 }
 
-bool GamePadButton::testTriggerDown() const {
+bool InputButtons::testTriggerDown() const {
     return (mTrigger & NEBULA_BUTTON_DOWN) != 0;
 }
 
-bool GamePadButton::testTriggerLeft() const {
+bool InputButtons::testTriggerLeft() const {
     return (mTrigger & NEBULA_BUTTON_LEFT) != 0;
 }
 
-bool GamePadButton::testTriggerRight() const {
+bool InputButtons::testTriggerRight() const {
     return (mTrigger & NEBULA_BUTTON_RIGHT) != 0;
 }
 
-bool GamePadButton::testTriggerA() const {
+bool InputButtons::testTriggerA() const {
     return (mTrigger & NEBULA_BUTTON_A) != 0;
 }
 
-bool GamePadButton::testTriggerB() const {
+bool InputButtons::testTriggerB() const {
     return (mTrigger & NEBULA_BUTTON_B) != 0;
 }
 
-bool GamePadButton::testTriggerMinus() const {
+bool InputButtons::testTriggerMinus() const {
     return (mTrigger & NEBULA_BUTTON_MINUS) != 0;
 }
 
-bool GamePadButton::testTriggerHome() const {
+bool InputButtons::testTriggerHome() const {
     return (mTrigger & NEBULA_BUTTON_HOME) != 0;
 }
 
-bool GamePadButton::testTriggerPlus() const {
+bool InputButtons::testTriggerPlus() const {
     return (mTrigger & NEBULA_BUTTON_PLUS) != 0;
 }
 
-bool GamePadButton::testTrigger1() const {
+bool InputButtons::testTrigger1() const {
     return (mTrigger & NEBULA_BUTTON_1) != 0;
 }
 
-bool GamePadButton::testTrigger2() const {
+bool InputButtons::testTrigger2() const {
     return (mTrigger & NEBULA_BUTTON_2) != 0;
 }
 
-bool GamePadButton::testTriggerC() const {
+bool InputButtons::testTriggerC() const {
     return (mTrigger & NEBULA_BUTTON_C) != 0;
 }
 
-bool GamePadButton::testTriggerZ() const {
+bool InputButtons::testTriggerZ() const {
     return (mTrigger & NEBULA_BUTTON_Z) != 0;
 }
 
-bool GamePadButton::testReleaseZ() const {
+bool InputButtons::testReleaseZ() const {
     return (mRelease & NEBULA_BUTTON_Z) != 0;
 }
 
-bool GamePadButton::isChangeAnyState() const {
+bool InputButtons::isChangeAnyState() const {
     return mTrigger != 0 || mRelease != 0;
 }

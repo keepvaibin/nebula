@@ -517,7 +517,7 @@ bool KoopaFunction::tryKoopaShellAttackPlayer(HitSensor* pSender, HitSensor* pRe
 }
 
 void KoopaFunction::startKoopaSpinHitBlow(Koopa* pKoopa) {
-    MR::tryRumblePadVeryStrong(pKoopa, GAMEPAD_CHAN0);
+    MR::tryRumblePadVeryStrong(pKoopa, PLAYER_1);
     MR::stopSceneForDefaultHit(::sKoopaHitBlowStopSceneStep);
     MR::startSpinHitSound(pKoopa);
     MR::startBlowHitSound(pKoopa);

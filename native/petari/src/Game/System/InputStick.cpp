@@ -1,6 +1,6 @@
-#include "Game/System/GamePadStick.hpp"
-#include "Game/System/GamePad.hpp"
-#include "Game/System/GamePadHolder.hpp"
+#include "Game/System/InputStick.hpp"
+#include "Game/System/PlayerInput.hpp"
+#include "Game/System/PlayerInputs.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
 #define STICK_FLAG_NONE 0x0
@@ -13,14 +13,14 @@ namespace {
     static const f32 sIsOnValue = 0.2f;
 };  // namespace
 
-GamePadStick::GamePadStick(const GamePad* pPad)
+InputStick::InputStick(const PlayerInput* pPad)
     : mPad(pPad), mStick(0.0f, 0.0f), mSpeed(), mHold(), mTrigger(), mRelease(), mIsTriggerUp(), mIsTriggerDown(), mIsHoldUp(), mIsHoldDown() {
 }
 
-void GamePadStick::update() {
-    GamePadSample* pSample = mPad->getSample(0);
+void InputStick::update() {
+    PlayerInputSample* pSample = mPad->getSample(0);
 
-    if (!MR::isDeviceFreeStyle(pSample)) {
+    if (!MR::hasMoveStick(pSample)) {
         return;
     }
 
@@ -93,6 +93,6 @@ void GamePadStick::update() {
     }
 }
 
-bool GamePadStick::isChanged() const {
+bool InputStick::isChanged() const {
     return mSpeed > 0.0001f;
 }

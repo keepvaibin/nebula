@@ -11,7 +11,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/EffectUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/JointUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
@@ -617,7 +617,7 @@ bool SurfRay::updateRideAccel() {
         return true;
     }
 
-    if (!MR::testCorePadButtonA(mPadChannel)) {
+    if (!MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(SurfRay, SurfRayNrvRideFree));
         return true;
     }
@@ -634,7 +634,7 @@ bool SurfRay::updateRideFree() {
         return true;
     }
 
-    if (MR::testCorePadButtonA(mPadChannel)) {
+    if (MR::isHeldJump(mPadChannel)) {
         setNerve(GET_NERVE(SurfRay, SurfRayNrvRideAccel));
         return true;
     }
@@ -789,7 +789,7 @@ void SurfRay::updateToWater() {
 }
 
 void SurfRay::updateAccel() {
-    if (MR::testCorePadButtonA(mPadChannel)) {
+    if (MR::isHeldJump(mPadChannel)) {
         mSurfSpeed += 0.5f;
     } else {
         mSurfSpeed *= 0.99f;
@@ -837,7 +837,7 @@ void SurfRay::updateRotate() {
 
     if (isRotateStart()) {
         TVec3f accel(0.0f, 0.0f, 0.0f);
-        MR::getCorePadAcceleration(&accel, mPadChannel);
+        MR::getMainTilt(&accel, mPadChannel);
 
         if (accel.z > -0.7f || MR::abs(accel.x) > 0.15f) {
             f32 twistAngle = accel.x;
@@ -1010,7 +1010,7 @@ bool SurfRay::tryInWater() {
 }
 
 bool SurfRay::tryJumpOrFall() {
-    if (MR::isPadSwing(GAMEPAD_CHAN0) && (MR::isBinded(this) || mWaterInfo.isInWater() || mAirTime < 15)) {
+    if (MR::isSpin(PLAYER_1) && (MR::isBinded(this) || mWaterInfo.isInWater() || mAirTime < 15)) {
         f32 f0 = (mSurfSpeed / 40.0f) * (((70.0f - MR::abs(mRotation.z)) * 5.0f) / 70.0f) + 15.0f;
         TVec3f v1(mGroundNormal);
 
@@ -1071,5 +1071,5 @@ bool SurfRay::isRotateStart() const {
         return false;
     }
 
-    return mSurfSpeed > 3.0f || MR::testCorePadButtonA(mPadChannel);
+    return mSurfSpeed > 3.0f || MR::isHeldJump(mPadChannel);
 }

@@ -9,7 +9,7 @@
 #include "Game/Util/DemoUtil.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/EventUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MessageUtil.hpp"
@@ -277,7 +277,7 @@ void StaffRoll::init(const JMapInfoIter& rIter) {
 }
 
 void StaffRoll::appear() {
-    GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(false);
+    GameSystemFunction::setPermissionToCheckInputAndScreenDimming(false);
     MR::deactivateGameSceneDraw3D();
     LayoutActor::appear();
     setNerve(GET_NERVE(StaffRoll, StaffRollNrvPrepareDemo));

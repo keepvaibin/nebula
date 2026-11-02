@@ -3,7 +3,7 @@
 #include "Game/LiveActor/LiveActor.hpp"
 #include "Game/Util/ActorSensorUtil.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include <JSystem/JGeometry/TMatrix.hpp>
 
 class LiveActorGroup;
@@ -40,7 +40,7 @@ public:
     }
 
     bool isButtonAPressed() {
-        return MR::testCorePadButtonA(GAMEPAD_CHAN0) && !MR::isDemoActive();
+        return MR::isHeldJump(PLAYER_1) && !MR::isDemoActive();
     }
 
     void sendSelectedMsgAndSetTarget(LiveActor* pTarget) {

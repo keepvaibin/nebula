@@ -13,7 +13,7 @@ public:
 
     void forceToDeactive();
     bool isActive() const;
-    bool tryCorePadTriggerHome();
+    bool tryPressedHome();
 
     void exeDeactive();
     void exeActive();

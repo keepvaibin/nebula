@@ -10,7 +10,7 @@ class SurfRay : public LiveActor {
 public:
     /// @brief Creates a new `SurfRay`.
     /// @param pName A pointer to the null-terminated name of the object.
-    /// @param padChannel The handle to the Wii Remote.
+    /// @param padChannel The player.
     SurfRay(const char* pName, s32 padChannel = 0);
 
     virtual void init(const JMapInfoIter&);

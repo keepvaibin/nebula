@@ -14,7 +14,7 @@
 #include "Game/Util/CameraUtil.hpp"
 #include "Game/Util/Color.hpp"
 #include "Game/Util/DemoUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MtxUtil.hpp"
@@ -494,7 +494,7 @@ bool Trapeze::receiveOtherMsg(u32 msg, HitSensor* pSender, HitSensor* pReceiver)
 }
 
 bool Trapeze::tryJump() {
-    if (MR::testCorePadTriggerA(GAMEPAD_CHAN0) || MR::testSystemTriggerA()) {
+    if (MR::isPressedJump(PLAYER_1) || MR::testSystemTriggerA()) {
         TVec3f jumpVel = mHangPoint->mVelocity * ::sJumpSpeedRate;
         jumpVel.y = MR::clamp(jumpVel.y, ::sJumpSpeedMinY, ::sJumpSpeedMaxY);
 
@@ -504,9 +504,9 @@ bool Trapeze::tryJump() {
             grabVel.scale(::sJumpSpeedMaxXZ);
             jumpVel.x = grabVel.x;
             jumpVel.z = grabVel.z;
-        } else if (grabVel.squared() < ::sJumpSpeedMinXZ * ::sJumpSpeedMinXZ && MR::isGamePadStickOperated(GAMEPAD_CHAN0)) {
+        } else if (grabVel.squared() < ::sJumpSpeedMinXZ * ::sJumpSpeedMinXZ && MR::isMoveStickOperated(PLAYER_1)) {
             TVec3f stick(0.0f, 0.0f, 0.0f);
-            MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
+            MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
             if (stick.dot(mFront) > 0.0f) {
                 jumpVel.x = mFront.x * ::sJumpSpeedMinXZ;
                 jumpVel.z = mFront.z * ::sJumpSpeedMinXZ;
@@ -568,9 +568,9 @@ void Trapeze::updateHangPoint() {
     mIsSwingFront = false;
     mIsSwingBack = false;
 
-    if (MR::isGamePadStickOperated(GAMEPAD_CHAN0)) {
+    if (MR::isMoveStickOperated(PLAYER_1)) {
         TVec3f stick(0.0f, 0.0f, 0.0f);
-        MR::calcWorldStickDirectionXZ(&stick, GAMEPAD_CHAN0);
+        MR::calcWorldStickDirectionXZ(&stick, PLAYER_1);
         TVec3f frontAccel = mFront;
         if (stick.dot(mFront) < 0.0f) {
             frontAccel.scale(-1.0f);

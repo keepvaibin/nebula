@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Game/System/GamePad.hpp"
+#include "Game/System/PlayerInput.hpp"
 #include <JSystem/JGeometry.hpp>
 
-class GamePadPointer {
+class InputPointer {
 public:
-    GamePadPointer(const GamePad*);
+    InputPointer(const PlayerInput*);
 
     void reset();
     void update();
@@ -15,7 +15,7 @@ public:
     s32 getEnablePastCount() const;
     void getPointingPosBasedOnScreen(TVec2f*) const;
 
-    /* 0x00 */ const GamePad* mPad;
+    /* 0x00 */ const PlayerInput* mPad;
     /* 0x04 */ TVec2f* mPointingPosArray;
     /* 0x08 */ TVec2f* mHorizonArray;
     /* 0x0C */ s32 mMaxPastCount;

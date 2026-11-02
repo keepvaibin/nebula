@@ -8,7 +8,7 @@
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/MainLoopFramework.hpp"
 #include "Game/Util/DrawUtil.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Screen/LayoutManager.hpp"
 #include "Game/Screen/NebulaRtPrepare.hpp"
@@ -151,7 +151,7 @@ void LogoScene::exeStrapDisplay() {
     }
 
     if (MR::isGreaterStep(this, STRAP_DISPLAY_MIN_FRAME) &&
-        (MR::testCorePadTriggerAnyWithoutHome(GAMEPAD_CHAN0) || MR::isGreaterEqualStep(this, STRAP_DISPLAY_MAX_FRAME))) {
+        (MR::isPressedAnyWithoutHome(PLAYER_1) || MR::isGreaterEqualStep(this, STRAP_DISPLAY_MAX_FRAME))) {
         setNerve(GET_NERVE_ANON(LogoSceneStrapFadeout));
     }
 }

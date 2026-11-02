@@ -5,7 +5,7 @@
 #include "Game/Screen/ButtonPaneController.hpp"
 #include "Game/Screen/MiiSelectIcon.hpp"
 #include "Game/Util/BitArray.hpp"
-#include "Game/Util/GamePadUtil.hpp"
+#include "Game/Util/PlayerInputUtil.hpp"
 #include "Game/Util/LayoutUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
@@ -163,9 +163,9 @@ void MiiSelect::exeWait() {
         }
     }
 
-    if (!_20[0]->isHidden() && (MR::testCorePadTriggerLeft(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerLeft(GAMEPAD_CHAN0))) {
+    if (!_20[0]->isHidden() && (MR::isPressedLeft(PLAYER_1) || MR::isMoveStickPressedLeft(PLAYER_1))) {
         callbackLeft();
-    } else if (!_20[1]->isHidden() && (MR::testCorePadTriggerRight(GAMEPAD_CHAN0) || MR::testSubPadStickTriggerRight(GAMEPAD_CHAN0))) {
+    } else if (!_20[1]->isHidden() && (MR::isPressedRight(PLAYER_1) || MR::isMoveStickPressedRight(PLAYER_1))) {
         callbackRight();
     }
 }

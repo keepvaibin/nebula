@@ -51,7 +51,7 @@ void MarioSearchLight::attackSensor(HitSensor* pSender, HitSensor* pReceiver) {
     }
 
     if (pReceiver != _A4) {
-        MR::tryRumblePadWeak(this, GAMEPAD_CHAN0);
+        MR::tryRumblePadWeak(this, PLAYER_1);
     }
 
     _A4 = pReceiver;
