@@ -39,8 +39,8 @@
 //! - BTI (texture files, after cook::formats::bti): the image header (host_timg).
 //! - RFL_Res.dat (Mii parts, after cook::formats::rfl_res): header, section tables, part texture headers, shapes'
 //!   counts and values (rfl_res_host).
-//! - The audio archive (BAA): the command stream, BST, BSTN, BSC and the wave systems (WSYS) (baa); IBNK stays
-//!   big-endian until its step.
+//! - The audio archive (BAA): the command stream, BST, BSTN, BSC, the wave systems (WSYS) and the banks (IBNK)
+//!   (baa).
 
 use anyhow::{bail, Context, Result};
 use std::collections::{HashMap, HashSet};
@@ -1559,7 +1559,7 @@ pub fn rfl_res_host(bytes: &[u8]) -> Result<Vec<u8>> {
 /// stream), the sound name table (BSTN: header words, sections, groups, name offsets) and the sequence collection
 /// (BSC: group count, size, table offsets, each table's count and sequence offsets; the sequences stay bytes) and the
 /// wave systems (WSYS: header, wave archive bank, archives, waves, control groups, scenes, controls and their wave
-/// entries). The banks (IBNK) stay big-endian until their step.
+/// entries) and the instrument banks (IBNK version 1: bank).
 pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
     if bytes.len() >= 4 && &bytes[0..4] == b"<_AA" {
         return Ok(bytes.to_vec()); // cooked already
@@ -1601,6 +1601,7 @@ pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
             b"bstn" => sound_name_table(bytes, &mut out, v[0], v[1]).context("the sound name table (BSTN)")?,
             b"bsc " => seq_collection(bytes, &mut out, v[0]).context("the sequence collection (BSC)")?,
             b"ws  " => wave_system(bytes, &mut out, v[1], &mut turned).with_context(|| format!("wave system {}", v[0]))?,
+            b"bnk " => bank(bytes, &mut out, v[1], &mut turned).with_context(|| format!("bank {}", v[0]))?,
             _ => {}
         }
     }
@@ -1759,6 +1760,155 @@ fn wave_system(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usi
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+/// An instrument bank (IBNK, version 1) at `base`: the header's size, word and version; each chunk's kind (a host
+/// character constant) and size (ENVT's envelope points stay big-endian with the sequences'), OSCT's count and oscillators (id, rate, table offsets,
+/// scales; the target byte stays), LIST's count and offsets, the other chunks' counts; then from LIST every
+/// instrument ('Inst': oscillator indices, effect offsets, key regions with their top-byte key, velocity regions,
+/// volume and pitch) and drum set ('Perc': its percussion map offsets, each 'Pmap': volume, pitch, release, effects,
+/// velocity regions), and every effect they name ('Rand', 'Sens': floats; type bytes stay). Velocity regions keep their
+/// first byte. The parser's reads: JASBNKParser::Ver1.
+fn bank(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usize>) -> Result<()> {
+    if src.get(base..base + 4) != Some(b"IBNK".as_slice()) {
+        bail!("no IBNK magic");
+    }
+    if !turned.insert(base) {
+        return Ok(());
+    }
+    let size = host32(src, out, base + 4)? as usize;
+    host32(src, out, base + 8)?;
+    let version = host32(src, out, base + 0xC)?;
+    if version != 1 {
+        bail!("bank version {version}");
+    }
+    let end = base + size;
+    if end > src.len() || base % 4 != 0 {
+        bail!("bank of {size:#x} bytes at {base:#x} outside the archive");
+    }
+    let words = |out: &mut [u8], from: usize, to: usize| -> Result<()> {
+        let mut p = from;
+        while p + 4 <= to {
+            host32(src, out, p)?;
+            p += 4;
+        }
+        Ok(())
+    };
+    let mut list: Vec<usize> = Vec::new();
+    // The chunks as JASBNKParser::Ver1::findChunk walks them: each that starts before the bank's stated end (a last
+    // chunk may run past it: bank 5's LIST does by four bytes).
+    let mut at = base + 0x20;
+    while at < end {
+        let kind: [u8; 4] = src.get(at..at + 4).context("a bank chunk past the archive")?.try_into().unwrap();
+        host32(src, out, at)?;
+        let length = host32(src, out, at + 4)? as usize;
+        let data = at + 8;
+        if data + length > src.len() {
+            bail!("bank chunk {:?} at {:#x} past the archive", String::from_utf8_lossy(&kind), at - base);
+        }
+        match &kind {
+            // Envelope points stay big-endian: the sequences' oscillator tables share their type (JASOscillator::Point,
+            // JASSeqParser setOscTable reads them from BMS data) and turn with the sequences.
+            b"ENVT" => {}
+            b"OSCT" => {
+                let count = host32(src, out, data)? as usize;
+                for i in 0..count {
+                    let r = data + 4 + 0x1C * i;
+                    host32(src, out, r)?; // id
+                    words(out, r + 8, r + 0x1C)?; // rate, table offset, release table offset, scale, word
+                }
+            }
+            b"LIST" => {
+                let count = host32(src, out, data)? as usize;
+                for i in 0..count {
+                    let o = host32(src, out, data + 4 + 4 * i)? as usize;
+                    if o != 0 {
+                        list.push(base + o);
+                    }
+                }
+            }
+            b"INST" | b"PMAP" | b"PERC" | b"RAND" | b"SENS" => {
+                host32(src, out, data)?; // the count (the records turn from LIST)
+            }
+            [0, 0, 0, 0] => {}
+            _ => bail!("bank chunk {:?} at {:#x}", String::from_utf8_lossy(&kind), at - base),
+        }
+        at = (at + 0xB + length) & !3;
+    }
+    let effect = |out: &mut [u8], turned: &mut HashSet<usize>, at: usize| -> Result<()> {
+        if !turned.insert(at) {
+            return Ok(());
+        }
+        match src.get(at..at + 4) {
+            Some(b"Rand") | Some(b"Sens") => {
+                host32(src, out, at)?;
+                words(out, at + 8, at + 16) // base and range, or start and end levels
+            }
+            _ => bail!("a bank effect at {:#x} of neither kind", at - base),
+        }
+    };
+    // A velocity region list at `p`: the count, then 16 bytes each (a byte, a wave id word, volume, pitch).
+    let velocities = |out: &mut [u8], p: usize| -> Result<usize> {
+        let count = host32(src, out, p)? as usize;
+        let mut q = p + 4;
+        for _ in 0..count {
+            words(out, q + 4, q + 16)?;
+            q += 16;
+        }
+        Ok(q)
+    };
+    for record in list {
+        if !turned.insert(record) {
+            continue;
+        }
+        let magic: [u8; 4] = src.get(record..record + 4).context("a bank record past the archive")?.try_into().unwrap();
+        host32(src, out, record)?;
+        match &magic {
+            b"Inst" => {
+                let mut p = record + 4;
+                let oscillators = host32(src, out, p)? as usize;
+                words(out, p + 4, p + 4 + 4 * oscillators)?;
+                p += 4 + 4 * oscillators;
+                let effects = host32(src, out, p)? as usize;
+                for e in 0..effects {
+                    let o = host32(src, out, p + 4 + 4 * e)? as usize;
+                    effect(out, turned, base + o)?;
+                }
+                p += 4 + 4 * effects;
+                let keys = host32(src, out, p)? as usize;
+                p += 4;
+                for _ in 0..keys {
+                    host32(src, out, p)?; // the high key in the top byte
+                    p = velocities(out, p + 4)?;
+                }
+                words(out, p, p + 8)?; // volume, pitch
+            }
+            b"Perc" => {
+                let count = host32(src, out, record + 4)? as usize;
+                for i in 0..count {
+                    let o = host32(src, out, record + 8 + 4 * i)? as usize;
+                    if o == 0 || !turned.insert(base + o) {
+                        continue;
+                    }
+                    let m = base + o;
+                    if src.get(m..m + 4) != Some(b"Pmap".as_slice()) {
+                        bail!("a drum entry at {o:#x} that is no Pmap");
+                    }
+                    host32(src, out, m)?;
+                    words(out, m + 4, m + 0xC)?; // volume, pitch
+                    host16(src, out, m + 0xE)?; // release (the pan byte stays)
+                    let effects = host32(src, out, m + 0x10)? as usize;
+                    for e in 0..effects {
+                        let eo = host32(src, out, m + 0x14 + 4 * e)? as usize;
+                        effect(out, turned, base + eo)?;
+                    }
+                    velocities(out, m + 0x14 + 4 * effects)?;
+                }
+            }
+            _ => bail!("a bank record at {:#x} of kind {:?}", record - base, String::from_utf8_lossy(&magic)),
         }
     }
     Ok(())
