@@ -126,13 +126,14 @@ void HeapMemoryWatcher::createRootHeap() {
     uintptr_t arenaHi, arenaLo;
 
     JKRExpHeap::createRoot(1, true);
-    // MEM2's arena: its first 14 MB are the auxiliary memory, the rest the GDDR3 root heap.
+    // MEM2's arena: first the sound memory (its reserved start, then the audio heap's bytes), the rest the GDDR3 root heap.
     void *mem1Lo, *mem1Hi, *mem2Lo, *mem2Hi;
     nebula_memory_arenas(&mem1Lo, &mem1Hi, &mem2Lo, &mem2Hi);
     arenaLo = reinterpret_cast< uintptr_t >(mem2Lo);
     arenaHi = reinterpret_cast< uintptr_t >(mem2Hi);
-    newHi = reinterpret_cast< void* >(arenaLo + 0xE00000);
-    NebulaAuxMemory::init(mem2Lo, 0xE00000);
+    const u32 soundMemory = NebulaAuxMemory::cReserved + NebulaAuxMemory::cSoundBytes;
+    newHi = reinterpret_cast< void* >(arenaLo + soundMemory);
+    NebulaAuxMemory::init(mem2Lo, soundMemory);
     JKRHeap::setAltAramStartAdr(arenaLo);
     pHeap = JKRExpHeap::create(newHi, (u32)(arenaHi - reinterpret_cast< uintptr_t >(newHi)), JKRHeap::sRootHeap, true);
 
