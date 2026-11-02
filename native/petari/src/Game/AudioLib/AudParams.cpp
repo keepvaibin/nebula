@@ -25,7 +25,6 @@ namespace AudParams {
     const int streamBlockSize = 0x2760;
     const int numStreamChannels = 4;
     const f32 outputGain = 0.9f;
-    const int maxSeqDataSize = 0xDAC0;
     const s32 numInspectableSoundObj = 8;
     const f32 masterVolBgm = 1.2f;
     const f32 masterVolSe = 1.2f;

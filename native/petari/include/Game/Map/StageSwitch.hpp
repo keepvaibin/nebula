@@ -6,25 +6,17 @@
 class JMapIdInfo;
 class JMapInfoIter;
 
-class BitFlag128 {
-public:
-    BitFlag128() {
-        u32* pFlag = mFlags;
-
-        do {
-            *pFlag++ = 0;
-        } while (pFlag < &mFlags[4]);
-    }
-
-    bool get(int idx) const;
-    void set(int bitIndex, bool setTrue);
-
-    /* 0x0 */ u32 mFlags[4];
-};
-
-class ZoneSwitch : public BitFlag128 {
+// A zone's switches, as many as its numbers reach: off until set.
+class ZoneSwitch {
 public:
     ZoneSwitch();
+
+    bool get(int index) const;
+    void set(int index, bool isOn);
+
+private:
+    u32* mFlags;
+    u32 mWords;
 };
 
 class SwitchIdInfo {

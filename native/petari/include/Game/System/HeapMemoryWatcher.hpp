@@ -35,6 +35,5 @@ public:
     NebulaArena* mGameHeap;
     NebulaArena* mFileCacheHeap;
     NebulaArena* mSceneHeap;
-    NebulaArena* mHomeButtonLayoutHeap;
     NebulaArena* mAudSystemHeap;
 };

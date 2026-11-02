@@ -75,7 +75,6 @@ void HeapMemoryWatcher::createHeaps() {
     mAudSystemHeap = ::createArena(NebulaArena::sRootHeap);
     mSoundMemory = NebulaArena::alloc(AudParams::soundMemorySize, 32, NebulaArena::sRootHeap);
     mStationedHeap = ::createArena(NebulaArena::sRootHeap);
-    mHomeButtonLayoutHeap = ::createArena(NebulaArena::sRootHeap);
     createGameHeap();
 }
 
@@ -84,7 +83,7 @@ void HeapMemoryWatcher::createGameHeap() {
 }
 
 HeapMemoryWatcher::HeapMemoryWatcher()
-    : mStationedHeap(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr), mHomeButtonLayoutHeap(nullptr), mAudSystemHeap(nullptr) {
+    : mStationedHeap(nullptr), mGameHeap(nullptr), mFileCacheHeap(nullptr), mSceneHeap(nullptr), mAudSystemHeap(nullptr) {
     createHeaps();
 }
 
