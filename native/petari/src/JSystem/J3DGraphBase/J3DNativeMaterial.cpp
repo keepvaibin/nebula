@@ -11,6 +11,7 @@
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <nebula_game_api.h>
+#include <nebula_cooked_material.h>
 #include "Game/Util/RenderSignals.hpp"
 #include <string.h>
 
@@ -19,65 +20,13 @@ extern "C" void nebula_log(const char* format, ...);
 
 // A display list's material: its program and its values (nebula_game_api.h).
 struct NebulaMaterialParts {
-    NebulaMaterialProgram program;
-    NebulaMaterialValues values;
-    u32 nativeShader;  // its J3D material's NebulaShaderId (0: the GX path)
+    J3DMaterialSetup setup;
+    J3DMaterialValues values;
+    u32 nativeShader;
+    const NebulaCookedMaterial* cooked;
 };
 
 namespace {
-    // The J3D material set (tools/dev/gen_j3d_materials.py): a program's FNV-1a hash -> its material (1-based).
-    struct J3DShaderEntry {
-        u64 hash;
-        u32 material;
-    };
-    const J3DShaderEntry sJ3DShaders[] = {
-#include "J3DMaterialShaders.inc"
-        {0xFFFFFFFFFFFFFFFFull, 0u},
-    };
-
-    u32 nativeShaderOf(const NebulaMaterialProgram& rProgram) {
-        // The program's shader-relevant bytes (tools/dev/gen_j3d_materials.py LOOKUP_ZERO): without its culling,
-        // dither, early depth, origin, differ flags, fog range adjustment, blend, depth or texture matrix places.
-        NebulaMaterialProgram key = rProgram;
-        key.cull = key.dither = key.z_compare_location = key.origin = 0;
-        key.diff_flags = 0;
-        u8* pFog = reinterpret_cast< u8* >(&key.fog);
-        memset(pFog + 1, 0, sizeof(key.fog) - 1);
-        memset(&key.blend, 0, sizeof(key.blend));
-        memset(&key.z_mode, 0, sizeof(key.z_mode));
-        memset(key.texture_matrix, 0, sizeof(key.texture_matrix));
-        const u8* pBytes = reinterpret_cast< const u8* >(&key);
-        u64 hash = 0xCBF29CE484222325ull;
-        for (u32 i = 0; i < sizeof(key); i++) {
-            hash = (hash ^ pBytes[i]) * 0x100000001B3ull;
-        }
-        u32 lo = 0;
-        u32 hi = sizeof(sJ3DShaders) / sizeof(sJ3DShaders[0]) - 1;
-        while (lo < hi) {
-            const u32 mid = (lo + hi) / 2;
-            if (sJ3DShaders[mid].hash < hash) {
-                lo = mid + 1;
-            } else {
-                hi = mid;
-            }
-        }
-        if (sJ3DShaders[lo].hash != hash) {
-            return 0;
-        }
-        // Materials whose native draws still differ after the A/B input dump (E04-NATIVE-SHADERS-PLAN.md exclusion
-        // list, each with its dump): drawn by their GX programs until fixed, by program hash (the set's numbers move
-        // as it grows). The list is empty before step 4.
-        static const u64 kExcluded[] = {
-            0,  // none (the penguin coach, 586, was fixed by review-586 1dfec1f5)
-        };
-        for (u32 i = 0; i < sizeof(kExcluded) / sizeof(kExcluded[0]); i++) {
-            if (kExcluded[i] != 0 && hash == kExcluded[i]) {
-                return 0;
-            }
-        }
-        return NEBULA_SHADER_J3D_FIRST + sJ3DShaders[lo].material - 1;
-    }
-
     // The register file as the J3D materials' constants lay it out (j3d_material.hlsli MaterialConstants): what the
     // J3D materials and the game's state changes set last. A native J3D material takes the parts its program does not
     // load from here (the TEV register PREV always: J3D loads registers 1-3), as GX kept them.
@@ -96,7 +45,9 @@ namespace {
     NebulaNativeMaterial sSiteRegisters;
     bool sSiteFollows = false;
     NebulaNativeMaterial sCurrent;
-    const NebulaMaterialProgram* sCurrentProgram = NULL;
+    const J3DMaterialSetup* sCurrentSetup = NULL;
+    const NebulaCookedMaterial* sCurrentCooked = NULL;
+    u8 sCurrentPass = 0;
 
     void setColor(f32* pOut, const u8* pColor, u32 count) {
         for (u32 c = 0; c < count; c++) {
@@ -104,37 +55,37 @@ namespace {
         }
     }
 
-    // The parts `rProgram` loads (NEBULA_MATERIAL_LOADS_*), into the register file. An instance's differed list
+    // The parts `rSetup` loads (J3D_LOADS_*), into the register file. An instance's differed list
     // (diff_flags) loads only the parts its flags name, as J3D's list does and the drawing state takes it
     // (draw_state.cpp set_material): TEV and konst colours under TevReg, material colours under MatColor, fog under
     // Fog; never the ambient colours, indirect matrices or alpha references, which stay as the shared list and the
     // state changes since left them (an actor's light loader sets the ambient colour between the two lists).
-    void loadRegisters(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
+    void loadRegisters(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
         f32* pC = sRegisters;
-        const u32 diff = rProgram.diff_flags;
+        const u32 diff = rSetup.diff_flags;
         const bool whole = diff == 0;
-        const u16 loads = rProgram.loads;
-        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & NEBULA_MATERIAL_LOADS_TEV_COLOR) != 0) {
+        const u16 loads = rSetup.loads;
+        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_TEV_COLOR) != 0) {
             for (u32 r = 0; r < 3; r++) {
                 for (u32 c = 0; c < 4; c++) {
                     pC[4 + r * 4 + c] = rValues.tev_color[r][c] / 255.0f;
                 }
             }
         }
-        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & NEBULA_MATERIAL_LOADS_KONST_COLOR) != 0) {
+        if ((whole || (diff & J3DDiffFlag_TevReg) != 0) && (loads & J3D_LOADS_KONST_COLOR) != 0) {
             for (u32 k = 0; k < 4; k++) {
                 setColor(pC + 16 + k * 4, rValues.konst_color[k], 4);
             }
         }
         for (u32 ch = 0; ch < 2; ch++) {
-            if ((whole || (diff & J3DDiffFlag_MatColor) != 0) && (loads & NEBULA_MATERIAL_LOADS_CHANNELS) != 0) {
+            if ((whole || (diff & J3DDiffFlag_MatColor) != 0) && (loads & J3D_LOADS_CHANNELS) != 0) {
                 setColor(pC + 32 + ch * 4, rValues.material_color[ch], 4);
             }
-            if (whole && (loads & NEBULA_MATERIAL_LOADS_AMBIENT) != 0) {
+            if (whole && (loads & J3D_LOADS_AMBIENT) != 0) {
                 setColor(pC + 40 + ch * 4, rValues.ambient_color[ch], 4);
             }
         }
-        if (whole && (loads & NEBULA_MATERIAL_LOADS_INDIRECT) != 0) {
+        if (whole && (loads & J3D_LOADS_INDIRECT) != 0) {
             for (u32 m = 0; m < 3; m++) {
                 f32 scale = 1.0f;
                 for (s32 e = rValues.ind_matrix[m].scale; e > 0; e--) {
@@ -150,13 +101,13 @@ namespace {
                 }
             }
         }
-        if ((whole || (diff & J3DDiffFlag_Fog) != 0) && (loads & NEBULA_MATERIAL_LOADS_FOG) != 0) {
+        if ((whole || (diff & J3DDiffFlag_Fog) != 0) && (loads & J3D_LOADS_FOG) != 0) {
             pC[72] = rValues.fog.start;
             pC[73] = rValues.fog.end;
             pC[74] = rValues.fog.near_z;
             pC[75] = rValues.fog.far_z;
             setColor(pC + 76, rValues.fog.color, 3);
-            pC[79] = rProgram.fog.type;
+            pC[79] = rSetup.fog_type;
         }
         if (whole) {
             pC[80] = rValues.alpha_ref[0] / 255.0f;
@@ -254,216 +205,18 @@ namespace {
         case NEBULA_STATE_TEV_SWAP_MODE:
         case NEBULA_STATE_TEV_SWAP_TABLE:
         case NEBULA_STATE_TEV_STAGE_ORDER:
-        case NEBULA_STATE_TEX_COORD_GEN:
         case NEBULA_STATE_IND_TEX_SCALE:
         case NEBULA_STATE_IND_TEX_ORDER:
         case NEBULA_STATE_Z_TEXTURE:
             return true;
         case NEBULA_STATE_ALPHA_COMPARE:
             return sCurrentKind == CURRENT_J3D &&
-                   (rOp.a[0] != sCurrentProgram->alpha_compare.comp0 || rOp.a[2] != sCurrentProgram->alpha_compare.op ||
-                    rOp.a[3] != sCurrentProgram->alpha_compare.comp1);
+                   (rOp.a[0] != sCurrentSetup->alpha_compare.comp0 || rOp.a[2] != sCurrentSetup->alpha_compare.op ||
+                    rOp.a[3] != sCurrentSetup->alpha_compare.comp1);
         default:
             return false;
         }
     }
-
-    // A program-changing state op applied to a J3D material's program (the registers as GX's change leaves them): a
-    // state list over a material (J3DModelX's lists, Mario's dynamic lists) makes another program, drawn by its own
-    // generated shader. False for a change the program record cannot hold.
-    bool foldOp(NebulaMaterialProgram& rP, const NebulaStateOp& rOp) {
-        const u8* a = rOp.a;
-        switch (rOp.kind) {
-        case NEBULA_STATE_GEN_MODE:
-            rP.tex_gens = a[0];
-            rP.channels = a[1];
-            rP.tev_stages = a[2];
-            return true;
-        case NEBULA_STATE_GEN_MODE2:
-            rP.tex_gens = a[0];
-            rP.channels = a[1];
-            rP.tev_stages = a[2];
-            rP.ind_stages = a[3];
-            rP.cull = a[4];
-            return true;
-        case NEBULA_STATE_NUM_TEX_GENS:
-            rP.tex_gens = a[0];
-            return true;
-        case NEBULA_STATE_NUM_CHANS:
-            rP.channels = a[0];
-            return true;
-        case NEBULA_STATE_NUM_TEV_STAGES:
-            rP.tev_stages = a[0];
-            return true;
-        case NEBULA_STATE_NUM_IND_STAGES:
-            rP.ind_stages = a[0];
-            return true;
-        case NEBULA_STATE_CHANNEL: {
-            // The record's order is COLOR0, ALPHA0, COLOR1, ALPHA1: the channel's colour, then its alpha.
-            if ((a[7] & 3) == 0) {
-                return false;
-            }
-            const s8 place = static_cast< s8 >(2 * (a[0] & 1));
-            const s8 places[2] = {(a[7] & 1) != 0 ? place : static_cast< s8 >(-1),
-                                  (a[7] & 2) != 0 ? static_cast< s8 >(place + 1) : static_cast< s8 >(-1)};
-            for (u32 k = 0; k < 2; k++) {
-                if (places[k] < 0) {
-                    continue;
-                }
-                rP.channel[places[k]].enable = a[1];
-                rP.channel[places[k]].ambient_source = a[2];
-                rP.channel[places[k]].material_source = a[3];
-                rP.channel[places[k]].light_mask = a[4];
-                rP.channel[places[k]].diffuse = a[5];
-                rP.channel[places[k]].attenuation = a[6];
-            }
-            return true;
-        }
-        case NEBULA_STATE_TEV_COLOR_CALC:
-        case NEBULA_STATE_TEV_ALPHA_CALC: {
-            if (a[0] >= 16) {
-                return false;
-            }
-            NebulaMaterialTevStage& rS = rP.tev[a[0]];
-            const bool color = rOp.kind == NEBULA_STATE_TEV_COLOR_CALC;
-            for (u32 k = 0; k < 4; k++) {
-                (color ? rS.color_in : rS.alpha_in)[k] = a[1 + k];
-            }
-            (color ? rS.color_op : rS.alpha_op) = a[5];
-            (color ? rS.color_bias : rS.alpha_bias) = a[6];
-            (color ? rS.color_scale : rS.alpha_scale) = a[7];
-            (color ? rS.color_clamp : rS.alpha_clamp) = a[8];
-            (color ? rS.color_reg : rS.alpha_reg) = a[9];
-            if (!color) {
-                rS.ras_swap = a[10];
-                rS.tex_swap = a[11];
-            }
-            return true;
-        }
-        case NEBULA_STATE_TEV_COLOR_IN:
-        case NEBULA_STATE_TEV_ALPHA_IN:
-            if (a[0] >= 16) {
-                return false;
-            }
-            for (u32 k = 0; k < 4; k++) {
-                (rOp.kind == NEBULA_STATE_TEV_COLOR_IN ? rP.tev[a[0]].color_in : rP.tev[a[0]].alpha_in)[k] = a[1 + k];
-            }
-            return true;
-        case NEBULA_STATE_TEV_COLOR_OP:
-        case NEBULA_STATE_TEV_ALPHA_OP: {
-            if (a[0] >= 16) {
-                return false;
-            }
-            NebulaMaterialTevStage& rS = rP.tev[a[0]];
-            const bool color = rOp.kind == NEBULA_STATE_TEV_COLOR_OP;
-            (color ? rS.color_op : rS.alpha_op) = a[1];
-            (color ? rS.color_bias : rS.alpha_bias) = a[2];
-            (color ? rS.color_scale : rS.alpha_scale) = a[3];
-            (color ? rS.color_clamp : rS.alpha_clamp) = a[4];
-            (color ? rS.color_reg : rS.alpha_reg) = a[5];
-            return true;
-        }
-        case NEBULA_STATE_TEV_DIRECT:
-        case NEBULA_STATE_TEV_INDIRECT: {
-            if (a[0] >= 16) {
-                return false;
-            }
-            NebulaMaterialTevStage& rS = rP.tev[a[0]];
-            const bool ind = rOp.kind == NEBULA_STATE_TEV_INDIRECT;
-            rS.ind_stage = ind ? a[1] : 0;
-            rS.ind_format = ind ? a[2] : 0;
-            rS.ind_bias = ind ? a[3] : 0;
-            rS.ind_matrix = ind ? a[4] : 0;
-            rS.ind_wrap_s = ind ? a[5] : 0;
-            rS.ind_wrap_t = ind ? a[6] : 0;
-            rS.ind_prev = ind ? a[7] : 0;
-            rS.ind_lod = ind ? a[8] : 0;
-            rS.ind_alpha = ind ? a[9] : 0;
-            return true;
-        }
-        case NEBULA_STATE_TEV_ORDER:
-            if (a[0] >= 15) {
-                return false;
-            }
-            for (u32 k = 0; k < 2; k++) {
-                rP.tev[a[0] + k].tex_coord = a[1 + k * 3];
-                rP.tev[a[0] + k].tex_map = a[2 + k * 3];
-                rP.tev[a[0] + k].channel = a[3 + k * 3];
-            }
-            return true;
-        case NEBULA_STATE_TEV_STAGE_ORDER:
-            if (a[0] >= 16) {
-                return false;
-            }
-            rP.tev[a[0]].tex_coord = a[1];
-            rP.tev[a[0]].tex_map = a[4] != 0 ? GPU_TEXMAP_NULL : a[2];
-            rP.tev[a[0]].channel = a[3];
-            return true;
-        case NEBULA_STATE_TEV_KCOLOR_SEL:
-        case NEBULA_STATE_TEV_KALPHA_SEL:
-            if (a[0] >= 16) {
-                return false;
-            }
-            (rOp.kind == NEBULA_STATE_TEV_KCOLOR_SEL ? rP.tev[a[0]].konst_color : rP.tev[a[0]].konst_alpha) = a[1];
-            return true;
-        case NEBULA_STATE_TEV_SWAP_MODE:
-            if (a[0] >= 16) {
-                return false;
-            }
-            rP.tev[a[0]].ras_swap = a[1];
-            rP.tev[a[0]].tex_swap = a[2];
-            return true;
-        case NEBULA_STATE_TEV_SWAP_TABLE:
-            if (a[0] >= 4) {
-                return false;
-            }
-            for (u32 k = 0; k < 4; k++) {
-                rP.swap_table[a[0]][k] = a[1 + k];
-            }
-            return true;
-        case NEBULA_STATE_TEX_COORD_GEN:
-            if (a[0] >= 8) {
-                return false;
-            }
-            // The op carries the generation in the record's encoding (J3DNativeTexGen) and the post row.
-            rP.tex_gen[a[0]].type = a[1];
-            rP.tex_gen[a[0]].source = a[2];
-            rP.tex_gen[a[0]].normalize = a[3];
-            rP.tex_gen[a[0]].post_matrix = a[4];
-            rP.tex_gen[a[0]].reserved[0] = 1;
-            if (a[5] != 0) {
-                rP.tex_gen[a[0]].matrix = static_cast< u8 >(3 * a[6]);  // the op's slot as the record's row
-            }
-            return true;
-        case NEBULA_STATE_IND_TEX_SCALE:
-            if (a[0] >= 4) {
-                return false;
-            }
-            rP.ind_order[a[0]].scale_s = a[1];
-            rP.ind_order[a[0]].scale_t = a[2];
-            return true;
-        case NEBULA_STATE_IND_TEX_ORDER:
-            if (a[0] >= 4) {
-                return false;
-            }
-            rP.ind_order[a[0]].coord = a[1];
-            rP.ind_order[a[0]].map = a[2];
-            return true;
-        case NEBULA_STATE_ALPHA_COMPARE:
-            rP.alpha_compare.comp0 = a[0];
-            rP.alpha_compare.op = a[2];
-            rP.alpha_compare.comp1 = a[3];
-            return true;
-        default:
-            return false;
-        }
-    }
-
-    // The program a state list folded into the current J3D material (state), and whether one change could not fold.
-    NebulaMaterialProgram sFold;
-    bool sFolding = false;
-    bool sFoldFailed = false;
-    bool sFoldCull = false;  // the list set the culling (GpuSetGenMode2's)
 
     // The current material ends: the draws that follow have none (the host draws nothing without one) until the next.
     void endCurrent() {
@@ -474,22 +227,11 @@ namespace {
     }
 
 
-    // The list that last ended a J3D material for a program no shader holds, until the next material.
-    bool sFoldLost = false;
-    bool sFoldDrawnPending = false;
-    bool sFoldLostFailed = false;
-    u32 sFoldLostShader = 0;
-    u8 sFoldLostOp = 0;  // the state op that made the fold
-    u8 sFoldOp = 0;
-    NebulaMaterialProgram sFoldLostProgram;
-
     // Each material the game sends (NativeShader::send, this file's sends; NULL a drawing-state one).
     // The shader of the material watchMaterial last saw (J3DNativeMaterial::currentShader).
     u32 sWatchedShader = 0;
 
     void watchMaterial(const NebulaNativeMaterial* pNative) {
-        sFoldLost = false;
-        sFoldDrawnPending = false;
         sWatchedShader = pNative != NULL ? pNative->shader : 0;
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
@@ -532,7 +274,7 @@ namespace {
         return gx;
     }
 
-    // A material with no shader in the set (its program registered: a material dump collects it for the generator):
+    // A material with no shader in the set:
     // not drawn. Each once in the log.
     void notDrawn(u32 shader, u64 key) {
         static u64 sLogged[256];
@@ -552,21 +294,21 @@ namespace {
     }
 
     // The draw's native material from the list's program and values (j3d_material.hlsli's constants).
-    void sendNative(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues, u32 shader,
-                    bool keepDepthCull = false) {
+    void sendNative(const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues, u32 shader,
+                    bool keepDepthCull = false, const NebulaCookedMaterial* cooked = NULL) {
         // Texture matrices into their places (as the material's display list loads them).
-        const bool differed = rProgram.diff_flags != 0;
-        if (!differed || ((rProgram.diff_flags >> 8) & 15) != 0) {
+        const bool differed = rSetup.diff_flags != 0;
+        if (!differed || ((rSetup.diff_flags >> 8) & 15) != 0) {
             for (u32 i = 0; i < 8; i++) {
-                const u8 id = rProgram.texture_matrix[i].id;
-                if (!rProgram.texture_matrix[i].present || (!differed && !rProgram.texture_matrix[i].listed)) {
+                const u8 id = rSetup.texture_matrix[i].id;
+                if (!rSetup.texture_matrix[i].present || (!differed && !rSetup.texture_matrix[i].listed)) {
                     continue;
                 }
                 const f32(*pMtx)[4] = reinterpret_cast< const f32(*)[4] >(rValues.texture_matrix[i]);
                 if (id >= 64) {
                     J3DNativeShape::setPostTexture((id - 64) / 3, pMtx);
                 } else if (id >= 30) {
-                    J3DNativeShape::setTexture((id - 30) / 3, pMtx, rProgram.texture_matrix[i].rows == 2 ? 2 : 3);
+                    J3DNativeShape::setTexture((id - 30) / 3, pMtx, rSetup.texture_matrix[i].rows == 2 ? 2 : 3);
                 }
             }
         }
@@ -581,15 +323,15 @@ namespace {
         }
         memset(&material, 0, sizeof(material));
         material.shader = shader;
-        material.blend_op = rProgram.blend.type;  // NEBULA_BLEND_*
-        material.blend_src = rProgram.blend.source;  // NEBULA_FACTOR_*
-        material.blend_dst = rProgram.blend.destination;
-        material.logic_op = rProgram.blend.logic_op;
-        material.depth_test = rProgram.z_mode.enable;
-        material.depth_func = rProgram.z_mode.func;
-        material.depth_write = rProgram.z_mode.update;
-        material.early_depth = rProgram.z_compare_location;
-        material.cull = rProgram.cull == NEBULA_CULL_ALL ? NEBULA_CULL_NONE : rProgram.cull;  // NEBULA_CULL_*
+        material.blend_op = rSetup.blend.type;  // NEBULA_BLEND_*
+        material.blend_src = rSetup.blend.source;  // NEBULA_FACTOR_*
+        material.blend_dst = rSetup.blend.destination;
+        material.logic_op = rSetup.blend.logic_op;
+        material.depth_test = rSetup.z_mode.enable;
+        material.depth_func = rSetup.z_mode.func;
+        material.depth_write = rSetup.z_mode.update;
+        material.early_depth = rSetup.z_compare_location;
+        material.cull = rSetup.cull == NEBULA_CULL_ALL ? NEBULA_CULL_NONE : rSetup.cull;  // NEBULA_CULL_*
         material.color_write = 2;
         material.alpha_write = 2;
         if (keepDepthCull) {
@@ -601,12 +343,12 @@ namespace {
             // (J3D diffBlend), as the drawing state takes it (draw_state.cpp set_material): the rest stays as the
             // shared list and the state changes since set it.
             material.cull = NEBULA_NATIVE_KEPT;
-            if ((rProgram.diff_flags & J3DDiffFlag_Blend) == 0) {
+            if ((rSetup.diff_flags & J3DDiffFlag_Blend) == 0) {
                 material.blend_op = NEBULA_NATIVE_KEPT;
                 material.depth_test = NEBULA_NATIVE_KEPT;
             }
         }
-        loadRegisters(rProgram, rValues);
+        loadRegisters(rSetup, rValues);
         memcpy(material.constants, sRegisters, sizeof(sRegisters));
         // Each coordinate's GX scale and each map's size (j3d_material.hlsli tex_scale): a sample reads coordinate c
         // of map m at c's scale over m's size, as GX scales coordinates per coordinate.
@@ -646,21 +388,20 @@ namespace {
         // list loads texgens only when its flags name them (TexGenNum with 0x1000: diffTexGen, as the GX path's
         // differed records): otherwise the texgens stay as the draw has them (a shape's own, ShapePacketUserData's
         // environment maps, set before the packet's differed list).
-        const bool keepTexGens = differed && !(((rProgram.diff_flags >> 8) & 15) != 0 && (rProgram.diff_flags & 0x1000) != 0);
+        const bool keepTexGens = differed && !(((rSetup.diff_flags >> 8) & 15) != 0 && (rSetup.diff_flags & 0x1000) != 0);
         for (u32 i = 0; i < 8; i++) {
             material.texgen_post[i] = keepTexGens ? static_cast< u8 >(NEBULA_NATIVE_KEPT)
-                                      : i < rProgram.tex_gens
-                                          ? static_cast< u8 >((rProgram.tex_gen[i].post_matrix & 0x3F) |
-                                                              (rProgram.tex_gen[i].normalize != 0 ? 0x80 : 0))
+                                      : i < rSetup.tex_gens
+                                          ? static_cast< u8 >(rSetup.tex_gen_post[i] & 0x3F)
                                           : 61;
         }
         // The lights the material's colour block loads (J3DColorBlockLightOn), as its list loaded them: a whole
         // material's with its channels, a differed list's under ColorChan or LightObjNum (diffLight), as the drawing
         // state takes them (native_material.cpp load_matrices).
-        const bool lights = differed ? (rProgram.diff_flags & J3DDiffFlag_ColorChan) != 0 ||
-                                           ((rProgram.diff_flags >> 4) & 15) != 0
-                                     : (rProgram.loads & NEBULA_MATERIAL_LOADS_CHANNELS) != 0;
-        if (lights && (rProgram.loads & NEBULA_MATERIAL_LOADS_LIGHTS) != 0) {
+        const bool lights = differed ? (rSetup.diff_flags & J3DDiffFlag_ColorChan) != 0 ||
+                                           ((rSetup.diff_flags >> 4) & 15) != 0
+                                     : (rSetup.loads & J3D_LOADS_CHANNELS) != 0;
+        if (lights && (rSetup.loads & J3D_LOADS_LIGHTS) != 0) {
             material.light_mask = rValues.light_mask;
             memcpy(material.light, rValues.light, sizeof(material.light));
         }
@@ -669,7 +410,9 @@ namespace {
         pHost->native_material(pHost->user, &material);
         watchMaterial(&material);
         dumpTag(shader);
-        sCurrentProgram = &rProgram;
+        sCurrentSetup = &rSetup;
+        sCurrentCooked = cooked;
+        sCurrentPass = 0;
     }
 }  // namespace
 
@@ -686,7 +429,7 @@ namespace {
     }
 
     // Map `map`'s texture as J3D's loadTexNo sets it up (the image and palette inside the texture's resource).
-    void texture(J3DTexture* pTexture, u32 map, u16 texNo, NebulaMaterialValues* pOut, u16* pSizes) {
+    void texture(J3DTexture* pTexture, u32 map, u16 texNo, J3DMaterialValues* pOut, u16* pSizes) {
         ResTIMG* pImg = pTexture->getResTIMG(texNo);
         NebulaMaterialTexture& rOut = pOut->texture[map];
         rOut.image = keyOf(reinterpret_cast< u8* >(pImg) + pImg->mImageDataOffset);
@@ -710,7 +453,7 @@ namespace {
     }
 
     // A texture coordinate's scale entry as loadTexCoordScale writes it from its map's table entry.
-    void coordScale(NebulaMaterialValues* pOut, u32 coord, u32 map) {
+    void coordScale(J3DMaterialValues* pOut, u32 coord, u32 map) {
         const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
         pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
         pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
@@ -720,36 +463,44 @@ namespace {
 }  // namespace
 
 namespace J3DNativeMaterial {
+    static u32 cookedShaderOf(const J3DMaterial* material) {
+        const NebulaCookedMaterial* desc = material->mNativeMaterial;
+        if (desc == NULL || desc->material_index != material->mIndex || desc->shader == 0) return 0;
+        static bool reported = false;
+        if (!reported) {
+            reported = true;
+            nebula_log("[cook-material] selecting cooked shader %u\n", desc->shader);
+        }
+        return NEBULA_SHADER_J3D_FIRST + desc->shader - 1;
+    }
+
     void dumpTag(u32 shader) {
         ::dumpTag(shader);
     }
 
     void build(J3DMaterial* pMaterial, J3DTexture* pTexture, NebulaMaterialParts* pParts) {
         memset(pParts, 0, sizeof(*pParts));
-        NebulaMaterialProgram* pOut = &pParts->program;
-        NebulaMaterialValues* pVal = &pParts->values;
+        pParts->cooked = pMaterial->mNativeMaterial;
+        J3DMaterialSetup* pOut = &pParts->setup;
+        J3DMaterialValues* pVal = &pParts->values;
         J3DTevBlock* pTev = pMaterial->mTevBlock;
         J3DIndBlock* pInd = pMaterial->mIndBlock;
         J3DTexGenBlock* pTexGen = pMaterial->mTexGenBlock;
         J3DColorBlock* pColor = pMaterial->mColorBlock;
         J3DPEBlock* pPE = pMaterial->mPEBlock;
 
-        pOut->tev_stages = pTev->getTevStageNum();
+        const u32 tevStages = pTev->getTevStageNum();
+        const u32 indStages = pInd->getIndTexStageNum();
         pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
-        pOut->channels = pColor->getColorChanNum();
-        pOut->ind_stages = pInd->getIndTexStageNum();
         {
             const GpuCullMode mode = static_cast< GpuCullMode >(pColor->getCullMode());
             pOut->cull = mode == GPU_CULL_BACK ? NEBULA_CULL_BACK : mode == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
                          : mode == GPU_CULL_ALL ? NEBULA_CULL_ALL : NEBULA_CULL_NONE;
         }
 
-        // The null TEV block writes no textures, orders or stages (its stage count still sets the mode).
+        // The null TEV block has no textures or orders.
         const bool tev = pTev->getTevOrder(0) != NULL;
-        if (tev) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_TEV;
-        }
-        // Textures first: their sizes fill the coordinate scale table the stages then read.
+        // Textures first: their sizes fill the coordinate scale table the orders then read.
         u16 sizes[16];
         memset(sizes, 0, sizeof(sizes));
         for (u32 map = 0; tev && map < 8; map++) {
@@ -760,67 +511,18 @@ namespace J3DNativeMaterial {
                 J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
             }
         }
-        for (u32 i = 0; tev && i < pOut->tev_stages; i++) {
-            NebulaMaterialTevStage& rOut = pOut->tev[i];
+        for (u32 i = 0; tev && i < tevStages; i++) {
             const J3DTevOrderInfo& rOrder = pTev->getTevOrder(i)->getTevOrderInfo();
-            rOut.tex_coord = rOrder.mTexCoord;
-            rOut.tex_map = rOrder.mTexMap;
-            rOut.channel = rOrder.mColorChan;
-            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
-            const J3DTevStage& rStage = *pTev->getTevStage(i);
-            for (u32 k = 0; k < 4; k++) {
-                rOut.color_in[k] = rStage.mColorIn[k];
-                rOut.alpha_in[k] = rStage.mAlphaIn[k];
-            }
-            rOut.color_op = rStage.mColorOp;
-            rOut.color_bias = rStage.mColorBias;
-            rOut.color_scale = rStage.mColorScale;
-            rOut.color_clamp = rStage.mColorClamp;
-            rOut.color_reg = rStage.mColorReg;
-            rOut.alpha_op = rStage.mAlphaOp;
-            rOut.alpha_bias = rStage.mAlphaBias;
-            rOut.alpha_scale = rStage.mAlphaScale;
-            rOut.alpha_clamp = rStage.mAlphaClamp;
-            rOut.alpha_reg = rStage.mAlphaReg;
-            rOut.ras_swap = rStage.mRasSel;
-            rOut.tex_swap = rStage.mTexSel;
-            const J3DIndTevStage& rInd = *pTev->getIndTevStage(i);
-            rOut.ind_stage = rInd.mIndStage;
-            rOut.ind_format = rInd.mIndFormat;
-            rOut.ind_bias = rInd.mBiasSel;
-            rOut.ind_matrix = rInd.mMtxSel;
-            rOut.ind_wrap_s = rInd.mWrapS;
-            rOut.ind_wrap_t = rInd.mWrapT;
-            rOut.ind_prev = rInd.mPrev;
-            rOut.ind_lod = rInd.mLod;
-            rOut.ind_alpha = rInd.mAlphaSel;
-        }
-        // Orders are written in pairs: an odd count's last stage pairs with the next entry the block holds.
-        if (tev && (pOut->tev_stages & 1) != 0 && pOut->tev_stages < 16 && pTev->getType() != 'TVB1') {
-            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(pOut->tev_stages)->getTevOrderInfo();
-            pOut->tev[pOut->tev_stages].tex_coord = rOrder.mTexCoord;
-            pOut->tev[pOut->tev_stages].tex_map = rOrder.mTexMap;
-            pOut->tev[pOut->tev_stages].channel = rOrder.mColorChan;
             coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
         }
-        // Konst selectors for all 16 stages, as the blocks write them: their own entries repeated (two in J3DTevBlock2,
-        // four in J3DTevBlock4, sixteen in J3DTevBlock16).
-        const u32 tevType = pTev->getType();
-        const u32 konst = tevType == 'TV16' ? 16 : tevType == 'TVB4' ? 4 : tevType == 'TVB2' ? 2 : 0;
-        for (u32 i = 0; konst != 0 && i < 16; i++) {
-            pOut->tev[i].konst_color = pTev->getTevKColorSel(i % konst);
-            pOut->tev[i].konst_alpha = pTev->getTevKAlphaSel(i % konst);
+        // Orders come in pairs: an odd count's last stage pairs with the next entry the block holds.
+        if (tev && (tevStages & 1) != 0 && tevStages < 16 && pTev->getType() != 'TVB1') {
+            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(tevStages)->getTevOrderInfo();
+            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
         }
-        // J3DTevBlock1 writes its one stage's order paired with a null second stage.
-        if (tevType == 'TVB1') {
-            pOut->tev[1].tex_coord = GPU_TEXCOORD_NULL;
-            pOut->tev[1].tex_map = GPU_TEXMAP_NULL;
-            pOut->tev[1].channel = GPU_COLOR_NULL;
-        }
-        // The parts a TEV block variant keeps (J3DTevBlock1 has no colours, selectors or swap tables; the patched
-        // block no swap tables): left as set before.
+        // The parts a TEV block variant keeps (J3DTevBlock1 has no colours): left as set before.
         if (pTev->getTevColor(0) != NULL) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_TEV_COLOR;
+            pOut->loads |= J3D_LOADS_TEV_COLOR;
             for (u32 i = 0; i < 3; i++) {
                 const J3DGXColorS10& rColor = *pTev->getTevColor(i);
                 pVal->tev_color[i][0] = rColor.r;
@@ -830,55 +532,36 @@ namespace J3DNativeMaterial {
             }
         }
         if (pTev->getTevKColor(0) != NULL) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_COLOR;
+            pOut->loads |= J3D_LOADS_KONST_COLOR;
             for (u32 i = 0; i < 4; i++) {
                 copyColor(pVal->konst_color[i], *pTev->getTevKColor(i));
             }
         }
-        if (konst != 0) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_KONST_SELECT | NEBULA_MATERIAL_LOADS_SWAP_TABLE;
-            for (u32 i = 0; i < 4; i++) {
-                const J3DTevSwapModeTable& rSwap = *pTev->getTevSwapModeTable(i);
-                pOut->swap_table[i][0] = rSwap.getR();
-                pOut->swap_table[i][1] = rSwap.getG();
-                pOut->swap_table[i][2] = rSwap.getB();
-                pOut->swap_table[i][3] = rSwap.getA();
-            }
-        }
 
-        // J3DIndBlockFull writes all four orders and coordinate scales whatever its stage count (the null block nothing).
+        // J3DIndBlockFull has all four orders whatever its stage count (the null block has none).
         if (pInd->getIndTexOrder(0) != NULL) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_INDIRECT;
+            pOut->loads |= J3D_LOADS_INDIRECT;
         }
         for (u32 i = 0; i < 4 && pInd->getIndTexOrder(0) != NULL; i++) {
             J3DIndTexOrder* pOrder = pInd->getIndTexOrder(i);
-            J3DIndTexCoordScale* pScale = pInd->getIndTexCoordScale(i);
-            pOut->ind_order[i].coord = pOrder->getCoord();
-            pOut->ind_order[i].map = pOrder->getMap();
-            pOut->ind_order[i].scale_s = pScale->getScaleS();
-            pOut->ind_order[i].scale_t = pScale->getScaleT();
             coordScale(pVal, pOrder->getCoord(), pOrder->getMap());
         }
-        for (u32 i = 0; i < pOut->ind_stages && i < 3; i++) {
+        for (u32 i = 0; i < indStages && i < 3; i++) {
             const J3DIndTexMtx& rMtx = *pInd->getIndTexMtx(i);
             memcpy(pVal->ind_matrix[i].m, rMtx.field_0x0, sizeof(pVal->ind_matrix[i].m));
             pVal->ind_matrix[i].scale = static_cast< s8 >(rMtx.field_0x18);
         }
 
+        // The post-transform row each coordinate uses (identity unless j3dSys asks for post matrices).
         for (u32 i = 0; i < pOut->tex_gens && i < 8; i++) {
             const J3DTexCoord& rCoord = *pTexGen->getTexCoord(i);
-            pOut->tex_gen[i].type = J3DNativeTexGen::kind(rCoord.getTexGenType(), rCoord.getTexGenSrc());
-            pOut->tex_gen[i].source = J3DNativeTexGen::source(rCoord.getTexGenSrc());
-            pOut->tex_gen[i].reserved[0] = 1;  // the renderer's encoding (gen_j3d_materials.py converts unmarked ones)
-            pOut->tex_gen[i].matrix = static_cast< u8 >(rCoord.getTexMtxReg());
-            // The post-transform matrix loadTexCoordGens names (identity unless j3dSys asks for post matrices).
-            pOut->tex_gen[i].post_matrix =
+            pOut->tex_gen_post[i] =
                 j3dSys.checkFlag(0x40000000) && rCoord.getTexGenMtx() != 60 ? static_cast< u8 >(i * 3) : 61;
         }
 
-        // The null colour block writes no channels or colours.
+        // The null colour block has no channels or colours.
         if (pColor->getColorChan(0) != NULL) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_CHANNELS;
+            pOut->loads |= J3D_LOADS_CHANNELS;
         }
         // Texture matrices as the texgen block's list loads them (J3DTexMtx::load, with this moment's j3dSys flags).
         for (u32 i = 0; i < 8; i++) {
@@ -893,29 +576,18 @@ namespace J3DNativeMaterial {
             pOut->texture_matrix[i].rows = post || pMtx->getTexMtxInfo().mProjection != GX_MTX2x4 ? 3 : 2;
             memcpy(pVal->texture_matrix[i], pMtx->getMtx(), sizeof(pVal->texture_matrix[i]));
         }
-        for (u32 i = 0; i < 4 && pColor->getColorChan(0) != NULL; i++) {
-            const J3DColorChan& rChan = *pColor->getColorChan(i);
-            pOut->channel[i].enable = rChan.getEnable();
-            pOut->channel[i].material_source = rChan.getMatSrc();
-            pOut->channel[i].ambient_source = rChan.getAmbSrc();
-            pOut->channel[i].light_mask = rChan.getLightMask();
-            pOut->channel[i].diffuse = rChan.getDiffuseFn();
-            pOut->channel[i].attenuation = rChan.getAttnFn();
-        }
-        // The renderer's lighting encoding for all four (an absent block's zeros too: gen_j3d_materials.py does the same).
-        J3DNativeChannel::toNative(*pOut);
         for (u32 i = 0; i < 2; i++) {
             if (pColor->getMatColor(i) != NULL) {
                 copyColor(pVal->material_color[i], *pColor->getMatColor(i));
             }
             if (pColor->getAmbColor(i) != NULL) {
-                pOut->loads |= NEBULA_MATERIAL_LOADS_AMBIENT;
+                pOut->loads |= J3D_LOADS_AMBIENT;
                 copyColor(pVal->ambient_color[i], *pColor->getAmbColor(i));
             }
         }
         // Lights only from the blocks that load them (J3DColorBlockLightOn).
         for (u32 i = 0; i < 8 && pColor->getType() == 'CLON'; i++) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_LIGHTS;
+            pOut->loads |= J3D_LOADS_LIGHTS;
             const J3DLightObj* pLight = pColor->getLight(i);
             if (pLight == NULL) {
                 continue;
@@ -958,21 +630,15 @@ namespace J3DNativeMaterial {
             pOut->z_compare_location = edge ? 0 : 1;
             return;
         }
-        pOut->loads |= NEBULA_MATERIAL_LOADS_DITHER;
         if (J3DFog* pFog = pPE->getFog()) {
-            pOut->loads |= NEBULA_MATERIAL_LOADS_FOG;
+            pOut->loads |= J3D_LOADS_FOG;
             const J3DFogInfo& rFog = *pFog->getFogInfo();
-            pOut->fog.type = rFog.mType;
-            pOut->fog.adjust_enable = rFog.mAdjEnable;
-            pOut->fog.adjust_center = rFog.mCenter;
+            pOut->fog_type = rFog.mType;
             pVal->fog.start = rFog.mStartZ;
             pVal->fog.end = rFog.mEndZ;
             pVal->fog.near_z = rFog.mNearZ;
             pVal->fog.far_z = rFog.mFarZ;
             copyColor(pVal->fog.color, rFog.mColor);
-            for (u32 i = 0; i < 10; i++) {
-                pOut->fog.adjust[i] = rFog.mFogAdjTable.r[i];
-            }
         }
         const J3DAlphaComp& rAlpha = *pPE->getAlphaComp();
         pOut->alpha_compare.comp0 = rAlpha.getComp0();
@@ -994,7 +660,6 @@ namespace J3DNativeMaterial {
         pOut->z_mode.func = rZ.getFunc();
         pOut->z_mode.update = rZ.getUpdateEnable();
         pOut->z_compare_location = pPE->getZCompLoc();
-        pOut->dither = pPE->getDither();
     }
 
     NebulaMaterialParts* create() {
@@ -1004,19 +669,9 @@ namespace J3DNativeMaterial {
     void capture(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList, u32 diffFlags) {
         if (pList != NULL && pList->mpNebulaMaterial != NULL) {
             NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
-            static NebulaMaterialProgram sRegistered;
-            sRegistered = rParts.program;
             build(pMaterial, pTexture, &rParts);
-            rParts.program.diff_flags = diffFlags;
-            rParts.program.origin = diffFlags != 0 ? 2 : pTexture == j3dSys.getTexture() ? 3 : 1;
-            rParts.nativeShader = nativeShaderOf(rParts.program);
-            // The list's program for the host's material dump (GALAXY_DUMP_MATERIAL_PROGRAMS, the generator's input):
-            // sent when the list's first capture makes it, or when a patch changes it (an animated material's captures
-            // change only its values).
-            if (!pList->mNebulaCaptured || memcmp(&sRegistered, &rParts.program, sizeof(sRegistered)) != 0) {
-                const NebulaHostServices* pHost = nebula_host();
-                pHost->material_program(pHost->user, keyOf(pList), &rParts.program);
-            }
+            rParts.setup.diff_flags = diffFlags;
+            rParts.nativeShader = cookedShaderOf(pMaterial);
             pList->mNebulaCaptured = true;
         }
     }
@@ -1024,11 +679,10 @@ namespace J3DNativeMaterial {
     void send(J3DMaterial* pMaterial, J3DTexture* pTexture, J3DDisplayListObj* pList) {
         static NebulaMaterialParts sParts;
         J3DNativeShape::flushState();
-        const NebulaHostServices* pHost = nebula_host();
         if (pList != NULL && pList->mNebulaCaptured) {
             const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
             if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
-                sendNative(rParts.program, rParts.values, rParts.nativeShader);
+                sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
                 return;
             }
             notDrawn(rParts.nativeShader, keyOf(pList));
@@ -1036,12 +690,11 @@ namespace J3DNativeMaterial {
         }
         // A list from the model file, which has no snapshot: its material built now, its program with it.
         build(pMaterial, pTexture, &sParts);
-        const u32 shader = nativeShaderOf(sParts.program);
+        const u32 shader = cookedShaderOf(pMaterial);
         if (shader != 0 && nativeDrawn(shader)) {
-            sendNative(sParts.program, sParts.values, shader);
+            sendNative(sParts.setup, sParts.values, shader, false, sParts.cooked);
             return;
         }
-        pHost->material_program(pHost->user, keyOf(&sParts), &sParts.program);
         notDrawn(shader, keyOf(pMaterial));
     }
 
@@ -1051,7 +704,7 @@ namespace J3DNativeMaterial {
         }
         const NebulaMaterialParts& rParts = *pList->mpNebulaMaterial;
         if (rParts.nativeShader != 0 && nativeDrawn(rParts.nativeShader)) {
-            sendNative(rParts.program, rParts.values, rParts.nativeShader);
+            sendNative(rParts.setup, rParts.values, rParts.nativeShader, false, rParts.cooked);
             return;
         }
         J3DNativeShape::flushState();
@@ -1107,154 +760,49 @@ namespace J3DNativeMaterial {
         return true;
     }
 
-    void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues) {
-        const u32 shader = nativeShaderOf(rProgram);
+    void sendWhole(u32 shader, const J3DMaterialSetup& rSetup, const J3DMaterialValues& rValues) {
         if (shader != 0 && nativeDrawn(shader)) {
-            sendNative(rProgram, rValues, shader, true);
+            sendNative(rSetup, rValues, shader, true);
             return;
         }
-        // The program's identity: its bytes' FNV-1a hash (the host keeps one registration per key).
-        const u8* pBytes = reinterpret_cast< const u8* >(&rProgram);
-        u64 key = 0xCBF29CE484222325ull;
-        for (u32 i = 0; i < sizeof(rProgram); i++) {
-            key = (key ^ pBytes[i]) * 0x100000001B3ull;
-        }
-        key |= 1ull << 63;  // apart from the game's addresses, the other materials' keys
-        static u64 sRegistered[2048];
-        u32 slot = static_cast< u32 >(key) & 2047;
-        while (sRegistered[slot] != 0 && sRegistered[slot] != key) {
-            slot = (slot + 1) & 2047;
-        }
-        const NebulaHostServices* pHost = nebula_host();
         J3DNativeShape::flushState();
-        if (sRegistered[slot] != key) {
-            sRegistered[slot] = key;
-            pHost->material_program(pHost->user, key, &rProgram);
-        }
-        notDrawn(shader, key);
+        notDrawn(shader, keyOf(&rSetup));
     }
 
-    // A folded program for a material dump to collect, keyed by its bytes (the host keeps one record per key).
-    static void registerFold(const NebulaMaterialProgram& rProgram) {
-        static NebulaMaterialProgram sFoldRegistered;
-        sFoldRegistered = rProgram;
-        sFoldRegistered.diff_flags = 0;
-        sFoldRegistered.origin = 0;
-        const u8* pBytes = reinterpret_cast< const u8* >(&sFoldRegistered);
-        u64 key = 0xCBF29CE484222325ull;
-        for (u32 i = 0; i < sizeof(sFoldRegistered); i++) {
-            key = (key ^ pBytes[i]) * 0x100000001B3ull;
-        }
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->material_program(pHost->user, key | (1ull << 62), &sFoldRegistered);
-    }
-
-    // Tests: the sweep's option.
-    static bool sweepWanted() {
-        static s32 sWanted = -1;
-        if (sWanted < 0) {
-            const NebulaHostServices* pHost = nebula_host();
-            sWanted = pHost->option(pHost->user, NEBULA_OPTION_TEST_MATERIAL_SWEEP) != 0 ? 1 : 0;
-        }
-        return sWanted != 0;
-    }
-
-    // A draw under a folded program no shader holds: registered and named. In a dump run, one in the set is registered
-    // too: what a draw used stays in the next set.
-    void noteDraw() {
-        if (sFoldDrawnPending) {
-            sFoldDrawnPending = false;
-            registerFold(sFoldLostProgram);
-        }
-        if (!sFoldLost) {
+    void applyPass(u8 pass) {
+        if (sCurrentKind != CURRENT_J3D || sCurrentCooked == NULL) {
+            notDrawn(0, pass);
             return;
         }
-        sFoldLost = false;
-        if (!sFoldLostFailed) {
-            registerFold(sFoldLostProgram);
+        sCurrentPass |= pass;
+        const u32 id = sCurrentCooked->passes[sCurrentPass];
+        if (id == 0) {
+            nebula_log("cooked material %u has no pass %u\n", sCurrentCooked->material_index, sCurrentPass);
+            notDrawn(0, keyOf(sCurrentCooked));
+            return;
         }
-        static u32 sFoldLogged[256];
-        static u32 sFoldLoggedCount = 0;
-        const u32 pair = sFoldLostShader << 1 | (sFoldLostFailed ? 1u : 0u);
-        bool seen = false;
-        for (u32 k = 0; k < sFoldLoggedCount; k++) {
-            seen = seen || sFoldLogged[k] == pair;
+        sCurrent.shader = NEBULA_SHADER_J3D_FIRST + id - 1;
+        memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
+        if ((pass & (NEBULA_PASS_PLAYER_OPACITY | NEBULA_PASS_LIGHT_MASK | NEBULA_PASS_SHADOW_VOLUME)) != 0) {
+            sRegisters[80] = sRegisters[81] = 0;
+            sCurrent.constants[80] = sCurrent.constants[81] = 0;
         }
-        if (!seen && sFoldLoggedCount < 256) {
-            sFoldLogged[sFoldLoggedCount++] = pair;
-            nebula_log("J3DNativeMaterial: J3D shader %u's list (state op %u) %s; not drawn\n", sFoldLostShader, sFoldLostOp,
-                       sFoldLostFailed ? "changes what a program record cannot hold" : "folds to a program not in the set");
-        }
+        sCurrent.constants_only = 0;
+        const NebulaHostServices* host = nebula_host();
+        host->native_material(host->user, &sCurrent);
+        watchMaterial(&sCurrent);
+        dumpTag(sCurrent.shader);
     }
 
     void state(const NebulaStateOp* pOps, u32 count) {
         bool changed = false;
         for (u32 i = 0; i < count; i++) {
             const NebulaStateOp& rOp = pOps[i];
-            if (sCurrentKind == CURRENT_J3D && changesProgram(rOp)) {
-                if (!sFolding) {
-                    sFold = *sCurrentProgram;
-                    sFolding = true;
-                    sFoldFailed = false;
-                    sFoldCull = false;
-                }
-                sFoldOp = rOp.kind;
-                sFoldFailed = !foldOp(sFold, rOp) || sFoldFailed;
-                sFoldCull = sFoldCull || rOp.kind == NEBULA_STATE_GEN_MODE2;
-            } else if (sCurrentKind != CURRENT_NONE && changesProgram(rOp)) {
-                if (sCurrentKind == CURRENT_SITE) {
-                    // A site's native material ended by a GX program change: its next draws fall back to the drawing
-                    // state's program. Each pair once in the log (every one is a conversion left to finish).
-                    static u32 sLogged[64];
-                    static u32 sLoggedCount = 0;
-                    const u32 pair = sCurrent.shader << 8 | rOp.kind;
-                    bool seen = false;
-                    for (u32 k = 0; k < sLoggedCount; k++) {
-                        seen = seen || sLogged[k] == pair;
-                    }
-                    if (!seen && sLoggedCount < 64) {
-                        sLogged[sLoggedCount++] = pair;
-                        nebula_log("J3DNativeMaterial: native shader %u ended by GX state op %u\n",
-                                   static_cast< u32 >(sCurrent.shader), static_cast< u32 >(rOp.kind));
-                    }
-                }
+            if (sCurrentKind != CURRENT_NONE && changesProgram(rOp)) {
+                // Legacy setup ends the previous draw. Actor passes use cooked IDs through applyPass.
                 endCurrent();
             }
             changed = setRegister(rOp) || changed;
-        }
-        // The folded program: its generated shader with the register file as the list left it; else not drawn (noteDraw
-        // reports it if a draw comes).
-        if (sFolding) {
-            sFolding = false;
-            const u32 shader = sFoldFailed ? 0 : nativeShaderOf(sFold);
-            if (shader != 0 && nativeDrawn(shader)) {
-                sCurrent.shader = shader;
-                if (sFoldCull) {
-                    sCurrent.cull = sFold.cull == GPU_CULL_BACK    ? NEBULA_CULL_BACK
-                                    : sFold.cull == GPU_CULL_FRONT ? NEBULA_CULL_FRONT
-                                                                  : NEBULA_CULL_NONE;
-                }
-                memcpy(sCurrent.constants, sRegisters, sizeof(sRegisters));
-                sCurrent.constants_only = 0;
-                const NebulaHostServices* pHost = nebula_host();
-                pHost->native_material(pHost->user, &sCurrent);
-                watchMaterial(&sCurrent);
-                dumpTag(shader);
-                sCurrentProgram = &sFold;
-                changed = false;
-                if (sweepWanted()) {
-                    sFoldDrawnPending = true;
-                    sFoldLostProgram = sFold;
-                }
-            } else {
-                // Only a draw under it loses anything: a site's own setup ends a material the same way.
-                sFoldLost = true;
-                sFoldLostFailed = sFoldFailed;
-                sFoldLostShader = sCurrent.shader;
-                sFoldLostProgram = sFold;
-                sFoldLostOp = sFoldOp;
-                endCurrent();
-            }
         }
         // A value the current J3D material takes: the material again with its constants (its state, textures and
         // lights as set since).
@@ -1269,48 +817,6 @@ namespace J3DNativeMaterial {
             sCurrent.constants_only = 1;
             const NebulaHostServices* pHost = nebula_host();
             pHost->native_material(pHost->user, &sCurrent);
-        }
-    }
-
-    static const J3DStateList* const (*sSweepChains)[2];
-    static u32 sSweepChainCount;
-
-    void setSweepChains(const J3DStateList* const (*pChains)[2], u32 count) {
-        sSweepChains = pChains;
-        sSweepChainCount = count;
-    }
-
-    void sweep(J3DModelData* pModelData) {
-        if (!sweepWanted()) {
-            return;
-        }
-        const NebulaHostServices* pHost = nebula_host();
-        static NebulaMaterialParts sParts;
-        for (u16 i = 0; i < pModelData->getMaterialNum(); i++) {
-            J3DMaterial* pMaterial = pModelData->getMaterialNodePointer(i);
-            build(pMaterial, pModelData->getTexture(), &sParts);
-            pHost->material_program(pHost->user, keyOf(pMaterial), &sParts.program);
-            // As state() folds them.
-            sCurrentKind = CURRENT_J3D;
-            sCurrentProgram = &sParts.program;
-            for (u32 chain = 0; chain < sSweepChainCount; chain++) {
-                NebulaMaterialProgram folded = sParts.program;
-                bool changes = false;
-                bool holds = true;
-                for (u32 link = 0; link < 2; link++) {
-                    const J3DStateList* pList = sSweepChains[chain][link];
-                    for (u32 op = 0; pList != nullptr && op < pList->count(); op++) {
-                        if (changesProgram(pList->ops()[op])) {
-                            changes = true;
-                            holds = foldOp(folded, pList->ops()[op]) && holds;
-                        }
-                    }
-                }
-                if (changes && holds) {
-                    registerFold(folded);
-                }
-            }
-            sCurrentKind = CURRENT_NONE;
         }
     }
 };  // namespace J3DNativeMaterial

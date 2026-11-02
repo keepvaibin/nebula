@@ -125,8 +125,6 @@ struct NativeMousePointerSample {
     int client_width = 0;
     int client_height = 0;
     NativePointerViewport viewport{};
-    float x_scale = 1.0f;
-    float y_scale = 1.0f;
 };
 
 struct NativeMousePointerProjection {
@@ -138,7 +136,6 @@ struct NativeMousePointerProjection {
 // One client-area cursor sample as pointer coordinates, -1..1 across the
 // content viewport. A sample outside the client or the viewport is not
 // visible; holding the pointer through a lost sample is the caller's choice.
-// Scales below 1 lower the gain in the centre band (native_input.cpp).
 // Follows Dusklight's menu pointer (CC0, src/dusk/menu_pointer.cpp).
 [[nodiscard]] NativeMousePointerProjection project_native_mouse_pointer(
     const NativeMousePointerSample& sample) noexcept;

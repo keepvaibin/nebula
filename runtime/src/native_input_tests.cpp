@@ -476,9 +476,10 @@ bool real_wiimote_handoff() {
 
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     bool ok = true;
-    ok &= settings_pad_toggles_navigates_and_hides_buttons();
+    const bool base_only = argc > 1 && std::string_view(argv[1]) == "--base";
+    if (!base_only) ok &= settings_pad_toggles_navigates_and_hides_buttons();
     ok &= native_input_script_unsigned_fields_fail_closed();
     ok &= normalizes_xinput_axes();
     ok &= player_buttons_are_bits();

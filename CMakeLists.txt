@@ -136,6 +136,11 @@ add_library(galaxy_native_host STATIC
     runtime/src/native_host.cpp
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
+    runtime/src/input/controls_engine.cpp
+    runtime/src/input/live_controls_engine.cpp
+    runtime/src/input/key_positions_win32.cpp
+    runtime/src/input/raw_mouse_win32.cpp
+    runtime/src/input/rumble_route.cpp
     runtime/src/native_audio.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
@@ -321,6 +326,13 @@ add_library(galaxy_gx STATIC
     runtime/src/render/render_api.cpp
     runtime/src/render/render_config.cpp
     runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/settings_model.cpp
+    runtime/src/ui/settings_system_page.cpp
+    runtime/src/ui/settings_advanced_page.cpp
+    runtime/src/ui/settings_display_page.cpp
+    runtime/src/ui/settings_general_page.cpp
+    runtime/src/ui/settings_graphics_page.cpp
+    runtime/src/ui/settings_save_model.cpp
     runtime/src/render/vblank_clock_win32.cpp
     runtime/src/render/renderer_d3d12.cpp
     runtime/src/render/renderer_common.cpp
@@ -456,6 +468,8 @@ endfunction()
 set(rt runtime/src)
 galaxy_test(galaxy_atomic_file_tests SOURCES ${rt}/atomic_file_tests.cpp LIBS galaxy_atomic_file)
 galaxy_test(galaxy_save_files_tests SOURCES ${rt}/save_files_tests.cpp LIBS galaxy_save_files)
+galaxy_test(galaxy_cooked_material_tests SOURCES native/tests/cooked_material_tests.cpp)
+target_include_directories(galaxy_cooked_material_tests PRIVATE native/include)
 galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS galaxy_disc_files)
 # The game's calendar (native/petari), compiled against a host the test provides.
 galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
@@ -465,6 +479,17 @@ galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.c
 galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
+galaxy_test(galaxy_controls_engine_tests SOURCES ${rt}/input/controls_engine_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_input_hotplug_tests SOURCES ${rt}/input/input_hotplug_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_keyboard_layout_tests SOURCES ${rt}/input/keyboard_layout_tests.cpp LIBS galaxy_runtime_settings)
+galaxy_test(galaxy_keyboard_state_tests SOURCES ${rt}/input/keyboard_state_tests.cpp)
+galaxy_test(galaxy_raw_mouse_tests SOURCES ${rt}/input/raw_mouse_tests.cpp)
+galaxy_test(galaxy_rumble_route_tests SOURCES ${rt}/input/rumble_route_tests.cpp ${rt}/input/rumble_route.cpp)
+galaxy_test(galaxy_mouse_projection_tests SOURCES ${rt}/input/mouse_projection_tests.cpp LIBS galaxy_native_input)
+galaxy_test(galaxy_raw_mouse_win32_tests SOURCES ${rt}/input/raw_mouse_win32_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_key_positions_win32_tests SOURCES ${rt}/input/key_positions_win32_tests.cpp
+    ${rt}/input/key_positions_win32.cpp LIBS user32)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)
@@ -484,6 +509,28 @@ galaxy_test(galaxy_mods_tests SOURCES ${rt}/mods_tests.cpp ${rt}/mod_xml.cpp ${r
     ${rt}/cooker_bridge.cpp
     ${rt}/mod_import.cpp LIBS galaxy_atomic_file nebula_archive)
 galaxy_test(galaxy_crash_report_tests SOURCES ${rt}/crash_report_tests.cpp ${rt}/crash_report.cpp)
+
+galaxy_test(galaxy_test_data_paths_tests SOURCES ${rt}/test_data_paths_tests.cpp ${rt}/host_env.cpp LIBS shell32)
+
+galaxy_test(galaxy_home_menu_model_tests SOURCES ${rt}/home_menu_model_tests.cpp)
+
+galaxy_test(galaxy_settings_model_tests SOURCES ${rt}/ui/settings_model_tests.cpp ${rt}/ui/settings_model.cpp)
+
+galaxy_test(galaxy_settings_save_model_tests SOURCES ${rt}/ui/settings_save_model_tests.cpp ${rt}/ui/settings_save_model.cpp)
+
+galaxy_test(galaxy_settings_graphics_page_tests SOURCES ${rt}/ui/settings_graphics_page_tests.cpp
+    ${rt}/ui/settings_graphics_page.cpp ${rt}/ui/settings_model.cpp)
+
+galaxy_test(galaxy_settings_general_page_tests SOURCES ${rt}/ui/settings_general_page_tests.cpp
+    ${rt}/ui/settings_general_page.cpp ${rt}/ui/settings_model.cpp)
+
+galaxy_test(galaxy_settings_display_page_tests SOURCES ${rt}/ui/settings_display_page_tests.cpp
+    ${rt}/ui/settings_display_page.cpp ${rt}/ui/settings_model.cpp)
+
+galaxy_test(galaxy_settings_advanced_page_tests SOURCES ${rt}/ui/settings_advanced_page_tests.cpp
+    ${rt}/ui/settings_advanced_page.cpp ${rt}/ui/settings_model.cpp runtime/src/render/galaxy_select.cpp)
+galaxy_test(galaxy_settings_system_page_tests SOURCES ${rt}/ui/settings_system_page_tests.cpp
+    ${rt}/ui/settings_system_page.cpp ${rt}/ui/settings_model.cpp)
 galaxy_test(galaxy_discord_presence_tests SOURCES ${rt}/discord_presence_tests.cpp ${rt}/discord_presence.cpp)
 
 set(gxs runtime/src/render)
@@ -573,6 +620,13 @@ if(NEBULA_VULKAN)
         runtime/src/render/render_api.cpp
             runtime/src/render/render_config.cpp
         runtime/src/render/host_window_win32.cpp
+    runtime/src/ui/settings_model.cpp
+    runtime/src/ui/settings_system_page.cpp
+    runtime/src/ui/settings_advanced_page.cpp
+    runtime/src/ui/settings_display_page.cpp
+    runtime/src/ui/settings_general_page.cpp
+    runtime/src/ui/settings_graphics_page.cpp
+    runtime/src/ui/settings_save_model.cpp
         runtime/src/render/vblank_clock_win32.cpp
         runtime/src/render/renderer_common.cpp
         runtime/src/render/gpu_upload_ring.cpp

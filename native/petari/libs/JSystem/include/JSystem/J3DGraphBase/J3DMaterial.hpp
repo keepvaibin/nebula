@@ -16,6 +16,7 @@ class J3DTevBlockPatched;
 class J3DPEBlock;
 class J3DMaterialAnm;
 class J3DDisplayListObj;
+struct NebulaCookedMaterial;
 
 class J3DMaterial {
 public:
@@ -153,6 +154,7 @@ public:
     /* 0x3C */ J3DMaterialAnm* mMaterialAnm;
     /* 0x40 */ J3DCurrentMtx mCurrentMtx;
     /* 0x48 */ J3DDisplayListObj* mSharedDLObj;
+    const NebulaCookedMaterial* mNativeMaterial;
 };
 
 class J3DPatchedMaterial : public J3DMaterial {

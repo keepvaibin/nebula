@@ -177,6 +177,7 @@ void J3DMaterial::initialize() {
     mpOrigMaterial = NULL;
     mMaterialAnm = NULL;
     mSharedDLObj = NULL;
+    mNativeMaterial = NULL;
 }
 
 
@@ -255,6 +256,7 @@ void J3DMaterial::calcCurrentMtx() {
 }
 
 void J3DMaterial::copy(J3DMaterial* pOther) {
+    mNativeMaterial = pOther->mNativeMaterial;
     mColorBlock->reset(pOther->mColorBlock);
     mTexGenBlock->reset(pOther->mTexGenBlock);
     mTevBlock->reset(pOther->mTevBlock);

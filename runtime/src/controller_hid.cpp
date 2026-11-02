@@ -1,4 +1,5 @@
 #include "galaxy/controller_hid.h"
+#include "galaxy/input/rumble_route.h"
 #include "galaxy/content_viewport.h"
 #include "galaxy/generic_hid.h"
 #include "galaxy/playstation_controller.h"
@@ -1871,7 +1872,7 @@ private:
             const std::size_t slot = device->joycon == sw::JoyConSide::Left && device->partner != nullptr
                                          ? device->partner->slot
                                          : device->slot;
-            const bool target = request.target.kind == RumbleTarget::Kind::Hid && request.target.slot == slot;
+            const bool target = rumble_targets_hid_device(request.target,{device->scheme,static_cast<std::uint8_t>(slot)});
             if (service_hid_rumble(*device, target ? level : std::uint8_t{0}, request.strength, now)) {
                 const DWORD period = device->scheme == ControlScheme::SwitchPro2 ? 10u : 25u;
                 timer_ms = timer_ms == 0u ? period : std::min(timer_ms, period);

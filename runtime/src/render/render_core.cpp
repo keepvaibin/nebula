@@ -489,7 +489,6 @@ void RenderCore::reset_fifo_session_state() {
     // While no producer or render thread runs.
     matrices_ = DrawMatrices{};
     draw_state_ = NativeDrawState{};
-    applied_program_ = nullptr;
 
     // Runs before the renderer initializes, so nothing still reads the buffer.
     release_resident_vertex_buffer();
@@ -5619,14 +5618,6 @@ void RenderCore::end_cached_draw_run() {
 }
 
 void RenderCore::on_shape_record(const shapes::Record& record) {
-    // State set outside materials (state ops, immediates, a draw's own texgens, markers, readbacks) may change what a
-    // program set: the next material applies its program whole.
-    using Kind = shapes::Record::Kind;
-    if (!(record.kind == Kind::Material || record.kind == Kind::MaterialProgram || record.kind == Kind::Array ||
-          record.kind == Kind::Geometry || record.kind == Kind::TextureImage ||
-          (record.kind == Kind::Draw && record.texgens.empty()))) {
-        applied_program_ = nullptr;
-    }
     switch (record.kind) {
     case shapes::Record::Kind::Array:
         shape_arrays_[record.key] = ShapeArrayEntry{record.array, ++shape_array_versions_};
@@ -5641,69 +5632,9 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
     case shapes::Record::Kind::Draw:
         draw_record_shape(record);
         return;
-    case shapes::Record::Kind::MaterialProgram: {
-        // One object per distinct program (instances of a model register equal ones), so a draw after another of the
-        // same program finds the drawing state already holding it.
-        const auto& bytes = *record.program;
-        const std::uint64_t content = fnv1a64(&bytes, sizeof(material::Program));
-        std::shared_ptr<const material::Program>* shared = nullptr;
-        for (auto& candidate : material_program_contents_[content]) {
-            if (std::memcmp(candidate.get(), &bytes, sizeof(material::Program)) == 0) {
-                shared = &candidate;
-                break;
-            }
-        }
-        if (shared == nullptr) {
-            shared = &material_program_contents_[content].emplace_back(record.program);
-            ++material_census_.distinct;
-            // GALAXY_DUMP_MATERIAL_PROGRAMS=<file>: each distinct program appended as it arrives (the J3D material set's
-            // input for tools/dev/gen_j3d_materials.py; E-04 step 3).
-            static std::ofstream dump = [] {
-                const std::optional<std::string> path = host::read_env_string("GALAXY_DUMP_MATERIAL_PROGRAMS");
-                return path && !path->empty() ? std::ofstream(*path, std::ios::binary | std::ios::app) : std::ofstream();
-            }();
-            if (dump.is_open()) [[unlikely]] {
-                dump.write(reinterpret_cast<const char*>(&bytes), sizeof(material::Program));
-                dump.flush();
-            }
-        }
-        ++material_census_.registrations;
-        auto& registered = material_programs_[record.key];
-        material_census_.changed += registered != nullptr && registered != *shared ? 1u : 0u;
-        registered = *shared;
-        return;
-    }
     case shapes::Record::Kind::NativeMaterial:
         apply_native_material(record.native);
         return;
-    case shapes::Record::Kind::Material: {
-        dump_tag_ = 0u;
-        end_native_material();
-        const auto program = material_programs_.find(record.key);
-        if (program == material_programs_.end()) {
-            return;  // the game registers every program before its first use
-        }
-        apply_record_material(*program->second, *record.material);
-        const bool whole = applied_program_ != program->second.get();
-        draw_state_.apply(*program->second, *record.material, whole);
-        applied_program_ = program->second.get();
-        static const bool census = read_env_u64("GALAXY_TEST_MATERIAL_CENSUS", 0u) != 0u;
-        if (census) [[unlikely]] {
-            MaterialCensus& c = material_census_;
-            c.values_only += whole ? 0u : 1u;
-            if ((++c.applications & 0xFFFFu) == 0u) {
-                std::fprintf(stderr,
-                             "[material-census] applications=%llu values-only=%llu registrations=%llu "
-                             "distinct-programs=%llu keys-registered=%zu program-changes=%llu\n",
-                             static_cast<unsigned long long>(c.applications),
-                             static_cast<unsigned long long>(c.values_only),
-                             static_cast<unsigned long long>(c.registrations),
-                             static_cast<unsigned long long>(c.distinct), material_programs_.size(),
-                             static_cast<unsigned long long>(c.changed));
-            }
-        }
-        return;
-    }
     case shapes::Record::Kind::State: {
         // A native material stays through state changes (the game folds a change of its values into it and ends it
         // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
@@ -5922,16 +5853,10 @@ void RenderCore::end_native_material() {
     native_material_.reset();
     // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
-    applied_program_ = nullptr;
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
     current_pso_key_valid_ = false;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
-}
-
-void RenderCore::apply_record_material(const material::Program& program, const material::Values& values) {
-    material::load_matrices(program, values, matrices_);
-    // The material wrote its coordinate scales.
 }
 
 void RenderCore::release_record_shape(RecordShape& shape) noexcept {

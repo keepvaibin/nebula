@@ -23,6 +23,7 @@
 
 f32 scale = 1.0f;
 void FlexibleSphere::fillTexGens(J3DStateList& rList) {
+    rList.setMaterialPass(NEBULA_PASS_FLEXIBLE_COORDINATES);
     rList.setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
     rList.setTexCoordGen2(GPU_TEXCOORD1, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
     rList.setTexCoordGen2(GPU_TEXCOORD2, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);

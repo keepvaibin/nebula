@@ -7,6 +7,7 @@ pub mod archive;
 pub mod audio_data;
 pub mod dol;
 pub mod formats;
+pub mod material;
 pub mod native_data;
 pub mod texture;
 pub mod thp;
@@ -77,9 +78,9 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         Some(native_data::rarc_host(&rebuilt).with_context(|| format!("{name}: archive (host order)"))?)
     } else if bytes.starts_with(b"J3D2bmd3") || bytes.starts_with(b"J3D2bdl4") {
         let textured = formats::j3d_model(&bytes, stats).with_context(|| format!("{name}: model"))?;
-        Some(native_data::j3d_model(&textured).with_context(|| format!("{name}: model (host order)"))?)
+        Some(material::cook_model(&textured).with_context(|| format!("{name}: native model materials"))?)
     } else if native_data::is_j3d_model(&bytes) {
-        Some(native_data::j3d_model(&bytes).with_context(|| format!("{name}: material table (host order)"))?)
+        Some(material::cook_model(&bytes).with_context(|| format!("{name}: native material table"))?)
     } else if native_data::is_j3d_animation(&bytes) {
         Some(native_data::j3d_animation(&bytes).with_context(|| format!("{name}: animation"))?)
     } else if bytes.starts_with(b"JPAC2-10") {
@@ -89,7 +90,7 @@ pub fn cook_file(name: &str, bytes: Vec<u8>, stats: &mut Stats) -> Result<Option
         let textured = formats::tpl(&bytes, stats).with_context(|| format!("{name}: layout textures"))?;
         Some(native_data::tpl_host(&textured).with_context(|| format!("{name}: layout textures (host order)"))?)
     } else if bytes.starts_with(b"RLYT") || bytes.starts_with(b"RLAN") {
-        Some(native_data::layout(&bytes).with_context(|| format!("{name}: layout"))?)
+        Some(material::layout::cook(&bytes).with_context(|| format!("{name}: native layout materials"))?)
     } else if bytes.starts_with(b"STRM") && extension(name) == "ast" {
         Some(audio_data::ast(&bytes).with_context(|| format!("{name}: stream"))?)
     } else if bytes.starts_with(b"THP\0") {

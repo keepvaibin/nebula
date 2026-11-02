@@ -196,6 +196,7 @@ namespace nw4r {
             void* mpGXMem;
             char mName[21];
             u8 mbUserAllocated;
+            u32 mNativeShaders[4];
         };
     };  // namespace lyt
 };  // namespace nw4r
