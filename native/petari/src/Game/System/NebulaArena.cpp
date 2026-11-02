@@ -237,6 +237,14 @@ void* NebulaArena::alloc(u32 size, int alignment) {
     u8* const pBlock = static_cast< u8* >(takeBlock(bytes));
     unlock();
 
+#if !defined(NEBULA_RELEASE)
+    // Tests (GALAXY_TEST_ARENA_FILL=a5): every block starts as this byte, so what reads a field left unset shows in a picture.
+    static const char* const pFill = getenv("GALAXY_TEST_ARENA_FILL");
+    if (pFill != nullptr) {
+        memset(pBlock, static_cast< int >(strtol(pFill, nullptr, 16)), rounded);
+    }
+#endif
+
     const uintptr_t data = (reinterpret_cast< uintptr_t >(pBlock) + sizeof(Header) + align - 1) & ~static_cast< uintptr_t >(align - 1);
     Header* const pHeader = reinterpret_cast< Header* >(data) - 1;
     pHeader->mClass = index;

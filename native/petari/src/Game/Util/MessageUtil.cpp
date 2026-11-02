@@ -159,11 +159,6 @@ namespace MR {
                 } else if (tag.getGroup() == 5) {
                     count += 3;
                 }
-#if (VERSION == RMGK01)
-                else if (tag.getGroup() == 11) {
-                    count += 2;
-                }
-#endif
                 else if (tag.getGroup() == 7) {
                     count += countMessageChar(tag.getParamString());
                 } else if (tag.isGroupTagId(1, 1)) {

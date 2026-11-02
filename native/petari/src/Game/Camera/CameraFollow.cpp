@@ -138,22 +138,6 @@ void CameraFollow::calcRotPos() {
     TVec3f newPos;
     MR::polarToCross(watchPos, &newPos, length, angleX, angleY);
 
-    #if (VERSION == RMGK01)
-    Triangle tri;
-    TriangleFilterFunc filterFunc(&MR::isCameraCodeThrough);
-
-    TVec3f mapPos;
-    TVec3f front = newPos - mPos;
-    if (!MR::isNearZero(front)) {
-        MR::normalize(&front);
-
-        if (MR::getFirstPolyOnLineToMap(&mapPos, &tri, mPos - front * ::sCollisionCheckOffset, newPos - mPos + front * ::sCollisionCheckDist, nullptr,
-                                        &filterFunc)) {
-            newPos = mPos;
-            mIsRounding = true;
-        }
-    }
-    #endif
     
     mPos.set(newPos);
     mWatchPos.set(watchPos);

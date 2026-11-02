@@ -26,11 +26,6 @@ namespace {
                             {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 190, 190, 255}, {110, 243, 70, 255},
                             {120, 255, 255, 255}, {255, 255, 80, 255},  {251, 188, 250, 255}, {190, 190, 200, 255}};
 
-#if (VERSION == RMGK01)
-    NebulaColor8 sTextColorKorean[] = {{255, 255, 255, 255}, {230, 160, 0, 255},   {80, 170, 80, 255},   {80, 140, 210, 255},
-                                  {235, 200, 0, 255},   {180, 110, 200, 255}, {255, 210, 80, 255},  {110, 243, 70, 255},
-                                  {120, 255, 255, 255}, {255, 255, 80, 255},  {251, 188, 250, 255}, {190, 190, 200, 255}};
-#endif
 
     u8 clampU8(s32 value);
 
@@ -47,15 +42,9 @@ namespace {
         return value < 0 ? 0 : value > 255 ? 255 : value;
     }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     const NebulaColor8& getTextColor(s32 index) {
         return ::sTextColor[index];
     }
-#else
-    const NebulaColor8& getTextColor(s32 index) {
-        return MR::getLanguage() == LANGUAGE_KRKOREAN ? ::sTextColorKorean[index] : ::sTextColor[index];
-    }
-#endif
 
     void setTextColor(nw4r::ut::TextWriterBase< char16_t >* writer, s32 index) {
         NebulaColor8 color = getTextColor(index);
@@ -125,9 +114,6 @@ CustomTagProcessor::Impl::GroupFunctionInfo CustomTagProcessor::Impl::sGroupFunc
     {255, &CustomTagProcessor::exeSystemGroup},
     {10, &CustomTagProcessor::exeFontGroup},
 
-#if (VERSION == RMGK01)
-    {11, &CustomTagProcessor::exePatchimuGroup},
-#endif
 
     {0, nullptr},
 };
@@ -149,17 +135,6 @@ namespace nw4r {
     namespace ut {
         template <>
         f32 TextWriterBase< char16_t >::PrintImpl(StreamType str, int length) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-            NW4R_POINTER_ASSERT_AT(271, this);
-            NW4R_POINTER_ASSERT_AT(272, str);
-            NW4R_POINTER_ASSERT_AT(273, GetFont());
-            NW4R_MIN_ASSERT_AT(274, length, 0);
-#else
-            NW4R_POINTER_ASSERT_AT(308, this);
-            NW4R_POINTER_ASSERT_AT(309, str);
-            NW4R_POINTER_ASSERT_AT(310, GetFont());
-            NW4R_MIN_ASSERT_AT(311, length, 0);
-#endif
 
             f32 xOrigin = GetCursorX();
             f32 yOrigin = GetCursorY();
@@ -217,11 +192,6 @@ namespace nw4r {
                     operation = mTagProcessor->Process(code, &context);
 
                     if (operation == TagProcessor::OPERATION_NEXT_LINE) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-                        NW4R_POINTER_ASSERT_AT(341, context.str);
-#else
-                        NW4R_POINTER_ASSERT_AT(378, context.str);
-#endif
 
                         if (IsDrawFlagSet(HORIZONTAL_ALIGN_MASK, HORIZONTAL_ALIGN_CENTER)) {
                             const int remain = length - (context.str - str);
@@ -252,11 +222,6 @@ namespace nw4r {
                         break;
                     }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
-                    NW4R_POINTER_ASSERT_AT(386, context.str);
-#else
-                    NW4R_POINTER_ASSERT_AT(423, context.str);
-#endif
                     reader.Set(context.str);
                 } else
 
@@ -293,11 +258,6 @@ namespace nw4r {
 
                     CharWriter::Print(code);
 
-#if (VERSION == RMGK01)
-                    if (processor) {
-                        processor->mPreviousChar = code;
-                    }
-#endif
 
                     SetCursorY(baseY);
                 }
@@ -337,19 +297,12 @@ CustomTagProcessor::CustomTagProcessor(nw4r::lyt::TextBox* textBox)
     mFontWidth = textBox->mFontSize.width;
     mFontHeight = textBox->mFontSize.height;
 
-#if (VERSION == RMGK01)
-    mPreviousChar = 0;
-#endif
 
     mIsShadow = false;
     mIsText = false;
     mIsInfo = false;
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     mNoCharSpace = true;
-#else
-    mNoCharSpace = false;
-#endif
 
     mTextBox = textBox;
 }
@@ -433,9 +386,6 @@ void CustomTagProcessor::reset(const char16_t* string) {
     mAlphaCtrl.mWaitTime = 0;
     mAlphaCtrl.mCharIndex = 0;
 
-#if (VERSION == RMGK01)
-    mPreviousChar = 0;
-#endif
 }
 
 MessageEditorMessageTag CustomTagProcessor::getReplaceTag(const char16_t* string, s32 group, s32 index, s32 occurrence) const {
@@ -550,11 +500,7 @@ CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect
             }
         }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
         writer.MoveCursorY(-writer.GetFontAscent());
-#else
-        writer.MoveCursorY(mPictureFontOffset + -writer.GetFontAscent());
-#endif
 
         writer.Print(&picture, 1);
         if (!mIsShadow) {
@@ -566,11 +512,9 @@ CustomTagProcessor::Operation CustomTagProcessor::exePictureGroup(nw4r::ut::Rect
 }
 
 CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01 || VERSION == RMGP01)
     if (rect != nullptr) {
         return OPERATION_NO_CHAR_SPACE;
     }
-#endif
 
     nw4r::ut::TextWriterBase< char16_t >* writer = context->writer;
     switch (tag.getTag()) {
@@ -585,15 +529,6 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontSizeGroup(nw4r::ut::Rec
         break;
     }
 
-#if (VERSION == RMGK01)
-    switch (tag.getTag()) {
-    case 2:
-        if (mTextBox->GetTextPositionV() != 0) {
-            writer->MoveCursorY(mFontSizeOffset * mFontHeight);
-        }
-        break;
-    }
-#endif
 
     return OPERATION_NO_CHAR_SPACE;
 }
@@ -778,62 +713,6 @@ CustomTagProcessor::Operation CustomTagProcessor::exeFontGroup(nw4r::ut::Rect* r
     return OPERATION_NO_CHAR_SPACE;
 }
 
-#if (VERSION == RMGK01)
-CustomTagProcessor::Operation CustomTagProcessor::exePatchimuGroup(nw4r::ut::Rect* rect, const MessageEditorMessageTag& tag, ContextType* context) {
-    char16_t string[16] = {};
-    char16_t* out = string;
-    bool hasPatchim = true;
-    if (mPreviousChar >= u'0' && mPreviousChar < u'9') {
-        if (mPreviousChar == u'3' || mPreviousChar == u'6') {
-            hasPatchim = true;
-        } else {
-            hasPatchim = false;
-        }
-    } else if (mPreviousChar >= 0xAC00) {
-        int patchim = (mPreviousChar - 0xAC00) % 28;
-        hasPatchim = patchim != 0;
-        if (tag.getTag() == 4 && patchim == 8) {
-            hasPatchim = false;
-        }
-    }
-
-    switch (tag.getTag()) {
-    case 0:
-        *out++ = hasPatchim ? 0xC740 : 0xB294;
-        break;
-    case 1:
-        *out++ = hasPatchim ? 0xC744 : 0xB97C;
-        break;
-    case 2:
-        *out++ = hasPatchim ? 0xC774 : 0xAC00;
-        break;
-    case 3:
-        *out++ = hasPatchim ? 0xACFC : 0xC640;
-        break;
-    case 4:
-        if (hasPatchim) {
-            *out++ = 0xC73C;
-        } else {
-            return OPERATION_NO_CHAR_SPACE;
-        }
-        break;
-    case 5:
-        *out++ = hasPatchim ? 0xBEC6 : 0xBEDF;
-        break;
-    case 6:
-        if (hasPatchim) {
-            *out++ = 0xC774;
-        } else {
-            return OPERATION_NO_CHAR_SPACE;
-        }
-        break;
-    }
-
-    *out = u'\0';
-    writeString(rect, string, context);
-    return OPERATION_DEFAULT;
-}
-#endif
 
 CustomTagProcessor::~CustomTagProcessor() {
 }
