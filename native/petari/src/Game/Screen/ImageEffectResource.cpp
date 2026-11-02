@@ -2,7 +2,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 ImageEffectResource::ImageEffectResource()
     : _0(nullptr), _4(nullptr), _8(nullptr), _C(nullptr), _10(nullptr), _14(nullptr), _18(nullptr), _1C(nullptr), _20(nullptr) {
@@ -75,8 +75,8 @@ JUTTexture* ImageEffectResource::createTexture(f32 scale, GpuTexFmt format) {
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
-    pTexture = new JUTTexture(scale * (s32)JUTVideo::getManager()->getFbWidth(),
-                              scale * (s32)JUTVideo::getManager()->getEfbHeight(), format);
+    pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cFrameWidth,
+                              scale * (s32)NebulaFrameClock::cFrameHeight, format);
     pTexture->mWrapS = GPU_CLAMP;
     pTexture->mWrapT = GPU_CLAMP;
     pTexture->mMinType = GPU_LINEAR;

@@ -19,7 +19,6 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include <cstring>
 
 void MarioShadow_FORCE_MATCH_SDATA2() {

@@ -11,7 +11,6 @@
 #include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JUtility/JUTAssert.hpp>
 #include <JSystem/JUtility/JUTConsole.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/Util/RenderSignals.hpp"
 #include <runtime.h>
 #include "Game/System/NebulaFrameClock.hpp"
@@ -37,9 +36,7 @@ void MainLoopFramework::ctor_subroutine(bool useAlpha) {
 }
 
 MainLoopFramework::~MainLoopFramework() {
-    if (JUTVideo::getManager()) {
-        waitBlanking(2);
-    }
+    waitBlanking(2);
 }
 
 MainLoopFramework* MainLoopFramework::createManager(bool useAlpha) {
@@ -67,7 +64,7 @@ void MainLoopFramework::preGX() {
 }
 
 void MainLoopFramework::endGX() {
-    J2DOrthoGraph ortho(0.0f, 0.0f, JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), -1.0f,
+    J2DOrthoGraph ortho(0.0f, 0.0f, NebulaFrameClock::cFrameWidth, NebulaFrameClock::cFrameHeight, -1.0f,
                         1.0f);
     if (JUTConsoleManager::sManager) {
         ortho.setPort();
@@ -78,7 +75,6 @@ void MainLoopFramework::endGX() {
 
 void MainLoopFramework::waitForRetrace() {
     ::waitForFrames(mRetraceCount);
-    JUTVideo::getManager()->waitRetraceIfNeed();
 }
 
 void MainLoopFramework::beginRender() {
@@ -98,8 +94,8 @@ void MainLoopFramework::endRender() {
             mPreRenderCallback();
         }
         prepareCopyDisp();
-        J3DNativeState::showFrame(JUTVideo::getManager()->getFbWidth(),
-                                  JUTVideo::getManager()->getEfbHeight(), mUseVFilter);
+        J3DNativeState::showFrame(NebulaFrameClock::cFrameWidth,
+                                  NebulaFrameClock::cFrameHeight, mUseVFilter);
     }
 }
 
@@ -117,8 +113,8 @@ void MainLoopFramework::waitBlanking(int tickCount) {
 // The frame cleared to `color` (its alpha when the frame keeps alpha) and the far depth, with the view, matrix and
 // pixel state the frame's first draws start from.
 void MainLoopFramework::clearEfb(NebulaColor8 color) {
-    u16 fbWidth = JUTVideo::getManager()->getFbWidth();
-    u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
+    u16 fbWidth = NebulaFrameClock::cFrameWidth;
+    u16 efbHeight = NebulaFrameClock::cFrameHeight;
     Mtx44 proj;
     NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
     J3DNativeView::setProjection(proj, GPU_ORTHOGRAPHIC);
@@ -143,7 +139,6 @@ void MainLoopFramework::clearEfb(NebulaColor8 color) {
 }
 
 void MainLoopFramework::setForOSResetSystem() {
-    JUTVideo::destroyManager();
     NebulaFrameClock::show(false);
     NebulaFrameClock::waitFrame();
     if (sManager) {
@@ -153,8 +148,7 @@ void MainLoopFramework::setForOSResetSystem() {
 }
 
 namespace {
-    // Waits until `frames` host frames (at least one) have passed since the last wait ended: the frame counts arrive
-    // through JUTVideo's queue, posted after each frame is shown.
+    // Waits until `frames` frames (at least one) have passed since the last wait ended.
     void waitForFrames(u16 frames) {
         static u32 nextCount;
         static s8 countInitialized;
@@ -163,15 +157,8 @@ namespace {
             countInitialized = 1;
         }
 
-        u32 frame;
-        do {
-            // A message is pointer-sized natively: receive into one, keep the frame count it carries.
-            void* message;
-            frame = (JUTVideo::getManager()->getMessageQueue())->receive(&message, true)
-                        ? (u32)(uintptr_t)message
-                        : 0;
-        } while ((s32)(frame - nextCount) < 0);
-        nextCount = frame + (frames != 0 ? frames : 1);
+        NebulaFrameClock::waitUntil(nextCount);
+        nextCount = NebulaFrameClock::count() + (frames != 0 ? frames : 1);
     }
 
 };  // namespace

@@ -1,7 +1,7 @@
 #include "Game/System/WPadPointer.hpp"
 #include "Game/System/WPadHolder.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 
 void WPadPointer_FORCE_MATCH_SDATA2() {
     (void)0.03f;
@@ -127,5 +127,5 @@ s32 WPadPointer::getEnablePastCount() const {
 
 void WPadPointer::getPointingPosBasedOnScreen(TVec2f* pOut) const {
     pOut->x = (0.5f + (0.5f * mPointingPosArray->x)) * static_cast< s32 >(MR::getScreenWidth());
-    pOut->y = (0.5f + (0.5f * mPointingPosArray->y)) * static_cast< s32 >(JUTVideo::getManager()->getEfbHeight());
+    pOut->y = (0.5f + (0.5f * mPointingPosArray->y)) * static_cast< s32 >(NebulaFrameClock::cFrameHeight);
 }

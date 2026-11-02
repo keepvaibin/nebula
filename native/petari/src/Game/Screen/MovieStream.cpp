@@ -7,7 +7,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/NerveUtil.hpp"
 #include <JSystem/JUtility/JUTException.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
+#include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>
 #include <nebula_game_api.h>
 
@@ -199,7 +199,7 @@ s32 MovieStream::drawCurrentFrame(u32 x, u32 y, u32 polyW, u32 polyH) {
 
     movieFrame(sMovieName, mHeader.mFrames > 0 ? mPlanesFrame % static_cast< s32 >(mHeader.mFrames) : mPlanesFrame, mHeader.mFrameRate, mPlaneY, mPlaneU,
                mPlaneV, mVideoInfo.mWidth, mVideoInfo.mHeight);
-    MovieDraw::drawFrame(JUTVideo::getManager()->getFbWidth(), JUTVideo::getManager()->getEfbHeight(), mPlaneY, mPlaneU, mPlaneV, x, y, mVideoInfo.mWidth,
+    MovieDraw::drawFrame(NebulaFrameClock::cFrameWidth, NebulaFrameClock::cFrameHeight, mPlaneY, mPlaneU, mPlaneV, x, y, mVideoInfo.mWidth,
                          mVideoInfo.mHeight, polyW, polyH);
 
     return mPlanesFrame;
