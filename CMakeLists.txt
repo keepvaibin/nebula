@@ -446,10 +446,7 @@ galaxy_test(galaxy_disc_files_tests SOURCES ${rt}/disc_files_tests.cpp LIBS gala
 # The game's calendar (native/petari), compiled against a host the test provides.
 galaxy_test(galaxy_native_calendar_tests SOURCES ${rt}/native_calendar_tests.cpp
     native/petari/src/Game/System/NebulaCalendar.cpp)
-target_include_directories(galaxy_native_calendar_tests PRIVATE native/include native/petari/include
-    native/petari/libs/RVL_SDK/include)
-# The game's types.h defines nullptr as 0 unless it is a macro already: here it names the keyword itself.
-target_compile_definitions(galaxy_native_calendar_tests PRIVATE _ALLOW_KEYWORD_MACROS nullptr=nullptr)
+target_include_directories(galaxy_native_calendar_tests PRIVATE native/include native/petari/include)
 galaxy_test(galaxy_runtime_settings_tests SOURCES ${rt}/runtime_settings_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
