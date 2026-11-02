@@ -20,7 +20,9 @@ ClippingActorInfo::ClippingActorInfo(LiveActor* pActor) {
 void ClippingActorInfo::judgeClipping() {
     if (isJudgedToClip()) {
         if (!MR::isClipped(mActor)) {
-            mActor->startClipped();
+            startClipped();
+        } else {
+            updateDrawnClipped();
         }
     } else {
         if (MR::isClipped(mActor)) {
@@ -38,6 +40,37 @@ bool ClippingActorInfo::isJudgedToClip() const {
     f32 val = _8;
     ClippingJudge* judge = MR::getClippingJudge();
     return judge->isJudgedToClipFrustum(*_4, val, farClipLevel);
+}
+
+// The level's distances say when an actor runs; the camera says whether it is seen. An actor out of its distance and
+// in view stays stopped and keeps its model, so nothing runs that the level did not expect and scenery does not pop in.
+bool ClippingActorInfo::isDrawnWhileClipped() const {
+    return !_14->_4 && !MR::isNoEntryDrawBuffer(mActor) && MR::isDrawnFarWhenClipped(mActor) &&
+           !MR::getClippingJudge()->isJudgedToClipFrustum(*_4, _8, 0);
+}
+
+void ClippingActorInfo::startClipped() {
+    if (isDrawnWhileClipped()) {
+        mActor->mFlag.mIsDrawnClipped = true;
+        mActor->prepareDrawClipped();
+    }
+
+    mActor->startClipped();
+}
+
+void ClippingActorInfo::updateDrawnClipped() {
+    const bool drawn = isDrawnWhileClipped();
+    if (drawn == mActor->mFlag.mIsDrawnClipped) {
+        return;
+    }
+
+    mActor->mFlag.mIsDrawnClipped = drawn;
+    if (drawn) {
+        mActor->prepareDrawClipped();
+        MR::connectToDrawTemporarily(mActor);
+    } else {
+        MR::disconnectToDrawTemporarily(mActor);
+    }
 }
 
 bool ClippingActorInfo::isGroupClipping() const {

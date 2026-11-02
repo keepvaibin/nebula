@@ -115,6 +115,6 @@ void ViewGroupCtrl::startInitViewGroupTable() {
         }
 
         ViewGroupCtrlDataEntry* entry = &mViewGroupData[groupID];
-        ctrl->setViewCtrlPtr(&entry->_1, &entry->_2, &entry->_3, &entry->_4);
+        ctrl->setHiddenPtr(&entry->_4);
     }
 }

@@ -10,4 +10,6 @@ LiveActorFlag::LiveActorFlag() {
     mIsCalcGravity = false;
     mIsClipped = false;
     mIsInvalidClipping = false;
+    mIsDrawnClipped = false;
+    mHasPose = false;
 }

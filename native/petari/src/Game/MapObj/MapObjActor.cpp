@@ -319,28 +319,7 @@ void MapObjActor::initialize(const JMapInfoIter& rIter, const MapObjActorInitInf
     }
 
     if (!rInfo.mNoUseLOD && LodCtrlFunction::isExistLodLowModel(mObjectName)) {
-        mPlanetLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, rInfo._88);
-
-        if (rInfo.mColorChangeArg > -1) {
-            const char* pColorName = ::cBrkNameColorChange;
-            if (MR::isExistBrk(this, pColorName)) {
-                MR::startBrk(mPlanetLodCtrl->_14, pColorName);
-                MR::setBrkFrameAndStop(mPlanetLodCtrl->_14, rInfo.mColorChangeArg);
-            }
-        }
-
-        if (rInfo.mTextureChangeArg > -1) {
-            const char* pTextureName = ::cBtpNameTexChange;
-            if (MR::isExistBtp(this, pTextureName)) {
-                MR::startBtp(mPlanetLodCtrl->_14, pTextureName);
-                MR::setBtpFrameAndStop(mPlanetLodCtrl->_14, rInfo.mTextureChangeArg);
-            }
-
-            if (MR::isExistBtk(this, pTextureName)) {
-                MR::startBtk(mPlanetLodCtrl->_14, ::cBtkNameTexChange);
-                MR::setBtkFrameAndStop(mPlanetLodCtrl->_14, rInfo.mTextureChangeArg);
-            }
-        }
+        mPlanetLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     }
 
     if (MR::isExistSubModel(mObjectName, "Bloom")) {

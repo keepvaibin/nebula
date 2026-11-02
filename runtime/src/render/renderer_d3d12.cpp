@@ -2365,6 +2365,7 @@ bool RendererD3D12::initialize(int window_width, int window_height, const FrameM
         ensure_native_settings_solid_pipeline_loaded();
     } catch (const std::exception& e) {
         std::cerr << "[Renderer] initialize failed: " << e.what() << "\n";
+        init_error_ = e.what();
         return false;
     }
     return true;

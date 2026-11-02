@@ -521,6 +521,8 @@ enum {
     NEBULA_TEST_LIST_ACTORS,      /* the scene's live actors with a model, their model name and position, logged */
     NEBULA_TEST_SET_EVENT_FLAG,   /* the save's event flag named `stage` on (GameDataFunction::onGameEventFlag) */
     NEBULA_TEST_SHAKE_CAMERA,     /* the screen shakes until the scene ends (MR::shakeCameraInfinity, Dodoryu's quake) */
+    NEBULA_TEST_PLACE_PLAYER_WATER, /* the player placed in water body `scenario` of the scene's, in turn */
+    NEBULA_TEST_PLACE_PLAYER_ACTOR, /* the player placed at live actor `scenario` of the scene's, in turn */
     NEBULA_TEST_KILL_ACTOR,       /* the live actors whose model is `stage` killed (their kill(): what they leave behind) */
 };
 
@@ -539,10 +541,6 @@ enum {
     NEBULA_OPTION_TEXT_SPEED = 1, /* 1 to 3: text steps revealed per frame; 4: each page at once */
     NEBULA_OPTION_TEST_DUMP_LAYOUTS, /* tests: 1 logs each layout's pane tree once (GALAXY_TEST_DUMP_LAYOUTS) */
     NEBULA_OPTION_DRAW_IDENTITIES, /* 1 while the renderer reads host markers (NebulaRender::hostMarker) */
-    NEBULA_OPTION_LOD_SCALE,         /* the 3D image's lines over the console's 456 as shown (1 at its resolution, 0
-                                        before the first scene): LodCtrl's switch distances grow by it */
-    NEBULA_OPTION_TEST_LOD,          /* tests (GALAXY_TEST_LOD): 1 every LodCtrl shows its middle model, 2 its low
-                                        model, 3 its high and middle models in turn each frame (the switch itself) */
     NEBULA_OPTION_BLOOM,             /* how BloomEffect and BloomEffectSimple go through the renderer
                                         (NebulaRender::bloomMarker): 0 not at all (their copy chains, as the console's), 1
                                         their own chains with the scene they work over kept and restored by it (in the

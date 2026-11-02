@@ -47,7 +47,7 @@ void ClippingInfoGroup::startClippedAll() {
 
     for (s32 i = 0; i < _10; i++) {
         if (!MR::isDead(_14[i]->mActor) && !MR::isClipped(_14[i]->mActor)) {
-            _14[i]->mActor->startClipped();
+            _14[i]->startClipped();
         }
     }
 }
@@ -71,6 +71,13 @@ void ClippingGroupHolder::movement() {
             u8 var = group->_1C;
             if (!var) {
                 group->startClippedAll();
+            } else {
+                for (s32 j = 0; j < group->_10; j++) {
+                    ClippingActorInfo* pInfo = group->_14[j];
+                    if (!MR::isDead(pInfo->mActor) && MR::isClipped(pInfo->mActor)) {
+                        pInfo->updateDrawnClipped();
+                    }
+                }
             }
         } else {
             u8 var = group->_1C;

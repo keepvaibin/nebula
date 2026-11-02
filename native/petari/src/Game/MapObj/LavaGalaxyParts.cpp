@@ -104,7 +104,7 @@ void LavaGalaxyParts::init(const JMapInfoIter& rIter) {
     }
 
     if (isNonFloatingOrLavaStep) {
-        mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+        mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
     }
 
     MR::connectToSceneMapObj(this);

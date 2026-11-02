@@ -90,7 +90,7 @@ public:
 
     bool initialize(int window_width, int window_height, const FrameMap& frame);
     // Why initialize failed, when the device said.
-    [[nodiscard]] std::string startup_failure() const { return vk::Context::get().failure(); }
+    [[nodiscard]] std::string startup_failure() const { return !init_error_.empty() ? init_error_ : vk::Context::get().failure(); }
     void create_first_use_resources();
     void shutdown();
     [[nodiscard]] UploadBuffer create_upload_buffer(std::size_t bytes, const char* name);
@@ -350,6 +350,7 @@ public:
     void draw_ui_glyph(int x, int y, int scale, std::uint64_t bitmap, const std::array<float, 4>& color) override;
 
 private:
+    std::string init_error_;  // why initialize failed
     struct Frame {
         VkCommandPool pool = VK_NULL_HANDLE;
         VkCommandBuffer commands = VK_NULL_HANDLE;

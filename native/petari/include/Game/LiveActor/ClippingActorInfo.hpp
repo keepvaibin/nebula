@@ -13,6 +13,9 @@ public:
 
     void judgeClipping();
     bool isJudgedToClip() const;
+    bool isDrawnWhileClipped() const;
+    void startClipped();
+    void updateDrawnClipped();
     bool isGroupClipping() const;
     void setTypeToSphere(f32, const TVec3f*);
     void setGroupClippingNo(const JMapInfoIter&);

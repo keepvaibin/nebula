@@ -54,6 +54,7 @@ public:
 
     /// @brief Calculates and sets the base matrix of the actor.
     /* 0x4C */ virtual void calcAndSetBaseMtx();
+    void prepareDrawClipped();
 
     /* 0x50 */ virtual void updateHitSensor(HitSensor* pSensor) {
     }

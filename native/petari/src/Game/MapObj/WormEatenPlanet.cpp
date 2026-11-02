@@ -52,7 +52,7 @@ void WormEatenPlanet::init(const JMapInfoIter& rIter) {
 
     initWormEatenHill();
 
-    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f, -1);
+    mLodCtrl = MR::createLodCtrlPlanet(this, rIter, -1.0f);
 
     if (MR::tryRegisterDemoCast(this, rIter)) {
         MR::tryRegisterDemoCast(mCaterpillar, rIter);

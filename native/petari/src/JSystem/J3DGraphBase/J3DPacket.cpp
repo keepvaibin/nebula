@@ -51,6 +51,7 @@ void J3DDrawPacket::draw() {
 }
 
 J3DMatPacket::J3DMatPacket() {
+    mpShapePacket = NULL;
     mpInitShapePacket = NULL;
     mpMaterial = NULL;
     mDiffFlag = 0xFFFFFFFF;

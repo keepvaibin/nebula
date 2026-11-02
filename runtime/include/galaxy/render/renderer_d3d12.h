@@ -82,6 +82,7 @@ public:
     }
 
 private:
+    std::string init_error_;  // why initialize failed
     // Retain identity so freed resource-pointer reuse cannot fake a match.
     Microsoft::WRL::ComPtr<ID3D12Resource> resource_;
     D3D12_CPU_DESCRIPTOR_HANDLE descriptor_{};
@@ -197,7 +198,7 @@ public:
     // kFrameWidth x kFrameHeight x scene_target_scale, the shared console root signature, the
     // present-blit pipeline, and all rings.
     bool initialize(int window_width, int window_height, const FrameMap& frame);
-    [[nodiscard]] std::string startup_failure() const { return {}; }
+    [[nodiscard]] std::string startup_failure() const { return init_error_; }
     // Creates the screen probes' resources up front, so the first frame that asks does not stall creating them.
     void create_first_use_resources();
     void shutdown();                // full GPU drain, then release

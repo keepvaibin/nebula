@@ -135,7 +135,7 @@ namespace {
         },
         {
             "TeresaRoomPlanet",
-            createNameObj< PlanetMapAnimLow >,
+            createNameObj< PlanetMap >,
         },
         {
             "TridentPlanet",
