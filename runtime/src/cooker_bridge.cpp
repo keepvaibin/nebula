@@ -28,6 +28,8 @@ namespace {
 using CookFile = int (*)(const char* name, const std::uint8_t* data, std::size_t size, std::uint8_t** out,
                          std::size_t* out_size);
 using CookFree = void (*)(std::uint8_t* data, std::size_t size);
+using CookWaveArchive = int (*)(const char* name, const std::uint8_t* data, std::size_t size, const std::uint8_t* archive,
+                                std::size_t archive_size, std::uint8_t** out, std::size_t* out_size);
 using CookDolTable = int (*)(const std::uint8_t* dol, std::size_t size, const char* game_id, const char* name,
                              std::uint8_t** out, std::size_t* out_size);
 
@@ -35,6 +37,7 @@ struct Library {
     CookFile cook = nullptr;
     CookFree release = nullptr;
     CookDolTable dol_table = nullptr;
+    CookWaveArchive wave_archive = nullptr;
 };
 
 const Library& library() {
@@ -55,6 +58,7 @@ const Library& library() {
         loaded.cook = reinterpret_cast<CookFile>(GetProcAddress(module, "nebula_cook_file"));
         loaded.release = reinterpret_cast<CookFree>(GetProcAddress(module, "nebula_cook_free"));
         loaded.dol_table = reinterpret_cast<CookDolTable>(GetProcAddress(module, "nebula_cook_dol_table"));
+        loaded.wave_archive = reinterpret_cast<CookWaveArchive>(GetProcAddress(module, "nebula_cook_wave_archive"));
 #else
         void* module = dlopen("libnebula_import.so", RTLD_NOW);
         if (module == nullptr) {
@@ -63,8 +67,9 @@ const Library& library() {
         loaded.cook = reinterpret_cast<CookFile>(dlsym(module, "nebula_cook_file"));
         loaded.release = reinterpret_cast<CookFree>(dlsym(module, "nebula_cook_free"));
         loaded.dol_table = reinterpret_cast<CookDolTable>(dlsym(module, "nebula_cook_dol_table"));
+        loaded.wave_archive = reinterpret_cast<CookWaveArchive>(dlsym(module, "nebula_cook_wave_archive"));
 #endif
-        if (loaded.cook == nullptr || loaded.release == nullptr || loaded.dol_table == nullptr) {
+        if (loaded.cook == nullptr || loaded.release == nullptr || loaded.dol_table == nullptr || loaded.wave_archive == nullptr) {
             loaded = Library{};
         }
     });
@@ -85,7 +90,7 @@ bool cooks(std::string_view name) {
     // crates/nebula-import/src/cook/mod.rs cooks().
     static constexpr std::string_view kCooked[] = {"arc", "szs", "bti", "bmd", "bdl", "bmt", "cit", "bas", "brs", "bme", "bct", "csw", "bck", "bca", "btk", "brk", "bpk", "bpa",
                                                    "btp", "bva", "blk", "bla", "bxk", "bxa", "tpl", "brfnt", "jpc", "bcsv", "tbl", "pa", "bcam", "banmt",
-                                                   "canm", "thp"};
+                                                   "canm", "thp", "ast"};
     return std::find(std::begin(kCooked), std::end(kCooked), extension) != std::end(kCooked);
 }
 
@@ -102,6 +107,33 @@ std::optional<std::vector<std::uint8_t>> cook_file(std::string_view name, std::s
     std::uint8_t* out = nullptr;
     std::size_t out_size = 0;
     const int result = lib.cook(path.c_str(), bytes.data(), bytes.size(), &out, &out_size);
+    if (result < 0) {
+        if (error != nullptr) {
+            *error = "the cooker cannot read " + path;
+        }
+        return std::nullopt;
+    }
+    if (result == 0) {
+        return std::nullopt;
+    }
+    std::vector<std::uint8_t> cooked(out, out + out_size);
+    lib.release(out, out_size);
+    return cooked;
+}
+
+std::optional<std::vector<std::uint8_t>> cook_wave_archive(std::string_view name, std::span<const std::uint8_t> bytes,
+                                                           std::span<const std::uint8_t> archive, std::string* error) {
+    const Library& lib = library();
+    if (lib.wave_archive == nullptr) {
+        if (error != nullptr) {
+            *error = "the cooker (nebula_import) is not beside the game";
+        }
+        return std::nullopt;
+    }
+    const std::string path(name);
+    std::uint8_t* out = nullptr;
+    std::size_t out_size = 0;
+    const int result = lib.wave_archive(path.c_str(), bytes.data(), bytes.size(), archive.data(), archive.size(), &out, &out_size);
     if (result < 0) {
         if (error != nullptr) {
             *error = "the cooker cannot read " + path;

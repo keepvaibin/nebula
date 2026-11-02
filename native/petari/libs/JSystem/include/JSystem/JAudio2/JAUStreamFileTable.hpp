@@ -2,11 +2,11 @@
 
 #include "JSystem/JAudio2/JAIStreamDataMgr.hpp"
 
-// bsft, big-endian.
+// bsft, in host order (cook/audio_data.rs).
 struct BinaryStreamFileTable {
     /* 0x0 */ char mIdentifier[4];
-    /* 0x4 */ NEBULA_BE(u32) mNumFiles;
-    /* 0x8 */ NEBULA_BE(s32) mFilePathOffsets[];
+    /* 0x4 */ u32 mNumFiles;
+    /* 0x8 */ s32 mFilePathOffsets[];
 };
 
 struct JAUStreamFileTable {

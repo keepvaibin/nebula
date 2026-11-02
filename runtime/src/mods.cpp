@@ -1161,11 +1161,11 @@ bool mods_differ_from_session(std::span<const ModInfo> mods) {
 // the mod's own bytes, is cooked once into the mods folder's .cooked cache (named by its bytes' hash) and read from
 // there. Patches in part over the game's cooked files are refused where they are placed (apply_mods).
 static void cook_mod_files(DiscNode& dir, const std::string& path, const std::uint8_t* partition, std::uint64_t partition_size,
-                    std::ostringstream& report, unsigned& cooked) {
+                    const std::vector<std::uint8_t>& audio_archive, std::ostringstream& report, unsigned& cooked) {
     for (DiscNode& node : dir.children) {
         const std::string node_path = path + "/" + node.name;
         if (node.directory) {
-            cook_mod_files(node, node_path, partition, partition_size, report, cooked);
+            cook_mod_files(node, node_path, partition, partition_size, audio_archive, report, cooked);
             continue;
         }
         // NebulaData's files come from the cooker already (main.dol's tables).
@@ -1174,7 +1174,8 @@ static void cook_mod_files(DiscNode& dir, const std::string& path, const std::ui
         std::uint8_t magic[4] = {};
         if (node.size >= sizeof(magic)) VirtualDisc::read_pieces(node, 0, sizeof(magic), magic, partition, partition_size);
         const bool compressed = magic[0] == 'Y' && magic[1] == 'a' && (magic[2] == 'z' || magic[2] == 'y') && magic[3] == '0';
-        if (!compressed && !cook::cooks(node.name)) continue;
+        const bool wave_archive = node.name.size() > 3 && (node.name.ends_with(".aw") || node.name.ends_with(".AW"));
+        if (!compressed && !wave_archive && !cook::cooks(node.name)) continue;
         const bool partial = std::any_of(node.pieces.begin(), node.pieces.end(),
                                          [](const DiscPiece& p) { return p.source == DiscPiece::Source::Partition; });
         if (partial) {
@@ -1190,7 +1191,9 @@ static void cook_mod_files(DiscNode& dir, const std::string& path, const std::ui
         std::error_code ec;
         if (!fs::is_regular_file(cache, ec)) {
             std::string error;
-            const std::optional<std::vector<std::uint8_t>> out = cook::cook_file(node_path, bytes, &error);
+            const std::optional<std::vector<std::uint8_t>> out = wave_archive && !compressed
+                ? cook::cook_wave_archive(node_path, bytes, audio_archive, &error)
+                : cook::cook_file(node_path, bytes, &error);
             if (!out) {
                 if (!error.empty()) report << "  " << node_path << ": " << error << '\n';
                 continue;
@@ -1528,7 +1531,12 @@ std::unique_ptr<ActiveMods> apply_mods(std::span<const std::uint8_t> partition_f
     }
     unsigned cooked = 0;
     if (DiscNode* disc_root = active->disc.find_path("", false)) {
-        cook_mod_files(*disc_root, std::string(), partition, partition_size, report, cooked);
+        // The wave systems say which ranges of an AW file hold PCM16: the mods' archive if one replaces it, else the game's.
+        std::vector<std::uint8_t> audio_archive;
+        if (const DiscNode* archive = active->disc.find_path("/AudioRes/SMR.szs", false)) {
+            audio_archive = VirtualDisc::materialize(*archive, partition, partition_size);
+        }
+        cook_mod_files(*disc_root, std::string(), partition, partition_size, audio_archive, report, cooked);
     }
     if (cooked != 0u) report << "cooked " << cooked << " of the mods' files\n";
     const std::uint64_t virtual_base = partition_size + 0x100000u;

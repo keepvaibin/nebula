@@ -20,6 +20,11 @@ namespace galaxy::cook {
 [[nodiscard]] std::optional<std::vector<std::uint8_t>> cook_file(std::string_view name, std::span<const std::uint8_t> bytes,
                                                                  std::string* error);
 
+// A mod's AW file with the PCM16 ranges the audio archive `archive` names for it in host order; nullopt when it has none
+// or on an error (`*error` says which).
+[[nodiscard]] std::optional<std::vector<std::uint8_t>> cook_wave_archive(std::string_view name, std::span<const std::uint8_t> bytes,
+                                                                         std::span<const std::uint8_t> archive, std::string* error);
+
 // The NebulaData files main.dol's tables become (crates/nebula-import/src/cook/dol.rs), by name.
 inline constexpr const char* kDolTableFiles[] = {"StoryProgressTable.bcsv", "GalaxyInfoTable.bcsv",
                                                   "ErrorMessageArchive.arc", "GalaxyCometSchedules.bin",

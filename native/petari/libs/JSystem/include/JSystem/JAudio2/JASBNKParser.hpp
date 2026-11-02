@@ -9,8 +9,7 @@ class JASBank;
 class JASBasicBank;
 class JKRHeap;
 
-// Banks (IBNK version 1) in host order, as the importer cooks the audio archive (native_data.rs bank); the envelope
-// points (JASOscillator::Point) stay big-endian with the sequences' oscillator tables.
+// Banks (IBNK version 1) in host order, as the importer cooks the audio archive (native_data.rs bank).
 namespace JASBNKParser {
     struct TFileHeader {
         /* 0x0 */ s32 id;
