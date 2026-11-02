@@ -31,7 +31,7 @@
 #include "galaxy/native_audio.h"
 #include "galaxy/native_host.h"
 #include "galaxy/native_input.h"
-#include "galaxy/native_thp_video.h"
+#include "galaxy/movie_video.h"
 #include "galaxy/perf_hint.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/pointer_control.h"
@@ -319,8 +319,8 @@ std::atomic<uint32_t> gFsOps{0};
 std::atomic<uint32_t> gAiBlocks{0};
 std::atomic<uint32_t> gDspFrames{0};
 std::atomic<uint32_t> gMovieFrames{0};
-std::atomic<uint64_t> gMovieDecodeNs{0};   // the THP decoder's time (svc_thp_video_decode)
-std::atomic<uint32_t> gMovieSkipped{0};    // THP frames not decoded: a replacement video showed instead
+std::atomic<uint64_t> gMovieDecodeNs{0};   // the movie decoder's time (svc_movie_video_decode)
+std::atomic<uint32_t> gMovieSkipped{0};    // movie frames not decoded: a replacement video showed instead
 std::atomic<uint32_t> gSceneBegins{0};
 
 void* find_symbol(void* module, const char* name) {
@@ -3577,9 +3577,8 @@ int svc_test_scene_frame(void*, NebulaTestAction* action) {
 }
 
 #if defined(NEBULA_HOST_RENDERER)
-// A THP frame's video component is one baseline JPEG whose SOF0 gives the movie's size; the decoder writes its planes
-// in GX's I8 tiling. The planes are then the renderer's to re-read, as after the console's decode.
-int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, void* u, void* v) {
+// A movie frame's video is one baseline JPEG; the decoder writes its planes as rows of texels for the renderer.
+int32_t svc_movie_video_decode(void*, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v) {
     gMovieFrames.fetch_add(1, std::memory_order_relaxed);
     if (galaxy::render::movie_replacement_showing()) {
         // A replacement video's frames show in place of these planes: their decode would be unseen work.
@@ -3595,32 +3594,16 @@ int32_t svc_thp_video_decode(void*, const void* frame, uint32_t size, void* y, v
                                      std::memory_order_relaxed);
         }
     } decode_time{decode_start};
-    const auto* p = static_cast<const uint8_t*>(frame);
-    if (size < 4 || p[0] != 0xFF || p[1] != 0xD8) {
+    if (width == 0 || height == 0 || width > 4096 || height > 4096) {
         return -1;
     }
-    uint16_t width = 0, height = 0;
-    for (size_t i = 2; i + 9 <= size && p[i] == 0xFF && p[i + 1] != 0xDA;
-         i += 2 + ((size_t(p[i + 2]) << 8) | p[i + 3])) {
-        if (p[i + 1] == 0xC0) {
-            height = static_cast<uint16_t>((p[i + 5] << 8) | p[i + 6]);
-            width = static_cast<uint16_t>((p[i + 7] << 8) | p[i + 8]);
-        }
-    }
-    if (width == 0 || height == 0) {
-        return -1;
-    }
-    const size_t end = size;
-    const auto plane = [](size_t w, size_t h) { return ((w + 7) / 8) * ((h + 3) / 4) * 32; };
-    const size_t luma = plane(width, height);
-    const size_t chroma = plane((width + 1u) / 2u, (height + 1u) / 2u);
-    const int32_t result = galaxy::thp::decode_video(
-        {p, end}, width, height, {static_cast<uint8_t*>(y), luma}, {static_cast<uint8_t*>(u), chroma},
-        {static_cast<uint8_t*>(v), chroma});
-    return result;
+    const size_t luma = size_t(width) * height;
+    const size_t chroma = size_t((width + 1u) / 2u) * ((height + 1u) / 2u);
+    return galaxy::movie::decode_video({static_cast<const uint8_t*>(frame), size}, static_cast<uint16_t>(width), static_cast<uint16_t>(height),
+                                       {static_cast<uint8_t*>(y), luma}, {static_cast<uint8_t*>(u), chroma}, {static_cast<uint8_t*>(v), chroma});
 }
 #else
-int32_t svc_thp_video_decode(void*, const void*, uint32_t, void*, void*, void*) {
+int32_t svc_movie_video_decode(void*, const void*, uint32_t, uint32_t, uint32_t, void*, void*, void*) {
     return 0;
 }
 #endif
@@ -4112,7 +4095,7 @@ int main(int argc, char** argv) {
     services.movie_audio_control = svc_movie_audio_control;
     services.audio_control = svc_audio_control;
     services.hbm = svc_hbm;
-    services.thp_video_decode = svc_thp_video_decode;
+    services.movie_video_decode = svc_movie_video_decode;
     services.gpu_coherent = svc_gpu_coherent;
     services.game_context = svc_game_context;
     services.power = svc_power;

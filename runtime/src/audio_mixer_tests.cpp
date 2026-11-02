@@ -363,7 +363,7 @@ void test_categories() {
     expect(near(named_out[2u * 800u], 0.5 * 32767.0 / 65536.0, 1e-3), "music back on", named_out[2u * 800u]);
 }
 
-// A THP audio record of `samples` samples per channel that holds each channel at its history (predictor 0 is
+// A movie's audio record (host order) of `samples` samples per channel that holds each channel at its history (predictor 0 is
 // {1, 0}; every nibble 0), or with `nibble` and `scale` set and no predictor, plays nibble << scale.
 std::vector<std::uint8_t> thp_record(std::uint32_t samples, std::int16_t left, std::int16_t right, int nibble = 0,
                                      int scale = 0) {
@@ -371,14 +371,10 @@ std::vector<std::uint8_t> thp_record(std::uint32_t samples, std::int16_t left, s
     const std::uint32_t channel = frames * 8u;
     std::vector<std::uint8_t> r(0x50u + channel * 2u, 0);
     const auto put32 = [&](std::size_t at, std::uint32_t v) {
-        r[at] = static_cast<std::uint8_t>(v >> 24u);
-        r[at + 1u] = static_cast<std::uint8_t>(v >> 16u);
-        r[at + 2u] = static_cast<std::uint8_t>(v >> 8u);
-        r[at + 3u] = static_cast<std::uint8_t>(v);
+        std::memcpy(&r[at], &v, sizeof(v));
     };
     const auto put16 = [&](std::size_t at, std::int16_t v) {
-        r[at] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v) >> 8u);
-        r[at + 1u] = static_cast<std::uint8_t>(static_cast<std::uint16_t>(v));
+        std::memcpy(&r[at], &v, sizeof(v));
     };
     put32(0u, channel);
     put32(4u, samples);

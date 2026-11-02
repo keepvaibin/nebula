@@ -1,7 +1,7 @@
 #include "Game/Screen/MoviePlayerSimple.hpp"
 #include "Game/LiveActor/Nerve.hpp"
 #include "Game/Screen/MovieDraw.hpp"
-#include "Game/Screen/THPSimplePlayerWrapper.hpp"
+#include "Game/Screen/MovieStream.hpp"
 #include "Game/System/GameSystem.hpp"
 #include "Game/System/GameSystemFunction.hpp"
 #include "Game/System/HomeButtonStateNotifier.hpp"
@@ -36,7 +36,7 @@ namespace {
 };  // namespace
 
 MoviePlayerSimple::MoviePlayerSimple()
-    : LayoutActor("\203\200\201\133\203\162\201\133\203\166\203\214\203\103\203\204\201\133" /* ムービープレイヤー */, true), JKRDisposer(), mMovie(nullptr), mPlayerWrapper(nullptr), _44(false), _45(false) {
+    : LayoutActor("\203\200\201\133\203\162\201\133\203\166\203\214\203\103\203\204\201\133" /* ムービープレイヤー */, true), JKRDisposer(), mMovie(nullptr), mStream(nullptr), _44(false), _45(false) {
     mMovie = new Movie();
     mMovie->mMovieName = "";
     mMovie->mBuffer = nullptr;
@@ -50,16 +50,15 @@ MoviePlayerSimple::MoviePlayerSimple()
 
 MoviePlayerSimple::~MoviePlayerSimple() {
     SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->unregisterMoviePlayerSimple(this);
-    mPlayerWrapper->quit();
-    delete mPlayerWrapper;
+    mStream->quit();
+    delete mStream;
     JKRHeap::destroy(mHeap);
 }
 
 void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
     MR::connectToSceneMovie(this);
 
-    mPlayerWrapper = new THPSimplePlayerWrapper("THP\203\126\203\223\203\166\203\213\203\166\203\214\203\103\203\204\201\133\202\314\203\211\203\142\203\160" /* THPシンプルプレイヤーのラッパ */);
-    mPlayerWrapper->init(0);
+    mStream = new MovieStream("MovieStream");
 
     mHeap = JKRExpHeap::create(calcNeedMemoryForMovieWorks(), MR::getCurrentHeap(), true);
 
@@ -87,11 +86,11 @@ void MoviePlayerSimple::draw() const {
             frameBufferWidth = 832;
         }
 
-        u32 ySize = mMovie->mVideoInfo.ySize;
+        u32 ySize = mMovie->mVideoInfo.mHeight;
         u32 v4 = (MR::getFrameBufferWidth() - frameBufferWidth) / 2;
         u32 v5 = (MR::getFrameBufferHeight() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
-        mMovie->mCurrentFrame = mPlayerWrapper->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
+        mMovie->mCurrentFrame = mStream->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
     }
 }
 
@@ -142,11 +141,11 @@ s32 MoviePlayerSimple::getCurrentFrame() const {
 }
 
 s32 MoviePlayerSimple::getTotalFrame() const {
-    return mPlayerWrapper->getTotalFrame();
+    return mStream->getTotalFrame();
 }
 
 void MoviePlayerSimple::setFrameRateDefault() {
-    f32 frameRate = mPlayerWrapper->getFrameRate();
+    f32 frameRate = mStream->getFrameRate();
 
     if (MR::isNearZero(frameRate - 59.94f)) {
         mMovie->mFrameRateDefault = 1;
@@ -156,11 +155,11 @@ void MoviePlayerSimple::setFrameRateDefault() {
 }
 
 void MoviePlayerSimple::setVolume(f32 volume, s32 time) {
-    mPlayerWrapper->setVolume(volume * 127.0f, time);
+    mStream->setVolume(volume * 127.0f, time);
 }
 
 void MoviePlayerSimple::setUnpauseHomeButtonFlag() {
-    mPlayerWrapper->setUnpauseFrameFlag();
+    mStream->setUnpauseFrameFlag();
 }
 
 void MoviePlayerSimple::exeSimpleOff() {
@@ -168,23 +167,23 @@ void MoviePlayerSimple::exeSimpleOff() {
 
 void MoviePlayerSimple::exeOpen() {
     if (MR::isFirstStep(this)) {
-        mPlayerWrapper->open(mMovie->mMovieName);
+        mStream->open(mMovie->mMovieName);
     }
 
-    if (mPlayerWrapper->_9) {
-        mPlayerWrapper->getVideoInfo(&mMovie->mVideoInfo);
+    if (mStream->isHeaderRead()) {
+        mMovie->mVideoInfo = mStream->getVideoInfo();
         mMovie->_20 = 0;
         mMovie->_19 = false;
         setFrameRateDefault();
-        mMovie->mBuffer = new (mHeap, 32) u8[mPlayerWrapper->calcNeedMemory()];
-        mPlayerWrapper->setBuffer(mMovie->mBuffer);
-        mPlayerWrapper->preLoad(_44 != false);
+        mMovie->mBuffer = new (mHeap, 32) u8[mStream->calcNeedMemory()];
+        mStream->setBuffer(mMovie->mBuffer);
+        mStream->preLoad(_44);
         setNerve(GET_NERVE_ANON(MoviePlayerSimplePreload));
     }
 }
 
 void MoviePlayerSimple::exePreload() {
-    if (mPlayerWrapper->isPreLoading()) {
+    if (mStream->isPreLoading()) {
         return;
     }
 
@@ -193,7 +192,7 @@ void MoviePlayerSimple::exePreload() {
 }
 
 void MoviePlayerSimple::exePlaying() {
-    if (mMovie->mCurrentFrame + 1 == mPlayerWrapper->getTotalFrame()) {
+    if (mMovie->mCurrentFrame + 1 == mStream->getTotalFrame()) {
         mMovie->_24 = 0;
 
         if (!mMovie->_18) {
@@ -204,7 +203,7 @@ void MoviePlayerSimple::exePlaying() {
     }
 
     if (!mMovie->_19) {
-        s32 result = mPlayerWrapper->decode(0);
+        s32 result = mStream->decode(0);
 
         switch (result) {
         case 0:
@@ -232,7 +231,7 @@ void MoviePlayerSimple::exeSimpleSuspend() {
 }
 
 void MoviePlayerSimple::control() {
-    mPlayerWrapper->updateNerve();
+    mStream->updateNerve();
 }
 
 void MoviePlayerSimple::play(bool a1) {
@@ -243,8 +242,8 @@ void MoviePlayerSimple::play(bool a1) {
 }
 
 void MoviePlayerSimple::stop() {
-    mPlayerWrapper->loadStop();
-    mPlayerWrapper->close();
+    mStream->loadStop();
+    mStream->close();
     delete[] mMovie->mBuffer;
     mMovie->mBuffer = nullptr;
     MR::endStarPointerMode(this);
@@ -254,18 +253,9 @@ void MoviePlayerSimple::stop() {
 u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
     u32 needMemory = 0;
     needMemory += 0x140000;
-
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight());
     needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
     needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
-#else
-    s32 texCount = mPlayerWrapper->getUseTextureCount();
-
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight()));
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4));
-    needMemory += NebulaAlignUp32(texCount * (MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4));
-#endif
 
     return needMemory + 0x1188;
 }

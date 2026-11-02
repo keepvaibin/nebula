@@ -29,7 +29,7 @@ upstream projects; CMake downloads both at configure time from pinned archives c
 
 | Project | License | Adapted for | Nebula files |
 |---|---|---|---|
-| [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/native_thp_video.cpp`, `runtime/include/galaxy/native_thp_video.h` |
+| [Aurora](https://github.com/encounter/aurora) | MIT | THP movie decoding (parser, Huffman tables, IDCT) | `runtime/src/movie_video.cpp`, `runtime/include/galaxy/movie_video.h` |
 | Aurora | MIT | GX blend and pipeline state canonicalization | `runtime/src/render/shader_keys.cpp` |
 | Aurora | MIT | Indirect texture stage sampling, indirect matrix scale decoding | `runtime/include/galaxy/render/texture_sampling.h`, `runtime/src/render/render_core.cpp` |
 | Aurora | MIT | Content-keyed texture cache (optional) | `runtime/src/render/texture_cache.cpp` |

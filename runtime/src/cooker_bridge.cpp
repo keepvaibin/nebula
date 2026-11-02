@@ -3,6 +3,9 @@
 // the executable on first use.
 #include "galaxy/cooker_bridge.h"
 
+#include <algorithm>
+#include <iterator>
+
 #include <cctype>
 #include <filesystem>
 #include <mutex>
@@ -79,8 +82,11 @@ bool cooks(std::string_view name) {
     for (char& c : extension) {
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     }
-    return extension == "arc" || extension == "szs" || extension == "bti" || extension == "bmd" || extension == "bdl" ||
-           extension == "tpl" || extension == "brfnt" || extension == "jpc";
+    // crates/nebula-import/src/cook/mod.rs cooks().
+    static constexpr std::string_view kCooked[] = {"arc", "szs", "bti", "bmd", "bdl", "bmt", "cit", "bas", "bck", "bca", "btk", "brk", "bpk", "bpa",
+                                                   "btp", "bva", "blk", "bla", "bxk", "bxa", "tpl", "brfnt", "jpc", "bcsv", "tbl", "pa", "bcam", "banmt",
+                                                   "canm", "thp"};
+    return std::find(std::begin(kCooked), std::end(kCooked), extension) != std::end(kCooked);
 }
 
 std::optional<std::vector<std::uint8_t>> cook_file(std::string_view name, std::span<const std::uint8_t> bytes,
