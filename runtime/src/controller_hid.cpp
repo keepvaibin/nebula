@@ -2172,7 +2172,7 @@ std::uint64_t controller_hid_now_us() noexcept {
 }
 
 bool hidden_test_session() noexcept {
-    static const bool hidden = env_flag("GALAXY_HIDE_WINDOW");
+    static const bool hidden = env_flag(NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW"));
     return hidden;
 }
 

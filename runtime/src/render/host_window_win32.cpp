@@ -3418,7 +3418,7 @@ bool hidden_window_mode_enabled() {
         std::size_t length = 0;
         return getenv_s(
                    &length, value, sizeof(value),
-                   "GALAXY_HIDE_WINDOW") == 0 &&
+                   NEBULA_TEST_ENV("GALAXY_HIDE_WINDOW")) == 0 &&
                length > 1 && value[0] != '0' && value[0] != 'n' &&
                value[0] != 'N';
     }();

@@ -3,6 +3,7 @@
 // copies and screen probes are renderer_vk_scene.cpp.
 
 #include "renderer_vk_internal.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/render/vk/renderer_vk.h"
 #include "galaxy/platform_time.h"
 
@@ -44,7 +45,7 @@ bool env_flag(const char* name, bool fallback) {
 }
 
 bool trace_present_stats_enabled() {
-    static const bool enabled = env_flag("GALAXY_TRACE_PRESENT_STATS", false);
+    static const bool enabled = env_flag(NEBULA_TEST_ENV("GALAXY_TRACE_PRESENT_STATS"), false);
     return enabled;
 }
 

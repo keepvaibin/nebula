@@ -112,6 +112,7 @@ namespace NrvGameScene {
 };  // namespace NrvGameScene
 
 namespace {
+#if !defined(NEBULA_RELEASE)
     // Tests (GALAXY_TEST_WALK): the player placed in each body of water, or at each live actor, to play there.
     bool sTestWalkActive = false;
     u32 sTestSwimFrames = 0;
@@ -277,6 +278,7 @@ namespace {
             MR::setPlayerPos(pos);
         }
     }
+#endif
 }  // namespace
 
 GameScene::GameScene()
@@ -441,6 +443,7 @@ void GameScene::draw() const {
         const f32 depth = MR::isCameraInWater() ? WaterAreaFunction::getCameraWaterDepth() : -1.0f;
         NebulaHost::gameContext(NEBULA_CONTEXT_CAMERA_WATER, depth < 0.0f ? 0 : static_cast< s32 >(depth) + 1);
     }
+#if !defined(NEBULA_RELEASE)
     if (sTestWalkActive && MR::isPlayerInWaterMode()) {
         ++sTestSwimFrames;
     }
@@ -454,6 +457,7 @@ void GameScene::draw() const {
         sPendingStar == NEBULA_TEST_GET_GRAND_STAR ? MR::requestGrandStarGetDemo() : MR::requestPowerStarGetDemo();
         sPendingStar = 0;
     }
+#endif
     // The settings' galaxy select (its ADVANCED page) names its galaxies and stars in the game's own words, asked once.
     if (NebulaHost::galaxySelectNamesWanted() != 0) {
         char id[64];
@@ -466,6 +470,7 @@ void GameScene::draw() const {
             }
         }
     }
+#if !defined(NEBULA_RELEASE)
     NebulaTestAction action;
     if (NebulaHost::testSceneFrame(&action)) {
         static char sStage[sizeof(action.stage)];  // the stage change keeps a pointer to the name
@@ -576,6 +581,7 @@ void GameScene::draw() const {
             }
         }
     }
+#endif
     MR::drawInit();
     LightFunction::initLightRegisterAll();
     CategoryList::execute(MR::DrawType_MiiFaceIcon);
