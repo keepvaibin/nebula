@@ -1,31 +1,19 @@
 #pragma once
 
-// RenderCore: owns the console pipeline's subsystems and runs the per-frame loop behind the galaxy::render
-// API (render_api.h, through render_api.cpp).
+// RenderCore: runs the frame behind the galaxy::render API (render_api.h, through render_api.cpp).
 //
-// The simulation thread calls render_frame() once per VI retrace; it copies the frame's FIFO bytes
-// into a bounded queue and returns. The render thread consumes the chunks in order:
+// The game's thread attaches records (shapes, materials, passes, scene boundaries) and hands them over with render_frame;
+// the render thread consumes them in order:
 //
 //   render_frame_on_thread(chunk)
-//     -> renderer.begin_frame()            (drains PSO completions first)
+//     -> renderer.begin_frame()
 //     -> pipeline_cache.drain_completions()
-//     -> parser.run(fifo, ...)             (this object is the FifoSink)
-//          register loads  -> state_
-//          on_draw         -> dirty state to keys and constants, vertex_loader into the rings,
-//                             texture_cache lookups, renderer.draw()
-//          on_scene_copy     -> copy to an display picture or texture, copy-clear
-//          on_pe_*         -> collect the game-visible FINISH/TOKEN events
-//     -> renderer.present(scene_copies.latest())
+//     -> on_shape_record for each record   (drawing state, draws, target passes, captures)
+//     -> renderer.present()
 //     -> renderer.end_frame() returns the submission fence
-//     -> the collected events bind to that fence
 //
-// A full queue (render_queue_depth chunks) blocks the producer. One chunk per retrace, parsed in
-// submission order, is the only synchronization: game-memory reads during the parse (textures,
-// vertex arrays) run a bounded number of frames behind the simulation, the window real GP
-// hardware has while the game respects GXDrawDone.
-//
-// A render-thread failure is rethrown from the next render_frame() call rather than leaving a
-// frozen display.
+// A full queue (render_queue_depth chunks) blocks the producer. A render-thread failure is rethrown from the next
+// render_frame() call rather than leaving a frozen display.
 
 #include "galaxy/render/actor_lights.h"
 #include "galaxy/render/capture.h"
@@ -119,31 +107,24 @@ public:
     void set_frame_end_presents(bool enabled) noexcept {
         frame_end_presents_.store(enabled, std::memory_order_relaxed);
     }
-    // Scene boundaries one render chunk carries (3D and 2D, two frames).
-    static constexpr std::size_t kStreamMarkersPerChunk = 8u;
     // A stage name as the game reports it (MR::getCurrentStageName), NUL-terminated.
     using SceneStage = std::array<char, 48>;
-    // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
-    void attach_scene_marker(SceneMarker marker) noexcept {
-        if (producer_stream_marker_count_ < producer_stream_markers_.size()) {
-            const std::uint8_t index = producer_stream_marker_count_++;
-            producer_stream_markers_[index] = marker;
-            producer_stream_marker_serials_[index] = producer_shape_record_serial_;
-            producer_stream_marker_views_[index] = producer_scene_view_;
-            producer_stream_marker_sky_up_[index] = producer_scene_sky_up_;
-            if (producer_scene_view_valid_ && marker == SceneMarker::SceneBegin) {
-                producer_stream_marker_view_mask_ |= static_cast<std::uint8_t>(1u << index);
-            } else {
-                producer_stream_marker_view_mask_ &= static_cast<std::uint8_t>(~(1u << index));
-            }
-            if (producer_scene_view_valid_ && producer_scene_sky_up_known_ && marker == SceneMarker::SceneBegin) {
-                producer_stream_marker_sky_up_mask_ |= static_cast<std::uint8_t>(1u << index);
-            } else {
-                producer_stream_marker_sky_up_mask_ &= static_cast<std::uint8_t>(~(1u << index));
-            }
-            producer_stream_marker_stages_[index] = producer_scene_stage_;
+    // Simulation thread: a scene boundary, a record in the stream like the draws around it.
+    void attach_scene_marker(SceneMarker marker) {
+        shapes::Record record;
+        record.kind = shapes::Record::Kind::Scene;
+        record.key = static_cast<std::uint64_t>(static_cast<int>(marker));
+        record.native_index = static_cast<std::uint32_t>(producer_record_pool_.scenes.size());
+        shapes::SceneInfo& info = producer_record_pool_.scenes.emplace_back();
+        if (marker == SceneMarker::SceneBegin && producer_scene_view_valid_) {
+            info.view = producer_scene_view_;
+            info.view_valid = true;
+            info.sky_up = producer_scene_sky_up_;
+            info.sky_up_valid = producer_scene_sky_up_known_;
         }
+        info.stage = producer_scene_stage_;
         producer_scene_view_valid_ = false;
+        attach_shape_record(std::move(record));
     }
     [[nodiscard]] bool draw_identity_wanted() const noexcept {
         return draw_identity_wanted_.load(std::memory_order_relaxed);
@@ -186,7 +167,6 @@ public:
     // Simulation thread: a native shape record (native_shapes.h) the next submission carries, run when its parser
     // reaches the record's offset.
     void attach_shape_record(shapes::Record&& record) {
-        record.serial = producer_shape_record_serial_++;
         producer_shape_records_.push_back(std::move(record));
     }
     // Simulation thread: room for a record's matrices and state ops in the pool the next submission carries.
@@ -320,9 +300,7 @@ private:
 
 
 
-    // One queued frame: the FIFO bytes the simulation produced for a retrace and the memory and
-    // services the parser callbacks need. With memory_snapshot_active, `memory` points at
-    // memory_snapshot, so delayed parsing sees the arrays and textures of submission time.
+    // One queued frame: its records and what the game said about it.
     struct FrameChunk {
         PointerResponseStamp pointer_response{};
         bool prerecorded_movie{};
@@ -333,23 +311,9 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        // Scene boundaries in this chunk, in the order the game made them (3D and 2D scenes of up to two frames).
-        std::array<SceneMarker, kStreamMarkersPerChunk> stream_markers{};
-        // Per marker: how many shape records the game had made before it (their order at one offset).
-        std::array<std::uint64_t, kStreamMarkersPerChunk> stream_marker_serials{};
-        std::uint8_t stream_marker_count = 0;
-        // Game camera (world to eye) per SceneBegin marker; bit i of the
-        // mask marks marker i's view valid.
-        std::array<std::array<float, 12>, kStreamMarkersPerChunk> stream_marker_views{};
-        std::uint8_t stream_marker_view_mask = 0;
-        // The player's up per SceneBegin marker (VertexConstants::sky_up); bit i of the mask marks it known.
-        std::array<std::uint32_t, kStreamMarkersPerChunk> stream_marker_sky_up{};
-        std::uint8_t stream_marker_sky_up_mask = 0;
-        // The stage per SceneBegin marker (empty when the game did not say).
-        std::array<SceneStage, kStreamMarkersPerChunk> stream_marker_stages{};
-        // JPA stripe particles in this chunk's FIFO (attach_stripe_particle).
+        // JPA stripe particles in this chunk (attach_stripe_particle).
         std::vector<StripeParticleMark> stripe_particles;
-        // Native shape records in this chunk's FIFO, in stream order (attach_shape_record).
+        // The chunk's records, in the order the game made them (attach_shape_record).
         std::vector<shapes::Record> shape_records;
         shapes::RecordPool record_pool;
     };
@@ -384,28 +348,10 @@ private:
     void present_vi_black(bool in_frame);
     bool vi_black_shown_ = false;
     PointerResponseStamp producer_pointer_response_{}, render_pointer_response_{}, last_response_{};
-    std::array<SceneMarker, kStreamMarkersPerChunk> producer_stream_markers_{};
-    std::array<std::uint64_t, kStreamMarkersPerChunk> producer_stream_marker_serials_{};
-    // Shape records made so far (attach_shape_record): each record's and marker's place among them.
-    std::uint64_t producer_shape_record_serial_ = 0;
-    // Render thread: where a chunk's stream is split (markers, the pointer depth field, shape records), reused.
-    struct StreamSplit {
-        std::uint64_t serial;
-        int marker;  // a SceneMarker; -1 the pointer depth field; kSplitShapeRecord a shape record
-        int view;    // the marker's index (its camera) or the record's, -1 none
-    };
-    static constexpr int kSplitShapeRecord = -2;
-    std::vector<StreamSplit> stream_splits_;
-    std::uint8_t producer_stream_marker_count_ = 0;
-    std::array<std::array<float, 12>, kStreamMarkersPerChunk> producer_stream_marker_views_{};
-    std::uint8_t producer_stream_marker_view_mask_ = 0;
-    std::array<std::uint32_t, kStreamMarkersPerChunk> producer_stream_marker_sky_up_{};
-    std::uint8_t producer_stream_marker_sky_up_mask_ = 0;
     std::array<float, 12> producer_scene_view_{};
     bool producer_scene_view_valid_ = false;
     std::uint32_t producer_scene_sky_up_ = 0u;
     bool producer_scene_sky_up_known_ = false;
-    std::array<SceneStage, kStreamMarkersPerChunk> producer_stream_marker_stages_{};
     SceneStage producer_scene_stage_{};
     // Render thread: the stage the game last reported, and whether it ever did.
     SceneStage scene_stage_{};
@@ -930,7 +876,6 @@ private:
     static_assert(
         kChunkPoolRetainedBuffers >= 2u * kMaxSelectableRenderQueueDepth + 1u,
         "the chunk pool must cover twice the deepest render queue plus the consumer's chunk");
-    void take_attached_stream_markers(FrameChunk& chunk) noexcept;
     // `sky_up`: the scene's VertexConstants::sky_up when `sky_up_known`; `stage` the game's stage (SceneBegin).
     void on_scene_marker(SceneMarker marker, const std::array<float, 12>* view = nullptr, std::uint32_t sky_up = 0u,
                         bool sky_up_known = false, const SceneStage* stage = nullptr);
