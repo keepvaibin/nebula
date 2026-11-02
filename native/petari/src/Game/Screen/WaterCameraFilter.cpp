@@ -19,7 +19,6 @@
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include "Game/Util/NativeShader.hpp"
 #include <nebula_game_api.h>
@@ -87,7 +86,7 @@ namespace {
 
 void WaterCameraFilter::initScreenTex() {
     MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
-    mScreenTex = new JUTTexture(::getCanvasWidth(), ::getScreenHeight(), GPU_TF_RGB565);
+    mScreenTex = new JUTTexture(::getCanvasWidth(), ::getScreenHeight());
 }
 
 void WaterCameraFilter::exeAirToWater() {

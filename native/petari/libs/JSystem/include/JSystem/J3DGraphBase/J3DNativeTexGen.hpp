@@ -10,14 +10,14 @@ namespace J3DNativeTexGen {
     // implicit w of 1 (position, normal, binormals), bits 4-6 the emboss light.
     inline u8 kind(u32 type, u32 source) {
         u32 kind = 0, light = 0;
-        if (type >= GPU_TG_BUMP0 && type <= GPU_TG_BUMP7) {
+        if (type >= J3D_TG_BUMP0 && type <= J3D_TG_BUMP7) {
             kind = 1;
-            light = type - GPU_TG_BUMP0;
-        } else if (type == GPU_TG_SRTG) {
-            kind = source == GPU_TG_COLOR0 ? 2 : 3;
+            light = type - J3D_TG_BUMP0;
+        } else if (type == J3D_TG_SRTG) {
+            kind = source == J3D_TG_COLOR0 ? 2 : 3;
         }
-        const u32 projective = type == GPU_TG_MTX3x4 ? 1 : 0;
-        const u32 form = source <= GPU_TG_TANGENT ? 1 : 0;
+        const u32 projective = type == J3D_TG_MTX3x4 ? 1 : 0;
+        const u32 form = source <= J3D_TG_TANGENT ? 1 : 0;
         return static_cast< u8 >(kind | projective << 2 | form << 3 | light << 4);
     }
 
@@ -25,21 +25,21 @@ namespace J3DNativeTexGen {
     // bits 4-6 the emboss source coordinate.
     inline u8 source(u32 source) {
         u32 row = 5, emboss = 5;
-        if (source <= GPU_TG_TANGENT) {
+        if (source <= J3D_TG_TANGENT) {
             static const u8 kRow[4] = {0, 1, 3, 4};
             row = kRow[source];
-        } else if (source >= GPU_TG_TEX0 && source <= GPU_TG_TEX7) {
-            row = 5 + (source - GPU_TG_TEX0);
-        } else if (source >= GPU_TG_TEXCOORD0 && source <= GPU_TG_TEXCOORD6) {
-            emboss = source - GPU_TG_TEXCOORD0;
-        } else if (source == GPU_TG_COLOR0 || source == GPU_TG_COLOR1) {
+        } else if (source >= J3D_TG_TEX0 && source <= J3D_TG_TEX7) {
+            row = 5 + (source - J3D_TG_TEX0);
+        } else if (source >= J3D_TG_TEXCOORD0 && source <= J3D_TG_TEXCOORD6) {
+            emboss = source - J3D_TG_TEXCOORD0;
+        } else if (source == J3D_TG_COLOR0 || source == J3D_TG_COLOR1) {
             row = 2;
         }
         return static_cast< u8 >(row | (emboss & 7) << 4);
     }
 
-    // The post-transform matrix as a row (GPU_PTTEXMTX0 + 3k as 3k, GPU_PTIDENTITY as 61).
+    // The post-transform matrix as a row (J3D_PTTEXMTX0 + 3k as 3k, J3D_PTIDENTITY as 61).
     inline u8 post(u32 postMatrix) {
-        return static_cast< u8 >(postMatrix >= GPU_PTTEXMTX0 ? postMatrix - GPU_PTTEXMTX0 : postMatrix);
+        return static_cast< u8 >(postMatrix >= J3D_PTTEXMTX0 ? postMatrix - J3D_PTTEXMTX0 : postMatrix);
     }
 }  // namespace J3DNativeTexGen

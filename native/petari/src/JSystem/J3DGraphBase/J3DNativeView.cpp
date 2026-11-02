@@ -7,7 +7,7 @@
 extern "C" const NebulaHostServices* nebula_host(void);
 
 namespace {
-    // GpuInit's projection (an orthographic identity-like one) until the game sets its own.
+    // An orthographic identity-like projection until the game sets its own.
     bool sPerspective = false;
     f32 sTerms[6] = {1.0f, 0.0f, 1.0f, 0.0f, -1.0f, -2.0f};
 

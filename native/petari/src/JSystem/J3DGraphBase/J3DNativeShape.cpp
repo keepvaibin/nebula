@@ -29,7 +29,7 @@ namespace {
     }
 
     u32 typeBytes(u32 type) {
-        return type == GPU_U8 || type == GPU_S8 ? 1 : type == GPU_U16 || type == GPU_S16 ? 2 : 4;
+        return type == J3D_U8 || type == J3D_S8 ? 1 : type == J3D_U16 || type == J3D_S16 ? 2 : 4;
     }
 
     // A vertex component or display-list field as the importer cooks VTX1 and SHP1 (host order).
@@ -246,17 +246,25 @@ namespace J3DNativeShape {
 
     void setCurrent(u8 position, const u8* pTexture) {
         J3DNativeDraw::flush();
-        sCurrent.position = static_cast< u8 >(position / 3);
+        sCurrent.position = position;
         for (u32 t = 0; t < 8; t++) {
-            sCurrent.texture[t] = static_cast< u8 >(pTexture[t] >= 30 ? (pTexture[t] - 30) / 3 : 0);
+            sCurrent.texture[t] = pTexture[t];
         }
         sCurrentSet = true;
         sCurrentPosition = sCurrent.position;
     }
 
+    void setCurrentFromFile(u8 position, const u8* pIds) {
+        u8 slots[8];
+        for (u32 t = 0; t < 8; t++) {
+            slots[t] = static_cast< u8 >(pIds[t] >= J3D_TEXMTX0 ? (pIds[t] - J3D_TEXMTX0) / 3 : 0);
+        }
+        setCurrent(static_cast< u8 >(position / 3), slots);
+    }
+
     void setCurrentIdentity() {
-        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        static const u8 kIdentity[8] = {J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                        J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
         setCurrent(0, kIdentity);
     }
 

@@ -163,13 +163,13 @@ void MiiFacePartsHolder::drawExtra() const {
 void MiiFacePartsHolder::setTevOpa() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, GPU_LIGHT0 | GPU_LIGHT1, GPU_DF_CLAMP, GPU_AF_NONE, ambient, material, 1);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_OPA, J3D_LIGHT0 | J3D_LIGHT1, J3D_DF_CLAMP, J3D_AF_NONE, ambient, material, 1);
     J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
 }
 
 void MiiFacePartsHolder::setTevXlu() const {
     const NebulaColor8 material = {165, 165, 165, 255};
     const NebulaColor8 ambient = {128, 128, 128, 128};
-    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, GPU_LIGHT0 | GPU_LIGHT1, GPU_DF_CLAMP, GPU_AF_NONE, ambient, material, 0);
+    Mii_NativeChain(MII_I_NATIVE_CHAIN_NPC_XLU, J3D_LIGHT0 | J3D_LIGHT1, J3D_DF_CLAMP, J3D_AF_NONE, ambient, material, 0);
     J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
 }

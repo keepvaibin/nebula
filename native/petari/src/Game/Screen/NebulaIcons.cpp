@@ -31,8 +31,7 @@ namespace {
     // Glyph sheets (texture records) handed to the renderer after they are painted, one image each.
     void handOverSheets(const u8* pFirst, s32 count, s32 sheetBytes, s32 width, s32 height) {
         for (s32 i = 0; i < count; i++) {
-            J3DNativeTexture::registerImage(pFirst + i * sheetBytes, GPU_TF_RGBA8, static_cast< u16 >(width),
-                                            static_cast< u16 >(height), 1);
+            J3DNativeTexture::registerRecord(pFirst + i * sheetBytes);
         }
     }
 
@@ -1572,7 +1571,7 @@ namespace {
         }
         initRecord(sPictures[k].mRecord, cPictureSizes[k], cPictureSizes[k]);
         paintInto(canvas, sPictures[k].mRecord, cPictureSizes[k], 0, 0);
-        J3DNativeTexture::registerImage(sPictures[k].mRecord, GPU_TF_RGBA8, cPictureSizes[k], cPictureSizes[k], 1);
+        J3DNativeTexture::registerRecord(sPictures[k].mRecord);
     }
 
     // GALAXY_EXPORT_ART: each family's sheets and A bubbles at the game's size and eight times it, and each icon alone.
@@ -1990,14 +1989,14 @@ namespace {
         if (rSet.mRow < rSet.mHeight) {
             return;
         }
-        J3DNativeTexture::registerImage(pRecord, GPU_TF_RGBA8, rSet.mWidth, rSet.mHeight, 1);
+        J3DNativeTexture::registerRecord(pRecord);
         nw4r::lyt::TexMap& rMap = rSet.mMaps[half][look];
         rMap.SetImage(pRecord);
         rMap.SetSize(static_cast< u16 >(rSet.mWidth), static_cast< u16 >(rSet.mHeight));
-        rMap.SetTexelFormat(GPU_TF_RGBA8);
-        rMap.SetWrapMode(GPU_CLAMP, GPU_CLAMP);
+        rMap.SetTexelFormat(nw4r::lyt::TexMap::TEXEL_RGBA8);
+        rMap.SetWrapMode(NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
         rMap.SetMipMap(false);
-        rMap.SetFilter(GPU_LINEAR, GPU_LINEAR);
+        rMap.SetFilter(NEBULA_FILTER_LINEAR, NEBULA_FILTER_LINEAR);
         rMap.SetLOD(0.0f, 0.0f);
         rSet.mNext++;
         rSet.mRow = 0;
@@ -2016,12 +2015,12 @@ namespace {
         for (u8 i = 0; pMaterial != nullptr && i < pMaterial->GetTextureNum() && rSwaps.mCount < cSwapsMax; i++) {
             nw4r::lyt::TexMap& rMap = pMaterial->GetTexMapAry()[i];
             for (s32 k = 0; k < 2; k++) {
-                if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == GPU_TF_IA4) {
+                if (rMap.mWidth == cPictureSizes[k] && rMap.mHeight == cPictureSizes[k] && rMap.GetTexelFormat() == nw4r::lyt::TexMap::TEXEL_IA4) {
                     rSwaps.mMaps[rSwaps.mCount] = &rMap;
                     rSwaps.mSaved[rSwaps.mCount] = rMap;
                     rSwaps.mCount++;
                     rMap.SetImage(sPictures[k].mRecord);
-                    rMap.SetTexelFormat(GPU_TF_RGBA8);
+                    rMap.SetTexelFormat(nw4r::lyt::TexMap::TEXEL_RGBA8);
                     rMap.SetMipMap(false);
                     rMap.SetLOD(0.0f, 0.0f);
                     break;

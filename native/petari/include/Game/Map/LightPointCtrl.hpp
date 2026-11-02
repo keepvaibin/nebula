@@ -1,7 +1,6 @@
 #pragma once
 
 #include "Game/Util/Color.hpp"
-#include <NebulaGpuEnums.h>
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/JGeometry.hpp>
 #include <NebulaGpu.h>

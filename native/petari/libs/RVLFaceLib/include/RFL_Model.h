@@ -32,9 +32,9 @@ typedef struct MiiCharModel {
 
 typedef struct MiiDrawSetting {
     u8 lightEnable;      // at 0x0
-    GpuLightID lightMask; // at 0x4
-    GpuDiffuseFn diffuse; // at 0x8
-    GpuAttnFn attn;       // at 0xC
+    u32 lightMask; // at 0x4
+    u32 diffuse; // at 0x8
+    u32 attn;       // at 0xC
     NebulaColor8 ambColor;    // at 0x10
     u8 compLoc;          // at 0x14
 } MiiDrawSetting;

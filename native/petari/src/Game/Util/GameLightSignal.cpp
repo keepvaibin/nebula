@@ -125,7 +125,7 @@ namespace GameLightSignal {
         sStarCore = pCore;
     }
 
-    // GpuInitLightDistAttn's falloff, 1 / (1 + k1 d + k2 d^2): the distance where the light halves.
+    // The light's falloff, 1 / (1 + k1 d + k2 d^2): the distance where the light halves.
     void pointLight(const PointLightInfo* pInfo) {
         const f32 reference = pInfo->mRefDistance;
         const f32 brightness = pInfo->mRefBrightness;

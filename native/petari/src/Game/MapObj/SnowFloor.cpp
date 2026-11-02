@@ -61,8 +61,8 @@ void SnowFloor::init(const JMapInfoIter& rIter) {
 
     initLocalPoint(rIter);
     drawSetup();
-    mTextures[0] = new JUTTexture(::sTextureSize, ::sTextureSize, GPU_TF_I8);
-    mTextures[1] = new JUTTexture(::sTextureSize, ::sTextureSize, GPU_TF_I8);
+    mTextures[0] = new JUTTexture(::sTextureSize, ::sTextureSize);
+    mTextures[1] = new JUTTexture(::sTextureSize, ::sTextureSize);
     mTexture = mTextures[0];
     mTextureIndex = 0;
     mImage = mTexture->mImage;
@@ -476,7 +476,7 @@ void SnowFloor::createTexture() {
         }
 
         // The depths as rows of texels (nebula_cooked_texture.h): the renderer reads them as they are.
-        J3DNativeTexture::registerImage(mImage, NEBULA_TEXTURE_LINEAR_L8, ::sTextureSize, ::sTextureSize, 1);
+        J3DNativeTexture::registerLinear(mImage, NEBULA_TEXTURE_LINEAR_L8, ::sTextureSize, ::sTextureSize, 1);
     }
 }
 

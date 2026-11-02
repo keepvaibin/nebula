@@ -11,7 +11,7 @@ public:
 
     void createBlurTexture();
     void createDOFTexture();
-    JUTTexture* createTexture(f32, GpuTexFmt);
+    JUTTexture* createTexture(f32);
 
     /* 0x00 */ JUTTexture* _0;
     /* 0x04 */ JUTTexture* _4;

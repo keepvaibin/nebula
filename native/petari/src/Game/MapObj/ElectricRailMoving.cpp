@@ -10,7 +10,6 @@
 #include "Game/Util.hpp"
 #include "Game/Util/Color.hpp"
 #include <JSystem/JMath/JMATrigonometric.hpp>
-#include <NebulaGpuEnums.h>
 
 namespace {
     const char* cSensorNameTable[] = {"body0", "body1", "body2", "body3", "body4", "body5", "body6", "body7"};

@@ -18,10 +18,9 @@
 #include <JSystem/JGeometry/TBox.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <new>
-#include <NebulaGpuEnums.h>
 
 void MarioActor::initScreenBox() {
-    _B44 = new (32) u8[0x20000];
+    _B44 = new (32) u8[32];  // the frame read's key
     _B28 = 0.0f;
     _B24 = 0.0f;
     _B30 = 0.0f;
@@ -121,10 +120,10 @@ void MarioActor::captureScreenBox() const {
         return;
     }
 
-    J3DPass::writeColor(false);
-    J3DPass::writeAlpha(true);
-    J3DNativeTarget::capture(_B44, (s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), NEBULA_TARGET_RGB,
-                             NEBULA_CAPTURE_CLEAR);
+    J3DNativeTarget::read(_B44, NEBULA_TARGET_RGB);
+    // The box's alpha becomes the model's mask; its depth follows the depth writes in force.
+    J3DNativeTarget::clearFrame((s32)(_B34), (s32)(_B38), (s32)(_B3C), (s32)(_B40), 0, 0xFFFFFF,
+                                NEBULA_CLEAR_ALPHA | (J3DNativeState::pass()->depth_write != 0 ? NEBULA_CLEAR_DEPTH : 0));
     J3DPass::writeColor(true);
     J3DPass::writeAlpha(false);
     J3DPass::constantAlpha(false, 0);
@@ -142,7 +141,13 @@ void MarioActor::writeBackScreenBox() const {
     J3DNativeTexObj texture;
     TVec2f minimum;
     TVec2f maximum;
-    J3DNativeTexture::init(&texture, _B44, (s32)(_B3C), (s32)(_B40), GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP, GPU_FALSE);
+    const f32 canvasWidth = MR::getCanvasWidth();
+    const f32 canvasHeight = MR::getScreenHeight();
+    const f32 u0 = static_cast< s32 >(_B34) / canvasWidth;
+    const f32 v0 = static_cast< s32 >(_B38) / canvasHeight;
+    const f32 u1 = (static_cast< s32 >(_B34) + static_cast< s32 >(_B3C)) / canvasWidth;
+    const f32 v1 = (static_cast< s32 >(_B38) + static_cast< s32 >(_B40)) / canvasHeight;
+    J3DNativeTexture::init(&texture, _B44, canvasWidth, canvasHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
     MR::convertCanvasPosToScreenPos(&minimum, mScreenBoxPos);
     MR::convertCanvasPosToScreenPos(&maximum, mScreenBoxPos + mScreenBoxSize + TVec2f(0.99f, 0.99f));
     NebulaNativeMaterial material;
@@ -156,13 +161,13 @@ void MarioActor::writeBackScreenBox() const {
     maximum.x = static_cast< s16 >(static_cast< s16 >(static_cast< s32 >(maximum.x) + 1) & ~1);
     J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(minimum.x, minimum.y, 0.9999f);
-    J3DNativeDraw::texCoord(0.0f, 0.0f);
+    J3DNativeDraw::texCoord(u0, v0);
     J3DNativeDraw::position(maximum.x, minimum.y, 0.9999f);
-    J3DNativeDraw::texCoord(1.0f, 0.0f);
+    J3DNativeDraw::texCoord(u1, v0);
     J3DNativeDraw::position(maximum.x, maximum.y, 0.9999f);
-    J3DNativeDraw::texCoord(1.0f, 1.0f);
+    J3DNativeDraw::texCoord(u1, v1);
     J3DNativeDraw::position(minimum.x, maximum.y, 0.9999f);
-    J3DNativeDraw::texCoord(0.0f, 1.0f);
+    J3DNativeDraw::texCoord(u0, v1);
     J3DPass::constantAlpha(false, 0);
     TDDraw::close();
 }
@@ -397,7 +402,7 @@ void MarioActor::updateRandomTexture(f32 distance) {
         }
     }
 
-    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
 }
 
 namespace {
@@ -453,9 +458,8 @@ namespace {
         TDDraw::setupNative(&material, 1, 0, 2);
         NativeShader::init(material, NEBULA_SHADER_FRAME_RIPPLE, NativeShader::BLEND_OPAQUE, NEBULA_COMPARE_ALWAYS, false,
                            NEBULA_CULL_NONE);
-        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, GPU_TF_RGB565, GPU_CLAMP, GPU_CLAMP,
-                               GPU_FALSE);
-        J3DNativeTarget::capture(pFrame, 0, 0, width, height, NEBULA_TARGET_RGB, 0);
+        J3DNativeTexture::init(&texture, const_cast< void* >(pFrame), width, height, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+        J3DNativeTarget::read(pFrame, NEBULA_TARGET_RGB);
         NativeShader::setTexObj(material, 0, &texture);
         material.constants[0] = amplitude;
         material.constants[1] = height;
@@ -646,7 +650,7 @@ void MarioActor::initDarkMask() {
         for (u32 i = 0; i < 8 * 8 * 2; i++) {
             image[i] = 0;
         }
-        J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+        J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     }
 
     _1C3 = true;
@@ -668,7 +672,7 @@ void MarioActor::updateDarkMask(u16 unused) {
     image[index + 1] = 255;
     previous[index] = 0;
     previous[index + 1] = 255;
-    J3DNativeTexture::registerImage(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
+    J3DNativeTexture::registerLinear(image, NEBULA_TEXTURE_LINEAR_LA8, 8, 8, 1);
     _1C4++;
 }
 

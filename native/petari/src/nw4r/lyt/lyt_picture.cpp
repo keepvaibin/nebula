@@ -25,7 +25,7 @@ namespace nw4r {
         }
 
         Picture::Picture(const res::Picture* pRes, const ResBlockSet& rBlockSet) : Pane(pRes) {
-            u8 num = ut::Min< u8 >(pRes->texCoordNum, GPU_MAX_TEXCOORD);
+            u8 num = ut::Min< u8 >(pRes->texCoordNum, 8);
             Init(num);
 
             for (int i = 0; i < 4; i++) {

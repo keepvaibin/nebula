@@ -14,7 +14,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include "math_types.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <NebulaGpuEnums.h>
 
 namespace {
     static Mtx mViewMtx;
@@ -439,27 +438,6 @@ namespace TDDraw {
         f32 end;
         MR::calcFogStartEnd(position, radius, &start, &end);
         J3DPass::linearFog(start, end, nearZ, farZ, color);
-    }
-
-    u32 getTexel32(const JUTTexture* pTexture, u32 x, u32 y) {
-        return getTexel32(pTexture->mImage, pTexture->getWidth(), x, y);
-    }
-
-    u32 getTexel32(const u8* pTexture, u32 width, u32 x, u32 y) {
-        u32 offset = ((width << 4) & ~0x3F) * (y >> 2) + (((x & 3) << 1) + (((y & 3) << 3) + ((x << 4) & ~0x3F)));
-        return (pTexture[offset] | (pTexture[offset + 0x21] << 8)) | ((pTexture[offset + 1] << 24) | (pTexture[offset + 0x20] << 16));
-    }
-
-    void setTexel32(JUTTexture* pTexture, u32 x, u32 y, u32 color) {
-        setTexel32(pTexture->mImage, pTexture->getWidth(), x, y, color);
-    }
-
-    void setTexel32(u8* pTexture, u32 width, u32 x, u32 y, u32 color) {
-        u32 offset = ((width << 4) & ~0x3F) * (y >> 2) + (((x & 3) << 1) + (((y & 3) << 3) + ((x << 4) & ~0x3F)));
-        pTexture[offset] = color;
-        pTexture[offset + 1] = color >> 24;
-        pTexture[offset + 0x20] = color >> 16;
-        pTexture[offset + 0x21] = color >> 8;
     }
 
     void invProject(TVec3f* pDest, const TVec3f& rScreen, MtxPtr pView, const f32* pProjection, const f32* pViewport, bool normalizedZ) {

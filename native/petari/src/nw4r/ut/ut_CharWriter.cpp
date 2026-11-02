@@ -37,7 +37,7 @@ namespace nw4r {
             EnableLinearFilter(true, true);
         }
 
-        void CharWriter::LoadTexture(const Glyph& glyph, GpuTexMapID slot) {
+        void CharWriter::LoadTexture(const Glyph& glyph, u8 slot) {
             LoadingTexture loadInfo;
 
             loadInfo.slot = slot;
@@ -47,10 +47,9 @@ namespace nw4r {
             if (loadInfo != mLoadingTexture) {
                 J3DNativeTexObj tobj;
 
-                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, glyph.texFormat, GPU_CLAMP, GPU_CLAMP,
-                             GPU_FALSE);
-                J3DNativeTexture::initLOD(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, GPU_DISABLE, GPU_DISABLE, GPU_ANISO_1);
-                NativeShader::setTexObj(sMaterial, slot - GPU_TEXMAP0, &tobj);
+                J3DNativeTexture::init(&tobj, const_cast< void* >(glyph.pTexture), glyph.texWidth, glyph.texHeight, NEBULA_WRAP_CLAMP, NEBULA_WRAP_CLAMP);
+                J3DNativeTexture::setFilter(&tobj, mFilter.atSmall, mFilter.atLarge, 0, 0, 0, false, 0);
+                NativeShader::setTexObj(sMaterial, slot - 0, &tobj);
                 NativeShader::send(sMaterial);
 
                 mLoadingTexture = loadInfo;
@@ -70,22 +69,22 @@ namespace nw4r {
                 SetupGXWithColorMapping(mColorMapping.min, mColorMapping.max);
             } else {
                 if (mFont) {
-                    GpuTexFmt format = mFont->GetTextureFormat();
+                    u8 format = mFont->GetTextureFormat();
 
                     switch (format) {
-                    case GPU_TF_I4:
-                    case GPU_TF_I8:
+                    case SHEET_I4:
+                    case SHEET_I8:
                         SetupGXForI();
                         break;
 
-                    case GPU_TF_IA4:
-                    case GPU_TF_IA8:
+                    case SHEET_IA4:
+                    case SHEET_IA8:
                         SetupGXDefault();
                         break;
 
-                    case GPU_TF_RGB565:
-                    case GPU_TF_RGB5A3:
-                    case GPU_TF_RGBA8:
+                    case SHEET_RGB565:
+                    case SHEET_RGB5A3:
+                    case SHEET_RGBA8:
                         SetupGXForRGBA();
                         break;
 
@@ -130,8 +129,8 @@ namespace nw4r {
         }
 
         void CharWriter::EnableLinearFilter(bool atSmall, bool atLarge) {
-            mFilter.atSmall = atSmall ? GPU_LINEAR : GPU_NEAR;
-            mFilter.atLarge = atLarge ? GPU_LINEAR : GPU_NEAR;
+            mFilter.atSmall = atSmall ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
+            mFilter.atLarge = atLarge ? NEBULA_FILTER_LINEAR : NEBULA_FILTER_NEAREST;
         }
 
         f32 CharWriter::Print(CharCode code) {
@@ -171,7 +170,7 @@ namespace nw4r {
             const u16 texRight = static_cast< u16 >((glyph.cellX + glyph.widths.glyphWidth) * TEXTURE_COODINATE_ONE / glyph.texWidth);
             const u16 texBottom = static_cast< u16 >((glyph.cellY + glyph.height) * TEXTURE_COODINATE_ONE / glyph.texHeight);
 
-            LoadTexture(glyph, GPU_TEXMAP0);
+            LoadTexture(glyph, 0);
 
             J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
             {

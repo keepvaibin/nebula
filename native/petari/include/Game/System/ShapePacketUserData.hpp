@@ -17,7 +17,7 @@ public:
     void loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const;
 
     struct TexMtxInfo {
-        TexMtxInfo() : mType(), mPostMtx(GPU_PTIDENTITY) {
+        TexMtxInfo() : mType(), mPostMtx(J3D_PTIDENTITY) {
         }
 
         /* 0x00 */ s32 mType;

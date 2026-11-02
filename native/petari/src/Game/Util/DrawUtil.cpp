@@ -21,13 +21,10 @@
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
-#include <NebulaGpuEnums.h>
 #include <NebulaGpuTypes.h>
 #include "Game/Util/RenderSignals.hpp"
 
 namespace {
-    J3DNativeTexObj clear_z_tobj;
-
     const f32 cNearZ = -10000.0f;
     const f32 cFarZ = 10000.0f;
 
@@ -360,7 +357,7 @@ namespace MR {
     void loadTexProjectionMtx(u32 id) {
         TPos3f matrix;
         calcTexProjectionMtx(&matrix);
-        J3DNativeShape::setTexture((id - GPU_TEXMTX0) / 3, matrix, 3);
+        J3DNativeShape::setTexture((id - J3D_TEXMTX0) / 3, matrix, 3);
     }
 
     void calcTexProjectionMtx(TPos3f* pMtx) {

@@ -31,15 +31,11 @@ namespace J3DNativeTarget {
         pHost->frame_clear(pHost->user, left, top, width, height, clearRgba, clearZ & 0xFFFFFF, channels);
     }
 
-    void capture(const void* pKey, u16 left, u16 top, u16 width, u16 height, NebulaTargetChannels channels, u32 flags) {
+    void read(const void* pKey, NebulaTargetChannels channels, u32 flags) {
         J3DNativeShape::flushState();
-        // A clear takes what the current writes allow.
-        const NebulaPassState* pPass = J3DNativeState::pass();
-        flags |= (pPass->color_write != 0 ? NEBULA_CAPTURE_CLEAR_COLOR : 0) | (pPass->alpha_write != 0 ? NEBULA_CAPTURE_CLEAR_ALPHA : 0) |
-                 (pPass->depth_write != 0 ? NEBULA_CAPTURE_CLEAR_DEPTH : 0);
         const NebulaHostServices* pHost = nebula_host();
-        pHost->target_capture(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), left, top, width,
-                              height, static_cast< u32 >(channels), flags);
+        pHost->frame_read(pHost->user, static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey)), static_cast< u32 >(channels),
+                          flags);
     }
 };  // namespace J3DNativeTarget
 

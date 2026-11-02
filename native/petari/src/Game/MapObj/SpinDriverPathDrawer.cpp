@@ -27,9 +27,9 @@ namespace {
         NativeShader::setTexture(material, 0, pColor);
         NativeShader::setTexture(material, 1, pMask);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
-                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        static const u8 kPlaces[8] = {0, 1, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture,
+                                      J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture, J3DNativeShape::kIdentityTexture};
+        J3DNativeShape::setCurrent(0, kPlaces);
     }
 }  // namespace
 
