@@ -3,7 +3,7 @@
 #include "Game/Screen/LayoutActor.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
 #include "Game/Screen/MovieStream.hpp"
-class JKRExpHeap;
+class NebulaArena;
 
 struct Movie {
     /* 0x00 */ const char* mMovieName;
@@ -43,12 +43,11 @@ public:
     void exeSimpleSuspend();
     void play(bool);
     void stop();
-    u32 calcNeedMemoryForMovieWorks();
     void drawCinemaFrame() const;
 
 private:
     /* 0x38 */ Movie* mMovie;
-    /* 0x3C */ JKRExpHeap* mHeap;
+    /* 0x3C */ NebulaArena* mHeap;
     /* 0x40 */ MovieStream* mStream;
     /* 0x44 */ bool _44;
     /* 0x44 */ bool _45;

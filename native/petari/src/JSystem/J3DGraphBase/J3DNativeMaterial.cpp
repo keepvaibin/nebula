@@ -9,7 +9,7 @@
 #include "JSystem/J3DGraphBase/J3DPacket.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTexture.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <nebula_game_api.h>
 #include <nebula_cooked_material.h>
 #include "Game/Util/RenderSignals.hpp"

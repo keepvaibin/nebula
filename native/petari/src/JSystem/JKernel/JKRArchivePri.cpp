@@ -1,5 +1,5 @@
 #include "JSystem/JKernel/JKRArchive.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include <cstring>
 #include <ctype.h>
 
@@ -15,10 +15,10 @@ JKRArchive::JKRArchive(s32 entryNum, EMountMode mountMode) {
     mMountMode = mountMode;
     _34 = 1;
     _58 = 1;
-    mHeap = JKRHeap::findFromRoot(this);
+    mHeap = NebulaArena::findFromRoot(this);
 
     if (mHeap == nullptr) {
-        mHeap = JKRHeap::sCurrentHeap;
+        mHeap = NebulaArena::sCurrentHeap;
     }
 
     mEntryNum = entryNum;

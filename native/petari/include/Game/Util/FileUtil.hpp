@@ -5,7 +5,7 @@
 
 
 class JKRArchive;
-class JKRHeap;
+class NebulaArena;
 class JKRMemArchive;
 
 namespace MR {
@@ -32,30 +32,30 @@ namespace MR {
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @param[in] allocDir The direction for the allocation.
     /// @return A pointer to the loaded file data.
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir);
+    void* loadToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir);
 
     /// @brief Requests asynchronous loading of a file into main memory.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
     /// @param[out] pDst A pointer to the target memory address, or `nullptr` to allocate.
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @param[in] allocDir The direction for the allocation.
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir);
+    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir);
 
     /// @brief Mounts an archive file synchronously.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @param[in,out] pHeap An optional pointer to the target heap.
     /// @return A pointer to the mounted archive.
-    JKRMemArchive* mountArchive(const char* pFilePath, JKRHeap* pHeap);
+    JKRMemArchive* mountArchive(const char* pFilePath, NebulaArena* pHeap);
 
     /// @brief Requests asynchronous mounting of an archive file.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @param[in,out] pHeap An optional pointer to the target heap.
-    void mountAsyncArchive(const char* pFilePath, JKRHeap* pHeap);
+    void mountAsyncArchive(const char* pFilePath, NebulaArena* pHeap);
 
     /// @brief Requests asynchronous mounting of an object or layout archive file.
     /// @param[in] pFilePrefix A pointer to the null-terminated name of the archive file, without the extension.
     /// @param[in,out] pHeap An optional pointer to the target heap.
-    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, JKRHeap* pHeap);
+    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap);
 
     /// @brief Returns the data of a file after it has been asynchronously loaded.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
@@ -74,13 +74,13 @@ namespace MR {
     /// @param[in] pArcData A pointer to the archive file data.
     /// @param[in,out] pHeap A pointer to the target heap.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.
-    void createAndAddArchive(void* pArcData, JKRHeap* pHeap, const char* pFilePath);
+    void createAndAddArchive(void* pArcData, NebulaArena* pHeap, const char* pFilePath);
 
     /// @brief Returns the mounted archive and heap for a given file by pointer.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the archive file.
     /// @param[out] ppArchive A pointer to the archive pointer to initialize.
     /// @param[out] ppHeap A pointer to the heap pointer to initialize.
-    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, JKRHeap** ppHeap);
+    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, NebulaArena** ppHeap);
 
 #if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     void removeFile(const char*);
@@ -92,7 +92,7 @@ namespace MR {
 
     /// @brief Removes resource and file holders from memory if they belong to the given heap.
     /// @param[in,out] pHeap A pointer to the heap to compare with.
-    void removeResourceAndFileHolderIfIsEqualHeap(JKRHeap* pHeap);
+    void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap);
 
     /// @brief Decompresses a file from an archive file.
     /// @param[in] pArchive A pointer to the target archive.
@@ -100,7 +100,7 @@ namespace MR {
     /// @param[in,out] pHeap A pointer to the target heap.
     /// @param[in] align The alignment for the allocation.
     /// @return A pointer to the copy.
-    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align);
+    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, NebulaArena* pHeap, int align);
 
     /// @brief Determines if an file is currently loaded.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.

@@ -43,34 +43,34 @@ namespace MR {
         return GameAssets::find(filePath);
     }
 
-    void* loadToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir) {
+    void* loadToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir) {
         loadAsyncToMainRAM(pFilePath, pDst, pHeap, allocDir);
 
         return receiveFile(pFilePath);
     }
 
-    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, JKRHeap* pHeap, GameAssets::AllocDirection allocDir) {
+    void loadAsyncToMainRAM(const char* pFilePath, u8* pDst, NebulaArena* pHeap, GameAssets::AllocDirection allocDir) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
         SingletonHolder< FileLoader >::get()->requestLoadToMainRAM(filePath, pDst, pHeap, allocDir, false);
     }
 
-    JKRMemArchive* mountArchive(const char* pFilePath, JKRHeap* pHeap) {
+    JKRMemArchive* mountArchive(const char* pFilePath, NebulaArena* pHeap) {
         mountAsyncArchive(pFilePath, pHeap);
 
         return receiveArchive(pFilePath);
     }
 
-    void mountAsyncArchive(const char* pFilePath, JKRHeap* pHeap) {
+    void mountAsyncArchive(const char* pFilePath, NebulaArena* pHeap) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
         SingletonHolder< FileLoader >::get()->requestMountArchive(filePath, pHeap, false);
     }
 
-    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, JKRHeap* pHeap) {
-        JKRHeap* pLocalHeap;
+    void mountAsyncArchiveByObjectOrLayoutName(const char* pFilePrefix, NebulaArena* pHeap) {
+        NebulaArena* pLocalHeap;
 
         if (pHeap != nullptr) {
             pLocalHeap = pHeap;
@@ -109,11 +109,11 @@ namespace MR {
         SingletonHolder< FileLoader >::get()->receiveAllRequestedFile();
     }
 
-    void createAndAddArchive(void* pArcData, JKRHeap* pHeap, const char* pFilePath) {
+    void createAndAddArchive(void* pArcData, NebulaArena* pHeap, const char* pFilePath) {
         SingletonHolder< FileLoader >::get()->createAndAddArchive(pArcData, pHeap, pFilePath);
     }
 
-    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, JKRHeap** ppHeap) {
+    void getMountedArchiveAndHeap(const char* pFilePath, JKRArchive** ppArchive, NebulaArena** ppHeap) {
         char filePath[256];
         makeFileNameConsideringLanguage(filePath, sizeof(filePath), pFilePath);
 
@@ -133,12 +133,12 @@ namespace MR {
         SingletonHolder< FileLoader >::get()->removeFile(filePath);
     }
 
-    void removeResourceAndFileHolderIfIsEqualHeap(JKRHeap* pHeap) {
+    void removeResourceAndFileHolderIfIsEqualHeap(NebulaArena* pHeap) {
         SingletonHolder< ResourceHolderManager >::get()->removeIfIsEqualHeap(pHeap);
         SingletonHolder< FileLoader >::get()->removeHolderIfIsEqualHeap(pHeap);
     }
 
-    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, JKRHeap* pHeap, int align) {
+    void* copyFileFromArchive(JKRArchive* pArchive, const char* pFilePath, NebulaArena* pHeap, int align) {
         const u8* const fileData = static_cast< const u8* >(pArchive->getResource(pFilePath));
         const u32 fileSize = pArchive->getResSize(fileData);
         u8* const buffer = new (pHeap, align) u8[fileSize];

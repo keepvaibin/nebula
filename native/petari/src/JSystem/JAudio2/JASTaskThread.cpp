@@ -3,7 +3,7 @@
 #include <stddef.h>
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "Game/System/GameThreads.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 JASTaskThread::JASTaskThread(int msgCount, u32 stackSize) : JKRThread(JASDram, stackSize, msgCount) {
 }

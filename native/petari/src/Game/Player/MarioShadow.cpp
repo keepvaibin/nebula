@@ -16,7 +16,7 @@
 #include "Game/Util/ScreenUtil.hpp"
 #include <JSystem/J3DGraphBase/J3DShape.hpp>
 #include <JSystem/J3DGraphBase/J3DSys.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <cstring>
 

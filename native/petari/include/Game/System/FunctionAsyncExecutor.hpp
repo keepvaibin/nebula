@@ -7,8 +7,8 @@
 #include "Game/Util/Array.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-class JKRExpHeap;
-class JKRUnitHeap;
+class NebulaArena;
+class NebulaArena;
 
 namespace MR {
     class FunctorBase;
@@ -27,7 +27,7 @@ public:
     }
 
     /* 0x00 */ MR::FunctorBase* mFunc;
-    JKRHeap* mStarterHeap;  // the current heap where it was started
+    NebulaArena* mStarterHeap;  // the current heap where it was started
     /* 0x08 */ const char* mName;
     /* 0x0C */ NebulaAtomic< bool > mIsEnd;
     /* 0x10 */ GameMessageQueue mQueue;
@@ -36,7 +36,7 @@ public:
 
 class FunctionAsyncExecutorThread : public GameThread {
 public:
-    FunctionAsyncExecutorThread(JKRHeap*);
+    FunctionAsyncExecutorThread(NebulaArena*);
 
     virtual void* run();
 
@@ -72,6 +72,6 @@ public:
     MR::Vector< MR::AssignableArray< FunctionAsyncExecutorThread* > > mThreads;
     /* 0x008 */ FunctionAsyncExecutorOnMainThread* mMainThreadExec;
     /* 0x00C */ MR::Vector< MR::FixedArray< FunctionAsyncExecInfo*, 256 > > mHolders;
-    /* 0x410 */ JKRUnitHeap* _410;
-    /* 0x414 */ JKRExpHeap* _414;
+    /* 0x410 */ NebulaArena* _410;
+    /* 0x414 */ NebulaArena* _414;
 };

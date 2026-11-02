@@ -7,12 +7,12 @@
 #include <JSystem/JAudio2/JASGlobal.hpp>
 
 class JAISoundHandle;
-class JKRHeap;
+class NebulaArena;
 class AudMeMgr;
 
 class AudRhythmMeSystem : public JASGlobalInstance< AudRhythmMeSystem > {
 public:
-    AudRhythmMeSystem(JKRHeap*, u32, bool);
+    AudRhythmMeSystem(NebulaArena*, u32, bool);
 
     AudRhythmMeSystem();
 

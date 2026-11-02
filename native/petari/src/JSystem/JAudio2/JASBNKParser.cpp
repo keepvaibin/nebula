@@ -8,7 +8,7 @@
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
 #include "JSystem/JAudio2/JASInstRand.hpp"
 #include "JSystem/JAudio2/JASInstSense.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
 
 template < typename T >
@@ -16,18 +16,15 @@ inline T readStream(void const* stream, u32 offset) {
     return *(T*)((intptr_t)stream + offset);
 }
 
-JASBank* JASBNKParser::createBank(void const* stream, JKRHeap* heap) {
+JASBank* JASBNKParser::createBank(void const* stream, NebulaArena* heap) {
     return createBasicBank(stream, heap);
 }
 
-u32 JASBNKParser::sUsedHeapSize;
 
-JASBasicBank* JASBNKParser::createBasicBank(void const* stream, JKRHeap* heap) {
+JASBasicBank* JASBNKParser::createBasicBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;
     }
-
-    u32 free_size = heap->getFreeSize();
 
     TFileHeader* filep = (TFileHeader*)stream;
     JASBasicBank* bank = nullptr;
@@ -40,7 +37,6 @@ JASBasicBank* JASBNKParser::createBasicBank(void const* stream, JKRHeap* heap) {
         break;
     }
 
-    sUsedHeapSize += free_size - heap->getFreeSize();
     return bank;
 }
 
@@ -57,7 +53,7 @@ JASBNKParser::Ver1::TChunk* JASBNKParser::Ver1::findChunk(void const* stream, u3
     return nullptr;
 }
 
-JASInstEffect* JASBNKParser::Ver1::createEffector(void const* stream, JKRHeap* heap) {
+JASInstEffect* JASBNKParser::Ver1::createEffector(void const* stream, NebulaArena* heap) {
     u32* data = (u32*)(intptr_t)stream;
     switch (*data++) {
     case 'Rand': {
@@ -80,7 +76,7 @@ JASInstEffect* JASBNKParser::Ver1::createEffector(void const* stream, JKRHeap* h
     }
 }
 
-JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, JKRHeap* heap) {
+JASBasicBank* JASBNKParser::Ver1::createBasicBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;
     }
@@ -205,7 +201,7 @@ inline JASInstParam::JASInstParam() {
     init();
 }
 
-JASBasicBank* JASBNKParser::Ver0::createBasicBank(void const* stream, JKRHeap* heap) {
+JASBasicBank* JASBNKParser::Ver0::createBasicBank(void const* stream, NebulaArena* heap) {
     if (heap == nullptr) {
         heap = JASDram;
     }

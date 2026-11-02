@@ -16,7 +16,7 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include "Game/System/NebulaClock.hpp"
 
 namespace {
@@ -49,7 +49,7 @@ MoviePlayerSimple::~MoviePlayerSimple() {
     SingletonHolder< GameSystem >::get()->mHomeButtonStateNotifier->unregisterMoviePlayerSimple(this);
     mStream->quit();
     delete mStream;
-    JKRHeap::destroy(mHeap);
+    NebulaArena::destroy(mHeap);
 }
 
 void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
@@ -57,7 +57,7 @@ void MoviePlayerSimple::init(const JMapInfoIter& rIter) {
 
     mStream = new MovieStream();
 
-    mHeap = JKRExpHeap::create(calcNeedMemoryForMovieWorks(), MR::getCurrentHeap(), true);
+    mHeap = NebulaArena::create(MR::getCurrentHeap());
 
     initNerve(GET_NERVE_ANON(MoviePlayerSimpleOff));
     kill();
@@ -228,12 +228,6 @@ void MoviePlayerSimple::stop() {
     mMovie->mBuffer = nullptr;
     MR::endStarPointerMode(this);
     GameSystemFunction::setPermissionToCheckWiiRemoteConnectAndScreenDimming(_45);
-}
-
-u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
-    // The picture's planes: the frames themselves stay in the mapped store. The game's movies are at most 640x480.
-    const u32 pixels = 640 * 480;
-    return NebulaAlignUp32(pixels) + NebulaAlignUp32(pixels / 4) * 2 + 0x1188;
 }
 
 void MoviePlayerSimple::drawCinemaFrame() const {

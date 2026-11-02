@@ -3,7 +3,7 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/MemoryUtil.hpp"
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 

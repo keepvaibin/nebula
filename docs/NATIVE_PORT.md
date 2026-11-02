@@ -30,7 +30,7 @@ clang 22 on every host, with the same flags everywhere:
 | `-fno-math-errno` | No kept code reads `errno` (M). With it, `sqrtf` is one instruction instead of a compare and a library call on the negative path (M, assembly). |
 | `-fno-stack-protector` | Pinned off for every toolchain (some distribution compilers enable it by default), so the module performs the same everywhere. |
 | `-fno-strict-float-cast-overflow` | Float-to-int casts saturate (`llvm.fpto[su]i.sat`, M). Unsigned conversions equal the console's `__cvt_fp2unsigned` (D). Signed ones differ only for NaN (0 here, 0x80000000 there). 8- and 16-bit targets saturate where the console wrapped after an int32 conversion: every such conversion goes through `s32` in the source (`(s16)(s32)(x)`, 205 sites; `native/tools/narrow_float_audit.py`). Degrees to binary angles (x 182.04) leave the 16-bit range past 180 degrees: saturated, every object placed rotated past 180 degrees was turned to 180 (the Observatory's Terrace and Fountain domes, M). |
-| `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. JKRHeap's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
+| `-fno-rtti -fno-exceptions -fno-sized-deallocation -fno-aligned-allocation` | CodeWarrior's model. NebulaArena's `operator new`/`delete` take every allocation; no kept code uses `dynamic_cast` or `typeid` (M). |
 | `-fno-ms-compatibility -fno-delayed-template-parsing`; `-Wno-everything` then, as errors, `return-type`, the pointer/int truncation casts, calls without a prototype, int/pointer conversions, mismatched function pointer types, returned addresses of locals and constant out-of-bounds indexes | Windows reports the errors every other host reports. Strict mode found 15 lookup/goto sites hidden by the MSVC-compatible defaults (M). `-w` would also silence the `-Werror=` checks (M). Each error class is one the audits found silently miscompiled natively (see Audits). No function falls off its end (M). |
 | `-ffp-contract=off` | The same results on every CPU, with or without FMA. |
 
@@ -77,8 +77,8 @@ Every console-only construct was found by tool, not by reading:
 - **Game module** (shared library): Petari's kept code, built with the flags above against the host's C and C++ libraries.
 - **Nebula host**: renderer, audio, input, files, settings and window. It uses the host C++ library.
 - Between the two sits a C function table.
-- They are separate modules so the game's `operator new` (JKRHeap's) stays out of the host.
-- JKRHeap's global `operator new` stays module-local: a DLL's own definition on Windows, hidden visibility on ELF and Mach-O.
+- They are separate modules so the game's `operator new` (NebulaArena's) stays out of the host.
+- NebulaArena's global `operator new` stays module-local: a DLL's own definition on Windows, hidden visibility on ELF and Mach-O.
 
 ## Audits
 
@@ -165,14 +165,14 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 
 ## Memory and the GPU's addresses
 
-- The game's memory is one block of 385 MB (`NebulaMemory.c`), which the root heap divides: heaps sized for 64-bit data, no console arena, no MEM1 or MEM2. Untouched pages cost address space and commit, not memory: about 41 MB is in memory at a stop. docs/NATIVE_PERFORMANCE.md "Memory" has the table.
+- The game's memory is arenas (`NebulaArena`): each has its own 4 GB of addresses from the host and commits memory as it grows, 1 MB at a time. No sizes are given and nothing runs out but the machine's memory. A freed block goes on its size's free list; destroying an arena gives all of it back at once, runs what is registered with it, destroys the arenas made under it, and drops its file views and what the renderer holds from it.
 - The store is mapped read-only for the process's life (`AssetStore::map`, `asset_map`). Waves and streams play from the mapping: no copy. A file the game loads whole, from 8 KB up, is a private view of the store (`asset_map_private`): a page costs memory of the game's only once written, which 98-99 % of them never are; the view goes with the heap it was asked for.
 - The sound memory holds no sound: 1 MB, each wave archive's place in its section, so the archive goes with the section. A voice carries its source's start and end.
-- Images and shapes reach the renderer as records: the game hands each over where it loads or rewrites it, and a heap's going tells the renderer to forget what lay in it (`shape_forget`).
+- Images and shapes reach the renderer as records: the game hands each over where it loads or rewrites it, and an arena's going tells the renderer to forget what lay in it (`shape_forget`).
 - The game draws through typed records (`nebula_game_api.h`; docs/GRAPHICS_ARCHITECTURE.md). No game code calls GX.
 - The lens flare's visibility test and the star pointer's and talk balloons' depth are screen probes: the game names its points, the renderer reads those pixels where the drawing has reached, the answers come back a frame or two later (`screen_probe`, `screen_probe_results`).
 - Each game thread is a host thread with its own stack, at least 256 KB, guarded by the OS.
-- A pointer stays a pointer: the block and the views lie anywhere in 64 bits, so no distance between them passes through 32 bits (`ResTIMG::image()`; `GALAXY_TEST_MEMORY_AT` places the block to test it).
+- A pointer stays a pointer: arenas and views lie anywhere in 64 bits, so no distance between them passes through 32 bits (`ResTIMG::image()`; `GALAXY_TEST_MEMORY_AT` places the arenas to test it).
 
 ## Platform boundary
 

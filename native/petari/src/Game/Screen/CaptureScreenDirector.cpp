@@ -4,7 +4,7 @@
 #include "Game/Util/MemoryUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JKernel/JKRExpHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include "Game/System/NebulaFrameClock.hpp"
 #include <cstring>

@@ -8,7 +8,7 @@
 #include "Game/Util/LiveActorUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>

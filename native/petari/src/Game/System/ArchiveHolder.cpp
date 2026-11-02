@@ -3,7 +3,7 @@
 #include "Game/Util.hpp"
 #include <cstring>
 
-ArchiveHolderArchiveEntry::ArchiveHolderArchiveEntry(void* pData, JKRHeap* pHeap, const char* pArchiveName)
+ArchiveHolderArchiveEntry::ArchiveHolderArchiveEntry(void* pData, NebulaArena* pHeap, const char* pArchiveName)
     : mHeap(pHeap), mArchive(nullptr), mArchiveName(nullptr) {
     JKRMemArchive* archive = new (pHeap, 0) JKRMemArchive();
     archive->mountFixed(pData, JKR_MEM_BREAK_FLAG_0);
@@ -24,7 +24,7 @@ ArchiveHolder::ArchiveHolder() {
     mMutex.init();
 }
 
-ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, JKRHeap* pHeap, const char* pArchiveName) {
+ArchiveHolderArchiveEntry* ArchiveHolder::createAndAdd(void* pData, NebulaArena* pHeap, const char* pArchiveName) {
     ArchiveHolderArchiveEntry* entry = new (pHeap, 0) ArchiveHolderArchiveEntry(pData, pHeap, pArchiveName);
     GameMutex* mutex = &mMutex;
     mutex->lock();
@@ -42,7 +42,7 @@ JKRMemArchive* ArchiveHolder::getArchive(const char* pArchiveName) const {
     return (entry != nullptr) ? entry->mArchive : nullptr;
 }
 
-void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, JKRArchive** pArchive, JKRHeap** pHeap) const {
+void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, JKRArchive** pArchive, NebulaArena** pHeap) const {
     mMutex.lock();
     ArchiveHolderArchiveEntry* entry = findEntry(pArchiveName);
     mMutex.unlock();
@@ -53,7 +53,7 @@ void ArchiveHolder::getArchiveAndHeap(const char* pArchiveName, JKRArchive** pAr
     }
 }
 
-void ArchiveHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
+void ArchiveHolder::removeIfIsEqualHeap(NebulaArena* pHeap) {
     if (pHeap == nullptr) {
         return;
     }

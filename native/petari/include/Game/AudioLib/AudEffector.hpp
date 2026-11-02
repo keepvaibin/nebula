@@ -2,14 +2,14 @@
 
 #include <JSystem/JAudio2/JASVoice.hpp>
 
-class JKRHeap;
+class NebulaArena;
 
 class AudEffector {
 public:
     /// @brief Creates a new `AudEffector`.
     AudEffector();
 
-    void initFxLine(JKRHeap*);
+    void initFxLine(NebulaArena*);
     void setFxSend(f32);
     void setCutoff(s32);
     void setSpecialFx(s32);

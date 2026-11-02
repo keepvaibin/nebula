@@ -4,7 +4,7 @@
 #include "JSystem/JAudio2/JASChannel.hpp"
 #include "JSystem/JAudio2/JASTrack.hpp"
 #include "JSystem/JAudio2/JASHeapCtrl.hpp"
-#include "JSystem/JKernel/JKRSolidHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 #include <nebula_game_api.h>
 

@@ -8,10 +8,8 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 
-#include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JKernel/JKRSolidHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 #include <JSystem/JKernel/JKRThread.hpp>
-#include <JSystem/JKernel/JKRUnitHeap.hpp>
 
 #include "JSystem/JUtility/JUTNativeLog.hpp"
 #include <JSystem/JUtility/JUTTexture.hpp>
@@ -45,123 +43,6 @@
 namespace {
     const u8 sUnitMask[] = {0x80, 0x40, 0x20, 0x10, 8, 4, 2, 1};
 };  // namespace
-
-NEBULA_NO_ASAN
-void* JKRUnitHeap::do_alloc(u32 size, int alignment) {
-    u32 bit;
-    u8* pBat;
-    s32 index;
-    lock();
-    void* pResult = nullptr;
-
-    if (size <= mUnitSize) {
-        index = find1FreeBlock(alignment);
-        if (index >= 0) {
-            setUnitUsed(index);
-            mTotalFreeSize -= mUnitSize;
-            pResult = indexToAddress(index);
-        }
-    } else {
-        u32 count = (size + mUnitSize - 1) / mUnitSize;
-        index = findFreeBlock(alignment, count);
-        if (index >= 0) {
-            pBat = mBat + index / 8;
-            for (s32 i = index; i < index + count; i++) {
-                bit = i & 7;
-                if (bit == 0) {
-                    pBat = mBat + i / 8;
-                }
-
-                *pBat |= ::sUnitMask[bit];
-            }
-
-            mTotalFreeSize -= mUnitSize * count;
-            pResult = indexToAddress(index);
-        }
-    }
-
-    unlock();
-    return pResult;
-}
-
-NEBULA_NO_ASAN
-void JKRUnitHeap::do_free(void* pMemory) {
-    lock();
-    s32 index = addressToIndex(pMemory);
-    if (index >= 0) {
-        u32 value = mBat[index / 8];
-        u32 cleared = value & (::sUnitMask[index & 7] ^ 0xFF);
-        mBat[index / 8] = cleared;
-        if (value != cleared) {
-            mTotalFreeSize += mUnitSize;
-        }
-    }
-
-    unlock();
-}
-
-void JKRSolidHeap::do_free(void* pMemory) {
-}
-
-NEBULA_NO_ASAN
-s32 JKRExpHeap::adjustSize() {
-    CMemBlock* pNext;
-    JKRHeap* pParent = mChildTree.getParent()->getObject();
-    if (pParent == nullptr) {
-        return -1;
-    }
-
-    lock();
-    u8* pEnd = mStart;
-    for (CMemBlock* pBlock = mHeadUsedList; pBlock != nullptr; pBlock = pBlock->mNext) {
-        u8* pBlockEnd = reinterpret_cast< u8* >(pBlock + 1) + pBlock->mSize;
-        if (pBlockEnd > pEnd) {
-            pEnd = pBlockEnd;
-        }
-    }
-
-    if (pEnd == mEnd) {
-        unlock();
-        return -1;
-    }
-
-    if (pParent->getHeapType() != 'EXPH') {
-        unlock();
-        return -1;
-    }
-
-    for (CMemBlock* pBlock = mHeadFreeList; pBlock != nullptr; pBlock = pNext) {
-        pNext = pBlock->mNext;
-        if (reinterpret_cast< u8* >(pBlock) >= pEnd) {
-            if (pNext != nullptr) {
-                pNext = pNext->mNext;
-            }
-
-            removeFreeBlock(pBlock);
-        }
-    }
-
-    if (mHeadFreeList == nullptr) {
-        CMemBlock* pBlock = reinterpret_cast< CMemBlock* >(pEnd);
-        pBlock->initiate(nullptr, nullptr, 0, 0, 0);
-        mHeadFreeList = pBlock;
-        mTailFreeList = pBlock;
-        pEnd += sizeof(CMemBlock);
-    }
-
-    u32 size = pEnd - reinterpret_cast< u8* >(this);
-    pParent->resize(this, size);
-    mEnd = pEnd;
-    mSize = pEnd - mStart;
-    unlock();
-    return size;
-}
-
-NEBULA_NO_ASAN
-u32 JKRHeap::getMaxAllocatableSize(int alignment) {
-    u32 address = (u32)reinterpret_cast< uintptr_t >(getMaxFreeBlock());
-    return ~(alignment - 1) & (getFreeSize() - ((alignment - 1) & (alignment - (address & 0xF))));
-}
 
 JSUOutputStream::~JSUOutputStream() {
 }
@@ -946,7 +827,7 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     JPADrawQuad(0);
 }
 
-void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
+void JAU_JASInitializer::initJASystem(NebulaArena* pHeap) {
     if (JASLoad::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
         if (audioMemSize_ == 0) {

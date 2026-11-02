@@ -5,13 +5,13 @@
 
 class JAISoundHandle;
 class JAISoundID;
-class JKRHeap;
+class NebulaArena;
 
 class JAUSoundObject : public JAISoundHandles {
 public:
     JAUSoundObject();
 
-    JAUSoundObject(TVec3f*, u8, JKRHeap*);
+    JAUSoundObject(TVec3f*, u8, NebulaArena*);
     ~JAUSoundObject();
 
     virtual void process();

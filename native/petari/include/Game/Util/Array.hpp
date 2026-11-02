@@ -2,13 +2,13 @@
 
 #include <NebulaGpu.h>
 #include <nebula_math.h>
-#include <JSystem/JKernel/JKRHeap.hpp>
+#include "Game/System/NebulaArena.hpp"
 
 namespace MR {
     /// @brief A full table: twice the room, in the heap it lies in, and the old one goes. Pointers into it do not survive this.
     template < class T >
     T* growArray(T* pOld, s32 num) {
-        T* const pNew = new (JKRHeap::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
+        T* const pNew = new (NebulaArena::findFromRoot(pOld), 0) T[num * 2];  // num is never 0: see AssignableArray::grow
         for (s32 i = 0; i < num; i++) {
             pNew[i] = pOld[i];
         }

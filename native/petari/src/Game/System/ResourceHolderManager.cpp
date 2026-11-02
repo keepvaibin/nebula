@@ -14,7 +14,7 @@ ResourceHolderManager::ResourceHolderManager() {
     mResourceArray.clear();
 }
 
-ResourceHolder* ResourceHolderManager::createAndAdd(const char* pArcName, JKRHeap*) {
+ResourceHolder* ResourceHolderManager::createAndAdd(const char* pArcName, NebulaArena*) {
     return createAndAddInner(pArcName, MR::makeObjectArchiveFileName, startCreateResourceHolder)->mResourceHolder;
 }
 
@@ -22,7 +22,7 @@ ResourceHolder* ResourceHolderManager::createAndAddStationed(const char* pParam1
     return createAndAddInnerStationed(pParam1, &ResourceHolderManager::createResourceHolder)->mResourceHolder;
 }
 
-LayoutHolder* ResourceHolderManager::createAndAddLayoutHolder(const char* pParam1, JKRHeap*) {
+LayoutHolder* ResourceHolderManager::createAndAddLayoutHolder(const char* pParam1, NebulaArena*) {
     return createAndAddInner(pParam1, MR::makeLayoutArchiveFileName, startCreateLayoutHolder)->mLayoutHolder;
 }
 
@@ -38,7 +38,7 @@ LayoutHolder* ResourceHolderManager::createAndAddLayoutHolderRawData(const char*
     return add(pParam1, args)->mLayoutHolder;
 }
 
-void ResourceHolderManager::removeIfIsEqualHeap(JKRHeap* pHeap) {
+void ResourceHolderManager::removeIfIsEqualHeap(NebulaArena* pHeap) {
     if (pHeap == nullptr) {
         return;
     }

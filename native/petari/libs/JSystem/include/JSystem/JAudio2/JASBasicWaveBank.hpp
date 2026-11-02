@@ -10,7 +10,7 @@ struct JASBasicWaveBank : public JASWaveBank {
     struct TWaveGroup : JASWaveArc {
         TWaveGroup(JASBasicWaveBank*);
         virtual ~TWaveGroup();
-        void setWaveCount(u32, JKRHeap*);
+        void setWaveCount(u32, NebulaArena*);
         virtual void onLoadDone();
         virtual void onEraseDone();
         u32 getWaveID(int index) const {
@@ -66,8 +66,8 @@ struct JASBasicWaveBank : public JASWaveBank {
     JASBasicWaveBank();
     ~JASBasicWaveBank();
     TWaveGroup* getWaveGroup(u32);
-    void setGroupCount(u32, JKRHeap*);
-    void setWaveTableSize(u32, JKRHeap*);
+    void setGroupCount(u32, NebulaArena*);
+    void setWaveTableSize(u32, NebulaArena*);
     void incWaveTable(JASBasicWaveBank::TWaveGroup const*);
     void decWaveTable(JASBasicWaveBank::TWaveGroup const*);
     JASWaveHandle* getWaveHandle(u32) const;

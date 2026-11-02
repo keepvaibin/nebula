@@ -1,9 +1,9 @@
 #include "Game/Speaker/SpkSystem.hpp"
 #include "Game/Speaker/SpkSpeakerCtrl.hpp"
 
-SpkSystem::SpkSystem(JKRHeap* pHeap) : JASGlobalInstance(true), mData() {
+SpkSystem::SpkSystem(NebulaArena* pHeap) : JASGlobalInstance(true), mData() {
     if (pHeap == nullptr) {
-        pHeap = JKRGetCurrentHeap();
+        pHeap = NebulaArena::getCurrentHeap();
     }
 
     mHeap = pHeap;

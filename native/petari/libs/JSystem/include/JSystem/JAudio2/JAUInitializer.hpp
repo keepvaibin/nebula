@@ -1,12 +1,12 @@
 #pragma once
 
 
-class JKRSolidHeap;
+class NebulaArena;
 
 class JAU_JASInitializer {
 public:
     JAU_JASInitializer();
-    void initJASystem(JKRSolidHeap* pHeap);
+    void initJASystem(NebulaArena* pHeap);
 
     /* 0x00 */ u32 audioMemory_;
     /* 0x04 */ u32 audioMemSize_;

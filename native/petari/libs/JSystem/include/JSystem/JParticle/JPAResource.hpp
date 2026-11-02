@@ -1,7 +1,7 @@
 #pragma once
 
 
-class JKRHeap;
+class NebulaArena;
 class JPAEmitterWorkData;
 class JPABaseEmitter;
 class JPABaseParticle;
@@ -17,7 +17,7 @@ class JPAFieldBlock;
 class JPAResource {
 public:
     JPAResource();
-    void init(JKRHeap*);
+    void init(NebulaArena*);
     bool calc(JPAEmitterWorkData*, JPABaseEmitter*);
     void draw(JPAEmitterWorkData*, JPABaseEmitter*);
     void drawP(JPAEmitterWorkData*);

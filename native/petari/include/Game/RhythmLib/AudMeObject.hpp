@@ -6,7 +6,7 @@
 
 class AudMeObject : public AudMeHandles, public JKRDisposer {
 public:
-    AudMeObject(TVec3f*, u8, JKRHeap*);
+    AudMeObject(TVec3f*, u8, NebulaArena*);
 
     virtual ~AudMeObject();
     virtual void dispose();

@@ -1,7 +1,7 @@
 #include "JSystem/JAudio2/JASDrumSet.hpp"
 #include "JSystem/JAudio2/JASCalc.hpp"
 #include "JSystem/JAudio2/JASInstEffect.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 JASDrumSet::JASDrumSet() {
     JASCalc::bzero(&mPercArray, PERC_MAX * sizeof(TPerc*));
@@ -65,7 +65,7 @@ void JASDrumSet::setPerc(int index, JASDrumSet::TPerc* pPerc) {
 JASDrumSet::TPerc::TPerc() : mVolume(1.0f), mPitch(1.0f), mPan(0.5f), mRelease(1000), mEffects(), mVelomapCount(0), mVelomap(nullptr) {
 }
 
-void JASDrumSet::TPerc::setVeloRegionCount(u32 count, JKRHeap* pHeap) {
+void JASDrumSet::TPerc::setVeloRegionCount(u32 count, NebulaArena* pHeap) {
     delete[] mVelomap;
     mVelomap = new (pHeap, 0) TVelomap[count];
     mVelomapCount = count;

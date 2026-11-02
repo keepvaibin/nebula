@@ -2,7 +2,7 @@
 
 #include "JSystem/JAudio2/JASBank.hpp"
 #include "JSystem/JAudio2/JASBasicInst.hpp"
-#include "JSystem/JKernel/JKRHeap.hpp"
+#include "Game/System/NebulaArena.hpp"
 
 #define INST_NUM_MAX 0xF0
 
@@ -16,7 +16,7 @@ public:
         return 'BSIC';
     }
 
-    void newInstTable(u8, JKRHeap*);
+    void newInstTable(u8, NebulaArena*);
     void setInst(int, JASInst*);
     JASInst* getInst(int) const;
 
