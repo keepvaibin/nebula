@@ -5,7 +5,6 @@
 #include "JSystem/JKernel/JKRDisposer.hpp"
 
 class JKRADCommand;
-class JKRAramBlock;
 class JSUFileInputStream;
 
 class JKRFile : public JKRDisposer {
@@ -53,7 +52,6 @@ public:
 
     /* 0x1C */ NebulaMutex mMutex1;
     /* 0x34 */ NebulaMutex mMutex2;
-    /* 0x4C */ JKRAramBlock* mBlock;
     /* 0x50 */ NebulaThread* field_0x50;
     /* 0x54 */ JSUFileInputStream* mFileStream;
     /* 0x58 */ u32 field_0x58;

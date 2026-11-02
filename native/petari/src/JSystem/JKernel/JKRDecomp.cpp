@@ -1,6 +1,5 @@
 #include "JSystem/JKernel/JKRDecomp.hpp"
 #include "Game/System/NebulaKernel.hpp"
-#include "JSystem/JKernel/JKRAramPiece.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
 #include <revolution/gx.h>
 #include <revolution/mtx.h>
@@ -38,10 +37,6 @@ void* JKRDecomp::run() {
         decode(command.mSrc, command.mDst, command.mCompressedSize, command.mDecompressedSize);
 
         if (command._20 != 0) {
-            if (command._20 == 1) {
-                JKRAramPiece::sendCommand(command.mAmCommand);
-            }
-
             continue;
         }
 

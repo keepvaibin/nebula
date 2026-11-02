@@ -29,7 +29,7 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/SystemUtil.hpp"
-#include <JSystem/JKernel/JKRAram.hpp>
+#include <JSystem/JKernel/JKRDecomp.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <nw4r/lyt/init.h>
 #include <revolution/gx.h>
@@ -86,7 +86,7 @@ GameSystem::GameSystem()
 }
 
 void GameSystem::init() {
-    JKRAram::create(0xE00000, 0xFFFFFFFF, 8, 7, 3);
+    JKRCreateDecompManager(7);
     mObjHolder = new GameSystemObjHolder();
     mFontHolder = new GameSystemFontHolder();
     mFontHolder->createFontFromEmbeddedData();

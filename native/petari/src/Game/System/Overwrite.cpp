@@ -7,8 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/MotionSignal.hpp"
 
-#include <JSystem/JKernel/JKRAram.hpp>
-#include <JSystem/JKernel/JKRAramPiece.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
 #include <JSystem/JKernel/JKRSolidHeap.hpp>
 #include <JSystem/JKernel/JKRThread.hpp>
@@ -995,37 +993,11 @@ void JPADrawRotYBillboard(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle)
     JPADrawQuad(0);
 }
 
-void JKRAramPiece::startDMA(JKRAMCommand* pCommand) {
-    // The console required a cached main-memory source (0x80000000 and up): natively, a main-to-ARAM transfer
-    // from a non-null pointer.
-    if (pCommand->mTransferDirection != 0 || pCommand->mSrc == 0) {
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    if (pCommand->mDst >= 0x04000000) {
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    if (pCommand->mDataLength > 0x00E00000) {
-        doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-        return;
-    }
-
-    NebulaAuxMemory::write(pCommand->mDst, reinterpret_cast< const void* >(pCommand->mSrc), pCommand->mDataLength);
-    doneDMA(reinterpret_cast< uintptr_t >(pCommand));
-}
-
 void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
     if (JASAudioThread::getThreadPointer() == nullptr && JASDvd::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
-        if (audioMemory_ == 0) {
-            audioMemory_ = JKRAram::getManager()->getAudioMemory();
-        }
-
         if (audioMemSize_ == 0) {
-            audioMemSize_ = JKRAram::getManager()->getAudioMemSize();
+            audioMemSize_ = NebulaAuxMemory::cSoundBytes;
         }
 
         JASKernel::setupAramHeap(audioMemory_, audioMemSize_);
@@ -1071,8 +1043,6 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
 namespace {
     s32 sAudioThreadMsgSize = 0x20;
     u32 sAudioThreadStackSize = 0x8000;
-    u32 sAramThreadStackSize = 0xC000;
-    s32 sAramThreadMsgSize = 0x20;
 };  // namespace
 
 JASAudioThread::JASAudioThread(int priority, int, u32)
@@ -1080,25 +1050,3 @@ JASAudioThread::JASAudioThread(int priority, int, u32)
     sThreadQueue.init();
 }
 
-JKRAram::JKRAram(u32 audioSize, u32 graphSize, s32 priority) : JKRThread(::sAramThreadStackSize, ::sAramThreadMsgSize, priority) {
-    const u32 reserved = NebulaAuxMemory::cReserved;
-    const u32 total = NebulaAuxMemory::size();
-    mAudioMemorySize = audioSize;
-    if (graphSize == 0xFFFFFFFF) {
-        mGraphMemorySize = total - audioSize - reserved;
-        mAramMemorySize = 0;
-    } else {
-        mGraphMemorySize = graphSize;
-        mAramMemorySize = total - (audioSize + graphSize) - reserved;
-    }
-
-    mAudioMemoryPtr = NebulaAuxMemory::alloc(mAudioMemorySize);
-    mGraphMemoryPtr = NebulaAuxMemory::alloc(mGraphMemorySize);
-    if (mAramMemorySize != 0) {
-        mAramMemoryPtr = NebulaAuxMemory::alloc(mAramMemorySize);
-    } else {
-        mAramMemoryPtr = 0;
-    }
-
-    mAramHeap = new (JKRGetSystemHeap(), 0) JKRAramHeap(mGraphMemoryPtr, mGraphMemorySize);
-}
