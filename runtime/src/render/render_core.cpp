@@ -530,7 +530,7 @@ void RenderCore::reset_fifo_session_state() {
     texture_bindings_dirty_ = true;
     current_texture_map_mask_ = 0u;
     current_texture_map_mask_valid_ = false;
-    native_material_.reset();
+    native_material_ = nullptr;
     current_texture_binding_key_ = {};
     current_texture_binding_key_mask_ = 0u;
     // Also clears current_texture_binding_key_valid_, so no key outlives its tables.
@@ -1583,10 +1583,32 @@ void RenderCore::take_attached_shape_records(FrameChunk& chunk) {
     if (chunk.shape_records.empty()) {
         chunk.shape_records.swap(producer_shape_records_);
         producer_shape_records_.reserve(count);
+        const std::size_t matrices = producer_record_pool_.matrices.size();
+        const std::size_t ops = producer_record_pool_.ops.size();
+        const std::size_t natives = producer_record_pool_.natives.size();
+        chunk.record_pool.matrices.swap(producer_record_pool_.matrices);
+        chunk.record_pool.ops.swap(producer_record_pool_.ops);
+        chunk.record_pool.natives.swap(producer_record_pool_.natives);
+        producer_record_pool_.matrices.reserve(matrices);
+        producer_record_pool_.ops.reserve(ops);
+        producer_record_pool_.natives.reserve(natives);
         return;
     }
+    const auto first_matrix = static_cast<std::uint32_t>(chunk.record_pool.matrices.size());
+    const auto first_op = static_cast<std::uint32_t>(chunk.record_pool.ops.size());
+    chunk.record_pool.matrices.insert(chunk.record_pool.matrices.end(), producer_record_pool_.matrices.begin(),
+                                      producer_record_pool_.matrices.end());
+    chunk.record_pool.ops.insert(chunk.record_pool.ops.end(), producer_record_pool_.ops.begin(), producer_record_pool_.ops.end());
+    const auto first_native = static_cast<std::uint32_t>(chunk.record_pool.natives.size());
+    chunk.record_pool.natives.insert(chunk.record_pool.natives.end(), producer_record_pool_.natives.begin(), producer_record_pool_.natives.end());
+    producer_record_pool_.matrices.clear();
+    producer_record_pool_.ops.clear();
+    producer_record_pool_.natives.clear();
     chunk.shape_records.reserve(chunk.shape_records.size() + count);
     for (shapes::Record& record : producer_shape_records_) {
+        record.matrix_first += first_matrix;
+        record.op_first += first_op;
+        record.native_index += record.native_index != shapes::kNoNative ? first_native : 0u;
         chunk.shape_records.push_back(std::move(record));
     }
     producer_shape_records_.clear();
@@ -4275,6 +4297,7 @@ void RenderCore::render_frame_on_thread(FrameChunk& chunk) {
             for (std::size_t i = 0; i < splits.size(); ++i) {
                 const StreamSplit split = splits[i];
                 if (split.marker == kSplitShapeRecord) {
+                    current_record_pool_ = &chunk.record_pool;
                     on_shape_record(chunk.shape_records[static_cast<std::size_t>(split.view)]);
                 } else if (split.marker < 0) {
                     record_pointer_depth_capture_in_frame(chunk);
@@ -5656,12 +5679,13 @@ void RenderCore::on_shape_record(const shapes::Record& record) {
         draw_record_shape(record);
         return;
     case shapes::Record::Kind::NativeMaterial:
-        apply_native_material(record.native);
+        apply_native_material(record.native_index != shapes::kNoNative ? &current_record_pool_->natives[record.native_index] : nullptr);
         return;
     case shapes::Record::Kind::State: {
         // A native material stays through state changes (the game folds a change of its values into it and ends it
         // before a change of its program: J3DNativeMaterial); its fixed-function state and textures take them here.
-        for (const state::Op& op : record.state) {
+        for (std::uint32_t op_index = 0; op_index < record.op_count; ++op_index) {
+            const state::Op& op = current_record_pool_->ops[record.op_first + op_index];
             if (op.kind == state::kLightAttenuation || op.kind == state::kLightPosition) {
                 load_light(op);
             }
@@ -5774,7 +5798,7 @@ void RenderCore::end_target_pass(const shapes::Record& record) {
     frame_bindings_dirty_ = true;
 }
 
-void RenderCore::apply_native_material(std::shared_ptr<const material::Native> native) {
+void RenderCore::apply_native_material(const material::Native* native) {
     if (native == nullptr) {
         end_native_material();  // NEBULA_SHADER_NONE: the game ended it
         return;
@@ -5784,7 +5808,8 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         dump_tag_ = 0u;
     }
     if ((m.constants_only & 1u) != 0u && native_material_ != nullptr && native_material_->shader == m.shader) {
-        native_material_ = std::move(native);
+        native_material_storage_ = m;
+        native_material_ = &native_material_storage_;
         native_constants_dirty_ = true;
         return;
     }
@@ -5863,7 +5888,8 @@ void RenderCore::apply_native_material(std::shared_ptr<const material::Native> n
         }
     }
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
-    native_material_ = std::move(native);
+    native_material_storage_ = m;
+    native_material_ = &native_material_storage_;
     native_constants_dirty_ = true;
     current_texture_map_mask_valid_ = false;
     texture_bindings_dirty_ = true;
@@ -5873,7 +5899,7 @@ void RenderCore::end_native_material() {
     if (native_material_ == nullptr) {
         return;
     }
-    native_material_.reset();
+    native_material_ = nullptr;
     // The GX state's pipeline, constants and textures are rebuilt at the next draw, and the next GX material loads
     // its whole program (the native material wrote blend, depth, culling, alpha test and textures).
     draw_state_.dirty |= kStateDirtyRenderState | kStateDirtyTex;
@@ -5890,7 +5916,8 @@ void RenderCore::release_record_shape(RecordShape& shape) noexcept {
 }
 
 void RenderCore::apply_record_matrices(const shapes::Record& record) {
-    for (const shapes::Matrix& m : record.matrices) {
+    for (std::uint32_t matrix_index = 0; matrix_index < record.matrix_count; ++matrix_index) {
+        const shapes::Matrix& m = current_record_pool_->matrices[record.matrix_first + matrix_index];
         switch (m.kind) {
         case shapes::MatrixKind::Position:
             matrices_.set_position(m.place, m.values.data(), m.model_matrix);
@@ -5923,7 +5950,8 @@ void RenderCore::apply_record_matrices(const shapes::Record& record) {
             draw_state_.dirty |= kStateDirtyVertexConstants;
         }
     }
-    for (const auto& g : record.texgens) {
+    for (std::uint8_t texgen_index = 0; texgen_index < record.texgen_count; ++texgen_index) {
+        const auto& g = record.texgens[texgen_index];
         const TexGen gen = material::tex_gen(g[1], g[2]);
         const PostTexGen post = material::post_tex_gen(g[4], g[3]);
         if (!(draw_state_.texgen[g[0] & 7u] == gen) || !(draw_state_.post_texgen[g[0] & 7u] == post)) {
