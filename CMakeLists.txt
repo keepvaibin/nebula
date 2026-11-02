@@ -1,10 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 project(Nebula VERSION 2.0.1 LANGUAGES C CXX)
 
-# Only takes effect when the compiler is Clang/Clang-cl
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    target_compile_options(galaxy_gx PRIVATE /clang:-mssse3)
-endif()
+
 
 # The Windows build: NebulaNative (D3D12) and, with NEBULA_VULKAN, NebulaNativeVk. The game module is
 # native/CMakeLists.txt; Android and Linux build from platform/sdl.
@@ -171,6 +168,11 @@ target_link_libraries(galaxy_native_host
         xinput9_1_0
         xaudio2
 )
+# Only takes effect when the compiler is Clang/Clang-cl
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    target_compile_options(galaxy_gx PRIVATE /clang:-mssse3)
+endif()
+
 galaxy_host_options(galaxy_native_host)
 
 # Uber shader sources (runtime/src/render/uber_*.hlsl) become NUL-terminated char
