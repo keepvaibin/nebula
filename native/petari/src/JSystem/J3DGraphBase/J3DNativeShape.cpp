@@ -1,3 +1,4 @@
+#include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphAnimator/J3DModelData.hpp"
@@ -703,6 +704,7 @@ namespace J3DNativeShape {
     }
 
     void draw(const J3DShapeDraw* pDraw) {
+        J3DNativeMaterial::noteDraw();
         const u32 mask = pDraw->mNebulaPlaces != 0 ? pDraw->mNebulaPlaces : 1u << sCurrentPosition;
         const u32 count = gather(mask, true);
         const NebulaHostServices* pHost = nebula_host();
@@ -714,6 +716,7 @@ namespace J3DNativeShape {
     }
 
     void drawGeometry(u64 key, u64 position, u64 normal, u64 color, u32 places) {
+        J3DNativeMaterial::noteDraw();
         const u32 count = gather(places != 0 ? places : 1u << sCurrentPosition, true);
         const NebulaHostServices* pHost = nebula_host();
         pHost->shape_draw(pHost->user, key, position, normal, color, sRecord, count, sCurrentSet ? &sCurrent : nullptr,

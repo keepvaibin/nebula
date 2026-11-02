@@ -1,3 +1,4 @@
+#include "JSystem/J3DGraphBase/J3DStateList.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
@@ -473,11 +474,22 @@ namespace {
     }
 
 
+    // The list that last ended a J3D material for a program no shader holds, until the next material.
+    bool sFoldLost = false;
+    bool sFoldDrawnPending = false;
+    bool sFoldLostFailed = false;
+    u32 sFoldLostShader = 0;
+    u8 sFoldLostOp = 0;  // the state op that made the fold
+    u8 sFoldOp = 0;
+    NebulaMaterialProgram sFoldLostProgram;
+
     // Each material the game sends (NativeShader::send, this file's sends; NULL a drawing-state one).
     // The shader of the material watchMaterial last saw (J3DNativeMaterial::currentShader).
     u32 sWatchedShader = 0;
 
     void watchMaterial(const NebulaNativeMaterial* pNative) {
+        sFoldLost = false;
+        sFoldDrawnPending = false;
         sWatchedShader = pNative != NULL ? pNative->shader : 0;
         sCurrentKind = pNative == NULL || pNative->shader == NEBULA_SHADER_NONE ? CURRENT_NONE
                        : pNative == &sCurrent                                   ? CURRENT_J3D
@@ -1122,6 +1134,59 @@ namespace J3DNativeMaterial {
         notDrawn(shader, key);
     }
 
+    // A folded program for a material dump to collect, keyed by its bytes (the host keeps one record per key).
+    static void registerFold(const NebulaMaterialProgram& rProgram) {
+        static NebulaMaterialProgram sFoldRegistered;
+        sFoldRegistered = rProgram;
+        sFoldRegistered.diff_flags = 0;
+        sFoldRegistered.origin = 0;
+        const u8* pBytes = reinterpret_cast< const u8* >(&sFoldRegistered);
+        u64 key = 0xCBF29CE484222325ull;
+        for (u32 i = 0; i < sizeof(sFoldRegistered); i++) {
+            key = (key ^ pBytes[i]) * 0x100000001B3ull;
+        }
+        const NebulaHostServices* pHost = nebula_host();
+        pHost->material_program(pHost->user, key | (1ull << 62), &sFoldRegistered);
+    }
+
+    // Tests: the sweep's option.
+    static bool sweepWanted() {
+        static s32 sWanted = -1;
+        if (sWanted < 0) {
+            const NebulaHostServices* pHost = nebula_host();
+            sWanted = pHost->option(pHost->user, NEBULA_OPTION_TEST_MATERIAL_SWEEP) != 0 ? 1 : 0;
+        }
+        return sWanted != 0;
+    }
+
+    // A draw under a folded program no shader holds: registered and named. In a dump run, one in the set is registered
+    // too: what a draw used stays in the next set.
+    void noteDraw() {
+        if (sFoldDrawnPending) {
+            sFoldDrawnPending = false;
+            registerFold(sFoldLostProgram);
+        }
+        if (!sFoldLost) {
+            return;
+        }
+        sFoldLost = false;
+        if (!sFoldLostFailed) {
+            registerFold(sFoldLostProgram);
+        }
+        static u32 sFoldLogged[256];
+        static u32 sFoldLoggedCount = 0;
+        const u32 pair = sFoldLostShader << 1 | (sFoldLostFailed ? 1u : 0u);
+        bool seen = false;
+        for (u32 k = 0; k < sFoldLoggedCount; k++) {
+            seen = seen || sFoldLogged[k] == pair;
+        }
+        if (!seen && sFoldLoggedCount < 256) {
+            sFoldLogged[sFoldLoggedCount++] = pair;
+            nebula_log("J3DNativeMaterial: J3D shader %u's list (state op %u) %s; not drawn\n", sFoldLostShader, sFoldLostOp,
+                       sFoldLostFailed ? "changes what a program record cannot hold" : "folds to a program not in the set");
+        }
+    }
+
     void state(const NebulaStateOp* pOps, u32 count) {
         bool changed = false;
         for (u32 i = 0; i < count; i++) {
@@ -1133,6 +1198,7 @@ namespace J3DNativeMaterial {
                     sFoldFailed = false;
                     sFoldCull = false;
                 }
+                sFoldOp = rOp.kind;
                 sFoldFailed = !foldOp(sFold, rOp) || sFoldFailed;
                 sFoldCull = sFoldCull || rOp.kind == NEBULA_STATE_GEN_MODE2;
             } else if (sCurrentKind != CURRENT_NONE && changesProgram(rOp)) {
@@ -1156,8 +1222,8 @@ namespace J3DNativeMaterial {
             }
             changed = setRegister(rOp) || changed;
         }
-        // The folded program: its generated shader with the register file as the list left it; else the GX path as
-        // before, the folded program registered so a material dump collects it for the set.
+        // The folded program: its generated shader with the register file as the list left it; else not drawn (noteDraw
+        // reports it if a draw comes).
         if (sFolding) {
             sFolding = false;
             const u32 shader = sFoldFailed ? 0 : nativeShaderOf(sFold);
@@ -1176,30 +1242,17 @@ namespace J3DNativeMaterial {
                 dumpTag(shader);
                 sCurrentProgram = &sFold;
                 changed = false;
+                if (sweepWanted()) {
+                    sFoldDrawnPending = true;
+                    sFoldLostProgram = sFold;
+                }
             } else {
-                if (!sFoldFailed) {
-                    static NebulaMaterialProgram sFoldRegistered;
-                    sFoldRegistered = sFold;
-                    sFoldRegistered.diff_flags = 0;
-                    sFoldRegistered.origin = 0;
-                    const NebulaHostServices* pHost = nebula_host();
-                    pHost->material_program(pHost->user,
-                                            static_cast< u64 >(reinterpret_cast< uintptr_t >(&sFoldRegistered)),
-                                            &sFoldRegistered);
-                }
-                static u32 sFoldLogged[256];
-                static u32 sFoldLoggedCount = 0;
-                const u32 pair = sCurrent.shader << 1 | (sFoldFailed ? 1u : 0u);
-                bool seen = false;
-                for (u32 k = 0; k < sFoldLoggedCount; k++) {
-                    seen = seen || sFoldLogged[k] == pair;
-                }
-                if (!seen && sFoldLoggedCount < 256) {
-                    sFoldLogged[sFoldLoggedCount++] = pair;
-                    nebula_log("J3DNativeMaterial: J3D shader %u's list %s; drawn by the GX path\n",
-                               static_cast< u32 >(sCurrent.shader),
-                               sFoldFailed ? "changes what a program record cannot hold" : "folds to a program not in the set");
-                }
+                // Only a draw under it loses anything: a site's own setup ends a material the same way.
+                sFoldLost = true;
+                sFoldLostFailed = sFoldFailed;
+                sFoldLostShader = sCurrent.shader;
+                sFoldLostProgram = sFold;
+                sFoldLostOp = sFoldOp;
                 endCurrent();
             }
         }
@@ -1219,22 +1272,45 @@ namespace J3DNativeMaterial {
         }
     }
 
+    static const J3DStateList* const (*sSweepChains)[2];
+    static u32 sSweepChainCount;
+
+    void setSweepChains(const J3DStateList* const (*pChains)[2], u32 count) {
+        sSweepChains = pChains;
+        sSweepChainCount = count;
+    }
+
     void sweep(J3DModelData* pModelData) {
-        static s32 sWanted = -1;
-        const NebulaHostServices* pHost = nebula_host();
-        if (sWanted < 0) {
-            sWanted = pHost->option(pHost->user, NEBULA_OPTION_TEST_MATERIAL_SWEEP) != 0 ? 1 : 0;
-        }
-        if (sWanted == 0) {
+        if (!sweepWanted()) {
             return;
         }
+        const NebulaHostServices* pHost = nebula_host();
         static NebulaMaterialParts sParts;
         for (u16 i = 0; i < pModelData->getMaterialNum(); i++) {
             J3DMaterial* pMaterial = pModelData->getMaterialNodePointer(i);
             build(pMaterial, pModelData->getTexture(), &sParts);
-            if (nativeShaderOf(sParts.program) == 0) {
-                pHost->material_program(pHost->user, keyOf(pMaterial), &sParts.program);
+            pHost->material_program(pHost->user, keyOf(pMaterial), &sParts.program);
+            // As state() folds them.
+            sCurrentKind = CURRENT_J3D;
+            sCurrentProgram = &sParts.program;
+            for (u32 chain = 0; chain < sSweepChainCount; chain++) {
+                NebulaMaterialProgram folded = sParts.program;
+                bool changes = false;
+                bool holds = true;
+                for (u32 link = 0; link < 2; link++) {
+                    const J3DStateList* pList = sSweepChains[chain][link];
+                    for (u32 op = 0; pList != nullptr && op < pList->count(); op++) {
+                        if (changesProgram(pList->ops()[op])) {
+                            changes = true;
+                            holds = foldOp(folded, pList->ops()[op]) && holds;
+                        }
+                    }
+                }
+                if (changes && holds) {
+                    registerFold(folded);
+                }
             }
+            sCurrentKind = CURRENT_NONE;
         }
     }
 };  // namespace J3DNativeMaterial

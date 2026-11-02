@@ -54,6 +54,10 @@ SIGNALS = [
     ("system", r"\b(?:SC|NWC24|HBM|RSO|ES|IPC)[A-Z][A-Za-z0-9_]*\s*\(", "SYSCONF/NWC24/HOME/RSO"),
     ("rfl", r"\bRFL[A-Za-z0-9_]*\s*\(", "Mii library"),
     ("thp_tpl", r"\b(?:THP|TPL)[A-Z][A-Za-z0-9_]*\s*\(", "THP/TPL"),
+    ("kernel_api", r"\b(?:NebulaKernel::|NebulaThread\b|NebulaThreadQueue\b|NebulaMutex\b|NebulaMessageQueue\b|NebulaAlarm\b|"
+                   r"nebula_raise_event\b|nebula_note_event\b|nebula_switch_stack\b)", "the console scheduler under its new name"),
+    ("audio_shape", r"\b(?:NebulaAudioVoice\b|audio_mix\b|JASDsp\b|JASDSPChannel\b|JASAudioThread\b|JASCriticalSection\b|"
+                    r"sDacRate\b|nebula_game_audio_tick\b)", "DSP-shaped audio interface"),
     ("byte_order", r"\bNEBULA_BE\b|\bNEBULA_OFFSET\b|\bBE\s*<|\bBEOffset\s*<|\bSelfRel\s*<|\bbswap\w*|"
                    r"\b__builtin_bswap\w*|\bbyteswap\w*|\bRFLI_(?:LD|ST)\w*", "big-endian access"),
     ("hw_register", r"\b__(?:GXData|cpReg|peReg|piReg|memReg|VIRegs|DSPRegs|AIRegs|EXIRegs|SIRegs|PIRegs|MEMRegs)\b|"

@@ -1605,6 +1605,12 @@ pub fn baa(bytes: &[u8]) -> Result<Vec<u8>> {
             b"bst " => sound_table(bytes, &mut out, v[0], v[1]).context("the sound table (BST)")?,
             b"bstn" => sound_name_table(bytes, &mut out, v[0], v[1]).context("the sound name table (BSTN)")?,
             b"bsc " => seq_collection(bytes, &mut out, v[0]).context("the sequence collection (BSC)")?,
+            b"bsft" => {
+                let files = host32(bytes, &mut out, v[0] + 4)? as usize;
+                for f in 0..files {
+                    host32(bytes, &mut out, v[0] + 8 + 4 * f)?;
+                }
+            }
             b"ws  " => wave_system(bytes, &mut out, v[1], &mut turned).with_context(|| format!("wave system {}", v[0]))?,
             b"bnk " => bank(bytes, &mut out, v[1], &mut turned).with_context(|| format!("bank {}", v[0]))?,
             _ => {}
@@ -1815,9 +1821,12 @@ fn bank(src: &[u8], out: &mut [u8], base: usize, turned: &mut HashSet<usize>) ->
             bail!("bank chunk {:?} at {:#x} past the archive", String::from_utf8_lossy(&kind), at - base);
         }
         match &kind {
-            // Envelope points stay big-endian: the sequences' oscillator tables share their type (JASOscillator::Point,
-            // JASSeqParser setOscTable reads them from BMS data) and turn with the sequences.
-            b"ENVT" => {}
+            // Envelope points: three 16-bit numbers each.
+            b"ENVT" => {
+                for o in (data..data + (length & !1)).step_by(2) {
+                    host16(src, out, o)?;
+                }
+            }
             b"OSCT" => {
                 let count = host32(src, out, data)? as usize;
                 for i in 0..count {
