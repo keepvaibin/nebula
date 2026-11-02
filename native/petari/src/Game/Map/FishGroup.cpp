@@ -10,12 +10,6 @@
 #include "Game/Util/PlayerUtil.hpp"
 #include "Game/Util/RailUtil.hpp"
 
-void FishGroup_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-}
-
 namespace {
     static const s32 sDefaultFishNum = 10;
     static const f32 sDefaultGroupSpeed = 5.0f;

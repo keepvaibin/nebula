@@ -43,7 +43,7 @@ bool JASHeap::alloc(JASHeap* pParent, u32 size) {
     u8* pCurrent = pParent->mBase;
     bool found = false;
     JASHeap* pNext = nullptr;
-    void* pAddress;
+    void* pAddress = nullptr;
     JSUTreeIterator< JASHeap > it(nullptr);
     for (it = pParent->mTree.getFirstChild(); it != pParent->mTree.getEndChild(); ++it) {
         if (pCurrent >= pParent->mBase + tailOffset) {
@@ -158,7 +158,7 @@ void JASHeap::insertChild(JASHeap* pHeap, JASHeap* pNext, void* pBase, u32 size,
     pHeap->mBase = (u8*)pBase;
     pHeap->mSize = size;
     pHeap->mHeap = nullptr;
-    mTree.insertChild(&pNext->mTree, &pHeap->mTree);
+    mTree.insertChild(pNext != nullptr ? &pNext->mTree : nullptr, &pHeap->mTree);
 }
 
 JASHeap* JASHeap::getTailHeap() {

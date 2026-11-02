@@ -40,15 +40,6 @@ namespace NrvDemoRabbit {
     NEW_NERVE(DemoRabbitNrvStartBGM, DemoRabbit, StartBGM);
 };  // namespace NrvDemoRabbit
 
-void DemoRabbit_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) MR::epsilon();
-    (void) 0.5f;
-    (void) 3.0f;
-    (void) 2.0f;
-}
-
 DemoRabbit::DemoRabbit(const char* pName) : NPCActor(pName) {
 }
 

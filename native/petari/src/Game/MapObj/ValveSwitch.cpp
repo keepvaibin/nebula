@@ -4,12 +4,6 @@
 #include "Game/MapObj/MapObjConnector.hpp"
 #include "Game/Util.hpp"
 
-void ValveSwitch_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)-75.0f;
-    (void)150.0f;
-}
-
 namespace NrvValveSwitch {
     NEW_NERVE(ValveSwitchNrvWait, ValveSwitch, Wait);
     NEW_NERVE(ValveSwitchNrvAdjust, ValveSwitch, Adjust);

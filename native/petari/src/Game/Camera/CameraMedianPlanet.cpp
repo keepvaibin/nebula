@@ -8,14 +8,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <JSystem/JGeometry/TUtil.hpp>
 
-void CameraMedianPlanet_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)MR::epsilon();
-    (void)MR::pi();
-}
-
 namespace {
     static const f32 sAngleConstrainRate = 0.2f;
     static const f32 sPartialRate = 0.5f;
@@ -81,10 +73,6 @@ void CameraMedianPlanet::constrainDipAngle(TVec3f* pPos) {
         MR::polarToCross(TVec3f(0.0f, 0.0f, 0.0f), pPos, length, angleX, angleY);
     }
     targetMtx.mult(*pPos, *pPos);
-}
-
-void CameraMedianPlanet_FORCE_MATCH_SDATA2_2() {
-    (void)(0.1f / 15.0f);
 }
 
 void CameraMedianPlanet::makeTargetMtx(TPos3f* pMtx) {

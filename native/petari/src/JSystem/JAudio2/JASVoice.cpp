@@ -171,17 +171,15 @@ void JASVoice::initAutoMixer() {
 }
 
 void JASVoice::setAutoMixer(f32 volume, f32 pan_position, f32 rear_position, f32 send) {
-    pan = static_cast< u8 >(static_cast< s32 >(pan_position * 127.5f)) / 128.0f;
-    rear = static_cast< u8 >(static_cast< s32 >(rear_position * 127.5f)) / 128.0f;
-    const u8 sendByte = static_cast< s32 >(send * 127.5f);
-    panner_send = (sendByte << 8 | sendByte << 1) / 32768.0f;
-    panner_target = static_cast< u16 >(static_cast< s32 >(volume * 65536.0f)) / 65536.0f;
+    pan = pan_position;
+    rear = rear_position;
+    panner_send = send;
+    panner_target = volume;
     panner = 1;
 }
 
 // `ratio`: source samples per 32 kHz sample; an oscillator's frequency, in units of 1 kHz (a constant: eight times its value).
 void JASVoice::setPitch(f32 ratio) {
-    ratio = static_cast< u16 >(static_cast< s32 >(ratio * 4096.0f) >= 0x7fff ? 0x7fff : static_cast< s32 >(ratio * 4096.0f)) / 4096.0f;
     if (format != NEBULA_AUDIO_OSCILLATOR) {
         rate = ratio * 32000.0f;
     } else if (oscillator == NEBULA_AUDIO_CONSTANT) {
@@ -192,13 +190,11 @@ void JASVoice::setPitch(f32 ratio) {
 }
 
 void JASVoice::setMixerInitVolume(u8 send, f32 volume) {
-    volume = static_cast< s16 >(static_cast< u16 >(static_cast< s32 >(volume * 65536.0f))) / 65536.0f;
     sends[send].current = volume;
     sends[send].target = volume;
 }
 
 void JASVoice::setMixerVolume(u8 send, f32 volume) {
-    volume = static_cast< s16 >(static_cast< u16 >(static_cast< s32 >(volume * 65536.0f))) / 65536.0f;
     if (forced_stop == 0) {
         sends[send].target = volume;
     }

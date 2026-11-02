@@ -23,7 +23,7 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 93u
+#define NEBULA_GAME_API_VERSION 94u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
    of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
@@ -533,7 +533,7 @@ enum {
 };
 
 /* The picture's shape as the game draws it (NebulaFrameClock::display), from the output's shape the host latches at
-   each retrace (display_extent): the camera, the 2D screen and the layouts widen with it. */
+   each frame (display_extent): the camera, the 2D screen and the layouts widen with it. */
 typedef struct NebulaDisplay {
     int32_t wide;          /* 0: the Wii's 16:9, nothing changes */
     float content_aspect;  /* width / height, 4:3 to 32:9 */
@@ -920,7 +920,7 @@ typedef struct NebulaHostServices {
        lifetime, strip 0 JPADrawStripe, 1-2 the passes of JPADrawStripeX. */
     void (*stripe_particle)(void* user, uint64_t particle, uint32_t age_lifetime, uint8_t strip);
 
-    /* Disc: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
+    /* The game's files: the file or folder at `path` ("/StageData/EggStarGalaxy.arc": from the root, '/' at a name's start
        returning to it, "." and ".." steps, letters in either case, a name followed by '/' a folder): 0 when there is
        none. */
     int (*asset_find)(void* user, const char* path, NebulaAssetEntry* entry);
@@ -931,13 +931,12 @@ typedef struct NebulaHostServices {
     /* Reads `size` bytes at `offset` of a file into dst; the host calls nebula_game_asset_complete(slot, bytes read or -1)
        from any thread when done. */
     void (*asset_read)(void* user, int32_t file, uint64_t offset, uint32_t size, void* dst, uint32_t slot);
-    /* The disc's game id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
-       whose few differences the module follows (NebulaRegion.hpp) and whose save folder the NAND holds. */
+    /* The game's id ("RMGE01", "RMGP01" or "RMGJ01", NUL-terminated), valid for the process's life: the release
+       whose few differences the module follows (NebulaRegion.hpp) and whose folder holds its saves. */
     const char* (*game_id)(void* user);
 
-    /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
-       whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
-    void (*vi_frame)(void* user, uint32_t display_picture, int black, uint32_t retrace);
+    /* A frame begins: whether the output is black, and the frame's number. On the game's frame thread; the host only records it. */
+    void (*frame_started)(void* user, int black, uint32_t frame);
 
     /* Starts a save file operation without blocking; the request's name, buffer, length and status stay valid until
        its status leaves NEBULA_SAVE_PENDING (the host writes it from its own thread). */
@@ -978,10 +977,8 @@ typedef struct NebulaHostServices {
        top) in game memory, which must hold the result before the renderer reads them; 0 on success. */
     int32_t (*movie_video_decode)(void* user, const void* frame, uint32_t size, uint32_t width, uint32_t height, void* y, void* u, void* v);
 
-    /* The game wrote [address, address + size) for the GPU: the console's cache flushes (DCFlushRange,
-       DCStoreRange) and DMA copies. An image handed over there must be handed over again. Called on the simulation
-       thread; the host's own writes to game memory (disc reads) need no call. */
-    void (*gpu_coherent)(void* user, const void* address, uint32_t size);
+    /* The game rewrote [address, address + size): an image handed over there must be handed over again. */
+    void (*memory_rewritten)(void* user, const void* address, uint32_t size);
 
     /* Game state the host's controls follow (NEBULA_CONTEXT_*), reported when it changes. */
     void (*game_context)(void* user, uint32_t what, int32_t value);
@@ -994,7 +991,7 @@ typedef struct NebulaHostServices {
        with `action` filled, or 0. */
     int (*test_scene_frame)(void* user, NebulaTestAction* action);
 
-    /* The output's shape latched at this retrace, after vi_frame: width << 16 | height (only the ratio counts), or 0
+    /* The output's shape for this frame, after frame_started: width << 16 | height (only the ratio counts), or 0
        for the Wii's 16:9. */
     uint32_t (*display_extent)(void* user);
     /* The borders around a fitted picture take this grey (0 black to 1 white) for the scene being drawn: the Wii Remote
@@ -1135,9 +1132,9 @@ typedef struct NebulaHostServices {
        fixed-function state and textures), until the next material or one whose shader is NEBULA_SHADER_NONE. */
     void (*native_material)(void* user, const NebulaNativeMaterial* material);
     /* Deterministic test mode only (NULL otherwise; GALAXY_TEST_DETERMINISTIC): the game's time is its frames. No game
-       thread can run: the host takes the next retrace (nebula_game_vi_retrace, with that retrace's audio ticks) and
+       thread can run: the host takes the next frame (nebula_game_frame_tick, with that frame's audio ticks) and
        returns, so frames follow the game's own pace and every run of a build is the same. The game's clock then
-       advances one retrace per call and its alarms fire when that clock passes them. */
+       advances one frame per call and its alarms fire when that clock passes them. */
     void (*test_frame_step)(void* user);
 } NebulaHostServices;
 
@@ -1180,16 +1177,15 @@ NEBULA_GAME_API uint32_t nebula_game_attach(const NebulaHostServices* host);
 NEBULA_GAME_API void nebula_game_run(void);
 /* A file read finished: `result` is the bytes read, or -1 on a read error. */
 NEBULA_GAME_API void nebula_game_asset_complete(uint32_t slot, int32_t result);
-/* A video retrace (the display clock: one per field at 59.94 Hz, or the host's presentation pace). */
-NEBULA_GAME_API void nebula_game_vi_retrace(void);
-/* A NAND operation finished. */
+/* The next frame's time has come (the display's pace, or the host's presentation pace). */
+NEBULA_GAME_API void nebula_game_frame_tick(void);
 /* The audio clock, while started (NEBULA_AUDIO_START): the game mixes its next frame (voices_mix, voices_frame). */
 NEBULA_GAME_API void nebula_game_sound_frame(void);
 /* Mii import. prepare: makes a Mii (a 74-byte record as the console stores it) acceptable where the console would
    refuse a detail (birthday, special Mii not kept local, favourite colour, no name), then 1 when the game takes it as
    its database's; pure, any thread. install: places it in slot `slot` (0-99) of the loaded database, free or holding
    the same Mii (its create ID); 0 when the database is not loaded or another Mii holds the slot. On the game thread
-   (the host's retrace). */
+   (the host's frame tick). */
 /* Whether the game takes a Mii into its database (its parts and values in range); the host keeps only these. */
 NEBULA_GAME_API uint32_t nebula_game_mii_valid(const NebulaMii* mii);
 /* The host's Mii database changed (Miis imported while the game runs): the game reads its slots again. */

@@ -51,8 +51,9 @@ int main() {
                      "a shorter save replaces the whole file");
     std::size_t files = 0;
     for (const auto& entry : fs::directory_iterator(folder)) {
-        (void)entry;
-        files++;
+        // The game's own copies of its last saves (GameData.bin.1, .2) are kept on purpose.
+        const std::string name = entry.path().filename().string();
+        files += name == "GameData.bin.1" || name == "GameData.bin.2" ? 0u : 1u;
     }
     passed &= expect(files == 1, "a save leaves no temporary file beside it");
 

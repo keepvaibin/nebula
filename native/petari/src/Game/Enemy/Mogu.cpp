@@ -47,13 +47,6 @@ Mogu::Mogu(const char* pName)
       mIsCannonFleet(false) {
 }
 
-void Mogu_FORCE_MATCH_SDATA2() {
-    (void) 1.0f;
-    (void) 0.0f;
-    (void) MR::pi();
-    (void) 2.0f;
-}
-
 void Mogu::init(const JMapInfoIter& rIter) {
     if (MR::isValidInfo(rIter)) {
         MR::initDefaultPos(this, rIter);

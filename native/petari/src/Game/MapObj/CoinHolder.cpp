@@ -4,12 +4,6 @@
 #include "Game/Scene/SceneObjHolder.hpp"
 #include "Game/Util.hpp"
 
-void CoinHolder_FORCE_MATCH() {
-    TVec3f vector(0.0f, 0.0f, 0.0f);
-    (void)-vector;
-    (void)0.001f;
-}
-
 namespace {
     static const s32 sCoinNumMax = 512;
     static const s32 sCreateCoinNum = 32;

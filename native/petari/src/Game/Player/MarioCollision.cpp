@@ -20,59 +20,6 @@
 #include <cstring>
 #include <nebula_math.h>
 
-void MarioCollision_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)3e+01f;
-    (void)0.3f;
-    (void)0.707f;
-    (void)1.01f;
-    (void)-0.99f;
-    (void)5.0f;
-    (void)4e+01f;
-    (void)1.1e+02f;
-    (void)5e+01f;
-    (void)6e+01f;
-    (void)-0.707f;
-    (void)45.0f;
-    (void)0.2f;
-    (void)1.2e+02f;
-    (void)8e+01f;
-    (void)0.7853982f;
-    (void)1e+02f;
-    (void)4e+02f;
-    (void)1e+01f;
-    (void)0.1f;
-    (void)2.5e+03f;
-    (void)1.5e+02f;
-    (void)0.10471976f;
-    (void)2.3561945f;
-    (void)0.17f;
-    (void)1.4959966f;
-    (void)-3e+01f;
-    (void)2e+02f;
-    (void)-1e+01f;
-    (void)5e+03f;
-    (void)25.0f;
-    (void)1.8e+02f;
-    (void)3.14159f;
-    (void)-0.999f;
-    (void)-0.9f;
-    (void)2.0943952f;
-    (void)6.0f;
-    (void)-6.0f;
-    (void)55.0f;
-    (void)0.99f;
-    (void)-0.01f;
-    (void)8.0f;
-    (void)2e+01f;
-    (void)2.1e+02f;
-    (void)-2607.5945f;
-    (void)2607.5945f;
-    (void)15.0f;
-    (void)2e+03f;
-    (void)0.125f;
-}
-
 void MarioCollision_FORCE_MATCH_STRINGS(const TVec3f& rPosition) {
     MR::getAreaObj("Fur", rPosition);
     MR::getAreaObj("\202\337\202\350\202\261\202\335" /* めりこみ */, rPosition);
@@ -678,7 +625,7 @@ void Mario::checkAllWall(const TVec3f& rPosition, f32 radius) {
             }
         }
 
-        f32 groundAngle;
+        f32 groundAngle = 0.0f;
 
         if (mMovementStates._1) {
             groundAngle = calcAngleD(_368);

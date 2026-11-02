@@ -24,15 +24,6 @@
 #include "Game/Util/SequenceUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void ScenarioStarter_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.000003814697265625f;
-    (void)0.5f;
-    (void)PI;
-    (void)2.0f;
-}
-
 namespace NrvScenarioStarter {
     NEW_NERVE(ScenarioStarterWaitScenarioCameraEnd, ScenarioStarter, WaitScenarioCameraEnd);
     NEW_NERVE(ScenarioStarterWaitToStart, ScenarioStarter, WaitToStart);

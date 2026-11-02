@@ -29,15 +29,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include <nebula_math.h>
 
-void BombTeresa_FORCE_MATCH_SDATA2() {
-    (void)70.0f;
-    (void)80.0f;
-    (void)20.0f;
-    (void)85.0f;
-    (void)0.1f;
-    (void)0.6f;
-}
-
 namespace NrvBombTeresa {
     NEW_NERVE(BombTeresaNrvAppear, BombTeresa, Appear);
     NEW_NERVE(BombTeresaNrvShadowAppear, BombTeresa, ShadowAppear);

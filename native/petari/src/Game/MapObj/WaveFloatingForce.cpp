@@ -2,12 +2,6 @@
 #include "Game/Util/ActorMovementUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void WaveFloatingForce_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)(MR::pi()/2.0f);
-    (void)2.0f;
-}
-
 WaveFloatingForce::WaveFloatingForce(const LiveActor* pActor, s32 stepCount, f32 amplitude, bool) : mActor(pActor), mStepCount(stepCount), mAmplitude(amplitude), mStep(), _10() {
     mStep = 2 * MR::pi() * MR::getRandom();
 }

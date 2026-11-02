@@ -5,13 +5,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include "Game/System/NebulaInput.hpp"
 
-void SphereAccelSensorController_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::epsilon();
-    (void)-1.0f;
-}
-
 namespace {
     // sMinStableValue
     // sMaxStableValue

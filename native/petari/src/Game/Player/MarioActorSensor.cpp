@@ -16,24 +16,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include <cstring>
 
-void MarioActorSensor_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-    (void)2000.0f;
-    (void)80.0f;
-    (void)60.0f;
-    (void)600.0f;
-    (void)1000.0f;
-    (void)2400.0f;
-    (void)3000.0f;
-    (void)300.0f;
-    (void)0.0872664675f;
-    (void)2607.59448f;
-    (void)200.0f;
-    (void)40.0f;
-    (void)1.20000005f;
-    (void)1.5f;
-}
-
 void MarioActor::setupSensors() {
     initHitSensor(4);
 

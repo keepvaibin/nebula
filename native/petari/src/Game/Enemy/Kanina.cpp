@@ -6,49 +6,6 @@
 #include "Game/Util/JointRumbler.hpp"
 #include "Game/System/NebulaInput.hpp"
 
-void Kanina_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)2.0f;
-    (void)-1.5707964f;
-    (void)1.5707964f;
-    (void)-1.0f;
-    (void)3.0f;
-    (void)0.25f;
-    (void)0.75f;
-    (void)1e+02f;
-    (void)8e+01f;
-    (void)6.0f;
-    (void)0.1f;
-    (void)1e+01f;
-    (void)4e+01f;
-    (void)15.0f;
-    (void)3e+01f;
-    (void)1.5f;
-    (void)25.0f;
-    (void)0.001f;
-    (void)6e+01f;
-    (void)0.017453292f;
-    (void)7.0f;
-    (void)13.0f;
-    (void)45.0f;
-    (void)0.3f;
-    (void)0.05f;
-    (void)8e+02f;
-    (void)2.2f;
-    (void)0.93f;
-    (void)0.99f;
-    (void)0.88f;
-    (void)1e+03f;
-    (void)1.8e+02f;
-    (void)1.2e+02f;
-    (void)2e+03f;
-    (void)2e+01f;
-    (void)5e+02f;
-    (void)1.7f;
-}
-
 namespace NrvKanina {
     NEW_NERVE(HostTypeAppear, Kanina, Appear);
     NEW_NERVE(HostTypeWait, Kanina, Wait);

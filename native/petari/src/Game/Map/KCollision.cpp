@@ -6,11 +6,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include <algorithm>
 
-void KCollision_FORCE_MATCH_SDATA2() {
-    (void)0.001f;
-    (void)1000000000.0f;
-    (void)0.01f;
-}
 f32 KCollision_FORCE_MATCH_CONVERSION(s32 value) {
     return value;
 }
@@ -1446,10 +1441,9 @@ s32* KCollisionServer::searchBlock(s32* pShift, const u32& rX, const u32& rY, co
 
     s32 xyShift = file->mBlockXYShift;
     s32 xShift = file->mBlockXShift;
-    s32 offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
-
-    if (xyShift == -1 && xShift == -1) {
-        offset = 0;
+    s32 offset = 0;
+    if (xyShift != -1 || xShift != -1) {
+        offset = (((rZ >> blockWidthShift) << xyShift) | ((rY >> blockWidthShift) << xShift) | (rX >> blockWidthShift)) * 4;
     }
 
     while ((offset = *reinterpret_cast< s32* >(octree + offset)) >= 0) {

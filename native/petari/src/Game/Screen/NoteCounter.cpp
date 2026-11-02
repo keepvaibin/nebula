@@ -7,11 +7,6 @@
 #include "Game/Util/MathUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void NoteCounter_FORCE_MATCH_SDATA2() {
-    (void)10.0f;
-    (void)-100.0f;
-}
-
 namespace {
     static const s32 sStepShowWait = 180;
     static const s32 sStepMove = 10;

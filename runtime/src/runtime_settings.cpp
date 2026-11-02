@@ -530,7 +530,7 @@ bool save_runtime_settings_to_file() {
         if (!contents) {
             return false;
         }
-        if (!io::write_text_file_atomically(path, contents.str())) {
+        if (!io::write_file_atomically(path, contents.str())) {
             return false;
         }
         record_input_mode_sync(input_mode, settings.input_mode);

@@ -28,31 +28,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include "Game/System/NebulaInput.hpp"
 
-void GCapture_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)MR::epsilon();
-    (void)0.0f;
-    (void)2.0f;
-    (void)1.0f;
-    (void)0.5f;
-    (void)0.1f;
-    (void)FLOAT_MAX;
-    (void)0.05f;
-    (void)0.91f;
-    (void)200.0f;
-    (void)80.0f;
-    (void)75.0f;
-    (void)0.992f;
-    (void)0.99f;
-    (void)0.002f;
-    (void)0.033333335f;
-    (void)180.0f;
-    (void)0.001f;
-    (void)130.0f;
-    (void)500.0f;
-    (void)0.7f;
-}
-
 namespace {
     // sMinActiveTime
     // sMaxHoldTime

@@ -365,7 +365,7 @@ void JASChannel::updateMixer(f32 i_volume, f32 i_pan, f32 i_fxmix, f32 i_dolby, 
         if (config.upper == 0) {
             i_volumeOut[i] = 0.0f;
         } else {
-            f32 scale;
+            f32 scale = 0.0f;
 
             if (config.lower0 != 0) {
                 switch (config.lower0) {

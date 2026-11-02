@@ -24,10 +24,6 @@ extern "C" const NebulaHostServices* nebula_host(void);
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 
-void FallOutFieldDraw_FORCE_MATCH_SDATA2() {
-    (void)0.25f;
-}
-
 namespace {
     inline void drawFillScreen(NebulaColor8 color) {
         ImageEffectLocalUtil::sendTextureVertex(1, 0);

@@ -9,7 +9,7 @@ void JASDriver::setOutputLevel(f32 param_0) {
 
 // A full channel's gain on its way to the mix.
 f32 JASDriver::getChannelGain() {
-    return 12000.0f / 65536.0f;
+    return 0.18310547f;
 }
 
 f32 JASDriver::getOutputLevel() {

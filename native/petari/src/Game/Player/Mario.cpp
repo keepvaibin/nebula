@@ -47,54 +47,6 @@
 #include "Game/Player/MarioWarp.hpp"
 #include "Game/Util.hpp"
 
-void Mario_FORCE_MATCH_SDATA2() {
-    (void)0.00100000005f;
-    (void)0.800000012f;
-    (void)-0.514999986f;
-    (void)200.0f;
-    (void)28000.0f;
-    (void)2499.0f;
-    (void)0.104719758f;
-    (void)0.707000017f;
-    (void)300.0f;
-    (void)1.42857146f;
-    (void)0.300000012f;
-    (void)0.100000001f;
-    (void)150.0f;
-    (void)40.0f;
-    (void)160.0f;
-    (void)80.0f;
-    (void)90.0f;
-    (void)5.0f;
-    (void)1.49599659f;
-    (void)170.0f;
-    (void)0.785398185f;
-    (void)0.99000001f;
-    (void)30.0f;
-    (void)15.0f;
-    (void)45.0f;
-    (void)60.0f;
-    (void)290.0f;
-    (void)260.0f;
-    (void)1.04719758f;
-    (void)0.200000003f;
-    (void)0.0245436933f;
-    (void)0.0174532924f;
-    (void)0.00999999978f;
-    (void)32.0f;
-    (void)0.125f;
-    (void)100.0f;
-    (void)35.0f;
-    (void)50.0f;
-    (void)0.00390625f;
-    (void)120.0f;
-    (void)0.0199999996f;
-    (void)1.5f;
-    (void)2607.59448f;
-    (void)-2607.59448f;
-    (void)-150.0f;
-}
-
 Mario::Mario(MarioActor* pActor) : MarioModule(pActor) {
     initMember();
     mVelocity.zero();

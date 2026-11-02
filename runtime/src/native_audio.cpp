@@ -389,6 +389,12 @@ void NativeGameAudio::frame() {
         out[i * 2u + 1u] = samples[i * 2u + 1u] * gain;
     }
     galaxy::input::speaker::game_speaker().mix(out, s.mixer->rate(), audio.wiimote_speaker);
+    static const bool trace_first = std::getenv("GALAXY_TRACE_FILE_READS") != nullptr;
+    static bool first_sound = false;
+    if (trace_first && !first_sound && std::any_of(out.begin(), out.end(), [](float value) { return value != 0.0f; })) {
+        first_sound = true;
+        std::fprintf(stderr, "[read] first sound\n");
+    }
     static const bool dump = std::getenv(NEBULA_TEST_ENV("GALAXY_AUDIO_WAV_DUMP")) != nullptr;
     if (dump) {
         s.wav_block.resize(frames * 4u);

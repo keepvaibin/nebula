@@ -16,56 +16,6 @@
 #include <JSystem/JGeometry/TVec.hpp>
 #include <nebula_math.h>
 
-void BossStinkBugActionBase_FORCE_MATCH_SDATA2() {
-    (void)15.0f;
-    (void)0.02f;
-    (void)0.95f;
-    (void)0.75f;
-    (void)-15.0f;
-    (void)35.0f;
-    (void)4e+01f;
-    (void)0.3f;
-    (void)1.1e+03f;
-    (void)1.2f;
-    (void)0.99f;
-    (void)1.8e+02f;
-    (void)0.9f;
-    (void)0.6666667f;
-    (void)1.5e+03f;
-    (void)12.0f;
-    (void)2.5e+03f;
-    (void)1e+03f;
-    (void)5.5e+02f;
-    (void)2e+03f;
-    (void)4.5e+03f;
-    (void)126.0f;
-    (void)2e+01f;
-}
-
-void BossStinkBugActionBase_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("GroundWalk", "GroundWalk");
-    MR::isEqualString("SE_BV_BOSS_BUG_ATTACK_G", "SE_BV_BOSS_BUG_ATTACK_G");
-    MR::isEqualString("Find", "Find");
-    MR::isEqualString("GroundRide", "GroundRide");
-    MR::isEqualString("GroundRun", "GroundRun");
-    MR::isEqualString("SE_BM_LV_BOSS_BUG_RUN_ADD_WATER", "SE_BM_LV_BOSS_BUG_RUN_ADD_WATER");
-    MR::isEqualString("AttackSuccess", "AttackSuccess");
-    MR::isEqualString("SE_BV_BOSS_BUG_GLAD", "SE_BV_BOSS_BUG_GLAD");
-    MR::isEqualString("CoolDown", "CoolDown");
-    MR::isEqualString("SE_BM_LV_BOSS_BUG_BRAKE", "SE_BM_LV_BOSS_BUG_BRAKE");
-    MR::isEqualString("GroundTurnLeft", "GroundTurnLeft");
-    MR::isEqualString("GroundTurnRight", "GroundTurnRight");
-    MR::isEqualString("SE_BM_BOSS_BUG_PRESSED", "SE_BM_BOSS_BUG_PRESSED");
-    MR::isEqualString("GroundDamage", "GroundDamage");
-    MR::isEqualString("Fall", "Fall");
-    MR::isEqualString("SE_BV_BOSS_BUG_DAMAGE", "SE_BV_BOSS_BUG_DAMAGE");
-    MR::isEqualString("FlyWait", "FlyWait");
-    MR::isEqualString("FlyRide", "FlyRide");
-    MR::isEqualString("FlyRollRight", "FlyRollRight");
-    MR::isEqualString("FlyRollWaitRight", "FlyRollWaitRight");
-    MR::isEqualString("FlyRollEndRight", "FlyRollEndRight");
-}
-
 BossStinkBugActionBase::BossStinkBugActionBase(const char* pName, BossStinkBug* pStinkBug)
     : ActorStateBase< BossStinkBug >(pName, pStinkBug), mSpringValue(), _14(0.0f, 0.0f, 0.0f), _20(0.0f, 0.0f, 1.0f), _38(15.0f), _3C(), _40(), _44(),
       mThrowBombTimer(), _50(true), _54(), _58(), _5C(), _60(), _61() {

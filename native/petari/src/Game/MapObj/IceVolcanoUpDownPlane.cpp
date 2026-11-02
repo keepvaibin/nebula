@@ -4,12 +4,6 @@
 #include "Game/Util/ModelUtil.hpp"
 #include "Game/Util/PlayerUtil.hpp"
 
-void IceVolcanoUpDownPlane_FORCE_MATCH_SDATA2() {
-    (void)0.0f;
-    (void)JGeometry::TUtil< f32 >::epsilon();
-    (void)-380.0f;
-}
-
 IceVolcanoUpDownPlane::IceVolcanoUpDownPlane(const char* pName) : RailMoveObj(pName), mNearestPosToPlayer(0.0f, 0.0f, 0.0f) {
 }
 

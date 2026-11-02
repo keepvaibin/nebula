@@ -4,10 +4,6 @@
 #include "Game/MapObj/MapPartsRailMover.hpp"
 #include "Game/Util.hpp"
 
-void OceanFloaterLandParts_FORCE_MATCH_SDATA2() {
-    (void)100.0f;
-}
-
 OceanFloaterLandParts::OceanFloaterLandParts(const char* pName)
     : LiveActor(pName), mRailMover(), mLodCtrl(), mRailEndPos(gZeroVec), mObjectName(), mIsMoving(), mIsRegisteredDemo(), mAlreadyDoneFlag(-1) {
 }

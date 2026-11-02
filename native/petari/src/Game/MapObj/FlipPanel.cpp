@@ -9,11 +9,6 @@
 #include <JSystem/JMath/JMath.hpp>
 #include "Game/System/NebulaHost.hpp"
 
-void FlipPanel_FORCE_MATCH_SDATA2() {
-    (void)MR::epsilon();
-    (void)-25.0f;
-}
-
 namespace NrvFlipPanel {
     NEW_NERVE(FlipPanelNrvFrontLand, FlipPanel, FrontLand);
     NEW_NERVE(FlipPanelNrvBackLand, FlipPanel, BackLand);

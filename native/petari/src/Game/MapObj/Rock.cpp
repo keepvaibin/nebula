@@ -593,7 +593,7 @@ bool Rock::tryFreeze(const Nerve* pNerve) {
 }
 
 void Rock::setBtkForEnvironmentMap(LiveActor* pActor, const char* pBtkName) {
-    f32 frame;
+    f32 frame = 0.0f;
 
     if (mRockType == NormalRock) {
         if (MR::isNearZero(mScale.x - 0.5f)) {

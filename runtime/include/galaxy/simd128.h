@@ -61,8 +61,6 @@ template <int N> [[nodiscard]] inline v128 shr32(v128 v) noexcept {
 }
 // Byte i of the result is byte indices[i] (0-15) of v.
 [[nodiscard]] inline v128 shuffle_bytes(v128 v, v128 indices) noexcept { return vqtbl1q_u8(v, indices); }
-[[nodiscard]] inline v128 byteswap16(v128 v) noexcept { return vrev16q_u8(v); }
-[[nodiscard]] inline v128 byteswap32(v128 v) noexcept { return vrev32q_u8(v); }
 [[nodiscard]] inline v128 add16(v128 a, v128 b) noexcept {
     return vreinterpretq_u8_u16(vaddq_u16(vreinterpretq_u16_u8(a), vreinterpretq_u16_u8(b)));
 }
@@ -101,12 +99,6 @@ template <int N> [[nodiscard]] inline v128 shr32(v128 v) noexcept { return _mm_s
 [[nodiscard]] inline v128 interleave_low16(v128 a, v128 b) noexcept { return _mm_unpacklo_epi16(a, b); }
 [[nodiscard]] inline v128 interleave_high16(v128 a, v128 b) noexcept { return _mm_unpackhi_epi16(a, b); }
 [[nodiscard]] inline v128 shuffle_bytes(v128 v, v128 indices) noexcept { return _mm_shuffle_epi8(v, indices); }
-[[nodiscard]] inline v128 byteswap16(v128 v) noexcept {
-    return _mm_shuffle_epi8(v, _mm_setr_epi8(1, 0, 3, 2, 5, 4, 7, 6, 9, 8, 11, 10, 13, 12, 15, 14));
-}
-[[nodiscard]] inline v128 byteswap32(v128 v) noexcept {
-    return _mm_shuffle_epi8(v, _mm_setr_epi8(3, 2, 1, 0, 7, 6, 5, 4, 11, 10, 9, 8, 15, 14, 13, 12));
-}
 [[nodiscard]] inline v128 add16(v128 a, v128 b) noexcept { return _mm_add_epi16(a, b); }
 [[nodiscard]] inline v128 add_saturate_u16(v128 a, v128 b) noexcept { return _mm_adds_epu16(a, b); }
 [[nodiscard]] inline bool all_equal16(v128 a, v128 b) noexcept {

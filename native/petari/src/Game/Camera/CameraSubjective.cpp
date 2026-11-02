@@ -4,15 +4,6 @@
 #include "Game/Util/GamePadUtil.hpp"
 #include "Game/Util/MathUtil.hpp"
 
-void CameraSubjective_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     static const f32 sDistance = 200.0f;
     static const f32 sHeight = 120.0f;

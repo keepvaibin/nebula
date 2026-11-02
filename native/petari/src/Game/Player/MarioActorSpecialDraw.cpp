@@ -21,19 +21,6 @@
 #include <new>
 #include <NebulaGpuEnums.h>
 
-void MarioActorSpecialDraw_FORCE_MATCH_SDATA2() {
-    (void)80.0f;
-    (void)0.99000001f;
-    (void)0.999899983f;
-    (void)300.0f;
-    (void)1000.0f;
-    (void)255.0f;
-    (void)63.0f;
-    (void)20.0f;
-    (void)0.800000012f;
-    (void)2607.59448f;
-}
-
 void MarioActor::initScreenBox() {
     _B44 = new (32) u8[0x20000];
     _B28 = 0.0f;

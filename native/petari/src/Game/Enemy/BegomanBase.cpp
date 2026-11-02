@@ -97,6 +97,8 @@ BegomanBase::BegomanBase(const char* pName)
     : LiveActor(pName), mBaseDelegator(), mFaceVec(0.0f, 0.0f, 1.0f), mTargetVec(0.0f, 0.0f, 1.0f), _A8(0.0f, 0.0f, -1.0f), _B4(1.0f, 1.0f, 1.0f),
       _C0(0, 0, 0, 1), _D0(0, 0, 0, 1), mTiredCounter(), mElectricCounter(), mInitPos(0.0f, 0.0f, 0.0f), mScaleControler(), mStarPointBind(),
       mCanTrySetReturn() {
+    mIsTouchElectricRail = false;
+    mInvertSideVec = false;
 }
 
 // needed to get a string to show up in .data, should be deadstripped.

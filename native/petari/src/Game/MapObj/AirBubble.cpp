@@ -11,13 +11,6 @@
 #include "Game/Util/RailUtil.hpp"
 #include "Game/Util/SoundUtil.hpp"
 
-void AirBubble_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     const f32 cHitSensorRadius = 130.0f;
     const f32 cSwingRange = 250.0f;

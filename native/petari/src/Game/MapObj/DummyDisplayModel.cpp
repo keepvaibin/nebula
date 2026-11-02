@@ -13,30 +13,6 @@
 
 #include "Game/Util/StringUtil.hpp"
 
-void DummyDisplayModel_FORCE_MATCH_STRINGS() {
-    MR::isEqualString("Coin", "Coin");
-    MR::isEqualString("Kinopio", "Kinopio");
-    MR::isEqualString("Freeze", "Freeze");
-    MR::isEqualString("SpinDriver", "SpinDriver");
-    MR::isEqualString("SuperSpinDriver", "SuperSpinDriver");
-    MR::isEqualString("StarPieceDummy", "StarPieceDummy");
-    MR::isEqualString("Tico", "Tico");
-    MR::isEqualString("KeySwitch", "KeySwitch");
-    MR::isEqualString("InRotation", "InRotation");
-    MR::isEqualString("PowerStar", "PowerStar");
-    MR::isEqualString("KinokoOneUp", "KinokoOneUp");
-    MR::isEqualString("Kuribo", "Kuribo");
-    MR::isEqualString("BlueChip", "BlueChip");
-    MR::isEqualString("YellowChip", "YellowChip");
-    MR::isEqualString("StrayTico", "StrayTico");
-    MR::isEqualString("GrandStar", "GrandStar");
-    MR::isEqualString("KinokoLifeUp", "KinokoLifeUp");
-    MR::isEqualString("ColorChange", "ColorChange");
-    MR::isEqualString("Shadow", "Shadow");
-    MR::isEqualString("Light", "Light");
-    MR::isEqualString("body", "body");
-}
-
 namespace {
     const DummyDisplayModelInfo cDummyDisplayModelInfoTable[15] = {
         {"Coin", {0.0f, 70.0f, 0.0f}, 15, nullptr, false},

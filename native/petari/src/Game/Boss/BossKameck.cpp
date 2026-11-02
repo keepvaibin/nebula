@@ -22,19 +22,6 @@
 #include "Game/Util/SoundUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void BossKameck_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)3.0f;
-    (void)2.0f;
-
-    // function order is weird here
-    (void)300.0f;
-    (void)240.0f;
-    (void)30.0f;
-    (void)40.0f;
-}
-
 namespace {
     static const f32 sFrontVecBlendRate = 0.2f;
     static const f32 sUpVecBlendRate = 0.04f;

@@ -954,7 +954,7 @@ bool save_mod_settings(std::span<const ModInfo> mods) {
         if (!mod.own_text) out << "text=game\n";
         for (const ModOption& o : mod.options) out << "option." << escape_key(o.key) << '=' << o.selected << '\n';
     }
-    return io::write_text_file_atomically(file, out.str());
+    return io::write_file_atomically(file, out.str());
 }
 
 namespace {

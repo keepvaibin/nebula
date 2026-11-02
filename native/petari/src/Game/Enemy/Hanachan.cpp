@@ -20,16 +20,6 @@
 #include "Game/Util/StarPointerUtil.hpp"
 #include "Game/Util/StringUtil.hpp"
 
-void Hanachan_FORCE_MATCH_SDATA2() {
-    (void)1.0f;
-    (void)0.0f;
-    (void)0.5f;
-    (void)3.0f;
-    (void)-1.0f;
-    (void)MR::pi();
-    (void)2.0f;
-}
-
 namespace {
     const f32 hFarDistToPursuePlayer = 2000.0f;
     // hPursuePlayerTurnLimitRadian
