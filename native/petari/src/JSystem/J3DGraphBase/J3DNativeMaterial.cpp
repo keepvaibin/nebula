@@ -457,8 +457,6 @@ namespace {
         const J3DTexCoordScaleInfo& rInfo = J3DSys::sTexCoordScaleTable[map & 7];
         pOut->tex_coord_scale[coord & 7].scale_s = rInfo.field_0x00;
         pOut->tex_coord_scale[coord & 7].scale_t = rInfo.field_0x02;
-        pOut->tex_coord_scale[coord & 7].bias_s = rInfo.field_0x04 == 1;
-        pOut->tex_coord_scale[coord & 7].bias_t = rInfo.field_0x06 == 1;
     }
 }  // namespace
 
@@ -489,7 +487,6 @@ namespace J3DNativeMaterial {
         J3DColorBlock* pColor = pMaterial->mColorBlock;
         J3DPEBlock* pPE = pMaterial->mPEBlock;
 
-        const u32 tevStages = pTev->getTevStageNum();
         const u32 indStages = pInd->getIndTexStageNum();
         pOut->tex_gens = static_cast< u8 >(pTexGen->getTexGenNum());
         {
@@ -499,8 +496,8 @@ namespace J3DNativeMaterial {
         }
 
         // The null TEV block has no textures or orders.
-        const bool tev = pTev->getTevOrder(0) != NULL;
-        // Textures first: their sizes fill the coordinate scale table the orders then read.
+        const bool tev = pTev->hasTextures();
+        // Textures first: their sizes fill the coordinate scale table.
         u16 sizes[16];
         memset(sizes, 0, sizeof(sizes));
         for (u32 map = 0; tev && map < 8; map++) {
@@ -511,14 +508,10 @@ namespace J3DNativeMaterial {
                 J3DSys::sTexCoordScaleTable[map].field_0x02 = sizes[map * 2 + 1];
             }
         }
-        for (u32 i = 0; tev && i < tevStages; i++) {
-            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(i)->getTevOrderInfo();
-            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
-        }
-        // Orders come in pairs: an odd count's last stage pairs with the next entry the block holds.
-        if (tev && (tevStages & 1) != 0 && tevStages < 16 && pTev->getType() != 'TVB1') {
-            const J3DTevOrderInfo& rOrder = pTev->getTevOrder(tevStages)->getTevOrderInfo();
-            coordScale(pVal, rOrder.mTexCoord, rOrder.mTexMap);
+        for (u32 k = 0; pParts->cooked != NULL && k < 8; k++) {
+            if (pParts->cooked->coord_map[k] != 255) {
+                coordScale(pVal, k, pParts->cooked->coord_map[k]);
+            }
         }
         // The parts a TEV block variant keeps (J3DTevBlock1 has no colours): left as set before.
         if (pTev->getTevColor(0) != NULL) {
@@ -538,13 +531,8 @@ namespace J3DNativeMaterial {
             }
         }
 
-        // J3DIndBlockFull has all four orders whatever its stage count (the null block has none).
-        if (pInd->getIndTexOrder(0) != NULL) {
+        if (pInd->isFull()) {
             pOut->loads |= J3D_LOADS_INDIRECT;
-        }
-        for (u32 i = 0; i < 4 && pInd->getIndTexOrder(0) != NULL; i++) {
-            J3DIndTexOrder* pOrder = pInd->getIndTexOrder(i);
-            coordScale(pVal, pOrder->getCoord(), pOrder->getMap());
         }
         for (u32 i = 0; i < indStages && i < 3; i++) {
             const J3DIndTexMtx& rMtx = *pInd->getIndTexMtx(i);
