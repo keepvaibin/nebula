@@ -3,6 +3,7 @@
 // A site's native material (nebula_game_api.h NebulaNativeMaterial; E-04): a shader compiled at build
 // (runtime/src/render/materials), its constants, textures and fixed-function state, sent for the draws that follow.
 
+#include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeMaterial.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeShape.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexture.hpp>
@@ -117,16 +118,14 @@ namespace NativeShader {
         rMaterial.constants_only |= 2;
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &rMaterial);
+        J3DNativeState::sendMaterial(&rMaterial);
         J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 
     inline void send(const NebulaNativeMaterial& rMaterial) {
         J3DNativeShape::flushState();
         J3DNativeMaterial::watch(&rMaterial);
-        const NebulaHostServices* pHost = nebula_host();
-        pHost->native_material(pHost->user, &rMaterial);
+        J3DNativeState::sendMaterial(&rMaterial);
         J3DNativeMaterial::dumpTag(rMaterial.shader);
     }
 }  // namespace NativeShader

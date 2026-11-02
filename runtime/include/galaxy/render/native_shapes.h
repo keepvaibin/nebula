@@ -106,6 +106,15 @@ struct RecordPool {
 };
 
 // The game's records, in the order it made them (render_core.h attach_shape_record).
+// What a draw does to the target (nebula_game_api.h NebulaPassState).
+struct PassState {
+    std::uint8_t blend_op = 0, blend_src = 0, blend_dst = 0, logic_op = 0;
+    std::uint8_t depth_test = 0, depth_func = 0, depth_write = 0;
+    std::uint8_t cull = 0;
+    std::uint8_t color_write = 0, alpha_write = 0;
+    std::uint8_t constant_alpha = 0, constant_alpha_value = 0;
+};
+
 struct Record {
     enum class Kind : std::uint8_t {
         Array, Geometry, Draw, State, Immediate, TextureImage, Readback, Marker,
@@ -126,6 +135,7 @@ struct Record {
     // (Geometry::attributes' bits) say each has its own. `primitive` a NebulaPrimitive.
     // Readback: its probes in the frame's pool, the same way.
     std::uint32_t vertex_first = 0, vertex_count = 0, attributes = 0;
+    PassState pass;  // Draw, Immediate
     std::uint8_t primitive = 0;
     // An image's bytes (TextureImage), at `key`: its physical address.
     std::shared_ptr<const std::vector<std::byte>> image;

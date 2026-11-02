@@ -1,6 +1,7 @@
 #include <JSystem/J3DGraphBase/J3DNativeChannel.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeTexGen.hpp>
 #include "JSystem/J3DGraphBase/J3DStateList.hpp"
+#include "JSystem/J3DGraphBase/J3DNativeState.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
 #include "JSystem/J3DGraphBase/J3DNativeMaterial.hpp"
 #include "JSystem/JKernel/JKRHeap.hpp"
@@ -36,22 +37,9 @@ void J3DStateList::copy(const J3DStateList& rOther) {
 }
 
 namespace {
-    // A change the native material folds into itself (its TEV, indirect, alpha-compare and Z-texture state): the
-    // host draws with the material's own shader and never receives it.
-    bool materialOnly(u8 kind) {
-        switch (kind) {
-        case NEBULA_STATE_ALPHA_COMPARE:
-        case NEBULA_STATE_TEV_COLOR:
-        case NEBULA_STATE_TEV_KCOLOR:
-        case NEBULA_STATE_TEV_COLOR_S10:
-        case NEBULA_STATE_IND_TEX_MATRIX:
-        case NEBULA_STATE_MATERIAL_COLOR:
-        case NEBULA_STATE_AMBIENT_COLOR:
-        case NEBULA_STATE_FOG:
-            return true;
-        default:
-            return false;
-        }
+    // The game's own changes have kinds of their own (J3D_STATE_*): folded here, never sent.
+    bool gameOnly(u8 kind) {
+        return kind >= J3D_STATE_BLEND_ETC;
     }
 }  // namespace
 
@@ -61,12 +49,13 @@ void J3DStateList::send() const {
     }
     J3DNativeShape::flushState();
     J3DNativeMaterial::state(mOps, mCount);
+    J3DNativeState::passChanges(mOps, mCount);
     if (mMaterialPass != 0) { J3DNativeMaterial::applyPass(mMaterialPass); }
     // The host's share, in order, in runs between material-only changes.
     const NebulaHostServices* pHost = nebula_host();
     u16 start = 0;
     for (u16 i = 0; i <= mCount; i++) {
-        if (i == mCount || materialOnly(mOps[i].kind)) {
+        if (i == mCount || gameOnly(mOps[i].kind)) {
             if (i > start) {
                 pHost->state(pHost->user, mOps + start, i - start);
             }
@@ -104,7 +93,7 @@ namespace {
 
 void J3DStateList::setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op,
                                    GpuBool colorUpdate, GpuBool alphaUpdate, GpuBool dither) {
-    NebulaStateOp& r = add(NEBULA_STATE_BLEND_ETC);
+    NebulaStateOp& r = add(J3D_STATE_BLEND_ETC);
     r.a[0] = nativeBlendOp(type);
     r.a[1] = nativeFactor(src, true);
     r.a[2] = nativeFactor(dst, false);
@@ -115,7 +104,7 @@ void J3DStateList::setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBle
 }
 
 void J3DStateList::setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op) {
-    NebulaStateOp& r = add(NEBULA_STATE_BLEND);
+    NebulaStateOp& r = add(J3D_STATE_BLEND);
     r.a[0] = nativeBlendOp(type);
     r.a[1] = nativeFactor(src, true);
     r.a[2] = nativeFactor(dst, false);
@@ -123,14 +112,14 @@ void J3DStateList::setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendF
 }
 
 void J3DStateList::setZMode(GpuBool compare, GpuCompare func, GpuBool update) {
-    NebulaStateOp& r = add(NEBULA_STATE_Z_MODE);
+    NebulaStateOp& r = add(J3D_STATE_Z_MODE);
     r.a[0] = compare;
     r.a[1] = func;
     r.a[2] = update;
 }
 
 void J3DStateList::setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1) {
-    NebulaStateOp& r = add(NEBULA_STATE_ALPHA_COMPARE);
+    NebulaStateOp& r = add(J3D_STATE_ALPHA_COMPARE);
     r.a[0] = comp0;
     r.a[1] = ref0;
     r.a[2] = op;
@@ -139,7 +128,7 @@ void J3DStateList::setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, Gpu
 }
 
 void J3DStateList::setDstAlpha(GpuBool enable, u8 alpha) {
-    NebulaStateOp& r = add(NEBULA_STATE_DST_ALPHA);
+    NebulaStateOp& r = add(J3D_STATE_DST_ALPHA);
     r.a[0] = enable;
     r.a[1] = alpha;
 }
@@ -153,23 +142,23 @@ namespace {
 }  // namespace
 
 void J3DStateList::setCullMode(GpuCullMode mode) {
-    add(NEBULA_STATE_CULL).a[0] = nativeCull(mode);
+    add(J3D_STATE_CULL).a[0] = nativeCull(mode);
 }
 
 void J3DStateList::setTevColor(GpuTevRegID reg, NebulaColor8 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR);
+    NebulaStateOp& r = add(J3D_STATE_TEV_COLOR);
     r.a[0] = reg;
     setColor(r.a + 1, color);
 }
 
 void J3DStateList::setChanMatColor(GpuChannelID chan, NebulaColor8 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_MATERIAL_COLOR);
+    NebulaStateOp& r = add(J3D_STATE_MATERIAL_COLOR);
     r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
 }
 
 void J3DStateList::setChanAmbColor(GpuChannelID chan, NebulaColor8 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_AMBIENT_COLOR);
+    NebulaStateOp& r = add(J3D_STATE_AMBIENT_COLOR);
     r.a[0] = static_cast< u8 >(chan & 1);  // the channel (0 or 1); the whole colour
     setColor(r.a + 1, color);
 }
@@ -209,7 +198,7 @@ void J3DStateList::setTexImgPtr(GpuTexMapID map, const void* pImage) {
 }
 
 void J3DStateList::setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_FOG);
+    NebulaStateOp& r = add(J3D_STATE_FOG);
     r.a[0] = type;
     setColor(r.a + 1, color);
     r.f[0] = start;
@@ -219,15 +208,15 @@ void J3DStateList::setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 fa
 }
 
 void J3DStateList::setColorUpdate(GpuBool enable) {
-    add(NEBULA_STATE_COLOR_UPDATE).a[0] = enable;
+    add(J3D_STATE_COLOR_UPDATE).a[0] = enable;
 }
 
 void J3DStateList::setAlphaUpdate(GpuBool enable) {
-    add(NEBULA_STATE_ALPHA_UPDATE).a[0] = enable;
+    add(J3D_STATE_ALPHA_UPDATE).a[0] = enable;
 }
 
 void J3DStateList::setTevKColor(GpuTevKColorID id, NebulaColor8 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEV_KCOLOR);
+    NebulaStateOp& r = add(J3D_STATE_TEV_KCOLOR);
     r.a[0] = id;
     setColor(r.a + 1, color);
 }
@@ -298,7 +287,7 @@ void J3DStateList::enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool 
 }
 
 void J3DStateList::setTevColorS10(GpuTevRegID id, NebulaColor16 color) {
-    NebulaStateOp& r = add(NEBULA_STATE_TEV_COLOR_S10);
+    NebulaStateOp& r = add(J3D_STATE_TEV_COLOR_S10);
     r.a[0] = id;
     r.size[0] = static_cast< u16 >(color.r);
     r.size[1] = static_cast< u16 >(color.g);
