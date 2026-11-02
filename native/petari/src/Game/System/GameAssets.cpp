@@ -3,6 +3,7 @@
 #include "Game/System/GameThreads.hpp"
 #include "Game/System/NebulaArena.hpp"
 
+#include <cstdlib>
 #include <cstring>
 
 #include <nebula_game_api.h>
@@ -73,7 +74,6 @@ namespace GameAssets {
     // fixed-up pointers aside), so they cost no memory of the game's. The heap it was asked for decides when it goes.
     namespace {
         const u32 cMappedFrom = 0x2000;
-        const u32 cMappedMax = 2048;
 
         struct Mapped {
             void* mData;
@@ -81,8 +81,9 @@ namespace GameAssets {
             NebulaArena* mHeap;
         };
 
-        Mapped sMapped[cMappedMax];
+        Mapped* sMapped;
         u32 sMappedCount;
+        u32 sMappedMax;
         GameMutex sMappedLock;  // all zeros: ready before anything can run
 
         void release(const Mapped& rMapped) {
@@ -95,7 +96,11 @@ namespace GameAssets {
         void* loadMapped(s32 entry, u32 size, NebulaArena* pHeap) {
             const NebulaHostServices* const host = nebula_host();
             sMappedLock.lock();
-            void* pData = sMappedCount < cMappedMax ? host->asset_map_private(host->user, entry) : nullptr;
+            void* pData = host->asset_map_private(host->user, entry);
+            if (pData != nullptr && sMappedCount == sMappedMax) {
+                sMappedMax = sMappedMax != 0 ? sMappedMax * 2 : 512;
+                sMapped = static_cast< Mapped* >(realloc(sMapped, sizeof(Mapped) * sMappedMax));
+            }
             if (pData != nullptr) {
                 Mapped& rMapped = sMapped[sMappedCount++];
                 rMapped.mData = pData;
