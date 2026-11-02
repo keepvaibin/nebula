@@ -94,8 +94,6 @@ constexpr std::uint32_t bit(unsigned group) {
 std::uint32_t op_groups(std::uint8_t kind) {
     switch (kind) {
     case state::kTexCoordGen: return bit(kTexgen) | bit(kPostTexgen) | bit(kTextureMatrix);
-    case state::kTexLookup: case state::kTexImage:
-        return bit(kTexture);
     case state::kProjection: return bit(kProjection) | bit(kProjectionType);
     case state::kViewport: return bit(kViewport);
     case state::kFrameAlpha: return bit(kFrame);
@@ -188,13 +186,6 @@ void NativeDrawState::set_op(const state::Op& op) {
                               top + static_cast<std::int32_t>(op.f[3]) - 1};
         break;
     }
-    case state::kTexLookup:
-        set_texture_mode(texture[a[0] & 7u], a[1], a[2], a[3] != 0u, a[4] != 0u, a[5], a[7] != 0u, op.f[2], a[8],
-                         a[6] != 0u, op.f[0], op.f[1]);
-        break;
-    case state::kTexImage:
-        set_texture_address(texture[a[0] & 7u], op.image);
-        break;
     default:
         break;
     }

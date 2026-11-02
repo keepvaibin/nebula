@@ -97,7 +97,7 @@ ElectricRailShadowDrawer::ElectricRailShadowDrawer(const LiveActor* pActor, Elec
 
 void ElectricRailShadowDrawer::loadModelDrawMtx() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DPass::positionMatrix(0);
 }
 
 void ElectricRailShadowDrawer::drawShape() const {
@@ -109,7 +109,7 @@ bool ElectricRailShadowDrawer::isDraw() const {
 }
 
 void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, ElectricRailSeparator* pSeparator, s32 val) const {
-    rMesh.begin(GPU_TRIANGLESTRIP, val * 4 + 2);
+    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 4 + 2);
 
     ElectricRailSeparator* separator;
     TVec3f vec24, vec30, vec3C, vec48;
@@ -161,7 +161,7 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
     rMesh.position(vec30.x, vec30.y, vec30.z);
     rMesh.corner();
 
-    rMesh.begin(GPU_TRIANGLESTRIP, val * 2);
+    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 2);
 
     for (s32 i = 0; i < val; i++) {
         separator = &pSeparator[i];
@@ -178,7 +178,7 @@ void ElectricRailShadowDrawer::drawShadowVolumeShape(NativeMesh& rMesh, Electric
         rMesh.corner();
     }
 
-    rMesh.begin(GPU_TRIANGLESTRIP, val * 2);
+    rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, val * 2);
 
     for (s32 i = 0; i < val; i++) {
         separator = &pSeparator[val - i - 1];
@@ -458,7 +458,7 @@ void ElectricRail::drawPlane(NativeMesh& rMesh, f32 a1, f32 a2, f32 a3, f32 a4) 
     const TVec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        rMesh.begin(GPU_TRIANGLESTRIP, 2 * mSeparatorCount);
+        rMesh.begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];
@@ -488,7 +488,7 @@ void ElectricRail::drawPlaneGX(f32 a1, f32 a2, f32 a3, f32 a4) const {
     const TVec3f* pUp;
 
     for (s32 i = 0; i < mRailHeight; i++) {
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 2 * mSeparatorCount, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 2 * mSeparatorCount, NEBULA_SHAPE_TEXCOORD0);
 
         for (s32 j = 0; j < mSeparatorCount; j++) {
             ElectricRailSeparator* s = &mSeparators[j];

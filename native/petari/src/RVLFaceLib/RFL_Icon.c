@@ -96,7 +96,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     }
 
     NebulaMtxPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);
-    J3DNativeViewSetProjection(projMtx, GPU_PERSPECTIVE);
+    J3DNativeViewSetPerspective(projMtx);
 
     cameraPos = (Vec){0.0f, 34.5f, 600.0f};
     target = (Vec){0.0f, 34.5f, 0.0f};
@@ -109,7 +109,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
 
     NebulaMtxMultVec(viewMtx, &pos, &pos);
     J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
-    J3DNativeStateLoadLightObjImm(&light, GPU_LIGHT0);
+    J3DNativeStateSendLight(&light, 0);
     MiiSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;
@@ -121,25 +121,25 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     MiiLoadDrawSetting(&drawSetting);
 
     if (!setting->drawXluOnly) {
-        J3DNativeStateSetColorUpdate(TRUE);
-        J3DNativeStateSetAlphaUpdate(TRUE);
-        J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
+        J3DPassWriteColor(1);
+        J3DPassWriteAlpha(1);
+        J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
         MiiDrawOpa(&model);
     }
 
-    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, FALSE);
-    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
-    J3DNativeStateSetColorUpdate(TRUE);
-    J3DNativeStateSetAlphaUpdate(FALSE);
+    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 0);
+    J3DPassBlend(NEBULA_FACTOR_SRC_ALPHA, NEBULA_FACTOR_INV_SRC_ALPHA);
+    J3DPassWriteColor(1);
+    J3DPassWriteAlpha(0);
     MiiDrawXlu(&model);
 
-    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
-    J3DNativeStateSetAlphaUpdate(TRUE);
-    J3DNativeStateSetColorUpdate(FALSE);
+    J3DPassBlend(NEBULA_FACTOR_ONE, NEBULA_FACTOR_INV_SRC_ALPHA);
+    J3DPassWriteAlpha(1);
+    J3DPassWriteColor(0);
     MiiDrawXlu(&model);
 
-    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, TRUE);
-    J3DNativeStateSetColorUpdate(TRUE);
+    J3DPassDepth(1, NEBULA_COMPARE_LEQUAL, 1);
+    J3DPassWriteColor(1);
     J3DNativeTargetEnd(buf);
 
     Mii_Free(modelBuf);

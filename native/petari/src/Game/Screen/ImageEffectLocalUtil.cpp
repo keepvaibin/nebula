@@ -39,16 +39,6 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
     MR::connectToScene(pObj, MR::MovementType_ImageEffect, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GpuTexFmt format, bool half, u8 clear) {
-    // FallOutFieldDraw::draw passes 0 divisions each frame it draws: the capture then starts at the origin.
-    if (divisions == 0) {
-        pTexture->capture(0, 0, format, half, clear);
-        return;
-    }
-    pTexture->capture((tile % divisions) * MR::getCanvasWidth() / divisions, (tile / divisions) * MR::getCanvasHeight() / divisions, format,
-                      half, clear);
-}
-
 
 namespace {
     // The draws' mode (runtime/src/render/materials/image_effect.hlsl params.x) and the colours the fall-out passes give.
@@ -97,20 +87,20 @@ void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getCanvasHeight(), 0.0f, MR::getCanvasWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(projectionMtx);
 
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DPass::positionMatrix(0);
 
-    J3DNativeState::setCullMode(GPU_CULL_NONE);
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
-    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
-    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    J3DPass::cull(NEBULA_CULL_NONE);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
+    J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
+    J3DPass::noAlphaTest();
     sMode = 0;
 }
 
@@ -129,7 +119,7 @@ void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     f32 bottom = (row + 1) * height;
     f32 top = row * height;
 
-    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(left, bottom, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 1.0f);
 

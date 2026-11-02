@@ -198,8 +198,19 @@ namespace {
             // Normal, rainbow, fire, ice, bee, spring, Boo, flying, tornado (PlayerMode).
             static const u16 kForms[] = {0, 1, 2, 3, 4, 5, 6, 7, 9};
             const u16 form = kForms[static_cast< u32 >(index) % (sizeof(kForms) / sizeof(kForms[0]))];
-            JUTNativeLog("test: form %u\n", form);
-            MarioAccess::getPlayerActor()->setPlayerMode(form, true);
+            // Only what this stage loaded: a form's models come with the stage's item, as in play.
+            MarioActor* pPlayer = MarioAccess::getPlayerActor();
+            const bool loaded = form == PlayerMode_Invincible ? pPlayer->_9C8 != nullptr
+                                : form == PlayerMode_Ice      ? pPlayer->_9C0 != nullptr
+                                : form == PlayerMode_Bee      ? pPlayer->_9E4 != nullptr
+                                : form == PlayerMode_Teresa   ? pPlayer->_9A4 != nullptr
+                                : form == PlayerMode_Hopper   ? pPlayer->_A00 != nullptr
+                                : form == PlayerMode_Tornado  ? pPlayer->mTornadoMario != nullptr
+                                                              : true;
+            if (loaded) {
+                JUTNativeLog("test: form %u\n", form);
+                pPlayer->setPlayerMode(form, true);
+            }
         }
         if (kind == NEBULA_TEST_PLACE_PLAYER_WATER) {
             TVec3f pos;
@@ -733,8 +744,8 @@ void GameScene::drawMirror() const {
         NebulaMtxCopy(MR::getMirrorCameraViewMtx(), j3dSys.mViewMtx);
         MR::loadProjectionMtx();
         CategoryList::entryDrawBufferMirror();
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
-        J3DNativeState::setColorUpdate(GPU_TRUE);
+        J3DPass::writeAlpha(false);
+        J3DPass::writeColor(true);
         CategoryList::drawOpa(MR::DrawBufferType_MirrorMapObj);
         CategoryList::drawXlu(MR::DrawBufferType_MirrorMapObj);
         CategoryList::execute(MR::DrawType_CaptureScreenIndirect);
@@ -769,25 +780,25 @@ void GameScene::draw3D() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
     MR::setDefaultViewportAndScissor();
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_TRUE);
-    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(true);
+    J3DPass::constantAlpha(true, 0);
     CategoryList::drawOpa(MR::DrawBufferType_ClippedMapParts);
     CategoryList::execute(MR::DrawType_ClipArea);
     CategoryList::execute(MR::DrawType_FallOutFieldDraw);
     SceneFunction::executeDrawBufferListNormalOpaBeforeVolumeShadow();
-    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DPass::writeAlpha(true);
     CategoryList::execute(MR::DrawType_ShadowVolume);
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+    J3DPass::writeColor(true);
+    J3DPass::constantAlpha(true, 0);
     SceneFunction::executeDrawBufferListNormalOpaBeforeSilhouette();
     CategoryList::execute(MR::DrawType_0x28);
     SceneFunction::executeDrawSilhouetteAndFillShadow();
     SceneFunction::executeDrawAlphaShadow();
     CategoryList::execute(MR::DrawType_BrightSun);
     MR::setLensFlareDrawSyncToken();
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
-    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+    J3DPass::writeAlpha(false);
+    J3DPass::constantAlpha(false, 0);
     SceneFunction::executeDrawBufferListNormalOpa();
     SceneFunction::executeDrawListOpa();
     CategoryList::drawOpa(MR::DrawBufferType_UNK_0x18);

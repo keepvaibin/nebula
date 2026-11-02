@@ -4,6 +4,65 @@
 #include <NebulaGpu.h>
 #include <nebula_math.h>
 
+// How a point light dims with distance.
+enum J3DLightFalloff {
+    J3D_FALLOFF_NONE = 0,
+    J3D_FALLOFF_GENTLE,
+    J3D_FALLOFF_MEDIUM,
+    J3D_FALLOFF_STEEP,
+};
+
+// What the draws that follow do to the target, in the host's values (nebula_game_api.h).
+#ifdef __cplusplus
+namespace J3DPass {
+    void depth(bool test, u8 compare, bool write);  // NEBULA_COMPARE_*
+    void blend(u8 source, u8 destination);          // source * source + target * destination, NEBULA_FACTOR_*
+    void blendState(u8 op, u8 source, u8 destination, u8 logicOp);  // NEBULA_BLEND_*, NEBULA_FACTOR_*
+    void noBlend();
+    void subtractBlend();
+    void cull(u8 faces);  // NEBULA_CULL_*
+    void writeColor(bool write);
+    void writeAlpha(bool write);
+    void constantAlpha(bool on, u8 alpha);  // the picture's alpha takes this value
+    void positionMatrix(u8 index);          // the place vertices without one of their own use
+    // A pixel is kept when the two comparisons with their references, joined by `op` (cAlpha*), pass.
+    const u8 cAlphaAnd = 0;
+    const u8 cAlphaOr = 1;
+    void alphaCompare(u8 compare0, u8 reference0, u8 op, u8 compare1, u8 reference1);
+    void noAlphaTest();
+    void alphaTest(u8 compare, u8 reference);  // NEBULA_COMPARE_*
+    void noFog();
+    void linearFog(f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
+    void lineWidth(f32 pixels);
+    void pointSize(f32 pixels);
+    void materialColor(u8 index, NebulaColor8 color);
+    void materialColorWide(u8 index, const NebulaColor16& rColor);
+    void constantColor(u8 index, NebulaColor8 color);
+    void lightMaterial(u8 channel, NebulaColor8 color);
+    void lightAmbient(u8 channel, NebulaColor8 color);
+    void indirectMatrix(u8 index, const f32 offset[2][3], s8 scaleExp);
+    void textureMatrix(u8 coord, u8 matrix);  // coordinate `coord` is texture coordinate 0 through texture matrix `matrix`
+    void textureIdentity(u8 coord);           // coordinate `coord` is its own texture coordinate
+};  // namespace J3DPass
+
+extern "C" {
+#endif
+void J3DPassDepth(int test, u8 compare, int write);
+void J3DPassBlend(u8 source, u8 destination);
+void J3DPassNoBlend(void);
+void J3DPassSubtractBlend(void);
+void J3DPassCull(u8 faces);
+void J3DPassWriteColor(int write);
+void J3DPassWriteAlpha(int write);
+void J3DPassConstantAlpha(int on, u8 alpha);
+void J3DPassPositionMatrix(u8 index);
+void J3DPassNoAlphaTest(void);
+void J3DPassAlphaTest(u8 compare, u8 reference);
+void J3DPassNoFog(void);
+#ifdef __cplusplus
+}
+#endif
+
 // Drawing-state changes the game makes as it draws: kept here and carried by the draws that follow (the pass), or sent
 // as a state record in their place in the stream (nebula_game_api.h state).
 #ifdef __cplusplus
@@ -11,24 +70,8 @@ namespace J3DNativeState {
     // What a draw does to the target: the blend, depth, culling and writes last set or last brought by a material. Each
     // draw carries them; the host keeps none.
     const NebulaPassState* pass();
-    // The pass changes among `count` state changes (J3DStateList::send).
-    void passChanges(const NebulaStateOp* pOps, u32 count);
     // A material to the host; its blend, depth, culling and writes become the current ones.
     void sendMaterial(const NebulaNativeMaterial* pMaterial);
-    void setZMode(GpuBool compare, GpuCompare func, GpuBool update);
-    void setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1);
-    void setDstAlpha(GpuBool enable, u8 alpha);
-    void setTevColor(GpuTevRegID id, NebulaColor8 color);
-    void setTevKColor(GpuTevKColorID id, NebulaColor8 color);
-    void setTevColorS10(GpuTevRegID id, NebulaColor16 color);
-    // GpuSetFog's writes (a projected type sends its second and third words without their register id, as it does).
-    void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-    void setIndTexMtx(GpuIndTexMtxID id, const f32 offset[2][3], s8 scaleExp);
-    // Partial setters: each changes only its own fields of the register it shares.
-    void setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx);
-    void setCurrentMtx(u32 id);
-    void setLineWidth(u8 width, GpuTexOffset texOffsets);
-    void setPointSize(u8 size, GpuTexOffset texOffsets);
     // Lights:
     void initLightColor(J3DNativeLight* pObj, NebulaColor8 color);
     void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);
@@ -38,9 +81,9 @@ namespace J3DNativeState {
     void initSpecularDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz);
     void initSpecularDirHA(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz);
     void initLightAttn(J3DNativeLight* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2);
-    void initLightSpot(J3DNativeLight* pObj, f32 cutoff, GpuSpotFn spotFn);
-    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn);
-    void loadLightObjImm(const J3DNativeLight* pObj, GpuLightID id);
+    void initLightNoSpot(J3DNativeLight* pObj);
+    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, J3DLightFalloff falloff);
+    void sendLight(const J3DNativeLight* pLight, u8 index);  // light 0-7
     // Whether the frame keeps alpha (the last value kept here: the host changes only when it differs).
     void setFrameAlpha(bool keepAlpha);
     // The drawing state the game starts from (what GpuInit set on the console), sent before anything is drawn.
@@ -50,41 +93,14 @@ namespace J3DNativeState {
     void showFrame(u16 width, u16 height);
     // The game's frame is complete: the host renders what it drew.
     void endFrame();
-    void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
-    // The cull mode (kept here: the game reads it back), the console's mapping.
-    void setCullMode(GpuCullMode mode);
-    void getCullMode(GpuCullMode* pMode);
-    void setChanMatColor(GpuChannelID chan, NebulaColor8 color);
-    void setChanAmbColor(GpuChannelID chan, NebulaColor8 color);
-    void setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op);
-    void setColorUpdate(GpuBool enable);
-    void setAlphaUpdate(GpuBool enable);
 };  // namespace J3DNativeState
 
 extern "C" {
 #endif
 // The same for the C sources (RVLFaceLib).
-void J3DNativeStateSetTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx);
-void J3DNativeStateSetCurrentMtx(u32 id);
-void J3DNativeStateSetLineWidth(u8 width, GpuTexOffset texOffsets);
-void J3DNativeStateSetPointSize(u8 size, GpuTexOffset texOffsets);
 void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color);
 void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z);
-void J3DNativeStateLoadLightObjImm(const J3DNativeLight* pObj, GpuLightID id);
-void J3DNativeStateEnableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
-void J3DNativeStateSetCullMode(GpuCullMode mode);
-void J3DNativeStateGetCullMode(GpuCullMode* pMode);
-void J3DNativeStateSetChanMatColor(GpuChannelID chan, NebulaColor8 color);
-void J3DNativeStateSetChanAmbColor(GpuChannelID chan, NebulaColor8 color);
-void J3DNativeStateSetZMode(GpuBool compare, GpuCompare func, GpuBool update);
-void J3DNativeStateSetAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1);
-void J3DNativeStateSetDstAlpha(GpuBool enable, u8 alpha);
-void J3DNativeStateSetTevColor(GpuTevRegID id, NebulaColor8 color);
-void J3DNativeStateSetTevKColor(GpuTevKColorID id, NebulaColor8 color);
-void J3DNativeStateSetFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
-void J3DNativeStateSetBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op);
-void J3DNativeStateSetColorUpdate(GpuBool enable);
-void J3DNativeStateSetAlphaUpdate(GpuBool enable);
+void J3DNativeStateSendLight(const J3DNativeLight* pLight, u8 index);
 #ifdef __cplusplus
 }
 #endif

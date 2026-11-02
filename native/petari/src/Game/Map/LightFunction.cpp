@@ -11,12 +11,10 @@
 #include "Game/Util/ObjUtil.hpp"
 #include <cstdio>
 
-const GpuLightID cLightDataIDs[8] = {GPU_LIGHT0, GPU_LIGHT1, GPU_LIGHT2, GPU_LIGHT3, GPU_LIGHT4, GPU_LIGHT5, GPU_LIGHT6, GPU_LIGHT7};
 
 namespace {};  // namespace
 
 void LightFunction::initLightRegisterAll() {
-    const GpuLightID cLightDataIDs[8] = {GPU_LIGHT0, GPU_LIGHT1, GPU_LIGHT2, GPU_LIGHT3, GPU_LIGHT4, GPU_LIGHT5, GPU_LIGHT6, GPU_LIGHT7};
     Color8 c(255, 255, 255, 255);
 
     for (s32 i = 0; i < 8; i++) {
@@ -28,7 +26,7 @@ void LightFunction::initLightRegisterAll() {
         J3DNativeState::initSpecularDir(&obj, 0.0f, -1.0f, 0.0f);
         J3DNativeState::initSpecularDirHA(&obj, 0.0f, -1.0f, 0.0f, 0.0f, -1.0f, 0.0f);
         J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f);
-        J3DNativeState::loadLightObjImm(&obj, cLightDataIDs[i]);
+        J3DNativeState::sendLight(&obj, i);
     }
 }
 
@@ -162,7 +160,7 @@ void LightFunction::blendActorLightInfo(ActorLightInfo* pResult, const ActorLigh
 }
 
 namespace {
-    void loadLightDiffuse(NebulaColor8 color, const TVec3f& rPos, GpuLightID lightID) {
+    void loadLightDiffuse(NebulaColor8 color, const TVec3f& rPos, u8 light) {
         J3DNativeLight lightObj;
 
         J3DNativeState::initLightPos(&lightObj, rPos.x, rPos.y, rPos.z);
@@ -170,21 +168,21 @@ namespace {
 
         NebulaColor8 new_color(color);
         J3DNativeState::initLightColor(&lightObj, new_color);
-        J3DNativeState::loadLightObjImm(&lightObj, lightID);
+        J3DNativeState::sendLight(&lightObj, light);
     }
 
-    inline void loadCameraLight(const LightInfo& rInfo, GpuLightID lightID) {
+    inline void loadCameraLight(const LightInfo& rInfo, u8 light) {
         TVec3f position(rInfo.mPos);
-        ::loadLightDiffuse(NebulaColor8(rInfo.mColor), position, lightID);
+        ::loadLightDiffuse(NebulaColor8(rInfo.mColor), position, light);
     }
 
-    void loadLightInfoDiffuse(const LightInfo& rInfo, GpuLightID lightID) {
+    void loadLightInfoDiffuse(const LightInfo& rInfo, u8 light) {
         if (rInfo.mIsFollowCamera) {
-            ::loadCameraLight(rInfo, lightID);
+            ::loadCameraLight(rInfo, light);
         } else {
             TVec3f v14(rInfo.mPos);
             MR::getCameraViewMtx().mult(v14, v14);
-            ::loadLightDiffuse(NebulaColor8(rInfo.mColor), v14, lightID);
+            ::loadLightDiffuse(NebulaColor8(rInfo.mColor), v14, light);
         }
     }
 };  // namespace
@@ -192,25 +190,25 @@ namespace {
 void LightFunction::loadActorLightInfo(const ActorLightInfo* pInfo) {
     MotionSignal::actorLight(pInfo);
     GameLightSignal::actorLight(pInfo);
-    ::loadLightInfoDiffuse(pInfo->mInfo0, GPU_LIGHT0);
-    ::loadLightInfoDiffuse(pInfo->mInfo1, GPU_LIGHT1);
+    ::loadLightInfoDiffuse(pInfo->mInfo0, 0);
+    ::loadLightInfoDiffuse(pInfo->mInfo1, 1);
 
     u8 alpha = pInfo->mAlpha2;
     NebulaColor8 c = {0, 0, 0, alpha};
-    ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), GPU_LIGHT2);
-    J3DNativeState::setChanAmbColor(GPU_COLOR0A0, NebulaColor8(pInfo->mColor));
+    ::loadLightDiffuse(c, TVec3f(0.0f, 0.0f, 0.0f), 2);
+    J3DPass::lightAmbient(0, NebulaColor8(pInfo->mColor));
 }
 
 void LightFunction::loadLightInfoCoin(const LightInfoCoin* pInfo) {
     MotionSignal::coinLight(pInfo);
-    ::loadLightInfoDiffuse(pInfo->base, GPU_LIGHT0);
+    ::loadLightInfoDiffuse(pInfo->base, 0);
     TVec3f v7(0.0f, 0.0f, -1.0f);
     J3DNativeLight obj;
     f32 v = pInfo->_18;
     J3DNativeState::initLightColor(&obj, NebulaColor8(pInfo->_14));
     J3DNativeState::initSpecularDir(&obj, v7.x, v7.y, v7.z);
     J3DNativeState::initLightAttn(&obj, 0.0f, 0.0f, 1.0f, (v / 2.0f), 0.0f, (1.0f - (v / 2.0f)));
-    J3DNativeState::loadLightObjImm(&obj, GPU_LIGHT3);
+    J3DNativeState::sendLight(&obj, 3);
 }
 
 void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
@@ -221,22 +219,21 @@ void LightFunction::loadPointLightInfo(const PointLightInfo* pInfo) {
     J3DNativeLight obj;
     J3DNativeState::initLightPos(&obj, v7.x, v7.y, v7.z);
     J3DNativeState::initLightDistAttn(&obj, pInfo->mRefDistance, pInfo->mRefBrightness, pInfo->mDistAttnFn);
-    J3DNativeState::initLightSpot(&obj, 0.0, GPU_SP_OFF);
+    J3DNativeState::initLightNoSpot(&obj);
     J3DNativeState::initLightColor(&obj, pInfo->mColor);
-    J3DNativeState::loadLightObjImm(&obj, GPU_LIGHT4);
+    J3DNativeState::sendLight(&obj, 4);
 }
 
 void LightFunction::loadAllLightWhite() {
     MotionSignal::allLightWhite();
-    const GpuLightID cLightDataIDs[8] = {GPU_LIGHT0, GPU_LIGHT1, GPU_LIGHT2, GPU_LIGHT3, GPU_LIGHT4, GPU_LIGHT5, GPU_LIGHT6, GPU_LIGHT7};
 
-    for (u32 i = 0; i < ARRAY_SIZE(cLightDataIDs); i++) {
+    for (u32 i = 0; i < 8; i++) {
         J3DNativeLight lightObj;
         J3DNativeState::initLightPos(&lightObj, 0.0f, 0.0f, 0.0f);
 
         NebulaColor8 color = {255, 255, 255, 255};
         J3DNativeState::initLightColor(&lightObj, color);
-        J3DNativeState::loadLightObjImm(&lightObj, cLightDataIDs[i]);
+        J3DNativeState::sendLight(&lightObj, i);
     }
 }
 

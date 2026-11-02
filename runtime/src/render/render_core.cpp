@@ -5504,11 +5504,6 @@ void RenderCore::apply_native_material(const material::Native* native) {
         if (t.image == 0u) {
             continue;
         }
-        if (t.image == material::kNativeKeptImage) {
-            // The drawing state's map as the game loaded it.
-            native_texture_mask_ = static_cast<std::uint8_t>(native_texture_mask_ | (1u << map));
-            continue;
-        }
         // The map as the native material names it: its image, size and format, and its sampling.
         TextureMap& out = draw_state_.texture[map];
         out.texture = t.image;

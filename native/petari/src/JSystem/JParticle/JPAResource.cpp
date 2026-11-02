@@ -904,12 +904,14 @@ void JPAResource::drawC(JPAEmitterWorkData* work) {
 
 namespace {
     // runtime/src/render/materials/particle.hlsl for the emitter's draws: the base shape's modes and alpha test, the
-    // textures as the emitter's functions load them (the drawing state's maps), the blending, depth and culling the
+    // textures the emitter's functions chose, the blending, depth and culling the
     // shape and the manager set; the register file it reads follows the per-emitter and per-particle colours.
     // The particle material in use and the colours the emitter and particle functions set (JPANativeColor): prm and
     // env carry over from one emitter to the next, as the console's colour registers did.
     NebulaNativeMaterial sParticle;
     bool sParticleSent = false;
+    // The textures the emitter's functions chose, by slot.
+    const J3DNativeTexObj* sParticleTextures[4] = {nullptr, nullptr, nullptr, nullptr};
     NebulaColor8 sPrm = {0, 0, 0, 0};
     NebulaColor8 sEnv = {0, 0, 0, 0};
     // The indirect matrix the emitter's extra texture shape gives (its rows scaled by 2^exponent), or none.
@@ -965,8 +967,10 @@ namespace {
         // The references (whole values; sendParticle scales them into the alpha test's slots).
         material.constants[92] = static_cast< f32 >(pShape->getAlphaRef0());
         material.constants[93] = static_cast< f32 >(pShape->getAlphaRef1());
-        for (u32 map = 0; map < 4; map++) {
-            material.textures[map].image = NEBULA_NATIVE_KEPT_IMAGE;
+        for (u32 slot = 0; slot < 4; slot++) {
+            if (sParticleTextures[slot] != nullptr) {
+                NativeShader::setTexObj(material, slot, sParticleTextures[slot]);
+            }
         }
         sParticleSent = true;
         sendParticle(false);
@@ -991,6 +995,18 @@ namespace {
 }  // namespace
 
 namespace JPANativeColor {
+    void texture(u32 slot, const J3DNativeTexObj* pTexture) {
+        if (sParticleTextures[slot] == pTexture) {
+            return;
+        }
+        JPAParticleBatch::flush();
+        sParticleTextures[slot] = pTexture;
+        NativeShader::setTexObj(sParticle, slot, pTexture);
+        if (sParticleSent) {
+            sendParticle(false);
+        }
+    }
+
     u32 prmWord() {
         return (static_cast< u32 >(sPrm.r) << 24) | (static_cast< u32 >(sPrm.g) << 16) | (static_cast< u32 >(sPrm.b) << 8) | sPrm.a;
     }
@@ -1052,7 +1068,7 @@ void JPAResource::setCTev(JPAEmitterWorkData* work) {
     if (mpChildShape->isClipOn()) {
     } else {
     }
-    work->mpResMgr->load(work->mpRes->getTexIdx(mpChildShape->getTexIdx()), GPU_TEXMAP1);
+    work->mpResMgr->use(work->mpRes->getTexIdx(mpChildShape->getTexIdx()), 1);
     sendParticleMaterial(mpBaseShape, 8);
 }
 

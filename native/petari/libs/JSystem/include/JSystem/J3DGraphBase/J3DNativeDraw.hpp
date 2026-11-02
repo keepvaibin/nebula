@@ -18,7 +18,7 @@ namespace J3DNativeDraw {
     // A primitive of `count` vertices, each giving the values `attributes` names (NEBULA_SHAPE_POSITION_MATRIX,
     // _NORMAL, _COLOR0, _COLOR1, _TEXCOORD0 << n; every vertex has a position) in the console's order: position matrix,
     // position, normal, colour 0, colour 1, texture coordinates. The record goes when the last vertex is complete.
-    void begin(GpuPrimitive primitive, u16 count, u32 attributes);
+    void begin(NebulaPrimitive primitive, u16 count, u32 attributes);
     // The vertex's position matrix place (0-9, J3DNativeShape::setPosition).
     void matrix(u8 place);
     void position(f32 x, f32 y, f32 z);
@@ -32,7 +32,7 @@ namespace J3DNativeDraw {
 extern "C" {
 #endif
 // The same for the C sources (RVLFaceLib).
-void J3DNativeDrawBegin(GpuPrimitive primitive, u16 count, u32 attributes);
+void J3DNativeDrawBegin(NebulaPrimitive primitive, u16 count, u32 attributes);
 void J3DNativeDrawPosition(f32 x, f32 y, f32 z);
 void J3DNativeDrawNormal(f32 x, f32 y, f32 z);
 void J3DNativeDrawColor(u32 rgba);

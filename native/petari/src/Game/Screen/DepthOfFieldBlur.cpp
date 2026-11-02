@@ -87,13 +87,13 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    ImageEffectLocalUtil::capture(_1C, 1, 0, GPU_TF_RGB565, true, 0);
+    _1C->frameColor(true);
     J3DNativeTarget::begin(_28->mImage, _28->getWidth(), _28->getHeight(), 0, 0xFFFFFF);
     drawZAlphaTex();
     J3DNativeTarget::end(_28->mImage, NEBULA_TARGET_RED);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    ImageEffectLocalUtil::capture(_20, 1, 0, GPU_TF_Z8, true, 0);
+    _20->frameDepth(true);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();
@@ -103,19 +103,19 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(NebulaFrameClock::cCanvasHeight), 0.0f,
                static_cast< s32 >(NebulaFrameClock::cCanvasWidth), -::sViewDistance, ::sViewDistance);
-    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
+    J3DNativeView::setOrthographic(projectionMtx);
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
-    J3DNativeState::setColorUpdate(GPU_TRUE);
-    J3DNativeState::setAlphaUpdate(GPU_FALSE);
-    J3DNativeState::setLineWidth(12, GPU_TO_ZERO);
+    J3DPass::positionMatrix(0);
+    J3DPass::writeColor(true);
+    J3DPass::writeAlpha(false);
+    J3DPass::lineWidth(2.0f);
     sendZAlphaMaterial();
 
-    J3DNativeDraw::begin(GPU_LINESTRIP, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_LINE_STRIP, 4, NEBULA_SHAPE_COLOR0);
     {
         u8 blurMinDist;
         u8 blurMaxDist = 248;

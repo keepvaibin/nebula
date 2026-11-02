@@ -224,7 +224,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        J3DNativeState::setTevColor(GPU_TEVREG1, mWarningColor);
+        J3DPass::materialColor(1, mWarningColor);
         mSurface->draw();
     }
 }

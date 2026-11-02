@@ -107,8 +107,7 @@ namespace JPAParticleBatch {
         Mtx identity;
         NebulaMtxIdentity(identity);
         J3DNativeShape::setPosition(0, identity);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
         const u32* const pColors[2] = {sBatchPrm, sBatchEnv};
         const f32* const pTexCoords[8] = {sBatchUv0, sBatchUv1, sBatchQ, nullptr, nullptr, nullptr, nullptr, nullptr};
         J3DNativeDraw::drawArrays(sBatchPrimitive, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_COLOR1 | NEBULA_SHAPE_TEXCOORD0 |
@@ -118,24 +117,27 @@ namespace JPAParticleBatch {
     }
 }  // namespace JPAParticleBatch
 
+// A particle of scale 1 as a point or line.
+static const f32 cParticleSizePixels = 25.0f / 6.0f;
+
 void JPASetPointSize(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DNativeState::setPointSize((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
+    J3DPass::pointSize(cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work) {
     JPAParticleBatch::flush();
-    J3DNativeState::setLineWidth((u8)(s32)((25.0f * work->mGlobalPtclScl.x)), GPU_TO_ONE);
+    J3DPass::lineWidth(cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetPointSize(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DNativeState::setPointSize((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
+    J3DPass::pointSize(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPASetLineWidth(JPAEmitterWorkData* work, JPABaseParticle* ptcl) {
     JPAParticleBatch::flush();
-    J3DNativeState::setLineWidth((u8)(s32)((ptcl->mParticleScaleX * (25.0f * work->mGlobalPtclScl.x))), GPU_TO_ONE);
+    J3DPass::lineWidth(ptcl->mParticleScaleX * cParticleSizePixels * work->mGlobalPtclScl.x);
 }
 
 void JPARegistPrm(JPAEmitterWorkData* work) {
@@ -402,7 +404,7 @@ namespace {
         if (image != sBatchImage) {
             JPAParticleBatch::flush();
             sBatchImage = image;
-            work->mpResMgr->load(image, GPU_TEXMAP0);
+            work->mpResMgr->use(image, 0);
         }
     }
 }  // namespace
@@ -910,31 +912,41 @@ JPABaseShape::JPABaseShape(u8 const* pData, JKRHeap* pHeap) {
     }
 }
 
-GpuBlendMode JPABaseShape::st_bm[3] = {
-    GPU_BM_NONE,
-    GPU_BM_BLEND,
-    GPU_BM_LOGIC,
-};
+// The numbers particle shapes store, as the host's. A colour factor names the other side's colour.
+const u8 JPABaseShape::st_bm[4] = {NEBULA_BLEND_REPLACE, NEBULA_BLEND_ADD, NEBULA_BLEND_LOGIC, NEBULA_BLEND_REPLACE};
 
-GpuBlendFactor JPABaseShape::st_bf[10] = {
-    GPU_BL_ZERO,      GPU_BL_ONE,      GPU_BL_SRCCLR,      GPU_BL_INVSRCCLR, GPU_BL_DSTCLR,
-    GPU_BL_INVDSTCLR, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_BL_DSTALPHA,  GPU_BL_INVDSTALPHA,
-};
+u8 JPABaseShape::blendFactor(u32 code, bool source) {
+    switch (code) {
+    case 0:
+        return NEBULA_FACTOR_ZERO;
+    case 1:
+        return NEBULA_FACTOR_ONE;
+    case 2:
+    case 4:
+        return source ? NEBULA_FACTOR_DST_COLOR : NEBULA_FACTOR_SRC_COLOR;
+    case 3:
+    case 5:
+        return source ? NEBULA_FACTOR_INV_DST_COLOR : NEBULA_FACTOR_INV_SRC_COLOR;
+    case 6:
+        return NEBULA_FACTOR_SRC_ALPHA;
+    case 7:
+        return NEBULA_FACTOR_INV_SRC_ALPHA;
+    case 8:
+        return NEBULA_FACTOR_DST_ALPHA;
+    case 9:
+        return NEBULA_FACTOR_INV_DST_ALPHA;
+    default:
+        return NEBULA_FACTOR_ZERO;
+    }
+}
 
-GpuLogicOp JPABaseShape::st_lo[16] = {
-    GPU_LO_CLEAR, GPU_LO_SET, GPU_LO_COPY, GPU_LO_INVCOPY, GPU_LO_NOOP,   GPU_LO_INV,    GPU_LO_AND,   GPU_LO_NAND,
-    GPU_LO_OR,    GPU_LO_NOR, GPU_LO_XOR,  GPU_LO_EQUIV,   GPU_LO_REVAND, GPU_LO_INVAND, GPU_LO_REVOR, GPU_LO_INVOR,
-};
+// NEBULA_BLEND_LOGIC's order: clear, and, reverse and, copy, inverted and, no-op, xor, or, nor, equivalent, invert,
+// reverse or, inverted copy, inverted or, nand, set.
+const u8 JPABaseShape::st_lo[16] = {0, 15, 3, 12, 5, 10, 1, 14, 7, 8, 6, 9, 2, 4, 11, 13};
 
-GpuCompare JPABaseShape::st_c[8] = {
-    GPU_NEVER, GPU_LESS, GPU_LEQUAL, GPU_EQUAL, GPU_NEQUAL, GPU_GEQUAL, GPU_GREATER, GPU_ALWAYS,
-};
-
-GpuAlphaOp JPABaseShape::st_ao[4] = {
-    GPU_AOP_AND,
-    GPU_AOP_OR,
-    GPU_AOP_XOR,
-    GPU_AOP_XNOR,
+const u8 JPABaseShape::st_c[8] = {
+    NEBULA_COMPARE_NEVER,  NEBULA_COMPARE_LESS,   NEBULA_COMPARE_LEQUAL,  NEBULA_COMPARE_EQUAL,
+    NEBULA_COMPARE_NEQUAL, NEBULA_COMPARE_GEQUAL, NEBULA_COMPARE_GREATER, NEBULA_COMPARE_ALWAYS,
 };
 
 GpuTevColorArg JPABaseShape::st_ca[6][4] = {
@@ -995,7 +1007,7 @@ GpuTevAlphaArg JPABaseShape::st_aa[2][4] = {
 // file the particle material reads); its colour and alpha modes and compares go into the particle material
 // (JPAResource::sendMaterial).
 void JPABaseShape::setGX(JPAEmitterWorkData* work) const {
-    J3DNativeState::setBlendMode(getBlendMode(), getBlendSrc(), getBlendDst(), getLogicOp());
-    J3DNativeState::setZMode(getZEnable(), getZCmp(), getZUpd());
-    J3DNativeState::setAlphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());
+    J3DPass::blendState(getBlendMode(), getBlendSrc(), getBlendDst(), getLogicOp());
+    J3DPass::depth(getZEnable(), getZCmp(), getZUpd());
+    J3DPass::alphaCompare(getAlphaCmp0(), getAlphaRef0(), getAlphaOp(), getAlphaCmp1(), getAlphaRef1());
 }

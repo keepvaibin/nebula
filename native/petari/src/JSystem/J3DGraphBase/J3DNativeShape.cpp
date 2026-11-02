@@ -254,6 +254,12 @@ namespace J3DNativeShape {
         sCurrentPosition = sCurrent.position;
     }
 
+    void setCurrentIdentity() {
+        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        setCurrent(0, kIdentity);
+    }
+
     u8 currentPosition() {
         return sCurrentPosition;
     }

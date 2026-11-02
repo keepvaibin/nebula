@@ -47,7 +47,7 @@ namespace MR {
 
     void reinitGX() {
         j3dSys.reinitGX();
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
+        J3DPass::writeAlpha(false);
     }
 
     void loadViewMtxFor2DModel() {
@@ -58,11 +58,11 @@ namespace MR {
 
     void drawInitFor2DModel() {
         MR::reinitGX();
-        J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+        J3DPass::depth(false, NEBULA_COMPARE_ALWAYS, false);
 
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, -MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), ::cNearZ, ::cFarZ);
-        J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projMtx);
 
         Mtx viewMtx;
         NebulaMtxIdentity(viewMtx);
@@ -76,9 +76,73 @@ namespace MR {
         J3DNativeView::setScissor(0, 0, width, height);
     }
 
+    // The whole screen in canvas units, for a fill or a picture over it.
+    void setupScreen2D() {
+        setDefaultViewportAndScissor();
+        Mtx44 projection;
+        NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getCanvasWidth(), -30000.0f, 30000.0f);
+        J3DNativeView::setOrthographic(projection);
+        Mtx identity;
+        NebulaMtxIdentity(identity);
+        J3DNativeShape::setPosition(0, identity);
+        J3DNativeShape::setCurrentIdentity();
+        J3DPass::alphaTest(NEBULA_COMPARE_GREATER, 0);
+        J3DPass::depth(false, NEBULA_COMPARE_LEQUAL, false);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::positionMatrix(0);
+    }
+
+    // runtime/src/render/materials/vertex_color.hlsl: the colour over the screen, blended by its alpha.
+    void drawScreenColor(const NebulaColor8& rColor) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_VERTEX_COLOR, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        material.constants[4] = 0.0f;
+        NativeShader::send(material);
+        const f32 width = getCanvasWidth();
+        const f32 height = ::getScreenHeightInline();
+        const u32 color = static_cast< u32 >(rColor.r) << 24 | static_cast< u32 >(rColor.g) << 16 |
+                          static_cast< u32 >(rColor.b) << 8 | rColor.a;
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(width, 0.0f, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(width, height, 0.0f);
+        J3DNativeDraw::color(color);
+        J3DNativeDraw::position(0.0f, height, 0.0f);
+        J3DNativeDraw::color(color);
+    }
+
+    // runtime/src/render/materials/j2d_picture.hlsl: the texture over the screen.
+    void drawScreenPicture(const JUTTexture& rTexture) {
+        NebulaNativeMaterial material;
+        NativeShader::init(material, NEBULA_SHADER_J2D_PICTURE, NativeShader::BLEND_ALPHA, NEBULA_COMPARE_ALWAYS, false,
+                           NEBULA_CULL_NONE);
+        NativeShader::setColor(material, 12, 255, 255, 255, 255);
+        material.constants[16] = 1.0f;
+        material.constants[17] = rTexture.getTransparency() ? 1.0f : 0.0f;
+        NativeShader::setTexture(material, 0, &rTexture);
+        NativeShader::send(material);
+        const f32 width = getCanvasWidth();
+        const f32 height = ::getScreenHeightInline();
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::position(0.0f, 0.0f, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(0.0f, 0.0f);
+        J3DNativeDraw::position(width, 0.0f, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(1.0f, 0.0f);
+        J3DNativeDraw::position(width, height, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(1.0f, 1.0f);
+        J3DNativeDraw::position(0.0f, height, 0.0f);
+        J3DNativeDraw::color(0xFFFFFFFFu);
+        J3DNativeDraw::texCoord(0.0f, 1.0f);
+    }
+
     void loadProjectionMtxFor2D() {
-        J2DOrthoGraphSimple orthoGraph;
-        orthoGraph.setPort();
+        MR::setupScreen2D();
     }
 
     void setupDrawForNW4RLayout(f32 scale, bool) {
@@ -95,9 +159,9 @@ namespace MR {
         height *= scale;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, height, -height, -halfWidth, halfWidth, -1000.0f, 1000.0f);
-        J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
-        J3DNativeState::setCullMode(GPU_CULL_NONE);
-        J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
+        J3DNativeView::setOrthographic(projMtx);
+        J3DPass::cull(NEBULA_CULL_NONE);
+        J3DPass::depth(false, NEBULA_COMPARE_NEVER, false);
     }
 
     // The frame's depth cleared to far, with the view, matrix and pixel state the next draws start from.
@@ -106,19 +170,19 @@ namespace MR {
         u16 height = NebulaFrameClock::cCanvasHeight;
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, height, 0.0f, width, 0.0f, 1.0f);
-        J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projMtx);
         MR::setDefaultViewportAndScissor();
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
-        J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
-        J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP);
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
-        J3DNativeState::setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
-        J3DNativeState::setCullMode(GPU_CULL_BACK);
+        J3DPass::positionMatrix(0);
+        J3DPass::noAlphaTest();
+        J3DPass::noBlend();
+        J3DPass::writeAlpha(false);
+        J3DPass::depth(true, NEBULA_COMPARE_ALWAYS, true);
+        J3DPass::cull(NEBULA_CULL_BACK);
         J3DNativeTarget::clearFrame(0, 0, width, height, 0, 0xFFFFFF, NEBULA_CLEAR_DEPTH);
-        J3DNativeState::setColorUpdate(GPU_TRUE);
+        J3DPass::writeColor(true);
     }
 
     void clearAlphaBuffer(u8 alpha) {
@@ -132,8 +196,8 @@ namespace MR {
         u16 height = (s32)(rSize.y);
         Mtx44 projection;
         NebulaMtxOrtho(projection, 0.0f, ::getScreenHeightInline(), 0.0f, getCanvasWidth(), -1.0f, 1.0f);
-        J3DNativeView::setProjection(projection, GPU_ORTHOGRAPHIC);
-        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+        J3DNativeView::setOrthographic(projection);
+        J3DPass::positionMatrix(0);
         Mtx matrix;
         NebulaMtxIdentity(matrix);
         J3DNativeShape::setPosition(0, matrix);
@@ -144,13 +208,11 @@ namespace MR {
         material.color_write = 0;
         material.alpha_write = 1;
         NativeShader::setColor(material, 0, 0, 0, 0, alpha);
-        J3DNativeState::setDstAlpha(GPU_TRUE, alpha);
+        J3DPass::constantAlpha(true, alpha);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
 
-        J3DNativeDraw::begin(GPU_TRIANGLES, 6, 0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, 6, 0);
         J3DNativeDraw::position(rPosition.x, rPosition.y, 0.0f);
         J3DNativeDraw::position(width + rPosition.x, rPosition.y, 0.0f);
         J3DNativeDraw::position(width + rPosition.x, height + rPosition.y, 0.0f);
@@ -158,17 +220,17 @@ namespace MR {
         J3DNativeDraw::position(width + rPosition.x, height + rPosition.y, 0.0f);
         J3DNativeDraw::position(rPosition.x, height + rPosition.y, 0.0f);
 
-        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
+        J3DPass::constantAlpha(false, 0);
     }
 
     void fillScreenSetup(const NebulaColor8& rColor) {
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
-        J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+        J3DPass::positionMatrix(0);
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, ::getScreenHeightInline(), 0.0f, MR::getCanvasWidth(), -1.0f, 1.0f);
-        J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projMtx);
         // runtime/src/render/materials/flat_color.hlsl in the colour, depth off, no culling; the blending and writes
         // the drawing state has (its callers set them).
         NebulaNativeMaterial material;
@@ -177,13 +239,11 @@ namespace MR {
         material.blend_op = NEBULA_NATIVE_KEPT;
         NativeShader::setColor(material, 0, rColor.r, rColor.g, rColor.b, rColor.a);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
     }
 
     void fillScreenArea(const TVec2s& rMin, const TVec2s& rMax) {
-        J3DNativeDraw::begin(GPU_QUADS, 4, 0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_QUADS, 4, 0);
         {
             u16 maxX = rMax.x;
             u16 minX = rMin.x;
@@ -206,7 +266,7 @@ namespace MR {
 
     void setupShadowVolumeDraw() {
         // The volumes draw in a flat colour each sets (setShadowVolumeColor).
-        J3DNativeState::setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
+        J3DPass::depth(true, NEBULA_COMPARE_GEQUAL, false);
     }
 
     void setShadowVolumeColor(const NebulaColor8& rColor) {
@@ -236,7 +296,7 @@ namespace MR {
         MR::captureScreenAlpha(0);
         Mtx44 projMtx;
         NebulaMtxOrtho(projMtx, 0.0f, MR::getScreenHeight(), 0.0f, MR::getScreenWidth(), -1.0f, 1.0f);
-        J3DNativeView::setProjection(projMtx, GPU_ORTHOGRAPHIC);
+        J3DNativeView::setOrthographic(projMtx);
         TMtx34f mtxImm;
         mtxImm.identity();
         J3DNativeShape::setPosition(0, mtxImm);
@@ -251,13 +311,11 @@ namespace MR {
         NativeShader::setColor(material, 0, 0, 0, 0, 0x80);
         material.constants[4] = 1.0f;
         NativeShader::setTexture(material, 0, MR::getScreenAlphaTexture(0));
-        J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+        J3DPass::constantAlpha(true, 0);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
-                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
-        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
+        J3DNativeShape::setCurrentIdentity();
 
-        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLE_STRIP, 4, NEBULA_SHAPE_TEXCOORD0);
         {
             u16 width = MR::getScreenWidth();
             u16 height = MR::getScreenHeight();
@@ -275,8 +333,8 @@ namespace MR {
             J3DNativeDraw::texCoord(1.0f, 1.0f);
         }
 
-        J3DNativeState::setDstAlpha(GPU_FALSE, 0);
-        J3DNativeState::setAlphaUpdate(GPU_FALSE);
+        J3DPass::constantAlpha(false, 0);
+        J3DPass::writeAlpha(false);
     }
 
     const JUTTexture* getMarioShadowTex() {
@@ -349,11 +407,3 @@ namespace MR {
     }
 };  // namespace MR
 
-J2DOrthoGraphSimple::J2DOrthoGraphSimple() : J2DOrthoGraph(0.0f, 0.0f, MR::getCanvasWidth(), ::getScreenHeightInline(), -30000.0f, 30000.0f) {
-    TBox2f bounds(0.0f, 0.0f, MR::getScreenWidth(), MR::getScreenHeight());
-    setOrtho(0.0f, 0.0f, bounds.getWidth(), bounds.getHeight(), -30000.0f, 30000.0f);
-}
-
-void J2DOrthoGraphSimple::setPort() {
-    J2DOrthoGraph::setPort();
-}

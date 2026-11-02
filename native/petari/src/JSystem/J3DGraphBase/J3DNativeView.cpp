@@ -67,16 +67,26 @@ namespace J3DNativeView {
         return pHost->screen_probe_results(pHost->user, channel, pProbes, capacity);
     }
 
-    void setProjection(const f32 (*pMtx)[4], GpuProjectionType type) {
-        // GpuSetProjection's terms: the orthographic one takes the translation column, the perspective one the third.
-        sPerspective = type == GPU_PERSPECTIVE;
-        sTerms[0] = pMtx[0][0];
-        sTerms[2] = pMtx[1][1];
-        sTerms[4] = pMtx[2][2];
-        sTerms[5] = pMtx[2][3];
-        sTerms[1] = sPerspective ? pMtx[0][2] : pMtx[0][3];
-        sTerms[3] = sPerspective ? pMtx[1][2] : pMtx[1][3];
-        send();
+    namespace {
+        // The matrix's terms: the orthographic one keeps its translation column, the perspective its third.
+        void setProjection(const f32 (*pMtx)[4], bool perspective) {
+            sPerspective = perspective;
+            sTerms[0] = pMtx[0][0];
+            sTerms[2] = pMtx[1][1];
+            sTerms[4] = pMtx[2][2];
+            sTerms[5] = pMtx[2][3];
+            sTerms[1] = perspective ? pMtx[0][2] : pMtx[0][3];
+            sTerms[3] = perspective ? pMtx[1][2] : pMtx[1][3];
+            send();
+        }
+    }  // namespace
+
+    void setPerspective(const f32 (*pMtx)[4]) {
+        setProjection(pMtx, true);
+    }
+
+    void setOrthographic(const f32 (*pMtx)[4]) {
+        setProjection(pMtx, false);
     }
 
     void setProjectionv(const f32* pValues) {
@@ -157,8 +167,12 @@ namespace J3DNativeView {
 };  // namespace J3DNativeView
 
 extern "C" {
-void J3DNativeViewSetProjection(const f32 (*pMtx)[4], GpuProjectionType type) {
-    J3DNativeView::setProjection(pMtx, type);
+void J3DNativeViewSetPerspective(const f32 (*pMtx)[4]) {
+    J3DNativeView::setPerspective(pMtx);
+}
+
+void J3DNativeViewSetOrthographic(const f32 (*pMtx)[4]) {
+    J3DNativeView::setOrthographic(pMtx);
 }
 
 void J3DNativeViewSetProjectionv(const f32* pValues) {

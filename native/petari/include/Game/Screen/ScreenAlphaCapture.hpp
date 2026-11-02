@@ -14,7 +14,6 @@ public:
 
     void createScreenAlpha(s32, f32);
     void captureScreenAlpha(s32);
-    void loadScreenTexture(s32, GpuTexMapID);
     JUTTexture* getTexture(s32);
 
 private:
@@ -24,6 +23,5 @@ private:
 namespace MR {
     void createScreenAlphaSceneObj(s32, f32);
     void captureScreenAlpha(s32);
-    void loadScreenAlphaTexture(s32, GpuTexMapID);
     JUTTexture* getScreenAlphaTexture(s32);
 };  // namespace MR

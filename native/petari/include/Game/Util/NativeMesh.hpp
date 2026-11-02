@@ -27,7 +27,7 @@ public:
     void useArray(u32 slot, const void* pKey);
 
     // A primitive as GpuBegin starts it: `count` corners follow, each its values or indices then corner().
-    void begin(GpuPrimitive primitive, u16 count);
+    void begin(NebulaPrimitive primitive, u16 count);
     void position(f32 x, f32 y, f32 z);
     void normal(f32 x, f32 y, f32 z);
     void color(u8 r, u8 g, u8 b, u8 a);

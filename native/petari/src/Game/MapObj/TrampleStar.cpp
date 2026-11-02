@@ -490,10 +490,10 @@ u32 TrampleStar::calcNearestVtxIndex(const TVec3f& rPos) {
 void TrampleStar::draw() const {
     if (!MR::isDead(this)) {
         drawSelf();
-        J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
+        J3DPass::depth(true, NEBULA_COMPARE_LEQUAL, true);
         MR::reinitGX();
-        J3DNativeState::setAlphaUpdate(GPU_TRUE);
-        J3DNativeState::setDstAlpha(GPU_TRUE, 0);
+        J3DPass::writeAlpha(true);
+        J3DPass::constantAlpha(true, 0);
     }
 }
 
@@ -627,7 +627,7 @@ void TrampleStar::drawSelf() const {
                                   GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
     J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 
-    J3DNativeDraw::begin(GPU_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
+    J3DNativeDraw::begin(NEBULA_PRIMITIVE_TRIANGLES, mNumDrawVtxs, MR::ddVtxAttributes());
     {
         TVec3f* pos = mDrawPos;
         TVec3f* norm = mDrawNorm;
