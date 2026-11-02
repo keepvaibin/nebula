@@ -13,9 +13,9 @@
 //          register loads  -> state_
 //          on_draw         -> dirty state to keys and constants, vertex_loader into the rings,
 //                             texture_cache lookups, renderer.draw()
-//          on_efb_copy     -> copy to an XFB or texture, copy-clear
+//          on_scene_copy     -> copy to an display picture or texture, copy-clear
 //          on_pe_*         -> collect the game-visible FINISH/TOKEN events
-//     -> renderer.present(efb_copies.latest())
+//     -> renderer.present(scene_copies.latest())
 //     -> renderer.end_frame() returns the submission fence
 //     -> the collected events bind to that fence
 //
@@ -83,7 +83,7 @@ namespace galaxy::render {
 // base level: the replacement shows its own); a guest sampler without mips uses the replacement's
 // levels down to the source size. An arbitrary replacement (_arb) pairs its levels with the game's
 // by index, as Dolphin does: the bias moves its LOD back to the game's at the console's resolution
-// (efb_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
+// (scene_target_scale_log2_x32: 32 x log2 of the internal resolution scale), over its whole chain, without
 // anisotropy (which would push its levels away); mip mode 3 in the key is linear without anisotropy.
 [[nodiscard]] std::uint32_t pack_sampler_key(
     const TextureSampler& mode,
@@ -91,7 +91,7 @@ namespace galaxy::render {
     std::uint8_t mip_levels,
     std::uint8_t lod_shift_x16 = 0u,
     bool arbitrary = false,
-    std::uint8_t efb_scale_log2_x32 = 0u) noexcept;
+    std::uint8_t scene_target_scale_log2_x32 = 0u) noexcept;
 
 // FNV-1a step over a whole 64-bit word (seed with kMix64OffsetBasis). Only bucket selection:
 // each key's operator== decides identity.
@@ -112,7 +112,7 @@ public:
         const RenderServices* services,
         bool present_swap_chain = true,
         bool black = false);
-    void present_cached_xfb(
+    void present_cached_display(
         bool black,
         bool present_swap_chain = true);
     void wait_for_render_idle();
@@ -210,7 +210,7 @@ public:
         mark.height = static_cast<std::uint16_t>(height);
     }
     void set_safety_scene_surround(float intensity) noexcept { producer_safety_surround_=intensity; }
-    // Simulation thread: answers a depth or color peek from an asynchronous EFB field. A peek made in
+    // Simulation thread: answers a depth or color peek from an asynchronous scene target field. A peek made in
     // a draw-sync token's callback (`token` nonzero) reads the field captured where the stream
     // reached that token (the console stopped the GPU there with a breakpoint while the callback
     // peeked); the field a frame earlier, as the capture completes asynchronously. Until that
@@ -238,9 +238,9 @@ private:
         std::uint8_t vtxfmt,
         std::size_t draw_count);
     void end_cached_draw_run();
-    // A copy (EFB to texture or display) with the pixel format it reads.
-    void on_efb_copy(const CaptureRequest& params);
-    // The frame clears' format byte (make_efb_clear_values): 1 a frame keeping alpha, 0 one without.
+    // A copy (scene target to texture or display) with the pixel format it reads.
+    void on_scene_copy(const CaptureRequest& params);
+    // The frame clears' format byte (make_scene_clear_values): 1 a frame keeping alpha, 0 one without.
     [[nodiscard]] std::uint8_t frame_format() const noexcept { return draw_state_.frame_alpha ? 1u : 0u; }
     void on_invalidate_vertex_cache();
     // A light op's words (GXLoadLightObjImm's), into matrix memory.
@@ -297,7 +297,7 @@ private:
 
 
 
-    struct EfbPeekRequest {
+    struct ScenePeekRequest {
         std::uint16_t x = 0;
         std::uint16_t y = 0;
         ReadbackKind kind = ReadbackKind::Color;
@@ -323,8 +323,8 @@ private:
         bool black = false;  // the output shows black (no picture)
         bool present_swap_chain = true;
         bool present_only = false;
-        bool efb_peek_only = false;
-        EfbPeekRequest* efb_peek_request = nullptr;
+        bool scene_peek_only = false;
+        ScenePeekRequest* scene_peek_request = nullptr;
         std::shared_ptr<PointerDepthCapture> pointer_depth_capture;
         // In-frame pointer field: recorded before the chunk's records.
         bool pointer_depth_in_frame = false;
@@ -362,7 +362,7 @@ private:
 
     void render_thread_main();
     void render_frame_on_thread(FrameChunk& chunk);
-    void execute_efb_peek_on_thread(FrameChunk& chunk);
+    void execute_scene_peek_on_thread(FrameChunk& chunk);
     void poll_completed_pointer_depth_capture();
     void drain_pending_pointer_depth_capture();
     // Render owner: completes an in-flight asynchronous depth field into the
@@ -371,10 +371,10 @@ private:
     void poll_async_peek_fields();
     void submit_async_peek_fields_if_requested();
     // Presents black, a named picture (`slot`) or the newest.
-    void present_cached_xfb_on_thread(
+    void present_cached_display_on_thread(
         bool black,
         bool sleep_if_missing,
-        bool count_game_xfb_present = true,
+        bool count_game_display_present = true,
         std::optional<std::uint32_t> slot = std::nullopt);
     void present_latest_frame_on_thread();
     // The output shows black (FrameChunk::black): one black present per black
@@ -567,7 +567,7 @@ private:
     bool interp_recording_ = false;
     // Render thread: the chunk being rendered ended a game frame (a new picture), and the picture serial last
     // presented when its chunk ended (present_on_copy_enabled).
-    bool xfb_copied_in_chunk_ = false;
+    bool display_copied_in_chunk_ = false;
     std::atomic<bool> frame_end_presents_{true};  // set_frame_end_presents
     std::uint64_t copy_presented_serial_ = 0u;
     // Sub-frames show between game frames now (interpolation on and its governors allowing at least one).
@@ -607,7 +607,7 @@ private:
         Affine34 view{};
         bool view_known = false;
         // The projection the ray tracer took the scene's view from (GX A, B, C, D, E, F without the temporal jitter)
-        // and its viewport's size in EFB pixels: sub-frames interpolate it (SubframeTime::projection).
+        // and its viewport's size in scene target pixels: sub-frames interpolate it (SubframeTime::projection).
         std::array<float, 6> rt_projection{};
         float rt_viewport[2]{};
         bool rt_projection_known = false;
@@ -790,7 +790,7 @@ private:
     std::uint64_t interp_cadence_drops_ = 0;
     double interp_cadence_fps_ = 0.0;
     double interp_cadence_own_misses_ = 0.0;   // the game's own misses per second: their lowest recent rate
-    // The game thread's time blocked on the render thread (queue space, drains, PE completions, EFB peeks), in QPC
+    // The game thread's time blocked on the render thread (queue space, drains, PE completions, scene target peeks), in QPC
     // ticks: the sub-frames' share of it tells their misses from the game's own.
     std::atomic<std::uint64_t> game_wait_qpc_{0};
     std::uint64_t interp_cadence_wait_seen_ = 0;
@@ -861,10 +861,10 @@ private:
     std::uint64_t pointer_response_count_{}, pointer_latency_total_{}, pointer_latency_max_{}, pointer_report_ns_{};
     std::array<std::uint64_t,512> pointer_acquisition_age_bins_{};
     std::uint64_t pointer_acquisition_age_count_{}, pointer_acquisition_age_total_{}, pointer_acquisition_age_max_{};
-    void record_pointer_response(const XfbTexture& texture) noexcept;
-    void record_presented_xfb_copy(const XfbTexture& texture) noexcept;
-    void record_skipped_duplicate_xfb_present(
-        const XfbTexture& texture) noexcept;
+    void record_pointer_response(const DisplayTexture& texture) noexcept;
+    void record_presented_display_copy(const DisplayTexture& texture) noexcept;
+    void record_skipped_duplicate_display_present(
+        const DisplayTexture& texture) noexcept;
     struct MonotonicCadenceAccumulator {
         static constexpr std::size_t kMaxRetainedIntervals = 20'000u;
 
@@ -900,7 +900,7 @@ private:
     }
     PipelineCache pipeline_cache_;
     TextureCache texture_cache_;
-    EfbCopyManager efb_copies_;
+    SceneCopyManager scene_copies_;
     Renderer renderer_;
 
     const RenderServices* frame_services_ = nullptr;
@@ -950,7 +950,7 @@ private:
     void apply_scene_jitter(const VertexConstants& cpu, VertexConstants& upload,
                             float jitter_ndc[2]);
     void adopt_pointer_depth_fence_if_needed();
-    // Asynchronous EFB fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
+    // Asynchronous scene target fields for simulation-thread GXPeekZ/GXPeekARGB, one per channel. A channel
     // answers one peek kind at one draw-sync token (`key`, bound by the simulation thread at the
     // first such peek; the least recently used channel is rebound). Three slots: the render owner
     // fills the slot after the published one, then publishes it. Readers only load the published
@@ -1091,12 +1091,12 @@ private:
     bool stop_render_thread_ = false;
     std::exception_ptr render_thread_error_;
     std::uint64_t present_epoch_ = 0;
-    XfbSerialAccountingState xfb_serial_accounting_{};
-    MonotonicCadenceAccumulator xfb_copy_production_cadence_{};
-    MonotonicCadenceAccumulator xfb_first_serial_present_cadence_{};
-    std::atomic<std::uint64_t> last_presented_xfb_stamp_{
+    DisplaySerialAccountingState display_serial_accounting_{};
+    MonotonicCadenceAccumulator display_copy_production_cadence_{};
+    MonotonicCadenceAccumulator display_first_serial_present_cadence_{};
+    std::atomic<std::uint64_t> last_presented_display_stamp_{
         ~std::uint64_t{0}};
-    std::atomic<std::uint64_t> last_presented_xfb_serial_{
+    std::atomic<std::uint64_t> last_presented_display_serial_{
         ~std::uint64_t{0}};
     std::atomic<std::uint32_t> last_presented_slot_{0};
     // Present rates below the game's 60 Hz show the newest frame on their own cadence. A 30 Hz present
@@ -1196,7 +1196,7 @@ private:
     bool matrix_blocks_forced_ = true;
     // Upload/descriptor-ring handles are frame-slot-local. Rebuild them on
     // the first draw after begin_frame(), even when GX register state did not
-    // change. EFB copies can also replace a guest-address texture alias
+    // change. scene target copies can also replace a guest-address texture alias
     // without rewriting its BP texture registers.
     bool frame_bindings_dirty_ = true;
     bool texture_bindings_dirty_ = true;
@@ -1246,7 +1246,7 @@ private:
         std::uint16_t width = 0;
         std::uint16_t height = 0;
         std::uint8_t format = 0;
-        // Exact decoded mip-chain or strided EFB alias footprint.
+        // Exact decoded mip-chain or strided scene target alias footprint.
         std::uint32_t source_bytes = 0;
 
         [[nodiscard]] bool operator==(
@@ -1385,11 +1385,11 @@ private:
     // render_start of the last emitted [gx-frame-timing] line, for frame-interval-us.
     std::chrono::steady_clock::time_point last_frame_timing_emit_{};
     bool last_frame_timing_emit_valid_ = false;
-    // One-time EFB seed clear; GX clears only through the copy command's clear bit (on_efb_copy).
-    bool efb_seeded_ = false;
+    // One-time scene target seed clear; GX clears only through the copy command's clear bit (on_scene_copy).
+    bool scene_seeded_ = false;
 
-    // The last display copy came from the output EFB and nothing has drawn or cleared since: an EFB-to-texture
-    // copy now takes that picture (RendererD3D12::copy_output_efb_to_texture), not the render EFB's scene.
+    // The last display copy came from the output scene target and nothing has drawn or cleared since: an scene target-to-texture
+    // copy now takes that picture (RendererD3D12::copy_output_scene_to_texture), not the render scene target's scene.
     bool display_copy_on_output_ = false;
 
     // Bring-up stats, reported every 300 frames.
@@ -1398,10 +1398,10 @@ private:
     std::uint64_t frame_draws_issued_ = 0;
     std::uint64_t frame_draw_batches_ = 0;
     std::uint64_t frame_draws_no_pso_ = 0;
-    std::uint64_t frame_xfb_copies_ = 0;
+    std::uint64_t frame_display_copies_ = 0;
     std::uint64_t frame_tex_copies_ = 0;
-    std::uint64_t frame_efb_alias_updates_ = 0;
-    std::uint64_t frame_efb_alias_noops_ = 0;
+    std::uint64_t frame_scene_alias_updates_ = 0;
+    std::uint64_t frame_scene_alias_noops_ = 0;
     std::uint64_t frame_texture_binding_cache_hits_ = 0;
     std::uint64_t frame_texture_binding_cache_misses_ = 0;
     std::uint64_t frame_texture_binding_cache_prunes_ = 0;
@@ -1451,7 +1451,7 @@ private:
     std::uint64_t frame_texture_decode_join_us_ = 0;
     std::uint64_t frame_cached_vertex_upload_us_ = 0;
     std::uint64_t frame_draw_record_us_ = 0;
-    std::uint64_t frame_efb_copy_us_ = 0;
+    std::uint64_t frame_scene_copy_us_ = 0;
     // Always-counted structural counters (the timing fields above need frame_time_detail_). The memo and
     // get() routes are frame_pso_memo_hits_ and frame_pso_get_calls_.
     std::uint64_t frame_flush_calls_ = 0;
@@ -1466,21 +1466,21 @@ private:
     Primitive cached_draw_run_primitive_ = Primitive::Points;
     std::uint8_t cached_draw_run_vtxfmt_ = 0;
     DrawCall cached_draw_run_state_call_{};
-    std::atomic<std::uint64_t> stat_xfb_copies_{0};
+    std::atomic<std::uint64_t> stat_display_copies_{0};
     std::unique_ptr<galaxy::telemetry::Publisher> frame_telemetry_;
-    std::atomic<std::uint64_t> stat_xfb_present_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_presented_{0};
-    std::atomic<std::uint64_t> stat_xfb_first_serial_presentations_{0};
+    std::atomic<std::uint64_t> stat_display_present_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_presented_{0};
+    std::atomic<std::uint64_t> stat_display_first_serial_presentations_{0};
     std::atomic<std::uint64_t>
-        stat_xfb_repeated_or_stale_serial_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_skipped_duplicate_presents_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_duplicate_run_max_{0};
-    std::atomic<std::uint64_t> stat_xfb_out_of_order_serial_requests_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_zero_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_one_{0};
-    std::atomic<std::uint64_t> stat_xfb_present_serial_delta_multi_{0};
+        stat_display_repeated_or_stale_serial_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_skipped_duplicate_presents_{0};
+    std::atomic<std::uint64_t> stat_display_present_duplicate_run_max_{0};
+    std::atomic<std::uint64_t> stat_display_out_of_order_serial_requests_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_zero_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_one_{0};
+    std::atomic<std::uint64_t> stat_display_present_serial_delta_multi_{0};
     std::atomic<std::uint64_t>
-        stat_xfb_highest_first_presented_copy_serial_{0};
+        stat_display_highest_first_presented_copy_serial_{0};
 
 };
 

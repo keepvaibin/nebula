@@ -31,9 +31,9 @@ public:
     PostProcessorVk& operator=(const PostProcessorVk&) = delete;
     ~PostProcessorVk() { shutdown(); }
 
-    // Starts compiling every pass, for the renderer's EFB pass (RGBA8 and depth) and its RGBA8 colour pass (one
+    // Starts compiling every pass, for the renderer's scene target pass (RGBA8 and depth) and its RGBA8 colour pass (one
     // attachment, ending shader-readable). The present pass comes with set_present_pass.
-    void initialize(const PostProcessSettings& settings, VkRenderPass efb_pass, VkRenderPass color_pass);
+    void initialize(const PostProcessSettings& settings, VkRenderPass scene_pass, VkRenderPass color_pass);
     // The swap chain's render pass (made again when its format changes): the chain's last pass draws in it.
     void set_present_pass(VkRenderPass pass);
     void shutdown() noexcept;
@@ -46,10 +46,10 @@ public:
     // New settings between frames; an SMAA quality change rebuilds its two pipelines.
     void apply_settings(const PostProcessSettings& settings);
 
-    // Scene AA of the EFB colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
-    // around the renderer beginning its EFB pass again: prepare_scene_aa records the passes before (a copy of the
+    // Scene AA of the scene target colour `color` (RGBA8, COLOR_ATTACHMENT_OPTIMAL, no render pass open), in two parts
+    // around the renderer beginning its scene target pass again: prepare_scene_aa records the passes before (a copy of the
     // scene, SMAA's edges and weights) and returns the pass to finish with; finish_scene_aa draws the result into the
-    // open EFB pass, RGB only (the alpha the game left there stays).
+    // open scene target pass, RGB only (the alpha the game left there stays).
     AaRun prepare_scene_aa(VkCommandBuffer commands, const Texture& color, unsigned width, unsigned height,
                            unsigned picture_width, unsigned picture_height, unsigned display_width,
                            unsigned display_height, const SetAllocator& allocate);
@@ -127,7 +127,7 @@ private:
     bool ready_ = false;
     bool built_ = false;
     bool easu_ = false;  // the device has EASU's single-channel gathers
-    VkRenderPass efb_pass_ = VK_NULL_HANDLE;
+    VkRenderPass scene_pass_ = VK_NULL_HANDLE;
     VkRenderPass color_pass_ = VK_NULL_HANDLE;
     VkRenderPass present_pass_ = VK_NULL_HANDLE;
     VkFormat stencil_format_ = VK_FORMAT_UNDEFINED;
@@ -150,7 +150,7 @@ private:
     VkPipeline smaa_edges_ = VK_NULL_HANDLE;
     VkPipeline smaa_weights_ = VK_NULL_HANDLE;
     VkPipeline smaa_blend_ = VK_NULL_HANDLE;      // colour pass (self-test)
-    VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // EFB pass, RGB only
+    VkPipeline smaa_blend_rgb_ = VK_NULL_HANDLE;  // scene target pass, RGB only
     VkPipeline fxaa_ = VK_NULL_HANDLE;
     VkPipeline fxaa_rgb_ = VK_NULL_HANDLE;
     PassPipelines to_color_{};

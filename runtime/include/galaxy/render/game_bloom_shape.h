@@ -32,7 +32,7 @@ inline float sigma(float variance, float d) {
     return std::max(std::sqrt(std::max(variance, 0.0f)) / d, 0.25f);
 }
 
-// The chain's resolutions: level 1 one texel per f x f EFB pixels (a quarter of the internal resolution up to 8x, the
+// The chain's resolutions: level 1 one texel per f x f scene target pixels (a quarter of the internal resolution up to 8x, the
 // frame's 456 lines at most twice over above it), level 2 one per n x n of those (half, at most the game's half: 228
 // lines). The selection's box: the game's 4 x 4 pixels.
 struct Shape {

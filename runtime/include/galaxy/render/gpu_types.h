@@ -108,7 +108,7 @@ struct DeviceRef {
 // GX copies stay below 640x528 at scale 6; every Vulkan device reports at least 4096.
 inline constexpr unsigned kMaxTexture2DDimension = 4096u;
 
-// An RGBA8 texture that is rendered to and sampled (XFB copies); empty when it cannot be created.
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
 
 }  // namespace galaxy::render::gpu
@@ -177,7 +177,7 @@ inline constexpr Topology kTopologyTrianglePatches = D3D_PRIMITIVE_TOPOLOGY_3_CO
     return Rect{static_cast<LONG>(left), static_cast<LONG>(top), static_cast<LONG>(right), static_cast<LONG>(bottom)};
 }
 
-// An RGBA8 texture that is rendered to and sampled (XFB copies); empty when it cannot be created.
+// An RGBA8 texture that is rendered to and sampled (display picture copies); empty when it cannot be created.
 [[nodiscard]] TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint32_t height);
 
 }  // namespace galaxy::render::gpu

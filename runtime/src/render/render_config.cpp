@@ -35,7 +35,7 @@ namespace {
 
 // Guarded by s_lock.
 static RenderConfig s_config{};
-static unsigned s_next_start_efb_scale = 1u;
+static unsigned s_next_start_scene_target_scale = 1u;
 static RenderFeatureCaps s_feature_caps{};
 static std::shared_mutex s_lock;
 // Last-write time of config.ini when this process last read or wrote it.
@@ -133,7 +133,7 @@ static unsigned parse_aspect_mode(const char* v, unsigned def) {
 }
 
 static void apply_kv(RenderConfig& cfg, const char* key, const char* val) {
-    if (std::strcmp(key, "efb_scale")           == 0) cfg.efb_scale           = std::clamp(parse_uint(val, 1), 1u, kMaxEfbScale);
+    if (std::strcmp(key, "efb_scale")           == 0) cfg.scene_target_scale           = std::clamp(parse_uint(val, 1), 1u, kMaxSceneScale);
     else if (std::strcmp(key, "vsync_interval") == 0) cfg.vsync_interval      = std::clamp(parse_uint(val, cfg.vsync_interval), 0u, 2u);
     else if (std::strcmp(key, "wait_for_frame_latency") == 0) cfg.wait_for_frame_latency = parse_bool(val, cfg.wait_for_frame_latency);
     else if (std::strcmp(key, "swap_chain_frame_latency") == 0) cfg.swap_chain_frame_latency = std::clamp(parse_uint(val, cfg.swap_chain_frame_latency), 1u, 2u);
@@ -300,7 +300,7 @@ static void apply_env_overrides(RenderConfig& cfg) {
 
 static void clamp_unimplemented_features(RenderConfig& cfg) {
     // Clamps every value into its range; settings the renderer does not implement stay parseable but off.
-    cfg.efb_scale = std::clamp(cfg.efb_scale, 1u, kMaxEfbScale);
+    cfg.scene_target_scale = std::clamp(cfg.scene_target_scale, 1u, kMaxSceneScale);
     cfg.vsync_interval = std::clamp(cfg.vsync_interval, 0u, 2u);
     cfg.swap_chain_frame_latency =
         std::clamp(cfg.swap_chain_frame_latency, 1u, 2u);
@@ -539,10 +539,10 @@ void set_render_config(const RenderConfig& cfg) {
     s_lock.unlock();
 }
 
-void stage_next_start_efb_scale(unsigned efb_scale) {
-    const unsigned sanitized = std::clamp(efb_scale, 1u, kMaxEfbScale);
+void stage_next_start_scene_target_scale(unsigned scene_target_scale) {
+    const unsigned sanitized = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     s_lock.lock();
-    s_next_start_efb_scale = sanitized;
+    s_next_start_scene_target_scale = sanitized;
     s_lock.unlock();
 }
 
@@ -585,7 +585,7 @@ void load_render_config_from_file() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_efb_scale = cfg.efb_scale;
+    s_next_start_scene_target_scale = cfg.scene_target_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -619,7 +619,7 @@ bool reload_render_config_if_changed() {
 
     s_lock.lock();
     s_config = cfg;
-    s_next_start_efb_scale = cfg.efb_scale;
+    s_next_start_scene_target_scale = cfg.scene_target_scale;
     s_config_write_time = write_time;
     s_file_gpu = file_gpu;
     s_lock.unlock();
@@ -629,7 +629,7 @@ bool reload_render_config_if_changed() {
 bool save_render_config_to_file() {
     s_lock.lock_shared();
     RenderConfig cfg = s_config;
-    const unsigned next_start_efb_scale = s_next_start_efb_scale;
+    const unsigned next_start_scene_target_scale = s_next_start_scene_target_scale;
     std::array<char, 32> gpu = s_file_gpu;
     s_lock.unlock_shared();
     clamp_unimplemented_features(cfg);
@@ -652,7 +652,7 @@ bool save_render_config_to_file() {
     std::ostringstream contents;
     contents.imbue(std::locale::classic());
     contents << "efb_scale="
-             << std::clamp(next_start_efb_scale, 1u, kMaxEfbScale) << '\n'
+             << std::clamp(next_start_scene_target_scale, 1u, kMaxSceneScale) << '\n'
              << "vsync_interval=" << cfg.vsync_interval << '\n'
              << "wait_for_frame_latency="
              << (cfg.wait_for_frame_latency ? 1u : 0u) << '\n'

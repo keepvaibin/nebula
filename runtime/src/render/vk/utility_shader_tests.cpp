@@ -31,7 +31,7 @@ bool compiles(const char* name, std::string_view hlsl, vk::ShaderStage stage) {
 int main() {
     using S = vk::ShaderStage;
     bool passed = true;
-    passed &= compiles("efb_conversion", render::efb_conversion_shader_source(), S::Fragment);
+    passed &= compiles("efb_conversion", render::scene_conversion_shader_source(), S::Fragment);
     passed &= compiles("display_filter", render::display_filter_shader_source(), S::Fragment);
     passed &= compiles("blit_vertex", render::blit_vertex_shader_source(), S::Vertex);
     passed &= compiles("blit_pixel", render::blit_pixel_shader_source(), S::Fragment);

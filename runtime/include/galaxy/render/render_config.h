@@ -2,7 +2,7 @@
 
 // The rendering settings (config.ini), set before galaxy::render::initialize() and changed at run time through
 // set_render_config(); the render thread takes a snapshot at each frame boundary and applies changes there
-// (efb_scale re-creates the EFB targets). Window dimensions change through the window itself. Settings the renderer
+// (scene_target_scale re-creates the scene target targets). Window dimensions change through the window itself. Settings the renderer
 // does not implement are clamped off.
 
 #include <algorithm>
@@ -16,9 +16,9 @@
 
 namespace galaxy::render {
 
-// The largest EFB/XFB backing scale; the game's logical EFB/VI sizes and addresses are unchanged. 12x covers 32:9 at
+// The largest scene target/display picture backing scale; the game's logical scene target/VI sizes and addresses are unchanged. 12x covers 32:9 at
 // 2160 lines; 16x (10240x8448) stays inside D3D12's 16384-texel limit.
-inline constexpr unsigned kMaxEfbScale = 16u;
+inline constexpr unsigned kMaxSceneScale = 16u;
 inline constexpr float kMinFrameRate = 1.0f;
 inline constexpr float kMaxFrameRate = 1000.0f;
 // The bloom settings' top (percent of the game's and the camera's own strength).
@@ -28,9 +28,9 @@ inline constexpr unsigned kBloomNative = 0;
 inline constexpr unsigned kBloomEnhanced = 1;
 
 struct RenderConfig {
-    // EFB resolution multiplier, 1..kMaxEfbScale (2: 1280x912, supersampling the game's 640x456 frame). 1 is the Wii's
+    // scene target resolution multiplier, 1..kMaxSceneScale (2: 1280x912, supersampling the game's 640x456 frame). 1 is the Wii's
     // own resolution.
-    unsigned efb_scale           = 1;
+    unsigned scene_target_scale           = 1;
 
     // DXGI Present sync interval: 0 off, 1 every vblank, 2 every other vblank. 1 can back-pressure the command
     // stream through DWM and lower the frame rate on some systems.
@@ -42,7 +42,7 @@ struct RenderConfig {
     bool     allow_tearing = false;
     bool     flip_discard = true;
 
-    // EFB multisampling (1, 2, 4 or 8), up to what the adapter supports; single-sampled with temporal upscaling or
+    // scene target multisampling (1, 2, 4 or 8), up to what the adapter supports; single-sampled with temporal upscaling or
     // ray tracing.
     unsigned msaa_samples        = 1;
 
@@ -81,7 +81,7 @@ struct RenderConfig {
     unsigned bloom_mode          = kBloomEnhanced;
     unsigned bloom               = 100;
 
-    // Match Output: after a resize settles (not during an edge drag), efb_scale becomes the smallest scale whose game
+    // Match Output: after a resize settles (not during an edge drag), scene_target_scale becomes the smallest scale whose game
     // picture covers the window; the renderer re-creates its targets once, at a frame boundary. Off by default: the
     // internal resolution is the player's setting.
     bool     internal_follow_window = false;
@@ -145,7 +145,7 @@ struct RenderConfig {
     bool     texture_dump        = false;
     unsigned texture_pack_budget_mb = 2048;
 
-    // Back-buffer size (the present blit scales the EFB to it): in windowed mode the client size, limited to the
+    // Back-buffer size (the present blit scales the scene target to it): in windowed mode the client size, limited to the
     // monitor's work area.
     unsigned window_width        = 854;
     unsigned window_height       = 480;
@@ -299,9 +299,9 @@ void set_curved_surfaces_offered(bool offered) noexcept;
 [[nodiscard]] bool curved_surfaces_offered() noexcept;
 void set_rt_effect_frame(std::uint64_t frame) noexcept;
 
-// The EFB scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
+// The scene target scale config.ini keeps for the next start. The overlay sets it with the live value so config.ini and the
 // running renderer agree.
-void stage_next_start_efb_scale(unsigned efb_scale);
+void stage_next_start_scene_target_scale(unsigned scene_target_scale);
 [[nodiscard]] RenderFeatureCaps get_render_feature_caps();
 void set_render_feature_caps(const RenderFeatureCaps& caps);
 

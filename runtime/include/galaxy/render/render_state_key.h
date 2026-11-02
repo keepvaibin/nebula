@@ -1,6 +1,6 @@
 #pragma once
 
-// The fixed-function state a native pipeline is built for (E-04): blending, depth, culling, the EFB's pixel format and
+// The fixed-function state a native pipeline is built for (E-04): blending, depth, culling, the scene target's pixel format and
 // variant, and the primitive topology. Native materials' shaders are compiled at build; a pipeline is a shader pair
 // under one of these.
 
@@ -15,22 +15,22 @@ namespace galaxy::render {
 inline constexpr std::uint8_t kTopologyTypeMask = 0x0Fu;
 inline constexpr std::uint8_t kTopologyPatch = 4u;  // D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH
 
-// RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene EFB
-// (RGBA16F) instead of the RGBA8 EFB. Ray tracing runs without MSAA, so the bits never combine.
-inline constexpr std::uint8_t kEfbVariantHdr = 4u;
-inline constexpr std::uint8_t kEfbVariantSamplesMask = 3u;
+// RenderStateKey::samples_log2 bit 2: the draw renders into the ray tracer's HDR scene scene target
+// (RGBA16F) instead of the RGBA8 scene target. Ray tracing runs without MSAA, so the bits never combine.
+inline constexpr std::uint8_t kSceneVariantHdr = 4u;
+inline constexpr std::uint8_t kSceneVariantSamplesMask = 3u;
 
 // Fixed-function pipeline state, kept apart from the shader keys so one compiled shader pair
 // serves every blend and depth variant.
 struct RenderStateKey {
     std::uint32_t blend_bits;       // see build_render_state_key; bit27 dual-source alpha,
-                                    // bit28 constant EFB alpha overwrite
+                                    // bit28 constant scene target alpha overwrite
     std::uint16_t zmode_bits;       // canonicalized BP 0x40
     std::uint8_t cull;              // CullMode
     std::uint8_t pixfmt;            // 1: the frame keeps alpha (destination alpha)
     std::uint8_t primitive_topology; // D3D12_PRIMITIVE_TOPOLOGY_TYPE value (bits 0-3; kVsKeyCurved: bits 4-5)
-    std::uint8_t samples_log2;      // the EFB's variant: bits 0-1 its samples per pixel (MSAA) as a power of
-                                    // two (0 for one), bit 2 kEfbVariantHdr
+    std::uint8_t samples_log2;      // the scene target's variant: bits 0-1 its samples per pixel (MSAA) as a power of
+                                    // two (0 for one), bit 2 kSceneVariantHdr
     std::uint8_t reserved[6];
 
     // Field-wise, not byte-wise: PsoKey::hash() leaves out `reserved`, and equality must not be

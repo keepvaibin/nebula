@@ -47,11 +47,11 @@ enum class Event : std::uint16_t {
     IdleWaitEnd = 18,      // a=1 woken by a publication, 0 timer or timeout
     PeWaitBegin = 19,      // sim: blocked on a frame PE token
     PeWaitEnd = 20,
-    XfbCopy = 21,          // render: XFB copy executed. a=guest destination
+    DisplayCopy = 21,          // render: display picture copy executed. a=guest destination
     SlotWaitBegin = 22,    // render: waiting for a frame slot's fence. a=fence
     SlotWaitEnd = 23,
     VBlank = 24,           // render: DWM composition timing. qpc=last vblank, a=refresh period (QPC ticks)
-    XfbPresented = 25,     // render: XFB chosen for a present. a=guest address, b=copy serial
+    DisplayPresented = 25,     // render: display picture chosen for a present. a=guest address, b=copy serial
     GuestFrame = 26,       // sim: game frame boundary marker. a=VI retrace count
     IdleWake = 27,         // any thread: woke the waiting simulation thread. a=EventKind, 100=host (PE, IOS)
 };

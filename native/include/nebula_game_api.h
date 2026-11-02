@@ -656,7 +656,7 @@ enum {
     NEBULA_OPTION_BLOOM,             /* how BloomEffect and BloomEffectSimple go through the renderer
                                         (NebulaRender::bloomMarker): 0 not at all (their copy chains, as the console's), 1
                                         their own chains with the scene they work over kept and restored by it (in the
-                                        EFB's own format), 2 it draws the bloom from their values */
+                                        scene target's own format), 2 it draws the bloom from their values */
     NEBULA_OPTION_RT_PREPARATION,    /* ray tracing's shader preparation, which the title waits for (NebulaRtPrepare):
                                         0 none, 1 the renderer opens its pipeline library, 2 it compiles the pipelines
                                         (the preparation screen shows) */
@@ -1030,7 +1030,7 @@ typedef struct NebulaHostServices {
 
     /* Video: at each retrace, the frame buffer the display shows from now (its physical address; 0 before the first),
        whether the output is black, and the retrace count. Called on the simulation thread; the host only records it. */
-    void (*vi_frame)(void* user, uint32_t xfb, int black, uint32_t retrace);
+    void (*vi_frame)(void* user, uint32_t display_picture, int black, uint32_t retrace);
 
     /* Starts a save file operation without blocking; the request's name, buffer, length and status stay valid until
        its status leaves NEBULA_SAVE_PENDING (the host writes it from its own thread). */

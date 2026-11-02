@@ -1678,7 +1678,7 @@ void svc_button_icons(void*, NebulaButtonIcons* icons) {
 
 // GALAXY_EXPORT_ART=<folder>: Nebula's own pictures (NebulaIcons) as a texture pack, pack/RMG/tex1_..._5.png at their
 // HD size, named by the texture the game draws; previews in native/ and hd/; pack-names.txt pairs them.
-// The scale the renderer last drew the 2D layer at (render_core: the EFB in use when the scene ends).
+// The scale the renderer last drew the 2D layer at (render_core: the scene target in use when the scene ends).
 uint32_t svc_layer_2d_scale(void*) {
 #if defined(NEBULA_HOST_RENDERER)
     return galaxy::render::layer_2d_scale();
@@ -2671,8 +2671,8 @@ const char* svc_disc_id(void*) {
 
 std::atomic<uint32_t> gRetraces{0};
 std::atomic<uint64_t> gSceneFrames{0};  // svc_test_scene_frame's count (GALAXY_TEST_SCRIPT_CLOCK=frames)
-void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
-    (void)xfb;
+void svc_vi_frame(void*, uint32_t display_picture, int black, uint32_t retrace) {
+    (void)display_picture;
     gRetraces.store(retrace, std::memory_order_relaxed);
 #if defined(NEBULA_HOST_RENDERER)
     frame_hash_retrace(retrace);
@@ -2687,7 +2687,7 @@ void svc_vi_frame(void*, uint32_t xfb, int black, uint32_t retrace) {
 #endif
 #if defined(NEBULA_HOST_RENDERER)
 #if defined(_WIN32)
-    galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, xfb);
+    galaxy::timeline::record(galaxy::timeline::Event::GuestFrame, retrace, display_picture);
 #endif
     if (retrace >= kBootRetraces) {
         end_boot_fast("start's retraces run out");

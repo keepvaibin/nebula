@@ -11,7 +11,7 @@ namespace galaxy::render {
 
 namespace {
 
-// GX blending uses the TEV-computed source alpha. The EFB alpha that is eventually stored may
+// GX blending uses the TEV-computed source alpha. The scene target alpha that is eventually stored may
 // be quantized to the target format or replaced by GXSetDstAlpha. Source-alpha blend factors
 // therefore need a separate export whenever they cannot safely read color0.a.
 [[nodiscard]] bool blend_reads_src_alpha(const BlendMode& bm) {
@@ -42,7 +42,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     const bool frame_alpha = state.frame_alpha;
     const BlendMode bm = effective_blend(state.blend, frame_alpha);
 
-    // An EFB without alpha reads destination alpha as one. These factors are normalized before
+    // An scene target without alpha reads destination alpha as one. These factors are normalized before
     // hashing, as Aurora does in populate_pipeline_config. pipeline_cache.cpp applies the same
     // mapping to the D3D12 PSO.
     // The pipeline key's three bits per factor are GX's codes, as the pipelines decode them: a colour factor names
@@ -83,7 +83,7 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
             (1u << 8u) |
             ((static_cast<std::uint32_t>(bm.logic_mode) & 0xFu) << 9u);
     }
-    // EFB write masks (cmode0 bits 3/4): bit25 = color_update, bit26 = alpha_update. Z-clear and
+    // scene target write masks (cmode0 bits 3/4): bit25 = color_update, bit26 = alpha_update. Z-clear and
     // z-prepass draws write depth with the colour update off.
     if (bm.color_update) {
         key.blend_bits |= (1u << 25u);
@@ -93,11 +93,11 @@ RenderStateKey build_render_state_key(const NativeDrawState& state) {
     }
     // bit27 = dual-source TEV alpha. The PSO uses
     // SRC1_ALPHA/INV_SRC1_ALPHA in place of SrcAlpha/InvSrcAlpha, so the blender reads TEV alpha
-    // while color0.a stays the physical EFB alpha.
+    // while color0.a stays the physical scene target alpha.
     if (needs_dual_src_alpha(frame_alpha, bm)) {
         key.blend_bits |= (1u << 27u);
     }
-    // Constant EFB alpha replacement is independent of source-alpha routing.
+    // Constant scene target alpha replacement is independent of source-alpha routing.
     // The pipeline reads this bit only inside its blend-enabled branch; the
     // pixel shader applies constant destination alpha itself.
     if (bm.blend_enable && frame_alpha && bm.const_alpha_enable &&

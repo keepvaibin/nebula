@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-// RendererVk's helpers shared by its sources (renderer_vk.cpp, renderer_vk_efb.cpp, renderer_vk_replay.cpp).
+// RendererVk's helpers shared by its sources (renderer_vk.cpp, renderer_vk_scene.cpp, renderer_vk_replay.cpp).
 #pragma once
 
 #include <volk.h>

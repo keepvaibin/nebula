@@ -176,7 +176,7 @@ void self_test_on_warp() {
     expect(!nothing.status().initialized && !nothing.status().smaa_ok, "no device: nothing available");
 }
 
-// The scene passes on a 64x64 EFB-like target with a stair-stepped edge and an alpha ramp:
+// The scene passes on a 64x64 scene target-like target with a stair-stepped edge and an alpha ramp:
 // they change colour near the edge and never the alpha.
 void scene_aa_on_warp() {
     using Microsoft::WRL::ComPtr;
@@ -332,7 +332,7 @@ void scene_aa_on_warp() {
     expect(device->GetDeviceRemovedReason() == S_OK, "device alive after the scene passes");
 }
 
-// A picture held from the top left of a taller texture (a handed-over EFB) presents bit for bit as the same picture
+// A picture held from the top left of a taller texture (a handed-over scene target) presents bit for bit as the same picture
 // in a texture its own size, through every scaling path and window size. Run once debanded and once without
 // (--held-no-deband), since debanding reads the picture first and the passes after it read its own-sized output.
 void held_picture_on_warp() {

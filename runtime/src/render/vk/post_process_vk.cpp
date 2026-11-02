@@ -188,7 +188,7 @@ void set_reason(std::array<char, N>& out, const char* text) noexcept {
 
 }  // namespace
 
-void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPass efb_pass,
+void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPass scene_pass,
                                  VkRenderPass color_pass) {
     shutdown();
     settings_ = settings;
@@ -198,7 +198,7 @@ void PostProcessorVk::initialize(const PostProcessSettings& settings, VkRenderPa
     status_.live_quality = settings_.smaa_quality;
     set_reason(status_.smaa_reason, "COMPILING");
     set_reason(status_.fxaa_reason, "COMPILING");
-    efb_pass_ = efb_pass;
+    scene_pass_ = scene_pass;
     color_pass_ = color_pass;
     stencil_format_ = stencil_format();
     compiled_.store(false, std::memory_order_relaxed);
@@ -433,9 +433,9 @@ bool PostProcessorVk::build_pipelines() {
         smaa_weights_ = create_pipeline(kSmaaWeightsVs, kSmaaWeightsPs, weights_pass_, kRgba, 2);
     }
     smaa_blend_ = create_pipeline(kSmaaBlendVs, kSmaaBlendPs, color_pass_, kRgba, 0);
-    smaa_blend_rgb_ = create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, efb_pass_, kRgb, 0);
+    smaa_blend_rgb_ = create_pipeline(kSmaaBlendVs, kSmaaBlendKeepPs, scene_pass_, kRgb, 0);
     fxaa_ = create_pipeline(kFullscreenVs, kFxaaPs, color_pass_, kRgba, 0);
-    fxaa_rgb_ = create_pipeline(kFullscreenVs, kFxaaPs, efb_pass_, kRgb, 0);
+    fxaa_rgb_ = create_pipeline(kFullscreenVs, kFxaaPs, scene_pass_, kRgb, 0);
     const bool smaa = smaa_edges_ != VK_NULL_HANDLE && smaa_weights_ != VK_NULL_HANDLE &&
         smaa_blend_ != VK_NULL_HANDLE && smaa_blend_rgb_ != VK_NULL_HANDLE;
     const bool fxaa = fxaa_ != VK_NULL_HANDLE && fxaa_rgb_ != VK_NULL_HANDLE;
@@ -675,7 +675,7 @@ AaRun PostProcessorVk::prepare_scene_aa(VkCommandBuffer commands, const Texture&
     const PostProcessPlan plan = plan_post_process(picture_width, picture_height, display_width, display_height,
                                                    settings_, status_.smaa_ok, status_.fxaa_ok);
     AaRun pass = plan.smaa ? AaRun::kSmaa : plan.fxaa ? AaRun::kFxaa : AaRun::kNone;
-    // The passes read a copy of the scene and write the EFB.
+    // The passes read a copy of the scene and write the scene target.
     if (pass != AaRun::kNone && !ensure_target(antialiased_, width, height, kColorFormat, color_pass_, false)) {
         pass = AaRun::kNone;
     }

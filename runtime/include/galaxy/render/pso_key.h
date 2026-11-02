@@ -64,10 +64,10 @@ namespace galaxy::render {
     return hash;
 }
 
-// RenderStateKey::blend_bits targets beyond the EFB. Motion vectors (temporal scenes): the motion-vector target as
+// RenderStateKey::blend_bits targets beyond the scene target. Motion vectors (temporal scenes): the motion-vector target as
 // render target 1. Reactive mask (temporal scenes): a blended draw also writes its alpha (max-blended, capped at 0.9)
 // to an R8 render target 1. The effects layer: a reactive draw also blends its colour into render target 2 and the
-// EFB's destination factor into render target 3.
+// scene target's destination factor into render target 3.
 inline constexpr std::uint32_t kRenderStateMotionTarget = 1u << 29u;
 inline constexpr std::uint32_t kRenderStateReactiveTarget = 1u << 30u;
 inline constexpr std::uint32_t kRenderStateLayerTarget = 1u << 23u;

@@ -115,7 +115,7 @@ Each phase: pictures compared with D3D12 on the same route, CPU and GPU measured
 - Shader path (M): every shader the Vulkan backend uses compiles through glslang to SPIR-V that passes the validator,
   each descriptor at its layout's binding (`galaxy_vk_shader_tests`): the uber shaders' variants, line/point geometry,
   EFB conversion, and the game's own 229 vertex and 719 pixel shaders captured over the 102-stop tour.
-- V1-V4 on Windows (M): RendererVk (renderer_vk.cpp, renderer_vk_efb.cpp), PipelineCacheVk (uber stand-ins while
+- V1-V4 on Windows (M): RendererVk (renderer_vk.cpp, renderer_vk_scene.cpp), PipelineCacheVk (uber stand-ins while
   workers build specialised pipelines; SPIR-V, keys and the driver cache on disk; GALAXY_GX_UBER as on D3D12) and the
   texture backend build into `NebulaNativeVk`. The title over 40 s matches D3D12 within 1/255 at presents 600, 1200,
   1800 and 2280 (0 pixels differ by more than 8); the Khronos validation layer (built from vulkan-sdk-1.4.350.1 into

@@ -696,11 +696,11 @@ int main() {
                 {1.0f, 2.0f}, 64.0f, 64.0f, 99u);
         passed &= expect_near(
             maximum_scale.line_width_pixels,
-            static_cast<float>(galaxy::render::kMaxEfbScale),
+            static_cast<float>(galaxy::render::kMaxSceneScale),
             "line width scale clamps to the supported maximum");
         passed &= expect_near(
             maximum_scale.point_size_pixels,
-            2.0f * static_cast<float>(galaxy::render::kMaxEfbScale),
+            2.0f * static_cast<float>(galaxy::render::kMaxSceneScale),
             "point size scale clamps to the supported maximum");
 
         galaxy::render::NativeDrawState state;
@@ -730,7 +730,7 @@ int main() {
             "production PSO path hard-fails a missing required geometry shader");
 
         for (unsigned scale = 1u;
-             scale <= galaxy::render::kMaxEfbScale; ++scale) {
+             scale <= galaxy::render::kMaxSceneScale; ++scale) {
             const galaxy::render::LinePointRasterParams raster =
                 galaxy::render::make_line_point_raster_params(
                     {2.0f, 2.0f},

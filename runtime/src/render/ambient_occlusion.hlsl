@@ -1,28 +1,28 @@
 // Ambient occlusion of the opaque scene (ambient_occlusion.h): ground-truth ambient occlusion (Jimenez, Wu, Pesce
-// and Jarabo, "Practical Realtime Strategies for Accurate Indirect Occlusion", SIGGRAPH 2016) over the EFB's depth,
+// and Jarabo, "Practical Realtime Strategies for Accurate Indirect Occlusion", SIGGRAPH 2016) over the scene target's depth,
 // in the form of Intel's XeGTAO (MIT): per pixel a few slices about the view direction, in each the highest horizon
 // on both sides within a radius, integrated against the slice's projected normal. Fixed 4x4 interleaved slice and
 // step patterns, removed exactly by the denoise's 5-tap tent (each pattern cell weighs the same), so a still
 // picture stays still without a temporal filter. The result multiplies the scene's colour before its translucent
 // phases draw.
 //
-// The occlusion is computed per occlusion pixel, one per g_size.z x g_size.z EFB pixels (the game's own resolution),
+// The occlusion is computed per occlusion pixel, one per g_size.z x g_size.z scene target pixels (the game's own resolution),
 // from the eye distance there:
-// DepthCS: the eye distance of each occlusion pixel's centre EFB pixel (0 for the far plane) into u0.
+// DepthCS: the eye distance of each occlusion pixel's centre scene target pixel (0 for the far plane) into u0.
 // AoCS: occlusion and eye distance from t2 (DepthCS's output) into u0.
 // DenoiseCS: the depth-weighted tent of t1 into u0.
-// ApplyVS/ApplyPS: per EFB pixel the denoised occlusion (depth-weighted bilinear), the colour multiplier of a
+// ApplyVS/ApplyPS: per scene target pixel the denoised occlusion (depth-weighted bilinear), the colour multiplier of a
 // multiplicative blend (g_size.w 1: the occlusion itself, the scene replaced; GALAXY_AO_VIEW).
 
 cbuffer AoConstants : register(b0) {
-    float4 g_ray;         // an EFB pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
+    float4 g_ray;         // an scene target pixel's eye ray at distance 1: x = px * x + y, y = py * z + w (z = -1)
     float4 g_depth;       // RtView z_scale, z_offset, min_depth, max_depth
-    float4 g_viewport;    // the scene viewport in EFB pixels: x, y, width, height
+    float4 g_viewport;    // the scene viewport in scene target pixels: x, y, width, height
     float4 g_params;      // radius (eye units), visibility exponent, strength, largest radius in occlusion pixels
-    uint4 g_size;         // occlusion target width, height; EFB pixels per occlusion pixel; 1: show the occlusion
+    uint4 g_size;         // occlusion target width, height; scene target pixels per occlusion pixel; 1: show the occlusion
 };
 
-Texture2D<float> t_depth : register(t0);       // the EFB's depth
+Texture2D<float> t_depth : register(t0);       // the scene target's depth
 Texture2D<float2> t_occlusion : register(t1);  // occlusion, eye distance
 SamplerState s_block : register(s0);           // point, clamped: the apply's 2x2 gathers
 Texture2D<float> t_distance : register(t2);    // DepthCS's eye distance
@@ -49,8 +49,8 @@ bool inside(float2 pixel) {
            pixel.y < g_viewport.y + g_viewport.w;
 }
 
-// The EFB pixel centre an occlusion pixel stands for.
-float2 efb_centre(int2 o) {
+// The scene target pixel centre an occlusion pixel stands for.
+float2 scene_centre(int2 o) {
     return float2(o * int(g_size.z) + int(g_size.z / 2u)) + 0.5f;
 }
 
@@ -70,7 +70,7 @@ void DepthCS(uint3 id : SV_DispatchThreadID) {
     if (id.x >= g_size.x || id.y >= g_size.y) {
         return;
     }
-    const float2 centre = efb_centre(int2(id.xy));
+    const float2 centre = scene_centre(int2(id.xy));
     const float depth = t_depth.Load(int3(int2(centre), 0));
     u_distance[id.xy] = inside(centre) && !far_plane(depth) ? -depth_to_eye_z(depth) : 0.0f;
 }
@@ -85,7 +85,7 @@ bool point_at(int2 o, out float3 p) {
     if (distance <= 0.0f) {
         return false;
     }
-    p = eye_position(efb_centre(o), distance);
+    p = eye_position(scene_centre(o), distance);
     return true;
 }
 
@@ -258,7 +258,7 @@ float multi_bounce(float visibility) {
     return max(visibility, ((visibility * a + b) * visibility + c) * visibility);
 }
 
-// The colour multiplier of a visibility, display-encoded (the EFB's colour): it rises with the visibility.
+// The colour multiplier of a visibility, display-encoded (the scene target's colour): it rises with the visibility.
 float ao_scale(float visibility) {
     return pow(max(lerp(1.0f, multi_bounce(saturate(visibility)), g_params.z), 0.0f), 1.0f / 2.2f);
 }
@@ -266,7 +266,7 @@ float ao_scale(float visibility) {
 float4 ApplyPS(ApplyOut i) : SV_Target {
     const int2 q = int2(i.position.xy);
     const bool view = g_size.w == 1u;
-    // The four nearest occlusion pixels (one per g_size.z x g_size.z EFB pixels), as gathers of their 2x2 block:
+    // The four nearest occlusion pixels (one per g_size.z x g_size.z scene target pixels), as gathers of their 2x2 block:
     // components (0,1), (1,1), (1,0), (0,0) from its top-left `base`.
     const float2 f = (i.position.xy - float(g_size.z / 2u) - 0.5f) / float(g_size.z);
     const int2 base = int2(floor(f));
@@ -311,7 +311,7 @@ float4 ApplyPS(ApplyOut i) : SV_Target {
         }
         visibility = weight > 1e-4f ? sum / weight : 1.0f;
     }
-    // The occlusion scales light, linear; the EFB holds display-encoded colour. A pixel it would change by less than a
+    // The occlusion scales light, linear; the scene target holds display-encoded colour. A pixel it would change by less than a
     // half level (8-bit) keeps its colour without a write.
     const float scale = ao_scale(visibility);
     if (view) {

@@ -1,4 +1,4 @@
-// Texture decode, EFB-copy conversion, texture cache and XFB tests: CPU oracles and D3D12 WARP readbacks.
+// Texture decode, scene target-copy conversion, texture cache and display picture tests: CPU oracles and D3D12 WARP readbacks.
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -523,7 +523,7 @@ V main(uint id : SV_VertexID) {
 )HLSL";
         const ComPtr<ID3DBlob> vs = compile_shader(kVertexShader, "vs_5_0");
         const ComPtr<ID3DBlob> ps = compile_shader(
-            galaxy::render::efb_conversion_shader_source(), "ps_5_0");
+            galaxy::render::scene_conversion_shader_source(), "ps_5_0");
 
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pipeline_desc{};
         pipeline_desc.pRootSignature = root_signature_.Get();
@@ -566,7 +566,7 @@ V main(uint id : SV_VertexID) {
     std::vector<Pixel> run_color(
         const std::array<Pixel, 3>& rows,
         unsigned scale,
-        const galaxy::render::EfbConversionShaderConstants& constants) {
+        const galaxy::render::SceneConversionShaderConstants& constants) {
         const UINT width = scale;
         const UINT height = 3u * scale;
         std::vector<std::uint8_t> bytes(
@@ -594,7 +594,7 @@ V main(uint id : SV_VertexID) {
     std::vector<Pixel> run_depth(
         const std::array<std::uint32_t, 3>& z24_rows,
         unsigned scale,
-        const galaxy::render::EfbConversionShaderConstants& constants) {
+        const galaxy::render::SceneConversionShaderConstants& constants) {
         const UINT width = scale;
         const UINT height = 3u * scale;
         std::vector<std::uint8_t> bytes(
@@ -622,7 +622,7 @@ V main(uint id : SV_VertexID) {
         const std::vector<Pixel>& pixels,
         unsigned width,
         unsigned height,
-        const galaxy::render::EfbPeekSamplingGeometry& sampling) {
+        const galaxy::render::ScenePeekSamplingGeometry& sampling) {
         if (pixels.size() !=
             static_cast<std::size_t>(width) * height) {
             throw std::invalid_argument(
@@ -641,7 +641,7 @@ V main(uint id : SV_VertexID) {
             width,
             height,
             1u,
-            galaxy::render::make_efb_peek_conversion_constants(
+            galaxy::render::make_scene_peek_conversion_constants(
                 sampling, galaxy::render::ReadbackKind::Color));
         if (result.size() != 1u) {
             throw std::runtime_error("color peek returned a non-1x1 result");
@@ -653,7 +653,7 @@ V main(uint id : SV_VertexID) {
         const std::vector<std::uint32_t>& z24_pixels,
         unsigned width,
         unsigned height,
-        const galaxy::render::EfbPeekSamplingGeometry& sampling) {
+        const galaxy::render::ScenePeekSamplingGeometry& sampling) {
         if (z24_pixels.size() !=
             static_cast<std::size_t>(width) * height) {
             throw std::invalid_argument(
@@ -677,7 +677,7 @@ V main(uint id : SV_VertexID) {
             width,
             height,
             1u,
-            galaxy::render::make_efb_peek_conversion_constants(
+            galaxy::render::make_scene_peek_conversion_constants(
                 sampling, galaxy::render::ReadbackKind::Depth));
         if (result.size() != 1u) {
             throw std::runtime_error("depth peek returned a non-1x1 result");
@@ -695,8 +695,8 @@ V main(uint id : SV_VertexID) {
             bytes[index * 4u + 2u] = pixels[index].b;
             bytes[index * 4u + 3u] = pixels[index].a;
         }
-        auto constants = galaxy::render::make_efb_peek_conversion_constants(
-            galaxy::render::compute_efb_peek_sampling_geometry(0, 0, scale),
+        auto constants = galaxy::render::make_scene_peek_conversion_constants(
+            galaxy::render::compute_scene_peek_sampling_geometry(0, 0, scale),
             galaxy::render::ReadbackKind::Color);
         constants.values[15] = -1.0f;
         return run_bytes(DXGI_FORMAT_R8G8B8A8_UNORM, bytes, width, height, logical_size, constants);
@@ -710,8 +710,8 @@ V main(uint id : SV_VertexID) {
             const float depth=1.0f-static_cast<float>(z24_pixels[i])/16777216.0f;
             std::memcpy(bytes.data()+i*sizeof(float), &depth, sizeof(depth));
         }
-        auto constants=galaxy::render::make_efb_peek_conversion_constants(
-            galaxy::render::compute_efb_peek_sampling_geometry(0,0,scale),
+        auto constants=galaxy::render::make_scene_peek_conversion_constants(
+            galaxy::render::compute_scene_peek_sampling_geometry(0,0,scale),
             galaxy::render::ReadbackKind::Depth);
         constants.values[15]=-1.0f;
         return run_bytes(DXGI_FORMAT_R32_FLOAT,bytes,width,height,logical_size,constants);
@@ -797,10 +797,10 @@ V main(uint id : SV_VertexID) {
 
     bool test_persistent_conversion_sources() {
         using namespace galaxy::render;
-        const auto sampling = compute_efb_peek_sampling_geometry(0u, 0u, 1u);
+        const auto sampling = compute_scene_peek_sampling_geometry(0u, 0u, 1u);
         const std::vector<std::uint8_t> color{18u, 52u, 86u, 120u};
-        bool passed = expect_pixel(run_bytes(kEfbColorFormat, color, 1u, 1u,
-            1u, make_efb_peek_conversion_constants(sampling, ReadbackKind::Color),
+        bool passed = expect_pixel(run_bytes(kSceneColorFormat, color, 1u, 1u,
+            1u, make_scene_peek_conversion_constants(sampling, ReadbackKind::Color),
             true).front(), {18u, 52u, 86u, 120u},
             "persistent color source survives frame descriptor overwrite/rewind");
         // Native R24/X8 views, not the R32 float fixture used by the broader
@@ -811,9 +811,9 @@ V main(uint id : SV_VertexID) {
                 static_cast<std::uint8_t>(depth >> 8u),
                 static_cast<std::uint8_t>(depth >> 16u), 0u};
             const std::uint8_t expected = depth == 0u ? 255u : 0u;
-            passed &= expect_pixel(run_bytes(kEfbDepthResourceFormat, bytes,
+            passed &= expect_pixel(run_bytes(kSceneDepthResourceFormat, bytes,
                 1u, 1u, 1u,
-                make_efb_peek_conversion_constants(sampling, ReadbackKind::Depth),
+                make_scene_peek_conversion_constants(sampling, ReadbackKind::Depth),
                 true).front(),
                 {expected, expected, expected, 255u},
                 "persistent native depth view survives frame descriptor overwrite/rewind");
@@ -821,13 +821,13 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_identity_efb_copy() {
+    bool test_identity_scene_copy() {
         using namespace galaxy::render;
         auto params = make_filter_params(false);
         params.src_x = params.src_y = 0u;
         params.src_width = params.src_height = 16u;
         params.channels = 0u;
-        bool passed = expect(detail::efb_identity_copy_box(params, false, 1u,
+        bool passed = expect(detail::scene_identity_copy_box(params, false, 1u,
             16u, 16u).has_value(), "identity RGBA8 filter is admitted");
         for (unsigned flag = 0u; flag < 8u; ++flag) {
             auto rejected = params;
@@ -841,15 +841,15 @@ V main(uint id : SV_VertexID) {
             case 6u: rejected.src_y = kFrameHeight - 15u; break;
             case 7u: rejected.filtered = true; break;
             }
-            passed &= expect(!detail::efb_identity_copy_box(rejected, false,
+            passed &= expect(!detail::scene_identity_copy_box(rejected, false,
                 1u, 16u, 16u), "nonidentity copy cannot bypass conversion");
         }
-        passed &= expect(!detail::efb_identity_copy_box(params, true, 1u, 16u, 16u) &&
-            !detail::efb_identity_copy_box(params, false, 1u, 15u, 16u) &&
-            !detail::efb_identity_copy_box(params, false, 1u, 16u, 15u),
+        passed &= expect(!detail::scene_identity_copy_box(params, true, 1u, 16u, 16u) &&
+            !detail::scene_identity_copy_box(params, false, 1u, 15u, 16u) &&
+            !detail::scene_identity_copy_box(params, false, 1u, 16u, 15u),
             "depth and destination resampling cannot bypass conversion");
         std::size_t checked = 0u;
-        // Full EFB extents (up to 16x) stress sampler coordinate precision; only the tested rectangle and its
+        // Full scene target extents (up to 16x) stress sampler coordinate precision; only the tested rectangle and its
         // neighbours are uploaded.
         for (const unsigned scale : {1u, 3u, 6u, 16u}) {
             const UINT source_width = kFrameWidth * scale;
@@ -860,7 +860,7 @@ V main(uint id : SV_VertexID) {
                     std::array<unsigned, 2>{624u, 440u}}) {
                 params.src_x = static_cast<std::uint16_t>(origin[0]);
                 params.src_y = static_cast<std::uint16_t>(origin[1]);
-                const auto box = detail::efb_identity_copy_box(params, false,
+                const auto box = detail::scene_identity_copy_box(params, false,
                     scale, size, size);
                 if (!expect(box.has_value(), "bounded scaled identity copy admitted")) return false;
                 D3D12_BOX upload_box{
@@ -887,15 +887,15 @@ V main(uint id : SV_VertexID) {
                         bytes[offset + 2u] = p.b; bytes[offset + 3u] = p.a;
                     }
                 }
-                const auto sampling = compute_efb_copy_sampling_geometry(params, size, size, scale);
-                const auto constants = make_efb_conversion_constants(params,
+                const auto sampling = compute_scene_copy_sampling_geometry(params, size, size, scale);
+                const auto constants = make_scene_conversion_constants(params,
                     false, false, false, 0u, sampling.src_x, sampling.src_y,
                     sampling.step_x, sampling.step_y, sampling.filter_row_offset,
                     scale, kFrameHeight);
-                const auto reference = run_bytes(kEfbColorFormat, bytes,
+                const auto reference = run_bytes(kSceneColorFormat, bytes,
                     source_width, source_height, size, constants,
                     false, nullptr, &upload_box);
-                const auto copied = run_bytes(kEfbColorFormat, bytes,
+                const auto copied = run_bytes(kSceneColorFormat, bytes,
                     source_width, source_height, size, constants,
                     false, &*box, &upload_box);
                 for (unsigned y = 0u; y < size; ++y) {
@@ -915,7 +915,7 @@ V main(uint id : SV_VertexID) {
                 }
             }
         }
-        std::printf("Identity EFB copy: %zu exact shader/copy/source pixels: %s\n",
+        std::printf("Identity scene target copy: %zu exact shader/copy/source pixels: %s\n",
             checked, passed ? "PASS" : "FAIL");
         return passed;
     }
@@ -972,27 +972,27 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_xfb_retirement_rollback() {
+    bool test_display_retirement_rollback() {
         using namespace galaxy::render;
-        EfbCopyManager manager;
+        SceneCopyManager manager;
         if (!manager.initialize(device_.Get(), 1u)) {
-            throw std::runtime_error("initialize XFB rollback manager");
+            throw std::runtime_error("initialize display picture rollback manager");
         }
         CaptureRequest params{};
         params.src_width = params.src_height = 8u;
         params.display = true;
         // Three published pictures fill the ring; the next acquire is the first again.
-        XfbTexture* shown = nullptr;
+        DisplayTexture* shown = nullptr;
         for (std::uint64_t frame = 1u; frame <= 3u; ++frame) {
-            shown = manager.acquire_xfb(params, frame);
-            manager.mark_xfb_copied(*shown, frame);
+            shown = manager.acquire_display(params, frame);
+            manager.mark_display_copied(*shown, frame);
         }
         auto* shown_resource = shown->texture.Get();
         const auto shown_serial = shown->copy_serial;
         // A resize before the first begin_frame has no retirement list: the ownership failure path.
         params.src_width = 16u;
         bool rejected = false;
-        try { (void)manager.acquire_xfb(params, 4u); }
+        try { (void)manager.acquire_display(params, 4u); }
         catch (const std::runtime_error&) { rejected = true; }
         const auto* latest = manager.latest();
         bool passed = expect(rejected && latest == shown && latest->texture.Get() == shown_resource &&
@@ -1000,7 +1000,7 @@ V main(uint id : SV_VertexID) {
             latest->frame_stamp == 3u,
             "failed resize retirement preserves the shown picture's resource and identity");
         manager.begin_frame(0u, kFramesInFlight);
-        const auto* resized = manager.acquire_xfb(params, 4u);
+        const auto* resized = manager.acquire_display(params, 4u);
         passed &= expect(resized->slot == 0u && resized->texture != nullptr && resized->width == 16u &&
             resized->height == 8u && !resized->presentable && resized->copy_serial == 0u,
             "resize succeeds after retirement storage is available without inventing a copied frame");
@@ -1009,43 +1009,43 @@ V main(uint id : SV_VertexID) {
         return passed;
     }
 
-    bool test_xfb_idle_pool_admission() {
+    bool test_display_idle_pool_admission() {
         using namespace galaxy::render;
-        EfbCopyManager manager;
+        SceneCopyManager manager;
         if (!manager.initialize(device_.Get(), 1u)) {
-            throw std::runtime_error("initialize XFB pool manager");
+            throw std::runtime_error("initialize display picture pool manager");
         }
         manager.begin_frame(0u, kFramesInFlight);
         CaptureRequest params{};
         params.src_height = 8u;
         params.display = true;
-        // Eight one-off sizes fill the idle pool; the ninth is the current XFB.
+        // Eight one-off sizes fill the idle pool; the ninth is the current display picture.
         for (unsigned i = 0; i < 9u; ++i) {
             params.src_width = static_cast<std::uint16_t>(32u + i);
-            (void)manager.acquire_xfb(params, i + 1u);
+            (void)manager.acquire_display(params, i + 1u);
         }
-        ComPtr<ID3D12Resource> wanted = manager.acquire_xfb(params, 10u)->texture;
+        ComPtr<ID3D12Resource> wanted = manager.acquire_display(params, 10u)->texture;
         manager.begin_frame(0u, kFramesInFlight);
         params.src_width = 41u;
-        ComPtr<ID3D12Resource> other = manager.acquire_xfb(params, 11u)->texture;
+        ComPtr<ID3D12Resource> other = manager.acquire_display(params, 11u)->texture;
         manager.begin_frame(1u, kFramesInFlight);
         params.src_width = 40u;
-        const auto* before_fence = manager.acquire_xfb(params, 12u);
+        const auto* before_fence = manager.acquire_display(params, 12u);
         // Witness ComPtrs keep resource identities distinct, so a released resource's address
         // cannot be reused by a new allocation.
         bool passed = expect(before_fence->texture.Get() != wanted.Get(),
-            "another frame slot cannot recycle the recently retired XFB");
+            "another frame slot cannot recycle the recently retired display picture");
         manager.begin_frame(0u, kFramesInFlight);
         params.src_width = 41u;
-        (void)manager.acquire_xfb(params, 13u);
+        (void)manager.acquire_display(params, 13u);
         params.src_width = 40u;
-        const auto* reused = manager.acquire_xfb(params, 14u);
+        const auto* reused = manager.acquire_display(params, 14u);
         passed &= expect(reused->texture.Get() == wanted.Get() &&
             reused->width == 40u && reused->height == 8u,
             "full idle pool admits a current size and reuses it after its owning fence");
         manager.begin_frame(1u, kFramesInFlight);
         params.src_width = 41u;
-        passed &= expect(manager.acquire_xfb(params, 15u)->texture.Get() == other.Get(),
+        passed &= expect(manager.acquire_display(params, 15u)->texture.Get() == other.Get(),
             "second size is reusable only after its own retirement slot is reclaimed");
         // No command lists are submitted; in the renderer each begin_frame follows its fence wait.
         manager.shutdown();
@@ -1470,7 +1470,7 @@ private:
         UINT source_width,
         UINT source_height,
         UINT dest_size,
-        const galaxy::render::EfbConversionShaderConstants& constants,
+        const galaxy::render::SceneConversionShaderConstants& constants,
         bool persistent_source = false, const D3D12_BOX* identity_box = nullptr,
         const D3D12_BOX* source_upload_box = nullptr) {
         const D3D12_HEAP_PROPERTIES default_heap =
@@ -1483,7 +1483,7 @@ private:
         ComPtr<ID3D12RootSignature> gx_root;
         ComPtr<ID3D12PipelineState> gx_pipeline;
         ComPtr<ID3D12Resource> gx_constants;
-        const bool native_depth = source_format == galaxy::render::kEfbDepthResourceFormat;
+        const bool native_depth = source_format == galaxy::render::kSceneDepthResourceFormat;
         const D3D12_RESOURCE_DESC source_desc = texture_desc(source_format,
             source_width, source_height, native_depth
                 ? D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL
@@ -1598,7 +1598,7 @@ private:
         ComPtr<ID3D12Resource> companion_source;
         D3D12_GPU_DESCRIPTOR_HANDLE source_gpu{};
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_desc{};
-        srv_desc.Format = native_depth ? galaxy::render::kEfbDepthSrvFormat : source_format;
+        srv_desc.Format = native_depth ? galaxy::render::kSceneDepthSrvFormat : source_format;
         srv_desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
         srv_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_desc.Texture2D.MipLevels = 1u;
@@ -1608,14 +1608,14 @@ private:
                 throw std::runtime_error("Create persistent source test ring");
             }
             const auto companion_desc = texture_desc(native_depth
-                ? galaxy::render::kEfbColorFormat : galaxy::render::kEfbDepthResourceFormat,
+                ? galaxy::render::kSceneColorFormat : galaxy::render::kSceneDepthResourceFormat,
                 1u, 1u, native_depth ? D3D12_RESOURCE_FLAG_NONE
                                      : D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
             check_hr(device_->CreateCommittedResource(&default_heap,
                 D3D12_HEAP_FLAG_NONE, &companion_desc,
                 D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, nullptr,
-                IID_PPV_ARGS(&companion_source)), "Create companion EFB source");
-            const auto views = galaxy::render::detail::create_efb_conversion_source_views(
+                IID_PPV_ARGS(&companion_source)), "Create companion scene target source");
+            const auto views = galaxy::render::detail::create_scene_conversion_source_views(
                 device_.Get(), native_depth ? companion_source.Get() : source.Get(),
                 native_depth ? source.Get() : companion_source.Get(), source_ring);
             source_gpu = views[native_depth ? 1u : 0u];
@@ -1733,7 +1733,7 @@ private:
         command_list->IASetPrimitiveTopology(
             D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
         if (identity_box != nullptr) {
-            galaxy::render::detail::record_efb_identity_copy(command_list.Get(),
+            galaxy::render::detail::record_scene_identity_copy(command_list.Get(),
                 source.Get(), destination.Get(), *identity_box);
         } else {
             command_list->DrawInstanced(3u, 1u, 0u, 0u);
@@ -1813,29 +1813,29 @@ private:
 
 bool test_clear_precision() {
     bool passed = true;
-    const auto bytes = [](const galaxy::render::EfbClearValues& v) {
+    const auto bytes = [](const galaxy::render::SceneClearValues& v) {
         return Pixel{static_cast<std::uint8_t>(std::lround(v.color[0] * 255.0f)),
             static_cast<std::uint8_t>(std::lround(v.color[1] * 255.0f)),
             static_cast<std::uint8_t>(std::lround(v.color[2] * 255.0f)),
             static_cast<std::uint8_t>(std::lround(v.color[3] * 255.0f))};
     };
-    passed &= expect_pixel(bytes(galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 0u)),
+    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 0x123456u, 0u)),
         {19u, 87u, 155u, 255u}, "RGB8 clears preserve each full 8-bit color channel");
-    passed &= expect_pixel(bytes(galaxy::render::make_efb_clear_values(0x13579b7fu, 0x123456u, 1u)),
+    passed &= expect_pixel(bytes(galaxy::render::make_scene_clear_values(0x13579b7fu, 0x123456u, 1u)),
         {19u, 87u, 155u, 127u}, "clears of a frame with alpha keep the values as given");
     return passed;
 }
 
-galaxy::render::EfbConversionShaderConstants constants_for_case(
+galaxy::render::SceneConversionShaderConstants constants_for_case(
     const galaxy::render::CaptureRequest& params,
     unsigned scale,
     bool is_depth,
     bool intensity,
     std::uint8_t format) {
-    const galaxy::render::EfbCopySamplingGeometry sampling =
-        galaxy::render::compute_efb_copy_sampling_geometry(
+    const galaxy::render::SceneCopySamplingGeometry sampling =
+        galaxy::render::compute_scene_copy_sampling_geometry(
             params, scale, scale, scale);
-    return galaxy::render::make_efb_conversion_constants(
+    return galaxy::render::make_scene_conversion_constants(
         params,
         is_depth,
         intensity,
@@ -1867,7 +1867,7 @@ bool expect_uniform_pixels(
     return true;
 }
 
-bool test_scaled_xfb_filter() {
+bool test_scaled_display_filter() {
     bool passed = true;
     WarpConversionHarness harness;
     const std::array<Pixel, 3> rows{
@@ -1875,16 +1875,16 @@ bool test_scaled_xfb_filter() {
         Pixel{0u, 0u, 0u, 2u}};
     const auto params = make_filter_params(true);
     for (const unsigned scale : {1u, 2u, 6u}) {
-        const auto sampling = galaxy::render::compute_xfb_sampling_geometry(
+        const auto sampling = galaxy::render::compute_display_sampling_geometry(
             params, scale, scale, scale);
-        const auto texture = galaxy::render::compute_efb_copy_sampling_geometry(
+        const auto texture = galaxy::render::compute_scene_copy_sampling_geometry(
             params, scale, scale, scale);
         passed &= expect(sampling.src_y == static_cast<float>(scale) &&
             sampling.step_x == 1.0f && sampling.step_y == 1.0f &&
             sampling.filter_row_offset == 1.0f &&
             texture.filter_row_offset == static_cast<float>(scale),
             "display filter footprint leaves source mapping and texture copies intact");
-        const auto constants = galaxy::render::make_efb_conversion_constants(
+        const auto constants = galaxy::render::make_scene_conversion_constants(
             params, false, false, true, 7u, sampling.src_x, sampling.src_y,
             sampling.step_x, sampling.step_y, sampling.filter_row_offset, scale, 3u);
         const auto result = harness.run_color(rows, scale, constants);
@@ -2045,8 +2045,8 @@ bool test_warp_against_oracle() {
                 0x345678u);
             for (unsigned logical_y = 0u; logical_y < 2u; ++logical_y) {
                 for (unsigned logical_x = 0u; logical_x < 2u; ++logical_x) {
-                    const galaxy::render::EfbPeekSamplingGeometry sampling =
-                        galaxy::render::compute_efb_peek_sampling_geometry(
+                    const galaxy::render::ScenePeekSamplingGeometry sampling =
+                        galaxy::render::compute_scene_peek_sampling_geometry(
                             static_cast<std::uint16_t>(logical_x),
                             static_cast<std::uint16_t>(logical_y),
                             scale);
@@ -2061,8 +2061,8 @@ bool test_warp_against_oracle() {
 
             for (unsigned logical_y = 0u; logical_y < 2u; ++logical_y) {
                 for (unsigned logical_x = 0u; logical_x < 2u; ++logical_x) {
-                    const galaxy::render::EfbPeekSamplingGeometry sampling =
-                        galaxy::render::compute_efb_peek_sampling_geometry(
+                    const galaxy::render::ScenePeekSamplingGeometry sampling =
+                        galaxy::render::compute_scene_peek_sampling_geometry(
                             static_cast<std::uint16_t>(logical_x),
                             static_cast<std::uint16_t>(logical_y),
                             scale);
@@ -2097,8 +2097,8 @@ bool test_warp_against_oracle() {
                 static_cast<std::size_t>(scale) * scale,
                 kColorMean);
             if (scale > 1u) {
-                const galaxy::render::EfbPeekSamplingGeometry sampling =
-                    galaxy::render::compute_efb_peek_sampling_geometry(
+                const galaxy::render::ScenePeekSamplingGeometry sampling =
+                    galaxy::render::compute_scene_peek_sampling_geometry(
                         0u, 0u, scale);
                 color_block[0] = Pixel{32u, 64u, 96u, 128u};
                 const std::size_t center =
@@ -2107,8 +2107,8 @@ bool test_warp_against_oracle() {
                     sampling.depth_texel_x;
                 color_block[center] = Pixel{96u, 128u, 160u, 192u};
             }
-            const galaxy::render::EfbPeekSamplingGeometry color_sampling =
-                galaxy::render::compute_efb_peek_sampling_geometry(
+            const galaxy::render::ScenePeekSamplingGeometry color_sampling =
+                galaxy::render::compute_scene_peek_sampling_geometry(
                     0u, 0u, scale);
             char color_label[96]{};
             std::snprintf(
@@ -2148,7 +2148,7 @@ bool test_warp_against_oracle() {
             }
         }
     } catch (const std::exception& error) {
-        std::fprintf(stderr, "FAILED: WARP EFB conversion suite: %s\n", error.what());
+        std::fprintf(stderr, "FAILED: WARP scene target conversion suite: %s\n", error.what());
         passed = false;
     }
     return passed;
@@ -2160,9 +2160,9 @@ int main(int argc, char** argv) {
     if (argc == 2 && std::strcmp(argv[1], "--identity-efb-copy") == 0) {
         try {
             WarpConversionHarness harness;
-            return harness.test_identity_efb_copy() ? 0 : 1;
+            return harness.test_identity_scene_copy() ? 0 : 1;
         } catch (const std::exception& error) {
-            std::fprintf(stderr, "FAILED: identity EFB copy: %s\n", error.what());
+            std::fprintf(stderr, "FAILED: identity scene target copy: %s\n", error.what());
             return 1;
         }
     }
@@ -2186,14 +2186,14 @@ int main(int argc, char** argv) {
         WarpConversionHarness harness;
         passed &= harness.test_texture_descriptor_retirement();
         passed &= harness.test_async_texture_decode_matches_sync();
-        passed &= harness.test_xfb_retirement_rollback();
+        passed &= harness.test_display_retirement_rollback();
         passed &= harness.test_conversion_rtv_slot_identity();
         passed &= harness.test_descriptor_ring_allocation_identity();
         passed &= harness.test_persistent_conversion_sources();
-        passed &= harness.test_identity_efb_copy();
-        passed &= harness.test_xfb_idle_pool_admission();
+        passed &= harness.test_identity_scene_copy();
+        passed &= harness.test_display_idle_pool_admission();
         passed &= harness.test_texture_cache_ranges();
-        passed &= test_scaled_xfb_filter();
+        passed &= test_scaled_display_filter();
     } catch (const std::exception& error) {
         std::fprintf(stderr, "FAILED: WARP texture cache suite: %s\n", error.what());
         passed = false;

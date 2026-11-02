@@ -104,7 +104,7 @@ add_library(galaxy_gx_vk STATIC
     ${rt}/render/native_shaders_none.cpp
     ${rt}/render/vk/compile_journal.cpp
     ${rt}/render/vk/renderer_vk.cpp
-    ${rt}/render/vk/renderer_vk_efb.cpp
+    ${rt}/render/vk/renderer_vk_scene.cpp
     ${rt}/render/vk/renderer_vk_replay.cpp
     ${rt}/render/vk/post_process_vk.cpp
     ${rt}/render/vk/game_bloom_vk.cpp

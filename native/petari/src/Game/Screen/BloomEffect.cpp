@@ -129,7 +129,7 @@ void BloomEffect::preDraw() const {
         return;
     }
 
-    // The renderer keeps the scene in the EFB's own format: the console's copy below is 8 bits, which cuts the ray
+    // The renderer keeps the scene in the scene target's own format: the console's copy below is 8 bits, which cuts the ray
     // tracer's HDR scene at 1.
     sBloomRoute = NebulaHost::option(NEBULA_OPTION_BLOOM);
     if (sBloomRoute != 0) {

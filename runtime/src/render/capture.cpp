@@ -1,4 +1,4 @@
-// EfbCopyManager, the XFB texture registry for display copies (render thread only), and the EFB-copy geometry
+// SceneCopyManager, the display picture texture registry for display copies (render thread only), and the scene target-copy geometry
 // helpers.
 
 #include "galaxy/render/capture.h"
@@ -14,11 +14,11 @@
 
 namespace galaxy::render {
 
-XfbSerialAccountingEvent account_xfb_present_serial(
-    XfbSerialAccountingState& state,
+DisplaySerialAccountingEvent account_display_present_serial(
+    DisplaySerialAccountingState& state,
     std::uint64_t& texture_accounted_serial,
     std::uint64_t copy_serial) noexcept {
-    XfbSerialAccountingEvent event{};
+    DisplaySerialAccountingEvent event{};
     const bool first_for_texture = texture_accounted_serial != copy_serial;
     if (!state.has_presented) {
         state.has_presented = true;
@@ -57,19 +57,19 @@ XfbSerialAccountingEvent account_xfb_present_serial(
 
 namespace {
 
-constexpr std::size_t kMaxIdleXfbTextures = 8u;
+constexpr std::size_t kMaxIdleDisplayTextures = 8u;
 // Three pictures: the one being drawn, the one shown and the one before it, which a present may still read.
 constexpr std::uint32_t kPictures = 3u;
 
 }  // namespace
 
-bool EfbCopyManager::initialize(gpu::Device* device, unsigned efb_scale) {
+bool SceneCopyManager::initialize(gpu::Device* device, unsigned scene_target_scale) {
     device_ = device;
-    efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     return device_ != nullptr;
 }
 
-void EfbCopyManager::shutdown() {
+void SceneCopyManager::shutdown() {
     registry_.clear();
     retired_textures_.clear();
     idle_textures_.clear();
@@ -77,11 +77,11 @@ void EfbCopyManager::shutdown() {
     latest_slot_ = 0;
     next_slot_ = 0;
     next_copy_serial_ = 1;
-    efb_scale_ = 1;
+    scene_target_scale_ = 1;
     device_.Reset();
 }
 
-void EfbCopyManager::begin_frame(
+void SceneCopyManager::begin_frame(
     unsigned frame_slot,
     unsigned frames_in_flight) {
     if (frames_in_flight == 0u || frame_slot >= frames_in_flight) {
@@ -96,7 +96,7 @@ void EfbCopyManager::begin_frame(
     current_frame_slot_ = frame_slot;
 }
 
-void EfbCopyManager::retire_texture(XfbTexture& texture) {
+void SceneCopyManager::retire_texture(DisplayTexture& texture) {
     if (!texture.texture) {
         return;
     }
@@ -105,7 +105,7 @@ void EfbCopyManager::retire_texture(XfbTexture& texture) {
             "[EfbCopyManager] texture retired before begin_frame");
     }
     // Reserve ownership storage before moving the live registry resource.
-    // A vector allocation failure must not release an in-flight XFB.
+    // A vector allocation failure must not release an in-flight display picture.
     auto& retired = retired_textures_[current_frame_slot_];
     retired.emplace_back();
     retired.back().width = texture.width;
@@ -113,11 +113,11 @@ void EfbCopyManager::retire_texture(XfbTexture& texture) {
     retired.back().texture = std::move(texture.texture);
 }
 
-void EfbCopyManager::recycle_retired_textures(unsigned frame_slot) {
+void SceneCopyManager::recycle_retired_textures(unsigned frame_slot) {
     auto& retired = retired_textures_[frame_slot];
     for (auto& texture : retired) {
         if (texture.texture) {
-            if (idle_textures_.size() >= kMaxIdleXfbTextures) {
+            if (idle_textures_.size() >= kMaxIdleDisplayTextures) {
                 // Idle textures are past their fence; the oldest goes so unused sizes do not accumulate.
                 idle_textures_.erase(idle_textures_.begin());
             }
@@ -127,7 +127,7 @@ void EfbCopyManager::recycle_retired_textures(unsigned frame_slot) {
     retired.clear();
 }
 
-gpu::TextureRef EfbCopyManager::acquire_idle_texture(
+gpu::TextureRef SceneCopyManager::acquire_idle_texture(
     std::uint16_t width,
     std::uint16_t height) {
     for (auto it = idle_textures_.begin(); it != idle_textures_.end(); ++it) {
@@ -141,11 +141,11 @@ gpu::TextureRef EfbCopyManager::acquire_idle_texture(
 }
 
 // A capture's size at the frame scale, within the largest texture the device makes.
-ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
+ScaledSceneCopyExtent compute_scaled_scene_copy_extent(
     std::uint16_t logical_width,
     std::uint16_t logical_height,
-    unsigned efb_scale) noexcept {
-    const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    unsigned scene_target_scale) noexcept {
+    const unsigned scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     constexpr unsigned kMaxTextureDimension = gpu::kMaxTexture2DDimension;
     const unsigned width = std::min(
         static_cast<unsigned>(logical_width) * scale,
@@ -153,19 +153,19 @@ ScaledEfbCopyExtent compute_scaled_efb_copy_extent(
     const unsigned height = std::min(
         static_cast<unsigned>(logical_height) * scale,
         kMaxTextureDimension);
-    return ScaledEfbCopyExtent{
+    return ScaledSceneCopyExtent{
         static_cast<std::uint16_t>(width),
         static_cast<std::uint16_t>(height)};
 }
 
-EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
+SceneCopySamplingGeometry compute_scene_copy_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned efb_scale) noexcept {
+    unsigned scene_target_scale) noexcept {
     const float scale = static_cast<float>(
-        std::clamp(efb_scale, 1u, kMaxEfbScale));
-    EfbCopySamplingGeometry geometry{};
+        std::clamp(scene_target_scale, 1u, kMaxSceneScale));
+    SceneCopySamplingGeometry geometry{};
     geometry.src_x = static_cast<float>(params.src_x) * scale;
     geometry.src_y = static_cast<float>(params.src_y) * scale;
     geometry.step_x = dest_width == 0u
@@ -181,30 +181,30 @@ EfbCopySamplingGeometry compute_efb_copy_sampling_geometry(
     return geometry;
 }
 
-EfbCopySamplingGeometry compute_xfb_sampling_geometry(
+SceneCopySamplingGeometry compute_display_sampling_geometry(
     const CaptureRequest& params,
     unsigned dest_width,
     unsigned dest_height,
-    unsigned efb_scale) noexcept {
-    auto geometry = compute_efb_copy_sampling_geometry(
-        params, dest_width, dest_height, efb_scale);
+    unsigned scene_target_scale) noexcept {
+    auto geometry = compute_scene_copy_sampling_geometry(
+        params, dest_width, dest_height, scene_target_scale);
     // The frame shown filters adjacent physical rows; only the tap spacing differs from captures.
     geometry.filter_row_offset = 1.0f;
     return geometry;
 }
 
-EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
+ScenePeekSamplingGeometry compute_scene_peek_sampling_geometry(
     std::uint16_t x,
     std::uint16_t y,
-    unsigned efb_scale) noexcept {
-    const unsigned integer_scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    unsigned scene_target_scale) noexcept {
+    const unsigned integer_scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     const float scale = static_cast<float>(integer_scale);
     const std::uint32_t src_x =
         static_cast<std::uint32_t>(x) * integer_scale;
     const std::uint32_t src_y =
         static_cast<std::uint32_t>(y) * integer_scale;
     const std::uint32_t center_offset = integer_scale / 2u;
-    return EfbPeekSamplingGeometry{
+    return ScenePeekSamplingGeometry{
         static_cast<float>(src_x),
         static_cast<float>(src_y),
         scale,
@@ -214,27 +214,27 @@ EfbPeekSamplingGeometry compute_efb_peek_sampling_geometry(
         integer_scale * integer_scale};
 }
 
-void EfbCopyManager::set_efb_scale(unsigned efb_scale) noexcept {
-    efb_scale_ = std::clamp(efb_scale, 1u, kMaxEfbScale);
+void SceneCopyManager::set_scene_target_scale(unsigned scene_target_scale) noexcept {
+    scene_target_scale_ = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
 }
 
-XfbTexture* EfbCopyManager::acquire_xfb(
+DisplayTexture* SceneCopyManager::acquire_display(
     const CaptureRequest& params,
     std::uint64_t frame_index) {
-    // The ring moves on when a picture is published (mark_xfb_copied).
+    // The ring moves on when a picture is published (mark_display_copied).
     const std::uint32_t slot = next_slot_;
 
     const std::uint16_t logical_h = params.src_height;
-    const ScaledEfbCopyExtent extent = compute_scaled_efb_copy_extent(
+    const ScaledSceneCopyExtent extent = compute_scaled_scene_copy_extent(
         params.src_width,
         logical_h,
-        efb_scale_);
+        scene_target_scale_);
     const std::uint16_t wanted_w = extent.width;
     const std::uint16_t wanted_h = extent.height;
 
     auto it = registry_.find(slot);
     if (it != registry_.end()) {
-        XfbTexture& entry = it->second;
+        DisplayTexture& entry = it->second;
         // A failed allocation can leave an entry with matching dimensions
         // but no resource. Retry allocation instead of returning that entry.
         if (entry.width == wanted_w && entry.height == wanted_h &&
@@ -248,12 +248,12 @@ XfbTexture* EfbCopyManager::acquire_xfb(
         entry.rtv = {};
         entry.rtv_valid = false;
     } else {
-        auto [ins_it, ok] = registry_.emplace(slot, XfbTexture{});
+        auto [ins_it, ok] = registry_.emplace(slot, DisplayTexture{});
         (void)ok;
         it = ins_it;
     }
 
-    XfbTexture& entry = it->second;
+    DisplayTexture& entry = it->second;
     entry.slot        = slot;
     entry.width       = wanted_w;
     entry.height      = wanted_h;
@@ -280,19 +280,19 @@ XfbTexture* EfbCopyManager::acquire_xfb(
     return &entry;
 }
 
-void EfbCopyManager::adopt_picture(XfbTexture& xfb, gpu::TextureRef texture) {
-    retire_texture(xfb);
-    xfb.texture = std::move(texture);
-    xfb.rtv = {};
-    xfb.rtv_valid = false;
+void SceneCopyManager::adopt_picture(DisplayTexture& display_picture, gpu::TextureRef texture) {
+    retire_texture(display_picture);
+    display_picture.texture = std::move(texture);
+    display_picture.rtv = {};
+    display_picture.rtv_valid = false;
 }
 
-gpu::TextureRef EfbCopyManager::take_idle_texture(std::uint16_t width, std::uint16_t height) {
+gpu::TextureRef SceneCopyManager::take_idle_texture(std::uint16_t width, std::uint16_t height) {
     return acquire_idle_texture(width, height);
 }
 
-void EfbCopyManager::mark_xfb_copied(
-    XfbTexture& texture,
+void SceneCopyManager::mark_display_copied(
+    DisplayTexture& texture,
     std::uint64_t frame_index) {
     texture.frame_stamp = frame_index;
     texture.copy_serial = next_copy_serial_++;
@@ -302,11 +302,11 @@ void EfbCopyManager::mark_xfb_copied(
     has_latest_ = true;
 }
 
-const XfbTexture* EfbCopyManager::latest() const {
+const DisplayTexture* SceneCopyManager::latest() const {
     return has_latest_ ? picture(latest_slot_) : nullptr;
 }
 
-const XfbTexture* EfbCopyManager::picture(std::uint32_t slot) const {
+const DisplayTexture* SceneCopyManager::picture(std::uint32_t slot) const {
     const auto it = registry_.find(slot);
     if (it == registry_.end()) {
         return nullptr;
@@ -315,8 +315,8 @@ const XfbTexture* EfbCopyManager::picture(std::uint32_t slot) const {
 }
 
 
-std::optional<EfbCopyRect> efb_identity_copy_rect(
-    const CaptureRequest& params, bool is_depth_copy, unsigned efb_scale,
+std::optional<SceneCopyRect> scene_identity_copy_rect(
+    const CaptureRequest& params, bool is_depth_copy, unsigned scene_target_scale,
     unsigned dest_width, unsigned dest_height) noexcept {
     if (is_depth_copy || params.display || params.channels != kCopyLayoutRgba ||
         params.luma || params.half_scale ||
@@ -328,14 +328,14 @@ std::optional<EfbCopyRect> efb_identity_copy_rect(
     if (params.filtered) {
         return std::nullopt;
     }
-    const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    const unsigned scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     if (dest_width != params.src_width * scale ||
         dest_height != params.src_height * scale) {
         return std::nullopt;
     }
     const std::uint32_t left = params.src_x * scale;
     const std::uint32_t top = params.src_y * scale;
-    return EfbCopyRect{left, top, left + dest_width, top + dest_height};
+    return SceneCopyRect{left, top, left + dest_width, top + dest_height};
 }
 
 }  // namespace galaxy::render
@@ -357,9 +357,9 @@ TextureRef create_render_texture(Device* device, std::uint32_t width, std::uint3
     desc.SampleDesc.Count   = 1;
     desc.SampleDesc.Quality = 0;
     desc.Layout             = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    // ALLOW_RENDER_TARGET so copy_efb_to_xfb can blit into it.
+    // ALLOW_RENDER_TARGET so copy_scene_to_display can blit into it.
     desc.Flags              = D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first EFB
+    // Initial state is PIXEL_SHADER_RESOURCE: the present blit reads it before the first scene target
     // copy transitions it to RENDER_TARGET.
     const D3D12_RESOURCE_STATES initial_state = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
     // An optimized clear value avoids debug-layer warnings on the first RTV clear.

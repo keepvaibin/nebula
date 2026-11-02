@@ -13,20 +13,20 @@ LinePointRasterParams make_line_point_raster_params(
     const LinePointValues& values,
     float viewport_width,
     float viewport_height,
-    unsigned efb_scale,
-    unsigned fallback_efb_width,
-    unsigned fallback_efb_height) noexcept {
-    const unsigned scale = std::clamp(efb_scale, 1u, kMaxEfbScale);
+    unsigned scene_target_scale,
+    unsigned fallback_scene_width,
+    unsigned fallback_scene_height) noexcept {
+    const unsigned scale = std::clamp(scene_target_scale, 1u, kMaxSceneScale);
     const bool valid_viewport =
         std::isfinite(viewport_width) &&
         std::isfinite(viewport_height) &&
         viewport_width > 0.0f && viewport_height > 0.0f;
     const float logical_width = valid_viewport
         ? viewport_width
-        : static_cast<float>(std::max(fallback_efb_width, 1u));
+        : static_cast<float>(std::max(fallback_scene_width, 1u));
     const float logical_height = valid_viewport
         ? viewport_height
-        : static_cast<float>(std::max(fallback_efb_height, 1u));
+        : static_cast<float>(std::max(fallback_scene_height, 1u));
     const float physical_scale = static_cast<float>(scale);
     return LinePointRasterParams{
         logical_width * physical_scale,
