@@ -17,7 +17,6 @@
 #include "Game/Util/SystemUtil.hpp"
 #include <JSystem/JKernel/JKRDisposer.hpp>
 #include <JSystem/JKernel/JKRExpHeap.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include "Game/System/NebulaClock.hpp"
 #include "JSystem/JUtility/JUTException.hpp"
 

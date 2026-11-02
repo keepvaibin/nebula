@@ -2,6 +2,8 @@
 
 #include "Game/NameObj/NameObj.hpp"
 
+class JUTTexture;
+
 class FallOutFieldDraw : public NameObj {
 public:
     /// @brief Creates a new `FallOutFieldDraw`.
@@ -17,6 +19,7 @@ public:
     void deactivate();
 
     /* 0x0C */ bool _C;
+    JUTTexture* mMask;  // the screen mask at half size
 };
 
 namespace MR {

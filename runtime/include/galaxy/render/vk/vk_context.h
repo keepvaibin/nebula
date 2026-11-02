@@ -35,6 +35,10 @@ struct Texture : std::enable_shared_from_this<Texture> {
     VkImageView view = VK_NULL_HANDLE;         // every level, sampled
     VkImageView target_view = VK_NULL_HANDLE;  // level 0, render target (render textures only)
     VkFramebuffer framebuffer = VK_NULL_HANDLE;  // made by the renderer for its render pass, on first use
+    // The scene target pass's framebuffer with this image as the scene target's colour (a display copy's hand-over, E-10) and the scene target
+    // depth target whose serial is scene_depth_serial.
+    VkFramebuffer scene_framebuffer = VK_NULL_HANDLE;
+    std::uint64_t scene_depth_serial = 0;
     VkFormat format = VK_FORMAT_UNDEFINED;
     std::uint32_t width = 0;
     std::uint32_t height = 0;

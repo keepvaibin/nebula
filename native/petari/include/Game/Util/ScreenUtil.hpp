@@ -1,7 +1,6 @@
 #pragma once
 
 #include <JSystem/JGeometry/TVec.hpp>
-#include <JSystem/JUtility/JUTVideo.hpp>
 #include <revolution/types.h>
 #include "Game/System/NebulaFrameClock.hpp"
 #include "Game/Util/SystemUtil.hpp"
@@ -22,14 +21,14 @@ namespace MR {
     void beginWiiScreenWidth();
     void endWiiScreenWidth();
     inline s32 getScreenHeight() NO_INLINE {
-        return JUTVideo::getManager()->getEfbHeight();
+        return NebulaFrameClock::cFrameHeight;
     }
     s32 getSafetyFrameWidth();
     s32 getSafetyFrameLeft();
     s32 getSafetyFrameRight();
     s32 getFrameBufferWidth() NO_INLINE;
     inline s32 getFrameBufferHeight() NO_INLINE {
-        return JUTVideo::getManager()->getEfbHeight();
+        return NebulaFrameClock::cFrameHeight;
     }
     void convertFrameBufferPosToScreenPos(TVec2f*, const TVec2f&);
     void convertScreenPosToFrameBufferPos(TVec2f*, const TVec2f&);

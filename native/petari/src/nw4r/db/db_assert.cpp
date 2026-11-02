@@ -55,8 +55,6 @@ namespace nw4r {
             u32 stackPointer = 0;
             (void)NebulaKernel::disableInterrupts();
 
-            (void)NebulaFrameClock::setPreHook(NULL);
-            (void)NebulaFrameClock::setPostHook(NULL);
 
             ShowStack_(stackPointer);
 

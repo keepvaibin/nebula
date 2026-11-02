@@ -1,3 +1,4 @@
+#include "Game/System/NebulaFrameClock.hpp"
 #include "Game/MapObj/BrightObj.hpp"
 #include "Game/Util/NativeShader.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeView.hpp>
@@ -16,7 +17,6 @@
 #include "Game/Util/MtxUtil.hpp"
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include <JSystem/JUtility/JUTVideo.hpp>
 
 void BrightObj_FORCE_MATCH_SDATA2() {
     (void)0.001f;
@@ -67,7 +67,7 @@ namespace {
         }
 
         f32 width = MR::getScreenWidth();
-        f32 height = static_cast< s32 >(JUTGetVideoManager()->getEfbHeight());
+        f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
         screenPos.set< f32 >(0.5f * width + 0.5f * (newPos.x * width), 0.5f * height + 0.5f * (-newPos.y * height), newPos.z);
 
         pDst->x = screenPos.x;

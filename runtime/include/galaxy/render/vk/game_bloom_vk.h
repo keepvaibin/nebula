@@ -52,10 +52,14 @@ public:
         unsigned frame_height = 0;
         unsigned logical_width = 640;
         unsigned logical_height = 456;
-        unsigned scale = 1;
+        float scale = 1.0f;
     };
     // BloomEffect::preDraw, BloomEffectSimple::draw with the game's own chain: the scene before the bloom works over it.
     bool keep(VkCommandBuffer commands, const Inputs& in);
+    // Keeping without a copy: the scene target continues on the image this returns (the hand-over makes one when it
+    // does not fit), and its picture is the kept scene. The composite writes the kept scene's alpha with its colour.
+    [[nodiscard]] std::shared_ptr<Texture> take_kept_image();
+    void keep_picture(std::shared_ptr<Texture> picture);
     // The chain before its composite, recorded with no render pass open; false when there is nothing to draw.
     bool prepare(VkCommandBuffer commands, const Inputs& in, const Params& params, const SetAllocator& allocate);
     // The composite prepare() set up, in the open scene target pass `pass` of 2^samples_log2 samples (RGB; the game's alpha
