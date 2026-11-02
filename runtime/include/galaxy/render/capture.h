@@ -74,13 +74,10 @@ struct CaptureRequest {
     bool half_scale = false;        // each texel averages 2x2 of the frame's
     bool luma = false;              // the red channel holds the colour's luminance
     bool depth = false;             // the red channel holds the depth's high byte
-    // Through the display's vertical filter (NEBULA_CAPTURE_FILTERED): each line half its own colour and half the
-    // line above's, as the game's television modes asked. Otherwise the line alone.
-    bool filtered = false;
 };
-// The filter's weights on the line above, the line and the line below, in 64ths.
-[[nodiscard]] constexpr std::uint32_t capture_filter_upper(const CaptureRequest& r) { return r.filtered ? 32u : 0u; }
-[[nodiscard]] constexpr std::uint32_t capture_filter_middle(const CaptureRequest& r) { return r.filtered ? 32u : 64u; }
+// A line's weights in a copy, in 64ths: the line alone.
+[[nodiscard]] constexpr std::uint32_t capture_filter_upper(const CaptureRequest&) { return 0u; }
+[[nodiscard]] constexpr std::uint32_t capture_filter_middle(const CaptureRequest&) { return 64u; }
 [[nodiscard]] constexpr std::uint32_t capture_filter_lower(const CaptureRequest&) { return 0u; }
 
 struct DisplayTexture {
@@ -99,8 +96,6 @@ struct DisplayTexture {
     mutable std::uint64_t last_accounted_present_serial =
         ~std::uint64_t{0};
     gpu::CpuDescriptor rtv{};
-    // A handed-over frame shown through the display's vertical filter: the presentation applies it (E-10).
-    bool display_filter = false;
     bool presentable = false;
     bool rtv_valid = false;
 };

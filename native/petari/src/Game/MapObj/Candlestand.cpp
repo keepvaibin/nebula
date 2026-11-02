@@ -102,17 +102,13 @@ void Candlestand::makeActorAppeared() {
 void Candlestand::startClipped() {
     MapObjActor::startClipped();
 
-    if (mFlag.mIsDrawnClipped) {
-        return;  // still seen: its flame stays with it
-    }
-
     if (isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack))) {
         deleteEffectFire();
     }
 }
 
 void Candlestand::endClipped() {
-    if (!mFlag.mIsDrawnClipped && (isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack)))) {
+    if (isNerve(GET_NERVE(Candlestand, HostTypeBurn)) || isNerve(GET_NERVE(Candlestand, HostTypeAttack))) {
         emitEffectFire();
     }
 

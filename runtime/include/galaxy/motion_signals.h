@@ -75,7 +75,6 @@ inline constexpr std::uint8_t kMarkerDumpTag = 17u;
 inline constexpr std::uint16_t kBloomKeep = 1u;
 inline constexpr std::uint16_t kBloomNormal = 2u;
 inline constexpr std::uint16_t kBloomSimple = 3u;
-inline constexpr std::uint16_t kBloomRestore = 4u;
 
 // Kind 6 flags.
 inline constexpr std::uint16_t kSceneCameraCut = 1u;  // the view jumped since the previous scene

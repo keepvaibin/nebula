@@ -47,7 +47,7 @@ namespace J3DNativeState {
     void initDefaults();
     // The frame's picture is drawn: its top left `width` x `height` becomes the one shown, through the display's
     // vertical filter when `filtered`.
-    void showFrame(u16 width, u16 height, bool filtered);
+    void showFrame(u16 width, u16 height);
     // The game's frame is complete: the host renders what it drew.
     void endFrame();
     void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);

@@ -637,7 +637,7 @@ void GalaxyMapController::capture() {
     NebulaMtxOrtho(projectionMtx, halfHeight, -halfHeight, -halfWidth, halfWidth, -1000.0f, 1000.0f);
     J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
     drawForCapture();
-    _38->capture(0, 0, GPU_TF_RGB565, true, 0, true);
+    _38->capture(0, 0, GPU_TF_RGB565, true, 0);
 }
 
 namespace MR {

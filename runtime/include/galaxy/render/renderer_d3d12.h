@@ -1720,10 +1720,6 @@ private:
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> conv_pipeline_r8_;  // into one-channel copies
     Microsoft::WRL::ComPtr<ID3D12PipelineState> display_filter_pipeline_;  // 1:1 display copies without gamma
-    // The presented picture of a handed-over frame through the display filter (filter_display_picture).
-    Microsoft::WRL::ComPtr<ID3D12Resource> display_filter_picture_;
-    unsigned display_filter_picture_width_ = 0, display_filter_picture_height_ = 0;
-    gpu::TextureRef filter_display_picture(const DisplayTexture& source);
     Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> conv_rtv_heap_;
     D3D12_CPU_DESCRIPTOR_HANDLE conv_scratch_rtv_{};
     detail::ConversionRtvSlot conv_scratch_rtv_slot_;

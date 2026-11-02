@@ -982,9 +982,7 @@ void RendererVk::record_game_bloom(const ReplayBloom& bloom) {
         vk::GameBloomVk::Params p{};
         p.threshold = bloom.a & 0xFFu;
         p.intensity = bloom.a >> 24u;
-        if (bloom.phase == motion::kBloomRestore) {
-            p.kind = vk::GameBloomVk::Kind::Restore;
-        } else if (bloom.phase == motion::kBloomNormal) {
+        if (bloom.phase == motion::kBloomNormal) {
             p.kind = vk::GameBloomVk::Kind::Normal;
             p.tap1 = (bloom.a >> 8u) & 0xFFu;
             p.tap2 = (bloom.a >> 16u) & 0xFFu;
@@ -1917,51 +1915,6 @@ VkDescriptorSet RendererVk::scene_color_source() {
         turn_source_frame_ = frame_index_;
     }
     return turn_source_;
-}
-
-vk::Texture* RendererVk::filter_display_picture(const DisplayTexture& source) {
-    const GpuPassScope pass{*this, GpuPass::DisplayCopy};
-    vk::Texture& frame = *source.texture;
-    if (!display_filter_picture_ || display_filter_picture_->width != frame.width ||
-        display_filter_picture_->height != frame.height) {
-        retire(std::move(display_filter_picture_));
-        display_filter_picture_ = vk::Context::get().create_texture(
-            frame.width, frame.height, 1u, VK_FORMAT_R8G8B8A8_UNORM,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, true, "display filter picture");
-        if (!display_filter_picture_) {
-            return nullptr;
-        }
-    }
-    vk::Texture& dest = *display_filter_picture_;
-    const VkDescriptorSet input = allocate_frame_set(conversion_set_layout_);
-    write_conversion_input(input, frame.view, linear_clamp_);
-    const VkCommandBuffer commands = commands_;
-    VkRenderPassBeginInfo begin{VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO};
-    begin.renderPass = color_pass_;
-    begin.framebuffer = framebuffer_for(dest);
-    begin.renderArea = {{0, 0}, {dest.width, dest.height}};
-    vkCmdBeginRenderPass(commands, &begin, VK_SUBPASS_CONTENTS_INLINE);
-    const VkViewport viewport{0.0f, static_cast<float>(dest.height), static_cast<float>(dest.width),
-                              -static_cast<float>(dest.height), 0.0f, 1.0f};
-    const VkRect2D scissor{{0, 0}, {dest.width, dest.height}};
-    vkCmdSetViewport(commands, 0, 1, &viewport);
-    vkCmdSetScissor(commands, 0, 1, &scissor);
-    vkCmdBindPipeline(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, display_filter_pipeline_);
-    vkCmdBindDescriptorSets(commands, VK_PIPELINE_BIND_POINT_GRAPHICS, conversion_layout_, 0, 1, &input, 0, nullptr);
-    // The display copy's own constants for the whole frame (copy_scene_to_display): the frame is the scene target it was.
-    CaptureRequest params{};
-    params.src_width = static_cast<std::uint16_t>(frame.width);
-    params.src_height = static_cast<std::uint16_t>(frame.height);
-    params.filtered = true;
-    const SceneConversionShaderConstants constants =
-        make_scene_conversion_constants(params, false, false, true, 15u, 0.0f, 0.0f, 1.0f, 1.0f, 1.0f, 1.0f, frame.height);
-    vkCmdPushConstants(commands, conversion_layout_, kPushStages, 0, sizeof(constants.values),
-                       constants.values.data());
-    vkCmdDraw(commands, 3, 1, 0, 0);
-    vkCmdEndRenderPass(commands);
-    dest.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    reset_draw_bindings();
-    return &dest;
 }
 
 bool RendererVk::copy_scene_to_texture(const CaptureRequest& params, TextureCache& textures, bool is_depth_copy) {

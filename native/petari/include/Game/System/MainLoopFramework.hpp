@@ -35,7 +35,6 @@ public:
 
     /* 0x00 */ Color8 mClearColor;
     /* 0x18 */ bool mUseAlpha;
-    /* 0x19 */ bool mUseVFilter;
     u8 _1A;
     u8 _1B;
     /* 0x1C */ f32 mCombinationRatio;
