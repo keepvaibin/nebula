@@ -137,6 +137,7 @@ add_library(galaxy_native_host STATIC
     runtime/src/host_env.cpp
     runtime/src/input/host_input.cpp
     runtime/src/input/controls_engine.cpp
+    runtime/src/input/live_controls_engine.cpp
     runtime/src/native_audio.cpp
     runtime/src/mii_import.cpp
     runtime/src/mii_formats.cpp
@@ -474,6 +475,7 @@ galaxy_test(galaxy_achievements_tests SOURCES ${rt}/achievements_tests.cpp LIBS 
 galaxy_test(galaxy_stats_tests SOURCES ${rt}/stats_tests.cpp LIBS galaxy_runtime_settings)
 galaxy_test(galaxy_controls_tests SOURCES ${rt}/controls_tests.cpp LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_controls_engine_tests SOURCES ${rt}/input/controls_engine_tests.cpp LIBS galaxy_native_host)
+galaxy_test(galaxy_live_controls_engine_tests SOURCES ${rt}/input/live_controls_engine_tests.cpp LIBS galaxy_native_host)
 galaxy_test(galaxy_pad_controller_tests SOURCES ${rt}/pad_controller_tests.cpp
     LIBS galaxy_runtime_settings galaxy_native_input)
 galaxy_test(galaxy_native_input_tests SOURCES ${rt}/native_input_tests.cpp LIBS galaxy_native_input)

@@ -10,6 +10,7 @@
 #include "galaxy/input_bindings.h"
 #include "galaxy/native_input.h"
 #include "galaxy/input/controls_engine.h"
+#include "galaxy/input/live_controls_engine.h"
 #include "galaxy/native_settings_pad.h"
 #include "galaxy/pointer_control.h"
 #include "galaxy/rumble.h"
@@ -609,25 +610,6 @@ std::int16_t deadzone_counts(float fraction) {
         std::lround(static_cast<double>(fraction) * 32767.0), 0l, 32767l));
 }
 
-// One controller this sample: unified pad sample plus its motion output.
-struct LivePad {
-    galaxy::input::PadSample sample{};
-    bool shake_remote = false;
-    bool shake_nunchuk = false;
-    bool imu_live = false;
-    float gyro_x = 0.0f;
-    float gyro_y = 0.0f;
-    // The touch surface's finger travel this sample (its width and height 1 each) and whether the controller has one.
-    bool touch_live = false;
-    float touch_dx = 0.0f;
-    float touch_dy = 0.0f;
-    // Controller up (gravity reaction, SDL frame) when the IMU knows it.
-    bool gravity_valid = false;
-    galaxy::input::tilt::Vec3 gravity{0.0f, 1.0f, 0.0f};
-    // XInput user index or Switch worker slot (with the scheme: identity).
-    std::uint8_t device_slot = 0xFF;
-};
-
 // Vibration (controller_hid.h): the controller in use, its strength setting and the window focus. The live input
 // path sets these each sample and the game's motor state reads them when it is published. Game thread only; the
 // replay path leaves it empty (no controller vibrates).
@@ -690,23 +672,6 @@ std::size_t collect_hid_pads(const galaxy::input::ControlsConfig& config,
     return count;
 }
 
-bool pad_has_input(const galaxy::input::PadSample& sample) {
-    if (!sample.connected) {
-        return false;
-    }
-    if (sample.buttons != 0u) {
-        return true;
-    }
-    for (std::size_t i = 0; i < 4u; ++i) {
-        if (std::fabs(sample.axes[i]) > 0.001f) {
-            return true;
-        }
-    }
-    return sample.axes[4] > 30.0f / 255.0f || sample.axes[5] > 30.0f / 255.0f;
-}
-
-// Runs the overlay chord and navigation over every connected pad at once and
-// applies its hidden/neutral decision back to each pad.
 bool route_native_settings_pads(std::span<LivePad> pads, bool capture_finished) {
     static std::uint16_t s_capture_hold = 0u;
     std::uint16_t word = 0u;
@@ -979,7 +944,65 @@ void apply_diagnostic_stick_command_file(NativeInputScriptOverlay& overlay) {
     }
 }
 
-constexpr std::uint64_t kMousePointerLossHoldMs = 500u;
+class WindowLiveControlsHost final : public LiveControlsHost {
+public:
+    WindowLiveControlsHost(HWND window, bool focused) : window_(window), focused_(focused) {}
+    std::uint64_t now_ms() override { return host_pointer_now_ms(); }
+    std::uint64_t now_us() override { return controller_hid_now_us(); }
+    bool injected(bool button) override { return native_pointer_input_injected(button); }
+    PointerSample pointer(bool buttons_allowed, bool check_hover) override {
+        const auto provider = g_host_pointer_provider.load(std::memory_order_acquire);
+        if (provider == nullptr) return {};
+        auto position = provider();
+        const auto buttons = consume_host_pointer_button_transitions(position, buttons_allowed);
+        position.left_button = buttons.left_button;
+        position.right_button = buttons.right_button;
+        if (buttons.has_transition_coordinates) {
+            position.absolute_valid = buttons.transition_coordinates.absolute_valid;
+            position.inside_client = buttons.transition_coordinates.inside_client;
+            position.client_x = buttons.transition_coordinates.client_x;
+            position.client_y = buttons.transition_coordinates.client_y;
+            position.client_width = buttons.transition_coordinates.client_width;
+            position.client_height = buttons.transition_coordinates.client_height;
+        }
+        const auto projected = project_client_mouse_pointer(position.window_focused, position.absolute_valid,
+            position.inside_client, position.client_x, position.client_y, position.client_width, position.client_height);
+        bool deliver = false;
+        if (check_hover && (position.left_button || position.right_button)) {
+            POINT cursor{};
+            HWND hovered_window = nullptr;
+            HWND game_window = reinterpret_cast<HWND>(position.debug_window);
+            if (game_window != nullptr) {
+                if (HWND root = GetAncestor(game_window, GA_ROOT); root != nullptr) game_window = root;
+            }
+            const bool under_cursor = game_window != nullptr &&
+                current_process_window_under_cursor(cursor, hovered_window) && hovered_window == game_window;
+            deliver = select_host_pointer_mouse_button_delivery(position.window_focused, position.absolute_valid,
+                position.inside_client, projected.visible, under_cursor);
+        }
+        return {true, position.window_focused, position.absolute_valid, position.inside_client,
+                position.left_button, position.right_button, deliver, buttons.has_transition_coordinates,
+                position.absolute_sequence, buttons.transition_sequence, projected};
+    }
+    galaxy::input::NativeMousePointerProjection cursor() override {
+        POINT position{};
+        HWND window = window_;
+        bool active = focused_ && window != nullptr;
+        if (!active) active = current_process_window_under_cursor(position, window);
+        else if (!GetCursorPos(&position)) active = false;
+        if (!active && current_process_runtime_window(window) && GetCursorPos(&position)) active = true;
+        RECT client{};
+        if (!active || !ScreenToClient(window, &position) || !GetClientRect(window, &client)) return {};
+        const int width = client.right - client.left, height = client.bottom - client.top;
+        if (width > 1 && height > 1 &&
+            (position.x < 0 || position.y < 0 || position.x >= width || position.y >= height)) active = false;
+        return project_client_mouse_pointer(active, active && width > 1 && height > 1, active,
+            static_cast<int>(position.x), static_cast<int>(position.y), width, height);
+    }
+private:
+    HWND window_;
+    bool focused_;
+};
 
 // The live controls as the player's input: the bindings of every connected controller and of the keyboard and mouse,
 // the pointer from whichever source moved last, tilt, shake and the scripted test input.
@@ -988,7 +1011,6 @@ galaxy::input::PlayerInput build_live_input(
     const galaxy::RuntimeInputModeState& input_mode_state,
     galaxy::input::PlayContext play_context,
     galaxy::input::tilt::Section tilt_section) {
-    galaxy::input::PlayerInput snapshot{};
     const NativeInputScriptOverlay script = build_native_input_script_overlay(
         current_vi, {apply_diagnostic_stick_command_file, galaxy::qpc_now});
     if (const NativeInputReplaySample* replay =
@@ -1034,8 +1056,6 @@ galaxy::input::PlayerInput build_live_input(
         clear_native_window_key_presses();
     }
     const LiveControls& controls = live_controls();
-    const galaxy::input::BindingTable& keyboard_table =
-        controls.config.table(galaxy::input::ControlScheme::Keyboard);
     galaxy::input::KeyboardMouseLevels keyboard_levels{};
     if (window_focused && !native_keyboard_captured) {
         for (std::size_t index = 0; index < controls.keyboard_keys.count; ++index) {
@@ -1139,529 +1159,36 @@ galaxy::input::PlayerInput build_live_input(
     const bool allow_absolute_pointer =
         host_window_input_enabled && use_keyboard &&
         input_mode != galaxy::RuntimeInputMode::RealWiimote;
-    const float trigger_threshold =
-        static_cast<float>(kXInputTriggerThreshold) / 255.0f;
 
-    // Each scheme's bindings turn its physical inputs into Wii targets. Pad
-    // and keyboard pointer axes stay apart: they are different pointer
-    // sources (velocity from the stick, keys at the keyboard speed).
-    galaxy::input::LogicalInput logic{};
-    galaxy::input::LogicalInput pad_logic_all{};
-    bool motion_shake_remote = false;
-    bool motion_shake_nunchuk = false;
-    float gyro_x = 0.0f;
-    float gyro_y = 0.0f;
-    float pad_pointer_speed = 0.0f;
-    bool pad_gyro_pointing = false;
-    // The touch pointer's travel this sample (pointer units, 2 = the picture's width and height; y down).
-    float touch_x = 0.0f;
-    float touch_y = 0.0f;
-    bool pad_touch_pointing = false;
-    // Rest-hide tuning of the pad that points (gyro first, then the stick).
-    float pointer_hide_seconds = 0.0f;
-    float pointer_hide_radius = galaxy::input::kDefaultPointerHideRadius;
-    static std::array<std::uint32_t, XUSER_MAX_COUNT + kMaxHidPads> s_pad_previous_pressed{};
-    // The controller in use: the last one with any input (buttons, sticks, triggers, a gyro turn, a
-    // shake). A key or mouse button bound to a Wii input hands control to the keyboard. In the tilt
-    // sections (tilt.h) its tilt steers when it has motion sensors (Pro Controller 1/2); otherwise the
-    // stick steers (Xbox, keyboard). Vibration goes to it.
-    constexpr std::uint32_t kDrivingNone = 0xFFFFFFFFu;
-    constexpr std::uint32_t kDrivingKeyboard = 0xFFFFFFFEu;
-    static std::uint32_t s_driving_pad = kDrivingNone;  // (scheme << 8) | device slot
-    const auto pad_key = [](const LivePad& pad) {
-        return (static_cast<std::uint32_t>(pad.sample.scheme) << 8u) | pad.device_slot;
-    };
-    galaxy::input::tilt::Vec3 tilt_up_value{0.0f, 1.0f, 0.0f};
-    const galaxy::input::tilt::Vec3* tilt_up = nullptr;
-    if (use_pads) {
-        const LivePad* driving = nullptr;
-        const LivePad* first_connected = nullptr;
-        for (const LivePad& pad : live_pads) {
-            if (!pad.sample.connected) continue;
-            if (first_connected == nullptr) first_connected = &pad;
-            const bool moved = pad_has_input(pad.sample) || pad.shake_remote || pad.shake_nunchuk ||
-                               std::fabs(pad.gyro_x) + std::fabs(pad.gyro_y) > 0.003f ||
-                               std::fabs(pad.touch_dx) + std::fabs(pad.touch_dy) > 0.0005f;
-            if (moved) s_driving_pad = pad_key(pad);
-            if (pad_key(pad) == s_driving_pad) driving = &pad;
-        }
-        if (driving == nullptr && s_driving_pad != kDrivingKeyboard) driving = first_connected;
-        if (driving != nullptr && driving->gravity_valid) {
-            tilt_up_value = driving->gravity;
-            tilt_up = &tilt_up_value;
-        }
-        for (std::size_t index = 0; index < live_pads.size(); ++index) {
-            const LivePad& pad = live_pads[index];
-            if (!pad.sample.connected) {
-                s_pad_previous_pressed[index] = 0u;
-                continue;
-            }
-            const galaxy::input::SchemeTuning& tuning = controls.config.tune(pad.sample.scheme);
-            const bool gyro_pointing = tuning.gyro_pointer && pad.imu_live;
-            const bool touch_pointing = tuning.touch_pointer && pad.touch_live;
-            galaxy::input::LogicalInput pad_logic = galaxy::input::evaluate_pad_bindings(
-                controls.config.table(pad.sample.scheme), pad.sample, trigger_threshold,
-                s_pad_previous_pressed[index], gyro_pointing || touch_pointing);
-            s_pad_previous_pressed[index] = pad_logic.pressed;
-            if (tuning.invert_pointer_y) pad_logic.pointer_y = -pad_logic.pointer_y;
-            if (std::fabs(pad_logic.pointer_x) + std::fabs(pad_logic.pointer_y) >
-                std::fabs(pad_logic_all.pointer_x) + std::fabs(pad_logic_all.pointer_y)) {
-                pad_pointer_speed = tuning.pointer_speed;
-            }
-            if (!pad_gyro_pointing) {
-                pointer_hide_seconds = tuning.pointer_hide_seconds;
-                pointer_hide_radius = tuning.pointer_hide_radius;
-            }
-            pad_logic_all = galaxy::input::merge_logical_input(pad_logic_all, pad_logic);
-            motion_shake_remote = motion_shake_remote || pad.shake_remote;
-            motion_shake_nunchuk = motion_shake_nunchuk || pad.shake_nunchuk;
-            if (gyro_pointing) {
-                pad_gyro_pointing = true;
-                pointer_hide_seconds = tuning.pointer_hide_seconds;
-                pointer_hide_radius = tuning.pointer_hide_radius;
-                gyro_x += pad.gyro_x;
-                gyro_y += tuning.invert_pointer_y ? -pad.gyro_y : pad.gyro_y;
-            }
-            if (touch_pointing) {
-                pad_touch_pointing = true;
-                touch_x += pad.touch_dx * 2.0f * tuning.touch_sensitivity;
-                touch_y += (tuning.invert_pointer_y ? -pad.touch_dy : pad.touch_dy) * 2.0f * tuning.touch_sensitivity;
-                if (!pad_gyro_pointing) {
-                    pointer_hide_seconds = tuning.pointer_hide_seconds;
-                    pointer_hide_radius = tuning.pointer_hide_radius;
-                }
-            }
-        }
-    } else {
-        s_pad_previous_pressed = {};
-    }
-    galaxy::input::LogicalInput keyboard_logic{};
-    if (use_keyboard) {
-        keyboard_logic = galaxy::input::evaluate_keyboard_bindings(keyboard_table, keyboard_levels);
-        if (controls.config.tune(galaxy::input::ControlScheme::Keyboard).invert_pointer_y) {
-            keyboard_logic.pointer_y = -keyboard_logic.pointer_y;
-        }
-        if (keyboard_logic.pressed != 0u || keyboard_logic.stick_x != 0.0f || keyboard_logic.stick_y != 0.0f) {
-            s_driving_pad = kDrivingKeyboard;
-        }
-    }
-    // Vibration: target and strength, published with the game's motor bit.
+    LiveControlsFrame frame{controls.config};
+    frame.pads = live_pads;
+    frame.keyboard_levels = keyboard_levels;
+    frame.script = script;
+    frame.vi = current_vi;
+    frame.script_pointer_grace_ms = script_pointer_live_mouse_grace_ms();
+    frame.script_pointer_force = script_pointer_force_enabled();
+    frame.window_focused = window_focused;
+    frame.use_keyboard = use_keyboard;
+    frame.use_pads = use_pads;
+    frame.allow_absolute_pointer = allow_absolute_pointer;
+    frame.drop_injected = drop_injected;
+    frame.context = play_context;
+    frame.tilt_section = tilt_section;
+    static LiveControlsEngine engine;
+    WindowLiveControlsHost host(focused_window, window_focused);
+    auto result = engine.sample(frame, host);
     g_rumble_host = {};
-    g_rumble_host.focused = window_focused;
-    if (use_pads && s_driving_pad != kDrivingNone && s_driving_pad != kDrivingKeyboard) {
-        const auto scheme = static_cast<galaxy::input::ControlScheme>((s_driving_pad >> 8u) & 0xFFu);
-        const auto slot = static_cast<std::uint8_t>(s_driving_pad & 0xFFu);
+    g_rumble_host.focused = result.rumble.focused;
+    g_rumble_host.strength = result.rumble.strength;
+    if (result.rumble.device) {
+        const auto [scheme, slot] = *result.rumble.device;
         if (scheme == galaxy::input::ControlScheme::Xbox && slot < XUSER_MAX_COUNT) {
             g_rumble_host.target = {RumbleTarget::Kind::XInput, slot};
         } else if (galaxy::input::scheme_uses_hid(scheme) && slot < kMaxHidPads) {
             g_rumble_host.target = {RumbleTarget::Kind::Hid, slot, scheme};
         }
-        if (static_cast<std::size_t>(scheme) < galaxy::input::kControlSchemeCount) {
-            const galaxy::input::SchemeTuning& tuning = controls.config.tune(scheme);
-            g_rumble_host.strength = tuning.vibration ? tuning.rumble : std::uint8_t{0};
-        }
     }
-    logic = galaxy::input::merge_logical_input(pad_logic_all, keyboard_logic);
-    const float pad_pointer_x = pad_logic_all.pointer_x;
-    const float pad_pointer_y = pad_logic_all.pointer_y;
-    const float keyboard_pointer_x = keyboard_logic.pointer_x;
-    const float keyboard_pointer_y = keyboard_logic.pointer_y;
-    const auto held = [&logic](galaxy::input::WiiTarget target) {
-        return logic.held(target);
-    };
-    using galaxy::input::WiiTarget;
-    snapshot.buttons.left = held(WiiTarget::DpadLeft) || script.buttons.left;
-    snapshot.buttons.right = held(WiiTarget::DpadRight) || script.buttons.right;
-    snapshot.buttons.down = held(WiiTarget::DpadDown) || script.buttons.down;
-    snapshot.buttons.up = held(WiiTarget::DpadUp) || script.buttons.up;
-    snapshot.buttons.plus = held(WiiTarget::Plus) || script.buttons.plus;
-    snapshot.buttons.minus = held(WiiTarget::Minus) || script.buttons.minus;
-    snapshot.buttons.one = held(WiiTarget::One) || script.buttons.one;
-    snapshot.buttons.two = held(WiiTarget::Two) || script.buttons.two;
-    snapshot.buttons.home = held(WiiTarget::Home) || script.buttons.home;
-    // B on the controllers: jump while Mario is under control, back in menus.
-    static galaxy::input::JumpBackLatch s_jump_back{};
-    const galaxy::input::JumpBackLatch::Output jump_back =
-        s_jump_back.update(held(WiiTarget::JumpBack), play_context);
-    snapshot.buttons.a = held(WiiTarget::A) || jump_back.a || script.buttons.a;
-    snapshot.buttons.b = held(WiiTarget::B) || jump_back.b || script.buttons.b;
-
-    float stick_x = logic.stick_x;
-    float stick_y = logic.stick_y;
-    if (script.has_stick) {
-        stick_x = script.stick_x;
-        stick_y = script.stick_y;
-    }
-    const galaxy::input::StickValue nunchuk_stick = galaxy::input::nunchuk_stick(stick_x, stick_y);
-    snapshot.stick_x = nunchuk_stick.x;
-    snapshot.stick_y = nunchuk_stick.y;
-    snapshot.buttons.c = held(WiiTarget::C) || script.buttons.c;
-    snapshot.buttons.z = held(WiiTarget::Z) || script.buttons.z;
-
-    static float s_pointer_x = 0.0f;
-    static float s_pointer_y = 0.0f;
-    static float s_mouse_x = 0.0f;
-    static float s_mouse_y = 0.0f;
-    static ULONGLONG s_last_mouse_inside_tick = 0;
-    static ULONGLONG s_last_live_mouse_tick = 0;
-    static std::uint64_t s_last_host_pointer_absolute_sequence = 0;
-    static std::uint64_t s_last_host_pointer_transition_sequence = 0;
-    static bool s_mouse_pointer_seen_inside = false;
-    const ULONGLONG live_mouse_script_grace_ms =
-        script_pointer_live_mouse_grace_ms();
-    const std::uint64_t now = host_pointer_now_ms();
-
-    bool pointer_active = false;
-    bool live_mouse_recent = false;
-    // The mouse this sample: where it points, whether that is on the picture
-    // and whether it moved (a new physical sample inside the client).
-    bool mouse_visible = false;
-    bool mouse_moved = false;
-    bool mouse_button_held = false;
-    const bool drop_injected_mouse = drop_injected && native_pointer_input_injected(false);
-    bool host_pointer_polled = false;
-    if (allow_absolute_pointer) {
-        const HostPointerProvider pointer_provider =
-            g_host_pointer_provider.load(std::memory_order_acquire);
-        if (pointer_provider != nullptr) {
-            HostPointerState host_pointer = pointer_provider();
-            const HostPointerButtonSample button_sample =
-                consume_host_pointer_button_transitions(
-                    host_pointer,
-                    use_keyboard &&
-                        !(drop_injected && native_pointer_input_injected(true)));
-            host_pointer.left_button = button_sample.left_button;
-            host_pointer.right_button = button_sample.right_button;
-            if (button_sample.has_transition_coordinates) {
-                host_pointer.absolute_valid =
-                    button_sample.transition_coordinates.absolute_valid;
-                host_pointer.inside_client =
-                    button_sample.transition_coordinates.inside_client;
-                host_pointer.client_x =
-                    button_sample.transition_coordinates.client_x;
-                host_pointer.client_y =
-                    button_sample.transition_coordinates.client_y;
-                host_pointer.client_width =
-                    button_sample.transition_coordinates.client_width;
-                host_pointer.client_height =
-                    button_sample.transition_coordinates.client_height;
-            }
-            host_pointer_polled = true;
-            const HostPointerIrAvailabilityDecision pointer_availability =
-                select_host_pointer_ir_availability(
-                    host_pointer.window_focused,
-                    host_pointer.absolute_valid,
-                    host_pointer.inside_client);
-            const galaxy::input::NativeMousePointerProjection
-                projected_host_pointer = project_client_mouse_pointer(
-                    host_pointer.window_focused,
-                    host_pointer.absolute_valid,
-                    host_pointer.inside_client,
-                    host_pointer.client_x,
-                    host_pointer.client_y,
-                    host_pointer.client_width,
-                    host_pointer.client_height);
-            if (use_keyboard &&
-                (host_pointer.left_button || host_pointer.right_button)) {
-                POINT cursor{};
-                HWND hovered_window = nullptr;
-                HWND game_window = reinterpret_cast<HWND>(
-                    host_pointer.debug_window);
-                if (game_window != nullptr) {
-                    if (HWND root = GetAncestor(game_window, GA_ROOT);
-                        root != nullptr) {
-                        game_window = root;
-                    }
-                }
-                const bool game_window_under_cursor =
-                    game_window != nullptr &&
-                    current_process_window_under_cursor(
-                        cursor, hovered_window) &&
-                    hovered_window == game_window;
-                if (select_host_pointer_mouse_button_delivery(
-                        host_pointer.window_focused,
-                        host_pointer.absolute_valid,
-                        host_pointer.inside_client,
-                        projected_host_pointer.visible,
-                        game_window_under_cursor)) {
-                    const std::uint32_t mouse_targets = galaxy::input::mouse_bound_targets(
-                        keyboard_table,
-                        static_cast<std::uint8_t>((host_pointer.left_button ? 1u : 0u) |
-                                                  (host_pointer.right_button ? 2u : 0u)));
-                    const auto mouse = [mouse_targets](WiiTarget target) {
-                        return (mouse_targets & galaxy::input::wii_target_bit(target)) != 0u;
-                    };
-                    snapshot.buttons.a = snapshot.buttons.a || mouse(WiiTarget::A);
-                    snapshot.buttons.b = snapshot.buttons.b || mouse(WiiTarget::B);
-                    snapshot.buttons.one = snapshot.buttons.one || mouse(WiiTarget::One);
-                    snapshot.buttons.two = snapshot.buttons.two || mouse(WiiTarget::Two);
-                    snapshot.buttons.plus = snapshot.buttons.plus || mouse(WiiTarget::Plus);
-                    snapshot.buttons.minus = snapshot.buttons.minus || mouse(WiiTarget::Minus);
-                    snapshot.buttons.home = snapshot.buttons.home || mouse(WiiTarget::Home);
-                    snapshot.buttons.up = snapshot.buttons.up || mouse(WiiTarget::DpadUp);
-                    snapshot.buttons.down = snapshot.buttons.down || mouse(WiiTarget::DpadDown);
-                    snapshot.buttons.left = snapshot.buttons.left || mouse(WiiTarget::DpadLeft);
-                    snapshot.buttons.right = snapshot.buttons.right || mouse(WiiTarget::DpadRight);
-                    snapshot.buttons.c = snapshot.buttons.c || mouse(WiiTarget::C);
-                    snapshot.buttons.z = snapshot.buttons.z || mouse(WiiTarget::Z);
-                    logic.pressed |= mouse_targets;
-                }
-            }
-            const bool host_pointer_inside_client =
-                pointer_availability.acquired_inside_available &&
-                projected_host_pointer.visible;
-            const bool host_pointer_absolute_sequence_changed =
-                host_pointer.absolute_sequence != 0u &&
-                host_pointer.absolute_sequence !=
-                    s_last_host_pointer_absolute_sequence;
-            const bool host_pointer_transition_sequence_changed =
-                button_sample.has_transition_coordinates &&
-                button_sample.transition_sequence != 0u &&
-                button_sample.transition_sequence !=
-                    s_last_host_pointer_transition_sequence;
-            const bool host_pointer_has_fresh_coordinates =
-                button_sample.has_transition_coordinates
-                ? host_pointer_transition_sequence_changed
-                : host_pointer_absolute_sequence_changed;
-            // Fresh physical movement inside the client takes precedence over a non-forced script, even when
-            // the game window is unfocused. Button ownership stays guarded separately by window focus.
-            mouse_button_held = host_pointer.window_focused &&
-                                (host_pointer.left_button || host_pointer.right_button);
-            if ((host_pointer_inside_client &&
-                 host_pointer_has_fresh_coordinates) ||
-                mouse_button_held) {
-                s_last_live_mouse_tick = now;
-            }
-            if (button_sample.has_transition_coordinates &&
-                button_sample.transition_sequence != 0u) {
-                s_last_host_pointer_transition_sequence =
-                    button_sample.transition_sequence;
-            } else if (host_pointer.absolute_sequence != 0u) {
-                s_last_host_pointer_absolute_sequence =
-                    host_pointer.absolute_sequence;
-            }
-            live_mouse_recent =
-                s_last_live_mouse_tick != 0 && now >= s_last_live_mouse_tick &&
-                now - s_last_live_mouse_tick <= live_mouse_script_grace_ms;
-            if (host_pointer_inside_client) {
-                s_mouse_x = projected_host_pointer.x;
-                s_mouse_y = projected_host_pointer.y;
-                // Only a new inside sample, or a queued button edge with its own coordinates, renews the hold
-                // through invalid samples; repeated polls of the same coordinate do not.
-                if (host_pointer_has_fresh_coordinates) {
-                    s_last_mouse_inside_tick = now;
-                    s_mouse_pointer_seen_inside = true;
-                    mouse_moved = !drop_injected_mouse;
-                }
-                mouse_visible = true;
-            } else if (pointer_availability.invalid_sample_hold_allowed &&
-                       s_mouse_pointer_seen_inside &&
-                       now >= s_last_mouse_inside_tick &&
-                       now - s_last_mouse_inside_tick <=
-                           kMousePointerLossHoldMs) {
-                // Remote Desktop can fail absolute cursor sampling for a moment while the pointer is still over the
-                // client: an invalid sample is uncertainty, not a lost sensor bar.
-                mouse_visible = true;
-            }
-        }
-    }
-    if (allow_absolute_pointer && !mouse_visible && !host_pointer_polled) {
-        POINT cursor{};
-        HWND pointer_window = focused_window;
-        bool pointer_window_active =
-            window_focused && pointer_window != nullptr;
-        if (!pointer_window_active) {
-            pointer_window_active =
-                current_process_window_under_cursor(cursor, pointer_window);
-        } else if (!GetCursorPos(&cursor)) {
-            pointer_window_active = false;
-        }
-        if (!pointer_window_active &&
-            current_process_runtime_window(pointer_window) &&
-            GetCursorPos(&cursor)) {
-            pointer_window_active = true;
-        }
-        RECT client{};
-        if (pointer_window_active &&
-            ScreenToClient(pointer_window, &cursor) &&
-            GetClientRect(pointer_window, &client)) {
-            const int width = client.right - client.left;
-            const int height = client.bottom - client.top;
-            if (width > 1 && height > 1) {
-                // The pointer tracks only while the cursor is over the client area (all of the screen in
-                // fullscreen). In a window it drops out when the cursor leaves, as a Wii Remote does when it
-                // loses the sensor bar.
-                const bool inside_client =
-                    cursor.x >= 0 && cursor.y >= 0 &&
-                    cursor.x < width && cursor.y < height;
-                if (!inside_client) {
-                    pointer_window_active = false;
-                }
-            }
-            const galaxy::input::NativeMousePointerProjection
-                projected_cursor = project_client_mouse_pointer(
-                    pointer_window_active,
-                    pointer_window_active && width > 1 && height > 1,
-                    pointer_window_active,
-                    static_cast<int>(cursor.x),
-                    static_cast<int>(cursor.y),
-                    width,
-                    height);
-            if (projected_cursor.visible) {
-                mouse_moved = projected_cursor.x != s_mouse_x || projected_cursor.y != s_mouse_y;
-                s_mouse_x = projected_cursor.x;
-                s_mouse_y = projected_cursor.y;
-                mouse_visible = true;
-            }
-        }
-    }
-
-    // One pointer: the source that moved last owns it (pointer_control.h).
-    static galaxy::input::PointerOwner s_pointer_owner{};
-    static std::uint64_t s_pointer_clock_us = 0u;
-    const std::uint64_t now_us = controller_hid_now_us();
-    const float dt = s_pointer_clock_us == 0u || now_us <= s_pointer_clock_us
-        ? 0.0f
-        : std::min(static_cast<float>(now_us - s_pointer_clock_us) * 1e-6f, 0.05f);
-    s_pointer_clock_us = now_us;
-    const galaxy::input::StickVector stick_velocity = galaxy::input::stick_pointer_velocity(
-        {pad_pointer_x, pad_pointer_y}, pad_pointer_speed);
-    const float keyboard_speed =
-        controls.config.tune(galaxy::input::ControlScheme::Keyboard).pointer_speed;
-    // The gyro counts as moving above about 5 degrees per second, so hand
-    // tremor and rest noise never take the pointer from the mouse or stick.
-    constexpr float kGyroActiveUnitsPerSecond = 0.25f;
-    const float gyro_motion = std::sqrt(gyro_x * gyro_x + gyro_y * gyro_y);
-    galaxy::input::PointerActivity activity{};
-    activity.mouse = mouse_moved;
-    activity.keys = std::fabs(keyboard_pointer_x) > 0.001f || std::fabs(keyboard_pointer_y) > 0.001f;
-    activity.stick = stick_velocity.x != 0.0f || stick_velocity.y != 0.0f;
-    activity.gyro = pad_gyro_pointing && dt > 0.0f &&
-                    gyro_motion > kGyroActiveUnitsPerSecond * dt;
-    activity.touch = pad_touch_pointing && std::fabs(touch_x) + std::fabs(touch_y) > 0.0f;
-    // Recenter (pointer_control.h RecenterHold): the press gives the pointer to the recentering device
-    // at the picture centre. While the button is held, the pointer stays there and that device keeps it.
-    const bool recenter_held = held(WiiTarget::PointerRecenter);
-    static galaxy::input::RecenterHold s_recenter{};
-    const galaxy::input::RecenterHold::Output recenter = s_recenter.update(recenter_held);
-    if (recenter.pressed) {
-        const bool pad_recenter = pad_logic_all.held(WiiTarget::PointerRecenter);
-        s_pointer_owner.owner = pad_recenter
-            ? (pad_gyro_pointing    ? galaxy::input::PointerSource::Gyro
-               : pad_touch_pointing ? galaxy::input::PointerSource::Touch
-                                    : galaxy::input::PointerSource::Stick)
-            : galaxy::input::PointerSource::Keys;
-    }
-    if (recenter.pinned) {
-        s_pointer_owner.last_active_us = now_us;
-    }
-    const galaxy::input::PointerSource owner = recenter.pinned
-        ? s_pointer_owner.owner
-        : s_pointer_owner.update(activity, now_us);
-    switch (owner) {
-    case galaxy::input::PointerSource::Mouse:
-        if (mouse_visible) {
-            s_pointer_x = s_mouse_x;
-            s_pointer_y = s_mouse_y;
-            pointer_active = true;
-        }
-        break;
-    case galaxy::input::PointerSource::Keys:
-        s_pointer_x = std::clamp(s_pointer_x + keyboard_pointer_x * keyboard_speed * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - keyboard_pointer_y * keyboard_speed * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Stick:
-        s_pointer_x = std::clamp(s_pointer_x + stick_velocity.x * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - stick_velocity.y * dt,
-                                 -galaxy::input::kStickPointerLimit, galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::Gyro:
-        s_pointer_x = std::clamp(s_pointer_x + gyro_x,
-                                 -galaxy::input::kGyroPointerLimit, galaxy::input::kGyroPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y - gyro_y,
-                                 -galaxy::input::kGyroPointerLimit, galaxy::input::kGyroPointerLimit);
-        // Pointed past the picture the game hides the pointer, as with a
-        // Wii Remote that loses the sensor bar.
-        pointer_active = std::fabs(s_pointer_x) <= galaxy::input::kPointerVisibleLimit &&
-                         std::fabs(s_pointer_y) <= galaxy::input::kPointerVisibleLimit;
-        break;
-    case galaxy::input::PointerSource::Touch:
-        // The finger moves it as a touchpad moves a cursor; it stays on the picture.
-        s_pointer_x = std::clamp(s_pointer_x + touch_x, -galaxy::input::kStickPointerLimit,
-                                 galaxy::input::kStickPointerLimit);
-        s_pointer_y = std::clamp(s_pointer_y + touch_y, -galaxy::input::kStickPointerLimit,
-                                 galaxy::input::kStickPointerLimit);
-        pointer_active = true;
-        break;
-    case galaxy::input::PointerSource::None:
-        break;
-    }
-    if (recenter.pinned) {
-        // Gyro and stick motion while the button is held is discarded.
-        s_pointer_x = 0.0f;
-        s_pointer_y = 0.0f;
-        pointer_active = true;
-    }
-    // A connected controller keeps the pointer on screen until the mouse
-    // owns it.
-    if (!pointer_active && use_pads && owner != galaxy::input::PointerSource::Mouse &&
-        owner != galaxy::input::PointerSource::Gyro) {
-        pointer_active = true;
-    }
-    // Still-pointer hiding (pointer_control.h PointerRestHide): a hidden gyro
-    // pointer comes back only with recenter; a stick pointer also with a push
-    // or a move out of the radius.
-    static galaxy::input::PointerRestHide s_rest_hide{};
-    const bool controller_owned = owner == galaxy::input::PointerSource::Stick ||
-                                  owner == galaxy::input::PointerSource::Gyro ||
-                                  owner == galaxy::input::PointerSource::Touch ||
-                                  (owner == galaxy::input::PointerSource::None && use_pads);
-    const bool rest_hidden = s_rest_hide.update(
-        s_pointer_x, s_pointer_y, now_us, controller_owned,
-        recenter.pinned || recenter.released ||
-            (owner == galaxy::input::PointerSource::Stick && activity.stick) ||
-            (owner == galaxy::input::PointerSource::Touch && activity.touch),
-        owner == galaxy::input::PointerSource::Gyro,
-        pointer_hide_seconds, pointer_hide_radius);
-    if (rest_hidden) {
-        pointer_active = false;
-    }
-    // In menus a key press acts on the pointer's position, so a resting mouse pointer stays.
-    static galaxy::input::MouseRestHide s_mouse_rest_hide{};
-    if (s_mouse_rest_hide.update(owner == galaxy::input::PointerSource::Mouse && pointer_active && window_focused &&
-                                     play_context == galaxy::input::PlayContext::Play,
-                                 mouse_moved || mouse_button_held, now_us)) {
-        pointer_active = false;
-    }
-    if (script.has_pointer &&
-        (script_pointer_force_enabled() || !live_mouse_recent ||
-         !pointer_active)) {
-        s_pointer_x = script.pointer_x;
-        s_pointer_y = script.pointer_y;
-        pointer_active = true;
-    }
-    galaxy::input::set_pointer(snapshot, s_pointer_x, s_pointer_y, pointer_active);
-
-    static galaxy::input::tilt::Tilt s_tilt{};
-    apply_tilt_accel(snapshot, s_tilt, tilt_section, tilt_up, stick_x, stick_y, recenter.pressed);
-
-    const bool shake_pressed =
-        script.shake || held(WiiTarget::Shake) || motion_shake_remote;
-    static bool s_previous_shake = false;
-    if (shake_pressed && !s_previous_shake) {
-        std::cerr << "[input-shake] vi=" << current_vi << " source="
-                  << (motion_shake_remote ? "motion" : held(WiiTarget::Shake) ? "binding" : "script")
-                  << " tilt-section=" << galaxy::input::tilt::section_name(tilt_section) << '\n';
-    }
-    s_previous_shake = shake_pressed;
-    snapshot.shake = shake_pressed;
-    snapshot.nunchuk_shake = held(WiiTarget::NunchukShake) || motion_shake_nunchuk;
-    return snapshot;
+    return result.input;
 }
 
 }  // namespace
