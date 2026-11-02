@@ -217,6 +217,8 @@ public:
     // and rewinds the slot's ring segments. Swap-chain latency is waited in
     // present(), after console/scene target work is recorded but before the backbuffer is
     // selected, so gameplay work is not paced by DWM too early.
+    // Test only (GALAXY_TEST_GPU_LOST_FRAME): the device removed, as a driver reset leaves it.
+    void test_lose_device();
     void begin_frame(bool present_swap_chain = true);
     // The frame-latency wait begin_frame(true) takes, for a frame begun without a present that presents after all (a
     // game frame shown when its display copy is made).

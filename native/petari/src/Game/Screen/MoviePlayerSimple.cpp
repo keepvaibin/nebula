@@ -79,14 +79,14 @@ void MoviePlayerSimple::draw() const {
         u32 frameBufferWidth;
 
         if (MR::isScreen16Per9()) {
-            frameBufferWidth = MR::getFrameBufferWidth();
+            frameBufferWidth = MR::getCanvasWidth();
         } else {
             frameBufferWidth = 832;
         }
 
         u32 ySize = mMovie->mVideoInfo.mHeight;
-        u32 v4 = (MR::getFrameBufferWidth() - frameBufferWidth) / 2;
-        u32 v5 = (MR::getFrameBufferHeight() - ySize) / 2;
+        u32 v4 = (MR::getCanvasWidth() - frameBufferWidth) / 2;
+        u32 v5 = (MR::getCanvasHeight() - ySize) / 2;
         MovieDraw::setLinearFilter(true);
         mMovie->mCurrentFrame = mStream->drawCurrentFrame(v4, v5, frameBufferWidth, ySize);
     }
@@ -251,9 +251,9 @@ void MoviePlayerSimple::stop() {
 u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
     u32 needMemory = 0;
     needMemory += 0x140000;
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight());
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
-    needMemory += NebulaAlignUp32(MR::getFrameBufferWidth() * MR::getFrameBufferHeight() / 4);
+    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight());
+    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
+    needMemory += NebulaAlignUp32(MR::getCanvasWidth() * MR::getCanvasHeight() / 4);
 
     return needMemory + 0x1188;
 }
@@ -261,11 +261,11 @@ u32 MoviePlayerSimple::calcNeedMemoryForMovieWorks() {
 void MoviePlayerSimple::drawCinemaFrame() const {
     MR::fillScreenSetup(::sCinemaFrameColor);
 
-    s16 width = MR::getFrameBufferWidth();
+    s16 width = MR::getCanvasWidth();
     TBox2s top(0, 0, width, ::sCinemaFrameHeightTop);
     MR::fillScreenArea(top.i, top.f);
 
-    s16 height = MR::getFrameBufferHeight();
+    s16 height = MR::getCanvasHeight();
     TBox2s bottom(0, ::sCinemaFrameHeightBottom, width, height);
     MR::fillScreenArea(bottom.i, bottom.f);
 }

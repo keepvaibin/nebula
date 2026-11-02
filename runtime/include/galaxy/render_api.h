@@ -90,7 +90,7 @@ void wait_for_render_idle();
 
 
 // Simulation thread: the next render_frame submission handles `marker` after the records made before it.
-void attach_scene_marker(SceneMarker marker) noexcept;
+void attach_scene_marker(SceneMarker marker);
 // Simulation thread, before attach_scene_marker(SceneBegin): the game camera's
 // world-to-eye matrix (row-major 3x4) for that scene, the player's up in the
 // world (null when unknown: the enhanced sky then takes the view's up), and

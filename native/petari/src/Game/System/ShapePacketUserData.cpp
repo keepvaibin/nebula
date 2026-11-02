@@ -61,7 +61,7 @@ void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index
             if (mTexMtxInfo[i].mType == 2) {
                 mtx.set(j3dSys.getModelDrawMtx(index));
                 mtx.setTrans(0.0f, 0.0f, 0.0f);
-                J3DNativeShape::setTexture(slot, mtx, pMaterial->getTexCoord(i)->getTexGenType() == GX_MTX2x4 ? 2 : 3);
+                J3DNativeShape::setTexture(slot, mtx, pMaterial->getTexCoord(i)->getTexGenType() == GPU_MTX2x4 ? 2 : 3);
             }
 
             J3DTexMtx* const pTexMtx = pMaterial->getTexMtx(i);

@@ -43,7 +43,7 @@ void ParticleDrawExecutor::draw2D() const {
         JPADrawInfo drawInfo(cameraMtx.toMtxPtr());
 
         f32 width;
-        f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
+        f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
         width = MR::isScreen16Per9() ? MR::getScreenWidth() : 608.0f;
         width *= 0.5f;
         height *= 0.5f;

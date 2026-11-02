@@ -98,7 +98,7 @@ void PlayTimerScene::draw() const {
     JUtility::TColor color(0, 0, 0, alpha);
     graph.setColor(color);
 
-    f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
+    f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
     f32 width = MR::getScreenWidth();
     graph.fillBox(0.0f, 0.0f, width, height);
 }

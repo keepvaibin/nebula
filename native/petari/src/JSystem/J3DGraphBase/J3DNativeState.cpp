@@ -13,12 +13,6 @@ namespace {
     // GpuInit's cull mode and frame (no alpha).
     GpuCullMode sCullMode = GPU_CULL_BACK;
     bool sFrameAlpha = false;
-
-    static_assert(sizeof(J3DNativeLight) <= sizeof(GpuLightObj), "a GpuLightObj holds a J3DNativeLight");
-
-    J3DNativeLight& light(GpuLightObj* pObj) {
-        return *reinterpret_cast< J3DNativeLight* >(pObj);
-    }
 }  // namespace
 
 namespace J3DNativeState {
@@ -250,23 +244,23 @@ namespace J3DNativeState {
         list.send();
     }
 
-    void initLightColor(GpuLightObj* pObj, NebulaColor8 color) {
-        J3DNativeLight& rLight = light(pObj);
+    void initLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
+        J3DNativeLight& rLight = *pObj;
         rLight.mColor[0] = color.r;
         rLight.mColor[1] = color.g;
         rLight.mColor[2] = color.b;
         rLight.mColor[3] = color.a;
     }
 
-    void initLightPos(GpuLightObj* pObj, f32 x, f32 y, f32 z) {
-        J3DNativeLight& rLight = light(pObj);
+    void initLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
+        J3DNativeLight& rLight = *pObj;
         rLight.mPosition[0] = x;
         rLight.mPosition[1] = y;
         rLight.mPosition[2] = z;
     }
 
-    void initLightDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz) {
-        J3DNativeLight& rLight = light(pObj);
+    void initLightDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {
+        J3DNativeLight& rLight = *pObj;
         rLight.mDirection[0] = -nx;
         rLight.mDirection[1] = -ny;
         rLight.mDirection[2] = -nz;
@@ -275,7 +269,7 @@ namespace J3DNativeState {
     // the console's distance for a light at infinity.
     const f32 cInfiniteLightDistance = 1.0e18f;
 
-    void initSpecularDir(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz) {
+    void initSpecularDir(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz) {
         const f32 hx = -nx;
         const f32 hy = -ny;
         const f32 hz = 1.0f - nz;
@@ -286,8 +280,8 @@ namespace J3DNativeState {
         initSpecularDirHA(pObj, nx, ny, nz, hx * mag, hy * mag, hz * mag);
     }
 
-    void initSpecularDirHA(GpuLightObj* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
-        J3DNativeLight& rLight = light(pObj);
+    void initSpecularDirHA(J3DNativeLight* pObj, f32 nx, f32 ny, f32 nz, f32 hx, f32 hy, f32 hz) {
+        J3DNativeLight& rLight = *pObj;
         rLight.mDirection[0] = hx;
         rLight.mDirection[1] = hy;
         rLight.mDirection[2] = hz;
@@ -296,8 +290,8 @@ namespace J3DNativeState {
         rLight.mPosition[2] = nz * -cInfiniteLightDistance;
     }
 
-    void initLightAttn(GpuLightObj* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
-        J3DNativeLight& rLight = light(pObj);
+    void initLightAttn(J3DNativeLight* pObj, f32 a0, f32 a1, f32 a2, f32 k0, f32 k1, f32 k2) {
+        J3DNativeLight& rLight = *pObj;
         rLight.mAngle[0] = a0;
         rLight.mAngle[1] = a1;
         rLight.mAngle[2] = a2;
@@ -306,7 +300,7 @@ namespace J3DNativeState {
         rLight.mDistance[2] = k2;
     }
 
-    void initLightSpot(GpuLightObj* pObj, f32 cutoff, GpuSpotFn spotFn) {
+    void initLightSpot(J3DNativeLight* pObj, f32 cutoff, GpuSpotFn spotFn) {
         if (cutoff <= 0.0f || cutoff > 90.0f) {
             spotFn = GPU_SP_OFF;
         }
@@ -352,13 +346,13 @@ namespace J3DNativeState {
             a2 = 0.0f;
             break;
         }
-        J3DNativeLight& rLight = light(pObj);
+        J3DNativeLight& rLight = *pObj;
         rLight.mAngle[0] = a0;
         rLight.mAngle[1] = a1;
         rLight.mAngle[2] = a2;
     }
 
-    void initLightDistAttn(GpuLightObj* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn) {
+    void initLightDistAttn(J3DNativeLight* pObj, f32 refDistance, f32 refBrightness, GpuDistAttnFn distFn) {
         if (refDistance < 0.0f || refBrightness <= 0.0f || refBrightness >= 1.0f) {
             distFn = GPU_DA_OFF;
         }
@@ -377,13 +371,13 @@ namespace J3DNativeState {
         default:
             break;
         }
-        J3DNativeLight& rLight = light(pObj);
+        J3DNativeLight& rLight = *pObj;
         rLight.mDistance[0] = k0;
         rLight.mDistance[1] = k1;
         rLight.mDistance[2] = k2;
     }
 
-    void loadLightObjImm(const GpuLightObj* pObj, GpuLightID id) {
+    void loadLightObjImm(const J3DNativeLight* pObj, GpuLightID id) {
         NebulaStateOp ops[2];
         J3DStateList list(ops, 2);
         list.setLight(id, *reinterpret_cast< const J3DNativeLight* >(pObj));
@@ -419,7 +413,7 @@ namespace J3DNativeState {
         const NebulaColor8 white = {255, 255, 255, 255};
 
         for (u32 i = 0; i < 8; i++) {
-            setTexCoordGen2(static_cast< GpuTexCoordID >(i), GX_TG_MTX2x4, static_cast< GpuTexGenSrc >(GPU_TG_TEX0 + i),
+            setTexCoordGen2(static_cast< GpuTexCoordID >(i), GPU_TG_MTX2x4, static_cast< GpuTexGenSrc >(GPU_TG_TEX0 + i),
                             GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
         }
         setLineWidth(6, GPU_TO_ZERO);
@@ -510,15 +504,15 @@ void J3DNativeStateSetPointSize(u8 size, GpuTexOffset texOffsets) {
     J3DNativeState::setPointSize(size, texOffsets);
 }
 
-void J3DNativeStateInitLightColor(GpuLightObj* pObj, NebulaColor8 color) {
+void J3DNativeStateInitLightColor(J3DNativeLight* pObj, NebulaColor8 color) {
     J3DNativeState::initLightColor(pObj, color);
 }
 
-void J3DNativeStateInitLightPos(GpuLightObj* pObj, f32 x, f32 y, f32 z) {
+void J3DNativeStateInitLightPos(J3DNativeLight* pObj, f32 x, f32 y, f32 z) {
     J3DNativeState::initLightPos(pObj, x, y, z);
 }
 
-void J3DNativeStateLoadLightObjImm(const GpuLightObj* pObj, GpuLightID id) {
+void J3DNativeStateLoadLightObjImm(const J3DNativeLight* pObj, GpuLightID id) {
     J3DNativeState::loadLightObjImm(pObj, id);
 }
 

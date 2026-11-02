@@ -65,9 +65,9 @@ void TalkPeekZ::setDrawSyncToken() {
     probe.user_x = mScreenPos.x;
     probe.user_y = mScreenPos.y;
     if (MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) &&
-        MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cFrameHeight - 1)) {
+        MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cCanvasHeight - 1)) {
         TVec2f pos;
-        MR::convertScreenPosToFrameBufferPos(&pos, mScreenPos);
+        MR::convertScreenPosToCanvasPos(&pos, mScreenPos);
         probe.x = pos.x;
         probe.y = pos.y;
     }

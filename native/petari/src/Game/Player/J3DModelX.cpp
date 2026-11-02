@@ -217,7 +217,7 @@ void J3DModelX::drawIn(J3DMaterial* material, bool fog, MtxPtr base, J3DModel* m
         if (*reinterpret_cast< u32* >(&mFlags) & (1 << i)) {
             if (i == 6 && J3DNativeMaterial::overrideCoordinate(
                               reinterpret_cast< const u8* >(MR::getScreenResTIMG()) + MR::getScreenResTIMG()->mImageDataOffset,
-                              MR::getScreenWidth(), NebulaFrameClock::cFrameHeight)) {
+                              MR::getScreenWidth(), NebulaFrameClock::cCanvasHeight)) {
                 continue;
             }
             mStateLists[i].send();
@@ -330,7 +330,7 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     // drawIn as a native material); they hold the pass's fixed state.
     list.setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
     list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE);
     list.setDstAlpha(GPU_TRUE, 0xFF);
     pLists[1].copy(list);
     list.clear();
@@ -338,31 +338,31 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     // List 2: texture 0 at alpha 1/4 added (J3DNativeMaterial::override mode 1).
     list.setCullMode(GPU_CULL_FRONT);
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
     pLists[2].copy(list);
     list.clear();
     list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
     list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_FALSE, GPU_TRUE);
     list.setDstAlpha(GPU_TRUE, 0x90);
     pLists[3].copy(list);
     list.clear();
 
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
     list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
     pLists[4].copy(list);
     list.clear();
 
     list.setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
     list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_FALSE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_CLEAR, GPU_FALSE, GPU_FALSE);
     pLists[5].copy(list);
     list.clear();
 
     list.setTexLookupMode(GPU_TEXMAP0, GPU_REPEAT, GPU_REPEAT, GPU_LINEAR, GPU_LINEAR, 0.0f, 0.0f, 0.0f, GPU_FALSE, GPU_FALSE, GPU_ANISO_1);
     list.setTexImgPtr(GPU_TEXMAP0, const_cast< u8* >(reinterpret_cast< const u8* >(MR::getScreenResTIMG())) + MR::getScreenResTIMG()->mImageDataOffset);
-    list.setTexCoordGen(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
+    list.setTexCoordGen(GPU_TEXCOORD0, GPU_TG_MTX2x4, GPU_TG_NRM, GPU_TRUE, GPU_IDENTITY);
     pLists[6].copy(list);
     list.clear();
 
@@ -370,24 +370,24 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     NebulaColor8 materialColor = {0, 0, 0, 255};
     list.setChanAmbColor(GPU_ALPHA0, ambientColor);
     list.setChanMatColor(GPU_ALPHA0, materialColor);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
     list.setMaterialPass(NEBULA_PASS_LIGHT_MASK);
     pLists[7].copy(list);
     list.clear();
 
     list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
     pLists[8].copy(list);
     list.clear();
 
     list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE);
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
     pLists[9].copy(list);
     list.clear();
 
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_INVDSTALPHA, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_INVDSTALPHA, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE);
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
     list.setDstAlpha(GPU_TRUE, 0);
     pLists[10].copy(list);
@@ -397,20 +397,20 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     // above 0x20, no channels) is J3DNativeMaterial::override mode 5.
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
     list.setCullMode(GPU_CULL_FRONT);
-    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP, GPU_TRUE, GPU_TRUE);
     pLists[11].copy(list);
     list.clear();
 
     // List 12: the blur ghosts in register 0's colour (the ghost's dynamic list sets it).
     list.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
     list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ONE, GPU_LO_NOOP, GPU_TRUE, GPU_FALSE);
     pLists[12].copy(list);
     list.clear();
 
     list.setZMode(GPU_TRUE, GPU_GEQUAL, GPU_FALSE);
     list.setCullMode(GPU_CULL_BACK);
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_SRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_SRCALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
     pLists[13].copy(list);
     list.clear();
 
@@ -418,7 +418,7 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     pLists[14].copy(list);
     list.clear();
 
-    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_INVDSTALPHA, GPU_BL_DSTALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE, GPU_FALSE);
+    list.setBlendModeEtc(GPU_BM_BLEND, GPU_BL_INVDSTALPHA, GPU_BL_DSTALPHA, GPU_LO_CLEAR, GPU_TRUE, GPU_FALSE);
     pLists[15].copy(list);
     list.clear();
 }

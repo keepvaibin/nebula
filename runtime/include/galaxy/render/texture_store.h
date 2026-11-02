@@ -242,7 +242,6 @@ private:
     std::map<std::uint64_t, std::shared_ptr<const std::vector<std::byte>>> registered_images_;
     std::vector<std::shared_ptr<const std::vector<std::byte>>> replaced_images_;
     std::uint64_t missing_images_ = 0;
-    [[nodiscard]] const std::byte* registered_bytes(std::uint64_t address, std::uint32_t size) const;
     // The texture record handed over at exactly `address` (nebula_cooked_texture.h), when that is what it is.
     [[nodiscard]] const ::NebulaTexture* registered_record(std::uint64_t address) const;
 

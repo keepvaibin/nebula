@@ -44,7 +44,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     Vec cameraPos;                     // sp+10C
     Vec target;                        // sp+100
     Vec cameraUp;                      // sp+F4
-    GpuLightObj light;                  // sp+168
+    J3DNativeLight light;                  // sp+168
     Vec pos;                           // sp+E8
     MiiDrawSetting drawSetting;        // sp+138
 

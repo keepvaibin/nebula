@@ -36,7 +36,7 @@ struct NativeDrawState {
     // combines its own colours and applies its own fog (native materials).
     DrawCounts gen{0u, 0u, 1u, CullMode::None, 0u};
     ZMode z{false, CompareFunc::Never, false};
-    BlendMode blend{false, false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
+    BlendMode blend{false, false, false, false, BlendFactor::Zero, BlendFactor::Zero, false, 0u, false, 0u};
     bool frame_alpha = false;  // the frame keeps alpha (NEBULA_STATE_FRAME_ALPHA)
 
     // Vertex lighting: the channel controls (colour 0, colour 1, alpha 0, alpha 1) and the material and ambient

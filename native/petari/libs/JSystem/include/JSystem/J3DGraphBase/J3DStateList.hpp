@@ -8,8 +8,8 @@
 // Changes the game keeps for itself (J3DStateList::send folds them into its materials and its pass state; the host never
 // sees them), beside the ones it sends (NEBULA_STATE_*).
 enum {
-    J3D_STATE_BLEND_ETC = 100,      /* type, source, destination, logic op, colour update, alpha update, dither */
-    J3D_STATE_BLEND,                /* type, source, destination, logic op (updates and dither kept) */
+    J3D_STATE_BLEND_ETC = 100,      /* type, source, destination, logic op, colour update, alpha update */
+    J3D_STATE_BLEND,                /* type, source, destination, logic op (updates kept) */
     J3D_STATE_Z_MODE,               /* compare, function, update */
     J3D_STATE_ALPHA_COMPARE,        /* comparison 0, reference 0, op, comparison 1, reference 1 */
     J3D_STATE_DST_ALPHA,            /* enable, alpha */
@@ -28,15 +28,6 @@ enum {
     J3D_STATE_LINE_WIDTH,           /* f: width (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     J3D_STATE_POINT_SIZE,           /* f: size (pixels); a[1]: texture offset n (1/n texel; 0 none) */
     J3D_STATE_TEX_OFFSETS,          /* texture coordinate, lines offset it, points offset it */
-};
-
-// A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
-struct J3DNativeLight {
-    u8 mColor[4];
-    f32 mAngle[3];     // a0-a2
-    f32 mDistance[3];  // k0-k2
-    f32 mPosition[3];
-    f32 mDirection[3];
 };
 
 // Drawing state the game sets outside materials, as values (nebula_game_api.h NebulaStateOp), sent as one record in
@@ -62,7 +53,7 @@ public:
     void setMaterialPass(NebulaMaterialPass pass) { mMaterialPass = pass; }
 
     void setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op, GpuBool colorUpdate,
-                         GpuBool alphaUpdate, GpuBool dither);
+                         GpuBool alphaUpdate);
     void setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op);
     void setZMode(GpuBool compare, GpuCompare func, GpuBool update);
     void setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1);

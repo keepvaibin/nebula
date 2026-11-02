@@ -49,7 +49,7 @@ namespace {
         }
 
         f32 width = MR::getScreenWidth();
-        f32 height = static_cast< s32 >(NebulaFrameClock::cFrameHeight);
+        f32 height = static_cast< s32 >(NebulaFrameClock::cCanvasHeight);
         screenPos.set< f32 >(0.5f * width + 0.5f * (newPos.x * width), 0.5f * height + 0.5f * (-newPos.y * height), newPos.z);
 
         pDst->x = screenPos.x;
@@ -169,7 +169,7 @@ void BrightObjBase::checkVisible(NebulaScreenProbe* pProbe, const TVec3f& rTrans
 
     if (::calcScreenPosition(&screenPos, rTrans, rViewMtx, rProjMtx)) {
         TVec2f frameBufferPos;
-        MR::convertScreenPosToFrameBufferPos(&frameBufferPos, screenPos);
+        MR::convertScreenPosToCanvasPos(&frameBufferPos, screenPos);
         pProbe->x = frameBufferPos.x;
         pProbe->y = frameBufferPos.y;
         pProbe->user_x = screenPos.x;

@@ -25,8 +25,8 @@ void ScreenAlphaCapture::init(const JMapInfoIter& rIter) {
 void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
-    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(NebulaFrameClock::cFrameWidth) * screenScale,
-                                            static_cast< s32 >(NebulaFrameClock::cFrameHeight) * screenScale, GPU_TF_I8);
+    mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(NebulaFrameClock::cCanvasWidth) * screenScale,
+                                            static_cast< s32 >(NebulaFrameClock::cCanvasHeight) * screenScale, GPU_TF_I8);
     mTexture[textureIndex]->mWrapS = GPU_CLAMP;
     mTexture[textureIndex]->mWrapT = GPU_CLAMP;
     mTexture[textureIndex]->mMinType = GPU_LINEAR;

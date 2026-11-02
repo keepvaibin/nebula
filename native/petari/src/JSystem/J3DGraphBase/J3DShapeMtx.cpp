@@ -254,7 +254,7 @@ void J3DDifferedTexMtx::loadExecute(f32 const (*param_0)[4]) {
                     break;
                 }
                 }
-                J3DNativeShape::setTexture(i, *mtx, tex_mtx_info_1->mProjection == GX_MTX2x4 ? 2 : 3);
+                J3DNativeShape::setTexture(i, *mtx, tex_mtx_info_1->mProjection == GPU_MTX2x4 ? 2 : 3);
             }
         }
     }
