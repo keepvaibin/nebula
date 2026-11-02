@@ -168,6 +168,7 @@ void DynamicCollisionObj::createCollision() {
         u16array[i + 2] = count--;
     }
 
+    mKCLFile->mTriangleNum = v;
     mKCLFile->mThickness = 40.f;
     mKCLFile->mBlockXShift = -1;
     mKCLFile->mBlockXYShift = -1;

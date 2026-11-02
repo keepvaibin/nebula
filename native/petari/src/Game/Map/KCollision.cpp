@@ -46,6 +46,7 @@ void KCollisionServer::setData(void* pData) {
     mModel.mNorms = reinterpret_cast< TVec3f* >(pBase + pHeader->mNormOffset);
     mModel.mPrisms = reinterpret_cast< KC_PrismData* >(pBase + pHeader->mPrismOffset);
     mModel.mOctree = pBase + pHeader->mOctreeOffset;
+    mModel.mTriangleNum = static_cast< s32 >((pHeader->mOctreeOffset - pHeader->mPrismOffset) / sizeof(KC_PrismData)) - 1;
     mModel.mThickness = pHeader->mThickness;
     mModel.mMin.set(pHeader->mMin[0], pHeader->mMin[1], pHeader->mMin[2]);
     mModel.mXMask = pHeader->mXMask;
@@ -1422,7 +1423,7 @@ KC_PrismData* KCollisionServer::getPrismData(u32 index) const {
 }
 
 s32 KCollisionServer::getTriangleNum() const {
-    return (reinterpret_cast< u8* >(static_cast< void* >(mFile->mOctree)) - reinterpret_cast< u8* >(mFile->mPrisms + 1)) / sizeof(KC_PrismData);
+    return mFile->mTriangleNum;
 }
 
 JMapInfoIter KCollisionServer::getAttributes(u32 index) const {
