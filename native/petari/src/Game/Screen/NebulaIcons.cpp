@@ -1388,7 +1388,7 @@ namespace {
         const u32 mapBytes = sizeof(nw4r::ut::FontCodeMap) + (cMapLast - cMapFirst + 1) * sizeof(u16);
         const u32 keyMapBytes = (sizeof(nw4r::ut::FontCodeMap) + cKeyCells * sizeof(u16) + 3u) & ~3u;
         const u32 bytes = sheetsBytes + widthBytes + keyMapBytes + mapBytes;
-        JKRHeap* pHeap = MR::getStationedHeapGDDR3();
+        JKRHeap* pHeap = MR::getStationedHeap();
         u8* pBlock = bytes <= NebulaIcons::cStationedBytes && pHeap != nullptr && pHeap->getFreeSize() >= static_cast< s32 >(bytes + 64u)
                          ? static_cast< u8* >(JKRHeap::alloc(bytes, 32, pHeap))
                          : nullptr;

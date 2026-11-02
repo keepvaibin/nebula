@@ -73,7 +73,7 @@ void ImageEffectResource::createDOFTexture() {
 JUTTexture* ImageEffectResource::createTexture(f32 scale, GpuTexFmt format) {
     JUTTexture* pTexture;
 
-    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
+    MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeap());
 
     pTexture = new JUTTexture(scale * (s32)NebulaFrameClock::cFrameWidth,
                               scale * (s32)NebulaFrameClock::cFrameHeight, format);

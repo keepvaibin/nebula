@@ -357,7 +357,7 @@ void CollisionShadow::initCaptureTex() {
     _2FC = 160;
     _2FE = 160;
     {
-        MR::CurrentHeapRestorer restorer(MR::getSceneHeapGDDR3());
+        MR::CurrentHeapRestorer restorer(MR::getSceneHeap());
         _300 = new JUTTexture(_2FC, _2FE, GPU_TF_I8);
         MR::zeroMemory(_300->mImage, _2FC * _2FE);
         MR::setMarioShadowTex(_300);

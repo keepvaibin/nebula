@@ -33,35 +33,19 @@ namespace MR {
 
         if (pFileCacheHeap != nullptr) {
             if (getHeapFreeRatio(pFileCacheHeap) < maxFreeSizeRate) {
-                pFileCacheHeap = SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeapGDDR;
+                pFileCacheHeap = SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
             }
         }
 
         return pFileCacheHeap;
     }
 
-    JKRExpHeap* getStationedHeapNapa() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mStationedHeapNapa;
+    JKRExpHeap* getStationedHeap() {
+        return SingletonHolder< HeapMemoryWatcher >::get()->mStationedHeap;
     }
 
-    JKRExpHeap* getStationedHeapGDDR3() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mStationedHeapGDDR;
-    }
-
-    JKRSolidHeap* getSceneHeapNapa() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeapNapa;
-    }
-
-    JKRSolidHeap* getSceneHeapGDDR3() {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeapGDDR;
-    }
-
-    JKRHeap* getHeapNapa(const JKRHeap* pHeap) {
-        return SingletonHolder< HeapMemoryWatcher >::get()->getHeapNapa(pHeap);
-    }
-
-    JKRHeap* getHeapGDDR3(const JKRHeap* pHeap) {
-        return SingletonHolder< HeapMemoryWatcher >::get()->getHeapGDDR3(pHeap);
+    JKRSolidHeap* getSceneHeap() {
+        return SingletonHolder< HeapMemoryWatcher >::get()->mSceneHeap;
     }
 
     void becomeCurrentHeap(JKRHeap* pHeap) {
@@ -193,13 +177,4 @@ namespace MR {
         return (sum << 16) | invSum;
     }
 
-    void* allocFromWPadHeap(u32 size) {
-        return SingletonHolder< HeapMemoryWatcher >::get()->mWPadHeap->alloc(size, 0);
-    }
-
-    u8 freeFromWPadHeap(void* pPtr) {
-        SingletonHolder< HeapMemoryWatcher >::get()->mWPadHeap->free(pPtr);
-
-        return 1;
-    }
 };  // namespace MR

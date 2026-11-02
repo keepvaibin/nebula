@@ -70,7 +70,7 @@ void GalaxyMapGalaxyPlain::init(const JMapInfoIter& rIter) {
     mNamePlate->initWithoutIter();
     mNamePlate->setShowBalloonNozzle(false);
 
-    mGalaxyName = new (MR::getSceneHeapGDDR3(), 0) wchar_t[GALAXY_NAME_BUFFER_SIZE];
+    mGalaxyName = new (MR::getSceneHeap(), 0) wchar_t[GALAXY_NAME_BUFFER_SIZE];
 }
 
 void GalaxyMapGalaxyPlain::appear() {

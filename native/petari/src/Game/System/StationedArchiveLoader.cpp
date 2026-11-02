@@ -17,9 +17,9 @@ JKRHeap* StationedArchiveLoader::Condition::getProperHeap(const MR::StationedFil
 JKRHeap* StationedArchiveLoader::getProperHeap(const MR::StationedFileInfo* pInfo) {
     switch (pInfo->mHeapType) {
     case MR::StationedFileInfo::HEAP_TYPE_NAPA:
-        return MR::getStationedHeapNapa();
+        return MR::getStationedHeap();
     case MR::StationedFileInfo::HEAP_TYPE_GDDR:
-        return MR::getStationedHeapGDDR3();
+        return MR::getStationedHeap();
     default:
         return nullptr;
     }

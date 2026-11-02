@@ -55,7 +55,7 @@ void ArchiveHolder::removeIfIsEqualHeap(JKRHeap* pHeap) {
     }
 
     for (ArchiveHolderArchiveEntry** i = mEntries.begin(); i != mEntries.end();) {
-        if ((*i)->mHeap == pHeap || MR::getHeapNapa((*i)->mHeap) == pHeap || MR::getHeapGDDR3((*i)->mHeap) == pHeap) {
+        if ((*i)->mHeap == pHeap) {
             delete *i;
             mEntries.erase(i);
         } else {

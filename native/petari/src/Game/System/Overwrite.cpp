@@ -38,7 +38,7 @@
 #include <JSystem/JAudio2/JAUInitializer.hpp>
 
 #include <cstdarg>
-#include "Game/System/NebulaAuxMemory.hpp"
+#include "Game/AudioLib/AudParams.hpp"
 #include "Game/System/NebulaSystemSettings.hpp"
 
 void Overwrite_FORCE_MATCH_SDATA2() {
@@ -997,7 +997,7 @@ void JAU_JASInitializer::initJASystem(JKRSolidHeap* pHeap) {
     if (JASDvd::getThreadPointer() == nullptr) {
         JASKernel::setupRootHeap(pHeap, heapSize_);
         if (audioMemSize_ == 0) {
-            audioMemSize_ = NebulaAuxMemory::cSoundBytes;
+            audioMemSize_ = AudParams::aramSize;
         }
 
         JASKernel::setupAramHeap(audioMemory_, audioMemSize_);

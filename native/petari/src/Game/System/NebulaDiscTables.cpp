@@ -38,7 +38,7 @@ namespace {
     }
 
     const u8* load(const char* pName, bool required) {
-        return load(pName, required, MR::getStationedHeapNapa());
+        return load(pName, required, MR::getStationedHeap());
     }
 
     u32 word(const u8* p) {

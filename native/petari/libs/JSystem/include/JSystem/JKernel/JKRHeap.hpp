@@ -172,8 +172,6 @@ public:
         sCurrentHeap = pHeap;
     }
 
-    static void setAltAramStartAdr(uintptr_t);
-    static uintptr_t getAltAramStartAdr();
 
     /* 0x806B70A8 */ static JKRHeap* sGameHeap;
     // Each thread's own; a new thread and an async function start with their starter's.

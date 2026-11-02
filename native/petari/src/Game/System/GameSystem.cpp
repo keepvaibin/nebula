@@ -1,4 +1,5 @@
 #include "Game/System/GameSystem.hpp"
+#include <JSystem/JKernel/JKRExpHeap.hpp>
 #include "Game/System/GameThreads.hpp"
 #include <JSystem/J3DGraphBase/J3DNativeState.hpp>
 #include "Game/LiveActor/Nerve.hpp"
@@ -58,7 +59,7 @@ namespace NrvGameSystem {
 extern "C" void nebula_game_main(void) {
     NebulaDisc::init();
     NebulaFrameClock::init();
-    HeapMemoryWatcher::createRootHeap();
+    JKRExpHeap::createRoot(1, true);
     (MR::MutexHolder< 0 >::sMutex).init();
     (MR::MutexHolder< 2 >::sMutex).init();
     nw4r::lyt::LytInit();

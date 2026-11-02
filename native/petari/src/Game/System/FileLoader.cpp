@@ -10,7 +10,7 @@ FileLoader::FileLoader() {
     mRequestedFileCount = 0;
     mFileHolder = nullptr;
     mArchiveHolder = nullptr;
-    mLoaderThread = new FileLoaderThread(320, MR::getStationedHeapNapa());
+    mLoaderThread = new FileLoaderThread(320, MR::getStationedHeap());
     GameThreads::resume(mLoaderThread->mThread);
     mMutex.init();
     mRequestFileInfos = new RequestFileInfo[0x140];
