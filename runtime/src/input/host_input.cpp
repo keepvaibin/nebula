@@ -67,7 +67,7 @@ namespace {
 
 bool xinput_requires_focus() {
     static const bool requires_focus =
-        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS");
+        read_env_flag("GALAXY_XINPUT_REQUIRE_FOCUS", true);
     return requires_focus;
 }
 
@@ -1188,6 +1188,7 @@ galaxy::input::PlayerInput build_live_input(
     frame.window_focused = window_focused;
     frame.use_keyboard = use_keyboard;
     frame.use_pads = use_pads;
+    frame.allow_background_device_input = !xinput_requires_focus();
     frame.allow_absolute_pointer = allow_absolute_pointer;
     frame.drop_injected = drop_injected;
     frame.context = play_context;
