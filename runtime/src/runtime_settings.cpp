@@ -1,4 +1,5 @@
 #include "galaxy/runtime_settings.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/atomic_file.h"
 #include "galaxy/input_bindings.h"
 #include "galaxy/platform_paths.h"
@@ -291,7 +292,7 @@ void apply_env(RuntimeSettings& settings, const char* env, const char* key) {
 }
 
 void apply_env_overrides(RuntimeSettings& settings) {
-    apply_env(settings, "GALAXY_INPUT_MODE", "input_mode");
+    apply_env(settings, NEBULA_TEST_ENV("GALAXY_INPUT_MODE"), "input_mode");
     apply_env(settings, "GALAXY_AUDIO_MASTER_GAIN", "audio_master_gain");
     apply_env(settings, "GALAXY_AUDIO_MUSIC_GAIN", "audio_music_gain");
     apply_env(settings, "GALAXY_AUDIO_EFFECTS_GAIN", "audio_sfx_gain");

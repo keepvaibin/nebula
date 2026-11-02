@@ -1,6 +1,5 @@
 #pragma once
 
-#include "nw4r/db/assert.h"
 
 #include "nw4r/math/constant.h"
 #include "nw4r/ut/CharWriter.h"
@@ -53,22 +52,18 @@ namespace nw4r {
             }
 
             f32 GetCharSpace() const {
-                NW4R_POINTER_ASSERT_AT(108, this);
                 return mCharSpace;
             }
 
             void SetCharSpace(f32 space) {
-                NW4R_POINTER_ASSERT_AT(98, this);
                 mCharSpace = space;
             }
 
             f32 GetLineSpace() const {
-                NW4R_POINTER_ASSERT_AT(103, this);
                 return mLineSpace;
             }
 
             void SetLineSpace(f32 space) {
-                NW4R_POINTER_ASSERT_AT(93, this);
                 mLineSpace = space;
             }
 
@@ -81,25 +76,20 @@ namespace nw4r {
             }
 
             u32 GetDrawFlag() const {
-                NW4R_POINTER_ASSERT_AT(144, this);
                 return mDrawFlag;
             }
 
             void SetDrawFlag(u32 flag) {
-                NW4R_POINTER_ASSERT_AT(139, this);
                 mDrawFlag = flag;
             }
 
             f32 GetLineHeight() const;
 
             TagProcessor& GetTagProcessor() const {
-                NW4R_POINTER_ASSERT_AT(164, this);
                 return *mTagProcessor;
             }
 
             void SetTagProcessor(TagProcessor* tagProcessor) {
-                NW4R_POINTER_ASSERT_AT(151, this);
-                NW4R_POINTER_ASSERT_AT(152, tagProcessor);
 
                 mTagProcessor = tagProcessor;
             }

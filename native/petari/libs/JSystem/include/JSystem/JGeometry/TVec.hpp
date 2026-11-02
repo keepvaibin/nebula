@@ -293,8 +293,8 @@ namespace JGeometry {
         }
 
         TVec3& operator=(const TVec3& b) {
-            // Force copies to use lwz/lha
-            *((s32*)this) = *((s32*)&b);
+            x = b.x;
+            y = b.y;
             z = b.z;
             return *this;
         }

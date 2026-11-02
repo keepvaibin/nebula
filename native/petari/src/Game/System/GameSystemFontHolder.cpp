@@ -24,13 +24,7 @@ void GameSystemFontHolder::createFontFromEmbeddedData() {
 
     MR::getMountedArchiveAndHeap("ErrorMessageArchive.arc", &pArchive, &pHeap);
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     const char* embeddedFontPath = "/LayoutData/EmbeddedFont.arc";
-#else
-    char embeddedFontPath[256];
-    const char* languagePrefix = MR::getCurrentLanguagePrefix();
-    nebula_snprintf(embeddedFontPath, sizeof(embeddedFontPath), "/%s/LayoutData/EmbeddedFont.arc", languagePrefix);
-#endif
 
     _4 = pArchive->getSubFolder(embeddedFontPath, pHeap);
     mEmbeddedMessageFont = new (pHeap, -4) nw4r::ut::ResFont();

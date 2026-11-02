@@ -52,9 +52,7 @@ namespace nw4r {
             mFontSize = pBlock->fontSize;
             mTextPosition = pBlock->textPosition;
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
             mBits.textAlignment = pBlock->textAlignment;
-#endif
 
             mCharSpace = pBlock->charSpace;
             mLineSpace = pBlock->lineSpace;
@@ -323,7 +321,6 @@ namespace nw4r {
             return mag;
         }
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
         u32 TextBox::MakeDrawFlag() const {
             u32 flag = 0;
             // textAlignment: the console's compiler packed the bit-field from the high bit (bits 5-6, read as
@@ -359,29 +356,6 @@ namespace nw4r {
 
             return flag;
         }
-#else
-        u32 TextBox::MakeDrawFlag() const {
-            u32 flag = 0;
-
-            switch (GetTextPositionH()) {
-            case 1: {
-                flag |= 1;
-                break;
-            }
-
-            case 2: {
-                flag |= 2;
-                break;
-            }
-
-            default: {
-                break;
-            }
-            }
-
-            return flag;
-        }
-#endif
 
         f32 TextBox::GetTextAlignMag() const {
             switch (GetTextAlignment()) {

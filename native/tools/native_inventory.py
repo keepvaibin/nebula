@@ -277,6 +277,9 @@ for rel in files:
         lines = raw.count("\n")
         body = strip_comments(raw, ext)
         for key, rx, _ in COMPILED:
+            # The importer is where the console's formats and main.dol are read: that is its work.
+            if area == "importer" and key in ("dol", "disc"):
+                continue
             n = len(rx.findall(body))
             if n:
                 counts[key] = n

@@ -452,7 +452,7 @@ NativeInputReplayLog load_native_input_replay_log(const std::string& path) {
 
 const NativeInputReplayLog* active_native_input_replay_log() {
     const std::optional<std::string> path =
-        read_env_string("GALAXY_INPUT_REPLAY_LOG");
+        read_env_string(NEBULA_TEST_ENV("GALAXY_INPUT_REPLAY_LOG"));
     static std::optional<std::string> s_loaded_path;
     static std::unique_ptr<NativeInputReplayLog> s_log;
     if (!path.has_value()) {
@@ -536,7 +536,7 @@ bool replay_xinput_has_input(const NativeInputReplaySample& sample) {
 // How long the mouse pointer stays shown through invalid cursor samples after its last sample inside the window.
 std::uint64_t script_pointer_live_mouse_grace_ms() {
     const std::optional<std::uint64_t> override_ms =
-        read_env_u64_optional("GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS");
+        read_env_u64_optional(NEBULA_TEST_ENV("GALAXY_INPUT_SCRIPT_POINTER_LIVE_MOUSE_MS"));
     if (!override_ms.has_value()) {
         return 250;
     }
@@ -545,7 +545,7 @@ std::uint64_t script_pointer_live_mouse_grace_ms() {
 }
 
 bool script_pointer_force_enabled() {
-    return read_env_flag("GALAXY_INPUT_SCRIPT_POINTER_FORCE");
+    return read_env_flag(NEBULA_TEST_ENV("GALAXY_INPUT_SCRIPT_POINTER_FORCE"));
 }
 
 void apply_script_buttons_to_input(
@@ -715,9 +715,9 @@ void apply_stick_script_env(
         return;
     }
     std::uint64_t anchor = 0;
-    if (read_env_flag("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL")) {
+    if (read_env_flag(NEBULA_TEST_ENV("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_MARIO_CONTROL"))) {
         anchor = read_env_u64_optional(
-                     "GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI")
+                     NEBULA_TEST_ENV("GALAXY_INPUT_STICK_SCRIPT_RELATIVE_FALLBACK_VI"))
                      .value_or(0);
     }
     for (const std::string& segment :
@@ -822,9 +822,9 @@ void apply_pointer_sweep_env(
     NativeInputScriptOverlay& overlay,
     std::uint64_t current_vi) {
     const std::optional<std::uint64_t> start =
-        read_env_u64_optional("GALAXY_INPUT_POINTER_SWEEP_VI");
+        read_env_u64_optional(NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_SWEEP_VI"));
     const std::optional<std::uint64_t> duration =
-        read_env_u64_optional("GALAXY_INPUT_POINTER_SWEEP_DURATION");
+        read_env_u64_optional(NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_SWEEP_DURATION"));
     if (start.has_value() != duration.has_value()) {
         throw std::runtime_error(
             "native input pointer sweep requires both VI and duration");
@@ -857,7 +857,7 @@ void apply_pointer_path_env(
     NativeInputScriptOverlay& overlay,
     std::uint64_t current_vi,
     std::int64_t (*clock_ticks)() noexcept) {
-    const std::optional<std::string> script = read_env_string("GALAXY_INPUT_POINTER_PATH");
+    const std::optional<std::string> script = read_env_string(NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_PATH"));
     if (!script.has_value()) {
         return;
     }
@@ -873,9 +873,9 @@ void apply_pointer_path_env(
             if (fields.size() != 3u) {
                 throw std::runtime_error("invalid native input pointer path segment");
             }
-            const PointerPathPoint point{parse_script_u64(fields[0], "GALAXY_INPUT_POINTER_PATH"),
-                                         parse_script_float(fields[1], "GALAXY_INPUT_POINTER_PATH"),
-                                         parse_script_float(fields[2], "GALAXY_INPUT_POINTER_PATH")};
+            const PointerPathPoint point{parse_script_u64(fields[0], NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_PATH")),
+                                         parse_script_float(fields[1], NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_PATH")),
+                                         parse_script_float(fields[2], NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_PATH"))};
             if (!next.empty() && point.vi < next.back().vi) {
                 throw std::runtime_error("native input pointer path VIs must ascend");
             }
@@ -920,22 +920,22 @@ void apply_pointer_script_envs(
     apply_pointer_pair_env(
         overlay,
         current_vi,
-        "GALAXY_INPUT_POINTER_X",
-        "GALAXY_INPUT_POINTER_Y",
+        NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_X"),
+        NEBULA_TEST_ENV("GALAXY_INPUT_POINTER_Y"),
         nullptr);
     // Values are read at every sample, so a test can change them while the game runs; a later waypoint takes
     // precedence over an earlier one.
     static constexpr std::array<std::array<const char*, 4>, 5> kWaypoints{{
-        {"GALAXY_INPUT_POINTER2_X", "GALAXY_INPUT_POINTER2_Y",
-         "GALAXY_INPUT_POINTER2_VI", "GALAXY_INPUT_POINTER2_DURATION"},
-        {"GALAXY_INPUT_POINTER3_X", "GALAXY_INPUT_POINTER3_Y",
-         "GALAXY_INPUT_POINTER3_VI", "GALAXY_INPUT_POINTER3_DURATION"},
-        {"GALAXY_INPUT_POINTER4_X", "GALAXY_INPUT_POINTER4_Y",
-         "GALAXY_INPUT_POINTER4_VI", "GALAXY_INPUT_POINTER4_DURATION"},
-        {"GALAXY_INPUT_POINTER5_X", "GALAXY_INPUT_POINTER5_Y",
-         "GALAXY_INPUT_POINTER5_VI", "GALAXY_INPUT_POINTER5_DURATION"},
-        {"GALAXY_INPUT_POINTER6_X", "GALAXY_INPUT_POINTER6_Y",
-         "GALAXY_INPUT_POINTER6_VI", "GALAXY_INPUT_POINTER6_DURATION"},
+        {NEBULA_TEST_ENV("GALAXY_INPUT_POINTER2_X"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER2_Y"),
+         NEBULA_TEST_ENV("GALAXY_INPUT_POINTER2_VI"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER2_DURATION")},
+        {NEBULA_TEST_ENV("GALAXY_INPUT_POINTER3_X"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER3_Y"),
+         NEBULA_TEST_ENV("GALAXY_INPUT_POINTER3_VI"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER3_DURATION")},
+        {NEBULA_TEST_ENV("GALAXY_INPUT_POINTER4_X"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER4_Y"),
+         NEBULA_TEST_ENV("GALAXY_INPUT_POINTER4_VI"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER4_DURATION")},
+        {NEBULA_TEST_ENV("GALAXY_INPUT_POINTER5_X"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER5_Y"),
+         NEBULA_TEST_ENV("GALAXY_INPUT_POINTER5_VI"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER5_DURATION")},
+        {NEBULA_TEST_ENV("GALAXY_INPUT_POINTER6_X"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER6_Y"),
+         NEBULA_TEST_ENV("GALAXY_INPUT_POINTER6_VI"), NEBULA_TEST_ENV("GALAXY_INPUT_POINTER6_DURATION")},
     }};
     for (const auto& waypoint : kWaypoints) {
         apply_pointer_pair_env(
@@ -966,10 +966,10 @@ NativeInputScriptOverlay build_native_input_script_overlay(std::uint64_t current
         apply_autopress_env(overlay, current_vi, name, "A", a_duration);
     }
     apply_button_script_env(overlay, current_vi, NEBULA_TEST_ENV("GALAXY_INPUT_AUTOPRESS_SCRIPT"), services.clock_ticks);
-    apply_stick_script_env(overlay, current_vi, "GALAXY_INPUT_STICK_SCRIPT");
+    apply_stick_script_env(overlay, current_vi, NEBULA_TEST_ENV("GALAXY_INPUT_STICK_SCRIPT"));
     if (services.diagnostic_command) services.diagnostic_command(overlay);
     apply_shake_script_env(
-        overlay, current_vi, "GALAXY_INPUT_SHAKE_SCRIPT");
+        overlay, current_vi, NEBULA_TEST_ENV("GALAXY_INPUT_SHAKE_SCRIPT"));
     apply_pointer_script_envs(overlay, current_vi, services.clock_ticks);
     return overlay;
 }

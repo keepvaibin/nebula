@@ -17,7 +17,11 @@
 
 namespace {
     bool enabled() {
+#if defined(NEBULA_RELEASE)
+        static const bool sEnabled = false;
+#else
         static const bool sEnabled = getenv("GALAXY_TRACE_LOADS") != nullptr;
+#endif
         return sEnabled;
     }
 

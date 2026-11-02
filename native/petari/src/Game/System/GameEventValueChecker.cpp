@@ -19,9 +19,6 @@ namespace {
         {"\203\124\201\133\203\164\203\102\203\223[\203\140\203\203\203\214\203\223\203\127]/lo" /* サーフィン[チャレンジ]/lo */, 90 * 60},
         {"LibraryOpenNewStarCount", 1},
         {"\212\107\226\173\212\371\223\307\217\315" /* 絵本既読章 */, 0},
-#if (VERSION == RMGK01)
-        {"MsgLedPattern", 1},
-#endif
         {"LuigiEventState", FindingLuigiEventScheduler::STATE_NULL},
         {"WarpPodSaveBits", 0},
         {"TicoGalaxyAlreadyTalk", 0},

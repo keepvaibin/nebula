@@ -165,9 +165,6 @@ void FileSelector::init(const JMapInfoIter& rIter) {
     createSelectEffect();
     initNerve(GET_NERVE(FileSelector, FileSelectorNrvWaitBind));
     MR::tryRegisterDemoCast(this, rIter);
-#if (VERSION == RMGK01)
-    createMiiFont();
-#endif
     appear();
 }
 
@@ -472,17 +469,6 @@ void FileSelector::createMiiConfirmIcon() {
     MR::connectToScene(mMiiConfirmIcon, MR::MovementType_Layout, MR::CalcAnimType_Layout, MR::DrawBufferType_None, MR::DrawType_LayoutDecoration);
 }
 
-#if (VERSION == RMGK01)
-void FileSelector::createMiiFont() {
-    AssetFolder* pArchive = MR::receiveArchive("/LayoutData/MiiFont.arc");
-    mFont = new nw4r::ut::ResFont();
-    mFont->SetResource(pArchive->getResource("/MiiFont26.brfnt"));
-    mFont->SetAlternateChar('?');
-    MR::setTextBoxFontRecursive(mFileInfo, "FileName", mFont);
-    MR::setTextBoxFontRecursive(mMiiSelect, "TxtName", mFont);
-    MR::setTextBoxFontRecursive(mMiiConfirmIcon, "MiiName", mFont);
-}
-#endif
 
 void FileSelector::createManual() {
     mManual = new Manual2P("\202\121\202\157\203\175\203\152\203\205\203\101\203\213" /* ２Ｐマニュアル */);
@@ -1393,11 +1379,6 @@ void FileSelector::exeCopySelect() {
     mSelectEffect[::getItemArrayIndex(_B8->_140)].disappear();
     mInfoMessage->disappear();
     MR::deactiveStarPointerGuidance();
-#if (VERSION == RMGK01)
-    setFileInfo(_B4->_140);
-    mFileInfo->appear();
-    mFileInfo->forceChange();
-#endif
     setNerve(GET_NERVE(FileSelector, FileSelectorNrvFileConfirmStart));
 }
 

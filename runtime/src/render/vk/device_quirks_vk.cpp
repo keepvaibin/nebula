@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // The Vulkan driver identification and known-bug table (device_quirks_vk.h).
 #include "galaxy/render/vk/device_quirks_vk.h"
+#include "galaxy/test_hooks.h"
 
 #include <cstdio>
 #include <cstdlib>
@@ -74,7 +75,7 @@ DriverVersion decode(DriverKind kind, std::uint32_t raw) {
 // GALAXY_VK_SIMULATE_DRIVER=<kind>:<major>.<minor>.<patch> (kind: qualcomm, arm, imagination, samsung) presents this
 // device as that driver to the table, so a desktop run exercises a mobile driver's workarounds.
 void apply_simulation(DeviceIdentity& identity) {
-    const char* value = std::getenv("GALAXY_VK_SIMULATE_DRIVER");
+    const char* value = std::getenv(NEBULA_TEST_ENV("GALAXY_VK_SIMULATE_DRIVER"));
     if (value == nullptr || value[0] == '\0') {
         return;
     }

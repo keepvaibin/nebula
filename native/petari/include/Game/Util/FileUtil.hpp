@@ -81,9 +81,7 @@ namespace MR {
     /// @param[out] ppHeap A pointer to the heap pointer to initialize.
     void getMountedArchiveAndHeap(const char* pFilePath, AssetFolder** ppArchive, NebulaArena** ppHeap);
 
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     void removeFile(const char*);
-#endif
 
     /// @brief Removes a file from memory, with respect to the current language.
     /// @param[in] pFilePath A pointer to the null-terminated absolute path of the file.

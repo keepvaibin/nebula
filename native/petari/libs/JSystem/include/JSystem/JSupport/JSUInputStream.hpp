@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Game/System/ConsoleSave.hpp"
 #include "JSystem/JSupport/JSUIosBase.hpp"
 
 class JSUInputStream : public JSUIosBase {
@@ -20,7 +21,7 @@ public:
         const s32 got = read(static_cast< void* >(pData), size);
         if (gSaveConsoleOrder && size % (s32)sizeof(T) == 0) {
             for (s32 i = 0; i < size / (s32)sizeof(T); i++) {
-                pData[i] = jsuSwapScalar(pData[i]);
+                pData[i] = saveScalar(pData[i]);
             }
         }
         return got;

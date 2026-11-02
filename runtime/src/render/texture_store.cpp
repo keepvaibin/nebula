@@ -9,6 +9,7 @@
 #endif
 
 #include "galaxy/render/texture_store.h"
+#include "galaxy/test_hooks.h"
 #include "galaxy/path_text.h"
 #include "galaxy/loss_report.h"
 #include "galaxy/render/rt_materials.h"
@@ -54,7 +55,7 @@ bool trace_stalls_enabled() {
                    &length,
                    value,
                    sizeof(value),
-                   "GALAXY_TRACE_GX_STALLS") == 0 &&
+                   NEBULA_TEST_ENV("GALAXY_TRACE_GX_STALLS")) == 0 &&
                length > 1 && value[0] != '0';
     }();
     return enabled;
@@ -79,7 +80,7 @@ std::uint64_t read_env_u64(const char* name, std::uint64_t fallback) {
 
 std::uint64_t trace_stall_threshold_us() {
     static const std::uint64_t threshold =
-        read_env_u64("GALAXY_TRACE_RENDER_STALL_US", 1000u);
+        read_env_u64(NEBULA_TEST_ENV("GALAXY_TRACE_RENDER_STALL_US"), 1000u);
     return threshold;
 }
 

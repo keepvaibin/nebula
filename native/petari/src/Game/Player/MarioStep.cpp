@@ -39,11 +39,6 @@ void Mario::checkStep() {
         return;
     }
 
-#if VERSION == RMGK01
-    if (isPlayerModeHopper()) {
-        return;
-    }
-#endif
 
     if (isDamaging()) {
         return;

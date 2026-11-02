@@ -184,7 +184,6 @@ void StarPointerPeekZ::setDrawSyncToken() {
 }
 
 namespace StarPointerFunction {
-#if (VERSION == RMGJ01 || VERSION == RMGE01 || VERSION == RMGP01)
     // No source in the decompilation; written from the RMGE01 assembly (0x80385C1C). Moves rPos along rDir to the
     // first screen edge (inset by the margins) that stays in the screen.
     bool forceOutsideScreenEdge(TVec2f* pOut, const TVec2f& rPos, const TVec2f& rDir, f32 marginX, f32 marginY) {
@@ -245,7 +244,6 @@ namespace StarPointerFunction {
 
         return true;
     }
-#endif
 
     bool isOnScreenEdge(const TVec2f& rPos, f32 marginX, f32 marginY) {
         if (rPos.x <= marginX) {
