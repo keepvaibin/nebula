@@ -303,6 +303,10 @@ namespace nw4r {
                     resOffs += sizeof(*pResBlendMode);
                 }
             }
+            const u8* native = detail::ConvertOffsToPtr<u8>(pRes, resOffs);
+            if (memcmp(native, "NSID", 4) == 0) {
+                memcpy(mNativeShaders, native + 4, sizeof(mNativeShaders));
+            }
         }
 
 #pragma dont_inline reset
@@ -318,6 +322,7 @@ namespace nw4r {
             mbUserAllocated = false;
 
             mpGXMem = 0;
+            memset(mNativeShaders, 0, sizeof(mNativeShaders));
         }
 
         Material::~Material() {
@@ -990,7 +995,9 @@ namespace nw4r {
                 }
             }
 
-            J3DNativeMaterial::sendWhole(rProgram, rValues);
+            const bool remap = mTevCols[0] != DefaultBlackColor || !IsWhiteColor(mTevCols[1]);
+            const u32 shader = mNativeShaders[(useRasStage ? 1 : 0) | (remap ? 2 : 0)];
+            J3DNativeMaterial::sendWhole(shader != 0 ? NEBULA_SHADER_J3D_FIRST + shader - 1 : 0, rProgram, rValues);
             J3DNativeShape::setCurrent(GPU_PNMTX0, places);
 
             return useRasStage && useVtxColor;

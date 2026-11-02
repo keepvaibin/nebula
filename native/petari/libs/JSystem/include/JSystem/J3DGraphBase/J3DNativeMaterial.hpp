@@ -42,6 +42,7 @@ namespace J3DNativeMaterial {
     // materials' constants take, a value change folded into the current native J3D material, and a change of what
     // its shader computes handing its draws back to the drawing state.
     void state(const NebulaStateOp* pOps, u32 count);
+    void applyPass(u8 pass);
     // Before each draw (J3DNativeShape, J3DNativeDraw).
     void noteDraw();
     // The register file (j3d_material.hlsli MaterialConstants' first 84 floats: colour registers, constant colours, material and
@@ -57,7 +58,7 @@ namespace J3DNativeMaterial {
     // A material another system builds whole (nw4r's layout materials), its program and values in storage that lasts
     // until the next material: its generated native shader when the material set has its program (depth and culling
     // kept from the drawing state), else the program registered with the host (once) and drawn by the drawing state.
-    void sendWhole(const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues);
+    void sendWhole(u32 shader, const NebulaMaterialProgram& rProgram, const NebulaMaterialValues& rValues);
     // The current J3D material with coordinate 0 its vertices' normals and texture 0 `pImage` (a `width` x `height`
     // RGB565 image, repeated, linear): J3DModelX list 6. False when the current material is not a native J3D one.
     bool overrideCoordinate(const void* pImage, u16 width, u16 height);

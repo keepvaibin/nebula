@@ -2,9 +2,13 @@
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphBase/J3DMaterial.hpp"
 #include "JSystem/JSupport/JSupport.hpp"
+#include <nebula_cooked_material.h>
 
 J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
     mMaterialNum = i_block.mMaterialNum;
+    u32 count = 0;
+    mpNativeMaterials = nebula_cooked_materials(&i_block, i_block.mBlockSize, &count);
+    if (count != mMaterialNum) mpNativeMaterials = nullptr;
     mpMaterialInitData = JSUConvertOffsetToPtr< J3DMaterialInitData >(&i_block, i_block.mpMaterialInitData);
     mpMaterialID = JSUConvertOffsetToPtr< u16 >(&i_block, i_block.mpMaterialID);
     if (i_block.mpIndInitData != 0 && i_block.mpIndInitData - i_block.mpNameTable > 4) {
@@ -46,6 +50,7 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
 }
 
 J3DMaterialFactory::J3DMaterialFactory(J3DMaterialDLBlock const& i_block) {
+    mpNativeMaterials = nullptr;
     mMaterialNum = i_block.mMaterialNum;
     mpMaterialInitData = nullptr;
     mpDisplayListInit = JSUConvertOffsetToPtr< J3DDisplayListInit >(&i_block, i_block.mpDisplayListInit);
@@ -144,6 +149,7 @@ J3DMaterial* J3DMaterialFactory::createNormalMaterial(J3DMaterial* i_material, i
     i_material->mIndBlock = J3DMaterial::createIndBlock(ind_flag);
     i_material->mPEBlock = J3DMaterial::createPEBlock(pe_flag, getMaterialMode(i_idx));
     i_material->mIndex = i_idx;
+    i_material->mNativeMaterial = mpNativeMaterials != nullptr ? mpNativeMaterials + i_idx : nullptr;
     i_material->mMaterialMode = getMaterialMode(i_idx);
     i_material->mColorBlock->setColorChanNum(newColorChanNum(i_idx));
     i_material->mColorBlock->setCullMode(newCullMode(i_idx));
@@ -251,6 +257,7 @@ J3DMaterial* J3DMaterialFactory::createPatchedMaterial(J3DMaterial* i_material, 
     if (i_material == nullptr) {
         i_material = new J3DPatchedMaterial();
     }
+    i_material->mNativeMaterial = mpNativeMaterials != nullptr ? mpNativeMaterials + i_idx : nullptr;
 
     u8 indFlag = (i_flags & 0x3000000) != 0 ? static_cast< u8 >(1) : static_cast< u8 >(0);
     i_material->mColorBlock = J3DMaterial::createColorBlock(0x40000000);

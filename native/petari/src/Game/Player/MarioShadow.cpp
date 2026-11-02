@@ -635,13 +635,8 @@ void CollisionShadow::createDL() {
 }
 
 void CollisionShadow::fillVolumeList(J3DStateList& rList) {
-    rList.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
     rList.setZMode(GPU_TRUE, GPU_LEQUAL, GPU_FALSE);
-    rList.setTevDirect(GPU_TEVSTAGE0);
-    rList.setGenMode(0, 1, 1);
-    rList.setChanCtrl(GPU_COLOR0A0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_CLAMP, GPU_AF_NONE);
-    rList.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_A0, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE,
-                                GPU_TEVPREV, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    rList.setMaterialPass(NEBULA_PASS_SHADOW_VOLUME);
     NebulaColor8 color = {0, 0, 0, 4};
     rList.setTevColor(GPU_TEVREG0, color);
 }

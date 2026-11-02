@@ -2,6 +2,7 @@
 
 #include "JSystem/J3DGraphBase/J3DMatBlock.hpp"
 #include "JSystem/J3DGraphLoader/J3DModelLoader.hpp"
+struct NebulaCookedMaterial;
 
 // MAT3 and MDL3 records in host order, as the importer cooks them (native_data.rs j3d_model).
 struct J3DMaterialInitData {
@@ -159,4 +160,5 @@ public:
     /* 0x7C */ J3DPatchingInfo* mpPatchingInfo;
     /* 0x80 */ J3DCurrentMtxInfo* mpCurrentMtxInfo;
     /* 0x84 */ u8* mpMaterialMode;
+    const NebulaCookedMaterial* mpNativeMaterials;
 };

@@ -1,7 +1,11 @@
 //! Extract compatibility programs directly from original MAT3 source tables.
 //! Usage: material_source_dump <original-game.pak> <programs.bin> <loader-flags-hex>
 use anyhow::{bail, Context, Result};
-use nebula_import::cook::{archive, material::Mat3, pak_files, pak_system_area};
+use nebula_import::cook::{
+    archive,
+    material::{cooked_shader, Mat3},
+    pak_files, pak_system_area,
+};
 use std::{
     env,
     fs::File,
@@ -44,10 +48,13 @@ fn scan(
                 let mat = Mat3::parse(block).with_context(|| name.to_string())?;
                 counts[0] += 1;
                 for i in 0..mat.len() {
-                    match mat.compatibility_program(i, flags, false) {
-                        Ok(p) => {
+                    match mat
+                        .compatibility_program(i, flags, false)
+                        .and_then(|p| Ok((cooked_shader(&p)?, p)))
+                    {
+                        Ok((shader, p)) => {
                             out.write_all(&p)?;
-                            println!("{}\t{name}\t{i}", counts[1]);
+                            println!("{}\t{name}\t{i}\t{shader}", counts[1]);
                             counts[1] += 1;
                         }
                         Err(e) => {

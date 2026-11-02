@@ -372,11 +372,7 @@ void J3DModelX::buildStateLists(J3DStateList* pLists) {
     list.setChanAmbColor(GPU_ALPHA0, ambientColor);
     list.setChanMatColor(GPU_ALPHA0, materialColor);
     list.setBlendModeEtc(GPU_BM_NONE, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_NOOP, GPU_FALSE, GPU_TRUE, GPU_FALSE);
-    list.setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
-    list.setChanCtrl(GPU_COLOR0, GPU_FALSE, GPU_SRC_REG, GPU_SRC_REG, 0, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setChanCtrl(GPU_ALPHA0, GPU_TRUE, GPU_SRC_REG, GPU_SRC_REG, GPU_LIGHT0, GPU_DF_CLAMP, GPU_AF_NONE);
-    list.setTevAlphaCalcAndSwap(GPU_TEVSTAGE0, GPU_CA_KONST, GPU_CA_ZERO, GPU_CA_RASA, GPU_CA_ZERO, GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE,
-                             GPU_TEVPREV, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+    list.setMaterialPass(NEBULA_PASS_LIGHT_MASK);
     pLists[7].copy(list);
     list.clear();
 
