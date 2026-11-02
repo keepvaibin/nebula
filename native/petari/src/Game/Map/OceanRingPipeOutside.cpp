@@ -100,9 +100,9 @@ void OceanRingPipeOutside::loadMaterial() const {
     NativeShader::setTexture(material, 0, mWaterPipeIndirectTex);
     NativeShader::setTexture(material, 1, mWaterPipeHighLightTex);
     NativeShader::send(material);
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_TEXMTX1, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_TEXMTX1, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
 }
 
 void OceanRingPipeOutside::sendGD() {
@@ -117,7 +117,7 @@ void OceanRingPipeOutside::sendGD() {
     for (s32 i = 0; i < mRingPipe->_9C - 1; i++) {
         f32 f27 = 0.0f;
         vv = mRingPipe->_98;
-        mMesh.begin(static_cast< GXPrimitive >(something), (u16)(vv << 1));
+        mMesh.begin(static_cast< GpuPrimitive >(something), (u16)(vv << 1));
         for (s32 j = 0; j < mRingPipe->_98; j++) {
             v = j * mRingPipe->_9C;
             u16 cl2 = i + v + 1;

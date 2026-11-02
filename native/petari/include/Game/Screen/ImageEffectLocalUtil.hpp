@@ -1,7 +1,7 @@
 #pragma once
 
-#include <revolution/gx/GXEnum.h>
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuEnums.h>
+#include <NebulaGpuTypes.h>
 
 class BloomEffect;
 class JUTTexture;
@@ -23,7 +23,7 @@ namespace ImageEffectLocalUtil {
     };
 
     // `filtered`: through the display's vertical filter (NEBULA_CAPTURE_FILTERED).
-    void capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool half, u8 clear,
+    void capture(JUTTexture* pTexture, s32 divisions, s32 tile, GpuTexFmt format, bool half, u8 clear,
                  bool filtered = false);
     void setStage(EStage stage);
     // The fall-out field's passes (runtime/src/render/materials/image_effect.hlsl modes 2-5): its mask by the texture's

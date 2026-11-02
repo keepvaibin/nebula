@@ -1,11 +1,11 @@
 #pragma once
 
 #include <nebula_game_api.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
-// A light as the game sets it up (GXLightObj's values: the GXInitLight* functions' results).
+// A light as the game sets it up (GpuLightObj's values: the GpuInitLight* functions' results).
 struct J3DNativeLight {
     u8 mColor[4];
     f32 mAngle[3];     // a0-a2
@@ -33,80 +33,80 @@ public:
     // The changes, as a record after every command written before it.
     void send() const;
 
-    void setBlendModeEtc(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op, GXBool colorUpdate,
-                         GXBool alphaUpdate, GXBool dither);
-    void setBlendMode(GXBlendMode type, GXBlendFactor src, GXBlendFactor dst, GXLogicOp op);
-    void setZMode(GXBool compare, GXCompare func, GXBool update);
-    void setAlphaCompare(GXCompare comp0, u8 ref0, GXAlphaOp op, GXCompare comp1, u8 ref1);
-    void setDstAlpha(GXBool enable, u8 alpha);
-    void setCullMode(GXCullMode mode);
+    void setBlendModeEtc(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op, GpuBool colorUpdate,
+                         GpuBool alphaUpdate, GpuBool dither);
+    void setBlendMode(GpuBlendMode type, GpuBlendFactor src, GpuBlendFactor dst, GpuLogicOp op);
+    void setZMode(GpuBool compare, GpuCompare func, GpuBool update);
+    void setAlphaCompare(GpuCompare comp0, u8 ref0, GpuAlphaOp op, GpuCompare comp1, u8 ref1);
+    void setDstAlpha(GpuBool enable, u8 alpha);
+    void setCullMode(GpuCullMode mode);
     void setGenMode(u8 texGens, u8 chans, u8 tevs);
-    void setGenMode2(u8 texGens, u8 chans, u8 tevs, u8 inds, GXCullMode cull);
-    void setChanCtrl(GXChannelID chan, GXBool enable, GXColorSrc ambSrc, GXColorSrc matSrc, u32 lightMask,
-                     GXDiffuseFn diffFn, GXAttnFn attnFn);
-    void setTevColorCalc(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d,
-                         GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out);
-    void setTevAlphaCalcAndSwap(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c,
-                                GXTevAlphaArg d, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp,
-                                GXTevRegID out, GXTevSwapSel rasSwap, GXTevSwapSel texSwap);
-    void setTevDirect(GXTevStageID stage);
-    void setTevOrder(GXTevStageID evenStage, GXTexCoordID coord0, GXTexMapID map0, GXChannelID color0,
-                     GXTexCoordID coord1, GXTexMapID map1, GXChannelID color1);
-    void setTevColor(GXTevRegID reg, NebulaColor8 color);
-    void setChanMatColor(GXChannelID chan, NebulaColor8 color);
-    void setChanAmbColor(GXChannelID chan, NebulaColor8 color);
-    void setTexCoordGen(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, GXBool normalize, u32 postMtx);
-    void setTexLookupMode(GXTexMapID map, GXTexWrapMode wrapS, GXTexWrapMode wrapT, GXTexFilter minFilter,
-                          GXTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GXBool biasClamp,
-                          GXBool edgeLod, GXAnisotropy maxAniso);
-    void setTexImgPtr(GXTexMapID map, const void* pImage);
+    void setGenMode2(u8 texGens, u8 chans, u8 tevs, u8 inds, GpuCullMode cull);
+    void setChanCtrl(GpuChannelID chan, GpuBool enable, GpuColorSrc ambSrc, GpuColorSrc matSrc, u32 lightMask,
+                     GpuDiffuseFn diffFn, GpuAttnFn attnFn);
+    void setTevColorCalc(GpuTevStageID stage, GpuTevColorArg a, GpuTevColorArg b, GpuTevColorArg c, GpuTevColorArg d,
+                         GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out);
+    void setTevAlphaCalcAndSwap(GpuTevStageID stage, GpuTevAlphaArg a, GpuTevAlphaArg b, GpuTevAlphaArg c,
+                                GpuTevAlphaArg d, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp,
+                                GpuTevRegID out, GpuTevSwapSel rasSwap, GpuTevSwapSel texSwap);
+    void setTevDirect(GpuTevStageID stage);
+    void setTevOrder(GpuTevStageID evenStage, GpuTexCoordID coord0, GpuTexMapID map0, GpuChannelID color0,
+                     GpuTexCoordID coord1, GpuTexMapID map1, GpuChannelID color1);
+    void setTevColor(GpuTevRegID reg, NebulaColor8 color);
+    void setChanMatColor(GpuChannelID chan, NebulaColor8 color);
+    void setChanAmbColor(GpuChannelID chan, NebulaColor8 color);
+    void setTexCoordGen(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, GpuBool normalize, u32 postMtx);
+    void setTexLookupMode(GpuTexMapID map, GpuTexWrapMode wrapS, GpuTexWrapMode wrapT, GpuTexFilter minFilter,
+                          GpuTexFilter magFilter, f32 minLod, f32 maxLod, f32 lodBias, GpuBool biasClamp,
+                          GpuBool edgeLod, GpuAnisotropy maxAniso);
+    void setTexImgPtr(GpuTexMapID map, const void* pImage);
     // A colour-indexed texture's palette: its format and place (a GX TLUT name).
-    void setFog(GXFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
+    void setFog(GpuFogType type, f32 start, f32 end, f32 nearZ, f32 farZ, NebulaColor8 color);
     // Changes of some fields of a register, its others as they are (GX's partial setters).
-    void setTevColorIn(GXTevStageID stage, GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d);
-    void setTevAlphaIn(GXTevStageID stage, GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d);
-    void setTevColorOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out);
-    void setTevAlphaOp(GXTevStageID stage, GXTevOp op, GXTevBias bias, GXTevScale scale, GXBool clamp, GXTevRegID out);
-    void setTevKColorSel(GXTevStageID stage, GXTevKColorSel sel);
-    void setTevKAlphaSel(GXTevStageID stage, GXTevKAlphaSel sel);
-    void setTevSwapMode(GXTevStageID stage, GXTevSwapSel rasSwap, GXTevSwapSel texSwap);
-    void setTevStageOrder(GXTevStageID stage, GXTexCoordID coord, GXTexMapID map, GXChannelID color);
-    void setIndTexOrder(GXIndTexStageID stage, GXTexCoordID coord, GXTexMapID map);
-    void enableTexOffsets(GXTexCoordID coord, GXBool lines, GXBool points);
-    void setColorUpdate(GXBool enable);
-    void setAlphaUpdate(GXBool enable);
-    void setDither(GXBool enable);
-    void setTevKColor(GXTevKColorID id, NebulaColor8 color);
-    void setTevColorS10(GXTevRegID id, NebulaColor16 color);
-    void setClipMode(GXClipMode mode);
-    void setTevSwapModeTable(GXTevSwapSel table, GXTevColorChan red, GXTevColorChan green, GXTevColorChan blue,
-                             GXTevColorChan alpha);
-    // GXSetTevOp's preset as its four changes (inputs and operations of both halves).
-    void setTevOp(GXTevStageID stage, GXTevMode mode);
-    // GXSetTexCoordGen2's change: setTexCoordGen's and the coordinate's matrix index.
-    void setTexCoordGen2(GXTexCoordID coord, GXTexGenType type, GXTexGenSrc src, u32 mtx, GXBool normalize, u32 postMtx);
+    void setTevColorIn(GpuTevStageID stage, GpuTevColorArg a, GpuTevColorArg b, GpuTevColorArg c, GpuTevColorArg d);
+    void setTevAlphaIn(GpuTevStageID stage, GpuTevAlphaArg a, GpuTevAlphaArg b, GpuTevAlphaArg c, GpuTevAlphaArg d);
+    void setTevColorOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out);
+    void setTevAlphaOp(GpuTevStageID stage, GpuTevOp op, GpuTevBias bias, GpuTevScale scale, GpuBool clamp, GpuTevRegID out);
+    void setTevKColorSel(GpuTevStageID stage, GpuTevKColorSel sel);
+    void setTevKAlphaSel(GpuTevStageID stage, GpuTevKAlphaSel sel);
+    void setTevSwapMode(GpuTevStageID stage, GpuTevSwapSel rasSwap, GpuTevSwapSel texSwap);
+    void setTevStageOrder(GpuTevStageID stage, GpuTexCoordID coord, GpuTexMapID map, GpuChannelID color);
+    void setIndTexOrder(GpuIndTexStageID stage, GpuTexCoordID coord, GpuTexMapID map);
+    void enableTexOffsets(GpuTexCoordID coord, GpuBool lines, GpuBool points);
+    void setColorUpdate(GpuBool enable);
+    void setAlphaUpdate(GpuBool enable);
+    void setDither(GpuBool enable);
+    void setTevKColor(GpuTevKColorID id, NebulaColor8 color);
+    void setTevColorS10(GpuTevRegID id, NebulaColor16 color);
+    void setClipMode(GpuClipMode mode);
+    void setTevSwapModeTable(GpuTevSwapSel table, GpuTevColorChan red, GpuTevColorChan green, GpuTevColorChan blue,
+                             GpuTevColorChan alpha);
+    // GpuSetTevOp's preset as its four changes (inputs and operations of both halves).
+    void setTevOp(GpuTevStageID stage, GpuTevMode mode);
+    // GpuSetTexCoordGen2's change: setTexCoordGen's and the coordinate's matrix index.
+    void setTexCoordGen2(GpuTexCoordID coord, GpuTexGenType type, GpuTexGenSrc src, u32 mtx, GpuBool normalize, u32 postMtx);
     void setNumTexGens(u8 count);
     void setNumChans(u8 count);
     void setNumTevStages(u8 count);
     void setNumIndStages(u8 count);
-    void setCoPlanar(GXBool enable);
+    void setCoPlanar(GpuBool enable);
     void setCurrentMtx(u32 id);
-    void setTevIndirect(GXTevStageID stage, GXIndTexStageID indStage, GXIndTexFormat format, GXIndTexBiasSel bias,
-                        GXIndTexMtxID matrix, GXIndTexWrap wrapS, GXIndTexWrap wrapT, GXBool addPrev, GXBool utcLod,
-                        GXIndTexAlphaSel alpha);
-    // GXSetTevIndWarp's setTevIndirect.
-    void setTevIndWarp(GXTevStageID stage, GXIndTexStageID indStage, GXBool signedOffset, GXBool replaceMode,
-                       GXIndTexMtxID matrix);
-    void setIndTexCoordScale(GXIndTexStageID indStage, GXIndTexScale scaleS, GXIndTexScale scaleT);
-    void setLineWidth(u8 width, GXTexOffset texOffsets);
-    void setPointSize(u8 size, GXTexOffset texOffsets);
-    // A light (GXLoadLightObjImm's: its attenuation and colour, then its position and direction).
-    void setLight(GXLightID id, const J3DNativeLight& rLight);
+    void setTevIndirect(GpuTevStageID stage, GpuIndTexStageID indStage, GpuIndTexFormat format, GpuIndTexBiasSel bias,
+                        GpuIndTexMtxID matrix, GpuIndTexWrap wrapS, GpuIndTexWrap wrapT, GpuBool addPrev, GpuBool utcLod,
+                        GpuIndTexAlphaSel alpha);
+    // GpuSetTevIndWarp's setTevIndirect.
+    void setTevIndWarp(GpuTevStageID stage, GpuIndTexStageID indStage, GpuBool signedOffset, GpuBool replaceMode,
+                       GpuIndTexMtxID matrix);
+    void setIndTexCoordScale(GpuIndTexStageID indStage, GpuIndTexScale scaleS, GpuIndTexScale scaleT);
+    void setLineWidth(u8 width, GpuTexOffset texOffsets);
+    void setPointSize(u8 size, GpuTexOffset texOffsets);
+    // A light (GpuLoadLightObjImm's: its attenuation and colour, then its position and direction).
+    void setLight(GpuLightID id, const J3DNativeLight& rLight);
     // Whether the frame keeps alpha; `changed` when it differs from the last value set.
     void setFrameAlpha(bool keepAlpha, bool changed);
-    void setZTexture(GXZTexOp op, GXTexFmt format, u32 bias);
-    // GXSetFogRangeAdj's changes: an enabled one's table pairs, then the centre and enable.
-    void setFogRangeAdj(GXBool enable, u16 center, const GXFogAdjTable* pTable);
+    void setZTexture(GpuZTexOp op, GpuTexFmt format, u32 bias);
+    // GpuSetFogRangeAdj's changes: an enabled one's table pairs, then the centre and enable.
+    void setFogRangeAdj(GpuBool enable, u16 center, const GpuFogAdjTable* pTable);
 
 private:
     NebulaStateOp& add(u8 kind);

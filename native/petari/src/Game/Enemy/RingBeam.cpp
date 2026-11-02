@@ -80,7 +80,7 @@ void RingBeamShadowDrawer::drawShape() const {
         NebulaMtxMultVec(mtx, &XDirScaled, &XDirScaled);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getTrans(Trans);
@@ -92,7 +92,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp.x, temp.y, temp.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -109,7 +109,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);
@@ -124,7 +124,7 @@ void RingBeamShadowDrawer::drawShape() const {
         J3DNativeDraw::position(temp2.x, temp2.y, temp2.z);
     }
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 64, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 64, 0);
     for (int i = 0; i < 32; i++) {
         MtxList[i].getXDir(listXDir);
         MtxList[i].getYDir(listYDir);

@@ -50,19 +50,19 @@ MainLoopFramework* MainLoopFramework::createManager(bool useAlpha) {
 }
 
 void MainLoopFramework::prepareCopyDisp() {
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
     if (mUseAlpha) {
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
+        J3DNativeState::setAlphaUpdate(GPU_TRUE);
     }
 }
 
 void MainLoopFramework::preGX() {
     if (mUseAlpha) {
         J3DNativeState::setFrameAlpha(true);
-        J3DNativeState::setDither(GX_TRUE);
+        J3DNativeState::setDither(GPU_TRUE);
     } else {
         J3DNativeState::setFrameAlpha(false);
-        J3DNativeState::setDither(GX_FALSE);
+        J3DNativeState::setDither(GPU_FALSE);
     }
 }
 
@@ -121,21 +121,21 @@ void MainLoopFramework::clearEfb(NebulaColor8 color) {
     u16 efbHeight = JUTVideo::getManager()->getEfbHeight();
     Mtx44 proj;
     NebulaMtxOrtho(proj, 0.0f, efbHeight, 0.0f, fbWidth, 0.0f, 1.0f);
-    J3DNativeView::setProjection(proj, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(proj, GPU_ORTHOGRAPHIC);
     J3DNativeView::setViewport(0.0f, 0.0f, fbWidth, efbHeight, 0.0f, 1.0f);
     J3DNativeView::setScissor(0, 0, fbWidth, efbHeight);
     Mtx identity;
     NebulaMtxIdentity(identity);
     J3DNativeShape::setPosition(0, identity);
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_ZERO, GX_BL_ZERO, GX_LO_NOOP);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_NOOP);
     if (mUseAlpha) {
-        J3DNativeState::setAlphaUpdate(GX_TRUE);
-        J3DNativeState::setDstAlpha(GX_FALSE, color.a);
+        J3DNativeState::setAlphaUpdate(GPU_TRUE);
+        J3DNativeState::setDstAlpha(GPU_FALSE, color.a);
     }
-    J3DNativeState::setZMode(GX_TRUE, GX_ALWAYS, GX_TRUE);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_ALWAYS, GPU_TRUE);
+    J3DNativeState::setCullMode(GPU_CULL_BACK);
     const u32 rgba = (static_cast< u32 >(color.r) << 24) | (static_cast< u32 >(color.g) << 16) |
                      (static_cast< u32 >(color.b) << 8) | color.a;
     J3DNativeTarget::clearFrame(0, 0, fbWidth, efbHeight, rgba, 0xFFFFFF,

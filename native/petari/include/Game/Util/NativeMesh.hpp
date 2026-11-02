@@ -1,7 +1,7 @@
 #pragma once
 
 #include <nebula_game_api.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -27,8 +27,8 @@ public:
     // Slot `slot` reads the game's array named `pKey` (its values sent with sendArray) by the indices corners give.
     void useArray(u32 slot, const void* pKey);
 
-    // A primitive as GXBegin starts it: `count` corners follow, each its values or indices then corner().
-    void begin(GXPrimitive primitive, u16 count);
+    // A primitive as GpuBegin starts it: `count` corners follow, each its values or indices then corner().
+    void begin(GpuPrimitive primitive, u16 count);
     void position(f32 x, f32 y, f32 z);
     void normal(f32 x, f32 y, f32 z);
     void color(u8 r, u8 g, u8 b, u8 a);

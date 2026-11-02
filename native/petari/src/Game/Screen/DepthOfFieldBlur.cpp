@@ -70,11 +70,11 @@ DepthOfFieldBlur::DepthOfFieldBlur(const char* pName)
     _1C = MR::getImageEffectResource()->_4;
     _20 = MR::getImageEffectResource()->_8;
     _24 = MR::getImageEffectResource()->_C;
-    _28 = new JUTTexture(128, 2, GX_TF_I8);
-    _28->mWrapS = GX_CLAMP;
-    _28->mWrapT = GX_CLAMP;
-    _28->mMinType = GX_LINEAR;
-    _28->mMagType = GX_LINEAR;
+    _28 = new JUTTexture(128, 2, GPU_TF_I8);
+    _28->mWrapS = GPU_CLAMP;
+    _28->mWrapT = GPU_CLAMP;
+    _28->mMinType = GPU_LINEAR;
+    _28->mMagType = GPU_LINEAR;
 }
 
 void DepthOfFieldBlur::draw() const {
@@ -82,13 +82,13 @@ void DepthOfFieldBlur::draw() const {
         return;
     }
 
-    ImageEffectLocalUtil::capture(_18, 4, 0, GX_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_1C, 1, 0, GX_TF_RGB565, true, 0);
+    ImageEffectLocalUtil::capture(_18, 4, 0, GPU_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_1C, 1, 0, GPU_TF_RGB565, true, 0);
     drawZAlphaTex();
-    ImageEffectLocalUtil::capture(_28, 1, 0, GX_CTF_R8, false, 0);
+    ImageEffectLocalUtil::capture(_28, 1, 0, GPU_CTF_R8, false, 0);
     ImageEffectLocalUtil::setupDrawTexture();
     createBlurTexture();
-    ImageEffectLocalUtil::capture(_20, 1, 0, GX_TF_Z8, true, 0);
+    ImageEffectLocalUtil::capture(_20, 1, 0, GPU_TF_Z8, true, 0);
     drawFinal();
     MR::loadProjectionMtx();
     MR::loadViewMtx();
@@ -98,20 +98,20 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()), 0.0f,
                static_cast< s32 >(JUTVideo::getManager()->getFbWidth()), -::sViewDistance, ::sViewDistance);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setLineWidth(12, GX_TO_ZERO);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setLineWidth(12, GPU_TO_ZERO);
     sendZAlphaMaterial();
 
-    J3DNativeDraw::begin(GX_LINESTRIP, 4, NEBULA_SHAPE_COLOR0);
+    J3DNativeDraw::begin(GPU_LINESTRIP, 4, NEBULA_SHAPE_COLOR0);
     {
         u8 blurMinDist;
         u8 blurMaxDist = 248;
@@ -150,9 +150,9 @@ void DepthOfFieldBlur::drawZAlphaTex() const {
 
 void DepthOfFieldBlur::createBlurTexture() const {
     ImageEffectLocalUtil::drawTexture(_1C, 4, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, false, 0);
     ImageEffectLocalUtil::blurTexture(_24, 4, 0, 4, mIntensity * get_10() * 0.005f, 1.0f);
-    ImageEffectLocalUtil::capture(_24, 4, 0, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_24, 4, 0, GPU_TF_RGB565, false, 0);
 }
 
 void DepthOfFieldBlur::drawFinal() const {

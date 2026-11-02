@@ -3,7 +3,7 @@
 #include <revolution/os.h>
 #include "JSystem/JUtility/JUTException.hpp"
 
-void JUTPalette::storeTLUT(_GXTlut param_0, ResTLUT* tlut) {
+void JUTPalette::storeTLUT(_GpuTlut param_0, ResTLUT* tlut) {
     if (tlut == nullptr) {
         JUTException::panic_f(__FILE__, 35, "JUTTexture: TLUT is NULL\n");
     }
@@ -12,14 +12,14 @@ void JUTPalette::storeTLUT(_GXTlut param_0, ResTLUT* tlut) {
     mTransparency = tlut->mTransparency;
     mLutNum = tlut->mLutNum;
     mColorTable = tlut + 8;
-    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
+    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GpuTlutFmt >(mFormat), mLutNum);
 }
 
-void JUTPalette::storeTLUT(_GXTlut param_0, _GXTlutFmt param_1, JUTTransparency param_2, u16 param_3, void* param_4) {
+void JUTPalette::storeTLUT(_GpuTlut param_0, _GpuTlutFmt param_1, JUTTransparency param_2, u16 param_3, void* param_4) {
     mName = param_0;
     mFormat = param_1;
     mTransparency = param_2;
     mLutNum = param_3;
     mColorTable = static_cast< ResTLUT* >(param_4);
-    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GXTlutFmt >(mFormat), mLutNum);
+    J3DNativeTexture::initTlut(&mObj, mColorTable, static_cast< GpuTlutFmt >(mFormat), mLutNum);
 }

@@ -169,7 +169,7 @@ namespace nw4r {
             writer.SetColorMapping(minCol, maxCol);
             writer.SetupGX();
 
-            J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+            J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
             writer.SetCursor(textRect.left, textRect.top);
             writer.Print(mTextBuf, mTextLen);
         }

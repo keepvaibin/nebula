@@ -61,19 +61,19 @@ void ShadowVolumeLine::drawShape() const {
     points[6].scaleAdd(toLength, toDrop, points[4]);
     points[7].scaleAdd(toLength, toDrop, points[5]);
 
-    J3DNativeDraw::begin(GX_QUADS, 4, 0);
+    J3DNativeDraw::begin(GPU_QUADS, 4, 0);
     TDDraw::sendPoint(points[1]);
     TDDraw::sendPoint(points[5]);
     TDDraw::sendPoint(points[7]);
     TDDraw::sendPoint(points[3]);
 
-    J3DNativeDraw::begin(GX_QUADS, 4, 0);
+    J3DNativeDraw::begin(GPU_QUADS, 4, 0);
     TDDraw::sendPoint(points[0]);
     TDDraw::sendPoint(points[2]);
     TDDraw::sendPoint(points[6]);
     TDDraw::sendPoint(points[4]);
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 10, 0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 10, 0);
     TDDraw::sendPoint(points[0]);
     TDDraw::sendPoint(points[1]);
     TDDraw::sendPoint(points[2]);

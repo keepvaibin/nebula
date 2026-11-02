@@ -4,7 +4,7 @@
 #include "nw4r/ut/LinkList.h"
 #include <cstddef>
 #include <mem.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -133,24 +133,24 @@ namespace nw4r {
 
         struct ChanCtrl {
             ChanCtrl() : reserve1(0), reserve2(0) {
-                Set(GX_SRC_VTX, GX_SRC_VTX);
+                Set(GPU_SRC_VTX, GPU_SRC_VTX);
             }
 
-            ChanCtrl(GXColorSrc colSrc, GXColorSrc alpSrc) : reserve1(0), reserve2(0) {
+            ChanCtrl(GpuColorSrc colSrc, GpuColorSrc alpSrc) : reserve1(0), reserve2(0) {
                 Set(colSrc, alpSrc);
             }
 
-            void Set(GXColorSrc colSrc, GXColorSrc alpSrc) {
+            void Set(GpuColorSrc colSrc, GpuColorSrc alpSrc) {
                 matSrcCol = colSrc;
                 matSrcAlp = alpSrc;
             }
 
-            GXColorSrc GetColorSrc() const {
-                return GXColorSrc(matSrcCol);
+            GpuColorSrc GetColorSrc() const {
+                return GpuColorSrc(matSrcCol);
             }
 
-            GXColorSrc GetAlphaSrc() const {
-                return GXColorSrc(matSrcAlp);
+            GpuColorSrc GetAlphaSrc() const {
+                return GpuColorSrc(matSrcAlp);
             }
 
             u8 matSrcCol;
@@ -167,28 +167,28 @@ namespace nw4r {
 
         struct TexCoordGen {
             TexCoordGen() : reserve(0) {
-                Set(GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY);
+                Set(GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY);
             }
 
-            TexCoordGen(GXTexGenType aTexGenType, GXTexGenSrc aTexGenSrc, u32 aTexMtx)
+            TexCoordGen(GpuTexGenType aTexGenType, GpuTexGenSrc aTexGenSrc, u32 aTexMtx)
                 : reserve(0)
 
             {
                 Set(aTexGenType, aTexGenSrc, aTexMtx);
             }
 
-            void Set(GXTexGenType aTexGenType, GXTexGenSrc aTexGenSrc, u32 aTexMtx) {
+            void Set(GpuTexGenType aTexGenType, GpuTexGenSrc aTexGenSrc, u32 aTexMtx) {
                 texGenType = aTexGenType;
                 texGenSrc = aTexGenSrc;
                 texMtx = u8(aTexMtx);
             }
 
-            GXTexGenType GetTexGenType() const {
-                return GXTexGenType(texGenType);
+            GpuTexGenType GetTexGenType() const {
+                return GpuTexGenType(texGenType);
             }
 
-            GXTexGenSrc GetTexGenSrc() const {
-                return GXTexGenSrc(texGenSrc);
+            GpuTexGenSrc GetTexGenSrc() const {
+                return GpuTexGenSrc(texGenSrc);
             }
 
             u32 GetTexMtx() const {
@@ -203,34 +203,34 @@ namespace nw4r {
 
         struct IndirectStage {
             IndirectStage() {
-                Set(GX_TEXCOORD0, GX_TEXMAP0, GX_ITS_1, GX_ITS_1);
+                Set(GPU_TEXCOORD0, GPU_TEXMAP0, GPU_ITS_1, GPU_ITS_1);
             }
 
-            IndirectStage(GXTexCoordID aTexCoordGen, GXTexMapID aTexMap, GXIndTexScale aScaleS, GXIndTexScale aScaleT) {
+            IndirectStage(GpuTexCoordID aTexCoordGen, GpuTexMapID aTexMap, GpuIndTexScale aScaleS, GpuIndTexScale aScaleT) {
                 Set(aTexCoordGen, aTexMap, aScaleS, aScaleT);
             }
 
-            void Set(GXTexCoordID aTexCoordGen, GXTexMapID aTexMap, GXIndTexScale aScaleS, GXIndTexScale aScaleT) {
+            void Set(GpuTexCoordID aTexCoordGen, GpuTexMapID aTexMap, GpuIndTexScale aScaleS, GpuIndTexScale aScaleT) {
                 texCoordGen = aTexCoordGen;
                 texMap = aTexMap;
                 scaleS = aScaleS;
                 scaleT = aScaleT;
             }
 
-            GXTexCoordID GetTexCoordGen() const {
-                return GXTexCoordID(texCoordGen);
+            GpuTexCoordID GetTexCoordGen() const {
+                return GpuTexCoordID(texCoordGen);
             }
 
-            GXTexMapID GetTexMap() const {
-                return GXTexMapID(texMap);
+            GpuTexMapID GetTexMap() const {
+                return GpuTexMapID(texMap);
             }
 
-            GXIndTexScale GetScaleS() const {
-                return GXIndTexScale(scaleS);
+            GpuIndTexScale GetScaleS() const {
+                return GpuIndTexScale(scaleS);
             }
 
-            GXIndTexScale GetScaleT() const {
-                return GXIndTexScale(scaleT);
+            GpuIndTexScale GetScaleT() const {
+                return GpuIndTexScale(scaleT);
             }
 
             u8 texCoordGen;
@@ -298,167 +298,167 @@ namespace nw4r {
 
         struct TevStage {
             TevStage() {
-                SetOrder(GX_TEXCOORD_NULL, GX_TEXMAP_NULL, GX_COLOR0A0, GX_TEV_SWAP0, GX_TEV_SWAP0);
-                SetColorIn(GX_CC_ZERO, GX_CC_ZERO, GX_CC_ZERO, GX_CC_RASC);
-                SetAlphaIn(GX_CA_ZERO, GX_CA_ZERO, GX_CA_ZERO, GX_CA_RASA);
-                SetColorOp(GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV, GX_TEV_KCSEL_K0);
-                SetAlphaOp(GX_TEV_ADD, GX_TB_ZERO, GX_CS_SCALE_1, GX_TRUE, GX_TEVPREV, GX_TEV_KASEL_K0_R);
-                SetIndirect(GX_INDTEXSTAGE0, GX_ITF_8, GX_ITB_NONE, GX_ITM_OFF, GX_ITW_OFF, GX_ITW_OFF, false, false, GX_ITBA_OFF);
+                SetOrder(GPU_TEXCOORD_NULL, GPU_TEXMAP_NULL, GPU_COLOR0A0, GPU_TEV_SWAP0, GPU_TEV_SWAP0);
+                SetColorIn(GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_ZERO, GPU_CC_RASC);
+                SetAlphaIn(GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_ZERO, GPU_CA_RASA);
+                SetColorOp(GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV, GPU_TEV_KCSEL_K0);
+                SetAlphaOp(GPU_TEV_ADD, GPU_TB_ZERO, GPU_CS_SCALE_1, GPU_TRUE, GPU_TEVPREV, GPU_TEV_KASEL_K0_R);
+                SetIndirect(GPU_INDTEXSTAGE0, GPU_ITF_8, GPU_ITB_NONE, GPU_ITM_OFF, GPU_ITW_OFF, GPU_ITW_OFF, false, false, GPU_ITBA_OFF);
             }
 
-            void SetOrder(GXTexCoordID aTexCoordGen, GXTexMapID aTexMap, GXChannelID aColChan, GXTevSwapSel rasSel, GXTevSwapSel texSel) {
+            void SetOrder(GpuTexCoordID aTexCoordGen, GpuTexMapID aTexMap, GpuChannelID aColChan, GpuTevSwapSel rasSel, GpuTevSwapSel texSel) {
                 texCoordGen = aTexCoordGen;
                 colChan = aColChan;
                 texMap = u8(aTexMap);
                 swapSel = u8(((aTexMap >> 8) << 0) | (rasSel << 1) | (texSel << 3));
             }
 
-            void SetColorIn(GXTevColorArg a, GXTevColorArg b, GXTevColorArg c, GXTevColorArg d) {
+            void SetColorIn(GpuTevColorArg a, GpuTevColorArg b, GpuTevColorArg c, GpuTevColorArg d) {
                 colIn.SetIn(a, b, c, d);
             }
 
-            void SetAlphaIn(GXTevAlphaArg a, GXTevAlphaArg b, GXTevAlphaArg c, GXTevAlphaArg d) {
+            void SetAlphaIn(GpuTevAlphaArg a, GpuTevAlphaArg b, GpuTevAlphaArg c, GpuTevAlphaArg d) {
                 alpIn.SetIn(a, b, c, d);
             }
 
-            void SetColorOp(GXTevOp op, GXTevBias bias, GXTevScale scale, bool clamp, GXTevRegID outReg, GXTevKColorSel kSel) {
+            void SetColorOp(GpuTevOp op, GpuTevBias bias, GpuTevScale scale, bool clamp, GpuTevRegID outReg, GpuTevKColorSel kSel) {
                 colIn.SetOp(op, bias, scale, clamp, outReg, kSel);
             }
 
-            void SetAlphaOp(GXTevOp op, GXTevBias bias, GXTevScale scale, bool clamp, GXTevRegID outReg, GXTevKAlphaSel kSel) {
+            void SetAlphaOp(GpuTevOp op, GpuTevBias bias, GpuTevScale scale, bool clamp, GpuTevRegID outReg, GpuTevKAlphaSel kSel) {
                 alpIn.SetOp(op, bias, scale, clamp, outReg, kSel);
             }
 
-            void SetIndirect(GXIndTexStageID stage, GXIndTexFormat format, GXIndTexBiasSel biasSel, GXIndTexMtxID mtxSel, GXIndTexWrap wrapS,
-                             GXIndTexWrap wrapT, bool addPrev, bool utcLod, GXIndTexAlphaSel alphaSel) {
+            void SetIndirect(GpuIndTexStageID stage, GpuIndTexFormat format, GpuIndTexBiasSel biasSel, GpuIndTexMtxID mtxSel, GpuIndTexWrap wrapS,
+                             GpuIndTexWrap wrapT, bool addPrev, bool utcLod, GpuIndTexAlphaSel alphaSel) {
                 indStage = stage;
                 indBiMt = u8((biasSel << 0) | (mtxSel << 3));
                 indWrap = u8((wrapS << 0) | (wrapT << 3));
                 indFoAdUtAl = u8((format << 0) | ((addPrev ? 1 : 0) << 2) | ((utcLod ? 1 : 0) << 3) | (alphaSel << 4));
             }
 
-            GXTexCoordID GetTexCoordGen() const {
-                return GXTexCoordID(texCoordGen);
+            GpuTexCoordID GetTexCoordGen() const {
+                return GpuTexCoordID(texCoordGen);
             }
 
-            GXTexMapID GetTexMap() const {
-                return GXTexMapID((((swapSel >> 0) & 0x1) << 8) | texMap);
+            GpuTexMapID GetTexMap() const {
+                return GpuTexMapID((((swapSel >> 0) & 0x1) << 8) | texMap);
             }
 
-            GXChannelID GetColorChan() const {
-                return GXChannelID(colChan);
+            GpuChannelID GetColorChan() const {
+                return GpuChannelID(colChan);
             }
 
-            GXTevSwapSel GetRasSwapSel() const {
-                return GXTevSwapSel((swapSel >> 1) & 0x3);
+            GpuTevSwapSel GetRasSwapSel() const {
+                return GpuTevSwapSel((swapSel >> 1) & 0x3);
             }
 
-            GXTevSwapSel GetTexSwapSel() const {
-                return GXTevSwapSel((swapSel >> 3) & 0x3);
+            GpuTevSwapSel GetTexSwapSel() const {
+                return GpuTevSwapSel((swapSel >> 3) & 0x3);
             }
 
-            GXTevColorArg GetColorInA() const {
-                return GXTevColorArg(colIn.GetA());
+            GpuTevColorArg GetColorInA() const {
+                return GpuTevColorArg(colIn.GetA());
             }
 
-            GXTevColorArg GetColorInB() const {
-                return GXTevColorArg(colIn.GetB());
+            GpuTevColorArg GetColorInB() const {
+                return GpuTevColorArg(colIn.GetB());
             }
 
-            GXTevColorArg GetColorInC() const {
-                return GXTevColorArg(colIn.GetC());
+            GpuTevColorArg GetColorInC() const {
+                return GpuTevColorArg(colIn.GetC());
             }
 
-            GXTevColorArg GetColorInD() const {
-                return GXTevColorArg(colIn.GetD());
+            GpuTevColorArg GetColorInD() const {
+                return GpuTevColorArg(colIn.GetD());
             }
 
-            GXTevAlphaArg GetAlphaInA() const {
-                return GXTevAlphaArg(alpIn.GetA());
+            GpuTevAlphaArg GetAlphaInA() const {
+                return GpuTevAlphaArg(alpIn.GetA());
             }
 
-            GXTevAlphaArg GetAlphaInB() const {
-                return GXTevAlphaArg(alpIn.GetB());
+            GpuTevAlphaArg GetAlphaInB() const {
+                return GpuTevAlphaArg(alpIn.GetB());
             }
 
-            GXTevAlphaArg GetAlphaInC() const {
-                return GXTevAlphaArg(alpIn.GetC());
+            GpuTevAlphaArg GetAlphaInC() const {
+                return GpuTevAlphaArg(alpIn.GetC());
             }
 
-            GXTevAlphaArg GetAlphaInD() const {
-                return GXTevAlphaArg(alpIn.GetD());
+            GpuTevAlphaArg GetAlphaInD() const {
+                return GpuTevAlphaArg(alpIn.GetD());
             }
 
-            GXTevOp GetColorOp() const {
-                return GXTevOp(colIn.GetOp());
+            GpuTevOp GetColorOp() const {
+                return GpuTevOp(colIn.GetOp());
             }
 
-            GXTevBias GetColorBias() const {
-                return GXTevBias(colIn.GetBias());
+            GpuTevBias GetColorBias() const {
+                return GpuTevBias(colIn.GetBias());
             }
 
-            GXTevScale GetColorScale() const {
-                return GXTevScale(colIn.GetScale());
+            GpuTevScale GetColorScale() const {
+                return GpuTevScale(colIn.GetScale());
             }
 
             bool IsColorClamp() const {
                 return colIn.IsClamp();
             }
 
-            GXTevRegID GetColorOutReg() const {
-                return GXTevRegID(colIn.GetOutReg());
+            GpuTevRegID GetColorOutReg() const {
+                return GpuTevRegID(colIn.GetOutReg());
             }
 
-            GXTevKColorSel GetKColorSel() const {
-                return GXTevKColorSel(colIn.GetKSel());
+            GpuTevKColorSel GetKColorSel() const {
+                return GpuTevKColorSel(colIn.GetKSel());
             }
 
-            GXTevOp GetAlphaOp() const {
-                return GXTevOp(alpIn.GetOp());
+            GpuTevOp GetAlphaOp() const {
+                return GpuTevOp(alpIn.GetOp());
             }
 
-            GXTevBias GetAlphaBias() const {
-                return GXTevBias(alpIn.GetBias());
+            GpuTevBias GetAlphaBias() const {
+                return GpuTevBias(alpIn.GetBias());
             }
 
-            GXTevScale GetAlphaScale() const {
-                return GXTevScale(alpIn.GetScale());
+            GpuTevScale GetAlphaScale() const {
+                return GpuTevScale(alpIn.GetScale());
             }
 
             bool IsAlphaClamp() const {
                 return alpIn.IsClamp();
             }
 
-            GXTevRegID GetAlphaOutReg() const {
-                return GXTevRegID(alpIn.GetOutReg());
+            GpuTevRegID GetAlphaOutReg() const {
+                return GpuTevRegID(alpIn.GetOutReg());
             }
 
-            GXTevKAlphaSel GetKAlphaSel() const {
-                return GXTevKAlphaSel(alpIn.GetKSel());
+            GpuTevKAlphaSel GetKAlphaSel() const {
+                return GpuTevKAlphaSel(alpIn.GetKSel());
             }
 
-            GXIndTexStageID GetIndStage() const {
-                return GXIndTexStageID(indStage);
+            GpuIndTexStageID GetIndStage() const {
+                return GpuIndTexStageID(indStage);
             }
 
-            GXIndTexFormat GetIndFormat() const {
-                return GXIndTexFormat((indFoAdUtAl >> 0) & 0x3);
+            GpuIndTexFormat GetIndFormat() const {
+                return GpuIndTexFormat((indFoAdUtAl >> 0) & 0x3);
             }
 
-            GXIndTexBiasSel GetIndBiasSel() const {
-                return GXIndTexBiasSel((indBiMt >> 0) & 0x7);
+            GpuIndTexBiasSel GetIndBiasSel() const {
+                return GpuIndTexBiasSel((indBiMt >> 0) & 0x7);
             }
 
-            GXIndTexMtxID GetIndMtxSel() const {
-                return GXIndTexMtxID((indBiMt >> 3) & 0xF);
+            GpuIndTexMtxID GetIndMtxSel() const {
+                return GpuIndTexMtxID((indBiMt >> 3) & 0xF);
             }
 
-            GXIndTexWrap GetIndWrapS() const {
-                return GXIndTexWrap((indWrap >> 0) & 0x7);
+            GpuIndTexWrap GetIndWrapS() const {
+                return GpuIndTexWrap((indWrap >> 0) & 0x7);
             }
 
-            GXIndTexWrap GetIndWrapT() const {
-                return GXIndTexWrap((indWrap >> 3) & 0x7);
+            GpuIndTexWrap GetIndWrapT() const {
+                return GpuIndTexWrap((indWrap >> 3) & 0x7);
             }
 
             bool IsIndAddPrev() const {
@@ -469,8 +469,8 @@ namespace nw4r {
                 return ((indFoAdUtAl >> 3) & 0x1) != 0;
             }
 
-            GXIndTexAlphaSel GetIndAlphaSel() const {
-                return GXIndTexAlphaSel((indFoAdUtAl >> 4) & 0x3);
+            GpuIndTexAlphaSel GetIndAlphaSel() const {
+                return GpuIndTexAlphaSel((indFoAdUtAl >> 4) & 0x3);
             }
 
             u8 texCoordGen;
@@ -489,31 +489,31 @@ namespace nw4r {
 
         struct TevSwapMode {
             TevSwapMode() {
-                Set(GX_CH_RED, GX_CH_GREEN, GX_CH_BLUE, GX_CH_ALPHA);
+                Set(GPU_CH_RED, GPU_CH_GREEN, GPU_CH_BLUE, GPU_CH_ALPHA);
             }
 
-            TevSwapMode(GXTevColorChan r, GXTevColorChan g, GXTevColorChan b, GXTevColorChan a) {
+            TevSwapMode(GpuTevColorChan r, GpuTevColorChan g, GpuTevColorChan b, GpuTevColorChan a) {
                 Set(r, g, b, a);
             }
 
-            void Set(GXTevColorChan r, GXTevColorChan g, GXTevColorChan b, GXTevColorChan a) {
-                swap = u8(((r - GX_CH_RED) << 0) | ((g - GX_CH_RED) << 2) | ((b - GX_CH_RED) << 4) | ((a - GX_CH_RED) << 6));
+            void Set(GpuTevColorChan r, GpuTevColorChan g, GpuTevColorChan b, GpuTevColorChan a) {
+                swap = u8(((r - GPU_CH_RED) << 0) | ((g - GPU_CH_RED) << 2) | ((b - GPU_CH_RED) << 4) | ((a - GPU_CH_RED) << 6));
             }
 
-            GXTevColorChan GetR() const {
-                return GXTevColorChan(GX_CH_RED + ((swap >> 0) & 0x3));
+            GpuTevColorChan GetR() const {
+                return GpuTevColorChan(GPU_CH_RED + ((swap >> 0) & 0x3));
             }
 
-            GXTevColorChan GetG() const {
-                return GXTevColorChan(GX_CH_RED + ((swap >> 2) & 0x3));
+            GpuTevColorChan GetG() const {
+                return GpuTevColorChan(GPU_CH_RED + ((swap >> 2) & 0x3));
             }
 
-            GXTevColorChan GetB() const {
-                return GXTevColorChan(GX_CH_RED + ((swap >> 4) & 0x3));
+            GpuTevColorChan GetB() const {
+                return GpuTevColorChan(GPU_CH_RED + ((swap >> 4) & 0x3));
             }
 
-            GXTevColorChan GetA() const {
-                return GXTevColorChan(GX_CH_RED + ((swap >> 6) & 0x3));
+            GpuTevColorChan GetA() const {
+                return GpuTevColorChan(GPU_CH_RED + ((swap >> 6) & 0x3));
             }
 
             u8 swap;
@@ -521,34 +521,34 @@ namespace nw4r {
 
         struct AlphaCompare {
             AlphaCompare() {
-                Set(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+                Set(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
             }
 
-            AlphaCompare(GXCompare aComp0, u8 aRef0, GXAlphaOp aOp, GXCompare aComp1, u8 aRef1) {
+            AlphaCompare(GpuCompare aComp0, u8 aRef0, GpuAlphaOp aOp, GpuCompare aComp1, u8 aRef1) {
                 Set(aComp0, aRef0, aOp, aComp1, aRef1);
             }
 
-            void Set(GXCompare aComp0, u8 aRef0, GXAlphaOp aOp, GXCompare aComp1, u8 aRef1) {
+            void Set(GpuCompare aComp0, u8 aRef0, GpuAlphaOp aOp, GpuCompare aComp1, u8 aRef1) {
                 comp = u8(aComp0 << 0 | aComp1 << 4);
                 op = aOp;
                 ref0 = aRef0;
                 ref1 = aRef1;
             }
 
-            GXCompare GetComp0() const {
-                return GXCompare((comp >> 0) & 0xF);
+            GpuCompare GetComp0() const {
+                return GpuCompare((comp >> 0) & 0xF);
             }
 
             u8 GetRef0() const {
                 return ref0;
             }
 
-            GXAlphaOp GetOp() const {
-                return GXAlphaOp(op);
+            GpuAlphaOp GetOp() const {
+                return GpuAlphaOp(op);
             }
 
-            GXCompare GetComp1() const {
-                return GXCompare((comp >> 4) & 0xF);
+            GpuCompare GetComp1() const {
+                return GpuCompare((comp >> 4) & 0xF);
             }
 
             u8 GetRef1() const {
@@ -563,34 +563,34 @@ namespace nw4r {
 
         struct BlendMode {
             BlendMode() {
-                Set(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_SET);
+                Set(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_SET);
             }
 
-            BlendMode(GXBlendMode aType, GXBlendFactor aSrcFactor, GXBlendFactor aDstFactor, GXLogicOp aOp) {
+            BlendMode(GpuBlendMode aType, GpuBlendFactor aSrcFactor, GpuBlendFactor aDstFactor, GpuLogicOp aOp) {
                 Set(aType, aSrcFactor, aDstFactor, aOp);
             }
 
-            void Set(GXBlendMode aType, GXBlendFactor aSrcFactor, GXBlendFactor aDstFactor, GXLogicOp aOp) {
+            void Set(GpuBlendMode aType, GpuBlendFactor aSrcFactor, GpuBlendFactor aDstFactor, GpuLogicOp aOp) {
                 type = aType;
                 srcFactor = aSrcFactor;
                 dstFactor = aDstFactor;
                 op = aOp;
             }
 
-            GXBlendMode GetType() const {
-                return GXBlendMode(type);
+            GpuBlendMode GetType() const {
+                return GpuBlendMode(type);
             }
 
-            GXBlendFactor GetSrcFactor() const {
-                return GXBlendFactor(srcFactor);
+            GpuBlendFactor GetSrcFactor() const {
+                return GpuBlendFactor(srcFactor);
             }
 
-            GXBlendFactor GetDstFactor() const {
-                return GXBlendFactor(dstFactor);
+            GpuBlendFactor GetDstFactor() const {
+                return GpuBlendFactor(dstFactor);
             }
 
-            GXLogicOp GetOp() const {
-                return GXLogicOp(op);
+            GpuLogicOp GetOp() const {
+                return GpuLogicOp(op);
             }
 
             u8 type;

@@ -53,9 +53,9 @@ namespace {
     void beginDrawPolygon(int idx, s32 pointCount, NativeMesh* pMesh, u32 attributes) {
         const u16 vtxCount = (u16)(((pointCount - 1 - idx) * 2 + 1));
         if (pMesh != nullptr) {
-            pMesh->begin(GX_TRIANGLESTRIP, vtxCount);
+            pMesh->begin(GPU_TRIANGLESTRIP, vtxCount);
         } else {
-            J3DNativeDraw::begin(GX_TRIANGLESTRIP, vtxCount, attributes);
+            J3DNativeDraw::begin(GPU_TRIANGLESTRIP, vtxCount, attributes);
         }
     }
 };  // namespace
@@ -618,9 +618,9 @@ const NebulaColor8 sOceanSphereFogBack = {0xFF, 0xFF, 0xFF, 0};
 void OceanSphere::loadMaterialFace() const {
     J3DNativeShape::setPosition(0, MR::getCameraViewMtx());
     J3DNativeShape::setNormal(0, MR::getCameraViewMtx());
-    static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     sendFaceMaterial(mWaterTex, sOceanSphereTevReg0Face, mTevReg1Front, sOceanSphereTevReg2Face, sOceanSphereKColor0Face,
                      NEBULA_CULL_BACK);
 }
@@ -632,9 +632,9 @@ void OceanSphere::loadMaterialBack() const {
     pos.zeroTrans();
     pos.scale(0.779175f);
     J3DNativeShape::setTexture(0, pos.toMtxPtr(), 2);
-    static const u8 kPlaces[8] = {GX_TEXMTX0, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                  GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-    J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+    static const u8 kPlaces[8] = {GPU_TEXMTX0, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                  GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+    J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     // runtime/src/render/materials/ocean_sphere_env.hlsl: the environment map by the normal from sOceanSphereTevReg0Env
     // toward sOceanSphereTevReg1Env; opaque, depth tested and written, front faces culled, no fog.
     NebulaNativeMaterial material;

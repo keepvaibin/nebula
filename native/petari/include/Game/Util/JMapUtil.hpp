@@ -2,7 +2,7 @@
 
 #include "Game/Util/JMapInfo.hpp"
 #include <JSystem/JGeometry.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

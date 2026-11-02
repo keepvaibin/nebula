@@ -86,7 +86,7 @@ public:
     /* 0x24 */ J3DTexMtxInfo* mpTexMtxInfo;
     /* 0x28 */ J3DTexMtxInfo* field_0x28;
     /* 0x2C */ u16* mpTexNo;
-    /* 0x30 */ GXCullMode* mpCullMode;
+    /* 0x30 */ GpuCullMode* mpCullMode;
     /* 0x34 */ J3DTevOrderInfo* mpTevOrderInfo;
     /* 0x38 */ NebulaColor16* mpTevColor;
     /* 0x3C */ NebulaColor8* mpTevKColor;

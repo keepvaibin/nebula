@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DNativeShape.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -27,13 +27,13 @@ public:
 };
 
 // The matrices a shape's corners take when they carry none: its position matrix's id and texture coordinates 0-7's
-// (GX_IDENTITY where a coordinate has no matrix).
+// (GPU_IDENTITY where a coordinate has no matrix).
 class J3DCurrentMtx {
 public:
     J3DCurrentMtx() {
         mPosition = 0;
         for (int i = 0; i < 8; i++) {
-            mTexture[i] = GX_IDENTITY;
+            mTexture[i] = GPU_IDENTITY;
         }
     }
 
@@ -122,8 +122,8 @@ public:
     }
 
     void initialize();
-    void addTexMtxIndexInDL(_GXAttr, u32);
-    void addTexMtxIndexInVcd(_GXAttr);
+    void addTexMtxIndexInDL(_GpuAttr, u32);
+    void addTexMtxIndexInVcd(_GpuAttr);
     void calcNBTScale(Vec const&, f32 (*)[3][3], f32 (*)[3][3]);
     u16 countBumpMtxNum() const;
     void initVtxAttr();
@@ -205,7 +205,7 @@ public:
     void setBumpMtxOffset(u32 offset) {
         mBumpMtxOffset = offset;
     }
-    GXVtxDescList* getVtxDesc() {
+    GpuVtxDescList* getVtxDesc() {
         return mVtxDesc;
     }
 
@@ -246,7 +246,7 @@ public:
     /* 0x14 */ Vec mMin;
     /* 0x20 */ Vec mMax;
     /* 0x2C */ bool mNebulaRegistered;
-    /* 0x30 */ GXVtxDescList* mVtxDesc;
+    /* 0x30 */ GpuVtxDescList* mVtxDesc;
     /* 0x34 */ bool mHasNBT;
     /* 0x38 */ J3DShapeMtx** mShapeMtx;
     /* 0x3C */ J3DShapeDraw** mShapeDraw;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -18,7 +18,7 @@ public:
     void loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index) const;
 
     struct TexMtxInfo {
-        TexMtxInfo() : mType(), mPostMtx(GX_PTIDENTITY) {
+        TexMtxInfo() : mType(), mPostMtx(GPU_PTIDENTITY) {
         }
 
         /* 0x00 */ s32 mType;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -63,7 +63,7 @@ public:
         return mVtxNum;
     }
 
-    GXVtxAttrFmtList* getVtxAttrFmtList() const {
+    GpuVtxAttrFmtList* getVtxAttrFmtList() const {
         return mVtxAttrFmtList;
     }
 
@@ -87,7 +87,7 @@ public:
         mVtxPosFrac = frac;
     }
 
-    void setVtxPosType(GXCompType type) {
+    void setVtxPosType(GpuCompType type) {
         mVtxPosType = type;
     }
 
@@ -95,7 +95,7 @@ public:
         mVtxNrmFrac = frac;
     }
 
-    void setVtxNrmType(GXCompType type) {
+    void setVtxNrmType(GpuCompType type) {
         mVtxNrmType = type;
     }
 
@@ -107,16 +107,16 @@ public:
     /* 0x0C */ u32 mTexCoordNum;
     /* 0x10 */ u32 mPacketNum;
     // A native copy on native builds (J3DModelLoader::readVertex); the vertex arrays stay as the file has them.
-    /* 0x14 */ GXVtxAttrFmtList* mVtxAttrFmtList;
+    /* 0x14 */ GpuVtxAttrFmtList* mVtxAttrFmtList;
     /* 0x18 */ void* mVtxPosArray;
     /* 0x1C */ void* mVtxNrmArray;
     /* 0x20 */ void* mVtxNBTArray;
     /* 0x24 */ NebulaColor8* mVtxColorArray[2];
     /* 0x2C */ void* mVtxTexCoordArray[8];
     /* 0x4C */ u8 mVtxPosFrac;
-    /* 0x50 */ GXCompType mVtxPosType;
+    /* 0x50 */ GpuCompType mVtxPosType;
     /* 0x54 */ u8 mVtxNrmFrac;
-    /* 0x58 */ GXCompType mVtxNrmType;
+    /* 0x58 */ GpuCompType mVtxNrmType;
     // Entries of each array the renderer has as values (J3DNativeShape): position, normal, NBT, colour 0-1,
     // texture coordinates 0-7.
     u32 mNebulaArrayCount[13];

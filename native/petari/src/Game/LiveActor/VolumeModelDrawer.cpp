@@ -30,27 +30,27 @@ void VolumeModelDrawer::draw() const {
     J3DNativeState::setColorUpdate(0);
     J3DNativeState::setAlphaUpdate(1);
     J3DNativeState::setDstAlpha(1, 0);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
+    J3DNativeState::setCullMode(GPU_CULL_NONE);
     NebulaColor8 color_1 = mColor;
     MR::setShadowVolumeColor(color_1);
-    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setZMode(0, GPU_ALWAYS, 0);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ZERO, GPU_LO_COPY);
     MR::drawSimpleModel(mModelData);
     J3DNativeState::setDstAlpha(0, 0);
-    J3DNativeState::setZMode(1, GX_GEQUAL, 0);
-    J3DNativeState::setCullMode(GX_CULL_FRONT);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setZMode(1, GPU_GEQUAL, 0);
+    J3DNativeState::setCullMode(GPU_CULL_FRONT);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_ZERO, GPU_LO_COPY);
     MR::drawSimpleModel(mModelData);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setBlendMode(GX_BM_SUBTRACT, GX_BL_ZERO, GX_BL_ZERO, GX_LO_COPY);
+    J3DNativeState::setCullMode(GPU_CULL_BACK);
+    J3DNativeState::setBlendMode(GPU_BM_SUBTRACT, GPU_BL_ZERO, GPU_BL_ZERO, GPU_LO_COPY);
     MR::drawSimpleModel(mModelData);
     NebulaColor8 color_2 = mColor;
     MR::setShadowVolumeColor(color_2);
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_DSTALPHA, GX_BL_ONE, GX_LO_COPY);
+    J3DNativeState::setCullMode(GPU_CULL_NONE);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_DSTALPHA, GPU_BL_ONE, GPU_LO_COPY);
     J3DNativeState::setColorUpdate(1);
     J3DNativeState::setDstAlpha(1, 0);
-    J3DNativeState::setZMode(0, GX_ALWAYS, 0);
+    J3DNativeState::setZMode(0, GPU_ALWAYS, 0);
     MR::drawSimpleModel(mModelData);
 }
 

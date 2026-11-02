@@ -5,7 +5,7 @@
 #include <JSystem/J3DGraphBase/J3DStruct.hpp>
 #include <JSystem/J3DGraphBase/J3DTexture.hpp>
 #include <JSystem/JUtility/JUTNameTab.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

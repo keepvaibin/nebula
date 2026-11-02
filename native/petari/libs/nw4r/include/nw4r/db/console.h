@@ -1,7 +1,7 @@
 #pragma once
 
 #include "nw4r/ut/TextWriter.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

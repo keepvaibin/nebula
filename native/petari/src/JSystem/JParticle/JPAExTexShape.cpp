@@ -9,12 +9,12 @@ void JPALoadExTex(JPAEmitterWorkData* work) {
 
     if (ets->isUseIndirect()) {
         u8 texIdx = ets->getIndTexIdx();
-        work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GX_TEXMAP2);
+        work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GPU_TEXMAP2);
     }
 
     if (ets->isUseSecTex()) {
         u8 texIdx = ets->getSecTexIdx();
-        work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GX_TEXMAP3);
+        work->mpResMgr->load(work->mpRes->getTexIdx(texIdx), GPU_TEXMAP3);
     }
 }
 

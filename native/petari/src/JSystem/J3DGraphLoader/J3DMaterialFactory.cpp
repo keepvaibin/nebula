@@ -13,7 +13,7 @@ J3DMaterialFactory::J3DMaterialFactory(J3DMaterialBlock const& i_block) {
         mpIndInitData = nullptr;
     }
 
-    mpCullMode = JSUConvertOffsetToPtr< GXCullMode >(&i_block, i_block.mpCullMode);
+    mpCullMode = JSUConvertOffsetToPtr< GpuCullMode >(&i_block, i_block.mpCullMode);
     mpMatColor = JSUConvertOffsetToPtr< NebulaColor8 >(&i_block, i_block.mpMatColor);
     mpColorChanNum = JSUConvertOffsetToPtr< u8 >(&i_block, i_block.mpColorChanNum);
     mpColorChanInfo = JSUConvertOffsetToPtr< J3DColorChanInfo >(&i_block, i_block.mpColorChanInfo);

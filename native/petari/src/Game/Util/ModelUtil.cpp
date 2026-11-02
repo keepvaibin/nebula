@@ -318,7 +318,7 @@ namespace MR {
 
             for (u32 idx = 0; idx < 8; idx++) {
                 J3DTexCoord* texCoord = material->getTexCoord(idx);
-                GXAttr attr = static_cast< GXAttr >(idx + 1);
+                GpuAttr attr = static_cast< GpuAttr >(idx + 1);
                 if (texCoord->getTexGenSrc() == 1) {
                     shape->addTexMtxIndexInDL(attr, 30);
                     shape->addTexMtxIndexInVcd(attr);
@@ -477,9 +477,9 @@ namespace MR {
 
     void downFracVtx(J3DModelData* pModelData) {
         u32 vtxNum = pModelData->getVtxNum();
-        GXVtxAttrFmtList* vtxAttrFmtList = pModelData->getVertexData().getVtxAttrFmtList();
-        while (vtxAttrFmtList->attr != GX_VA_NULL) {
-            if (vtxAttrFmtList->attr == GX_VA_POS) {
+        GpuVtxAttrFmtList* vtxAttrFmtList = pModelData->getVertexData().getVtxAttrFmtList();
+        while (vtxAttrFmtList->attr != GPU_VA_NULL) {
+            if (vtxAttrFmtList->attr == GPU_VA_POS) {
                 if (vtxAttrFmtList->frac == 0) {
                     return;
                 }

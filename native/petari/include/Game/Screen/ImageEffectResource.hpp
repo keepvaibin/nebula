@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class JUTTexture;
 
@@ -12,7 +12,7 @@ public:
     void createBloomTexture();
     void createBlurTexture();
     void createDOFTexture();
-    JUTTexture* createTexture(f32, GXTexFmt);
+    JUTTexture* createTexture(f32, GpuTexFmt);
 
     /* 0x00 */ JUTTexture* _0;
     /* 0x04 */ JUTTexture* _4;

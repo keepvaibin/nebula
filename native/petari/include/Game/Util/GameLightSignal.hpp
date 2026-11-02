@@ -2,7 +2,7 @@
 
 #include "Game/Util/Color.hpp"
 #include <JSystem/JGeometry/TVec.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

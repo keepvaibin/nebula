@@ -2,7 +2,7 @@
 
 #include "nw4r/db/assert.h"
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

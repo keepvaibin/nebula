@@ -601,7 +601,7 @@ void JPADrawLine(JPAEmitterWorkData* pWork, JPABaseParticle* pParticle) {
 
     end.setLength(pWork->mGlobalPtclScl.y * (25.0f * pParticle->mParticleScaleY));
     end.sub(position, end);
-    J3DNativeDraw::begin(GX_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_LINES, 2, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(position.x, position.y, position.z);
     J3DNativeDraw::texCoord(0.0f, 0.0f);
     J3DNativeDraw::position(end.x, end.y, end.z);
@@ -645,7 +645,7 @@ void JPADrawStripe(JPAEmitterWorkData* pWork) {
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
@@ -736,7 +736,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     TVec3f side;
     TVec3f vertices[2];
     Mtx matrix;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;
@@ -790,7 +790,7 @@ void JPADrawStripeX(JPAEmitterWorkData* pWork) {
     }
 
     texCoord = startTexCoord;
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, count * 2, NEBULA_SHAPE_TEXCOORD0);
     for (JPANode< JPABaseParticle >* pNode = pFirst; pNode != pWork->mpAlivePtcl->getEnd();) {
         JPABaseParticle* pParticle = pNode->getObject();
         pWork->mpCurNode = pNode;

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "JSystem/J3DGraphBase/J3DShape.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

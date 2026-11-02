@@ -635,8 +635,8 @@ void MR::calcAnimLayoutWithDrawInfo(const LayoutActor* pActor, const nw4r::lyt::
 
 void MR::drawLayoutWithDrawInfoWithoutProjectionSetup(const LayoutActor* pActor, const nw4r::lyt::DrawInfo& rDrawInfo) {
     if (isExecuteDrawLayout(pActor)) {
-        J3DNativeState::setCullMode(GX_CULL_NONE);
-        J3DNativeState::setZMode(GX_FALSE, GX_NEVER, GX_FALSE);
+        J3DNativeState::setCullMode(GPU_CULL_NONE);
+        J3DNativeState::setZMode(GPU_FALSE, GPU_NEVER, GPU_FALSE);
         pActor->getLayoutManager()->mLayout->Draw(rDrawInfo);
     }
 }

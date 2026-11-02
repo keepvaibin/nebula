@@ -1,10 +1,10 @@
 #pragma once
 
 #include "nw4r/lyt/types.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 namespace nw4r {
     namespace lyt {
@@ -13,18 +13,18 @@ namespace nw4r {
             TexMap() {
                 SetImage(NULL);
                 SetSize(0, 0);
-                SetTexelFormat(GX_TF_I4);
-                SetWrapMode(GX_CLAMP, GX_CLAMP);
+                SetTexelFormat(GPU_TF_I4);
+                SetWrapMode(GPU_CLAMP, GPU_CLAMP);
                 SetMipMap(false);
-                SetFilter(GX_LINEAR, GX_LINEAR);
+                SetFilter(GPU_LINEAR, GPU_LINEAR);
                 SetLOD(0.0f, 0.0f);
                 SetLODBias(0.0f);
                 SetBiasClampEnable(false);
                 SetEdgeLODEnable(false);
-                SetAnisotropy(GX_ANISO_1);
+                SetAnisotropy(GPU_ANISO_1);
             }
 
-            TexMap(const GXTexObj& rTexObj) {
+            TexMap(const GpuTexObj& rTexObj) {
                 Set(rTexObj);
             }
 
@@ -32,33 +32,33 @@ namespace nw4r {
                 mImage = pImage;
             }
 
-            void SetAnisotropy(GXAnisotropy aniso) {
+            void SetAnisotropy(GpuAnisotropy aniso) {
                 mBits.anisotropy = aniso;
             }
 
-            void Get(_GXTexObj*) const;
-            void Set(const _GXTexObj&);
+            void Get(_GpuTexObj*) const;
+            void Set(const _GpuTexObj&);
             // Image `id` of a cooked TPL file (its image a texture record).
             void ReplaceImage(const void* pTplFile, u32 id = 0);
 
-            inline GXTexFmt GetTexelFormat() const {
-                return GXTexFmt(mBits.textureFormat);
+            inline GpuTexFmt GetTexelFormat() const {
+                return GpuTexFmt(mBits.textureFormat);
             }
 
-            inline GXTexWrapMode GetWrapModeS() const {
-                return GXTexWrapMode(mBits.wrapS);
+            inline GpuTexWrapMode GetWrapModeS() const {
+                return GpuTexWrapMode(mBits.wrapS);
             }
 
-            inline GXTexWrapMode GetWrapModeT() const {
-                return GXTexWrapMode(mBits.wrapT);
+            inline GpuTexWrapMode GetWrapModeT() const {
+                return GpuTexWrapMode(mBits.wrapT);
             }
 
-            inline GXTexFilter GetMinFilter() const {
-                return GXTexFilter(mBits.minFilter);
+            inline GpuTexFilter GetMinFilter() const {
+                return GpuTexFilter(mBits.minFilter);
             }
 
-            inline GXTexFilter GetMagFilter() const {
-                return GXTexFilter(mBits.magFilter);
+            inline GpuTexFilter GetMagFilter() const {
+                return GpuTexFilter(mBits.magFilter);
             }
 
             inline bool IsBiasClampEnable() const {
@@ -69,8 +69,8 @@ namespace nw4r {
                 return 0 != mBits.edgeLODEnable;
             }
 
-            inline GXAnisotropy GetAnisotropy() const {
-                return GXAnisotropy(mBits.anisotropy);
+            inline GpuAnisotropy GetAnisotropy() const {
+                return GpuAnisotropy(mBits.anisotropy);
             }
 
             inline f32 GetLODBias() const {
@@ -97,12 +97,12 @@ namespace nw4r {
                 mLODBias = u16((s32)(bias * 256));
             }
 
-            void SetWrapMode(GXTexWrapMode wrapS, GXTexWrapMode wrapT) {
+            void SetWrapMode(GpuTexWrapMode wrapS, GpuTexWrapMode wrapT) {
                 mBits.wrapS = wrapS;
                 mBits.wrapT = wrapT;
             }
 
-            void SetFilter(GXTexFilter minFlt, GXTexFilter magFlt) {
+            void SetFilter(GpuTexFilter minFlt, GpuTexFilter magFlt) {
                 mBits.minFilter = minFlt;
                 mBits.magFilter = magFlt;
             }
@@ -125,7 +125,7 @@ namespace nw4r {
                 mHeight = height;
             }
 
-            void SetTexelFormat(GXTexFmt value) {
+            void SetTexelFormat(GpuTexFmt value) {
                 mBits.textureFormat = value;
             }
 

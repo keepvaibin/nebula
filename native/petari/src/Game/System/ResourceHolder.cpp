@@ -10,7 +10,7 @@
 #include <JSystem/J3DGraphLoader/J3DModelLoader.hpp>
 #include <cstdio>
 #include <cstring>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 #include "Game/Util/MotionSignal.hpp"

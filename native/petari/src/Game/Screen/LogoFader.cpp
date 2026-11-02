@@ -21,8 +21,8 @@ LogoFader::LogoFader(const char* pName) : LayoutActor(pName, true), _20(true), m
 
 void LogoFader::draw() const {
     if (mRate > RATE_MIN) {
-        J3DNativeState::setColorUpdate(GX_TRUE);
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
+        J3DNativeState::setColorUpdate(GPU_TRUE);
+        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
 
         NebulaColor8 fillColor = {0, 0, 0, (s32)(mRate * 255.0f)};
         MR::fillScreen(fillColor);

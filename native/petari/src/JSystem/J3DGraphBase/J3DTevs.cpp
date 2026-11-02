@@ -3,7 +3,7 @@
 #include "JSystem/J3DGraphBase/J3DStruct.hpp"
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
 #include "JSystem/J3DGraphBase/J3DTransform.hpp"
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 
 
 
@@ -224,9 +224,9 @@ void loadNBTScale(J3DNBTScale& NBTScale) {
 }
 
 J3DTexCoordInfo const j3dDefaultTexCoordInfo[8] = {
-    {GX_MTX2x4, GX_TG_TEX0, GX_IDENTITY, 0}, {GX_MTX2x4, GX_TG_TEX1, GX_IDENTITY, 0}, {GX_MTX2x4, GX_TG_TEX2, GX_IDENTITY, 0},
-    {GX_MTX2x4, GX_TG_TEX3, GX_IDENTITY, 0}, {GX_MTX2x4, GX_TG_TEX4, GX_IDENTITY, 0}, {GX_MTX2x4, GX_TG_TEX5, GX_IDENTITY, 0},
-    {GX_MTX2x4, GX_TG_TEX6, GX_IDENTITY, 0}, {GX_MTX2x4, GX_TG_TEX7, GX_IDENTITY, 0},
+    {GX_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, 0}, {GX_MTX2x4, GPU_TG_TEX1, GPU_IDENTITY, 0}, {GX_MTX2x4, GPU_TG_TEX2, GPU_IDENTITY, 0},
+    {GX_MTX2x4, GPU_TG_TEX3, GPU_IDENTITY, 0}, {GX_MTX2x4, GPU_TG_TEX4, GPU_IDENTITY, 0}, {GX_MTX2x4, GPU_TG_TEX5, GPU_IDENTITY, 0},
+    {GX_MTX2x4, GPU_TG_TEX6, GPU_IDENTITY, 0}, {GX_MTX2x4, GPU_TG_TEX7, GPU_IDENTITY, 0},
 };
 
 J3DTexMtxInfo const j3dDefaultTexMtxInfo = {
@@ -271,7 +271,7 @@ static u8 j3dTexCoordTable[7623];
 
 void makeTexCoordTable() {
     u8 texMtx[] = {
-        GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_TEXMTX3, GX_TEXMTX4, GX_TEXMTX5, GX_TEXMTX6, GX_TEXMTX7, GX_TEXMTX8, GX_TEXMTX9, GX_IDENTITY,
+        GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_TEXMTX3, GPU_TEXMTX4, GPU_TEXMTX5, GPU_TEXMTX6, GPU_TEXMTX7, GPU_TEXMTX8, GPU_TEXMTX9, GPU_IDENTITY,
     };
 
     u8* table = j3dTexCoordTable;
@@ -361,7 +361,7 @@ J3DTevSwapModeInfo const j3dDefaultTevSwapMode = {
 
 const J3DTevSwapModeTableInfo j3dDefaultTevSwapModeTable = {0x00, 0x01, 0x02, 0x03};
 
-const J3DBlendInfo j3dDefaultBlendInfo = {GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP};
+const J3DBlendInfo j3dDefaultBlendInfo = {GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP};
 
 const u8 j3dDefaultTevSwapTableID = 0x1B;
 

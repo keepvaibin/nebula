@@ -3,7 +3,7 @@
 #include "Game/NameObj/NameObj.hpp"
 #include "Game/Util/Color.hpp"
 #include <JSystem/J3DGraphAnimator/J3DModelData.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

@@ -53,7 +53,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
     TDDraw::setupNative(&material, 0, 1, 0);
     NativeShader::setDepth(material, true, NEBULA_COMPARE_LEQUAL, false);
     NativeShader::send(material);
-    J3DNativeState::setPointSize(27, GX_TO_ZERO);
+    J3DNativeState::setPointSize(27, GPU_TO_ZERO);
 
     static u8 phase = 0;
     phase = (phase + 1) & 3;
@@ -144,7 +144,7 @@ void MarineSnow::draw(const TVec3f& rPosition, const TVec3f& rUp, f32 surfaceDis
                 }
 
                 for (u16 point = firstParticle; point < lastParticle; point += particleStride) {
-                    J3DNativeDraw::begin(GX_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
+                    J3DNativeDraw::begin(GPU_QUADS, 4, NEBULA_SHAPE_COLOR0 | NEBULA_SHAPE_TEXCOORD0);
                     {
                         TDDraw::sendPoint(mParticlePositions[point] - diagonalDown, alpha);
                         J3DNativeDraw::texCoord(0.0f, 0.0f);

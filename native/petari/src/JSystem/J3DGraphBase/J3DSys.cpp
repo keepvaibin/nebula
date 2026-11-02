@@ -76,15 +76,15 @@ void J3DSys::loadNrmMtxIndx(int addr, u16 indx) const {
 }
 
 void J3DSys::drawInit() {
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setCoPlanar(GX_FALSE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setDither(GX_TRUE);
-    J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_NOOP);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
+    J3DNativeState::setCullMode(GPU_CULL_BACK);
+    J3DNativeState::setCoPlanar(GPU_FALSE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setDither(GPU_TRUE);
+    J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_NOOP);
+    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
 
     reinitTexture();
 
@@ -98,23 +98,23 @@ void J3DSys::drawInit() {
 
     u8 i;
     for (i = 0; i < 3; i++)
-        J3DNativeState::setIndTexMtx((GXIndTexMtxID)(GX_ITM_0 + i), indTexMtx, 1);
+        J3DNativeState::setIndTexMtx((GpuIndTexMtxID)(GPU_ITM_0 + i), indTexMtx, 1);
 
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, j3dDefaultColInfo);
-    J3DNativeState::setChanMatColor(GX_COLOR1A1, j3dDefaultColInfo);
+    J3DNativeState::setChanMatColor(GPU_COLOR0A0, j3dDefaultColInfo);
+    J3DNativeState::setChanMatColor(GPU_COLOR1A1, j3dDefaultColInfo);
 
-    for (i = 0; i < GX_MAX_TEVREG; i++)
-        J3DNativeState::setTevKColor((GXTevKColorID)i, j3dDefaultTevKColor);
+    for (i = 0; i < GPU_MAX_TEVREG; i++)
+        J3DNativeState::setTevKColor((GpuTevKColorID)i, j3dDefaultTevKColor);
 
-    for (i = 0; i < GX_MAX_TEVREG; i++)
-        J3DNativeState::setTevColorS10((GXTevRegID)i, j3dDefaultTevColor);
+    for (i = 0; i < GPU_MAX_TEVREG; i++)
+        J3DNativeState::setTevColorS10((GpuTevRegID)i, j3dDefaultTevColor);
 
 
 }
 
 void J3DSys::reinitGX() {
-    J3DNativeState::setCullMode(GX_CULL_BACK);
-    J3DNativeState::setCoPlanar(GX_FALSE);
+    J3DNativeState::setCullMode(GPU_CULL_BACK);
+    J3DNativeState::setCoPlanar(GPU_FALSE);
     reinitLighting();
     reinitTransform();
     reinitTexture();
@@ -124,45 +124,45 @@ void J3DSys::reinitGX() {
 }
 
 void J3DSys::reinitLighting() {
-    J3DNativeState::setChanAmbColor(GX_COLOR0A0, ColorBlack);
-    J3DNativeState::setChanAmbColor(GX_COLOR1A1, ColorBlack);
-    J3DNativeState::setChanMatColor(GX_COLOR0A0, ColorWhite);
-    J3DNativeState::setChanMatColor(GX_COLOR1A1, ColorWhite);
+    J3DNativeState::setChanAmbColor(GPU_COLOR0A0, ColorBlack);
+    J3DNativeState::setChanAmbColor(GPU_COLOR1A1, ColorBlack);
+    J3DNativeState::setChanMatColor(GPU_COLOR0A0, ColorWhite);
+    J3DNativeState::setChanMatColor(GPU_COLOR1A1, ColorWhite);
 }
 
 void J3DSys::reinitTransform() {
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 }
 
 void J3DSys::reinitTexture() {
-    J3DNativeTexture::registerImage(&sNullTexture, GX_TF_IA8, 4, 4, 1);
+    J3DNativeTexture::registerImage(&sNullTexture, GPU_TF_IA8, 4, 4, 1);
 }
 
 void J3DSys::reinitTevStages() {
-    J3DNativeState::setTevColor(GX_TEVREG0, ColorWhite);
-    J3DNativeState::setTevColor(GX_TEVREG1, ColorWhite);
-    J3DNativeState::setTevColor(GX_TEVREG2, ColorWhite);
-    J3DNativeState::setTevKColor(GX_KCOLOR0, ColorWhite);
-    J3DNativeState::setTevKColor(GX_KCOLOR1, ColorWhite);
-    J3DNativeState::setTevKColor(GX_KCOLOR2, ColorWhite);
-    J3DNativeState::setTevKColor(GX_KCOLOR3, ColorWhite);
+    J3DNativeState::setTevColor(GPU_TEVREG0, ColorWhite);
+    J3DNativeState::setTevColor(GPU_TEVREG1, ColorWhite);
+    J3DNativeState::setTevColor(GPU_TEVREG2, ColorWhite);
+    J3DNativeState::setTevKColor(GPU_KCOLOR0, ColorWhite);
+    J3DNativeState::setTevKColor(GPU_KCOLOR1, ColorWhite);
+    J3DNativeState::setTevKColor(GPU_KCOLOR2, ColorWhite);
+    J3DNativeState::setTevKColor(GPU_KCOLOR3, ColorWhite);
 
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_AND, GX_ALWAYS, 0);
+    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_AND, GPU_ALWAYS, 0);
 }
 
 void J3DSys::reinitIndStages() {
-    J3DNativeState::setIndTexMtx(GX_ITM_0, IndMtx, 1);
-    J3DNativeState::setIndTexMtx(GX_ITM_1, IndMtx, 1);
-    J3DNativeState::setIndTexMtx(GX_ITM_2, IndMtx, 1);
+    J3DNativeState::setIndTexMtx(GPU_ITM_0, IndMtx, 1);
+    J3DNativeState::setIndTexMtx(GPU_ITM_1, IndMtx, 1);
+    J3DNativeState::setIndTexMtx(GPU_ITM_2, IndMtx, 1);
 }
 
 void J3DSys::reinitPixelProc() {
-    J3DNativeState::setBlendMode(GX_BM_NONE, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_CLEAR);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    // SMG1 change -- GX_FALSE to GX_TRUE
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setDither(GX_TRUE);
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, ColorBlack);
-    J3DNativeState::setFogRangeAdj(GX_FALSE, 0, nullptr);
-    J3DNativeState::setZMode(GX_TRUE, GX_LEQUAL, GX_TRUE);
+    J3DNativeState::setBlendMode(GPU_BM_NONE, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_CLEAR);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    // SMG1 change -- GPU_FALSE to GPU_TRUE
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DNativeState::setDither(GPU_TRUE);
+    J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 1.0f, 0.1f, 1.0f, ColorBlack);
+    J3DNativeState::setFogRangeAdj(GPU_FALSE, 0, nullptr);
+    J3DNativeState::setZMode(GPU_TRUE, GPU_LEQUAL, GPU_TRUE);
 }

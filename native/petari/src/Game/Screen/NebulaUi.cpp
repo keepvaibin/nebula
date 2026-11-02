@@ -225,15 +225,15 @@ namespace NebulaUi {
         }
         const s32 tilesAcross = (rGlyph.texWidth + 7) / 8;
         switch (rGlyph.texFormat) {
-        case GX_TF_I4: {
+        case GPU_TF_I4: {
             const u8 byte = pData[((y / 8) * tilesAcross + x / 8) * 32 + (y % 8) * 4 + (x % 8) / 2];
             return (x & 1) == 0 ? byte >> 4 : byte & 0xF;
         }
-        case GX_TF_IA4:
+        case GPU_TF_IA4:
             return pData[((y / 4) * tilesAcross + x / 8) * 32 + (y % 4) * 8 + x % 8] >> 4;
-        case GX_TF_I8:
+        case GPU_TF_I8:
             return pData[((y / 4) * tilesAcross + x / 8) * 32 + (y % 4) * 8 + x % 8] >> 4;
-        case GX_TF_IA8:
+        case GPU_TF_IA8:
             return pData[(((y / 4) * ((rGlyph.texWidth + 3) / 4) + x / 4) * 16 + (y % 4) * 4 + x % 4) * 2] >> 4;
         default:
             return -1;

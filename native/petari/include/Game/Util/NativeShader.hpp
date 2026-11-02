@@ -39,7 +39,7 @@ namespace NativeShader {
         rMaterial.color_write = 2;  // as it was (0 off, 1 on, 2 kept)
         rMaterial.alpha_write = 2;
         for (u32 i = 0; i < 8; i++) {
-            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GX_PTIDENTITY), GX's texgens' default
+            rMaterial.texgen_post[i] = 61;  // the identity post-transform (GPU_PTIDENTITY), GX's texgens' default
         }
     }
 
@@ -48,7 +48,7 @@ namespace NativeShader {
         rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pTexture->mImage);
         rMaterial.textures[slot].repeat_s = pTexture->mWrapS;
         rMaterial.textures[slot].repeat_t = pTexture->mWrapT;
-        // The texture's filters as it loads them (its resource's, GXTexFilter: near 0, linear 1, then by mip level
+        // The texture's filters as it loads them (its resource's, GpuTexFilter: near 0, linear 1, then by mip level
         // near/linear: 2-3 nearest level, 4-5 between levels).
         const u8 minType = pTexture->mMinType;
         rMaterial.textures[slot].mag_linear = pTexture->mMagType != 0 ? 1 : 0;
@@ -62,23 +62,23 @@ namespace NativeShader {
     }
 
     // Texture `slot` from a texture object the site set up (J3DNativeTexture::init: an image it made or captured).
-    inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const GXTexObj* pObj) {
+    inline void setTexObj(NebulaNativeMaterial& rMaterial, u32 slot, const GpuTexObj* pObj) {
         void* pImage;
         u16 width, height;
-        GXTexFmt format;
-        GXTexWrapMode wrapS, wrapT;
-        GXBool mipmap;
+        GpuTexFmt format;
+        GpuTexWrapMode wrapS, wrapT;
+        GpuBool mipmap;
         J3DNativeTexture::getAll(pObj, &pImage, &width, &height, &format, &wrapS, &wrapT, &mipmap);
-        GXTexFilter minFilter, magFilter;
+        GpuTexFilter minFilter, magFilter;
         f32 minLod, maxLod, lodBias;
-        GXBool biasClamp, edgeLod;
-        GXAnisotropy maxAniso;
+        GpuBool biasClamp, edgeLod;
+        GpuAnisotropy maxAniso;
         J3DNativeTexture::getLODAll(pObj, &minFilter, &magFilter, &minLod, &maxLod, &lodBias, &biasClamp, &edgeLod,
                                     &maxAniso);
         rMaterial.textures[slot].image = reinterpret_cast< uintptr_t >(pImage);
         rMaterial.textures[slot].repeat_s = static_cast< u8 >(wrapS);
         rMaterial.textures[slot].repeat_t = static_cast< u8 >(wrapT);
-        rMaterial.textures[slot].mag_linear = magFilter != GX_NEAR ? 1 : 0;
+        rMaterial.textures[slot].mag_linear = magFilter != GPU_NEAR ? 1 : 0;
         rMaterial.textures[slot].min_linear = minFilter == 1 || minFilter == 3 || minFilter == 5 ? 1 : 0;
         rMaterial.textures[slot].mip_filter = minFilter < 2 ? 0 : minFilter < 4 ? 1 : 2;
         rMaterial.textures[slot].anisotropy = static_cast< u8 >(maxAniso);
@@ -96,14 +96,14 @@ namespace NativeShader {
         rMaterial.constants[at + 3] = a / 255.0f;
     }
 
-    // Depth: tested by `func` (NEBULA_COMPARE_*, GX's order) when `test`, written when `write` (GXSetZMode's terms).
+    // Depth: tested by `func` (NEBULA_COMPARE_*, GX's order) when `test`, written when `write` (GpuSetZMode's terms).
     inline void setDepth(NebulaNativeMaterial& rMaterial, bool test, u8 func, bool write) {
         rMaterial.depth_test = test ? 1 : 0;
         rMaterial.depth_func = test ? func : static_cast< u8 >(NEBULA_COMPARE_ALWAYS);
         rMaterial.depth_write = test && write ? 1 : 0;
     }
 
-    // Blending as GXSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, GX's order).
+    // Blending as GpuSetBlendMode's blend: source and destination factors (NEBULA_FACTOR_*, GX's order).
     inline void setBlend(NebulaNativeMaterial& rMaterial, u8 src, u8 dst) {
         rMaterial.blend_op = NEBULA_BLEND_ADD;
         rMaterial.blend_src = src;

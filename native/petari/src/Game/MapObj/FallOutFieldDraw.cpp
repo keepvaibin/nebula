@@ -33,11 +33,11 @@ namespace {
 };  // namespace
 
 namespace {
-    static GXTevOp sAlphaTevOperater = GX_TEV_COMP_A8_GT;
-    static GXBlendMode sFillBlendMode = GX_BM_BLEND;
-    static GXBlendFactor sFillSrcFactor = GX_BL_SRCALPHA;
-    static GXBlendFactor sFillDstFactor = GX_BL_INVSRCALPHA;
-    static GXLogicOp sFillLogicOp = GX_LO_NOOP;
+    static GpuTevOp sAlphaTevOperater = GPU_TEV_COMP_A8_GT;
+    static GpuBlendMode sFillBlendMode = GPU_BM_BLEND;
+    static GpuBlendFactor sFillSrcFactor = GPU_BL_SRCALPHA;
+    static GpuBlendFactor sFillDstFactor = GPU_BL_INVSRCALPHA;
+    static GpuLogicOp sFillLogicOp = GPU_LO_NOOP;
     // static const s32 sBlurCount = _;
     // static const f32 sBlurRadius = _;
     // static const f32 sBlurIntensity = _;
@@ -71,17 +71,17 @@ namespace {
 }  // namespace
 
 void FallOutFieldDraw::setUpFillScreen() const {
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
     J3DNativeView::setZScaleOffset(0.0f, 1.0f);
     sendFillMaterial(_C);
 }
 
 
 void FallOutFieldDraw::setUpEdgeAndClearAlpha() const {
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
 }
 
 void FallOutFieldDraw::init(const JMapInfoIter& rIter) {
@@ -121,11 +121,11 @@ void FallOutFieldDraw::draw() const {
     JUTTexture* pScreenAlphaTexture3 = MR::getScreenAlphaTexture(3);
     JUTTexture* pScreenAlphaTexture4 = MR::getScreenAlphaTexture(4);
 
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GX_CTF_A8, true, 0, true);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture2, 0, 1, GPU_CTF_A8, true, 0, true);
 
-    J3DNativeState::setColorUpdate(GX_FALSE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_FALSE, 0);
+    J3DNativeState::setColorUpdate(GPU_FALSE);
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DNativeState::setDstAlpha(GPU_FALSE, 0);
     J3DNativeView::setZScaleOffset(0.0f, 0.0f);
     // The mask: alpha 255 where the screen's alpha is under (or, by arg 0, over) 1 (GX: konst 0's alpha compared).
     const NebulaColor8 konst = {0, 0, 0, 1};
@@ -134,12 +134,12 @@ void FallOutFieldDraw::draw() const {
                                   white);
 
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture2, 2, 0, 255, ImageEffectLocalUtil::TexDrawType_0);
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture3, 2, 0, GX_CTF_A8, true, 0, true);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture3, 2, 0, GPU_CTF_A8, true, 0, true);
 
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Alpha, konst, ::sEdgeColor);
 
     ImageEffectLocalUtil::blurTexture(pScreenAlphaTexture3, 4, 4, 5, 0.004f, 1.0f);
-    ImageEffectLocalUtil::capture(pScreenAlphaTexture4, 4, 4, GX_CTF_A8, false, 0, true);
+    ImageEffectLocalUtil::capture(pScreenAlphaTexture4, 4, 4, GPU_CTF_A8, false, 0, true);
     setUpEdgeAndClearAlpha();
     ImageEffectLocalUtil::setMode(ImageEffectLocalUtil::Mode_Edge, konst, ::sEdgeColor);
     ImageEffectLocalUtil::drawTexture(pScreenAlphaTexture4, 1, 0, 255, ImageEffectLocalUtil::TexDrawType_2);
@@ -150,9 +150,9 @@ void FallOutFieldDraw::draw() const {
     MR::loadViewMtx();
     MR::loadProjectionMtx();
 
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
     J3DNativeView::setZScaleOffset(1.0f, 0.0f);
 }
 

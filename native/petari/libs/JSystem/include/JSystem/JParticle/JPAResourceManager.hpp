@@ -2,7 +2,7 @@
 
 #include "Inline.hpp"
 #include "JSystem/JParticle/JPATexture.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -20,11 +20,11 @@ public:
     void registTex(JPATexture*);
     u32 getResUserWork(u16) const;
 
-    void load(u16 idx, GXTexMapID texMapID) NO_INLINE {
+    void load(u16 idx, GpuTexMapID texMapID) NO_INLINE {
         CALL_INLINE_FUNC(load, idx, texMapID);
     }
 
-    inline void INLINE_FUNC_DECL(load, u16 idx, GXTexMapID texMapID) {
+    inline void INLINE_FUNC_DECL(load, u16 idx, GpuTexMapID texMapID) {
         mpTexArr[idx]->load(texMapID);
     }
 

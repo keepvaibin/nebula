@@ -107,7 +107,7 @@ void NativeMesh::useArray(u32 slot, const void* pKey) {
     mArrays[slot] = static_cast< u64 >(reinterpret_cast< uintptr_t >(pKey));
 }
 
-void NativeMesh::begin(GXPrimitive primitive, u16 count) {
+void NativeMesh::begin(GpuPrimitive primitive, u16 count) {
     mPrimitiveType = static_cast< u8 >(primitive);
     mPrimitiveCount = count;
     mPrimitiveAt = 0;
@@ -177,25 +177,25 @@ void NativeMesh::corner() {
     const u32 count = mPrimitiveCount;
     const u8 type = mPrimitiveType;
     u32 triangles = 0;
-    if (type == GX_TRIANGLES) {
+    if (type == GPU_TRIANGLES) {
         triangles = count / 3;
-    } else if (type == GX_QUADS) {
+    } else if (type == GPU_QUADS) {
         triangles = count / 4 * 2;
     } else if (count >= 3) {
         triangles = count - 2;
     }
     for (u32 t = 0; t < triangles; t++) {
         u32 v[3];
-        if (type == GX_TRIANGLES) {
+        if (type == GPU_TRIANGLES) {
             v[0] = 3 * t;
             v[1] = 3 * t + 1;
             v[2] = 3 * t + 2;
-        } else if (type == GX_QUADS) {
+        } else if (type == GPU_QUADS) {
             const u32 q = 4 * (t / 2);
             v[0] = q;
             v[1] = q + 1 + (t & 1);
             v[2] = q + 2 + (t & 1);
-        } else if (type == GX_TRIANGLESTRIP) {
+        } else if (type == GPU_TRIANGLESTRIP) {
             v[0] = (t & 1) != 0 ? t + 1 : t;
             v[1] = (t & 1) != 0 ? t : t + 1;
             v[2] = t + 2;

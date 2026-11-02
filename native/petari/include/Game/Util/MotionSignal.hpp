@@ -85,14 +85,14 @@ namespace MotionSignal {
         }
     }
 
-    // One particle draws next (its own GXBegin).
+    // One particle draws next (its own GpuBegin).
     inline void drawParticle(const JPABaseParticle* pParticle, bool child) {
         if (NebulaRender::sDrawIdentities != 0) {
             drawParticleImpl(pParticle, child);
         }
     }
 
-    // A particle of a stripe: its two vertices are written next, inside the stripe's one GXBegin (strip 0 JPADrawStripe,
+    // A particle of a stripe: its two vertices are written next, inside the stripe's one GpuBegin (strip 0 JPADrawStripe,
     // 1 and 2 the passes of JPADrawStripeX).
     void stripeParticle(const JPABaseParticle* pParticle, u8 strip);
 

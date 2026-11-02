@@ -2,7 +2,7 @@
 
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <nebula_game_api.h>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class JUTTexture;
 

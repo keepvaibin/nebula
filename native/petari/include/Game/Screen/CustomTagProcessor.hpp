@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Game/Screen/MessageTagSkipTagProcessor.hpp"
-#include <revolution/gx/GXStruct.h>
+#include <NebulaGpuTypes.h>
 
 namespace nw4r {
     namespace lyt {

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -14,18 +14,18 @@ struct ResTLUT {
 
 class JUTPalette {
 public:
-    JUTPalette(_GXTlut p1, _GXTlutFmt p2, JUTTransparency p3, u16 p4, void* p5) {
+    JUTPalette(_GpuTlut p1, _GpuTlutFmt p2, JUTTransparency p3, u16 p4, void* p5) {
         this->storeTLUT(p1, p2, p3, p4, p5);
     }
 
-    JUTPalette(GXTlut tlutNo, ResTLUT* p_tlutRes) {
+    JUTPalette(GpuTlut tlutNo, ResTLUT* p_tlutRes) {
         storeTLUT(tlutNo, p_tlutRes);
     }
 
-    void storeTLUT(GXTlut, ResTLUT*);
-    void storeTLUT(GXTlut, GXTlutFmt, JUTTransparency, u16, void*);
+    void storeTLUT(GpuTlut, ResTLUT*);
+    void storeTLUT(GpuTlut, GpuTlutFmt, JUTTransparency, u16, void*);
 
-    /* 0x00 */ GXTlutObj mObj;
+    /* 0x00 */ GpuTlutObj mObj;
     /* 0x0C */ u8 mName;
     /* 0x0D */ u8 mFormat;
     /* 0x10 */ ResTLUT* mColorTable;

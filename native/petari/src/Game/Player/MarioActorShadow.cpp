@@ -589,7 +589,7 @@ void MarioActor::drawSilhouette() const {
     pModel->mFlags._1C = true;
     pModel->directDraw(nullptr);
     pModel->mFlags._1C = false;
-    J3DNativeState::setAlphaUpdate(GX_TRUE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setDstAlpha(GX_TRUE, 0);
+    J3DNativeState::setAlphaUpdate(GPU_TRUE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setDstAlpha(GPU_TRUE, 0);
 }

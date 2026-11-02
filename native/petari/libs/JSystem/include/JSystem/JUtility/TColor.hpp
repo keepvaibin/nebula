@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Inline.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 namespace JUtility {
     struct TColor : public NebulaColor8 {

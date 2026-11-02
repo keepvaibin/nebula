@@ -365,7 +365,7 @@ namespace nw4r {
             }
 
             J3DNativeShape::setPosition(0, *pMtx);
-            J3DNativeState::setCurrentMtx(GX_PNMTX0);
+            J3DNativeState::setCurrentMtx(GPU_PNMTX0);
         }
 
         const math::VEC2 Pane::GetVtxPos() const {

@@ -46,7 +46,7 @@ void FurDrawManager::draw() const {
         }
     }
 
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 FurCtrl::FurCtrl(LiveActor* pActor, FurParam* pParam, bool addToManager, u8 drawOrder) : mParam(pParam), mVisible(), mFurUVScale(1.0f) {
@@ -135,8 +135,8 @@ void FurCtrl::drawFur() {
     }
 
     J3DShape* pShape = pModelData->getShapeNodePointer(mShapeIndex);
-    pShape->mCurrentMtx.setCurrentTexMtx(GX_TEXMTX0, GX_TEXMTX1, GX_TEXMTX2, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                         GX_IDENTITY, GX_IDENTITY);
+    pShape->mCurrentMtx.setCurrentTexMtx(GPU_TEXMTX0, GPU_TEXMTX1, GPU_TEXMTX2, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                         GPU_IDENTITY, GPU_IDENTITY);
     J3DShapePacket* pPacket;
 
     for (s32 i = 0; i < mDrawer->mNumLayers; i++) {
@@ -149,8 +149,8 @@ void FurCtrl::drawFur() {
 
     mModel->mShapePacket[mShapeIndex].setModel(mModel);
     NebulaColor8 fogColor = {0, 0, 0, 0};
-    J3DNativeState::setFog(GX_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setFog(GPU_FOG_NONE, 0.0f, 0.0f, 0.0f, 0.0f, fogColor);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void FurCtrl::createFurMap() {
@@ -197,10 +197,10 @@ void FurCtrl::setupFur(J3DModel* pModel, ResTIMG* pLength, ResTIMG* pIndirect, R
     s32 componentSize;
 
     switch (mShader->_24) {
-    case GX_S16:
+    case GPU_S16:
         componentSize = sizeof(s16);
         break;
-    case GX_F32:
+    case GPU_F32:
         componentSize = sizeof(f32);
         break;
     }

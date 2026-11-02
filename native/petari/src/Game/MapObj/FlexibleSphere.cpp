@@ -25,9 +25,9 @@ void shapeCallBack(J3DShape* pShape) {
     Mtx mtx;
     NebulaMtxScale(mtx, scale, scale, 0.0f);
     J3DNativeShape::setTexture(0, mtx, 2);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD1, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
-    J3DNativeState::setTexCoordGen2(GX_TEXCOORD2, GX_TG_MTX2x4, GX_TG_TEX0, 30, GX_FALSE, 125);
+    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD1, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
+    J3DNativeState::setTexCoordGen2(GPU_TEXCOORD2, GX_TG_MTX2x4, GPU_TG_TEX0, 30, GPU_FALSE, 125);
 }
 
 FlexibleSphere::FlexibleSphere(const char* pName) : LiveActor(pName), mTimer() {

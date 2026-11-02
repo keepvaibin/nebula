@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class JPAEmitterWorkData;
 class JPABaseParticle;

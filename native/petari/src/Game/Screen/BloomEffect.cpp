@@ -13,8 +13,8 @@
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
 #include "JSystem/JUtility/JUTVideo.hpp"
-#include "revolution/gx/GXEnum.h"
-#include "revolution/gx/GXStruct.h"
+#include <NebulaGpuEnums.h>
+#include <NebulaGpuTypes.h>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nebula_game_api.h>
 #include <cstring>
@@ -136,13 +136,13 @@ void BloomEffect::preDraw() const {
         NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
     } else
     {
-        ImageEffectLocalUtil::capture(_24, 1, 0, GX_TF_RGBA8, false, 0);
+        ImageEffectLocalUtil::capture(_24, 1, 0, GPU_TF_RGBA8, false, 0);
     }
 
     MR::fillScreen(Color8(0, 0, 0, 0xFF).mGXColor);
     MR::loadViewMtx();
     MR::loadProjectionMtx();
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
 }
 
 void BloomEffect::postDraw() const {
@@ -161,41 +161,41 @@ void BloomEffect::postDraw() const {
                               floatBits(1.0f / MR::getAspect()));
         initDraw();
         J3DNativeState::setNumTexGens(1);
-        J3DNativeState::setTexCoordGen2(GX_TEXCOORD0, GX_TG_MTX2x4, GX_TG_TEX0, GX_IDENTITY, GX_FALSE, GX_PTIDENTITY);
+        J3DNativeState::setTexCoordGen2(GPU_TEXCOORD0, GX_TG_MTX2x4, GPU_TG_TEX0, GPU_IDENTITY, GPU_FALSE, GPU_PTIDENTITY);
         J3DNativeState::setNumTevStages(1);
-        J3DNativeState::setTevOrder(GX_TEVSTAGE0, GX_TEXCOORD0, GX_TEXMAP0, GX_COLOR0A0);
-        J3DNativeState::setTevOp(GX_TEVSTAGE0, GX_MODULATE);
-        _3C->load(GX_TEXMAP0);
-        J3DNativeState::setChanMatColor(GX_COLOR0A0, Color8(0xFF, 0xFF, 0xFF, 0xFF));
-        J3DNativeState::setBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_ONE, GX_LO_CLEAR);
+        J3DNativeState::setTevOrder(GPU_TEVSTAGE0, GPU_TEXCOORD0, GPU_TEXMAP0, GPU_COLOR0A0);
+        J3DNativeState::setTevOp(GPU_TEVSTAGE0, GPU_MODULATE);
+        _3C->load(GPU_TEXMAP0);
+        J3DNativeState::setChanMatColor(GPU_COLOR0A0, Color8(0xFF, 0xFF, 0xFF, 0xFF));
+        J3DNativeState::setBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_ONE, GPU_LO_CLEAR);
         return;
     }
 
-    ImageEffectLocalUtil::capture(_28, 1, 0, GX_TF_RGB565, true, 0);
+    ImageEffectLocalUtil::capture(_28, 1, 0, GPU_TF_RGB565, true, 0);
     initDraw();
     drawTexture(_28, 4, 0, 0xFF, DrawType_0);
 
-    ImageEffectLocalUtil::capture(_2C, 4, 0, GX_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_40, 4, 0, GX_TF_I8, false, 0);
+    ImageEffectLocalUtil::capture(_2C, 4, 0, GPU_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_40, 4, 0, GPU_TF_I8, false, 0);
     drawTexture(_2C, 4, 2, 0xFF, DrawType_0);
 
     sBloomStage = BloomStage_Threshold;
     drawTexture(_40, 4, 2, _20, DrawType_2);
     sBloomStage = BloomStage_Modulate;
 
-    ImageEffectLocalUtil::capture(_44, 4, 2, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_44, 4, 2, GPU_TF_RGB565, false, 0);
     blurTexture(_44, _48, 4, 3, 6, _18, 2, &::sL1RadAndOfs[0]._0);
 
-    ImageEffectLocalUtil::capture(_30, 4, 3, GX_TF_RGB565, false, 0);
-    ImageEffectLocalUtil::capture(_34, 4, 3, GX_TF_RGB565, true, 0);
+    ImageEffectLocalUtil::capture(_30, 4, 3, GPU_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_34, 4, 3, GPU_TF_RGB565, true, 0);
     blurTexture(_34, _4C, 8, 20, 12, _1C, 3, &::sL2RadAndOfs[0]._0);
 
-    ImageEffectLocalUtil::capture(_38, 8, 20, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_38, 8, 20, GPU_TF_RGB565, false, 0);
     const u8 intensity = _14 * get_10();
     drawTexture(_30, 4, 7, intensity, DrawType_0);
     drawTexture(_38, 4, 7, intensity, DrawType_1);
 
-    ImageEffectLocalUtil::capture(_3C, 4, 7, GX_TF_RGB565, false, 0);
+    ImageEffectLocalUtil::capture(_3C, 4, 7, GPU_TF_RGB565, false, 0);
 
     if (sBloomRoute != 0) {
         // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).
@@ -221,25 +221,25 @@ bool BloomEffect::isForEachModel() const {
 
 void BloomEffect::initDraw() const {
     MR::reinitGX();
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
+    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
 
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setDither(GX_FALSE);
+    J3DNativeState::setCullMode(GPU_CULL_NONE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+    J3DNativeState::setDither(GPU_FALSE);
     sBloomStage = BloomStage_Modulate;
 }
 
@@ -255,7 +255,7 @@ void BloomEffect::drawTexture(JUTTexture* pTexture, s32 param2, s32 param3, u8 i
     f32 bottom = (row + 1) * height;
     f32 top = row * height;
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     {
         J3DNativeDraw::position(left, bottom, -1.0f);
         J3DNativeDraw::texCoord(0.0f, 1.0f);
@@ -316,7 +316,7 @@ void BloomEffect::drawBlur(s32 divisions, s32 tile, Mtx* pMtx, u32 stageCount, u
         }
         sendBlurMaterial(stageCount, &pMtx[i]);
 
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(left, bottom, -1.0f);
         J3DNativeDraw::texCoord(0.0f, 1.0f);
 

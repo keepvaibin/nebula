@@ -27,9 +27,9 @@ namespace {
         NativeShader::setColor(material, 4, 0x32, 0x32, 0x96, 0xFF);
         NativeShader::setTexture(material, 0, pTexture);
         NativeShader::send(material);
-        static const u8 kPlaces[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                      GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
-        J3DNativeShape::setCurrent(GX_PNMTX0, kPlaces);
+        static const u8 kPlaces[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                      GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
+        J3DNativeShape::setCurrent(GPU_PNMTX0, kPlaces);
     }
 }  // namespace
 namespace {
@@ -272,7 +272,7 @@ void WaterPlant::drawDirect() const {
         f32 drawOffsetX = mHalfWidth * ::sDrawVec.x;
         f32 drawOffsetZ = mHalfWidth * ::sDrawVec.z;
         // Each vertex's texture coordinate is its entry of ::gxArray.
-        J3DNativeDraw::begin(GX_TRIANGLESTRIP, 8, NEBULA_SHAPE_TEXCOORD0);
+        J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 8, NEBULA_SHAPE_TEXCOORD0);
         J3DNativeDraw::position(drawVec3.x - drawOffsetX, drawVec3.y, drawVec3.z - drawOffsetZ);
         J3DNativeDraw::texCoord(::gxArray[2 * 0], ::gxArray[2 * 0 + 1]);
         J3DNativeDraw::position(drawVec3.x + drawOffsetX, drawVec3.y, drawVec3.z + drawOffsetZ);

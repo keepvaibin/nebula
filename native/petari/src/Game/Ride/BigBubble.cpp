@@ -233,7 +233,7 @@ void BigBubble::calcAnim() {
 
 void BigBubble::draw() const {
     if (isDraw()) {
-        J3DNativeState::setTevColor(GX_TEVREG1, mWarningColor);
+        J3DNativeState::setTevColor(GPU_TEVREG1, mWarningColor);
         mSurface->draw();
     }
 }

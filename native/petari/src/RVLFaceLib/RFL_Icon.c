@@ -44,7 +44,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     Vec cameraPos;                     // sp+10C
     Vec target;                        // sp+100
     Vec cameraUp;                      // sp+F4
-    GXLightObj light;                  // sp+168
+    GpuLightObj light;                  // sp+168
     Vec pos;                           // sp+E8
     MiiDrawSetting drawSetting;        // sp+138
 
@@ -96,7 +96,7 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     }
 
     NebulaMtxPerspective(projMtx, fovy, aspect, 500.0f, 700.0f);
-    J3DNativeViewSetProjection(projMtx, GX_PERSPECTIVE);
+    J3DNativeViewSetProjection(projMtx, GPU_PERSPECTIVE);
 
     cameraPos = (Vec){0.0f, 34.5f, 600.0f};
     target = (Vec){0.0f, 34.5f, 0.0f};
@@ -109,13 +109,13 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
 
     NebulaMtxMultVec(viewMtx, &pos, &pos);
     J3DNativeStateInitLightPos(&light, pos.x, pos.y, pos.z);
-    J3DNativeStateLoadLightObjImm(&light, GX_LIGHT0);
+    J3DNativeStateLoadLightObjImm(&light, GPU_LIGHT0);
     MiiSetMtx(&model, viewMtx);
 
     drawSetting.lightEnable = TRUE;
-    drawSetting.lightMask = GX_LIGHT0;
-    drawSetting.diffuse = GX_DF_CLAMP;
-    drawSetting.attn = GX_AF_NONE;
+    drawSetting.lightMask = GPU_LIGHT0;
+    drawSetting.diffuse = GPU_DF_CLAMP;
+    drawSetting.attn = GPU_AF_NONE;
     drawSetting.ambColor = (NebulaColor8){160, 160, 160, 255};
     drawSetting.compLoc = 0;
     MiiLoadDrawSetting(&drawSetting);
@@ -123,22 +123,22 @@ void Mii_MakeIcon(void* buf, Mii_CharInfo* info, MiiExpression expression, const
     if (!setting->drawXluOnly) {
         J3DNativeStateSetColorUpdate(TRUE);
         J3DNativeStateSetAlphaUpdate(TRUE);
-        J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+        J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
         MiiDrawOpa(&model);
     }
 
-    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, FALSE);
-    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_SRCALPHA, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, FALSE);
+    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_SRCALPHA, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeStateSetAlphaUpdate(FALSE);
     MiiDrawXlu(&model);
 
-    J3DNativeStateSetBlendMode(GX_BM_BLEND, GX_BL_ONE, GX_BL_INVSRCALPHA, GX_LO_COPY);
+    J3DNativeStateSetBlendMode(GPU_BM_BLEND, GPU_BL_ONE, GPU_BL_INVSRCALPHA, GPU_LO_COPY);
     J3DNativeStateSetAlphaUpdate(TRUE);
     J3DNativeStateSetColorUpdate(FALSE);
     MiiDrawXlu(&model);
 
-    J3DNativeStateSetZMode(TRUE, GX_LEQUAL, TRUE);
+    J3DNativeStateSetZMode(TRUE, GPU_LEQUAL, TRUE);
     J3DNativeStateSetColorUpdate(TRUE);
     J3DNativeTargetEnd(buf);
 

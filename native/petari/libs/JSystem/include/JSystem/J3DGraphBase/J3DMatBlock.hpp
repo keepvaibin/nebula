@@ -20,11 +20,11 @@ struct J3DIndTexOrder : public J3DIndTexOrderInfo {
     }
 
     u8 getMap() const {
-        return (GXTexMapID)mMap;
+        return (GpuTexMapID)mMap;
     }
 
     u8 getCoord() const {
-        return (GXTexCoordID)mCoord;
+        return (GpuTexCoordID)mCoord;
     }
 };  // Size: 0x04
 

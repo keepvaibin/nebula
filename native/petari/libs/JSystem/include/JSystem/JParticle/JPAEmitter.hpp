@@ -90,7 +90,7 @@ public:
     JPABaseParticle* createParticle();
     u32 getCurrentCreateNumber() const;
     u8 getDrawCount() const;
-    bool loadTexture(u8, GXTexMapID);
+    bool loadTexture(u8, GpuTexMapID);
 
     void initStatus(u32 status) {
         mStatus = status;

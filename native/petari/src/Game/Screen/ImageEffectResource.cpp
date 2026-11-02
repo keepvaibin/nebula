@@ -10,81 +10,81 @@ ImageEffectResource::ImageEffectResource()
 
 void ImageEffectResource::createBloomTexture() {
     if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
+        _0 = createTexture(1.0f, GPU_TF_RGBA8);
     }
 
     if (_4 == nullptr) {
-        _4 = createTexture(0.5f, GX_TF_RGB565);
+        _4 = createTexture(0.5f, GPU_TF_RGB565);
     }
 
     if (_C == nullptr) {
-        _C = createTexture(0.25f, GX_TF_RGB565);
+        _C = createTexture(0.25f, GPU_TF_RGB565);
     }
 
     if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GX_TF_RGB565);
+        _10 = createTexture(0.25f, GPU_TF_RGB565);
     }
 
     if (_14 == nullptr) {
-        _14 = createTexture(0.125f, GX_TF_RGB565);
+        _14 = createTexture(0.125f, GPU_TF_RGB565);
     }
 
     if (_18 == nullptr) {
-        _18 = createTexture(0.125f, GX_TF_RGB565);
+        _18 = createTexture(0.125f, GPU_TF_RGB565);
     }
 
     if (_1C == nullptr) {
-        _1C = createTexture(0.25f, GX_TF_I8);
+        _1C = createTexture(0.25f, GPU_TF_I8);
     }
 
     if (_20 == nullptr) {
-        _20 = createTexture(0.25f, GX_TF_RGB565);
+        _20 = createTexture(0.25f, GPU_TF_RGB565);
     }
 }
 
 void ImageEffectResource::createBlurTexture() {
     if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
+        _0 = createTexture(1.0f, GPU_TF_RGBA8);
     }
 
     if (_8 == nullptr) {
-        _8 = createTexture(0.5f, GX_TF_I8);
+        _8 = createTexture(0.5f, GPU_TF_I8);
     }
 }
 
 void ImageEffectResource::createDOFTexture() {
     if (_0 == nullptr) {
-        _0 = createTexture(1.0f, GX_TF_RGBA8);
+        _0 = createTexture(1.0f, GPU_TF_RGBA8);
     }
 
     if (_4 == nullptr) {
-        _4 = createTexture(0.5f, GX_TF_RGB565);
+        _4 = createTexture(0.5f, GPU_TF_RGB565);
     }
 
     if (_C == nullptr) {
-        _C = createTexture(0.25f, GX_TF_RGB565);
+        _C = createTexture(0.25f, GPU_TF_RGB565);
     }
 
     if (_10 == nullptr) {
-        _10 = createTexture(0.25f, GX_TF_RGB565);
+        _10 = createTexture(0.25f, GPU_TF_RGB565);
     }
 
     if (_8 == nullptr) {
-        _8 = createTexture(0.5f, GX_TF_I8);
+        _8 = createTexture(0.5f, GPU_TF_I8);
     }
 }
 
-JUTTexture* ImageEffectResource::createTexture(f32 scale, GXTexFmt format) {
+JUTTexture* ImageEffectResource::createTexture(f32 scale, GpuTexFmt format) {
     JUTTexture* pTexture;
 
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
     pTexture = new JUTTexture(scale * (s32)JUTVideo::getManager()->getFbWidth(),
                               scale * (s32)JUTVideo::getManager()->getEfbHeight(), format);
-    pTexture->mWrapS = GX_CLAMP;
-    pTexture->mWrapT = GX_CLAMP;
-    pTexture->mMinType = GX_LINEAR;
-    pTexture->mMagType = GX_LINEAR;
+    pTexture->mWrapS = GPU_CLAMP;
+    pTexture->mWrapT = GPU_CLAMP;
+    pTexture->mMinType = GPU_LINEAR;
+    pTexture->mMagType = GPU_LINEAR;
 
     return pTexture;
 }

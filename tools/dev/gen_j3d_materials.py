@@ -102,7 +102,7 @@ def native_tex_gen(gx_type, gx_source):
 
 
 def native_channel(diffuse, attenuation):
-    """GXDiffuseFn and GXAttnFn as the records' encoding (J3DNativeChannel.hpp): diffuse 0 none, 1 signed, 2 clamped
+    """GpuDiffuseFn and GpuAttnFn as the records' encoding (J3DNativeChannel.hpp): diffuse 0 none, 1 signed, 2 clamped
     (none with specular attenuation); attenuation 0 none, 1 specular, 2 directional, 3 spot."""
     return (0 if attenuation == 0 else diffuse & 3), (1 if attenuation == 0 else 3 if attenuation == 1 else 2)
 
@@ -215,8 +215,8 @@ def emit_vertex(p, out):
         out.append(f"    {{  // coordinate {i}: kind {kind}, projective {projective}, row {row}")
         out.append(f"        const float4 c = {coord};")
         # The texgen's matrix from matrix memory by the index the shape loads (its current matrix, which GX takes over
-        # the material's texgen id: GX_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
-        # by the program's row (GX_PTTEXMTX0's 0 + 3k, 61 the identity).
+        # the material's texgen id: GPU_TEXMTX0 30 + 3k, 60 the identity) or the vertex's own; its post-transform matrix
+        # by the program's row (GPU_PTTEXMTX0's 0 + 3k, 61 the identity).
         # As the uber shader: the draw's texture matrix rows (inline_tex_matrices: the matrix its current matrix index
         # names) or, where the shape carries per-vertex indices, the vertex's matrix from the matrix rows; then the
         # post-transform the draw's texgen names (inline_post_matrices: the material's, or a shape's env map or

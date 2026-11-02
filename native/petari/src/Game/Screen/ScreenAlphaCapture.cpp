@@ -26,18 +26,18 @@ void ScreenAlphaCapture::createScreenAlpha(s32 textureIndex, f32 screenScale) {
     MR::CurrentHeapRestorer heapRestorer(MR::getSceneHeapGDDR3());
 
     mTexture[textureIndex] = new JUTTexture(static_cast< s32 >(JUTVideo::getManager()->getFbWidth()) * screenScale,
-                                            static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * screenScale, GX_TF_I8);
-    mTexture[textureIndex]->mWrapS = GX_CLAMP;
-    mTexture[textureIndex]->mWrapT = GX_CLAMP;
-    mTexture[textureIndex]->mMinType = GX_LINEAR;
-    mTexture[textureIndex]->mMagType = GX_LINEAR;
+                                            static_cast< s32 >(JUTVideo::getManager()->getEfbHeight()) * screenScale, GPU_TF_I8);
+    mTexture[textureIndex]->mWrapS = GPU_CLAMP;
+    mTexture[textureIndex]->mWrapT = GPU_CLAMP;
+    mTexture[textureIndex]->mMinType = GPU_LINEAR;
+    mTexture[textureIndex]->mMagType = GPU_LINEAR;
 }
 
 void ScreenAlphaCapture::captureScreenAlpha(s32 textureIndex) {
-    mTexture[textureIndex]->capture(0, 0, GX_CTF_A8, false, 0);
+    mTexture[textureIndex]->capture(0, 0, GPU_CTF_A8, false, 0);
 }
 
-void ScreenAlphaCapture::loadScreenTexture(s32 index, GXTexMapID id) {
+void ScreenAlphaCapture::loadScreenTexture(s32 index, GpuTexMapID id) {
     mTexture[index]->load(id);
 }
 
@@ -55,7 +55,7 @@ namespace MR {
         ::getScreenAlphaCapture()->captureScreenAlpha(textureIndex);
     }
 
-    void loadScreenAlphaTexture(s32 index, GXTexMapID id) {
+    void loadScreenAlphaTexture(s32 index, GpuTexMapID id) {
         ::getScreenAlphaCapture()->loadScreenTexture(index, id);
     }
 

@@ -39,7 +39,7 @@ void MR::connectToSceneImageEffectMovement(NameObj* pObj) {
     MR::connectToScene(pObj, MR::MovementType_ImageEffect, MR::CalcAnimType_None, MR::DrawBufferType_None, MR::DrawType_None);
 }
 
-void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GXTexFmt format, bool half, u8 clear,
+void ImageEffectLocalUtil::capture(JUTTexture* pTexture, s32 divisions, s32 tile, GpuTexFmt format, bool half, u8 clear,
                                    bool filtered) {
     // FallOutFieldDraw::draw passes 0 divisions each frame it draws: the capture then starts at the origin.
     if (divisions == 0) {
@@ -98,22 +98,22 @@ void ImageEffectLocalUtil::setMode(EMode mode, const NebulaColor8& rKonst, const
 void ImageEffectLocalUtil::setupDrawTexture() {
     Mtx44 projectionMtx;
     NebulaMtxOrtho(projectionMtx, 0.0f, MR::getFrameBufferHeight(), 0.0f, MR::getFrameBufferWidth(), -10000.0f, 10000.0f);
-    J3DNativeView::setProjection(projectionMtx, GX_ORTHOGRAPHIC);
+    J3DNativeView::setProjection(projectionMtx, GPU_ORTHOGRAPHIC);
 
     MR::loadViewMtxFor2DModel();
 
     TMtx34f posMtx;
     posMtx.identity();
     J3DNativeShape::setPosition(0, posMtx.toMtxPtr());
-    J3DNativeState::setCurrentMtx(GX_PNMTX0);
+    J3DNativeState::setCurrentMtx(GPU_PNMTX0);
 
-    J3DNativeState::setCullMode(GX_CULL_NONE);
-    J3DNativeState::setClipMode(GX_CLIP_ENABLE);
-    J3DNativeState::setColorUpdate(GX_TRUE);
-    J3DNativeState::setAlphaUpdate(GX_FALSE);
-    J3DNativeState::setZMode(GX_FALSE, GX_ALWAYS, GX_FALSE);
-    J3DNativeState::setAlphaCompare(GX_ALWAYS, 0, GX_AOP_OR, GX_ALWAYS, 0);
-    J3DNativeState::setDither(GX_FALSE);
+    J3DNativeState::setCullMode(GPU_CULL_NONE);
+    J3DNativeState::setClipMode(GPU_CLIP_ENABLE);
+    J3DNativeState::setColorUpdate(GPU_TRUE);
+    J3DNativeState::setAlphaUpdate(GPU_FALSE);
+    J3DNativeState::setZMode(GPU_FALSE, GPU_ALWAYS, GPU_FALSE);
+    J3DNativeState::setAlphaCompare(GPU_ALWAYS, 0, GPU_AOP_OR, GPU_ALWAYS, 0);
+    J3DNativeState::setDither(GPU_FALSE);
     sMode = 0;
 }
 
@@ -132,7 +132,7 @@ void ImageEffectLocalUtil::sendTextureVertex(s32 divisions, s32 tile) {
     f32 bottom = (row + 1) * height;
     f32 top = row * height;
 
-    J3DNativeDraw::begin(GX_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
+    J3DNativeDraw::begin(GPU_TRIANGLESTRIP, 4, NEBULA_SHAPE_TEXCOORD0);
     J3DNativeDraw::position(left, bottom, 0.0f);
     J3DNativeDraw::texCoord(0.0f, 1.0f);
 

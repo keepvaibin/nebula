@@ -1,7 +1,7 @@
 #ifndef RVL_FACE_LIBRARY_INTERNAL_MAKE_TEX_H
 #define RVL_FACE_LIBRARY_INTERNAL_MAKE_TEX_H
 #include "RFLi_Types.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/types.h>
 #ifdef __cplusplus
 extern "C" {
@@ -26,7 +26,7 @@ typedef enum {
 typedef struct Mii_TexObj {
     struct Mii_Texture* texture; // at 0x0
     u8* image;                   // at 0x4
-    GXTexObj tobj;               // at 0x8
+    GpuTexObj tobj;               // at 0x8
 } Mii_TexObj;
 
 typedef struct Mii_Part {

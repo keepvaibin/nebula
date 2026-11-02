@@ -143,7 +143,7 @@ namespace MR {
     }
 
     void loadProjectionMtx() {
-        J3DNativeView::setProjection(::getCameraContext()->mProjection, (GXProjectionType) nullptr);
+        J3DNativeView::setProjection(::getCameraContext()->mProjection, (GpuProjectionType) nullptr);
     }
 
     void loadViewMtx() {

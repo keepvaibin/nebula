@@ -20,18 +20,18 @@ void ShapePacketUserData::init(J3DMaterial* pMaterial) {
     mTexGenNum = pMaterial->getTexGenNum();
     for (u32 i = 0; i < mTexGenNum; i++) {
         J3DTexCoord* pTexCoord = pMaterial->getTexCoord(i);
-        if (pTexCoord->getTexGenSrc() == GX_TG_POS) {
+        if (pTexCoord->getTexGenSrc() == GPU_TG_POS) {
             mTexMtxInfo[i].mType = 1;
-            mTexMtxInfo[i].mPostMtx = GX_PTTEXMTX0 + i * 3;
-        } else if (pTexCoord->getTexGenSrc() == GX_TG_NRM) {
+            mTexMtxInfo[i].mPostMtx = GPU_PTTEXMTX0 + i * 3;
+        } else if (pTexCoord->getTexGenSrc() == GPU_TG_NRM) {
             mTexMtxInfo[i].mType = 2;
-            mTexMtxInfo[i].mPostMtx = GX_PTTEXMTX0 + i * 3;
-        } else if (isEnvMap && pTexCoord->getTexGenMtx() != GX_IDENTITY) {
+            mTexMtxInfo[i].mPostMtx = GPU_PTTEXMTX0 + i * 3;
+        } else if (isEnvMap && pTexCoord->getTexGenMtx() != GPU_IDENTITY) {
             mTexMtxInfo[i].mType = 3;
-            mTexMtxInfo[i].mPostMtx = GX_PTTEXMTX0 + i * 3;
+            mTexMtxInfo[i].mPostMtx = GPU_PTTEXMTX0 + i * 3;
         } else {
             mTexMtxInfo[i].mType = 0;
-            mTexMtxInfo[i].mPostMtx = GX_PTIDENTITY;
+            mTexMtxInfo[i].mPostMtx = GPU_PTIDENTITY;
         }
     }
 
@@ -44,8 +44,8 @@ void ShapePacketUserData::init(J3DMaterial* pMaterial) {
 
 void ShapePacketUserData::load() const {
     if (mEnvMap) {
-        static const u8 kIdentity[8] = {GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY,
-                                        GX_IDENTITY, GX_IDENTITY, GX_IDENTITY, GX_IDENTITY};
+        static const u8 kIdentity[8] = {GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY,
+                                        GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY, GPU_IDENTITY};
         J3DNativeShape::setCurrent(0, kIdentity);
     }
     for (u32 i = 0; i < mTexGenNum; i++) {
@@ -67,7 +67,7 @@ void ShapePacketUserData::loadTexMtx(J3DMaterial* pMaterial, int slot, u16 index
 
             J3DTexMtx* const pTexMtx = pMaterial->getTexMtx(i);
             pTexMtx->calcPostTexMtx(MR::getCameraInvViewMtx());
-            J3DNativeShape::setPostTexture((mTexMtxInfo[i].mPostMtx - GX_PTTEXMTX0) / 3, pTexMtx->getMtx());
+            J3DNativeShape::setPostTexture((mTexMtxInfo[i].mPostMtx - GPU_PTTEXMTX0) / 3, pTexMtx->getMtx());
         }
     }
 }

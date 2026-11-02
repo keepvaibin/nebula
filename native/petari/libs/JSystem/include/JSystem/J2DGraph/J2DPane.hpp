@@ -28,7 +28,7 @@ public:
     virtual void add(f32 x, f32 y);
     virtual void resize(f32 x, f32 y);
     virtual void setCullBack(bool cull);
-    virtual void setCullBack(_GXCullMode cmode);
+    virtual void setCullBack(_GpuCullMode cmode);
     virtual void setAlpha(u8 alpha);
     virtual bool setConnectParent(bool connected);
     virtual void calcMtx();

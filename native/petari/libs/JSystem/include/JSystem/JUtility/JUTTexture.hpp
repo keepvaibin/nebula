@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 
@@ -47,7 +47,7 @@ public:
     /// @param width The width of the texture, in pixels.
     /// @param height The height of the texture, in pixels.
     /// @param format The type of the texture.
-    JUTTexture(int width, int height, GXTexFmt format);
+    JUTTexture(int width, int height, GpuTexFmt format);
 
     /// @brief Creates a new `JUTTexture`.
     /// @param pTIMG TODO.
@@ -63,20 +63,20 @@ public:
 
     void storeTIMG(const ResTIMG*, u8);
     void storeTIMG(const ResTIMG*, JUTPalette*);
-    void storeTIMG(const ResTIMG*, JUTPalette*, GXTlut);
+    void storeTIMG(const ResTIMG*, JUTPalette*, GpuTlut);
     void attachPalette(JUTPalette*);
     void init();
-    GXTexObj getTexObj() const {
+    GpuTexObj getTexObj() const {
         return mObj;
     }
 
     void initTexObj();
-    void initTexObj(_GXTlut);
-    void load(_GXTexMapID);
+    void initTexObj(_GpuTlut);
+    void load(_GpuTexMapID);
     // The frame's picture at x, y as this texture (half size, cleared afterwards, through the display's vertical
     // filter: J3DNativeTarget::capture's flags).
-    void capture(int x, int y, GXTexFmt format, bool half, u8 clear, bool filtered = false);
-    static void captureDolTexture(void*, int, int, int, int, bool, GXTexFmt);
+    void capture(int x, int y, GpuTexFmt format, bool half, u8 clear, bool filtered = false);
+    static void captureDolTexture(void*, int, int, int, int, bool, GpuTexFmt);
 
     const ResTIMG* getTexInfo() const {
         return mTIMG;
@@ -109,7 +109,7 @@ public:
         return mTlutName;
     }
 
-    /* 0x00 */ GXTexObj mObj;
+    /* 0x00 */ GpuTexObj mObj;
     /* 0x20 */ const ResTIMG* mTIMG;
     /* 0x24 */ u8* mImage;
     /* 0x28 */ JUTPalette* mEmbPalette;

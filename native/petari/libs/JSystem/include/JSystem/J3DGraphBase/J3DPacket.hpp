@@ -3,7 +3,7 @@
 #include "Inline.hpp"
 
 #include "JSystem/J3DGraphBase/J3DSys.hpp"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 #include <stdint.h>

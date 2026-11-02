@@ -1,7 +1,7 @@
 #ifndef RVL_FACE_LIBRARY_MODEL_H
 #define RVL_FACE_LIBRARY_MODEL_H
 #include "RFL_Types.h"
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/types.h>
 #ifdef __cplusplus
@@ -33,9 +33,9 @@ typedef struct MiiCharModel {
 
 typedef struct MiiDrawSetting {
     u8 lightEnable;      // at 0x0
-    GXLightID lightMask; // at 0x4
-    GXDiffuseFn diffuse; // at 0x8
-    GXAttnFn attn;       // at 0xC
+    GpuLightID lightMask; // at 0x4
+    GpuDiffuseFn diffuse; // at 0x8
+    GpuAttnFn attn;       // at 0xC
     NebulaColor8 ambColor;    // at 0x10
     u8 compLoc;          // at 0x14
 } MiiDrawSetting;

@@ -3,7 +3,7 @@
 #include "Game/Util/NativeMesh.hpp"
 #include <JSystem/JGeometry.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 #include <revolution/mtx.h>
 #include <revolution/os.h>
 

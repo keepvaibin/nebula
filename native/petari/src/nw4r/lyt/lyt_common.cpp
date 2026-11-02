@@ -2,7 +2,7 @@
 #include <JSystem/JUtility/JUTException.hpp>
 #include <JSystem/J3DGraphBase/J3DNativeDraw.hpp>
 #include "nw4r/lyt/layout.h"
-#include <revolution/gx/GXEnum.h>
+#include <NebulaGpuEnums.h>
 #include <cstdio>
 
 namespace nw4r {
@@ -106,7 +106,7 @@ namespace nw4r {
             }
 
             void DrawQuad(const math::VEC2& basePt, const Size& size, u8 num, const math::VEC2 (*texCoords)[4], const ut::Color* vtxColors) {
-                J3DNativeDraw::begin(GX_QUADS, 4,
+                J3DNativeDraw::begin(GPU_QUADS, 4,
                                      (vtxColors ? NEBULA_SHAPE_COLOR0 : 0) | ((1u << num) - 1u) * NEBULA_SHAPE_TEXCOORD0);
                 J3DNativeDraw::position(basePt.x, basePt.y, 0.0f);
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <revolution/gx.h>
+#include <NebulaGpu.h>
 
 class JPAEmitterWorkData;
 class JPABaseParticle;
@@ -40,50 +40,50 @@ public:
     JPABaseShape(u8 const*, JKRHeap*);
     void setGX(JPAEmitterWorkData*) const;
 
-    static GXBlendMode st_bm[3];
-    static GXBlendFactor st_bf[10];
-    static GXLogicOp st_lo[16];
-    static GXCompare st_c[8];
-    static GXAlphaOp st_ao[4];
-    static GXTevColorArg st_ca[6][4];
-    static GXTevAlphaArg st_aa[2][4];
+    static GpuBlendMode st_bm[3];
+    static GpuBlendFactor st_bf[10];
+    static GpuLogicOp st_lo[16];
+    static GpuCompare st_c[8];
+    static GpuAlphaOp st_ao[4];
+    static GpuTevColorArg st_ca[6][4];
+    static GpuTevAlphaArg st_aa[2][4];
 
-    GXBlendMode getBlendMode() const {
+    GpuBlendMode getBlendMode() const {
         return st_bm[mpData->mBlendModeCfg & 0x03];
     }
-    GXBlendFactor getBlendSrc() const {
+    GpuBlendFactor getBlendSrc() const {
         return st_bf[(mpData->mBlendModeCfg >> 2) & 0x0F];
     }
-    GXBlendFactor getBlendDst() const {
+    GpuBlendFactor getBlendDst() const {
         return st_bf[(mpData->mBlendModeCfg >> 6) & 0x0F];
     }
-    GXLogicOp getLogicOp() const {
+    GpuLogicOp getLogicOp() const {
         return st_lo[(mpData->mBlendModeCfg >> 10) & 0x0F];
     }
-    GXBool getZCompLoc() const {
-        return (GXBool)((mpData->mZModeCfg >> 5) & 0x01);
+    GpuBool getZCompLoc() const {
+        return (GpuBool)((mpData->mZModeCfg >> 5) & 0x01);
     }
 
-    GXBool getZEnable() const {
-        return (GXBool)(mpData->mZModeCfg & 0x01);
+    GpuBool getZEnable() const {
+        return (GpuBool)(mpData->mZModeCfg & 0x01);
     }
-    GXCompare getZCmp() const {
+    GpuCompare getZCmp() const {
         return st_c[(mpData->mZModeCfg >> 1) & 0x07];
     }
-    GXBool getZUpd() const {
-        return (GXBool)((mpData->mZModeCfg >> 4) & 0x01);
+    GpuBool getZUpd() const {
+        return (GpuBool)((mpData->mZModeCfg >> 4) & 0x01);
     }
 
-    GXCompare getAlphaCmp0() const {
+    GpuCompare getAlphaCmp0() const {
         return st_c[mpData->mAlphaCompareCfg & 0x07];
     }
     u8 getAlphaRef0() const {
         return mpData->mAlphaRef0;
     }
-    GXAlphaOp getAlphaOp() const {
+    GpuAlphaOp getAlphaOp() const {
         return st_ao[(mpData->mAlphaCompareCfg >> 3) & 0x03];
     }
-    GXCompare getAlphaCmp1() const {
+    GpuCompare getAlphaCmp1() const {
         return st_c[(mpData->mAlphaCompareCfg >> 5) & 0x07];
     }
     u8 getAlphaRef1() const {
@@ -97,10 +97,10 @@ public:
     u32 getTevAlphaMode() const {
         return (mpData->mFlags >> 0x12) & 0x01;
     }
-    const GXTevColorArg* getTevColorArg() const {
+    const GpuTevColorArg* getTevColorArg() const {
         return st_ca[(mpData->mFlags >> 0x0F) & 0x07];
     }
-    const GXTevAlphaArg* getTevAlphaArg() const {
+    const GpuTevAlphaArg* getTevAlphaArg() const {
         return st_aa[(mpData->mFlags >> 0x12) & 0x01];
     }
 
