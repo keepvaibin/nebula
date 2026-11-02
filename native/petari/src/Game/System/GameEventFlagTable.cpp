@@ -288,10 +288,8 @@ namespace GameEventFlagTable {
         return findFlag(pFlagName);
     }
 
-    // The flags (main.dol's when a mod changed them there).
     const GameEventFlag* flags() {
-        static const GameEventFlag* sFlags = NebulaDataTables::getEventFlags(::sGameEventFlagStatic);
-        return sFlags;
+        return ::sGameEventFlagStatic;
     }
 
     s32 getTableSize() {
