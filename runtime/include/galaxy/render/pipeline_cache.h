@@ -27,15 +27,13 @@
 
 namespace galaxy::render {
 
-// The PSO descriptor of a render state. Point and line topologies take the matching geometry shader, triangles none, a
+// The PSO descriptor of a render state; a
 // curved surface's patches its variant's hull and domain shaders. Public for the WARP tests.
 [[nodiscard]] D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
     ID3D12RootSignature* root_signature,
     const RenderStateKey& render_state,
     D3D12_SHADER_BYTECODE vertex_shader,
     D3D12_SHADER_BYTECODE pixel_shader,
-    D3D12_SHADER_BYTECODE line_geometry_shader,
-    D3D12_SHADER_BYTECODE point_geometry_shader,
     D3D12_SHADER_BYTECODE hull_shader = {},
     D3D12_SHADER_BYTECODE domain_shader = {});
 
