@@ -3,6 +3,12 @@
 // under a render state, created on its first draw and kept for the session.
 
 #include "galaxy/render/pipeline_cache.h"
+#include "galaxy/render/pipeline_seed.h"
+#include "galaxy/windows_power.h"
+
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include "galaxy/render/native_shaders.h"
 #include "galaxy/render/renderer_d3d12.h"
 
@@ -34,7 +40,7 @@ constexpr D3D12_INPUT_ELEMENT_DESC kInputLayout[] = {
 };
 
 // GX BlendFactor -> D3D12, src side (GX factor 2/3 reference the destination).
-D3D12_BLEND gx_src_blend(std::uint32_t f) {
+D3D12_BLEND src_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
     case 1: return D3D12_BLEND_ONE;
@@ -49,7 +55,7 @@ D3D12_BLEND gx_src_blend(std::uint32_t f) {
 }
 
 // GX BlendFactor -> D3D12, dst side (GX factor 2/3 reference the source).
-D3D12_BLEND gx_dst_blend(std::uint32_t f) {
+D3D12_BLEND dst_blend(std::uint32_t f) {
     switch (f) {
     case 0: return D3D12_BLEND_ZERO;
     case 1: return D3D12_BLEND_ONE;
@@ -75,7 +81,7 @@ D3D12_BLEND to_alpha_blend(D3D12_BLEND b) {
 }
 
 // GX LogicOp 0-15 -> D3D12.
-D3D12_LOGIC_OP gx_logic_op(std::uint32_t m) {
+D3D12_LOGIC_OP logic_op_mode(std::uint32_t m) {
     switch (m) {
     case 0:  return D3D12_LOGIC_OP_CLEAR;
     case 1:  return D3D12_LOGIC_OP_AND;
@@ -134,8 +140,8 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
             rt.DestBlend = D3D12_BLEND_ONE;
             rt.BlendOp   = D3D12_BLEND_OP_REV_SUBTRACT;
         } else {
-            rt.SrcBlend  = gx_src_blend((bb >> 2) & 0x7u);
-            rt.DestBlend = gx_dst_blend((bb >> 5) & 0x7u);
+            rt.SrcBlend  = src_blend((bb >> 2) & 0x7u);
+            rt.DestBlend = dst_blend((bb >> 5) & 0x7u);
             rt.BlendOp   = D3D12_BLEND_OP_ADD;
             if (rs.pixfmt != 1u) {
                 if (rt.SrcBlend == D3D12_BLEND_DEST_ALPHA)
@@ -179,7 +185,7 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc_impl(
         }
     } else if (bb & (1u << 8)) {         // logic_op_enable
         rt.LogicOpEnable = TRUE;
-        rt.LogicOp = gx_logic_op((bb >> 9) & 0xFu);
+        rt.LogicOp = logic_op_mode((bb >> 9) & 0xFu);
     }
 
     pd.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
@@ -372,6 +378,32 @@ D3D12_GRAPHICS_PIPELINE_STATE_DESC make_pso_desc(
         domain_shader);
 }
 
+Microsoft::WRL::ComPtr<ID3D12PipelineState> PipelineCache::create_native(std::uint32_t shader, const RenderStateKey& rs,
+                                                                          unsigned variant) const {
+    const auto code = [](const NativeShaderBytes& bytes) {
+        return bytes.size != 0u ? D3D12_SHADER_BYTECODE{bytes.data, bytes.size} : D3D12_SHADER_BYTECODE{};
+    };
+    const D3D12_SHADER_BYTECODE vs = code(native_shader_bytes(shader, variant, false));
+    const D3D12_SHADER_BYTECODE ps = code(native_shader_bytes(shader, variant, true));
+    // A curved surface's patches: the native patch stages for the output layout.
+    const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
+    const bool motion = variant == kNativeVariantMotion;
+    const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(motion, false)) : D3D12_SHADER_BYTECODE{};
+    const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(motion, true)) : D3D12_SHADER_BYTECODE{};
+    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
+    const auto topology = static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(rs.primitive_topology & kTopologyTypeMask);
+    const bool line = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
+    const bool point = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
+    const D3D12_SHADER_BYTECODE gs = line || point ? code(native_line_point_bytes(motion, point)) : D3D12_SHADER_BYTECODE{};
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
+    if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode)) &&
+        (!(line || point) || gs.pShaderBytecode)) {
+        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, line ? gs : D3D12_SHADER_BYTECODE{},
+                         point ? gs : D3D12_SHADER_BYTECODE{}, hs, ds);
+    }
+    return pso;
+}
+
 ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const RenderStateKey& render_state) {
     if (!device_ || !root_signature_) {
         return nullptr;
@@ -386,29 +418,71 @@ ID3D12PipelineState* PipelineCache::get_native(std::uint32_t shader, const Rende
             return entry.second.Get();
         }
     }
-    const auto code = [](const NativeShaderBytes& bytes) {
-        return bytes.size != 0u ? D3D12_SHADER_BYTECODE{bytes.data, bytes.size} : D3D12_SHADER_BYTECODE{};
-    };
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso;
-    const D3D12_SHADER_BYTECODE vs = code(native_shader_bytes(shader, variant, false));
-    const D3D12_SHADER_BYTECODE ps = code(native_shader_bytes(shader, variant, true));
-    // A curved surface's patches: the native patch stages for the output layout.
-    const bool curved = (rs.primitive_topology & kTopologyTypeMask) == kTopologyPatch;
-    const bool motion = variant == kNativeVariantMotion;
-    const D3D12_SHADER_BYTECODE hs = curved ? code(native_curved_bytes(motion, false)) : D3D12_SHADER_BYTECODE{};
-    const D3D12_SHADER_BYTECODE ds = curved ? code(native_curved_bytes(motion, true)) : D3D12_SHADER_BYTECODE{};
-    // Lines and points: the native geometry stage that widens them (native_lines.hlsl).
-    const auto topology = static_cast<D3D12_PRIMITIVE_TOPOLOGY_TYPE>(rs.primitive_topology & kTopologyTypeMask);
-    const bool line = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE;
-    const bool point = topology == D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT;
-    const D3D12_SHADER_BYTECODE gs = line || point ? code(native_line_point_bytes(motion, point)) : D3D12_SHADER_BYTECODE{};
-    if (vs.pShaderBytecode && ps.pShaderBytecode && (!curved || (hs.pShaderBytecode && ds.pShaderBytecode)) &&
-        (!(line || point) || gs.pShaderBytecode)) {
-        pso = create_pso(device_.Get(), root_signature_.Get(), rs, vs, ps, line ? gs : D3D12_SHADER_BYTECODE{},
-                         point ? gs : D3D12_SHADER_BYTECODE{}, hs, ds);
-    }
+    note_pipeline_for_seed(shader, render_state);
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> pso = create_native(shader, rs, variant);
     bucket.emplace_back(std::make_pair(id, rs), pso);
     return pso.Get();
+}
+
+void PipelineCache::start_prepare() {
+    std::size_t env_length = 0;
+    char env_value[8] = {};
+    (void)getenv_s(&env_length, env_value, sizeof(env_value), "GALAXY_NO_PIPELINE_PREPARE");
+    if (pipeline_seeds().empty() || env_length != 0u) {
+        return;
+    }
+    const auto prepare_started_at = std::chrono::steady_clock::now();
+    for (unsigned t = 0; t < 2u; ++t) {
+        prepare_threads_.emplace_back([this, prepare_started_at] {
+            galaxy::host::name_current_thread(L"Nebula Pipeline Prepare");
+            SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+            const auto seeds = pipeline_seeds();
+            while (!prepare_stop_.load(std::memory_order_relaxed)) {
+                const std::size_t i = prepare_next_.fetch_add(1u, std::memory_order_relaxed);
+                if (i >= seeds.size()) {
+                    if (i == seeds.size()) {
+                        std::fprintf(stderr, "[pipelines] %zu prepared at %llu ms\n", seeds.size(),
+                                     static_cast<unsigned long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                         std::chrono::steady_clock::now() - prepare_started_at).count()));
+                    }
+                    return;
+                }
+                const RenderStateKey rs = native_render_state(seed_render_state(seeds[i]));
+                Prepared out{seeds[i].shader, rs, create_native(seeds[i].shader, rs, native_shader_variant(rs.blend_bits))};
+                const std::lock_guard guard(prepared_lock_);
+                prepared_.push_back(std::move(out));
+                prepare_ready_.store(true, std::memory_order_release);
+            }
+        });
+    }
+}
+
+void PipelineCache::merge_prepared() {
+    if (!prepare_started_) {
+        prepare_started_ = true;
+        start_prepare();
+    }
+    if (!prepare_ready_.load(std::memory_order_acquire)) {
+        return;
+    }
+    std::vector<Prepared> done;
+    {
+        const std::lock_guard guard(prepared_lock_);
+        done.swap(prepared_);
+        prepare_ready_.store(false, std::memory_order_relaxed);
+    }
+    for (Prepared& p : done) {
+        const unsigned variant = native_shader_variant(p.rs.blend_bits);
+        const std::uint32_t id = p.shader * kNativeVariants + variant;
+        auto& bucket = native_psos_[combine64(hash_key_words(&p.rs, sizeof(p.rs)), id)];
+        bool have = false;
+        for (const auto& entry : bucket) {
+            have = have || (entry.first.first == id && entry.first.second == p.rs);
+        }
+        if (!have) {
+            bucket.emplace_back(std::make_pair(id, p.rs), std::move(p.pso));
+        }
+    }
 }
 
 bool PipelineCache::initialize(ID3D12Device* device, ID3D12RootSignature* root_signature) {
@@ -425,6 +499,12 @@ PipelineCache::~PipelineCache() noexcept {
 }
 
 void PipelineCache::shutdown() noexcept {
+    prepare_stop_.store(true, std::memory_order_relaxed);
+    for (std::thread& t : prepare_threads_) {
+        t.join();
+    }
+    prepare_threads_.clear();
+    prepared_.clear();
     native_psos_.clear();
     root_signature_.Reset();
     device_.Reset();

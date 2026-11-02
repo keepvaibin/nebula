@@ -90,14 +90,6 @@ struct Matrix {
 // How immediate vertices group: nebula_game_api.h NebulaPrimitive's values.
 enum PrimitiveKind : std::uint8_t { kQuads = 0, kTriangles, kTriangleStrip, kTriangleFan, kLines, kLineStrip, kPoints };
 
-// Vertices the game sent as it drew them (nebula_game_api.h NebulaImmediate): `geometry` has one corner per vertex,
-// in order, reading `arrays` (its values) entry by entry; `primitive` is a NebulaPrimitive.
-struct Immediate {
-    std::uint8_t primitive = 0;
-    Geometry geometry;
-    std::array<Array, 12> arrays;
-};
-
 // The indices a primitive (NebulaPrimitive) of `count` vertices draws with: quads as (0 1 2)(0 2 3), strips with their
 // odd triangles turned, fans around vertex 0, line strips as line lists, triangles, lines and points as they are.
 void primitive_indices(std::uint8_t primitive, std::uint32_t count, std::vector<std::uint16_t>& out);
@@ -109,6 +101,8 @@ struct RecordPool {
     std::vector<Matrix> matrices;
     std::vector<state::Op> ops;
     std::vector<material::Native> natives;
+    std::vector<RenderVertex> vertices;
+    std::vector<ScreenProbe> probes;
 };
 
 // The game's records, in the order it made them (render_core.h attach_shape_record).
@@ -128,7 +122,11 @@ struct Record {
     std::uint32_t native_index = kNoNative;
     // Drawing-state changes outside materials, in order: their place in the frame's pool (RecordPool::ops).
     std::uint32_t op_first = 0, op_count = 0;
-    std::shared_ptr<const Immediate> immediate;
+    // Immediate: its vertices in the frame's pool; their position matrix slot is the current one unless the attributes
+    // (Geometry::attributes' bits) say each has its own. `primitive` a NebulaPrimitive.
+    // Readback: its probes in the frame's pool, the same way.
+    std::uint32_t vertex_first = 0, vertex_count = 0, attributes = 0;
+    std::uint8_t primitive = 0;
     // An image's bytes (TextureImage), at `key`: its physical address.
     std::shared_ptr<const std::vector<std::byte>> image;
     // A draw's (or an immediate's) matrices, and the places its corners take when they carry none (position, texture

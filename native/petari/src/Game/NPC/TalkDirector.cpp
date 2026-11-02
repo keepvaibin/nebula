@@ -50,21 +50,28 @@ TalkPeekZ::TalkPeekZ() {
 void TalkPeekZ::setDrawSyncToken() {
     J3DNativeView::getProjectionv(&_20);
     J3DNativeView::getViewportv(&_3C);
-    _8 = 0;
-    J3DNativeView::captureReadback(cReadbackChannel);
 
-    if (!MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) ||
-        !MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cFrameHeight - 1)) {
-        return;
+    // The depth at the balloon's point asked last; then the picture drawn so far, at its point now.
+    NebulaScreenProbe probe;
+    _8 = 0.0f;
+    if (J3DNativeView::screenProbeResults(cReadbackChannel, &probe, 1) == 1 && probe.x >= 0.0f) {
+        _8 = probe.value;
+        TDDraw::invProject(&_14, TVec3f(probe.user_x, probe.user_y, _8), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
+                           &_3C, true);
     }
 
-    TVec2f pos;
-    MR::convertScreenPosToFrameBufferPos(&pos, mScreenPos);
-
-    _8 = J3DNativeView::readbackDepth(cReadbackChannel, (s32)(pos.x), (s32)(pos.y));
-
-    TDDraw::invProject(&_14, TVec3f(mScreenPos.x, mScreenPos.y, static_cast< f32 >(_8)), const_cast< MtxPtr >(MR::getCameraViewMtx().mMtx), &_20,
-                       &_3C, false);
+    probe.x = -1.0f;
+    probe.y = -1.0f;
+    probe.user_x = mScreenPos.x;
+    probe.user_y = mScreenPos.y;
+    if (MR::isInRange(mScreenPos.x, 0.0f, MR::getScreenWidth() - 1) &&
+        MR::isInRange(mScreenPos.y, 0.0f, NebulaFrameClock::cFrameHeight - 1)) {
+        TVec2f pos;
+        MR::convertScreenPosToFrameBufferPos(&pos, mScreenPos);
+        probe.x = pos.x;
+        probe.y = pos.y;
+    }
+    J3DNativeView::probeScreen(cReadbackChannel, NEBULA_SCREEN_PROBE_DEPTH, &probe, 1);
 }
 
 TalkDirector::TalkDirector(const char* pName)

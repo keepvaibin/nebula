@@ -77,7 +77,7 @@ void RendererVk::update_ring_mode() {
     }
     // Rebuilt rings may be new buffers: no cached set may name the old ones.
     constants_sets_.clear();
-    reset_gx_bindings();
+    reset_draw_bindings();
     for (Segment& segment : segments_) {
         segment.retired.clear();
         segment.snapshots.clear();
@@ -1007,7 +1007,7 @@ std::uint64_t RendererVk::patched_table(ReplayList& list, std::uint64_t table) {
             VkDescriptorSetAllocateInfo info{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
             info.descriptorPool = list.descriptors;
             info.descriptorSetCount = 1;
-            info.pSetLayouts = &gx_layout_.sets[1];
+            info.pSetLayouts = &draw_layout_.sets[1];
             VkDescriptorSet set = VK_NULL_HANDLE;
             if (vkAllocateDescriptorSets(device, &info, &set) == VK_SUCCESS) {
                 std::array<VkDescriptorImageInfo, kMaxTextureMaps> images{};
@@ -1057,7 +1057,7 @@ void RendererVk::replay_copy(const ReplayCopy& copy, vk::Texture& target) {
                       VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
                       VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT);
         target.layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        reset_gx_bindings();
+        reset_draw_bindings();
         bind_scene();
         return;
     }
@@ -1154,7 +1154,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     std::swap(alt_scene_, replay_alt_scene_);
     std::swap(alt_scene_map_, replay_alt_scale_);
     replaying_ = true;
-    reset_gx_bindings();
+    reset_draw_bindings();
     redirect_.clear();
     patched_.clear();
     // Copy textures the frame read before rewriting them: its snapshots of them.
@@ -1273,7 +1273,7 @@ bool RendererVk::record_replay_list(ReplayList& list) {
     replay_list_ = nullptr;
     commands_ = saved_commands;
     scene_pass_open_ = saved_pass;
-    reset_gx_bindings();
+    reset_draw_bindings();
     vk::check(vkEndCommandBuffer(list.commands), "vkEndCommandBuffer");
     list.sequence = sequence_.serial;
     list.segment = run_log_.segment;
@@ -1430,7 +1430,7 @@ bool RendererVk::present_replay_subframe(const SubframeTime& time, const Affine3
     commands_ = saved_commands;
     scene_pass_open_ = saved_pass;
     swap_image_ = saved_image;
-    reset_gx_bindings();
+    reset_draw_bindings();
     sequence_.first = false;
     subframe_record_ms_ += std::chrono::duration<double, std::milli>(
         std::chrono::steady_clock::now() - record_start).count();
