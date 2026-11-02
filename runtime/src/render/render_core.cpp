@@ -19,6 +19,7 @@
 #include <immintrin.h>
 #endif
 #endif
+#include "galaxy/loss_report.h"
 #include "galaxy/platform_time.h"
 #include "galaxy/platform_paths.h"
 #include "galaxy/perf_hint.h"
@@ -4878,6 +4879,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     // Every draw takes its material's native shader (E-04); one without a native material is not drawn. The count of
     // those in the log every 65,536 (GALAXY_LOG_NATIVE_MATERIALS=1).
     if (native_material_ == nullptr) [[unlikely]] {
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoMaterial);
         static const bool log_native = read_env_u64("GALAXY_LOG_NATIVE_MATERIALS", 0u) != 0u;
         static std::uint64_t dropped = 0u;
         if (log_native && (dropped++ & 0xFFFFu) == 0u) {
@@ -5085,6 +5087,7 @@ gpu::Pipeline* RenderCore::flush_draw_state(
     if (current_pipeline_ == nullptr) {
         // The driver refused the pipeline in every form and no uber stand-in exists (the pipeline cache logged
         // why): the draw is skipped.
+        galaxy::loss::note(galaxy::loss::Kind::DrawNoPipeline);
         return nullptr;
     }
     // An effects-layer draw binds the reactive mask and the layer's targets, uber stand-in or not (its variant writes
