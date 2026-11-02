@@ -71,13 +71,13 @@ int JASVoice::setEffectLine(u8 line, bool restart, EffectConfig* config) {
     JASEffectLine& effect = sEffects[line];
     GameAudioExclusion cs;
     if (config != NULL) {
-        effect.volume_a = config->_4;
+        effect.volume_a = config->_4 / 32768.0f;
         effect.bus_a = sEffectDestinations[config->_2];
-        effect.volume_b = config->_8;
+        effect.volume_b = config->_8 / 32768.0f;
         effect.bus_b = sEffectDestinations[config->_6];
         effect.subframes = config->_C;
         for (int i = 0; i < 8; i++) {
-            effect.fir[i] = config->_10[i];
+            effect.fir[i] = config->_10[i] / 32768.0f;
         }
     }
     if (restart && config != nullptr) {
@@ -173,8 +173,8 @@ void JASVoice::initAutoMixer() {
 void JASVoice::setAutoMixer(u16 volume, u8 pan_position, u8 rear_position, u8 send, u8) {
     pan = pan_position;
     rear = rear_position;
-    panner_send = send << 8 | send << 1;
-    panner_target = volume;
+    panner_send = (send << 8 | send << 1) / 32768.0f;
+    panner_target = volume / 65536.0f;
     panner = 1;
 }
 
@@ -182,17 +182,24 @@ void JASVoice::setPitch(u16 value) {
     if (value >= 0x7fff) {
         value = 0x7fff;
     }
-    pitch = value;
+    // `value`: source samples per 32 kHz sample, 4.12; an oscillator's cycles per 32 kHz sample, 15.17.
+    if (format != NEBULA_AUDIO_OSCILLATOR) {
+        rate = value * (32000.0f / 4096.0f);
+    } else if (oscillator == NEBULA_AUDIO_CONSTANT) {
+        rate = value / 32768.0f;
+    } else {
+        rate = value * (32000.0f / 131072.0f);
+    }
 }
 
 void JASVoice::setMixerInitVolume(u8 send, s16 volume) {
-    sends[send].current = volume;
-    sends[send].target = volume;
+    sends[send].current = volume / 65536.0f;
+    sends[send].target = volume / 65536.0f;
 }
 
 void JASVoice::setMixerVolume(u8 send, s16 volume) {
     if (forced_stop == 0) {
-        sends[send].target = volume;
+        sends[send].target = volume / 65536.0f;
     }
 }
 
@@ -202,13 +209,13 @@ void JASVoice::setPauseFlag(u8 flag) {
 
 void JASVoice::initFilter() {
     for (int i = 0; i < 8; i++) {
-        fir[i] = 0;
+        fir[i] = 0.0f;
     }
-    fir[0] = 0x7fff;
+    fir[0] = 32767.0f / 32768.0f;
     for (int i = 0; i < 4; i++) {
-        iir[i] = 0;
+        iir[i] = 0.0f;
     }
-    iir[0] = 0x7fff;
+    iir[0] = 32767.0f / 32768.0f;
 }
 
 void JASVoice::setFilterMode(u16 mode) {
@@ -217,22 +224,23 @@ void JASVoice::setFilterMode(u16 mode) {
     if (taps > (iir_on ? 0x14 : 0x18)) {
         taps = iir_on ? 0x14 : 0x18;
     }
-    filter = iir_on + taps;
+    fir_taps = taps;
+    this->iir_on = iir_on != 0;
 }
 
 void JASVoice::setIIRFilterParam(s16* coefficients) {
     for (int i = 0; i < 4; i++) {
-        iir[i] = coefficients[i];
+        iir[i] = coefficients[i] / 32768.0f;
     }
 }
 
 void JASVoice::setFIR8FilterParam(s16* coefficients) {
     for (int i = 0; i < 8; i++) {
-        fir[i] = coefficients[i];
+        fir[i] = coefficients[i] / 32768.0f;
     }
 }
 
 // The bus a send feeds: the mix configuration's value is the bus (NEBULA_AUDIO_BUS_*).
 void JASVoice::setBusConnect(u8 send, u8 bus) {
-    sends[send].bus = bus < NEBULA_AUDIO_BUSES ? bus : NEBULA_AUDIO_BUS_NONE;
+    sends[send].bus = bus < NEBULA_AUDIO_BUSES ? bus : static_cast< u32 >(NEBULA_AUDIO_BUS_NONE);
 }

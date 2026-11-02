@@ -23,12 +23,12 @@ extern "C" {
 #define NEBULA_GAME_API __attribute__((visibility("default")))
 #endif
 
-#define NEBULA_GAME_API_VERSION 91u
+#define NEBULA_GAME_API_VERSION 92u
 
 /* Audio (the host's mixer): the game's 64 voices mix at the output device's rate, one subframe (1/400 s: 80 samples
-   of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (ADPCM, PCM or an oscillator) through
+   of the game's 32 kHz sound clock) per voices_mix call. A voice plays one source (PCM16 or an oscillator) through
    its filters into mix buses or the surround panner; the game writes its settings, the mixer advances its playback.
-   Volumes are 15-bit fractions (a send of 32767 adds half the voice to its bus; voices_mix's gain scales the output). */
+   Volumes are gains (a send of 0.5 adds half the voice to its bus; voices_mix's gain scales the output). */
 enum {
     NEBULA_AUDIO_BUS_NONE = 0,
     NEBULA_AUDIO_BUS_LEFT,
@@ -52,14 +52,14 @@ enum {
     NEBULA_AUDIO_OSCILLATOR, /* waveform `oscillator`, no wave data */
 };
 
-/* Oscillator waveforms (NebulaVoice.oscillator); the frequency is pitch / 131072 cycles per 32 kHz sample. */
+/* Oscillator waveforms (NebulaVoice.oscillator); NebulaVoice.rate is its frequency in Hz. */
 enum {
     NEBULA_AUDIO_SQUARE = 0,
     NEBULA_AUDIO_SAWTOOTH = 1,
     NEBULA_AUDIO_SQUARE_FM = 2, /* the square, its rate modulated by the surround-right bus (which it consumes) */
     NEBULA_AUDIO_PULSE25 = 3,   /* 25 % duty */
     NEBULA_AUDIO_TRIANGLE = 4,
-    NEBULA_AUDIO_CONSTANT = 6,  /* the value pitch */
+    NEBULA_AUDIO_CONSTANT = 6,  /* the value `rate` */
     NEBULA_AUDIO_SINE = 7,
     NEBULA_AUDIO_SINE_PM = 10,
     NEBULA_AUDIO_NOISE_A = 11,
@@ -76,10 +76,9 @@ enum {
 };
 
 typedef struct NebulaAudioSend {
-    uint16_t bus;    /* NEBULA_AUDIO_BUS_* */
-    int16_t target;  /* volume reached over the next subframe */
-    int16_t current; /* volume now (the mixer's) */
-    uint16_t reserved;
+    uint32_t bus;   /* NEBULA_AUDIO_BUS_* */
+    float target;   /* gain reached over the next subframe */
+    float current;  /* gain now (the mixer's) */
 } NebulaAudioSend;
 
 typedef struct NebulaVoice {
@@ -88,7 +87,7 @@ typedef struct NebulaVoice {
     uint16_t starting;       /* set at play start: the next mix starts the source over (the mixer clears it) */
     uint16_t paused;         /* holds its last output */
     uint16_t forced_stop;    /* every volume halves each subframe; finished once all are zero */
-    uint16_t pitch;          /* source samples per 32 kHz sample, 4.12 */
+    float rate;              /* source samples played a second */
     uint16_t format;         /* NEBULA_AUDIO_SILENT..OSCILLATOR */
     uint16_t oscillator;     /* NEBULA_AUDIO_SQUARE.. */
     const uint8_t* wave;     /* the source's first byte, in the sound memory (voices_setup) or before wave_end */
@@ -100,18 +99,19 @@ typedef struct NebulaVoice {
     /* The position, advanced by the mixer each subframe (the stream player reads and moves it): */
     uint32_t address;        /* the next sample, in bytes from wave */
     uint32_t left;           /* samples before end */
-    uint16_t filter;         /* FIR taps (bits 0-4; coefficients past the eighth are zero), IIR on (bit 5) */
+    uint8_t fir_taps;        /* 0: no FIR (coefficients past the eighth are zero) */
+    uint8_t iir_on;
     /* FIR: y[n] = sum fir[k] x[n - taps + k], k < taps; IIR: y[n] = iir[0] x[n] + iir[1] x[n-1] + iir[2] y[n-1] +
-       iir[3] y[n-2]; Q15 at 32 kHz (the mixer keeps their responses at its own rate). */
-    int16_t fir[8];
-    int16_t iir[4];
+       iir[3] y[n-2]; designed for 32 kHz (the mixer keeps their responses at its own rate). */
+    float fir[8];
+    float iir[4];
     NebulaAudioSend sends[6];
     uint16_t panner;         /* nonzero: the surround panner plays the voice instead of its sends */
     uint8_t pan;             /* 0 left .. 127 right */
     uint8_t rear;            /* 0 front .. 127 rear */
-    int16_t panner_send;     /* effect send */
-    int16_t panner_volume;   /* now (the mixer's) */
-    int16_t panner_target;   /* reached over the next subframe */
+    float panner_send;       /* effect send */
+    float panner_volume;     /* gain now (the mixer's) */
+    float panner_target;     /* gain reached over the next subframe */
     uint8_t category;        /* NEBULA_SOUND_*: the volume setting it follows */
     uint8_t named;           /* the game knows the sound playing it (else its source's format chose the category) */
     uint16_t reserved_category;
@@ -125,10 +125,10 @@ typedef struct NebulaEffectLine {
     uint16_t filter;
     uint16_t subframes;
     uint16_t bus_a;
-    int16_t volume_a;
     uint16_t bus_b;
-    int16_t volume_b;
-    int16_t fir[8];
+    float volume_a;
+    float volume_b;
+    float fir[8];
     uint32_t generation;
 } NebulaEffectLine;
 
@@ -950,8 +950,8 @@ typedef struct NebulaHostServices {
                         const void* sound_memory, uint32_t sound_memory_size);
     void (*voices_mix)(void* user, float gain);
     void (*voices_frame)(void* user);
-    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its
-       big-endian header, then the ADPCM data of the track played) for the host to decode and play with the game's
+    /* The movie player's sound, on the game's threads: movie_audio queues one frame's audio record (its stereo sample count,
+       u32, then the samples, PCM16, left and right in turn, of the track played) for the mixer; 0 when the queue is full (null asks only that).
        sound at 32 kHz; 0 when 20 frames already wait (nothing taken). A null record only asks for room.
        movie_audio_control: NEBULA_MOVIE_AUDIO_*. */
     int (*movie_audio)(void* user, const void* record, uint32_t size);

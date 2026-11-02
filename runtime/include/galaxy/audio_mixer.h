@@ -100,7 +100,7 @@ public:
 private:
     static constexpr std::size_t kMaxSubframe = 512u;  // output samples of one subframe at 192 kHz, rounded up
     static constexpr std::size_t kVoices = 64u;
-    static constexpr std::uint32_t kMaxSourceSamples = 4u + 0x7FFFu * 80u / 4096u + 1u;
+    static constexpr std::uint32_t kMaxSourceSamples = 4u + 700u;
 
     struct Biquad {
         float b0{1.0f}, b1{}, b2{}, a1{}, a2{};
@@ -108,7 +108,7 @@ private:
     };
 
     struct VoiceState {
-        std::uint32_t phase{};            // 12-bit position between source samples
+        double phase{};                   // the position between source samples
         std::array<float, 4> history{};   // the previous subframe's last source samples
             bool loop_pending{};              // PCM: the end was reached exactly; loop or finish at the next read
         float last{};                     // the last resampled sample, held while paused
@@ -118,11 +118,11 @@ private:
         std::uint32_t noise_seed{0x9E3779B9u};
         // FIR at the output rate, rebuilt when the game's taps or coefficients change.
         std::uint16_t fir_key_mode{0xFFFFu};
-        std::array<std::int16_t, 8> fir_key{};
+        std::array<float, 8> fir_key{};
         std::vector<float> fir;           // weights by delay in output samples (index 0: one sample back)
         std::vector<float> fir_history;   // newest at the back
         // IIR at the output rate, rebuilt when the coefficients change.
-        std::array<std::int16_t, 4> iir_key{};
+        std::array<float, 4> iir_key{};
         bool iir_valid{};
         Biquad iir;
         // Volume category gain.
@@ -141,7 +141,7 @@ private:
         std::vector<float> history_a;      // the FIR's input history (before the sends)
         std::vector<float> history_b;      // (after the sends)
         std::vector<float> fir;            // weights by delay in output samples
-        std::array<std::int16_t, 8> fir_key{};
+        std::array<float, 8> fir_key{};
         std::array<float, kMaxSubframe> input{};  // what goes into the delay at the end of the subframe
     };
 

@@ -17,6 +17,11 @@ constexpr float kFold = 26500.0f / 32768.0f;
 constexpr float kMatrix = 18400.0f / 32768.0f;
 constexpr float kCenterGain = 23170.0f / 32768.0f;
 
+// A forced stop's next gain: half, down to nothing after 16 steps of a full gain.
+[[nodiscard]] float halved(float gain) noexcept {
+    return std::floor(gain * 32768.0f) / 65536.0f;
+}
+
 [[nodiscard]] double bessel_i0(double x) noexcept {
     double sum = 1.0;
     double term = 1.0;
@@ -291,7 +296,7 @@ void AudioMixer::render_voice(std::uint32_t index, NebulaVoice& voice) {
     const bool paused = voice.paused != 0u;
     const bool starting = voice.starting != 0u;
     if (starting) {
-        state.phase = 0u;
+        state.phase = 0.0;
         state.history = {};
         state.last = 0.0f;
         state.cycle = 0.0;
@@ -353,18 +358,18 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
         return;
     }
     // The source samples this subframe covers, after the previous subframe's last four.
-    const std::uint32_t pitch = voice.pitch;
-    const std::uint32_t end_position = state.phase + pitch * kGameSubframeSamples;
-    const std::uint32_t needed = end_position >> 12u;
+    const double span = static_cast<double>(voice.rate) / kSubframesPerSecond;
+    const double end_position = state.phase + span;
+    const auto needed = static_cast<std::uint32_t>(end_position);
     float* x = source_.data();
     std::copy(state.history.begin(), state.history.end(), x);
     ++stats_.pcm_renders;
     read_pcm(state, voice, x + 4, needed);
     // Output i reads at source position phase + i * span / n; four taps around it (position + 1 between the second
     // and third). Steps of four source samples or more pick samples directly.
-    const double start = state.phase / 4096.0;
-    const double step = (pitch * static_cast<double>(kGameSubframeSamples) / 4096.0) / n;
-    if (pitch >= 0x4000u) {
+    const double start = state.phase;
+    const double step = span / n;
+    if (voice.rate >= 4.0f * kGameRate) {
         for (std::uint32_t i = 0; i < n; ++i) {
             out[i] = x[static_cast<std::uint32_t>(start + i * step)];
         }
@@ -378,7 +383,7 @@ void AudioMixer::render_source(VoiceState& state, NebulaVoice& voice, float* out
         }
     }
     state.last = out[n - 1u];
-    state.phase = end_position & 0xFFFu;
+    state.phase = end_position - needed;
     std::copy_n(x + needed, 4u, state.history.begin());
 }
 
@@ -447,7 +452,7 @@ void AudioMixer::read_pcm(VoiceState& state, NebulaVoice& voice, float* out, std
 void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, float* out) {
     ++stats_.oscillator_renders;
     const std::uint32_t n = samples_;
-    const double per_game_sample = voice.pitch / 131072.0;
+    const double per_game_sample = static_cast<double>(voice.rate) / kGameRate;
     const double step = per_game_sample / game_ratio_;
     double cycle = state.cycle;
     const auto advance = [&](double by) {
@@ -472,10 +477,9 @@ void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, 
         float* modulator = buses_[kSurroundRight].data();
         for (std::uint32_t i = 0; i < n; ++i) {
             out[i] = cycle < 0.5 ? 0.5f : -0.5f;
-            const auto m = static_cast<std::int32_t>(std::lround(std::clamp(modulator[i], -1.0f, 1.0f) * 32767.0f));
-            const std::uint32_t rate = (static_cast<std::uint32_t>(m) + voice.pitch) & 0xFFFFu;
+            const double m = std::clamp(modulator[i], -1.0f, 1.0f) * (32767.0 / 131072.0);
             modulator[i] = 0.0f;
-            advance(rate / 131072.0 / game_ratio_);
+            advance(std::max(per_game_sample + m, 0.0) / game_ratio_);
         }
         break;
     }
@@ -494,7 +498,7 @@ void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, 
         }
         break;
     case NEBULA_AUDIO_CONSTANT:
-        std::fill_n(out, n, voice.pitch / 32768.0f);
+        std::fill_n(out, n, voice.rate);
         break;
     case NEBULA_AUDIO_NOISE_A:
     case NEBULA_AUDIO_NOISE_B:
@@ -523,19 +527,19 @@ void AudioMixer::render_oscillator(VoiceState& state, const NebulaVoice& voice, 
 // FIR: taps (filter bits 0-4) over the previous inputs at 32 kHz, fir[k] at taps - k samples back; at the output
 // rate each tap sits at the same time back.
 void AudioMixer::apply_fir(VoiceState& state, const NebulaVoice& voice, float* samples) {
-    const std::uint32_t taps = voice.filter & 0x1Fu;
+    const std::uint32_t taps = voice.fir_taps;
     if (taps == 0u) {
         return;
     }
     ++stats_.fir_renders;
-    std::array<std::int16_t, 8> key{};
+    std::array<float, 8> key{};
     std::copy_n(voice.fir, 8u, key.begin());
     if (state.fir_key_mode != taps || state.fir_key != key || state.fir.empty()) {
         std::array<float, 8> coefficients{};
         std::array<double, 8> delays{};
         const std::uint32_t used = std::min<std::uint32_t>(taps, 8u);
         for (std::uint32_t k = 0; k < used; ++k) {
-            coefficients[k] = voice.fir[k] / 32768.0f;
+            coefficients[k] = voice.fir[k];
             delays[k] = static_cast<double>(taps - k);
         }
         state.fir = delays_to_weights(coefficients.data(), delays.data(), used, game_ratio_);
@@ -549,19 +553,19 @@ void AudioMixer::apply_fir(VoiceState& state, const NebulaVoice& voice, float* s
 // filter both rates' bilinear transforms share (exact at DC, the same shape with the top octave compressed); outputs
 // saturate as the game's filter did. {1, 0, 0, 0} passes the signal through.
 void AudioMixer::apply_iir(VoiceState& state, const NebulaVoice& voice, float* samples) {
-    if ((voice.filter & 0x20u) == 0u) {
+    if (voice.iir_on == 0u) {
         return;
     }
-    std::array<std::int16_t, 4> key{voice.iir[0], voice.iir[1], voice.iir[2], voice.iir[3]};
-    if (key[0] == 0x7FFF && key[1] == 0 && key[2] == 0 && key[3] == 0) {
+    std::array<float, 4> key{voice.iir[0], voice.iir[1], voice.iir[2], voice.iir[3]};
+    if (key[0] == kUnit && key[1] == 0.0f && key[2] == 0.0f && key[3] == 0.0f) {
         return;
     }
     ++stats_.iir_renders;
     if (!state.iir_valid || state.iir_key != key) {
-        const double b0 = key[0] / 32768.0;
-        const double b1 = key[1] / 32768.0;
-        const double a1 = key[2] / 32768.0;
-        const double a2 = key[3] / 32768.0;
+        const double b0 = key[0];
+        const double b1 = key[1];
+        const double a1 = key[2];
+        const double a2 = key[3];
         // z^-1 at 32 kHz = (A + B q) / (B + A q), q = z^-1 at the output rate.
         const double r = static_cast<double>(rate_) / kGameRate;
         const double A = 1.0 - r;
@@ -605,7 +609,7 @@ void AudioMixer::ramp_mix(float* destination, const float* source, float start, 
     for (std::uint32_t i = 0; i < samples_; ++i) {
         const double t = std::clamp((i * game_per_output - 1.0) / 64.0, 0.0, 1.0);
         const float volume = start + delta * static_cast<float>(t);
-        destination[i] += source[i] * volume / 65536.0f;
+        destination[i] += source[i] * volume;
     }
 }
 
@@ -614,9 +618,8 @@ void AudioMixer::mix_sends(NebulaVoice& voice, const float* samples) {
         // Every target becomes half its current volume; the voice finishes once all are zero.
         bool silent = true;
         for (NebulaAudioSend& send : voice.sends) {
-            const auto current = static_cast<std::uint16_t>(send.current);
-            send.target = static_cast<std::int16_t>(current >> 1u);
-            silent = silent && current == 0u;
+            send.target = halved(send.current);
+            silent = silent && send.current == 0.0f;
         }
         if (silent) {
             voice.finished = 1u;
@@ -627,7 +630,7 @@ void AudioMixer::mix_sends(NebulaVoice& voice, const float* samples) {
         if (destination == nullptr) {
             continue;
         }
-        ramp_mix(destination, samples, send.current, static_cast<float>(send.target) - send.current);
+        ramp_mix(destination, samples, send.current, send.target - send.current);
         send.current = send.target;
     }
 }
@@ -637,9 +640,8 @@ void AudioMixer::mix_sends(NebulaVoice& voice, const float* samples) {
 void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
     ++stats_.panner_renders;
     if (voice.forced_stop != 0u) {
-        const auto current = static_cast<std::uint16_t>(voice.panner_volume);
-        voice.panner_target = static_cast<std::int16_t>(current >> 1u);
-        if (current == 0u) {
+        voice.panner_target = halved(voice.panner_volume);
+        if (voice.panner_volume == 0.0f) {
             voice.finished = 1u;
         }
     }
@@ -653,8 +655,8 @@ void AudioMixer::mix_panner(NebulaVoice& voice, const float* samples) {
     const std::array<std::uint32_t, 4> dry{kLeft, kRight, kSurroundLeft, kSurroundRight};
     const std::array<std::uint32_t, 4> wet{kEffect0 + 2u, kEffect0 + 3u, kPannerSendLeft, kPannerSendRight};
     const float current = voice.panner_volume;
-    const float delta = static_cast<float>(voice.panner_target) - current;
-    const float send = voice.panner_send / 32768.0f;
+    const float delta = voice.panner_target - current;
+    const float send = voice.panner_send;
     for (std::size_t i = 0; i < 4u; ++i) {
         ramp_mix(bus(dry[i]), samples, gains[i] * current, gains[i] * delta);
         ramp_mix(bus(wet[i]), samples, gains[i] * current * send, gains[i] * delta * send);
@@ -689,13 +691,13 @@ void AudioMixer::effects_begin() {
             continue;
         }
         ++stats_.effect_subframes;
-        std::array<std::int16_t, 8> key{};
+        std::array<float, 8> key{};
         std::copy_n(config.fir, 8u, key.begin());
         if (e.fir.empty() || e.fir_key != key) {
             std::array<float, 8> coefficients{};
             std::array<double, 8> delays{};
             for (std::size_t k = 0; k < 8u; ++k) {
-                coefficients[k] = config.fir[k] / 32768.0f;
+                coefficients[k] = config.fir[k];
                 delays[k] = static_cast<double>(8u - k);
             }
             e.fir = delays_to_weights(coefficients.data(), delays.data(), 8u, game_ratio_);
@@ -722,12 +724,11 @@ void AudioMixer::effects_begin() {
         for (const auto& [target, volume] : {std::pair{config.bus_a, config.volume_a},
                                              std::pair{config.bus_b, config.volume_b}}) {
             float* destination = bus(target);
-            if (destination == nullptr || volume == 0) {
+            if (destination == nullptr || volume == 0.0f) {
                 continue;
             }
-            const float gain = volume / 32768.0f;
             for (std::size_t i = 0; i < n; ++i) {
-                destination[i] += sends[line][i] * gain;
+                destination[i] += sends[line][i] * volume;
             }
         }
     }
