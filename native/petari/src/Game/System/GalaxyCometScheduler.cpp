@@ -288,7 +288,7 @@ void GalaxyCometTimeTable::advance() {
 GalaxyCometScheduler::GalaxyCometScheduler() : mTimeTables(), mEnabled(true) {
     mTimeTables.init(6);
     for (s32 i = 0; i < mTimeTables.size(); i++) {
-        mTimeTables[i] = new GalaxyCometTimeTable(NebulaDataTables::getCometTimePaper(i, sGalaxyCometTimerPaper[i]));
+        mTimeTables[i] = new GalaxyCometTimeTable(sGalaxyCometTimerPaper[i]);
     }
 }
 
