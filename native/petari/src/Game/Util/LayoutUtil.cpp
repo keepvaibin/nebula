@@ -17,7 +17,6 @@
 #include "Game/Util/ObjUtil.hpp"
 #include "Game/Util/SingletonHolder.hpp"
 #include "Game/Util/StringUtil.hpp"
-#include <JSystem/J2DGraph/J2DPicture.hpp>
 #include <JSystem/J3DGraphAnimator/J3DAnimation.hpp>
 #include <JSystem/JUtility/JUTTexture.hpp>
 #include <nw4r/lyt/layout.h>

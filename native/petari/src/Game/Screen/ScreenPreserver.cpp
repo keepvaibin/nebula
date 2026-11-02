@@ -1,7 +1,6 @@
 #include "Game/Screen/ScreenPreserver.hpp"
 #include "Game/Util/DrawUtil.hpp"
 #include "Game/Util/ScreenUtil.hpp"
-#include "JSystem/J2DGraph/J2DPicture.hpp"
 #include "JSystem/JUtility/JUTTexture.hpp"
 #include "Game/System/NebulaFrameClock.hpp"
 
@@ -20,15 +19,9 @@ void ScreenPreserver::draw() const {
         return;
     }
 
-    J2DOrthoGraphSimple ortho;
-    ortho.setPort();
-
+    MR::setupScreen2D();
     JUTTexture tex(MR::getScreenResTIMG());
-    J2DPicture pic(&tex);
-
-    f32 width = MR::getScreenWidth();
-    f32 height = static_cast<s32>(NebulaFrameClock::cCanvasHeight);
-    pic.draw(0.0f, 0.0f, width, height, false, false, false);
+    MR::drawScreenPicture(tex);
 }
 
 void ScreenPreserver::activate() {

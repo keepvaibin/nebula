@@ -1,6 +1,5 @@
 #pragma once
 
-#include <JSystem/J2DGraph/J2DOrthoGraph.hpp>
 #include <JSystem/JGeometry/TMatrix.hpp>
 #include <JSystem/JGeometry/TVec.hpp>
 #include <NebulaGpu.h>
@@ -10,17 +9,11 @@ class J3DModel;
 class J3DMaterial;
 class JUTTexture;
 
-class J2DOrthoGraphSimple : public J2DOrthoGraph {
-public:
-    J2DOrthoGraphSimple();
-
-    virtual ~J2DOrthoGraphSimple() {
-    }
-
-    virtual void setPort();
-};
 
 namespace MR {
+    void setupScreen2D();
+    void drawScreenColor(const NebulaColor8& rColor);
+    void drawScreenPicture(const JUTTexture& rTexture);
     void drawInit();
     void reinitGX();
     void loadViewMtxFor2DModel();
