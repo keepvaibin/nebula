@@ -165,13 +165,14 @@ Complete over every compiled unit (1,874), with the compiler as the checker. An 
 
 ## Memory and the GPU's addresses
 
-- The game's memory is one block of 385 MB (`NebulaMemory.c`), which the root heap divides: heaps sized for 64-bit data, no console arena, no MEM1 or MEM2. Untouched pages cost address space and commit, not memory: about 80 MB is in memory at a stop. docs/NATIVE_PERFORMANCE.md "Memory" has the table.
+- The game's memory is one block of 385 MB (`NebulaMemory.c`), which the root heap divides: heaps sized for 64-bit data, no console arena, no MEM1 or MEM2. Untouched pages cost address space and commit, not memory: about 41 MB is in memory at a stop. docs/NATIVE_PERFORMANCE.md "Memory" has the table.
 - The store is mapped read-only for the process's life (`AssetStore::map`, `asset_map`). Waves and streams play from the mapping: no copy. A file the game loads whole, from 8 KB up, is a private view of the store (`asset_map_private`): a page costs memory of the game's only once written, which 98-99 % of them never are; the view goes with the heap it was asked for.
 - The sound memory holds no sound: 1 MB, each wave archive's place in its section, so the archive goes with the section. A voice carries its source's start and end.
 - Images and shapes reach the renderer as records: the game hands each over where it loads or rewrites it, and a heap's going tells the renderer to forget what lay in it (`shape_forget`).
 - The game draws through typed records (`nebula_game_api.h`; docs/GRAPHICS_ARCHITECTURE.md). No game code calls GX.
 - The lens flare's visibility test and the star pointer's and talk balloons' depth are screen probes: the game names its points, the renderer reads those pixels where the drawing has reached, the answers come back a frame or two later (`screen_probe`, `screen_probe_results`).
 - Each game thread is a host thread with its own stack, at least 256 KB, guarded by the OS.
+- A pointer stays a pointer: the block and the views lie anywhere in 64 bits, so no distance between them passes through 32 bits (`ResTIMG::image()`; `GALAXY_TEST_MEMORY_AT` places the block to test it).
 
 ## Platform boundary
 

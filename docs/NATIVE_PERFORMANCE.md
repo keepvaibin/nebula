@@ -153,9 +153,8 @@ pixel-bound there (24 million pixel shader invocations against 4.1 million at 1x
 
 ### Native draws
 
-The game's GX calls still reach the renderer as GX commands, parsed into GX register state. They are replaced by native
-draws subsystem by subsystem (design: the shared NATIVE-RENDER note; order: shapes, materials, records for 2D,
-particles and immediate draws, then the command stream goes).
+How the game's GX calls became native draws, and what each step measured. The command stream, its parser and the markers
+named here are gone ([GRAPHICS_ARCHITECTURE.md](GRAPHICS_ARCHITECTURE.md)); the numbers stand as the record of each step.
 
 - Model shapes: J3DShapeDraw draws its list by a handle (`__NebulaGXCallShapeDisplayList`, the shape-list marker).
   Each list is built once on a worker at background priority (`galaxy/render/native_shapes.h`): decoded by the renderer's
@@ -282,14 +281,15 @@ it (`asset_map`), and its pages are the file's: no commit, and the system can dr
 
 | what | before | now |
 |---|---|---|
-| process, private working set | 2,224 MB (first reading) | 405 MB |
+| process, private working set | 2,224 MB (first reading) | 357-372 MB |
 | upload rings | 464 MB, all resident | 64 MB; the most a frame took: vertex 2.2, index 1.2, constant 1.4, matrix 0.7 |
 | resident vertices | CPU copy + 64 MB upload copy + 64 MB local | 64 MB local |
 | wave archives | 48 MB and more in the sound memory | none: mapped |
 | streams | a whole file in the heap each (29 MB for one) | none: mapped |
 | images of dead scenes | grew to 404 MB over a tour | gone with their scene's heap |
 | archives | read into the heaps | private views of the store: only written pages are the game's |
-| game block | 512 MB committed | 385 MB committed, about 80 MB in memory |
+| game block | 512 MB committed | 385 MB committed, about 41 MB in memory |
+| limited to 4 GB of committed memory, the 102 stops | 2,378 MB peak | 1,363 MB peak, nothing lost |
 
 ## Planned, measured before adopted (H)
 
