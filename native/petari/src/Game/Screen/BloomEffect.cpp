@@ -107,7 +107,6 @@ BloomEffect::BloomEffect(const char* pName) : ImageEffectBase(pName), _14(255), 
     MR::createImageEffectSystemHolder();
     MR::getImageEffectResource()->createBloomTexture();
 
-    _24 = MR::getImageEffectResource()->_0;
     _28 = MR::getImageEffectResource()->_4;
     _2C = MR::getImageEffectResource()->_C;
     _30 = MR::getImageEffectResource()->_10;
@@ -133,15 +132,12 @@ void BloomEffect::preDraw() const {
         return;
     }
 
-    // The renderer keeps the scene in the scene target's own format: the console's copy below is 8 bits, which cuts the ray
-    // tracer's HDR scene at 1.
+    // No renderer bloom (its passes failed to build): none at all, and the scene stays as it is.
     sBloomRoute = NebulaHost::option(NEBULA_OPTION_BLOOM);
-    if (sBloomRoute != 0) {
-        NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
-    } else
-    {
-        ImageEffectLocalUtil::capture(_24, 1, 0, GPU_TF_RGBA8, false, 0);
+    if (sBloomRoute == 0) {
+        return;
     }
+    NebulaRender::bloomMarker(NebulaRender::kBloomKeep, 0, 0);
 
     MR::fillScreen(Color8(0, 0, 0, 0xFF).mGXColor);
     MR::loadViewMtx();
@@ -151,6 +147,10 @@ void BloomEffect::preDraw() const {
 
 void BloomEffect::postDraw() const {
     if (!isSomething()) {
+        return;
+    }
+
+    if (sBloomRoute == 0) {
         return;
     }
 
@@ -213,13 +213,8 @@ void BloomEffect::postDraw() const {
     drawTexture(_38, 4, 0, intensity, DrawType_1);
     J3DNativeTarget::end(_3C->mImage, NEBULA_TARGET_RGB);
 
-    if (sBloomRoute != 0) {
-        // The scene the renderer kept, drawn back as _24 would be (its RGB; the alpha update is off).
-        NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
-    } else
-    {
-        drawTexture(_24, 1, 0, 0xFF, DrawType_0);
-    }
+    // The scene the renderer kept, drawn back (its RGB; the alpha update is off).
+    NebulaRender::bloomMarker(NebulaRender::kBloomRestore, 0, 0);
     drawTexture(_3C, 1, 0, 0xFF, DrawType_1);
 }
 
